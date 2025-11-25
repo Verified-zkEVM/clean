@@ -108,7 +108,7 @@ def localAdds
 /--
 ElaboratedCircuit for ADD instruction step.
 -/
-def elaborated
+noncomputable def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
@@ -124,14 +124,15 @@ def elaborated
       fp := preState.fp
     }
     let enabled := input.enabled.eval env
-    [(⟨"state", [preState.pc, preState.ap, preState.fp]⟩, enabled * (-1)),
-     (⟨"state", [postState.pc, postState.ap, postState.fp]⟩, enabled * 1)]
+    InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
+    InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
   localAdds_eq := by
     intro input env offset
     simp only [main, circuit_norm, emitStateWhen, emitAdd, fetchInstructionCircuit,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
       readFromMemoryCircuit, assertBool, FormalAssertion.toSubcircuit,
-      Operations.collectAdds, List.nil_append, NamedList.eval]
+      Operations.collectAdds, List.nil_append, NamedList.eval,
+      add_zero, zero_add]
     rfl
 
 /--
@@ -150,7 +151,7 @@ If enabled, the pre-state consumed and post-state produced must reflect a valid 
 def Spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (input : InstructionStepInput (F p)) (adds : List (NamedList (F p) × F p)) : Prop :=
+    (input : InstructionStepInput (F p)) (adds : InteractionDelta (F p)) : Prop :=
   if input.enabled = 1 then
     -- When enabled, we need to verify:
     -- 1. The pre-state is consumed (multiplicity -1)
@@ -166,21 +167,20 @@ def Spec
                 Spec.dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp with
           | some v1, some v2, some v3 =>
             v1 + v2 = v3 ∧
-            adds = [(⟨"state", [input.preState.pc, input.preState.ap, input.preState.fp]⟩, -1),
-                    (⟨"state", [input.preState.pc + 4, input.preState.ap, input.preState.fp]⟩, 1)]
+            adds = InteractionDelta.single ⟨"state", [input.preState.pc, input.preState.ap, input.preState.fp]⟩ (-1) +
+                   InteractionDelta.single ⟨"state", [input.preState.pc + 4, input.preState.ap, input.preState.fp]⟩ 1
           | _, _, _ => False
         else False
       | none => False
     | none => False
   else
     -- When disabled, both entries have multiplicity 0
-    adds = [(⟨"state", [input.preState.pc, input.preState.ap, input.preState.fp]⟩, 0),
-            (⟨"state", [input.preState.pc + 4, input.preState.ap, input.preState.fp]⟩, 0)]
+    adds = 0  -- Empty delta when disabled
 
 /--
 FormalAssertionChangingMultiset for the ADD instruction step.
 -/
-def circuit
+noncomputable def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalAssertionChangingMultiset (F p) InstructionStepInput where
