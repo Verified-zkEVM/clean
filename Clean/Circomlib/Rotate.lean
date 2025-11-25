@@ -53,7 +53,6 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     -- Prove index equality via Fin arithmetic
     simp [Fin.coe_cast, Fin.val_add]
 
-
   completeness := by
     circuit_proof_start
     -- element-wise equality
@@ -64,7 +63,6 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     rw [h_env ⟨i, hi⟩]
     -- simplify RHS to match
     rw [Vector.getElem_mapFinRange i hi]
-
 
 end RotR
 end Circomlib
