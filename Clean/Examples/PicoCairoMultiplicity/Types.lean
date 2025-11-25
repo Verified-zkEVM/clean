@@ -2,13 +2,13 @@ import Clean.Circuit.Provable
 import Clean.Examples.FemtoCairo.Types
 
 /-!
-# NanoCairoMultiplicity Types
+# PicoCairoMultiplicity Types
 
 Type definitions for the multiplicity-based VM execution tracking.
 Following the PR 286 PicoCairo pattern but using multiplicities instead of timestamps.
 -/
 
-namespace Examples.NanoCairoMultiplicity.Types
+namespace Examples.PicoCairoMultiplicity.Types
 open Examples.FemtoCairo.Types
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -78,4 +78,4 @@ instance (capacities : InstructionCapacities) : ProvableStruct (ExecutionCircuit
   fromComponents := fun (.cons initialState (.cons finalState (.cons bundledInputs .nil))) =>
     { initialState, finalState, bundledInputs }
 
-end Examples.NanoCairoMultiplicity.Types
+end Examples.PicoCairoMultiplicity.Types

@@ -1,26 +1,26 @@
 /-
-NanoCairoMultiplicity ADD Instruction Circuit
+PicoCairoMultiplicity ADD Instruction Circuit
 Following PR 286 PicoCairo pattern but using multiplicities instead of timestamps.
 -/
 
 import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.Loops
-import Clean.Examples.NanoCairoMultiplicity.Types
-import Clean.Examples.NanoCairoMultiplicity.Helpers
+import Clean.Examples.PicoCairoMultiplicity.Types
+import Clean.Examples.PicoCairoMultiplicity.Helpers
 import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Examples.FemtoCairo.Types
 import Clean.Examples.FemtoCairo.Spec
 import Clean.Gadgets.Boolean
 import Batteries.Data.Vector.Lemmas
 
-namespace Examples.NanoCairoMultiplicity.AddInstruction
+namespace Examples.PicoCairoMultiplicity.AddInstruction
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.Spec
-open Examples.NanoCairoMultiplicity.Types
-open Examples.NanoCairoMultiplicity.Helpers
+open Examples.PicoCairoMultiplicity.Types
+open Examples.PicoCairoMultiplicity.Helpers
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -192,4 +192,4 @@ def circuit
   completeness := by
     sorry
 
-end Examples.NanoCairoMultiplicity.AddInstruction
+end Examples.PicoCairoMultiplicity.AddInstruction

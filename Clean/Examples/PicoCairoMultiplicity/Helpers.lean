@@ -1,5 +1,5 @@
 /-
-NanoCairoMultiplicity Helper Functions
+PicoCairoMultiplicity Helper Functions
 Following PR 286 PicoCairo pattern but using multiplicities instead of timestamps.
 -/
 
@@ -9,14 +9,14 @@ import Clean.Circuit.Provable
 import Clean.Examples.FemtoCairo.Types
 import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Examples.FemtoCairo.Spec
-import Clean.Examples.NanoCairoMultiplicity.Types
+import Clean.Examples.PicoCairoMultiplicity.Types
 import Clean.Gadgets.Conditional
 
-namespace Examples.NanoCairoMultiplicity.Helpers
+namespace Examples.PicoCairoMultiplicity.Helpers
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
-open Examples.NanoCairoMultiplicity.Types
+open Examples.PicoCairoMultiplicity.Types
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -112,9 +112,15 @@ def conditionalDecodeCircuit :
     else
       decodeInstructionSpec input.rawInstrType output
   soundness := by
-    sorry
+    circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstructionCircuit, decodeInstructionSpec]
+    intro h_assumptions
+    rcases h_holds with ⟨ h_decode, h_conditional ⟩
+    specialize h_conditional h_assumptions
+    simp only [Gadgets.Conditional.Spec] at h_conditional
+    simp only [h_conditional]
+    rcases h_assumptions with h_zero | h_one <;> aesop
   completeness := by
-    sorry
+    circuit_proof_all [conditionalDecodeElaborated, conditionalDecodeMain, decodeInstructionCircuit, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstructionSpec]
 
 /-!
 ## Dummy instructions for conditional decoding
@@ -234,4 +240,4 @@ def dummyLoadStateInstruction : Var DecodedInstruction (F p) := {
   }
 }
 
-end Examples.NanoCairoMultiplicity.Helpers
+end Examples.PicoCairoMultiplicity.Helpers

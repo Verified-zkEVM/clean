@@ -4,7 +4,7 @@ import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Utils.SourceSinkPath
 
 /-!
-# NanoCairoMultiplicity
+# PicoCairoMultiplicity
 
 A FemtoCairo-like VM example that uses the multiplicity-based approach from `SourceSinkPath.lean`
 to prove execution correctness without timestamps.
@@ -24,7 +24,7 @@ The `SourceSinkPath.exists_path_from_source_to_sink` theorem then proves: if net
 initial, -1 at final, and 0 elsewhere, a valid execution path exists.
 -/
 
-namespace Examples.NanoCairoMultiplicity
+namespace Examples.PicoCairoMultiplicity
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.Spec
@@ -355,4 +355,4 @@ theorem execution_soundness
         validExecutionPath program memory path :=
   multiplicity_soundness program memory transitions initialState finalState h_valid h_source h_conserved
 
-end Examples.NanoCairoMultiplicity
+end Examples.PicoCairoMultiplicity
