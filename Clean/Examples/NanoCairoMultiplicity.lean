@@ -72,19 +72,6 @@ def finalBoundary (finalState : Var State (F p)) : Circuit (F p) Unit :=
 -- Connection to SourceSinkPath
 -- ============================================================================
 
-/-- Convert a State to a NamedList for comparison -/
-def stateToNamedList (s : State (F p)) : NamedList (F p) :=
-  { name := "state", values := [s.pc, s.ap, s.fp] }
-
-/-- Check if a NamedList represents a given state -/
-def isStateNL (nl : NamedList (F p)) (s : State (F p)) : Bool :=
-  nl.name = "state" ∧ nl.values = [s.pc, s.ap, s.fp]
-
-/-- Compute the net flow at a state from collected adds.
-    Sums multiplicities directly: +1 for destination entries, -1 for source entries. -/
-def netFlowFromAdds (adds : List (NamedList (F p) × ℤ)) (state : State (F p)) : ℤ :=
-  ∑ i : Fin adds.length, if isStateNL adds[i].1 state then adds[i].2 else 0
-
 /-- A valid execution path: each consecutive pair is a valid transition -/
 def validExecutionPath
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
@@ -99,12 +86,6 @@ def validExecutionPath
 
 /-- A list of transitions (src, dst) claimed by the prover -/
 abbrev TransitionList (F : Type) := List (State F × State F)
-
-/-- Generate adds from a list of transitions representing net flow contributions.
-    Each transition (src, dst) contributes +1 to outflow from src and -1 to inflow at dst. -/
-def transitionsToAdds (transitions : TransitionList (F p)) : List (NamedList (F p) × ℤ) :=
-  transitions.flatMap fun (src, dst) =>
-    [(stateToNamedList src, 1), (stateToNamedList dst, -1)]
 
 /-- All transitions in the list are valid according to the VM -/
 def AllTransitionsValid
@@ -124,14 +105,6 @@ def countAsDest (transitions : TransitionList (F p)) (s : State (F p)) : ℕ :=
 /-- Net flow at a state from transitions: outflow - inflow = sources - destinations -/
 def netFlowFromTransitions (transitions : TransitionList (F p)) (s : State (F p)) : ℤ :=
   (countAsSource transitions s : ℤ) - (countAsDest transitions s : ℤ)
-
-/-- Key property: netFlowFromAdds equals netFlowFromTransitions for generated adds -/
-theorem netFlow_transitionsToAdds_eq
-    (transitions : TransitionList (F p)) (s : State (F p)) :
-    netFlowFromAdds (transitionsToAdds transitions) s = netFlowFromTransitions transitions s := by
-  -- This theorem is not used in the main soundness proof.
-  -- The main theorem uses transitionsToRun and run_netFlow_eq_transitionNetFlow instead.
-  sorry
 
 /-- Build a Run from transitions -/
 def transitionsToRun (transitions : TransitionList (F p)) : Utils.StateTransition.Run (State (F p)) :=
