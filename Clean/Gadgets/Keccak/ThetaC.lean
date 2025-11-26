@@ -30,6 +30,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main, Operations.collectAdds]
+    apply InteractionDelta.toFinsupp_zero_of_eq_zero
     apply Circuit.collectAdds_mapFinRange
     intro i n
     simp [circuit_norm, Xor64.circuit, Operations.collectAdds]

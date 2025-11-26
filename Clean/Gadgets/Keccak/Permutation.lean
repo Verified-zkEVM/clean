@@ -31,6 +31,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
+    apply InteractionDelta.toFinsupp_zero_of_eq_zero
     apply Circuit.collectAdds_foldl
     intro state rc n
     simp [circuit_norm, KeccakRound.circuit, Operations.collectAdds]

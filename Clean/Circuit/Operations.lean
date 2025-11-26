@@ -132,6 +132,14 @@ theorem toFinsupp_zero_mult [DecidableEq F] (nl1 nl2 : NamedList F) :
     toFinsupp ([(nl1, 0), (nl2, 0)] : InteractionDelta F) = 0 := by
   simp only [toFinsupp, List.foldl_cons, List.foldl_nil, Finsupp.single_zero, add_zero, zero_add]
 
+/-- Helper lemma: equality of InteractionDeltas implies equality of their toFinsupp. -/
+theorem toFinsupp_eq_of_eq [DecidableEq F] {a b : InteractionDelta F} (h : a = b) :
+    a.toFinsupp = b.toFinsupp := by rw [h]
+
+/-- Helper lemma: if collectAdds = 0, then toFinsupp of collectAdds = toFinsupp 0. -/
+theorem toFinsupp_zero_of_eq_zero [DecidableEq F] {a : InteractionDelta F} (h : a = 0) :
+    a.toFinsupp = (0 : InteractionDelta F).toFinsupp := by rw [h]
+
 end InteractionDelta
 
 /--

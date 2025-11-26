@@ -9,13 +9,13 @@ instantiate an environment which uses the circuit's witness generators.
 
 Besides that, a `name` is required, to identify the table created from this circuit.
 -/
-structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α] [ProvableType β]
+structure LookupCircuit (F : Type) [Field F] [DecidableEq F] (α β : TypeMap) [ProvableType α] [ProvableType β]
     extends circuit : FormalCircuit F α β where
   name : String
   computableWitnesses : circuit.ComputableWitnesses
 
 namespace LookupCircuit
-variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
+variable {F : Type} [Field F] [DecidableEq F] {α β : TypeMap} [ProvableType α] [ProvableType β]
 
 def proverEnvironment (circuit : LookupCircuit F α β) (input : α F) : Environment F :=
   circuit.main (const input) |>.proverEnvironment

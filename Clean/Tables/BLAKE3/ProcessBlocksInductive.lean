@@ -82,6 +82,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   localAdds_eq _ _ _ := by
     simp only [main, circuit_norm, Operations.collectAdds, List.append_nil]
+    apply InteractionDelta.toFinsupp_zero_of_eq_zero
     apply Circuit.collectAdds_forEach
     intro x n; simp only [circuit_norm, Operations.collectAdds]
   subcircuitsConsistent := by
@@ -145,6 +146,7 @@ def circuit : FormalAssertion (F p) BlockInput where
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   localAdds_eq _ _ _ := by
     simp only [main, circuit_norm, Operations.collectAdds]
+    apply InteractionDelta.toFinsupp_zero_of_eq_zero
     apply Circuit.collectAdds_forEach
     intro x n; simp only [circuit_norm, Operations.collectAdds]
   subcircuitsConsistent := by

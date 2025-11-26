@@ -78,6 +78,7 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
   localAdds_eq := by
     intro block env offset
     simp only [circuit_norm]
+    apply InteractionDelta.toFinsupp_zero_of_eq_zero
     apply Circuit.collectAdds_forEach
     intro x n; simp only [circuit_norm, Operations.collectAdds]
   soundness := by

@@ -84,6 +84,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
   localAdds_eq _ _ _ := by
     simp only [main, circuit_norm, Operations.collectAdds]
     simp only [List.append_nil]
+    apply InteractionDelta.toFinsupp_zero_of_eq_zero
     apply Circuit.collectAdds_foldlRange'
     intro (lc1, e2) i k
     simp only [circuit_norm, Operations.collectAdds, List.append_nil]

@@ -588,7 +588,7 @@ end FlatOperation
 `FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
-def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
+def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F] [ProvableType Output] [ProvableType Input]
     (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
   let Spec input output := orig.Assumptions input → orig.Spec input output
   exact {
@@ -611,7 +611,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Fi
 `FormalAssertion`.  The idea is to make `FormalAssertion.Spec` available in the completeness
 by putting it within `GeneralFormalCircuit.Assumption`.
 -/
-def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
+def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F] [DecidableEq F] [ProvableType Input]
     (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit := by
   let Spec input (_ : Unit) := orig.Assumptions input → orig.Spec input
   exact {

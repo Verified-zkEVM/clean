@@ -5,7 +5,7 @@ import Clean.Utils.Tactics
 namespace Gadgets.Conditional
 
 section
-variable {F : Type} [Field F]
+variable {F : Type} [Field F] [DecidableEq F]
 variable {M : TypeMap} [ProvableType M]
 
 open ProvableType
