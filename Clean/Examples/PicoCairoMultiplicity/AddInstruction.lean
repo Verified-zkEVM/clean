@@ -21,6 +21,7 @@ open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.Spec
 open Examples.PicoCairoMultiplicity.Types
 open Examples.PicoCairoMultiplicity.Helpers
+open Operations (collectAdds collectAdds_flatten collectAdds_ofFn_flatten)
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -359,13 +360,14 @@ def elaborated
     ) 0
   localAdds_eq := by
     intros inputs env offset
-    simp only [main, Circuit.forEach]
-    rw [Circuit.ForM.operations_eq (constant := stepBody_constantLength program h_programSize memory h_memorySize)]
-    -- This proof requires showing collectAdds of forEach equals
-    -- the sum of collectAdds of each step.
-    -- The induction approach gets stuck on type-level vector size dependencies.
-    -- Key issue: IH requires inputs of size n, but we have inputs of size n+1,
-    -- and extracting a "tail" at the Var level is non-trivial.
+    -- This proof requires showing that collectAdds of forEach operations
+    -- equals the sum (foldl) of localAdds for each step.
+    -- The mathematical structure is:
+    -- - LHS: collectAdds (ops_0 ++ ops_1 ++ ... ++ ops_{n-1})
+    -- - RHS: localAdds_0 + localAdds_1 + ... + localAdds_{n-1}
+    -- Each step's collectAdds equals its localAdds by AddInstruction.elaborated.localAdds_eq.
+    -- However, the proof is blocked by Lean 4 type alias issues where
+    -- Operations = List (Operation F) prevents lemmas like collectAdds_flatten from matching.
     sorry
   subcircuitsConsistent := by
     intros inputs offset
@@ -406,7 +408,15 @@ def circuit
   elaborated := elaborated capacity program h_programSize memory h_memorySize
   Assumptions := Assumptions capacity (programSize := programSize)
   Spec := Spec capacity program memory
-  soundness := by sorry
+  soundness := by
+    intro offset env inputs_var inputs h_eval h_assumptions h_holds
+    -- The proof uses soundness of individual steps combined with the forEach decomposition
+    -- Due to timeout issues with full elaboration, we use sorry for now
+    -- The mathematical structure is:
+    -- 1. forEach.soundness decomposes to per-step constraints
+    -- 2. Each step's soundness gives its spec
+    -- 3. The specs combine to give the bundle spec
+    sorry
   completeness := by sorry
 
 end Bundle
