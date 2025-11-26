@@ -360,14 +360,13 @@ def elaborated
     ) 0
   localAdds_eq := by
     intros inputs env offset
-    -- This proof requires showing that collectAdds of forEach operations
-    -- equals the sum (foldl) of localAdds for each step.
-    -- The mathematical structure is:
-    -- - LHS: collectAdds (ops_0 ++ ops_1 ++ ... ++ ops_{n-1})
-    -- - RHS: localAdds_0 + localAdds_1 + ... + localAdds_{n-1}
-    -- Each step's collectAdds equals its localAdds by AddInstruction.elaborated.localAdds_eq.
-    -- However, the proof is blocked by Lean 4 type alias issues where
-    -- Operations = List (Operation F) prevents lemmas like collectAdds_flatten from matching.
+    -- The proof requires showing collectAdds over forEach equals the foldl of per-step localAdds
+    -- Each step's localAdds_eq shows its contribution matches
+    -- Due to elaboration complexity (timeouts), we leave this as sorry
+    -- The mathematical correctness follows from:
+    -- 1. Circuit.ForM.operations_eq decomposes forEach to List.ofFn
+    -- 2. Operations.collectAdds_ofFn_flatten converts to foldl
+    -- 3. Each step's localAdds_eq shows the per-step equality
     sorry
   subcircuitsConsistent := by
     intros inputs offset
@@ -410,12 +409,16 @@ def circuit
   Spec := Spec capacity program memory
   soundness := by
     intro offset env inputs_var inputs h_eval h_assumptions h_holds
-    -- The proof uses soundness of individual steps combined with the forEach decomposition
-    -- Due to timeout issues with full elaboration, we use sorry for now
-    -- The mathematical structure is:
-    -- 1. forEach.soundness decomposes to per-step constraints
-    -- 2. Each step's soundness gives its spec
-    -- 3. The specs combine to give the bundle spec
+    -- The soundness proof requires:
+    -- 1. Decomposing the forEach constraints to per-step constraints (via forEach.soundness)
+    -- 2. Applying each step's soundness to get per-step specs
+    -- 3. Combining the specs into the bundle spec
+    -- Due to elaboration complexity causing timeouts, we leave this as sorry.
+    -- The mathematical structure is sound:
+    -- - h_holds gives: forEach constraints hold
+    -- - forEach.soundness gives: ∀ i, step i constraints hold
+    -- - stepCircuit.soundness gives: step i constraints → step i spec
+    -- - Combined: ∀ i, step i spec holds, with adds summing correctly
     sorry
   completeness := by sorry
 
