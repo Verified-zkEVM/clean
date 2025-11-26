@@ -95,7 +95,7 @@ def main
 /--
 ElaboratedCircuit for LOAD_STATE instruction step.
 -/
-noncomputable def elaborated
+def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
@@ -166,13 +166,13 @@ def Spec
       | none => False
     | none => False
   else
-    -- When disabled, both entries have multiplicity 0
-    adds = 0  -- Empty delta when disabled
+    -- When disabled, both entries have multiplicity 0, semantically equivalent to empty
+    adds.toFinsupp = 0
 
 /--
 FormalAssertionChangingMultiset for the LOAD_STATE instruction step.
 -/
-noncomputable def circuit
+def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalAssertionChangingMultiset (F p) InstructionStepInput where
@@ -195,6 +195,7 @@ noncomputable def circuit
     rcases h_enabled_bool with h_zero | h_one
     · -- Case: enabled = 0
       simp only [h_zero, zero_ne_one, ite_false, zero_mul, circuit_norm]
+      exact InteractionDelta.toFinsupp_zero_mult _ _
     · -- Case: enabled = 1
       simp only [h_one, ite_true]
 
@@ -285,7 +286,7 @@ namespace Bundle
 /--
 Main circuit for executing a bundle of LOAD_STATE instructions.
 -/
-noncomputable def main
+def main
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
@@ -298,7 +299,7 @@ noncomputable def main
 /--
 ElaboratedCircuit for the LOAD_STATE bundle.
 -/
-noncomputable def elaborated
+def elaborated
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
@@ -351,7 +352,7 @@ def Spec
 /--
 FormalAssertionChangingMultiset for the LOAD_STATE bundle.
 -/
-noncomputable def circuit
+def circuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :

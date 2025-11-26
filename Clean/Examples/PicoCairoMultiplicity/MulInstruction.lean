@@ -93,7 +93,7 @@ def main
 /--
 ElaboratedCircuit for MUL instruction step.
 -/
-noncomputable def elaborated
+def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
@@ -159,13 +159,13 @@ def Spec
       | none => False
     | none => False
   else
-    -- When disabled, both entries have multiplicity 0
-    adds = 0  -- Empty delta when disabled
+    -- When disabled, both entries have multiplicity 0, semantically equivalent to empty
+    adds.toFinsupp = 0
 
 /--
 FormalAssertionChangingMultiset for the MUL instruction step.
 -/
-noncomputable def circuit
+def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalAssertionChangingMultiset (F p) InstructionStepInput where
@@ -188,6 +188,7 @@ noncomputable def circuit
     rcases h_enabled_bool with h_zero | h_one
     · -- Case: enabled = 0
       simp only [h_zero, zero_ne_one, ite_false, zero_mul, circuit_norm]
+      exact InteractionDelta.toFinsupp_zero_mult _ _
     · -- Case: enabled = 1
       simp only [h_one, ite_true]
 
@@ -298,7 +299,7 @@ namespace Bundle
 Bundle of MUL instruction step circuits.
 Takes a vector of inputs with given capacity and executes MUL instructions for each enabled input.
 -/
-noncomputable def main
+def main
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
@@ -310,7 +311,7 @@ noncomputable def main
 /--
 Elaborated circuit for MUL instruction bundle.
 -/
-noncomputable def elaborated
+def elaborated
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
@@ -320,13 +321,16 @@ noncomputable def elaborated
   localLength_eq := by sorry
   output _ _ := ()
   localAdds inputs env offset :=
-    Finset.sum Finset.univ fun i : Fin capacity =>
+    -- Sum up localAdds from each instruction step using list fold
+    (List.finRange capacity).foldl (fun acc i =>
       let input := eval env inputs[i]
       let preState := input.preState
       let postState : State (F p) := { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
       let enabled := input.enabled
+      acc +
       InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
       InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
+    ) 0
   localAdds_eq := by sorry
   subcircuitsConsistent := by sorry
 
@@ -344,9 +348,9 @@ def Spec
     (adds : InteractionDelta (F p)) : Prop :=
   ∃ (stepAdds : Fin capacity → InteractionDelta (F p)),
     (∀ i : Fin capacity, MulInstruction.Spec program memory inputs[i] (stepAdds i)) ∧
-    adds = Finset.sum Finset.univ stepAdds
+    adds = (List.finRange capacity).foldl (fun acc i => acc + stepAdds i) 0
 
-noncomputable def circuit
+def circuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :

@@ -53,7 +53,7 @@ Main circuit for the execution bundle.
 Executes each instruction circuit with its enabled flag.
 Asserts that exactly one instruction is enabled.
 -/
-noncomputable def main
+def main
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var ExecutionBundleInput (F p)) : Circuit (F p) Unit := do
@@ -92,7 +92,7 @@ noncomputable def main
 /--
 ElaboratedCircuit for the execution bundle.
 -/
-noncomputable def elaborated
+def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) ExecutionBundleInput unit where
@@ -178,7 +178,7 @@ def Spec
 /--
 FormalAssertionChangingMultiset for the execution bundle.
 -/
-noncomputable def circuit
+def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalAssertionChangingMultiset (F p) ExecutionBundleInput where
