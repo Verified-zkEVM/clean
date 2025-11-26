@@ -304,15 +304,28 @@ namespace Bundle
 Bundle of ADD instruction step circuits.
 Takes a vector of inputs with given capacity and executes ADD instructions for each enabled input.
 -/
+def stepBody
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit :=
+  (AddInstruction.circuit program h_programSize memory h_memorySize).elaborated.main input
+
+instance stepBody_constantLength
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    Circuit.ConstantLength (stepBody program h_programSize memory h_memorySize) where
+  localLength := 27
+  localLength_eq _ _ := by
+    simp only [stepBody]
+    exact (AddInstruction.circuit program h_programSize memory h_memorySize).elaborated.localLength_eq _ _
+
 def main
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
-  for h : i in [0:capacity] do
-    let idx : Fin capacity := ⟨i, Membership.mem.upper h⟩
-    -- Use the circuit for compositional reuse
-    (AddInstruction.circuit program h_programSize memory h_memorySize).elaborated.main inputs[idx.val]
+    (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit :=
+  Circuit.forEach inputs (stepBody program h_programSize memory h_memorySize)
+    (stepBody_constantLength program h_programSize memory h_memorySize)
 
 /--
 Elaborated circuit for ADD instruction bundle.
@@ -326,7 +339,8 @@ def elaborated
   localLength _ := capacity * 27  -- Each step uses 27 locals
   localLength_eq := by
     intros input offset
-    sorry
+    simp only [main, Circuit.forEach.localLength_eq]
+    congr 1
   output _ _ := ()
   localAdds inputs env offset :=
     -- Sum up localAdds from each instruction step using list fold
@@ -348,7 +362,9 @@ def elaborated
     sorry
   subcircuitsConsistent := by
     intros inputs offset
-    sorry
+    rw [Operations.SubcircuitsConsistent, main, Circuit.forEach.forAll]
+    intro i
+    exact (AddInstruction.elaborated program h_programSize memory h_memorySize).subcircuitsConsistent _ _
 
 /--
 Assumptions for the bundle: each input must satisfy the individual step assumptions.
