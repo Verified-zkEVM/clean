@@ -380,6 +380,45 @@ theorem collectAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
   | cons op ops1 ih =>
     cases op <;> simp only [List.cons_append, collectAdds, ih, InteractionDelta.add_assoc']
 
+-- Helper: a + foldl (+) 0 xs = foldl (+) a xs for InteractionDelta
+private theorem foldl_add_start {xs : List (InteractionDelta F)} {a : InteractionDelta F} :
+    a + xs.foldl (· + ·) 0 = xs.foldl (· + ·) a := by
+  induction xs generalizing a with
+  | nil => simp only [List.foldl_nil, InteractionDelta.add_zero']
+  | cons y ys ih =>
+    simp only [List.foldl_cons, InteractionDelta.zero_add']
+    rw [←ih (a:=y), ←ih (a:=a+y)]
+    rw [InteractionDelta.add_assoc']
+
+theorem collectAdds_flatten (env : Environment F) (opss : List (Operations F)) :
+    collectAdds env opss.flatten = (opss.map (collectAdds env)).foldl (· + ·) 0 := by
+  induction opss with
+  | nil => rfl
+  | cons ops opss ih =>
+    simp only [List.flatten_cons, collectAdds_append, List.map_cons, List.foldl_cons,
+      InteractionDelta.zero_add', ih, foldl_add_start]
+
+-- Helper to convert between foldl forms
+private theorem foldl_ofFn_eq {m : ℕ} {β : Type*} (f : Fin m → β) (g : β → β → β) (init : β) :
+    (List.ofFn f).foldl g init = (List.finRange m).foldl (fun acc i => g acc (f i)) init := by
+  induction m generalizing init with
+  | zero => rfl
+  | succ n ih =>
+    simp only [List.ofFn_succ, List.finRange_succ, List.foldl_cons, List.foldl_map]
+    exact ih (fun i => f i.succ) (g init (f 0))
+
+theorem collectAdds_ofFn_flatten {m : ℕ} (env : Environment F) (f : Fin m → Operations F) :
+    collectAdds env (List.ofFn f).flatten =
+    (List.finRange m).foldl (fun acc i => acc + collectAdds env (f i)) 0 := by
+  rw [collectAdds_flatten, List.map_ofFn, foldl_ofFn_eq]
+  simp only [Function.comp_apply]
+
+-- Version where f takes Nat and uses Fin.val coercion implicitly
+theorem collectAdds_ofFn_flatten' {m : ℕ} (env : Environment F) (f : ℕ → Operations F) :
+    collectAdds env (List.ofFn (fun i : Fin m => f ↑i)).flatten =
+    (List.finRange m).foldl (fun acc i => acc + collectAdds env (f i.val)) 0 :=
+  collectAdds_ofFn_flatten env (fun i => f ↑i)
+
 end Operations
 
 -- generic folding over `Operations` resulting in a proposition
