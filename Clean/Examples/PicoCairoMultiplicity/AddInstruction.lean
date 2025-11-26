@@ -108,7 +108,7 @@ def localAdds
 /--
 ElaboratedCircuit for ADD instruction step.
 -/
-noncomputable def elaborated
+def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
@@ -180,7 +180,7 @@ def Spec
 /--
 FormalAssertionChangingMultiset for the ADD instruction step.
 -/
-noncomputable def circuit
+def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalAssertionChangingMultiset (F p) InstructionStepInput where
@@ -188,8 +188,203 @@ noncomputable def circuit
   Assumptions := Assumptions (programSize := programSize)
   Spec := Spec program memory
   soundness := by
-    sorry
+    circuit_proof_start [elaborated, main, Assumptions, Spec, fetchInstructionCircuit,
+      conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
+      readFromMemoryCircuit, decodeInstructionCircuit, decodeInstructionSpec]
+
+    -- Extract assumptions
+    obtain ⟨h_enabled_bool, h_pc_bound⟩ := h_assumptions
+    obtain ⟨h_input_enabled, h_input_preState⟩ := h_input
+
+    -- Extract constraints from h_holds
+    obtain ⟨_, h_fetch, h_decode_cond, h_isAdd, h_read1, h_read2, h_read3, h_add_constraint⟩ := h_holds
+
+    -- Case split on enabled
+    rcases h_enabled_bool with h_zero | h_one
+    · -- Case: enabled = 0
+      simp only [h_zero, zero_ne_one, ite_false, zero_mul, circuit_norm]
+    · -- Case: enabled = 1
+      simp only [h_one, ite_true]
+
+      -- Simplify h_input_preState to get eval relation on pc
+      have h_pc_eval : Expression.eval env input_var_preState.pc = input_preState.pc := by
+        rw [←h_input_preState]; rfl
+      rw [h_pc_eval] at h_fetch
+
+      -- Split on fetchInstruction result
+      split at h_fetch
+      case h_2 => contradiction
+      case h_1 rawInstr h_fetch_eq =>
+        rw [h_fetch_eq]
+        simp only [Option.some.injEq, one_mul, mul_one, circuit_norm]
+
+        -- Get the decode result - apply IsBool hypothesis
+        have h_bool : IsBool input_enabled := Or.inr h_one
+        specialize h_decode_cond h_bool
+        simp only [h_one, one_ne_zero, ite_false] at h_decode_cond
+
+        -- Relate env.get i₀ to rawInstr.rawInstrType using h_fetch
+        have h_rawInstrType : env.get i₀ = rawInstr.rawInstrType := congrArg RawInstruction.rawInstrType h_fetch
+        have h_op1 : env.get (i₀ + 1) = rawInstr.op1 := congrArg RawInstruction.op1 h_fetch
+        have h_op2 : env.get (i₀ + 1 + 1) = rawInstr.op2 := congrArg RawInstruction.op2 h_fetch
+        have h_op3 : env.get (i₀ + 1 + 1 + 1) = rawInstr.op3 := congrArg RawInstruction.op3 h_fetch
+
+        rw [h_rawInstrType] at h_decode_cond
+
+        split at h_decode_cond
+        case h_2 => exact h_decode_cond.elim
+        case h_1 instr_type mode1_val mode2_val mode3_val h_decode_eq =>
+          -- Rewrite goal with h_decode_eq
+          simp only [h_decode_eq]
+          obtain ⟨h_instr_type, h_instr_encoded, h_mode1, h_mode1_encoded,
+                  h_mode2, h_mode2_encoded, h_mode3, h_mode3_encoded⟩ := h_decode_cond
+
+          -- Show instrType = 0 from h_isAdd constraint
+          have h_isAdd_eq : instr_type = 0 := by
+            -- From h_isAdd: isAdd + -1 = 0, get isAdd = 1
+            have h_isAdd_1 := add_neg_eq_zero.mp h_isAdd
+            -- Normalize both h_isAdd_1 and h_instr_type to same form, then simplify
+            simp only [circuit_norm, explicit_provable_type] at h_isAdd_1 h_instr_type
+            simp only [DecodedInstructionType.val, h_isAdd_1, ↓reduceIte] at h_instr_type
+            exact h_instr_type.symm
+          simp only [h_isAdd_eq, ite_true]
+
+          -- Use soundness of memory reads
+          specialize h_read1 h_mode1_encoded
+          specialize h_read2 h_mode2_encoded
+          specialize h_read3 h_mode3_encoded
+
+          rw [h_mode1, h_op1] at h_read1
+          rw [h_mode2, h_op2] at h_read2
+          rw [h_mode3, h_op3] at h_read3
+
+          -- Split on the goal's match expressions
+          split
+          case h_1 v1 v2 v3 h_v1_eq h_v2_eq h_v3_eq =>
+            -- v1 + v2 = v3 from ADD constraint
+            simp only [h_one, one_mul] at h_add_constraint
+            -- Get values from h_read hypotheses
+            split at h_read1
+            case h_1 val1 h_read1_val =>
+              split at h_read2
+              case h_1 val2 h_read2_val =>
+                split at h_read3
+                case h_1 val3 h_read3_val =>
+                  -- Now we have h_v1_eq, h_v2_eq, h_v3_eq as well as h_read1_val, h_read2_val, h_read3_val
+                  -- both saying dataMemoryAccess = some value
+                  have hv1 : v1 = val1 := by simp_all
+                  have hv2 : v2 = val2 := by simp_all
+                  have hv3 : v3 = val3 := by simp_all
+                  rw [hv1, hv2, hv3, ←h_read1, ←h_read2, ←h_read3]
+                  -- h_add_constraint: v3 + -(v1 + v2) = 0 means v3 = v1 + v2
+                  -- Goal: v1 + v2 = v3
+                  have h := h_add_constraint
+                  have h' : env.get (i₀ + 4 + 8 + 5 + 5 + 1 + 1 + 1 + 1) =
+                            env.get (i₀ + 4 + 8 + 1 + 1 + 1 + 1) + env.get (i₀ + 4 + 8 + 5 + 1 + 1 + 1 + 1) := by
+                    have : env.get (i₀ + 4 + 8 + 5 + 5 + 1 + 1 + 1 + 1) +
+                           -(env.get (i₀ + 4 + 8 + 1 + 1 + 1 + 1) + env.get (i₀ + 4 + 8 + 5 + 1 + 1 + 1 + 1)) = 0 := h
+                    -- From a + -b = 0, we get a = b
+                    have := add_neg_eq_zero.mp this
+                    exact this
+                  ring_nf at h' ⊢
+                  exact h'.symm
+                case h_2 => simp_all
+              case h_2 => simp_all
+            case h_2 => simp_all
+          case h_2 =>
+            -- One of dataMemoryAccess returned none - show contradiction
+            split at h_read1 <;> split at h_read2 <;> split at h_read3 <;> simp_all
   completeness := by
     sorry
+
+namespace Bundle
+
+/--
+Bundle of ADD instruction step circuits.
+Takes a vector of inputs with given capacity and executes ADD instructions for each enabled input.
+-/
+noncomputable def main
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
+  for h : i in [0:capacity] do
+    let idx : Fin capacity := ⟨i, Membership.mem.upper h⟩
+    -- Use the circuit for compositional reuse
+    (AddInstruction.circuit program h_programSize memory h_memorySize).elaborated.main inputs[idx.val]
+
+/--
+Elaborated circuit for ADD instruction bundle.
+-/
+noncomputable def elaborated
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    ElaboratedCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
+  main := main capacity program h_programSize memory h_memorySize
+  localLength _ := capacity * 27  -- Each step uses 27 locals
+  localLength_eq := by
+    intros input offset
+    sorry
+  output _ _ := ()
+  localAdds inputs env offset :=
+    -- Sum up localAdds from each instruction step using list fold
+    (List.finRange capacity).foldl (fun acc i =>
+      let input := eval env inputs[i]
+      let preState := input.preState
+      let postState : State (F p) := {
+        pc := preState.pc + 4,
+        ap := preState.ap,
+        fp := preState.fp
+      }
+      let enabled := input.enabled
+      acc +
+      InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
+      InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
+    ) 0
+  localAdds_eq := by
+    intros inputs env offset
+    sorry
+  subcircuitsConsistent := by
+    intros inputs offset
+    sorry
+
+/--
+Assumptions for the bundle: each input must satisfy the individual step assumptions.
+-/
+def Assumptions
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize]
+    (inputs : ProvableVector InstructionStepInput capacity (F p)) : Prop :=
+  ∀ i : Fin capacity, AddInstruction.Assumptions (programSize := programSize) inputs[i]
+
+/--
+Spec for the bundle: each element satisfies its step spec, and local adds are summed.
+-/
+def Spec
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (inputs : ProvableVector InstructionStepInput capacity (F p))
+    (adds : InteractionDelta (F p)) : Prop :=
+  ∃ (stepAdds : Fin capacity → InteractionDelta (F p)),
+    (∀ i : Fin capacity, AddInstruction.Spec program memory inputs[i] (stepAdds i)) ∧
+    adds = (List.finRange capacity).foldl (fun acc i => acc + stepAdds i) 0
+
+/--
+FormalAssertionChangingMultiset for ADD instruction bundle.
+-/
+noncomputable def circuit
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    FormalAssertionChangingMultiset (F p) (ProvableVector InstructionStepInput capacity) where
+  elaborated := elaborated capacity program h_programSize memory h_memorySize
+  Assumptions := Assumptions capacity (programSize := programSize)
+  Spec := Spec capacity program memory
+  soundness := by sorry
+  completeness := by sorry
+
+end Bundle
 
 end Examples.PicoCairoMultiplicity.AddInstruction

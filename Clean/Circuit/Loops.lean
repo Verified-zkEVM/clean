@@ -676,7 +676,7 @@ theorem collectAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : 
   case cons n a as ih =>
     simp only [circuit_norm, Operations.collectAdds_append]
     rw [h_body, ih]
-    simp
+    rfl
 
 theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
@@ -689,7 +689,7 @@ theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β
   case cons x xs ih =>
     simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
     rw [Operations.collectAdds_append, Operations.collectAdds_append]
-    simp only [Operations.collectAdds, h_body, add_zero, ih]
+    simp only [Operations.collectAdds, h_body, InteractionDelta.add_zero', ih]
 
 theorem collectAdds_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
@@ -714,7 +714,7 @@ theorem collectAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector �
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]
     simp only [Circuit.bind_operations_eq, Operations.collectAdds_append]
-    rw [h_body, zero_add, ←Vector.foldlM_toList]
+    rw [h_body, InteractionDelta.zero_add', ←Vector.foldlM_toList]
     exact ih _ _
 
 theorem collectAdds_foldlRange [Inhabited β] {m : ℕ} [inst : Inhabited (Fin m)]
@@ -740,7 +740,7 @@ theorem collectAdds_foldlRange' [Inhabited β] {m : ℕ}
   | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.collectAdds]
   | cons x xs ih =>
     simp only [List.foldlM_cons, Circuit.bind_operations_eq, Operations.collectAdds_append]
-    rw [h_body, zero_add]
+    rw [h_body, InteractionDelta.zero_add']
     exact ih ((body init x).output offset) (offset + (body init x).localLength offset)
 
 end Circuit

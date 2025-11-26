@@ -421,8 +421,8 @@ theorem collectAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environme
       have h_n2_lt : n2 < m + 3 := by unfold n2; omega
       simp only [Circuit.operations, Circuit.bind_def]
       rw [Operations.collectAdds_append, Operations.collectAdds_append]
-      simp only [IH _ h_n1_lt, IH _ h_n2_lt]
-      simp only [zero_add]
+      rw [IH _ h_n1_lt, IH _ h_n2_lt]
+      simp only [InteractionDelta.zero_add']
       exact AND.circuit.localAdds_eq _ env _
 
 -- Helper theorem for subcircuitsConsistent

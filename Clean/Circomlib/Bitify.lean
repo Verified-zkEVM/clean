@@ -83,9 +83,10 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   localAdds_eq _ _ _ := by
     simp only [main, circuit_norm, Operations.collectAdds]
+    simp only [List.append_nil]
     apply Circuit.collectAdds_foldlRange'
     intro (lc1, e2) i k
-    simp only [circuit_norm, Operations.collectAdds, add_zero]
+    simp only [circuit_norm, Operations.collectAdds, List.append_nil]
 
   soundness := by
     circuit_proof_start

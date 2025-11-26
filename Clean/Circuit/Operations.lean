@@ -24,23 +24,106 @@ def eval (env : Environment F) (nl : NamedList (Expression F)) : NamedList F :=
 end NamedList
 
 /--
-An `InteractionDelta` represents a change to an interaction (multiset argument), as a finite map
-from named lists to their multiplicities. Using `Finsupp` gives us a canonical representation:
-entries with multiplicity 0 are not stored, so two deltas are equal iff they have the same
-non-zero entries.
+An `InteractionDelta` represents a change to an interaction (multiset argument), as a list
+of (NamedList, multiplicity) pairs. This representation is computable and supports efficient
+addition via list concatenation. Two deltas are semantically equal if they have the same
+total multiplicity for each key (checked via `toFinsupp` in proofs).
+
+Note: Multiplicities are in `F` (the field) rather than `ℤ` because the `enabled` flag used
+in conditional emission (e.g., `emitStateWhen enabled mult state`) is a field element.
+Using `F` avoids ambiguity in converting `F → ℤ` and allows direct multiplication
+`enabled * mult` without coercion issues.
 -/
-abbrev InteractionDelta (F : Type) [Zero F] := Finsupp (NamedList F) F
+abbrev InteractionDelta (F : Type) := List (NamedList F × F)
 
 namespace InteractionDelta
-variable {F : Type} [Field F]
+variable {F : Type}
+
+instance : Zero (InteractionDelta F) := ⟨[]⟩
+
+instance : Inhabited (InteractionDelta F) := ⟨0⟩
 
 /-- Create a singleton interaction delta with one named list and its multiplicity -/
-noncomputable def single (nl : NamedList F) (mult : F) : InteractionDelta F :=
-  Finsupp.single nl mult
+def single (nl : NamedList F) (mult : F) : InteractionDelta F :=
+  [(nl, mult)]
 
-theorem add_zero' (d : InteractionDelta F) : d + 0 = d := add_zero d
+/-- Addition is list concatenation - semantic equality handles combining multiplicities -/
+instance : Add (InteractionDelta F) := ⟨List.append⟩
 
-theorem zero_add' (d : InteractionDelta F) : 0 + d = d := zero_add d
+/-- Negation: negate all multiplicities -/
+def neg [Neg F] (d : InteractionDelta F) : InteractionDelta F :=
+  d.map (fun (nl, m) => (nl, -m))
+
+instance [Neg F] : Neg (InteractionDelta F) := ⟨neg⟩
+
+variable [Field F]
+
+/-- Get the total multiplicity for a key by summing all entries -/
+def getMultiplicity [DecidableEq F] (nl : NamedList F) (d : InteractionDelta F) : F :=
+  d.foldl (fun acc (k, v) => if k = nl then acc + v else acc) 0
+
+/-- Convert to Finsupp for proofs (noncomputable) -/
+noncomputable def toFinsupp [DecidableEq F] (d : InteractionDelta F) : Finsupp (NamedList F) F :=
+  d.foldl (fun acc (nl, m) => acc + Finsupp.single nl m) 0
+
+omit [Field F] in
+@[circuit_norm] theorem add_eq_append (d1 d2 : InteractionDelta F) : d1 + d2 = d1 ++ d2 := rfl
+
+omit [Field F] in
+@[circuit_norm] theorem zero_eq_nil : (0 : InteractionDelta F) = [] := rfl
+
+omit [Field F] in
+@[circuit_norm] theorem add_zero' (d : InteractionDelta F) : d + 0 = d := List.append_nil d
+
+omit [Field F] in
+@[circuit_norm] theorem zero_add' (d : InteractionDelta F) : 0 + d = d := List.nil_append d
+
+omit [Field F] in
+theorem add_assoc' (d1 d2 d3 : InteractionDelta F) : (d1 + d2) + d3 = d1 + (d2 + d3) :=
+  List.append_assoc d1 d2 d3
+
+/-- AddMonoid instance for InteractionDelta.
+    Note: Addition is list concatenation, so commutativity only holds semantically
+    (same result via toFinsupp), not definitionally. -/
+instance instAddMonoid : AddMonoid (InteractionDelta F) where
+  add := (· + ·)
+  add_assoc := add_assoc'
+  zero := 0
+  zero_add := zero_add'
+  add_zero := add_zero'
+  nsmul := nsmulRec
+
+@[circuit_norm]
+theorem single_zero (nl : NamedList F) : single nl 0 = [(nl, 0)] := rfl
+
+-- Semantic equality: two deltas are equal if they have the same toFinsupp
+theorem toFinsupp_add [DecidableEq F] (d1 d2 : InteractionDelta F) :
+    (d1 + d2).toFinsupp = d1.toFinsupp + d2.toFinsupp := by
+  simp only [toFinsupp, add_eq_append]
+  have h : ∀ (init : Finsupp (NamedList F) F) (l : List (NamedList F × F)),
+      List.foldl (fun acc x => acc + Finsupp.single x.1 x.2) init l =
+      init + List.foldl (fun acc x => acc + Finsupp.single x.1 x.2) 0 l := by
+    intro init l
+    induction l generalizing init with
+    | nil => simp
+    | cons hd' tl' ih' =>
+      simp only [List.foldl_cons]
+      rw [ih' (init + Finsupp.single hd'.1 hd'.2), ih' (0 + Finsupp.single hd'.1 hd'.2)]
+      simp only [zero_add]
+      rw [add_assoc]
+  induction d1 with
+  | nil => simp [List.foldl_nil]
+  | cons hd tl ih =>
+    simp only [List.cons_append, List.foldl_cons]
+    rw [h (0 + Finsupp.single hd.1 hd.2) (tl ++ d2)]
+    simp only [zero_add]
+    rw [ih]
+    rw [h (Finsupp.single hd.1 hd.2) tl]
+    rw [add_assoc]
+
+theorem toFinsupp_single [DecidableEq F] (nl : NamedList F) (m : F) :
+    (single nl m).toFinsupp = Finsupp.single nl m := by
+  simp only [single, toFinsupp, List.foldl_cons, List.foldl_nil, zero_add]
 
 end InteractionDelta
 
@@ -259,7 +342,7 @@ def induct {motive : Operations F → Sort*}
   | .add mult nl :: ops => add mult nl ops (induct empty witness assert lookup subcircuit add ops)
 
 /-- Collect all add operations from the operations list, evaluating their expressions -/
-noncomputable def collectAdds (env : Environment F) : Operations F → InteractionDelta F
+def collectAdds (env : Environment F) : Operations F → InteractionDelta F
   | [] => 0
   | .add mult nl :: ops => InteractionDelta.single (nl.eval env) (mult.eval env) + collectAdds env ops
   | .witness _ _ :: ops => collectAdds env ops
@@ -286,9 +369,9 @@ theorem collectAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operation
 theorem collectAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
     collectAdds env (ops1 ++ ops2) = collectAdds env ops1 + collectAdds env ops2 := by
   induction ops1 with
-  | nil => simp [collectAdds]
+  | nil => simp only [List.nil_append, collectAdds, InteractionDelta.zero_add']
   | cons op ops1 ih =>
-    cases op <;> simp only [List.cons_append, collectAdds, ih, add_assoc]
+    cases op <;> simp only [List.cons_append, collectAdds, ih, InteractionDelta.add_assoc']
 
 end Operations
 
