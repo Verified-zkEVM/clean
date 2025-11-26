@@ -359,10 +359,13 @@ def elaborated
     ) 0
   localAdds_eq := by
     intros inputs env offset
-    -- TODO: This proof requires showing collectAdds of forEach equals
-    -- the sum of collectAdds of each step. The key lemma is
-    -- Operations.collectAdds_ofFn_flatten but there are unification issues
-    -- with Fin coercions in the goal structure.
+    simp only [main, Circuit.forEach]
+    rw [Circuit.ForM.operations_eq (constant := stepBody_constantLength program h_programSize memory h_memorySize)]
+    -- This proof requires showing collectAdds of forEach equals
+    -- the sum of collectAdds of each step.
+    -- The induction approach gets stuck on type-level vector size dependencies.
+    -- Key issue: IH requires inputs of size n, but we have inputs of size n+1,
+    -- and extracting a "tail" at the Var level is non-trivial.
     sorry
   subcircuitsConsistent := by
     intros inputs offset
