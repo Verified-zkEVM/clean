@@ -132,9 +132,8 @@ def elaborated
     intro input env offset
     simp only [main, circuit_norm, emitStateWhen, emitAdd, fetchInstructionCircuit,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
-      readFromMemoryCircuit, assertBool, FormalAssertion.toSubcircuit,
-      Operations.collectAdds, List.nil_append, NamedList.eval,
-      add_zero, zero_add]
+      readFromMemoryCircuit, assertBool, FormalAssertion.toSubcircuit, Operations.collectAdds,
+      List.nil_append, NamedList.eval, add_zero]
     rfl
 
 /--
@@ -219,7 +218,7 @@ def circuit
       case h_2 => contradiction
       case h_1 rawInstr h_fetch_eq =>
         rw [h_fetch_eq]
-        simp only [Option.some.injEq, one_mul, mul_one, circuit_norm]
+        simp only [one_mul, mul_one, circuit_norm]
 
         -- Get the decode result - apply IsBool hypothesis
         have h_bool : IsBool input_enabled := Or.inr h_one
@@ -372,7 +371,7 @@ def elaborated
     apply Finset.sum_congr rfl
     intro i _
     -- Unfold stepBody and localLength
-    simp only [stepBody, Circuit.ConstantLength.localLength, stepBody_constantLength]
+    simp only [stepBody, Circuit.ConstantLength.localLength]
     -- Use AddInstruction.elaborated.localAdds_eq
     have h_step := (AddInstruction.elaborated program h_programSize memory h_memorySize).localAdds_eq
       inputs[i] env (offset + ↑i * 27)
