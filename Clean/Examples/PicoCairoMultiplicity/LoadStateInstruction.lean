@@ -22,6 +22,8 @@ open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.Spec
 open Examples.PicoCairoMultiplicity.Types
 open Examples.PicoCairoMultiplicity.Helpers
+open Operations (collectAdds collectAdds_flatten collectAdds_ofFn_flatten)
+open Circuit (collectAdds_forEach_foldl)
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -284,17 +286,33 @@ def circuit
 namespace Bundle
 
 /--
+Step body for a single LOAD_STATE instruction in the bundle.
+-/
+def stepBody
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit :=
+  (LoadStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.main input
+
+instance stepBody_constantLength
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    Circuit.ConstantLength (stepBody program h_programSize memory h_memorySize) where
+  localLength := 27
+  localLength_eq _ _ := by
+    simp only [stepBody]
+    exact (LoadStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.localLength_eq _ _
+
+/--
 Main circuit for executing a bundle of LOAD_STATE instructions.
 -/
 def main
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
-  for h : i in [0:capacity] do
-    let idx : Fin capacity := ⟨i, Membership.mem.upper h⟩
-    -- Use the circuit for compositional reuse
-    (LoadStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.main inputs[idx.val]
+    (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit :=
+  Circuit.forEach inputs (stepBody program h_programSize memory h_memorySize)
+    (stepBody_constantLength program h_programSize memory h_memorySize)
 
 /--
 ElaboratedCircuit for the LOAD_STATE bundle.
@@ -307,26 +325,51 @@ def elaborated
   main := main capacity program h_programSize memory h_memorySize
   localLength _ := capacity * 27
   localLength_eq := by
-    intro input offset
-    sorry
+    intros input offset
+    simp only [main, Circuit.forEach.localLength_eq]
+    congr 1
   output _ _ := ()
   localAdds inputs env offset :=
-    let inputsEval := eval env inputs
-    List.foldl (· + ·) 0 <| List.ofFn fun (i : Fin capacity) =>
-      let preState := inputsEval[i.val].preState
-      let v1 := env.get (offset + i.val * 27 + 4 + 8 + 4)
-      let v2 := env.get (offset + i.val * 27 + 4 + 8 + 5 + 4)
-      let v3 := env.get (offset + i.val * 27 + 4 + 8 + 5 + 5 + 4)
+    (List.finRange capacity).foldl (fun acc (i : Fin capacity) =>
+      let input := eval env inputs[i]
+      let preState := input.preState
+      -- For LOAD_STATE, postState uses the memory values v1, v2, v3 at computed offsets
+      let v1 := env.get (offset + i * 27 + 4 + 8 + 4)
+      let v2 := env.get (offset + i * 27 + 4 + 8 + 5 + 4)
+      let v3 := env.get (offset + i * 27 + 4 + 8 + 5 + 5 + 4)
       let postState : State (F p) := { pc := v1, ap := v2, fp := v3 }
-      let enabled := inputsEval[i.val].enabled
+      let enabled := input.enabled
+      acc +
       InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
       InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
-  localAdds_eq := by
-    intro input env offset
-    sorry
+    ) 0
+  localAdds_eq inputs env offset := by
+    -- Unfold main to expose forEach
+    simp only [main]
+    -- Use collectAdds_forEach_foldl to rewrite LHS
+    rw [collectAdds_forEach_foldl]
+    -- Convert both foldls to sums using toFinsupp_foldl_finRange
+    rw [InteractionDelta.toFinsupp_foldl_finRange]
+    simp only [add_assoc]
+    rw [InteractionDelta.toFinsupp_foldl_finRange]
+    -- Now prove term-by-term equality
+    apply Finset.sum_congr rfl
+    intro i _
+    -- Unfold stepBody and localLength
+    simp only [stepBody, Circuit.ConstantLength.localLength, stepBody_constantLength]
+    -- Use LoadStateInstruction.elaborated.localAdds_eq
+    have h_step := (LoadStateInstruction.elaborated program h_programSize memory h_memorySize).localAdds_eq
+      inputs[i] env (offset + ↑i * 27)
+    rw [Circuit.operations] at h_step
+    rw [h_step]
+    -- The LHS is now LoadStateInstruction.elaborated.localAdds which equals the RHS by definition
+    simp only [ElaboratedCircuit.localAdds, LoadStateInstruction.elaborated, circuit_norm]
+    rfl
   subcircuitsConsistent := by
-    intro input offset
-    sorry
+    intros inputs offset
+    rw [Operations.SubcircuitsConsistent, main, Circuit.forEach.forAll]
+    intro i
+    exact (LoadStateInstruction.elaborated program h_programSize memory h_memorySize).subcircuitsConsistent _ _
 
 /--
 Assumptions for the LOAD_STATE bundle.
@@ -361,7 +404,29 @@ def circuit
   Assumptions := Assumptions capacity (programSize := programSize)
   Spec := Spec capacity program memory
   soundness := by
-    sorry
+    intro offset env inputs_var inputs h_eval h_assumptions h_holds
+    simp only [elaborated, main] at h_holds
+    rw [Circuit.forEach.soundness] at h_holds
+    -- Define stepAdds inline with the LoadState-specific postState
+    use fun i =>
+      let input := inputs_var[i]
+      let preState := eval env input.preState
+      -- LoadState uses memory reads for postState
+      let v1 := env.get (offset + i * 27 + 4 + 8 + 4)
+      let v2 := env.get (offset + i * 27 + 4 + 8 + 5 + 4)
+      let v3 := env.get (offset + i * 27 + 4 + 8 + 5 + 5 + 4)
+      let postState : State (F p) := { pc := v1, ap := v2, fp := v3 }
+      let enabled := input.enabled.eval env
+      InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
+      InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
+    constructor
+    · -- Each step satisfies LoadStateInstruction.Spec
+      intro i
+      sorry
+    · -- The adds sum correctly
+      simp only [elaborated, Spec]
+      -- Convert List.ofFn to List.finRange foldl form
+      sorry
   completeness := by
     sorry
 

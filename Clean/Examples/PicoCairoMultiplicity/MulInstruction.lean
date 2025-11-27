@@ -402,7 +402,30 @@ def circuit
   elaborated := elaborated capacity program h_programSize memory h_memorySize
   Assumptions := Assumptions capacity (programSize := programSize)
   Spec := Spec capacity program memory
-  soundness := by sorry
+  soundness := by
+    intro offset env inputs_var inputs h_eval h_assumptions h_holds
+    simp only [elaborated, main] at h_holds
+    rw [Circuit.forEach.soundness] at h_holds
+    -- Define stepAdds inline
+    use fun i =>
+      let input := inputs_var[i]
+      let preState := eval env input.preState
+      let postState : State (F p) := { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
+      let enabled := input.enabled.eval env
+      InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
+      InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
+    constructor
+    · -- Each step satisfies MulInstruction.Spec
+      -- This would apply MulInstruction.circuit.soundness for each i
+      -- but causes elaboration timeouts
+      intro i
+      sorry
+    · -- The adds sum correctly
+      simp only [elaborated]
+      apply List.foldl_ext
+      intro acc i _
+      simp only [circuit_norm]
+      rfl
   completeness := by sorry
 
 end Bundle

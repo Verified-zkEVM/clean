@@ -422,17 +422,28 @@ def circuit
   Spec := Spec capacity program memory
   soundness := by
     intro offset env inputs_var inputs h_eval h_assumptions h_holds
-    -- The soundness proof requires:
-    -- 1. Decomposing the forEach constraints to per-step constraints (via forEach.soundness)
-    -- 2. Applying each step's soundness to get per-step specs
-    -- 3. Combining the specs into the bundle spec
-    -- Due to elaboration complexity causing timeouts, we leave this as sorry.
-    -- The mathematical structure is sound:
-    -- - h_holds gives: forEach constraints hold
-    -- - forEach.soundness gives: ∀ i, step i constraints hold
-    -- - stepCircuit.soundness gives: step i constraints → step i spec
-    -- - Combined: ∀ i, step i spec holds, with adds summing correctly
-    sorry
+    simp only [elaborated, main] at h_holds
+    rw [Circuit.forEach.soundness] at h_holds
+    -- Define stepAdds inline
+    use fun i =>
+      let input := inputs_var[i]
+      let preState := eval env input.preState
+      let postState : State (F p) := { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
+      let enabled := input.enabled.eval env
+      InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
+      InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
+    constructor
+    · -- Each step satisfies AddInstruction.Spec
+      -- This would apply AddInstruction.circuit.soundness for each i
+      -- but causes elaboration timeouts
+      intro i
+      sorry
+    · -- The adds sum correctly
+      simp only [elaborated]
+      apply List.foldl_ext
+      intro acc i _
+      simp only [circuit_norm]
+      rfl
   completeness := by sorry
 
 end Bundle
