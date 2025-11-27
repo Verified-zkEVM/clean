@@ -834,6 +834,15 @@ def totalCapacity (capacities : InstructionCapacities) : ℕ :=
 
 /-! ## Key structural lemma: multiplicity equals emission + flow -/
 
+/-- Helper: If two states are different, their NamedList representations are different. -/
+lemma stateToNamedList_ne_of_ne {s1 s2 : State (F p)} (h : s1 ≠ s2) :
+    stateToNamedList s1 ≠ stateToNamedList s2 := fun heq => h (stateToNamedList_injective heq)
+
+/-- Helper: Finsupp.single at a different state evaluates to zero. -/
+lemma finsupp_single_ne_state {s1 s2 : State (F p)} {v : F p} (h : s1 ≠ s2) :
+    Finsupp.single (stateToNamedList s1) v (stateToNamedList s2) = 0 :=
+  Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h).symm
+
 /--
 For a single instruction with spec, its contribution to multiplicity at state s is:
 - -1 if enabled and preState = s
@@ -864,35 +873,18 @@ lemma single_instruction_multiplicity_contribution
       subst h_pre
       by_cases h_post : postStateFn input.preState = input.preState
       · -- both pre and post are s
-        rw [h_post]
-        simp only [true_and, ↓reduceIte, Finsupp.single_eq_same]
-        ring
+        simp only [h_post, true_and, ↓reduceIte, Finsupp.single_eq_same]; ring
       · -- pre = s, post ≠ s
-        have h_ne : stateToNamedList (postStateFn input.preState) ≠ stateToNamedList input.preState := by
-          intro heq
-          apply h_post
-          exact stateToNamedList_injective heq
-        simp only [true_and, h_post, eq_self_iff_true, ↓reduceIte,
-          Finsupp.single_eq_same, Finsupp.single_eq_of_ne (Ne.symm h_ne)]
-        ring
+        simp only [true_and, h_post, ↓reduceIte, Finsupp.single_eq_same,
+          finsupp_single_ne_state h_post]; ring
     · -- pre ≠ s
       by_cases h_post : postStateFn input.preState = s
       · -- pre ≠ s, post = s
-        have h_ne : stateToNamedList input.preState ≠ stateToNamedList s := by
-          intro heq
-          apply h_pre
-          exact stateToNamedList_injective heq
-        rw [h_post]
-        simp only [h_pre, false_and, ↓reduceIte, sub_zero, true_and,
-          Finsupp.single_eq_same, Finsupp.single_eq_of_ne (Ne.symm h_ne), zero_add]
+        simp only [h_post, h_pre, false_and, ↓reduceIte, sub_zero, true_and,
+          Finsupp.single_eq_same, finsupp_single_ne_state h_pre, zero_add]
       · -- neither pre nor post is s
-        have h_ne_pre : stateToNamedList input.preState ≠ stateToNamedList s := by
-          intro heq; apply h_pre; exact stateToNamedList_injective heq
-        have h_ne_post : stateToNamedList (postStateFn input.preState) ≠ stateToNamedList s := by
-          intro heq; apply h_post; exact stateToNamedList_injective heq
         simp only [h_pre, false_and, ↓reduceIte, sub_zero, h_post,
-          Finsupp.single_eq_of_ne (Ne.symm h_ne_post), Finsupp.single_eq_of_ne (Ne.symm h_ne_pre),
-          add_zero, sub_self]
+          finsupp_single_ne_state h_post, finsupp_single_ne_state h_pre, add_zero, sub_self]
   · simp only [h_enabled, ↓reduceIte, false_and, InteractionDelta.toFinsupp_zero,
       Finsupp.zero_apply, sub_zero]
 
