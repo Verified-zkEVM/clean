@@ -1009,7 +1009,8 @@ theorem balanced_adds_implies_netFlow
     (adds : InteractionDelta (F p))
     (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
     (h_balanced : adds.toFinsupp = 0)
-    (h_ne : inputs.initialState ≠ inputs.finalState) :
+    (h_ne : inputs.initialState ≠ inputs.finalState)
+    (h_capacity : 2 * totalCapacity capacities + 1 < p) :
     let R := buildRunFromInputs program memory
                inputs.bundledInputs.addInputs
                inputs.bundledInputs.mulInputs
@@ -1082,17 +1083,57 @@ theorem balanced_adds_implies_netFlow
   -- Since p > 512 and counts are bounded by totalCapacity < 512, field = integer arithmetic
 
   -- We need bounds to lift from field to integers
-  -- For now, we assume the counts are small enough (bounded by p)
-  -- This is true because totalCapacity ≤ sum of all capacities << p
+  -- countOutgoing is bounded by vector length (filter length ≤ list length)
+  have h_count_out_bound : ∀ {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
+      (postStateFn : State (F p) → State (F p)) (s : State (F p)),
+      countOutgoing inputs postStateFn s ≤ n := by
+    intro n inputs postStateFn s
+    simp only [countOutgoing]
+    have h1 := List.length_filter_le (fun i => decide (i.enabled = 1 ∧ i.preState = s)) inputs.toList
+    simp only [Vector.length_toList] at h1
+    exact h1
+
+  have h_count_in_bound : ∀ {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
+      (postStateFn : State (F p) → State (F p)) (s : State (F p)),
+      countIncoming inputs postStateFn s ≤ n := by
+    intro n inputs postStateFn s
+    simp only [countIncoming]
+    have h1 := List.length_filter_le (fun i => decide (i.enabled = 1 ∧ postStateFn i.preState = s)) inputs.toList
+    simp only [Vector.length_toList] at h1
+    exact h1
+
+  -- totalOutgoing and totalIncoming are each bounded by totalCapacity
+  have h_total_out_bound : ∀ s,
+      totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s ≤
+      totalCapacity capacities := by
+    intro s
+    simp only [totalOutgoing, totalCapacity]
+    have h1 := h_count_out_bound addInputs addPostState s
+    have h2 := h_count_out_bound mulInputs mulPostState s
+    have h3 := h_count_out_bound storeInputs storeStatePostState s
+    have h4 := h_count_out_bound loadInputs (loadStatePostState program memory) s
+    omega
+
+  have h_total_in_bound : ∀ s,
+      totalIncoming program memory addInputs mulInputs storeInputs loadInputs s ≤
+      totalCapacity capacities := by
+    intro s
+    simp only [totalIncoming, totalCapacity]
+    have h1 := h_count_in_bound addInputs addPostState s
+    have h2 := h_count_in_bound mulInputs mulPostState s
+    have h3 := h_count_in_bound storeInputs storeStatePostState s
+    have h4 := h_count_in_bound loadInputs (loadStatePostState program memory) s
+    omega
+
   have h_bounds : ∀ s,
       totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s +
       totalIncoming program memory addInputs mulInputs storeInputs loadInputs s + 1 < p := by
     intro s
-    -- totalOutgoing and totalIncoming are each bounded by totalCapacity
-    -- and totalCapacity < 512 < p
-    have hp : p > 512 := p_large_enough.out
-    -- Each count is bounded by the sum of capacities
-    sorry
+    have h_out := h_total_out_bound s
+    have h_in := h_total_in_bound s
+    -- totalOutgoing + totalIncoming ≤ 2 * totalCapacity
+    -- and 2 * totalCapacity + 1 < p by h_capacity
+    omega
 
   constructor
   · -- Case: R.netFlow initialState = 1
@@ -1449,7 +1490,8 @@ theorem Spec_implies_execution
     (inputs : ExecutionCircuitInput capacities (F p))
     (adds : InteractionDelta (F p))
     (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
-    (h_balanced : adds.toFinsupp = 0) :
+    (h_balanced : adds.toFinsupp = 0)
+    (h_capacity : 2 * totalCapacity capacities + 1 < p) :
     ∃ (steps : ℕ),
       femtoCairoMachineBoundedExecution program memory (some inputs.initialState) steps =
         some inputs.finalState := by
@@ -1487,7 +1529,7 @@ theorem Spec_implies_execution
 
     -- Step 1: Get netFlow properties from balanced_adds_implies_netFlow
     have h_netFlow := balanced_adds_implies_netFlow capacities program memory
-                       inputs adds h_spec h_balanced h_eq
+                       inputs adds h_spec h_balanced h_eq h_capacity
     obtain ⟨h_netFlow_source, h_netFlow_sink, h_netFlow_others⟩ := h_netFlow
 
     -- Step 2: Get Run validity from buildRunFromInputs_valid
@@ -1539,10 +1581,11 @@ theorem Spec_implies_ExecutionExistenceSpec
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p) (h_memorySize : memorySize < p)
     (inputs : ExecutionCircuitInput capacities (F p))
     (adds : InteractionDelta (F p))
-    (h_spec : ExecutionBundle.Spec capacities program memory inputs adds) :
+    (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
+    (h_capacity : 2 * totalCapacity capacities + 1 < p) :
     ExecutionExistenceSpec capacities program memory inputs adds := by
   intro h_balanced
-  exact Spec_implies_execution capacities program h_programSize memory h_memorySize inputs adds h_spec h_balanced
+  exact Spec_implies_execution capacities program h_programSize memory h_memorySize inputs adds h_spec h_balanced h_capacity
 
 /-
 The circuit with the weaker execution existence spec.
