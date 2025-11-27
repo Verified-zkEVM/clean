@@ -596,6 +596,45 @@ def totalIncoming
   countIncoming storeInputs storeStatePostState s +
   countIncoming loadInputs (loadStatePostState program memory) s
 
+/-- For a single instruction, sum over all targets equals 1 if enabled and preState=s, else 0 -/
+lemma sum_instructionEdgeContribution_over_targets
+    (input : InstructionStepInput (F p))
+    (postStateFn : State (F p) → State (F p))
+    (s : State (F p)) :
+    ∑ t : State (F p), instructionEdgeContribution input postStateFn (s, t) =
+    if input.enabled = 1 ∧ input.preState = s then 1 else 0 := by
+  simp only [instructionEdgeContribution]
+  -- When enabled ∧ preState = s, there is exactly one t where the condition holds
+  -- namely t = postStateFn input.preState = postStateFn s
+  by_cases h : input.enabled = 1 ∧ input.preState = s
+  · -- Case: enabled and preState = s
+    simp only [h, and_true, if_true]
+    -- The sum has exactly one non-zero term at t = postStateFn s
+    rw [Finset.sum_eq_single (postStateFn s)]
+    · -- At t = postStateFn s, the term is 1
+      simp only [h.1, h.2, and_self, ↓reduceIte]
+    · -- For other t ≠ postStateFn s, the term is 0
+      intro t _ h_ne
+      simp only [h.1, true_and, h.2]
+      simp only [if_neg h_ne]
+    · -- postStateFn s is in Finset.univ
+      intro h_not_mem
+      exact absurd (Finset.mem_univ _) h_not_mem
+  · -- Case: not (enabled and preState = s)
+    simp only [h, ↓reduceIte]
+    -- Every term is 0
+    apply Finset.sum_eq_zero
+    intro t _
+    push_neg at h
+    by_cases he : input.enabled = 1
+    · -- enabled but preState ≠ s
+      have h_ne := h he
+      simp only [he, true_and]
+      simp only [show ¬(s = input.preState ∧ t = postStateFn input.preState) by
+        intro ⟨h1, _⟩; exact h_ne h1.symm, ↓reduceIte]
+    · -- not enabled
+      simp only [he, false_and, ↓reduceIte]
+
 /-- Helper lemma: sum over all target states equals total outgoing from source -/
 lemma sum_bundleEdgeCount_eq_countOutgoing {n : ℕ}
     (inputs : Vector (InstructionStepInput (F p)) n)
@@ -603,9 +642,84 @@ lemma sum_bundleEdgeCount_eq_countOutgoing {n : ℕ}
     (s : State (F p)) :
     ∑ t : State (F p), bundleEdgeCount inputs postStateFn (s, t) =
     countOutgoing inputs postStateFn s := by
-  -- Each enabled input with preState=s contributes 1 to exactly one target (postStateFn preState)
-  -- The sum over all targets collects all such contributions
-  sorry
+  -- Unfold definitions
+  simp only [bundleEdgeCount, countOutgoing]
+  -- We need to show: ∑ t, (List.map contrib inputs.toList).sum = filter.length
+  -- Rewrite using the helper lemma for each instruction
+  -- First, interchange order: ∑ t, ∑_list i, contrib(i,t) = ∑_list i, ∑ t, contrib(i,t)
+
+  -- Convert the Finset.sum ∑ t, List.sum ... to ∑ i ∈ list, ∑ t, ...
+  -- Use that List.sum distributes: ∑ t, (map f list).sum = (map (λ i => ∑ t, f i t) list).sum
+  have h_distrib : ∀ (L : List (InstructionStepInput (F p))),
+      ∑ t : State (F p), (L.map (fun i => instructionEdgeContribution i postStateFn (s, t))).sum =
+      (L.map (fun i => ∑ t : State (F p), instructionEdgeContribution i postStateFn (s, t))).sum := by
+    intro L
+    induction L with
+    | nil => simp
+    | cons head tail ih =>
+      simp only [List.map_cons, List.sum_cons]
+      rw [Finset.sum_add_distrib]
+      rw [ih]
+
+  rw [h_distrib]
+  -- Now use sum_instructionEdgeContribution_over_targets
+  simp_rw [sum_instructionEdgeContribution_over_targets]
+  -- Goal: (map (λ i => if enabled ∧ preState=s then 1 else 0) list).sum = filter.length
+  -- This is: count of elements where enabled ∧ preState=s = filter.length
+  rw [← List.countP_eq_length_filter]
+  -- Prove by induction that sum of ite 1 0 = countP
+  have h_sum_countP : ∀ (L : List (InstructionStepInput (F p))),
+      (L.map (fun i => if i.enabled = 1 ∧ i.preState = s then 1 else 0)).sum =
+      L.countP (fun i => decide (i.enabled = 1 ∧ i.preState = s)) := by
+    intro L
+    induction L with
+    | nil => simp
+    | cons head tail ih =>
+      simp only [List.map_cons, List.sum_cons, List.countP_cons]
+      by_cases h : head.enabled = 1 ∧ head.preState = s
+      · simp only [h, ↓reduceIte, decide_true, ih, and_self, add_comm]
+      · simp only [h, ↓reduceIte, zero_add, ih]
+        -- The remaining part: countP = countP + (if decide False = true then 1 else 0)
+        -- decide False = false, so if false = true then 1 else 0 = 0
+        rfl
+  exact h_sum_countP inputs.toList
+
+/-- For a single instruction, sum over all sources equals 1 if enabled and postStateFn preState=s, else 0 -/
+lemma sum_instructionEdgeContribution_over_sources
+    (input : InstructionStepInput (F p))
+    (postStateFn : State (F p) → State (F p))
+    (s : State (F p)) :
+    ∑ t : State (F p), instructionEdgeContribution input postStateFn (t, s) =
+    if input.enabled = 1 ∧ postStateFn input.preState = s then 1 else 0 := by
+  simp only [instructionEdgeContribution]
+  by_cases h : input.enabled = 1 ∧ postStateFn input.preState = s
+  · -- Case: enabled and postStateFn preState = s
+    simp only [h, and_true, if_true]
+    -- The sum has exactly one non-zero term at t = input.preState
+    rw [Finset.sum_eq_single input.preState]
+    · -- At t = preState, the term is 1
+      simp only [h.1, true_and, and_true, h.2, ↓reduceIte]
+    · -- For other t ≠ preState, the term is 0
+      intro t _ h_ne
+      simp only [h.1, true_and, if_neg h_ne]
+    · -- preState is in Finset.univ
+      intro h_not_mem
+      exact absurd (Finset.mem_univ _) h_not_mem
+  · -- Case: not (enabled and postStateFn preState = s)
+    simp only [h, ↓reduceIte]
+    -- Every term is 0
+    apply Finset.sum_eq_zero
+    intro t _
+    push_neg at h
+    by_cases he : input.enabled = 1
+    · -- enabled but postStateFn preState ≠ s
+      have h_ne := h he
+      simp only [he, true_and]
+      by_cases hps : t = input.preState ∧ s = postStateFn input.preState
+      · exact absurd hps.2.symm h_ne
+      · simp only [hps, ↓reduceIte]
+    · -- not enabled
+      simp only [he, false_and, ↓reduceIte]
 
 /-- Helper lemma: sum over all source states equals total incoming to target -/
 lemma sum_bundleEdgeCount_eq_countIncoming {n : ℕ}
@@ -614,9 +728,39 @@ lemma sum_bundleEdgeCount_eq_countIncoming {n : ℕ}
     (s : State (F p)) :
     ∑ t : State (F p), bundleEdgeCount inputs postStateFn (t, s) =
     countIncoming inputs postStateFn s := by
-  -- Each enabled input with postStateFn preState = s contributes 1 to exactly one source (preState)
-  -- The sum over all sources collects all such contributions
-  sorry
+  -- Unfold definitions
+  simp only [bundleEdgeCount, countIncoming]
+  -- Use that List.sum distributes: ∑ t, (map f list).sum = (map (λ i => ∑ t, f i t) list).sum
+  have h_distrib : ∀ (L : List (InstructionStepInput (F p))),
+      ∑ t : State (F p), (L.map (fun i => instructionEdgeContribution i postStateFn (t, s))).sum =
+      (L.map (fun i => ∑ t : State (F p), instructionEdgeContribution i postStateFn (t, s))).sum := by
+    intro L
+    induction L with
+    | nil => simp
+    | cons head tail ih =>
+      simp only [List.map_cons, List.sum_cons]
+      rw [Finset.sum_add_distrib]
+      rw [ih]
+
+  rw [h_distrib]
+  -- Now use sum_instructionEdgeContribution_over_sources
+  simp_rw [sum_instructionEdgeContribution_over_sources]
+  -- Goal: (map (λ i => if enabled ∧ postStateFn preState=s then 1 else 0) list).sum = filter.length
+  rw [← List.countP_eq_length_filter]
+  -- Prove by induction that sum of ite 1 0 = countP
+  have h_sum_countP : ∀ (L : List (InstructionStepInput (F p))),
+      (L.map (fun i => if i.enabled = 1 ∧ postStateFn i.preState = s then 1 else 0)).sum =
+      L.countP (fun i => decide (i.enabled = 1 ∧ postStateFn i.preState = s)) := by
+    intro L
+    induction L with
+    | nil => simp
+    | cons head tail ih =>
+      simp only [List.map_cons, List.sum_cons, List.countP_cons]
+      by_cases h : head.enabled = 1 ∧ postStateFn head.preState = s
+      · simp only [h, ↓reduceIte, decide_true, ih, and_self, add_comm]
+      · simp only [h, ↓reduceIte, zero_add, ih]
+        rfl
+  exact h_sum_countP inputs.toList
 
 /-! ## Field-integer lifting lemmas -/
 
