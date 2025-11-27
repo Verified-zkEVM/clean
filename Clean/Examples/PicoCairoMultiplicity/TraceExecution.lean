@@ -1054,24 +1054,42 @@ lemma multiplicity_eq_emission_plus_flow
   -- Convert to toFinsupp and evaluate at stateToNamedList s
   simp only [InteractionDelta.toFinsupp_add, Finsupp.add_apply, InteractionDelta.toFinsupp_single]
 
-  -- The key insight: the bundle contributions sum to totalIncoming - totalOutgoing
-  -- This requires showing that each bundle's toFinsupp at s equals countIncoming - countOutgoing
-  -- for that bundle. This is a complex proof that requires connecting Bundle.Spec
-  -- to the finsupp representation. We leave this as a sorry for now.
+  -- The goal now has structure:
+  -- single(init, 1)(s) + addAdds(s) + mulAdds(s) + storeAdds(s) + loadAdds(s) + single(final, -1)(s)
+  --   = (if s=init then 1 else 0) + totalIncoming - totalOutgoing + (if s=final then -1 else 0)
+  --
+  -- The emission terms single(init, 1)(s) and single(final, -1)(s) directly match the if-then-else.
+  -- The bundle contributions need to sum to totalIncoming - totalOutgoing.
+  --
+  -- To complete this proof:
+  -- 1. Use toFinsupp_foldl_add to convert each bundle's foldl to Finset.sum
+  -- 2. Extract from each Bundle.Spec that stepAdds[i].toFinsupp has the expected form:
+  --    - When enabled: single(pre, -1) + single(post, +1)
+  --    - When disabled: 0
+  -- 3. Apply bundle_multiplicity_contribution to each bundle
+  -- 4. Combine the four bundles' contributions to get totalIncoming - totalOutgoing
+  --
+  -- Key helper needed: For each instruction type's Spec, extract that when enabled,
+  -- adds = single(preState, -1) + single(postStateFn preState, +1), and when disabled,
+  -- adds.toFinsupp = 0.
 
   -- Handle the emission terms
-  let init_nl : NamedList (F p) := ⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩
-  let final_nl : NamedList (F p) := ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩
-  let s_nl := stateToNamedList s
-
-  -- The structure is: init_emission + bundle_contributions + final_emission
-  -- = emission_at_init + totalIncoming - totalOutgoing + emission_at_final
-
-  -- For now, we use sorry. The full proof would require:
-  -- 1. Connecting each Bundle.Spec to bundle_multiplicity_contribution
-  -- 2. Showing the foldl sum in Bundle.Spec equals a Finset.sum
-  -- 3. Using that to establish each bundle's contribution = countIncoming - countOutgoing
-  sorry
+  by_cases h_init : s = inputs.initialState <;> by_cases h_final : s = inputs.finalState
+  all_goals simp only [h_init, h_final, ↓reduceIte, stateToNamedList]
+  all_goals try simp only [Finsupp.single_eq_same]
+  all_goals (
+    try (
+      have h_ne : (⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩ : NamedList (F p)) ≠
+                  ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ := by
+        intro h_eq
+        apply h_final
+        subst h_init
+        simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
+        ext <;> exact h_eq.1 <;> exact h_eq.2.1 <;> exact h_eq.2.2
+      simp only [Finsupp.single_eq_of_ne h_ne, Finsupp.single_eq_of_ne (Ne.symm h_ne)]))
+  -- The remaining goals require connecting bundle contributions to totalIncoming - totalOutgoing
+  -- This requires extracting from each Bundle.Spec that the contributions have the expected form
+  all_goals sorry
 
 /--
 Key consequence: when adds.toFinsupp = 0, the emission equals outgoing - incoming.
