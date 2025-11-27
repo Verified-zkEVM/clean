@@ -1020,6 +1020,263 @@ lemma bundle_multiplicity_contribution
   · -- Similar for outgoing
     exact sum_ite_eq_countP inputs (fun i => i.enabled = 1 ∧ i.preState = s)
 
+/-! ## Spec_toFinsupp_ite lemmas
+
+For each instruction type, we prove that the Spec implies the toFinsupp has the ite form.
+This bridges between the Spec (which uses equality or zero) and the sum form needed
+for bundle_multiplicity_contribution.
+-/
+
+/--
+For AddInstruction.Spec, the toFinsupp equals the expected ite form.
+When enabled: single(pre,-1) + single(post,+1)
+When disabled: 0
+-/
+lemma AddInstruction_Spec_toFinsupp_ite
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p))
+    (adds : InteractionDelta (F p))
+    (h_spec : AddInstruction.Spec program memory input adds) :
+    adds.toFinsupp = (if input.enabled = 1 then
+                        InteractionDelta.single (stateToNamedList input.preState) (-1) +
+                        InteractionDelta.single (stateToNamedList (addPostState input.preState)) 1
+                      else 0).toFinsupp := by
+  by_cases h_enabled : input.enabled = 1
+  · -- Case: enabled = 1
+    simp only [h_enabled, ↓reduceIte]
+    -- From h_spec, when enabled, we get adds = single(...) + single(...)
+    simp only [AddInstruction.Spec, h_enabled, ite_true] at h_spec
+    -- Navigate through the nested match statements
+    split at h_spec
+    case h_2 => exact h_spec.elim
+    case h_1 rawInstr h_fetch =>
+      split at h_spec
+      case h_2 => exact h_spec.elim
+      case h_1 instrType mode1 mode2 mode3 h_decode =>
+        split at h_spec
+        case isTrue h_add =>
+          split at h_spec
+          case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
+            obtain ⟨_, h_adds_eq⟩ := h_spec
+            -- h_adds_eq : adds = single(pre,-1) + single(post,+1)
+            rw [h_adds_eq]
+            simp only [stateToNamedList, addPostState]
+          all_goals exact h_spec.elim
+        case isFalse => exact h_spec.elim
+  · -- Case: enabled ≠ 1
+    simp only [h_enabled, ↓reduceIte, InteractionDelta.toFinsupp_zero]
+    -- From h_spec, when not enabled, adds.toFinsupp = 0
+    simp only [AddInstruction.Spec, h_enabled, ite_false] at h_spec
+    exact h_spec
+
+/--
+For MulInstruction.Spec, the toFinsupp equals the expected ite form.
+-/
+lemma MulInstruction_Spec_toFinsupp_ite
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p))
+    (adds : InteractionDelta (F p))
+    (h_spec : MulInstruction.Spec program memory input adds) :
+    adds.toFinsupp = (if input.enabled = 1 then
+                        InteractionDelta.single (stateToNamedList input.preState) (-1) +
+                        InteractionDelta.single (stateToNamedList (mulPostState input.preState)) 1
+                      else 0).toFinsupp := by
+  by_cases h_enabled : input.enabled = 1
+  · simp only [h_enabled, ↓reduceIte]
+    simp only [MulInstruction.Spec, h_enabled, ite_true] at h_spec
+    split at h_spec
+    case h_2 => exact h_spec.elim
+    case h_1 rawInstr h_fetch =>
+      split at h_spec
+      case h_2 => exact h_spec.elim
+      case h_1 instrType mode1 mode2 mode3 h_decode =>
+        split at h_spec
+        case isTrue h_mul =>
+          split at h_spec
+          case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
+            obtain ⟨_, h_adds_eq⟩ := h_spec
+            rw [h_adds_eq]
+            simp only [stateToNamedList, mulPostState]
+          all_goals exact h_spec.elim
+        case isFalse => exact h_spec.elim
+  · simp only [h_enabled, ↓reduceIte, InteractionDelta.toFinsupp_zero]
+    simp only [MulInstruction.Spec, h_enabled, ite_false] at h_spec
+    exact h_spec
+
+/--
+For StoreStateInstruction.Spec, the toFinsupp equals the expected ite form.
+-/
+lemma StoreStateInstruction_Spec_toFinsupp_ite
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p))
+    (adds : InteractionDelta (F p))
+    (h_spec : StoreStateInstruction.Spec program memory input adds) :
+    adds.toFinsupp = (if input.enabled = 1 then
+                        InteractionDelta.single (stateToNamedList input.preState) (-1) +
+                        InteractionDelta.single (stateToNamedList (storeStatePostState input.preState)) 1
+                      else 0).toFinsupp := by
+  by_cases h_enabled : input.enabled = 1
+  · simp only [h_enabled, ↓reduceIte]
+    simp only [StoreStateInstruction.Spec, h_enabled, ite_true] at h_spec
+    split at h_spec
+    case h_2 => exact h_spec.elim
+    case h_1 rawInstr h_fetch =>
+      split at h_spec
+      case h_2 => exact h_spec.elim
+      case h_1 instrType mode1 mode2 mode3 h_decode =>
+        split at h_spec
+        case isTrue h_store =>
+          split at h_spec
+          case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
+            obtain ⟨_, _, _, h_adds_eq⟩ := h_spec
+            rw [h_adds_eq]
+            simp only [stateToNamedList, storeStatePostState]
+          all_goals exact h_spec.elim
+        case isFalse => exact h_spec.elim
+  · simp only [h_enabled, ↓reduceIte, InteractionDelta.toFinsupp_zero]
+    simp only [StoreStateInstruction.Spec, h_enabled, ite_false] at h_spec
+    exact h_spec
+
+/--
+For LoadStateInstruction.Spec, the toFinsupp equals the expected ite form.
+Note: loadStatePostState uses femtoCairoMachineTransition to compute the post state,
+which for LOAD_STATE reads (v1, v2, v3) from memory. When the transition fails (shouldn't
+happen for valid enabled instructions), it falls back to preState.
+-/
+lemma LoadStateInstruction_Spec_toFinsupp_ite
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p))
+    (adds : InteractionDelta (F p))
+    (h_spec : LoadStateInstruction.Spec program memory input adds) :
+    adds.toFinsupp = (if input.enabled = 1 then
+                        InteractionDelta.single (stateToNamedList input.preState) (-1) +
+                        InteractionDelta.single (stateToNamedList (loadStatePostState program memory input.preState)) 1
+                      else 0).toFinsupp := by
+  by_cases h_enabled : input.enabled = 1
+  · simp only [h_enabled, ↓reduceIte]
+    simp only [LoadStateInstruction.Spec, h_enabled, ite_true] at h_spec
+    split at h_spec
+    case h_2 => exact h_spec.elim
+    case h_1 rawInstr h_fetch =>
+      split at h_spec
+      case h_2 => exact h_spec.elim
+      case h_1 instrType mode1 mode2 mode3 h_decode =>
+        split at h_spec
+        case isTrue h_load =>
+          split at h_spec
+          case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
+            -- h_spec gives us the adds equation for LOAD_STATE
+            rw [h_spec]
+            simp only [stateToNamedList, loadStatePostState]
+            -- Need to show femtoCairoMachineTransition returns the expected postState
+            simp only [femtoCairoMachineTransition, h_fetch, h_decode, h_mem1, h_mem2, h_mem3,
+              computeNextState, h_load, Option.bind_eq_bind, Option.bind_some]
+          all_goals exact h_spec.elim
+        case isFalse => exact h_spec.elim
+  · simp only [h_enabled, ↓reduceIte, InteractionDelta.toFinsupp_zero]
+    simp only [LoadStateInstruction.Spec, h_enabled, ite_false] at h_spec
+    exact h_spec
+
+/-! ## Bundle.Spec_toFinsupp_sum lemmas
+
+For each instruction type, convert Bundle.Spec's foldl to the sum form needed
+for bundle_multiplicity_contribution.
+-/
+
+/--
+For AddInstruction.Bundle.Spec, the toFinsupp equals a sum over individual instruction contributions.
+This bridges the foldl form in Bundle.Spec to the Finset.sum form.
+-/
+lemma AddInstruction_Bundle_Spec_toFinsupp_sum
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (inputs : Vector (InstructionStepInput (F p)) capacity)
+    (adds : InteractionDelta (F p))
+    (h_spec : AddInstruction.Bundle.Spec capacity program memory inputs adds) :
+    adds.toFinsupp = ∑ i : Fin capacity,
+      (if inputs[i].enabled = 1 then
+         InteractionDelta.single (stateToNamedList inputs[i].preState) (-1) +
+         InteractionDelta.single (stateToNamedList (addPostState inputs[i].preState)) 1
+       else 0).toFinsupp := by
+  -- Extract stepAdds from h_spec
+  obtain ⟨stepAdds, h_step_specs, h_adds_eq⟩ := h_spec
+  -- Rewrite adds to foldl form
+  rw [h_adds_eq]
+  -- Use toFinsupp_foldl_add to convert foldl to sum
+  rw [toFinsupp_foldl_add]
+  -- Now show each term equals the expected form
+  apply Finset.sum_congr rfl
+  intro i _
+  exact AddInstruction_Spec_toFinsupp_ite program memory inputs[i] (stepAdds i) (h_step_specs i)
+
+/--
+For MulInstruction.Bundle.Spec, the toFinsupp equals a sum over individual instruction contributions.
+-/
+lemma MulInstruction_Bundle_Spec_toFinsupp_sum
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (inputs : Vector (InstructionStepInput (F p)) capacity)
+    (adds : InteractionDelta (F p))
+    (h_spec : MulInstruction.Bundle.Spec capacity program memory inputs adds) :
+    adds.toFinsupp = ∑ i : Fin capacity,
+      (if inputs[i].enabled = 1 then
+         InteractionDelta.single (stateToNamedList inputs[i].preState) (-1) +
+         InteractionDelta.single (stateToNamedList (mulPostState inputs[i].preState)) 1
+       else 0).toFinsupp := by
+  obtain ⟨stepAdds, h_step_specs, h_adds_eq⟩ := h_spec
+  rw [h_adds_eq, toFinsupp_foldl_add]
+  apply Finset.sum_congr rfl
+  intro i _
+  exact MulInstruction_Spec_toFinsupp_ite program memory inputs[i] (stepAdds i) (h_step_specs i)
+
+/--
+For StoreStateInstruction.Bundle.Spec, the toFinsupp equals a sum over individual instruction contributions.
+-/
+lemma StoreStateInstruction_Bundle_Spec_toFinsupp_sum
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (inputs : Vector (InstructionStepInput (F p)) capacity)
+    (adds : InteractionDelta (F p))
+    (h_spec : StoreStateInstruction.Bundle.Spec capacity program memory inputs adds) :
+    adds.toFinsupp = ∑ i : Fin capacity,
+      (if inputs[i].enabled = 1 then
+         InteractionDelta.single (stateToNamedList inputs[i].preState) (-1) +
+         InteractionDelta.single (stateToNamedList (storeStatePostState inputs[i].preState)) 1
+       else 0).toFinsupp := by
+  obtain ⟨stepAdds, h_step_specs, h_adds_eq⟩ := h_spec
+  rw [h_adds_eq, toFinsupp_foldl_add]
+  apply Finset.sum_congr rfl
+  intro i _
+  exact StoreStateInstruction_Spec_toFinsupp_ite program memory inputs[i] (stepAdds i) (h_step_specs i)
+
+/--
+For LoadStateInstruction.Bundle.Spec, the toFinsupp equals a sum over individual instruction contributions.
+-/
+lemma LoadStateInstruction_Bundle_Spec_toFinsupp_sum
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (inputs : Vector (InstructionStepInput (F p)) capacity)
+    (adds : InteractionDelta (F p))
+    (h_spec : LoadStateInstruction.Bundle.Spec capacity program memory inputs adds) :
+    adds.toFinsupp = ∑ i : Fin capacity,
+      (if inputs[i].enabled = 1 then
+         InteractionDelta.single (stateToNamedList inputs[i].preState) (-1) +
+         InteractionDelta.single (stateToNamedList (loadStatePostState program memory inputs[i].preState)) 1
+       else 0).toFinsupp := by
+  obtain ⟨stepAdds, h_step_specs, h_adds_eq⟩ := h_spec
+  rw [h_adds_eq, toFinsupp_foldl_add]
+  apply Finset.sum_congr rfl
+  intro i _
+  exact LoadStateInstruction_Spec_toFinsupp_ite program memory inputs[i] (stepAdds i) (h_step_specs i)
+
 /--
 For any state s, the multiplicity in adds.toFinsupp equals:
   emission(s) + incoming_edges(s) - outgoing_edges(s)
@@ -1073,23 +1330,103 @@ lemma multiplicity_eq_emission_plus_flow
   -- adds = single(preState, -1) + single(postStateFn preState, +1), and when disabled,
   -- adds.toFinsupp = 0.
 
-  -- Handle the emission terms
-  by_cases h_init : s = inputs.initialState <;> by_cases h_final : s = inputs.finalState
-  all_goals simp only [h_init, h_final, ↓reduceIte, stateToNamedList]
-  all_goals try simp only [Finsupp.single_eq_same]
-  all_goals (
-    try (
-      have h_ne : (⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩ : NamedList (F p)) ≠
-                  ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ := by
+  -- Get bundle contributions in the sum form using Bundle_Spec_toFinsupp_sum
+  have h_add_sum := AddInstruction_Bundle_Spec_toFinsupp_sum capacities.addCapacity
+    program memory inputs.bundledInputs.addInputs addAdds h_add_spec
+  have h_mul_sum := MulInstruction_Bundle_Spec_toFinsupp_sum capacities.mulCapacity
+    program memory inputs.bundledInputs.mulInputs mulAdds h_mul_spec
+  have h_store_sum := StoreStateInstruction_Bundle_Spec_toFinsupp_sum capacities.storeStateCapacity
+    program memory inputs.bundledInputs.storeStateInputs storeStateAdds h_store_spec
+  have h_load_sum := LoadStateInstruction_Bundle_Spec_toFinsupp_sum capacities.loadStateCapacity
+    program memory inputs.bundledInputs.loadStateInputs loadStateAdds h_load_spec
+
+  -- Apply bundle_multiplicity_contribution to each bundle to get countIncoming - countOutgoing
+  have h_add_contrib := bundle_multiplicity_contribution program memory
+    inputs.bundledInputs.addInputs addAdds addPostState h_add_sum s
+  have h_mul_contrib := bundle_multiplicity_contribution program memory
+    inputs.bundledInputs.mulInputs mulAdds mulPostState h_mul_sum s
+  have h_store_contrib := bundle_multiplicity_contribution program memory
+    inputs.bundledInputs.storeStateInputs storeStateAdds storeStatePostState h_store_sum s
+  have h_load_contrib := bundle_multiplicity_contribution program memory
+    inputs.bundledInputs.loadStateInputs loadStateAdds (loadStatePostState program memory) h_load_sum s
+
+  -- Handle the emission terms - split into 4 cases based on whether s equals initial/final state
+  by_cases h_init : s = inputs.initialState
+  · -- s = initialState
+    by_cases h_final : s = inputs.finalState
+    · -- Case 1: s = initialState AND s = finalState
+      rw [h_init]
+      have h_init_eq_final : inputs.initialState = inputs.finalState := by rw [← h_init]; exact h_final
+      rw [h_init_eq_final]
+      simp only [stateToNamedList, Finsupp.single_eq_same, ↓reduceIte]
+      rw [h_init, h_init_eq_final] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      simp only [stateToNamedList] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
+      simp only [totalIncoming, totalOutgoing]
+      push_cast
+      ring
+    · -- Case 2: s = initialState AND s ≠ finalState
+      rw [h_init]
+      have h_init_ne_final : inputs.initialState ≠ inputs.finalState := by rw [← h_init]; exact h_final
+      simp only [stateToNamedList, Finsupp.single_eq_same, ↓reduceIte, ne_eq, h_init_ne_final,
+        not_true_eq_false, not_false_eq_true]
+      -- The Finsupp.single for final evaluated at initial should be 0 (different keys)
+      have h_ne_keys : (⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩ : NamedList (F p)) ≠
+                       ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ := by
         intro h_eq
-        apply h_final
-        subst h_init
         simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
-        ext <;> exact h_eq.1 <;> exact h_eq.2.1 <;> exact h_eq.2.2
-      simp only [Finsupp.single_eq_of_ne h_ne, Finsupp.single_eq_of_ne (Ne.symm h_ne)]))
-  -- The remaining goals require connecting bundle contributions to totalIncoming - totalOutgoing
-  -- This requires extracting from each Bundle.Spec that the contributions have the expected form
-  all_goals sorry
+        have h_states_eq : inputs.initialState = inputs.finalState := State.ext h_eq.1 h_eq.2.1 h_eq.2.2
+        exact h_init_ne_final h_states_eq
+      simp only [Finsupp.single_eq_of_ne h_ne_keys]
+      rw [h_init] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      simp only [stateToNamedList] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
+      simp only [totalIncoming, totalOutgoing]
+      push_cast
+      ring
+  · -- s ≠ initialState
+    by_cases h_final : s = inputs.finalState
+    · -- Case 3: s ≠ initialState AND s = finalState
+      rw [h_final]
+      have h_final_ne_init : inputs.finalState ≠ inputs.initialState := by rw [← h_final]; exact h_init
+      simp only [stateToNamedList, Finsupp.single_eq_same, ↓reduceIte, ne_eq, h_final_ne_init,
+        not_true_eq_false, not_false_eq_true]
+      -- The Finsupp.single for initial evaluated at final should be 0 (different keys)
+      have h_ne_keys : (⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ : NamedList (F p)) ≠
+                       ⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩ := by
+        intro h_eq
+        simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
+        have h_states_eq : inputs.finalState = inputs.initialState := State.ext h_eq.1 h_eq.2.1 h_eq.2.2
+        exact h_final_ne_init h_states_eq
+      rw [Finsupp.single_eq_of_ne h_ne_keys]
+      rw [h_final] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      simp only [stateToNamedList] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
+      simp only [totalIncoming, totalOutgoing]
+      push_cast
+      ring
+    · -- Case 4: s ≠ initialState AND s ≠ finalState
+      simp only [stateToNamedList, ↓reduceIte, ne_eq, h_init, not_true_eq_false, not_false_eq_true,
+        h_final]
+      -- Both singletons evaluate to 0 at s
+      have h_ne_init : (⟨"state", [s.pc, s.ap, s.fp]⟩ : NamedList (F p)) ≠
+                       ⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩ := by
+        intro h_eq
+        simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
+        have h_states_eq : s = inputs.initialState := State.ext h_eq.1 h_eq.2.1 h_eq.2.2
+        exact h_init h_states_eq
+      have h_ne_final : (⟨"state", [s.pc, s.ap, s.fp]⟩ : NamedList (F p)) ≠
+                        ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ := by
+        intro h_eq
+        simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
+        have h_states_eq : s = inputs.finalState := State.ext h_eq.1 h_eq.2.1 h_eq.2.2
+        exact h_final h_states_eq
+      rw [Finsupp.single_eq_of_ne h_ne_init, Finsupp.single_eq_of_ne h_ne_final]
+      simp only [stateToNamedList] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
+      simp only [totalIncoming, totalOutgoing]
+      push_cast
+      ring
 
 /--
 Key consequence: when adds.toFinsupp = 0, the emission equals outgoing - incoming.
