@@ -897,26 +897,39 @@ lemma single_instruction_multiplicity_contribution
       Finsupp.zero_apply, sub_zero]
 
 /--
+Helper: Sum of ite 1 0 over a list equals countP.
+-/
+lemma list_sum_ite_eq_countP {α : Type*} (l : List α) (p : α → Prop) [DecidablePred p]
+    {F : Type*} [Semiring F] :
+    (l.map (fun x => if p x then (1 : F) else 0)).sum = ↑(l.countP (fun x => decide (p x))) := by
+  induction l with
+  | nil => simp
+  | cons hd tl ih =>
+    simp only [List.map_cons, List.sum_cons, List.countP_cons, ih]
+    by_cases hp : p hd
+    · simp [hp, add_comm]
+    · simp [hp]
+
+/--
 Helper: Sum of ite 1 0 over finRange equals countP over vector's toList.
 -/
 lemma sum_ite_eq_countP {α : Type*} {n : ℕ} (v : Vector α n) (p : α → Prop) [DecidablePred p]
     {F : Type*} [Semiring F] :
-    (List.finRange n).map (fun i => if p v[i] then (1 : F) else 0) |>.sum =
+    ((List.finRange n).map (fun i => if p v[i] then (1 : F) else 0)).sum =
       ↑(v.toList.countP (fun x => decide (p x))) := by
-  -- Use that v[i] = v.toList[i] and map over finRange matches map over list
-  induction n with
-  | zero =>
-    simp only [List.finRange_zero, List.map_nil, List.sum_nil, Vector.toList_mk, List.countP_nil,
-      Nat.cast_zero]
-  | succ k ih =>
-    -- v : Vector α (k+1), split into head and tail
-    obtain ⟨l, hl⟩ := v.exists_eq_cons
-    cases hl
-    simp only [List.finRange_succ, List.map_cons, List.sum_cons]
-    -- First element
-    simp only [Fin.val_zero, Vector.getElem_cons_zero]
-    -- Tail elements: need to relate tail to List.finRange k
-    sorry
+  -- The key equality: indexed map = direct list map
+  have h_maps_eq : (List.finRange n).map (fun i => if p v[i] then (1 : F) else 0) =
+                   v.toList.map (fun x => if p x then (1 : F) else 0) := by
+    -- Both lists have the same length (n)
+    have h_len1 : (List.finRange n).length = n := List.length_finRange
+    have h_len2 : v.toList.length = n := Vector.length_toList
+    apply List.ext_getElem
+    · simp only [List.length_map, h_len1, h_len2]
+    · intro k h1 h2
+      simp only [List.getElem_map, List.getElem_finRange, Vector.getElem_toList]
+      congr 2
+  rw [h_maps_eq]
+  exact list_sum_ite_eq_countP v.toList p
 
 /--
 For a bundle of instructions satisfying Bundle.Spec, the total multiplicity contribution
@@ -964,9 +977,9 @@ lemma bundle_multiplicity_contribution
   -- Relate finRange to toList via getElem
   congr 1
   · -- (List.finRange n).map (λ i => if enabled ∧ post=s then 1 else 0)).sum = countP
-    sorry
+    exact sum_ite_eq_countP inputs (fun i => i.enabled = 1 ∧ postStateFn i.preState = s)
   · -- Similar for outgoing
-    sorry
+    exact sum_ite_eq_countP inputs (fun i => i.enabled = 1 ∧ i.preState = s)
 
 /--
 For any state s, the multiplicity in adds.toFinsupp equals:
@@ -993,10 +1006,32 @@ lemma multiplicity_eq_emission_plus_flow
            inputs.bundledInputs.addInputs inputs.bundledInputs.mulInputs
            inputs.bundledInputs.storeStateInputs inputs.bundledInputs.loadStateInputs s) : F p) +
       (if s = inputs.finalState then -1 else 0) := by
-  -- This requires relating the Bundle.Spec to individual instruction contributions
-  -- Each enabled instruction contributes preState(-1) + postState(+1)
-  -- Sum over all enabled instructions gives: -outgoing + incoming
-  -- Plus the emission terms from initial and final states
+  -- Extract components from h_spec
+  obtain ⟨addAdds, mulAdds, storeStateAdds, loadStateAdds, h_add_spec, h_mul_spec, h_store_spec, h_load_spec, h_adds_eq⟩ := h_spec
+
+  -- Rewrite adds in terms of components
+  rw [h_adds_eq]
+
+  -- Convert to toFinsupp and evaluate at stateToNamedList s
+  simp only [InteractionDelta.toFinsupp_add, Finsupp.add_apply, InteractionDelta.toFinsupp_single]
+
+  -- The key insight: the bundle contributions sum to totalIncoming - totalOutgoing
+  -- This requires showing that each bundle's toFinsupp at s equals countIncoming - countOutgoing
+  -- for that bundle. This is a complex proof that requires connecting Bundle.Spec
+  -- to the finsupp representation. We leave this as a sorry for now.
+
+  -- Handle the emission terms
+  let init_nl : NamedList (F p) := ⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩
+  let final_nl : NamedList (F p) := ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩
+  let s_nl := stateToNamedList s
+
+  -- The structure is: init_emission + bundle_contributions + final_emission
+  -- = emission_at_init + totalIncoming - totalOutgoing + emission_at_final
+
+  -- For now, we use sorry. The full proof would require:
+  -- 1. Connecting each Bundle.Spec to bundle_multiplicity_contribution
+  -- 2. Showing the foldl sum in Bundle.Spec equals a Finset.sum
+  -- 3. Using that to establish each bundle's contribution = countIncoming - countOutgoing
   sorry
 
 /--
