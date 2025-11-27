@@ -309,7 +309,7 @@ def stepBody
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit :=
-  (AddInstruction.circuit program h_programSize memory h_memorySize).elaborated.main input
+  (AddInstruction.circuit program h_programSize memory h_memorySize) input
 
 instance stepBody_constantLength
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
@@ -317,8 +317,8 @@ instance stepBody_constantLength
     Circuit.ConstantLength (stepBody program h_programSize memory h_memorySize) where
   localLength := 27
   localLength_eq _ _ := by
-    simp only [stepBody]
-    exact (AddInstruction.circuit program h_programSize memory h_memorySize).elaborated.localLength_eq _ _
+    simp only [stepBody, circuit_norm]
+    rfl
 
 def main
     (capacity : ℕ) [NeZero capacity]
@@ -370,21 +370,18 @@ def elaborated
     -- Now prove term-by-term equality
     apply Finset.sum_congr rfl
     intro i _
-    -- Unfold stepBody and localLength
-    simp only [stepBody, Circuit.ConstantLength.localLength]
-    -- Use AddInstruction.elaborated.localAdds_eq
-    have h_step := (AddInstruction.elaborated program h_programSize memory h_memorySize).localAdds_eq
-      inputs[i] env (offset + ↑i * 27)
-    rw [Circuit.operations] at h_step
-    rw [h_step]
-    -- The LHS is now AddInstruction.elaborated.localAdds which equals the RHS by definition
-    simp only [ElaboratedCircuit.localAdds, AddInstruction.elaborated, circuit_norm]
+    -- Unfold stepBody to assertionChangingMultiset which produces a subcircuit
+    simp only [stepBody, assertionChangingMultiset, Circuit.ConstantLength.localLength, circuit_norm]
+    -- collectAdds on [.subcircuit s] = s.localAdds
+    -- s.localAdds = circuit.localAdds by FormalAssertionChangingMultiset.toSubcircuit_localAdds
+    -- circuit.localAdds = elaborated.localAdds by definition
+    simp only [AddInstruction.circuit, AddInstruction.elaborated, circuit_norm]
     rfl
   subcircuitsConsistent := by
     intros inputs offset
     rw [Operations.SubcircuitsConsistent, main, Circuit.forEach.forAll]
     intro i
-    exact (AddInstruction.elaborated program h_programSize memory h_memorySize).subcircuitsConsistent _ _
+    simp only [stepBody, assertionChangingMultiset, circuit_norm]
 
 /--
 Assumptions for the bundle: each input must satisfy the individual step assumptions.

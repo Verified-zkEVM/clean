@@ -181,6 +181,61 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
   }
 
 /--
+Theorem and implementation that allows us to take a formal assertion changing multiset and use it as a subcircuit.
+-/
+def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChangingMultiset F β)
+    (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
+  let ops := circuit.main input_var |>.operations n
+  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
+
+  {
+    ops := ops.toFlat,
+    Soundness env :=
+      let adds := circuit.localAdds input_var env n
+      circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) adds,
+    Completeness env :=
+      let adds := circuit.localAdds input_var env n
+      circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var) adds,
+    UsesLocalWitnesses _ := True,
+    localLength := circuit.localLength input_var
+    localAdds env := circuit.localAdds input_var env n
+
+    imply_soundness := by
+      intro env h_holds adds as
+      let input : β F := eval env input_var
+
+      suffices h: ConstraintsHold.Soundness env ops by
+        exact circuit.soundness n env input_var input rfl as h
+
+      guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
+      apply can_replace_soundness
+      exact constraintsHold_toFlat_iff.mp h_holds
+
+    implied_by_completeness := by
+      intro env h_env h_completeness
+
+      let input := eval env input_var
+      let adds := circuit.localAdds input_var env n
+      have as : circuit.Assumptions input ∧ circuit.Spec input adds := h_completeness
+
+      have h_env' : env.UsesLocalWitnesses n ops := by
+        guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
+        rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
+        exact h_env
+      have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env'
+
+      have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
+
+      apply constraintsHold_toFlat_iff.mpr
+      exact can_replace_completeness h_consistent h_env' h_holds
+
+    imply_usesLocalWitnesses := by intros; exact trivial
+
+    localLength_eq := by
+      rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
+  }
+
+/--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/
 def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
@@ -250,6 +305,13 @@ def subcircuitWithAssertion (circuit : GeneralFormalCircuit F β α) (b : Var β
     let subcircuit := circuit.toSubcircuit offset b
     (a, [.subcircuit subcircuit])
 
+/-- Include an assertion changing multiset subcircuit. -/
+@[circuit_norm]
+def assertionChangingMultiset (circuit : FormalAssertionChangingMultiset F β) (b : Var β F) : Circuit F Unit :=
+  fun offset =>
+    let subcircuit := circuit.toSubcircuit offset b
+    ((), [.subcircuit subcircuit])
+
 -- we'd like to use subcircuits like functions
 
 instance : CoeFun (FormalCircuit F β α) (fun _ => Var β F → Circuit F (Var α F)) where
@@ -260,6 +322,9 @@ instance : CoeFun (FormalAssertion F β) (fun _ => Var β F → Circuit F Unit) 
 
 instance : CoeFun (GeneralFormalCircuit F β α) (fun _ => Var β F → Circuit F (Var α F)) where
   coe circuit input := subcircuitWithAssertion circuit input
+
+instance : CoeFun (FormalAssertionChangingMultiset F β) (fun _ => Var β F → Circuit F Unit) where
+  coe circuit input := assertionChangingMultiset circuit input
 
 namespace Circuit
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
@@ -272,6 +337,9 @@ lemma assertion_localLength_eq (circuit : FormalAssertion F β) (input : Var β 
   (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 
 lemma subcircuitWithAssertion_localLength_eq (circuit : GeneralFormalCircuit F β α) (input : Var β F) (offset : ℕ) :
+  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
+
+lemma assertionChangingMultiset_localLength_eq (circuit : FormalAssertionChangingMultiset F β) (input : Var β F) (offset : ℕ) :
   (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 end Circuit
 
@@ -347,7 +415,7 @@ theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
 
 -- to reduce offsets, `circuit_norm` will use these theorems to unfold subcircuits
 attribute [circuit_norm] Circuit.subcircuit_localLength_eq Circuit.assertion_localLength_eq
-  Circuit.subcircuitWithAssertion_localLength_eq
+  Circuit.subcircuitWithAssertion_localLength_eq Circuit.assertionChangingMultiset_localLength_eq
 
 -- Simplification lemmas for toSubcircuit.UsesLocalWitnesses
 
@@ -447,6 +515,16 @@ theorem FormalAssertion.toSubcircuit_localAdds
     (circuit.toSubcircuit n input_var).localAdds env = 0 := by
   rfl
 
+/--
+Simplifies localAdds for FormalAssertionChangingMultiset.toSubcircuit.
+-/
+@[circuit_norm]
+theorem FormalAssertionChangingMultiset.toSubcircuit_localAdds
+    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertionChangingMultiset F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).localAdds env = circuit.localAdds input_var env n := by
+  rfl
+
 -- Simplification lemmas for toSubcircuit.Soundness
 
 /--
@@ -515,4 +593,40 @@ theorem FormalAssertion.toSubcircuit_completeness
     (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
     (circuit.toSubcircuit n input_var).Completeness env =
     (circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var)) := by
+  rfl
+
+-- Simplification lemmas for FormalAssertionChangingMultiset.toSubcircuit
+
+/--
+Simplifies localLength for FormalAssertionChangingMultiset.toSubcircuit.
+-/
+@[circuit_norm]
+theorem FormalAssertionChangingMultiset.toSubcircuit_localLength
+    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertionChangingMultiset F Input) (n : ℕ) (input_var : Var Input F) :
+    (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
+  rfl
+
+/--
+Simplifies Soundness for FormalAssertionChangingMultiset.toSubcircuit.
+-/
+@[circuit_norm]
+theorem FormalAssertionChangingMultiset.toSubcircuit_soundness
+    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertionChangingMultiset F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).Soundness env =
+    (let adds := circuit.localAdds input_var env n
+     circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) adds) := by
+  rfl
+
+/--
+Simplifies Completeness for FormalAssertionChangingMultiset.toSubcircuit.
+-/
+@[circuit_norm]
+theorem FormalAssertionChangingMultiset.toSubcircuit_completeness
+    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertionChangingMultiset F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).Completeness env =
+    (let adds := circuit.localAdds input_var env n
+     circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var) adds) := by
   rfl
