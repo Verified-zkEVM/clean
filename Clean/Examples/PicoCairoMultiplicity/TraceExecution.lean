@@ -982,11 +982,18 @@ lemma netFlow_eq_totalOutgoing_sub_totalIncoming
   have h_load_in := sum_bundleEdgeCount_eq_countIncoming loadInputs (loadStatePostState program memory) s
 
   -- Convert sums to countOutgoing/countIncoming
-  simp only [totalOutgoing, totalIncoming, countOutgoing, countIncoming]
+  -- Don't unfold here to avoid the complex filter expressions
+  -- simp only [totalOutgoing, totalIncoming, countOutgoing, countIncoming]
 
-  -- The algebra connecting Finset.sum over bundleEdgeCounts to countOutgoing/countIncoming
-  -- requires the helper lemmas sum_bundleEdgeCount_eq_countOutgoing/Incoming
-  sorry
+  -- Convert ∑ x, ↑(f x) to ↑(∑ x, f x) using Nat.cast_sum
+  simp only [← Nat.cast_sum]
+
+  -- Now use the helper lemmas
+  rw [h_add_out, h_mul_out, h_store_out, h_load_out,
+      h_add_in, h_mul_in, h_store_in, h_load_in]
+
+  -- Unfold the totalOutgoing/totalIncoming definitions
+  simp only [totalOutgoing, totalIncoming, Int.ofNat_add]
 
 /--
 When the ExecutionBundle.Spec holds with balanced adds (toFinsupp = 0),
