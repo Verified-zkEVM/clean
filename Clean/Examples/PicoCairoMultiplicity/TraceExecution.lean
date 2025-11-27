@@ -932,6 +932,45 @@ lemma sum_ite_eq_countP {α : Type*} {n : ℕ} (v : Vector α n) (p : α → Pro
   exact list_sum_ite_eq_countP v.toList p
 
 /--
+Helper: foldl add over finRange for InteractionDelta equals list sum of map.
+-/
+lemma foldl_add_eq_map_sum {n : ℕ} (f : Fin n → InteractionDelta (F p)) :
+    (List.finRange n).foldl (fun acc i => acc + f i) 0 =
+    ((List.finRange n).map f).sum := by
+  -- LHS folds over finRange applying f, RHS is sum of map f
+  -- Use List.foldl_map to relate them
+  have h : (List.finRange n).foldl (fun acc i => acc + f i) 0 =
+           ((List.finRange n).map f).foldl (fun acc x => acc + x) 0 := by
+    rw [List.foldl_map]
+  rw [h]
+  -- Now use List.sum_eq_foldl
+  rw [← List.sum_eq_foldl]
+
+/--
+Helper: toFinsupp of list sum equals sum of map toFinsupp.
+-/
+lemma toFinsupp_list_sum (l : List (InteractionDelta (F p))) :
+    l.sum.toFinsupp = (l.map InteractionDelta.toFinsupp).sum := by
+  induction l with
+  | nil => simp only [List.sum_nil, InteractionDelta.toFinsupp_zero, List.map_nil]
+  | cons hd tl ih =>
+    simp only [List.sum_cons, InteractionDelta.toFinsupp_add, List.map_cons, ih]
+
+/--
+Helper: toFinsupp distributes over foldl addition.
+-/
+lemma toFinsupp_foldl_add {n : ℕ} (f : Fin n → InteractionDelta (F p)) :
+    ((List.finRange n).foldl (fun acc i => acc + f i) 0).toFinsupp = ∑ i : Fin n, (f i).toFinsupp := by
+  rw [foldl_add_eq_map_sum, toFinsupp_list_sum]
+  -- LHS: ((finRange n).map f).map toFinsupp).sum : Finsupp
+  -- RHS: ∑ i : Fin n, (f i).toFinsupp
+  rw [List.map_map]
+  -- Now: ((finRange n).map (toFinsupp ∘ f)).sum = ∑ i : Fin n, (f i).toFinsupp
+  rw [Fin.sum_univ_def]
+  -- RHS becomes: ((finRange n).map (fun i => (f i).toFinsupp)).sum
+  rfl
+
+/--
 For a bundle of instructions satisfying Bundle.Spec, the total multiplicity contribution
 at state s equals countIncoming - countOutgoing.
 -/
