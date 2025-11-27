@@ -1,12 +1,13 @@
 /-
-PicoCairoMultiplicity Execution Bundle
-Combines all four instruction circuits (ADD, MUL, LoadState, StoreState).
-For a single execution step, exactly one instruction is enabled.
+PicoCairo Execution Bundle (Multiplicity version)
+Combines all four instruction bundles (ADD, MUL, LoadState, StoreState).
+Each bundle processes multiple instructions of a single type with given capacity.
 -/
 
 import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.Loops
+import Clean.Circuit.Theorems
 import Clean.Examples.PicoCairoMultiplicity.Types
 import Clean.Examples.PicoCairoMultiplicity.Helpers
 import Clean.Examples.PicoCairoMultiplicity.AddInstruction
@@ -30,162 +31,183 @@ open Examples.PicoCairoMultiplicity.Helpers
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
-Input for the execution bundle: pre-state and 4 enabled flags for each instruction type.
-Exactly one enabled flag should be 1.
+Instruction capacities for the execution bundle.
+Groups all instruction type capacities with their NeZero constraints.
 -/
-structure ExecutionBundleInput (F : Type) where
-  preState : State F
-  enableAdd : F
-  enableMul : F
-  enableStoreState : F
-  enableLoadState : F
+structure InstructionCapacities where
+  addCapacity : ℕ
+  mulCapacity : ℕ
+  storeStateCapacity : ℕ
+  loadStateCapacity : ℕ
+  addCapacity_nz : NeZero addCapacity
+  mulCapacity_nz : NeZero mulCapacity
+  storeStateCapacity_nz : NeZero storeStateCapacity
+  loadStateCapacity_nz : NeZero loadStateCapacity
 
-instance : ProvableStruct ExecutionBundleInput where
-  components := [State, field, field, field, field]
-  toComponents := fun { preState, enableAdd, enableMul, enableStoreState, enableLoadState } =>
-    .cons preState (.cons enableAdd (.cons enableMul (.cons enableStoreState (.cons enableLoadState .nil))))
-  fromComponents := fun (.cons preState (.cons enableAdd (.cons enableMul (.cons enableStoreState (.cons enableLoadState .nil))))) => {
-    preState, enableAdd, enableMul, enableStoreState, enableLoadState
-  }
+instance (capacities : InstructionCapacities) : NeZero capacities.addCapacity := capacities.addCapacity_nz
+instance (capacities : InstructionCapacities) : NeZero capacities.mulCapacity := capacities.mulCapacity_nz
+instance (capacities : InstructionCapacities) : NeZero capacities.storeStateCapacity := capacities.storeStateCapacity_nz
+instance (capacities : InstructionCapacities) : NeZero capacities.loadStateCapacity := capacities.loadStateCapacity_nz
 
 /--
-Main circuit for the execution bundle.
-Executes each instruction circuit with its enabled flag.
-Asserts that exactly one instruction is enabled.
+Bundled instruction inputs for all instruction types.
+Groups the input vectors for ADD, MUL, StoreState, and LoadState instructions.
+-/
+structure BundledInstructionInputs (capacities : InstructionCapacities) (F : Type) where
+  addInputs : ProvableVector InstructionStepInput capacities.addCapacity F
+  mulInputs : ProvableVector InstructionStepInput capacities.mulCapacity F
+  storeStateInputs : ProvableVector InstructionStepInput capacities.storeStateCapacity F
+  loadStateInputs : ProvableVector InstructionStepInput capacities.loadStateCapacity F
+
+instance (capacities : InstructionCapacities) : ProvableStruct (BundledInstructionInputs capacities) where
+  components := [
+    ProvableVector InstructionStepInput capacities.addCapacity,
+    ProvableVector InstructionStepInput capacities.mulCapacity,
+    ProvableVector InstructionStepInput capacities.storeStateCapacity,
+    ProvableVector InstructionStepInput capacities.loadStateCapacity
+  ]
+  toComponents := fun { addInputs, mulInputs, storeStateInputs, loadStateInputs } =>
+    .cons addInputs (.cons mulInputs (.cons storeStateInputs (.cons loadStateInputs .nil)))
+  fromComponents := fun (.cons addInputs (.cons mulInputs (.cons storeStateInputs (.cons loadStateInputs .nil)))) =>
+    { addInputs, mulInputs, storeStateInputs, loadStateInputs }
+
+instance (capacities : InstructionCapacities) : NonEmptyProvableType (BundledInstructionInputs capacities) where
+  nonempty := by
+    simp only [size, circuit_norm]
+    simp only [List.sum_cons, List.sum_nil, add_zero, Nat.reduceAdd, gt_iff_lt, add_pos_iff,
+      Nat.ofNat_pos, mul_pos_iff_of_pos_right]
+    have : NeZero capacities.addCapacity := inferInstance
+    rcases this
+    omega
+
+/--
+Main execution bundle that combines all instruction type bundles.
+Includes ADD, MUL, StoreState, and LoadState bundles.
 -/
 def main
+    (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (input : Var ExecutionBundleInput (F p)) : Circuit (F p) Unit := do
+    (inputs : Var (BundledInstructionInputs capacities) (F p)) :
+    Circuit (F p) Unit := do
 
-  -- Assert all enabled flags are boolean
-  assertBool input.enableAdd
-  assertBool input.enableMul
-  assertBool input.enableStoreState
-  assertBool input.enableLoadState
+  -- Execute ADD instruction bundle
+  (AddInstruction.Bundle.circuit capacities.addCapacity program h_programSize memory h_memorySize) inputs.addInputs
 
-  -- Assert exactly one is enabled: sum = 1
-  assertZero (input.enableAdd + input.enableMul + input.enableStoreState + input.enableLoadState - 1)
+  -- Execute MUL instruction bundle
+  (MulInstruction.Bundle.circuit capacities.mulCapacity program h_programSize memory h_memorySize) inputs.mulInputs
 
-  -- Execute each instruction circuit with its enabled flag
-  -- Use .circuit.elaborated.main for compositional reuse
-  (AddInstruction.circuit program h_programSize memory h_memorySize).elaborated.main {
-    enabled := input.enableAdd,
-    preState := input.preState
-  }
+  -- Execute StoreState instruction bundle
+  (StoreStateInstruction.Bundle.circuit capacities.storeStateCapacity program h_programSize memory h_memorySize) inputs.storeStateInputs
 
-  (MulInstruction.circuit program h_programSize memory h_memorySize).elaborated.main {
-    enabled := input.enableMul,
-    preState := input.preState
-  }
-
-  (StoreStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.main {
-    enabled := input.enableStoreState,
-    preState := input.preState
-  }
-
-  (LoadStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.main {
-    enabled := input.enableLoadState,
-    preState := input.preState
-  }
+  -- Execute LoadState instruction bundle
+  (LoadStateInstruction.Bundle.circuit capacities.loadStateCapacity program h_programSize memory h_memorySize) inputs.loadStateInputs
 
 /--
-ElaboratedCircuit for the execution bundle.
+Elaborated circuit for the execution bundle.
+The localAdds are the sum of adds from all instruction bundles.
 -/
 def elaborated
+    (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    ElaboratedCircuit (F p) ExecutionBundleInput unit where
-  main := main program h_programSize memory h_memorySize
-  -- 4×assertBool(0) + assertZero(0) + 4×instruction(27) = 108
-  localLength _ := 108
+    ElaboratedCircuit (F p) (BundledInstructionInputs capacities) unit where
+  main := main capacities program h_programSize memory h_memorySize
+  localLength _ :=
+    capacities.addCapacity * 27 +
+    capacities.mulCapacity * 27 +
+    capacities.storeStateCapacity * 27 +
+    capacities.loadStateCapacity * 27
   localLength_eq := by
-    intro input offset
-    sorry
+    intros input offset
+    simp only [circuit_norm, main]
+    simp only [AddInstruction.Bundle.circuit, AddInstruction.Bundle.elaborated]
+    simp only [MulInstruction.Bundle.circuit, MulInstruction.Bundle.elaborated]
+    simp only [StoreStateInstruction.Bundle.circuit, StoreStateInstruction.Bundle.elaborated]
+    simp only [LoadStateInstruction.Bundle.circuit, LoadStateInstruction.Bundle.elaborated]
+    omega
   output _ _ := ()
-  localAdds input env offset :=
-    let preState := eval env input.preState
-    let enableAdd := input.enableAdd.eval env
-    let enableMul := input.enableMul.eval env
-    let enableStoreState := input.enableStoreState.eval env
-    let enableLoadState := input.enableLoadState.eval env
-
-    -- ADD instruction delta
-    let addPostState : State (F p) := { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
-    let addDelta := InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enableAdd * (-1)) +
-                    InteractionDelta.single ⟨"state", [addPostState.pc, addPostState.ap, addPostState.fp]⟩ (enableAdd * 1)
-
-    -- MUL instruction delta
-    let mulPostState : State (F p) := { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
-    let mulDelta := InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enableMul * (-1)) +
-                    InteractionDelta.single ⟨"state", [mulPostState.pc, mulPostState.ap, mulPostState.fp]⟩ (enableMul * 1)
-
-    -- StoreState instruction delta
-    let storePostState : State (F p) := { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
-    let storeDelta := InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enableStoreState * (-1)) +
-                      InteractionDelta.single ⟨"state", [storePostState.pc, storePostState.ap, storePostState.fp]⟩ (enableStoreState * 1)
-
-    -- LoadState instruction delta (post-state uses memory values)
-    let loadV1 := env.get (offset + 27 + 27 + 27 + 4 + 8 + 4)
-    let loadV2 := env.get (offset + 27 + 27 + 27 + 4 + 8 + 5 + 4)
-    let loadV3 := env.get (offset + 27 + 27 + 27 + 4 + 8 + 5 + 5 + 4)
-    let loadPostState : State (F p) := { pc := loadV1, ap := loadV2, fp := loadV3 }
-    let loadDelta := InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enableLoadState * (-1)) +
-                     InteractionDelta.single ⟨"state", [loadPostState.pc, loadPostState.ap, loadPostState.fp]⟩ (enableLoadState * 1)
-
-    addDelta + mulDelta + storeDelta + loadDelta
+  localAdds inputs env offset :=
+    (AddInstruction.Bundle.elaborated capacities.addCapacity program h_programSize memory h_memorySize).localAdds
+      inputs.addInputs env offset +
+    (MulInstruction.Bundle.elaborated capacities.mulCapacity program h_programSize memory h_memorySize).localAdds
+      inputs.mulInputs env (offset + capacities.addCapacity * 27) +
+    (StoreStateInstruction.Bundle.elaborated capacities.storeStateCapacity program h_programSize memory h_memorySize).localAdds
+      inputs.storeStateInputs env (offset + capacities.addCapacity * 27 + capacities.mulCapacity * 27) +
+    (LoadStateInstruction.Bundle.elaborated capacities.loadStateCapacity program h_programSize memory h_memorySize).localAdds
+      inputs.loadStateInputs env (offset + capacities.addCapacity * 27 + capacities.mulCapacity * 27 + capacities.storeStateCapacity * 27)
   localAdds_eq := by
-    intro input env offset
-    sorry
+    intros inputs env offset
+    simp only [main, circuit_norm]
+    -- Use toSubcircuit_localAdds to relate subcircuit localAdds to bundle localAdds
+    simp only [Operations.collectAdds, FormalAssertionChangingMultiset.toSubcircuit_localAdds,
+      add_zero]
+    -- Now we have the bundle's localAdds on both sides
+    simp only [AddInstruction.Bundle.circuit, MulInstruction.Bundle.circuit,
+      StoreStateInstruction.Bundle.circuit, LoadStateInstruction.Bundle.circuit,
+      AddInstruction.Bundle.elaborated, MulInstruction.Bundle.elaborated,
+      StoreStateInstruction.Bundle.elaborated, LoadStateInstruction.Bundle.elaborated]
+    -- LHS uses + while RHS uses ++, which are the same for InteractionDelta
+    simp only [← InteractionDelta.add_eq_append, InteractionDelta.toFinsupp_add, add_assoc]
   subcircuitsConsistent := by
-    intro input offset
-    sorry
+    intros inputs offset
+    simp only [main, circuit_norm]
+    -- After simp, the goal is arithmetic about ElaboratedCircuit.localLength
+    -- Simplify localLength to capacity * 27 values
+    simp only [AddInstruction.Bundle.circuit, MulInstruction.Bundle.circuit,
+      StoreStateInstruction.Bundle.circuit,
+      AddInstruction.Bundle.elaborated, MulInstruction.Bundle.elaborated,
+      StoreStateInstruction.Bundle.elaborated,
+      ElaboratedCircuit.localLength]
+    omega
 
 /--
-Assumptions for the execution bundle.
-All enabled flags are boolean and exactly one is 1.
+Assumptions for the execution bundle: each instruction bundle must satisfy its assumptions.
 -/
 def Assumptions
+    (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize]
-    (input : ExecutionBundleInput (F p)) : Prop :=
-  IsBool input.enableAdd ∧
-  IsBool input.enableMul ∧
-  IsBool input.enableStoreState ∧
-  IsBool input.enableLoadState ∧
-  input.enableAdd + input.enableMul + input.enableStoreState + input.enableLoadState = 1 ∧
-  ZMod.val input.preState.pc + 3 < programSize
+    (inputs : BundledInstructionInputs capacities (F p)) : Prop :=
+  AddInstruction.Bundle.Assumptions capacities.addCapacity (programSize := programSize) inputs.addInputs ∧
+  MulInstruction.Bundle.Assumptions capacities.mulCapacity (programSize := programSize) inputs.mulInputs ∧
+  StoreStateInstruction.Bundle.Assumptions capacities.storeStateCapacity (programSize := programSize) inputs.storeStateInputs ∧
+  LoadStateInstruction.Bundle.Assumptions capacities.loadStateCapacity (programSize := programSize) inputs.loadStateInputs
 
 /--
-Specification for the execution bundle.
-The bundle correctly executes whichever instruction is enabled.
+Spec for the execution bundle: each instruction bundle must satisfy its spec,
+and the local adds are the sum of all bundle adds.
 -/
 def Spec
+    (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (input : ExecutionBundleInput (F p)) (adds : InteractionDelta (F p)) : Prop :=
-  -- Delegate to the appropriate instruction's spec based on which one is enabled
-  if input.enableAdd = 1 then
-    AddInstruction.Spec program memory { enabled := 1, preState := input.preState } adds
-  else if input.enableMul = 1 then
-    MulInstruction.Spec program memory { enabled := 1, preState := input.preState } adds
-  else if input.enableStoreState = 1 then
-    StoreStateInstruction.Spec program memory { enabled := 1, preState := input.preState } adds
-  else if input.enableLoadState = 1 then
-    LoadStateInstruction.Spec program memory { enabled := 1, preState := input.preState } adds
-  else
-    False  -- At least one should be enabled
+    (inputs : BundledInstructionInputs capacities (F p))
+    (adds : InteractionDelta (F p)) : Prop :=
+  ∃ (addAdds mulAdds storeStateAdds loadStateAdds : InteractionDelta (F p)),
+    AddInstruction.Bundle.Spec capacities.addCapacity program memory inputs.addInputs addAdds ∧
+    MulInstruction.Bundle.Spec capacities.mulCapacity program memory inputs.mulInputs mulAdds ∧
+    StoreStateInstruction.Bundle.Spec capacities.storeStateCapacity program memory inputs.storeStateInputs storeStateAdds ∧
+    LoadStateInstruction.Bundle.Spec capacities.loadStateCapacity program memory inputs.loadStateInputs loadStateAdds ∧
+    adds = addAdds + mulAdds + storeStateAdds + loadStateAdds
 
 /--
-FormalAssertionChangingMultiset for the execution bundle.
+Formal circuit for the execution bundle.
 -/
 def circuit
+    (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    FormalAssertionChangingMultiset (F p) ExecutionBundleInput where
-  elaborated := elaborated program h_programSize memory h_memorySize
-  Assumptions := Assumptions (programSize := programSize)
-  Spec := Spec program memory
+    FormalAssertionChangingMultiset (F p) (BundledInstructionInputs capacities) where
+  elaborated := elaborated capacities program h_programSize memory h_memorySize
+  Assumptions := Assumptions capacities (programSize := programSize)
+  Spec := Spec capacities program memory
   soundness := by
+    -- The soundness proof decomposes each bundle's constraints using bind_soundness,
+    -- then applies each bundle's soundness to get the specs.
+    -- The main technical challenge is matching the List.foldl expressions:
+    -- - The hypothesis uses acc ++ (x ++ y) form
+    -- - The goal uses acc + x + y form (which unfolds to acc ++ x ++ y)
+    -- These are equal by List.append_assoc, but the proof times out due to term size.
     sorry
   completeness := by
     sorry
