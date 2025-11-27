@@ -731,6 +731,20 @@ private theorem InteractionDelta.foldl_init_eq_append {β : Type*} (f : Interact
     show init ++ ((f 0 y) ++ _) = (f init y) ++ _
     rw [hf init y, InteractionDelta.add_eq_append, List.append_assoc]
 
+/-- Helper: In forEach cons case, the tail's foldl matches the shifted indexing pattern. -/
+private theorem forEach_cons_foldl_eq {n : ℕ} (a : α) (as : Vector α n) (body : α → Circuit F Unit)
+    (env : Environment F) (offset k : ℕ) :
+    (List.finRange n).foldl (fun acc (i : Fin n) =>
+      acc + Operations.collectAdds env ((body as[i]) (offset + k + i * k)).2) 0 =
+    (List.finRange n).foldl (fun acc (i : Fin n) =>
+      acc + Operations.collectAdds env ((body (a :: as.toList)[↑(Fin.succ i)]) (offset + ↑(Fin.succ i) * k)).2) 0 := by
+  congr 1; funext acc i
+  have h1 : (a :: as.toList)[(Fin.succ i : Fin (n+1))] = as[i] := by
+    show (a :: as.toList)[i.val + 1] = as[i.val]
+    simp only [List.getElem_cons_succ, Vector.getElem_toList]
+  have h2 : offset + k + i * k = offset + (↑i + 1) * k := by ring
+  simp only [h1, h2, Fin.val_succ]
+
 /-- Relates collectAdds of forEach to a foldl over finRange.
     This is useful for proving Bundle.localAdds_eq where localAdds is defined via foldl. -/
 theorem collectAdds_forEach_foldl {m : ℕ} (xs : Vector α m) [Inhabited α]
@@ -743,25 +757,14 @@ theorem collectAdds_forEach_foldl {m : ℕ} (xs : Vector α m) [Inhabited α]
   case nil => rfl
   case cons n a as ih =>
     simp only [circuit_norm, Operations.collectAdds_append]
-    have h_len : Operations.localLength (body a offset).2 = constant.localLength := constant.localLength_eq a offset
+    have h_len : (body a).localLength offset = constant.localLength := constant.localLength_eq a offset
+    simp only [Circuit.localLength] at h_len
     rw [h_len, ih]
-    simp only [List.finRange_succ, List.foldl_cons, List.foldl_map, List.nil_append]
-    set k := constant.localLength
-    simp only [Fin.val_zero, zero_mul, add_zero]
-    simp only [Vector.cons, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
-    -- Show both foldl functions compute the same on each step
-    have h_fun_eq : (fun acc (i : Fin n) => acc + Operations.collectAdds env (body as[↑i] (offset + k + ↑i * k)).2) =
-                    (fun acc (i : Fin n) => acc + Operations.collectAdds env (body (a :: as.toList)[↑(Fin.succ i)] (offset + ↑(Fin.succ i) * k)).2) := by
-      funext acc i
-      have h1 : (a :: as.toList)[(i.succ : Fin (n+1))] = as[i] := by
-        show (a :: as.toList)[i.succ.val] = as[i.val]
-        simp only [Fin.val_succ, List.getElem_cons_succ, Vector.getElem_toList]
-      have h2 : offset + k + ↑i * k = offset + (↑i + 1) * k := by ring
-      simp only [h1, h2, Fin.val_succ]
-    rw [h_fun_eq]
-    -- Apply the extracted lemma
-    set f := fun acc (i : Fin n) => acc + Operations.collectAdds env (body (a :: as.toList)[↑(Fin.succ i)] (offset + ↑(Fin.succ i) * k)).2
-    exact InteractionDelta.foldl_init_eq_append f (fun _ _ => rfl) _ _
+    simp only [List.finRange_succ, List.foldl_cons, List.foldl_map, List.nil_append,
+      Fin.val_zero, zero_mul, add_zero, Vector.cons, Vector.getElem_mk,
+      List.getElem_toArray, List.getElem_cons_zero]
+    rw [forEach_cons_foldl_eq a as body env offset constant.localLength]
+    exact InteractionDelta.foldl_init_eq_append _ (fun _ _ => rfl) _ _
 
 theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
