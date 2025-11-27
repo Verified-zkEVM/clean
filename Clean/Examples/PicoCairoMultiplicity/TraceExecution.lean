@@ -736,8 +736,28 @@ lemma emission_eq_flow_diff
     rw [h_balanced]
     simp only [Finsupp.coe_zero, Pi.zero_apply]
   rw [h_zero] at h_mult
-  -- Algebraic manipulation in field to get: out - inc = emission_init + emission_final
-  sorry
+  -- h_mult : 0 = emit_init + ↑inc - ↑out + emit_final
+  -- Goal: ↑out - ↑inc = emit_init + emit_final
+  -- This is pure algebra in a commutative ring
+
+  -- Define local abbreviations for readability
+  set init_emit : F p := if s = inputs.initialState then 1 else 0 with h_init_def
+  set final_emit : F p := if s = inputs.finalState then -1 else 0 with h_final_def
+  set out_field : F p := ↑(totalOutgoing program memory inputs.bundledInputs.addInputs
+      inputs.bundledInputs.mulInputs inputs.bundledInputs.storeStateInputs
+      inputs.bundledInputs.loadStateInputs s) with h_out_def
+  set inc_field : F p := ↑(totalIncoming program memory inputs.bundledInputs.addInputs
+      inputs.bundledInputs.mulInputs inputs.bundledInputs.storeStateInputs
+      inputs.bundledInputs.loadStateInputs s) with h_inc_def
+
+  -- h_mult: 0 = init_emit + inc_field - out_field + final_emit
+  have h_eq : (0 : F p) = init_emit + inc_field - out_field + final_emit := h_mult
+  -- Goal: out_field - inc_field = init_emit + final_emit
+  -- From 0 = a + b - c + d, derive c - b = a + d by ring manipulation
+  calc out_field - inc_field
+    = out_field - inc_field + 0 := by ring
+  _ = out_field - inc_field + (init_emit + inc_field - out_field + final_emit) := by rw [← h_eq]
+  _ = init_emit + final_emit := by ring
 
 /-- The total number of enabled instructions is bounded by total capacity -/
 lemma enabled_count_bounded
