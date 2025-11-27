@@ -310,7 +310,7 @@ def stepBody
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit :=
-  (StoreStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.main input
+  (StoreStateInstruction.circuit program h_programSize memory h_memorySize) input
 
 instance stepBody_constantLength
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
@@ -318,8 +318,8 @@ instance stepBody_constantLength
     Circuit.ConstantLength (stepBody program h_programSize memory h_memorySize) where
   localLength := 27
   localLength_eq _ _ := by
-    simp only [stepBody]
-    exact (StoreStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.localLength_eq _ _
+    simp only [stepBody, circuit_norm]
+    rfl
 
 /--
 Main circuit for executing a bundle of STORE_STATE instructions.
@@ -373,21 +373,18 @@ def elaborated
     -- Now prove term-by-term equality
     apply Finset.sum_congr rfl
     intro i _
-    -- Unfold stepBody and localLength
-    simp only [stepBody, Circuit.ConstantLength.localLength, stepBody_constantLength]
-    -- Use StoreStateInstruction.elaborated.localAdds_eq
-    have h_step := (StoreStateInstruction.elaborated program h_programSize memory h_memorySize).localAdds_eq
-      inputs[i] env (offset + ↑i * 27)
-    rw [Circuit.operations] at h_step
-    rw [h_step]
-    -- The LHS is now StoreStateInstruction.elaborated.localAdds which equals the RHS by definition
-    simp only [ElaboratedCircuit.localAdds, StoreStateInstruction.elaborated, circuit_norm]
+    -- Unfold stepBody to assertionChangingMultiset which produces a subcircuit
+    simp only [stepBody, assertionChangingMultiset, Circuit.ConstantLength.localLength, circuit_norm]
+    -- collectAdds on [.subcircuit s] = s.localAdds
+    -- s.localAdds = circuit.localAdds by FormalAssertionChangingMultiset.toSubcircuit_localAdds
+    -- circuit.localAdds = elaborated.localAdds by definition
+    simp only [StoreStateInstruction.circuit, StoreStateInstruction.elaborated, circuit_norm]
     rfl
   subcircuitsConsistent := by
     intros inputs offset
     rw [Operations.SubcircuitsConsistent, main, Circuit.forEach.forAll]
     intro i
-    exact (StoreStateInstruction.elaborated program h_programSize memory h_memorySize).subcircuitsConsistent _ _
+    simp only [stepBody, assertionChangingMultiset, circuit_norm]
 
 /--
 Assumptions for the STORE_STATE bundle.
@@ -396,7 +393,7 @@ def Assumptions
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize]
     (inputs : ProvableVector InstructionStepInput capacity (F p)) : Prop :=
-  ∀ i : Fin capacity, StoreStateInstruction.Assumptions (programSize := programSize) inputs[i.val]
+  ∀ i : Fin capacity, StoreStateInstruction.Assumptions (programSize := programSize) inputs[i]
 
 /--
 Specification for the STORE_STATE bundle.
@@ -406,9 +403,9 @@ def Spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (adds : InteractionDelta (F p)) : Prop :=
-  ∃ individualAdds : Fin capacity → InteractionDelta (F p),
-    (∀ i, StoreStateInstruction.Spec program memory inputs[i.val] (individualAdds i)) ∧
-    adds = List.foldl (· + ·) 0 (List.ofFn individualAdds)
+  ∃ (stepAdds : Fin capacity → InteractionDelta (F p)),
+    (∀ i : Fin capacity, StoreStateInstruction.Spec program memory inputs[i] (stepAdds i)) ∧
+    adds = (List.finRange capacity).foldl (fun acc i => acc + stepAdds i) 0
 
 /--
 FormalAssertionChangingMultiset for the STORE_STATE bundle.
@@ -425,24 +422,35 @@ def circuit
     intro offset env inputs_var inputs h_eval h_assumptions h_holds
     simp only [elaborated, main] at h_holds
     rw [Circuit.forEach.soundness] at h_holds
-    -- Define stepAdds inline with StoreState postState (pc + 4, ap, fp unchanged)
-    use fun i =>
-      let input := inputs_var[i]
-      let preState := eval env input.preState
-      let postState : State (F p) := { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
-      let enabled := input.enabled.eval env
-      InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
-      InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
+    -- Define stepAdds using the circuit's localAdds
+    let stepCircuit := StoreStateInstruction.circuit program h_programSize memory h_memorySize
+    use fun i => stepCircuit.localAdds inputs_var[i] env (offset + i * 27)
     constructor
     · -- Each step satisfies StoreStateInstruction.Spec
       intro i
-      sorry
+      have h_step := h_holds i
+      simp only [stepBody, assertionChangingMultiset, circuit_norm] at h_step
+      have h_eval_i : eval env inputs_var[i] = inputs[i] :=
+        eval_vector_eq_get env inputs_var inputs h_eval i i.isLt
+      simp only [show (StoreStateInstruction.circuit program h_programSize memory h_memorySize).Assumptions =
+        StoreStateInstruction.Assumptions from rfl,
+        show (StoreStateInstruction.circuit program h_programSize memory h_memorySize).Spec =
+        StoreStateInstruction.Spec program memory from rfl] at h_step
+      have h_record : { enabled := Expression.eval env (Vector.get inputs_var ⟨↑i, i.isLt⟩).enabled,
+                        preState := eval env (Vector.get inputs_var ⟨↑i, i.isLt⟩).preState :
+                        InstructionStepInput (F p) } = eval env inputs_var[i] := by
+        simp only [eval, toVars, toElements, fromElements, circuit_norm]
+      rw [h_record, h_eval_i] at h_step
+      have h_assump : StoreStateInstruction.Assumptions inputs[i] := h_assumptions i
+      convert h_step h_assump using 2
     · -- The adds sum correctly
-      simp only [elaborated, Spec]
-      -- Convert List.ofFn to List.finRange foldl form
-      sorry
-  completeness := by
-    sorry
+      simp only [elaborated]
+      apply List.foldl_ext
+      intro acc i _
+      simp only [stepCircuit, StoreStateInstruction.circuit, circuit_norm]
+      rfl
+  -- Completeness is out of scope for the current work.
+  completeness := by sorry
 
 end Bundle
 

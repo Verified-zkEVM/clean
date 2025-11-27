@@ -292,7 +292,7 @@ def stepBody
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit :=
-  (LoadStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.main input
+  (LoadStateInstruction.circuit program h_programSize memory h_memorySize) input
 
 instance stepBody_constantLength
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
@@ -300,8 +300,8 @@ instance stepBody_constantLength
     Circuit.ConstantLength (stepBody program h_programSize memory h_memorySize) where
   localLength := 27
   localLength_eq _ _ := by
-    simp only [stepBody]
-    exact (LoadStateInstruction.circuit program h_programSize memory h_memorySize).elaborated.localLength_eq _ _
+    simp only [stepBody, circuit_norm]
+    rfl
 
 /--
 Main circuit for executing a bundle of LOAD_STATE instructions.
@@ -355,21 +355,18 @@ def elaborated
     -- Now prove term-by-term equality
     apply Finset.sum_congr rfl
     intro i _
-    -- Unfold stepBody and localLength
-    simp only [stepBody, Circuit.ConstantLength.localLength, stepBody_constantLength]
-    -- Use LoadStateInstruction.elaborated.localAdds_eq
-    have h_step := (LoadStateInstruction.elaborated program h_programSize memory h_memorySize).localAdds_eq
-      inputs[i] env (offset + ↑i * 27)
-    rw [Circuit.operations] at h_step
-    rw [h_step]
-    -- The LHS is now LoadStateInstruction.elaborated.localAdds which equals the RHS by definition
-    simp only [ElaboratedCircuit.localAdds, LoadStateInstruction.elaborated, circuit_norm]
+    -- Unfold stepBody to assertionChangingMultiset which produces a subcircuit
+    simp only [stepBody, assertionChangingMultiset, Circuit.ConstantLength.localLength, circuit_norm]
+    -- collectAdds on [.subcircuit s] = s.localAdds
+    -- s.localAdds = circuit.localAdds by FormalAssertionChangingMultiset.toSubcircuit_localAdds
+    -- circuit.localAdds = elaborated.localAdds by definition
+    simp only [LoadStateInstruction.circuit, LoadStateInstruction.elaborated, circuit_norm]
     rfl
   subcircuitsConsistent := by
     intros inputs offset
     rw [Operations.SubcircuitsConsistent, main, Circuit.forEach.forAll]
     intro i
-    exact (LoadStateInstruction.elaborated program h_programSize memory h_memorySize).subcircuitsConsistent _ _
+    simp only [stepBody, assertionChangingMultiset, circuit_norm]
 
 /--
 Assumptions for the LOAD_STATE bundle.
@@ -378,7 +375,7 @@ def Assumptions
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize]
     (inputs : ProvableVector InstructionStepInput capacity (F p)) : Prop :=
-  ∀ i : Fin capacity, LoadStateInstruction.Assumptions (programSize := programSize) inputs[i.val]
+  ∀ i : Fin capacity, LoadStateInstruction.Assumptions (programSize := programSize) inputs[i]
 
 /--
 Specification for the LOAD_STATE bundle.
@@ -388,9 +385,9 @@ def Spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (adds : InteractionDelta (F p)) : Prop :=
-  ∃ individualAdds : Fin capacity → InteractionDelta (F p),
-    (∀ i, LoadStateInstruction.Spec program memory inputs[i.val] (individualAdds i)) ∧
-    adds = List.foldl (· + ·) 0 (List.ofFn individualAdds)
+  ∃ (stepAdds : Fin capacity → InteractionDelta (F p)),
+    (∀ i : Fin capacity, LoadStateInstruction.Spec program memory inputs[i] (stepAdds i)) ∧
+    adds = (List.finRange capacity).foldl (fun acc i => acc + stepAdds i) 0
 
 /--
 FormalAssertionChangingMultiset for the LOAD_STATE bundle.
@@ -407,28 +404,35 @@ def circuit
     intro offset env inputs_var inputs h_eval h_assumptions h_holds
     simp only [elaborated, main] at h_holds
     rw [Circuit.forEach.soundness] at h_holds
-    -- Define stepAdds inline with the LoadState-specific postState
-    use fun i =>
-      let input := inputs_var[i]
-      let preState := eval env input.preState
-      -- LoadState uses memory reads for postState
-      let v1 := env.get (offset + i * 27 + 4 + 8 + 4)
-      let v2 := env.get (offset + i * 27 + 4 + 8 + 5 + 4)
-      let v3 := env.get (offset + i * 27 + 4 + 8 + 5 + 5 + 4)
-      let postState : State (F p) := { pc := v1, ap := v2, fp := v3 }
-      let enabled := input.enabled.eval env
-      InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
-      InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
+    -- Define stepAdds using the circuit's localAdds
+    let stepCircuit := LoadStateInstruction.circuit program h_programSize memory h_memorySize
+    use fun i => stepCircuit.localAdds inputs_var[i] env (offset + i * 27)
     constructor
     · -- Each step satisfies LoadStateInstruction.Spec
       intro i
-      sorry
+      have h_step := h_holds i
+      simp only [stepBody, assertionChangingMultiset, circuit_norm] at h_step
+      have h_eval_i : eval env inputs_var[i] = inputs[i] :=
+        eval_vector_eq_get env inputs_var inputs h_eval i i.isLt
+      simp only [show (LoadStateInstruction.circuit program h_programSize memory h_memorySize).Assumptions =
+        LoadStateInstruction.Assumptions from rfl,
+        show (LoadStateInstruction.circuit program h_programSize memory h_memorySize).Spec =
+        LoadStateInstruction.Spec program memory from rfl] at h_step
+      have h_record : { enabled := Expression.eval env (Vector.get inputs_var ⟨↑i, i.isLt⟩).enabled,
+                        preState := eval env (Vector.get inputs_var ⟨↑i, i.isLt⟩).preState :
+                        InstructionStepInput (F p) } = eval env inputs_var[i] := by
+        simp only [eval, toVars, toElements, fromElements, circuit_norm]
+      rw [h_record, h_eval_i] at h_step
+      have h_assump : LoadStateInstruction.Assumptions inputs[i] := h_assumptions i
+      convert h_step h_assump using 2
     · -- The adds sum correctly
-      simp only [elaborated, Spec]
-      -- Convert List.ofFn to List.finRange foldl form
-      sorry
-  completeness := by
-    sorry
+      simp only [elaborated]
+      apply List.foldl_ext
+      intro acc i _
+      simp only [stepCircuit, LoadStateInstruction.circuit, circuit_norm]
+      rfl
+  -- Completeness is out of scope for the current work.
+  completeness := by sorry
 
 end Bundle
 
