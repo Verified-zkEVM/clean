@@ -9,12 +9,12 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256
 
 def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
-  let state ← subcircuit Theta.circuit state
-  let state ← subcircuit RhoPi.circuit state
-  let state ← subcircuit Chi.circuit state
+  let state ← Theta.circuit state
+  let state ← RhoPi.circuit state
+  let state ← Chi.circuit state
 
   -- add the round constant
-  let s0 ← subcircuit Xor64.circuit ⟨state[0], const (U64.fromUInt64 rc)⟩
+  let s0 ← Xor64.circuit ⟨state[0], const (U64.fromUInt64 rc)⟩
   return state.set 0 s0
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
@@ -37,11 +37,11 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, elaborated, eval_vector, keccakRound, iota]
+  simp only [circuit_norm, eval_vector, keccakRound, iota]
 
   -- simplify constraints
   simp only [Assumptions] at state_norm
-  simp only [main, h_input, state_norm, circuit_norm, subcircuit_norm,
+  simp only [main, h_input, state_norm, circuit_norm,
     Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
@@ -79,17 +79,11 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
   exact ⟨ chi_norm, chi_eq ⟩
 
 theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
-
-  -- simplify goal and witness hypotheses
-  simp only [Assumptions] at state_norm
-  dsimp only [main, circuit_norm, subcircuit_norm,
-    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
+  circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
-    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
-  ] at h_env ⊢
-  simp_all only [main, h_input, state_norm, circuit_norm,
-    U64.fromUInt64_normalized]
+    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
+
+  simp_all only [forall_const, U64.fromUInt64_normalized, and_true, true_and]
 
   -- `simp_all` left one goal to pull out of hypotheses
   obtain ⟨ ⟨theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env

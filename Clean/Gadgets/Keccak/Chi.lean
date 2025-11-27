@@ -8,14 +8,13 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open Bitwise (not64)
 open Not (not64_bytewise not64_bytewise_value)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .mapFinRange 25 fun i => do
-    let state_not ← subcircuit Not.circuit (state[i + 5])
-    let state_and ← subcircuit And.And64.circuit ⟨state_not, state[i + 10]⟩
-    subcircuit Xor64.circuit ⟨state[i], state_and⟩
+    let state_not ← Not.circuit (state[i + 5])
+    let state_and ← And.And64.circuit ⟨state_not, state[i + 10]⟩
+    Xor64.circuit ⟨state[i], state_and⟩
 
 def Assumptions := KeccakState.Normalized (p:=p)
 
@@ -35,7 +34,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
     simp only [main, circuit_norm]
     intro i
     and_intros <;> ac_rfl
-  output_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  output_eq state i0 := by simp [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 -- rewrite the chi spec as a loop
@@ -49,12 +48,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, Spec, elaborated, chi_loop, eval_vector, KeccakState.value]
+  simp only [circuit_norm, chi_loop, eval_vector, KeccakState.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [Assumptions, KeccakState.Normalized] at state_norm
-  simp only [main, circuit_norm, subcircuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd] at h_holds
 
   simp_all
@@ -67,7 +66,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [state_norm, h_input, main, circuit_norm, subcircuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  simp_all [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState :=

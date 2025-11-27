@@ -71,9 +71,8 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
     let slsb := input[i.val * 2]
     let smsb := input[i.val * 2 + 1]
 
-    -- Compute b, a, e values for this iteration
-    let e_val : ℤ := 2^i.val
-    let b_val : ℤ := (1 <<< 128) - 1 - (2^(i.val + 1) - 1)
+    -- Compute b, a values for this iteration
+    let b_val : ℤ := 2^128 - 2^i.val
     let a_val : ℤ := 2^i.val
 
     if cmsb == 0 && clsb == 0 then
@@ -90,7 +89,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 
   -- Convert sum to bits
   have hp : p > 2^135 := by linarith [‹Fact (p > 2^253)›.elim]
-  let bits ← subcircuitWithAssertion (Num2Bits.circuit 135 hp) sout
+  let bits ← Num2Bits.circuit 135 hp sout
 
   let out <== bits[127]
   return out
@@ -98,7 +97,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
-  localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
+  localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
   subcircuitsConsistent input n := by
     simp only [circuit_norm, main, Num2Bits.circuit]
     and_intros <;> ac_rfl
@@ -110,8 +109,7 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
   soundness := by
-    simp only [circuit_norm, main, Num2Bits.circuit]
-    simp only [circuit_norm, subcircuit_norm]
+    simp only [circuit_norm, main]
     sorry
 
   completeness := by

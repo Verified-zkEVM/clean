@@ -9,20 +9,20 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
-  let c0 ← subcircuit (Rotation64.circuit (64 - 1)) row[1]
-  let c0 ← subcircuit Xor64.circuit ⟨row[4], c0⟩
+  let c0 ← Rotation64.circuit (64 - 1) row[1]
+  let c0 ← Xor64.circuit ⟨row[4], c0⟩
 
-  let c1 ← subcircuit (Rotation64.circuit (64 - 1)) row[2]
-  let c1 ← subcircuit Xor64.circuit ⟨row[0], c1⟩
+  let c1 ← Rotation64.circuit (64 - 1) row[2]
+  let c1 ← Xor64.circuit ⟨row[0], c1⟩
 
-  let c2 ← subcircuit (Rotation64.circuit (64 - 1)) row[3]
-  let c2 ← subcircuit Xor64.circuit ⟨row[1], c2⟩
+  let c2 ← Rotation64.circuit (64 - 1) row[3]
+  let c2 ← Xor64.circuit ⟨row[1], c2⟩
 
-  let c3 ← subcircuit (Rotation64.circuit (64 - 1)) row[4]
-  let c3 ← subcircuit Xor64.circuit ⟨row[2], c3⟩
+  let c3 ← Rotation64.circuit (64 - 1) row[4]
+  let c3 ← Xor64.circuit ⟨row[2], c3⟩
 
-  let c4 ← subcircuit (Rotation64.circuit (64 - 1)) row[0]
-  let c4 ← subcircuit Xor64.circuit ⟨row[3], c4⟩
+  let c4 ← Rotation64.circuit (64 - 1) row[0]
+  let c4 ← Xor64.circuit ⟨row[3], c4⟩
 
   return #v[c0, c1, c2, c3, c4]
 
@@ -32,7 +32,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 
-def Spec (row : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
+def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaD row.value
 
@@ -41,9 +41,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [Assumptions] at row_norm
   dsimp only [circuit_norm, Spec, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_holds ⊢
-  simp only [circuit_norm, subcircuit_norm, Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec] at h_holds
-  simp only [Nat.reduceMod, zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd, and_assoc] at h_holds
-  simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, KeccakState.value, eval_vector]
+  simp only [circuit_norm, Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec] at h_holds
+  simp only [zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd] at h_holds
+  simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, eval_vector]
 
   have s (i : ℕ) (hi : i < 5) : eval env (row_var[i]) = row[i] := by
     rw [←h_input, Vector.getElem_map]
@@ -71,15 +71,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_xor4 (row_norm 3) h_rot4.right
   rw [h_rot4.left] at h_xor4
 
-  simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Bitwise.rotLeft64]
+  simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rotLeft64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env row_var h_env row h_input h_assumptions
   simp only [Assumptions, KeccakRow.normalized_iff] at h_assumptions
   dsimp only [circuit_norm, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
-  simp_all only [circuit_norm, subcircuit_norm, getElem_eval_vector, h_input,
+  simp_all only [circuit_norm, getElem_eval_vector,
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
-    add_assoc, seval, h_assumptions, true_and, true_implies]
+    add_assoc, seval, true_and, true_implies]
 
 def circuit : FormalCircuit (F p) KeccakRow KeccakRow :=
   { elaborated with Assumptions, Spec, soundness, completeness }

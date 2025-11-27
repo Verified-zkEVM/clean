@@ -4,7 +4,6 @@ import Mathlib.Data.Nat.Bitwise
 import Clean.Utils.Bits
 
 namespace Utils.Rotation
-open Bitwise (rotRight64 rotRight32)
 open Bits (toBits toBits_injective)
 
 -- Theorems about 64-bit rotation
@@ -18,7 +17,7 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
   simp only [rotRight64]
   simp only [BitVec.toNat_rotateRight]
   simp only [Nat.shiftLeft_eq, Nat.mul_mod, dvd_refl, Nat.mod_mod_of_dvd]
-  simp only [Nat.mod_mod, UInt64.toNat_toBitVec, UInt64.toNat_ofNat]
+  simp only [Nat.mod_mod, UInt64.toNat_toBitVec]
 
   by_cases cond : (offset % 64 = 0)
   · simp [cond, pow_zero, Nat.mod_one, tsub_zero, Nat.reducePow, zero_mul, Nat.div_one,
@@ -27,7 +26,7 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     apply Nat.mod_eq_of_lt
     linarith
 
-  · have h1 : 2^(64 - offset%64) < 2^64 := by
+  · have h1 : 2^(64-offset%64) < 2^64 := by
       apply Nat.pow_lt_pow_of_lt
       · linarith
       · simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and]
@@ -57,15 +56,15 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
 
     have offset_bv_lt : offset_bv < 64 := by
       simp only [offset_bv]
-      simp only [UInt64.lt_iff_toNat_lt, UInt64.toNat_ofNat, UInt64.reduceToNat]
+      simp only [UInt64.lt_iff_toNat_lt, UInt64.toNat_ofNat]
       apply Nat.mod_lt_of_lt
       apply Nat.mod_lt offset (by linarith)
 
     have offset_bv_pos : offset_bv > 0 := by
-      simp only [Nat.toUInt64_eq, gt_iff_lt, offset_bv]
+      simp only [Nat.toUInt64_eq, offset_bv]
       have := Nat.pos_of_ne_zero cond
-      rw [UInt64.lt_ofNat_iff]
-      simp only [UInt64.toNat_zero, offset_bv]
+      rw [gt_iff_lt, UInt64.lt_ofNat_iff]
+      simp only [UInt64.toNat_zero]
       · assumption
       · simp [UInt64.size]
         have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
@@ -75,29 +74,26 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     apply_fun UInt64.toNat at h_sat
 
     simp only [UInt64.toNat_shiftLeft, UInt64.toNat_mod, UInt64.toNat_ofNat,
-      UInt64.reduceToNat, x_bv, offset_bv] at h_sat
-    simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.one_mod, Nat.reduceDvd,
-      Nat.mod_mod_of_dvd, dvd_refl, offset_bv, x_bv] at h_sat
+      x_bv, offset_bv] at h_sat
+    simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.one_mod] at h_sat
     rw [Nat.mod_eq_of_lt h] at h_sat
 
     have h' : UInt64.ofNat (offset % 64) ≤ 64 := by
       have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
       rw [UInt64.ofNat_le_iff]
-      · simp only [UInt64.reduceToNat, ge_iff_le, offset_bv, x_bv]
+      · simp only [UInt64.reduceToNat]
         linarith
       · simp [UInt64.size]
         linarith
     rw [UInt64.toNat_sub_of_le _ _ h'] at h_sat
-    simp only [Nat.reduceDvd, Nat.mod_mod_of_dvd, dvd_refl, UInt64.reduceToNat,
-      UInt64.toNat_ofNat', offset_bv, x_bv] at h_sat
+    simp only [UInt64.reduceToNat, UInt64.toNat_ofNat'] at h_sat
 
     have h_eq : offset % 64 % 2^64 = offset % 64 := by
       apply Nat.mod_eq_of_lt
       have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
       linarith
     rw [h_eq, Nat.mod_mod] at h_sat
-    simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', dvd_refl, Nat.mod_mod_of_dvd,
-      offset_bv, x_bv]
+    simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', dvd_refl, Nat.mod_mod_of_dvd]
 
     rw [show x % 2^64 = x by
       apply Nat.mod_eq_of_lt
@@ -106,7 +102,7 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     have h_eq' : (64 - offset % 64) % 64 = 64 - offset % 64 := by
       apply Nat.mod_eq_of_lt
       have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
-      simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and, gt_iff_lt, offset_bv, x_bv]
+      simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and]
       exact Nat.pos_of_ne_zero cond
     rw [h_eq'] at h_sat
     rw [←h_sat]
@@ -128,11 +124,11 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
         apply Nat.le_of_lt
         apply Nat.mod_lt
         linarith
-      rw (occs:= .pos [4]) [eq]
+      rw (occs:=.pos [4]) [eq]
       apply Nat.shiftLeft_lt
       rw [Nat.one_shiftLeft]
       apply Nat.mod_lt
-      simp only [gt_iff_lt, Nat.ofNat_pos, pow_pos, offset_bv, x_bv]
+      simp only [Nat.ofNat_pos, pow_pos]
 
     rw [h_eq3]
 
@@ -157,7 +153,7 @@ lemma rotRight64_off_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
   rw [Nat.mod_eq_of_lt h']
 
 lemma rotRight64_fin (x : ℕ) (offset : Fin 64) :
-    rotRight64 x offset.val = x % (2^offset.val) * (2^(64 - offset.val)) + x / (2^offset.val) := by
+    rotRight64 x offset.val = x % (2^offset.val) * (2^(64-offset.val)) + x / (2^offset.val) := by
   simp only [rotRight64]
   rw [Nat.mod_eq_of_lt offset.is_lt]
 
@@ -205,7 +201,6 @@ lemma rotRight64_testBit (x r i : ℕ) (h : x < 2^64) :
   · rw [rotRight64_testBit_of_ge]
     repeat omega
 
-
 /--
   The bits of the result of a rotation are the rotated bits of the input
 -/
@@ -214,13 +209,13 @@ theorem rotRight64_toBits (x r : ℕ) (h : x < 2^64):
   simp [toBits, Vector.rotate]
   ext i hi
   · simp
-  simp only [Vector.size_toArray, Vector.getElem_toArray, Array.getElem_toList,
+  simp only [Vector.size_toArray, Vector.getElem_toArray,
     Vector.getElem_mapRange, List.getElem_toArray, List.getElem_rotate] at ⊢ hi
   rw [rotRight64_testBit]
-  simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib]
+  simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib,
+    Vector.length_toList, Vector.getElem_toList, Vector.getElem_mapRange]
   split <;> (congr; omega)
   linarith
-
 
 theorem rotRight64_lt (x r : ℕ) (h : x < 2^64) :
     rotRight64 x r < 2^64 := by
@@ -254,7 +249,6 @@ theorem rotRight64_composition (x n m : ℕ) (h : x < 2^64) :
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
 
-
 -- Theorems about 32-bit rotation
 
 /--
@@ -266,7 +260,7 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
   simp only [rotRight32]
   simp only [BitVec.toNat_rotateRight]
   simp only [Nat.shiftLeft_eq, Nat.mul_mod, dvd_refl, Nat.mod_mod_of_dvd]
-  simp only [Nat.mod_mod, UInt32.toNat_toBitVec, UInt32.toNat_ofNat]
+  simp only [Nat.mod_mod, UInt32.toNat_toBitVec]
 
   by_cases cond : (offset % 32 = 0)
   · simp [cond, pow_zero, Nat.mod_one, tsub_zero, Nat.reducePow, zero_mul, Nat.div_one,
@@ -275,7 +269,7 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
     apply Nat.mod_eq_of_lt
     linarith
 
-  · have h1 : 2^(32 - offset%32) < 2^32 := by
+  · have h1 : 2^(32-offset%32) < 2^32 := by
       apply Nat.pow_lt_pow_of_lt
       · linarith
       · simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and]
@@ -305,15 +299,15 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
 
     have offset_bv_lt : offset_bv < 32 := by
       simp only [offset_bv]
-      simp only [UInt32.lt_iff_toNat_lt, UInt32.toNat_ofNat, UInt32.reduceToNat]
+      simp only [UInt32.lt_iff_toNat_lt, UInt32.toNat_ofNat]
       apply Nat.mod_lt_of_lt
       apply Nat.mod_lt offset (by linarith)
 
     have offset_bv_pos : offset_bv > 0 := by
-      simp only [Nat.toUInt32_eq, gt_iff_lt, offset_bv]
+      simp only [Nat.toUInt32_eq, offset_bv]
       have := Nat.pos_of_ne_zero cond
-      rw [UInt32.lt_ofNat_iff]
-      simp only [UInt32.toNat_zero, offset_bv]
+      rw [gt_iff_lt, UInt32.lt_ofNat_iff]
+      simp only [UInt32.toNat_zero]
       · assumption
       · simp [UInt32.size]
         have : offset % 32 < 32 := Nat.mod_lt offset (by linarith)
@@ -323,29 +317,26 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
     apply_fun UInt32.toNat at h_sat
 
     simp only [UInt32.toNat_shiftLeft, UInt32.toNat_mod, UInt32.toNat_ofNat,
-      UInt32.reduceToNat, x_bv, offset_bv] at h_sat
-    simp only [Nat.toUInt32_eq, UInt32.toNat_ofNat', Nat.one_mod, Nat.reduceDvd,
-      Nat.mod_mod_of_dvd, dvd_refl, offset_bv, x_bv] at h_sat
+      x_bv, offset_bv] at h_sat
+    simp only [Nat.toUInt32_eq, UInt32.toNat_ofNat', Nat.one_mod] at h_sat
     rw [Nat.mod_eq_of_lt h] at h_sat
 
     have h' : UInt32.ofNat (offset % 32) ≤ 32 := by
       have : offset % 32 < 32 := Nat.mod_lt offset (by linarith)
       rw [UInt32.ofNat_le_iff]
-      · simp only [UInt32.reduceToNat, ge_iff_le, offset_bv, x_bv]
+      · simp only [UInt32.reduceToNat]
         linarith
       · simp [UInt32.size]
         linarith
     rw [UInt32.toNat_sub_of_le _ _ h'] at h_sat
-    simp only [Nat.reduceDvd, Nat.mod_mod_of_dvd, dvd_refl, UInt32.reduceToNat,
-      UInt32.toNat_ofNat', offset_bv, x_bv] at h_sat
+    simp only [UInt32.reduceToNat, UInt32.toNat_ofNat'] at h_sat
 
     have h_eq : offset % 32 % 2^32 = offset % 32 := by
       apply Nat.mod_eq_of_lt
       have : offset % 32 < 32 := Nat.mod_lt offset (by linarith)
       linarith
     rw [h_eq, Nat.mod_mod] at h_sat
-    simp only [Nat.toUInt32_eq, UInt32.toNat_ofNat', dvd_refl, Nat.mod_mod_of_dvd,
-      offset_bv, x_bv]
+    simp only [Nat.toUInt32_eq, UInt32.toNat_ofNat', dvd_refl, Nat.mod_mod_of_dvd]
 
     rw [show x % 2^32 = x by
       apply Nat.mod_eq_of_lt
@@ -354,7 +345,7 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
     have h_eq' : (32 - offset % 32) % 32 = 32 - offset % 32 := by
       apply Nat.mod_eq_of_lt
       have : offset % 32 < 32 := Nat.mod_lt offset (by linarith)
-      simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and, gt_iff_lt, offset_bv, x_bv]
+      simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and]
       exact Nat.pos_of_ne_zero cond
     rw [h_eq'] at h_sat
     rw [←h_sat]
@@ -376,11 +367,11 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
         apply Nat.le_of_lt
         apply Nat.mod_lt
         linarith
-      rw (occs:= .pos [4]) [eq]
+      rw (occs:=.pos [4]) [eq]
       apply Nat.shiftLeft_lt
       rw [Nat.one_shiftLeft]
       apply Nat.mod_lt
-      simp only [gt_iff_lt, Nat.ofNat_pos, pow_pos, offset_bv, x_bv]
+      simp only [Nat.ofNat_pos, pow_pos]
 
     rw [h_eq3]
 
@@ -405,7 +396,7 @@ lemma rotRight32_off_mod_32 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 32) :
   rw [Nat.mod_eq_of_lt h']
 
 lemma rotRight32_fin (x : ℕ) (offset : Fin 32) :
-    rotRight32 x offset.val = x % (2^offset.val) * (2^(32 - offset.val)) + x / (2^offset.val) := by
+    rotRight32 x offset.val = x % (2^offset.val) * (2^(32-offset.val)) + x / (2^offset.val) := by
   simp only [rotRight32]
   rw [Nat.mod_eq_of_lt offset.is_lt]
 
@@ -453,7 +444,6 @@ lemma rotRight32_testBit (x r i : ℕ) (h : x < 2^32) :
   · rw [rotRight32_testBit_of_ge]
     repeat omega
 
-
 /--
   The bits of the result of a rotation are the rotated bits of the input
 -/
@@ -462,13 +452,13 @@ theorem rotRight32_toBits (x r : ℕ) (h : x < 2^32):
   simp [toBits, Vector.rotate]
   ext i hi
   · simp
-  simp only [Vector.size_toArray, Vector.getElem_toArray, Array.getElem_toList,
+  simp only [Vector.size_toArray, Vector.getElem_toArray,
     Vector.getElem_mapRange, List.getElem_toArray, List.getElem_rotate] at ⊢ hi
   rw [rotRight32_testBit]
-  simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib]
+  simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib,
+    Vector.length_toList, Vector.getElem_toList, Vector.getElem_mapRange]
   split <;> (congr; omega)
   linarith
-
 
 theorem rotRight32_lt (x r : ℕ) (h : x < 2^32) :
     rotRight32 x r < 2^32 := by
@@ -502,7 +492,6 @@ theorem rotRight32_composition (x n m : ℕ) (h : x < 2^32) :
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
 
-
 -- helpful lemmas for {32, 64}-bit rotation with offset in [0, 7]
 
 lemma two_power_val {p : ℕ} {offset : Fin 8} [p_large_enough: Fact (p > 2^16 + 2^8)] :
@@ -532,7 +521,7 @@ lemma divides_256_two_power {offset : ℕ} (ho : offset < 8) {x i : ℕ} (h : i 
   linarith
 
 lemma div_256_two_power {offset : ℕ} (ho : offset < 8) {i : ℕ} (h : i > 0):
-    256^i / 2^offset = 256^(i-1) * 2^(8 - offset) := by
+    256^i / 2^offset = 256^(i-1) * 2^(8-offset) := by
   rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, Nat.pow_div]
   rw [←Nat.pow_mul, ←Nat.pow_add]
   rw [Nat.mul_sub_left_distrib, Nat.mul_one]
@@ -540,7 +529,7 @@ lemma div_256_two_power {offset : ℕ} (ho : offset < 8) {i : ℕ} (h : i > 0):
   repeat linarith
 
 lemma mul_div_256_off {offset : ℕ} (ho : offset < 8) {x : ℕ} (i : ℕ) (h : i > 0):
-    (x * 256^i) / 2^offset = x * 256^(i-1) * 2^(8 - offset) := by
+    (x * 256^i) / 2^offset = x * 256^(i-1) * 2^(8-offset) := by
   rw [Nat.mul_div_assoc, div_256_two_power ho h]
   rw [show 256=2^8 by rfl, ←Nat.pow_mul]
   ac_rfl
@@ -548,47 +537,44 @@ lemma mul_div_256_off {offset : ℕ} (ho : offset < 8) {x : ℕ} (i : ℕ) (h : 
   apply Nat.pow_dvd_pow
   linarith
 
-
 lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
-    (2 ^ (8 - offset.val) % 256) = 2 ^ (8 - offset.val) := by
+    (2 ^ (8-offset.val) % 256) = 2 ^ (8-offset.val) := by
   apply Nat.mod_eq_of_lt
   fin_cases offset <;>
     first
     | contradiction
     | simp
 
-
 lemma shifted_decomposition_eq {offset : ℕ} (ho : offset < 8) {x1 x2 : ℕ} :
-    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256 =
-    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8 - offset) := by
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8-offset)) * 256 =
+    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8-offset) := by
   ring_nf
   simp only [Nat.add_left_inj]
   rw [Nat.mul_assoc, ←Nat.pow_add, Nat.add_sub_of_le (by linarith)]
   rfl
 
 lemma shifted_decomposition_eq' {offset : ℕ} (ho : offset < 8) {x1 x2 i : ℕ} (hi : i > 0) :
-    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256^i =
-    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8 - offset) * 256^(i-1) := by
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8-offset)) * 256^i =
+    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8-offset) * 256^(i-1) := by
   rw [Nat.pow_minus_one_mul hi, ←Nat.mul_assoc, shifted_decomposition_eq ho]
 
 lemma shifted_decomposition_eq'' {offset : ℕ} (ho : offset < 8) {x1 x2 i : ℕ} (hi : i > 0) :
-    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256^i =
-    (2^offset * (x1 / 2^offset) * 2^(8 - offset) * 256^(i-1) +
-    (x2 % 2^offset) * 2^(8 - offset) * 256^i) := by
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8-offset)) * 256^i =
+    (2^offset * (x1 / 2^offset) * 2^(8-offset) * 256^(i-1) +
+    (x2 % 2^offset) * 2^(8-offset) * 256^i) := by
   rw [shifted_decomposition_eq' ho hi]
   ring_nf
   rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
 
-
 lemma soundness_simp {offset : ℕ} {x y : ℕ} :
-    x % 2 ^ offset * 2 ^ (8 - offset) * y + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset) * y =
-    x * y * 2^ (8 - offset) := by
+    x % 2 ^ offset * 2 ^ (8-offset) * y + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8-offset) * y =
+    x * y * 2^ (8-offset) := by
   rw [Nat.mul_assoc, Nat.mul_assoc, ←Nat.add_mul, add_comm, Nat.div_add_mod]
   ac_rfl
 
 lemma soundness_simp' {offset : ℕ} {x : ℕ} :
-    x % 2 ^ offset * 2 ^ (8 - offset) + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset) =
-    x * 2^ (8 - offset) := by
+    x % 2 ^ offset * 2 ^ (8-offset) + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8-offset) =
+    x * 2^ (8-offset) := by
   rw [←Nat.mul_one (x % 2 ^ offset * 2 ^ (8 - offset))]
   rw [←Nat.mul_one (2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset))]
   rw [soundness_simp, Nat.mul_one]

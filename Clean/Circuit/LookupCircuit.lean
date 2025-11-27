@@ -58,7 +58,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     exact circuit.proverEnvironment_usesLocalWitnesses input
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
--- this gives `circuit.lookup input` _exactly_ the same interface as `subcircuit circuit input`.
+-- this gives `circuit.lookup input` _exactly_ the same interface as `circuit input`.
 
 @[circuit_norm]
 def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β where
@@ -88,5 +88,5 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
 
 @[circuit_norm]
 def lookup (circuit : LookupCircuit F α β) (input : Var α F) : Circuit F (Var β F) :=
-  subcircuit (lookupCircuit circuit) input
+  lookupCircuit circuit input
 end LookupCircuit

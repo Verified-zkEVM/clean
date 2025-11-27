@@ -6,7 +6,6 @@ import Clean.Specs.Keccak256
 namespace Gadgets.Keccak256.RhoPi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
-open Bitwise (rotLeft64)
 
 def rhoPiIndices : Vector (Fin 25) 25 := #v[
   0, 15, 5, 20, 10, 6, 21, 11, 1, 16, 12, 2, 17, 7, 22, 18, 8, 23, 13, 3, 24, 14, 4, 19, 9
@@ -18,7 +17,7 @@ def rhoPiConstants := rhoPiIndices.zip rhoPiShifts
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .map rhoPiConstants fun (i, s) =>
-    subcircuit (Rotation64.circuit (-s)) state[i.val]
+    Rotation64.circuit (-s) state[i.val]
 
 def Assumptions := KeccakState.Normalized (p:=p)
 
@@ -46,16 +45,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [elaborated, eval_vector, Vector.getElem_map, Vector.getElem_mapIdx,
+  simp only [elaborated, eval_vector, Vector.getElem_map,
     KeccakState.value, rhoPi_loop]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [Assumptions, KeccakState.Normalized] at state_norm
-  simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
-    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated,
-    Vector.getElem_zip] at h_holds ⊢
-  simp_all [rhoPiConstants, Bitwise.rotLeft64_eq_rotRight64]
+  simp only [h_input, state_norm, main, circuit_norm,
+    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated] at h_holds ⊢
+  simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
@@ -65,7 +63,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [main, circuit_norm, subcircuit_norm,
+  simp_all [main, circuit_norm,
     Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState :=

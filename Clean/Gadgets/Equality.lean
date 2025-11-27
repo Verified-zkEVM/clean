@@ -38,6 +38,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
+@[simps! (attr := circuit_norm) (config := {isSimp := false})]
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
   Assumptions _ := True
 
@@ -98,12 +99,12 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elabo
 @[circuit_norm]
 theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit]
+  simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit]
+  simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
@@ -117,13 +118,13 @@ end Gadgets
 
 @[circuit_norm]
 def assertEquals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
-  (x y : α (Expression F)) : Circuit F Unit :=
-  assertion (Gadgets.Equality.circuit α) (x, y)
+    (x y : α (Expression F)) : Circuit F Unit :=
+  Gadgets.Equality.circuit α (x, y)
 
 @[circuit_norm, reducible]
 def Expression.assertEquals {F : Type} [Field F]
-  (x y : Expression F) : Circuit F Unit :=
-  assertion (Gadgets.Equality.circuit id) (x, y)
+    (x y : Expression F) : Circuit F Unit :=
+  Gadgets.Equality.circuit id (x, y)
 
 class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
   assert_eq : β → β → Circuit F Unit
@@ -141,27 +142,30 @@ infix:50 " === " => HasAssertEq.assert_eq
 -- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
 
 class HasAssignEq (β : Type) (F : outParam Type) [Field F] where
-  assign_eq : β → Circuit F β
+  assignEq : β → Circuit F β
 
 instance {F : Type} [Field F] : HasAssignEq (Expression F) F where
-  assign_eq := fun rhs => do
+  assignEq := fun rhs => do
     let witness ← witnessField fun env => rhs.eval env
     witness === rhs
     return witness
 
 instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
   HasAssignEq (α (Expression F)) F where
-  assign_eq := fun rhs => do
+  assignEq := fun rhs => do
     let witness ← ProvableType.witness fun env => eval env rhs
     witness === rhs
     return witness
 
-attribute [circuit_norm] HasAssignEq.assign_eq
+instance {F : Type} [Field F] {n : ℕ} : HasAssignEq (Vector (Expression F) n) F :=
+  inferInstanceAs (HasAssignEq (fields n (Expression F)) F)
+
+attribute [circuit_norm] HasAssignEq.assignEq
 
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem
 syntax "let " ident " : " term " <== " term : doElem
 
 macro_rules
-  | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assign_eq $e)
-  | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assign_eq $e)
+  | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assignEq $e)
+  | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assignEq $e)

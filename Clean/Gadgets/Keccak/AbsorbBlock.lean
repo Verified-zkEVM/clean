@@ -18,14 +18,14 @@ instance : ProvableStruct Input where
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let { state, block } := input
   -- absorb the block into the state by XORing with the first RATE elements
-  let state_rate ← Circuit.mapFinRange RATE fun i => subcircuit Xor64.circuit ⟨state[i.val], block[i.val]⟩
+  let state_rate ← Circuit.mapFinRange RATE fun i => Xor64.circuit ⟨state[i.val], block[i.val]⟩
 
   -- the remaining elements of the state are unchanged
   let state_capacity := Vector.mapFinRange (25 - RATE) fun i => state[RATE + i.val]
   let state' : Vector _ 25 := state_rate ++ state_capacity
 
   -- apply the permutation
-  subcircuit Permutation.circuit state'
+  Permutation.circuit state'
 
 instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   main
@@ -47,7 +47,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
   -- simplify goal and constraints
-  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock, subcircuit_norm,
+  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock,
     Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
     Permutation.circuit, Permutation.Assumptions, Permutation.Spec,
     Input.mk.injEq] at *
@@ -82,10 +82,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
-  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock, subcircuit_norm,
-    Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
-    Permutation.circuit, Permutation.Assumptions, Permutation.Spec,
-    Input.mk.injEq] at *
+  simp only [circuit_norm, RATE, main, Assumptions, Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
+    Permutation.circuit, Permutation.Assumptions, Permutation.Spec, Input.mk.injEq] at *
   simp only [getElem_eval_vector, h_input] at h_env ⊢
 
   have assumptions' (i : Fin 17) : state[i.val].Normalized ∧ block[i.val].Normalized := by

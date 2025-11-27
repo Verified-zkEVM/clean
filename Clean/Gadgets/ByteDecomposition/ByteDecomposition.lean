@@ -10,8 +10,8 @@ namespace Gadgets.ByteDecomposition
 open FieldUtils (mod floorDiv two_lt two_pow_lt two_val two_pow_val)
 
 structure Outputs (F : Type) where
-  low : field F
-  high : field F
+  low : F
+  high : F
 
 instance : ProvableStruct Outputs where
   components := [field, field]
@@ -23,23 +23,23 @@ instance : ProvableStruct Outputs where
   The low part is the least significant `offset` bits,
   and the high part is the most significant `8 - offset` bits.
 -/
-def main (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
   let high ← witness fun env => floorDiv (env x) (2^offset.val)
 
-  lookup ByteTable ((2^(8 - offset.val) : F p) * low)
+  lookup ByteTable ((2^(8-offset.val) : F p) * low)
   lookup ByteTable high
 
-  x.assertEquals (low + high * (2^offset.val : F p))
+  x === low + high * (2^offset.val : F p)
 
   return { low, high }
 
 def Assumptions (x : F p) := x.val < 256
 
-def Spec (offset : Fin 8) (x : F p) (out: Outputs (F p)) :=
+def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
   let ⟨low, high⟩ := out
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
-  ∧ (low.val < 2^offset.val ∧ high.val < 2^(8 - offset.val))
+  ∧ (low.val < 2^offset.val ∧ high.val < 2^(8-offset.val))
 
 def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   main := main offset
@@ -67,9 +67,9 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have h_eq_mul : 2^n * x = 2^n * low + 2^n * 2^offset.val * high := by rw [h_eq, mul_add, mul_comm high, mul_assoc]
   replace h_eq_mul := congrArg ZMod.val h_eq_mul
 
-  have h_lt_mul {x n} (hn : n ≤ 8) (hx: x < 2^8) : 2^n * x < 2^16 := by
-    have : 2^(n + 8) ≤ 2^16 := Nat.pow_le_pow_of_le (by norm_num) (by omega)
-    suffices 2^n * x < 2^(n + 8) by linarith
+  have h_lt_mul {x n} (hn : n ≤ 8) (hx : x < 2^8) : 2^n * x < 2^16 := by
+    have : 2^(n+8) ≤ 2^16 := Nat.pow_le_pow_of_le (by norm_num) (by omega)
+    suffices 2^n * x < 2^(n+8) by linarith
     rw [pow_add]
     exact Nat.mul_lt_mul_of_pos_left hx (Nat.two_pow_pos n)
 

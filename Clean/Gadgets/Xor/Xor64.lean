@@ -47,11 +47,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   lookup ByteXorTable (x.x7, y.x7, z.x7)
   return z
 
-def Assumptions (input: Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input: Inputs (F p)) (z : U64 (F p)) :=
+def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
@@ -84,7 +84,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
       Nat.xor_lt_two_pow (n:=8) hx6 hy6, Nat.xor_lt_two_pow (n:=8) hx7 hy7 ⟩
 
   suffices z.value = x.value ^^^ y.value from ⟨ this, z_norm ⟩
-  simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, Bitwise.xor_mul_two_pow]
+  simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, xor_mul_two_pow]
   ac_rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by

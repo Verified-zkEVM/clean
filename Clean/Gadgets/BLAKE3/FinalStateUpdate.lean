@@ -22,24 +22,24 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   let { state, chaining_value } := input
 
   -- XOR first 8 words with last 8 words
-  let s0 ← subcircuit (Xor32.circuit) ⟨state[0], state[8]⟩
-  let s1 ← subcircuit (Xor32.circuit) ⟨state[1], state[9]⟩
-  let s2 ← subcircuit (Xor32.circuit) ⟨state[2], state[10]⟩
-  let s3 ← subcircuit (Xor32.circuit) ⟨state[3], state[11]⟩
-  let s4 ← subcircuit (Xor32.circuit) ⟨state[4], state[12]⟩
-  let s5 ← subcircuit (Xor32.circuit) ⟨state[5], state[13]⟩
-  let s6 ← subcircuit (Xor32.circuit) ⟨state[6], state[14]⟩
-  let s7 ← subcircuit (Xor32.circuit) ⟨state[7], state[15]⟩
+  let s0 ← Xor32.circuit ⟨state[0], state[8]⟩
+  let s1 ← Xor32.circuit ⟨state[1], state[9]⟩
+  let s2 ← Xor32.circuit ⟨state[2], state[10]⟩
+  let s3 ← Xor32.circuit ⟨state[3], state[11]⟩
+  let s4 ← Xor32.circuit ⟨state[4], state[12]⟩
+  let s5 ← Xor32.circuit ⟨state[5], state[13]⟩
+  let s6 ← Xor32.circuit ⟨state[6], state[14]⟩
+  let s7 ← Xor32.circuit ⟨state[7], state[15]⟩
 
   -- XOR last 8 words with chaining value
-  let s8 ← subcircuit (Xor32.circuit) ⟨chaining_value[0], state[8]⟩
-  let s9 ← subcircuit (Xor32.circuit) ⟨chaining_value[1], state[9]⟩
-  let s10 ← subcircuit (Xor32.circuit) ⟨chaining_value[2], state[10]⟩
-  let s11 ← subcircuit (Xor32.circuit) ⟨chaining_value[3], state[11]⟩
-  let s12 ← subcircuit (Xor32.circuit) ⟨chaining_value[4], state[12]⟩
-  let s13 ← subcircuit (Xor32.circuit) ⟨chaining_value[5], state[13]⟩
-  let s14 ← subcircuit (Xor32.circuit) ⟨chaining_value[6], state[14]⟩
-  let s15 ← subcircuit (Xor32.circuit) ⟨chaining_value[7], state[15]⟩
+  let s8 ← Xor32.circuit ⟨chaining_value[0], state[8]⟩
+  let s9 ← Xor32.circuit ⟨chaining_value[1], state[9]⟩
+  let s10 ← Xor32.circuit ⟨chaining_value[2], state[10]⟩
+  let s11 ← Xor32.circuit ⟨chaining_value[3], state[11]⟩
+  let s12 ← Xor32.circuit ⟨chaining_value[4], state[12]⟩
+  let s13 ← Xor32.circuit ⟨chaining_value[5], state[13]⟩
+  let s14 ← Xor32.circuit ⟨chaining_value[6], state[14]⟩
+  let s15 ← Xor32.circuit ⟨chaining_value[7], state[15]⟩
 
   return #v[s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 
@@ -74,7 +74,7 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, chaining_value } := input
   state.Normalized ∧ (∀ i : Fin 8, chaining_value[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, chaining_value } := input
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 
@@ -131,10 +131,9 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true,
     Fin.getElem_fin] at state_norm chaining_value_norm
   dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at henv ⊢
-  simp only [h_input, circuit_norm, subcircuit_norm, and_imp,
+  simp only [h_input, circuit_norm, and_imp,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
-  simp_all only [gt_iff_lt, forall_const, and_self]
-
+  simp_all only [forall_const, and_self]
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness

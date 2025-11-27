@@ -11,15 +11,15 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
   .mapFinRange 5 fun i => do
-    let c ← subcircuit Xor64.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
-    let c ← subcircuit Xor64.circuit ⟨c, state[5*i.val + 2]⟩
-    let c ← subcircuit Xor64.circuit ⟨c, state[5*i.val + 3]⟩
-    let c ← subcircuit Xor64.circuit ⟨c, state[5*i.val + 4]⟩
+    let c ← Xor64.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
+    let c ← Xor64.circuit ⟨c, state[5*i.val + 2]⟩
+    let c ← Xor64.circuit ⟨c, state[5*i.val + 3]⟩
+    let c ← Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
+def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
@@ -46,9 +46,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [circuit_norm, subcircuit_norm, h_input, eval_vector,
+  simp only [circuit_norm, h_input,
     main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_holds
-  simp only [and_assoc, Nat.reduceAdd, Nat.reduceMod] at h_holds
+  simp only [Nat.reduceAdd] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].Normalized :=
     fun hi => state_norm ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
@@ -60,8 +60,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [h_input, circuit_norm, subcircuit_norm, Assumptions, eval_vector,
-    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec, KeccakState.Normalized] at h_env ⊢
+  simp only [h_input, circuit_norm,
+    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 

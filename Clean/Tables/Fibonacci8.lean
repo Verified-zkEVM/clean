@@ -34,7 +34,7 @@ instance : ProvableType RowType where
 def fibRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
   let next_x ← copyToVar curr.y
-  let next_y ← subcircuit Gadgets.Addition8.circuit { x := curr.x, y := curr.y }
+  let next_y ← Gadgets.Addition8.circuit { x := curr.x, y := curr.y }
   assignVar (.next 0) next_x
   assign (.next 1) next_y
 
@@ -61,8 +61,10 @@ def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
     (row.y.val = fib8 (index + 1))
 
 lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
-  induction' n using Nat.twoStepInduction
-  repeat {simp [fib8]}; apply Nat.mod_lt; simp
+  induction n using Nat.twoStepInduction with
+  | zero => simp [fib8]
+  | one => simp [fib8]
+  | more _ _ _ => simp [fib8]; apply Nat.mod_lt; simp
 
 -- TODO kinda pointless to use `assignCurrRow` if the easiest way to unfold it is by making the steps explicit
 omit p_large_enough in
@@ -72,7 +74,7 @@ lemma boundaryFib_eq : boundaryFib (p:=p) = (do
   := rfl
 
 omit p_large_enough in
-lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p)) :
+lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
   Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) boundaryFib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`
@@ -98,14 +100,16 @@ def formalFibTable : FormalTable (F p) RowType := {
 
   soundness := by
     intro N trace envs _
-    simp only [gt_iff_lt, TraceOfLength.ForAllRowsOfTrace, TableConstraintsHold,
-      fibTable, Spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex, and_imp]
+    simp only [TableConstraintsHold,
+      fibTable, Spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex]
 
-    induction' trace.val using Trace.every_row_two_rows_induction with first_row curr next rest _ ih2
-    · simp [table_norm]
-    · simp [table_norm]
+    induction trace.val using Trace.every_row_two_rows_induction with
+    | zero => simp [table_norm]
+    | one first_row =>
+      simp [table_norm]
       exact boundary_step first_row (envs 0 0)
-    · -- first, we prove the inductive part of the Spec
+    | more curr next rest ih1 ih2 =>
+      -- first, we prove the inductive part of the Spec
       -- TODO this should be easier, or there should be a custom induction for it
       unfold Trace.ForAllRowsOfTraceWithIndex.inner
       intros ConstraintsHold
@@ -117,7 +121,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       unfold TableConstraintsHold.foldl at ConstraintsHold
       simp [Trace.len] at ConstraintsHold
       specialize ih2 ConstraintsHold.right
-      simp only [ih2, and_self, and_true, Trace.len]
+      simp only [ih2, and_true, Trace.len]
 
       let ⟨curr_fib0, curr_fib1⟩ := ih2.left
 
@@ -127,9 +131,9 @@ def formalFibTable : FormalTable (F p) RowType := {
 
       set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
 
-      simp only [fibTable, fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
+      simp only [fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
           Gadgets.Addition8.circuit] at ConstraintsHold
-      simp only [circuit_norm, subcircuit_norm, eval, varFromOffset, Vector.mapRange] at ConstraintsHold
+      simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
 
       have hx_curr : env.get 0 = curr.x := by rfl
       have hy_curr : env.get 1 = curr.y := by rfl

@@ -7,24 +7,30 @@ under `circuit_norm` in every way we need them to.
 -/
 import Clean.Circuit.Subcircuit
 import Clean.Utils.Misc
+
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
     xs.forM body = forM xs.toList body := by
-  rw [Vector.forM_eq_forM, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
+  rw [Vector.forM_eq_forM, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]; rfl
 
-lemma Vector.mapM_toList (xs : Vector α n) {m : Type → Type} [monad: Monad m] [LawfulMonad m] (body : α → m β) :
-    (fun v => v.toArray.toList) <$> (xs.mapM body) = xs.toList.mapM body := by
-  rw [←Array.toList_mapM, ←Vector.toArray_mapM, Functor.map_map]
+lemma Vector.toList_mapM (xs : Vector α n) {m : Type → Type} [monad: Monad m] [LawfulMonad m] (body : α → m β) :
+    Vector.toList <$> (xs.mapM body) = xs.toList.mapM body := by
+  rw [←Array.toList_mapM]
+  suffices toList <$> mapM body xs = Array.toList <$> Array.mapM body xs.toArray by
+    convert this
+  rw [←Vector.toArray_mapM, Functor.map_map]
+  congr
 
 lemma Vector.foldlM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : β → α → m β) (init : β) :
     xs.foldlM body init = xs.toList.foldlM body init := by
   rw [Vector.foldlM_mk, List.foldlM_toArray]
+  congr
 
 namespace Circuit
 variable {prop : Condition F}
 
-lemma ConstantLength.length_eq_default {circuit : α → Circuit F β} (_: ConstantLength circuit) [Inhabited α] (a : α) (n : ℕ) :
+lemma ConstantLength.length_eq_default {circuit : α → Circuit F β} (_ : ConstantLength circuit) [Inhabited α] (a : α) (n : ℕ) :
    (circuit a).localLength n = (circuit default).localLength 0 := by
   simp only [ConstantLength.localLength_eq]
 
@@ -55,7 +61,7 @@ lemma forAll_flatten_abstract (circuit : Fin m → Circuit F β) (constant : Con
       localLength := constant.localLength
       localLength_eq a n := constant.localLength_eq (a.succ) n }
     set k := constant.localLength
-    specialize ih (n := n + k) circuit' constant'
+    specialize ih (n:=n + k) circuit' constant'
     set k' := constant'.localLength
     have : k' = k := rfl
     rw [this] at ih
@@ -86,7 +92,7 @@ theorem localLength_eq : (xs.forM circuit).localLength n = m * constant.localLen
   induction xs using Vector.induct generalizing n
   case nil => ac_rfl
   case cons x xs ih =>
-    rw [Vector.forM_toList, Vector.cons, List.forM_cons, ←Vector.forM_toList,
+    rw [Vector.forM_toList, Vector.cons, Vector.toList_mk, List.forM_cons, ←Vector.forM_toList,
       bind_localLength_eq, ih, constant.localLength_eq]
     ring
 
@@ -98,7 +104,7 @@ theorem operations_eq :
   induction xs using Vector.induct generalizing n
   case nil => rfl
   case cons x xs ih =>
-    rw [ofFn_flatten_cons, Vector.forM_toList, Vector.cons, List.forM_cons, ←Vector.forM_toList,
+    rw [ofFn_flatten_cons, Vector.forM_toList, Vector.cons, Vector.toList_mk, List.forM_cons, ←Vector.forM_toList,
       bind_operations_eq, ih, constant.localLength_eq]
 
 theorem forAll_iff {prop : Condition F} :
@@ -128,7 +134,7 @@ theorem output_eq : (xs.mapM circuit).output n =
     simp
 
 lemma ext_map_toList (f g : Circuit F (Vector α n)) :
-    (fun v => v.toArray.toList) <$> f = (fun v => v.toArray.toList) <$> g → f = g := by
+    (fun v => v.toList) <$> f = (fun v => v.toList) <$> g → f = g := by
   intro h
   rw [ext_iff] at h
   ext1 n
@@ -145,8 +151,8 @@ lemma mapM_cons (xs : Vector α n) (body : α → Circuit F β) (x : α) :
     let ys ← xs.mapM body
     return Vector.cons y ys := by
   apply ext_map_toList
-  rw [Vector.mapM_toList, Vector.toList_cons, List.mapM_cons, ←Vector.mapM_toList]
-  simp only [map_bind, map_pure, Vector.toList_cons]
+  rw [Vector.toList_mapM, Vector.toList_cons, List.mapM_cons, ←Vector.toList_mapM]
+  simp only [map_bind, map_pure]
   rfl
 
 theorem operations_eq : (xs.mapM circuit).operations n =
@@ -177,11 +183,11 @@ def prod (circuit : β → α → Circuit F β) : β × α → Circuit F β := f
 variable {env : Environment F} {prop : Condition F} {xs : Vector α m}
   {circuit : β → α → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
-lemma foldlM_cons (x: α) :
+lemma foldlM_cons (x : α) :
   (Vector.cons x xs).foldlM circuit init = (do
     let init' ← circuit init x
     xs.foldlM circuit init') := by
-  rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons]
+  rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]
   simp only [←Vector.foldlM_toList]
 
 theorem localLength_eq :
@@ -192,7 +198,7 @@ theorem localLength_eq :
     rw [foldlM_cons, bind_localLength_eq, ih, constant.localLength_eq (init, x)]
     ring
 
-lemma finFoldl_cons_succ (x: α) :
+lemma finFoldl_cons_succ (x : α) :
   Fin.foldl (m + 1) (fun acc i => (circuit acc (Vector.cons x xs)[i.val]).output (n + i * constant.localLength)) init
     = Fin.foldl m (fun acc i => (circuit acc xs[i.val]).output (n + constant.localLength + i * constant.localLength)) ((circuit init x).output n) := by
   set k := constant.localLength
@@ -211,7 +217,6 @@ theorem output_eq :
   case cons x xs ih =>
     rw [foldlM_cons, bind_output_eq, ih, constant.localLength_eq (init, x), finFoldl_cons_succ]
 
-
 def foldlAcc (n : ℕ) (xs : Vector α m) (circuit : β → α → Circuit F β) (init : β) (j : Fin m) : β :=
   Fin.foldl j (fun acc i => (circuit acc xs[i.val]).output (n + i*(circuit acc xs[i.val]).localLength)) init
 
@@ -223,7 +228,7 @@ lemma foldlAcc_cons_succ (i : Fin m) (x : α) [constant : ConstantLength (prod c
     foldlAcc (n + (circuit init x).localLength n) xs circuit ((circuit init x).output n) i := by
   simp only [foldlAcc]
   simp only [Fin.val_succ, Vector.cons, Vector.getElem_mk, List.getElem_toArray, Fin.foldl_succ,
-    List.getElem_cons_succ, Array.getElem_toList, Vector.getElem_toArray, add_mul, one_mul,
+    List.getElem_cons_succ, add_mul, one_mul,
     Fin.val_zero, List.getElem_cons_zero, zero_mul, add_zero]
   congr
   funext acc j
@@ -282,7 +287,7 @@ theorem foldlAcc_const_succ (constant : ConstantLength (prod circuit))
   conv => lhs; lhs; intro acc i; rw [h_const_out (acc, _),
     ConstantLength.length_eq_default constant (acc, _)]
   rw [h_const_out (_, xs[i])]
-  simp only [prod, Fin.foldl_const, Fin.natCast_eq_last, Fin.val_last]
+  simp only [prod, Fin.foldl_const, Fin.val_last]
   rfl
 
 theorem foldlAcc_const (constant : ConstantLength (prod circuit))
@@ -345,7 +350,7 @@ theorem forAll_iff_const [NeZero m] (constant : ConstantLength (prod circuit))
       rfl
   intro h i
   rcases i with ⟨ _ | i, hi ⟩
-  · simp only [Fin.mk_zero', Fin.val_zero]
+  · simp only [Fin.mk_zero']
     rw [foldlAcc_zero, zero_mul, add_zero]
     exact h.left
   · rw [foldlAcc_const_succ constant h_const_out]
@@ -548,7 +553,7 @@ lemma foldl.output_eq [NeZero m] :
   conv => lhs; lhs; intro acc i; rw [const_out (acc, _)]
   rcases m with _ | m
   · nomatch this
-  simp only [Fin.foldl_const, Fin.natCast_eq_last, Fin.val_last, add_tsub_cancel_right]
+  simp only [Fin.foldl_const, Fin.val_last, add_tsub_cancel_right]
 
 @[circuit_norm ↓]
 lemma foldl.forAll [NeZero m] :
@@ -603,7 +608,7 @@ lemma foldlRange.localLength_eq :
       if h : m > 0 then m * (body default ⟨0, h⟩).localLength else 0 := by
   rw [foldlRange, FoldlM.localLength_eq (constant:=constant)]
   rcases m with rfl | m; simp
-  have : m+1 > 0 := by omega
+  have : m + 1 > 0 := by omega
   simp only [this, ↓reduceDIte]
   rw [constant.localLength_eq (_, _)]
 

@@ -1,7 +1,6 @@
 import Mathlib.Analysis.Normed.Ring.Lemmas
 import Clean.Utils.Field
-
-namespace Bitwise
+import Mathlib.Data.Nat.Bitwise
 def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
 def add32 (a b : ℕ) : ℕ := (a + b) % 2^32
@@ -9,24 +8,24 @@ def add32 (a b : ℕ) : ℕ := (a + b) % 2^32
 def rotRight8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)
   let high := x / (2^offset.val)
-  low * (2^(8 - offset.val)) + high
+  low * (2^(8-offset.val)) + high
 
 def rotLeft8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
-  let low := x % (2^(8 - offset.val))
-  let high := x / (2^(8 - offset.val))
+  let low := x % (2^(8-offset.val))
+  let high := x / (2^(8-offset.val))
   low * (2^offset.val) + high
 
 def rotRight64 (x : ℕ) (offset : ℕ) : ℕ :=
   let offset := offset % 64
   let low := x % (2^offset)
   let high := x / (2^offset)
-  low * (2^(64 - offset)) + high
+  low * (2^(64-offset)) + high
 
 def rotRight32 (x : ℕ) (offset : ℕ) : ℕ :=
   let offset := offset % 32
   let low := x % (2^offset)
   let high := x / (2^offset)
-  low * (2^(32 - offset)) + high
+  low * (2^(32-offset)) + high
 
 def rotLeft64 (value : ℕ) (left : Fin 64) : ℕ:=
   let right := (64 - left) % 64
@@ -53,11 +52,11 @@ theorem xor_eq_add {x : ℕ} (n : ℕ) (hx : x < 2^n) (y : ℕ) : x + 2^n * y = 
     rw [Nat.testBit_lt_two_pow hx]
     simp [this]
 
-theorem and_mul_two_pow {x y n : Nat} : 2 ^ n * (x &&& y) =  2 ^ n * x &&&  2 ^ n * y := by
+theorem and_mul_two_pow {x y n : ℕ} : 2 ^ n * (x &&& y) =  2 ^ n * x &&&  2 ^ n * y := by
   simp only [mul_comm]
   exact Nat.bitwise_mul_two_pow
 
-theorem xor_mul_two_pow {x y n : Nat} : 2 ^ n * (x ^^^ y) =  2 ^ n * x ^^^  2 ^ n * y := by
+theorem xor_mul_two_pow {x y n : ℕ} : 2 ^ n * (x ^^^ y) =  2 ^ n * x ^^^  2 ^ n * y := by
   simp only [mul_comm]
   exact Nat.bitwise_mul_two_pow
 
@@ -83,7 +82,6 @@ lemma and_xor_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
   congr; symm
   exact and_mul_two_pow
 
-
 theorem not64_eq_sub {x : ℕ} (x_lt : x < 2^64) :
     not64 x = 2^64 - 1 - x := by
   rw [not64]
@@ -94,4 +92,21 @@ theorem not64_eq_sub {x : ℕ} (x_lt : x < 2^64) :
   exact h_u64
   rw [UInt64.le_iff_toNat_le, UInt64.toNat_ofNat_of_lt' x_lt]
   exact Nat.le_pred_of_lt x_lt
-end Bitwise
+
+-- Bitwise AND theorems
+
+/-- For binary values, 0 is the absorbing element for `&&&` -/
+theorem and_zero_absorb (a : ℕ) :
+    0 &&& a = 0 := by
+  -- 0 &&& a = Nat.land 0 a = 0
+  simp only [HAnd.hAnd, AndOp.and]
+  -- land 0 a = 0
+  simp only [Nat.land]
+  apply Nat.bitwise_zero_left
+
+/-- For binary values, 1 is the identity element for `&&&` -/
+theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) :
+    1 &&& a = a := by
+  cases ha with
+  | inl h0 => rw [h0]; rfl
+  | inr h1 => rw [h1]; rfl

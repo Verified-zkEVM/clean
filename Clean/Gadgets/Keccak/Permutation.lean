@@ -7,7 +7,7 @@ open Specs.Keccak256
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .foldl roundConstants state
-    fun state rc => subcircuit (KeccakRound.circuit rc) state
+    fun state rc => KeccakRound.circuit rc state
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
@@ -41,10 +41,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
-  simp only [main, circuit_norm, subcircuit_norm, Spec,
+  simp only [main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
-  simp only [zero_add, h_input] at h_holds
+  simp only [h_input] at h_holds
   obtain ⟨ h_init, h_succ ⟩ := h_holds
   specialize h_init h_assumptions
 
@@ -79,11 +79,10 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions
-  simp only [main, h_input, h_assumptions, circuit_norm, subcircuit_norm, Spec,
-    KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions] at h_env ⊢
+  simp only [main, h_input, h_assumptions, circuit_norm, KeccakRound.circuit,
+    KeccakRound.elaborated, KeccakRound.Spec,
+    KeccakRound.Assumptions] at h_env ⊢
 
-  -- only keep the statements about normalization
   obtain ⟨ h_init, h_succ ⟩ := h_env
   replace h_init := h_init.left
   replace h_succ := fun i hi ih => (h_succ i hi ih).left

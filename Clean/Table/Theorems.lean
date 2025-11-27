@@ -93,7 +93,7 @@ def two_row_induction {prop : Row F S → ℕ → Prop}
     have h3 : prop next (rest +> curr).len := succ _ _ _ ih2.left
     exact ⟨ h3, ih2.left, ih2.right ⟩
 
-theorem lastRow_of_forAllWithIndex {N: ℕ+} {prop : Row F S → ℕ → Prop}
+theorem lastRow_of_forAllWithIndex {N : ℕ+} {prop : Row F S → ℕ → Prop}
   (trace : TraceOfLength F S N) (h : ForAllRowsOfTraceWithIndex trace prop) :
     prop trace.lastRow (N - 1) := by
   induction N, trace using everyRowTwoRowsInduction' with
@@ -101,11 +101,11 @@ theorem lastRow_of_forAllWithIndex {N: ℕ+} {prop : Row F S → ℕ → Prop}
     simp only [table_norm, and_true] at h
     exact h
   | more N curr next rest ih =>
-    simp only [table_norm, and_true] at h ⊢
+    simp only [table_norm] at h ⊢
     rw [rest.property] at h
     exact h.left
 
-theorem lastRow_of_forAllWithPrevious {N: ℕ+} {prop : Row F S → (i: ℕ) → TraceOfLength F S i → Prop}
+theorem lastRow_of_forAllWithPrevious {N : ℕ+} {prop : Row F S → (i : ℕ) → TraceOfLength F S i → Prop}
   (trace : TraceOfLength F S N) (h : ForAllRowsWithPrevious trace prop) :
     prop trace.lastRow (N - 1) trace.tail := by
   induction N, trace using everyRowTwoRowsInduction' with
@@ -115,7 +115,7 @@ theorem lastRow_of_forAllWithPrevious {N: ℕ+} {prop : Row F S → (i: ℕ) →
   | more N curr next rest ih =>
     rcases rest with ⟨ rest, hN ⟩
     subst hN
-    simp only [ForAllRowsWithPrevious, Trace.ForAllRowsWithPrevious, table_norm, and_true] at h ⊢
+    simp only [ForAllRowsWithPrevious, Trace.ForAllRowsWithPrevious, table_norm] at h ⊢
     simp only [PNat.mk_coe, Nat.add_one_sub_one, tail, Trace.tail]
     exact h.left
 
@@ -125,21 +125,21 @@ variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
 
 namespace CellAssignment
 
-def pushVarInput_offset (assignment: CellAssignment W S) (off: CellOffset W S) :
+def pushVarInput_offset (assignment : CellAssignment W S) (off : CellOffset W S) :
   (assignment.pushVarInput off).offset = assignment.offset + 1 := by
   simp [pushVarInput, Vector.push]
 
-lemma pushRow_offset (assignment: CellAssignment W S) (row: Fin W) :
-  (assignment.pushRow row).offset = assignment.offset + size S := by rfl
+lemma pushRow_offset (assignment : CellAssignment W S) (row : Fin W) :
+  (assignment.pushRow row).offset = assignment.offset + size S := rfl
 
-theorem assignmentFromCircuit_offset (as: CellAssignment W S) (ops: Operations F) :
+theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Operations F) :
     (assignmentFromCircuit as ops).offset = as.offset + ops.localLength := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
   | witness | assert | lookup | subcircuit =>
     simp_all +arith [assignmentFromCircuit, CellAssignment.pushVarsAux, Operations.localLength]
 
-theorem assignmentFromCircuit_vars (as: CellAssignment W S) (ops: Operations F) :
+theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F) :
     (assignmentFromCircuit as ops).vars = (as.vars ++ (.mapRange ops.localLength fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
       ).cast (assignmentFromCircuit_offset ..).symm := by
   induction ops using Operations.induct generalizing as with
