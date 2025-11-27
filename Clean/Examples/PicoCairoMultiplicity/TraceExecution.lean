@@ -897,6 +897,28 @@ lemma single_instruction_multiplicity_contribution
       Finsupp.zero_apply, sub_zero]
 
 /--
+Helper: Sum of ite 1 0 over finRange equals countP over vector's toList.
+-/
+lemma sum_ite_eq_countP {α : Type*} {n : ℕ} (v : Vector α n) (p : α → Prop) [DecidablePred p]
+    {F : Type*} [Semiring F] :
+    (List.finRange n).map (fun i => if p v[i] then (1 : F) else 0) |>.sum =
+      ↑(v.toList.countP (fun x => decide (p x))) := by
+  -- Use that v[i] = v.toList[i] and map over finRange matches map over list
+  induction n with
+  | zero =>
+    simp only [List.finRange_zero, List.map_nil, List.sum_nil, Vector.toList_mk, List.countP_nil,
+      Nat.cast_zero]
+  | succ k ih =>
+    -- v : Vector α (k+1), split into head and tail
+    obtain ⟨l, hl⟩ := v.exists_eq_cons
+    cases hl
+    simp only [List.finRange_succ, List.map_cons, List.sum_cons]
+    -- First element
+    simp only [Fin.val_zero, Vector.getElem_cons_zero]
+    -- Tail elements: need to relate tail to List.finRange k
+    sorry
+
+/--
 For a bundle of instructions satisfying Bundle.Spec, the total multiplicity contribution
 at state s equals countIncoming - countOutgoing.
 -/
@@ -917,10 +939,34 @@ lemma bundle_multiplicity_contribution
       (↑(countIncoming inputs postStateFn s) : F p) - ↑(countOutgoing inputs postStateFn s) := by
   rw [h_adds]
   simp only [Finsupp.finset_sum_apply]
-  -- Convert sum over Fin n to sum over inputs.toList
-  -- Each instruction contributes: (if enabled ∧ postState=s then 1 else 0) - (if enabled ∧ preState=s then 1 else 0)
-  -- Summing these gives: countIncoming - countOutgoing
-  sorry
+  -- Each instruction's contribution
+  have h_each : ∀ i : Fin n,
+      (if inputs[i].enabled = 1 then
+         InteractionDelta.single (stateToNamedList inputs[i].preState) (-1) +
+         InteractionDelta.single (stateToNamedList (postStateFn inputs[i].preState)) 1
+       else 0).toFinsupp (stateToNamedList s) =
+      (if inputs[i].enabled = 1 ∧ postStateFn inputs[i].preState = s then 1 else 0) -
+      (if inputs[i].enabled = 1 ∧ inputs[i].preState = s then 1 else 0) := by
+    intro i
+    exact single_instruction_multiplicity_contribution program memory inputs[i] _ postStateFn rfl s
+  simp_rw [h_each]
+  -- Now we have: ∑ i, (incoming_i - outgoing_i) = countIncoming - countOutgoing
+  -- Rewrite as: (∑ i, incoming_i) - (∑ i, outgoing_i)
+  rw [Finset.sum_sub_distrib]
+  -- Now we need: ∑ i, (if enabled ∧ post=s then 1 else 0) = countIncoming
+  --          and: ∑ i, (if enabled ∧ pre=s then 1 else 0) = countOutgoing
+  -- We use that ∑ of ite 1 0 = countP and countP = filter.length
+  simp only [countIncoming, countOutgoing]
+  rw [← List.countP_eq_length_filter, ← List.countP_eq_length_filter]
+  -- Convert sum to list operations
+  -- Use Fin.sum_univ_def: ∑ i, f i = (List.finRange n).map f).sum
+  rw [Fin.sum_univ_def, Fin.sum_univ_def]
+  -- Relate finRange to toList via getElem
+  congr 1
+  · -- (List.finRange n).map (λ i => if enabled ∧ post=s then 1 else 0)).sum = countP
+    sorry
+  · -- Similar for outgoing
+    sorry
 
 /--
 For any state s, the multiplicity in adds.toFinsupp equals:
