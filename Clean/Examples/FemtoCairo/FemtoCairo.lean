@@ -834,8 +834,17 @@ def femtoCairoCircuitSpec
     | some s => s = nextState
     | none => False -- impossible, constraints ensure that the transition is valid
 
-def femtoCairoAssumptions (_state : State (F p)) : Prop :=
-  True
+/--
+  Assumptions required for the FemtoCairo step circuit completeness.
+  1. ValidProgram: All instruction bytes in program memory are < 256
+  2. The state transition succeeds (execution doesn't fail)
+-/
+def femtoCairoAssumptions
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (state : State (F p)) : Prop :=
+  ValidProgram program ∧
+  (Spec.femtoCairoMachineTransition program memory state).isSome
 
 def femtoCairoStepCircuitSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
@@ -921,18 +930,17 @@ def femtoCairoStepCircuitSoundness
               rw [←c_next]
               simp [explicit_provable_type, circuit_norm]
 
--- Assumptions are missing about the content of the program memory. For instance rawInstructionType is less than 256.
 def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
   (h_programSize : programSize < p) {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize)
-      femtoCairoAssumptions := by sorry
+      (femtoCairoAssumptions program memory) := by sorry
 
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     : GeneralFormalCircuit (F p) State State := {
       femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize with
-      Assumptions := femtoCairoAssumptions,
+      Assumptions := femtoCairoAssumptions program memory,
       Spec := femtoCairoCircuitSpec program memory,
       soundness := femtoCairoStepCircuitSoundness program h_programSize memory h_memorySize,
       completeness := femtoCairoStepCircuitCompleteness program h_programSize memory h_memorySize,
@@ -959,6 +967,9 @@ def femtoCairoTable
       Spec.femtoCairoMachineBoundedExecution program memory (some initial_state) i with
     | some reachedState => state = reachedState
     | none => False -- impossible, constraints ensure that every transition is valid
+
+  -- Initial state assumptions for completeness: program must be valid
+  InitialStateAssumptions := fun _ => ValidProgram program
 
   soundness := by
     intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold

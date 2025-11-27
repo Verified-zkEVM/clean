@@ -183,4 +183,11 @@ def DecodedAddressingMode.isEncodedCorrectly (mode : DecodedAddressingMode (F p)
   (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 1 ∧ mode.isImmediate = 0) ∨
   (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 1)
 
+/--
+  A program is valid if all instruction bytes in the program memory are < 256.
+  This ensures that `decodeInstruction` will always succeed for any fetched instruction.
+-/
+def ValidProgram {programSize : ℕ} (program : Fin programSize → F p) : Prop :=
+  ∀ (i : Fin programSize), (program i).val < 256
+
 end Examples.FemtoCairo.Types

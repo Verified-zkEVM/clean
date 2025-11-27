@@ -143,4 +143,40 @@ def femtoCairoMachineBoundedExecution
     let reachedState ← femtoCairoMachineBoundedExecution program memory state i
     femtoCairoMachineTransition program memory reachedState
 
+-- Helper lemmas for completeness proofs
+
+/-- If memoryAccess succeeds, the address is in bounds -/
+lemma memoryAccess_isSome_implies_bounds {n : ℕ} [NeZero n]
+    (memory : Fin n → F p) (addr : F p)
+    (h : (memoryAccess memory addr).isSome) : addr.val < n := by
+  simp only [memoryAccess, Option.isSome_iff_exists] at h
+  split at h
+  case isTrue h_bound => exact h_bound
+  case isFalse => simp at h
+
+/-- If memoryAccess returns some value, the address is in bounds -/
+lemma memoryAccess_eq_some_implies_bounds {n : ℕ} [NeZero n]
+    (memory : Fin n → F p) (addr : F p) (v : F p)
+    (h : memoryAccess memory addr = some v) : addr.val < n := by
+  simp only [memoryAccess] at h
+  split at h
+  case isTrue h_bound => exact h_bound
+  case isFalse => simp at h
+
+/-- If decodeInstruction succeeds, the instruction value is < 256 -/
+lemma decodeInstruction_isSome_implies_bound (instr : F p)
+    (h : (decodeInstruction instr).isSome) : instr.val < 256 := by
+  simp only [decodeInstruction] at h
+  split at h
+  case isTrue h_ge => simp at h
+  case isFalse h_lt => omega
+
+/-- If decodeInstruction returns some value, the instruction value is < 256 -/
+lemma decodeInstruction_eq_some_implies_bound (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
+    (h : decodeInstruction instr = some result) : instr.val < 256 := by
+  simp only [decodeInstruction] at h
+  split at h
+  case isTrue h_ge => simp at h
+  case isFalse h_lt => omega
+
 end Examples.FemtoCairo.Spec
