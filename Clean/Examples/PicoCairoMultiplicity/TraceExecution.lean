@@ -456,26 +456,22 @@ def extractEnabledTransitions {n : ℕ}
     else
       none
 
-/-- Extract the post state from a LoadState instruction when enabled
+/-- Extract the post state from a LoadState instruction when enabled.
 
-**DESIGN NOTE**: This definition is INCORRECT for LOAD_STATE! The actual LOAD_STATE
-instruction produces `{ pc := v1, ap := v2, fp := v3 }` where v1, v2, v3 are read from
-memory. This definition assumes the post state is `{ pc + 4, ap, fp }` like other instructions,
-which is wrong.
+For LOAD_STATE, the post state is `{ pc := v1, ap := v2, fp := v3 }` where v1, v2, v3
+are read from memory based on the instruction's addressing modes. This requires
+access to the program (to fetch/decode the instruction) and memory (to read values).
 
-This means `buildRunFromInputs` doesn't correctly count LOAD_STATE edges, and the
-`buildRunFromInputs_valid` theorem has a gap for LOAD_STATE.
-
-To fix this properly, we would need to either:
-1. Include the expected post state in `InstructionStepInput` for LOAD_STATE
-2. Use a different approach that extracts post states from the InteractionDelta
-3. Add constraints ensuring LOAD_STATE always loads `{ pc + 4, ap, fp }` (defeats purpose)
-
-For now, we leave this incorrect definition and note that the theorem only works when
-LOAD_STATE instructions happen to load values that match `{ pc + 4, ap, fp }`.
+We use `femtoCairoMachineTransition` to compute the actual post state, returning
+a default if the transition fails (which shouldn't happen for valid enabled instructions).
 -/
-def loadStatePostState (preState : State (F p)) : State (F p) :=
-  { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
+def loadStatePostState
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (preState : State (F p)) : State (F p) :=
+  match femtoCairoMachineTransition program memory preState with
+  | some postState => postState
+  | none => preState  -- fallback, shouldn't happen for valid enabled instructions
 
 /-! ## Building the Run from instruction inputs -/
 
@@ -496,6 +492,8 @@ def bundleEdgeCount {n : ℕ}
 
 /-- Build Run directly from all instruction inputs across all bundles -/
 def buildRunFromInputs
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     {addCap mulCap storeCap loadCap : ℕ}
     (addInputs : Vector (InstructionStepInput (F p)) addCap)
     (mulInputs : Vector (InstructionStepInput (F p)) mulCap)
@@ -506,10 +504,12 @@ def buildRunFromInputs
     bundleEdgeCount addInputs addPostState t +
     bundleEdgeCount mulInputs mulPostState t +
     bundleEdgeCount storeInputs storeStatePostState t +
-    bundleEdgeCount loadInputs loadStatePostState t
+    bundleEdgeCount loadInputs (loadStatePostState program memory) t
 
 /-- Alternative: count edges directly using filter -/
 def buildRunFromInputs'
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     {addCap mulCap storeCap loadCap : ℕ}
     (addInputs : Vector (InstructionStepInput (F p)) addCap)
     (mulInputs : Vector (InstructionStepInput (F p)) mulCap)
@@ -520,7 +520,7 @@ def buildRunFromInputs'
     (addInputs.toList.filter (fun i => i.enabled = 1 ∧ i.preState = s1 ∧ addPostState i.preState = s2)).length +
     (mulInputs.toList.filter (fun i => i.enabled = 1 ∧ i.preState = s1 ∧ mulPostState i.preState = s2)).length +
     (storeInputs.toList.filter (fun i => i.enabled = 1 ∧ i.preState = s1 ∧ storeStatePostState i.preState = s2)).length +
-    (loadInputs.toList.filter (fun i => i.enabled = 1 ∧ i.preState = s1 ∧ loadStatePostState i.preState = s2)).length
+    (loadInputs.toList.filter (fun i => i.enabled = 1 ∧ i.preState = s1 ∧ (loadStatePostState program memory) i.preState = s2)).length
 
 /-! ## Key theorem connecting balanced InteractionDelta to Run.netFlow -/
 
@@ -569,7 +569,7 @@ theorem balanced_adds_implies_netFlow
     (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
     (h_balanced : adds.toFinsupp = 0)
     (h_ne : inputs.initialState ≠ inputs.finalState) :
-    let R := buildRunFromInputs
+    let R := buildRunFromInputs program memory
                inputs.bundledInputs.addInputs
                inputs.bundledInputs.mulInputs
                inputs.bundledInputs.storeStateInputs
@@ -653,7 +653,7 @@ theorem buildRunFromInputs_valid
     (inputs : ExecutionCircuitInput capacities (F p))
     (adds : InteractionDelta (F p))
     (h_spec : ExecutionBundle.Spec capacities program memory inputs adds) :
-    let R := buildRunFromInputs
+    let R := buildRunFromInputs program memory
                inputs.bundledInputs.addInputs
                inputs.bundledInputs.mulInputs
                inputs.bundledInputs.storeStateInputs
@@ -679,7 +679,7 @@ theorem buildRunFromInputs_valid
   change bundleEdgeCount inputs.bundledInputs.addInputs addPostState (s1, s2) +
          bundleEdgeCount inputs.bundledInputs.mulInputs mulPostState (s1, s2) +
          bundleEdgeCount inputs.bundledInputs.storeStateInputs storeStatePostState (s1, s2) +
-         bundleEdgeCount inputs.bundledInputs.loadStateInputs loadStatePostState (s1, s2) > 0 at h_edge
+         bundleEdgeCount inputs.bundledInputs.loadStateInputs (loadStatePostState program memory) (s1, s2) > 0 at h_edge
 
   -- The edge count is the sum of edge counts from each bundle.
   -- If the total is > 0, at least one bundle contributed.
@@ -854,44 +854,40 @@ theorem buildRunFromInputs_valid
       rw [h_postState_eq]
       exact h_post
   · -- LoadState bundle contributed
-    -- NOTE: LoadState is fundamentally different from other instructions.
-    -- For LOAD_STATE, the post state is { v1, v2, v3 } loaded from memory,
-    -- NOT { pc + 4, ap, fp }. However, loadStatePostState is defined as { pc + 4, ap, fp }.
-    --
-    -- This means bundleEdgeCount only counts LoadState edges where the memory
-    -- happens to contain values (v1, v2, v3) = (pc + 4, ap, fp).
-    -- This is a rare case, but we still need to prove validity when it occurs.
-    --
-    -- The proof follows a similar structure to the other cases, but requires
-    -- showing that the memory values match the expected post state structure.
+    -- With the fixed loadStatePostState that uses femtoCairoMachineTransition,
+    -- this case is now straightforward.
     obtain ⟨i, h_enabled, h_pre, h_post⟩ := bundleEdgeCount_pos_implies_exists
-      inputs.bundledInputs.loadStateInputs loadStatePostState (s1, s2) h_load
-    obtain ⟨stepAdds, h_step_specs, _⟩ := h_load_bundle
-    have h_spec_i := h_step_specs i
-    obtain ⟨postState, h_trans, h_adds_eq⟩ := LoadStateInstruction_Spec_implies_transition
-      program memory inputs.bundledInputs.loadStateInputs[i] (stepAdds i) h_spec_i h_enabled
+      inputs.bundledInputs.loadStateInputs (loadStatePostState program memory) (s1, s2) h_load
     simp only [IsValidTransition]
     have h_pre' : inputs.bundledInputs.loadStateInputs[i].preState = s1 := h_pre
     rw [← h_pre']
+    -- h_post : loadStatePostState program memory preState = s2
+    -- loadStatePostState is defined as matching on femtoCairoMachineTransition
+    -- When the transition succeeds (which it does for enabled valid instructions),
+    -- loadStatePostState returns the post state.
+    -- We need: femtoCairoMachineTransition program memory preState = some s2
     simp only [loadStatePostState] at h_post
-    -- For LOAD_STATE, femtoCairoMachineTransition returns some { v1, v2, v3 }
-    -- where v1, v2, v3 are memory values.
-    -- h_post tells us { pc + 4, ap, fp } = s2
-    -- h_trans tells us the transition returns some postState where postState = { v1, v2, v3 }
-    -- We need to show the transition returns some s2
-    -- This requires postState = s2, i.e., { v1, v2, v3 } = { pc + 4, ap, fp }
-    -- This happens when memory contains exactly v1 = pc + 4, v2 = ap, v3 = fp
-    -- which is implied by h_post and the adds structure
-    rw [h_trans]
-    congr 1
-    -- Need to show: s2 = postState
-    -- h_post : { pc + 4, ap, fp } = s2
-    -- From the adds structure, we know the post state in adds is stateToNamedList postState
-    -- If bundleEdgeCount detected this edge with loadStatePostState, it means
-    -- the adds contain information that the post state matches { pc + 4, ap, fp }
-    -- But this is tricky because LOAD_STATE's post state is { v1, v2, v3 }
-    -- and we need to show { v1, v2, v3 } = { pc + 4, ap, fp }
-    sorry
+    -- h_post now shows the result of the match on femtoCairoMachineTransition
+    -- If it matched some postState, then h_post : postState = s2
+    -- And femtoCairoMachineTransition returns some postState
+    -- So femtoCairoMachineTransition = some s2
+    split at h_post
+    case h_1 postState h_trans =>
+      -- h_trans : femtoCairoMachineTransition ... = some postState
+      -- h_post : postState = s2
+      rw [h_trans, h_post]
+    case h_2 h_none =>
+      -- h_none : femtoCairoMachineTransition ... = none
+      -- But we know from the spec that the transition succeeds for enabled instructions
+      -- This case is contradictory
+      obtain ⟨stepAdds, h_step_specs, _⟩ := h_load_bundle
+      have h_spec_i := h_step_specs i
+      obtain ⟨postState, h_trans, _⟩ := LoadStateInstruction_Spec_implies_transition
+        program memory inputs.bundledInputs.loadStateInputs[i] (stepAdds i) h_spec_i h_enabled
+      -- h_trans : femtoCairoMachineTransition ... = some postState
+      -- h_none : femtoCairoMachineTransition ... = none
+      rw [h_trans] at h_none
+      exact Option.noConfusion h_none
 
 /--
 The main theorem: If ExecutionBundle.Spec holds with balanced adds, there exists a valid execution.
@@ -958,7 +954,7 @@ theorem Spec_implies_execution
   -- 5. That theorem gives us a path, which we convert to bounded execution
 
   -- Build the Run from enabled instruction transitions
-  let R := buildRunFromInputs
+  let R := buildRunFromInputs program memory
              inputs.bundledInputs.addInputs
              inputs.bundledInputs.mulInputs
              inputs.bundledInputs.storeStateInputs
