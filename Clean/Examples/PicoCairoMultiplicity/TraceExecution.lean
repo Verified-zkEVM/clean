@@ -473,6 +473,106 @@ def loadStatePostState
   | some postState => postState
   | none => preState  -- fallback, shouldn't happen for valid enabled instructions
 
+/-! ## Helper lemmas: Spec implies transition to specific postState -/
+
+/-- ADD instruction spec implies transition to addPostState -/
+theorem AddInstruction_Spec_transition_postState
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p)) (adds : InteractionDelta (F p))
+    (h_spec : AddInstruction.Spec program memory input adds)
+    (h_enabled : input.enabled = 1) :
+    femtoCairoMachineTransition program memory input.preState = some (addPostState input.preState) := by
+  simp only [AddInstruction.Spec, h_enabled, ite_true] at h_spec
+  split at h_spec
+  case h_2 => exact h_spec.elim
+  case h_1 rawInstr h_fetch =>
+    split at h_spec
+    case h_2 => exact h_spec.elim
+    case h_1 instrType mode1 mode2 mode3 h_decode =>
+      split at h_spec
+      case isTrue h_add =>
+        split at h_spec
+        case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
+          simp only [femtoCairoMachineTransition, h_fetch, h_decode, h_mem1, h_mem2, h_mem3,
+            computeNextState, h_add, h_spec.1, ite_true, Option.bind_eq_bind, Option.bind_some, addPostState]
+        all_goals exact h_spec.elim
+      case isFalse => exact h_spec.elim
+
+/-- MUL instruction spec implies transition to mulPostState -/
+theorem MulInstruction_Spec_transition_postState
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p)) (adds : InteractionDelta (F p))
+    (h_spec : MulInstruction.Spec program memory input adds)
+    (h_enabled : input.enabled = 1) :
+    femtoCairoMachineTransition program memory input.preState = some (mulPostState input.preState) := by
+  simp only [MulInstruction.Spec, h_enabled, ite_true] at h_spec
+  split at h_spec
+  case h_2 => exact h_spec.elim
+  case h_1 rawInstr h_fetch =>
+    split at h_spec
+    case h_2 => exact h_spec.elim
+    case h_1 instrType mode1 mode2 mode3 h_decode =>
+      split at h_spec
+      case isTrue h_mul =>
+        split at h_spec
+        case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
+          simp only [femtoCairoMachineTransition, h_fetch, h_decode, h_mem1, h_mem2, h_mem3,
+            computeNextState, h_mul, h_spec.1, ite_true, Option.bind_eq_bind, Option.bind_some, mulPostState]
+        all_goals exact h_spec.elim
+      case isFalse => exact h_spec.elim
+
+/-- StoreState instruction spec implies transition to storeStatePostState -/
+theorem StoreStateInstruction_Spec_transition_postState
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p)) (adds : InteractionDelta (F p))
+    (h_spec : StoreStateInstruction.Spec program memory input adds)
+    (h_enabled : input.enabled = 1) :
+    femtoCairoMachineTransition program memory input.preState = some (storeStatePostState input.preState) := by
+  simp only [StoreStateInstruction.Spec, h_enabled, ite_true] at h_spec
+  split at h_spec
+  case h_2 => exact h_spec.elim
+  case h_1 rawInstr h_fetch =>
+    split at h_spec
+    case h_2 => exact h_spec.elim
+    case h_1 instrType mode1 mode2 mode3 h_decode =>
+      split at h_spec
+      case isTrue h_store =>
+        split at h_spec
+        case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
+          obtain ⟨h_v1_pc, h_v2_ap, h_v3_fp, _⟩ := h_spec
+          simp only [femtoCairoMachineTransition, h_fetch, h_decode, h_mem1, h_mem2, h_mem3,
+            computeNextState, h_store, h_v1_pc, h_v2_ap, h_v3_fp, and_self, ite_true,
+            Option.bind_eq_bind, Option.bind_some, storeStatePostState]
+        all_goals exact h_spec.elim
+      case isFalse => exact h_spec.elim
+
+/-- LoadState instruction spec implies transition to loadStatePostState -/
+theorem LoadStateInstruction_Spec_transition_postState
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p)) (adds : InteractionDelta (F p))
+    (h_spec : LoadStateInstruction.Spec program memory input adds)
+    (h_enabled : input.enabled = 1) :
+    femtoCairoMachineTransition program memory input.preState = some (loadStatePostState program memory input.preState) := by
+  simp only [LoadStateInstruction.Spec, h_enabled, ite_true] at h_spec
+  split at h_spec
+  case h_2 => exact h_spec.elim
+  case h_1 rawInstr h_fetch =>
+    split at h_spec
+    case h_2 => exact h_spec.elim
+    case h_1 instrType mode1 mode2 mode3 h_decode =>
+      split at h_spec
+      case isTrue h_load =>
+        split at h_spec
+        case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
+          simp only [femtoCairoMachineTransition, h_fetch, h_decode, h_mem1, h_mem2, h_mem3,
+            computeNextState, h_load, Option.bind_eq_bind, Option.bind_some, loadStatePostState]
+        all_goals exact h_spec.elim
+      case isFalse => exact h_spec.elim
+
 /-! ## Building the Run from instruction inputs -/
 
 /-- The edge contribution of a single instruction: 1 if enabled and matches the transition, 0 otherwise -/
@@ -1760,204 +1860,31 @@ theorem buildRunFromInputs_valid
       · -- ADD bundle contributed
         obtain ⟨i, h_enabled, h_pre, h_post⟩ := bundleEdgeCount_pos_implies_exists
           inputs.bundledInputs.addInputs addPostState (s1, s2) h_add
-        -- Get the individual instruction spec
         obtain ⟨stepAdds, h_step_specs, _⟩ := h_add_bundle
-        have h_spec_i := h_step_specs i
-        -- Use AddInstruction_Spec_implies_transition
-        obtain ⟨postState, h_trans, _⟩ := AddInstruction_Spec_implies_transition
-          program memory inputs.bundledInputs.addInputs[i] (stepAdds i) h_spec_i h_enabled
-        -- h_pre : inputs[i].preState = s1
-        -- h_post : addPostState inputs[i].preState = s2
-        -- h_trans : femtoCairoMachineTransition program memory inputs[i].preState = some postState
-        -- Need: femtoCairoMachineTransition program memory s1 = some s2
-        simp only [IsValidTransition]
-        have h_pre' : inputs.bundledInputs.addInputs[i].preState = s1 := h_pre
-        rw [← h_pre']
-        -- Goal: femtoCairoMachineTransition program memory inputs[i].preState = some s2
-        -- Strategy: The transition is deterministic, so h_trans tells us the result is postState.
-        -- We need to show postState = s2. But h_post tells us addPostState preState = s2.
-        -- From h_trans we can derive postState = addPostState preState using Option.some.inj
-        -- and the determinism of the transition.
-        simp only [addPostState] at h_post
-        -- h_post : { pc + 4, ... } = s2
-        -- h_trans : femtoCairoMachineTransition ... = some postState
-        -- We need to show postState = { pc + 4, ... }
-        -- The transition deterministically computes the result.
-        -- We use Option.some.inj: if some x = some y then x = y
-        -- h_trans tells us the transition equals some postState
-        -- And the transition definition computes { pc + 4, ap, fp }
-        -- So we can derive postState = { pc + 4, ... } by computing the transition
-        -- Then use h_post to show { pc + 4, ... } = s2
-        -- Therefore: goal is: some s2 = some postState (after rw [h_trans])
-        rw [h_trans]
-        -- Goal: some s2 = some postState
-        congr 1
-        -- Goal: s2 = postState
-        -- From h_trans with Option.some.inj and computing the transition, postState = { pc + 4, ... }
-        -- And h_post says { pc + 4, ... } = s2
-        -- So s2 = postState iff s2 = { pc + 4, ... } which is h_post.symm
-        -- We need to show postState = { pc + 4, ... }
-        -- The key is: h_trans says the transition returns some postState.
-        -- We can compute the transition to see it returns some { pc + 4, ... }.
-        -- By Option.some.inj, postState = { pc + 4, ... }.
-        -- Since Option.some is injective and h_trans : transition = some postState,
-        -- we have postState equals whatever the transition computes to.
-        -- But postState is opaque. We need to extract this.
-        -- Alternative: use calc or have with Option.some.inj
-        have h_struct : femtoCairoMachineTransition program memory inputs.bundledInputs.addInputs[i].preState =
-                        some { pc := inputs.bundledInputs.addInputs[i].preState.pc + 4,
-                               ap := inputs.bundledInputs.addInputs[i].preState.ap,
-                               fp := inputs.bundledInputs.addInputs[i].preState.fp } := by
-          -- This follows from the proof of AddInstruction_Spec_implies_transition
-          -- which computes the transition and shows it equals this struct
-          -- We need to unfold the spec and compute
-          have h_spec_unfolded := h_spec_i
-          simp only [AddInstruction.Spec, h_enabled, ite_true] at h_spec_unfolded
-          -- Now split on all the cases like in AddInstruction_Spec_implies_transition
-          split at h_spec_unfolded
-          case h_2 => exact h_spec_unfolded.elim
-          case h_1 rawInstr h_fetch =>
-            split at h_spec_unfolded
-            case h_2 => exact h_spec_unfolded.elim
-            case h_1 instrType mode1 mode2 mode3 h_decode =>
-              split at h_spec_unfolded
-              case isTrue h_add_instr =>
-                split at h_spec_unfolded
-                case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
-                  simp only [femtoCairoMachineTransition, h_fetch, h_decode, h_mem1, h_mem2, h_mem3,
-                    computeNextState, h_add_instr, h_spec_unfolded.1, ite_true,
-                    Option.bind_eq_bind, Option.bind_some]
-                all_goals exact h_spec_unfolded.elim
-              case isFalse => exact h_spec_unfolded.elim
-        -- Now we have h_struct and h_trans, both giving the transition result
-        -- By Option.some.inj: postState = { pc + 4, ... }
-        have h_postState_eq : postState = { pc := inputs.bundledInputs.addInputs[i].preState.pc + 4,
-                                            ap := inputs.bundledInputs.addInputs[i].preState.ap,
-                                            fp := inputs.bundledInputs.addInputs[i].preState.fp } := by
-          have h_eq := h_trans.symm.trans h_struct
-          exact Option.some.inj h_eq
-        rw [h_postState_eq]
-        exact h_post
+        simp only [IsValidTransition] at *
+        rw [← h_pre, ← h_post]
+        exact AddInstruction_Spec_transition_postState program memory _ _ (h_step_specs i) h_enabled
       · -- MUL bundle contributed
         obtain ⟨i, h_enabled, h_pre, h_post⟩ := bundleEdgeCount_pos_implies_exists
           inputs.bundledInputs.mulInputs mulPostState (s1, s2) h_mul
         obtain ⟨stepAdds, h_step_specs, _⟩ := h_mul_bundle
-        have h_spec_i := h_step_specs i
-        obtain ⟨postState, h_trans, _⟩ := MulInstruction_Spec_implies_transition
-          program memory inputs.bundledInputs.mulInputs[i] (stepAdds i) h_spec_i h_enabled
-        simp only [IsValidTransition]
-        have h_pre' : inputs.bundledInputs.mulInputs[i].preState = s1 := h_pre
-        rw [← h_pre']
-        simp only [mulPostState] at h_post
-        rw [h_trans]
-        congr 1
-        -- Need to show s2 = postState
-        have h_struct : femtoCairoMachineTransition program memory inputs.bundledInputs.mulInputs[i].preState =
-                        some { pc := inputs.bundledInputs.mulInputs[i].preState.pc + 4,
-                               ap := inputs.bundledInputs.mulInputs[i].preState.ap,
-                               fp := inputs.bundledInputs.mulInputs[i].preState.fp } := by
-          have h_spec_unfolded := h_spec_i
-          simp only [MulInstruction.Spec, h_enabled, ite_true] at h_spec_unfolded
-          split at h_spec_unfolded
-          case h_2 => exact h_spec_unfolded.elim
-          case h_1 rawInstr h_fetch =>
-            split at h_spec_unfolded
-            case h_2 => exact h_spec_unfolded.elim
-            case h_1 instrType mode1 mode2 mode3 h_decode =>
-              split at h_spec_unfolded
-              case isTrue h_mul_instr =>
-                split at h_spec_unfolded
-                case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
-                  simp only [femtoCairoMachineTransition, h_fetch, h_decode, h_mem1, h_mem2, h_mem3,
-                    computeNextState, h_mul_instr, h_spec_unfolded.1, ite_true,
-                    Option.bind_eq_bind, Option.bind_some]
-                all_goals exact h_spec_unfolded.elim
-              case isFalse => exact h_spec_unfolded.elim
-        have h_postState_eq : postState = { pc := inputs.bundledInputs.mulInputs[i].preState.pc + 4,
-                                            ap := inputs.bundledInputs.mulInputs[i].preState.ap,
-                                            fp := inputs.bundledInputs.mulInputs[i].preState.fp } := by
-          have h_eq := h_trans.symm.trans h_struct
-          exact Option.some.inj h_eq
-        rw [h_postState_eq]
-        exact h_post
+        simp only [IsValidTransition] at *
+        rw [← h_pre, ← h_post]
+        exact MulInstruction_Spec_transition_postState program memory _ _ (h_step_specs i) h_enabled
     · -- StoreState bundle contributed
       obtain ⟨i, h_enabled, h_pre, h_post⟩ := bundleEdgeCount_pos_implies_exists
         inputs.bundledInputs.storeStateInputs storeStatePostState (s1, s2) h_store
       obtain ⟨stepAdds, h_step_specs, _⟩ := h_store_bundle
-      have h_spec_i := h_step_specs i
-      obtain ⟨postState, h_trans, _⟩ := StoreStateInstruction_Spec_implies_transition
-        program memory inputs.bundledInputs.storeStateInputs[i] (stepAdds i) h_spec_i h_enabled
-      simp only [IsValidTransition]
-      have h_pre' : inputs.bundledInputs.storeStateInputs[i].preState = s1 := h_pre
-      rw [← h_pre']
-      simp only [storeStatePostState] at h_post
-      rw [h_trans]
-      congr 1
-      -- Need to show s2 = postState
-      have h_struct : femtoCairoMachineTransition program memory inputs.bundledInputs.storeStateInputs[i].preState =
-                      some { pc := inputs.bundledInputs.storeStateInputs[i].preState.pc + 4,
-                             ap := inputs.bundledInputs.storeStateInputs[i].preState.ap,
-                             fp := inputs.bundledInputs.storeStateInputs[i].preState.fp } := by
-        have h_spec_unfolded := h_spec_i
-        simp only [StoreStateInstruction.Spec, h_enabled, ite_true] at h_spec_unfolded
-        split at h_spec_unfolded
-        case h_2 => exact h_spec_unfolded.elim
-        case h_1 rawInstr h_fetch =>
-          split at h_spec_unfolded
-          case h_2 => exact h_spec_unfolded.elim
-          case h_1 instrType mode1 mode2 mode3 h_decode =>
-            split at h_spec_unfolded
-            case isTrue h_store_instr =>
-              split at h_spec_unfolded
-              case h_1 v1 v2 v3 h_mem1 h_mem2 h_mem3 =>
-                obtain ⟨h_v1_pc, h_v2_ap, h_v3_fp, _⟩ := h_spec_unfolded
-                simp only [femtoCairoMachineTransition, h_fetch, h_decode, h_mem1, h_mem2, h_mem3,
-                  computeNextState, h_store_instr, h_v1_pc, h_v2_ap, h_v3_fp, and_self, ite_true,
-                  Option.bind_eq_bind, Option.bind_some]
-              all_goals exact h_spec_unfolded.elim
-            case isFalse => exact h_spec_unfolded.elim
-      have h_postState_eq : postState = { pc := inputs.bundledInputs.storeStateInputs[i].preState.pc + 4,
-                                          ap := inputs.bundledInputs.storeStateInputs[i].preState.ap,
-                                          fp := inputs.bundledInputs.storeStateInputs[i].preState.fp } := by
-        have h_eq := h_trans.symm.trans h_struct
-        exact Option.some.inj h_eq
-      rw [h_postState_eq]
-      exact h_post
+      simp only [IsValidTransition] at *
+      rw [← h_pre, ← h_post]
+      exact StoreStateInstruction_Spec_transition_postState program memory _ _ (h_step_specs i) h_enabled
   · -- LoadState bundle contributed
-    -- With the fixed loadStatePostState that uses femtoCairoMachineTransition,
-    -- this case is now straightforward.
     obtain ⟨i, h_enabled, h_pre, h_post⟩ := bundleEdgeCount_pos_implies_exists
       inputs.bundledInputs.loadStateInputs (loadStatePostState program memory) (s1, s2) h_load
-    simp only [IsValidTransition]
-    have h_pre' : inputs.bundledInputs.loadStateInputs[i].preState = s1 := h_pre
-    rw [← h_pre']
-    -- h_post : loadStatePostState program memory preState = s2
-    -- loadStatePostState is defined as matching on femtoCairoMachineTransition
-    -- When the transition succeeds (which it does for enabled valid instructions),
-    -- loadStatePostState returns the post state.
-    -- We need: femtoCairoMachineTransition program memory preState = some s2
-    simp only [loadStatePostState] at h_post
-    -- h_post now shows the result of the match on femtoCairoMachineTransition
-    -- If it matched some postState, then h_post : postState = s2
-    -- And femtoCairoMachineTransition returns some postState
-    -- So femtoCairoMachineTransition = some s2
-    split at h_post
-    case h_1 postState h_trans =>
-      -- h_trans : femtoCairoMachineTransition ... = some postState
-      -- h_post : postState = s2
-      rw [h_trans, h_post]
-    case h_2 h_none =>
-      -- h_none : femtoCairoMachineTransition ... = none
-      -- But we know from the spec that the transition succeeds for enabled instructions
-      -- This case is contradictory
-      obtain ⟨stepAdds, h_step_specs, _⟩ := h_load_bundle
-      have h_spec_i := h_step_specs i
-      obtain ⟨postState, h_trans, _⟩ := LoadStateInstruction_Spec_implies_transition
-        program memory inputs.bundledInputs.loadStateInputs[i] (stepAdds i) h_spec_i h_enabled
-      -- h_trans : femtoCairoMachineTransition ... = some postState
-      -- h_none : femtoCairoMachineTransition ... = none
-      rw [h_trans] at h_none
-      exact Option.noConfusion h_none
+    obtain ⟨stepAdds, h_step_specs, _⟩ := h_load_bundle
+    simp only [IsValidTransition] at *
+    rw [← h_pre, ← h_post]
+    exact LoadStateInstruction_Spec_transition_postState program memory _ _ (h_step_specs i) h_enabled
 
 /--
 The main theorem: If ExecutionBundle.Spec holds with balanced adds, there exists a valid execution.
