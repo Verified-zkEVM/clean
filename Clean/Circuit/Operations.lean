@@ -140,6 +140,26 @@ theorem toFinsupp_eq_of_eq [DecidableEq F] {a b : InteractionDelta F} (h : a = b
 theorem toFinsupp_zero_of_eq_zero [DecidableEq F] {a : InteractionDelta F} (h : a = 0) :
     a.toFinsupp = (0 : InteractionDelta F).toFinsupp := by rw [h]
 
+/-- Relates a foldl over List.finRange to a Finset.sum at the toFinsupp level.
+    This is useful for proving localAdds_eq when localAdds is defined using foldl. -/
+theorem toFinsupp_foldl_finRange [DecidableEq F] {n : ℕ} (f : Fin n → InteractionDelta F) :
+    ((List.finRange n).foldl (fun acc i => acc + f i) 0).toFinsupp =
+    ∑ i : Fin n, (f i).toFinsupp := by
+  induction n with
+  | zero =>
+    simp only [List.finRange_zero, List.foldl_nil, Finset.univ_eq_empty, Finset.sum_empty]
+    rfl
+  | succ n ih =>
+    -- Use the _last variant: finRange (n+1) = map castSucc (finRange n) ++ [last n]
+    rw [List.finRange_succ_last, List.foldl_append, List.foldl_map, List.foldl_cons, List.foldl_nil]
+    -- Show that foldl.toFinsupp = sum for the first n elements
+    have ih' : ((List.finRange n).foldl (fun acc i => acc + f (Fin.castSucc i)) 0).toFinsupp =
+        ∑ i : Fin n, (f (Fin.castSucc i)).toFinsupp := by
+      have := ih (f ∘ Fin.castSucc)
+      simp only [Function.comp_def] at this
+      exact this
+    rw [toFinsupp_add, ih', Fin.sum_univ_castSucc]
+
 end InteractionDelta
 
 /--

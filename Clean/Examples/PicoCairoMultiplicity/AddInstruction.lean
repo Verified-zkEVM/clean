@@ -22,6 +22,7 @@ open Examples.FemtoCairo.Spec
 open Examples.PicoCairoMultiplicity.Types
 open Examples.PicoCairoMultiplicity.Helpers
 open Operations (collectAdds collectAdds_flatten collectAdds_ofFn_flatten)
+open Circuit (collectAdds_forEach_foldl)
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -358,16 +359,28 @@ def elaborated
       InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
       InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
     ) 0
-  localAdds_eq := by
-    intros inputs env offset
-    -- The proof requires showing collectAdds over forEach equals the foldl of per-step localAdds
-    -- Each step's localAdds_eq shows its contribution matches
-    -- Due to elaboration complexity (timeouts), we leave this as sorry
-    -- The mathematical correctness follows from:
-    -- 1. Circuit.ForM.operations_eq decomposes forEach to List.ofFn
-    -- 2. Operations.collectAdds_ofFn_flatten converts to foldl
-    -- 3. Each step's localAdds_eq shows the per-step equality
-    sorry
+  localAdds_eq inputs env offset := by
+    -- Unfold main to expose forEach
+    simp only [main]
+    -- Use collectAdds_forEach_foldl to rewrite LHS
+    rw [collectAdds_forEach_foldl]
+    -- Convert both foldls to sums using toFinsupp_foldl_finRange
+    rw [InteractionDelta.toFinsupp_foldl_finRange]
+    simp only [add_assoc]
+    rw [InteractionDelta.toFinsupp_foldl_finRange]
+    -- Now prove term-by-term equality
+    apply Finset.sum_congr rfl
+    intro i _
+    -- Unfold stepBody and localLength
+    simp only [stepBody, Circuit.ConstantLength.localLength, stepBody_constantLength]
+    -- Use AddInstruction.elaborated.localAdds_eq
+    have h_step := (AddInstruction.elaborated program h_programSize memory h_memorySize).localAdds_eq
+      inputs[i] env (offset + ↑i * 27)
+    rw [Circuit.operations] at h_step
+    rw [h_step]
+    -- The LHS is now AddInstruction.elaborated.localAdds which equals the RHS by definition
+    simp only [ElaboratedCircuit.localAdds, AddInstruction.elaborated, circuit_norm]
+    rfl
   subcircuitsConsistent := by
     intros inputs offset
     rw [Operations.SubcircuitsConsistent, main, Circuit.forEach.forAll]
