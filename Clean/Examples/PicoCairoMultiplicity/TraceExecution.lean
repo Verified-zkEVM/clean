@@ -835,6 +835,94 @@ def totalCapacity (capacities : InstructionCapacities) : ℕ :=
 /-! ## Key structural lemma: multiplicity equals emission + flow -/
 
 /--
+For a single instruction with spec, its contribution to multiplicity at state s is:
+- -1 if enabled and preState = s
+- +1 if enabled and postState = s
+- 0 otherwise
+-/
+lemma single_instruction_multiplicity_contribution
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (input : InstructionStepInput (F p))
+    (adds : InteractionDelta (F p))
+    (postStateFn : State (F p) → State (F p))
+    (h_spec : adds = if input.enabled = 1 then
+                       InteractionDelta.single (stateToNamedList input.preState) (-1) +
+                       InteractionDelta.single (stateToNamedList (postStateFn input.preState)) 1
+                     else 0)
+    (s : State (F p)) :
+    adds.toFinsupp (stateToNamedList s) =
+      (if input.enabled = 1 ∧ postStateFn input.preState = s then 1 else 0) -
+      (if input.enabled = 1 ∧ input.preState = s then 1 else 0) := by
+  rw [h_spec]
+  by_cases h_enabled : input.enabled = 1
+  · simp only [h_enabled, ↓reduceIte]
+    rw [InteractionDelta.toFinsupp_add, Finsupp.add_apply,
+        InteractionDelta.toFinsupp_single, InteractionDelta.toFinsupp_single]
+    by_cases h_pre : input.preState = s
+    · -- pre = s
+      subst h_pre
+      by_cases h_post : postStateFn input.preState = input.preState
+      · -- both pre and post are s
+        rw [h_post]
+        simp only [true_and, ↓reduceIte, Finsupp.single_eq_same]
+        ring
+      · -- pre = s, post ≠ s
+        have h_ne : stateToNamedList (postStateFn input.preState) ≠ stateToNamedList input.preState := by
+          intro heq
+          apply h_post
+          exact stateToNamedList_injective heq
+        simp only [true_and, h_post, eq_self_iff_true, ↓reduceIte,
+          Finsupp.single_eq_same, Finsupp.single_eq_of_ne (Ne.symm h_ne)]
+        ring
+    · -- pre ≠ s
+      by_cases h_post : postStateFn input.preState = s
+      · -- pre ≠ s, post = s
+        have h_ne : stateToNamedList input.preState ≠ stateToNamedList s := by
+          intro heq
+          apply h_pre
+          exact stateToNamedList_injective heq
+        rw [h_post]
+        simp only [h_pre, false_and, ↓reduceIte, sub_zero, true_and,
+          Finsupp.single_eq_same, Finsupp.single_eq_of_ne (Ne.symm h_ne), zero_add]
+      · -- neither pre nor post is s
+        have h_ne_pre : stateToNamedList input.preState ≠ stateToNamedList s := by
+          intro heq; apply h_pre; exact stateToNamedList_injective heq
+        have h_ne_post : stateToNamedList (postStateFn input.preState) ≠ stateToNamedList s := by
+          intro heq; apply h_post; exact stateToNamedList_injective heq
+        simp only [h_pre, false_and, ↓reduceIte, sub_zero, h_post,
+          Finsupp.single_eq_of_ne (Ne.symm h_ne_post), Finsupp.single_eq_of_ne (Ne.symm h_ne_pre),
+          add_zero, sub_self]
+  · simp only [h_enabled, ↓reduceIte, false_and, InteractionDelta.toFinsupp_zero,
+      Finsupp.zero_apply, sub_zero]
+
+/--
+For a bundle of instructions satisfying Bundle.Spec, the total multiplicity contribution
+at state s equals countIncoming - countOutgoing.
+-/
+lemma bundle_multiplicity_contribution
+    {n : ℕ}
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (inputs : Vector (InstructionStepInput (F p)) n)
+    (adds : InteractionDelta (F p))
+    (postStateFn : State (F p) → State (F p))
+    (h_adds : adds.toFinsupp = ∑ i : Fin n,
+        (if inputs[i].enabled = 1 then
+           InteractionDelta.single (stateToNamedList inputs[i].preState) (-1) +
+           InteractionDelta.single (stateToNamedList (postStateFn inputs[i].preState)) 1
+         else 0).toFinsupp)
+    (s : State (F p)) :
+    adds.toFinsupp (stateToNamedList s) =
+      (↑(countIncoming inputs postStateFn s) : F p) - ↑(countOutgoing inputs postStateFn s) := by
+  rw [h_adds]
+  simp only [Finsupp.finset_sum_apply]
+  -- Convert sum over Fin n to sum over inputs.toList
+  -- Each instruction contributes: (if enabled ∧ postState=s then 1 else 0) - (if enabled ∧ preState=s then 1 else 0)
+  -- Summing these gives: countIncoming - countOutgoing
+  sorry
+
+/--
 For any state s, the multiplicity in adds.toFinsupp equals:
   emission(s) + incoming_edges(s) - outgoing_edges(s)
 
