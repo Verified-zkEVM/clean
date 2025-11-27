@@ -202,13 +202,42 @@ def circuit
   Assumptions := Assumptions capacities (programSize := programSize)
   Spec := Spec capacities program memory
   soundness := by
-    -- The soundness proof decomposes each bundle's constraints using bind_soundness,
-    -- then applies each bundle's soundness to get the specs.
-    -- The main technical challenge is matching the List.foldl expressions:
-    -- - The hypothesis uses acc ++ (x ++ y) form
-    -- - The goal uses acc + x + y form (which unfolds to acc ++ x ++ y)
-    -- These are equal by List.append_assoc, but the proof times out due to term size.
-    sorry
+    circuit_proof_start
+    -- Extract eval equalities from h_input
+    have h_eval_add : eval env input_var.addInputs = input.addInputs := by
+      have := congrArg BundledInstructionInputs.addInputs h_input; simp at this; exact this
+    have h_eval_mul : eval env input_var.mulInputs = input.mulInputs := by
+      have := congrArg BundledInstructionInputs.mulInputs h_input; simp at this; exact this
+    have h_eval_store : eval env input_var.storeStateInputs = input.storeStateInputs := by
+      have := congrArg BundledInstructionInputs.storeStateInputs h_input; simp at this; exact this
+    have h_eval_load : eval env input_var.loadStateInputs = input.loadStateInputs := by
+      have := congrArg BundledInstructionInputs.loadStateInputs h_input; simp at this; exact this
+    -- Simplify h_holds to convert .circuit.Assumptions to Bundle.Assumptions etc
+    -- and ElaboratedCircuit.localLength to capacity * 27
+    simp only [AddInstruction.Bundle.circuit, AddInstruction.Bundle.elaborated,
+      MulInstruction.Bundle.circuit, MulInstruction.Bundle.elaborated,
+      StoreStateInstruction.Bundle.circuit, StoreStateInstruction.Bundle.elaborated,
+      LoadStateInstruction.Bundle.circuit, LoadStateInstruction.Bundle.elaborated,
+      ElaboratedCircuit.localLength] at h_holds
+    -- Now apply eval equalities to h_holds
+    rw [h_eval_add, h_eval_mul, h_eval_store, h_eval_load] at h_holds
+    -- Extract the four implications from h_holds
+    obtain ⟨h_add_impl, h_mul_impl, h_store_impl, h_load_impl⟩ := h_holds
+    -- Extract the four assumptions from h_assumptions
+    obtain ⟨h_assump_add, h_assump_mul, h_assump_store, h_assump_load⟩ := h_assumptions
+    -- Apply each implication with its corresponding assumption to get the Specs
+    have h_add_spec := h_add_impl h_assump_add
+    have h_mul_spec := h_mul_impl h_assump_mul
+    have h_store_spec := h_store_impl h_assump_store
+    have h_load_spec := h_load_impl h_assump_load
+    -- Simplify goal to use the same localAdds expressions
+    simp only [AddInstruction.Bundle.elaborated, MulInstruction.Bundle.elaborated,
+      StoreStateInstruction.Bundle.elaborated, LoadStateInstruction.Bundle.elaborated,
+      ElaboratedCircuit.localAdds] at *
+    -- Now provide the witnesses and prove the equality
+    refine ⟨_, _, _, _, h_add_spec, h_mul_spec, h_store_spec, h_load_spec, ?_⟩
+    -- LHS and RHS are now syntactically equal
+    rfl
   completeness := by
     sorry
 
