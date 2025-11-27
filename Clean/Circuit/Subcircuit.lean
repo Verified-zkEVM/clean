@@ -227,7 +227,7 @@ def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChang
       have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
 
       apply constraintsHold_toFlat_iff.mpr
-      exact can_replace_completeness h_consistent h_env' h_holds
+      apply can_replace_completeness h_consistent h_env' h_holds
 
     imply_usesLocalWitnesses := by intros; exact trivial
 

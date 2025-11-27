@@ -94,7 +94,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   let out <== bits[127]
   return out
 
-def elaborated (c : ℕ) : ElaboratedCircuit (F p) (fields 254) field where
+def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1
   output _ i0 := varFromOffset field (i0 + 127 + 1 + 135)
@@ -104,9 +104,6 @@ def elaborated (c : ℕ) : ElaboratedCircuit (F p) (fields 254) field where
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
     simp only [Operations.collectAdds, circuit_norm]
-
-def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
-  elaborated := elaborated c
 
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1

@@ -128,11 +128,12 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
           fieldFromBits output + aux * (2^n : F p)
 
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main]
-    -- The goal is to show collectAdds returns []
-    -- We have foldlRange generating equality constraints, and two final equality constraints
-    -- All Gadgets.Equality subcircuits have localAdds = []
-    sorry
+    simp only [circuit_norm, main, Operations.collectAdds_append, Operations.collectAdds,
+      FormalAssertion.toSubcircuit_localAdds, InteractionDelta.zero_add']
+    -- Handle the foldlRange part - all subcircuits have localAdds = 0
+    rw [Circuit.collectAdds_foldlRange' _ _ _ _ _ (by intros; simp only [Operations.collectAdds,
+      FormalAssertion.toSubcircuit_localAdds, InteractionDelta.zero_add'])]
+    rfl
 
   soundness := by
     sorry
