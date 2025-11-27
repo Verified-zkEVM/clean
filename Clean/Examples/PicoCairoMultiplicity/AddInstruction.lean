@@ -420,26 +420,51 @@ def circuit
     intro offset env inputs_var inputs h_eval h_assumptions h_holds
     simp only [elaborated, main] at h_holds
     rw [Circuit.forEach.soundness] at h_holds
-    -- Define stepAdds inline
-    use fun i =>
-      let input := inputs_var[i]
-      let preState := eval env input.preState
-      let postState : State (F p) := { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
-      let enabled := input.enabled.eval env
-      InteractionDelta.single ⟨"state", [preState.pc, preState.ap, preState.fp]⟩ (enabled * (-1)) +
-      InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
+    -- Define stepAdds using the circuit's localAdds
+    let stepCircuit := AddInstruction.circuit program h_programSize memory h_memorySize
+    use fun i => stepCircuit.localAdds inputs_var[i] env (offset + i * 27)
     constructor
     · -- Each step satisfies AddInstruction.Spec
-      -- This would apply AddInstruction.circuit.soundness for each i
-      -- but causes elaboration timeouts
       intro i
-      sorry
+      -- Get constraints for step i
+      have h_step := h_holds i
+      simp only [stepBody, assertionChangingMultiset, circuit_norm] at h_step
+      -- h_step : Assumptions {...} → Spec {...} (localAdds ...)
+      -- The record {...} is definitionally equal to eval env inputs_var[i]
+      -- We have h_eval : eval env inputs_var = inputs, so (eval env inputs_var)[i] = inputs[i]
+      -- And eval env inputs_var[i] = (eval env inputs_var)[i] by eval_vector_eq_get
+      have h_eval_i : eval env inputs_var[i] = inputs[i] :=
+        eval_vector_eq_get env inputs_var inputs h_eval i i.isLt
+      -- The assumption and spec in h_step match when we substitute
+      -- The record { enabled := ..., preState := ... } expands from eval, use simp to normalize
+      simp only [show (AddInstruction.circuit program h_programSize memory h_memorySize).Assumptions =
+        AddInstruction.Assumptions from rfl,
+        show (AddInstruction.circuit program h_programSize memory h_memorySize).Spec =
+        AddInstruction.Spec program memory from rfl] at h_step
+      -- The record in h_step is equal to eval env inputs_var[i], which equals inputs[i] by h_eval_i
+      -- First show the record equals eval env inputs_var[i]
+      have h_record : { enabled := Expression.eval env (Vector.get inputs_var ⟨↑i, i.isLt⟩).enabled,
+                        preState := eval env (Vector.get inputs_var ⟨↑i, i.isLt⟩).preState :
+                        InstructionStepInput (F p) } = eval env inputs_var[i] := by
+        simp only [eval, toVars, toElements, fromElements, circuit_norm]
+      rw [h_record, h_eval_i] at h_step
+      -- Now h_step gives us inputs[i] → Spec for inputs[i]
+      -- The difference between inputs_var[↑i] and inputs_var[i] is just the coercion (defeq)
+      -- Also localLength unit default = 27
+      -- Apply with assumptions
+      -- h_assumptions : Assumptions capacity inputs = ∀ j, AddInstruction.Assumptions inputs[j]
+      have h_assump : AddInstruction.Assumptions inputs[i] := h_assumptions i
+      convert h_step h_assump using 2
     · -- The adds sum correctly
       simp only [elaborated]
       apply List.foldl_ext
       intro acc i _
-      simp only [circuit_norm]
+      simp only [stepCircuit, AddInstruction.circuit, circuit_norm]
       rfl
+  -- Completeness is out of scope for the current work.
+  -- The proof would require showing that if Spec holds for some stepAdds (from the existential
+  -- in Bundle.Spec), then the circuit's actual localAdds also satisfies it. Since
+  -- AddInstruction.Spec is deterministic in adds, these must coincide when assumptions hold.
   completeness := by sorry
 
 end Bundle
