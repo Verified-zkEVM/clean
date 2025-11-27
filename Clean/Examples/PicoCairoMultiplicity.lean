@@ -9,6 +9,7 @@ import Clean.Examples.PicoCairoMultiplicity.MulInstruction
 import Clean.Examples.PicoCairoMultiplicity.LoadStateInstruction
 import Clean.Examples.PicoCairoMultiplicity.StoreStateInstruction
 import Clean.Examples.PicoCairoMultiplicity.ExecutionBundle
+import Clean.Examples.PicoCairoMultiplicity.TraceExecution
 
 /-!
 # PicoCairoMultiplicity
