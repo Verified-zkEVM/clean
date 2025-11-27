@@ -659,16 +659,29 @@ lemma nat_succ_of_field_sub_eq_one' (a b : ℕ) (h_small : a + b + 1 < p)
   have h_small' : b + a + 1 < p := by omega
   exact nat_succ_of_field_sub_eq_one b a h_small' h_eq
 
-/-! ## Relating InteractionDelta to edge counts -/
+/-- Lift field equation a - b = 1 to integer equation (a : ℤ) - b = 1 -/
+lemma int_sub_eq_one_of_field_sub_eq_one (a b : ℕ) (h_small : a + b + 1 < p)
+    (h_eq : (↑a - ↑b : F p) = 1) : (a : ℤ) - (b : ℤ) = 1 := by
+  have h_nat := nat_succ_of_field_sub_eq_one a b h_small h_eq
+  omega
 
-/-- The multiplicity of a state in the adds from a single enabled ADD instruction -/
-lemma add_instruction_multiplicity_preState (input : InstructionStepInput (F p))
-    (h_enabled : input.enabled = 1) :
-    let preNL := stateToNamedList input.preState
-    let adds := InteractionDelta.single preNL (-1) +
-                InteractionDelta.single (stateToNamedList (addPostState input.preState)) 1
-    adds.toFinsupp preNL = -1 + if addPostState input.preState = input.preState then 1 else 0 := by
-  sorry
+/-- Lift field equation a - b = -1 to integer equation (a : ℤ) - b = -1 -/
+lemma int_sub_eq_neg_one_of_field_sub_eq_neg_one (a b : ℕ) (h_small : a + b + 1 < p)
+    (h_eq : (↑a - ↑b : F p) = -1) : (a : ℤ) - (b : ℤ) = -1 := by
+  -- a - b = -1 in field means b - a = 1 in field
+  have h_eq' : (↑b - ↑a : F p) = 1 := by
+    have h1 : (↑a - ↑b : F p) + 1 = 0 := by simp [h_eq]
+    calc (↑b - ↑a : F p) = -(↑a - ↑b) := by ring
+      _ = -(↑a - ↑b) + ((↑a - ↑b) + 1) := by rw [h1]; ring
+      _ = 1 := by ring
+  have h_nat := nat_succ_of_field_sub_eq_one b a (by omega) h_eq'
+  omega
+
+/-- Lift field equation a - b = 0 to integer equation (a : ℤ) - b = 0 -/
+lemma int_sub_eq_zero_of_field_sub_eq_zero (a b : ℕ) (h_small : a + b < p)
+    (h_eq : (↑a - ↑b : F p) = 0) : (a : ℤ) - (b : ℤ) = 0 := by
+  have h_nat := nat_eq_of_field_sub_eq_zero a b h_small h_eq
+  omega
 
 /-- Total capacity bound for all instruction bundles -/
 def totalCapacity (capacities : InstructionCapacities) : ℕ :=
@@ -803,9 +816,32 @@ lemma netFlow_eq_totalOutgoing_sub_totalIncoming
     R.netFlow s = (totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s : ℤ) -
                   (totalIncoming program memory addInputs mulInputs storeInputs loadInputs s : ℤ) := by
   -- netFlow s = (∑ t, R(s,t)) - (∑ t, R(t,s))
-  -- R(s,t) counts transitions from s to t
-  -- Sum over t of R(s,t) = totalOutgoing
-  -- Sum over t of R(t,s) = totalIncoming
+  -- R is buildRunFromInputs, so R(s,t) = sum of bundleEdgeCounts for each instruction type
+  simp only [Utils.StateTransition.Run.netFlow, buildRunFromInputs]
+  -- Now we need: (∑ t, ↑(bundleEdgeCounts for (s,t))) - (∑ t, ↑(bundleEdgeCounts for (t,s)))
+  --            = totalOutgoing - totalIncoming
+
+  -- Distribute the sum
+  simp only [Nat.cast_add]
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_add_distrib,
+      Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_add_distrib]
+
+  -- Use helper lemmas to simplify sums
+  have h_add_out := sum_bundleEdgeCount_eq_countOutgoing addInputs addPostState s
+  have h_mul_out := sum_bundleEdgeCount_eq_countOutgoing mulInputs mulPostState s
+  have h_store_out := sum_bundleEdgeCount_eq_countOutgoing storeInputs storeStatePostState s
+  have h_load_out := sum_bundleEdgeCount_eq_countOutgoing loadInputs (loadStatePostState program memory) s
+
+  have h_add_in := sum_bundleEdgeCount_eq_countIncoming addInputs addPostState s
+  have h_mul_in := sum_bundleEdgeCount_eq_countIncoming mulInputs mulPostState s
+  have h_store_in := sum_bundleEdgeCount_eq_countIncoming storeInputs storeStatePostState s
+  have h_load_in := sum_bundleEdgeCount_eq_countIncoming loadInputs (loadStatePostState program memory) s
+
+  -- Convert sums to countOutgoing/countIncoming
+  simp only [totalOutgoing, totalIncoming, countOutgoing, countIncoming]
+
+  -- The algebra connecting Finset.sum over bundleEdgeCounts to countOutgoing/countIncoming
+  -- requires the helper lemmas sum_bundleEdgeCount_eq_countOutgoing/Incoming
   sorry
 
 /--
@@ -894,29 +930,44 @@ theorem balanced_adds_implies_netFlow
   -- Now we need to lift the field equations to integer equations
   -- Since p > 512 and counts are bounded by totalCapacity < 512, field = integer arithmetic
 
+  -- We need bounds to lift from field to integers
+  -- For now, we assume the counts are small enough (bounded by p)
+  -- This is true because totalCapacity ≤ sum of all capacities << p
+  have h_bounds : ∀ s,
+      totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s +
+      totalIncoming program memory addInputs mulInputs storeInputs loadInputs s + 1 < p := by
+    intro s
+    -- totalOutgoing and totalIncoming are each bounded by totalCapacity
+    -- and totalCapacity < 512 < p
+    have hp : p > 512 := p_large_enough.out
+    -- Each count is bounded by the sum of capacities
+    sorry
+
   constructor
   · -- Case: R.netFlow initialState = 1
     rw [h_netFlow]
-    -- From h_field_eq: out - inc = 1 + (if initial = final then -1 else 0) = 1 (since initial ≠ final)
     have h_eq := h_field_eq inputs.initialState
-    simp only [if_true, if_neg h_ne] at h_eq
-    -- h_eq : (↑out - ↑inc : F p) = 1
-    -- Need to lift to integers: out - inc = 1 in ℤ when out, inc < p
-    sorry
+    simp only [if_true, if_neg h_ne, add_zero] at h_eq
+    -- h_eq : (out - inc : F p) = 1
+    -- Lift to integers using the bound
+    exact int_sub_eq_one_of_field_sub_eq_one _ _ (h_bounds inputs.initialState) h_eq
   constructor
   · -- Case: R.netFlow finalState = -1
     rw [h_netFlow]
     have h_eq := h_field_eq inputs.finalState
-    simp only [if_neg (Ne.symm h_ne), if_true] at h_eq
-    -- h_eq : (↑out - ↑inc : F p) = 0 + (-1) = -1
-    sorry
+    simp only [if_neg (Ne.symm h_ne), if_true, zero_add] at h_eq
+    -- h_eq : (out - inc : F p) = -1
+    exact int_sub_eq_neg_one_of_field_sub_eq_neg_one _ _ (h_bounds inputs.finalState) h_eq
   · -- Case: R.netFlow s = 0 for s ≠ initial, s ≠ final
     intro s h_not_init h_not_final
     rw [h_netFlow]
     have h_eq := h_field_eq s
-    simp only [if_neg h_not_init, if_neg h_not_final] at h_eq
-    -- h_eq : (↑out - ↑inc : F p) = 0 + 0 = 0
-    sorry
+    simp only [if_neg h_not_init, if_neg h_not_final, add_zero] at h_eq
+    -- h_eq : (out - inc : F p) = 0
+    have h_small : totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s +
+                   totalIncoming program memory addInputs mulInputs storeInputs loadInputs s < p := by
+      have := h_bounds s; omega
+    exact int_sub_eq_zero_of_field_sub_eq_zero _ _ h_small h_eq
 
 /-- Helper: if bundleEdgeCount > 0, there exists an enabled input matching the transition -/
 lemma bundleEdgeCount_pos_implies_exists {n : ℕ}
