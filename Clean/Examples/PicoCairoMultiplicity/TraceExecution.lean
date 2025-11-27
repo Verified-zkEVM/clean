@@ -834,6 +834,10 @@ def totalCapacity (capacities : InstructionCapacities) : ℕ :=
 
 /-! ## Key structural lemma: multiplicity equals emission + flow -/
 
+/-- Fold raw NamedList back to stateToNamedList. -/
+lemma stateToNamedList_eq (s : State (F p)) :
+    (⟨"state", [s.pc, s.ap, s.fp]⟩ : NamedList (F p)) = stateToNamedList s := rfl
+
 /-- Helper: If two states are different, their NamedList representations are different. -/
 lemma stateToNamedList_ne_of_ne {s1 s2 : State (F p)} (h : s1 ≠ s2) :
     stateToNamedList s1 ≠ stateToNamedList s2 := fun heq => h (stateToNamedList_injective heq)
@@ -1347,78 +1351,32 @@ lemma multiplicity_eq_emission_plus_flow
   · -- s = initialState
     by_cases h_final : s = inputs.finalState
     · -- Case 1: s = initialState AND s = finalState
-      rw [h_init]
-      have h_init_eq_final : inputs.initialState = inputs.finalState := by rw [← h_init]; exact h_final
-      rw [h_init_eq_final]
-      simp only [stateToNamedList, Finsupp.single_eq_same, ↓reduceIte]
-      rw [h_init, h_init_eq_final] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
-      simp only [stateToNamedList] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      subst h_init
+      simp only [stateToNamedList_eq, h_final, Finsupp.single_eq_same, ↓reduceIte] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib ⊢
       rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
-      simp only [totalIncoming, totalOutgoing]
-      push_cast
-      ring
+      simp only [totalIncoming, totalOutgoing]; push_cast; ring
     · -- Case 2: s = initialState AND s ≠ finalState
-      rw [h_init]
-      have h_init_ne_final : inputs.initialState ≠ inputs.finalState := by rw [← h_init]; exact h_final
-      simp only [stateToNamedList, Finsupp.single_eq_same, ↓reduceIte, ne_eq, h_init_ne_final,
-        not_true_eq_false, not_false_eq_true]
-      -- The Finsupp.single for final evaluated at initial should be 0 (different keys)
-      have h_ne_keys : (⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩ : NamedList (F p)) ≠
-                       ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ := by
-        intro h_eq
-        simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
-        have h_states_eq : inputs.initialState = inputs.finalState := State.ext h_eq.1 h_eq.2.1 h_eq.2.2
-        exact h_init_ne_final h_states_eq
-      simp only [Finsupp.single_eq_of_ne h_ne_keys]
-      rw [h_init] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
-      simp only [stateToNamedList] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      subst h_init
+      have h_init_ne_final : inputs.initialState ≠ inputs.finalState := h_final
+      simp only [stateToNamedList_eq, Finsupp.single_eq_same, ↓reduceIte, ne_eq, h_init_ne_final,
+        not_false_eq_true, Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_init_ne_final)]
       rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
-      simp only [totalIncoming, totalOutgoing]
-      push_cast
-      ring
+      simp only [totalIncoming, totalOutgoing]; push_cast; ring
   · -- s ≠ initialState
     by_cases h_final : s = inputs.finalState
     · -- Case 3: s ≠ initialState AND s = finalState
-      rw [h_final]
-      have h_final_ne_init : inputs.finalState ≠ inputs.initialState := by rw [← h_final]; exact h_init
-      simp only [stateToNamedList, Finsupp.single_eq_same, ↓reduceIte, ne_eq, h_final_ne_init,
-        not_true_eq_false, not_false_eq_true]
-      -- The Finsupp.single for initial evaluated at final should be 0 (different keys)
-      have h_ne_keys : (⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ : NamedList (F p)) ≠
-                       ⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩ := by
-        intro h_eq
-        simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
-        have h_states_eq : inputs.finalState = inputs.initialState := State.ext h_eq.1 h_eq.2.1 h_eq.2.2
-        exact h_final_ne_init h_states_eq
-      rw [Finsupp.single_eq_of_ne h_ne_keys]
-      rw [h_final] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
-      simp only [stateToNamedList] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      subst h_final
+      have h_final_ne_init : inputs.finalState ≠ inputs.initialState := h_init
+      simp only [stateToNamedList_eq, Finsupp.single_eq_same, ↓reduceIte, ne_eq, h_final_ne_init,
+        not_false_eq_true, Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_final_ne_init)]
       rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
-      simp only [totalIncoming, totalOutgoing]
-      push_cast
-      ring
+      simp only [totalIncoming, totalOutgoing]; push_cast; ring
     · -- Case 4: s ≠ initialState AND s ≠ finalState
-      simp only [stateToNamedList, ↓reduceIte, ne_eq, h_init, not_true_eq_false, not_false_eq_true,
-        h_final]
-      -- Both singletons evaluate to 0 at s
-      have h_ne_init : (⟨"state", [s.pc, s.ap, s.fp]⟩ : NamedList (F p)) ≠
-                       ⟨"state", [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]⟩ := by
-        intro h_eq
-        simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
-        have h_states_eq : s = inputs.initialState := State.ext h_eq.1 h_eq.2.1 h_eq.2.2
-        exact h_init h_states_eq
-      have h_ne_final : (⟨"state", [s.pc, s.ap, s.fp]⟩ : NamedList (F p)) ≠
-                        ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ := by
-        intro h_eq
-        simp only [NamedList.mk.injEq, List.cons.injEq, and_true, true_and] at h_eq
-        have h_states_eq : s = inputs.finalState := State.ext h_eq.1 h_eq.2.1 h_eq.2.2
-        exact h_final h_states_eq
-      rw [Finsupp.single_eq_of_ne h_ne_init, Finsupp.single_eq_of_ne h_ne_final]
-      simp only [stateToNamedList] at h_add_contrib h_mul_contrib h_store_contrib h_load_contrib
+      simp only [stateToNamedList_eq, ↓reduceIte, ne_eq, h_init, not_false_eq_true, h_final,
+        Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_init),
+        Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_final)]
       rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
-      simp only [totalIncoming, totalOutgoing]
-      push_cast
-      ring
+      simp only [totalIncoming, totalOutgoing]; push_cast; ring
 
 /--
 Key consequence: when adds.toFinsupp = 0, the emission equals outgoing - incoming.
