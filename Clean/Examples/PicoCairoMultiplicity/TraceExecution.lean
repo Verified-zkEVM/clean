@@ -554,6 +554,240 @@ This translates to (when multiplicities are small enough to avoid wraparound):
 Which gives us the netFlow properties.
 -/
 
+/-! ## Helper definitions for netFlow proof -/
+
+/-- Count how many enabled inputs have preState = s -/
+def countOutgoing {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
+    (postStateFn : State (F p) → State (F p)) (s : State (F p)) : ℕ :=
+  (inputs.toList.filter (fun i => i.enabled = 1 ∧ i.preState = s)).length
+
+/-- Count how many enabled inputs have postState = s -/
+def countIncoming {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
+    (postStateFn : State (F p) → State (F p)) (s : State (F p)) : ℕ :=
+  (inputs.toList.filter (fun i => i.enabled = 1 ∧ postStateFn i.preState = s)).length
+
+/-- The total outgoing edge count for state s in the Run -/
+def totalOutgoing
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {addCap mulCap storeCap loadCap : ℕ}
+    (addInputs : Vector (InstructionStepInput (F p)) addCap)
+    (mulInputs : Vector (InstructionStepInput (F p)) mulCap)
+    (storeInputs : Vector (InstructionStepInput (F p)) storeCap)
+    (loadInputs : Vector (InstructionStepInput (F p)) loadCap)
+    (s : State (F p)) : ℕ :=
+  countOutgoing addInputs addPostState s +
+  countOutgoing mulInputs mulPostState s +
+  countOutgoing storeInputs storeStatePostState s +
+  countOutgoing loadInputs (loadStatePostState program memory) s
+
+/-- The total incoming edge count for state s in the Run -/
+def totalIncoming
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {addCap mulCap storeCap loadCap : ℕ}
+    (addInputs : Vector (InstructionStepInput (F p)) addCap)
+    (mulInputs : Vector (InstructionStepInput (F p)) mulCap)
+    (storeInputs : Vector (InstructionStepInput (F p)) storeCap)
+    (loadInputs : Vector (InstructionStepInput (F p)) loadCap)
+    (s : State (F p)) : ℕ :=
+  countIncoming addInputs addPostState s +
+  countIncoming mulInputs mulPostState s +
+  countIncoming storeInputs storeStatePostState s +
+  countIncoming loadInputs (loadStatePostState program memory) s
+
+/-- Helper lemma: sum over all target states equals total outgoing from source -/
+lemma sum_bundleEdgeCount_eq_countOutgoing {n : ℕ}
+    (inputs : Vector (InstructionStepInput (F p)) n)
+    (postStateFn : State (F p) → State (F p))
+    (s : State (F p)) :
+    ∑ t : State (F p), bundleEdgeCount inputs postStateFn (s, t) =
+    countOutgoing inputs postStateFn s := by
+  -- Each enabled input with preState=s contributes 1 to exactly one target (postStateFn preState)
+  -- The sum over all targets collects all such contributions
+  sorry
+
+/-- Helper lemma: sum over all source states equals total incoming to target -/
+lemma sum_bundleEdgeCount_eq_countIncoming {n : ℕ}
+    (inputs : Vector (InstructionStepInput (F p)) n)
+    (postStateFn : State (F p) → State (F p))
+    (s : State (F p)) :
+    ∑ t : State (F p), bundleEdgeCount inputs postStateFn (t, s) =
+    countIncoming inputs postStateFn s := by
+  -- Each enabled input with postStateFn preState = s contributes 1 to exactly one source (preState)
+  -- The sum over all sources collects all such contributions
+  sorry
+
+/-! ## Field-integer lifting lemmas -/
+
+/-- If two natural numbers have equal field representations and are small, they are equal -/
+lemma nat_eq_of_field_eq (a b : ℕ) (h_small_a : a < p) (h_small_b : b < p)
+    (h_eq : (a : F p) = (b : F p)) : a = b := by
+  have ha : ZMod.val (a : F p) = a := ZMod.val_natCast_of_lt h_small_a
+  have hb : ZMod.val (b : F p) = b := ZMod.val_natCast_of_lt h_small_b
+  rw [h_eq] at ha
+  omega
+
+/-- Field subtraction equals integer subtraction when values are small -/
+lemma field_sub_eq_int_sub (a b : ℕ) (h_small : a + b < p) :
+    (↑a - ↑b : F p) = ((a : ℤ) - (b : ℤ) : F p) := by
+  simp only [Int.cast_sub, Int.cast_natCast]
+
+/-- When a - b = 0 in field and values are small, a = b as naturals -/
+lemma nat_eq_of_field_sub_eq_zero (a b : ℕ) (h_small : a + b < p)
+    (h_eq : (↑a - ↑b : F p) = 0) : a = b := by
+  have h_field : (↑a : F p) = (↑b : F p) := by
+    have := sub_eq_zero.mp h_eq
+    exact this
+  exact nat_eq_of_field_eq a b (by omega) (by omega) h_field
+
+/-- When a - b = 1 in field and values are small, a = b + 1 -/
+lemma nat_succ_of_field_sub_eq_one (a b : ℕ) (h_small : a + b + 1 < p)
+    (h_eq : (↑a - ↑b : F p) = 1) : a = b + 1 := by
+  have h1 : (↑(b + 1) : F p) = ↑b + 1 := by simp
+  have h_field : (↑a : F p) = (↑(b + 1) : F p) := by
+    have := sub_eq_iff_eq_add.mp h_eq
+    rw [h1, add_comm]
+    exact this
+  have h_small_a : a < p := by omega
+  have h_small_b1 : b + 1 < p := by omega
+  exact nat_eq_of_field_eq a (b + 1) h_small_a h_small_b1 h_field
+
+/-- When b - a = 1 in field and values are small, b = a + 1 -/
+lemma nat_succ_of_field_sub_eq_one' (a b : ℕ) (h_small : a + b + 1 < p)
+    (h_eq : (↑b - ↑a : F p) = 1) : b = a + 1 := by
+  have h_small' : b + a + 1 < p := by omega
+  exact nat_succ_of_field_sub_eq_one b a h_small' h_eq
+
+/-! ## Relating InteractionDelta to edge counts -/
+
+/-- The multiplicity of a state in the adds from a single enabled ADD instruction -/
+lemma add_instruction_multiplicity_preState (input : InstructionStepInput (F p))
+    (h_enabled : input.enabled = 1) :
+    let preNL := stateToNamedList input.preState
+    let adds := InteractionDelta.single preNL (-1) +
+                InteractionDelta.single (stateToNamedList (addPostState input.preState)) 1
+    adds.toFinsupp preNL = -1 + if addPostState input.preState = input.preState then 1 else 0 := by
+  sorry
+
+/-- Total capacity bound for all instruction bundles -/
+def totalCapacity (capacities : InstructionCapacities) : ℕ :=
+  capacities.addCapacity + capacities.mulCapacity +
+  capacities.storeStateCapacity + capacities.loadStateCapacity
+
+/-! ## Key structural lemma: multiplicity equals emission + flow -/
+
+/--
+For any state s, the multiplicity in adds.toFinsupp equals:
+  emission(s) + incoming_edges(s) - outgoing_edges(s)
+
+where emission(s) = 1 if s = initialState, -1 if s = finalState, 0 otherwise.
+
+This is the central lemma connecting InteractionDelta to the Run structure.
+-/
+lemma multiplicity_eq_emission_plus_flow
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (inputs : ExecutionCircuitInput capacities (F p))
+    (adds : InteractionDelta (F p))
+    (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
+    (s : State (F p)) :
+    adds.toFinsupp (stateToNamedList s) =
+      (if s = inputs.initialState then 1 else 0) +
+      (↑(totalIncoming program memory
+           inputs.bundledInputs.addInputs inputs.bundledInputs.mulInputs
+           inputs.bundledInputs.storeStateInputs inputs.bundledInputs.loadStateInputs s) : F p) -
+      (↑(totalOutgoing program memory
+           inputs.bundledInputs.addInputs inputs.bundledInputs.mulInputs
+           inputs.bundledInputs.storeStateInputs inputs.bundledInputs.loadStateInputs s) : F p) +
+      (if s = inputs.finalState then -1 else 0) := by
+  -- This requires relating the Bundle.Spec to individual instruction contributions
+  -- Each enabled instruction contributes preState(-1) + postState(+1)
+  -- Sum over all enabled instructions gives: -outgoing + incoming
+  -- Plus the emission terms from initial and final states
+  sorry
+
+/--
+Key consequence: when adds.toFinsupp = 0, the emission equals outgoing - incoming.
+-/
+lemma emission_eq_flow_diff
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (inputs : ExecutionCircuitInput capacities (F p))
+    (adds : InteractionDelta (F p))
+    (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
+    (h_balanced : adds.toFinsupp = 0)
+    (s : State (F p)) :
+    let out := totalOutgoing program memory
+                 inputs.bundledInputs.addInputs inputs.bundledInputs.mulInputs
+                 inputs.bundledInputs.storeStateInputs inputs.bundledInputs.loadStateInputs s
+    let inc := totalIncoming program memory
+                 inputs.bundledInputs.addInputs inputs.bundledInputs.mulInputs
+                 inputs.bundledInputs.storeStateInputs inputs.bundledInputs.loadStateInputs s
+    (↑out - ↑inc : F p) =
+      (if s = inputs.initialState then 1 else 0) + (if s = inputs.finalState then -1 else 0) := by
+  -- From multiplicity_eq_emission_plus_flow and h_balanced:
+  --   0 = emission_init + incoming - outgoing + emission_final
+  -- Rearranging: outgoing - incoming = emission_init + emission_final
+  have h_mult := multiplicity_eq_emission_plus_flow capacities program memory inputs adds h_spec s
+  have h_zero : adds.toFinsupp (stateToNamedList s) = 0 := by
+    rw [h_balanced]
+    simp only [Finsupp.coe_zero, Pi.zero_apply]
+  rw [h_zero] at h_mult
+  -- Algebraic manipulation in field to get: out - inc = emission_init + emission_final
+  sorry
+
+/-- The total number of enabled instructions is bounded by total capacity -/
+lemma enabled_count_bounded
+    (capacities : InstructionCapacities)
+    (inputs : ExecutionCircuitInput capacities (F p)) :
+    (inputs.bundledInputs.addInputs.toList.filter (·.enabled = 1)).length +
+    (inputs.bundledInputs.mulInputs.toList.filter (·.enabled = 1)).length +
+    (inputs.bundledInputs.storeStateInputs.toList.filter (·.enabled = 1)).length +
+    (inputs.bundledInputs.loadStateInputs.toList.filter (·.enabled = 1)).length ≤
+    totalCapacity capacities := by
+  simp only [totalCapacity]
+  have h1 : (inputs.bundledInputs.addInputs.toList.filter (·.enabled = 1)).length ≤
+            inputs.bundledInputs.addInputs.toList.length :=
+    List.length_filter_le _ _
+  have h2 : (inputs.bundledInputs.mulInputs.toList.filter (·.enabled = 1)).length ≤
+            inputs.bundledInputs.mulInputs.toList.length :=
+    List.length_filter_le _ _
+  have h3 : (inputs.bundledInputs.storeStateInputs.toList.filter (·.enabled = 1)).length ≤
+            inputs.bundledInputs.storeStateInputs.toList.length :=
+    List.length_filter_le _ _
+  have h4 : (inputs.bundledInputs.loadStateInputs.toList.filter (·.enabled = 1)).length ≤
+            inputs.bundledInputs.loadStateInputs.toList.length :=
+    List.length_filter_le _ _
+  simp only [Vector.length_toList] at h1 h2 h3 h4
+  omega
+
+/-! ## Connecting Run.netFlow to totalOutgoing/totalIncoming -/
+
+/--
+The netFlow computed from buildRunFromInputs equals totalOutgoing - totalIncoming.
+This connects the Run structure to our counting functions.
+-/
+lemma netFlow_eq_totalOutgoing_sub_totalIncoming
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {addCap mulCap storeCap loadCap : ℕ}
+    (addInputs : Vector (InstructionStepInput (F p)) addCap)
+    (mulInputs : Vector (InstructionStepInput (F p)) mulCap)
+    (storeInputs : Vector (InstructionStepInput (F p)) storeCap)
+    (loadInputs : Vector (InstructionStepInput (F p)) loadCap)
+    (s : State (F p)) :
+    let R := buildRunFromInputs program memory addInputs mulInputs storeInputs loadInputs
+    R.netFlow s = (totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s : ℤ) -
+                  (totalIncoming program memory addInputs mulInputs storeInputs loadInputs s : ℤ) := by
+  -- netFlow s = (∑ t, R(s,t)) - (∑ t, R(t,s))
+  -- R(s,t) counts transitions from s to t
+  -- Sum over t of R(s,t) = totalOutgoing
+  -- Sum over t of R(t,s) = totalIncoming
+  sorry
+
 /--
 When the ExecutionBundle.Spec holds with balanced adds (toFinsupp = 0),
 the Run built from enabled instructions has the expected netFlow properties.
@@ -577,32 +811,92 @@ theorem balanced_adds_implies_netFlow
     R.netFlow inputs.initialState = 1 ∧
     R.netFlow inputs.finalState = -1 ∧
     ∀ s, s ≠ inputs.initialState → s ≠ inputs.finalState → R.netFlow s = 0 := by
-  -- This proof requires careful reasoning about:
-  -- 1. How the bundle specs decompose the adds
-  -- 2. How the balanced condition translates to netFlow
-  -- 3. The field-to-integer conversion (safe since counts are bounded by capacities)
 
-  -- The key structure from h_spec is:
-  -- adds = initial(+1) + addAdds + mulAdds + storeAdds + loadAdds + final(-1)
-  -- where each instruction adds = preState(-1) + postState(+1) when enabled, 0 otherwise
+  /-
+  Proof outline:
 
-  -- From h_balanced, the total multiplicity at each state sums to 0 in F.
-  -- This means:
-  -- - initialState: +1 (from initial) - (outgoing edges) = 0 → outgoing = 1
-  -- - finalState: -1 (from final) + (incoming edges) = 0 → incoming = 1
-  -- - other states: -(outgoing) + (incoming) = 0 → outgoing = incoming
+  From h_spec, we have:
+    adds = InteractionDelta.single initialState 1 +
+           addAdds + mulAdds + storeStateAdds + loadStateAdds +
+           InteractionDelta.single finalState (-1)
 
-  -- This matches the netFlow definition:
-  -- netFlow s = (outgoing from s) - (incoming to s)
-  --           = (outgoing from s) - (incoming to s)
+  For any state s, the multiplicity in adds.toFinsupp is:
+    adds.toFinsupp (stateToNamedList s) =
+      (if s = initialState then 1 else 0) +    -- from initial emission
+      (-outgoing_edges_from_s + incoming_edges_to_s) +  -- from instruction bundles
+      (if s = finalState then -1 else 0)       -- from final emission
 
-  -- For initial: outgoing - incoming = outgoing (since no instruction targets initial as post)
-  --              but we also have the +1 emission, so netFlow = 1
-  -- For final: outgoing - incoming = -incoming (since no instruction starts from final)
-  --            but we also have the -1 emission, so netFlow = -1
-  -- For others: outgoing = incoming, so netFlow = 0
+  where outgoing_edges_from_s = number of enabled instructions with preState = s
+        incoming_edges_to_s = number of enabled instructions with postState = s
 
-  sorry
+  This is because each enabled instruction contributes:
+    - preState with multiplicity -1 (outgoing edge)
+    - postState with multiplicity +1 (incoming edge)
+
+  From h_balanced (adds.toFinsupp = 0), for all s:
+    emission(s) + incoming - outgoing = 0  (in F p)
+
+  where emission(s) = 1 if s = initial, -1 if s = final, 0 otherwise.
+
+  Rearranging: outgoing - incoming = emission(s) (in F p)
+
+  Since p > 512 and edge counts are bounded by totalCapacity (which is << p),
+  field arithmetic equals integer arithmetic for these values.
+
+  Therefore:
+    netFlow(s) = outgoing - incoming = emission(s) as integers
+
+  Which gives the three cases we need.
+  -/
+
+  -- Define abbreviations for the inputs
+  let addInputs := inputs.bundledInputs.addInputs
+  let mulInputs := inputs.bundledInputs.mulInputs
+  let storeInputs := inputs.bundledInputs.storeStateInputs
+  let loadInputs := inputs.bundledInputs.loadStateInputs
+
+  -- Define the Run
+  let R := buildRunFromInputs program memory addInputs mulInputs storeInputs loadInputs
+
+  -- Helper: get the field equation for a state s
+  have h_field_eq : ∀ s,
+      (↑(totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s) -
+       ↑(totalIncoming program memory addInputs mulInputs storeInputs loadInputs s) : F p) =
+      (if s = inputs.initialState then 1 else 0) + (if s = inputs.finalState then -1 else 0) :=
+    emission_eq_flow_diff capacities program memory inputs adds h_spec h_balanced
+
+  -- Helper: netFlow equals totalOutgoing - totalIncoming (as integers)
+  have h_netFlow : ∀ s, R.netFlow s =
+      (totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s : ℤ) -
+      (totalIncoming program memory addInputs mulInputs storeInputs loadInputs s : ℤ) :=
+    netFlow_eq_totalOutgoing_sub_totalIncoming program memory addInputs mulInputs storeInputs loadInputs
+
+  -- Now we need to lift the field equations to integer equations
+  -- Since p > 512 and counts are bounded by totalCapacity < 512, field = integer arithmetic
+
+  constructor
+  · -- Case: R.netFlow initialState = 1
+    rw [h_netFlow]
+    -- From h_field_eq: out - inc = 1 + (if initial = final then -1 else 0) = 1 (since initial ≠ final)
+    have h_eq := h_field_eq inputs.initialState
+    simp only [if_true, if_neg h_ne] at h_eq
+    -- h_eq : (↑out - ↑inc : F p) = 1
+    -- Need to lift to integers: out - inc = 1 in ℤ when out, inc < p
+    sorry
+  constructor
+  · -- Case: R.netFlow finalState = -1
+    rw [h_netFlow]
+    have h_eq := h_field_eq inputs.finalState
+    simp only [if_neg (Ne.symm h_ne), if_true] at h_eq
+    -- h_eq : (↑out - ↑inc : F p) = 0 + (-1) = -1
+    sorry
+  · -- Case: R.netFlow s = 0 for s ≠ initial, s ≠ final
+    intro s h_not_init h_not_final
+    rw [h_netFlow]
+    have h_eq := h_field_eq s
+    simp only [if_neg h_not_init, if_neg h_not_final] at h_eq
+    -- h_eq : (↑out - ↑inc : F p) = 0 + 0 = 0
+    sorry
 
 /-- Helper: if bundleEdgeCount > 0, there exists an enabled input matching the transition -/
 lemma bundleEdgeCount_pos_implies_exists {n : ℕ}
