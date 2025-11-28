@@ -60,12 +60,14 @@ def ReadOnlyTableFromFunction
       · apply ZMod.val_injective
 }
 
+namespace decodeInstruction
+
 /--
 Specification for decoding an instruction.
 Extracted as a named definition following PR 286.
 -/
-def decodeInstructionSpec (instruction : F p) (output : DecodedInstruction (F p)) : Prop :=
-  match Spec.decodeInstruction instruction with
+def Spec (instruction : F p) (output : DecodedInstruction (F p)) : Prop :=
+  match FemtoCairo.Spec.decodeInstruction instruction with
   | some (instr_type, mode1, mode2, mode3) =>
     output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
     output.mode1.val = mode1 ∧ output.mode1.isEncodedCorrectly ∧
@@ -76,7 +78,7 @@ def decodeInstructionSpec (instruction : F p) (output : DecodedInstruction (F p)
 /--
 Main circuit for decoding an instruction.
 -/
-def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
+def main (instruction : Expression (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
   let bits ← Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction
   return {
     instrType := {
@@ -108,11 +110,11 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
 /--
 ElaboratedCircuit for decoding an instruction.
 -/
-def decodeInstructionElaborated : ElaboratedCircuit (F p) field DecodedInstruction where
-  main := decodeInstructionMain
+def elaborated : ElaboratedCircuit (F p) field DecodedInstruction where
+  main
   localLength _ := 8
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, decodeInstructionMain]
+    simp only [circuit_norm, main]
     simp only [Operations.collectAdds, circuit_norm]
 
 /--
@@ -120,16 +122,16 @@ Circuit that decodes a femtoCairo instruction into a one-hot representation.
 It returns a `DecodedInstruction` struct containing the decoded fields.
 This circuit is not satisfiable if the input instruction is not correctly encoded.
 -/
-def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstruction where
-  elaborated := decodeInstructionElaborated
+def circuit : GeneralFormalCircuit (F p) field DecodedInstruction where
+  elaborated
 
   Assumptions
   | instruction => instruction.val < 256
 
-  Spec := decodeInstructionSpec
+  Spec
 
   soundness := by
-    circuit_proof_start [Gadgets.toBits, decodeInstructionMain, decodeInstructionSpec, decodeInstructionElaborated]
+    circuit_proof_start [Gadgets.toBits, main, Spec, elaborated]
     simp only [Nat.reducePow] at h_holds
     obtain ⟨ h_range_check, h_eq ⟩ := h_holds
     have h : ¬ 256 ≤ input.val := by linarith
@@ -314,7 +316,9 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
             and_self, or_true]
 
-  completeness := by circuit_proof_all [Gadgets.toBits, decodeInstructionMain, decodeInstructionSpec, decodeInstructionElaborated]
+  completeness := by circuit_proof_all [Gadgets.toBits, main, Spec, elaborated]
+
+end decodeInstruction
 
 /--
   Circuit that fetches a femtoCairo instruction from a read-only program memory,
@@ -841,7 +845,7 @@ def femtoCairoStepElaboratedCircuit
       let { rawInstrType, op1, op2, op3 } ← subcircuitWithAssertion (fetchInstructionCircuit program h_programSize) state.pc
 
       -- Decode instruction
-      let decoded ← subcircuitWithAssertion decodeInstructionCircuit rawInstrType
+      let decoded ← subcircuitWithAssertion decodeInstruction.circuit rawInstrType
 
       -- Perform relevant memory accesses
       let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.mode1 }
@@ -871,7 +875,7 @@ def femtoCairoStepCircuitSoundness
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) (femtoCairoCircuitSpec program memory) := by
   circuit_proof_start [femtoCairoCircuitSpec, femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
-    Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemoryCircuit, nextStateCircuit, decodeInstructionCircuit]
+    Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemoryCircuit, nextStateCircuit, decodeInstruction.circuit]
 
   obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
   obtain ⟨pc, ap, fp⟩ := input
@@ -890,10 +894,10 @@ def femtoCairoStepCircuitSoundness
     rw [h_eq, ←c_fetch]
     simp [circuit_norm, explicit_provable_type]
 
-    simp only [decodeInstructionSpec] at c_decode
+    simp only [decodeInstruction.Spec] at c_decode
     split at c_decode
     case h_2 =>
-      -- impossible, decodeInstructionCircuit ensures that
+      -- impossible, decodeInstruction.circuit ensures that
       -- instruction decode is always successful
       contradiction
     case h_1 instr_type mode1 mode2 mode3 h_eq_decode =>

@@ -205,11 +205,10 @@ def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChang
       let input : β F := eval env input_var
 
       suffices h: ConstraintsHold.Soundness env ops by
-        exact circuit.soundness n env input_var input rfl as h
+        apply circuit.soundness n env input_var input rfl as h
 
-      guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
       apply can_replace_soundness
-      exact constraintsHold_toFlat_iff.mp h_holds
+      apply constraintsHold_toFlat_iff.mp h_holds
 
     implied_by_completeness := by
       intro env h_env h_completeness
@@ -219,13 +218,12 @@ def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChang
       have as : circuit.Assumptions input ∧ circuit.Spec input adds := h_completeness
 
       have h_env' : env.UsesLocalWitnesses n ops := by
-        guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
         rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
         exact h_env
 
       apply constraintsHold_toFlat_iff.mpr
       apply can_replace_completeness h_consistent h_env'
-      exact circuit.completeness n env input_var
+      apply circuit.completeness n env input_var
         (env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env') input rfl as.left as.right
 
     imply_usesLocalWitnesses := by intros; exact trivial

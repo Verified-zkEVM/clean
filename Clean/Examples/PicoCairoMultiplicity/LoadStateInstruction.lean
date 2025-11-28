@@ -184,7 +184,7 @@ def circuit
   soundness := by
     circuit_proof_start [elaborated, main, Assumptions, Spec, fetchInstructionCircuit,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
-      readFromMemoryCircuit, decodeInstructionCircuit, decodeInstructionSpec]
+      readFromMemoryCircuit, decodeInstruction.circuit, decodeInstruction.Spec]
 
     -- Extract assumptions
     obtain ⟨h_enabled_bool, h_pc_bound⟩ := h_assumptions

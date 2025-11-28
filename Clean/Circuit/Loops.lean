@@ -695,7 +695,7 @@ theorem collectAdds_forEach_sum [DecidableEq F] {m : ℕ} (xs : Vector α m) [In
     simp only [circuit_norm, Operations.collectAdds_append]
     rw [← InteractionDelta.add_eq_append, InteractionDelta.toFinsupp_add, h_body, ih]
     rw [Fin.sum_univ_succ]
-    congr 1
+    rfl
 
 /-- Version of collectAdds_forEach_sum using toFinsupp equality for h_body.
     This is useful when the body's localAdds_eq gives toFinsupp equality. -/
@@ -714,7 +714,7 @@ theorem collectAdds_forEach_sum' [DecidableEq F] {m : ℕ} (xs : Vector α m) [I
     simp only [circuit_norm, Operations.collectAdds_append]
     rw [← InteractionDelta.add_eq_append, InteractionDelta.toFinsupp_add, h_body, ih]
     rw [Fin.sum_univ_succ]
-    congr 1
+    rfl
 
 omit [Field F] in
 /-- For InteractionDelta accumulator functions, foldl starting from `init` equals

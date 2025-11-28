@@ -74,7 +74,7 @@ def conditionalDecodeMain
   let dummy := input.dummy
 
   -- Decode the actual instruction
-  let actualDecoded ← subcircuitWithAssertion decodeInstructionCircuit rawInstrType
+  let actualDecoded ← subcircuitWithAssertion decodeInstruction.circuit rawInstrType
 
   -- Use conditional gadget to select between actual and dummy based on enabled
   let result ← subcircuit Gadgets.Conditional.circuit {
@@ -91,9 +91,9 @@ ElaboratedCircuit for conditional decode.
 def conditionalDecodeElaborated :
     ElaboratedCircuit (F p) ConditionalDecodeInput DecodedInstruction where
   main := conditionalDecodeMain
-  localLength _ := 8  -- Same as decodeInstructionCircuit since Conditional adds 0
+  localLength _ := 8  -- Same as decodeInstruction.circuit since Conditional adds 0
   localAdds_eq _ _ _ := by
-    simp only [conditionalDecodeMain, circuit_norm, decodeInstructionCircuit, Gadgets.Conditional.circuit]
+    simp only [conditionalDecodeMain, circuit_norm, decodeInstruction.circuit, Gadgets.Conditional.circuit]
     simp only [Operations.collectAdds, circuit_norm]
 
 /--
@@ -110,9 +110,9 @@ def conditionalDecodeCircuit :
     if input.enabled = 0 then
       output = input.dummy
     else
-      decodeInstructionSpec input.rawInstrType output
+      decodeInstruction.Spec input.rawInstrType output
   soundness := by
-    circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstructionCircuit, decodeInstructionSpec]
+    circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstruction.circuit, decodeInstruction.Spec]
     intro h_assumptions
     rcases h_holds with ⟨ h_decode, h_conditional ⟩
     specialize h_conditional h_assumptions
@@ -120,7 +120,7 @@ def conditionalDecodeCircuit :
     simp only [h_conditional]
     rcases h_assumptions with h_zero | h_one <;> aesop
   completeness := by
-    circuit_proof_all [conditionalDecodeElaborated, conditionalDecodeMain, decodeInstructionCircuit, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstructionSpec]
+    circuit_proof_all [conditionalDecodeElaborated, conditionalDecodeMain, decodeInstruction.circuit, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstruction.Spec]
 
 /-!
 ## Dummy instructions for conditional decoding
