@@ -1551,6 +1551,81 @@ lemma netFlow_eq_totalOutgoing_sub_totalIncoming
   -- Unfold the totalOutgoing/totalIncoming definitions
   simp only [totalOutgoing, totalIncoming, Int.ofNat_add]
 
+/-- countOutgoing is bounded by the vector length (filter length ≤ list length) -/
+lemma countOutgoing_le_length {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
+    (postStateFn : State (F p) → State (F p)) (s : State (F p)) :
+    countOutgoing inputs postStateFn s ≤ n := by
+  simp only [countOutgoing]
+  have h1 := List.length_filter_le (fun i => decide (i.enabled = 1 ∧ i.preState = s)) inputs.toList
+  simp only [Vector.length_toList] at h1
+  exact h1
+
+/-- countIncoming is bounded by the vector length (filter length ≤ list length) -/
+lemma countIncoming_le_length {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
+    (postStateFn : State (F p) → State (F p)) (s : State (F p)) :
+    countIncoming inputs postStateFn s ≤ n := by
+  simp only [countIncoming]
+  have h1 := List.length_filter_le (fun i => decide (i.enabled = 1 ∧ postStateFn i.preState = s)) inputs.toList
+  simp only [Vector.length_toList] at h1
+  exact h1
+
+/-- totalOutgoing is bounded by totalCapacity -/
+lemma totalOutgoing_le_totalCapacity
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (addInputs : Vector (InstructionStepInput (F p)) capacities.addCapacity)
+    (mulInputs : Vector (InstructionStepInput (F p)) capacities.mulCapacity)
+    (storeInputs : Vector (InstructionStepInput (F p)) capacities.storeStateCapacity)
+    (loadInputs : Vector (InstructionStepInput (F p)) capacities.loadStateCapacity)
+    (s : State (F p)) :
+    totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s ≤
+    totalCapacity capacities := by
+  simp only [totalOutgoing, totalCapacity]
+  have h1 := countOutgoing_le_length addInputs addPostState s
+  have h2 := countOutgoing_le_length mulInputs mulPostState s
+  have h3 := countOutgoing_le_length storeInputs storeStatePostState s
+  have h4 := countOutgoing_le_length loadInputs (loadStatePostState program memory) s
+  omega
+
+/-- totalIncoming is bounded by totalCapacity -/
+lemma totalIncoming_le_totalCapacity
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (addInputs : Vector (InstructionStepInput (F p)) capacities.addCapacity)
+    (mulInputs : Vector (InstructionStepInput (F p)) capacities.mulCapacity)
+    (storeInputs : Vector (InstructionStepInput (F p)) capacities.storeStateCapacity)
+    (loadInputs : Vector (InstructionStepInput (F p)) capacities.loadStateCapacity)
+    (s : State (F p)) :
+    totalIncoming program memory addInputs mulInputs storeInputs loadInputs s ≤
+    totalCapacity capacities := by
+  simp only [totalIncoming, totalCapacity]
+  have h1 := countIncoming_le_length addInputs addPostState s
+  have h2 := countIncoming_le_length mulInputs mulPostState s
+  have h3 := countIncoming_le_length storeInputs storeStatePostState s
+  have h4 := countIncoming_le_length loadInputs (loadStatePostState program memory) s
+  omega
+
+/-- Combined bound: totalOutgoing + totalIncoming + 1 < p when 2 * totalCapacity + 1 < p -/
+lemma totalFlow_bound
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (addInputs : Vector (InstructionStepInput (F p)) capacities.addCapacity)
+    (mulInputs : Vector (InstructionStepInput (F p)) capacities.mulCapacity)
+    (storeInputs : Vector (InstructionStepInput (F p)) capacities.storeStateCapacity)
+    (loadInputs : Vector (InstructionStepInput (F p)) capacities.loadStateCapacity)
+    (h_capacity : 2 * totalCapacity capacities + 1 < p)
+    (s : State (F p)) :
+    totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s +
+    totalIncoming program memory addInputs mulInputs storeInputs loadInputs s + 1 < p := by
+  have h_out := totalOutgoing_le_totalCapacity capacities program memory
+    addInputs mulInputs storeInputs loadInputs s
+  have h_in := totalIncoming_le_totalCapacity capacities program memory
+    addInputs mulInputs storeInputs loadInputs s
+  omega
+
 /--
 When the ExecutionBundle.Spec holds with balanced adds (toFinsupp = 0),
 the Run built from enabled instructions has the expected netFlow properties.
@@ -1635,83 +1710,27 @@ theorem balanced_adds_implies_netFlow
       (totalIncoming program memory addInputs mulInputs storeInputs loadInputs s : ℤ) :=
     netFlow_eq_totalOutgoing_sub_totalIncoming program memory addInputs mulInputs storeInputs loadInputs
 
-  -- Now we need to lift the field equations to integer equations
-  -- Since p > 512 and counts are bounded by totalCapacity < 512, field = integer arithmetic
-
-  -- We need bounds to lift from field to integers
-  -- countOutgoing is bounded by vector length (filter length ≤ list length)
-  have h_count_out_bound : ∀ {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
-      (postStateFn : State (F p) → State (F p)) (s : State (F p)),
-      countOutgoing inputs postStateFn s ≤ n := by
-    intro n inputs postStateFn s
-    simp only [countOutgoing]
-    have h1 := List.length_filter_le (fun i => decide (i.enabled = 1 ∧ i.preState = s)) inputs.toList
-    simp only [Vector.length_toList] at h1
-    exact h1
-
-  have h_count_in_bound : ∀ {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
-      (postStateFn : State (F p) → State (F p)) (s : State (F p)),
-      countIncoming inputs postStateFn s ≤ n := by
-    intro n inputs postStateFn s
-    simp only [countIncoming]
-    have h1 := List.length_filter_le (fun i => decide (i.enabled = 1 ∧ postStateFn i.preState = s)) inputs.toList
-    simp only [Vector.length_toList] at h1
-    exact h1
-
-  -- totalOutgoing and totalIncoming are each bounded by totalCapacity
-  have h_total_out_bound : ∀ s,
-      totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s ≤
-      totalCapacity capacities := by
-    intro s
-    simp only [totalOutgoing, totalCapacity]
-    have h1 := h_count_out_bound addInputs addPostState s
-    have h2 := h_count_out_bound mulInputs mulPostState s
-    have h3 := h_count_out_bound storeInputs storeStatePostState s
-    have h4 := h_count_out_bound loadInputs (loadStatePostState program memory) s
-    omega
-
-  have h_total_in_bound : ∀ s,
-      totalIncoming program memory addInputs mulInputs storeInputs loadInputs s ≤
-      totalCapacity capacities := by
-    intro s
-    simp only [totalIncoming, totalCapacity]
-    have h1 := h_count_in_bound addInputs addPostState s
-    have h2 := h_count_in_bound mulInputs mulPostState s
-    have h3 := h_count_in_bound storeInputs storeStatePostState s
-    have h4 := h_count_in_bound loadInputs (loadStatePostState program memory) s
-    omega
-
-  have h_bounds : ∀ s,
-      totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s +
-      totalIncoming program memory addInputs mulInputs storeInputs loadInputs s + 1 < p := by
-    intro s
-    have h_out := h_total_out_bound s
-    have h_in := h_total_in_bound s
-    -- totalOutgoing + totalIncoming ≤ 2 * totalCapacity
-    -- and 2 * totalCapacity + 1 < p by h_capacity
-    omega
+  -- Use extracted bound lemmas
+  have h_bounds := totalFlow_bound capacities program memory
+    addInputs mulInputs storeInputs loadInputs h_capacity
 
   constructor
   · -- Case: R.netFlow initialState = 1
     rw [h_netFlow]
     have h_eq := h_field_eq inputs.initialState
     simp only [if_true, if_neg h_ne, add_zero] at h_eq
-    -- h_eq : (out - inc : F p) = 1
-    -- Lift to integers using the bound
     exact int_sub_eq_one_of_field_sub_eq_one _ _ (h_bounds inputs.initialState) h_eq
   constructor
   · -- Case: R.netFlow finalState = -1
     rw [h_netFlow]
     have h_eq := h_field_eq inputs.finalState
     simp only [if_neg (Ne.symm h_ne), if_true, zero_add] at h_eq
-    -- h_eq : (out - inc : F p) = -1
     exact int_sub_eq_neg_one_of_field_sub_eq_neg_one _ _ (h_bounds inputs.finalState) h_eq
   · -- Case: R.netFlow s = 0 for s ≠ initial, s ≠ final
     intro s h_not_init h_not_final
     rw [h_netFlow]
     have h_eq := h_field_eq s
     simp only [if_neg h_not_init, if_neg h_not_final, add_zero] at h_eq
-    -- h_eq : (out - inc : F p) = 0
     have h_small : totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s +
                    totalIncoming program memory addInputs mulInputs storeInputs loadInputs s < p := by
       have := h_bounds s; omega
