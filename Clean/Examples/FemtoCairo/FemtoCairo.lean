@@ -978,11 +978,32 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
     simp only [Option.isSome_iff_exists] at h_decode_bound
     exact h_decode_bound ⟨decode, h_decode⟩
 
-  -- Get the subcircuit completeness hypotheses
+  -- Get the subcircuit completeness hypotheses from h_env
+  -- h_env contains: for each subcircuit, circuit.Assumptions (eval env ...) → ...
+  -- After circuit_norm, these become the subcircuit Completeness requirements
   obtain ⟨c_fetch, c_decode, c_read1, c_read2, c_read3, c_next⟩ := h_env
 
-  -- For now, we need to work through the nested structure
-  -- The subcircuitWithAssertion requires showing the assertion holds
+  -- The completeness proof requires showing each subcircuit's assumptions hold.
+  -- h_input : eval env input_var = input, so we can use this to rewrite.
+
+  -- The full compositional completeness proof is complex because:
+  -- 1. Each subcircuit's input depends on the output of previous subcircuits
+  -- 2. We need to show that spec-level success (transition.isSome) implies
+  --    circuit-level assumptions hold for each subcircuit
+  -- 3. The circuit structure uses witnesses that the prover computes
+
+  -- Key observations:
+  -- - h_pc_bound gives us: input.pc.val + 3 < programSize
+  -- - h_instr_bound gives us: raw.rawInstrType.val < 256
+  -- - h_fetch, h_decode, h_v1, h_v2, h_v3, h_computeNext decompose the spec success
+
+  -- To complete this proof, we would need to:
+  -- 1. Use h_input to relate circuit inputs to spec inputs
+  -- 2. Use c_fetch's spec guarantee to relate circuit outputs to spec outputs
+  -- 3. Chain through each subcircuit showing assumptions are met
+
+  -- This is a detailed proof that requires careful handling of the
+  -- compositional circuit structure. For now, we leave it as sorry.
   sorry
 
 def femtoCairoStepCircuit
