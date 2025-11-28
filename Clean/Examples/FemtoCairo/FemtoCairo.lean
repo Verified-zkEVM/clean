@@ -957,10 +957,32 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
   -- 4. nextStateCircuit.Assumptions: isEncodedCorrectly ∧ computeNextState.isSome
   --    (follows from decode succeeding and transition.isSome)
 
-  -- For now, we leave this as sorry - the full proof requires:
-  -- - Using helper lemmas from Spec.lean to decompose transition.isSome
-  -- - Showing each subcircuit assumption follows from the decomposition
-  -- - This is complex due to the nested structure of subcircuitWithAssertion
+  -- Use helper lemma to decompose the transition into its components
+  have h_decompose := Spec.transition_isSome_implies_computeNextState_isSome
+    program memory input h_transition_isSome
+  obtain ⟨raw, decode, v1, v2, v3, h_fetch, h_decode, h_v1, h_v2, h_v3, h_computeNext⟩ := h_decompose
+
+  -- Derive fetchInstruction bounds from transition success
+  have h_fetch_isSome : (Spec.fetchInstruction program input.pc).isSome := by
+    exact Spec.transition_isSome_implies_fetch_isSome program memory input h_transition_isSome
+  have h_pc_bound : input.pc.val + 3 < programSize :=
+    Spec.fetchInstruction_isSome_implies_pc_bound program h_valid_size input.pc h_fetch_isSome
+
+  -- Derive instruction type bound from ValidProgram
+  have h_instr_bound : raw.rawInstrType.val < 256 := by
+    -- From h_fetch, we know fetchInstruction succeeded and returned raw
+    -- raw.rawInstrType is a value from program memory at position pc
+    -- ValidProgram says all values in program are < 256
+    -- But we need to connect raw.rawInstrType to program values...
+    have h_decode_bound := Spec.decodeInstruction_isSome_implies_bound raw.rawInstrType
+    simp only [Option.isSome_iff_exists] at h_decode_bound
+    exact h_decode_bound ⟨decode, h_decode⟩
+
+  -- Get the subcircuit completeness hypotheses
+  obtain ⟨c_fetch, c_decode, c_read1, c_read2, c_read3, c_next⟩ := h_env
+
+  -- For now, we need to work through the nested structure
+  -- The subcircuitWithAssertion requires showing the assertion holds
   sorry
 
 def femtoCairoStepCircuit
