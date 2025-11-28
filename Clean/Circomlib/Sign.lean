@@ -37,7 +37,7 @@ def main (input : Vector (Expression (F p)) 254) :=
   CompConstant.circuit ((p - 1) / 2) input
 
 def circuit : FormalCircuit (F p) (fields 254) field where
-  main := main
+  main
   localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
   output input offset := (CompConstant.circuit ((p - 1) / 2)).output input offset
   localAdds_eq _ _ _ := by
