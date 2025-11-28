@@ -222,12 +222,11 @@ def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChang
         guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
         rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
         exact h_env
-      have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env'
-
-      have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
 
       apply constraintsHold_toFlat_iff.mpr
-      apply can_replace_completeness h_consistent h_env' h_holds
+      apply can_replace_completeness h_consistent h_env'
+      exact circuit.completeness n env input_var
+        (env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env') input rfl as.left as.right
 
     imply_usesLocalWitnesses := by intros; exact trivial
 
