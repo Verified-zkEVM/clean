@@ -193,19 +193,47 @@ lemma transition_isSome_implies_fetch_isSome
   · simp [h_fetch] at h_next
   · simp
 
-/-- If fetchInstruction succeeds and there's no field wraparound, pc + 3 < programSize -/
+/-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 < programSize -/
 lemma fetchInstruction_isSome_implies_pc_bound
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (h_programSize : programSize < p)
+    (h_valid_size : Types.ValidProgramSize (p := p) programSize)
     (pc : F p)
     (h : (fetchInstruction program pc).isSome) : pc.val + 3 < programSize := by
-  -- This requires showing that if fetchInstruction succeeds (meaning all 4 memory accesses succeed),
-  -- then pc.val + 3 < programSize. The key insight is that memoryAccess (pc + 3) succeeds means
-  -- (pc + 3).val < programSize. For typical program sizes (< p - 3), this implies pc.val + 3 < p
-  -- (no wraparound), so (pc + 3).val = pc.val + 3 and we're done.
-  -- Edge case: if programSize is close to p (within 3), wraparound is possible and the lemma
-  -- may not hold. This is a limitation that should be addressed by adding programSize ≤ p - 3 assumption.
-  sorry
+  -- ValidProgramSize ensures programSize + 3 < p, so no wraparound can occur.
+  -- From fetchInstruction succeeding, we know (pc + 3).val < programSize.
+  -- Since programSize + 3 < p, we have (pc + 3).val < p - 3.
+  -- For any pc.val < programSize, pc.val + 3 < programSize + 3 < p.
+  -- Therefore no wraparound: (pc + 3).val = pc.val + 3, and we conclude pc.val + 3 < programSize.
+  simp only [fetchInstruction, Option.isSome_iff_exists] at h
+  obtain ⟨raw, h_raw⟩ := h
+  simp only [Option.bind_eq_bind] at h_raw
+  cases h0 : memoryAccess program pc with
+  | none => simp [h0] at h_raw
+  | some v0 =>
+    cases h1 : memoryAccess program (pc + 1) with
+    | none => simp [h0, h1] at h_raw
+    | some v1 =>
+      cases h2 : memoryAccess program (pc + 2) with
+      | none => simp [h0, h1, h2] at h_raw
+      | some v2 =>
+        cases h3 : memoryAccess program (pc + 3) with
+        | none => simp [h0, h1, h2, h3] at h_raw
+        | some v3 =>
+          -- Extract bound from h0: pc.val < programSize
+          have bound0 := memoryAccess_eq_some_implies_bounds program pc v0 h0
+          have bound3 := memoryAccess_eq_some_implies_bounds program (pc + 3) v3 h3
+          -- ValidProgramSize says programSize + 3 < p
+          simp only [Types.ValidProgramSize] at h_valid_size
+          -- From pc.val < programSize and programSize + 3 < p, we get pc.val + 3 < p
+          have h_no_wrap : pc.val + 3 < p := by omega
+          -- With no wraparound, (pc + 3).val = pc.val + 3
+          have h_eq : (pc + 3).val = pc.val + 3 := by
+            have h3_lt_p : 3 < p := by omega
+            have h3_val : (3 : ZMod p).val = 3 := ZMod.val_natCast_of_lt h3_lt_p
+            calc (pc + 3).val = (pc.val + (3 : ZMod p).val) % p := ZMod.val_add pc 3
+              _ = (pc.val + 3) % p := by rw [h3_val]
+              _ = pc.val + 3 := Nat.mod_eq_of_lt h_no_wrap
+          omega
 
 /-- If transition succeeds, decode succeeds -/
 lemma transition_isSome_implies_decode_isSome
@@ -224,7 +252,7 @@ lemma transition_isSome_implies_decode_isSome
     use raw
     constructor
     · rfl
-    · simp only [h_fetch, Option.some_bind] at h_next
+    · simp only [h_fetch, Option.bind_some] at h_next
       cases h_decode : decodeInstruction raw.rawInstrType with
       | none => simp [h_decode] at h_next
       | some _ => simp

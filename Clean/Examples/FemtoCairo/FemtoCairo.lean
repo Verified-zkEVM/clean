@@ -836,13 +836,15 @@ def femtoCairoCircuitSpec
 
 /--
   Assumptions required for the FemtoCairo step circuit completeness.
-  1. ValidProgram: All instruction bytes in program memory are < 256
-  2. The state transition succeeds (execution doesn't fail)
+  1. ValidProgramSize: programSize + 3 < p (ensures no field wraparound in address arithmetic)
+  2. ValidProgram: All instruction bytes in program memory are < 256
+  3. The state transition succeeds (execution doesn't fail)
 -/
 def femtoCairoAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     (state : State (F p)) : Prop :=
+  ValidProgramSize (p := p) programSize ∧
   ValidProgram program ∧
   (Spec.femtoCairoMachineTransition program memory state).isSome
 
@@ -938,15 +940,22 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
   circuit_proof_start [femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
     fetchInstructionCircuit, decodeInstructionCircuit, readFromMemoryCircuit, nextStateCircuit]
 
-  -- Extract assumptions: ValidProgram program ∧ transition.isSome
-  obtain ⟨h_valid_program, h_transition_isSome⟩ := h_assumptions
+  -- Extract assumptions:
+  -- 1. ValidProgramSize: programSize + 3 < p (no wraparound)
+  -- 2. ValidProgram: all instruction bytes < 256
+  -- 3. transition.isSome: state transition succeeds
+  obtain ⟨h_valid_size, h_valid_program, h_transition_isSome⟩ := h_assumptions
 
   -- The proof needs to show that all subcircuit completeness conditions are satisfied.
   -- This requires showing:
   -- 1. fetchInstructionCircuit.Assumptions: pc.val + 3 < programSize
+  --    (follows from transition.isSome + ValidProgramSize ensuring no wraparound)
   -- 2. decodeInstructionCircuit.Assumptions: rawInstrType.val < 256
+  --    (follows from ValidProgram)
   -- 3. readFromMemoryCircuit.Assumptions (x3): all addresses in dataMemoryAddresses are in bounds
+  --    (follows from transition.isSome ensuring memory accesses succeed)
   -- 4. nextStateCircuit.Assumptions: isEncodedCorrectly ∧ computeNextState.isSome
+  --    (follows from decode succeeding and transition.isSome)
 
   -- For now, we leave this as sorry - the full proof requires:
   -- - Using helper lemmas from Spec.lean to decompose transition.isSome
@@ -987,8 +996,8 @@ def femtoCairoTable
     | some reachedState => state = reachedState
     | none => False -- impossible, constraints ensure that every transition is valid
 
-  -- Initial state assumptions for completeness: program must be valid
-  InitialStateAssumptions _ := ValidProgram program
+  -- Initial state assumptions for completeness: program size and contents must be valid
+  InitialStateAssumptions _ := ValidProgramSize (p := p) programSize ∧ ValidProgram program
 
   soundness := by
     intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold
