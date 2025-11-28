@@ -125,7 +125,7 @@ def GeneralFormalCircuitChangingMultiset.weakenSpec
     intro offset env input_var input h_eval h_holds
     have h_strong_spec := circuit.soundness offset env input_var input h_eval h_holds
     exact h_spec_implication input _ _ h_strong_spec
-  completeness := circuit.completeness  -- No sorry needed!
+  completeness := circuit.completeness
 }
 
 @[circuit_norm]

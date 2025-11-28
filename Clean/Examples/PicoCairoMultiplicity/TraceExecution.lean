@@ -1999,33 +1999,20 @@ theorem Spec_implies_ExecutionExistenceSpec
 /--
 The circuit with the weaker execution existence spec.
 
-This is constructed directly as a `GeneralFormalCircuitChangingMultiset` with
-the `ExecutionExistenceSpec` as its specification. The soundness proof uses
-`Spec_implies_ExecutionExistenceSpec` to derive the weaker spec from the
-original `ExecutionBundle.Spec`.
+This uses `GeneralFormalCircuitChangingMultiset.weakenSpec` to weaken the spec from
+`ExecutionBundle.Spec` to `ExecutionExistenceSpec`.
 -/
 def circuitWithExecutionExistenceSpec
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p) (h_memorySize : memorySize < p)
     (h_capacity : 2 * totalCapacity capacities + 1 < p) :
-    GeneralFormalCircuitChangingMultiset (F p) (ExecutionCircuitInput capacities) unit where
-  elaborated := ExecutionBundle.elaborated capacities program h_programSize memory h_memorySize
-  Assumptions := ExecutionBundle.Assumptions capacities (programSize := programSize)
-  Spec input _ adds := ExecutionBundle.Assumptions capacities (programSize := programSize) input →
-    ExecutionExistenceSpec capacities program memory input adds
-  soundness := by
-    intro offset env input_var input h_eval h_holds
-    -- Simplify let bindings and intro from the implication in Spec
-    simp only
-    intro h_assumptions
-    have h_spec := (ExecutionBundle.circuit capacities program h_programSize memory h_memorySize).soundness
-      offset env input_var input h_eval h_assumptions h_holds
-    exact Spec_implies_ExecutionExistenceSpec capacities program h_programSize memory h_memorySize
-      input _ h_spec h_capacity
-  completeness := by
-    -- ExecutionBundle.circuit.completeness is already a sorry,
-    -- and the signature differs (requires Spec, not just Assumptions)
-    sorry
+    GeneralFormalCircuitChangingMultiset (F p) (ExecutionCircuitInput capacities) unit :=
+  (ExecutionBundle.circuit capacities program h_programSize memory h_memorySize).weakenSpec
+    (fun input _ adds => ExecutionBundle.Assumptions capacities (programSize := programSize) input →
+      ExecutionExistenceSpec capacities program memory input adds)
+    (fun input _ adds h_spec h_assumptions =>
+      Spec_implies_ExecutionExistenceSpec capacities program h_programSize memory h_memorySize
+        input adds (h_spec h_assumptions) h_capacity)
 
 end Examples.PicoCairoMultiplicity.TraceExecution
