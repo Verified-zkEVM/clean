@@ -181,6 +181,64 @@ def Spec
            InteractionDelta.single ⟨"state", [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]⟩ (-1)
 
 /--
+Spec for GeneralFormalCircuitChangingMultiset: wraps Assumptions implication around Spec.
+-/
+private def CircuitSpec
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (input : ExecutionCircuitInput capacities (F p)) (_ : Unit) (adds : InteractionDelta (F p)) : Prop :=
+  Assumptions capacities (programSize := programSize) input → Spec capacities program memory input adds
+
+/--
+Soundness proof for the execution bundle.
+-/
+private theorem circuit_soundness
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    GeneralFormalCircuit.SoundnessChangingMultiset (F p)
+      (elaborated capacities program h_programSize memory h_memorySize)
+      (CircuitSpec capacities program memory)
+      (elaborated capacities program h_programSize memory h_memorySize).localAdds := by
+  circuit_proof_start [CircuitSpec, AddInstruction.Bundle.circuit, AddInstruction.Bundle.elaborated,
+    MulInstruction.Bundle.circuit, MulInstruction.Bundle.elaborated,
+    StoreStateInstruction.Bundle.circuit, StoreStateInstruction.Bundle.elaborated,
+    LoadStateInstruction.Bundle.circuit, LoadStateInstruction.Bundle.elaborated]
+  intro h_assumptions
+  -- Extract the four assumptions from h_assumptions
+  obtain ⟨h_assump_add, h_assump_mul, h_assump_store, h_assump_load⟩ := h_assumptions
+  -- We need to rewrite using h_input to convert eval env input_var.3.* to input.bundledInputs.*
+  have h_eval_add : eval (α := ProvableVector InstructionStepInput capacities.addCapacity) env input_var.3.addInputs = input.bundledInputs.addInputs :=
+    congrArg (fun x => x.bundledInputs.addInputs) h_input
+  have h_eval_mul : eval (α := ProvableVector InstructionStepInput capacities.mulCapacity) env input_var.3.mulInputs = input.bundledInputs.mulInputs :=
+    congrArg (fun x => x.bundledInputs.mulInputs) h_input
+  have h_eval_store : eval (α := ProvableVector InstructionStepInput capacities.storeStateCapacity) env input_var.3.storeStateInputs = input.bundledInputs.storeStateInputs :=
+    congrArg (fun x => x.bundledInputs.storeStateInputs) h_input
+  have h_eval_load : eval (α := ProvableVector InstructionStepInput capacities.loadStateCapacity) env input_var.3.loadStateInputs = input.bundledInputs.loadStateInputs :=
+    congrArg (fun x => x.bundledInputs.loadStateInputs) h_input
+  have h_eval_initial : eval env input_var.initialState = input.initialState :=
+    congrArg ExecutionCircuitInput.initialState h_input
+  have h_eval_final : eval env input_var.finalState = input.finalState :=
+    congrArg ExecutionCircuitInput.finalState h_input
+  -- Extract the four implications from h_holds, applying eval rewrites
+  rw [h_eval_add, h_eval_mul, h_eval_store, h_eval_load] at h_holds
+  obtain ⟨h_add_impl, h_mul_impl, h_store_impl, h_load_impl⟩ := h_holds
+  -- Apply each implication with its corresponding assumption to get the Specs
+  have h_add_spec := h_add_impl h_assump_add
+  have h_mul_spec := h_mul_impl h_assump_mul
+  have h_store_spec := h_store_impl h_assump_store
+  have h_load_spec := h_load_impl h_assump_load
+  -- Unfold Spec and provide witnesses
+  simp only [Spec]
+  rw [h_eval_initial, h_eval_final]
+  -- Convert ++ to + in the adds equality (both in goal and hypotheses)
+  simp only [← InteractionDelta.add_eq_append] at h_add_spec h_mul_spec h_store_spec h_load_spec ⊢
+  refine ⟨_, _, _, _, h_add_spec, h_mul_spec, h_store_spec, h_load_spec, ?_⟩
+  -- The equality needs associativity manipulation
+  simp only [add_assoc]
+
+/--
 Formal circuit for the execution bundle.
 
 Uses `GeneralFormalCircuitChangingMultiset` so that `weakenSpec` can be applied
@@ -193,15 +251,14 @@ def circuit
     GeneralFormalCircuitChangingMultiset (F p) (ExecutionCircuitInput capacities) unit := {
   elaborated := elaborated capacities program h_programSize memory h_memorySize
   Assumptions := Assumptions capacities (programSize := programSize)
-  Spec := fun input _ adds => Assumptions capacities (programSize := programSize) input → Spec capacities program memory input adds
-  soundness := by
-    intro offset env input_var input h_eval h_holds
-    intro h_assumptions
-    -- This proof requires showing that when constraints hold and assumptions hold,
-    -- the Spec holds. The detailed proof would follow the bundle soundness proofs.
-    sorry
-  completeness := by
-    sorry
+  Spec := CircuitSpec capacities program memory
+  soundness := circuit_soundness capacities program h_programSize memory h_memorySize
+  -- Note: Completeness proof depends on the bundle completeness proofs being filled:
+  -- - AddInstruction.Bundle.circuit completeness (currently sorry)
+  -- - MulInstruction.Bundle.circuit completeness (currently sorry)
+  -- - StoreStateInstruction.Bundle.circuit completeness (currently sorry)
+  -- - LoadStateInstruction.Bundle.circuit completeness (currently sorry)
+  completeness := by sorry
 }
 
 end Examples.PicoCairoMultiplicity.ExecutionBundle
