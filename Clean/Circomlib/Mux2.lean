@@ -86,6 +86,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> decide
       output[i] = (c[i])[idx]
 
+  localAdds_eq input env offset := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds, circuit_norm]
+
   soundness := by
     simp only [circuit_norm, main]
     intro offset env input_var input h_input h_assumptions h_output
@@ -182,10 +186,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [main, circuit_norm]
     rfl
 
-  subcircuitsConsistent := by
-    intro input offset
-    simp only [main, circuit_norm]
-
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1]
@@ -199,6 +199,9 @@ def circuit : FormalCircuit (F p) Inputs field where
       simp only [idx, s0, s1]
       split <;> split <;> decide
     output = c[idx]
+
+  localAdds_eq input env offset := by
+    simp only [main, MultiMux2.circuit, circuit_norm, Operations.collectAdds]
 
   soundness := by
     simp only [circuit_norm, main]

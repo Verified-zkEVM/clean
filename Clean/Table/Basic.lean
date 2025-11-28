@@ -321,6 +321,7 @@ def assignmentFromCircuit (as : CellAssignment W S) : Operations F → CellAssig
   | .assert _ :: ops => assignmentFromCircuit as ops
   | .lookup _ :: ops => assignmentFromCircuit as ops
   | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
+  | .add _ _ :: ops => assignmentFromCircuit as ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`
 def assignmentFromCircuit' (as : CellAssignment W S) (ops : Operations F) : CellAssignment W S where

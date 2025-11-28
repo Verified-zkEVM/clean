@@ -60,6 +60,8 @@ def circuit : FormalCircuit (F p) U64 U64 where
   localLength _ := 0
   output x _ := not64_bytewise x
 
+  localAdds_eq _ _ _ := by simp [circuit_norm]
+
   soundness := by
     intro i env x_var x h_input x_norm h_holds
     simp_all only [circuit_norm, eval_not]
