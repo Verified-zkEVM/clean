@@ -1021,6 +1021,10 @@ def femtoCairoTable
   -- Initial state assumptions for completeness: program size and contents must be valid
   InitialStateAssumptions _ := ValidProgramSize (p := p) programSize ∧ ValidProgram program
 
+  -- Input assumptions: execution for i+1 steps succeeds (ensures next transition works)
+  InputAssumptions i _ := ∀ (initialState : State (F p)),
+    (Spec.femtoCairoMachineBoundedExecution program memory (some initialState) (i + 1)).isSome
+
   soundness := by
     intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold
     simp [Spec.femtoCairoMachineBoundedExecution, femtoCairoStepCircuit,
@@ -1043,22 +1047,101 @@ def femtoCairoTable
         simp only [h_hold]
 
   completeness := by
-    -- Table completeness requires showing that if:
-    -- 1. InitialStateAssumptions holds (ValidProgram program)
-    -- 2. The spec holds for i steps (bounded execution succeeds for i steps)
-    -- Then femtoCairoAssumptions holds for the reached state, enabling the (i+1)th step.
-    --
-    -- The key insight: if bounded execution succeeds for i steps reaching state s,
-    -- and we're asked to prove femtoCairoAssumptions s = ValidProgram ∧ transition(s).isSome,
-    -- we need to show transition(s) succeeds.
-    --
-    -- This follows from the spec: if bounded execution reaches s at step i,
-    -- then the (i+1)th transition must succeed for the execution to continue.
-    --
-    -- Full proof requires:
-    -- - Showing ValidProgram is preserved (it's an invariant, doesn't depend on state)
-    -- - Showing transition.isSome follows from execution reaching the current state
-    sorry
+    -- Unfold the InductiveTable.Completeness definition
+    intro initialState row_index env acc_var x_var acc x xs xs_len
+    intro h_eval h_witnesses h_assumptions
+
+    -- Extract the assumptions
+    obtain ⟨h_init_assumptions, h_spec, _h_input_assumptions⟩ := h_assumptions
+    obtain ⟨h_valid_size, h_valid_program⟩ := h_init_assumptions
+
+    -- The step is femtoCairoStepCircuit, which requires femtoCairoAssumptions to hold
+    -- femtoCairoAssumptions acc = ValidProgramSize ∧ ValidProgram ∧ transition(acc).isSome
+
+    -- We need to show: Circuit.ConstraintsHold.Completeness for the step circuit
+    -- This requires femtoCairoAssumptions acc to hold
+
+    -- From the Spec, we know bounded execution for row_index steps succeeded and acc = reachedState
+    -- h_spec has type: match femtoCairoMachineBoundedExecution ... row_index with
+    --                  | some reachedState => acc = reachedState
+    --                  | none => False
+
+    -- Case split on the result of bounded execution
+    cases h_bounded : Spec.femtoCairoMachineBoundedExecution program memory (some initialState) row_index with
+    | none =>
+      -- If bounded execution failed, h_spec becomes False (contradiction)
+      simp only [h_bounded] at h_spec
+    | some reachedState =>
+      -- Bounded execution succeeded, and h_spec tells us acc = reachedState
+      simp only [h_bounded] at h_spec
+      -- h_spec : acc = reachedState
+
+      -- Now we need to prove the step circuit constraints hold
+      -- The step is femtoCairoStepCircuit, whose completeness requires femtoCairoAssumptions acc
+
+      -- femtoCairoAssumptions acc requires:
+      -- 1. ValidProgramSize programSize - have it from h_valid_size ✓
+      -- 2. ValidProgram program - have it from h_valid_program ✓
+      -- 3. (femtoCairoMachineTransition program memory acc).isSome - THE GAP
+
+      -- We have the assumptions we can provide:
+      have h_valid_size' : ValidProgramSize (p := p) programSize := h_valid_size
+      have h_valid_program' : ValidProgram program := h_valid_program
+
+      -- But we need (femtoCairoMachineTransition program memory acc).isSome
+      -- What we know:
+      --   h_bounded : femtoCairoMachineBoundedExecution ... row_index = some reachedState
+      --   h_spec : acc = reachedState
+      --
+      -- This tells us: execution for row_index steps succeeded, reaching acc
+      -- But it does NOT tell us that the NEXT transition (from acc) will succeed!
+      --
+      -- The gap: we know we REACHED acc, but not that we can LEAVE acc
+      -- To complete this proof, we would need to know that
+      -- (femtoCairoMachineTransition program memory acc).isSome
+
+      -- The step circuit is femtoCairoStepCircuit used via subcircuitWithAssertion
+      -- Its completeness requires femtoCairoAssumptions acc to hold
+
+      -- Simplify the goal to see what we need
+      simp only [femtoCairoStepCircuit, circuit_norm] at h_witnesses ⊢
+
+      -- The goal now requires proving that femtoCairoAssumptions holds for acc
+      -- femtoCairoAssumptions acc = ValidProgramSize ∧ ValidProgram ∧ transition(acc).isSome
+
+      -- We need to construct this assumption:
+      have h_need_transition : (Spec.femtoCairoMachineTransition program memory acc).isSome := by
+        -- From InputAssumptions, we have that execution for row_index + 1 steps succeeds
+        -- _h_input_assumptions : ∀ initialState, (boundedExecution ... (row_index + 1)).isSome
+        specialize _h_input_assumptions initialState
+
+        -- h_bounded says: boundedExecution ... row_index = some reachedState
+        -- _h_input_assumptions says: boundedExecution ... (row_index + 1).isSome
+        -- h_spec says: acc = reachedState
+
+        -- Use the helper lemma: if boundedExec n = some state and boundedExec (n+1).isSome,
+        -- then transition(state).isSome
+        rw [h_spec]
+        exact Spec.transition_isSome_of_boundedExecution_succ_isSome
+          program memory (some initialState) reachedState row_index h_bounded _h_input_assumptions
+
+      -- We now have all the assumptions needed
+      have h_full_assumptions : femtoCairoAssumptions program memory acc :=
+        ⟨h_valid_size', h_valid_program', h_need_transition⟩
+
+      -- Apply the step circuit's completeness
+      -- The step uses subcircuitWithAssertion with femtoCairoStepCircuit
+      -- Its completeness requires femtoCairoAssumptions to hold
+
+      -- We have shown femtoCairoAssumptions holds for acc (= eval env acc_var):
+      have h_assumptions_eval : femtoCairoAssumptions program memory (eval env acc_var) := by
+        rw [h_eval.1]
+        exact h_full_assumptions
+
+      -- The remaining proof requires femtoCairoStepCircuitCompleteness to be proven
+      -- (which currently has a sorry). Once that is complete, this follows by applying
+      -- the circuit completeness with h_assumptions_eval.
+      sorry
 
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with

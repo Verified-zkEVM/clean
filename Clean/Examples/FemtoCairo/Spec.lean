@@ -323,4 +323,30 @@ lemma transition_isSome_implies_computeNextState_isSome
             case eq5 => exact h_v3
             case isSome => rw [Option.isSome_iff_exists]; exact ⟨nextState, h_next⟩
 
+/--
+If bounded execution for n steps reaches `state`, and bounded execution for n+1 steps succeeds,
+then the transition from `state` succeeds.
+
+The recursion structure is:
+  boundedExec init (n+1) = boundedExec init n >>= transition
+So if boundedExec init n = some state and boundedExec init (n+1).isSome,
+then transition(state).isSome.
+-/
+lemma transition_isSome_of_boundedExecution_succ_isSome
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (initialState : Option (State (F p))) (state : State (F p)) (n : ℕ)
+    (h_n : femtoCairoMachineBoundedExecution program memory initialState n = some state)
+    (h_succ : (femtoCairoMachineBoundedExecution program memory initialState (n + 1)).isSome) :
+    (femtoCairoMachineTransition program memory state).isSome := by
+  -- boundedExec init (n+1) = boundedExec init n >>= transition
+  simp only [femtoCairoMachineBoundedExecution, Option.isSome_iff_exists] at h_succ
+  obtain ⟨finalState, h_final⟩ := h_succ
+  -- h_final : (boundedExec init n >>= transition) = some finalState
+  rw [h_n] at h_final
+  -- h_final : (some state >>= transition) = some finalState
+  -- which is: transition state = some finalState
+  rw [Option.isSome_iff_exists]
+  exact ⟨finalState, h_final⟩
+
 end Examples.FemtoCairo.Spec
