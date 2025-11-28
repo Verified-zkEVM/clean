@@ -59,23 +59,11 @@ def main
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ExecutionCircuitInput capacities) (F p)) :
     Circuit (F p) Unit := do
-
-  -- Emit initial state with multiplicity +1 (source)
   emitAdd "state" 1 [inputs.initialState.pc, inputs.initialState.ap, inputs.initialState.fp]
-
-  -- Execute ADD instruction bundle
   (AddInstruction.Bundle.circuit capacities.addCapacity program h_programSize memory h_memorySize) inputs.bundledInputs.addInputs
-
-  -- Execute MUL instruction bundle
   (MulInstruction.Bundle.circuit capacities.mulCapacity program h_programSize memory h_memorySize) inputs.bundledInputs.mulInputs
-
-  -- Execute StoreState instruction bundle
   (StoreStateInstruction.Bundle.circuit capacities.storeStateCapacity program h_programSize memory h_memorySize) inputs.bundledInputs.storeStateInputs
-
-  -- Execute LoadState instruction bundle
   (LoadStateInstruction.Bundle.circuit capacities.loadStateCapacity program h_programSize memory h_memorySize) inputs.bundledInputs.loadStateInputs
-
-  -- Emit final state with multiplicity -1 (sink)
   emitAdd "state" (-1) [inputs.finalState.pc, inputs.finalState.ap, inputs.finalState.fp]
 
 /--
@@ -253,11 +241,6 @@ def circuit
   Assumptions := Assumptions capacities (programSize := programSize)
   Spec := CircuitSpec capacities program memory
   soundness := circuit_soundness capacities program h_programSize memory h_memorySize
-  -- Note: Completeness proof depends on the bundle completeness proofs being filled:
-  -- - AddInstruction.Bundle.circuit completeness (currently sorry)
-  -- - MulInstruction.Bundle.circuit completeness (currently sorry)
-  -- - StoreStateInstruction.Bundle.circuit completeness (currently sorry)
-  -- - LoadStateInstruction.Bundle.circuit completeness (currently sorry)
   completeness := by sorry
 }
 
