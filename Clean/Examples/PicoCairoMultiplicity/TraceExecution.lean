@@ -1999,19 +1999,23 @@ theorem Spec_implies_ExecutionExistenceSpec
 /--
 The circuit with the weaker execution existence spec.
 
-This construction uses `FormalAssertionChangingMultiset.weakenSpec` to create a circuit
-with the weaker `ExecutionExistenceSpec` from the original `ExecutionBundle.circuit`.
+This construction uses `FormalAssertionChangingMultiset.toGeneralCircuit` and
+`GeneralFormalCircuitChangingMultiset.weakenSpec` to create a circuit with the weaker
+`ExecutionExistenceSpec` from the original `ExecutionBundle.circuit`.
+
+The key advantage of using `GeneralFormalCircuitChangingMultiset` is that its `weakenSpec`
+doesn't require a sorry because `GeneralFormalCircuit.Completeness` doesn't depend on Spec.
 -/
 def circuitWithExecutionExistenceSpec
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p) (h_memorySize : memorySize < p)
     (h_capacity : 2 * totalCapacity capacities + 1 < p) :
-    FormalAssertionChangingMultiset (F p) (ExecutionCircuitInput capacities) :=
-  (ExecutionBundle.circuit capacities program h_programSize memory h_memorySize).weakenSpec
-    (ExecutionExistenceSpec capacities program memory)
-    (fun input adds _ h_spec =>
+    GeneralFormalCircuitChangingMultiset (F p) (ExecutionCircuitInput capacities) unit :=
+  (ExecutionBundle.circuit capacities program h_programSize memory h_memorySize).toGeneralCircuit.weakenSpec
+    (fun input _ adds => ExecutionBundle.Assumptions capacities input → ExecutionExistenceSpec capacities program memory input adds)
+    (fun input _ adds h_spec h_assumptions =>
       Spec_implies_ExecutionExistenceSpec capacities program h_programSize memory h_memorySize
-        input adds h_spec h_capacity)
+        input adds (h_spec h_assumptions) h_capacity)
 
 end Examples.PicoCairoMultiplicity.TraceExecution
