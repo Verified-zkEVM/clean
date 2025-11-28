@@ -378,10 +378,31 @@ lemma decodeInstruction_eq_some_implies_isEncodedCorrectly (instr : F p) (result
     simp only [Option.some.injEq] at h
     rcases h with ⟨rfl, _, _, _⟩
     -- result.1 = instr.val % 4, which is 0, 1, 2, or 3
-    -- The proof requires showing that the if-then-else encoding produces valid one-hot vectors
-    -- Issue: simp rewrites instr.val % 4 to fieldToBits representation, making direct proof complex
-    -- TODO: Add a lemma relating fieldToBits back to modular arithmetic
-    sorry
+    -- Use fieldToBits_bits: each bit is 0 or 1
+    have h_bit0 := fieldToBits_bits (n := 8) (x := instr) 0 (by omega)
+    have h_bit1 := fieldToBits_bits (n := 8) (x := instr) 1 (by omega)
+    -- Case split on bit values
+    rcases h_bit0 with h0_zero | h0_one <;> rcases h_bit1 with h1_zero | h1_one
+    · -- bit0 = 0, bit1 = 0 → value = 0
+      left
+      simp only [h0_zero, h1_zero, ZMod.val_zero, mul_zero, add_zero,
+        if_pos rfl, if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
+        if_neg (by decide : ¬(0 = 3)), if_true, and_self]
+    · -- bit0 = 0, bit1 = 1 → value = 2
+      right; right; left
+      simp only [h0_zero, h1_one, ZMod.val_zero, ZMod.val_one, mul_one, add_zero,
+        if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)), if_pos rfl,
+        if_neg (by decide : ¬(2 = 3)), if_true, and_self]
+    · -- bit0 = 1, bit1 = 0 → value = 1
+      right; left
+      simp only [h0_one, h1_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
+        if_neg (by decide : ¬(1 = 0)), if_pos rfl, if_neg (by decide : ¬(1 = 2)),
+        if_neg (by decide : ¬(1 = 3)), if_true, and_self]
+    · -- bit0 = 1, bit1 = 1 → value = 3
+      right; right; right
+      simp only [h0_one, h1_one, ZMod.val_one, mul_one,
+        if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
+        if_neg (by decide : ¬(3 = 2)), if_pos rfl, if_true, and_self]
 
 /-- If decodeInstruction succeeds, all addressing modes are encoded correctly -/
 lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
@@ -407,10 +428,74 @@ lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : �
   case isFalse h_lt =>
     simp only [Option.some.injEq] at h
     rcases h with ⟨_, rfl, rfl, rfl⟩
-    -- Each mode value is (instr.val / k) % 4, which is in {0,1,2,3}
-    -- Same issue as above: simp rewrites to fieldToBits representation
-    -- TODO: Add a lemma relating fieldToBits back to modular arithmetic
-    sorry
+    -- Each mode value is derived from different bit pairs of the instruction
+    -- mode1 uses bits 2-3, mode2 uses bits 4-5, mode3 uses bits 6-7
+    -- Use fieldToBits_bits: each bit is 0 or 1
+    have h_bit2 := fieldToBits_bits (n := 8) (x := instr) 2 (by omega)
+    have h_bit3 := fieldToBits_bits (n := 8) (x := instr) 3 (by omega)
+    have h_bit4 := fieldToBits_bits (n := 8) (x := instr) 4 (by omega)
+    have h_bit5 := fieldToBits_bits (n := 8) (x := instr) 5 (by omega)
+    have h_bit6 := fieldToBits_bits (n := 8) (x := instr) 6 (by omega)
+    have h_bit7 := fieldToBits_bits (n := 8) (x := instr) 7 (by omega)
+    -- Helper tactic for the mode proofs
+    refine ⟨?mode1, ?mode2, ?mode3⟩
+    -- mode1: bits 2-3
+    case mode1 =>
+      rcases h_bit2 with h2_zero | h2_one <;> rcases h_bit3 with h3_zero | h3_one
+      · left
+        simp only [h2_zero, h3_zero, ZMod.val_zero, mul_zero, add_zero,
+          if_pos rfl, if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
+          if_neg (by decide : ¬(0 = 3)), if_true, and_self]
+      · right; right; left
+        simp only [h2_zero, h3_one, ZMod.val_zero, ZMod.val_one, mul_one, add_zero,
+          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)), if_pos rfl,
+          if_neg (by decide : ¬(2 = 3)), if_true, and_self]
+      · right; left
+        simp only [h2_one, h3_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
+          if_neg (by decide : ¬(1 = 0)), if_pos rfl, if_neg (by decide : ¬(1 = 2)),
+          if_neg (by decide : ¬(1 = 3)), if_true, and_self]
+      · right; right; right
+        simp only [h2_one, h3_one, ZMod.val_one, mul_one,
+          if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
+          if_neg (by decide : ¬(3 = 2)), if_pos rfl, if_true, and_self]
+    -- mode2: bits 4-5
+    case mode2 =>
+      rcases h_bit4 with h4_zero | h4_one <;> rcases h_bit5 with h5_zero | h5_one
+      · left
+        simp only [h4_zero, h5_zero, ZMod.val_zero, mul_zero, add_zero,
+          if_pos rfl, if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
+          if_neg (by decide : ¬(0 = 3)), if_true, and_self]
+      · right; right; left
+        simp only [h4_zero, h5_one, ZMod.val_zero, ZMod.val_one, mul_one, add_zero,
+          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)), if_pos rfl,
+          if_neg (by decide : ¬(2 = 3)), if_true, and_self]
+      · right; left
+        simp only [h4_one, h5_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
+          if_neg (by decide : ¬(1 = 0)), if_pos rfl, if_neg (by decide : ¬(1 = 2)),
+          if_neg (by decide : ¬(1 = 3)), if_true, and_self]
+      · right; right; right
+        simp only [h4_one, h5_one, ZMod.val_one, mul_one,
+          if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
+          if_neg (by decide : ¬(3 = 2)), if_pos rfl, if_true, and_self]
+    -- mode3: bits 6-7
+    case mode3 =>
+      rcases h_bit6 with h6_zero | h6_one <;> rcases h_bit7 with h7_zero | h7_one
+      · left
+        simp only [h6_zero, h7_zero, ZMod.val_zero, mul_zero, add_zero,
+          if_pos rfl, if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
+          if_neg (by decide : ¬(0 = 3)), if_true, and_self]
+      · right; right; left
+        simp only [h6_zero, h7_one, ZMod.val_zero, ZMod.val_one, mul_one, add_zero,
+          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)), if_pos rfl,
+          if_neg (by decide : ¬(2 = 3)), if_true, and_self]
+      · right; left
+        simp only [h6_one, h7_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
+          if_neg (by decide : ¬(1 = 0)), if_pos rfl, if_neg (by decide : ¬(1 = 2)),
+          if_neg (by decide : ¬(1 = 3)), if_true, and_self]
+      · right; right; right
+        simp only [h6_one, h7_one, ZMod.val_one, mul_one,
+          if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
+          if_neg (by decide : ¬(3 = 2)), if_pos rfl, if_true, and_self]
 
 /-- If dataMemoryAccess succeeds, specific accessed addresses are in bounds -/
 lemma dataMemoryAccess_mode0_bound

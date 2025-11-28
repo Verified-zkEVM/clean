@@ -1021,31 +1021,40 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
   case fetch => exact h_fetch_assumptions
 
   case decode =>
-    -- Need: ZMod.val (env.get i₀) < 256
-    -- where env.get i₀ is the value stored for the rawInstrType variable
-    --
-    -- The fetch circuit's witness stores: program (Fin.ofNat programSize pc.val)
-    -- In the completeness context, h_fetch_env tells us the environment uses this witness.
-    --
-    -- h_fetch_env has type: (fetch.Assumptions → UsesWitnesses ∧ fetch.Spec)
-    -- After applying h_fetch_assumptions, we get that env stores the witness values.
-    --
-    -- The witness for rawInstrType at index i₀ is:
-    --   program (Fin.ofNat programSize (eval env input_var.pc).val)
-    -- = program (Fin.ofNat programSize input.pc.val)  [by h_input]
-    --
-    -- By ValidProgram, this value is < 256.
+    -- h_fetch_env has type: fetch.Assumptions → fetch.Spec
+    -- Apply with h_fetch_assumptions to get fetch.Spec
+    have h_fetch_spec := h_fetch_env h_fetch_assumptions
 
-    -- Extract the witness value connection from h_fetch_env
-    -- h_fetch_env : fetch.Assumptions (eval env input_var.pc) → ...
-    -- Applying it with h_fetch_assumptions should give us witness equality
+    -- fetch.Spec says output equals Spec.fetchInstruction result
+    -- Since h_fetch says fetchInstruction succeeded with result `raw`,
+    -- and h_eval_pc connects circuit variables to spec values,
+    -- we need to show the decode input (rawInstrType) satisfies .val < 256
 
-    -- The goal requires env.get i₀ = program (Fin.ofNat programSize input.pc.val)
-    -- Then we apply h_valid_program to conclude
+    -- The goal after simp should be about the evaluated rawInstrType
+    -- h_fetch_spec : Spec.fetchInstruction ... = some (eval env rawInstr_var)
+    -- We need: (eval env rawInstrType_var).val < 256
 
-    -- For now, use sorry to mark this needs witness infrastructure
-    -- The key insight is: env.get i₀ = program (Fin.ofNat _ input.pc.val)
-    -- This follows from UsesLocalWitnesses in h_fetch_env
+    -- From h_fetch we know: fetchInstruction program input.pc = some raw
+    -- From h_fetch_spec: eval env output_var matches this
+    -- From h_instr_bound: raw.rawInstrType.val < 256
+
+    -- Goal: ZMod.val (env.get i₀) < 256
+    -- h_fetch_env : eval env {rawInstrType := var {index := i₀}, ...} = raw
+    -- This means env.get i₀ = raw.rawInstrType
+    -- h_instr_bound : ZMod.val raw.rawInstrType < 256
+
+    -- Goal: ZMod.val (env.get i₀) < 256
+    --
+    -- Proof sketch:
+    -- 1. h_fetch_env (after applying h_fetch_assumptions) gives: eval env {...} = raw
+    --    where the {...} structure has rawInstrType := var {index := i₀}
+    -- 2. Therefore env.get i₀ = raw.rawInstrType
+    -- 3. h_instr_bound : ZMod.val raw.rawInstrType < 256
+    -- 4. Substituting: ZMod.val (env.get i₀) < 256
+    --
+    -- The challenge is extracting the equality from the Spec result structure.
+    -- h_fetch_env h_fetch_assumptions gives the Spec, which after simplification
+    -- should be an equality, but the type is complex due to circuit elaboration.
     sorry
 
   case read1 =>
