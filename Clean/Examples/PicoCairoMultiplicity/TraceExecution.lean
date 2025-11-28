@@ -735,6 +735,14 @@ lemma sum_instructionEdgeContribution_over_targets
     · -- not enabled
       simp only [he, false_and, ↓reduceIte]
 
+/-- Helper: Finset.sum over list.map.sum equals list.map of Finset.sum -/
+lemma sum_list_map_sum_eq_list_map_sum {α β : Type*} [Fintype α] [AddCommMonoid β]
+    (L : List (InstructionStepInput (F p))) (f : InstructionStepInput (F p) → α → β) :
+    ∑ t : α, (L.map (fun i => f i t)).sum = (L.map (fun i => ∑ t : α, f i t)).sum := by
+  induction L with
+  | nil => simp
+  | cons head tail ih => simp only [List.map_cons, List.sum_cons, Finset.sum_add_distrib, ih]
+
 /-- Helper lemma: sum over all target states equals total outgoing from source -/
 lemma sum_bundleEdgeCount_eq_countOutgoing {n : ℕ}
     (inputs : Vector (InstructionStepInput (F p)) n)
@@ -742,47 +750,16 @@ lemma sum_bundleEdgeCount_eq_countOutgoing {n : ℕ}
     (s : State (F p)) :
     ∑ t : State (F p), bundleEdgeCount inputs postStateFn (s, t) =
     countOutgoing inputs postStateFn s := by
-  -- Unfold definitions
   simp only [bundleEdgeCount, countOutgoing]
-  -- We need to show: ∑ t, (List.map contrib inputs.toList).sum = filter.length
-  -- Rewrite using the helper lemma for each instruction
-  -- First, interchange order: ∑ t, ∑_list i, contrib(i,t) = ∑_list i, ∑ t, contrib(i,t)
-
-  -- Convert the Finset.sum ∑ t, List.sum ... to ∑ i ∈ list, ∑ t, ...
-  -- Use that List.sum distributes: ∑ t, (map f list).sum = (map (λ i => ∑ t, f i t) list).sum
-  have h_distrib : ∀ (L : List (InstructionStepInput (F p))),
-      ∑ t : State (F p), (L.map (fun i => instructionEdgeContribution i postStateFn (s, t))).sum =
-      (L.map (fun i => ∑ t : State (F p), instructionEdgeContribution i postStateFn (s, t))).sum := by
-    intro L
-    induction L with
-    | nil => simp
-    | cons head tail ih =>
-      simp only [List.map_cons, List.sum_cons]
-      rw [Finset.sum_add_distrib]
-      rw [ih]
-
-  rw [h_distrib]
-  -- Now use sum_instructionEdgeContribution_over_targets
+  rw [sum_list_map_sum_eq_list_map_sum]
   simp_rw [sum_instructionEdgeContribution_over_targets]
-  -- Goal: (map (λ i => if enabled ∧ preState=s then 1 else 0) list).sum = filter.length
-  -- This is: count of elements where enabled ∧ preState=s = filter.length
   rw [← List.countP_eq_length_filter]
-  -- Prove by induction that sum of ite 1 0 = countP
-  have h_sum_countP : ∀ (L : List (InstructionStepInput (F p))),
-      (L.map (fun i => if i.enabled = 1 ∧ i.preState = s then 1 else 0)).sum =
-      L.countP (fun i => decide (i.enabled = 1 ∧ i.preState = s)) := by
-    intro L
-    induction L with
-    | nil => simp
-    | cons head tail ih =>
-      simp only [List.map_cons, List.sum_cons, List.countP_cons]
-      by_cases h : head.enabled = 1 ∧ head.preState = s
-      · simp only [h, ↓reduceIte, decide_true, ih, and_self, add_comm]
-      · simp only [h, ↓reduceIte, zero_add, ih]
-        -- The remaining part: countP = countP + (if decide False = true then 1 else 0)
-        -- decide False = false, so if false = true then 1 else 0 = 0
-        rfl
-  exact h_sum_countP inputs.toList
+  -- Convert sum of ite 1 0 to countP
+  induction inputs.toList with
+  | nil => simp
+  | cons head tail ih =>
+    simp only [List.map_cons, List.sum_cons, List.countP_cons, ih]
+    by_cases h : head.enabled = 1 ∧ head.preState = s <;> simp [h, add_comm]
 
 /-- For a single instruction, sum over all sources equals 1 if enabled and postStateFn preState=s, else 0 -/
 lemma sum_instructionEdgeContribution_over_sources
@@ -828,39 +805,16 @@ lemma sum_bundleEdgeCount_eq_countIncoming {n : ℕ}
     (s : State (F p)) :
     ∑ t : State (F p), bundleEdgeCount inputs postStateFn (t, s) =
     countIncoming inputs postStateFn s := by
-  -- Unfold definitions
   simp only [bundleEdgeCount, countIncoming]
-  -- Use that List.sum distributes: ∑ t, (map f list).sum = (map (λ i => ∑ t, f i t) list).sum
-  have h_distrib : ∀ (L : List (InstructionStepInput (F p))),
-      ∑ t : State (F p), (L.map (fun i => instructionEdgeContribution i postStateFn (t, s))).sum =
-      (L.map (fun i => ∑ t : State (F p), instructionEdgeContribution i postStateFn (t, s))).sum := by
-    intro L
-    induction L with
-    | nil => simp
-    | cons head tail ih =>
-      simp only [List.map_cons, List.sum_cons]
-      rw [Finset.sum_add_distrib]
-      rw [ih]
-
-  rw [h_distrib]
-  -- Now use sum_instructionEdgeContribution_over_sources
+  rw [sum_list_map_sum_eq_list_map_sum]
   simp_rw [sum_instructionEdgeContribution_over_sources]
-  -- Goal: (map (λ i => if enabled ∧ postStateFn preState=s then 1 else 0) list).sum = filter.length
   rw [← List.countP_eq_length_filter]
-  -- Prove by induction that sum of ite 1 0 = countP
-  have h_sum_countP : ∀ (L : List (InstructionStepInput (F p))),
-      (L.map (fun i => if i.enabled = 1 ∧ postStateFn i.preState = s then 1 else 0)).sum =
-      L.countP (fun i => decide (i.enabled = 1 ∧ postStateFn i.preState = s)) := by
-    intro L
-    induction L with
-    | nil => simp
-    | cons head tail ih =>
-      simp only [List.map_cons, List.sum_cons, List.countP_cons]
-      by_cases h : head.enabled = 1 ∧ postStateFn head.preState = s
-      · simp only [h, ↓reduceIte, decide_true, ih, and_self, add_comm]
-      · simp only [h, ↓reduceIte, zero_add, ih]
-        rfl
-  exact h_sum_countP inputs.toList
+  -- Convert sum of ite 1 0 to countP
+  induction inputs.toList with
+  | nil => simp
+  | cons head tail ih =>
+    simp only [List.map_cons, List.sum_cons, List.countP_cons, ih]
+    by_cases h : head.enabled = 1 ∧ postStateFn head.preState = s <;> simp [h, add_comm]
 
 /-! ## Field-integer lifting lemmas -/
 
