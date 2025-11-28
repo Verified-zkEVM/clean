@@ -969,7 +969,7 @@ def femtoCairoTable
     | none => False -- impossible, constraints ensure that every transition is valid
 
   -- Initial state assumptions for completeness: program must be valid
-  InitialStateAssumptions := fun _ => ValidProgram program
+  InitialStateAssumptions _ := ValidProgram program
 
   soundness := by
     intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold
