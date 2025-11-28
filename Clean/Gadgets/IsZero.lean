@@ -32,7 +32,9 @@ instance elaborated : ElaboratedCircuit F M field where
   localAdds_eq := by
     intro input env offset
     simp [main, circuit_norm]
-    sorry
+    rw [Circuit.collectAdds_foldlRange' _ _ _ _ _ (by intros; simp only [Operations.collectAdds,
+      FormalCircuit.toSubcircuit_localAdds, InteractionDelta.zero_add'])]
+    rfl
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 

@@ -786,6 +786,13 @@ theorem collectAdds_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F
   unfold mapFinRange Vector.mapFinRangeM
   exact collectAdds_map (Vector.finRange m) body constant env offset h_body
 
+/-- Version of collectAdds_mapFinRange using `.2` syntax for easier matching in proofs. -/
+theorem collectAdds_mapFinRange' (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (h_body : ∀ i n, Operations.collectAdds env ((body i) n).2 = 0) :
+    Operations.collectAdds env ((mapFinRange m body constant) offset).2 = 0 :=
+  collectAdds_mapFinRange m body constant env offset h_body
+
 theorem collectAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector α m)
     (init : β) (body : β → α → Circuit F β)
     (const_out : ConstantOutput (fun (s, a) => body s a))
