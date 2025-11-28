@@ -280,12 +280,47 @@ lemma transition_isSome_implies_computeNextState_isSome
     ∃ raw decode v1 v2 v3,
       fetchInstruction program state.pc = some raw ∧
       decodeInstruction raw.rawInstrType = some decode ∧
-      dataMemoryAccess memory raw.op1 decode.1 state.ap state.fp = some v1 ∧
-      dataMemoryAccess memory raw.op2 decode.2.1 state.ap state.fp = some v2 ∧
-      dataMemoryAccess memory raw.op3 decode.2.2.1 state.ap state.fp = some v3 ∧
-      (computeNextState decode.2.2.2 v1 v2 v3 state).isSome := by
+      dataMemoryAccess memory raw.op1 decode.2.1 state.ap state.fp = some v1 ∧
+      dataMemoryAccess memory raw.op2 decode.2.2.1 state.ap state.fp = some v2 ∧
+      dataMemoryAccess memory raw.op3 decode.2.2.2 state.ap state.fp = some v3 ∧
+      (computeNextState decode.1 v1 v2 v3 state).isSome := by
   -- The transition is a chain of Option.bind operations. If the whole chain returns some,
   -- each intermediate step must have returned some.
-  sorry
+  simp only [femtoCairoMachineTransition, Option.isSome_iff_exists] at h
+  obtain ⟨nextState, h_next⟩ := h
+  simp only [Option.bind_eq_bind] at h_next
+  -- Case on fetchInstruction
+  cases h_fetch : fetchInstruction program state.pc with
+  | none => simp [h_fetch] at h_next
+  | some raw =>
+    simp only [h_fetch, Option.bind_some] at h_next
+    -- Case on decodeInstruction
+    cases h_decode : decodeInstruction raw.rawInstrType with
+    | none => simp [h_decode] at h_next
+    | some decode =>
+      simp only [h_decode, Option.bind_some] at h_next
+      -- Case on first dataMemoryAccess (uses decode.2.1 = mode1)
+      cases h_v1 : dataMemoryAccess memory raw.op1 decode.2.1 state.ap state.fp with
+      | none => simp [h_v1] at h_next
+      | some v1 =>
+        simp only [h_v1, Option.bind_some] at h_next
+        -- Case on second dataMemoryAccess (uses decode.2.2.1 = mode2)
+        cases h_v2 : dataMemoryAccess memory raw.op2 decode.2.2.1 state.ap state.fp with
+        | none => simp [h_v2] at h_next
+        | some v2 =>
+          simp only [h_v2, Option.bind_some] at h_next
+          -- Case on third dataMemoryAccess (uses decode.2.2.2 = mode3)
+          cases h_v3 : dataMemoryAccess memory raw.op3 decode.2.2.2 state.ap state.fp with
+          | none => simp [h_v3] at h_next
+          | some v3 =>
+            simp only [h_v3, Option.bind_some] at h_next
+            -- Now h_next : computeNextState decode.1 v1 v2 v3 state = some nextState
+            refine ⟨raw, decode, v1, v2, v3, ?eq1, ?eq2, ?eq3, ?eq4, ?eq5, ?isSome⟩
+            case eq1 => rfl
+            case eq2 => exact h_decode
+            case eq3 => exact h_v1
+            case eq4 => exact h_v2
+            case eq5 => exact h_v3
+            case isSome => rw [Option.isSome_iff_exists]; exact ⟨nextState, h_next⟩
 
 end Examples.FemtoCairo.Spec
