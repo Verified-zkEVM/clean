@@ -978,33 +978,69 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
     simp only [Option.isSome_iff_exists] at h_decode_bound
     exact h_decode_bound ⟨decode, h_decode⟩
 
-  -- Get the subcircuit completeness hypotheses from h_env
-  -- h_env contains: for each subcircuit, circuit.Assumptions (eval env ...) → ...
-  -- After circuit_norm, these become the subcircuit Completeness requirements
-  obtain ⟨c_fetch, c_decode, c_read1, c_read2, c_read3, c_next⟩ := h_env
+  -- The goal is a conjunction of subcircuit completeness requirements.
+  -- h_env contains (Assumptions → Spec) implications for each subcircuit.
+  -- We prove each subcircuit's Assumptions using:
+  -- 1. h_input to connect circuit variables to spec values
+  -- 2. The Spec outputs from earlier subcircuits to prove later Assumptions
 
-  -- The completeness proof requires showing each subcircuit's assumptions hold.
-  -- h_input : eval env input_var = input, so we can use this to rewrite.
+  -- Use State.eval_pc to relate evaluated struct fields
+  have h_eval_pc : Expression.eval env input_var.pc = input.pc := by
+    rw [← State.eval_pc env input_var, h_input]
 
-  -- The full compositional completeness proof is complex because:
-  -- 1. Each subcircuit's input depends on the output of previous subcircuits
-  -- 2. We need to show that spec-level success (transition.isSome) implies
-  --    circuit-level assumptions hold for each subcircuit
-  -- 3. The circuit structure uses witnesses that the prover computes
+  -- Extract h_env implications for each subcircuit
+  -- h_env after circuit_proof_start contains:
+  -- (fetch.Assumptions → fetch.Spec) ∧ (decode.Assumptions → decode.Spec) ∧ ...
+  obtain ⟨h_fetch_env, h_decode_env, h_read1_env, h_read2_env, h_read3_env, h_next_env⟩ := h_env
 
-  -- Key observations:
-  -- - h_pc_bound gives us: input.pc.val + 3 < programSize
-  -- - h_instr_bound gives us: raw.rawInstrType.val < 256
-  -- - h_fetch, h_decode, h_v1, h_v2, h_v3, h_computeNext decompose the spec success
+  -- Prove fetch.Assumptions
+  have h_fetch_assumptions : (Expression.eval env input_var.pc).val + 3 < programSize := by
+    rw [h_eval_pc]; exact h_pc_bound
 
-  -- To complete this proof, we would need to:
-  -- 1. Use h_input to relate circuit inputs to spec inputs
-  -- 2. Use c_fetch's spec guarantee to relate circuit outputs to spec outputs
-  -- 3. Chain through each subcircuit showing assumptions are met
+  -- Use h_fetch_env to get fetch.Spec
+  -- The fetch.Spec says the output matches Spec.fetchInstruction
+  -- This connects the circuit's rawInstrType to the spec's raw.rawInstrType
+  -- Note: After simp, h_fetch_env should have type:
+  -- fetch.Assumptions (eval env input_var.pc) → fetch.Spec (eval env input_var.pc) (output)
 
-  -- This is a detailed proof that requires careful handling of the
-  -- compositional circuit structure. For now, we leave it as sorry.
-  sorry
+  -- For the remaining subcircuits, we need to prove their Assumptions hold.
+  -- The compositional completeness requires showing:
+  -- 1. decode.Assumptions: (eval env rawInstrType_var).val < 256
+  --    This follows from ValidProgram + witness computation + h_fetch_assumptions
+  -- 2. read1/2/3.Assumptions: memory addresses in bounds
+  --    This follows from transition.isSome ensuring memory accesses succeed
+  -- 3. next.Assumptions: isEncodedCorrectly ∧ computeNextState.isSome
+  --    This follows from decode.Spec + transition.isSome
+
+  -- The remaining proofs require careful tracking of how witnesses are computed
+  -- and relating them to spec values. For now, we prove what we can and leave
+  -- the compositional parts for future work.
+
+  refine ⟨?fetch, ?decode, ?read1, ?read2, ?read3, ?next⟩
+
+  case fetch => exact h_fetch_assumptions
+
+  case decode =>
+    -- Need: (eval env rawInstrType_var).val < 256
+    -- where rawInstrType_var is the output of fetch
+    -- The witness computes: program (Fin.ofNat programSize pc.val)
+    -- By ValidProgram, this is < 256
+    -- But connecting eval to the witness requires UsesLocalWitnesses from h_fetch_env
+    sorry
+
+  case read1 =>
+    -- Need: ∀ addr ∈ dataMemoryAddresses ..., addr.val < memorySize
+    sorry
+
+  case read2 =>
+    sorry
+
+  case read3 =>
+    sorry
+
+  case next =>
+    -- Need: isEncodedCorrectly decoded ∧ computeNextState.isSome
+    sorry
 
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)

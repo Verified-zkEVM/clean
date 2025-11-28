@@ -145,6 +145,26 @@ instance : ProvableStruct StateTransitionInput where
 lemma State.ext {F : Type} {s1 s2 : State F} (h1 : s1.pc = s2.pc) (h2 : s1.ap = s2.ap) (h3 : s1.fp = s2.fp) : s1 = s2 := by
   cases s1; cases s2; simp_all only
 
+section StateEval
+variable {F : Type} [Field F]
+
+/-- Evaluating a State variable and extracting pc equals evaluating the pc expression -/
+@[circuit_norm]
+lemma State.eval_pc (env : Environment F) (s : Var State F) :
+    (ProvableType.eval env s).pc = Expression.eval env s.pc := rfl
+
+/-- Evaluating a State variable and extracting ap equals evaluating the ap expression -/
+@[circuit_norm]
+lemma State.eval_ap (env : Environment F) (s : Var State F) :
+    (ProvableType.eval env s).ap = Expression.eval env s.ap := rfl
+
+/-- Evaluating a State variable and extracting fp equals evaluating the fp expression -/
+@[circuit_norm]
+lemma State.eval_fp (env : Environment F) (s : Var State F) :
+    (ProvableType.eval env s).fp = Expression.eval env s.fp := rfl
+
+end StateEval
+
 /--
   Convert the one-hot encoding of an instruction type back to its numeric representation.
 -/
