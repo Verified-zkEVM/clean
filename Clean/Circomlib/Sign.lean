@@ -36,16 +36,13 @@ def main (input : Vector (Expression (F p)) 254) :=
   -- Use (p-1)/2 as the constant for comparison
   CompConstant.circuit ((p - 1) / 2) input
 
-def elaborated : ElaboratedCircuit (F p) (fields 254) field where
+def circuit : FormalCircuit (F p) (fields 254) field where
   main := main
   localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
   output input offset := (CompConstant.circuit ((p - 1) / 2)).output input offset
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
     simp only [Operations.collectAdds, circuit_norm]
-
-def circuit : FormalCircuit (F p) (fields 254) field where
-  elaborated := elaborated
 
   Assumptions input :=
     -- Input should be binary representation of a field element
