@@ -933,7 +933,26 @@ def femtoCairoStepCircuitSoundness
 def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
   (h_programSize : programSize < p) {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize)
-      (femtoCairoAssumptions program memory) := by sorry
+      (femtoCairoAssumptions program memory) := by
+  -- Unfold the completeness definition and introduce all parameters
+  circuit_proof_start [femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
+    fetchInstructionCircuit, decodeInstructionCircuit, readFromMemoryCircuit, nextStateCircuit]
+
+  -- Extract assumptions: ValidProgram program ∧ transition.isSome
+  obtain ⟨h_valid_program, h_transition_isSome⟩ := h_assumptions
+
+  -- The proof needs to show that all subcircuit completeness conditions are satisfied.
+  -- This requires showing:
+  -- 1. fetchInstructionCircuit.Assumptions: pc.val + 3 < programSize
+  -- 2. decodeInstructionCircuit.Assumptions: rawInstrType.val < 256
+  -- 3. readFromMemoryCircuit.Assumptions (x3): all addresses in dataMemoryAddresses are in bounds
+  -- 4. nextStateCircuit.Assumptions: isEncodedCorrectly ∧ computeNextState.isSome
+
+  -- For now, we leave this as sorry - the full proof requires:
+  -- - Using helper lemmas from Spec.lean to decompose transition.isSome
+  -- - Showing each subcircuit assumption follows from the decomposition
+  -- - This is complex due to the nested structure of subcircuitWithAssertion
+  sorry
 
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
@@ -992,7 +1011,23 @@ def femtoCairoTable
         rw [h_eq]
         simp only [h_hold]
 
-  completeness := by sorry
+  completeness := by
+    -- Table completeness requires showing that if:
+    -- 1. InitialStateAssumptions holds (ValidProgram program)
+    -- 2. The spec holds for i steps (bounded execution succeeds for i steps)
+    -- Then femtoCairoAssumptions holds for the reached state, enabling the (i+1)th step.
+    --
+    -- The key insight: if bounded execution succeeds for i steps reaching state s,
+    -- and we're asked to prove femtoCairoAssumptions s = ValidProgram ∧ transition(s).isSome,
+    -- we need to show transition(s) succeeds.
+    --
+    -- This follows from the spec: if bounded execution reaches s at step i,
+    -- then the (i+1)th transition must succeed for the execution to continue.
+    --
+    -- Full proof requires:
+    -- - Showing ValidProgram is preserved (it's an invariant, doesn't depend on state)
+    -- - Showing transition.isSome follows from execution reaching the current state
+    sorry
 
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with
