@@ -242,6 +242,15 @@ def pathToExecutionSteps (path : List (State (F p))) : ℕ :=
   path.length - 1
 
 open Utils.StateTransition in
+/-- The first transition in a path has count > 0 -/
+lemma countTransitionInPath_first_pos {α : Type*} [DecidableEq α] (s0 s1 : α) (rest : List α) :
+    countTransitionInPath (s0, s1) (s0 :: s1 :: rest) > 0 := by
+  unfold countTransitionInPath
+  simp only [List.zip, List.tail, List.zipWith_cons_cons]
+  simp only [List.count_cons, beq_self_eq_true, ↓reduceIte]
+  omega
+
+open Utils.StateTransition in
 /-- Helper: First transition in a path with at least 2 elements is valid -/
 lemma first_transition_valid
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -251,13 +260,9 @@ lemma first_transition_valid
     (h_valid_run : IsValidRun program memory R)
     (h_contains : R.containsPath (s0 :: s1 :: rest)) :
     femtoCairoMachineTransition program memory s0 = some s1 := by
-  have h_count_pos : countTransitionInPath (s0, s1) (s0 :: s1 :: rest) > 0 := by
-    unfold countTransitionInPath
-    simp only [List.zip, List.tail, List.zipWith_cons_cons]
-    simp only [List.count_cons, beq_self_eq_true, ↓reduceIte]
-    omega
   have h_R_pos : R (s0, s1) > 0 := by
     have h_bound := h_contains (s0, s1)
+    have h_count_pos := countTransitionInPath_first_pos s0 s1 rest
     omega
   exact h_valid_run s0 s1 h_R_pos
 
@@ -863,15 +868,18 @@ lemma int_sub_eq_one_of_field_sub_eq_one (a b : ℕ) (h_small : a + b + 1 < p)
   have h_nat := nat_succ_of_field_sub_eq_one a b h_small h_eq
   omega
 
+/-- In a field, a - b = -1 implies b - a = 1 -/
+lemma field_sub_eq_neg_one_implies_swap_eq_one {F : Type*} [Field F]
+    (a b : F) (h : a - b = -1) : b - a = 1 := by
+  have h1 : a - b + 1 = 0 := by simp [h]
+  calc b - a = -(a - b) := by ring
+    _ = -(a - b) + ((a - b) + 1) := by rw [h1]; ring
+    _ = 1 := by ring
+
 /-- Lift field equation a - b = -1 to integer equation (a : ℤ) - b = -1 -/
 lemma int_sub_eq_neg_one_of_field_sub_eq_neg_one (a b : ℕ) (h_small : a + b + 1 < p)
     (h_eq : (↑a - ↑b : F p) = -1) : (a : ℤ) - (b : ℤ) = -1 := by
-  -- a - b = -1 in field means b - a = 1 in field
-  have h_eq' : (↑b - ↑a : F p) = 1 := by
-    have h1 : (↑a - ↑b : F p) + 1 = 0 := by simp [h_eq]
-    calc (↑b - ↑a : F p) = -(↑a - ↑b) := by ring
-      _ = -(↑a - ↑b) + ((↑a - ↑b) + 1) := by rw [h1]; ring
-      _ = 1 := by ring
+  have h_eq' : (↑b - ↑a : F p) = 1 := field_sub_eq_neg_one_implies_swap_eq_one _ _ h_eq
   have h_nat := nat_succ_of_field_sub_eq_one b a (by omega) h_eq'
   omega
 
@@ -949,6 +957,15 @@ lemma list_sum_ite_eq_countP {α : Type*} (l : List α) (p : α → Prop) [Decid
     · simp [hp, add_comm]
     · simp [hp]
 
+/-- Mapping a function over finRange with indexed access equals mapping over toList -/
+lemma finRange_map_getElem_eq_toList_map {α β : Type*} {n : ℕ} (v : Vector α n) (f : α → β) :
+    (List.finRange n).map (fun i => f v[i]) = v.toList.map f := by
+  apply List.ext_getElem
+  · simp only [List.length_map, List.length_finRange, Vector.length_toList]
+  · intro k h1 h2
+    simp only [List.getElem_map, List.getElem_finRange, Vector.getElem_toList]
+    rfl
+
 /--
 Helper: Sum of ite 1 0 over finRange equals countP over vector's toList.
 -/
@@ -956,18 +973,7 @@ lemma sum_ite_eq_countP {α : Type*} {n : ℕ} (v : Vector α n) (p : α → Pro
     {F : Type*} [Semiring F] :
     ((List.finRange n).map (fun i => if p v[i] then (1 : F) else 0)).sum =
       ↑(v.toList.countP (fun x => decide (p x))) := by
-  -- The key equality: indexed map = direct list map
-  have h_maps_eq : (List.finRange n).map (fun i => if p v[i] then (1 : F) else 0) =
-                   v.toList.map (fun x => if p x then (1 : F) else 0) := by
-    -- Both lists have the same length (n)
-    have h_len1 : (List.finRange n).length = n := List.length_finRange
-    have h_len2 : v.toList.length = n := Vector.length_toList
-    apply List.ext_getElem
-    · simp only [List.length_map, h_len1, h_len2]
-    · intro k h1 h2
-      simp only [List.getElem_map, List.getElem_finRange, Vector.getElem_toList]
-      congr 2
-  rw [h_maps_eq]
+  rw [finRange_map_getElem_eq_toList_map v (fun x => if p x then (1 : F) else 0)]
   exact list_sum_ite_eq_countP v.toList p
 
 /--
