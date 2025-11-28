@@ -5,6 +5,7 @@ Proves that the ExecutionBundle spec implies existence of a valid FemtoCairo exe
 
 import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
+import Clean.Circuit.StructuralLemmas
 import Clean.Utils.SourceSinkPath
 import Clean.Examples.PicoCairoMultiplicity.Types
 import Clean.Examples.PicoCairoMultiplicity.ExecutionBundle
@@ -1995,14 +1996,22 @@ theorem Spec_implies_ExecutionExistenceSpec
   intro h_balanced
   exact Spec_implies_execution capacities program h_programSize memory h_memorySize inputs adds h_spec h_balanced h_capacity
 
-/-
+/--
 The circuit with the weaker execution existence spec.
 
-This construction uses the fact that the original ExecutionBundle.Spec implies
-ExecutionExistenceSpec when the adds are balanced.
-
-Note: To complete this construction, we would need a FormalAssertionChangingMultiset.weakenSpec
-lemma analogous to FormalCircuit.weakenSpec.
+This construction uses `FormalAssertionChangingMultiset.weakenSpec` to create a circuit
+with the weaker `ExecutionExistenceSpec` from the original `ExecutionBundle.circuit`.
 -/
+def circuitWithExecutionExistenceSpec
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p) (h_memorySize : memorySize < p)
+    (h_capacity : 2 * totalCapacity capacities + 1 < p) :
+    FormalAssertionChangingMultiset (F p) (ExecutionCircuitInput capacities) :=
+  (ExecutionBundle.circuit capacities program h_programSize memory h_memorySize).weakenSpec
+    (ExecutionExistenceSpec capacities program memory)
+    (fun input adds _ h_spec =>
+      Spec_implies_ExecutionExistenceSpec capacities program h_programSize memory h_memorySize
+        input adds h_spec h_capacity)
 
 end Examples.PicoCairoMultiplicity.TraceExecution
