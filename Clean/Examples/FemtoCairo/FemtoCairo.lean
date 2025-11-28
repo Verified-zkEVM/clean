@@ -1021,31 +1021,31 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
   case fetch => exact h_fetch_assumptions
 
   case decode =>
-    -- Need: (eval env rawInstrType_var).val < 256
-    -- where rawInstrType_var is the output of fetch
-    -- The witness computes: program (Fin.ofNat programSize pc.val)
-    -- By ValidProgram, this is < 256
+    -- Need: ZMod.val (env.get i₀) < 256
+    -- where env.get i₀ is the value stored for the rawInstrType variable
+    --
+    -- The fetch circuit's witness stores: program (Fin.ofNat programSize pc.val)
+    -- In the completeness context, h_fetch_env tells us the environment uses this witness.
+    --
+    -- h_fetch_env has type: (fetch.Assumptions → UsesWitnesses ∧ fetch.Spec)
+    -- After applying h_fetch_assumptions, we get that env stores the witness values.
+    --
+    -- The witness for rawInstrType at index i₀ is:
+    --   program (Fin.ofNat programSize (eval env input_var.pc).val)
+    -- = program (Fin.ofNat programSize input.pc.val)  [by h_input]
+    --
+    -- By ValidProgram, this value is < 256.
 
-    -- In the completeness context, env uses correct witnesses.
-    -- The fetch circuit's witness for rawInstrType is:
-    --   fun eval => program (Fin.ofNat programSize (eval pc).val)
-    -- So eval env rawInstrType_var = program (Fin.ofNat programSize input.pc.val)
-    -- By ValidProgram: (program i).val < 256 for all i
+    -- Extract the witness value connection from h_fetch_env
+    -- h_fetch_env : fetch.Assumptions (eval env input_var.pc) → ...
+    -- Applying it with h_fetch_assumptions should give us witness equality
 
-    -- Extract from h_fetch_env that witnesses are used correctly
-    -- h_fetch_env should have type involving UsesLocalWitnesses for fetch
-    -- After simplification, this gives us the witness value
+    -- The goal requires env.get i₀ = program (Fin.ofNat programSize input.pc.val)
+    -- Then we apply h_valid_program to conclude
 
-    -- Alternative: Use h_instr_bound which we already derived
-    -- We showed raw.rawInstrType.val < 256 where raw = fetchInstruction result
-    -- The circuit's rawInstrType_var evaluates to the same value in completeness context
-
-    -- For now, we need the compositional infrastructure to connect these
-    -- The proof requires showing eval env rawInstrType_var = raw.rawInstrType
-    -- This follows from witness correctness + Fin.ofNat simplification
-
-    -- Key lemma needed: if pc.val < programSize (from h_pc_bound) and
-    -- env uses correct witnesses, then eval env rawInstrType_var = program ⟨pc.val, _⟩
+    -- For now, use sorry to mark this needs witness infrastructure
+    -- The key insight is: env.get i₀ = program (Fin.ofNat _ input.pc.val)
+    -- This follows from UsesLocalWitnesses in h_fetch_env
     sorry
 
   case read1 =>

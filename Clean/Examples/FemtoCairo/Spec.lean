@@ -1,5 +1,6 @@
 import Clean.Utils.Bits
 import Clean.Utils.Field
+import Mathlib.Tactic.IntervalCases
 
 import Clean.Examples.FemtoCairo.Types
 
@@ -348,5 +349,175 @@ lemma transition_isSome_of_boundedExecution_succ_isSome
   -- which is: transition state = some finalState
   rw [Option.isSome_iff_exists]
   exact ⟨finalState, h_final⟩
+
+/-! ### Infrastructure lemmas for completeness proofs -/
+
+/-- ValidProgram ensures any program access returns a value < 256 -/
+lemma validProgram_bound {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
+    (h_valid : Types.ValidProgram program) (i : Fin programSize) :
+    (program i).val < 256 := h_valid i
+
+/-- ValidProgram + Fin.ofNat gives bound < 256 (useful when index comes from witness computation) -/
+lemma validProgram_bound_at_ofNat {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
+    (h_valid : Types.ValidProgram program) (n : ℕ) :
+    (program (Fin.ofNat programSize n)).val < 256 := h_valid _
+
+/-- If decodeInstruction succeeds, the result encodes a valid instruction type -/
+lemma decodeInstruction_eq_some_implies_isEncodedCorrectly (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
+    (h : decodeInstruction instr = some result) :
+    Types.DecodedInstructionType.isEncodedCorrectly (p := p) {
+      isAdd := if result.1 = 0 then 1 else 0
+      isMul := if result.1 = 1 then 1 else 0
+      isStoreState := if result.1 = 2 then 1 else 0
+      isLoadState := if result.1 = 3 then 1 else 0
+    } := by
+  simp only [decodeInstruction] at h
+  split at h
+  case isTrue => simp at h
+  case isFalse h_lt =>
+    simp only [Option.some.injEq] at h
+    rcases h with ⟨rfl, _, _, _⟩
+    -- result.1 = instr.val % 4, which is 0, 1, 2, or 3
+    -- The proof requires showing that the if-then-else encoding produces valid one-hot vectors
+    -- Issue: simp rewrites instr.val % 4 to fieldToBits representation, making direct proof complex
+    -- TODO: Add a lemma relating fieldToBits back to modular arithmetic
+    sorry
+
+/-- If decodeInstruction succeeds, all addressing modes are encoded correctly -/
+lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
+    (h : decodeInstruction instr = some result) :
+    let mode1 := { isDoubleAddressing := if result.2.1 = 0 then (1 : F p) else 0
+                   isApRelative := if result.2.1 = 1 then 1 else 0
+                   isFpRelative := if result.2.1 = 2 then 1 else 0
+                   isImmediate := if result.2.1 = 3 then 1 else 0 }
+    let mode2 := { isDoubleAddressing := if result.2.2.1 = 0 then (1 : F p) else 0
+                   isApRelative := if result.2.2.1 = 1 then 1 else 0
+                   isFpRelative := if result.2.2.1 = 2 then 1 else 0
+                   isImmediate := if result.2.2.1 = 3 then 1 else 0 }
+    let mode3 := { isDoubleAddressing := if result.2.2.2 = 0 then (1 : F p) else 0
+                   isApRelative := if result.2.2.2 = 1 then 1 else 0
+                   isFpRelative := if result.2.2.2 = 2 then 1 else 0
+                   isImmediate := if result.2.2.2 = 3 then 1 else 0 }
+    Types.DecodedAddressingMode.isEncodedCorrectly mode1 ∧
+    Types.DecodedAddressingMode.isEncodedCorrectly mode2 ∧
+    Types.DecodedAddressingMode.isEncodedCorrectly mode3 := by
+  simp only [decodeInstruction] at h
+  split at h
+  case isTrue => simp at h
+  case isFalse h_lt =>
+    simp only [Option.some.injEq] at h
+    rcases h with ⟨_, rfl, rfl, rfl⟩
+    -- Each mode value is (instr.val / k) % 4, which is in {0,1,2,3}
+    -- Same issue as above: simp rewrites to fieldToBits representation
+    -- TODO: Add a lemma relating fieldToBits back to modular arithmetic
+    sorry
+
+/-- If dataMemoryAccess succeeds, specific accessed addresses are in bounds -/
+lemma dataMemoryAccess_mode0_bound
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (offset ap fp result : F p)
+    (h : dataMemoryAccess memory offset 0 ap fp = some result) :
+    (ap + offset).val < memorySize ∧
+    ∃ addr', memoryAccess memory (ap + offset) = some addr' ∧ addr'.val < memorySize := by
+  simp only [dataMemoryAccess, Option.bind_eq_bind] at h
+  cases h_first : memoryAccess memory (ap + offset) with
+  | none => simp [h_first] at h
+  | some addr' =>
+    simp only [h_first, Option.bind_some] at h
+    simp only [memoryAccess] at h_first
+    split at h_first
+    case isTrue h_lt =>
+      simp only [Option.some.injEq] at h_first
+      constructor
+      · exact h_lt
+      · refine ⟨addr', ?_, ?_⟩
+        · simp only [memoryAccess, h_lt]
+        · simp only [memoryAccess, dataMemoryAccess] at h
+          split at h <;> simp_all
+    case isFalse h_neg =>
+      simp at h_first
+
+/-- If dataMemoryAccess succeeds in mode 1 (ap-relative), the address is in bounds -/
+lemma dataMemoryAccess_mode1_bound
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (offset ap fp result : F p)
+    (h : dataMemoryAccess memory offset 1 ap fp = some result) :
+    (ap + offset).val < memorySize := by
+  simp only [dataMemoryAccess, memoryAccess] at h
+  split at h <;> simp_all
+
+/-- If dataMemoryAccess succeeds in mode 2 (fp-relative), the address is in bounds -/
+lemma dataMemoryAccess_mode2_bound
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (offset ap fp result : F p)
+    (h : dataMemoryAccess memory offset 2 ap fp = some result) :
+    (fp + offset).val < memorySize := by
+  simp only [dataMemoryAccess, memoryAccess] at h
+  split at h <;> simp_all
+
+/-- If transition succeeds, all memory addresses accessed are in bounds -/
+lemma transition_isSome_implies_all_memory_bounds
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    (state : State (F p))
+    (h : (femtoCairoMachineTransition program memory state).isSome) :
+    ∃ raw decode,
+      fetchInstruction program state.pc = some raw ∧
+      decodeInstruction raw.rawInstrType = some decode ∧
+      (dataMemoryAccess memory raw.op1 decode.2.1 state.ap state.fp).isSome ∧
+      (dataMemoryAccess memory raw.op2 decode.2.2.1 state.ap state.fp).isSome ∧
+      (dataMemoryAccess memory raw.op3 decode.2.2.2 state.ap state.fp).isSome := by
+  obtain ⟨raw, decode, v1, v2, v3, h_fetch, h_decode, h_v1, h_v2, h_v3, _⟩ :=
+    transition_isSome_implies_computeNextState_isSome program memory state h
+  refine ⟨raw, decode, h_fetch, h_decode, ?_, ?_, ?_⟩
+  · rw [Option.isSome_iff_exists]; exact ⟨v1, h_v1⟩
+  · rw [Option.isSome_iff_exists]; exact ⟨v2, h_v2⟩
+  · rw [Option.isSome_iff_exists]; exact ⟨v3, h_v3⟩
+
+/-- If fetchInstruction succeeds, rawInstrType is a valid program memory value -/
+lemma fetchInstruction_rawInstrType_eq_program
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    (pc : F p) (raw : Types.RawInstruction (F p))
+    (h : fetchInstruction program pc = some raw)
+    (h_bound : pc.val < programSize) :
+    raw.rawInstrType = program ⟨pc.val, h_bound⟩ := by
+  simp only [fetchInstruction, Option.bind_eq_bind] at h
+  cases h_mem : memoryAccess program pc with
+  | none => simp [h_mem] at h
+  | some type =>
+    simp only [h_mem, Option.bind_some] at h
+    simp only [memoryAccess] at h_mem
+    split at h_mem
+    case isTrue h_lt =>
+      simp only [Option.some.injEq] at h_mem
+      -- Extract remaining components
+      cases h_op1 : memoryAccess program (pc + 1)
+      · simp [h_op1] at h
+      · simp only [h_op1, Option.bind_some] at h
+        cases h_op2 : memoryAccess program (pc + 2)
+        · simp [h_op2] at h
+        · simp only [h_op2, Option.bind_some] at h
+          cases h_op3 : memoryAccess program (pc + 3)
+          · simp [h_op3] at h
+          · simp only [h_op3, Option.bind_some, Option.some.injEq] at h
+            -- h : { rawInstrType := type, op1 := .., op2 := .., op3 := .. } = raw
+            -- h_mem : program ⟨h_lt, _⟩ = type
+            -- Goal: raw.rawInstrType = program ⟨pc.val, h_bound⟩
+            -- Lean sees proof irrelevance for Fin indices, so this closes the goal
+            rw [← h, ← h_mem]
+    case isFalse h_neg =>
+      -- h_neg : ¬ pc.val < programSize, but we have h_bound : pc.val < programSize
+      exact absurd h_bound h_neg
+
+/-- Combining ValidProgram with fetchInstruction success gives rawInstrType.val < 256 -/
+lemma fetchInstruction_rawInstrType_bound
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    (h_valid : Types.ValidProgram program)
+    (pc : F p) (raw : Types.RawInstruction (F p))
+    (h : fetchInstruction program pc = some raw)
+    (h_bound : pc.val < programSize) :
+    raw.rawInstrType.val < 256 := by
+  rw [fetchInstruction_rawInstrType_eq_program program pc raw h h_bound]
+  exact h_valid ⟨pc.val, h_bound⟩
 
 end Examples.FemtoCairo.Spec
