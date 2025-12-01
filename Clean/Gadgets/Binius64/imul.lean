@@ -110,8 +110,7 @@ private lemma fullAdder_eval
     (env : Environment (F p)) (a b c : Expression (F p)) :
     env ((fullAdder a b c).1) = (fullAdder (env a) (env b) (env c)).1 ∧
       env ((fullAdder a b c).2) = (fullAdder (env a) (env b) (env c)).2 := by
-  -- placeholder, to be proven
-  sorry
+  constructor <;> simp [fullAdder, Expression.eval, eval_add, eval_mul', sub_eq_add_neg]
 
 private lemma addBitvec_eval
     {n : ℕ} (env : Environment (F p))

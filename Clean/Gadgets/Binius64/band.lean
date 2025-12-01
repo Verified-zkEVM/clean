@@ -63,7 +63,6 @@ instance elaborated (k m : ShiftKind) (a b : Fin 64) :
   main := main k m a b
   localLength _ := 0
 
-
 theorem soundness (k m : ShiftKind) (a b : Fin 64) :
     Soundness (F p) (elaborated (k:=k) (m:=m) (a:=a) (b:=b))
       (Assumptions (k:=k) (m:=m) (a:=a) (b:=b))
