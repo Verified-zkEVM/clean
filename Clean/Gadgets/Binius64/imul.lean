@@ -110,7 +110,7 @@ private lemma fullAdder_eval
     (env : Environment (F p)) (a b c : Expression (F p)) :
     env ((fullAdder a b c).1) = (fullAdder (env a) (env b) (env c)).1 ∧
       env ((fullAdder a b c).2) = (fullAdder (env a) (env b) (env c)).2 := by
-  constructor <;> simp [fullAdder, Expression.eval, eval_add, eval_mul', sub_eq_add_neg]
+  constructor <;> simp [fullAdder, Expression.eval, eval_add, sub_eq_add_neg]
 
 private lemma addBitvec_eval
     {n : ℕ} (env : Environment (F p))
@@ -120,7 +120,7 @@ private lemma addBitvec_eval
     let ysVals := Vector.map env ys
     let resVals := addBitvec (α := F p) xsVals ysVals (env carry)
     Vector.map env resExpr.1 = resVals.1 ∧ env resExpr.2 = resVals.2 := by
-  -- placeholder, to be proven
+  -- TODO: prove evaluation commutes with addBitvec
   sorry
 
 private lemma partialRow_eval
@@ -128,23 +128,88 @@ private lemma partialRow_eval
     (lhs rhs : Vector (Expression (F p)) 64) (shift : Fin 64) :
     Vector.map env (partialRow lhs rhs shift) =
       partialRow (Vector.map env lhs) (Vector.map env rhs) shift := by
-  -- placeholder, to be proven
-  sorry
+  classical
+  apply Vector.ext
+  intro i hi
+  let idx : Fin 128 := ⟨i, hi⟩
+  by_cases hlt : i < shift.val
+  · simp [partialRow, hlt, Expression.eval_zero]
+  · by_cases hj : i - shift.val < 64
+    · simp [partialRow, hlt, hj, eval_mul']
+    · simp [partialRow, hlt, hj, Expression.eval_zero]
 
 private lemma mul64_eval
     (env : Environment (F p)) (lhs rhs : Vector (Expression (F p)) 64) :
     Vector.map env (mul64 lhs rhs) =
       mul64 (Vector.map env lhs) (Vector.map env rhs) := by
-  -- placeholder proof; will be completed with a proper evaluation lemma
-  sorry
+  classical
+  let f := fun (acc : Vector (Expression (F p)) 128) (row : Vector (Expression (F p)) 128) =>
+    (addBitvec acc row (0 : Expression (F p))).1
+  let g := fun (acc : Vector (F p) 128) (row : Vector (F p) 128) =>
+    (addBitvec acc row (0 : F p)).1
+  let rows := (Vector.finRange 64).map (fun i => partialRow lhs rhs i)
+  let rows' := (Vector.finRange 64).map (fun i => partialRow (Vector.map env lhs) (Vector.map env rhs) i)
+  have hvec : Vector.map (Vector.map env) rows = rows' := by
+    ext i
+    simp [rows, rows', partialRow_eval, Vector.getElem_map]
+  have hrows : rows.toList.map (Vector.map env) = rows'.toList := by
+    simpa [Vector.toList_map] using congrArg Vector.toList hvec
+
+  have hf :
+      ∀ (acc : Vector (Expression (F p)) 128) (rs : List (Vector (Expression (F p)) 128))
+        (rs' : List (Vector (F p) 128)),
+        rs.map (Vector.map env) = rs' →
+        Vector.map env (rs.foldl f acc) = rs'.foldl g (Vector.map env acc) := by
+    intro acc rs
+    induction rs generalizing acc with
+    | nil =>
+        intro rs' hmap
+        cases rs' <;> simp at hmap
+        simp [f, g]
+    | cons r rs ih =>
+        intro rs' hmap
+        cases rs' with
+        | nil => cases hmap
+        | cons r' rs' =>
+            have hhead : Vector.map env r = r' := by
+              have := congrArg List.head? hmap
+              simpa using this
+            have htail : rs.map (Vector.map env) = rs' := by
+              have := congrArg List.tail hmap
+              simpa using this
+            have hstep := addBitvec_eval (env:=env) (xs:=acc) (ys:=r) (carry:=0)
+            have hcarry := hstep.right
+            have hvec := hstep.left
+            specialize ih ((addBitvec acc r 0).1) rs' htail
+            have hvec :
+                Vector.map env (f acc r) = g (Vector.map env acc) r' := by
+              have hadd := addBitvec_eval (env:=env) (xs:=acc) (ys:=r) (carry:=0)
+              simpa [f, g, hhead] using hadd.left
+            have hrec :
+                Vector.map env (rs.foldl f (f acc r)) =
+                  rs'.foldl g (Vector.map env (f acc r)) := ih
+            -- combine
+            simpa [List.foldl, f, g, hhead, hvec] using hrec
+
+  -- apply the fold lemma to our rows
+  have hfold := hf (acc := Vector.replicate 128 (0 : Expression (F p)))
+    (rs := rows.toList) (rs' := rows'.toList) hrows
+  -- simplify back to mul64
+  simpa [mul64, f, g, rows, rows']
+    using hfold
 
 private lemma split128_eval
     (env : Environment (F p)) (bits : Vector (Expression (F p)) 128) :
     let res := split128 bits
     let vals := split128 (Vector.map env bits)
     Vector.map env res.1 = vals.1 ∧ Vector.map env res.2 = vals.2 := by
-  -- placeholder, to be proven
-  sorry
+  classical
+  dsimp [split128]
+  constructor
+  · ext i
+    simp [Vector.getElem_map, Vector.getElem_ofFn]
+  · ext i
+    simp [Vector.getElem_map, Vector.getElem_ofFn]
 
 private lemma unsignedMulExpr_eval
     (env : Environment (F p))
@@ -154,8 +219,11 @@ private lemma unsignedMulExpr_eval
     let rhsVals := Vector.map env rhs
     let (highVals, lowVals) := unsignedMulVals lhsVals rhsVals
     Vector.map env highExpr = highVals ∧ Vector.map env lowExpr = lowVals := by
-  -- placeholder, to be proven
-  sorry
+  classical
+  dsimp [unsignedMulExpr, unsignedMulVals]
+  have hMul := mul64_eval (env := env) lhs rhs
+  have hSplit := split128_eval (env := env) (bits := mul64 lhs rhs)
+  simpa [hMul] using hSplit
 
 def main (k m : ShiftKind) (a b : Fin 64)
     (input : Var (IMulInputs k m a b) (F p)) :
