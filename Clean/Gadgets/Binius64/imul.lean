@@ -112,6 +112,14 @@ private lemma fullAdder_eval
       env ((fullAdder a b c).2) = (fullAdder (env a) (env b) (env c)).2 := by
   constructor <;> simp [fullAdder, Expression.eval, eval_add, sub_eq_add_neg]
 
+private lemma fullAdder_correct
+    (a b c : F p) :
+    let res := fullAdder a b c
+    ZMod.val res.1 + 2 * ZMod.val res.2 =
+      ZMod.val a + ZMod.val b + ZMod.val c := by
+  -- Over F₂ we can brute force the eight possible inputs.
+  fin_cases a <;> fin_cases b <;> fin_cases c <;> decide
+
 private lemma map_head {α β : Type} {n : ℕ} (f : α → β) (v : Vector α (n + 1)) :
     (Vector.map f v).head = f v.head := by
   simp [Vector.head, Vector.getElem_map]
