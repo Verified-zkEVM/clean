@@ -83,6 +83,12 @@ instance : HDiv (Expression F) ℕ (Expression F) where
 -- TODO probably should just make Variable F := ℕ
 instance {n : ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
+
+@[circuit_norm] lemma eval_const (env : Environment F) (c : F) :
+    Expression.eval env (.const c) = c := rfl
+
+@[circuit_norm] lemma eval_zero (env : Environment F) :
+    Expression.eval env (0 : Expression F) = 0 := rfl
 end Expression
 
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
@@ -104,6 +110,18 @@ variable [Field F]
 lemma eval_mul (env : Environment F) (a b : Expression F) :
     Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
   simp only [Expression.eval]
+
+@[circuit_norm]
+lemma eval_add (env : Environment F) (a b : Expression F) :
+    Expression.eval env (a + b) =
+      Expression.eval env a + Expression.eval env b := by
+  simp [Expression.eval]
+
+@[circuit_norm]
+lemma eval_mul' (env : Environment F) (a b : Expression F) :
+    Expression.eval env (a * b) =
+      Expression.eval env a * Expression.eval env b := by
+  simp [Expression.eval]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/
 lemma eval_foldl (env : Environment F) (n : ℕ)
