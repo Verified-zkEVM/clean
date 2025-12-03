@@ -43,10 +43,8 @@ variable [OfNat α 0] [OfNat α 1] [OfNat α 2] [OfNat α 4]
 variable [Zero α]
 
 private def fullAdder (a b cin : α) : α × α :=
-  let sum := a + b + cin -
-    (2 : α) * (a * b + b * cin + a * cin) +
-    (4 : α) * (a * b * cin)
-  let carry := a * b + cin * (a + b - (2 : α) * a * b)
+  let sum := a + b + cin
+  let carry := a * b + cin * (a + b)
   (sum, carry)
 
 private def addBitvec : ∀ {n : ℕ}, Vector α n → Vector α n → α →
@@ -110,7 +108,7 @@ private lemma fullAdder_eval
     (env : Environment (F p)) (a b c : Expression (F p)) :
     env ((fullAdder a b c).1) = (fullAdder (env a) (env b) (env c)).1 ∧
       env ((fullAdder a b c).2) = (fullAdder (env a) (env b) (env c)).2 := by
-  constructor <;> simp [fullAdder, Expression.eval, eval_add, sub_eq_add_neg]
+  constructor <;> simp [fullAdder, Expression.eval, eval_add]
 
 private lemma fullAdder_correct
     (a b c : F p) :
