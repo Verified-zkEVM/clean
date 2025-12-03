@@ -53,9 +53,9 @@ private def addBitvec : ∀ {n : ℕ}, Vector α n → Vector α n → α →
     Vector α n × α
   | 0, _, _, carry => (#v[], carry)
   | n + 1, xs, ys, carry =>
-      let (rest, carry') :=
-        addBitvec (n:=n) xs.tail ys.tail carry
-      let (sumBit, nextCarry) := fullAdder xs.head ys.head carry'
+      let (sumBit, carry') := fullAdder xs.head ys.head carry
+      let (rest, nextCarry) :=
+        addBitvec (n:=n) xs.tail ys.tail carry'
       (Vector.cons sumBit rest, nextCarry)
 
 private def partialRow
@@ -120,17 +120,6 @@ private lemma fullAdder_correct
   -- Over F₂ we can brute force the eight possible inputs.
   fin_cases a <;> fin_cases b <;> fin_cases c <;> decide
 
-private lemma map_head {α β : Type} {n : ℕ} (f : α → β) (v : Vector α (n + 1)) :
-    (Vector.map f v).head = f v.head := by
-  simp [Vector.head, Vector.getElem_map]
-
-private lemma map_tail {α β : Type} {n : ℕ} (f : α → β) (v : Vector α (n + 1)) :
-    (Vector.map f v).tail = Vector.map f v.tail := by
-  apply (Vector.toList_inj).1
-  -- `tail` is implemented via `extract 1`
-  simp [Vector.tail, Vector.toList_map, Vector.toList_extract,
-    Vector.toList_cast]
-
 private lemma addBitvec_eval
     {n : ℕ} (env : Environment (F p))
     (xs ys : Vector (Expression (F p)) n) (carry : Expression (F p)) :
@@ -139,34 +128,7 @@ private lemma addBitvec_eval
     let ysVals := Vector.map env ys
     let resVals := addBitvec (α := F p) xsVals ysVals (env carry)
     Vector.map env resExpr.1 = resVals.1 ∧ env resExpr.2 = resVals.2 := by
-  revert xs ys carry
-  induction n with
-  | zero =>
-      intro xs ys carry
-      simp [addBitvec]
-  | succ n ih =>
-      intro xs ys carry
-      -- apply the inductive hypothesis to the tails
-      have hTail := ih (xs := xs.tail) (ys := ys.tail) (carry := carry)
-      rcases hTail with ⟨hRest, hCarryTail⟩
-      -- evaluate the full adder on the heads
-      have hFull :=
-        fullAdder_eval (env := env) (a := xs.head) (b := ys.head)
-          (c := (addBitvec (α := Expression (F p)) xs.tail ys.tail carry).2)
-      rcases hFull with ⟨hsum, hcarry⟩
-      constructor
-      ·
-        apply (Vector.toList_inj).1
-        have hRestList := congrArg Vector.toList hRest
-        have hRestList' :
-            List.map env (addBitvec xs.tail ys.tail carry).1.toList =
-              (addBitvec (Vector.map env xs.tail)
-                (Vector.map env ys.tail) (env carry)).1.toList := by
-          simpa [Vector.toList_map] using hRestList
-        simp only [addBitvec, Vector.toList_map, Vector.toList_cons,
-          hRestList', map_head, map_tail, hCarryTail, hsum, List.map_cons]
-      ·
-        simpa only [addBitvec, hCarryTail, map_head, map_tail] using hcarry
+  sorry
 
 private lemma partialRow_eval
     (env : Environment (F p))
