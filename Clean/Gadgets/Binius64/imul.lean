@@ -82,6 +82,9 @@ private def mul64
 
 private def split128
     (bits : Vector α 128) : Vector α 64 × Vector α 64 :=
+  -- let lo := bits.extract 0 64
+  -- let hi := bits.extract 64 128
+  -- (hi, lo)
   let lo := Vector.ofFn fun i : Fin 64 =>
     bits[(i.castLT (by
       have h : i.val < 128 :=
@@ -136,7 +139,38 @@ private lemma addBitvec_correct
       Utils.Bits.fromBits (Vector.map ZMod.val xs) +
         Utils.Bits.fromBits (Vector.map ZMod.val ys) +
         ZMod.val carry := by
-  sorry
+  simp only [Utils.Bits.fromBits, Vector.getElem_map]
+  induction n with
+  | zero => simp [addBitvec]
+  | succ n ih =>
+    simp only [addBitvec, Fin.foldl_succ_last,
+      Fin.coe_castSucc, Fin.val_last]
+    -- ring_nf
+    let x := Fin.foldl n (fun x i ↦ x + xs[i.val].val * 2 ^ i.val) 0
+    let x' := Fin.foldl n (fun x i ↦ x + xs.pop[i.val].val * 2 ^ i.val) 0
+    let y := Fin.foldl n (fun x i ↦ x + ys[i.val].val * 2 ^ i.val) 0
+    let y' := Fin.foldl n (fun x i ↦ x + ys.pop[i.val].val * 2 ^ i.val) 0
+
+    have hx : x = x' := by simp [x, x']
+    have hy : y = y' := by simp [y, y']
+
+    show _ = (x + xs[n].val * 2 ^ n) + (y + ys[n].val * 2 ^ n) + ZMod.val carry
+    rw [hx, hy]
+
+    have h_comm : (x' + xs[n].val * 2 ^ n) + (y' + ys[n].val * 2 ^ n) + ZMod.val carry
+      = (x' + y' + ZMod.val carry) +
+        xs[n].val * 2 ^ n + ys[n].val * 2 ^ n := by
+      sorry
+    rw [h_comm]
+    let h_ih := ih xs.pop ys.pop
+    change _ = x' + y' + ZMod.val carry at h_ih
+    rw [←h_ih]
+    clear ih h_ih h_comm
+    simp only [Vector.cons, Vector.getElem_mk,
+      List.getElem_toArray]
+    sorry
+
+
 
 private lemma partialRow_eval
     (env : Environment (F p))
