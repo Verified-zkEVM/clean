@@ -130,6 +130,16 @@ private lemma addBitvec_eval
     Vector.map env resExpr.1 = resVals.1 ∧ env resExpr.2 = resVals.2 := by
   sorry
 
+private lemma addBitvec_correct
+    {n : ℕ} (xs ys : Vector (F p) n) (carry : F p) :
+    let res := addBitvec (α := F p) xs ys carry
+    Utils.Bits.fromBits (Vector.map ZMod.val res.1) +
+        2^n * ZMod.val res.2 =
+      Utils.Bits.fromBits (Vector.map ZMod.val xs) +
+        Utils.Bits.fromBits (Vector.map ZMod.val ys) +
+        ZMod.val carry := by
+  sorry
+
 private lemma partialRow_eval
     (env : Environment (F p))
     (lhs rhs : Vector (Expression (F p)) 64) (shift : Fin 64) :
@@ -144,6 +154,15 @@ private lemma partialRow_eval
   · by_cases hj : i - shift.val < 64
     · simp [partialRow, hlt, hj, eval_mul']
     · simp [partialRow, hlt, hj, Expression.eval_zero]
+
+private lemma partialRow_correct
+    (lhs rhs : Vector (F p) 64) (shift : Fin 64) (idx : Fin 128) :
+    (partialRow lhs rhs shift)[idx] =
+      if idx.val < shift.val then (0 : F p)
+      else
+        let j := idx.val - shift.val
+        if hj : j < 64 then lhs[(⟨j, hj⟩ : Fin 64)] * rhs[shift] else (0 : F p) := by
+  sorry
 
 private lemma mul64_eval
     (env : Environment (F p)) (lhs rhs : Vector (Expression (F p)) 64) :
