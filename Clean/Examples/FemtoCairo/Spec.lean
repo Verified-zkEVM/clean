@@ -146,6 +146,7 @@ def femtoCairoMachineBoundedExecution
 
 /-! ### Helper lemmas for completeness proofs -/
 
+omit p_large_enough in
 /-- If memoryAccess succeeds, the address is in bounds -/
 lemma memoryAccess_isSome_implies_bounds {n : ℕ} [NeZero n]
     (memory : Fin n → F p) (addr : F p)
@@ -155,6 +156,7 @@ lemma memoryAccess_isSome_implies_bounds {n : ℕ} [NeZero n]
   case isTrue h_bound => exact h_bound
   case isFalse => simp at h
 
+omit [Fact p.Prime] p_large_enough in
 /-- If memoryAccess returns some value, the address is in bounds -/
 lemma memoryAccess_eq_some_implies_bounds {n : ℕ} [NeZero n]
     (memory : Fin n → F p) (addr : F p) (v : F p)
@@ -164,6 +166,7 @@ lemma memoryAccess_eq_some_implies_bounds {n : ℕ} [NeZero n]
   case isTrue h_bound => exact h_bound
   case isFalse => simp at h
 
+omit p_large_enough in
 /-- If decodeInstruction succeeds, the instruction value is < 256 -/
 lemma decodeInstruction_isSome_implies_bound (instr : F p)
     (h : (decodeInstruction instr).isSome) : instr.val < 256 := by
@@ -172,6 +175,7 @@ lemma decodeInstruction_isSome_implies_bound (instr : F p)
   case isTrue h_ge => simp at h
   case isFalse h_lt => omega
 
+omit p_large_enough in
 /-- If decodeInstruction returns some value, the instruction value is < 256 -/
 lemma decodeInstruction_eq_some_implies_bound (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
     (h : decodeInstruction instr = some result) : instr.val < 256 := by
@@ -180,6 +184,7 @@ lemma decodeInstruction_eq_some_implies_bound (instr : F p) (result : ℕ × ℕ
   case isTrue h_ge => simp at h
   case isFalse h_lt => omega
 
+omit p_large_enough in
 /-- If femtoCairoMachineTransition succeeds, fetchInstruction succeeds -/
 lemma transition_isSome_implies_fetch_isSome
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -194,6 +199,7 @@ lemma transition_isSome_implies_fetch_isSome
   · simp [h_fetch] at h_next
   · simp
 
+omit p_large_enough in
 /-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 < programSize -/
 lemma fetchInstruction_isSome_implies_pc_bound
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -236,6 +242,7 @@ lemma fetchInstruction_isSome_implies_pc_bound
               _ = pc.val + 3 := Nat.mod_eq_of_lt h_no_wrap
           omega
 
+omit p_large_enough in
 /-- If transition succeeds, decode succeeds -/
 lemma transition_isSome_implies_decode_isSome
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -258,12 +265,13 @@ lemma transition_isSome_implies_decode_isSome
       | none => simp [h_decode] at h_next
       | some _ => simp
 
+omit p_large_enough in
 /-- If transition succeeds with ValidProgram, the fetched instruction type is < 256 -/
 lemma transition_isSome_with_valid_program_implies_instr_bound
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     (state : State (F p))
-    (h_valid : Types.ValidProgram program)
+    (_h_valid : Types.ValidProgram program)
     (h_trans : (femtoCairoMachineTransition program memory state).isSome) :
     ∃ raw, fetchInstruction program state.pc = some raw ∧ raw.rawInstrType.val < 256 := by
   obtain ⟨raw, h_fetch, h_decode⟩ := transition_isSome_implies_decode_isSome program memory state h_trans
@@ -272,6 +280,7 @@ lemma transition_isSome_with_valid_program_implies_instr_bound
   · exact h_fetch
   · exact decodeInstruction_isSome_implies_bound raw.rawInstrType h_decode
 
+omit p_large_enough in
 /-- If transition succeeds, all intermediate steps succeed -/
 lemma transition_isSome_implies_computeNextState_isSome
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -324,6 +333,7 @@ lemma transition_isSome_implies_computeNextState_isSome
             case eq5 => exact h_v3
             case isSome => rw [Option.isSome_iff_exists]; exact ⟨nextState, h_next⟩
 
+omit p_large_enough in
 /--
 If bounded execution for n steps reaches `state`, and bounded execution for n+1 steps succeeds,
 then the transition from `state` succeeds.
@@ -350,16 +360,19 @@ lemma transition_isSome_of_boundedExecution_succ_isSome
   rw [Option.isSome_iff_exists]
   exact ⟨finalState, h_final⟩
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- ValidProgram ensures any program access returns a value < 256 -/
 lemma validProgram_bound {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
     (h_valid : Types.ValidProgram program) (i : Fin programSize) :
     (program i).val < 256 := h_valid i
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- ValidProgram + Fin.ofNat gives bound < 256 (useful when index comes from witness computation) -/
 lemma validProgram_bound_at_ofNat {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
     (h_valid : Types.ValidProgram program) (n : ℕ) :
     (program (Fin.ofNat programSize n)).val < 256 := h_valid _
 
+omit p_large_enough in
 /-- If decodeInstruction succeeds, the result encodes a valid instruction type -/
 lemma decodeInstruction_eq_some_implies_isEncodedCorrectly (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
     (h : decodeInstruction instr = some result) :
@@ -384,24 +397,25 @@ lemma decodeInstruction_eq_some_implies_isEncodedCorrectly (instr : F p) (result
     · -- bit0 = 0, bit1 = 0 → value = 0
       left
       simp only [h0_zero, h1_zero, ZMod.val_zero, mul_zero, add_zero,
-        if_pos rfl, if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
+        if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
         if_neg (by decide : ¬(0 = 3)), if_true, and_self]
     · -- bit0 = 0, bit1 = 1 → value = 2
       right; right; left
-      simp only [h0_zero, h1_one, ZMod.val_zero, ZMod.val_one, mul_one, add_zero,
-        if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)), if_pos rfl,
+      simp only [h0_zero, h1_one, ZMod.val_zero, ZMod.val_one, mul_one,
+        if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)),
         if_neg (by decide : ¬(2 = 3)), if_true, and_self]
     · -- bit0 = 1, bit1 = 0 → value = 1
       right; left
       simp only [h0_one, h1_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
-        if_neg (by decide : ¬(1 = 0)), if_pos rfl, if_neg (by decide : ¬(1 = 2)),
+        if_neg (by decide : ¬(1 = 0)), if_neg (by decide : ¬(1 = 2)),
         if_neg (by decide : ¬(1 = 3)), if_true, and_self]
     · -- bit0 = 1, bit1 = 1 → value = 3
       right; right; right
       simp only [h0_one, h1_one, ZMod.val_one, mul_one,
         if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
-        if_neg (by decide : ¬(3 = 2)), if_pos rfl, if_true, and_self]
+        if_neg (by decide : ¬(3 = 2)), if_true, and_self]
 
+omit p_large_enough in
 /-- If decodeInstruction succeeds, all addressing modes are encoded correctly -/
 lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
     (h : decodeInstruction instr = some result) :
@@ -442,59 +456,60 @@ lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : �
       rcases h_bit2 with h2_zero | h2_one <;> rcases h_bit3 with h3_zero | h3_one
       · left
         simp only [h2_zero, h3_zero, ZMod.val_zero, mul_zero, add_zero,
-          if_pos rfl, if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
+          if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
           if_neg (by decide : ¬(0 = 3)), if_true, and_self]
       · right; right; left
-        simp only [h2_zero, h3_one, ZMod.val_zero, ZMod.val_one, mul_one, add_zero,
-          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)), if_pos rfl,
+        simp only [h2_zero, h3_one, ZMod.val_zero, ZMod.val_one, mul_one,
+          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)),
           if_neg (by decide : ¬(2 = 3)), if_true, and_self]
       · right; left
         simp only [h2_one, h3_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(1 = 0)), if_pos rfl, if_neg (by decide : ¬(1 = 2)),
+          if_neg (by decide : ¬(1 = 0)), if_neg (by decide : ¬(1 = 2)),
           if_neg (by decide : ¬(1 = 3)), if_true, and_self]
       · right; right; right
         simp only [h2_one, h3_one, ZMod.val_one, mul_one,
           if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
-          if_neg (by decide : ¬(3 = 2)), if_pos rfl, if_true, and_self]
+          if_neg (by decide : ¬(3 = 2)), if_true, and_self]
     -- mode2: bits 4-5
     case mode2 =>
       rcases h_bit4 with h4_zero | h4_one <;> rcases h_bit5 with h5_zero | h5_one
       · left
         simp only [h4_zero, h5_zero, ZMod.val_zero, mul_zero, add_zero,
-          if_pos rfl, if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
+          if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
           if_neg (by decide : ¬(0 = 3)), if_true, and_self]
       · right; right; left
-        simp only [h4_zero, h5_one, ZMod.val_zero, ZMod.val_one, mul_one, add_zero,
-          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)), if_pos rfl,
+        simp only [h4_zero, h5_one, ZMod.val_zero, ZMod.val_one, mul_one,
+          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)),
           if_neg (by decide : ¬(2 = 3)), if_true, and_self]
       · right; left
         simp only [h4_one, h5_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(1 = 0)), if_pos rfl, if_neg (by decide : ¬(1 = 2)),
+          if_neg (by decide : ¬(1 = 0)), if_neg (by decide : ¬(1 = 2)),
           if_neg (by decide : ¬(1 = 3)), if_true, and_self]
       · right; right; right
         simp only [h4_one, h5_one, ZMod.val_one, mul_one,
           if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
-          if_neg (by decide : ¬(3 = 2)), if_pos rfl, if_true, and_self]
+          if_neg (by decide : ¬(3 = 2)), if_true, and_self]
     -- mode3: bits 6-7
     case mode3 =>
       rcases h_bit6 with h6_zero | h6_one <;> rcases h_bit7 with h7_zero | h7_one
       · left
         simp only [h6_zero, h7_zero, ZMod.val_zero, mul_zero, add_zero,
-          if_pos rfl, if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
+          if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
           if_neg (by decide : ¬(0 = 3)), if_true, and_self]
       · right; right; left
-        simp only [h6_zero, h7_one, ZMod.val_zero, ZMod.val_one, mul_one, add_zero,
-          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)), if_pos rfl,
+        simp only [h6_zero, h7_one, ZMod.val_zero, ZMod.val_one, mul_one,
+          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)),
           if_neg (by decide : ¬(2 = 3)), if_true, and_self]
       · right; left
         simp only [h6_one, h7_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(1 = 0)), if_pos rfl, if_neg (by decide : ¬(1 = 2)),
+          if_neg (by decide : ¬(1 = 0)), if_neg (by decide : ¬(1 = 2)),
           if_neg (by decide : ¬(1 = 3)), if_true, and_self]
       · right; right; right
         simp only [h6_one, h7_one, ZMod.val_one, mul_one,
           if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
-          if_neg (by decide : ¬(3 = 2)), if_pos rfl, if_true, and_self]
+          if_neg (by decide : ¬(3 = 2)), if_true, and_self]
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- If dataMemoryAccess succeeds, specific accessed addresses are in bounds -/
 lemma dataMemoryAccess_mode0_bound
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
@@ -514,12 +529,13 @@ lemma dataMemoryAccess_mode0_bound
       constructor
       · exact h_lt
       · refine ⟨addr', ?_, ?_⟩
-        · simp only [memoryAccess, h_lt]
-        · simp only [memoryAccess, dataMemoryAccess] at h
+        · rfl
+        · simp only [memoryAccess] at h
           split at h <;> simp_all
     case isFalse h_neg =>
       simp at h_first
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- If dataMemoryAccess succeeds in mode 1 (ap-relative), the address is in bounds -/
 lemma dataMemoryAccess_mode1_bound
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
@@ -529,6 +545,7 @@ lemma dataMemoryAccess_mode1_bound
   simp only [dataMemoryAccess, memoryAccess] at h
   split at h <;> simp_all
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- If dataMemoryAccess succeeds in mode 2 (fp-relative), the address is in bounds -/
 lemma dataMemoryAccess_mode2_bound
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
@@ -538,6 +555,7 @@ lemma dataMemoryAccess_mode2_bound
   simp only [dataMemoryAccess, memoryAccess] at h
   split at h <;> simp_all
 
+omit p_large_enough in
 /-- If transition succeeds, all memory addresses accessed are in bounds -/
 lemma transition_isSome_implies_all_memory_bounds
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -557,6 +575,7 @@ lemma transition_isSome_implies_all_memory_bounds
   · rw [Option.isSome_iff_exists]; exact ⟨v2, h_v2⟩
   · rw [Option.isSome_iff_exists]; exact ⟨v3, h_v3⟩
 
+omit p_large_enough in
 /-- If fetchInstruction succeeds, rawInstrType is a valid program memory value -/
 lemma fetchInstruction_rawInstrType_eq_program
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -592,6 +611,7 @@ lemma fetchInstruction_rawInstrType_eq_program
       -- h_neg : ¬ pc.val < programSize, but we have h_bound : pc.val < programSize
       exact absurd h_bound h_neg
 
+omit p_large_enough in
 /-- Combining ValidProgram with fetchInstruction success gives rawInstrType.val < 256 -/
 lemma fetchInstruction_rawInstrType_bound
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
