@@ -400,15 +400,8 @@ lemma fetchInstruction_rawInstrType_eq_program
         · simp only [h_op2, Option.bind_some] at h
           cases h_op3 : memoryAccess program (pc + 3)
           · simp [h_op3] at h
-          · simp only [h_op3, Option.bind_some, Option.some.injEq] at h
-            -- h : { rawInstrType := type, op1 := .., op2 := .., op3 := .. } = raw
-            -- h_mem : program ⟨h_lt, _⟩ = type
-            -- Goal: raw.rawInstrType = program ⟨pc.val, h_bound⟩
-            -- Lean sees proof irrelevance for Fin indices, so this closes the goal
-            rw [← h, ← h_mem]
-    case isFalse h_neg =>
-      -- h_neg : ¬ pc.val < programSize, but we have h_bound : pc.val < programSize
-      exact absurd h_bound h_neg
+          · aesop
+    case isFalse h_neg => aesop
 
 omit p_large_enough in
 /-- Combining ValidProgram with fetchInstruction success gives rawInstrType.val < 256 -/
@@ -420,6 +413,6 @@ lemma fetchInstruction_rawInstrType_bound
     (h_bound : pc.val < programSize) :
     raw.rawInstrType.val < 256 := by
   rw [fetchInstruction_rawInstrType_eq_program program pc raw h h_bound]
-  exact h_valid ⟨pc.val, h_bound⟩
+  aesop
 
 end Examples.FemtoCairo.Spec

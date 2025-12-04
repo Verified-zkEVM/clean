@@ -1090,15 +1090,8 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
       simp only [circuit_norm, RawInstruction.eval_op1, Expression.eval] at this
       exact this
 
-    -- Get the state field equalities
-    have h_ap_eq : Expression.eval env input_var.ap = input.ap := by
-      rw [← State.eval_ap env input_var, h_input]
-    have h_fp_eq : Expression.eval env input_var.fp = input.fp := by
-      rw [← State.eval_fp env input_var, h_input]
-
     -- Now we can convert the goal to use the spec values
-    -- simp + h_op1_eq/h_ap_eq/h_fp_eq should transform the goal to match h_op1_bounds
-    simp only [circuit_norm, h_op1_eq, h_ap_eq, h_fp_eq]
+    simp only [circuit_norm, h_op1_eq]
     exact h_op1_bounds
 
   case read2 =>
@@ -1116,14 +1109,9 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
       simp only [circuit_norm, RawInstruction.eval_op2] at this
       exact this
 
-    have h_ap_eq : Expression.eval env input_var.ap = input.ap := by
-      rw [← State.eval_ap env input_var, h_input]
-    have h_fp_eq : Expression.eval env input_var.fp = input.fp := by
-      rw [← State.eval_fp env input_var, h_input]
-
     -- Convert the goal to match h_op2_bounds using the established equalities
-    simp only [circuit_norm] at h_op2_eq h_ap_eq h_fp_eq
-    simp only [h_op2_eq, h_ap_eq, h_fp_eq]
+    simp only [circuit_norm] at h_op2_eq
+    simp only [h_op2_eq]
     exact h_op2_bounds
 
   case read3 =>
@@ -1141,14 +1129,9 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
       simp only [circuit_norm, RawInstruction.eval_op3] at this
       exact this
 
-    have h_ap_eq : Expression.eval env input_var.ap = input.ap := by
-      rw [← State.eval_ap env input_var, h_input]
-    have h_fp_eq : Expression.eval env input_var.fp = input.fp := by
-      rw [← State.eval_fp env input_var, h_input]
-
     -- Convert the goal to match h_op3_bounds using the established equalities
-    simp only [circuit_norm] at h_op3_eq h_ap_eq h_fp_eq
-    simp only [h_op3_eq, h_ap_eq, h_fp_eq]
+    simp only [circuit_norm] at h_op3_eq
+    simp only [h_op3_eq]
     exact h_op3_bounds
 
   case next =>
