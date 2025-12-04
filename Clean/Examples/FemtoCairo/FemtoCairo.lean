@@ -1100,10 +1100,8 @@ def femtoCairoTable
       have h_full_assumptions : femtoCairoAssumptions program memory acc :=
         ⟨h_valid_size, h_valid_program, h_need_transition, h_memory_bounds⟩
 
-      have h_assumptions_eval : femtoCairoAssumptions program memory (eval env acc_var) := by
-        rw [h_eval.1]; exact h_full_assumptions
-
-      exact h_assumptions_eval
+      show femtoCairoAssumptions program memory (eval env acc_var)
+      rw [h_eval.1]; exact h_full_assumptions
 
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with
