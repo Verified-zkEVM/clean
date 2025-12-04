@@ -669,136 +669,71 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
     simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input1
     simp only [h_input2] at ⊢ h_env
     rcases h_encode with h_add | h_mul | h_load | h_store
-    · simp only [h_add] at h_exec h_env ⊢
-      simp only [↓reduceIte, Option.isSome_ite] at h_exec
-      simp only [zero_ne_one, ↓reduceIte] at h_env
-      ring_nf
-      simp only [true_and, circuit_norm]
-      and_intros
-      · simp only [← h_exec]
-        ring_nf
-      · specialize h_env 0
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, add_zero, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons_zero] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-      · specialize h_env 1
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons] at h_env
-        simp only [one_ne_zero, ↓reduceDIte] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-      · specialize h_env 2
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons] at h_env
-        simp only [Nat.mod_succ, OfNat.ofNat_ne_zero, ↓reduceDIte, Nat.add_one_sub_one,
-          one_ne_zero] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-    · simp only [h_mul] at h_exec h_env ⊢
-      simp only [zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec
-      simp only [zero_ne_one, ↓reduceIte] at h_env
-      ring_nf
-      simp only [true_and, circuit_norm]
-      and_intros
-      · simp only [← h_exec]
-        ring_nf
-      · specialize h_env 0
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, add_zero, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons_zero] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-      · specialize h_env 1
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons] at h_env
-        simp only [one_ne_zero, ↓reduceDIte] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-      · specialize h_env 2
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons] at h_env
-        simp only [Nat.mod_succ, OfNat.ofNat_ne_zero, ↓reduceDIte, Nat.add_one_sub_one,
-          one_ne_zero] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-    · simp only [h_load] at h_exec h_env ⊢
-      simp only [zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec
-      simp only [zero_ne_one, ↓reduceIte] at h_env
-      ring_nf
-      simp only [true_and, circuit_norm]
-      and_intros
-      · simp only [h_exec, ← h_input1]
-        ring_nf
-      · simp only [h_exec, ← h_input1]
-        ring_nf
-      · simp only [h_exec, ← h_input1]
-        ring_nf
-      · specialize h_env 0
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, add_zero, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons_zero] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-      · specialize h_env 1
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons] at h_env
-        simp only [one_ne_zero, ↓reduceDIte] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-      · specialize h_env 2
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons] at h_env
-        simp only [Nat.mod_succ, OfNat.ofNat_ne_zero, ↓reduceDIte, Nat.add_one_sub_one,
-          one_ne_zero] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-    · simp only [h_store] at h_exec h_env ⊢
-      simp only [zero_ne_one, ↓reduceIte] at h_exec
-      simp only [↓reduceIte] at h_env
-      ring_nf
-      simp only [true_and, circuit_norm]
-      and_intros
-      · specialize h_env 0
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, add_zero, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons_zero] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-      · specialize h_env 1
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons] at h_env
-        simp only [one_ne_zero, ↓reduceDIte] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
-      · specialize h_env 2
-        simp only [explicit_provable_type] at h_env
-        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Vector.getElem_mk,
-          List.getElem_toArray, List.getElem_cons] at h_env
-        simp only [Nat.mod_succ, OfNat.ofNat_ne_zero, ↓reduceDIte, Nat.add_one_sub_one,
-          one_ne_zero] at h_env
-        simp only [circuit_norm, explicit_provable_type, fromVars]
-        simp only [h_env]
-        ring_nf
+    · simp only [h_add, ↓reduceIte, Option.isSome_ite, zero_ne_one] at h_exec h_env ⊢
+      ring_nf; simp only [true_and, circuit_norm]; and_intros
+      · simp only [← h_exec]; ring_nf
+      · have h_env0 := h_env 0
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+          add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env0]; ring_nf
+      · have h_env1 := h_env 1
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+          Vector.getElem_mk, List.getElem_toArray, List.getElem_cons, one_ne_zero, ↓reduceDIte] at h_env1
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env1]; ring_nf
+      · have h_env2 := h_env 2
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.mod_succ,
+          OfNat.ofNat_ne_zero, Nat.add_one_sub_one, one_ne_zero, ↓reduceDIte,
+          Vector.getElem_mk, List.getElem_toArray, List.getElem_cons] at h_env2
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env2]; ring_nf
+    · simp only [h_mul, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec h_env ⊢
+      ring_nf; simp only [true_and, circuit_norm]; and_intros
+      · simp only [← h_exec]; ring_nf
+      · have h_env0 := h_env 0
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+          add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env0]; ring_nf
+      · have h_env1 := h_env 1
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+          Vector.getElem_mk, List.getElem_toArray, List.getElem_cons, one_ne_zero, ↓reduceDIte] at h_env1
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env1]; ring_nf
+      · have h_env2 := h_env 2
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.mod_succ,
+          OfNat.ofNat_ne_zero, Nat.add_one_sub_one, one_ne_zero, ↓reduceDIte,
+          Vector.getElem_mk, List.getElem_toArray, List.getElem_cons] at h_env2
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env2]; ring_nf
+    · simp only [h_load, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec h_env ⊢
+      ring_nf; simp only [true_and, circuit_norm]; and_intros
+      · simp only [h_exec, ← h_input1]; ring_nf
+      · simp only [h_exec, ← h_input1]; ring_nf
+      · simp only [h_exec, ← h_input1]; ring_nf
+      · have h_env0 := h_env 0
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+          add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env0]; ring_nf
+      · have h_env1 := h_env 1
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+          Vector.getElem_mk, List.getElem_toArray, List.getElem_cons, one_ne_zero, ↓reduceDIte] at h_env1
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env1]; ring_nf
+      · have h_env2 := h_env 2
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.mod_succ,
+          OfNat.ofNat_ne_zero, Nat.add_one_sub_one, one_ne_zero, ↓reduceDIte,
+          Vector.getElem_mk, List.getElem_toArray, List.getElem_cons] at h_env2
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env2]; ring_nf
+    · simp only [h_store, zero_ne_one, ↓reduceIte] at h_exec h_env ⊢
+      ring_nf; simp only [true_and, circuit_norm]; and_intros
+      · have h_env0 := h_env 0
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+          add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env0]; ring_nf
+      · have h_env1 := h_env 1
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+          Vector.getElem_mk, List.getElem_toArray, List.getElem_cons, one_ne_zero, ↓reduceDIte] at h_env1
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env1]; ring_nf
+      · have h_env2 := h_env 2
+        simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.mod_succ,
+          OfNat.ofNat_ne_zero, Nat.add_one_sub_one, one_ne_zero, ↓reduceDIte,
+          Vector.getElem_mk, List.getElem_toArray, List.getElem_cons] at h_env2
+        simp only [circuit_norm, explicit_provable_type, fromVars, h_env2]; ring_nf
 
 /--
   The main femtoCairo step circuit, which combines instruction fetch, decode,
