@@ -989,64 +989,33 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
   (h_programSize : programSize < p) {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize)
       (femtoCairoAssumptions program memory) := by
-  -- Unfold the completeness definition and introduce all parameters
   circuit_proof_start [femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
     fetchInstructionCircuit, decodeInstructionCircuit, readFromMemoryCircuit, nextStateCircuit]
 
-  -- Extract assumptions:
-  -- 1. ValidProgramSize: programSize + 3 < p (no wraparound)
-  -- 2. ValidProgram: all instruction bytes < 256
-  -- 3. transition.isSome: state transition succeeds
-  -- 4. Memory bounds: all addresses in dataMemoryAddresses are in bounds for each operand
   obtain ⟨h_valid_size, h_valid_program, h_transition_isSome, h_memory_bounds⟩ := h_assumptions
   obtain ⟨raw_bounds, h_fetch_bounds, h_op1_bounds, h_op2_bounds, h_op3_bounds⟩ := h_memory_bounds
 
-  -- The proof needs to show that all subcircuit completeness conditions are satisfied.
-  -- This requires showing:
-  -- 1. fetchInstructionCircuit.Assumptions: pc.val + 3 < programSize
-  --    (follows from transition.isSome + ValidProgramSize ensuring no wraparound)
-  -- 2. decodeInstructionCircuit.Assumptions: rawInstrType.val < 256
-  --    (follows from ValidProgram)
-  -- 3. readFromMemoryCircuit.Assumptions (x3): all addresses in dataMemoryAddresses are in bounds
-  --    (follows from h_memory_bounds)
-  -- 4. nextStateCircuit.Assumptions: isEncodedCorrectly ∧ computeNextState.isSome
-  --    (follows from decode succeeding and transition.isSome)
-
-  -- Use helper lemma to decompose the transition into its components
+  -- Decompose transition into components
   have h_decompose := Spec.transition_isSome_implies_computeNextState_isSome
     program memory input h_transition_isSome
   obtain ⟨raw, decode, v1, v2, v3, h_fetch, h_decode, h_v1, h_v2, h_v3, h_computeNext⟩ := h_decompose
 
-  -- Derive fetchInstruction bounds from transition success
   have h_fetch_isSome : (Spec.fetchInstruction program input.pc).isSome := by
     exact Spec.transition_isSome_implies_fetch_isSome program memory input h_transition_isSome
   have h_pc_bound : input.pc.val + 3 < programSize :=
     Spec.fetchInstruction_isSome_implies_pc_bound program h_valid_size input.pc h_fetch_isSome
-
-  -- Derive instruction type bound from ValidProgram
   have h_instr_bound : raw.rawInstrType.val < 256 := by
-    -- From h_fetch, we know fetchInstruction succeeded and returned raw
-    -- raw.rawInstrType is a value from program memory at position pc
-    -- ValidProgram says all values in program are < 256
-    -- But we need to connect raw.rawInstrType to program values...
     have h_decode_bound := Spec.decodeInstruction_isSome_implies_bound raw.rawInstrType
     simp only [Option.isSome_iff_exists] at h_decode_bound
     exact h_decode_bound ⟨decode, h_decode⟩
 
-  -- The goal is a conjunction of subcircuit completeness requirements.
-  -- h_env contains (Assumptions → Spec) implications for each subcircuit.
-  -- We prove each subcircuit's Assumptions using:
-  -- 1. h_input to connect circuit variables to spec values
-  -- 2. The Spec outputs from earlier subcircuits to prove later Assumptions
-
-  -- Common setup: extract h_env components and prove fetch assumptions
+  -- Setup: extract subcircuit specs and derive operand equalities
   obtain ⟨h_fetch_env, h_decode_env, h_read1_env, h_read2_env, h_read3_env, h_next_env⟩ := h_env
   have h_eval_pc : Expression.eval env input_var.pc = input.pc := by
     rw [← State.eval_pc env input_var, h_input]
   have h_fetch_assumptions : (Expression.eval env input_var.pc).val + 3 < programSize := by
     rw [h_eval_pc]; exact h_pc_bound
 
-  -- Get fetch spec and derive all operand equalities upfront
   have h_fetch_spec := h_fetch_env h_fetch_assumptions
   simp only [h_eval_pc, h_fetch] at h_fetch_spec
   have h_rawInstrType_eval : env.get i₀ = raw.rawInstrType := by
@@ -1062,20 +1031,17 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
     have := rawInstruction_eq_op3 h_fetch_spec
     simp only [circuit_norm, RawInstruction.eval_op3, Expression.eval] at this; exact this
 
-  -- Unify raw_bounds with raw
   have h_raw_eq := fetchInstruction_some_unique program input.pc raw_bounds raw h_fetch_bounds h_fetch
   simp only [h_raw_eq, AllMemoryAddressesInBounds] at h_op1_bounds h_op2_bounds h_op3_bounds
 
   refine ⟨h_fetch_assumptions, ?decode, ?read1, ?read2, ?read3, ?next⟩
 
   case decode => rw [h_rawInstrType_eval]; exact h_instr_bound
-
   case read1 => simp only [circuit_norm, h_op1_eq]; exact h_op1_bounds
   case read2 => simp only [circuit_norm, h_op2_eq]; exact h_op2_bounds
   case read3 => simp only [circuit_norm, h_op3_eq]; exact h_op3_bounds
 
   case next =>
-    -- Decode assumptions and spec
     have h_decode_assumptions : (Expression.eval env (var ⟨i₀⟩)).val < 256 := by
       simp only [Expression.eval, h_rawInstrType_eval]; exact h_instr_bound
     have h_decode_spec := h_decode_env h_decode_assumptions
