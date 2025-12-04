@@ -4,7 +4,7 @@ import Clean.Utils.Bits
 import Clean.Utils.Field
 import Clean.Table.Inductive
 
-import Clean.Examples.FemtoCairo.Spec
+import Clean.Examples.FemtoCairo.SpecLemmas
 import Clean.Examples.FemtoCairo.Types
 
 namespace Examples.FemtoCairo
