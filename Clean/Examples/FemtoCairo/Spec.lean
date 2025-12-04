@@ -144,7 +144,7 @@ def femtoCairoMachineBoundedExecution
     let reachedState ← femtoCairoMachineBoundedExecution program memory state i
     femtoCairoMachineTransition program memory reachedState
 
--- Helper lemmas for completeness proofs
+/-! ### Helper lemmas for completeness proofs -/
 
 /-- If memoryAccess succeeds, the address is in bounds -/
 lemma memoryAccess_isSome_implies_bounds {n : ℕ} [NeZero n]
@@ -349,8 +349,6 @@ lemma transition_isSome_of_boundedExecution_succ_isSome
   -- which is: transition state = some finalState
   rw [Option.isSome_iff_exists]
   exact ⟨finalState, h_final⟩
-
-/-! ### Infrastructure lemmas for completeness proofs -/
 
 /-- ValidProgram ensures any program access returns a value < 256 -/
 lemma validProgram_bound {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
