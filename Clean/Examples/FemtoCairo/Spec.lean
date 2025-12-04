@@ -1,6 +1,5 @@
 import Clean.Utils.Bits
 import Clean.Utils.Field
-import Mathlib.Tactic.IntervalCases
 
 import Clean.Examples.FemtoCairo.Types
 
