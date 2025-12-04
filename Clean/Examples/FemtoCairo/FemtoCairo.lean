@@ -12,6 +12,7 @@ open Gadgets
 open Utils.Bits
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
+open Examples.FemtoCairo.Spec
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--

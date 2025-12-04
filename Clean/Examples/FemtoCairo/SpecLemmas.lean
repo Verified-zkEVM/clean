@@ -69,7 +69,7 @@ omit p_large_enough in
 /-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 < programSize -/
 lemma fetchInstruction_isSome_implies_pc_bound
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (h_valid_size : Types.ValidProgramSize (p := p) programSize)
+    (h_valid_size : ValidProgramSize (p := p) programSize)
     (pc : F p)
     (h : (fetchInstruction program pc).isSome) : pc.val + 3 < programSize := by
   -- ValidProgramSize ensures programSize + 3 < p, so no wraparound can occur.
@@ -96,7 +96,7 @@ lemma fetchInstruction_isSome_implies_pc_bound
           have bound0 := memoryAccess_eq_some_implies_bounds program pc v0 h0
           have bound3 := memoryAccess_eq_some_implies_bounds program (pc + 3) v3 h3
           -- ValidProgramSize says programSize + 3 < p
-          simp only [Types.ValidProgramSize] at h_valid_size
+          simp only [ValidProgramSize] at h_valid_size
           -- From pc.val < programSize and programSize + 3 < p, we get pc.val + 3 < p
           have h_no_wrap : pc.val + 3 < p := by omega
           -- With no wraparound, (pc + 3).val = pc.val + 3
@@ -137,7 +137,7 @@ lemma transition_isSome_with_valid_program_implies_instr_bound
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     (state : State (F p))
-    (_h_valid : Types.ValidProgram program)
+    (_h_valid : ValidProgram program)
     (h_trans : (femtoCairoMachineTransition program memory state).isSome) :
     ∃ raw, fetchInstruction program state.pc = some raw ∧ raw.rawInstrType.val < 256 := by
   obtain ⟨raw, h_fetch, h_decode⟩ := transition_isSome_implies_decode_isSome program memory state h_trans
@@ -229,13 +229,13 @@ lemma transition_isSome_of_boundedExecution_succ_isSome
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- ValidProgram ensures any program access returns a value < 256 -/
 lemma validProgram_bound {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
-    (h_valid : Types.ValidProgram program) (i : Fin programSize) :
+    (h_valid : ValidProgram program) (i : Fin programSize) :
     (program i).val < 256 := h_valid i
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- ValidProgram + Fin.ofNat gives bound < 256 (useful when index comes from witness computation) -/
 lemma validProgram_bound_at_ofNat {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
-    (h_valid : Types.ValidProgram program) (n : ℕ) :
+    (h_valid : ValidProgram program) (n : ℕ) :
     (program (Fin.ofNat programSize n)).val < 256 := h_valid _
 
 omit p_large_enough in
@@ -481,7 +481,7 @@ omit p_large_enough in
 /-- Combining ValidProgram with fetchInstruction success gives rawInstrType.val < 256 -/
 lemma fetchInstruction_rawInstrType_bound
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (h_valid : Types.ValidProgram program)
+    (h_valid : ValidProgram program)
     (pc : F p) (raw : Types.RawInstruction (F p))
     (h : fetchInstruction program pc = some raw)
     (h_bound : pc.val < programSize) :
