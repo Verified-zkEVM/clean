@@ -16,10 +16,8 @@ omit p_large_enough in
 /-- Adding a natural number to a field element preserves the value when no wraparound occurs -/
 lemma ZMod_val_add_nat (x : F p) (n : ℕ) (h : x.val + n < p) :
     (x + n).val = x.val + n := by
-  have hn_lt_p : n < p := by omega
-  have hn_val : (n : ZMod p).val = n := ZMod.val_natCast_of_lt hn_lt_p
   calc (x + n).val = (x.val + (n : ZMod p).val) % p := ZMod.val_add x n
-    _ = (x.val + n) % p := by rw [hn_val]
+    _ = (x.val + n) % p := by rw [ZMod.val_natCast_of_lt (by omega : n < p)]
     _ = x.val + n := Nat.mod_eq_of_lt h
 
 omit [Fact p.Prime] p_large_enough in
@@ -332,12 +330,7 @@ lemma dataMemoryAccess_mode0_bound
     split at h_first
     case isTrue h_lt =>
       simp only [Option.some.injEq] at h_first
-      constructor
-      · exact h_lt
-      · refine ⟨addr', ?_, ?_⟩
-        · rfl
-        · simp only [memoryAccess] at h
-          split at h <;> simp_all
+      exact ⟨h_lt, addr', rfl, by simp only [memoryAccess] at h; split at h <;> simp_all⟩
     case isFalse h_neg =>
       simp at h_first
 
