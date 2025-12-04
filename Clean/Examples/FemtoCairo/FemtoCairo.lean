@@ -949,6 +949,42 @@ def femtoCairoStepCircuitSoundness
               rw [←c_next]
               simp [explicit_provable_type, circuit_norm]
 
+/-! ### Helper lemmas for completeness proof -/
+
+omit p_large_enough in
+/-- If two fetchInstruction calls return some on the same pc, the results are equal -/
+private lemma fetchInstruction_some_unique
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    (pc : F p) (raw1 raw2 : Types.RawInstruction (F p))
+    (h1 : Spec.fetchInstruction program pc = some raw1)
+    (h2 : Spec.fetchInstruction program pc = some raw2) :
+    raw1 = raw2 := by
+  rw [h1] at h2; exact Option.some.inj h2
+
+omit [Fact p.Prime] p_large_enough in
+/-- Extract rawInstrType equality from RawInstruction equality -/
+private lemma rawInstruction_eq_rawInstrType
+    {raw1 raw2 : Types.RawInstruction (F p)} (h : raw1 = raw2) :
+    raw1.rawInstrType = raw2.rawInstrType := congrArg (·.rawInstrType) h
+
+omit [Fact p.Prime] p_large_enough in
+/-- Extract op1 equality from RawInstruction equality -/
+private lemma rawInstruction_eq_op1
+    {raw1 raw2 : Types.RawInstruction (F p)} (h : raw1 = raw2) :
+    raw1.op1 = raw2.op1 := congrArg (·.op1) h
+
+omit [Fact p.Prime] p_large_enough in
+/-- Extract op2 equality from RawInstruction equality -/
+private lemma rawInstruction_eq_op2
+    {raw1 raw2 : Types.RawInstruction (F p)} (h : raw1 = raw2) :
+    raw1.op2 = raw2.op2 := congrArg (·.op2) h
+
+omit [Fact p.Prime] p_large_enough in
+/-- Extract op3 equality from RawInstruction equality -/
+private lemma rawInstruction_eq_op3
+    {raw1 raw2 : Types.RawInstruction (F p)} (h : raw1 = raw2) :
+    raw1.op3 = raw2.op3 := congrArg (·.op3) h
+
 def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
   (h_programSize : programSize < p) {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize)
@@ -1070,160 +1106,84 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
     exact h_instr_bound
 
   case read1 =>
-    -- Need: ∀ addr ∈ dataMemoryAddresses memory op1 state.ap state.fp, addr.val < memorySize
-    -- We have h_op1_bounds from the strengthened femtoCairoAssumptions
-    -- First, show that raw_bounds = raw (both from the same fetchInstruction)
-    have h_raw_eq : raw_bounds = raw := by
-      rw [h_fetch_bounds] at h_fetch
-      exact Option.some.inj h_fetch
+    -- raw_bounds = raw since both fetchInstruction calls are on the same pc
+    have h_raw_eq := fetchInstruction_some_unique program input.pc raw_bounds raw h_fetch_bounds h_fetch
     simp only [h_raw_eq, AllMemoryAddressesInBounds] at h_op1_bounds
-    -- h_op1_bounds : ∀ addr ∈ dataMemoryAddresses memory raw.op1 input.ap input.fp, addr.val < memorySize
 
-    -- Get the fetch spec to connect circuit variables to spec values
+    -- Get fetch spec and extract op1 equality
     have h_fetch_spec := h_fetch_env h_fetch_assumptions
     simp only [h_eval_pc, h_fetch] at h_fetch_spec
-    -- h_fetch_spec : eval env raw_var = raw
-
-    -- Extract the op1 field equality (using env.get form)
     have h_op1_eq : env.get (i₀ + 1) = raw.op1 := by
-      have := congrArg (·.op1) h_fetch_spec
-      simp only [circuit_norm, RawInstruction.eval_op1, Expression.eval] at this
-      exact this
+      have := rawInstruction_eq_op1 h_fetch_spec
+      simp only [circuit_norm, RawInstruction.eval_op1, Expression.eval] at this; exact this
 
-    -- Now we can convert the goal to use the spec values
     simp only [circuit_norm, h_op1_eq]
     exact h_op1_bounds
 
   case read2 =>
-    -- Similar to read1, using h_op2_bounds
-    have h_raw_eq : raw_bounds = raw := by
-      rw [h_fetch_bounds] at h_fetch
-      exact Option.some.inj h_fetch
+    have h_raw_eq := fetchInstruction_some_unique program input.pc raw_bounds raw h_fetch_bounds h_fetch
     simp only [h_raw_eq, AllMemoryAddressesInBounds] at h_op2_bounds
 
     have h_fetch_spec := h_fetch_env h_fetch_assumptions
     simp only [h_eval_pc, h_fetch] at h_fetch_spec
-
     have h_op2_eq : Expression.eval env (var ⟨i₀ + 1 + 1⟩) = raw.op2 := by
-      have := congrArg (·.op2) h_fetch_spec
-      simp only [circuit_norm, RawInstruction.eval_op2] at this
-      exact this
+      have := rawInstruction_eq_op2 h_fetch_spec
+      simp only [circuit_norm, RawInstruction.eval_op2] at this; exact this
 
-    -- Convert the goal to match h_op2_bounds using the established equalities
     simp only [circuit_norm] at h_op2_eq
     simp only [h_op2_eq]
     exact h_op2_bounds
 
   case read3 =>
-    -- Similar to read1, using h_op3_bounds
-    have h_raw_eq : raw_bounds = raw := by
-      rw [h_fetch_bounds] at h_fetch
-      exact Option.some.inj h_fetch
+    have h_raw_eq := fetchInstruction_some_unique program input.pc raw_bounds raw h_fetch_bounds h_fetch
     simp only [h_raw_eq, AllMemoryAddressesInBounds] at h_op3_bounds
 
     have h_fetch_spec := h_fetch_env h_fetch_assumptions
     simp only [h_eval_pc, h_fetch] at h_fetch_spec
-
     have h_op3_eq : Expression.eval env (var ⟨i₀ + 1 + 1 + 1⟩) = raw.op3 := by
-      have := congrArg (·.op3) h_fetch_spec
-      simp only [circuit_norm, RawInstruction.eval_op3] at this
-      exact this
+      have := rawInstruction_eq_op3 h_fetch_spec
+      simp only [circuit_norm, RawInstruction.eval_op3] at this; exact this
 
-    -- Convert the goal to match h_op3_bounds using the established equalities
     simp only [circuit_norm] at h_op3_eq
     simp only [h_op3_eq]
     exact h_op3_bounds
 
   case next =>
-    -- Need: isEncodedCorrectly decoded.instrType ∧ computeNextState.isSome
-    -- We need to show:
-    -- 1. The decoded instruction has valid one-hot encoding
-    -- 2. computeNextState succeeds (follows from h_computeNext)
-
-    -- First, get the decode assumptions (already proven in decode case)
-    have h_decode_assumptions : (Expression.eval env (var ⟨i₀⟩)).val < 256 := by
-      have h_fetch_spec := h_fetch_env h_fetch_assumptions
-      simp only [h_eval_pc, h_fetch] at h_fetch_spec
-      have h_rawInstrType : env.get i₀ = raw.rawInstrType := by
-        have := congrArg (·.rawInstrType) h_fetch_spec
-        simp only [circuit_norm, RawInstruction.eval_rawInstrType] at this
-        exact this
-      simp only [Expression.eval, h_rawInstrType]
-      exact h_instr_bound
-
-    -- Get the decode spec
-    have h_decode_spec := h_decode_env h_decode_assumptions
-
-    -- The decode Spec gives us:
-    -- match Spec.decodeInstruction (eval env rawInstrType_var) with
-    -- | some (instr_type, mode1, mode2, mode3) =>
-    --     output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧ ...
-    -- | none => False
-
-    -- We have h_decode : decodeInstruction raw.rawInstrType = some decode
-    -- Simplify using the known facts
+    -- Get fetch spec and derive rawInstrType equality
+    have h_fetch_spec := h_fetch_env h_fetch_assumptions
+    simp only [h_eval_pc, h_fetch] at h_fetch_spec
     have h_rawInstrType_eval : env.get i₀ = raw.rawInstrType := by
-      have h_fetch_spec := h_fetch_env h_fetch_assumptions
-      simp only [h_eval_pc, h_fetch] at h_fetch_spec
-      have := congrArg (·.rawInstrType) h_fetch_spec
-      simp only [circuit_norm, RawInstruction.eval_rawInstrType] at this
-      exact this
+      have := rawInstruction_eq_rawInstrType h_fetch_spec
+      simp only [circuit_norm, RawInstruction.eval_rawInstrType] at this; exact this
 
+    -- Decode assumptions and spec
+    have h_decode_assumptions : (Expression.eval env (var ⟨i₀⟩)).val < 256 := by
+      simp only [Expression.eval, h_rawInstrType_eval]; exact h_instr_bound
+    have h_decode_spec := h_decode_env h_decode_assumptions
     simp only [h_rawInstrType_eval, h_decode] at h_decode_spec
 
-    -- Now h_decode_spec gives us the isEncodedCorrectly and val properties
-    -- h_decode_spec : (eval output).instrType.val = decode.0 ∧ (eval output).instrType.isEncodedCorrectly ∧ ...
-
-    -- Extract the isEncodedCorrectly properties and val equality
+    -- Extract decode spec components
     obtain ⟨h_val_eq, h_isEncoded, h_mode1_val, h_mode1_encoded, h_mode2_val, h_mode2_encoded,
             h_mode3_val, h_mode3_encoded⟩ := h_decode_spec
 
-    -- For the next case goal, we need:
-    -- 1. isEncodedCorrectly decoded.instrType - directly from h_isEncoded
-    -- 2. computeNextState.isSome - from h_computeNext + matching values
-
     constructor
-    · -- Part 1: isEncodedCorrectly
-      exact h_isEncoded
-    · -- Part 2: computeNextState.isSome
-      -- We have h_computeNext : (Spec.computeNextState decode.0 v1 v2 v3 input).isSome
-      -- Need to show: (Spec.computeNextState (val (circuit's decoded.instrType)) ...).isSome
-      -- Use h_val_eq to connect the instruction types, and read specs for v1, v2, v3
-
-      -- Rewrite using the instruction type equality
+    · exact h_isEncoded
+    · -- computeNextState.isSome
       simp only [h_val_eq]
 
-      -- The goal is now about computeNextState with circuit's v1, v2, v3
-      -- We need to show these equal spec's v1, v2, v3
-      -- This follows from h_v1, h_v2, h_v3 and the read circuit completeness
-
-      -- Establish op equalities for connecting circuit to spec
+      -- Operand equalities
       have h_op1_eq : env.get (i₀ + 1) = raw.op1 := by
-        have h_fetch_spec := h_fetch_env h_fetch_assumptions
-        simp only [h_eval_pc, h_fetch] at h_fetch_spec
-        have := congrArg (·.op1) h_fetch_spec
-        simp only [circuit_norm, RawInstruction.eval_op1, Expression.eval] at this
-        exact this
+        have := rawInstruction_eq_op1 h_fetch_spec
+        simp only [circuit_norm, RawInstruction.eval_op1, Expression.eval] at this; exact this
       have h_op2_eq : env.get (i₀ + 1 + 1) = raw.op2 := by
-        have h_fetch_spec := h_fetch_env h_fetch_assumptions
-        simp only [h_eval_pc, h_fetch] at h_fetch_spec
-        have := congrArg (·.op2) h_fetch_spec
-        simp only [circuit_norm, RawInstruction.eval_op2, Expression.eval] at this
-        exact this
+        have := rawInstruction_eq_op2 h_fetch_spec
+        simp only [circuit_norm, RawInstruction.eval_op2, Expression.eval] at this; exact this
       have h_op3_eq : env.get (i₀ + 1 + 1 + 1) = raw.op3 := by
-        have h_fetch_spec := h_fetch_env h_fetch_assumptions
-        simp only [h_eval_pc, h_fetch] at h_fetch_spec
-        have := congrArg (·.op3) h_fetch_spec
-        simp only [circuit_norm, RawInstruction.eval_op3, Expression.eval] at this
-        exact this
+        have := rawInstruction_eq_op3 h_fetch_spec
+        simp only [circuit_norm, RawInstruction.eval_op3, Expression.eval] at this; exact this
 
-      -- Get raw_bounds = raw
-      have h_raw_eq : raw_bounds = raw := by
-        rw [h_fetch_bounds] at h_fetch
-        exact Option.some.inj h_fetch
+      have h_raw_eq := fetchInstruction_some_unique program input.pc raw_bounds raw h_fetch_bounds h_fetch
 
-      -- Use convert to handle the structural matching
-      -- Goals will be: v1 equality, v2 equality, v3 equality
       convert h_computeNext using 3
       · -- v1 equality: circuit's v1 = spec's v1
         -- Prove read1 assumptions hold (directly in env.get form)
