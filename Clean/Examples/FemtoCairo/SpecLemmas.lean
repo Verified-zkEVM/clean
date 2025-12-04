@@ -22,7 +22,7 @@ lemma ZMod_val_add_nat (x : F p) (n : ℕ) (h : x.val + n < p) :
     _ = (x.val + n) % p := by rw [hn_val]
     _ = x.val + n := Nat.mod_eq_of_lt h
 
-omit p_large_enough in
+omit [Fact p.Prime] p_large_enough in
 /-- If memoryAccess succeeds, the address is in bounds -/
 lemma memoryAccess_isSome_implies_bounds {n : ℕ} [NeZero n]
     (memory : Fin n → F p) (addr : F p)
@@ -36,11 +36,8 @@ omit [Fact p.Prime] p_large_enough in
 /-- If memoryAccess returns some value, the address is in bounds -/
 lemma memoryAccess_eq_some_implies_bounds {n : ℕ} [NeZero n]
     (memory : Fin n → F p) (addr : F p) (v : F p)
-    (h : memoryAccess memory addr = some v) : addr.val < n := by
-  simp only [memoryAccess] at h
-  split at h
-  case isTrue h_bound => exact h_bound
-  case isFalse => simp at h
+    (h : memoryAccess memory addr = some v) : addr.val < n :=
+  memoryAccess_isSome_implies_bounds memory addr (Option.isSome_iff_exists.mpr ⟨v, h⟩)
 
 omit p_large_enough in
 /-- If decodeInstruction succeeds, the instruction value is < 256 -/
@@ -54,11 +51,8 @@ lemma decodeInstruction_isSome_implies_bound (instr : F p)
 omit p_large_enough in
 /-- If decodeInstruction returns some value, the instruction value is < 256 -/
 lemma decodeInstruction_eq_some_implies_bound (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
-    (h : decodeInstruction instr = some result) : instr.val < 256 := by
-  simp only [decodeInstruction] at h
-  split at h
-  case isTrue h_ge => simp at h
-  case isFalse h_lt => omega
+    (h : decodeInstruction instr = some result) : instr.val < 256 :=
+  decodeInstruction_isSome_implies_bound instr (Option.isSome_iff_exists.mpr ⟨result, h⟩)
 
 omit p_large_enough in
 /-- If femtoCairoMachineTransition succeeds, fetchInstruction succeeds -/
@@ -382,10 +376,10 @@ lemma transition_isSome_implies_all_memory_bounds
       (dataMemoryAccess memory raw.op3 decode.2.2.2 state.ap state.fp).isSome := by
   obtain ⟨raw, decode, v1, v2, v3, h_fetch, h_decode, h_v1, h_v2, h_v3, _⟩ :=
     transition_isSome_implies_computeNextState_isSome program memory state h
-  refine ⟨raw, decode, h_fetch, h_decode, ?_, ?_, ?_⟩
-  · rw [Option.isSome_iff_exists]; exact ⟨v1, h_v1⟩
-  · rw [Option.isSome_iff_exists]; exact ⟨v2, h_v2⟩
-  · rw [Option.isSome_iff_exists]; exact ⟨v3, h_v3⟩
+  exact ⟨raw, decode, h_fetch, h_decode,
+    Option.isSome_iff_exists.mpr ⟨v1, h_v1⟩,
+    Option.isSome_iff_exists.mpr ⟨v2, h_v2⟩,
+    Option.isSome_iff_exists.mpr ⟨v3, h_v3⟩⟩
 
 omit p_large_enough in
 /-- If fetchInstruction succeeds, rawInstrType is a valid program memory value -/
