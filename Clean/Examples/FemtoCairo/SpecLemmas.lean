@@ -74,11 +74,6 @@ lemma fetchInstruction_isSome_implies_pc_bound
     (h_valid_size : ValidProgramSize (p := p) programSize)
     (pc : F p)
     (h : (fetchInstruction program pc).isSome) : pc.val + 3 < programSize := by
-  -- ValidProgramSize ensures programSize + 3 < p, so no wraparound can occur.
-  -- From fetchInstruction succeeding, we know (pc + 3).val < programSize.
-  -- Since programSize + 3 < p, we have (pc + 3).val < p - 3.
-  -- For any pc.val < programSize, pc.val + 3 < programSize + 3 < p.
-  -- Therefore no wraparound: (pc + 3).val = pc.val + 3, and we conclude pc.val + 3 < programSize.
   simp only [fetchInstruction, Option.isSome_iff_exists] at h
   obtain ⟨raw, h_raw⟩ := h
   simp only [Option.bind_eq_bind] at h_raw
@@ -94,14 +89,10 @@ lemma fetchInstruction_isSome_implies_pc_bound
         cases h3 : memoryAccess program (pc + 3) with
         | none => simp [h0, h1, h2, h3] at h_raw
         | some v3 =>
-          -- Extract bound from h0: pc.val < programSize
           have bound0 := memoryAccess_eq_some_implies_bounds program pc v0 h0
           have bound3 := memoryAccess_eq_some_implies_bounds program (pc + 3) v3 h3
-          -- ValidProgramSize says programSize + 3 < p
           simp only [ValidProgramSize] at h_valid_size
-          -- From pc.val < programSize and programSize + 3 < p, we get pc.val + 3 < p
           have h_no_wrap : pc.val + 3 < p := by omega
-          -- With no wraparound, (pc + 3).val = pc.val + 3
           have h_eq : (pc + 3).val = pc.val + 3 := ZMod_val_add_nat pc 3 h_no_wrap
           omega
 
@@ -157,46 +148,31 @@ lemma transition_isSome_implies_computeNextState_isSome
       dataMemoryAccess memory raw.op2 decode.2.2.1 state.ap state.fp = some v2 ∧
       dataMemoryAccess memory raw.op3 decode.2.2.2 state.ap state.fp = some v3 ∧
       (computeNextState decode.1 v1 v2 v3 state).isSome := by
-  -- The transition is a chain of Option.bind operations. If the whole chain returns some,
-  -- each intermediate step must have returned some.
   simp only [femtoCairoMachineTransition, Option.isSome_iff_exists] at h
   obtain ⟨nextState, h_next⟩ := h
   simp only [Option.bind_eq_bind] at h_next
-  -- Case on fetchInstruction
   cases h_fetch : fetchInstruction program state.pc with
   | none => simp [h_fetch] at h_next
   | some raw =>
     simp only [h_fetch, Option.bind_some] at h_next
-    -- Case on decodeInstruction
     cases h_decode : decodeInstruction raw.rawInstrType with
     | none => simp [h_decode] at h_next
     | some decode =>
       simp only [h_decode, Option.bind_some] at h_next
-      -- Case on first dataMemoryAccess (uses decode.2.1 = mode1)
       cases h_v1 : dataMemoryAccess memory raw.op1 decode.2.1 state.ap state.fp with
       | none => simp [h_v1] at h_next
       | some v1 =>
         simp only [h_v1, Option.bind_some] at h_next
-        -- Case on second dataMemoryAccess (uses decode.2.2.1 = mode2)
         cases h_v2 : dataMemoryAccess memory raw.op2 decode.2.2.1 state.ap state.fp with
         | none => simp [h_v2] at h_next
         | some v2 =>
           simp only [h_v2, Option.bind_some] at h_next
-          -- Case on third dataMemoryAccess (uses decode.2.2.2 = mode3)
           cases h_v3 : dataMemoryAccess memory raw.op3 decode.2.2.2 state.ap state.fp with
           | none => simp [h_v3] at h_next
           | some v3 => aesop
 
 omit p_large_enough in
-/--
-If bounded execution for n steps reaches `state`, and bounded execution for n+1 steps succeeds,
-then the transition from `state` succeeds.
-
-The recursion structure is:
-  boundedExec init (n+1) = boundedExec init n >>= transition
-So if boundedExec init n = some state and boundedExec init (n+1).isSome,
-then transition(state).isSome.
--/
+/-- If boundedExec n = some state and boundedExec (n+1).isSome, then transition(state).isSome -/
 lemma transition_isSome_of_boundedExecution_succ_isSome
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
@@ -204,10 +180,8 @@ lemma transition_isSome_of_boundedExecution_succ_isSome
     (h_n : femtoCairoMachineBoundedExecution program memory initialState n = some state)
     (h_succ : (femtoCairoMachineBoundedExecution program memory initialState (n + 1)).isSome) :
     (femtoCairoMachineTransition program memory state).isSome := by
-  -- boundedExec init (n+1) = boundedExec init n >>= transition
   simp only [femtoCairoMachineBoundedExecution, Option.isSome_iff_exists] at h_succ
   obtain ⟨finalState, h_final⟩ := h_succ
-  -- h_final : (boundedExec init n >>= transition) = some finalState
   rw [h_n] at h_final
   aesop
 
@@ -239,21 +213,13 @@ lemma decodeInstruction_eq_some_implies_isEncodedCorrectly (instr : F p) (result
   case isFalse h_lt =>
     simp only [Option.some.injEq] at h
     rcases h with ⟨rfl, _, _, _⟩
-    -- result.1 = instr.val % 4, which is 0, 1, 2, or 3
-    -- Use fieldToBits_bits: each bit is 0 or 1
     have h_bit0 := fieldToBits_bits (n := 8) (x := instr) 0 (by omega)
     have h_bit1 := fieldToBits_bits (n := 8) (x := instr) 1 (by omega)
-    -- Case split on bit values
     rcases h_bit0 with h0_zero | h0_one <;> rcases h_bit1 with h1_zero | h1_one
-    · -- bit0 = 0, bit1 = 0 → value = 0
-      left
-      simp +decide [h0_zero, h1_zero]
-    · -- bit0 = 0, bit1 = 1 → value = 2
-      right; right; left; simp +decide [h0_zero, h1_one, ZMod.val_one]
-    · -- bit0 = 1, bit1 = 0 → value = 1
-      right; left; simp +decide [h0_one, h1_zero, ZMod.val_one]
-    · -- bit0 = 1, bit1 = 1 → value = 3
-      right; right; right; simp +decide [h0_one, h1_one, ZMod.val_one]
+    · left; simp +decide [h0_zero, h1_zero]
+    · right; right; left; simp +decide [h0_zero, h1_one, ZMod.val_one]
+    · right; left; simp +decide [h0_one, h1_zero, ZMod.val_one]
+    · right; right; right; simp +decide [h0_one, h1_one, ZMod.val_one]
 
 omit p_large_enough in
 /-- If decodeInstruction succeeds, all addressing modes are encoded correctly -/
@@ -280,32 +246,25 @@ lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : �
   case isFalse h_lt =>
     simp only [Option.some.injEq] at h
     rcases h with ⟨_, rfl, rfl, rfl⟩
-    -- Each mode value is derived from different bit pairs of the instruction
-    -- mode1 uses bits 2-3, mode2 uses bits 4-5, mode3 uses bits 6-7
-    -- Use fieldToBits_bits: each bit is 0 or 1
     have h_bit2 := fieldToBits_bits (n := 8) (x := instr) 2 (by omega)
     have h_bit3 := fieldToBits_bits (n := 8) (x := instr) 3 (by omega)
     have h_bit4 := fieldToBits_bits (n := 8) (x := instr) 4 (by omega)
     have h_bit5 := fieldToBits_bits (n := 8) (x := instr) 5 (by omega)
     have h_bit6 := fieldToBits_bits (n := 8) (x := instr) 6 (by omega)
     have h_bit7 := fieldToBits_bits (n := 8) (x := instr) 7 (by omega)
-    -- Helper tactic for the mode proofs
     refine ⟨?mode1, ?mode2, ?mode3⟩
-    -- mode1: bits 2-3
     case mode1 =>
       rcases h_bit2 with h2_zero | h2_one <;> rcases h_bit3 with h3_zero | h3_one
       · left; simp +decide [h2_zero, h3_zero]
       · right; right; left; simp +decide [h2_zero, h3_one, ZMod.val_one]
       · right; left; simp +decide [h2_one, h3_zero, ZMod.val_one]
       · right; right; right; simp +decide [h2_one, h3_one, ZMod.val_one]
-    -- mode2: bits 4-5
     case mode2 =>
       rcases h_bit4 with h4_zero | h4_one <;> rcases h_bit5 with h5_zero | h5_one
       · left; simp +decide [h4_zero, h5_zero]
       · right; right; left; simp +decide [h4_zero, h5_one, ZMod.val_one]
       · right; left; simp +decide [h4_one, h5_zero, ZMod.val_one]
       · right; right; right; simp +decide [h4_one, h5_one, ZMod.val_one]
-    -- mode3: bits 6-7
     case mode3 =>
       rcases h_bit6 with h6_zero | h6_one <;> rcases h_bit7 with h7_zero | h7_one
       · left; simp +decide [h6_zero, h7_zero]
@@ -391,7 +350,6 @@ lemma fetchInstruction_rawInstrType_eq_program
     split at h_mem
     case isTrue h_lt =>
       simp only [Option.some.injEq] at h_mem
-      -- Extract remaining components
       cases h_op1 : memoryAccess program (pc + 1)
       · simp [h_op1] at h
       · simp only [h_op1, Option.bind_some] at h
