@@ -5,7 +5,7 @@ import Clean.Utils.Field
 import Clean.Table.Inductive
 
 import Clean.Examples.FemtoCairo.SpecLemmas
-import Clean.Examples.FemtoCairo.Types
+import Clean.Examples.FemtoCairo.TypesLemmas
 
 namespace Examples.FemtoCairo
 open Gadgets
