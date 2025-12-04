@@ -1089,20 +1089,15 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
       simp only [circuit_norm, RawInstruction.eval_op1, Expression.eval] at this
       exact this
 
-    -- Get the state field equalities (using env.get form)
-    have h_ap_eq : env.get input_var.ap.index = input.ap := by
-      have := congrArg (·.ap) h_input
-      simp only [State.eval_ap, Expression.eval] at this
-      exact this
-    have h_fp_eq : env.get input_var.fp.index = input.fp := by
-      have := congrArg (·.fp) h_input
-      simp only [State.eval_fp, Expression.eval] at this
-      exact this
+    -- Get the state field equalities
+    have h_ap_eq : Expression.eval env input_var.ap = input.ap := by
+      rw [← State.eval_ap env input_var, h_input]
+    have h_fp_eq : Expression.eval env input_var.fp = input.fp := by
+      rw [← State.eval_fp env input_var, h_input]
 
     -- Now we can convert the goal to use the spec values
-    -- The goal is about circuit-evaluated values, h_op1_bounds is about spec values
-    -- We use the equalities to rewrite
-    rw [h_op1_eq, h_ap_eq, h_fp_eq]
+    -- simp + h_op1_eq/h_ap_eq/h_fp_eq should transform the goal to match h_op1_bounds
+    simp only [circuit_norm, h_op1_eq, h_ap_eq, h_fp_eq]
     exact h_op1_bounds
 
   case read2 =>
@@ -1115,21 +1110,19 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
     have h_fetch_spec := h_fetch_env h_fetch_assumptions
     simp only [h_eval_pc, h_fetch] at h_fetch_spec
 
-    have h_op2_eq : env.get (i₀ + 1 + 1) = raw.op2 := by
+    have h_op2_eq : Expression.eval env (var ⟨i₀ + 1 + 1⟩) = raw.op2 := by
       have := congrArg (·.op2) h_fetch_spec
-      simp only [circuit_norm, RawInstruction.eval_op2, Expression.eval] at this
+      simp only [circuit_norm, RawInstruction.eval_op2] at this
       exact this
 
-    have h_ap_eq : env.get input_var.ap.index = input.ap := by
-      have := congrArg (·.ap) h_input
-      simp only [State.eval_ap, Expression.eval] at this
-      exact this
-    have h_fp_eq : env.get input_var.fp.index = input.fp := by
-      have := congrArg (·.fp) h_input
-      simp only [State.eval_fp, Expression.eval] at this
-      exact this
+    have h_ap_eq : Expression.eval env input_var.ap = input.ap := by
+      rw [← State.eval_ap env input_var, h_input]
+    have h_fp_eq : Expression.eval env input_var.fp = input.fp := by
+      rw [← State.eval_fp env input_var, h_input]
 
-    rw [h_op2_eq, h_ap_eq, h_fp_eq]
+    -- Convert the goal to match h_op2_bounds using the established equalities
+    simp only [circuit_norm] at h_op2_eq h_ap_eq h_fp_eq
+    simp only [h_op2_eq, h_ap_eq, h_fp_eq]
     exact h_op2_bounds
 
   case read3 =>
@@ -1142,21 +1135,19 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
     have h_fetch_spec := h_fetch_env h_fetch_assumptions
     simp only [h_eval_pc, h_fetch] at h_fetch_spec
 
-    have h_op3_eq : env.get (i₀ + 1 + 1 + 1) = raw.op3 := by
+    have h_op3_eq : Expression.eval env (var ⟨i₀ + 1 + 1 + 1⟩) = raw.op3 := by
       have := congrArg (·.op3) h_fetch_spec
-      simp only [circuit_norm, RawInstruction.eval_op3, Expression.eval] at this
+      simp only [circuit_norm, RawInstruction.eval_op3] at this
       exact this
 
-    have h_ap_eq : env.get input_var.ap.index = input.ap := by
-      have := congrArg (·.ap) h_input
-      simp only [State.eval_ap, Expression.eval] at this
-      exact this
-    have h_fp_eq : env.get input_var.fp.index = input.fp := by
-      have := congrArg (·.fp) h_input
-      simp only [State.eval_fp, Expression.eval] at this
-      exact this
+    have h_ap_eq : Expression.eval env input_var.ap = input.ap := by
+      rw [← State.eval_ap env input_var, h_input]
+    have h_fp_eq : Expression.eval env input_var.fp = input.fp := by
+      rw [← State.eval_fp env input_var, h_input]
 
-    rw [h_op3_eq, h_ap_eq, h_fp_eq]
+    -- Convert the goal to match h_op3_bounds using the established equalities
+    simp only [circuit_norm] at h_op3_eq h_ap_eq h_fp_eq
+    simp only [h_op3_eq, h_ap_eq, h_fp_eq]
     exact h_op3_bounds
 
   case next =>
@@ -1215,64 +1206,84 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
       -- Need to show: (Spec.computeNextState (val (circuit's decoded.instrType)) ...).isSome
       -- Use h_val_eq to connect the instruction types, and read specs for v1, v2, v3
 
-      -- Get the state equality from h_input
-      have h_state_eq : ProvableType.eval env input_var = input := h_input
-
-      -- The circuit's decoded.instrType.val equals decode.0
-      -- h_val_eq : (eval env decoded_var).instrType.val = decode.0
-
-      -- For v1, v2, v3 values, use read circuit specs with mode correctness
-      -- The read circuit spec says: isEncodedCorrectly mode → output = dataMemoryAccess value
-      -- h_v1, h_v2, h_v3 say: dataMemoryAccess = some v1/v2/v3
-
-      -- Rewrite using the instruction type and state equalities
+      -- Rewrite using the instruction type equality
       simp only [h_val_eq]
 
       -- The goal is now about computeNextState with circuit's v1, v2, v3
       -- We need to show these equal spec's v1, v2, v3
       -- This follows from h_v1, h_v2, h_v3 and the read circuit completeness
 
+      -- Establish op equalities for connecting circuit to spec
+      have h_op1_eq : env.get (i₀ + 1) = raw.op1 := by
+        have h_fetch_spec := h_fetch_env h_fetch_assumptions
+        simp only [h_eval_pc, h_fetch] at h_fetch_spec
+        have := congrArg (·.op1) h_fetch_spec
+        simp only [circuit_norm, RawInstruction.eval_op1, Expression.eval] at this
+        exact this
+      have h_op2_eq : env.get (i₀ + 1 + 1) = raw.op2 := by
+        have h_fetch_spec := h_fetch_env h_fetch_assumptions
+        simp only [h_eval_pc, h_fetch] at h_fetch_spec
+        have := congrArg (·.op2) h_fetch_spec
+        simp only [circuit_norm, RawInstruction.eval_op2, Expression.eval] at this
+        exact this
+      have h_op3_eq : env.get (i₀ + 1 + 1 + 1) = raw.op3 := by
+        have h_fetch_spec := h_fetch_env h_fetch_assumptions
+        simp only [h_eval_pc, h_fetch] at h_fetch_spec
+        have := congrArg (·.op3) h_fetch_spec
+        simp only [circuit_norm, RawInstruction.eval_op3, Expression.eval] at this
+        exact this
+
+      -- Get raw_bounds = raw
+      have h_raw_eq : raw_bounds = raw := by
+        rw [h_fetch_bounds] at h_fetch
+        exact Option.some.inj h_fetch
+
       -- Use convert to handle the structural matching
+      -- Goals will be: v1 equality, v2 equality, v3 equality
       convert h_computeNext using 3
-      · -- state equality
-        simp only [circuit_norm, explicit_provable_type] at h_state_eq
-        exact h_state_eq.symm
+      · -- v1 equality: circuit's v1 = spec's v1
+        -- Prove read1 assumptions hold (directly in env.get form)
+        have h_read1_assump : ∀ addr ∈ Spec.dataMemoryAddresses memory (env.get (i₀ + 1)) input.ap input.fp,
+            addr.val < memorySize := by
+          rw [h_op1_eq]; simp only [h_raw_eq, AllMemoryAddressesInBounds] at h_op1_bounds; exact h_op1_bounds
+
+        have h_read1_spec := h_read1_env h_read1_assump
+
+        -- Rewrite h_v1 to use circuit offset form (faster than rewriting h_read1_spec)
+        have h_v1' : Spec.dataMemoryAccess memory (env.get (i₀ + 1)) decode.2.1 input.ap input.fp = some v1 := by
+          rw [h_op1_eq]; exact h_v1
+
+        simp only [h_mode1_encoded, h_mode1_val, h_v1'] at h_read1_spec
+        simp only [circuit_norm, explicit_provable_type] at h_read1_spec
+        exact h_read1_spec
+
       · -- v2 equality: circuit's v2 = spec's v2
-        -- Use the read2 circuit spec to connect the output to dataMemoryAccess
+        have h_read2_assump : ∀ addr ∈ Spec.dataMemoryAddresses memory (env.get (i₀ + 1 + 1)) input.ap input.fp,
+            addr.val < memorySize := by
+          rw [h_op2_eq]; simp only [h_raw_eq, AllMemoryAddressesInBounds] at h_op2_bounds; exact h_op2_bounds
 
-        -- Get all the needed equalities to connect circuit to spec:
-        -- 1. Circuit's offset (op2) = raw.op2
-        have h_op2_eq : env.get (i₀ + 1 + 1) = raw.op2 := by
-          have h_fetch_spec := h_fetch_env h_fetch_assumptions
-          simp only [h_eval_pc, h_fetch] at h_fetch_spec
-          have := congrArg (·.op2) h_fetch_spec
-          simp only [circuit_norm, RawInstruction.eval_op2, Expression.eval] at this
-          exact this
-        -- 2. Circuit's state.ap = input.ap
-        have h_ap_eq' : env.get input_var.ap.index = input.ap := by
-          have := congrArg (·.ap) h_input
-          simp only [State.eval_ap, Expression.eval] at this
-          exact this
-        -- 3. Circuit's state.fp = input.fp
-        have h_fp_eq' : env.get input_var.fp.index = input.fp := by
-          have := congrArg (·.fp) h_input
-          simp only [State.eval_fp, Expression.eval] at this
-          exact this
+        have h_read2_spec := h_read2_env h_read2_assump
 
-        -- The mode2 value connection from decode spec
-        -- h_mode2_val : (eval env decoded).mode2.val = decode.1
-        -- h_mode2_encoded : (eval env decoded).mode2.isEncodedCorrectly
+        have h_v2' : Spec.dataMemoryAccess memory (env.get (i₀ + 1 + 1)) decode.2.2.1 input.ap input.fp = some v2 := by
+          rw [h_op2_eq]; exact h_v2
 
-        -- Apply h_read2_env to get the read2 spec
-        -- But first we need to prove read2 assumptions hold
-        -- (which was done in the read2 case above, need to extract it here)
-
-        -- For now, this requires more infrastructure to connect properly
-        sorry
+        simp only [h_mode2_encoded, h_mode2_val, h_v2'] at h_read2_spec
+        simp only [circuit_norm, explicit_provable_type] at h_read2_spec
+        exact h_read2_spec
 
       · -- v3 equality: circuit's v3 = spec's v3
-        -- Similar approach - use read3 circuit spec with all needed equalities
-        sorry
+        have h_read3_assump : ∀ addr ∈ Spec.dataMemoryAddresses memory (env.get (i₀ + 1 + 1 + 1)) input.ap input.fp,
+            addr.val < memorySize := by
+          rw [h_op3_eq]; simp only [h_raw_eq, AllMemoryAddressesInBounds] at h_op3_bounds; exact h_op3_bounds
+
+        have h_read3_spec := h_read3_env h_read3_assump
+
+        have h_v3' : Spec.dataMemoryAccess memory (env.get (i₀ + 1 + 1 + 1)) decode.2.2.2 input.ap input.fp = some v3 := by
+          rw [h_op3_eq]; exact h_v3
+
+        simp only [h_mode3_encoded, h_mode3_val, h_v3'] at h_read3_spec
+        simp only [circuit_norm, explicit_provable_type] at h_read3_spec
+        exact h_read3_spec
 
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
@@ -1441,10 +1452,9 @@ def femtoCairoTable
         rw [h_eval.1]
         exact h_full_assumptions
 
-      -- The remaining proof requires femtoCairoStepCircuitCompleteness to be proven
-      -- (which currently has a sorry). Once that is complete, this follows by applying
-      -- the circuit completeness with h_assumptions_eval.
-      sorry
+      -- The goal after simp is asking for femtoCairoAssumptions
+      -- h_assumptions_eval provides exactly this
+      exact h_assumptions_eval
 
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with
