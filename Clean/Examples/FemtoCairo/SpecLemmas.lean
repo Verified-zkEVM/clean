@@ -13,6 +13,16 @@ open Examples.FemtoCairo.Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 omit p_large_enough in
+/-- Adding a natural number to a field element preserves the value when no wraparound occurs -/
+lemma ZMod_val_add_nat (x : F p) (n : ℕ) (h : x.val + n < p) :
+    (x + n).val = x.val + n := by
+  have hn_lt_p : n < p := by omega
+  have hn_val : (n : ZMod p).val = n := ZMod.val_natCast_of_lt hn_lt_p
+  calc (x + n).val = (x.val + (n : ZMod p).val) % p := ZMod.val_add x n
+    _ = (x.val + n) % p := by rw [hn_val]
+    _ = x.val + n := Nat.mod_eq_of_lt h
+
+omit p_large_enough in
 /-- If memoryAccess succeeds, the address is in bounds -/
 lemma memoryAccess_isSome_implies_bounds {n : ℕ} [NeZero n]
     (memory : Fin n → F p) (addr : F p)
@@ -100,12 +110,7 @@ lemma fetchInstruction_isSome_implies_pc_bound
           -- From pc.val < programSize and programSize + 3 < p, we get pc.val + 3 < p
           have h_no_wrap : pc.val + 3 < p := by omega
           -- With no wraparound, (pc + 3).val = pc.val + 3
-          have h_eq : (pc + 3).val = pc.val + 3 := by
-            have h3_lt_p : 3 < p := by omega
-            have h3_val : (3 : ZMod p).val = 3 := ZMod.val_natCast_of_lt h3_lt_p
-            calc (pc + 3).val = (pc.val + (3 : ZMod p).val) % p := ZMod.val_add pc 3
-              _ = (pc.val + 3) % p := by rw [h3_val]
-              _ = pc.val + 3 := Nat.mod_eq_of_lt h_no_wrap
+          have h_eq : (pc + 3).val = pc.val + 3 := ZMod_val_add_nat pc 3 h_no_wrap
           omega
 
 omit p_large_enough in
