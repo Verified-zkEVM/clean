@@ -193,16 +193,7 @@ lemma transition_isSome_implies_computeNextState_isSome
           -- Case on third dataMemoryAccess (uses decode.2.2.2 = mode3)
           cases h_v3 : dataMemoryAccess memory raw.op3 decode.2.2.2 state.ap state.fp with
           | none => simp [h_v3] at h_next
-          | some v3 =>
-            simp only [h_v3, Option.bind_some] at h_next
-            -- Now h_next : computeNextState decode.1 v1 v2 v3 state = some nextState
-            refine ⟨raw, decode, v1, v2, v3, ?eq1, ?eq2, ?eq3, ?eq4, ?eq5, ?isSome⟩
-            case eq1 => rfl
-            case eq2 => exact h_decode
-            case eq3 => exact h_v1
-            case eq4 => exact h_v2
-            case eq5 => exact h_v3
-            case isSome => rw [Option.isSome_iff_exists]; exact ⟨nextState, h_next⟩
+          | some v3 => aesop
 
 omit p_large_enough in
 /--
@@ -226,10 +217,7 @@ lemma transition_isSome_of_boundedExecution_succ_isSome
   obtain ⟨finalState, h_final⟩ := h_succ
   -- h_final : (boundedExec init n >>= transition) = some finalState
   rw [h_n] at h_final
-  -- h_final : (some state >>= transition) = some finalState
-  -- which is: transition state = some finalState
-  rw [Option.isSome_iff_exists]
-  exact ⟨finalState, h_final⟩
+  aesop
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- ValidProgram ensures any program access returns a value < 256 -/
@@ -267,24 +255,13 @@ lemma decodeInstruction_eq_some_implies_isEncodedCorrectly (instr : F p) (result
     rcases h_bit0 with h0_zero | h0_one <;> rcases h_bit1 with h1_zero | h1_one
     · -- bit0 = 0, bit1 = 0 → value = 0
       left
-      simp only [h0_zero, h1_zero, ZMod.val_zero, mul_zero, add_zero,
-        if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
-        if_neg (by decide : ¬(0 = 3)), if_true, and_self]
+      simp +decide [h0_zero, h1_zero]
     · -- bit0 = 0, bit1 = 1 → value = 2
-      right; right; left
-      simp only [h0_zero, h1_one, ZMod.val_zero, ZMod.val_one, mul_one,
-        if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)),
-        if_neg (by decide : ¬(2 = 3)), if_true, and_self]
+      right; right; left; simp +decide [h0_zero, h1_one, ZMod.val_one]
     · -- bit0 = 1, bit1 = 0 → value = 1
-      right; left
-      simp only [h0_one, h1_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
-        if_neg (by decide : ¬(1 = 0)), if_neg (by decide : ¬(1 = 2)),
-        if_neg (by decide : ¬(1 = 3)), if_true, and_self]
+      right; left; simp +decide [h0_one, h1_zero, ZMod.val_one]
     · -- bit0 = 1, bit1 = 1 → value = 3
-      right; right; right
-      simp only [h0_one, h1_one, ZMod.val_one, mul_one,
-        if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
-        if_neg (by decide : ¬(3 = 2)), if_true, and_self]
+      right; right; right; simp +decide [h0_one, h1_one, ZMod.val_one]
 
 omit p_large_enough in
 /-- If decodeInstruction succeeds, all addressing modes are encoded correctly -/
@@ -325,60 +302,24 @@ lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : �
     -- mode1: bits 2-3
     case mode1 =>
       rcases h_bit2 with h2_zero | h2_one <;> rcases h_bit3 with h3_zero | h3_one
-      · left
-        simp only [h2_zero, h3_zero, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
-          if_neg (by decide : ¬(0 = 3)), if_true, and_self]
-      · right; right; left
-        simp only [h2_zero, h3_one, ZMod.val_zero, ZMod.val_one, mul_one,
-          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)),
-          if_neg (by decide : ¬(2 = 3)), if_true, and_self]
-      · right; left
-        simp only [h2_one, h3_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(1 = 0)), if_neg (by decide : ¬(1 = 2)),
-          if_neg (by decide : ¬(1 = 3)), if_true, and_self]
-      · right; right; right
-        simp only [h2_one, h3_one, ZMod.val_one, mul_one,
-          if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
-          if_neg (by decide : ¬(3 = 2)), if_true, and_self]
+      · left; simp +decide [h2_zero, h3_zero]
+      · right; right; left; simp +decide [h2_zero, h3_one, ZMod.val_one]
+      · right; left; simp +decide [h2_one, h3_zero, ZMod.val_one]
+      · right; right; right; simp +decide [h2_one, h3_one, ZMod.val_one]
     -- mode2: bits 4-5
     case mode2 =>
       rcases h_bit4 with h4_zero | h4_one <;> rcases h_bit5 with h5_zero | h5_one
-      · left
-        simp only [h4_zero, h5_zero, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
-          if_neg (by decide : ¬(0 = 3)), if_true, and_self]
-      · right; right; left
-        simp only [h4_zero, h5_one, ZMod.val_zero, ZMod.val_one, mul_one,
-          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)),
-          if_neg (by decide : ¬(2 = 3)), if_true, and_self]
-      · right; left
-        simp only [h4_one, h5_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(1 = 0)), if_neg (by decide : ¬(1 = 2)),
-          if_neg (by decide : ¬(1 = 3)), if_true, and_self]
-      · right; right; right
-        simp only [h4_one, h5_one, ZMod.val_one, mul_one,
-          if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
-          if_neg (by decide : ¬(3 = 2)), if_true, and_self]
+      · left; simp +decide [h4_zero, h5_zero]
+      · right; right; left; simp +decide [h4_zero, h5_one, ZMod.val_one]
+      · right; left; simp +decide [h4_one, h5_zero, ZMod.val_one]
+      · right; right; right; simp +decide [h4_one, h5_one, ZMod.val_one]
     -- mode3: bits 6-7
     case mode3 =>
       rcases h_bit6 with h6_zero | h6_one <;> rcases h_bit7 with h7_zero | h7_one
-      · left
-        simp only [h6_zero, h7_zero, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(0 = 1)), if_neg (by decide : ¬(0 = 2)),
-          if_neg (by decide : ¬(0 = 3)), if_true, and_self]
-      · right; right; left
-        simp only [h6_zero, h7_one, ZMod.val_zero, ZMod.val_one, mul_one,
-          if_neg (by decide : ¬(2 = 0)), if_neg (by decide : ¬(2 = 1)),
-          if_neg (by decide : ¬(2 = 3)), if_true, and_self]
-      · right; left
-        simp only [h6_one, h7_zero, ZMod.val_one, ZMod.val_zero, mul_zero, add_zero,
-          if_neg (by decide : ¬(1 = 0)), if_neg (by decide : ¬(1 = 2)),
-          if_neg (by decide : ¬(1 = 3)), if_true, and_self]
-      · right; right; right
-        simp only [h6_one, h7_one, ZMod.val_one, mul_one,
-          if_neg (by decide : ¬(3 = 0)), if_neg (by decide : ¬(3 = 1)),
-          if_neg (by decide : ¬(3 = 2)), if_true, and_self]
+      · left; simp +decide [h6_zero, h7_zero]
+      · right; right; left; simp +decide [h6_zero, h7_one, ZMod.val_one]
+      · right; left; simp +decide [h6_one, h7_zero, ZMod.val_one]
+      · right; right; right; simp +decide [h6_one, h7_one, ZMod.val_one]
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- If dataMemoryAccess succeeds, specific accessed addresses are in bounds -/
