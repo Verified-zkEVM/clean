@@ -622,7 +622,7 @@ end Circuit
 -- `circuit_norm` attributes
 
 -- basic logical simplifcations
-attribute [circuit_norm] true_and and_true true_implies implies_true forall_const
+attribute [circuit_norm] true_and and_true true_implies implies_true forall_const gt_iff_lt
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form

@@ -150,10 +150,6 @@ instance : ProvableStruct StateTransitionInput where
     state, decoded, v1, v2, v3
   }
 
-@[ext]
-lemma State.ext {F : Type} {s1 s2 : State F} (h1 : s1.pc = s2.pc) (h2 : s1.ap = s2.ap) (h3 : s1.fp = s2.fp) : s1 = s2 := by
-  cases s1; cases s2; simp_all only
-
 /--
   Convert the one-hot encoding of an instruction type back to its numeric representation.
 -/
