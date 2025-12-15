@@ -959,7 +959,7 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize)
       (femtoCairoAssumptions program memory) := by
   circuit_proof_start [femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
-    fetchInstructionCircuit, decodeInstructionCircuit, readFromMemoryCircuit, nextStateCircuit]
+    fetchInstructionCircuit, decodeInstruction.circuit, readFromMemoryCircuit, nextStateCircuit]
 
   obtain ⟨h_valid_size, h_valid_program, h_transition_isSome, h_memory_bounds⟩ := h_assumptions
   obtain ⟨raw_bounds, h_fetch_bounds, h_op1_bounds, h_op2_bounds, h_op3_bounds⟩ := h_memory_bounds
@@ -1014,7 +1014,7 @@ def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (
     have h_decode_assumptions : (Expression.eval env (var ⟨i₀⟩)).val < 256 := by
       simp only [Expression.eval, h_rawInstrType_eval]; exact h_instr_bound
     have h_decode_spec := h_decode_env h_decode_assumptions
-    simp only [h_rawInstrType_eval, h_decode] at h_decode_spec
+    simp only [decodeInstruction.Spec, h_rawInstrType_eval, h_decode] at h_decode_spec
     obtain ⟨h_val_eq, h_isEncoded, h_mode1_val, h_mode1_encoded, h_mode2_val, h_mode2_encoded,
             h_mode3_val, h_mode3_encoded⟩ := h_decode_spec
 

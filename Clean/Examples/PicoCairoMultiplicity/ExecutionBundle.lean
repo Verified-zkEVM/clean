@@ -123,8 +123,6 @@ def elaborated
     simp only [← InteractionDelta.add_eq_append, InteractionDelta.toFinsupp_add, add_assoc]
     -- Remaining difference: -1*1 vs -1
     simp only [mul_one]
-    -- The State.pc/ap/fp after Expression.eval should match (eval env state).pc/ap/fp
-    rfl
   subcircuitsConsistent := by
     intros inputs offset
     simp only [main, circuit_norm, emitAdd]
@@ -219,6 +217,8 @@ private theorem circuit_soundness
   have h_load_spec := h_load_impl h_assump_load
   -- Unfold Spec and provide witnesses
   simp only [Spec]
+  -- Normalize Expression.eval to (eval ...).field using State.eval_* lemmas (in goal and hypotheses)
+  simp only [← State.eval_pc, ← State.eval_ap, ← State.eval_fp] at h_add_spec h_mul_spec h_store_spec h_load_spec ⊢
   rw [h_eval_initial, h_eval_final]
   -- Convert ++ to + in the adds equality (both in goal and hypotheses)
   simp only [← InteractionDelta.add_eq_append] at h_add_spec h_mul_spec h_store_spec h_load_spec ⊢
