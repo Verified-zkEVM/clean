@@ -367,7 +367,9 @@ variable {α : TypeMap} [ProvableType α]
 
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
-  ProvableType.eval env x = Expression.eval env x := rfl
+    ProvableType.eval env x = Expression.eval env x := by
+  simp only [circuit_norm, explicit_provable_type]
+  aesop
 
 @[circuit_norm ↓]
 theorem varFromOffset_field {F} (offset : ℕ) :
@@ -383,12 +385,18 @@ theorem varFromOffset_fields {F} (offset : ℕ) :
 
 @[circuit_norm ↓]
 theorem eval_fieldPair {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
-  ProvableType.eval env t = (match t with | (x, y) => (Expression.eval env x, Expression.eval env y)) := rfl
+    ProvableType.eval env t = (match t with | (x, y) => (Expression.eval env x, Expression.eval env y)) := by
+  rcases t
+  simp only [circuit_norm, explicit_provable_type]
+  aesop
 
 @[circuit_norm ↓]
 theorem eval_fieldTriple {F : Type} [Field F] (env : Environment F) (t : Var fieldTriple F) :
-  ProvableType.eval env t = (match t with
-    | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z)) := rfl
+    ProvableType.eval env t = (match t with
+    | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z)) := by
+  rcases t
+  simp only [circuit_norm, explicit_provable_type]
+  aesop
 
 @[circuit_norm ↓]
 theorem varFromOffset_fieldPair {F} (offset : ℕ) :
