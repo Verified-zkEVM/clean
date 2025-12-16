@@ -121,6 +121,20 @@ def main (input : Vector (Expression (F p)) 254) := do
   -- Convert bits to number
   Bits2Num.main 254 input
 
+lemma mapFinRange_eq_map {α β : Type} {n : ℕ} (v : Vector α n) (f : α → β) :
+    Vector.mapFinRange n (fun i => f v[i]) = v.map f := by
+  ext i
+  simp only [Vector.getElem_mapFinRange, Vector.getElem_map]
+  simp
+
+lemma fieldFromBits_eq_mapFinRange_cast {n} {f : Fin n → F p} :
+    fieldFromBits (Vector.mapFinRange n f) = (fromBits (Vector.mapFinRange n fun i => (f i).val) : F p) := by
+  unfold fieldFromBits
+  apply congrArg (Nat.cast : ℕ → F p)
+  apply congrArg fromBits
+  ext i
+  simp only [Vector.getElem_map, Vector.getElem_mapFinRange]
+
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
@@ -135,8 +149,27 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    simp only [circuit_norm, main, Bits2Num.main]
-    sorry
+    intro i0 env input_var input h_input assumptions h_holds
+    simp only [circuit_norm, main, Bits2Num.main] at h_holds ⊢
+    simp_all only [circuit_norm, AliasCheck.circuit]
+    simp only [Num2Bits.lc_eq, Fin.forall_iff,
+      id_eq, mul_eq_zero, add_neg_eq_zero] at h_holds
+    obtain ⟨ h_bits, h_eq ⟩ := h_holds
+    rw[← ZMod.val_natCast_of_lt h_bits]
+    rw[← mapFinRange_eq_map]
+    rw[← fieldFromBits_eq_mapFinRange_cast]
+    conv =>
+          rhs
+          congr
+          congr
+          congr
+          ext i
+          -- input を変数評価の形に戻す
+          rw [← h_input]
+          simp
+          rw [← Fin.getElem_fin]
+    rw [← Bits2Num.lc_eq]
+    simp
 
   completeness := by
     simp only [circuit_norm, main, Bits2Num.main]
