@@ -152,8 +152,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     intro i0 env input_var input h_input assumptions h_holds
     simp only [circuit_norm, main, Bits2Num.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit]
-    simp only [Num2Bits.lc_eq, Fin.forall_iff,
-      id_eq, mul_eq_zero, add_neg_eq_zero] at h_holds
+    simp only [id_eq] at h_holds
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
     rw[← ZMod.val_natCast_of_lt h_bits]
     rw[← mapFinRange_eq_map]
