@@ -164,7 +164,6 @@ def circuit : FormalCircuit (F p) (fields 254) field where
           congr
           congr
           ext i
-          -- input を変数評価の形に戻す
           rw [← h_input]
           simp
           rw [← Fin.getElem_fin]
