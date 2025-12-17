@@ -533,7 +533,7 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
-  Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.toArray_push List.append_assoc
   Vector.eq_mk Vector.mk_eq
 
 -- `getElem` lemmas should be tried before expanding Vectors/Lists
