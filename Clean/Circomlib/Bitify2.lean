@@ -135,6 +135,8 @@ lemma fieldFromBits_eq_mapFinRange_cast {n} {f : Fin n → F p} :
   ext i
   simp only [Vector.getElem_map, Vector.getElem_mapFinRange]
 
+set_option linter.constructorNameAsVariable false
+
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
@@ -164,7 +166,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
           congr
           ext i
           rw [← h_input]
-          simp
+          simp only [Fin.getElem_fin, Vector.getElem_map]
           rw [← Fin.getElem_fin]
     rw [← Bits2Num.lc_eq]
     simp
