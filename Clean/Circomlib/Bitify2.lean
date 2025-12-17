@@ -145,7 +145,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+  Assumptions input := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
 
   Spec input output :=
     output.val = fromBits (input.map ZMod.val)
@@ -155,7 +155,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     simp only [circuit_norm, main, Bits2Num.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit]
     simp only [id_eq] at h_holds
-    obtain ⟨ h_bits, h_eq ⟩ := h_holds
+    obtain ⟨ _, h_bits ⟩ := assumptions
     rw[← ZMod.val_natCast_of_lt h_bits]
     rw[← mapFinRange_eq_map]
     rw[← fieldFromBits_eq_mapFinRange_cast]
@@ -172,8 +172,14 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     simp
 
   completeness := by
-    simp only [circuit_norm, main, Bits2Num.main]
-    sorry
+    simp only [circuit_norm, main]
+    intro i0 env input_var h_env input h_input assumptions
+    simp only [circuit_norm, Bits2Num.main] at h_env h_input ⊢
+    simp only [h_input, circuit_norm] at h_env ⊢
+    obtain ⟨assumption₁, assumption₂⟩ := assumptions
+    simp only [circuit_norm, AliasCheck.circuit, assumption₁,assumption₂] at ⊢
+    rw[← h_env]
+    rfl
 end Bits2Num_strict
 
 namespace Num2BitsNeg
