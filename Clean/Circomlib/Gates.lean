@@ -444,7 +444,9 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           simp only [add_zero, List.getElem_toArray]
           exact h_completeness
         · simp only [Operations.forAll]
-          trivial
+          simp only [circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main]
+          rw [Circuit.forEach]
+          simp_all [assertZero, circuit_norm, Operations.toFlat, FlatOperation.forAll]
     | m + 3 =>
       intros
       subst offset2
@@ -669,8 +671,9 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
       simp only [List.foldl_cons, List.foldl_nil]
       rw [one_land_of_IsBool input[0].val (val_of_IsBool h_input0)]
     rw [h_fold_two]
-    exact h_val
-  · exact h_binary
+    convert h_val using 2
+    all_goals simp only [circuit_norm, ElaboratedCircuit.output_eq]
+  · convert h_binary using 1; simp only [circuit_norm, ElaboratedCircuit.output_eq]
 
 /-- Completeness for n = 0 case -/
 lemma completeness_zero {p : ℕ} [Fact p.Prime]
@@ -711,15 +714,13 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
     rfl
   · simp only [Assumptions] at h_assumptions
     constructor
-    · have h_eval0 : env input_var[0] = input[0] :=
+    · have h_eval0 : Expression.eval env input_var[0] = input[0] :=
         by simp[h_env, circuit_norm]
-      change IsBool (env input_var[0])
-      rw [h_eval0]
+      simp only [ProvableType.eval_fieldPair, h_eval0]
       exact h_binary0
-    · have h_eval1 : env input_var[1] = input[1] :=
+    · have h_eval1 : Expression.eval env input_var[1] = input[1] :=
         by simp[h_env, circuit_norm]
-      change IsBool (env input_var[1])
-      rw [h_eval1]
+      simp only [ProvableType.eval_fieldPair, h_eval1]
       exact h_binary1
 
 theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
@@ -806,9 +807,10 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       constructor
       · trans (Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input1.map (·.val)) &&&
                Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input2.map (·.val)))
-        · convert h_and_val using 1
-          simp only [out1, out2]
-          simp only [h_val1, h_val2]
+        · convert h_and_val using 2
+          · simp only [circuit_norm, out1, out2, ElaboratedCircuit.output_eq]; rfl
+          · simp only [out1]; exact h_val1.symm
+          · simp only [out2]; exact h_val2.symm
 
         have h_append : input1.cast (by omega : n1 = n1) ++ input2.cast (by omega : n2 = n2) =
                           input.cast (by omega : m + 3 = n1 + n2) := by
@@ -850,7 +852,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 
           rw [h_cast_transport]
 
-      · exact h_and_binary
+      · convert h_and_binary using 1; simp only [circuit_norm, ElaboratedCircuit.output_eq]; rfl
 
 lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
@@ -1003,13 +1005,15 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_assumptions2
 
             constructor
-            · apply main_output_binary_from_completeness n1 offset env input_var1 input1
+            · simp only [ProvableType.eval_fieldPair]
+              apply main_output_binary_from_completeness n1 offset env input_var1 input1
               · exact h_eval1
               · exact h_assumptions1
               · exact h_local_witnesses.1
               · exact h_comp1
 
-            · have h_rest := h_local_witnesses.2
+            · simp only [ProvableType.eval_fieldPair]
+              have h_rest := h_local_witnesses.2
               rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_rest
               apply main_output_binary_from_completeness n2 (offset + (main input_var1).localLength offset) env input_var2 input2
               · exact h_eval2
@@ -1028,7 +1032,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
 
   soundness := by
     intro offset env input_var input h_env h_assumptions h_hold
-    exact soundness n offset env input_var input h_env.symm h_assumptions h_hold
+    convert soundness n offset env input_var input h_env.symm h_assumptions h_hold using 1
+    simp only [circuit_norm]
   completeness := by
     intro offset env input_var h_local_witnesses input h_env h_assumptions
     exact completeness n offset env input_var input h_local_witnesses h_env.symm h_assumptions
