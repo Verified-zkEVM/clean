@@ -114,10 +114,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- Normalize arithmetic in hypotheses to match goal
   ring_nf at c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15
 
-  simp [circuit_norm, eval_vector, BLAKE3State.value, finalStateUpdate]
+  simp only [circuit_norm, eval_vector, BLAKE3State.value, finalStateUpdate]
   ring_nf
-  simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, and_self,
-    true_and]
+  simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, true_and]
 
   -- Prove the Normalized property for all indices
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, List.getElem_cons_zero,

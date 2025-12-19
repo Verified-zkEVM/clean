@@ -31,7 +31,7 @@ lemma test_eval_eq_struct_literal {F : Type} [Field F] (env : Environment F)
     (h : eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3) :
     Expression.eval env x_var = 1 ∧ Expression.eval env y_var = 2 ∧ Expression.eval env z_var = 3 := by
   fail_if_no_progress simplify_provable_struct_eval
-  -- Now h should be literal = literal, but it isn't!
+  -- TODO(#316): Remove this simp call once simplify_provable_struct_eval is fixed
   simp only [components, toComponents, ProvableStruct.eval.go, circuit_norm, explicit_provable_type] at h
   rw [TestInputs.mk.injEq] at h
   exact h
@@ -115,12 +115,13 @@ theorem test_complex_eval {F : Type} [Field F] (env : Environment F)
   simplify_provable_struct_eval
   -- Should simplify the eval expression
   -- now h should be a conjunction of literal = literal
+  -- TODO(#316): Remove this simp call once simplify_provable_struct_eval is fixed
   simp only [components, toComponents, ProvableStruct.eval.go, circuit_norm, explicit_provable_type] at h
   simp only [TestInputs.mk.injEq] at h
   exact h
 
 /-
-This test doesn't work till we can use `simplify_provable_struct_eval` without calling
+TODO(#316): This test doesn't work till we can use `simplify_provable_struct_eval` without calling
 `simp only [components, toComponents, ProvableStruct.eval.go, circuit_norm, explicit_provable_type] at h`
 afterwards. The `simp` call is so powerful that it destroys all the subtlety of keeping eval env s1 = eval env s2 intact.
 
