@@ -257,10 +257,14 @@ def readFromMemory
     let memoryTable := ReadOnlyTableFromFunction memory h_memorySize
 
     -- read into memory for all cases of addressing mode
+    -- TODO: get rid of redundant v1_tmp which is just v2
     let v1_tmp : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval (state.ap + offset)).val
     let v1 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval v1_tmp).val
     let v2 : Expression _ ← witness fun eval =>  memory <| Fin.ofNat _ (eval (state.ap + offset)).val
     let v3 : Expression _ ← witness fun eval =>  memory <| Fin.ofNat _ (eval (state.fp + offset)).val
+    -- TODO: we have to lookup all of the addresses, which forces all of the addresses to be in bounds
+    -- this is a problematic requirement and a limitation of `lookup`
+    -- => make it possible to do a conditional lookup!
     lookup memoryTable ⟨(state.ap + offset), v1_tmp⟩
     lookup memoryTable ⟨v1_tmp, v1⟩
     lookup memoryTable ⟨(state.ap + offset), v2⟩
@@ -553,15 +557,15 @@ def femtoCairoStepElaboratedCircuit
     ElaboratedCircuit (F p) State State where
     main := fun state => do
       -- Fetch instruction
-      let { rawInstrType, op1, op2, op3 } ← (fetchInstruction program h_programSize) state.pc
+      let { rawInstrType, op1, op2, op3 } ← fetchInstruction program h_programSize state.pc
 
       -- Decode instruction
       let decoded ← decodeInstruction rawInstrType
 
       -- Perform relevant memory accesses
-      let v1 ← (readFromMemory memory h_memorySize) { state, offset := op1, mode := decoded.mode1 }
-      let v2 ← (readFromMemory memory h_memorySize) { state, offset := op2, mode := decoded.mode2 }
-      let v3 ← (readFromMemory memory h_memorySize) { state, offset := op3, mode := decoded.mode3 }
+      let v1 ← readFromMemory memory h_memorySize { state, offset := op1, mode := decoded.mode1 }
+      let v2 ← readFromMemory memory h_memorySize { state, offset := op2, mode := decoded.mode2 }
+      let v3 ← readFromMemory memory h_memorySize { state, offset := op3, mode := decoded.mode3 }
 
       -- Compute next state
       nextState { state, decoded, v1, v2, v3 }
@@ -577,7 +581,7 @@ def femtoCairoStepSpec
 
 /--
   Memory bounds requirement: all addresses in dataMemoryAddresses for the given offset are in bounds.
-  This is needed because the readFromMemoryCircuit does ALL lookups regardless of mode.
+  This is needed because the readFromMemory does ALL lookups regardless of mode.
 -/
 def AllMemoryAddressesInBounds
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
@@ -599,7 +603,7 @@ def femtoCairoStepAssumptions
   ValidProgram program ∧
   (Spec.femtoCairoMachineTransition program memory state).isSome ∧
   -- Additional requirement: all memory addresses for each operand are in bounds
-  -- This is needed because readFromMemoryCircuit does ALL lookups regardless of mode
+  -- This is needed because readFromMemory does ALL lookups regardless of mode
   (∃ raw, Spec.fetchInstruction program state.pc = some raw ∧
     AllMemoryAddressesInBounds memory raw.op1 state.ap state.fp ∧
     AllMemoryAddressesInBounds memory raw.op2 state.ap state.fp ∧
