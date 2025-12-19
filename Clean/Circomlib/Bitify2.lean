@@ -256,7 +256,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
           simp only [eval, fromElements, toVars, toElements] at h_input
           exact h_input
         rw[this] at h_eq
-        simp at h_eq ⊢
+        simp only [id_eq, mul_zero, dite_eq_ite, ite_self, add_zero, neg_zero, ZMod.val_zero,
+          Nat.cast_zero, sub_zero] at h_eq ⊢
         rw[← h_eq]
         have h_f := fieldToBits_fieldFromBits hn bits h_bits'
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
