@@ -276,8 +276,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         rw [h_val_zero]
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
       · have : Expression.eval env input_var = input := by
-          rw [← h_input]
-          rfl
+          convert h_input
         rw [this] at h_eq
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
           ↓reduceIte, zero_mul, ne_eq, not_false_eq_true, ZMod.natCast_val]
