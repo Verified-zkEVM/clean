@@ -275,12 +275,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
           exact h_eq
         rw [h_val_zero]
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
-      · have : Expression.eval env input_var ≠ 0 := by
-          simp only [eval, fromElements, toVars, toElements, id_eq, Vector.map_mk, List.map_toArray,
-            List.map_cons, List.map_nil] at h_input
-          rw [h_input]
-          exact h_input_zero
-        have : Expression.eval env input_var = input := by
+      · have : Expression.eval env input_var = input := by
           rw [← h_input]
           rfl
         rw [this] at h_eq
