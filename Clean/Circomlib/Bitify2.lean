@@ -137,7 +137,7 @@ lemma fieldFromBits_eq_mapFinRange_cast {n} {f : Fin n → F p} :
 
 set_option linter.constructorNameAsVariable false
 
-def circuit : FormalCircuit (F p) (fields 254) field where
+def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq := by simp +arith [circuit_norm, main,
@@ -148,14 +148,27 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   Assumptions input := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
 
   Spec input output :=
-    output.val = fromBits (input.map ZMod.val)
+    (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) → output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    intro i0 env input_var input h_input assumptions h_holds
-    simp only [circuit_norm, main, Bits2Num.main] at h_holds ⊢
-    simp_all only [circuit_norm, AliasCheck.circuit]
+    intro i0 env input_var input h_input assumptions h_holds h_binary
+    simp only [ElaboratedCircuit.main, main] at assumptions h_holds ⊢
+    simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at assumptions h_holds ⊢
+    simp_all only [circuit_norm, Nat.reducePow, implies_true, Vector.map_map,
+      forall_const, id_eq, Nat.reduceAdd]
+    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = input[i]) := by {
+      intro i hi
+      rw[← h_input]
+      simp only [Vector.getElem_map]
+    }
+    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = 0 ∨ Expression.eval env input_var[i] = 1) := by {
+      intro i hi
+      rw[this]
+      apply h_binary
+    }
+    simp_all only [implies_true, forall_const]
     simp only [id_eq] at h_holds
-    obtain ⟨ _, h_bits ⟩ := assumptions
+    obtain ⟨ h_bits, h_eq ⟩ := assumptions
     rw[← ZMod.val_natCast_of_lt h_bits]
     rw[← mapFinRange_eq_map]
     rw[← fieldFromBits_eq_mapFinRange_cast]
@@ -169,7 +182,8 @@ def circuit : FormalCircuit (F p) (fields 254) field where
           simp only [Fin.getElem_fin, Vector.getElem_map]
           rw [← Fin.getElem_fin]
     rw [← Bits2Num.lc_eq]
-    simp
+    simp[h_holds]
+    sorry
 
   completeness := by
     simp only [circuit_norm, main]
