@@ -248,6 +248,11 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         apply h_bits ⟨i, hi⟩
       }
 
+      set bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
+      have h_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
+          = fieldFromBitsExpr bits_vars := by
+        simp [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
+
       by_cases h_input_zero : input = 0
       {
         simp_rw[h_input_zero] at h_input ⊢
@@ -262,18 +267,11 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         simp_all
         ext i hi
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
-        rw [← Nat.cast_two, ← Nat.cast_pow]
-        rw [ZMod.val_natCast_of_lt hn]
-        rw [Nat.testBit_two_pow]
+        rw [← Nat.cast_two, ← Nat.cast_pow, ZMod.val_natCast_of_lt hn, Nat.testBit_two_pow]
         have : n ≠ i := ne_of_gt hi
         simp [this]
         rw [← fieldToBits_fieldFromBits hn bits h_bits']
         have h_val_zero : fieldFromBits bits = 0 := by
-          let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
-          have h_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
-              = fieldFromBitsExpr bits_vars := by
-            simp [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
-          rw [h_fold] at h_eq
           simp [fieldFromBits_eval] at h_eq
           have h_bits_eq : Vector.map (Expression.eval env) bits_vars = bits := by
             simp [bits, bits_vars]
@@ -300,7 +298,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
           have h_expr_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
             = fieldFromBitsExpr bits_vars := by
             simp [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
-          rw [h_expr_fold, ← fieldFromBits_eval]
+          rw [← fieldFromBits_eval]
         }
         rw[this]
         symm
