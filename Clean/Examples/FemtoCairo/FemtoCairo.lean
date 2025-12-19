@@ -265,14 +265,14 @@ def readFromMemory
       - in case of single addressing, the second lookup is (0, DUMMY_VALUE)
       - in case of immediate, both lookups are (0, DUMMY_VALUE)
     -/
-    let addr1 :=
+    let addr1 <==
       mode.isDoubleAddressing * (state.ap + offset) +
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
     let value1 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval addr1).val
 
-    let addr2 := mode.isDoubleAddressing * value1
+    let addr2 <== mode.isDoubleAddressing * value1
 
     let value2 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval addr2).val
 
@@ -288,7 +288,7 @@ def readFromMemory
 
     return value
 
-  localLength _ := 3
+  localLength _ := 5
 
   Assumptions _ := True
 
@@ -311,63 +311,65 @@ def readFromMemory
     simp only [Fin.ofNat_eq_cast, id_eq, eval, fromElements, size, toVars, toElements,
       Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
       ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
-      DecodedAddressingMode.mk.injEq] at h_holds h_input
+      DecodedAddressingMode.mk.injEq] at h_holds h_assumptions h_input
     simp only [h_input] at h_holds
     simp only [Option.bind_eq_bind, id_eq]
+    set addr1 := env.get i₀
+    set value1 := env.get (i₀ + 1)
+    set addr2 := env.get (i₀ + 2)
+    set value2 := env.get (i₀ + 3)
+    set value := env.get (i₀ + 4)
+
+    simp only [and_assoc] at h_holds
+    obtain ⟨ h_addr1, h_addr2, h_value1, h_addr1_lt, h_value2, h_addr2_lt, h_final_constraint ⟩ := h_holds
+    rw [h_addr1] at h_addr1_lt h_value1
+    rw [h_value1] at h_addr2
+    rw [h_addr2] at h_addr2_lt h_value2
+    clear h_addr1 h_addr2
 
     -- does the memory accesses return some or none?
     split
 
     -- the lookups imply that the memory accesses are valid, therefore
     -- here we prove that Spec.memoryAccess never returns none
-    case h_2 x h_eq =>
-      simp only [and_assoc] at h_holds
-      obtain ⟨ h1, h1', h2, h2', h3, h3', h4, h4', h_final_constraint ⟩ := h_holds
-
-      split at h_eq
-      · have h1'' := h1'
-        simp_all only [ite_eq_left_iff, ↓reduceDIte, Option.bind_some, dite_eq_right_iff,
-          reduceCtorEq, imp_false, not_lt]
-        have contradiction := Nat.not_le_of_lt h2'
-        rw [←Fin.mk_val (@Nat.cast (Fin memorySize) (Fin.NatCast.instNatCast memorySize) (ZMod.val (ap + input_offset)))] at contradiction
-        simp_all only [Fin.val_natCast, Nat.mod_eq_of_lt h1'', not_true_eq_false]
-      · simp_all only [↓reduceDIte, reduceCtorEq]
-      · simp_all only [↓reduceDIte, reduceCtorEq]
-      · simp_all only [reduceCtorEq]
+    case h_2 x h_spec =>
+      -- by cases on the addressing mode, the proof for each case is pretty simple
+      rcases h_assumptions with h_mode|h_mode|h_mode|h_mode
+      · simp only [h_mode, one_mul, zero_mul, add_zero, ↓reduceIte, Option.bind_eq_none_iff,
+          Option.dite_none_right_eq_some, Option.some.injEq, dite_eq_right_iff, reduceCtorEq,
+          imp_false, not_lt, forall_exists_index, forall_apply_eq_imp_iff, and_self] at *
+        specialize h_spec h_addr1_lt
+        rw [←Fin.mk_val (@Nat.cast (Fin memorySize) (Fin.NatCast.instNatCast memorySize) (ZMod.val (ap + input_offset)))] at h_addr2_lt
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt] at h_addr2_lt
+        linarith
+      · simp_all
+      · simp_all
+      · simp_all
 
     -- handle the case where all memory accesses are valid
     case h_1 rawInstrType _ _ value h_eq =>
-      simp only [and_assoc] at h_holds
-      obtain ⟨ h1, h1', h2, h2', h3, h3', h4, h4', h_final_constraint ⟩ := h_holds
-
       -- by cases on the addressing mode, the proof for each case is pretty simple
-      rcases h_assumptions with isDoubleAddressing_cases | isApRelative_cases | isFpRelative_cases | isImmediate_cases
-      · simp_all [↓reduceDIte, Option.bind_some, one_mul, zero_mul, add_zero,
-        ↓reduceIte, Option.dite_none_right_eq_some, Option.some.injEq]
-        obtain ⟨h, h_eq⟩ := h_eq
+      rcases h_assumptions with h_mode|h_mode|h_mode|h_mode
+      <;> simp_all only [zero_mul, one_mul, zero_add, add_zero, ZMod.val_zero, zero_ne_one,
+        ↓reduceIte, ↓reduceDIte, Option.bind_some, Option.dite_none_right_eq_some, Option.some.injEq]
+      · obtain ⟨h, h_eq⟩ := h_eq
         rw [← h_eq]
         -- first addressing
         congr
         rw [←Fin.val_eq_val]
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h2']
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr2_lt]
         -- second addressing
         congr
         rw [←Fin.val_eq_val]
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h1']
-      · simp_all only [↓reduceDIte, Option.bind_some, zero_mul, one_mul, zero_add,
-        add_zero, zero_ne_one, ↓reduceIte, Option.some.injEq]
-        rw [← h_eq]
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt]
+      · rw [← h_eq]
         congr
         rw [←Fin.val_eq_val]
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h3']
-      · simp_all only [↓reduceDIte, Option.bind_some, zero_mul, add_zero, one_mul,
-        zero_add, zero_ne_one, ↓reduceIte, Option.some.injEq]
-        rw [← h_eq]
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt]
+      · rw [← h_eq]
         congr
         rw [←Fin.val_eq_val]
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h4']
-      · simp_all only [↓reduceDIte, Option.bind_some, zero_mul, add_zero, one_mul,
-        zero_add, zero_ne_one, ↓reduceIte, Option.some.injEq]
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt]
 
   completeness := by
     circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly, Spec.dataMemoryAddresses]
