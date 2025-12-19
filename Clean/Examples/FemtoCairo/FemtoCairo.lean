@@ -290,12 +290,16 @@ def readFromMemory
 
   localLength _ := 5
 
-  Assumptions _ := True
+  Assumptions
+  | { state, offset, mode } =>
+    -- for completeness, we assume that the memory access succeeds
+    mode.isEncodedCorrectly ∧
+    (Spec.dataMemoryAccess memory offset mode.val state.ap state.fp).isSome
 
   Spec
   | {state, offset, mode}, output =>
     mode.isEncodedCorrectly →
-    match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
+    match Spec.dataMemoryAccess memory offset mode.val state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
 
@@ -372,29 +376,33 @@ def readFromMemory
         simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt]
 
   completeness := by
-    circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly, Spec.dataMemoryAddresses]
-    and_intros
-    · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
-    · aesop
-    · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
-    · apply h_assumptions (env.get i₀)
-      simp only [Spec.memoryAccess]
-      apply Set.mem_union_right
-      rw [dite_cond_eq_true]
-      · simp only [h_env]
-        apply Set.mem_singleton_of_eq
-        congr
-        simp only [← h_input]
-        simp only [Fin.ofNat_eq_cast]
-        apply Fin.natCast_eq_mk
-      apply eq_true
-      apply h_assumptions (input_state.ap + input_offset)
-      simp
-    · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
-    · aesop
-    · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
-    · aesop
-    · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast, id_eq]
+    circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly, Spec.dataMemoryAccess]
+    set addr1 := env.get i₀
+    set value1 := env.get (i₀ + 1)
+    set addr2 := env.get (i₀ + 2)
+    set value2 := env.get (i₀ + 3)
+    set value := env.get (i₀ + 4)
+    -- get rid of most goals
+    simp only [h_env, Fin.ofNat_eq_cast, true_and, and_true]
+    -- break up the addressing mode and state
+    obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
+    obtain ⟨_pc, ap, fp⟩ := input_state
+    simp only [circuit_norm, explicit_provable_type, DecodedAddressingMode.mk.injEq, State.mk.injEq] at h_input
+    simp only [h_input, DecodedAddressingMode.val, memoryAccess] at h_assumptions ⊢
+    obtain ⟨ h_mode_encode, h_mem_access ⟩ := h_assumptions
+    have : memorySize > 0 := NeZero.pos _
+    -- by cases on the addressing mode
+    rcases h_mode_encode with h_mode|h_mode|h_mode|h_mode
+    · simp_all
+      simp [Option.isSome_iff_exists, Option.bind_eq_some_iff] at h_mem_access
+      obtain ⟨ _, h_value1, h_value2, _ ⟩ := h_mem_access
+      use h_value1
+      rw [←Fin.mk_val (@Nat.cast (Fin memorySize) (Fin.NatCast.instNatCast memorySize) (ZMod.val (ap + input_offset)))]
+      simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_value1]
+      exact h_value2
+    · simp_all
+    · simp_all
+    · simp_all
 
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
