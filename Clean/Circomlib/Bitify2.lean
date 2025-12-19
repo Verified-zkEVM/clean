@@ -156,9 +156,9 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     simp_all only [circuit_norm, AliasCheck.circuit]
     simp only [id_eq] at h_holds
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
-    rw[← ZMod.val_natCast_of_lt h_bits]
-    rw[← mapFinRange_eq_map]
-    rw[← fieldFromBits_eq_mapFinRange_cast]
+    rw [← ZMod.val_natCast_of_lt h_bits]
+    rw [← mapFinRange_eq_map]
+    rw [← fieldFromBits_eq_mapFinRange_cast]
     conv =>
           rhs
           congr
@@ -234,7 +234,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     obtain ⟨ h_bits, h_iszero, h_eq ⟩ := h_holds
 
     by_cases h_n : n = 0
-    · rw[h_n] at h_eq h_iszero ⊢
+    · rw [h_n] at h_eq h_iszero ⊢
       simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, id_eq, add_zero, lt_self_iff_false,
         ↓reduceDIte, Fin.foldl_zero, mul_one, ↓reduceIte]
       rfl
@@ -254,10 +254,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         have : Expression.eval env input_var = 0 := by
           simp only [eval, fromElements, toVars, toElements] at h_input
           exact h_input
-        rw[this] at h_eq
+        rw [this] at h_eq
         simp only [id_eq, mul_zero, dite_eq_ite, ite_self, add_zero, neg_zero, ZMod.val_zero,
           Nat.cast_zero, sub_zero] at h_eq ⊢
-        rw[← h_eq]
+        rw [← h_eq]
         have h_f := fieldToBits_fieldFromBits hn bits h_bits'
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
           ↓reduceIte, one_mul, add_eq_right, zero_add]
@@ -278,12 +278,12 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
       · have : Expression.eval env input_var ≠ 0 := by
           simp only [eval, fromElements, toVars, toElements, id_eq, Vector.map_mk, List.map_toArray,
             List.map_cons, List.map_nil] at h_input
-          rw[h_input]
+          rw [h_input]
           exact h_input_zero
         have : Expression.eval env input_var = input := by
-          rw[← h_input]
+          rw [← h_input]
           rfl
-        rw[this] at h_eq
+        rw [this] at h_eq
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
           ↓reduceIte, zero_mul, ne_eq, not_false_eq_true, ZMod.natCast_val]
         have : (2 ^ n - ZMod.cast input) = fieldFromBits bits := by
@@ -293,7 +293,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
               = fieldFromBitsExpr bits_vars := by
             simp only [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
           rw [← fieldFromBits_eval]
-        rw[this]
+        rw [this]
         symm
         apply fieldToBits_fieldFromBits hn
         exact h_bits'
