@@ -408,7 +408,7 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
     isStoreState * (v2 - state.ap) === 0
     isStoreState * (v3 - state.fp) === 0
 
-    -- TODO create ProvableType level if-else expression so we can just use `nextState <== ...`
+    -- TODO make `ifElse` more usable and use it here
     nextState.pc === isLoadState * v1 + (1 - isLoadState) * (state.pc + 4)
     nextState.ap === isLoadState * v2 + (1 - isLoadState) * state.ap
     nextState.fp === isLoadState * v3 + (1 - isLoadState) * state.fp
