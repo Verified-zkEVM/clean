@@ -238,9 +238,6 @@ def fetchInstruction
       _ < programSize := by
         rw [← Nat.cast_three, ZMod.val_natCast]
         rw [Nat.mod_eq_of_lt] <;> omega
-
-def DUMMY_ADDR : F p := 0
-
 /--
   Circuit that reads a value from a read-only memory, given a state, an offset,
   and an addressing mode.
@@ -260,27 +257,22 @@ def readFromMemory
 
     /-
       read into memory for all cases of addressing mode.
-      to avoid a completeness issue, the needs to ensures that the memory contains
-      a special dummy entry, (DUMMY_ADDR, 0), where DUMMY_ADDR is outside of the used address range.
+      to avoid a completeness issue, we use dummy lookups (0, DUMMY_VALUE),
+      where DUMMY_VALUE is the actual memory value at address 0 (which is a valid address since memorySize > 0).
 
       we do two lookups to cover all cases:
       - in case of double addressing, these are the actual two lookups we need
-      - in case of single addressing, the second lookup is (DUMMY_ADDR, 0)
-      - in case of immediate, both lookups are (DUMMY_ADDR, 0)
+      - in case of single addressing, the second lookup is (0, DUMMY_VALUE)
+      - in case of immediate, both lookups are (0, DUMMY_VALUE)
     -/
     let addr1 :=
       mode.isDoubleAddressing * (state.ap + offset) +
       mode.isApRelative * (state.ap + offset) +
-      mode.isFpRelative * (state.fp + offset) +
-      mode.isImmediate * (const DUMMY_ADDR)
+      mode.isFpRelative * (state.fp + offset)
 
     let value1 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval addr1).val
 
-    let addr2 :=
-      mode.isDoubleAddressing * value1 +
-      mode.isApRelative * (const DUMMY_ADDR) +
-      mode.isFpRelative * (const DUMMY_ADDR) +
-      mode.isImmediate * (const DUMMY_ADDR)
+    let addr2 := mode.isDoubleAddressing * value1
 
     let value2 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval addr2).val
 
@@ -298,10 +290,7 @@ def readFromMemory
 
   localLength _ := 3
 
-  Assumptions
-  | {state, mode, offset} =>
-    ∀ addr ∈ Spec.dataMemoryAddresses memory offset state.ap state.fp,
-      addr.val < memorySize
+  Assumptions _ := True
 
   Spec
   | {state, offset, mode}, output =>
