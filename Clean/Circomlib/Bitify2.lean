@@ -279,7 +279,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
           convert h_input
         rw [this] at h_eq
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
-          ↓reduceIte, zero_mul, ne_eq, not_false_eq_true, ZMod.natCast_val]
+          ↓reduceIte, zero_mul, ZMod.natCast_val]
         have : (2 ^ n - ZMod.cast input) = fieldFromBits bits := by
           rw [sub_eq_add_neg, ZMod.cast_id, ← h_eq]
           let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
