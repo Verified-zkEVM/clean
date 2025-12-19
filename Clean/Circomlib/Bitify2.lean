@@ -178,7 +178,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     simp only [h_input, circuit_norm] at h_env ⊢
     obtain ⟨assumption₁, assumption₂⟩ := assumptions
     simp only [circuit_norm, AliasCheck.circuit, assumption₁,assumption₂] at ⊢
-    rw[← h_env]
+    rw [← h_env]
     rfl
 end Bits2Num_strict
 
