@@ -151,9 +151,9 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) → output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    intro i0 env input_var input h_input assumptions h_holds h_binary
-    simp only [ElaboratedCircuit.main, main] at assumptions h_holds ⊢
-    simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at assumptions h_holds ⊢
+    intro i0 env input_var input h_input assumptions output h_binary
+    simp only [ElaboratedCircuit.main, main] at assumptions output ⊢
+    simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at assumptions output ⊢
     simp_all only [circuit_norm, Nat.reducePow, implies_true, Vector.map_map,
       forall_const, id_eq, Nat.reduceAdd]
     have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = input[i]) := by {
@@ -167,11 +167,10 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
       apply h_binary
     }
     simp_all only [implies_true, forall_const]
-    simp only [id_eq] at h_holds
     obtain ⟨ h_bits, h_eq ⟩ := assumptions
-    rw[← ZMod.val_natCast_of_lt h_bits]
-    rw[← mapFinRange_eq_map]
-    rw[← fieldFromBits_eq_mapFinRange_cast]
+    rw [← ZMod.val_natCast_of_lt h_bits]
+    rw [← mapFinRange_eq_map]
+    rw [← fieldFromBits_eq_mapFinRange_cast]
     conv =>
           rhs
           congr
@@ -182,8 +181,8 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
           simp only [Fin.getElem_fin, Vector.getElem_map]
           rw [← Fin.getElem_fin]
     rw [← Bits2Num.lc_eq]
-    simp[h_holds]
-    sorry
+    simp only [output, circuit_norm, main, AliasCheck.circuit, Bits2Num.main]
+    rw [h_eq]
 
   completeness := by
     simp only [circuit_norm, main]
