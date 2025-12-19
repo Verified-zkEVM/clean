@@ -450,9 +450,16 @@ def readFromMemoryCircuit
 
     simp only [Fin.ofNat_eq_cast, id_eq, eval, fromElements, size, toVars, toElements,
       Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
-      ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
-      DecodedAddressingMode.mk.injEq] at h_holds h_input
-    simp only [h_input] at h_holds
+      ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ] at h_holds h_input
+    -- Destructure h_input to get individual component equalities
+    rw [MemoryReadInput.mk.injEq] at h_input
+    obtain ⟨h_input_state, h_input_offset, h_input_mode⟩ := h_input
+    rw [State.mk.injEq] at h_input_state
+    obtain ⟨h_input_pc, h_input_ap, h_input_fp⟩ := h_input_state
+    rw [DecodedAddressingMode.mk.injEq] at h_input_mode
+    obtain ⟨h_input_dd, h_input_ap_rel, h_input_fp_rel, h_input_imm⟩ := h_input_mode
+    simp only [h_input_ap, h_input_fp, h_input_offset, h_input_dd, h_input_ap_rel,
+      h_input_fp_rel, h_input_imm] at h_holds
     simp only [Option.bind_eq_bind, id_eq]
 
     -- does the memory accesses return some or none?
@@ -513,7 +520,9 @@ def readFromMemoryCircuit
     circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly, Spec.dataMemoryAddresses]
     and_intros
     · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
-    · aesop
+    · -- Need to show ZMod.val (ap + offset) < memorySize
+      simp only [eval, ← State.eval_ap, ← State.eval_fp] at *
+      aesop
     · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
     · apply h_assumptions (env.get i₀)
       simp only [Spec.memoryAccess]
@@ -522,16 +531,23 @@ def readFromMemoryCircuit
       · simp only [h_env]
         apply Set.mem_singleton_of_eq
         congr
-        simp only [← h_input]
+        rw [MemoryReadInput.mk.injEq] at h_input
+        obtain ⟨h_input_state, h_input_offset, h_input_mode⟩ := h_input
+        rw [State.mk.injEq] at h_input_state
+        obtain ⟨h_input_pc, h_input_ap, h_input_fp⟩ := h_input_state
+        simp only [eval, State.eval_ap] at h_input_ap
+        simp only [← State.eval_ap, ← h_input_ap, ← h_input_offset]
         simp only [Fin.ofNat_eq_cast]
         apply Fin.natCast_eq_mk
       apply eq_true
       apply h_assumptions (input_state.ap + input_offset)
       simp
     · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
-    · aesop
+    · simp only [eval, ← State.eval_ap, ← State.eval_fp] at *
+      aesop
     · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
-    · aesop
+    · simp only [eval, ← State.eval_ap, ← State.eval_fp] at *
+      aesop
     · simp_all only [Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast, id_eq]
 
 /--
@@ -588,10 +604,13 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
     obtain ⟨isAdd, isMul, isStoreState, isLoadState⟩ := input_decoded_instrType
     obtain ⟨pc, ap, fp⟩ := input_state
 
-    obtain ⟨h_input_state, h_input_decoded, h_input_memoryValues⟩ := h_input
+    rw [StateTransitionInput.mk.injEq] at h_input
+    obtain ⟨h_input_state, h_input_decoded, h_input_v1, h_input_v2, h_input_v3⟩ := h_input
     simp [circuit_norm, explicit_provable_type] at h_input_decoded h_input_state h_holds ⊢
 
-    obtain ⟨h_input_decoded_isAdd, h_input_decoded_isMul, h_input_decoded_isStoreState, h_input_decoded_isLoadState⟩ := h_input_decoded
+    -- h_input_decoded is already expanded to a conjunction by simp
+    obtain ⟨⟨h_input_decoded_isAdd, h_input_decoded_isMul, h_input_decoded_isStoreState, h_input_decoded_isLoadState⟩,
+            h_input_decoded_mode1, h_input_decoded_mode2, h_input_decoded_mode3⟩ := h_input_decoded
     obtain ⟨h_input_state_pc, h_input_state_ap, h_input_state_fp⟩ := h_input_state
 
     rw [h_input_state_pc, h_input_state_ap, h_input_state_fp] at h_holds
@@ -660,7 +679,10 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
     simp only [DecodedInstructionType.isEncodedCorrectly] at h_encode
     simp only [DecodedInstructionType.val] at h_exec
     simp only
-    rcases h_input with ⟨h_input1, ⟨ h_input2, h_input3 ⟩, h_input⟩
+    rw [StateTransitionInput.mk.injEq] at h_input
+    obtain ⟨h_input1, h_input_decoded, h_input_v1, h_input_v2, h_input_v3⟩ := h_input
+    rw [DecodedInstruction.mk.injEq] at h_input_decoded
+    obtain ⟨h_input2, h_input_mode1, h_input_mode2, h_input_mode3⟩ := h_input_decoded
     simp only [circuit_norm, explicit_provable_type, DecodedInstructionType.mk.injEq] at h_input2
     rcases input_var_state
     rename_i input_var_state_pc input_var_state_ap input_var_state_fp
@@ -671,7 +693,7 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
     rcases h_encode with h_add | h_mul | h_load | h_store
     · simp only [h_add, ↓reduceIte, Option.isSome_ite, zero_ne_one] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [← h_exec]; ring_nf
+      · simp only [h_input_v1, h_input_v2, h_input_v3, ← h_exec]; ring_nf
       · have h_env0 := h_env 0
         simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
@@ -687,7 +709,7 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
         simp only [circuit_norm, explicit_provable_type, fromVars, h_env2]; ring_nf
     · simp only [h_mul, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [← h_exec]; ring_nf
+      · simp only [h_input_v1, h_input_v2, h_input_v3, ← h_exec]; ring_nf
       · have h_env0 := h_env 0
         simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
@@ -703,9 +725,9 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
         simp only [circuit_norm, explicit_provable_type, fromVars, h_env2]; ring_nf
     · simp only [h_load, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [h_exec, ← h_input1]; ring_nf
-      · simp only [h_exec, ← h_input1]; ring_nf
-      · simp only [h_exec, ← h_input1]; ring_nf
+      · simp only [h_input_v1, h_input_v2, h_input_v3, h_exec, ← h_input1]; ring_nf
+      · simp only [h_input_v1, h_input_v2, h_input_v3, h_exec, ← h_input1]; ring_nf
+      · simp only [h_input_v1, h_input_v2, h_input_v3, h_exec, ← h_input1]; ring_nf
       · have h_env0 := h_env 0
         simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0

@@ -152,15 +152,18 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rcases h_holds with ⟨h_IsZero, h_Or32_1, h_Or32_2, h_Compress⟩
   simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, id_eq, mul_one, Nat.ofNat_pos, and_self, and_true, true_and,
     Nat.reduceMul, and_imp, Nat.reducePow, mul_zero, add_zero]
-  specialize h_Or32_1 (by
-    split <;> simp [ZMod.val_one])
+  specialize h_Or32_1
+    (by simp only [Inputs.mk.injEq] at h_input; rw [h_input.2.2.2]; exact h_assumptions.2.2.2.2)
+    (by split <;> simp [ZMod.val_one])
 
   simp_all only [forall_const]
   have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
   specialize h_Or32_2 (by simp [val_two])
   specialize h_Compress (by simp_all)
     (by apply bytesToWords_normalized; simp_all)
-    (by linarith)
+    (by simp only [Inputs.mk.injEq, ProcessBlocksState.mk.injEq] at h_input
+        simp only [h_input.1.2.1]; exact h_assumptions.1.2.1)
+    (by simp only [Inputs.mk.injEq] at h_input; simp only [h_input.2.1]; linarith [h_assumptions.2.1])
     (by simp_all)
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
   have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
@@ -181,7 +184,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
       clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress
       rw [← Vector.map_map, ← eval_vector, eval_bytesToWords]
-      simp only [h_input]
+      simp only [Inputs.mk.injEq] at h_input
+      simp only [h_input.2.2.1]
       simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
       ext i hi
       simp only [explicit_provable_type, circuit_norm, Vector.getElem_ofFn, List.getElem_append,
@@ -194,11 +198,18 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         · simp only [Nat.reducePow, mul_eq_zero, ZMod.val_eq_zero, OfNat.ofNat_ne_zero, or_false]
           exact h_rest ⟨ _, by omega ⟩ (by simp only; omega))
     rw [this]
+    simp only [Inputs.mk.injEq, ProcessBlocksState.mk.injEq] at h_input
     congr 1
-    · rw [List.length_map, Vector.length_toList, left_eq_inf]
-      linarith
-    · congr
-      simp only [startFlag, chunkStart]
+    · -- e_chaining_value
+      rw [← Vector.map_map, ← eval_vector, h_input.1.1]
+    · -- e_counter
+      rw [h_input.1.2.1]
+    · -- e_block_len
+      simp only [List.length_map, Vector.toList_extract, List.drop_zero,
+        List.length_take, Vector.length_toList, Nat.sub_zero, h_input.2.1]
+      rw [Nat.min_eq_left h_assumptions.2.1]
+    · -- e_flags
+      simp only [startFlag, chunkStart, chunkEnd]
       split <;> simp_all [circuit_norm]
   · rintro ⟨i, h_i⟩
     simp only [eval_vector]
@@ -265,13 +276,24 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   )
   simp only [Or32.circuit, Or32.Spec] at h_or2
   simp only [ProcessBlocksState.Normalized] at h_assumptions
-  simp only [h_or2, h_assumptions]
-  simp only [circuit_norm]
-  constructor
+  simp only [Inputs.mk.injEq] at h_input
+  obtain ⟨h_state, h_len, h_data, h_flags⟩ := h_input
+  -- Extract field equalities from h_state
+  have h_cv := congrArg ProcessBlocksState.chaining_value h_state
+  have h_cc := congrArg ProcessBlocksState.chunk_counter h_state
+  simp only [circuit_norm] at h_cv h_cc
+  simp only [circuit_norm, h_cv, h_cc, h_len, h_data, h_flags]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · exact h_assumptions.1.1
   · apply bytesToWords_normalized
-    simp only [h_input]
-    aesop
-  omega
+    intro i; rw [h_data]; exact h_assumptions.2.2.1 i
+  · simp [U32.Normalized]
+  · exact h_assumptions.1.2.1
+  · -- block_len.Normalized: need val < 256 for each byte
+    have h := block_len_normalized input_buffer_len h_assumptions.2.1
+    simp only [U32.Normalized, ZMod.val_zero] at h
+    exact h
+  · exact h_or2.2
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   elaborated with Assumptions, Spec, soundness, completeness

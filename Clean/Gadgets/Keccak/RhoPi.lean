@@ -34,11 +34,18 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
 -- recharacterize rhoPi as a loop
 lemma rhoPi_loop (state : Vector ℕ 25) :
     Specs.Keccak256.rhoPi state = rhoPiConstants.map fun (i, s) => rotLeft64 state[i.val] s := by
-  simp only [Specs.Keccak256.rhoPi, circuit_norm]
-  rw [Vector.map_mk]
-  simp only
-  rw [List.map_toArray]
-  rfl
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Specs.Keccak256.rhoPi, rhoPiConstants, rhoPiIndices, rhoPiShifts,
+    circuit_norm, Vector.getElem_map, Vector.getElem_mk, List.getElem_toArray,
+    Vector.get, Vector.zip]
+  match i, hi with
+  | 0, _ => simp | 1, _ => simp | 2, _ => simp | 3, _ => simp | 4, _ => simp
+  | 5, _ => simp | 6, _ => simp | 7, _ => simp | 8, _ => simp | 9, _ => simp
+  | 10, _ => simp | 11, _ => simp | 12, _ => simp | 13, _ => simp | 14, _ => simp
+  | 15, _ => simp | 16, _ => simp | 17, _ => simp | 18, _ => simp | 19, _ => simp
+  | 20, _ => simp | 21, _ => simp | 22, _ => simp | 23, _ => simp | 24, _ => simp
+  | n + 25, h => omega
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env state_var state h_input state_norm h_holds

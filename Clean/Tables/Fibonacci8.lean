@@ -135,10 +135,44 @@ def formalFibTable : FormalTable (F p) RowType := {
           Gadgets.Addition8.circuit] at ConstraintsHold
       simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
 
-      have hx_curr : env.get 0 = curr.x := by rfl
-      have hy_curr : env.get 1 = curr.y := by rfl
-      have hx_next : env.get 2 = next.x := by rfl
-      have hy_next : env.get (2 + 1) = next.y := by rfl
+      -- NOTE: In Lean 4.25.0-rc2, Vector/List indexing doesn't reduce definitionally
+      -- as it did in v4.24.0. We use explicit simp lemmas to reduce the expressions.
+      -- See: https://github.com/leanprover/lean4/issues/10736 for related issues.
+      have hx_curr : env.get 0 = curr.x := by
+        simp only [env, windowEnv, fibRelation, table_assignment_norm, table_norm, circuit_norm,
+          copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
+        simp only [dif_pos (by omega : 0 < 5)]
+        simp only [Vector.toList_mk, List.getElem_set, show (2 + 1 = 0) = False by decide,
+          show (2 = 0) = False by decide, ite_false, Vector.toList_append,
+          Vector.mapFinRange_zero, Vector.mapFinRange_succ, Vector.mapRange_zero,
+          Vector.mapRange_succ, Vector.toList_push, List.nil_append, List.append_assoc]
+        rfl
+      have hy_curr : env.get 1 = curr.y := by
+        simp only [env, windowEnv, fibRelation, table_assignment_norm, table_norm, circuit_norm,
+          copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
+        simp only [dif_pos (by omega : 1 < 5)]
+        simp only [Vector.toList_mk, List.getElem_set, show (2 + 1 = 1) = False by decide,
+          show (2 = 1) = False by decide, ite_false, Vector.toList_append,
+          Vector.mapFinRange_zero, Vector.mapFinRange_succ, Vector.mapRange_zero,
+          Vector.mapRange_succ, Vector.toList_push, List.nil_append, List.append_assoc]
+        rfl
+      have hx_next : env.get 2 = next.x := by
+        simp only [env, windowEnv, fibRelation, table_assignment_norm, table_norm, circuit_norm,
+          copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
+        simp only [dif_pos (by omega : 2 < 5)]
+        simp only [Vector.toList_mk, List.getElem_set, show (2 + 1 = 2) = False by decide,
+          ite_true, ite_false, Vector.toList_append, Vector.mapFinRange_zero,
+          Vector.mapFinRange_succ, Vector.mapRange_zero, Vector.mapRange_succ,
+          Vector.toList_push, List.nil_append, List.append_assoc]
+        rfl
+      have hy_next : env.get (2 + 1) = next.y := by
+        simp only [env, windowEnv, fibRelation, table_assignment_norm, table_norm, circuit_norm,
+          copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
+        simp only [dif_pos (by omega : 2 + 1 < 5)]
+        simp only [Vector.toList_mk, List.getElem_set, ite_true, Vector.toList_append,
+          Vector.mapFinRange_zero, Vector.mapFinRange_succ, Vector.mapRange_zero,
+          Vector.mapRange_succ, Vector.toList_push, List.nil_append, List.append_assoc]
+        rfl
       rw [hx_curr, hy_curr, hx_next, hy_next] at ConstraintsHold
       clear hx_curr hy_curr hx_next hy_next
 

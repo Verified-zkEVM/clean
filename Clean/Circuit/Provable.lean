@@ -390,6 +390,16 @@ theorem eval_fieldPair {F : Type} [Field F] (env : Environment F) (t : Var field
   aesop
 
 @[circuit_norm ↓]
+theorem eval_fieldPair_fst {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
+    (ProvableType.eval env t).1 = Expression.eval env t.1 := by
+  simp only [eval_fieldPair]
+
+@[circuit_norm ↓]
+theorem eval_fieldPair_snd {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
+    (ProvableType.eval env t).2 = Expression.eval env t.2 := by
+  simp only [eval_fieldPair]
+
+@[circuit_norm ↓]
 theorem eval_fieldTriple {F : Type} [Field F] (env : Environment F) (t : Var fieldTriple F) :
     ProvableType.eval env t = (match t with
       | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z)) := by

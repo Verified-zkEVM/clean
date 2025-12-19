@@ -19,17 +19,20 @@ variable {F : Type} [Field F]
 /-- Evaluating a State variable and extracting pc equals evaluating the pc expression -/
 @[circuit_norm]
 lemma State.eval_pc (env : Environment F) (s : Var State F) :
-    (ProvableType.eval env s).pc = Expression.eval env s.pc := rfl
+    (ProvableType.eval env s).pc = Expression.eval env s.pc := by
+  simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a State variable and extracting ap equals evaluating the ap expression -/
 @[circuit_norm]
 lemma State.eval_ap (env : Environment F) (s : Var State F) :
-    (ProvableType.eval env s).ap = Expression.eval env s.ap := rfl
+    (ProvableType.eval env s).ap = Expression.eval env s.ap := by
+  simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a State variable and extracting fp equals evaluating the fp expression -/
 @[circuit_norm]
 lemma State.eval_fp (env : Environment F) (s : Var State F) :
-    (ProvableType.eval env s).fp = Expression.eval env s.fp := rfl
+    (ProvableType.eval env s).fp = Expression.eval env s.fp := by
+  simp [circuit_norm, explicit_provable_type]
 
 end StateEval
 
@@ -39,22 +42,26 @@ variable {F : Type} [Field F]
 /-- Evaluating a RawInstruction variable and extracting rawInstrType equals evaluating the rawInstrType expression -/
 @[circuit_norm]
 lemma RawInstruction.eval_rawInstrType (env : Environment F) (r : Var RawInstruction F) :
-    (ProvableType.eval env r).rawInstrType = Expression.eval env r.rawInstrType := rfl
+    (ProvableType.eval env r).rawInstrType = Expression.eval env r.rawInstrType := by
+  simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op1 equals evaluating the op1 expression -/
 @[circuit_norm]
 lemma RawInstruction.eval_op1 (env : Environment F) (r : Var RawInstruction F) :
-    (ProvableType.eval env r).op1 = Expression.eval env r.op1 := rfl
+    (ProvableType.eval env r).op1 = Expression.eval env r.op1 := by
+  simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op2 equals evaluating the op2 expression -/
 @[circuit_norm]
 lemma RawInstruction.eval_op2 (env : Environment F) (r : Var RawInstruction F) :
-    (ProvableType.eval env r).op2 = Expression.eval env r.op2 := rfl
+    (ProvableType.eval env r).op2 = Expression.eval env r.op2 := by
+  simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op3 equals evaluating the op3 expression -/
 @[circuit_norm]
 lemma RawInstruction.eval_op3 (env : Environment F) (r : Var RawInstruction F) :
-    (ProvableType.eval env r).op3 = Expression.eval env r.op3 := rfl
+    (ProvableType.eval env r).op3 = Expression.eval env r.op3 := by
+  simp [circuit_norm, explicit_provable_type]
 
 end RawInstructionEval
 
