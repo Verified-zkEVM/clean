@@ -236,7 +236,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     by_cases h_n : n = 0
     {
       rw[h_n] at h_eq h_iszero ⊢
-      simp_all
+      simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, id_eq, add_zero, lt_self_iff_false,
+        ↓reduceDIte, Fin.foldl_zero, mul_one, ↓reduceIte]
       unfold Vector.mapRange
       rfl
     }
@@ -291,7 +292,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
           rfl
         }
         rw[this] at h_eq
-        simp_all
+        simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
+          ↓reduceIte, zero_mul, ne_eq, not_false_eq_true, ZMod.natCast_val]
         have : (2 ^ n - ZMod.cast input) = fieldFromBits bits := by {
           rw [sub_eq_add_neg, ZMod.cast_id, ← h_eq]
           let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
