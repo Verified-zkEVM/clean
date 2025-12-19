@@ -119,7 +119,6 @@ theorem test_complex_eval {F : Type} [Field F] (env : Environment F)
   simp only [TestInputs.mk.injEq] at h
   exact h
 
-
 /-
 This test doesn't work till we can use `simplify_provable_struct_eval` without calling
 `simp only [components, toComponents, ProvableStruct.eval.go, circuit_norm, explicit_provable_type] at h`
