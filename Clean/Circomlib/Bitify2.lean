@@ -237,7 +237,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     · rw[h_n] at h_eq h_iszero ⊢
       simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, id_eq, add_zero, lt_self_iff_false,
         ↓reduceDIte, Fin.foldl_zero, mul_one, ↓reduceIte]
-      unfold Vector.mapRange
       rfl
     · set bits := Vector.map (Expression.eval env) (Vector.mapRange n fun i => var { index := i0 + i })
       have h_bits' : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1 := by
