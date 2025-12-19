@@ -265,7 +265,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         simp at h_eq ⊢
         rw[← h_eq]
         have h_f := fieldToBits_fieldFromBits hn bits h_bits'
-        simp_all
+        simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
+          ↓reduceIte, one_mul, add_eq_right, zero_add]
         ext i hi
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
         rw [← Nat.cast_two, ← Nat.cast_pow, ZMod.val_natCast_of_lt hn, Nat.testBit_two_pow]
