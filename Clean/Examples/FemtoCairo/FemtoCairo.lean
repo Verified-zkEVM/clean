@@ -239,6 +239,8 @@ def fetchInstruction
         rw [← Nat.cast_three, ZMod.val_natCast]
         rw [Nat.mod_eq_of_lt] <;> omega
 
+def DUMMY_ADDR : F p := 0
+
 /--
   Circuit that reads a value from a read-only memory, given a state, an offset,
   and an addressing mode.
@@ -256,30 +258,45 @@ def readFromMemory
   main := fun { state, offset, mode } => do
     let memoryTable := ReadOnlyTableFromFunction memory h_memorySize
 
-    -- read into memory for all cases of addressing mode
-    -- TODO: get rid of redundant v1_tmp which is just v2
-    let v1_tmp : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval (state.ap + offset)).val
-    let v1 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval v1_tmp).val
-    let v2 : Expression _ ← witness fun eval =>  memory <| Fin.ofNat _ (eval (state.ap + offset)).val
-    let v3 : Expression _ ← witness fun eval =>  memory <| Fin.ofNat _ (eval (state.fp + offset)).val
-    -- TODO: we have to lookup all of the addresses, which forces all of the addresses to be in bounds
-    -- this is a problematic requirement and a limitation of `lookup`
-    -- => make it possible to do a conditional lookup!
-    lookup memoryTable ⟨(state.ap + offset), v1_tmp⟩
-    lookup memoryTable ⟨v1_tmp, v1⟩
-    lookup memoryTable ⟨(state.ap + offset), v2⟩
-    lookup memoryTable ⟨(state.fp + offset), v3⟩
+    /-
+      read into memory for all cases of addressing mode.
+      to avoid a completeness issue, the needs to ensures that the memory contains
+      a special dummy entry, (DUMMY_ADDR, 0), where DUMMY_ADDR is outside of the used address range.
+
+      we do two lookups to cover all cases:
+      - in case of double addressing, these are the actual two lookups we need
+      - in case of single addressing, the second lookup is (DUMMY_ADDR, 0)
+      - in case of immediate, both lookups are (DUMMY_ADDR, 0)
+    -/
+    let addr1 :=
+      mode.isDoubleAddressing * (state.ap + offset) +
+      mode.isApRelative * (state.ap + offset) +
+      mode.isFpRelative * (state.fp + offset) +
+      mode.isImmediate * (const DUMMY_ADDR)
+
+    let value1 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval addr1).val
+
+    let addr2 :=
+      mode.isDoubleAddressing * value1 +
+      mode.isApRelative * (const DUMMY_ADDR) +
+      mode.isFpRelative * (const DUMMY_ADDR) +
+      mode.isImmediate * (const DUMMY_ADDR)
+
+    let value2 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval addr2).val
+
+    lookup memoryTable ⟨addr1, value1⟩
+    lookup memoryTable ⟨addr2, value2⟩
 
     -- select the correct value based on the addressing mode
     let value <==
-      mode.isDoubleAddressing * v1 +
-      mode.isApRelative * v2 +
-      mode.isFpRelative * v3 +
+      mode.isDoubleAddressing * value2 +
+      mode.isApRelative * value1 +
+      mode.isFpRelative * value1 +
       mode.isImmediate * offset
 
     return value
 
-  localLength _ := 5
+  localLength _ := 3
 
   Assumptions
   | {state, mode, offset} =>
