@@ -234,20 +234,16 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     obtain ⟨ h_bits, h_iszero, h_eq ⟩ := h_holds
 
     by_cases h_n : n = 0
-    {
-      rw[h_n] at h_eq h_iszero ⊢
+    · rw[h_n] at h_eq h_iszero ⊢
       simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, id_eq, add_zero, lt_self_iff_false,
         ↓reduceDIte, Fin.foldl_zero, mul_one, ↓reduceIte]
       unfold Vector.mapRange
       rfl
-    }
-    {
-      set bits := Vector.map (Expression.eval env) (Vector.mapRange n fun i => var { index := i0 + i })
-      have h_bits' : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1 := by {
+    · set bits := Vector.map (Expression.eval env) (Vector.mapRange n fun i => var { index := i0 + i })
+      have h_bits' : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1 := by
         intro i hi
         simp only [bits, Vector.getElem_map, Vector.getElem_mapRange]
         apply h_bits ⟨i, hi⟩
-      }
 
       set bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
       have h_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
@@ -255,12 +251,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         simp [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
 
       by_cases h_input_zero : input = 0
-      {
-        simp_rw [h_input_zero] at h_input ⊢
-        have : Expression.eval env input_var = 0 := by {
+      · simp_rw [h_input_zero] at h_input ⊢
+        have : Expression.eval env input_var = 0 := by
           simp only [eval, fromElements, toVars, toElements] at h_input
           exact h_input
-        }
         rw[this] at h_eq
         simp at h_eq ⊢
         rw[← h_eq]
@@ -281,35 +275,28 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
           exact h_eq
         rw [h_val_zero]
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
-      }
-      {
-        have : Expression.eval env input_var ≠ 0 := by {
+      · have : Expression.eval env input_var ≠ 0 := by
           simp only [eval, fromElements, toVars, toElements, id_eq, Vector.map_mk, List.map_toArray,
             List.map_cons, List.map_nil] at h_input
           rw[h_input]
           exact h_input_zero
-        }
-        have : Expression.eval env input_var = input := by {
+        have : Expression.eval env input_var = input := by
           rw[← h_input]
           rfl
-        }
         rw[this] at h_eq
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
           ↓reduceIte, zero_mul, ne_eq, not_false_eq_true, ZMod.natCast_val]
-        have : (2 ^ n - ZMod.cast input) = fieldFromBits bits := by {
+        have : (2 ^ n - ZMod.cast input) = fieldFromBits bits := by
           rw [sub_eq_add_neg, ZMod.cast_id, ← h_eq]
           let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
           have h_expr_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
-            = fieldFromBitsExpr bits_vars := by
+              = fieldFromBitsExpr bits_vars := by
             simp only [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
           rw [← fieldFromBits_eval]
-        }
         rw[this]
         symm
         apply fieldToBits_fieldFromBits hn
         exact h_bits'
-      }
-    }
 
   completeness := by
     simp only [circuit_norm, main]
