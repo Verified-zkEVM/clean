@@ -153,17 +153,15 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   soundness := by
     intro i0 env input_var input h_input assumptions output h_binary
     simp only [ElaboratedCircuit.main, main] at assumptions output ⊢
-    simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at assumptions output ⊢
-    simp_all only [circuit_norm, Nat.reducePow, implies_true, Vector.map_map,
-      forall_const, id_eq, Nat.reduceAdd]
+    simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at h_input assumptions output ⊢
     have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = input[i]) := by {
       intro i hi
-      rw[← h_input]
+      rw [← h_input]
       simp only [Vector.getElem_map]
     }
     have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = 0 ∨ Expression.eval env input_var[i] = 1) := by {
       intro i hi
-      rw[this]
+      rw [this]
       apply h_binary
     }
     simp_all only [implies_true, forall_const]
