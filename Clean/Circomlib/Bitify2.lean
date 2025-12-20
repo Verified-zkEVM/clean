@@ -154,16 +154,14 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     intro i0 env input_var input h_input assumptions output h_binary
     simp only [ElaboratedCircuit.main, main] at assumptions output ⊢
     simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at h_input assumptions output ⊢
-    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = input[i]) := by {
+    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = input[i]) := by
       intro i hi
       rw [← h_input]
       simp only [Vector.getElem_map]
-    }
-    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = 0 ∨ Expression.eval env input_var[i] = 1) := by {
+    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = 0 ∨ Expression.eval env input_var[i] = 1) := by
       intro i hi
       rw [this]
       apply h_binary
-    }
     simp_all only [implies_true, forall_const]
     obtain ⟨ h_bits, h_eq ⟩ := assumptions
     rw [← ZMod.val_natCast_of_lt h_bits]
@@ -188,7 +186,7 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     simp only [circuit_norm, Bits2Num.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     obtain ⟨assumption₁, assumption₂⟩ := assumptions
-    simp only [circuit_norm, AliasCheck.circuit, assumption₁,assumption₂] at ⊢
+    simp only [circuit_norm, AliasCheck.circuit, assumption₁, assumption₂] at ⊢
     rw [← h_env]
     rfl
 end Bits2Num_strict
