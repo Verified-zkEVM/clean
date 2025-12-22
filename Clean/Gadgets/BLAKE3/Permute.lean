@@ -12,6 +12,7 @@ instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State where
   main := main
   localLength _ := 0
   output state i0 := Vector.ofFn (fun i => state[msgPermutation[i]])
+  localAdds_eq _ _ _ := by simp [main, circuit_norm]
 
 def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 

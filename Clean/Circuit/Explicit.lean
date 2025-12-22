@@ -6,7 +6,7 @@ This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
 import Clean.Circuit.Subcircuit
-variable {n : ℕ} {F : Type} [Field F] {α β : Type}
+variable {n : ℕ} {F : Type} [Field F] [DecidableEq F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where
   /-- an "explicit" circuit is encapsulated by three functions of the input offset -/
