@@ -61,40 +61,42 @@ def ReadOnlyTableFromFunction
       · apply ZMod.val_injective
 }
 
+def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
+  let bits ← Gadgets.toBits 8 (by linarith [p_large_enough.elim]) instruction
+  return {
+    instrType := {
+      isAdd := (1 : Expression _) - bits[0] - bits[1] + bits[0] * bits[1],
+      isMul := bits[0] - bits[0] * bits[1],
+      isStoreState := bits[1] - bits[0] * bits[1],
+      isLoadState := bits[0] * bits[1]
+    },
+    mode1 := {
+      isDoubleAddressing := (1 : Expression _) - bits[2] - bits[3] + bits[2] * bits[3],
+      isApRelative := bits[2] - bits[2] * bits[3],
+      isFpRelative := bits[3] - bits[2] * bits[3],
+      isImmediate := bits[2] * bits[3]
+    },
+    mode2 := {
+      isDoubleAddressing := (1 : Expression _) - bits[4] - bits[5] + bits[4] * bits[5],
+      isApRelative := bits[4] - bits[4] * bits[5],
+      isFpRelative := bits[5] - bits[4] * bits[5],
+      isImmediate := bits[4] * bits[5]
+    },
+    mode3 := {
+      isDoubleAddressing := (1 : Expression _) - bits[6] - bits[7] + bits[6] * bits[7],
+      isApRelative := bits[6] - bits[6] * bits[7],
+      isFpRelative := bits[7] - bits[6] * bits[7],
+      isImmediate := bits[6] * bits[7]
+    }
+  }
+
 /--
   Circuit that decodes a femtoCairo instruction into a one-hot representation.
   It returns a `DecodedInstruction` struct containing the decoded fields.
   This circuit is not satisfiable if the input instruction is not correctly encoded.
 -/
 def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
-  main := fun instruction => do
-    let bits ← Gadgets.toBits 8 (by linarith [p_large_enough.elim]) instruction
-    return {
-      instrType := {
-        isAdd := (1 : Expression _) - bits[0] - bits[1] + bits[0] * bits[1],
-        isMul := bits[0] - bits[0] * bits[1],
-        isStoreState := bits[1] - bits[0] * bits[1],
-        isLoadState := bits[0] * bits[1]
-      },
-      mode1 := {
-        isDoubleAddressing := (1 : Expression _) - bits[2] - bits[3] + bits[2] * bits[3],
-        isApRelative := bits[2] - bits[2] * bits[3],
-        isFpRelative := bits[3] - bits[2] * bits[3],
-        isImmediate := bits[2] * bits[3]
-      },
-      mode2 := {
-        isDoubleAddressing := (1 : Expression _) - bits[4] - bits[5] + bits[4] * bits[5],
-        isApRelative := bits[4] - bits[4] * bits[5],
-        isFpRelative := bits[5] - bits[4] * bits[5],
-        isImmediate := bits[4] * bits[5]
-      },
-      mode3 := {
-        isDoubleAddressing := (1 : Expression _) - bits[6] - bits[7] + bits[6] * bits[7],
-        isApRelative := bits[6] - bits[6] * bits[7],
-        isFpRelative := bits[7] - bits[6] * bits[7],
-        isImmediate := bits[6] * bits[7]
-      }
-    }
+  main := decodeInstructionMain
   localLength _ := 8
 
   Assumptions
@@ -111,7 +113,7 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
     | none => False -- impossible, constraints ensure that input < 256
 
   soundness := by
-    circuit_proof_start [Gadgets.toBits]
+    circuit_proof_start [Gadgets.toBits, decodeInstructionMain]
     obtain ⟨ h_range_check, h_eq ⟩ := h_holds
     have h_range_check' : ¬ 256 ≤ input.val := by linarith
     simp only [Spec.decodeInstruction, h_range_check', ↓reduceIte]
@@ -143,7 +145,7 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
     · rcases h_bits6 <;> rcases h_bits7 <;> simp_all [DecodedAddressingMode.val, ZMod.val_one]
     · rcases h_bits6 <;> rcases h_bits7 <;> simp_all [DecodedAddressingMode.isEncodedCorrectly]
 
-  completeness := by circuit_proof_all [Gadgets.toBits]
+  completeness := by circuit_proof_all [Gadgets.toBits, decodeInstructionMain]
 
 /--
   Circuit that fetches a femtoCairo instruction from a read-only program memory,
@@ -158,7 +160,7 @@ def fetchInstruction
   main := fun pc => do
     let programTable := ReadOnlyTableFromFunction program h_programSize
 
-    let rawInstrType : Expression _ ← witness fun eval => program <| Fin.ofNat _ (eval pc).val
+    let rawInstrType ← witness fun eval => program <| Fin.ofNat _ (eval pc).val
     let op1 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 1)).val
     let op2 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 2)).val
     let op3 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 3)).val
@@ -171,6 +173,8 @@ def fetchInstruction
     return { rawInstrType, op1, op2, op3 }
 
   localLength _ := 4
+  output _ i₀ := varFromOffset RawInstruction i₀
+
   Assumptions
   | pc => pc.val + 3 < programSize
 
@@ -270,11 +274,11 @@ def readFromMemory
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
-    let value1 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval addr1).val
+    let value1 ← witness fun eval => memory <| Fin.ofNat _ (eval addr1).val
 
     let addr2 <== mode.isDoubleAddressing * value1
 
-    let value2 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval addr2).val
+    let value2 ← witness fun eval => memory <| Fin.ofNat _ (eval addr2).val
 
     lookup memoryTable ⟨addr1, value1⟩
     lookup memoryTable ⟨addr2, value2⟩
@@ -289,6 +293,7 @@ def readFromMemory
     return value
 
   localLength _ := 5
+  output _ i₀ := var ⟨i₀ + 4⟩
 
   Assumptions
   | { state, offset, mode } =>
@@ -393,8 +398,9 @@ def readFromMemory
     have : memorySize > 0 := NeZero.pos _
     -- by cases on the addressing mode
     rcases h_mode_encode with h_mode|h_mode|h_mode|h_mode
-    · simp_all
-      simp [Option.isSome_iff_exists, Option.bind_eq_some_iff] at h_mem_access
+    · simp_all only [one_mul, zero_mul, add_zero, reduceIte, Fin.ofNat_eq_cast]
+      simp only [Option.isSome_iff_exists, Option.bind_eq_bind, Option.dite_none_right_eq_some,
+        Option.bind_eq_some_iff, Option.some.injEq, exists_exists_eq_and] at h_mem_access
       obtain ⟨ _, h_value1, h_value2, _ ⟩ := h_mem_access
       use h_value1
       rw [←Fin.mk_val (@Nat.cast (Fin memorySize) (Fin.NatCast.instNatCast memorySize) (ZMod.val (ap + input_offset)))]
@@ -438,6 +444,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     return nextState
 
   localLength _ := 3
+  output _ i₀ := varFromOffset State i₀
 
   Assumptions
   | {state, decoded, v1, v2, v3} =>
@@ -596,20 +603,10 @@ def femtoCairoStepSpec
     | none => False -- impossible, constraints ensure that the transition is valid
 
 /--
-  Memory bounds requirement: all addresses in dataMemoryAddresses for the given offset are in bounds.
-  This is needed because the readFromMemory does ALL lookups regardless of mode.
--/
-def AllMemoryAddressesInBounds
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
-    (offset ap fp : F p) : Prop :=
-  ∀ addr ∈ Spec.dataMemoryAddresses memory offset ap fp, addr.val < memorySize
-
-/--
   Assumptions required for the FemtoCairo step circuit completeness.
   1. ValidProgramSize: programSize + 3 < p (ensures no field wraparound in address arithmetic)
   2. ValidProgram: All instruction bytes in program memory are < 256
   3. The state transition succeeds (execution doesn't fail)
-  4. All memory addresses accessed by the circuit are in bounds (for all operands)
 -/
 def femtoCairoStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -617,13 +614,7 @@ def femtoCairoStepAssumptions
     (state : State (F p)) : Prop :=
   ValidProgramSize (p := p) programSize ∧
   ValidProgram program ∧
-  (Spec.femtoCairoMachineTransition program memory state).isSome ∧
-  -- Additional requirement: all memory addresses for each operand are in bounds
-  -- This is needed because readFromMemory does ALL lookups regardless of mode
-  (∃ raw, Spec.fetchInstruction program state.pc = some raw ∧
-    AllMemoryAddressesInBounds memory raw.op1 state.ap state.fp ∧
-    AllMemoryAddressesInBounds memory raw.op2 state.ap state.fp ∧
-    AllMemoryAddressesInBounds memory raw.op3 state.ap state.fp)
+  (Spec.femtoCairoMachineTransition program memory state).isSome
 
 def femtoCairoStepSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
@@ -634,7 +625,7 @@ def femtoCairoStepSoundness
 
   obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
   obtain ⟨pc, ap, fp⟩ := input
-  simp [circuit_norm, explicit_provable_type] at h_input
+  simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input
   obtain ⟨h_input_pc, h_input_ap, h_input_fp⟩ := h_input
 
   obtain ⟨ c_fetch, c_decode, c_read1, c_read2, c_read3, c_next ⟩ := h_holds
@@ -647,7 +638,7 @@ def femtoCairoStepSoundness
   case h_1 raw_instruction h_eq =>
     rw [h_input_pc] at h_eq
     rw [h_eq, ←c_fetch]
-    simp [circuit_norm, explicit_provable_type]
+    simp only [Option.bind_eq_bind, Option.bind_some]
 
     split at c_decode
     case h_2 =>
@@ -655,11 +646,11 @@ def femtoCairoStepSoundness
       -- instruction decode is always successful
       contradiction
     case h_1 instr_type mode1 mode2 mode3 h_eq_decode =>
-      rw [h_eq_decode]
+      simp only [circuit_norm, explicit_provable_type] at h_eq_decode ⊢
+      rw [h_eq_decode, Option.bind_some]
       obtain ⟨ h_instr_type_val, h_instr_type_encoded_correctly, h_mode1_val,
         h_mode1_encoded_correctly, h_mode2_val, h_mode2_encoded_correctly,
         h_mode3_val, h_mode3_encoded_correctly ⟩ := c_decode
-      simp [circuit_norm, explicit_provable_type]
 
       -- satisfy assumptions of read1
       specialize c_read1 h_mode1_encoded_correctly
@@ -677,6 +668,7 @@ def femtoCairoStepSoundness
       specialize c_next h_instr_type_encoded_correctly
       rw [h_instr_type_val] at c_next
 
+      simp only [circuit_norm, explicit_provable_type] at c_read1 c_read2 c_read3
       split at c_read1
       case h_2 =>
         -- impossible, readFromMemory ensures that
@@ -698,7 +690,7 @@ def femtoCairoStepSoundness
             contradiction
           case h_1 v3 h_eq_v3 =>
             rw [h_eq_v3, ←c_read3]
-            simp [circuit_norm, explicit_provable_type]
+            simp only [Option.bind_some]
 
             split at c_next
             case h_2 =>
@@ -707,43 +699,7 @@ def femtoCairoStepSoundness
               contradiction
             case h_1 next_state h_eq_next =>
               rw [←c_next]
-              simp [explicit_provable_type, circuit_norm]
-
-/-! ### Helper lemmas for completeness proof -/
-
-omit p_large_enough in
-/-- If two fetchInstruction calls return some on the same pc, the results are equal -/
-private lemma fetchInstruction_some_unique
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (pc : F p) (raw1 raw2 : Types.RawInstruction (F p))
-    (h1 : Spec.fetchInstruction program pc = some raw1)
-    (h2 : Spec.fetchInstruction program pc = some raw2) :
-    raw1 = raw2 := by
-  rw [h1] at h2; exact Option.some.inj h2
-
-omit [Fact p.Prime] p_large_enough in
-/-- Extract rawInstrType equality from RawInstruction equality -/
-private lemma rawInstruction_eq_rawInstrType
-    {raw1 raw2 : Types.RawInstruction (F p)} (h : raw1 = raw2) :
-    raw1.rawInstrType = raw2.rawInstrType := congrArg (·.rawInstrType) h
-
-omit [Fact p.Prime] p_large_enough in
-/-- Extract op1 equality from RawInstruction equality -/
-private lemma rawInstruction_eq_op1
-    {raw1 raw2 : Types.RawInstruction (F p)} (h : raw1 = raw2) :
-    raw1.op1 = raw2.op1 := congrArg (·.op1) h
-
-omit [Fact p.Prime] p_large_enough in
-/-- Extract op2 equality from RawInstruction equality -/
-private lemma rawInstruction_eq_op2
-    {raw1 raw2 : Types.RawInstruction (F p)} (h : raw1 = raw2) :
-    raw1.op2 = raw2.op2 := congrArg (·.op2) h
-
-omit [Fact p.Prime] p_large_enough in
-/-- Extract op3 equality from RawInstruction equality -/
-private lemma rawInstruction_eq_op3
-    {raw1 raw2 : Types.RawInstruction (F p)} (h : raw1 = raw2) :
-    raw1.op3 = raw2.op3 := congrArg (·.op3) h
+              rfl
 
 def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
   (h_programSize : programSize < p) {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
@@ -752,8 +708,7 @@ def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepElaboratedCircuit,
     fetchInstruction, decodeInstruction, readFromMemory, nextState]
 
-  obtain ⟨h_valid_size, h_valid_program, h_transition_isSome, h_memory_bounds⟩ := h_assumptions
-  obtain ⟨raw_bounds, h_fetch_bounds, h_op1_bounds, h_op2_bounds, h_op3_bounds⟩ := h_memory_bounds
+  obtain ⟨h_valid_size, h_valid_program, h_transition_isSome⟩ := h_assumptions
 
   -- Decompose transition into components
   have h_decompose := Spec.transition_isSome_implies_computeNextState_isSome
@@ -770,63 +725,17 @@ def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program
     exact h_decode_bound ⟨decode, h_decode⟩
 
   -- Setup: extract subcircuit specs and derive operand equalities
+  set fetched := varFromOffset RawInstruction i₀
+  rcases raw with ⟨rawInstrType, op1, op2, op3⟩
+  simp only at *
+
   obtain ⟨h_fetch_env, h_decode_env, h_read1_env, h_read2_env, h_read3_env, h_next_env⟩ := h_env
   have h_eval_pc : Expression.eval env input_var.pc = input.pc := by
     rw [← State.eval_pc env input_var, h_input]
-  have h_fetch_assumptions : (Expression.eval env input_var.pc).val + 3 < programSize := by
-    rw [h_eval_pc]; exact h_pc_bound
-
-  have h_fetch_spec := h_fetch_env h_fetch_assumptions
-  simp only [h_eval_pc, h_fetch] at h_fetch_spec
-  have h_rawInstrType_eval : env.get i₀ = raw.rawInstrType := by
-    have := rawInstruction_eq_rawInstrType h_fetch_spec
-    simp only [circuit_norm, RawInstruction.eval_rawInstrType] at this; exact this
-  have h_op1_eq : env.get (i₀ + 1) = raw.op1 := by
-    have := rawInstruction_eq_op1 h_fetch_spec
-    simp only [circuit_norm, RawInstruction.eval_op1, Expression.eval] at this; exact this
-  have h_op2_eq : env.get (i₀ + 1 + 1) = raw.op2 := by
-    have := rawInstruction_eq_op2 h_fetch_spec
-    simp only [circuit_norm, RawInstruction.eval_op2, Expression.eval] at this; exact this
-  have h_op3_eq : env.get (i₀ + 1 + 1 + 1) = raw.op3 := by
-    have := rawInstruction_eq_op3 h_fetch_spec
-    simp only [circuit_norm, RawInstruction.eval_op3, Expression.eval] at this; exact this
-
-  have h_raw_eq := fetchInstruction_some_unique program input.pc raw_bounds raw h_fetch_bounds h_fetch
-  simp only [h_raw_eq, AllMemoryAddressesInBounds] at h_op1_bounds h_op2_bounds h_op3_bounds
-
-  refine ⟨h_fetch_assumptions, ?decode, ?read1, ?read2, ?read3, ?next⟩
-
-  case decode => rw [h_rawInstrType_eval]; exact h_instr_bound
-  case read1 => simp only [circuit_norm, h_op1_eq]; exact h_op1_bounds
-  case read2 => simp only [circuit_norm, h_op2_eq]; exact h_op2_bounds
-  case read3 => simp only [circuit_norm, h_op3_eq]; exact h_op3_bounds
-
-  case next =>
-    have h_decode_assumptions : (Expression.eval env (var ⟨i₀⟩)).val < 256 := by
-      simp only [Expression.eval, h_rawInstrType_eval]; exact h_instr_bound
-    have h_decode_spec := h_decode_env h_decode_assumptions
-    simp only [h_rawInstrType_eval, h_decode] at h_decode_spec
-    obtain ⟨h_val_eq, h_isEncoded, h_mode1_val, h_mode1_encoded, h_mode2_val, h_mode2_encoded,
-            h_mode3_val, h_mode3_encoded⟩ := h_decode_spec
-
-    refine ⟨h_isEncoded, ?_⟩
-    simp only [h_val_eq]
-    convert h_computeNext using 3
-    · have h_read1_spec := h_read1_env (by rw [h_op1_eq]; exact h_op1_bounds)
-      have h_v1' : Spec.dataMemoryAccess memory (env.get (i₀ + 1)) decode.2.1 input.ap input.fp = some v1 := by
-        rw [h_op1_eq]; exact h_v1
-      simp only [h_mode1_encoded, h_mode1_val, h_v1'] at h_read1_spec
-      simp only [circuit_norm, explicit_provable_type] at h_read1_spec; exact h_read1_spec
-    · have h_read2_spec := h_read2_env (by rw [h_op2_eq]; exact h_op2_bounds)
-      have h_v2' : Spec.dataMemoryAccess memory (env.get (i₀ + 1 + 1)) decode.2.2.1 input.ap input.fp = some v2 := by
-        rw [h_op2_eq]; exact h_v2
-      simp only [h_mode2_encoded, h_mode2_val, h_v2'] at h_read2_spec
-      simp only [circuit_norm, explicit_provable_type] at h_read2_spec; exact h_read2_spec
-    · have h_read3_spec := h_read3_env (by rw [h_op3_eq]; exact h_op3_bounds)
-      have h_v3' : Spec.dataMemoryAccess memory (env.get (i₀ + 1 + 1 + 1)) decode.2.2.2 input.ap input.fp = some v3 := by
-        rw [h_op3_eq]; exact h_v3
-      simp only [h_mode3_encoded, h_mode3_val, h_v3'] at h_read3_spec
-      simp only [circuit_norm, explicit_provable_type] at h_read3_spec; exact h_read3_spec
+  simp only [h_eval_pc] at h_fetch_env
+  specialize h_fetch_env h_pc_bound
+  simp only [h_fetch, circuit_norm, explicit_provable_type, RawInstruction.mk.injEq] at h_fetch_env
+  simp_all
 
 def femtoCairoStep
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
