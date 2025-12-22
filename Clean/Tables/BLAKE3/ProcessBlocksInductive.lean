@@ -88,7 +88,6 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
-    simp only [ProcessBlocksState.mk.injEq] at h_input
     obtain ⟨h_cv, h_cc, h_bc⟩ := h_input
     simp only [eval_vector] at h_cv
     constructor
@@ -101,7 +100,6 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
 
   completeness := by
     circuit_proof_start [U32.AssertNormalized.circuit]
-    simp only [ProcessBlocksState.mk.injEq] at h_input
     obtain ⟨h_cv, h_cc, h_bc⟩ := h_input
     simp only [ProcessBlocksState.Normalized] at h_spec
     constructor
@@ -157,7 +155,6 @@ def circuit : FormalAssertion (F p) BlockInput where
 
   soundness := by
     circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
-    simp only [BlockInput.mk.injEq] at h_input
     obtain ⟨h_be, h_bd⟩ := h_input
     constructor
     · simp_all
@@ -166,7 +163,6 @@ def circuit : FormalAssertion (F p) BlockInput where
 
   completeness := by
     circuit_proof_start [U32.AssertNormalized.circuit]
-    simp only [BlockInput.mk.injEq] at h_input
     obtain ⟨h_be, h_bd⟩ := h_input
     simp only [BlockInput.Normalized] at h_spec
     constructor
@@ -270,9 +266,6 @@ private lemma step_process_block (env : Environment (F p))
   simp only [BlockInput.Normalized] at x_normalized
   simp only [circuit_norm] at acc_normalized x_normalized
   provable_struct_simp
-  -- Expand h_eval from match expression into field equalities
-  simp only [circuit_norm, ProvableStruct.eval.go, ProvableStruct.fromComponents,
-    ProvableStruct.toComponents, ProcessBlocksState.mk.injEq, BlockInput.mk.injEq] at h_eval
   obtain ⟨⟨h_cv_eq, h_cc_eq, h_bc_eq⟩, ⟨h_be_eq, h_bd_eq⟩⟩ := h_eval
   simp only [h_cv_eq, h_cc_eq, h_bc_eq, h_be_eq, h_bd_eq, h_x] at ⊢ h_holds
   rcases h_holds with ⟨ _, h_holds ⟩
@@ -353,9 +346,6 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   · simp only [h_x, decide_false, cond_false]
     simp only [circuit_norm, step] at h_holds
     provable_struct_simp
-    -- Expand h_eval from match expression into field equalities
-    simp only [circuit_norm, ProvableStruct.eval.go, ProvableStruct.fromComponents,
-      ProvableStruct.toComponents, ProcessBlocksState.mk.injEq, BlockInput.mk.injEq] at h_eval
     obtain ⟨⟨h_cv_eq, h_cc_eq, h_bc_eq⟩, ⟨h_be_eq, h_bd_eq⟩⟩ := h_eval
     have x_block_exists_zero : x_block_exists = 0 := by
       simp only [BlockInput.Normalized] at input_normalized
@@ -383,9 +373,6 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_assumptions, h_input ⟩⟩
     simp only [circuit_norm, step] at ⊢ h_witnesses
     provable_struct_simp
-    -- Expand h_eval from match expression into field equalities
-    simp only [circuit_norm, ProvableStruct.eval, ProvableStruct.eval.go, ProvableStruct.fromComponents,
-      ProvableStruct.toComponents, ProcessBlocksState.mk.injEq, BlockInput.mk.injEq] at h_eval
     obtain ⟨⟨h_cv, h_cc, h_bc⟩, h_be, h_bd⟩ := h_eval
     simp only [h_cv, h_cc, h_bc, h_be, h_bd] at ⊢ h_witnesses
     dsimp only [ProcessBlocksState.Normalized] at h_assumptions

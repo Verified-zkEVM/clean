@@ -80,20 +80,22 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [BLAKE3State.Normalized, Xor32.circuit, Xor32.elaborated, and_imp,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
+  intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
+  simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
-  simp only [Inputs.mk.injEq] at h_input
-  obtain ⟨h_input_state, h_input_cv⟩ := h_input
+  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
+  simp only [FormalCircuit.toSubcircuit, Circuit.operations, ElaboratedCircuit.main,
+    ElaboratedCircuit.localLength, Xor32.Assumptions,
+    ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents, components, toComponents,
+    ProvableStruct.eval.go, getElem_eval_vector, h_input, Xor32.Spec, ElaboratedCircuit.output,
+    and_imp, Nat.add_zero, add_zero, and_true] at h_holds
 
-  -- Rewrite h_holds to use input_state instead of eval env input_var_state
-  simp only [h_input_state, h_input_cv] at h_holds
+  ring_nf at h_holds
 
-  obtain ⟨state_norm, chaining_value_norm⟩ := h_assumptions
+  simp only [Assumptions, BLAKE3State.Normalized] at h_normalized
+  obtain ⟨state_norm, chaining_value_norm⟩ := h_normalized
 
   obtain ⟨c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15⟩ := h_holds
-
-  -- Specialize hypotheses with normalization facts
   specialize c0 (state_norm 0) (state_norm 8)
   specialize c1 (state_norm 1) (state_norm 9)
   specialize c2 (state_norm 2) (state_norm 10)
@@ -111,22 +113,18 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
 
-  -- Normalize arithmetic in hypotheses to match goal
-  ring_nf at c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15
-
-  simp only [circuit_norm, eval_vector, BLAKE3State.value, finalStateUpdate]
+  simp [Spec, circuit_norm, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf
-  simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, true_and]
+  simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, and_self,
+    true_and]
 
-  -- Prove the Normalized property for all indices
-  simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, List.getElem_cons_zero,
-    Fin.val_succ, List.getElem_cons_succ, Fin.val_eq_zero, zero_add, IsEmpty.forall_iff, and_true]
-  exact ⟨c0.2, c1.2, c2.2, c3.2, c4.2, c5.2, c6.2, c7.2, c8.2, c9.2, c10.2, c11.2, c12.2, c13.2, c14.2, c15.2⟩
+  simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, List.getElem_cons_zero, c0,
+    Fin.val_succ, List.getElem_cons_succ, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13,
+    c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]
 
-  simp only [Inputs.mk.injEq] at h_input
   obtain ⟨h_input_state, h_input_cv⟩ := h_input
   obtain ⟨state_norm, chaining_value_norm⟩ := h_assumptions
 

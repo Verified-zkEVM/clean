@@ -549,8 +549,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     flags := input_var_flags
   }
 
-  -- Extract field equations from h_input
-  simp only [Inputs.mk.injEq] at h_input
   obtain ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩ := h_input
 
   -- Apply h_holds with the proven assumptions
@@ -568,7 +566,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     constructor
     · exact h_helper.1
     · intro i
-      rw [h_block_words]
       exact h_helper.2 i
   )
   clear h_holds
@@ -611,10 +608,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       Nat.div_eq_of_lt h_lt, h_counter_low_eq, zero_add]
     -- Now handle the remaining equalities
     congr 1
-    · -- Prove the state vectors are equal
-      simp only [getElem_eval_vector, h_chaining]
-    · -- Prove the messages are equal
-      simp only [← eval_vector, h_block_words]
+    simp only [getElem_eval_vector, h_chaining]
 
   · -- Show out.Normalized
     exact h_normalized
@@ -632,8 +626,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     flags := input_var_flags
   }
 
-  -- Extract field equations from h_input
-  simp only [Inputs.mk.injEq] at h_input
   obtain ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩ := h_input
 
   -- Unfold and prove the goal
@@ -649,7 +641,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   constructor
   · exact h_helper.1
   · intro i
-    rw [h_block_words]
     exact h_helper.2 i
 
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.

@@ -164,11 +164,9 @@ def circuit : FormalAssertion (F p) Inputs where
     circuit_proof_start
     intro h_ie
     simp_all only [one_ne_zero, or_true, id_eq]
-    rw [Inputs.mk.injEq] at h_input
     obtain ⟨h_enabled, h_inp⟩ := h_input
     rw [← h_inp]
     obtain ⟨h1, h2⟩ := h_holds
-    rw [h_enabled] at h2
     simp only [one_mul] at h2
     -- h2 : 1 + -output = 0
     -- Use h1 to get that input must be 0 (since output = 1)
@@ -191,7 +189,6 @@ def circuit : FormalAssertion (F p) Inputs where
   completeness := by
     circuit_proof_start
     simp_all only [id_eq]
-    rw [Inputs.mk.injEq] at h_input
     obtain ⟨h_enabled, h_inp⟩ := h_input
     constructor
     trivial
@@ -199,7 +196,7 @@ def circuit : FormalAssertion (F p) Inputs where
     cases h_assumptions with
     | inl h_enabled_l =>
       left
-      rw [h_enabled, h_enabled_l]
+      rw [h_enabled_l]
     | inr h_enabled_r =>
       simp_all only [forall_const, one_ne_zero, false_or]
       -- h_spec says input_inp.1 = input_inp.2

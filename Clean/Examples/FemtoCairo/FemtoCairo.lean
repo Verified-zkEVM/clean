@@ -451,8 +451,6 @@ def readFromMemoryCircuit
     simp only [Fin.ofNat_eq_cast, id_eq, eval, fromElements, size, toVars, toElements,
       Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
       ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ] at h_holds h_input
-    -- Destructure h_input to get individual component equalities
-    rw [MemoryReadInput.mk.injEq] at h_input
     obtain ⟨h_input_state, h_input_offset, h_input_mode⟩ := h_input
     rw [State.mk.injEq] at h_input_state
     obtain ⟨h_input_pc, h_input_ap, h_input_fp⟩ := h_input_state
@@ -531,7 +529,6 @@ def readFromMemoryCircuit
       · simp only [h_env]
         apply Set.mem_singleton_of_eq
         congr
-        rw [MemoryReadInput.mk.injEq] at h_input
         obtain ⟨h_input_state, h_input_offset, h_input_mode⟩ := h_input
         rw [State.mk.injEq] at h_input_state
         obtain ⟨h_input_pc, h_input_ap, h_input_fp⟩ := h_input_state
@@ -604,7 +601,6 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
     obtain ⟨isAdd, isMul, isStoreState, isLoadState⟩ := input_decoded_instrType
     obtain ⟨pc, ap, fp⟩ := input_state
 
-    rw [StateTransitionInput.mk.injEq] at h_input
     obtain ⟨h_input_state, h_input_decoded, h_input_v1, h_input_v2, h_input_v3⟩ := h_input
     simp [circuit_norm, explicit_provable_type] at h_input_decoded h_input_state h_holds ⊢
 
@@ -679,9 +675,7 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
     simp only [DecodedInstructionType.isEncodedCorrectly] at h_encode
     simp only [DecodedInstructionType.val] at h_exec
     simp only
-    rw [StateTransitionInput.mk.injEq] at h_input
     obtain ⟨h_input1, h_input_decoded, h_input_v1, h_input_v2, h_input_v3⟩ := h_input
-    rw [DecodedInstruction.mk.injEq] at h_input_decoded
     obtain ⟨h_input2, h_input_mode1, h_input_mode2, h_input_mode3⟩ := h_input_decoded
     simp only [circuit_norm, explicit_provable_type, DecodedInstructionType.mk.injEq] at h_input2
     rcases input_var_state

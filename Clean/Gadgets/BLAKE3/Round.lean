@@ -53,7 +53,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   obtain ⟨h_state, h_message⟩ := h_assumptions
 
-  simp only [Inputs.mk.injEq] at h_input
   obtain ⟨h_input_state, h_input_message⟩ := h_input
 
   dsimp only [ElaboratedCircuit.main, main, Fin.isValue, G.circuit, G.elaborated, Fin.val_zero,
@@ -101,9 +100,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start [G.circuit, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true]
 
-  simp only [Inputs.mk.injEq] at h_input
   obtain ⟨h_input_state, h_input_message⟩ := h_input
-  simp only [h_input_state, h_input_message] at h_env
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_env
 
