@@ -242,6 +242,7 @@ def fetchInstruction
       _ < programSize := by
         rw [← Nat.cast_three, ZMod.val_natCast]
         rw [Nat.mod_eq_of_lt] <;> omega
+
 /--
   Circuit that reads a value from a read-only memory, given a state, an offset,
   and an addressing mode.
