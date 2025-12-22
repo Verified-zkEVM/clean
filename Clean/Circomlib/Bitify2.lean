@@ -137,7 +137,7 @@ lemma fieldFromBits_eq_mapFinRange_cast {n} {f : Fin n → F p} :
 
 set_option linter.constructorNameAsVariable false
 
-def circuit : FormalCircuit (F p) (fields 254) field where
+def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq := by simp +arith [circuit_norm, main,
@@ -145,17 +145,25 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+  Assumptions input := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
 
   Spec input output :=
-    output.val = fromBits (input.map ZMod.val)
+    (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) → output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    intro i0 env input_var input h_input assumptions h_holds
-    simp only [circuit_norm, main, Bits2Num.main] at h_holds ⊢
-    simp_all only [circuit_norm, AliasCheck.circuit]
-    simp only [id_eq] at h_holds
-    obtain ⟨ h_bits, h_eq ⟩ := h_holds
+    intro i0 env input_var input h_input assumptions output h_binary
+    simp only [ElaboratedCircuit.main, main] at assumptions output ⊢
+    simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at h_input assumptions output ⊢
+    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = input[i]) := by
+      intro i hi
+      rw [← h_input]
+      simp only [Vector.getElem_map]
+    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = 0 ∨ Expression.eval env input_var[i] = 1) := by
+      intro i hi
+      rw [this]
+      apply h_binary
+    simp_all only [implies_true, forall_const]
+    obtain ⟨ h_bits, h_eq ⟩ := assumptions
     rw [← ZMod.val_natCast_of_lt h_bits]
     rw [← mapFinRange_eq_map]
     rw [← fieldFromBits_eq_mapFinRange_cast]
@@ -169,11 +177,18 @@ def circuit : FormalCircuit (F p) (fields 254) field where
           simp only [Fin.getElem_fin, Vector.getElem_map]
           rw [← Fin.getElem_fin]
     rw [← Bits2Num.lc_eq]
-    simp
+    simp only [output, circuit_norm, main, AliasCheck.circuit, Bits2Num.main]
+    rw [h_eq]
 
   completeness := by
-    simp only [circuit_norm, main, Bits2Num.main]
-    sorry
+    simp only [circuit_norm, main]
+    intro i0 env input_var h_env input h_input assumptions
+    simp only [circuit_norm, Bits2Num.main] at h_env h_input ⊢
+    simp only [h_input, circuit_norm] at h_env ⊢
+    obtain ⟨assumption₁, assumption₂⟩ := assumptions
+    simp only [circuit_norm, AliasCheck.circuit, assumption₁, assumption₂] at ⊢
+    rw [← h_env]
+    rfl
 end Bits2Num_strict
 
 namespace Num2BitsNeg
