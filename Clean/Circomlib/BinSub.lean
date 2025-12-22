@@ -1,12 +1,7 @@
 import Clean.Circuit
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
 import Clean.Utils.Bits
-import Clean.Utils.Fin
-import Clean.Utils.Vector
 import Clean.Gadgets.Bits
 import Clean.Gadgets.Boolean
-import Clean.Circomlib.Bitify
 
 namespace Circomlib
 open Utils.Bits
@@ -227,14 +222,14 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         -- By definition of `fieldFromBits`, we know that it is equal to the foldl of the same operation.
         have h_fieldFromBits_eq_foldl : ∀ (bits : Vector (F p) n), Utils.Bits.fieldFromBits bits = Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ (k : ℕ)) 0 := by exact fieldFromBits_as_sum;
         convert h_fieldFromBits_eq_foldl _;
-        simp +decide [ Vector.getElem_map, Vector.getElem_mapRange ];
+        simp +decide [Vector.getElem_map, Vector.getElem_mapRange];
         rfl;
       · norm_num)
 
     -- Final Conclusion: Assemble the parts
     -- We provide the witness `aux` from the environment and use the equation proved above
     refine ⟨h_assumptions, h_out_bool, env.get (i₀ + n), h_aux_bool, ?_⟩
-    erw [← h_lhs_eval, ← h_rhs_eval]
+    erw [←h_lhs_eval, ←h_rhs_eval]
     exact h_eqn
 
   completeness := by
@@ -265,19 +260,18 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Step 4: Prove the reconstruction equation: lin = (sum of low bits) + aux * 2^n
     -- We define the sum of the output bits as 'lout_val'
     have h_reconstruction :
-      Expression.eval env (inputLinearSub n input_var) = Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 +
-            env.get (i₀ + n) * 2 ^ n := by
-          -- 2. Convert Circuit Fold to Summation
+      Expression.eval env (inputLinearSub n input_var) = Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 + env.get (i₀ + n) * 2 ^ n := by
+          -- 1. Convert Circuit Fold to Summation
           rw [←foldl_explicit (le_refl n) env i₀ h_out_binary]
 
-          -- 3. Define 'lin' for clarity and prove it equals the reconstruction
+          -- 2. Define 'lin' for clarity and prove it equals the reconstruction
           set lin := Expression.eval env (inputLinearSub n input_var)
 
           -- We verify the equation by lifting to Natural numbers (ZMod.val)
           -- This avoids modular arithmetic issues since we know 2^(n+1) < p
           apply ZMod.val_injective
 
-          -- 4. Analyze the Summation Term (Lower Bits)
+          -- 3. Analyze the Summation Term (Lower Bits)
           -- The sum corresponds to 'fieldFromBits' applied to the bits of 'lin'
           -- Ideally: (Sum ...) = lin.val % 2^n
           have h_sum_mod : (Fin.foldl n (fun acc k ↦ acc + env.get (i₀ + ↑k) * 2 ^ k.val) 0).val = lin.val % 2^n := by
@@ -289,10 +283,10 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
               · exact fun i => h_env_out i ▸ h_out_binary i;
             rw [h_lin_mod, Utils.Bits.fieldFromBits_fieldToBits_mod];
             rcases p with ( _ | _ | p ) <;> norm_cast;
-            erw [ ZMod.val_cast_of_lt ];
-            exact lt_of_le_of_lt ( Nat.mod_le _ _ ) ( Nat.lt_of_lt_of_le ( ZMod.val_lt _ ) ( by linarith [ pow_succ' 2 n ] ) )
+            erw [ZMod.val_cast_of_lt];
+            exact lt_of_le_of_lt (Nat.mod_le _ _) (Nat.lt_of_lt_of_le (ZMod.val_lt _) (by linarith [pow_succ' 2 n]))
 
-          -- 5. Analyze the Aux Term (Upper Bit)
+          -- 4. Analyze the Aux Term (Upper Bit)
           -- aux = (lin / 2^n) % 2
           have h_aux_div : (env.get (i₀ + n)).val = lin.val / 2^n := by
             rw [h_env_aux]
@@ -332,7 +326,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
               · exact Nat.le_antisymm ( Nat.le_of_lt_succ <| Nat.div_lt_of_lt_mul <| by linarith! [ pow_succ' 2 n ] ) ( Nat.div_pos h_if <| by positivity );
               · exact Nat.div_lt_of_lt_mul h_div_lt
 
-          -- 6. Combine to prove Euclidean Division: lin = (lin % 2^n) + (lin / 2^n) * 2^n
+          -- 5. Combine to prove Euclidean Division: lin = (lin % 2^n) + (lin / 2^n) * 2^n
           rw [ZMod.val_add, ZMod.val_mul]
           simp only [h_sum_mod, h_aux_div]
           have hh := (Nat.mod_add_div lin.val (2^n)).symm
@@ -344,7 +338,6 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
           · norm_num [ mul_comm, ZMod.val_natCast ];
             norm_cast;
             erw [ ZMod.val_cast_of_lt ] ; linarith [ Nat.pow_le_pow_right two_pos ( show n ≤ n + 1 by linarith ) ]
-
 
     -- Final Goal: Prove the conjunction of constraints
     constructor
