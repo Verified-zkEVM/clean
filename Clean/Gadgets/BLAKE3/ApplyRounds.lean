@@ -474,17 +474,12 @@ lemma initial_state_and_messages_are_normalized
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
   set state_vec := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
-
-  -- Decompose h_input into field equalities
-  simp only [circuit_norm, ProvableStruct.eval, ProvableStruct.eval.go, ProvableStruct.fromComponents,
-    ProvableStruct.toComponents] at h_input
-  simp only [Inputs.mk.injEq] at h_input
-  obtain ⟨h_chaining, h_block, h_counter_high, h_counter_low, h_block_len, h_flags⟩ := h_input
+  provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var.chaining_value[i]).Normalized := by
-    simp only [circuit_norm, eval_vector_eq_get, h_chaining]
-    exact h_normalized.1 ⟨ i, h_i ⟩
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var_chaining_value[i]).Normalized := by
+    simp_all only [circuit_norm, eval_vector_eq_get]
+    convert h_normalized.1 ⟨ i, h_i ⟩
 
   -- Show the state is normalized
   have h_state_normalized : (eval env state_vec).Normalized := by
@@ -496,6 +491,7 @@ lemma initial_state_and_messages_are_normalized
       state_vec_norm_simp; simp [h_chaining_value_normalized]
     -- Next 4 are IV constants
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
+    -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all
 
   constructor
@@ -523,33 +519,13 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [Nat.div_eq_of_lt h1]
     simp
 
-  -- Reconstruct input_var as a struct for the helper lemma
-  let input_var : Var Inputs (F p) := {
-    chaining_value := input_var_chaining_value,
-    block_words := input_var_block_words,
-    counter_high := input_var_counter_high,
-    counter_low := input_var_counter_low,
-    block_len := input_var_block_len,
-    flags := input_var_flags
-  }
-
-  obtain ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩ := h_input
-
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
-    -- Unfold the assumption to show what we need to prove
-    simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec]
-    -- Use the helper lemma
-    have h_helper := initial_state_and_messages_are_normalized env input_var input_block_words
-      input_chaining_value input_counter_high input_counter_low input_block_len input_flags
-      (by simp only [input_var, circuit_norm, Inputs.mk.injEq]
-          exact ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩)
-      (by simp only [Assumptions]; exact h_assumptions)
-    simp only [input_var] at h_helper
-    constructor
-    · exact h_helper.1
-    · intro i
-      exact h_helper.2 i
+    apply initial_state_and_messages_are_normalized
+    · simp only [circuit_norm, h_input]
+      rfl
+    · simp only [Assumptions]
+      aesop
   )
   clear h_holds
 
@@ -572,26 +548,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
     -- h_value tells us the output equals applySevenRounds on our constructed state
     simp only [BLAKE3State.value] at h_value ⊢
-
-    -- Unfold the goal's ElaboratedCircuit.output to match h_value's form
-    simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat,
-      sixRoundsApplyStyle, sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute,
-      roundWithPermute, Round.circuit] at h_value ⊢
-
-    rw [h_value]
-    -- Now prove the two applySevenRounds calls are equal by simplifying both sides
-    simp only [initializeStateVector, eval_vector, circuit_norm]
-    simp only [h_counter_low, h_counter_high, h_block_len, h_flags]
-    simp only [U32.value_fromUInt32]
-    -- Simplify counter expressions - use convert to handle dependent types
-    have h_2pow32 : (2 : ℕ)^32 = 4294967296 := rfl
-    have h_lt := U32.value_lt_of_normalized h_assumptions.2.2.2.1
-    rw [h_2pow32] at h_lt
-    simp only [h_2pow32, Nat.add_mul_mod_self_left, Nat.add_mul_div_left _ _ (by norm_num : (4294967296 : ℕ) > 0),
-      Nat.div_eq_of_lt h_lt, h_counter_low_eq, zero_add]
-    -- Now handle the remaining equalities
-    congr 1
-    simp only [getElem_eval_vector, h_chaining]
+    calc
+      _ = _ := h_value
+      _ = _ := by
+        clear h_value
+        simp only [initializeStateVector, h_input, eval_vector, circuit_norm, getElem_eval_vector]
+        simp [circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
 
   · -- Show out.Normalized
     exact h_normalized
@@ -599,31 +561,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
 
-  -- Reconstruct input_var as a struct for the helper lemma
-  let input_var : Var Inputs (F p) := {
-    chaining_value := input_var_chaining_value,
-    block_words := input_var_block_words,
-    counter_high := input_var_counter_high,
-    counter_low := input_var_counter_low,
-    block_len := input_var_block_len,
-    flags := input_var_flags
-  }
-
-  obtain ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩ := h_input
-
-  -- Unfold and prove the goal
-  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec]
-  -- Use the helper lemma
-  have h_helper := initial_state_and_messages_are_normalized env input_var input_block_words
-    input_chaining_value input_counter_high input_counter_low input_block_len input_flags
-    (by simp only [input_var, circuit_norm, Inputs.mk.injEq]
-        exact ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩)
-    (by simp only [Assumptions]; exact h_assumptions)
-  simp only [input_var] at h_helper
-  constructor
-  · exact h_helper.1
-  · intro i
-    exact h_helper.2 i
+  -- Use the helper lemma to prove normalization
+  apply initial_state_and_messages_are_normalized env
+  · simp only [h_input, circuit_norm]
+    rfl
+  · simp only [Assumptions]
+    aesop
 
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.

@@ -152,16 +152,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rcases h_holds with ⟨h_IsZero, h_Or32_1, h_Or32_2, h_Compress⟩
   simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, id_eq, mul_one, Nat.ofNat_pos, and_self, and_true, true_and,
     Nat.reduceMul, and_imp, Nat.reducePow, mul_zero, add_zero]
-  specialize h_Or32_1
-    (by split <;> simp [ZMod.val_one])
+  specialize h_Or32_1 (by
+    split <;> simp [ZMod.val_one])
 
   simp_all only [forall_const]
   have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
   specialize h_Or32_2 (by simp [val_two])
-  specialize h_Compress
-    (by simp_all)
+  specialize h_Compress (by simp_all)
     (by apply bytesToWords_normalized; simp_all)
-    (by omega)
+    (by linarith)
     (by simp_all)
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
   have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
@@ -182,7 +181,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
       clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress
       rw [← Vector.map_map, ← eval_vector, eval_bytesToWords]
-      simp only [h_input.2.2.1]
+      simp only [h_input]
       simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
       ext i hi
       simp only [explicit_provable_type, circuit_norm, Vector.getElem_ofFn, List.getElem_append,
