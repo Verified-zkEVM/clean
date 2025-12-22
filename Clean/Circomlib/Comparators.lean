@@ -163,53 +163,41 @@ def circuit : FormalAssertion (F p) Inputs where
   soundness := by
     circuit_proof_start
     intro h_ie
-    simp_all only [one_ne_zero, or_true, id_eq]
-    obtain ⟨h_enabled, h_inp⟩ := h_input
-    rw [← h_inp]
-    obtain ⟨h1, h2⟩ := h_holds
-    simp only [one_mul] at h2
-    -- h2 : 1 + -output = 0
-    -- Use h1 to get that input must be 0 (since output = 1)
-    have h_spec := h1 trivial
-    simp only [circuit_norm, IsZero.circuit] at h_spec
-    split_ifs at h_spec with h_zero
-    · -- input = 0, so inp.2 - inp.1 = 0, so inp.1 = inp.2
-      simp only [circuit_norm] at h_zero
-      -- h_zero : inp.2 + -inp.1 = 0 means inp.2 = inp.1
-      exact (eq_of_add_neg_eq_zero h_zero).symm
-    · -- output = 0 but h2 says 1 + -output = 0, contradiction
-      -- h_spec : output = 0, h2 : 1 + -output = 0
-      -- This means 1 = 0, contradiction
-      have h_out_one := eq_of_add_neg_eq_zero h2
-      -- Unify h_spec and h_out_one: both refer to the output of IsZero
-      simp only [IsZero.circuit] at h_out_one h_spec
-      rw [h_spec] at h_out_one
-      exact (one_ne_zero h_out_one).elim
+    simp_all only [one_ne_zero, or_true, id_eq, one_mul]
+    cases h_input with
+    | intro h_enabled h_inp =>
+      rw [← h_inp]
+      simp only
+      cases h_holds with
+      | intro h1 h2 =>
+        rw [h1] at h2
+        rw [add_comm] at h2
+        simp only [id_eq] at h2
+        split_ifs at h2 with h_ifs
+        . simp_all only [neg_add_cancel]
+          rw [add_comm, neg_add_eq_zero] at h_ifs
+          exact h_ifs
+        . simp_all only [neg_zero, zero_add, one_ne_zero]
+        rw [add_comm, neg_add_eq_zero] at h2
+        rw [h2] at h1
+        trivial
 
   completeness := by
     circuit_proof_start
     simp_all only [id_eq]
-    obtain ⟨h_enabled, h_inp⟩ := h_input
     constructor
     trivial
     rw [mul_eq_zero, add_comm, neg_add_eq_zero]
     cases h_assumptions with
-    | inl h_enabled_l =>
-      left
-      rw [h_enabled_l]
+    | inl h_enabled_l => apply Or.inl h_enabled_l
     | inr h_enabled_r =>
       simp_all only [forall_const, one_ne_zero, false_or]
-      -- h_spec says input_inp.1 = input_inp.2
-      -- h_inp says (eval inp.1, eval inp.2) = input_inp
-      -- So eval inp.2 - eval inp.1 = 0
-      have h_diff_zero : Expression.eval env input_var_inp.2 + -Expression.eval env input_var_inp.1 = 0 := by
-        have h2 : input_inp.2 = Expression.eval env input_var_inp.2 := by rw [← h_inp]
-        have h1 : input_inp.1 = Expression.eval env input_var_inp.1 := by rw [← h_inp]
-        rw [← h1, ← h2, h_spec]
-        ring
-      have h_spec_app := h_env trivial
-      simp only [circuit_norm, IsZero.circuit, h_diff_zero, ↓reduceIte] at h_spec_app
-      exact h_spec_app
+      have h_spec := h_spec.symm
+      rw [← sub_eq_zero, ← h_input.right] at h_spec
+      rw [← sub_eq_add_neg] at h_env
+      rw [h_env]
+      simp only [id_eq, h_spec, ↓reduceIte]
+      trivial
 
 end ForceEqualIfEnabled
 
