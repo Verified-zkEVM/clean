@@ -5,7 +5,6 @@ import Clean.Gadgets.Boolean
 
 namespace Circomlib
 open Utils.Bits
-open Expression
 variable {p : ℕ} [Fact p.Prime]
 
 -- Define a 2D vector type for BinSub inputs
