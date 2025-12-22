@@ -251,7 +251,7 @@ def fetchInstruction
   - If the addressing is fp-relative, it reads the value at `memory[fp + offset]`.
   - If the addressing is immediate, it returns the offset itself.
   The circuit uses lookups into a read-only table representing the memory.
-  This circuit is not satisfiable if any memory access is out of bounds.
+  This circuit is not satisfiable if the memory access is out of bounds.
 -/
 def readFromMemory
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
@@ -610,7 +610,7 @@ def femtoCairoStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     (state : State (F p)) : Prop :=
-  ValidProgramSize (p := p) programSize ∧
+  ValidProgramSize p programSize ∧
   ValidProgram program ∧
   (Spec.femtoCairoMachineTransition program memory state).isSome
 
@@ -735,6 +735,7 @@ def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program
   simp_all
 
 variable {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+variable (h_program : ValidProgramSize p programSize ∧ ValidProgram program)
 variable {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
 
 def femtoCairoStep : GeneralFormalCircuit (F p) State State where
@@ -754,52 +755,51 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   for `n` steps from the given initial state, using the given program memory, does not
   return `none`.
 -/
-def femtoCairoTable : InductiveTable (F p) State unit where
+def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
   step state _ :=
     femtoCairoStep program h_programSize memory h_memorySize state
 
   Spec initialState _ i _ state : Prop :=
     (Spec.femtoCairoMachineBoundedExecution program memory (some initialState) i) = some state
 
-  -- Initial state assumptions for completeness: program size and contents must be valid
-  InitialStateAssumptions _ := ValidProgramSize (p := p) programSize ∧ ValidProgram program
-
-  -- Input assumptions: execution for i+1 steps succeeds AND all memory addresses are in bounds
-  InputAssumptions i _ := (∀ (initialState : State (F p)),
-    (Spec.femtoCairoMachineBoundedExecution program memory (some initialState) (i + 1)).isSome)
+  -- For completeness, we assume that execution on the initial state succeeds, for all steps up to a maximum N
+  InputAssumptions i _ := i < n
+  InitialStateAssumptions initialState :=
+    ∀ i ≤ n, (Spec.femtoCairoMachineBoundedExecution program memory (some initialState) i).isSome
 
   soundness := by
     intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold
     simp_all [circuit_norm, Spec.femtoCairoMachineBoundedExecution, femtoCairoStep, femtoCairoStepSpec]
 
   completeness := by
-    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses
-    rintro ⟨h_init_assumptions, h_spec, h_input_assumptions⟩
-    specialize h_input_assumptions initialState
+    intro initialState i env acc_var x_var acc x xs xs_len h_eval h_witnesses
+    rintro ⟨h_initial_state, h_spec, h_i⟩
+    specialize h_initial_state (i+1) h_i
     simp_all [circuit_norm, Spec.femtoCairoMachineBoundedExecution, femtoCairoStep, femtoCairoStepAssumptions]
 
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with
-  the default initial state (pc=0, ap=0, fp=0)
--/
-def femtoCairoFormalTable (output : State (F p)) :=
-  let table := femtoCairoTable program h_programSize memory h_memorySize
-  table.toFormal { pc := 0, ap := 0, fp := 0} output
+  the default initial state (pc=0, ap=0, fp=0).
 
-/--
   The table's statement implies that the state at each row is exactly the state reached by the
   femtoCairo machine after executing that many steps from the initial state.
   In particular, the bounded execution does not return `none`, which means that
   the execution is successful for that many steps.
 -/
-theorem femtoCairoTableStatement
-  (state : State (F p)) : ∀ n > 0, ∀ trace,
-  (femtoCairoFormalTable program h_programSize memory h_memorySize state).statement n trace →
-    (Spec.femtoCairoMachineBoundedExecution program memory (some {pc:=0, ap:=0, fp:=0}) (n - 1)) = some state
+theorem femtoCairoTableStatement (finalState : State (F p)) :
+  let initialState : State (F p) := { pc := 0, ap := 0, fp := 0 };
+
+  ∀ n > 0, ∀ trace,
+
+  let table := femtoCairoTable program h_programSize h_program memory h_memorySize n
+    |>.toFormal initialState finalState
+
+  table.statement n trace →
+    (Spec.femtoCairoMachineBoundedExecution program memory (some initialState) (n - 1)) = some finalState
   := by
-  intro n hn trace Spec
-  simp only [FormalTable.statement, femtoCairoFormalTable,
-    InductiveTable.toFormal, femtoCairoTable, FemtoCairo.Spec.femtoCairoMachineBoundedExecution] at Spec
-  simp_all only [and_self, forall_const]
+  intro initialState n hn trace table Spec
+  simp only [table, FormalTable.statement, InductiveTable.toFormal, femtoCairoTable,
+    FemtoCairo.Spec.femtoCairoMachineBoundedExecution] at Spec
+  simp_all
 
 end Examples.FemtoCairo

@@ -71,7 +71,7 @@ omit p_large_enough in
 /-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 < programSize -/
 lemma fetchInstruction_isSome_implies_pc_bound
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (h_valid_size : ValidProgramSize (p := p) programSize)
+    (h_valid_size : ValidProgramSize p programSize)
     (pc : F p)
     (h : (fetchInstruction program pc).isSome) : pc.val + 3 < programSize := by
   simp only [fetchInstruction, Option.isSome_iff_exists] at h
