@@ -62,7 +62,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     List.cons_append, List.nil_append, Operations.localLength.eq_5, Operations.localLength.eq_1,
     Nat.add_zero, Circuit.ConstraintsHold.Soundness.eq_5,
     Circuit.ConstraintsHold.Soundness.eq_1] at h_holds
-  simp only [G.Assumptions, h_input_state, h_input_message, getElem_eval_vector, G.Spec, Fin.isValue,
+  simp only [G.Assumptions, h_input_message, getElem_eval_vector, G.Spec, Fin.isValue,
     and_imp] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_holds
 

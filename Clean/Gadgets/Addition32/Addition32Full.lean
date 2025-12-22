@@ -72,7 +72,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   let ⟨ y0, y1, y2, y3 ⟩ := input_y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := input_var_x
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := input_var_y
-  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
+  simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_input
   simp only [circuit_norm, explicit_provable_type, h_input] at *
 
   -- introduce intermediate variables, like in the circuit
@@ -111,7 +111,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   let ⟨ y0, y1, y2, y3 ⟩ := input_y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := input_var_x
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := input_var_y
-  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
+  simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_input
   simp only [circuit_norm, explicit_provable_type, h_input] at *
 
   -- introduce intermediate variables, like in the circuit

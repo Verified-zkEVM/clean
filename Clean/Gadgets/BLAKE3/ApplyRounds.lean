@@ -554,8 +554,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
     -- Unfold the assumption to show what we need to prove
-    simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sixRoundsApplyStyle, sixRoundsWithPermute,
-      fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, Round.Assumptions]
+    simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec]
     -- Use the helper lemma
     have h_helper := initial_state_and_messages_are_normalized env input_var input_block_words
       input_chaining_value input_counter_high input_counter_low input_block_len input_flags
@@ -629,8 +628,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   obtain ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩ := h_input
 
   -- Unfold and prove the goal
-  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sixRoundsApplyStyle, sixRoundsWithPermute,
-    fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, Round.Assumptions]
+  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec]
   -- Use the helper lemma
   have h_helper := initial_state_and_messages_are_normalized env input_var input_block_words
     input_chaining_value input_counter_high input_counter_low input_block_len input_flags
