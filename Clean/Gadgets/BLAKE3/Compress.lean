@@ -46,9 +46,6 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-
-  obtain ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩ := h_input
-
   simp_all only [circuit_norm, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
@@ -61,9 +58,6 @@ lemma ApplyRouunds.circuit_spec_is :
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
-
-  obtain ⟨h_chaining, h_block_words, h_counter_high, h_counter_low, h_block_len, h_flags⟩ := h_input
-
   simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRouunds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]

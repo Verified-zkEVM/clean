@@ -496,23 +496,7 @@ lemma initial_state_and_messages_are_normalized
       state_vec_norm_simp; simp [h_chaining_value_normalized]
     -- Next 4 are IV constants
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
-    -- Last 4 are counter_low, counter_high, block_len, flags
-    case «12» =>
-      state_vec_norm_simp_simple
-      simp only [h_counter_low]
-      exact h_normalized.2.2.2.1
-    case «13» =>
-      state_vec_norm_simp_simple
-      simp only [h_counter_high]
-      exact h_normalized.2.2.1
-    case «14» =>
-      state_vec_norm_simp_simple
-      simp only [h_block_len]
-      exact h_normalized.2.2.2.2.1
-    case «15» =>
-      state_vec_norm_simp_simple
-      simp only [h_flags]
-      exact h_normalized.2.2.2.2.2
+    case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all
 
   constructor
   · apply h_state_normalized
