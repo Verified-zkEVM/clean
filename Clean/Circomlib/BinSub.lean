@@ -354,8 +354,5 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
       · -- Constraint 3: The linear sum check (lin === lout)
         -- This matches our h_reconstruction lemma exactly
         exact h_reconstruction
-
-
 end BinSub
-
 end Circomlib
