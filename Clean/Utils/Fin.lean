@@ -72,8 +72,8 @@ lemma foldl_factor_const {α : Type*} [CommSemiring α] {n : ℕ} (f : Fin n →
 lemma foldl_factor_init {α : Type*} [CommSemiring α] {n : ℕ} (f : Fin n → α) (init : α) :
     Fin.foldl n (fun acc i => acc + f i) init =
     init + Fin.foldl n (fun acc i => acc + f i) 0 := by
-      have hh := (foldl_factor_const f 1 init)
-      simp_all only [mul_one, one_mul]
+  have hh := (foldl_factor_const f 1 init)
+  simp_all only [mul_one, one_mul]
 
 /-- Convert Fin.foldl to Finset.sum via range -/
 lemma foldl_eq_sum_range {α : Type*} [AddCommMonoid α] : ∀ (n' : ℕ) (f' : Fin n' → α),

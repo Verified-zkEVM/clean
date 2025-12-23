@@ -73,15 +73,15 @@ lemma foldl_explicit {n : ℕ} {m : ℕ} (h_le : m <= n) (env : Environment (F p
 lemma lin_val_eq {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)
     (h0 : in0.val < 2^n) (h1 : in1.val < 2^n) (h_p : 2^(n+1) < p) :
     (in0 + 2^n - in1).val = in0.val + 2^n - in1.val := by
-      have h_sub_eq : (in0 + 2^n - in1 : F p).val = (in0.val + 2^n - in1.val) % p := by
-        norm_num [←ZMod.val_natCast];
-        rw [Nat.cast_sub] <;> norm_num;
-        linarith;
-      rw [h_sub_eq, Nat.mod_eq_of_lt (by rw [pow_succ'] at h_p; omega)]
+  have h_sub_eq : (in0 + 2^n - in1 : F p).val = (in0.val + 2^n - in1.val) % p := by
+    norm_num [←ZMod.val_natCast];
+    rw [Nat.cast_sub] <;> norm_num;
+    linarith;
+  rw [h_sub_eq, Nat.mod_eq_of_lt (by rw [pow_succ'] at h_p; omega)]
 
 -- Lemma: The value of `in0 + 2^n - in1` is bound by `2^(n+1)`.
 lemma lin_bound {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)  (h0 : in0.val < 2^n) (h1 : in1.val < 2^n) (h_p : 2^(n+1) < p) :
-  (in0 + 2^n - in1).val < 2^(n+1) := by
+    (in0 + 2^n - in1).val < 2^(n+1) := by
   rw [lin_val_eq in0 in1 h0 h1 h_p]; omega
 
 /-

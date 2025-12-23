@@ -255,13 +255,13 @@ theorem fieldFromBits_fieldToBits {n : ℕ} {x : F p} (hx : x.val < 2^n) :
 
 /-- Generalization of `fieldFromBits_fieldToBits` for any field element: `fieldToBits` is a right-inverse of `fieldFromBits` modulo `2^n` -/
 theorem fieldFromBits_fieldToBits_mod {n : ℕ} (x : F p) :
-  fieldFromBits (fieldToBits n x) = ((x.val % 2^n : ℕ) : F p) := by
-    convert fromBits_toBits_mod (n:=n) (x:=x.val);
-    unfold fieldFromBits fieldToBits;
-    simp_all only [Vector.map_map]
-    apply Iff.intro
-    · intro a; exact fromBits_toBits_mod (x:=ZMod.val x)
-    · intro a; congr; convert a using 2; exact val_natCast_toBits
+    fieldFromBits (fieldToBits n x) = ((x.val % 2^n : ℕ) : F p) := by
+  convert fromBits_toBits_mod (n:=n) (x:=x.val);
+  unfold fieldFromBits fieldToBits;
+  simp_all only [Vector.map_map]
+  apply Iff.intro
+  · intro a; exact fromBits_toBits_mod (x:=ZMod.val x)
+  · intro a; congr; convert a using 2; exact val_natCast_toBits
 
 /-! ## Additional lemmas about fieldFromBits -/
 
