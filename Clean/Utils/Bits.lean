@@ -110,7 +110,7 @@ theorem fromBits_toBits_mod {n : ℕ} {x : ℕ} : fromBits (toBits n x) = x % 2^
     simp +decide [Finset.sum_range];
     convert Fin.foldl_to_sum n _ using 2 ; simp +decide [Nat.testBit];
     simp +decide [Nat.shiftRight_eq_div_pow, Vector.getElem_mapRange];
-    cases Nat.mod_two_eq_zero_or_one (x / 2^(↑‹Fin n› : ℕ) ) <;> simp +decide [ * ];
+    cases Nat.mod_two_eq_zero_or_one (x / 2^(↑‹Fin n› : ℕ) ) <;> simp +decide [*];
   induction n <;> simp_all +decide [Finset.sum_range_succ, pow_succ]
   · rw [Nat.mod_one]
   · rw [←Nat.mod_add_div x (2 ^ _)] ; simp +decide [Nat.add_mod]

@@ -43,7 +43,7 @@ lemma inputLinearSub_eval_eq_sub {n : ℕ} [hn : NeZero n] (env : Environment (F
       fieldFromBits input_val[0] + 2^n - fieldFromBits input_val[1] := by
   simp only [inputLinearSub, circuit_norm, eval_foldl]
   simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
-  have h_foldl_split := Fin.foldl_split_mul_add_distrib (α:=F p) (fun j k => input_val[j][Fin.val k]) (fun i => 2^i) (n:=n)
+  have h_foldl_split := Fin.foldl_split_mul_add_distrib (α:=F p) (fun j k => input_val[j][k]) (fun i => 2^i) (n:=n)
   simp_all only [Fin.getElem_fin, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.mod_succ]
   simp [fieldFromBits_as_sum]
 
@@ -72,16 +72,16 @@ lemma foldl_explicit {n : ℕ} {m : ℕ} (h_le : m <= n) (env : Environment (F p
 -- Lemma: The value of `in0 + 2^n - in1` in the field is equal to the integer arithmetic result `in0.val + 2^n - in1.val`, provided inputs are small enough (`< 2^n`) and the modulus `p` is large enough (`> 2^(n+1)`).
 lemma lin_val_eq {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)
     (h0 : in0.val < 2^n) (h1 : in1.val < 2^n) (h_p : 2^(n+1) < p) :
-    (in0 + (2^n : F p) - in1).val = in0.val + 2^n - in1.val := by
+    (in0 + 2^n - in1).val = in0.val + 2^n - in1.val := by
       have h_sub_eq : (in0 + 2^n - in1 : F p).val = (in0.val + 2^n - in1.val) % p := by
-        norm_num [ ← ZMod.val_natCast ];
-        rw [ Nat.cast_sub ] <;> norm_num;
+        norm_num [←ZMod.val_natCast];
+        rw [Nat.cast_sub] <;> norm_num;
         linarith;
-      rw [ h_sub_eq, Nat.mod_eq_of_lt ( by rw [ pow_succ' ] at h_p; omega ) ]
+      rw [h_sub_eq, Nat.mod_eq_of_lt (by rw [pow_succ'] at h_p; omega)]
 
 -- Lemma: The value of `in0 + 2^n - in1` is bound by `2^(n+1)`.
 lemma lin_bound {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)  (h0 : in0.val < 2^n) (h1 : in1.val < 2^n) (h_p : 2^(n+1) < p) :
-  (in0 + (2^n : F p) - in1).val < 2^(n+1) := by
+  (in0 + 2^n - in1).val < 2^(n+1) := by
   rw [lin_val_eq in0 in1 h0 h1 h_p]; omega
 
 /-
@@ -281,7 +281,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
               · (expose_names; exact h_env_out x_1);
               · exact fun i => h_env_out i ▸ h_out_binary i;
             rw [h_lin_mod, Utils.Bits.fieldFromBits_fieldToBits_mod];
-            rcases p with ( _ | _ | p ) <;> norm_cast;
+            rcases p with (_ | _ | p) <;> norm_cast;
             erw [ZMod.val_cast_of_lt];
             exact lt_of_le_of_lt (Nat.mod_le _ _) (Nat.lt_of_lt_of_le (ZMod.val_lt _) (by linarith [pow_succ' 2 n]))
 
@@ -300,19 +300,19 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
                   have h_lin_lt : lin.val < 2^(n+1) := by
                     have h_lin_lt : (fieldFromBits input[0]).val < 2^n ∧ (fieldFromBits input[1]).val < 2^n := by
                       have h_lin_lt : ∀ (bits : Vector (F p) n), (∀ i (_ : i < n), IsBool bits[i]) → (fieldFromBits bits).val < 2^n := by exact fieldFromBits_lt;
-                      exact ⟨ h_lin_lt _ fun i hi => h_assumptions 0 i ( by decide ) hi, h_lin_lt _ fun i hi => h_assumptions 1 i ( by decide ) hi ⟩;
-                    rw [ h_lin_val ];
+                      exact ⟨h_lin_lt _ fun i hi => h_assumptions 0 i (by decide) hi, h_lin_lt _ fun i hi => h_assumptions 1 i (by decide) hi⟩;
+                    rw [h_lin_val];
                     convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
                   exact Nat.div_lt_of_lt_mul h_lin_lt;
                 convert h_if using 1;
-                exact Eq.symm ( Nat.mod_eq_of_lt h_aux_one )
+                exact Eq.symm (Nat.mod_eq_of_lt h_aux_one)
             · -- Case: Bit is 0
-              rw [ ZMod.val_zero, Nat.div_eq_of_lt ];
+              rw [ZMod.val_zero, Nat.div_eq_of_lt];
               have h_div_lt : lin.val < 2^(n+1) := by
                 have h_div : lin.val < 2^(n+1) := by
                   have h_lin_val : lin = fieldFromBits input[0] + 2^n - fieldFromBits input[1] := by
                     exact h_lin_val
-                  rw [ h_lin_val ];
+                  rw [h_lin_val];
                   apply Circomlib.BinSub.lin_bound;
                   · exact fieldFromBits_lt input[0] fun i ↦
                       h_assumptions 0 i (of_decide_eq_true (id (Eq.refl true)));
@@ -321,8 +321,8 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
                   · exact hnout;
                 exact h_div;
               contrapose! h_if;
-              rw [ Nat.mod_eq_of_lt ];
-              · exact Nat.le_antisymm ( Nat.le_of_lt_succ <| Nat.div_lt_of_lt_mul <| by linarith! [ pow_succ' 2 n ] ) ( Nat.div_pos h_if <| by positivity );
+              rw [Nat.mod_eq_of_lt];
+              · exact Nat.le_antisymm (Nat.le_of_lt_succ <| Nat.div_lt_of_lt_mul <| by linarith! [pow_succ' 2 n]) (Nat.div_pos h_if <| by positivity);
               · exact Nat.div_lt_of_lt_mul h_div_lt
 
           -- 5. Combine to prove Euclidean Division: lin = (lin % 2^n) + (lin / 2^n) * 2^n
@@ -331,12 +331,12 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
           have hh := (Nat.mod_add_div lin.val (2^n)).symm
           -- Since $2^n \cdot (lin.val / 2^n)$ is an integer, we can apply the definition of modulo.
           have h_mod : lin.val % p = (lin.val % 2^n + 2^n * (lin.val / 2^n)) % p := by
-            rw [ ← hh ];
+            rw [← hh];
           convert h_mod using 1;
-          · exact Eq.symm ( Nat.mod_eq_of_lt ( show lin.val < p from ZMod.val_lt _ ) );
-          · norm_num [ mul_comm, ZMod.val_natCast ];
+          · exact Eq.symm (Nat.mod_eq_of_lt (show lin.val < p from ZMod.val_lt _));
+          · norm_num [mul_comm, ZMod.val_natCast];
             norm_cast;
-            erw [ ZMod.val_cast_of_lt ] ; linarith [ Nat.pow_le_pow_right two_pos ( show n ≤ n + 1 by linarith ) ]
+            erw [ZMod.val_cast_of_lt]; linarith [Nat.pow_le_pow_right two_pos (show n ≤ n + 1 by linarith)]
 
     -- Final Goal: Prove the conjunction of constraints
     constructor
