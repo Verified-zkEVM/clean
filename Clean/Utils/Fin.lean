@@ -132,9 +132,10 @@ lemma foldl_split_mul_add_distrib {α : Type*} [CommRing α] {n : ℕ} (f : Fin 
     (Fin.foldl n (fun acc' i => acc' + f 0 i * g i.val) 0) +
     2^n -
     (Fin.foldl n (fun acc' i => acc' + f 1 i * g i.val) 0) := by
-  simp [add_assoc]
-  simp [<-sub_eq_add_neg]
+  simp only [add_assoc]
+  simp only [← sub_eq_add_neg]
   simp only [foldl_to_sum_init_value]
-  simp only [zero_add, Finset.sum_sub_distrib, add_sub, add_comm]
+  simp only [Finset.sum_sub_distrib]
+  grind
 
 end Fin
