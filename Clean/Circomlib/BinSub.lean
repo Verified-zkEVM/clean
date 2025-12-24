@@ -31,9 +31,6 @@ namespace BinSub
 instance {n : ℕ} [hn : NeZero n] : NonEmptyProvableType (fields n) where
   nonempty := Nat.pos_of_ne_zero hn.out
 
-def nbits (a : ℕ) : ℕ :=
-  if a = 0 then 1 else Nat.log2 a + 1
-
 def inputLinearSub (n : ℕ) (inp : BinSubInput n (Expression (F p))) : Expression (F p) :=
   Fin.foldl n (fun lin k => lin + inp[0][k] * (2^k.val : F p) - (inp[1][k] * (2^k.val : F p))) (2^n : F p)
 
