@@ -116,11 +116,13 @@ theorem fromBits_toBits_mod {n : ℕ} {x : ℕ} : fromBits (toBits n x) = x % 2^
   · rw [←Nat.mod_add_div x (2 ^ _)] ; simp +decide [Nat.add_mod]
     norm_num [Nat.add_div, Nat.add_mod, Nat.mul_div_assoc, Nat.mul_mod, Nat.pow_succ']
     swap
-    exact ‹ℕ› + 1
+    · rename_i pred ih
+      exact pred + 1
     norm_num [Nat.pow_succ, Nat.mul_mod_mul_left, Nat.mod_eq_of_lt]
     split_ifs <;> simp_all +decide [Nat.mul_assoc];
     · linarith [Nat.mod_lt x (show 2 ^ ‹_› > 0 by positivity)]
-    · rw [← Nat.mod_add_div (x % (2 ^ _ * 2) ) (2 ^ _)]
+    · rename_i pred ih h_lt
+      rw [← Nat.mod_add_div (x % (2 ^ pred * 2) ) (2 ^ pred)]
       rw [Nat.add_mul_div_left _ _ (by positivity)]; norm_num
       rw [Nat.mod_eq_of_lt (show x % (2 ^ _ * 2)/2 ^ _ < 2 from Nat.div_lt_of_lt_mul <| by linarith [Nat.mod_lt x (by positivity : 0 < (2 ^ ‹_› * 2))])]
       ring
