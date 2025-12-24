@@ -144,12 +144,12 @@ lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Env
     convert h_if using 1
     · convert h_if.symm using 1
       exact ZMod.val_one p
-    · have h_aux_one : (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n < 2 := by
-        have h_lin_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
-          have h_lin_lt : (fieldFromBits input[0]).val < 2^n ∧ (fieldFromBits input[1]).val < 2^n := by
-            exact ⟨input_fieldFromBits_bound input h_assumptions 0, input_fieldFromBits_bound input h_assumptions 1⟩
-          rw [soundness_lhs_eval env input_var input h_input]
-          convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
+    · have h_lin_lt : (fieldFromBits input[0]).val < 2^n ∧ (fieldFromBits input[1]).val < 2^n := by
+        exact ⟨input_fieldFromBits_bound input h_assumptions 0, input_fieldFromBits_bound input h_assumptions 1⟩
+      have h_lin_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
+        rw [soundness_lhs_eval env input_var input h_input]
+        convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
+      have h_aux_one : (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n < 2 := by
         exact Nat.div_lt_of_lt_mul h_lin_lt
       grind
   · -- Case: Bit is 0
