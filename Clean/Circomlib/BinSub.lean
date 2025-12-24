@@ -84,6 +84,24 @@ lemma lin_bound {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)  (h0 : in0.va
     (in0 + 2^n - in1).val < 2^(n+1) := by
   rw [lin_val_eq in0 in1 h0 h1 h_p]; omega
 
+-- Helper lemma: Extract Boolean property from circuit constraint
+lemma boolean_from_constraint {x : F p} (h : x * (x - 1) = 0) : IsBool x := by
+  have : x = 0 ∨ x = 1 := by
+    cases (mul_eq_zero.mp h) with
+    | inl h1 => left; exact h1
+    | inr h2 => right; exact eq_of_sub_eq_zero h2
+  simpa [IsBool] using this
+
+-- Lemma: Simplified LHS evaluation for soundness proof
+lemma soundness_lhs_eval {n : ℕ} [NeZero n] (env : Environment (F p)) (input_var : Var (BinSubInput n) (F p)) (input : BinSubInput n (F p))
+    (h_input : ProvableType.eval env input_var = input) :
+    Expression.eval env (inputLinearSub n input_var) = fieldFromBits input[0] + 2^n - fieldFromBits input[1] := by
+  apply inputLinearSub_eval_eq_sub; assumption
+
+-- Lemma: Boolean property from fieldToBits
+lemma fieldToBits_boolean {n : ℕ} (x : F p) (i : Fin n) : IsBool (fieldToBits n x)[i] :=
+  fieldToBits_bits i.val i.isLt
+
 /-
 template BinSub(n) {
     signal input in[2][n];
@@ -203,10 +221,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Step 3: Analyze the Left Hand Side (LHS) of the main equation
     -- Link the circuit's `foldl` for `lin` to the arithmetic definition: (in0 + 2^n - in1)
     -- Hint: Use `inputLinearSub_eval_eq_sub`
-    have h_lhs_eval :
-        Expression.eval env (Fin.foldl n (fun lin i ↦ lin + input_var[0][↑i] * Expression.const ((2 : F p) ^ ↑i) - input_var[1][↑i] * Expression.const (2 ^ ↑i)) (Expression.const (2 ^ n))) =
-        fieldFromBits input[0] + 2 ^ n - fieldFromBits input[1] := by
-      convert inputLinearSub_eval_eq_sub env input_var input h_input using 1
+    have h_lhs_eval := soundness_lhs_eval env input_var input h_input
 
     -- Step 4: Analyze the Right Hand Side (RHS) of the main equation
     -- Link the circuit's reconstruction loop to `fieldFromBits` of the output vars
@@ -239,16 +254,13 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
 
     -- Step 1: Simplify the evaluation of the linear combination 'lin'
     -- We use the existing lemma to show 'lin' equals (in[0] + 2^n - in[1])
-    have h_lin_val : Expression.eval env (inputLinearSub n input_var) =
-        fieldFromBits input[0] + 2^n - fieldFromBits input[1] := by apply inputLinearSub_eval_eq_sub; assumption
+    have h_lin_val := soundness_lhs_eval env input_var input h_input
 
     -- Step 2: Establish that the 'out' bits in the environment are binary
     have h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)) := by
       rintro ⟨i, h⟩
       simp only [h_env_out ⟨i, h⟩]
-      set f2b := (Expression.eval env (Fin.foldl n (fun lin i ↦ lin + input_var[0][i.val] * Expression.const (@HPow.hPow (F p) ℕ (F p) instHPow 2 i) - input_var[1][i.val] * Expression.const (@HPow.hPow (F p) ℕ (F p) instHPow 2 i)) (Expression.const (2 ^ n)))) with ←heq
-      have h_f2b_bits (i : Fin n) : (fieldToBits n f2b)[i] = 0 ∨ (fieldToBits n f2b)[i] = 1 := fieldToBits_bits i.val i.isLt
-      apply h_f2b_bits ⟨i, h⟩
+      exact fieldToBits_boolean _ ⟨i, h⟩
 
     -- Step 3: Establish that the 'aux' bit is binary
     -- This follows from h_env_aux structure (if ... then 1 else 0)
