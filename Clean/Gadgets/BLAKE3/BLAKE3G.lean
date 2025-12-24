@@ -113,12 +113,12 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
     · exact c11.right
     · simp only [U32.Normalized, explicit_provable_type, toVars, Vector.map_mk, List.map_toArray,
         List.map_cons, List.map_nil, fromElements] at c12 ⊢
-      simp +arith at c12 ⊢
+      simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c12 ⊢
       exact c12.right
     · exact c14.right
     · simp only [U32.Normalized, explicit_provable_type, toVars, Vector.map_mk, List.map_toArray,
         List.map_cons, List.map_nil, fromElements] at c9 ⊢
-      simp +arith at c9 ⊢
+      simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c9 ⊢
       exact c9.right
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
