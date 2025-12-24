@@ -162,20 +162,17 @@ lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Env
           rw [soundness_lhs_eval env input_var input h_input]
           convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
         exact Nat.div_lt_of_lt_mul h_lin_lt
-      convert h_if using 1
-      exact Eq.symm (Nat.mod_eq_of_lt h_aux_one)
+      grind
   · -- Case: Bit is 0
     rw [ZMod.val_zero, Nat.div_eq_of_lt]
     have h_div_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
-      have h_div : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
-        rw [soundness_lhs_eval env input_var input h_input]
-        apply Circomlib.BinSub.lin_bound
-        · exact fieldFromBits_lt input[0] fun i ↦
-            h_assumptions 0 i (of_decide_eq_true (id (Eq.refl true)))
-        · exact fieldFromBits_lt input[1] fun i ↦
-            h_assumptions 1 i (of_decide_eq_true (id (Eq.refl true)))
-        · exact hnout
-      exact h_div
+      rw [soundness_lhs_eval env input_var input h_input]
+      apply Circomlib.BinSub.lin_bound
+      · exact fieldFromBits_lt input[0] fun i ↦
+          h_assumptions 0 i (of_decide_eq_true (id (Eq.refl true)))
+      · exact fieldFromBits_lt input[1] fun i ↦
+          h_assumptions 1 i (of_decide_eq_true (id (Eq.refl true)))
+      · exact hnout
     contrapose! h_if
     rw [Nat.mod_eq_of_lt]
     · exact Nat.le_antisymm (Nat.le_of_lt_succ <| Nat.div_lt_of_lt_mul <| by linarith! [pow_succ' 2 n]) (Nat.div_pos h_if <| by positivity)
