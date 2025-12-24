@@ -106,10 +106,10 @@ theorem fromBits_toBits_mod {n : ℕ} {x : ℕ} : fromBits (toBits n x) = x % 2^
   -- By definition of `toBits` and `fromBits`, we know that `fromBits (toBits n x)` is the sum of `x_i * 2^i` for `i` from `0` to `n-1`, where `x_i` is the `i`-th bit of `x`.
   have h_fromBits_toBits : ∀ (x : ℕ) (n : ℕ), fromBits (toBits n x) = ∑ i ∈ Finset.range n, (x / 2^i) % 2 * 2^i := by
     intros x n
-    simp [fromBits, toBits];
-    simp +decide [Finset.sum_range];
+    simp only [fromBits, toBits];
+    simp +decide only [Finset.sum_range];
     convert Fin.foldl_to_sum n _ using 2 ; simp +decide [Nat.testBit];
-    simp +decide [Nat.shiftRight_eq_div_pow, Vector.getElem_mapRange];
+    simp +decide only [Nat.shiftRight_eq_div_pow, Vector.getElem_mapRange];
     cases Nat.mod_two_eq_zero_or_one (x / 2^(↑‹Fin n› : ℕ) ) <;> simp +decide [*];
   induction n <;> simp_all +decide [Finset.sum_range_succ, pow_succ]
   · rw [Nat.mod_one]
