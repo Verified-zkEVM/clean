@@ -364,9 +364,6 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
       rw [h_env_aux]
       exact aux_bit_boolean lin
 
-    -- Step 4: Prove the reconstruction equation using extracted lemma
-    have h_reconstruction := completeness_reconstruction hnout env i₀ input input_var h_input h_assumptions h_out_binary h_env_out h_env_aux
-
     -- Final Goal: Prove the conjunction of constraints
     and_intros
     · -- Constraint 1: Output bits are binary
@@ -380,6 +377,6 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
       . rw [h0]; norm_num
       . rw [h1]; norm_num
     · -- Constraint 3: The linear sum check (lin === lout)
-      exact h_reconstruction
+      exact completeness_reconstruction hnout env i₀ input input_var h_input h_assumptions h_out_binary h_env_out h_env_aux
 end BinSub
 end Circomlib
