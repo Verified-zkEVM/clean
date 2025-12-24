@@ -84,14 +84,6 @@ lemma lin_bound {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)  (h0 : in0.va
     (in0 + 2^n - in1).val < 2^(n+1) := by
   rw [lin_val_eq in0 in1 h0 h1 h_p]; omega
 
--- Helper lemma: Extract Boolean property from circuit constraint
-lemma boolean_from_constraint {x : F p} (h : x * (x - 1) = 0) : IsBool x := by
-  have : x = 0 ∨ x = 1 := by
-    cases (mul_eq_zero.mp h) with
-    | inl h1 => left; exact h1
-    | inr h2 => right; exact eq_of_sub_eq_zero h2
-  simpa [IsBool] using this
-
 -- Lemma: Simplified LHS evaluation for soundness proof
 lemma soundness_lhs_eval {n : ℕ} [NeZero n] (env : Environment (F p)) (input_var : Var (BinSubInput n) (F p)) (input : BinSubInput n (F p))
     (h_input : ProvableType.eval env input_var = input) :
