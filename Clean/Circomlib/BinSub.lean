@@ -103,7 +103,7 @@ lemma fieldToBits_boolean {n : ℕ} (x : F p) (i : Fin n) : IsBool (fieldToBits 
   fieldToBits_bits i.val i.isLt
 
 -- Lemma: fieldFromBits produces values bounded by 2^n
-lemma fieldFromBits_bound {n : ℕ} (bits : Vector (F p) n) (h_bool : ∀ i : Fin n, IsBool bits[i]) : 
+lemma fieldFromBits_bound {n : ℕ} (bits : Vector (F p) n) (h_bool : ∀ i : Fin n, IsBool bits[i]) :
     (fieldFromBits bits).val < 2^n := by
   apply fieldFromBits_lt
   intro i hi
@@ -117,11 +117,102 @@ lemma input_fieldFromBits_bound {n : ℕ} [NeZero n] (input : BinSubInput n (F p
   exact h_assumptions j i (by fin_cases j <;> decide) i.isLt
 
 -- Lemma: Aux bit value is Boolean
-lemma aux_bit_boolean {n : ℕ} (lin_val : F p) : 
+lemma aux_bit_boolean {n : ℕ} (lin_val : F p) :
     IsBool (if lin_val.val / (2^n) % 2 = 1 then (1 : F p) else (0 : F p)) := by
   split_ifs
   · simp [IsBool]
   · simp [IsBool]
+
+-- Completeness helper lemmas
+
+-- Lemma: Sum of output bits modulo 2^n
+lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+    (input_var : Var (BinSubInput n) (F p)) (h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)))
+    (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i]) :
+    (Fin.foldl n (fun acc k ↦ acc + env.get (i₀ + ↑k) * 2 ^ k.val) 0).val = (Expression.eval env (inputLinearSub n input_var)).val % 2^n := by
+  have h_lin_mod : Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + env.get (i₀ + k) * 2^k.val) 0 =
+      fieldFromBits (fieldToBits n (Expression.eval env (inputLinearSub n input_var))) := by
+    have h_foldl_eq_fieldFromBits : ∀ (bits : Vector (F p) n), (∀ i : Fin n, IsBool (bits[i])) →
+        Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ k.val) 0 = fieldFromBits bits := by
+      exact fun bits a ↦ Eq.symm (fieldFromBits_as_sum bits)
+    convert h_foldl_eq_fieldFromBits _ _
+    · (expose_names; exact h_env_out x_1)
+    · exact fun i => h_env_out i ▸ h_out_binary i
+  rw [h_lin_mod, Utils.Bits.fieldFromBits_fieldToBits_mod]
+  rcases p with (_ | _ | p) <;> norm_cast
+  erw [ZMod.val_cast_of_lt]
+  exact lt_of_le_of_lt (Nat.mod_le _ _) (Nat.lt_of_lt_of_le (ZMod.val_lt _) (by linarith [pow_succ' 2 n]))
+
+-- Lemma: Aux bit equals lin divided by 2^n
+lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+    (input : BinSubInput n (F p)) (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
+    (input_var : Var (BinSubInput n) (F p)) (h_input : ProvableType.eval env input_var = input)
+    (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
+    (env.get (i₀ + n)).val = (Expression.eval env (inputLinearSub n input_var)).val / 2^n := by
+  rw [h_env_aux]
+  split_ifs with h_if
+  · -- Case: Bit is 1
+    convert h_if using 1
+    · convert h_if.symm using 1
+      exact ZMod.val_one p
+    · have h_aux_one : (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n < 2 := by
+        have h_lin_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
+          have h_lin_lt : (fieldFromBits input[0]).val < 2^n ∧ (fieldFromBits input[1]).val < 2^n := by
+            exact ⟨input_fieldFromBits_bound input h_assumptions 0, input_fieldFromBits_bound input h_assumptions 1⟩
+          rw [soundness_lhs_eval env input_var input h_input]
+          convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
+        exact Nat.div_lt_of_lt_mul h_lin_lt
+      convert h_if using 1
+      exact Eq.symm (Nat.mod_eq_of_lt h_aux_one)
+  · -- Case: Bit is 0
+    rw [ZMod.val_zero, Nat.div_eq_of_lt]
+    have h_div_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
+      have h_div : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
+        rw [soundness_lhs_eval env input_var input h_input]
+        apply Circomlib.BinSub.lin_bound
+        · exact fieldFromBits_lt input[0] fun i ↦
+            h_assumptions 0 i (of_decide_eq_true (id (Eq.refl true)))
+        · exact fieldFromBits_lt input[1] fun i ↦
+            h_assumptions 1 i (of_decide_eq_true (id (Eq.refl true)))
+        · exact hnout
+      exact h_div
+    contrapose! h_if
+    rw [Nat.mod_eq_of_lt]
+    · exact Nat.le_antisymm (Nat.le_of_lt_succ <| Nat.div_lt_of_lt_mul <| by linarith! [pow_succ' 2 n]) (Nat.div_pos h_if <| by positivity)
+    · exact Nat.div_lt_of_lt_mul h_div_lt
+
+-- Lemma: Main reconstruction equation for completeness
+lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+    (input : BinSubInput n (F p)) (input_var : Var (BinSubInput n) (F p))
+    (h_input : ProvableType.eval env input_var = input)
+    (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
+    (h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)))
+    (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i])
+    (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
+    Expression.eval env (inputLinearSub n input_var) =
+    Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 +
+    env.get (i₀ + n) * 2 ^ n := by
+  -- 1. Convert Circuit Fold to Summation
+  rw [←foldl_explicit (le_refl n) env i₀ h_out_binary]
+  -- We verify the equation by lifting to Natural numbers (ZMod.val)
+  -- This avoids modular arithmetic issues since we know 2^(n+1) < p
+  apply ZMod.val_injective
+  -- 3. Analyze the Summation Term (Lower Bits)
+  have h_sum_mod := completeness_sum_mod hnout env i₀ input_var h_out_binary h_env_out
+  -- 4. Analyze the Aux Term (Upper Bit)
+  have h_aux_div := completeness_aux_div hnout env i₀ input h_assumptions input_var h_input h_env_aux
+  -- 5. Combine to prove Euclidean Division: lin = (lin % 2^n) + (lin / 2^n) * 2^n
+  rw [ZMod.val_add, ZMod.val_mul]
+  simp only [h_sum_mod, h_aux_div]
+  set lin := Expression.eval env (inputLinearSub n input_var)
+  have hh := (Nat.mod_add_div lin.val (2^n)).symm
+  have h_mod : lin.val % p = (lin.val % 2^n + 2^n * (lin.val / 2^n)) % p := by
+    rw [← hh]
+  convert h_mod using 1
+  · exact Eq.symm (Nat.mod_eq_of_lt (show lin.val < p from ZMod.val_lt _))
+  · norm_num [mul_comm, ZMod.val_natCast]
+    norm_cast
+    erw [ZMod.val_cast_of_lt]; linarith [Nat.pow_le_pow_right two_pos (show n ≤ n + 1 by linarith)]
 
 /-
 template BinSub(n) {
@@ -273,7 +364,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Decompose the witness generation assumption (h_env) into parts for 'out' and 'aux'
     rcases h_env with ⟨h_env_out, h_env_aux⟩
 
-    -- Step 1: Define 'lin' for clarity and prove it equals the reconstruction
+    -- Step 1: Define 'lin' for clarity
     set lin := Expression.eval env (inputLinearSub n input_var)
 
     -- Step 2: Establish that the 'out' bits in the environment are binary
@@ -283,102 +374,26 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
       exact fieldToBits_boolean _ ⟨i, h⟩
 
     -- Step 3: Establish that the 'aux' bit is binary
-    -- This follows from h_env_aux structure (if ... then 1 else 0)
     have h_aux_binary : IsBool (env.get (i₀ + n)) := by
       rw [h_env_aux]
       exact aux_bit_boolean lin
 
-    -- Step 4: Prove the reconstruction equation: lin = (sum of low bits) + aux * 2^n
-    -- We define the sum of the output bits as 'lout_val'
-    have h_reconstruction :
-      Expression.eval env (inputLinearSub n input_var) = Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 + env.get (i₀ + n) * 2 ^ n := by
-          -- 1. Convert Circuit Fold to Summation
-          rw [←foldl_explicit (le_refl n) env i₀ h_out_binary]
-
-          -- We verify the equation by lifting to Natural numbers (ZMod.val)
-          -- This avoids modular arithmetic issues since we know 2^(n+1) < p
-          apply ZMod.val_injective
-
-          -- 3. Analyze the Summation Term (Lower Bits)
-          -- The sum corresponds to 'fieldFromBits' applied to the bits of 'lin'
-          -- Ideally: (Sum ...) = lin.val % 2^n
-          have h_sum_mod : (Fin.foldl n (fun acc k ↦ acc + env.get (i₀ + ↑k) * 2 ^ k.val) 0).val = lin.val % 2^n := by
-            have h_lin_mod : Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + env.get (i₀ + k) * 2^k.val) 0 = fieldFromBits (fieldToBits n lin) := by
-              have h_foldl_eq_fieldFromBits : ∀ (bits : Vector (F p) n), (∀ i : Fin n, IsBool (bits[i])) → Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ k.val) 0 = fieldFromBits bits := by
-                exact fun bits a ↦ Eq.symm (fieldFromBits_as_sum bits);
-              convert h_foldl_eq_fieldFromBits _ _;
-              · (expose_names; exact h_env_out x_1);
-              · exact fun i => h_env_out i ▸ h_out_binary i;
-            rw [h_lin_mod, Utils.Bits.fieldFromBits_fieldToBits_mod];
-            rcases p with (_ | _ | p) <;> norm_cast;
-            erw [ZMod.val_cast_of_lt];
-            exact lt_of_le_of_lt (Nat.mod_le _ _) (Nat.lt_of_lt_of_le (ZMod.val_lt _) (by linarith [pow_succ' 2 n]))
-
-          -- 4. Analyze the Aux Term (Upper Bit)
-          -- aux = (lin / 2^n) % 2
-          have h_aux_div : (env.get (i₀ + n)).val = lin.val / 2^n := by
-            rw [h_env_aux]
-            split_ifs with h_if
-            · -- Case: Bit is 1
-              -- We need to show (lin / 2^n) % 2 = 1 implies lin / 2^n = 1
-              -- This requires bounding lin < 2^(n+1)
-              convert h_if using 1;
-              · convert h_if.symm using 1;
-                exact ZMod.val_one p;
-              · have h_aux_one : lin.val / 2 ^ n < 2 := by
-                  have h_lin_lt : lin.val < 2^(n+1) := by
-                    have h_lin_lt : (fieldFromBits input[0]).val < 2^n ∧ (fieldFromBits input[1]).val < 2^n := by
-                      exact ⟨input_fieldFromBits_bound input h_assumptions 0, input_fieldFromBits_bound input h_assumptions 1⟩;
-                    simp [lin, soundness_lhs_eval env input_var input h_input];
-                    convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
-                  exact Nat.div_lt_of_lt_mul h_lin_lt;
-                convert h_if using 1;
-                exact Eq.symm (Nat.mod_eq_of_lt h_aux_one)
-            · -- Case: Bit is 0
-              rw [ZMod.val_zero, Nat.div_eq_of_lt];
-              have h_div_lt : lin.val < 2^(n+1) := by
-                have h_div : lin.val < 2^(n+1) := by
-                  simp [lin, soundness_lhs_eval env input_var input h_input];
-                  apply Circomlib.BinSub.lin_bound;
-                  · exact fieldFromBits_lt input[0] fun i ↦
-                      h_assumptions 0 i (of_decide_eq_true (id (Eq.refl true)));
-                  · exact fieldFromBits_lt input[1] fun i ↦
-                      h_assumptions 1 i (of_decide_eq_true (id (Eq.refl true)));
-                  · exact hnout;
-                exact h_div;
-              contrapose! h_if;
-              rw [Nat.mod_eq_of_lt];
-              · exact Nat.le_antisymm (Nat.le_of_lt_succ <| Nat.div_lt_of_lt_mul <| by linarith! [pow_succ' 2 n]) (Nat.div_pos h_if <| by positivity);
-              · exact Nat.div_lt_of_lt_mul h_div_lt
-
-          -- 5. Combine to prove Euclidean Division: lin = (lin % 2^n) + (lin / 2^n) * 2^n
-          rw [ZMod.val_add, ZMod.val_mul]
-          simp only [h_sum_mod, h_aux_div]
-          have hh := (Nat.mod_add_div lin.val (2^n)).symm
-          -- Since $2^n \cdot (lin.val / 2^n)$ is an integer, we can apply the definition of modulo.
-          have h_mod : lin.val % p = (lin.val % 2^n + 2^n * (lin.val / 2^n)) % p := by
-            rw [← hh];
-          convert h_mod using 1;
-          · exact Eq.symm (Nat.mod_eq_of_lt (show lin.val < p from ZMod.val_lt _));
-          · norm_num [mul_comm, ZMod.val_natCast];
-            norm_cast;
-            erw [ZMod.val_cast_of_lt]; linarith [Nat.pow_le_pow_right two_pos (show n ≤ n + 1 by linarith)]
+    -- Step 4: Prove the reconstruction equation using extracted lemma
+    have h_reconstruction := completeness_reconstruction hnout env i₀ input input_var h_input h_assumptions h_out_binary h_env_out h_env_aux
 
     -- Final Goal: Prove the conjunction of constraints
-    constructor
+    and_intros
     · -- Constraint 1: Output bits are binary
       intro i
       specialize h_out_binary i
       rcases h_out_binary with (h0 | h1)
       . rw [h0]; norm_num
       . rw [h1]; norm_num
-    · constructor
-      · -- Constraint 2: Aux bit is binary
-        rcases h_aux_binary with (h0 | h1)
-        . rw [h0]; norm_num
-        . rw [h1]; norm_num
-      · -- Constraint 3: The linear sum check (lin === lout)
-        -- This matches our h_reconstruction lemma exactly
-        exact h_reconstruction
+    · -- Constraint 2: Aux bit is binary
+      rcases h_aux_binary with (h0 | h1)
+      . rw [h0]; norm_num
+      . rw [h1]; norm_num
+    · -- Constraint 3: The linear sum check (lin === lout)
+      exact h_reconstruction
 end BinSub
 end Circomlib
