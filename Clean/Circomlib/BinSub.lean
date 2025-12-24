@@ -330,11 +330,11 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
       apply Eq.symm; exact (by
       convert foldl_explicit _ _ _ _ using 1;
       any_goals exact fun i => h_out_bool _ i.2;
-      · simp +zetaDelta at *;
+      · simp +zetaDelta only [id_eq, mul_eq_zero, Nat.cast_ofNat] at *;
         -- By definition of `fieldFromBits`, we know that it is equal to the foldl of the same operation.
         have h_fieldFromBits_eq_foldl : ∀ (bits : Vector (F p) n), Utils.Bits.fieldFromBits bits = Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ (k : ℕ)) 0 := by exact fieldFromBits_as_sum;
         convert h_fieldFromBits_eq_foldl _;
-        simp +decide [Vector.getElem_map, Vector.getElem_mapRange];
+        simp +decide only [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapRange];
         rfl;
       · norm_num)
 
