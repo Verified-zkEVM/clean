@@ -155,6 +155,6 @@ def ValidProgram {programSize : ℕ} (program : Fin programSize → F p) : Prop 
   wraparound can occur when accessing consecutive instruction addresses (pc, pc+1, pc+2, pc+3).
   In practice, this is always satisfied since program sizes are much smaller than cryptographic primes.
 -/
-def ValidProgramSize (programSize : ℕ) : Prop := programSize + 3 < p
+def ValidProgramSize (p : ℕ) (programSize : ℕ) : Prop := programSize + 3 < p
 
 end Examples.FemtoCairo.Spec
