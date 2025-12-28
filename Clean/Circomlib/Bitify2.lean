@@ -220,9 +220,22 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
 lemma fieldFromBits_eq {n : ℕ} {xs ys : Vector (F p) n} (h: ∀ (i : Fin n), xs[↑i] = ys[↑i]):
   fieldFromBits xs = fieldFromBits ys := by {
-    simp [fieldFromBits, fromBits]
-    sorry
+    have h_vec_eq : xs = ys := by
+      ext i h_range
+      let fi : Fin n := ⟨i, h_range⟩
+      exact h fi
+    rw [h_vec_eq]
 }
+
+lemma fin_foldl_const_zero (n : ℕ) :
+  Fin.foldl n (fun acc _k => acc) (0: F p) = (0: F p) := by
+  induction n with
+  | zero =>
+    -- Base case: Fin.foldl 0 f init = init
+    rfl
+  | succ n ih =>
+    -- Step case: Fin.foldl (n+1) f init = f (Fin.foldl n f init) (Fin.last n)
+    simp [Fin.foldl_succ, ih]
 
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
   main := main n
@@ -230,6 +243,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
+
+  Assumptions input := input.val < 2^n
 
   Spec input output :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
@@ -300,7 +315,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
 
   completeness := by
     simp only [circuit_norm, main]
-    intro i0 env input_var h_env input h_input
+    intro i0 env input_var h_env input h_input assumption
     simp only [circuit_norm, IsZero.circuit, IsZero.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     by_cases h_n : n = 0
@@ -319,7 +334,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         rw[← h_env]
         rw[← h_input]
         simp_all
-        sorry
       }
     }
     {
@@ -335,14 +349,9 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         rw[h_eq]
         simp_all
         let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
-        --let h_input_bits : input_var = fieldFromBitsExpr bits_vars := by {
-        --  unfold bits_vars
-        --  simp_all
-        --}
         have h_expr_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
             = fieldFromBitsExpr bits_vars := by
           simp only [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
-
         rw [h_expr_fold]
 
         have : ∀ (i: Fin n), Expression.eval env bits_vars[i]! = env.get (i0 + i) := by {
@@ -355,30 +364,68 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         simp_all only [not_false_eq_true, Fin.is_lt, getElem!_pos, Fin.getElem_fin]
         simp [fieldFromBits_eval]
 
-        -- input ≠ 0 → lc1 = 2^n - in
-        -- input = 0 → lc1 = 0
-
         by_cases h_iz: input = 0
         {
           simp_all only [sub_zero, ↓reduceIte, id_eq, neg_zero, add_zero, add_eq_right]
-          unfold bits_vars
-          simp [Vector.map_mapRange]
-          simp [fieldFromBits]
-          simp [Vector.map_mapRange]
+          simp [fieldToBits, toBits] at this
+          have h : (ZMod.val (2 ^ n)) = 2 ^ n := by {
+            rw[← ZMod.val_natCast_of_lt hn]
+            simp only [Nat.cast_pow, Nat.cast_ofNat]
+            rfl
+          }
+          simp_all only [ZMod.val_zero, Nat.ofNat_pos, pow_pos]
+          simp [Nat.testBit_two_pow, Vector.getElem_mapRange] at this
+
+          have h : ∀ (i : Fin n), n ≠ i.val := by
+            intro i
+            symm
+            exact ne_of_lt i.isLt
+
+          simp [h] at this
+
+          rw [fieldFromBits_as_sum]
+          simp only [Vector.getElem_map]
+          conv =>
+            lhs
+            congr
+            ext acc k
+            rw [this k]
+            simp
+
+          apply fin_foldl_const_zero
         }
         {
-          have h_1: fieldFromBits ((fieldToBits n ((2 ^ n).cast - input.cast))) = ((fieldFromBits (Vector.map (fun x ↦ Expression.eval env x) bits_vars))) := by {
+          have h_field_eq : ((2 ^ n - input.val : ℕ) : F p) = (2 ^ n : F p) - (ZMod.cast input : F p) := by
+            rw [Nat.cast_sub (Nat.le_of_lt assumption)]
+            simp only [Nat.cast_pow, Nat.cast_ofNat]
+            congr
+            simp
+
+          have h_1: fieldFromBits ((fieldToBits n ((2 ^ n) - input.val).cast)) = ((fieldFromBits (Vector.map (fun x ↦ Expression.eval env x) bits_vars))) := by
             apply fieldFromBits_eq
-            sorry
-          }
-          have h_2: fieldFromBits (fieldToBits n ((2 ^ n: F p) - (ZMod.cast input: F p))) = (2 ^ n: F p) - (ZMod.cast input: F p) := by {
-            apply fieldFromBits_fieldToBits
-            sorry
-          }
-          simp_all only [↓reduceIte, id_eq, Nat.cast_pow, Nat.cast_ofNat, add_zero]
+            intro i
+            simp only [Fin.getElem_fin, Vector.getElem_map]
+            rw[this, h_field_eq]
+            rw [ZMod.cast_id]
+
+          simp_all only [↓reduceIte, id_eq, add_zero]
           rw [← h_1]
+          rw [ZMod.cast_id]
+          rw [fieldFromBits_fieldToBits]
           simp [sub_eq_add_neg]
-          apply ZMod.cast_id
+
+          have hnowrap : 2 ^ n - ZMod.val input < p :=
+            lt_of_le_of_lt (Nat.sub_le _ _) hn
+
+          have h_val_eq : HSub.hSub (2^n : F p) ↑input = ↑(2 ^ n - ZMod.val input) := by
+            rw [Nat.cast_sub (Nat.le_of_lt assumption)]
+            simp only [Nat.cast_pow, Nat.cast_ofNat, ZMod.natCast_val, sub_right_inj]
+            rw [ZMod.cast_id]
+
+          rw[h_val_eq]
+          simp only [ZMod.val_natCast_of_lt hnowrap]
+          simp only [tsub_lt_self_iff, Nat.ofNat_pos, pow_pos, ZMod.val_pos, ne_eq, true_and]
+          exact h_iz
         }
       }
     }
