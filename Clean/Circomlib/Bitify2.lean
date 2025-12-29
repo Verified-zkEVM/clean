@@ -328,7 +328,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
       }
       {
         simp_all only [id_eq, ↓reduceIte, add_zero]
-        simp [Expression.eval]
+        simp only [Expression.eval]
         rw [← h_env]
         rw [← h_input]
         simp_all
@@ -340,7 +340,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
       {
         intro i
         rw [h_bits]
-        simp [IsBool]
+        simp only [IsBool]
         apply fieldToBits_bits
       }
       {
@@ -361,7 +361,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
           simp only [Vector.getElem_mapRange, Expression.eval]
 
         simp_all only [not_false_eq_true, Fin.is_lt, getElem!_pos, Fin.getElem_fin]
-        simp [fieldFromBits_eval]
+        simp only [fieldFromBits_eval]
 
         by_cases h_iz: input = 0
         {
@@ -408,7 +408,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
           rw [← h_1]
           rw [ZMod.cast_id]
           rw [fieldFromBits_fieldToBits]
-          simp [sub_eq_add_neg]
+          simp only [sub_eq_add_neg]
 
           have hnowrap : 2 ^ n - ZMod.val input < p :=
             lt_of_le_of_lt (Nat.sub_le _ _) hn
