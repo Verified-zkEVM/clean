@@ -6,6 +6,14 @@ namespace Fin
 
 /-! ## Lemmas about Fin.foldl and sums -/
 
+lemma fin_foldl_const {T : Type*} (n : ℕ) (c : T) :
+  Fin.foldl n (fun acc _k => acc) c = c := by
+  induction n with
+  | zero =>
+    rfl
+  | succ n ih =>
+    simp [Fin.foldl_succ, ih]
+
 /-- The ZMod.val of a Fin.foldl sum is bounded by the sum of individual ZMod.vals -/
 lemma foldl_sum_val_bound {p : ℕ} [Fact p.Prime] {ops : ℕ} (f : Fin ops → ZMod p) (M : ℕ)
     (h_bound : ∀ j : Fin ops, (f j).val ≤ M) (h_no_overflow : ops * M < p) :
