@@ -301,34 +301,24 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     simp only [circuit_norm, IsZero.circuit, IsZero.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     by_cases h_n : n = 0
-    {
-      rw [h_n] at h_env ⊢
+    · rw [h_n] at h_env ⊢
       simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, ↓reduceIte, IsEmpty.forall_iff, id_eq,
         add_zero, lt_self_iff_false, ↓reduceDIte, true_and, Fin.foldl_zero, mul_one]
       by_cases h_input_zero : input = 0
-      {
-        rw [h_input_zero]
+      · rw [h_input_zero]
         simp only [Expression.eval, ↓reduceIte, neg_zero, add_zero, add_eq_right]
-      }
-      {
-        simp_all only [id_eq, ↓reduceIte, add_zero]
+      · simp_all only [id_eq, ↓reduceIte, add_zero]
         simp only [Expression.eval]
         rw [← h_env]
         rw [← h_input]
         simp_all
-      }
-    }
-    {
-      obtain ⟨h_bits, h_eq⟩ := h_env
+    · obtain ⟨h_bits, h_eq⟩ := h_env
       constructor
-      {
-        intro i
+      · intro i
         rw [h_bits]
         simp only [IsBool]
         apply fieldToBits_bits
-      }
-      {
-        rw [h_eq]
+      · rw [h_eq]
         simp_all
         let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
 
@@ -348,8 +338,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         simp only [fieldFromBits_eval]
 
         by_cases h_iz: input = 0
-        {
-          have h : (ZMod.val (2 ^ n: ZMod p)) = 2 ^ n := by
+        · have h : (ZMod.val (2 ^ n: ZMod p)) = 2 ^ n := by
             rw [← ZMod.val_natCast_of_lt hn]
             simp only [Nat.cast_pow, Nat.cast_ofNat]
 
@@ -374,9 +363,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
             simp only [decide_false, Bool.false_eq_true, ↓reduceIte, Nat.cast_zero, zero_mul,
               add_zero]
           apply Fin.fin_foldl_const
-        }
-        {
-          have h_field_eq : ((2 ^ n - input.val : ℕ) : F p) = (2 ^ n : F p) - (ZMod.cast input : F p) := by
+        · have h_field_eq : ((2 ^ n - input.val : ℕ) : F p) = (2 ^ n : F p) - (ZMod.cast input : F p) := by
             rw [Nat.cast_sub (Nat.le_of_lt assumption)]
             simp only [Nat.cast_pow, Nat.cast_ofNat]
             congr
@@ -407,9 +394,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
           simp only [ZMod.val_natCast_of_lt hnowrap]
           simp only [tsub_lt_self_iff, Nat.ofNat_pos, pow_pos, ZMod.val_pos, ne_eq, true_and]
           exact h_iz
-        }
-      }
-    }
 end Num2BitsNeg
 
 end Circomlib
