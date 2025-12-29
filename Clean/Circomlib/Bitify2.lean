@@ -219,7 +219,7 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
   return out
 
-def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
+def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
@@ -232,7 +232,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
   soundness := by
-    intro i0 env input_var input h_input assumptions h_holds
+    intro i0 env input_var input h_input h_holds
     simp only [circuit_norm, main, IsZero.circuit, IsZero.main] at h_holds ⊢
     obtain ⟨ h_bits, h_iszero, h_eq ⟩ := h_holds
 
