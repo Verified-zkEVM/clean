@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Bits
+import Clean.Utils.Fin
 import Clean.Circomlib.Bitify
 import Clean.Circomlib.AliasCheck
 import Clean.Circomlib.Comparators
@@ -218,14 +219,6 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
   return out
 
-lemma fin_foldl_const_zero (n : ℕ) :
-  Fin.foldl n (fun acc _k => acc) (0: F p) = (0: F p) := by
-  induction n with
-  | zero =>
-    rfl
-  | succ n ih =>
-    simp [Fin.foldl_succ, ih]
-
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n + 2 -- witness + IsZero
@@ -380,7 +373,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
             rw [this k]
             simp only [decide_false, Bool.false_eq_true, ↓reduceIte, Nat.cast_zero, zero_mul,
               add_zero]
-          apply fin_foldl_const_zero
+          apply Fin.fin_foldl_const
         }
         {
           have h_field_eq : ((2 ^ n - input.val : ℕ) : F p) = (2 ^ n : F p) - (ZMod.cast input : F p) := by
