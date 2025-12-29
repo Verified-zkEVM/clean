@@ -218,15 +218,6 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
   return out
 
-lemma fieldFromBits_eq {n : ℕ} {xs ys : Vector (F p) n} (h: ∀ (i : Fin n), xs[↑i] = ys[↑i]):
-  fieldFromBits xs = fieldFromBits ys := by {
-    have h_vec_eq : xs = ys := by
-      ext i h_range
-      let fi : Fin n := ⟨i, h_range⟩
-      exact h fi
-    rw [h_vec_eq]
-}
-
 lemma fin_foldl_const_zero (n : ℕ) :
   Fin.foldl n (fun acc _k => acc) (0: F p) = (0: F p) := by
   induction n with

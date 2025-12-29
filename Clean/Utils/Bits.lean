@@ -245,4 +245,13 @@ lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
   induction n with
   | zero => simp [fieldFromBits, fromBits, Fin.foldl_zero]
   | succ n ih => simp [fieldFromBits_succ, ih, Fin.foldl_succ_last]
+
+lemma fieldFromBits_eq {n : ℕ} {xs ys : Vector (F p) n} (h: ∀ (i : Fin n), xs[↑i] = ys[↑i]) :
+    fieldFromBits xs = fieldFromBits ys := by
+  have h_vec_eq : xs = ys := by
+    ext i h_range
+    let fi : Fin n := ⟨i, h_range⟩
+    exact h fi
+  rw [h_vec_eq]
+
 end Utils.Bits
