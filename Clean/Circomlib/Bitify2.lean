@@ -324,7 +324,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
       by_cases h_input_zero : input = 0
       {
         rw [h_input_zero]
-        simp [Expression.eval]
+        simp only [Expression.eval, ↓reduceIte, neg_zero, add_zero, add_eq_right]
       }
       {
         simp_all only [id_eq, ↓reduceIte, add_zero]
@@ -387,7 +387,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
             congr
             ext acc k
             rw [this k]
-            simp
+            simp only [decide_false, Bool.false_eq_true, ↓reduceIte, Nat.cast_zero, zero_mul,
+              add_zero]
           apply fin_foldl_const_zero
         }
         {
@@ -395,7 +396,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
             rw [Nat.cast_sub (Nat.le_of_lt assumption)]
             simp only [Nat.cast_pow, Nat.cast_ofNat]
             congr
-            simp
+            simp only [ZMod.natCast_val]
 
           have h_1: fieldFromBits ((fieldToBits n ((2 ^ n) - input.val).cast)) = ((fieldFromBits (Vector.map (fun x ↦ Expression.eval env x) bits_vars))) := by
             apply fieldFromBits_eq
