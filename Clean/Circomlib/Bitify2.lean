@@ -319,7 +319,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         simp only [IsBool]
         apply fieldToBits_bits
       · rw [h_eq]
-        simp_all
+        simp_all only [Nat.reducePow, gt_iff_lt, ↓reduceIte, id_eq, mul_zero, dite_eq_ite, ite_self,
+          add_zero, ite_mul, one_mul, zero_mul]
         let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
 
         have h_expr_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
@@ -329,7 +330,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
         have : ∀ (i: Fin n), Expression.eval env bits_vars[i]! = env.get (i0 + i) := by
           unfold bits_vars
-          simp_all
+          simp_all only [not_false_eq_true, Fin.is_lt, getElem!_pos, Fin.getElem_fin]
           intro i
           rw [← h_bits]
           simp only [Vector.getElem_mapRange, Expression.eval]
