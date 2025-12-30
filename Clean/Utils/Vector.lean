@@ -158,7 +158,7 @@ theorem getElemFin_finRange {n} (i : Fin n) : (finRange n)[i] = i := by
 
 def mapFinRange (n : ℕ) (create : Fin n → α) : Vector α n := finRange n |>.map create
 
-theorem mapFinRange_zero {create : Fin 0 → α} : mapFinRange 0 create = #v[] := rfl
+theorem mapFinRange_zero {create : Fin 0 → α} : mapFinRange 0 create = #v[] := by aesop
 
 theorem mapFinRange_succ {n : ℕ} {create : Fin (n + 1) → α} :
     mapFinRange (n + 1) create = (mapFinRange n (fun i => create i.castSucc)).push (create (.last n)) := by
