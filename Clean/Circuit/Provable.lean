@@ -111,6 +111,7 @@ def synthesizeConstVar : Var α F :=
 instance [Field F] : Inhabited (Var α F) where
   default := synthesizeConstVar
 
+-- TODO this should be simply called `var`, analogous to `const`
 @[explicit_provable_type]
 def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
   let vars := Vector.mapRange (size α) fun i => var ⟨offset + i⟩
