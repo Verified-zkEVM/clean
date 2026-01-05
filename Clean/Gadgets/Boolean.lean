@@ -204,6 +204,8 @@ def assertBool : FormalAssertion (F p) field where
   Assumptions _ := True
   Spec (x : F p) := IsBool x
 
+  localAdds_eq _ _ _ := by simp [circuit_norm]
+
   soundness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
   completeness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
 end Boolean

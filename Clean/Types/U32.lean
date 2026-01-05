@@ -279,6 +279,8 @@ def circuit : FormalAssertion (F p) U32 where
   Assumptions _ := True
   Spec inputs := inputs.Normalized
 
+  localAdds_eq _ _ _ := by simp [main, circuit_norm]
+
   soundness := by
     rintro i0 env x_var ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]

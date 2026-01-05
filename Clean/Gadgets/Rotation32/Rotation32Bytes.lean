@@ -37,6 +37,9 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
     | 2 => ⟨ x2, x3, x0, x1 ⟩
     | 3 => ⟨ x3, x0, x1, x2 ⟩
 
+  localAdds_eq _ _ _ := by
+    simp only [main]
+    fin_cases off <;> simp [circuit_norm]
   subcircuitsConsistent x i0 := by
     simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]

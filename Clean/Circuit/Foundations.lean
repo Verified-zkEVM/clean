@@ -10,7 +10,7 @@ This ensures that the `FormalCircuit` and `FormalAssertion` definitions are not 
 -/
 import Clean.Circuit.Theorems
 
-variable {F : Type} [Field F]
+variable {F : Type} [Field F] [DecidableEq F]
 variable {α β : TypeMap} [ProvableType α] [ProvableType β]
 open Circuit (ConstraintsHold)
 
