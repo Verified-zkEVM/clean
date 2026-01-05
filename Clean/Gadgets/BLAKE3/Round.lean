@@ -41,7 +41,6 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
     simp only [main, circuit_norm, G.circuit, G.elaborated]
   localAdds_eq _ _ _ := by
     simp [circuit_norm, main, G.circuit, G.elaborated, Operations.collectAdds]
-    repeat (first | rfl | constructor)
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input

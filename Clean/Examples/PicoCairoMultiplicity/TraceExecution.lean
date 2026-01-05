@@ -40,6 +40,7 @@ def namedListToState (nl : NamedList (F p)) : Option (State (F p)) :=
     | _ => none
   else none
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 theorem stateToNamedList_injective : Function.Injective (stateToNamedList (p := p)) := by
   intro s1 s2 h
   simp only [stateToNamedList] at h
@@ -57,6 +58,7 @@ theorem stateToNamedList_injective : Function.Injective (stateToNamedList (p := 
   simp at h_pc h_ap h_fp
   simp [h_pc, h_ap, h_fp]
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 theorem namedListToState_stateToNamedList (s : State (F p)) :
     namedListToState (stateToNamedList s) = some s := by
   simp [namedListToState, stateToNamedList]
@@ -102,6 +104,7 @@ theorem AddInstruction_Spec_implies_transition
         all_goals exact h_spec.elim
       case isFalse => exact h_spec.elim
 
+omit p_large_enough in
 /-- MUL instruction spec (when enabled) implies valid femtoCairo transition -/
 theorem MulInstruction_Spec_implies_transition
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -141,6 +144,7 @@ theorem MulInstruction_Spec_implies_transition
         all_goals exact h_spec.elim
       case isFalse => exact h_spec.elim
 
+omit p_large_enough in
 /-- StoreState instruction spec (when enabled) implies valid femtoCairo transition -/
 theorem StoreStateInstruction_Spec_implies_transition
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -181,6 +185,7 @@ theorem StoreStateInstruction_Spec_implies_transition
         all_goals exact h_spec.elim
       case isFalse => exact h_spec.elim
 
+omit p_large_enough in
 /-- LoadState instruction spec (when enabled) implies valid femtoCairo transition -/
 theorem LoadStateInstruction_Spec_implies_transition
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -251,6 +256,7 @@ lemma countTransitionInPath_first_pos {α : Type*} [DecidableEq α] (s0 s1 : α)
   simp only [List.count_cons, beq_self_eq_true, ↓reduceIte]
   omega
 
+omit p_large_enough in
 open Utils.StateTransition in
 /-- Helper: First transition in a path with at least 2 elements is valid -/
 lemma first_transition_valid
@@ -267,6 +273,7 @@ lemma first_transition_valid
     omega
   exact h_valid_run s0 s1 h_R_pos
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 open Utils.StateTransition in
 /-- Helper: containsPath is preserved when dropping the first element -/
 lemma containsPath_tail
@@ -308,6 +315,7 @@ lemma containsPath_tail
         omega
       omega
 
+omit p_large_enough in
 /-- Helper: bounded execution followed by one step equals bounded execution with one more step -/
 lemma boundedExecution_succ
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -318,6 +326,7 @@ lemma boundedExecution_succ
       (femtoCairoMachineTransition program memory) := by
   rfl
 
+omit p_large_enough in
 /-- Helper: bounded execution from some s with transition step prepended -/
 lemma boundedExecution_step_prepend
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -328,7 +337,7 @@ lemma boundedExecution_step_prepend
     femtoCairoMachineBoundedExecution program memory (some s2) n := by
   induction n generalizing s1 s2 with
   | zero =>
-    simp only [femtoCairoMachineBoundedExecution, Option.bind_eq_bind, Option.some_bind, h_trans]
+    simp only [femtoCairoMachineBoundedExecution, Option.bind_eq_bind, Option.bind_some, h_trans]
   | succ m ih =>
     -- Goal: bounded (m+2) from s1 = bounded (m+1) from s2
     -- Use the definition: bounded (k+1) = bounded k >>= trans
@@ -343,6 +352,7 @@ lemma boundedExecution_step_prepend
           (femtoCairoMachineTransition program memory) := by rw [ih s1 s2 h_trans]
     _ = femtoCairoMachineBoundedExecution program memory (some s2) (m + 1) := rfl
 
+omit p_large_enough in
 open Utils.StateTransition in
 /-- If a path is valid (contained in a valid run), then it corresponds to a valid execution -/
 theorem valid_path_implies_bounded_execution
@@ -481,6 +491,7 @@ def loadStatePostState
 
 /-! ## Helper lemmas: Spec implies transition to specific postState -/
 
+omit p_large_enough in
 /-- ADD instruction spec implies transition to addPostState -/
 theorem AddInstruction_Spec_transition_postState
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -505,6 +516,7 @@ theorem AddInstruction_Spec_transition_postState
         all_goals exact h_spec.elim
       case isFalse => exact h_spec.elim
 
+omit p_large_enough in
 /-- MUL instruction spec implies transition to mulPostState -/
 theorem MulInstruction_Spec_transition_postState
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -529,6 +541,7 @@ theorem MulInstruction_Spec_transition_postState
         all_goals exact h_spec.elim
       case isFalse => exact h_spec.elim
 
+omit p_large_enough in
 /-- StoreState instruction spec implies transition to storeStatePostState -/
 theorem StoreStateInstruction_Spec_transition_postState
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -555,6 +568,7 @@ theorem StoreStateInstruction_Spec_transition_postState
         all_goals exact h_spec.elim
       case isFalse => exact h_spec.elim
 
+omit p_large_enough in
 /-- LoadState instruction spec implies transition to loadStatePostState -/
 theorem LoadStateInstruction_Spec_transition_postState
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -664,7 +678,7 @@ Which gives us the netFlow properties.
 
 /-- Count how many enabled inputs have preState = s -/
 def countOutgoing {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
-    (postStateFn : State (F p) → State (F p)) (s : State (F p)) : ℕ :=
+    (s : State (F p)) : ℕ :=
   (inputs.toList.filter (fun i => i.enabled = 1 ∧ i.preState = s)).length
 
 /-- Count how many enabled inputs have postState = s -/
@@ -682,10 +696,10 @@ def totalOutgoing
     (storeInputs : Vector (InstructionStepInput (F p)) storeCap)
     (loadInputs : Vector (InstructionStepInput (F p)) loadCap)
     (s : State (F p)) : ℕ :=
-  countOutgoing addInputs addPostState s +
-  countOutgoing mulInputs mulPostState s +
-  countOutgoing storeInputs storeStatePostState s +
-  countOutgoing loadInputs (loadStatePostState program memory) s
+  countOutgoing addInputs s +
+  countOutgoing mulInputs s +
+  countOutgoing storeInputs s +
+  countOutgoing loadInputs s
 
 /-- The total incoming edge count for state s in the Run -/
 def totalIncoming
@@ -754,7 +768,7 @@ lemma sum_bundleEdgeCount_eq_countOutgoing {n : ℕ}
     (postStateFn : State (F p) → State (F p))
     (s : State (F p)) :
     ∑ t : State (F p), bundleEdgeCount inputs postStateFn (s, t) =
-    countOutgoing inputs postStateFn s := by
+    countOutgoing inputs s := by
   simp only [bundleEdgeCount, countOutgoing]
   rw [sum_list_map_sum_eq_list_map_sum]
   simp_rw [sum_instructionEdgeContribution_over_targets]
@@ -1033,7 +1047,7 @@ lemma bundle_multiplicity_contribution
          else 0).toFinsupp)
     (s : State (F p)) :
     adds.toFinsupp (stateToNamedList s) =
-      (↑(countIncoming inputs postStateFn s) : F p) - ↑(countOutgoing inputs postStateFn s) := by
+      (↑(countIncoming inputs postStateFn s) : F p) - ↑(countOutgoing inputs s) := by
   rw [h_adds]
   simp only [Finsupp.finset_sum_apply]
   -- Each instruction's contribution
@@ -1560,7 +1574,7 @@ lemma netFlow_eq_totalOutgoing_sub_totalIncoming
 /-- countOutgoing is bounded by the vector length (filter length ≤ list length) -/
 lemma countOutgoing_le_length {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
     (postStateFn : State (F p) → State (F p)) (s : State (F p)) :
-    countOutgoing inputs postStateFn s ≤ n := by
+    countOutgoing inputs s ≤ n := by
   simp only [countOutgoing]
   have h1 := List.length_filter_le (fun i => decide (i.enabled = 1 ∧ i.preState = s)) inputs.toList
   simp only [Vector.length_toList] at h1

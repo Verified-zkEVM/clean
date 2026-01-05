@@ -18,7 +18,6 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   localLength _ := 480
   localAdds_eq _ _ _ := by
     simp [circuit_norm, main, ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit, Operations.collectAdds]
-    repeat (first | rfl | constructor)
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 

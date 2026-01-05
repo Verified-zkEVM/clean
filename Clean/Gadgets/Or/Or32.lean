@@ -41,7 +41,6 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   localLength _ := 4
   localAdds_eq _ _ _ := by
     simp [main, circuit_norm, Operations.collectAdds]
-    repeat (first | rfl | constructor)
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
