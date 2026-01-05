@@ -505,7 +505,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     rcases h_encode with h_add | h_mul | h_load | h_store
     · simp only [h_add, ↓reduceIte, Option.isSome_ite, zero_ne_one] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [h_input_v1, h_input_v2, h_input_v3, ← h_exec]; ring_nf
+      · simp only [← h_exec]; ring_nf
       · have h_env0 := h_env 0
         simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
@@ -521,7 +521,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
         simp only [circuit_norm, explicit_provable_type, fromVars, h_env2]
     · simp only [h_mul, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [h_input_v1, h_input_v2, h_input_v3, ← h_exec]; ring_nf
+      · simp only [← h_exec]; ring_nf
       · have h_env0 := h_env 0
         simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
@@ -537,9 +537,9 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
         simp only [circuit_norm, explicit_provable_type, fromVars, h_env2]
     · simp only [h_load, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [h_input_v1, h_input_v2, h_input_v3, h_exec, ← h_input1]; ring_nf
-      · simp only [h_input_v1, h_input_v2, h_input_v3, h_exec, ← h_input1]; ring_nf
-      · simp only [h_input_v1, h_input_v2, h_input_v3, h_exec, ← h_input1]; ring_nf
+      · simp only [h_exec, ← h_input1]; ring_nf
+      · simp only [h_exec, ← h_input1]; ring_nf
+      · simp only [h_exec, ← h_input1]; ring_nf
       · have h_env0 := h_env 0
         simp only [explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero] at h_env0
