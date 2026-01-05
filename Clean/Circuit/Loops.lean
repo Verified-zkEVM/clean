@@ -804,7 +804,7 @@ theorem collectAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector �
   case nil =>
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.toList_mk, List.foldlM_nil]
-    simp only [pure_operations_eq, Operations.collectAdds]
+    simp only [Operations.collectAdds]
   case cons x xs ih =>
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]

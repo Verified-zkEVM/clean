@@ -406,10 +406,10 @@ theorem collectAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environme
     match n with
     | 0 =>
       simp only [main, Circuit.operations, Circuit.pure_def]
-      simp only [Operations.collectAdds, circuit_norm, InteractionDelta.toFinsupp_zero]
+      simp only [Operations.collectAdds, circuit_norm]
     | 1 =>
       simp only [main, Circuit.operations, Circuit.pure_def]
-      simp only [Operations.collectAdds, circuit_norm, InteractionDelta.toFinsupp_zero]
+      simp only [Operations.collectAdds, circuit_norm]
     | 2 =>
       simp only [main, Circuit.operations]
       exact AND.circuit.localAdds_eq (input[0], input[1]) env offset

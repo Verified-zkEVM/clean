@@ -49,7 +49,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   localAdds_eq input env offset := by
     have : (main off input |>.operations offset).collectAdds env = 0 := by
-      simp only [circuit_norm, main, Operations.collectAdds, List.append_nil, InteractionDelta.zero_eq_nil]
+      simp only [circuit_norm, main, List.append_nil, InteractionDelta.zero_eq_nil]
       apply Circuit.collectAdds_map
       intro x n
       simp only [circuit_norm, Operations.collectAdds]

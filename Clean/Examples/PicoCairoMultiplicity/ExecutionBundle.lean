@@ -34,7 +34,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 instance (capacities : InstructionCapacities) : NonEmptyProvableType (BundledInstructionInputs capacities) where
   nonempty := by
     simp only [size, circuit_norm]
-    simp only [List.sum_cons, List.sum_nil, add_zero, Nat.reduceAdd, gt_iff_lt, add_pos_iff,
+    simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, add_pos_iff,
       Nat.ofNat_pos, mul_pos_iff_of_pos_right]
     have : NeZero capacities.addCapacity := inferInstance
     rcases this

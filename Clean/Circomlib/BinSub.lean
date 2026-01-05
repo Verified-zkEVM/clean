@@ -301,7 +301,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main, Operations.collectAdds_append, Operations.collectAdds,
-      FormalAssertion.toSubcircuit_localAdds, InteractionDelta.zero_add']
+      FormalAssertion.toSubcircuit_localAdds]
     -- Handle the foldlRange part - all subcircuits have localAdds = 0
     rw [Circuit.collectAdds_foldlRange' _ _ _ _ _ (by intros; simp only [Operations.collectAdds,
       FormalAssertion.toSubcircuit_localAdds, InteractionDelta.zero_add'])]

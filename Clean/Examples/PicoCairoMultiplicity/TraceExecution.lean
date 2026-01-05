@@ -303,7 +303,7 @@ lemma containsPath_tail
       -- Simplify h_bound using the fact that the condition is false
       have h_simplified : List.count t (List.zipWith Prod.mk (hd2 :: tl2) tl2) + 0 ≤ R t := by
         have : (if ((hd, hd2) == t) = true then 1 else 0) = 0 := by
-          simp only [h_beq_false, ↓reduceIte]
+          simp only [h_beq_false]
           decide
         omega
       omega
@@ -718,11 +718,10 @@ lemma sum_instructionEdgeContribution_over_targets
     -- The sum has exactly one non-zero term at t = postStateFn s
     rw [Finset.sum_eq_single (postStateFn s)]
     · -- At t = postStateFn s, the term is 1
-      simp only [h.1, h.2, and_self, ↓reduceIte]
+      simp only [and_self, ↓reduceIte]
     · -- For other t ≠ postStateFn s, the term is 0
       intro t _ h_ne
-      simp only [h.1, true_and, h.2]
-      simp only [if_neg h_ne]
+      simp only [true_and, if_neg h_ne]
     · -- postStateFn s is in Finset.univ
       intro h_not_mem
       exact absurd (Finset.mem_univ _) h_not_mem
@@ -781,10 +780,10 @@ lemma sum_instructionEdgeContribution_over_sources
     -- The sum has exactly one non-zero term at t = input.preState
     rw [Finset.sum_eq_single input.preState]
     · -- At t = preState, the term is 1
-      simp only [h.1, true_and, and_true, h.2, ↓reduceIte]
+      simp only [and_true, ↓reduceIte]
     · -- For other t ≠ preState, the term is 0
       intro t _ h_ne
-      simp only [h.1, true_and, if_neg h_ne]
+      simp only [true_and, if_neg h_ne]
     · -- preState is in Finset.univ
       intro h_not_mem
       exact absurd (Finset.mem_univ _) h_not_mem
@@ -835,7 +834,7 @@ lemma nat_eq_of_field_eq (a b : ℕ) (h_small_a : a < p) (h_small_b : b < p)
 /-- Field subtraction equals integer subtraction when values are small -/
 lemma field_sub_eq_int_sub (a b : ℕ) (h_small : a + b < p) :
     (↑a - ↑b : F p) = ((a : ℤ) - (b : ℤ) : F p) := by
-  simp only [Int.cast_sub, Int.cast_natCast]
+  simp only [Int.cast_natCast]
 
 /-- When a - b = 0 in field and values are small, a = b as naturals -/
 lemma nat_eq_of_field_sub_eq_zero (a b : ℕ) (h_small : a + b < p)
@@ -936,8 +935,8 @@ lemma single_instruction_multiplicity_contribution
         InteractionDelta.toFinsupp_single]
     by_cases h_pre : input.preState = s
     · subst h_pre; by_cases h_post : postStateFn input.preState = input.preState
-      · simp only [h_post, true_and, ↓reduceIte, Finsupp.single_eq_same]; ring
-      · simp [true_and, h_post, Finsupp.single_eq_same, finsupp_single_ne_state h_post]
+      · simp only [h_post, Finsupp.single_eq_same]; ring
+      · simp [h_post, Finsupp.single_eq_same, finsupp_single_ne_state h_post]
     · by_cases h_post : postStateFn input.preState = s
       · simp [h_post, h_pre, Finsupp.single_eq_same, finsupp_single_ne_state h_pre]
       · simp [h_pre, h_post, finsupp_single_ne_state h_post, finsupp_single_ne_state h_pre]
@@ -1408,8 +1407,8 @@ lemma multiplicity_eq_emission_plus_flow
     · -- Case 2: s = initialState AND s ≠ finalState
       subst h_init
       have h_init_ne_final : inputs.initialState ≠ inputs.finalState := h_final
-      simp only [stateToNamedList_eq, Finsupp.single_eq_same, ↓reduceIte, ne_eq, h_init_ne_final,
-        not_false_eq_true, Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_init_ne_final)]
+      simp only [stateToNamedList_eq, Finsupp.single_eq_same, ↓reduceIte, h_init_ne_final,
+        Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_init_ne_final)]
       rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
       simp only [totalIncoming, totalOutgoing]; push_cast; ring
   · -- s ≠ initialState
@@ -1417,12 +1416,12 @@ lemma multiplicity_eq_emission_plus_flow
     · -- Case 3: s ≠ initialState AND s = finalState
       subst h_final
       have h_final_ne_init : inputs.finalState ≠ inputs.initialState := h_init
-      simp only [stateToNamedList_eq, Finsupp.single_eq_same, ↓reduceIte, ne_eq, h_final_ne_init,
-        not_false_eq_true, Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_final_ne_init)]
+      simp only [stateToNamedList_eq, Finsupp.single_eq_same, ↓reduceIte, h_final_ne_init,
+        Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_final_ne_init)]
       rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
       simp only [totalIncoming, totalOutgoing]; push_cast; ring
     · -- Case 4: s ≠ initialState AND s ≠ finalState
-      simp only [stateToNamedList_eq, ↓reduceIte, ne_eq, h_init, not_false_eq_true, h_final,
+      simp only [stateToNamedList_eq, ↓reduceIte, h_init, h_final,
         Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_init),
         Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h_final)]
       rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
