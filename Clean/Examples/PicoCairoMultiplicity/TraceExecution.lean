@@ -1571,7 +1571,7 @@ lemma netFlow_eq_totalOutgoing_sub_totalIncoming
 
 /-- countOutgoing is bounded by the vector length (filter length ≤ list length) -/
 lemma countOutgoing_le_length {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
-    (postStateFn : State (F p) → State (F p)) (s : State (F p)) :
+    (s : State (F p)) :
     countOutgoing inputs s ≤ n := by
   simp only [countOutgoing]
   have h1 := List.length_filter_le (fun i => decide (i.enabled = 1 ∧ i.preState = s)) inputs.toList
@@ -1600,10 +1600,10 @@ lemma totalOutgoing_le_totalCapacity
     totalOutgoing addInputs mulInputs storeInputs loadInputs s ≤
     totalCapacity capacities := by
   simp only [totalOutgoing, totalCapacity]
-  have h1 := countOutgoing_le_length addInputs addPostState s
-  have h2 := countOutgoing_le_length mulInputs mulPostState s
-  have h3 := countOutgoing_le_length storeInputs storeStatePostState s
-  have h4 := countOutgoing_le_length loadInputs (loadStatePostState program memory) s
+  have h1 := countOutgoing_le_length addInputs s
+  have h2 := countOutgoing_le_length mulInputs s
+  have h3 := countOutgoing_le_length storeInputs s
+  have h4 := countOutgoing_le_length loadInputs s
   omega
 
 /-- totalIncoming is bounded by totalCapacity -/
