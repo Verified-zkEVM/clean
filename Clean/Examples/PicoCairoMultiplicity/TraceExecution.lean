@@ -448,17 +448,17 @@ def storeStatePostState (preState : State (F p)) : State (F p) :=
   { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
 
 /-- For a single enabled ADD instruction, extract the transition -/
-def extractAddTransition (input : InstructionStepInput (F p)) (_h_enabled : input.enabled = 1) :
+def extractAddTransition (input : InstructionStepInput (F p)) :
     State (F p) × State (F p) :=
   (input.preState, addPostState input.preState)
 
 /-- For a single enabled MUL instruction, extract the transition -/
-def extractMulTransition (input : InstructionStepInput (F p)) (_h_enabled : input.enabled = 1) :
+def extractMulTransition (input : InstructionStepInput (F p)) :
     State (F p) × State (F p) :=
   (input.preState, mulPostState input.preState)
 
 /-- For a single enabled StoreState instruction, extract the transition -/
-def extractStoreStateTransition (input : InstructionStepInput (F p)) (_h_enabled : input.enabled = 1) :
+def extractStoreStateTransition (input : InstructionStepInput (F p)) :
     State (F p) × State (F p) :=
   (input.preState, storeStatePostState input.preState)
 
@@ -946,8 +946,6 @@ For a single instruction with spec, its contribution to multiplicity at state s 
 - 0 otherwise
 -/
 lemma single_instruction_multiplicity_contribution
-    {programSize : ℕ} [NeZero programSize] (_program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (_memory : Fin memorySize → F p)
     (input : InstructionStepInput (F p))
     (adds : InteractionDelta (F p))
     (postStateFn : State (F p) → State (F p))
@@ -1079,7 +1077,7 @@ lemma bundle_multiplicity_contribution
       (if inputs[i].enabled = 1 ∧ postStateFn inputs[i].preState = s then 1 else 0) -
       (if inputs[i].enabled = 1 ∧ inputs[i].preState = s then 1 else 0) := by
     intro i
-    exact single_instruction_multiplicity_contribution program memory inputs[i] _ postStateFn rfl s
+    exact single_instruction_multiplicity_contribution inputs[i] _ postStateFn rfl s
   simp_rw [h_each]
   -- Now we have: ∑ i, (incoming_i - outgoing_i) = countIncoming - countOutgoing
   -- Rewrite as: (∑ i, incoming_i) - (∑ i, outgoing_i)
@@ -1627,8 +1625,6 @@ omit p_large_enough in
 /-- totalOutgoing is bounded by totalCapacity -/
 lemma totalOutgoing_le_totalCapacity
     (capacities : InstructionCapacities)
-    {programSize : ℕ} [NeZero programSize] (_program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (_memory : Fin memorySize → F p)
     (addInputs : Vector (InstructionStepInput (F p)) capacities.addCapacity)
     (mulInputs : Vector (InstructionStepInput (F p)) capacities.mulCapacity)
     (storeInputs : Vector (InstructionStepInput (F p)) capacities.storeStateCapacity)
@@ -1677,7 +1673,7 @@ lemma totalFlow_bound
     (s : State (F p)) :
     totalOutgoing addInputs mulInputs storeInputs loadInputs s +
     totalIncoming program memory addInputs mulInputs storeInputs loadInputs s + 1 < p := by
-  have h_out := totalOutgoing_le_totalCapacity capacities program memory
+  have h_out := totalOutgoing_le_totalCapacity capacities
     addInputs mulInputs storeInputs loadInputs s
   have h_in := totalIncoming_le_totalCapacity capacities program memory
     addInputs mulInputs storeInputs loadInputs s
