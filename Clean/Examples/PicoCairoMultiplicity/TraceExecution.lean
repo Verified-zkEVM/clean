@@ -688,8 +688,6 @@ def countIncoming {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
 
 /-- The total outgoing edge count for state s in the Run -/
 def totalOutgoing
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     {addCap mulCap storeCap loadCap : ℕ}
     (addInputs : Vector (InstructionStepInput (F p)) addCap)
     (mulInputs : Vector (InstructionStepInput (F p)) mulCap)
@@ -1357,7 +1355,7 @@ lemma multiplicity_eq_emission_plus_flow
       (↑(totalIncoming program memory
            inputs.bundledInputs.addInputs inputs.bundledInputs.mulInputs
            inputs.bundledInputs.storeStateInputs inputs.bundledInputs.loadStateInputs s) : F p) -
-      (↑(totalOutgoing program memory
+      (↑(totalOutgoing
            inputs.bundledInputs.addInputs inputs.bundledInputs.mulInputs
            inputs.bundledInputs.storeStateInputs inputs.bundledInputs.loadStateInputs s) : F p) +
       (if s = inputs.finalState then -1 else 0) := by
@@ -1453,7 +1451,7 @@ lemma emission_eq_flow_diff
     (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
     (h_balanced : adds.toFinsupp = 0)
     (s : State (F p)) :
-    let out := totalOutgoing program memory
+    let out := totalOutgoing
                  inputs.bundledInputs.addInputs inputs.bundledInputs.mulInputs
                  inputs.bundledInputs.storeStateInputs inputs.bundledInputs.loadStateInputs s
     let inc := totalIncoming program memory
@@ -1476,7 +1474,7 @@ lemma emission_eq_flow_diff
   -- Define local abbreviations for readability
   set init_emit : F p := if s = inputs.initialState then 1 else 0 with h_init_def
   set final_emit : F p := if s = inputs.finalState then -1 else 0 with h_final_def
-  set out_field : F p := ↑(totalOutgoing program memory inputs.bundledInputs.addInputs
+  set out_field : F p := ↑(totalOutgoing inputs.bundledInputs.addInputs
       inputs.bundledInputs.mulInputs inputs.bundledInputs.storeStateInputs
       inputs.bundledInputs.loadStateInputs s) with h_out_def
   set inc_field : F p := ↑(totalIncoming program memory inputs.bundledInputs.addInputs
@@ -1533,7 +1531,7 @@ lemma netFlow_eq_totalOutgoing_sub_totalIncoming
     (loadInputs : Vector (InstructionStepInput (F p)) loadCap)
     (s : State (F p)) :
     let R := buildRunFromInputs program memory addInputs mulInputs storeInputs loadInputs
-    R.netFlow s = (totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s : ℤ) -
+    R.netFlow s = (totalOutgoing addInputs mulInputs storeInputs loadInputs s : ℤ) -
                   (totalIncoming program memory addInputs mulInputs storeInputs loadInputs s : ℤ) := by
   -- netFlow s = (∑ t, R(s,t)) - (∑ t, R(t,s))
   -- R is buildRunFromInputs, so R(s,t) = sum of bundleEdgeCounts for each instruction type
@@ -1599,7 +1597,7 @@ lemma totalOutgoing_le_totalCapacity
     (storeInputs : Vector (InstructionStepInput (F p)) capacities.storeStateCapacity)
     (loadInputs : Vector (InstructionStepInput (F p)) capacities.loadStateCapacity)
     (s : State (F p)) :
-    totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s ≤
+    totalOutgoing addInputs mulInputs storeInputs loadInputs s ≤
     totalCapacity capacities := by
   simp only [totalOutgoing, totalCapacity]
   have h1 := countOutgoing_le_length addInputs addPostState s
@@ -1638,7 +1636,7 @@ lemma totalFlow_bound
     (loadInputs : Vector (InstructionStepInput (F p)) capacities.loadStateCapacity)
     (h_capacity : 2 * totalCapacity capacities + 1 < p)
     (s : State (F p)) :
-    totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s +
+    totalOutgoing addInputs mulInputs storeInputs loadInputs s +
     totalIncoming program memory addInputs mulInputs storeInputs loadInputs s + 1 < p := by
   have h_out := totalOutgoing_le_totalCapacity capacities program memory
     addInputs mulInputs storeInputs loadInputs s
@@ -1719,14 +1717,14 @@ theorem balanced_adds_implies_netFlow
 
   -- Helper: get the field equation for a state s
   have h_field_eq : ∀ s,
-      (↑(totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s) -
+      (↑(totalOutgoing addInputs mulInputs storeInputs loadInputs s) -
        ↑(totalIncoming program memory addInputs mulInputs storeInputs loadInputs s) : F p) =
       (if s = inputs.initialState then 1 else 0) + (if s = inputs.finalState then -1 else 0) :=
     emission_eq_flow_diff capacities program memory inputs adds h_spec h_balanced
 
   -- Helper: netFlow equals totalOutgoing - totalIncoming (as integers)
   have h_netFlow : ∀ s, R.netFlow s =
-      (totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s : ℤ) -
+      (totalOutgoing addInputs mulInputs storeInputs loadInputs s : ℤ) -
       (totalIncoming program memory addInputs mulInputs storeInputs loadInputs s : ℤ) :=
     netFlow_eq_totalOutgoing_sub_totalIncoming program memory addInputs mulInputs storeInputs loadInputs
 
@@ -1751,7 +1749,7 @@ theorem balanced_adds_implies_netFlow
     rw [h_netFlow]
     have h_eq := h_field_eq s
     simp only [if_neg h_not_init, if_neg h_not_final, add_zero] at h_eq
-    have h_small : totalOutgoing program memory addInputs mulInputs storeInputs loadInputs s +
+    have h_small : totalOutgoing addInputs mulInputs storeInputs loadInputs s +
                    totalIncoming program memory addInputs mulInputs storeInputs loadInputs s < p := by
       have := h_bounds s; omega
     exact int_sub_eq_zero_of_field_sub_eq_zero _ _ h_small h_eq
