@@ -1942,8 +1942,8 @@ properties from the balanced `InteractionDelta` is complex.
 -/
 theorem Spec_implies_execution
     (capacities : InstructionCapacities)
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p) (_h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p) (_h_memorySize : memorySize < p)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     (inputs : ExecutionCircuitInput capacities (F p))
     (adds : InteractionDelta (F p))
     (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
@@ -2035,15 +2035,15 @@ omit p_large_enough in
 /-- The stronger spec implies the weaker execution existence spec -/
 theorem Spec_implies_ExecutionExistenceSpec
     (capacities : InstructionCapacities)
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p) (h_memorySize : memorySize < p)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     (inputs : ExecutionCircuitInput capacities (F p))
     (adds : InteractionDelta (F p))
     (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
     (h_capacity : 2 * totalCapacity capacities + 1 < p) :
     ExecutionExistenceSpec capacities program memory inputs adds := by
   intro h_balanced
-  exact Spec_implies_execution capacities program h_programSize memory h_memorySize inputs adds h_spec h_balanced h_capacity
+  exact Spec_implies_execution capacities program memory inputs adds h_spec h_balanced h_capacity
 
 /--
 The circuit with the weaker execution existence spec.
@@ -2061,7 +2061,7 @@ def circuitWithExecutionExistenceSpec
     (fun input _ adds => ExecutionBundle.Assumptions capacities (programSize := programSize) input →
       ExecutionExistenceSpec capacities program memory input adds)
     (fun input _ adds h_spec h_assumptions =>
-      Spec_implies_ExecutionExistenceSpec capacities program h_programSize memory h_memorySize
+      Spec_implies_ExecutionExistenceSpec capacities program memory
         input adds (h_spec h_assumptions) h_capacity)
 
 end Examples.PicoCairoMultiplicity.TraceExecution
