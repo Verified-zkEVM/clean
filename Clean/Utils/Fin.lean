@@ -10,7 +10,7 @@ lemma fin_foldl_const {T : Type*} (n : ℕ) (c : T) :
   Fin.foldl n (fun acc _k => acc) c = c := by
   induction n with
   | zero =>
-    rfl
+    simp [Fin.foldl_zero]
   | succ n ih =>
     simp [Fin.foldl_succ, ih]
 

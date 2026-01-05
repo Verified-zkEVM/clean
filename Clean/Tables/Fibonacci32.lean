@@ -144,6 +144,30 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   obtain ⟨ h_add_mod, h_norm_next_y ⟩ := h_add
   exact ⟨h_add_mod, h_norm_next_y⟩
 
+omit p_large_enough in
+lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
+    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
+       .input ⟨0, 7⟩] := by
+  dsimp only [table_assignment_norm, circuit_norm, boundary]
+  simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
+    Vector.mapRange_zero]
+  simp
+
+omit p_large_enough in
+lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
+    let env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env;
+    eval env (varFromOffset U32 0) = first_row.x ∧
+    eval env (varFromOffset U32 4) = first_row.y := by
+  intro env
+  dsimp only [env, windowEnv]
+  have h_offset : (boundary (p:=p)).finalAssignment.offset = 8 := rfl
+  simp only [h_offset]
+  rw [boundary_assignment]
+  simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]
+  simp only [Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
+    Fin.isValue, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
+  and_intros <;> rfl
+
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
   Circuit.ConstraintsHold.Soundness (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
@@ -151,10 +175,8 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
   simp only [table_norm, boundary, circuit_norm]
   simp only [and_imp]
-  have hx : eval env (varFromOffset U32 0) = first_row.x := rfl
-  have hy : eval env (varFromOffset U32 4) = first_row.y := rfl
+  have ⟨hx, hy⟩ := boundary_vars first_row aux_env
   rw [hx, hy]
-  clear hx hy
   intro x_zero y_one
   rw [x_zero, y_one]
   simp only [U32.fromByte_normalized, U32.fromByte_value, fib32]

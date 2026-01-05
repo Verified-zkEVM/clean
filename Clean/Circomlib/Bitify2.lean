@@ -274,7 +274,9 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     · rw [h_n] at h_eq h_iszero ⊢
       simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, id_eq, add_zero, lt_self_iff_false,
         ↓reduceDIte, Fin.foldl_zero, mul_one, ↓reduceIte]
-      rfl
+      unfold Vector.mapRange
+      simp only [Vector.map_mk, List.map_toArray, List.map_nil, Vector.mk_eq, Array.empty_eq,
+        Vector.toArray_eq_empty_iff]
     · set bits := Vector.map (Expression.eval env) (Vector.mapRange n fun i => var { index := i0 + i })
       have h_bits' : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1 := by
         intro i hi
@@ -290,7 +292,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
       · simp_rw [h_input_zero] at h_input ⊢
         have : Expression.eval env input_var = 0 := by
           simp only [eval, fromElements, toVars, toElements] at h_input
-          exact h_input
+          convert h_input
+          simp
         rw [this] at h_eq
         simp only [id_eq, mul_zero, dite_eq_ite, ite_self, add_zero, neg_zero, ZMod.val_zero,
           Nat.cast_zero, sub_zero] at h_eq ⊢
@@ -313,7 +316,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         rw [h_val_zero]
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
       · have : Expression.eval env input_var = input := by
-          convert h_input
+          rw [← h_input]
+          simp [circuit_norm]
         rw [this] at h_eq
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
           ↓reduceIte, zero_mul, ZMod.natCast_val]

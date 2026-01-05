@@ -213,7 +213,7 @@ theorem output_eq :
   (xs.foldlM circuit init).output n =
     Fin.foldl m (fun acc i => (circuit acc xs[i.val]).output (n + i * constant.localLength)) init := by
   induction xs using Vector.induct generalizing init n
-  case nil => rfl
+  case nil => aesop
   case cons x xs ih =>
     rw [foldlM_cons, bind_output_eq, ih, constant.localLength_eq (init, x), finFoldl_cons_succ]
 

@@ -16,11 +16,11 @@ https://github.com/iden3/circomlib/blob/master/circuits/mux1.circom
 namespace MultiMux1
 
 structure Inputs (n : ℕ) (F : Type) where
-  c : ProvableVector (ProvablePair field field) n F  -- n pairs of constants
-  s : F                 -- selector
+  c : ProvableVector fieldPair n F  -- n pairs of constants
+  s : F                              -- selector
 
 instance {n : ℕ} : ProvableStruct (Inputs n) where
-  components := [ProvableVector (ProvablePair field field) n, field]
+  components := [ProvableVector fieldPair n, field]
   toComponents := fun {c, s} => .cons c (.cons s .nil)
   fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
 /-
@@ -114,13 +114,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         rw [h0]
         simp only [mul_zero, circuit_norm]
         norm_num
-        rfl
       | inr h1 =>
         -- When s = 1
         rw [h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
         norm_num
-        rfl
 
   completeness := by
     circuit_proof_start

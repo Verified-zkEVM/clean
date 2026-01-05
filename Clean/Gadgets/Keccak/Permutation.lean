@@ -38,10 +38,13 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
 
--- interestingly, `Fin.foldl` is defeq to `List.foldl`. the proofs below use this fact!
-example (state : Vector ℕ 25) :
+-- `Fin.foldl` relates to `Vector.foldl` via this lemma
+lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
   Fin.foldl 24 (fun state j => keccakRound state roundConstants[j]) state
-  = roundConstants.foldl keccakRound state := rfl
+  = roundConstants.foldl keccakRound state := by
+  simp only [Vector.foldl, roundConstants, Fin.foldl_eq_foldl_finRange]
+  rw [← Array.foldl_toList, ← List.foldl_map]
+  simp [List.finRange]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
@@ -78,7 +81,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       use h_succ.left
       rw [h_succ.right, Fin.foldl_succ_last, ih.right]
       simp
-  exact h_inductive 23 (by norm_num)
+  have h := h_inductive 23 (by norm_num)
+  simp only [keccakPermutation, ← fin_foldl_eq_vector_foldl] at h ⊢
+  exact h
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro n env initial_state_var h_env initial_state h_input h_assumptions

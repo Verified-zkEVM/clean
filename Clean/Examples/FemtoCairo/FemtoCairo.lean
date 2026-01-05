@@ -499,7 +499,8 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     simp only [DecodedInstructionType.isEncodedCorrectly] at h_encode
     simp only [DecodedInstructionType.val] at h_exec
     simp only
-    rcases h_input with ⟨h_input1, ⟨ h_input2, h_input3 ⟩, h_input⟩
+    obtain ⟨h_input1, h_input_decoded, h_input_v1, h_input_v2, h_input_v3⟩ := h_input
+    obtain ⟨h_input2, h_input_mode1, h_input_mode2, h_input_mode3⟩ := h_input_decoded
     simp only [circuit_norm, explicit_provable_type, DecodedInstructionType.mk.injEq] at h_input2
     rcases input_var_state
     rename_i input_var_state_pc input_var_state_ap input_var_state_fp

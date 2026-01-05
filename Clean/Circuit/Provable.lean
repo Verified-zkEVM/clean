@@ -368,7 +368,8 @@ variable {α : TypeMap} [ProvableType α]
 
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
-  ProvableType.eval env x = Expression.eval env x := rfl
+    ProvableType.eval env x = Expression.eval env x := by
+  simp [circuit_norm, explicit_provable_type]
 
 @[circuit_norm ↓]
 theorem varFromOffset_field {F} (offset : ℕ) :
@@ -384,12 +385,24 @@ theorem varFromOffset_fields {F} (offset : ℕ) :
 
 @[circuit_norm ↓]
 theorem eval_fieldPair {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
-  ProvableType.eval env t = (match t with | (x, y) => (Expression.eval env x, Expression.eval env y)) := rfl
+    ProvableType.eval env t = (match t with | (x, y) => (Expression.eval env x, Expression.eval env y)) := by
+  simp [circuit_norm, explicit_provable_type]
+
+@[circuit_norm ↓]
+theorem eval_fieldPair_fst {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
+    (ProvableType.eval env t).1 = Expression.eval env t.1 := by
+  simp only [eval_fieldPair]
+
+@[circuit_norm ↓]
+theorem eval_fieldPair_snd {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
+    (ProvableType.eval env t).2 = Expression.eval env t.2 := by
+  simp only [eval_fieldPair]
 
 @[circuit_norm ↓]
 theorem eval_fieldTriple {F : Type} [Field F] (env : Environment F) (t : Var fieldTriple F) :
-  ProvableType.eval env t = (match t with
-    | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z)) := rfl
+    ProvableType.eval env t = (match t with
+      | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z)) := by
+  simp [circuit_norm, explicit_provable_type]
 
 @[circuit_norm ↓]
 theorem varFromOffset_fieldPair {F} (offset : ℕ) :
@@ -490,7 +503,7 @@ variable {n : ℕ} {α : TypeMap} [NonEmptyProvableType α]
 
 @[reducible]
 def psize (α : TypeMap) [NonEmptyProvableType α] : ℕ+ :=
-  ⟨ size α, NonEmptyProvableType.nonempty⟩
+  ⟨ size α, NonEmptyProvableType.nonempty ⟩
 
 instance ProvableVector.instance : ProvableType (ProvableVector α n) where
   size := n * size α
@@ -540,7 +553,7 @@ theorem varFromOffset_vector {F : Type} [Field F] {α : TypeMap} [NonEmptyProvab
     varFromOffset (F:=F) (ProvableVector α n) offset
     = .mapRange n fun i => varFromOffset α (offset + (size α)*i) := by
   induction n with
-  | zero => rfl
+  | zero => simp [Vector.mapRange_zero]
   | succ n ih =>
     rw [Vector.mapRange_succ, ←ih]
     simp only [varFromOffset, fromVars, fromElements, size]
@@ -601,20 +614,20 @@ theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : En
 @[circuit_norm ↓ high]
 theorem eval_pair_left_expr {β : TypeMap} [ProvableType β] (env : Environment F)
   (a : Expression F) (b : Var β F) :
-    eval (α:=ProvablePair field β) env (a, b) = (Expression.eval env a, eval env b) :=
-  eval_pair (α:=field) env a b
+    eval (α:=ProvablePair field β) env (a, b) = (Expression.eval env a, eval env b) := by
+  rw [eval_pair (α:=field), ProvableType.eval_field]
 
 @[circuit_norm ↓ high]
 theorem eval_pair_right_expr {α : TypeMap} [ProvableType α] (env : Environment F)
   (a : Var α F) (b : Expression F) :
-    eval (α:=ProvablePair α field) env (a, b) = (eval env a, Expression.eval env b) :=
-  eval_pair (β:=field) env a b
+    eval (α:=ProvablePair α field) env (a, b) = (eval env a, Expression.eval env b) := by
+  rw [eval_pair (β:=field), ProvableType.eval_field]
 
 @[circuit_norm ↓ high]
 theorem eval_pair_both_expr (env : Environment F)
   (a b : Expression F) :
-    eval (α:=ProvablePair field field) env (a, b) = (Expression.eval env a, Expression.eval env b) :=
-  eval_pair (α:=field) (β:=field) env a b
+    eval (α:=ProvablePair field field) env (a, b) = (Expression.eval env a, Expression.eval env b) := by
+  simp only [eval_pair (α:=field) (β:=field), ProvableType.eval_field]
 
 -- Specialized lemmas for Vector (Expression F) to handle type inference issues with vectors
 @[circuit_norm ↓ high]

@@ -329,7 +329,8 @@ theorem normalized_iff {x : U32 (F p)} :
     simp_all
 
 lemma toLimbs_map {α β : Type} (x : U32 α) (f : α → β) :
-  toLimbs (map x f) = (toLimbs x).map f := rfl
+    toLimbs (map x f) = (toLimbs x).map f := by
+  simp [toLimbs, toElements, map]
 
 lemma getElem_eval_toLimbs {F} [Field F] {env : Environment F} {x : U32 (Expression F)} {i : ℕ} (hi : i < 4) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
