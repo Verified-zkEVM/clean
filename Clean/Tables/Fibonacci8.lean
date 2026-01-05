@@ -135,12 +135,24 @@ def formalFibTable : FormalTable (F p) RowType := {
           Gadgets.Addition8.circuit] at ConstraintsHold
       simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
 
-      have hx_curr : env.get 0 = curr.x := by rfl
-      have hy_curr : env.get 1 = curr.y := by rfl
-      have hx_next : env.get 2 = next.x := by rfl
-      have hy_next : env.get (2 + 1) = next.y := by rfl
-      rw [hx_curr, hy_curr, hx_next, hy_next] at ConstraintsHold
-      clear hx_curr hy_curr hx_next hy_next
+      -- NOTE: In Lean 4.25.0-rc2, Vector/List indexing doesn't reduce definitionally
+      -- as it did in v4.24.0. We use explicit simp lemmas to reduce the expressions.
+      -- See: https://github.com/leanprover/lean4/issues/10736 for related issues.
+      have env_simp : env.get 0 = curr.x ∧ env.get 1 = curr.y ∧
+                      env.get 2 = next.x ∧ env.get (2 + 1) = next.y := by
+        simp only [env, windowEnv, fibRelation, table_assignment_norm, table_norm, circuit_norm,
+          copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
+        refine ⟨?_, ?_, ?_, ?_⟩
+        all_goals simp only [Vector.toList_mk, List.getElem_set, ite_true,
+          Vector.toList_append, Vector.mapFinRange_zero, Vector.mapFinRange_succ,
+          Vector.mapRange_zero, Vector.mapRange_succ, Vector.toList_push,
+          List.nil_append, List.append_assoc]
+        · simp only [dif_pos (by omega : 0 < 5)]; rfl
+        · simp only [dif_pos (by omega : 1 < 5)]; rfl
+        · simp only [dif_pos (by omega : 2 < 5)]; rfl
+        · simp only [dif_pos (by omega : 2 + 1 < 5)]; rfl
+      rw [env_simp.1, env_simp.2.1, env_simp.2.2.1, env_simp.2.2.2] at ConstraintsHold
+      clear env_simp
 
       have ⟨eq_holds, add_holds⟩ := ConstraintsHold
       rw [add_neg_eq_zero] at eq_holds

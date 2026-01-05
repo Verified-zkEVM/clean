@@ -378,10 +378,9 @@ lemma applyRounds_eq_applySevenRounds
 lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
     x < 256^4 ->
     (eval env (U32.decomposeNatExpr x)).value = x := by
-  intro _
-  simp only [U32.decomposeNatExpr]
-  apply U32.value_of_decomposedNat_of_small
-  assumption
+  intro h
+  simp only [U32.decomposeNatExpr, circuit_norm]
+  exact U32.value_of_decomposedNat_of_small x h
 
 -- Tactic for common steps in state vector normalization proof
 syntax "state_vec_norm_simp" : tactic
