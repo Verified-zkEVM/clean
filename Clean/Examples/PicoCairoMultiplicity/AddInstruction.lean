@@ -46,7 +46,7 @@ def main
   emitStateWhen enabled (-1) preState
 
   -- Step 3: Fetch instruction from program memory
-  let rawInstruction ← subcircuitWithAssertion (fetchInstructionCircuit program h_programSize) preState.pc
+  let rawInstruction ← subcircuitWithAssertion (fetchInstruction program h_programSize) preState.pc
 
   -- Step 4: Conditionally decode the instruction (returns dummy ADD when disabled)
   let decoded ← subcircuitWithAssertion conditionalDecodeCircuit {
@@ -61,19 +61,19 @@ def main
   assertZero (decoded.instrType.isAdd - 1)
 
   -- Step 6: Read operands from memory using addressing modes
-  let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) {
+  let v1 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
     state := preState,
     offset := rawInstruction.op1,
     mode := decoded.mode1
   }
 
-  let v2 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) {
+  let v2 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
     state := preState,
     offset := rawInstruction.op2,
     mode := decoded.mode2
   }
 
-  let v3 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) {
+  let v3 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
     state := preState,
     offset := rawInstruction.op3,
     mode := decoded.mode3
@@ -130,9 +130,9 @@ def elaborated
     InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
   localAdds_eq := by
     intro input env offset
-    simp only [main, circuit_norm, emitStateWhen, emitAdd, fetchInstructionCircuit,
+    simp only [main, circuit_norm, emitStateWhen, emitAdd, FemtoCairo.fetchInstruction,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
-      readFromMemoryCircuit, assertBool, FormalAssertion.toSubcircuit, Operations.collectAdds,
+      readFromMemory, assertBool, FormalAssertion.toSubcircuit, Operations.collectAdds,
       List.nil_append, NamedList.eval, add_zero]
     rfl
 
@@ -189,9 +189,9 @@ def circuit
   Assumptions := Assumptions (programSize := programSize)
   Spec := Spec program memory
   soundness := by
-    circuit_proof_start [elaborated, main, Assumptions, Spec, fetchInstructionCircuit,
+    circuit_proof_start [elaborated, main, Assumptions, Spec, FemtoCairo.fetchInstruction,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
-      readFromMemoryCircuit, decodeInstruction.circuit, decodeInstruction.Spec]
+      readFromMemory, FemtoCairo.decodeInstruction]
 
     -- Extract assumptions
     obtain ⟨h_enabled_bool, h_pc_bound⟩ := h_assumptions
@@ -231,7 +231,12 @@ def circuit
         have h_op2 : env.get (i₀ + 1 + 1) = rawInstr.op2 := congrArg RawInstruction.op2 h_fetch
         have h_op3 : env.get (i₀ + 1 + 1 + 1) = rawInstr.op3 := congrArg RawInstruction.op3 h_fetch
 
-        rw [h_rawInstrType] at h_decode_cond
+        -- Show Expression.eval of rawInstrType equals rawInstr.rawInstrType
+        have h_rawInstrType_eval : Expression.eval env (varFromOffset RawInstruction i₀).rawInstrType = rawInstr.rawInstrType := by
+          simp only [varFromOffset, circuit_norm]
+          exact h_rawInstrType
+
+        rw [h_rawInstrType_eval] at h_decode_cond
 
         split at h_decode_cond
         case h_2 => exact h_decode_cond.elim
@@ -256,9 +261,20 @@ def circuit
           specialize h_read2 h_mode2_encoded
           specialize h_read3 h_mode3_encoded
 
-          rw [h_mode1, h_op1] at h_read1
-          rw [h_mode2, h_op2] at h_read2
-          rw [h_mode3, h_op3] at h_read3
+          -- Rewrite Expression.eval of op fields to actual op values
+          have h_op1_eval : Expression.eval env (varFromOffset RawInstruction i₀).op1 = rawInstr.op1 := by
+            simp only [varFromOffset, circuit_norm]
+            exact h_op1
+          have h_op2_eval : Expression.eval env (varFromOffset RawInstruction i₀).op2 = rawInstr.op2 := by
+            simp only [varFromOffset, circuit_norm]
+            exact h_op2
+          have h_op3_eval : Expression.eval env (varFromOffset RawInstruction i₀).op3 = rawInstr.op3 := by
+            simp only [varFromOffset, circuit_norm]
+            exact h_op3
+
+          rw [h_op1_eval, h_mode1] at h_read1
+          rw [h_op2_eval, h_mode2] at h_read2
+          rw [h_op3_eval, h_mode3] at h_read3
 
           -- Split on the goal's match expressions
           split

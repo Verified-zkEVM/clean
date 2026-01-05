@@ -26,8 +26,180 @@ The circuit ensures that:
 2. The aux bit is binary (0 or 1)
 3. The equation (in[0] + 2^n) - in[1] = out + aux*2^n holds
 -/
-
 namespace BinSub
+-- Instance for NonEmptyProvableType for fields when n > 0
+instance {n : ℕ} [hn : NeZero n] : NonEmptyProvableType (fields n) where
+  nonempty := Nat.pos_of_ne_zero hn.out
+
+def inputLinearSub (n : ℕ) (inp : BinSubInput n (Expression (F p))) : Expression (F p) :=
+  Fin.foldl n (fun lin k => lin + inp[0][k] * (2^k.val : F p) - (inp[1][k] * (2^k.val : F p))) (2^n : F p)
+
+-- Lemma: evaluating `inputLinearSub` corresponds to the circuit's desired output
+lemma inputLinearSub_eval_eq_sub {n : ℕ} [hn : NeZero n] (env : Environment (F p)) (input : Var (BinSubInput n) (F p)) (input_val : BinSubInput n (F p)) (h_eval : ProvableType.eval env input = input_val) :
+    Expression.eval env (inputLinearSub n input) =
+      fieldFromBits input_val[0] + 2^n - fieldFromBits input_val[1] := by
+  simp only [inputLinearSub, circuit_norm, eval_foldl]
+  simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
+  have h_foldl_split := Fin.foldl_split_mul_add_distrib (α:=F p) (fun j k => input_val[j][k]) (fun i => 2^i) (n:=n)
+  simp_all only [Fin.getElem_fin, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.mod_succ]
+  simp [fieldFromBits_as_sum]
+
+-- Lemma: (Left) folding `n` times over an accumulator that starts as `(0, 1)`, and doubling each time the right element of the accumulator, results in having `2^n` as the right element of the pair
+lemma foldl_acc1_powerof2 {n : ℕ} (env : Environment (F p)) (f : Expression (F p) × Expression (F p) → ℕ → Expression (F p)) :
+  Expression.eval env (Fin.foldl n (fun acc i ↦ (f acc i, acc.2 + acc.2)) (0, 1)).2 = (2^n : F p) := by
+  induction n with
+  | zero => simp_all only [Fin.foldl_zero, pow_zero, circuit_norm]
+  | succ n' ihn' => simp_all +arith [Fin.foldl_succ_last, circuit_norm, two_mul, pow_succ, mul_comm]
+
+-- Lemma: Conversion to bitstring equals the evaluation of the conversion with explicit accumulator and variables
+lemma foldl_explicit {n : ℕ} {m : ℕ} (h_le : m <= n) (env : Environment (F p)) (offset : ℕ) (h_bool : ∀ i : Fin n, IsBool (env.get (offset + i))) :
+  Fin.foldl m (fun acc k ↦ acc + env.get (offset + k) * 2^k.val) 0 =
+    Expression.eval env (Fin.foldl m (fun acc i ↦ (acc.1 + var { index := offset + i } * acc.2, acc.2 + acc.2)) (0, 1)).1 := by
+  induction m with
+  | zero => simp_all +arith [Expression.eval]
+  | succ m' ihm' =>
+    specialize (ihm' (Nat.le_of_add_right_le h_le))
+    conv_lhs => rw [Fin.foldl_succ_last]
+    conv_rhs => rw [Fin.foldl_succ_last]
+    simp_all +arith [circuit_norm]
+    cases h_bool ⟨m', Nat.lt_of_add_one_le h_le⟩ with
+    | inl h0 => rw [h0]; norm_num
+    | inr h1 => rw [h1]; left; rw [foldl_acc1_powerof2 env (n:=m') (fun acc i => acc.1 + var { index := offset + ↑i } * acc.2)]
+
+-- Lemma: The value of `in0 + 2^n - in1` in the field is equal to the integer arithmetic result `in0.val + 2^n - in1.val`, provided inputs are small enough (`< 2^n`) and the modulus `p` is large enough (`> 2^(n+1)`).
+lemma lin_val_eq {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)
+    (h0 : in0.val < 2^n) (h1 : in1.val < 2^n) (h_p : 2^(n+1) < p) :
+    (in0 + 2^n - in1).val = in0.val + 2^n - in1.val := by
+  have h_sub_eq : (in0 + 2^n - in1 : F p).val = (in0.val + 2^n - in1.val) % p := by
+    norm_num [←ZMod.val_natCast];
+    rw [Nat.cast_sub] <;> norm_num;
+    linarith;
+  rw [h_sub_eq, Nat.mod_eq_of_lt (by rw [pow_succ'] at h_p; omega)]
+
+-- Lemma: The value of `in0 + 2^n - in1` is bound by `2^(n+1)`.
+lemma lin_bound {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)  (h0 : in0.val < 2^n) (h1 : in1.val < 2^n) (h_p : 2^(n+1) < p) :
+    (in0 + 2^n - in1).val < 2^(n+1) := by
+  rw [lin_val_eq in0 in1 h0 h1 h_p]; omega
+
+-- Lemma: Simplified LHS evaluation for soundness proof
+lemma soundness_lhs_eval {n : ℕ} [NeZero n] (env : Environment (F p)) (input_var : Var (BinSubInput n) (F p)) (input : BinSubInput n (F p))
+    (h_input : ProvableType.eval env input_var = input) :
+    Expression.eval env (inputLinearSub n input_var) = fieldFromBits input[0] + 2^n - fieldFromBits input[1] := by
+  apply inputLinearSub_eval_eq_sub; assumption
+
+-- Lemma: Boolean property from fieldToBits
+lemma fieldToBits_boolean {n : ℕ} (x : F p) (i : Fin n) : IsBool (fieldToBits n x)[i] :=
+  fieldToBits_bits i.val i.isLt
+
+-- Lemma: fieldFromBits produces values bounded by 2^n
+lemma fieldFromBits_bound {n : ℕ} (bits : Vector (F p) n) (h_bool : ∀ i : Fin n, IsBool bits[i]) :
+    (fieldFromBits bits).val < 2^n := by
+  apply fieldFromBits_lt
+  intro i hi
+  exact h_bool ⟨i, hi⟩
+
+-- Lemma: fieldFromBits of input bits is bounded
+lemma input_fieldFromBits_bound {n : ℕ} [NeZero n] (input : BinSubInput n (F p)) (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]) (j : Fin 2) :
+    (fieldFromBits input[j]).val < 2^n := by
+  apply fieldFromBits_bound
+  intro i
+  exact h_assumptions j i (by fin_cases j <;> decide) i.isLt
+
+-- Lemma: Aux bit value is Boolean
+lemma aux_bit_boolean {n : ℕ} (lin_val : F p) :
+    IsBool (if lin_val.val / (2^n) % 2 = 1 then (1 : F p) else (0 : F p)) := by
+  split_ifs
+  · simp [IsBool]
+  · simp [IsBool]
+
+-- Completeness helper lemmas
+
+-- Lemma: Sum of output bits modulo 2^n
+lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+    (input_var : Var (BinSubInput n) (F p)) (h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)))
+    (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i]) :
+    (Fin.foldl n (fun acc k ↦ acc + env.get (i₀ + ↑k) * 2 ^ k.val) 0).val = (Expression.eval env (inputLinearSub n input_var)).val % 2^n := by
+  have h_lin_mod : Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + env.get (i₀ + k) * 2^k.val) 0 =
+      fieldFromBits (fieldToBits n (Expression.eval env (inputLinearSub n input_var))) := by
+    have h_foldl_eq_fieldFromBits : ∀ (bits : Vector (F p) n), (∀ i : Fin n, IsBool (bits[i])) →
+        Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ k.val) 0 = fieldFromBits bits := by
+      exact fun bits a ↦ Eq.symm (fieldFromBits_as_sum bits)
+    convert h_foldl_eq_fieldFromBits _ _
+    · (expose_names; exact h_env_out x_1)
+    · exact fun i => h_env_out i ▸ h_out_binary i
+  rw [h_lin_mod, Utils.Bits.fieldFromBits_fieldToBits_mod]
+  rcases p with (_ | _ | p) <;> norm_cast
+  erw [ZMod.val_cast_of_lt]
+  exact lt_of_le_of_lt (Nat.mod_le _ _) (Nat.lt_of_lt_of_le (ZMod.val_lt _) (by linarith [pow_succ' 2 n]))
+
+-- Lemma: Aux bit equals lin divided by 2^n
+lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+    (input : BinSubInput n (F p)) (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
+    (input_var : Var (BinSubInput n) (F p)) (h_input : ProvableType.eval env input_var = input)
+    (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
+    (env.get (i₀ + n)).val = (Expression.eval env (inputLinearSub n input_var)).val / 2^n := by
+  rw [h_env_aux]
+  split_ifs with h_if
+  · -- Case: Bit is 1
+    convert h_if using 1
+    · convert h_if.symm using 1
+      exact ZMod.val_one p
+    · have h_lin_lt : (fieldFromBits input[0]).val < 2^n ∧ (fieldFromBits input[1]).val < 2^n := by
+        exact ⟨input_fieldFromBits_bound input h_assumptions 0, input_fieldFromBits_bound input h_assumptions 1⟩
+      have h_lin_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
+        rw [soundness_lhs_eval env input_var input h_input]
+        convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
+      have h_aux_one : (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n < 2 := by
+        exact Nat.div_lt_of_lt_mul h_lin_lt
+      grind
+  · -- Case: Bit is 0
+    rw [ZMod.val_zero, Nat.div_eq_of_lt]
+    have h_div_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
+      rw [soundness_lhs_eval env input_var input h_input]
+      apply Circomlib.BinSub.lin_bound
+      · exact fieldFromBits_lt input[0] fun i ↦
+          h_assumptions 0 i (of_decide_eq_true (id (Eq.refl true)))
+      · exact fieldFromBits_lt input[1] fun i ↦
+          h_assumptions 1 i (of_decide_eq_true (id (Eq.refl true)))
+      · exact hnout
+    contrapose! h_if
+    rw [Nat.mod_eq_of_lt]
+    · exact Nat.le_antisymm (Nat.le_of_lt_succ <| Nat.div_lt_of_lt_mul <| by linarith! [pow_succ' 2 n]) (Nat.div_pos h_if <| by positivity)
+    · exact Nat.div_lt_of_lt_mul h_div_lt
+
+-- Lemma: Main reconstruction equation for completeness
+lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+    (input : BinSubInput n (F p)) (input_var : Var (BinSubInput n) (F p))
+    (h_input : ProvableType.eval env input_var = input)
+    (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
+    (h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)))
+    (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i])
+    (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
+    Expression.eval env (inputLinearSub n input_var) =
+    Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 +
+    env.get (i₀ + n) * 2 ^ n := by
+  -- 1. Convert Circuit Fold to Summation
+  rw [←foldl_explicit (le_refl n) env i₀ h_out_binary]
+  -- We verify the equation by lifting to Natural numbers (ZMod.val)
+  -- This avoids modular arithmetic issues since we know 2^(n+1) < p
+  apply ZMod.val_injective
+  -- 3. Analyze the Summation Term (Lower Bits)
+  have h_sum_mod := completeness_sum_mod hnout env i₀ input_var h_out_binary h_env_out
+  -- 4. Analyze the Aux Term (Upper Bit)
+  have h_aux_div := completeness_aux_div hnout env i₀ input h_assumptions input_var h_input h_env_aux
+  -- 5. Combine to prove Euclidean Division: lin = (lin % 2^n) + (lin / 2^n) * 2^n
+  rw [ZMod.val_add, ZMod.val_mul]
+  simp only [h_sum_mod, h_aux_div]
+  set lin := Expression.eval env (inputLinearSub n input_var)
+  have hh := (Nat.mod_add_div lin.val (2^n)).symm
+  have h_mod : lin.val % p = (lin.val % 2^n + 2^n * (lin.val / 2^n)) % p := by
+    rw [← hh]
+  convert h_mod using 1
+  · exact Eq.symm (Nat.mod_eq_of_lt (show lin.val < p from ZMod.val_lt _))
+  · norm_num [mul_comm, ZMod.val_natCast]
+    norm_cast
+    erw [ZMod.val_cast_of_lt]; linarith [Nat.pow_le_pow_right two_pos (show n ≤ n + 1 by linarith)]
+
 /-
 template BinSub(n) {
     signal input in[2][n];
@@ -99,18 +271,18 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
   return out
 
 -- n: number of bits per operand
-def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout : 2^(n+1) < p) :
-    FormalCircuit (F p) (BinSubInput n) (fields n) where
+def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
+  FormalCircuit (F p) (BinSubInput n) (fields n) where
   main input := main n input
 
-  localLength _ := n
-  localLength_eq := by sorry
+  localLength _ := n+1
+  localLength_eq := by simp [main, circuit_norm]
 
   output _ i := varFromOffset (fields n) i
 
-  output_eq := by sorry
+  output_eq := by intros input offset; rfl
 
-  subcircuitsConsistent := by sorry
+  subcircuitsConsistent := by simp +arith [main, circuit_norm]
 
   Assumptions input :=
     -- All inputs are binary
@@ -136,11 +308,83 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
     rfl
 
   soundness := by
-    sorry
+    circuit_proof_start
+
+    -- Decompose the big conjunction of constraints into manageable hypotheses
+    rcases h_holds with ⟨h_out_constrs, h_aux_constr, h_eqn⟩
+
+    -- Step 1: Establish that the output bits in the environment are Boolean
+    -- Derived from: ∀ i, out[i] * (out[i] - 1) = 0
+    have h_out_bool : ∀ i < n, IsBool (env.get (i₀ + i)) := by
+      intro i hi
+      specialize h_out_constrs ⟨i, hi⟩
+      simpa [add_eq_zero_iff_eq_neg] using h_out_constrs
+
+    -- Step 2: Establish that the aux bit is Boolean
+    have h_aux_bool : IsBool (env.get (i₀ + n)) := by
+      apply Or.symm; exact (by grind)
+
+    -- Step 3: Analyze the Left Hand Side (LHS) of the main equation
+    -- Link the circuit's `foldl` for `lin` to the arithmetic definition: (in0 + 2^n - in1)
+    -- Hint: Use `inputLinearSub_eval_eq_sub`
+    have h_lhs_eval := soundness_lhs_eval env input_var input h_input
+
+    -- Step 4: Analyze the Right Hand Side (RHS) of the main equation
+    -- Link the circuit's reconstruction loop to `fieldFromBits` of the output vars
+    -- Hint: Use `foldl_explicit` and `Bits.fieldFromBits_eval`
+    let out_vars : Vector (Expression (F p)) n := Vector.mapRange n (fun i ↦ var { index := i₀ + i })
+    have h_rhs_eval : Expression.eval env (Fin.foldl n (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 = fieldFromBits (Vector.map (Expression.eval env) out_vars) := by
+      -- By definition of `fieldFromBits`, we know that `fieldFromBits (Vector.map (Expression.eval env) out_vars)` is the sum of the bits of `out_vars` multiplied by their respective powers of 2.
+      apply Eq.symm; exact (by
+      convert foldl_explicit _ _ _ _ using 1;
+      any_goals exact fun i => h_out_bool _ i.2;
+      · simp +zetaDelta only [id_eq, mul_eq_zero, Nat.cast_ofNat] at *;
+        -- By definition of `fieldFromBits`, we know that it is equal to the foldl of the same operation.
+        have h_fieldFromBits_eq_foldl : ∀ (bits : Vector (F p) n), Utils.Bits.fieldFromBits bits = Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ (k : ℕ)) 0 := by exact fieldFromBits_as_sum;
+        convert h_fieldFromBits_eq_foldl _;
+        simp +decide only [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapRange];
+        rfl;
+      · norm_num)
+
+    -- Final Conclusion: Assemble the parts
+    -- We provide the witness `aux` from the environment and use the equation proved above
+    refine ⟨h_assumptions, h_out_bool, env.get (i₀ + n), h_aux_bool, ?_⟩
+    erw [←h_lhs_eval, ←h_rhs_eval]
+    exact h_eqn
 
   completeness := by
-    sorry
+    circuit_proof_start
 
+    -- Decompose the witness generation assumption (h_env) into parts for 'out' and 'aux'
+    rcases h_env with ⟨h_env_out, h_env_aux⟩
+
+    -- Step 1: Define 'lin' for clarity
+    set lin := Expression.eval env (inputLinearSub n input_var)
+
+    -- Step 2: Establish that the 'out' bits in the environment are binary
+    have h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)) := by
+      rintro ⟨i, h⟩
+      simp only [h_env_out ⟨i, h⟩]
+      exact fieldToBits_boolean _ ⟨i, h⟩
+
+    -- Step 3: Establish that the 'aux' bit is binary
+    have h_aux_binary : IsBool (env.get (i₀ + n)) := by
+      rw [h_env_aux]
+      exact aux_bit_boolean lin
+
+    -- Final Goal: Prove the conjunction of constraints
+    and_intros
+    · -- Constraint 1: Output bits are binary
+      intro i
+      specialize h_out_binary i
+      rcases h_out_binary with (h0 | h1)
+      . rw [h0]; norm_num
+      . rw [h1]; norm_num
+    · -- Constraint 2: Aux bit is binary
+      rcases h_aux_binary with (h0 | h1)
+      . rw [h0]; norm_num
+      . rw [h1]; norm_num
+    · -- Constraint 3: The linear sum check (lin === lout)
+      exact completeness_reconstruction hnout env i₀ input input_var h_input h_assumptions h_out_binary h_env_out h_env_aux
 end BinSub
-
 end Circomlib

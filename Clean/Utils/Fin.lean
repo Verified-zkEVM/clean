@@ -6,6 +6,14 @@ namespace Fin
 
 /-! ## Lemmas about Fin.foldl and sums -/
 
+lemma fin_foldl_const {T : Type*} (n : ℕ) (c : T) :
+  Fin.foldl n (fun acc _k => acc) c = c := by
+  induction n with
+  | zero =>
+    rfl
+  | succ n ih =>
+    simp [Fin.foldl_succ, ih]
+
 /-- The ZMod.val of a Fin.foldl sum is bounded by the sum of individual ZMod.vals -/
 lemma foldl_sum_val_bound {p : ℕ} [Fact p.Prime] {ops : ℕ} (f : Fin ops → ZMod p) (M : ℕ)
     (h_bound : ∀ j : Fin ops, (f j).val ≤ M) (h_no_overflow : ops * M < p) :
@@ -55,7 +63,8 @@ lemma foldl_factor_const {α : Type*} [CommSemiring α] {n : ℕ} (f : Fin n →
     have h_eq : Fin.foldl m (fun x1 x2 => x1 + f x2.castSucc * c) init =
                 Fin.foldl m (fun x1 x2 => x1 + (f ∘ Fin.castSucc) x2 * c) init := by
       congr
-    rw [h_eq, ih (f ∘ Fin.castSucc)]
+    rw [h_eq]
+    rw [ih (f ∘ Fin.castSucc)]
     -- Now simplify the RHS
     have h_rhs : Fin.foldl m (fun x1 x2 => x1 + f x2.castSucc) 0 =
                  Fin.foldl m (fun x1 x2 => x1 + (f ∘ Fin.castSucc) x2) 0 := by
@@ -66,6 +75,13 @@ lemma foldl_factor_const {α : Type*} [CommSemiring α] {n : ℕ} (f : Fin n →
     rw [mul_add, add_assoc]
     congr 1
     rw [mul_comm c (f (Fin.last m)), add_comm]
+
+/-- Factoring out the init from a foldl sum, corollary of foldl_factor_const -/
+lemma foldl_factor_init {α : Type*} [CommSemiring α] {n : ℕ} (f : Fin n → α) (init : α) :
+    Fin.foldl n (fun acc i => acc + f i) init =
+    init + Fin.foldl n (fun acc i => acc + f i) 0 := by
+  have hh := (foldl_factor_const f 1 init)
+  simp_all only [mul_one, one_mul]
 
 /-- Convert Fin.foldl to Finset.sum via range -/
 lemma foldl_eq_sum_range {α : Type*} [AddCommMonoid α] : ∀ (n' : ℕ) (f' : Fin n' → α),
@@ -99,6 +115,12 @@ lemma foldl_to_sum {α : Type*} [AddCommMonoid α] : ∀ (n' : ℕ) (f' : Fin n'
   simp only [Finset.sum_fin_eq_sum_range]
   exact foldl_eq_sum_range n' f'
 
+/-- Convert Fin.foldl to a standard sum, with a non-zero initial value -/
+lemma foldl_to_sum_init_value {α : Type*} [CommSemiring α] : ∀ init (n' : ℕ) (f' : Fin n' → α), Fin.foldl n' (fun acc i => acc + f' i) init = init + ∑ i : Fin n', f' i := by
+  intro init n' f'
+  rw [foldl_factor_init]
+  simp only [foldl_to_sum]
+
 /-- Summation interchange for double sums -/
 lemma sum_interchange {α : Type*} [CommSemiring α] {n ops : ℕ} (f : Fin ops → Fin n → α) (g : ℕ → α) :
     Fin.foldl n (fun acc k => acc + g k.val *
@@ -111,5 +133,17 @@ lemma sum_interchange {α : Type*} [CommSemiring α] {n ops : ℕ} (f : Fin ops 
   rw [Finset.sum_comm]
   -- Just need to show g k * f j k = f j k * g k
   simp only [mul_comm]
+
+/-- Splits an inner sum in a foldl into two separate folds and distributes multiplication over addition -/
+lemma foldl_split_mul_add_distrib {α : Type*} [CommRing α] {n : ℕ} (f : Fin 2 → Fin n → α) (g : ℕ → α) :
+    Fin.foldl n (fun acc i => acc + f 0 i * g i.val + - (f 1 i * g i.val)) (2^n : α) =
+    (Fin.foldl n (fun acc' i => acc' + f 0 i * g i.val) 0) +
+    2^n -
+    (Fin.foldl n (fun acc' i => acc' + f 1 i * g i.val) 0) := by
+  simp only [add_assoc]
+  simp only [← sub_eq_add_neg]
+  simp only [foldl_to_sum_init_value]
+  simp only [Finset.sum_sub_distrib]
+  grind
 
 end Fin

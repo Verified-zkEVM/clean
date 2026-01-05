@@ -74,7 +74,7 @@ def conditionalDecodeMain
   let dummy := input.dummy
 
   -- Decode the actual instruction
-  let actualDecoded ← subcircuitWithAssertion decodeInstruction.circuit rawInstrType
+  let actualDecoded ← subcircuitWithAssertion decodeInstruction rawInstrType
 
   -- Use conditional gadget to select between actual and dummy based on enabled
   let result ← subcircuit Gadgets.Conditional.circuit {
@@ -93,7 +93,7 @@ def conditionalDecodeElaborated :
   main := conditionalDecodeMain
   localLength _ := 8  -- Same as decodeInstruction.circuit since Conditional adds 0
   localAdds_eq _ _ _ := by
-    simp only [conditionalDecodeMain, circuit_norm, decodeInstruction.circuit, Gadgets.Conditional.circuit]
+    simp only [conditionalDecodeMain, circuit_norm, decodeInstruction, Gadgets.Conditional.circuit]
     simp only [Operations.collectAdds, circuit_norm]
 
 /--
@@ -112,15 +112,14 @@ def conditionalDecodeCircuit :
     else
       decodeInstruction.Spec input.rawInstrType output
   soundness := by
-    circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstruction.circuit, decodeInstruction.Spec]
+    circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstruction]
     intro h_assumptions
     rcases h_holds with ⟨ h_decode, h_conditional ⟩
     specialize h_conditional h_assumptions
-    simp only [Gadgets.Conditional.Spec] at h_conditional
     simp only [h_conditional]
     rcases h_assumptions with h_zero | h_one <;> aesop
   completeness := by
-    circuit_proof_all [conditionalDecodeElaborated, conditionalDecodeMain, decodeInstruction.circuit, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstruction.Spec]
+    circuit_proof_all [conditionalDecodeElaborated, conditionalDecodeMain, decodeInstruction, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions]
 
 /-!
 ## Dummy instructions for conditional decoding

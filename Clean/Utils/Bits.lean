@@ -5,6 +5,7 @@ The bits are themselves typed as field elements, with values in { 0, 1 }.
 import Clean.Utils.Field
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
+import Clean.Utils.Fin
 
 namespace Utils.Bits
 /--
@@ -99,6 +100,32 @@ theorem fromBits_toBits {n : ℕ} {x : ℕ} (hx : x < 2^n) :
     intro i hi; simp [toBits, Vector.getElem_mapRange]
   apply toBits_injective n (fromBits_lt _ h_bits) hx
   rw [toBits_fromBits _ h_bits]
+
+/-- Generalization of `fromBits_toBits` to any field element: `toBits` is a right-inverse of `fromBits` modulo `2^n` -/
+theorem fromBits_toBits_mod {n : ℕ} {x : ℕ} : fromBits (toBits n x) = x % 2^n := by
+  -- By definition of `toBits` and `fromBits`, we know that `fromBits (toBits n x)` is the sum of `x_i * 2^i` for `i` from `0` to `n-1`, where `x_i` is the `i`-th bit of `x`.
+  have h_fromBits_toBits : ∀ (x : ℕ) (n : ℕ), fromBits (toBits n x) = ∑ i ∈ Finset.range n, (x / 2^i) % 2 * 2^i := by
+    intros x n
+    simp only [fromBits, toBits];
+    simp +decide only [Finset.sum_range];
+    convert Fin.foldl_to_sum n _ using 2 ; simp +decide [Nat.testBit];
+    simp +decide only [Nat.shiftRight_eq_div_pow, Vector.getElem_mapRange];
+    cases Nat.mod_two_eq_zero_or_one (x / 2^(↑‹Fin n› : ℕ) ) <;> simp +decide [*];
+  induction n <;> simp_all +decide [Finset.sum_range_succ, pow_succ]
+  · rw [Nat.mod_one]
+  · rw [←Nat.mod_add_div x (2 ^ _)] ; simp +decide [Nat.add_mod]
+    norm_num [Nat.add_div, Nat.add_mod, Nat.mul_div_assoc, Nat.mul_mod, Nat.pow_succ']
+    swap
+    · rename_i pred ih
+      exact pred + 1
+    norm_num [Nat.pow_succ, Nat.mul_mod_mul_left, Nat.mod_eq_of_lt]
+    split_ifs <;> simp_all +decide [Nat.mul_assoc];
+    · linarith [Nat.mod_lt x (show 2 ^ ‹_› > 0 by positivity)]
+    · rename_i pred ih h_lt
+      rw [← Nat.mod_add_div (x % (2 ^ pred * 2) ) (2 ^ pred)]
+      rw [Nat.add_mul_div_left _ _ (by positivity)]; norm_num
+      rw [Nat.mod_eq_of_lt (show x % (2 ^ _ * 2)/2 ^ _ < 2 from Nat.div_lt_of_lt_mul <| by linarith [Nat.mod_lt x (by positivity : 0 < (2 ^ ‹_› * 2))])]
+      ring
 
 -- field variant of `toBits` and `fromBits`
 variable {p : ℕ} [prime: Fact p.Prime]
@@ -228,6 +255,16 @@ theorem fieldFromBits_fieldToBits {n : ℕ} {x : F p} (hx : x.val < 2^n) :
   simp only [fieldToBits, fieldFromBits]
   rw [Vector.map_map, val_natCast_toBits, fromBits_toBits hx, ZMod.natCast_zmod_val]
 
+/-- Generalization of `fieldFromBits_fieldToBits` for any field element: `fieldToBits` is a right-inverse of `fieldFromBits` modulo `2^n` -/
+theorem fieldFromBits_fieldToBits_mod {n : ℕ} (x : F p) :
+    fieldFromBits (fieldToBits n x) = ((x.val % 2^n : ℕ) : F p) := by
+  convert fromBits_toBits_mod (n:=n) (x:=x.val);
+  unfold fieldFromBits fieldToBits;
+  simp_all only [Vector.map_map]
+  apply Iff.intro
+  · intro a; exact fromBits_toBits_mod (x:=ZMod.val x)
+  · intro a; congr; convert a using 2; exact val_natCast_toBits
+
 /-! ## Additional lemmas about fieldFromBits -/
 
 /-- fieldFromBits decomposes as sum of first n bits + bit_n * 2^n -/
@@ -245,4 +282,13 @@ lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
   induction n with
   | zero => simp [fieldFromBits, fromBits, Fin.foldl_zero]
   | succ n ih => simp [fieldFromBits_succ, ih, Fin.foldl_succ_last]
+
+lemma fieldFromBits_eq {n : ℕ} {xs ys : Vector (F p) n} (h: ∀ (i : Fin n), xs[↑i] = ys[↑i]) :
+    fieldFromBits xs = fieldFromBits ys := by
+  have h_vec_eq : xs = ys := by
+    ext i h_range
+    let fi : Fin n := ⟨i, h_range⟩
+    exact h fi
+  rw [h_vec_eq]
+
 end Utils.Bits

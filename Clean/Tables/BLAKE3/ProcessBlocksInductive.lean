@@ -288,7 +288,6 @@ private lemma step_process_block (env : Environment (F p))
     simp [acc_normalized, circuit_norm])
   dsimp only [Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
-  dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
   specialize h_vector_cond (by simp only [circuit_norm])
   specialize h_u32_cond (by simp only [circuit_norm])
   simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
@@ -348,7 +347,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       | inl _ => assumption
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
-    simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
+    simp only [Conditional.circuit, h_eval, step, circuit_norm] at h_holds ⊢
     simp only [circuit_norm, h_holds, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢
     simp_all only [circuit_norm]
@@ -403,7 +402,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
           simp only [h_witnesses_iszero]
           norm_num
       · norm_num
-    simp_all only [Addition32.circuit, Addition32.Assumptions, Conditional.circuit, Conditional.Assumptions]
+    simp_all only [Addition32.circuit, Addition32.Assumptions]
     constructor
     · dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
       rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
