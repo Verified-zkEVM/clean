@@ -65,6 +65,7 @@ theorem namedListToState_stateToNamedList (s : State (F p)) :
 
 /-! ## Individual instruction specs imply valid transitions -/
 
+omit p_large_enough in
 /-- ADD instruction spec (when enabled) implies valid femtoCairo transition -/
 theorem AddInstruction_Spec_implies_transition
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
@@ -714,6 +715,7 @@ def totalIncoming
   countIncoming storeInputs storeStatePostState s +
   countIncoming loadInputs (loadStatePostState program memory) s
 
+omit p_large_enough in
 /-- For a single instruction, sum over all targets equals 1 if enabled and preState=s, else 0 -/
 lemma sum_instructionEdgeContribution_over_targets
     (input : InstructionStepInput (F p))
@@ -752,6 +754,7 @@ lemma sum_instructionEdgeContribution_over_targets
     · -- not enabled
       simp only [he, false_and, ↓reduceIte]
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- Helper: Finset.sum over list.map.sum equals list.map of Finset.sum -/
 lemma sum_list_map_sum_eq_list_map_sum {α β : Type*} [Fintype α] [AddCommMonoid β]
     (L : List (InstructionStepInput (F p))) (f : InstructionStepInput (F p) → α → β) :
@@ -760,6 +763,7 @@ lemma sum_list_map_sum_eq_list_map_sum {α β : Type*} [Fintype α] [AddCommMono
   | nil => simp
   | cons head tail ih => simp only [List.map_cons, List.sum_cons, Finset.sum_add_distrib, ih]
 
+omit p_large_enough in
 /-- Helper lemma: sum over all target states equals total outgoing from source -/
 lemma sum_bundleEdgeCount_eq_countOutgoing {n : ℕ}
     (inputs : Vector (InstructionStepInput (F p)) n)
@@ -778,6 +782,7 @@ lemma sum_bundleEdgeCount_eq_countOutgoing {n : ℕ}
     simp only [List.map_cons, List.sum_cons, List.countP_cons, ih]
     by_cases h : head.enabled = 1 ∧ head.preState = s <;> simp [h, add_comm]
 
+omit p_large_enough in
 /-- For a single instruction, sum over all sources equals 1 if enabled and postStateFn preState=s, else 0 -/
 lemma sum_instructionEdgeContribution_over_sources
     (input : InstructionStepInput (F p))
@@ -815,6 +820,7 @@ lemma sum_instructionEdgeContribution_over_sources
     · -- not enabled
       simp only [he, false_and, ↓reduceIte]
 
+omit p_large_enough in
 /-- Helper lemma: sum over all source states equals total incoming to target -/
 lemma sum_bundleEdgeCount_eq_countIncoming {n : ℕ}
     (inputs : Vector (InstructionStepInput (F p)) n)
@@ -835,6 +841,7 @@ lemma sum_bundleEdgeCount_eq_countIncoming {n : ℕ}
 
 /-! ## Field-integer lifting lemmas -/
 
+omit p_large_enough in
 /-- If two natural numbers have equal field representations and are small, they are equal -/
 lemma nat_eq_of_field_eq (a b : ℕ) (h_small_a : a < p) (h_small_b : b < p)
     (h_eq : (a : F p) = (b : F p)) : a = b := by
@@ -843,11 +850,13 @@ lemma nat_eq_of_field_eq (a b : ℕ) (h_small_a : a < p) (h_small_b : b < p)
   rw [h_eq] at ha
   omega
 
+omit p_large_enough in
 /-- Field subtraction equals integer subtraction when values are small -/
-lemma field_sub_eq_int_sub (a b : ℕ) (h_small : a + b < p) :
+lemma field_sub_eq_int_sub (a b : ℕ) (_h_small : a + b < p) :
     (↑a - ↑b : F p) = ((a : ℤ) - (b : ℤ) : F p) := by
   simp only [Int.cast_natCast]
 
+omit p_large_enough in
 /-- When a - b = 0 in field and values are small, a = b as naturals -/
 lemma nat_eq_of_field_sub_eq_zero (a b : ℕ) (h_small : a + b < p)
     (h_eq : (↑a - ↑b : F p) = 0) : a = b := by
@@ -856,6 +865,7 @@ lemma nat_eq_of_field_sub_eq_zero (a b : ℕ) (h_small : a + b < p)
     exact this
   exact nat_eq_of_field_eq a b (by omega) (by omega) h_field
 
+omit p_large_enough in
 /-- When a - b = 1 in field and values are small, a = b + 1 -/
 lemma nat_succ_of_field_sub_eq_one (a b : ℕ) (h_small : a + b + 1 < p)
     (h_eq : (↑a - ↑b : F p) = 1) : a = b + 1 := by
@@ -868,12 +878,14 @@ lemma nat_succ_of_field_sub_eq_one (a b : ℕ) (h_small : a + b + 1 < p)
   have h_small_b1 : b + 1 < p := by omega
   exact nat_eq_of_field_eq a (b + 1) h_small_a h_small_b1 h_field
 
+omit p_large_enough in
 /-- When b - a = 1 in field and values are small, b = a + 1 -/
 lemma nat_succ_of_field_sub_eq_one' (a b : ℕ) (h_small : a + b + 1 < p)
     (h_eq : (↑b - ↑a : F p) = 1) : b = a + 1 := by
   have h_small' : b + a + 1 < p := by omega
   exact nat_succ_of_field_sub_eq_one b a h_small' h_eq
 
+omit p_large_enough in
 /-- Lift field equation a - b = 1 to integer equation (a : ℤ) - b = 1 -/
 lemma int_sub_eq_one_of_field_sub_eq_one (a b : ℕ) (h_small : a + b + 1 < p)
     (h_eq : (↑a - ↑b : F p) = 1) : (a : ℤ) - (b : ℤ) = 1 := by
@@ -888,6 +900,7 @@ lemma field_sub_eq_neg_one_implies_swap_eq_one {F : Type*} [Field F]
     _ = -(a - b) + ((a - b) + 1) := by rw [h1]; ring
     _ = 1 := by ring
 
+omit p_large_enough in
 /-- Lift field equation a - b = -1 to integer equation (a : ℤ) - b = -1 -/
 lemma int_sub_eq_neg_one_of_field_sub_eq_neg_one (a b : ℕ) (h_small : a + b + 1 < p)
     (h_eq : (↑a - ↑b : F p) = -1) : (a : ℤ) - (b : ℤ) = -1 := by
@@ -895,6 +908,7 @@ lemma int_sub_eq_neg_one_of_field_sub_eq_neg_one (a b : ℕ) (h_small : a + b + 
   have h_nat := nat_succ_of_field_sub_eq_one b a (by omega) h_eq'
   omega
 
+omit p_large_enough in
 /-- Lift field equation a - b = 0 to integer equation (a : ℤ) - b = 0 -/
 lemma int_sub_eq_zero_of_field_sub_eq_zero (a b : ℕ) (h_small : a + b < p)
     (h_eq : (↑a - ↑b : F p) = 0) : (a : ℤ) - (b : ℤ) = 0 := by
@@ -908,19 +922,23 @@ def totalCapacity (capacities : InstructionCapacities) : ℕ :=
 
 /-! ## Key structural lemma: multiplicity equals emission + flow -/
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- Fold raw NamedList back to stateToNamedList. -/
 lemma stateToNamedList_eq (s : State (F p)) :
     (⟨"state", [s.pc, s.ap, s.fp]⟩ : NamedList (F p)) = stateToNamedList s := rfl
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- Helper: If two states are different, their NamedList representations are different. -/
 lemma stateToNamedList_ne_of_ne {s1 s2 : State (F p)} (h : s1 ≠ s2) :
     stateToNamedList s1 ≠ stateToNamedList s2 := fun heq => h (stateToNamedList_injective heq)
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /-- Helper: Finsupp.single at a different state evaluates to zero. -/
 lemma finsupp_single_ne_state {s1 s2 : State (F p)} {v : F p} (h : s1 ≠ s2) :
     Finsupp.single (stateToNamedList s1) v (stateToNamedList s2) = 0 :=
   Finsupp.single_eq_of_ne (stateToNamedList_ne_of_ne h).symm
 
+omit p_large_enough in
 /--
 For a single instruction with spec, its contribution to multiplicity at state s is:
 - -1 if enabled and preState = s
@@ -928,8 +946,8 @@ For a single instruction with spec, its contribution to multiplicity at state s 
 - 0 otherwise
 -/
 lemma single_instruction_multiplicity_contribution
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {programSize : ℕ} [NeZero programSize] (_program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (_memory : Fin memorySize → F p)
     (input : InstructionStepInput (F p))
     (adds : InteractionDelta (F p))
     (postStateFn : State (F p) → State (F p))
@@ -988,6 +1006,7 @@ lemma sum_ite_eq_countP {α : Type*} {n : ℕ} (v : Vector α n) (p : α → Pro
   rw [finRange_map_getElem_eq_toList_map v (fun x => if p x then (1 : F) else 0)]
   exact list_sum_ite_eq_countP v.toList p
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 /--
 Helper: foldl add over finRange for InteractionDelta equals list sum of map.
 -/
@@ -1003,6 +1022,7 @@ lemma foldl_add_eq_map_sum {n : ℕ} (f : Fin n → InteractionDelta (F p)) :
   -- Now use List.sum_eq_foldl
   rw [← List.sum_eq_foldl]
 
+omit p_large_enough in
 /--
 Helper: toFinsupp of list sum equals sum of map toFinsupp.
 -/
@@ -1013,6 +1033,7 @@ lemma toFinsupp_list_sum (l : List (InteractionDelta (F p))) :
   | cons hd tl ih =>
     simp only [List.sum_cons, InteractionDelta.toFinsupp_add, List.map_cons, ih]
 
+omit p_large_enough in
 /--
 Helper: toFinsupp distributes over foldl addition.
 -/
@@ -1027,6 +1048,7 @@ lemma toFinsupp_foldl_add {n : ℕ} (f : Fin n → InteractionDelta (F p)) :
   -- RHS becomes: ((finRange n).map (fun i => (f i).toFinsupp)).sum
   rfl
 
+omit p_large_enough in
 /--
 For a bundle of instructions satisfying Bundle.Spec, the total multiplicity contribution
 at state s equals countIncoming - countOutgoing.
@@ -1084,6 +1106,7 @@ This bridges between the Spec (which uses equality or zero) and the sum form nee
 for bundle_multiplicity_contribution.
 -/
 
+omit p_large_enough in
 /--
 For AddInstruction.Spec, the toFinsupp equals the expected ite form.
 When enabled: single(pre,-1) + single(post,+1)
@@ -1127,6 +1150,7 @@ lemma AddInstruction_Spec_toFinsupp_ite
     simp only [AddInstruction.Spec, h_enabled, ite_false] at h_spec
     exact h_spec
 
+omit p_large_enough in
 /--
 For MulInstruction.Spec, the toFinsupp equals the expected ite form.
 -/
@@ -1162,6 +1186,7 @@ lemma MulInstruction_Spec_toFinsupp_ite
     simp only [MulInstruction.Spec, h_enabled, ite_false] at h_spec
     exact h_spec
 
+omit p_large_enough in
 /--
 For StoreStateInstruction.Spec, the toFinsupp equals the expected ite form.
 -/
@@ -1197,6 +1222,7 @@ lemma StoreStateInstruction_Spec_toFinsupp_ite
     simp only [StoreStateInstruction.Spec, h_enabled, ite_false] at h_spec
     exact h_spec
 
+omit p_large_enough in
 /--
 For LoadStateInstruction.Spec, the toFinsupp equals the expected ite form.
 Note: loadStatePostState uses femtoCairoMachineTransition to compute the post state,
@@ -1244,6 +1270,7 @@ For each instruction type, convert Bundle.Spec's foldl to the sum form needed
 for bundle_multiplicity_contribution.
 -/
 
+omit p_large_enough in
 /--
 For AddInstruction.Bundle.Spec, the toFinsupp equals a sum over individual instruction contributions.
 This bridges the foldl form in Bundle.Spec to the Finset.sum form.
@@ -1271,6 +1298,7 @@ lemma AddInstruction_Bundle_Spec_toFinsupp_sum
   intro i _
   exact AddInstruction_Spec_toFinsupp_ite program memory inputs[i] (stepAdds i) (h_step_specs i)
 
+omit p_large_enough in
 /--
 For MulInstruction.Bundle.Spec, the toFinsupp equals a sum over individual instruction contributions.
 -/
@@ -1292,6 +1320,7 @@ lemma MulInstruction_Bundle_Spec_toFinsupp_sum
   intro i _
   exact MulInstruction_Spec_toFinsupp_ite program memory inputs[i] (stepAdds i) (h_step_specs i)
 
+omit p_large_enough in
 /--
 For StoreStateInstruction.Bundle.Spec, the toFinsupp equals a sum over individual instruction contributions.
 -/
@@ -1313,6 +1342,7 @@ lemma StoreStateInstruction_Bundle_Spec_toFinsupp_sum
   intro i _
   exact StoreStateInstruction_Spec_toFinsupp_ite program memory inputs[i] (stepAdds i) (h_step_specs i)
 
+omit p_large_enough in
 /--
 For LoadStateInstruction.Bundle.Spec, the toFinsupp equals a sum over individual instruction contributions.
 -/
@@ -1334,6 +1364,7 @@ lemma LoadStateInstruction_Bundle_Spec_toFinsupp_sum
   intro i _
   exact LoadStateInstruction_Spec_toFinsupp_ite program memory inputs[i] (stepAdds i) (h_step_specs i)
 
+omit p_large_enough in
 /--
 For any state s, the multiplicity in adds.toFinsupp equals:
   emission(s) + incoming_edges(s) - outgoing_edges(s)
@@ -1439,6 +1470,7 @@ lemma multiplicity_eq_emission_plus_flow
       rw [h_add_contrib, h_mul_contrib, h_store_contrib, h_load_contrib]
       simp only [totalIncoming, totalOutgoing]; push_cast; ring
 
+omit p_large_enough in
 /--
 Key consequence: when adds.toFinsupp = 0, the emission equals outgoing - incoming.
 -/
@@ -1490,6 +1522,7 @@ lemma emission_eq_flow_diff
   _ = out_field - inc_field + (init_emit + inc_field - out_field + final_emit) := by rw [← h_eq]
   _ = init_emit + final_emit := by ring
 
+omit p_large_enough in
 /-- The total number of enabled instructions is bounded by total capacity -/
 lemma enabled_count_bounded
     (capacities : InstructionCapacities)
@@ -1517,6 +1550,7 @@ lemma enabled_count_bounded
 
 /-! ## Connecting Run.netFlow to totalOutgoing/totalIncoming -/
 
+omit p_large_enough in
 /--
 The netFlow computed from buildRunFromInputs equals totalOutgoing - totalIncoming.
 This connects the Run structure to our counting functions.
@@ -1567,8 +1601,9 @@ lemma netFlow_eq_totalOutgoing_sub_totalIncoming
       h_add_in, h_mul_in, h_store_in, h_load_in]
 
   -- Unfold the totalOutgoing/totalIncoming definitions
-  simp only [totalOutgoing, totalIncoming, Int.ofNat_add]
+  simp only [totalOutgoing, totalIncoming, Int.natCast_add]
 
+omit p_large_enough in
 /-- countOutgoing is bounded by the vector length (filter length ≤ list length) -/
 lemma countOutgoing_le_length {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
     (s : State (F p)) :
@@ -1578,6 +1613,7 @@ lemma countOutgoing_le_length {n : ℕ} (inputs : Vector (InstructionStepInput (
   simp only [Vector.length_toList] at h1
   exact h1
 
+omit p_large_enough in
 /-- countIncoming is bounded by the vector length (filter length ≤ list length) -/
 lemma countIncoming_le_length {n : ℕ} (inputs : Vector (InstructionStepInput (F p)) n)
     (postStateFn : State (F p) → State (F p)) (s : State (F p)) :
@@ -1587,11 +1623,12 @@ lemma countIncoming_le_length {n : ℕ} (inputs : Vector (InstructionStepInput (
   simp only [Vector.length_toList] at h1
   exact h1
 
+omit p_large_enough in
 /-- totalOutgoing is bounded by totalCapacity -/
 lemma totalOutgoing_le_totalCapacity
     (capacities : InstructionCapacities)
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {programSize : ℕ} [NeZero programSize] (_program : Fin programSize → F p)
+    {memorySize : ℕ} [NeZero memorySize] (_memory : Fin memorySize → F p)
     (addInputs : Vector (InstructionStepInput (F p)) capacities.addCapacity)
     (mulInputs : Vector (InstructionStepInput (F p)) capacities.mulCapacity)
     (storeInputs : Vector (InstructionStepInput (F p)) capacities.storeStateCapacity)
@@ -1606,6 +1643,7 @@ lemma totalOutgoing_le_totalCapacity
   have h4 := countOutgoing_le_length loadInputs s
   omega
 
+omit p_large_enough in
 /-- totalIncoming is bounded by totalCapacity -/
 lemma totalIncoming_le_totalCapacity
     (capacities : InstructionCapacities)
@@ -1625,6 +1663,7 @@ lemma totalIncoming_le_totalCapacity
   have h4 := countIncoming_le_length loadInputs (loadStatePostState program memory) s
   omega
 
+omit p_large_enough in
 /-- Combined bound: totalOutgoing + totalIncoming + 1 < p when 2 * totalCapacity + 1 < p -/
 lemma totalFlow_bound
     (capacities : InstructionCapacities)
@@ -1644,6 +1683,7 @@ lemma totalFlow_bound
     addInputs mulInputs storeInputs loadInputs s
   omega
 
+omit p_large_enough in
 /--
 When the ExecutionBundle.Spec holds with balanced adds (toFinsupp = 0),
 the Run built from enabled instructions has the expected netFlow properties.
@@ -1754,6 +1794,7 @@ theorem balanced_adds_implies_netFlow
       have := h_bounds s; omega
     exact int_sub_eq_zero_of_field_sub_eq_zero _ _ h_small h_eq
 
+omit p_large_enough in
 /-- Helper: if bundleEdgeCount > 0, there exists an enabled input matching the transition -/
 lemma bundleEdgeCount_pos_implies_exists {n : ℕ}
     (inputs : Vector (InstructionStepInput (F p)) n)
@@ -1792,6 +1833,7 @@ lemma bundleEdgeCount_pos_implies_exists {n : ℕ}
     rw [← h_eq] at h_ne_zero
     exact absurd rfl h_ne_zero
 
+omit p_large_enough in
 /--
 The Run built from enabled instructions is valid: every edge corresponds to
 a valid femtoCairoMachineTransition.
@@ -1814,9 +1856,7 @@ theorem buildRunFromInputs_valid
   -- We have theorems like AddInstruction_Spec_implies_transition that give us this.
 
   -- Introduce the let binding
-  intro R
-
-  intro s1 s2 h_edge
+  intro R s1 s2 h_edge
   -- h_edge : R (s1, s2) > 0
   -- Need to show: femtoCairoMachineTransition program memory s1 = some s2
 
@@ -1866,6 +1906,7 @@ theorem buildRunFromInputs_valid
     rw [← h_pre, ← h_post]
     exact LoadStateInstruction_Spec_transition_postState program memory _ _ (h_step_specs i) h_enabled
 
+omit p_large_enough in
 /--
 The main theorem: If ExecutionBundle.Spec holds with balanced adds, there exists a valid execution.
 
@@ -1905,8 +1946,8 @@ properties from the balanced `InteractionDelta` is complex.
 -/
 theorem Spec_implies_execution
     (capacities : InstructionCapacities)
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p) (h_memorySize : memorySize < p)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p) (_h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p) (_h_memorySize : memorySize < p)
     (inputs : ExecutionCircuitInput capacities (F p))
     (adds : InteractionDelta (F p))
     (h_spec : ExecutionBundle.Spec capacities program memory inputs adds)
@@ -1994,6 +2035,7 @@ def ExecutionExistenceSpec
       femtoCairoMachineBoundedExecution program memory (some inputs.initialState) steps =
         some inputs.finalState
 
+omit p_large_enough in
 /-- The stronger spec implies the weaker execution existence spec -/
 theorem Spec_implies_ExecutionExistenceSpec
     (capacities : InstructionCapacities)
