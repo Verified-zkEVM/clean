@@ -273,13 +273,7 @@ theorem normalized_iff {x : U64 (F p)} :
 
 lemma toLimbs_map {α β : Type} (x : U64 α) (f : α → β) :
     toLimbs (map x f) = (toLimbs x).map f := by
-  simp only [toLimbs, toElements, map, ProvableType.toElements, Vector.map_mk]
-  congr 1
-  apply Array.ext
-  · simp only [Array.size_map]; rfl
-  · intro i h1 h2
-    simp only [Array.getElem_map, Array.size_map] at h1 h2 ⊢
-    rcases i with _ | _ | _ | _ | _ | _ | _ | _ | _ <;> first | rfl | (simp at h2; omega)
+  simp [toLimbs, toElements, map]
 
 lemma getElem_eval_toLimbs {F} [Field F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
