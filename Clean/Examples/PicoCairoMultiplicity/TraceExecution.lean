@@ -852,8 +852,9 @@ lemma nat_eq_of_field_eq (a b : ℕ) (h_small_a : a < p) (h_small_b : b < p)
 
 omit p_large_enough in
 /-- Field subtraction equals integer subtraction when values are small -/
-lemma field_sub_eq_int_sub (a b : ℕ) (_h_small : a + b < p) :
+lemma field_sub_eq_int_sub (a b : ℕ) : a + b < p →
     (↑a - ↑b : F p) = ((a : ℤ) - (b : ℤ) : F p) := by
+  intro
   simp only [Int.cast_natCast]
 
 omit p_large_enough in
@@ -1053,8 +1054,6 @@ at state s equals countIncoming - countOutgoing.
 -/
 lemma bundle_multiplicity_contribution
     {n : ℕ}
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
     (inputs : Vector (InstructionStepInput (F p)) n)
     (adds : InteractionDelta (F p))
     (postStateFn : State (F p) → State (F p))
@@ -1427,13 +1426,13 @@ lemma multiplicity_eq_emission_plus_flow
     program memory inputs.bundledInputs.loadStateInputs loadStateAdds h_load_spec
 
   -- Apply bundle_multiplicity_contribution to each bundle to get countIncoming - countOutgoing
-  have h_add_contrib := bundle_multiplicity_contribution program memory
+  have h_add_contrib := bundle_multiplicity_contribution
     inputs.bundledInputs.addInputs addAdds addPostState h_add_sum s
-  have h_mul_contrib := bundle_multiplicity_contribution program memory
+  have h_mul_contrib := bundle_multiplicity_contribution
     inputs.bundledInputs.mulInputs mulAdds mulPostState h_mul_sum s
-  have h_store_contrib := bundle_multiplicity_contribution program memory
+  have h_store_contrib := bundle_multiplicity_contribution
     inputs.bundledInputs.storeStateInputs storeStateAdds storeStatePostState h_store_sum s
-  have h_load_contrib := bundle_multiplicity_contribution program memory
+  have h_load_contrib := bundle_multiplicity_contribution
     inputs.bundledInputs.loadStateInputs loadStateAdds (loadStatePostState program memory) h_load_sum s
 
   -- Handle the emission terms - split into 4 cases based on whether s equals initial/final state
