@@ -210,7 +210,9 @@ def circuit
 
       -- Simplify h_input_preState to get eval relation on pc
       have h_pc_eval : Expression.eval env input_var_preState.pc = input_preState.pc := by
-        rw [←h_input_preState]; rfl
+        have := congrArg State.pc h_input_preState
+        simp only [circuit_norm] at this
+        exact this
       rw [h_pc_eval] at h_fetch
 
       -- Split on fetchInstruction result
@@ -225,16 +227,12 @@ def circuit
         specialize h_decode_cond h_bool
         simp only [h_one, one_ne_zero, ite_false] at h_decode_cond
 
-        -- Relate env.get i₀ to rawInstr.rawInstrType using h_fetch
-        have h_rawInstrType : env.get i₀ = rawInstr.rawInstrType := congrArg RawInstruction.rawInstrType h_fetch
-        have h_op1 : env.get (i₀ + 1) = rawInstr.op1 := congrArg RawInstruction.op1 h_fetch
-        have h_op2 : env.get (i₀ + 1 + 1) = rawInstr.op2 := congrArg RawInstruction.op2 h_fetch
-        have h_op3 : env.get (i₀ + 1 + 1 + 1) = rawInstr.op3 := congrArg RawInstruction.op3 h_fetch
-
-        -- Show Expression.eval of rawInstrType equals rawInstr.rawInstrType
+        -- h_fetch gives us: eval env (varFromOffset RawInstruction i₀) = rawInstr
+        -- We need to extract the rawInstrType field for the decode condition
         have h_rawInstrType_eval : Expression.eval env (varFromOffset RawInstruction i₀).rawInstrType = rawInstr.rawInstrType := by
-          simp only [varFromOffset, circuit_norm]
-          exact h_rawInstrType
+          have := congrArg RawInstruction.rawInstrType h_fetch
+          simp only [varFromOffset, circuit_norm] at this ⊢
+          exact this
 
         rw [h_rawInstrType_eval] at h_decode_cond
 
@@ -263,14 +261,17 @@ def circuit
 
           -- Rewrite Expression.eval of op fields to actual op values
           have h_op1_eval : Expression.eval env (varFromOffset RawInstruction i₀).op1 = rawInstr.op1 := by
-            simp only [varFromOffset, circuit_norm]
-            exact h_op1
+            have := congrArg RawInstruction.op1 h_fetch
+            simp only [varFromOffset, circuit_norm] at this ⊢
+            exact this
           have h_op2_eval : Expression.eval env (varFromOffset RawInstruction i₀).op2 = rawInstr.op2 := by
-            simp only [varFromOffset, circuit_norm]
-            exact h_op2
+            have := congrArg RawInstruction.op2 h_fetch
+            simp only [varFromOffset, circuit_norm] at this ⊢
+            exact this
           have h_op3_eval : Expression.eval env (varFromOffset RawInstruction i₀).op3 = rawInstr.op3 := by
-            simp only [varFromOffset, circuit_norm]
-            exact h_op3
+            have := congrArg RawInstruction.op3 h_fetch
+            simp only [varFromOffset, circuit_norm] at this ⊢
+            exact this
 
           rw [h_op1_eval, h_mode1] at h_read1
           rw [h_op2_eval, h_mode2] at h_read2
@@ -386,11 +387,11 @@ def elaborated
     -- Now prove term-by-term equality
     apply Finset.sum_congr rfl
     intro i _
-    -- Unfold stepBody to assertionChangingMultiset which produces a subcircuit
-    simp only [stepBody, assertionChangingMultiset, Circuit.ConstantLength.localLength, circuit_norm]
-    -- collectAdds on [.subcircuit s] = s.localAdds
-    -- s.localAdds = circuit.localAdds by FormalAssertionChangingMultiset.toSubcircuit_localAdds
-    -- circuit.localAdds = elaborated.localAdds by definition
+    -- Unfold stepBody and show the localAdds match
+    simp only [stepBody, assertionChangingMultiset, Circuit.ConstantLength.localLength]
+    -- Use the fact that collectAdds on subcircuit gives localAdds
+    simp only [Operations.collectAdds, circuit_norm]
+    -- Now we need to show the elaborated circuit's localAdds matches our manual computation
     simp only [AddInstruction.circuit, AddInstruction.elaborated, circuit_norm]
     rfl
   subcircuitsConsistent := by
@@ -476,7 +477,16 @@ def circuit
       apply List.foldl_ext
       intro acc i _
       simp only [stepCircuit, AddInstruction.circuit, circuit_norm]
-      rfl
+      simp only [Fin.eta, mul_neg, mul_one, List.append_cancel_left_eq]
+      -- Unfold ElaboratedCircuit.localAdds for AddInstruction.elaborated
+      simp only [AddInstruction.elaborated, circuit_norm]
+      -- Now LHS has Vector.get inputs_var i and -enabled
+      -- RHS has inputs_var[↑i] and enabled * -1 / enabled * 1
+      -- Vector.get v i = v[i] by definition (Fin index)
+      simp only [Vector.get_eq_getElem]
+      -- Now just need -x = x * -1 and x = x * 1
+      ring_nf
+
   -- Completeness is out of scope for the current work.
   -- The proof would require showing that if Spec holds for some stepAdds (from the existential
   -- in Bundle.Spec), then the circuit's actual localAdds also satisfies it. Since
