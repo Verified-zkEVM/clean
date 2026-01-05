@@ -128,6 +128,7 @@ lemma mapFinRange_eq_map {α β : Type} {n : ℕ} (v : Vector α n) (f : α → 
   simp only [Vector.getElem_mapFinRange, Vector.getElem_map]
   simp
 
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma fieldFromBits_eq_mapFinRange_cast {n} {f : Fin n → F p} :
     fieldFromBits (Vector.mapFinRange n f) = (fromBits (Vector.mapFinRange n fun i => (f i).val) : F p) := by
   unfold fieldFromBits
