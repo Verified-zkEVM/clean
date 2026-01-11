@@ -178,6 +178,12 @@ theorem getElem_mapFinRange {n} {create : Fin n → α} :
     ∀ (i : ℕ) (hi : i < n), (mapFinRange n create)[i] = create ⟨ i, hi ⟩ := by
   simp [mapFinRange, finRange]
 
+lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
+    Vector.mapFinRange n (fun i => f v[i]) = v.map f := by
+  ext i
+  simp only [Vector.getElem_mapFinRange, Vector.getElem_map]
+  simp
+
 def mapRange (n : ℕ) (create : ℕ → α) : Vector α n :=
   match n with
   | 0 => #v[]

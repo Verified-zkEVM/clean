@@ -291,4 +291,12 @@ lemma fieldFromBits_eq {n : ℕ} {xs ys : Vector (F p) n} (h: ∀ (i : Fin n), x
     exact h fi
   rw [h_vec_eq]
 
+lemma fieldFromBits_eq_mapFinRange_cast {n} {f : Fin n → F p} :
+    fieldFromBits (Vector.mapFinRange n f) = (fromBits (Vector.mapFinRange n fun i => (f i).val) : F p) := by
+  unfold fieldFromBits
+  apply congrArg (Nat.cast : ℕ → F p)
+  apply congrArg fromBits
+  ext i
+  simp only [Vector.getElem_map, Vector.getElem_mapFinRange]
+
 end Utils.Bits
