@@ -33,6 +33,7 @@ lemma constraintsHold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Env
       exact constraintsHold_cons.mpr ⟨ h_op, h_rest ⟩
 end FlatOperation
 
+@[circuit_norm]
 lemma Operations.toNested_toFlat (ops : Operations F) {name : String} :
     (NestedOperations.nested ⟨ name, ops.toNested ⟩).toFlat = ops.toFlat := by
   sorry
@@ -357,7 +358,7 @@ theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
     (subcircuit circuit input).ComputableWitnesses n := by
   intro h env env'
   simp only [circuit_norm, FormalCircuit.toSubcircuit, Operations.ComputableWitnesses,
-    Operations.forAllFlat, Operations.toNested_toFlat, Operations.forAll_toFlat_iff]
+    Operations.forAllFlat, Operations.forAll_toFlat_iff]
   exact circuit.compose_computableWitnesses input n h env env'
 
 -- to reduce offsets, `circuit_norm` will use these theorems to unfold subcircuits
