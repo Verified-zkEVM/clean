@@ -44,7 +44,7 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
     | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval ops
     | lookup { table, entry } =>
       table.Contains (entry.map eval) ∧ ConstraintsHoldFlat eval ops
-    | _ =>  ConstraintsHoldFlat eval ops
+    | _ => ConstraintsHoldFlat eval ops
 
 @[circuit_norm]
 def localLength : List (FlatOperation F) → ℕ
