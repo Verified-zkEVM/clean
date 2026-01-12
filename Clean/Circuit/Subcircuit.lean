@@ -36,7 +36,8 @@ end FlatOperation
 @[circuit_norm]
 lemma Operations.toNested_toFlat (ops : Operations F) {name : String} :
     (NestedOperations.nested ⟨ name, ops.toNested ⟩).toFlat = ops.toFlat := by
-  sorry
+  induction ops using Operations.induct
+  <;> simp_all [toNested, toFlat, NestedOperations.toFlat]
 
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
