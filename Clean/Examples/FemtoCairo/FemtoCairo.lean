@@ -100,10 +100,10 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
   localLength _ := 8
 
   Assumptions
-  | instruction => instruction.val < 256
+  | instruction, _ => instruction.val < 256
 
   Spec
-  | instruction, output =>
+  | instruction, output, _ =>
     match Spec.decodeInstruction instruction with
     | some (instr_type, mode1, mode2, mode3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
@@ -176,10 +176,10 @@ def fetchInstruction
   output _ i₀ := varFromOffset RawInstruction i₀
 
   Assumptions
-  | pc => pc.val + 3 < programSize
+  | pc, _ => pc.val + 3 < programSize
 
   Spec
-  | pc, output =>
+  | pc, output, _ =>
     match Spec.fetchInstruction program pc with
       | some claimed_output => output = claimed_output
       | none => False -- impossible, lookups ensure that memory accesses are valid
@@ -243,6 +243,36 @@ def fetchInstruction
         rw [← Nat.cast_three, ZMod.val_natCast]
         rw [Nat.mod_eq_of_lt] <;> omega
 
+structure MemoryEntry F where
+  address : F
+  value : F
+
+instance : ProvableStruct MemoryEntry where
+  components := [field, field]
+  toComponents := fun { address, value} => .cons address (.cons value .nil)
+  fromComponents := fun (.cons address (.cons value .nil)) => { address, value }
+  combinedSize := 2
+
+def MemoryTable : Table (F p) MemoryEntry where
+  name := "memory"
+  Contains table entry := entry ∈ table
+  Soundness table entry := entry ∈ table
+  Completeness table entry := entry ∈ table
+  imply_soundness := by intros; assumption
+  implied_by_completeness := by intros; assumption
+
+def getMemory (env : Environment (F p)) (address : Expression (F p)) : F p :=
+  let mem := env.getTable MemoryTable
+  mem[(env address).val]?.getD 0 |>.value
+
+def memorySize (env : Environment (F p)) : ℕ :=
+  let mem := env.getTable MemoryTable
+  mem.size
+
+def memory (env : Environment (F p)) : Fin (memorySize env) → F p :=
+  let mem := env.getTable MemoryTable
+  fun i => mem[i.val].value
+
 /--
   Circuit that reads a value from a read-only memory, given a state, an offset,
   and an addressing mode.
@@ -254,12 +284,9 @@ def fetchInstruction
   The circuit uses lookups into a read-only table representing the memory.
   This circuit is not satisfiable if the memory access is out of bounds.
 -/
-def readFromMemory
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+def readFromMemory :
     GeneralFormalCircuit (F p) MemoryReadInput field where
   main := fun { state, offset, mode } => do
-    let memoryTable := ReadOnlyTableFromFunction memory h_memorySize
-
     /-
       read into memory for all cases of addressing mode.
       to avoid a completeness issue, we use dummy lookups (0, DUMMY_VALUE),
@@ -275,14 +302,13 @@ def readFromMemory
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
-    let value1 ← witness fun eval => memory <| Fin.ofNat _ (eval addr1).val
+    let value1 ← witness fun env => getMemory env addr1
 
     let addr2 <== mode.isDoubleAddressing * value1
 
-    let value2 ← witness fun eval => memory <| Fin.ofNat _ (eval addr2).val
-
-    lookup memoryTable ⟨addr1, value1⟩
-    lookup memoryTable ⟨addr2, value2⟩
+    let value2 ← witness fun env => getMemory env addr2
+    lookup MemoryTable ⟨addr1, value1⟩
+    lookup MemoryTable ⟨addr2, value2⟩
 
     -- select the correct value based on the addressing mode
     let value <==
@@ -297,21 +323,24 @@ def readFromMemory
   output _ i₀ := var ⟨i₀ + 4⟩
 
   Assumptions
-  | { state, offset, mode } =>
+  | { state, offset, mode }, env =>
+    ∃ hm : NeZero (memorySize env),
     -- for completeness, we assume that the memory access succeeds
     mode.isEncodedCorrectly ∧
-    (Spec.dataMemoryAccess memory offset mode.val state.ap state.fp).isSome
+    (Spec.dataMemoryAccess (memory env) offset mode.val state.ap state.fp).isSome
 
   Spec
-  | {state, offset, mode}, output =>
+  | {state, offset, mode}, output, env =>
+    ∀ hm : NeZero (memorySize env),
     mode.isEncodedCorrectly →
-    match Spec.dataMemoryAccess memory offset mode.val state.ap state.fp with
+    match Spec.dataMemoryAccess (memory env) offset mode.val state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
 
   soundness := by
     circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess,
-      Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly]
+      Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
+      MemoryTable]
     intro h_assumptions
 
     -- circuit_proof_start did not unpack those, so we manually unpack here
@@ -448,12 +477,12 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
   output _ i₀ := varFromOffset State i₀
 
   Assumptions
-  | {state, decoded, v1, v2, v3} =>
+  | {state, decoded, v1, v2, v3}, _ =>
     DecodedInstructionType.isEncodedCorrectly decoded.instrType ∧
     (Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state).isSome
 
   Spec
-  | {state, decoded, v1, v2, v3}, output =>
+  | {state, decoded, v1, v2, v3}, output, _ =>
     DecodedInstructionType.isEncodedCorrectly decoded.instrType →
     match Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state with
       | some nextState => output = nextState
@@ -599,7 +628,7 @@ def femtoCairoStepElaboratedCircuit
 def femtoCairoStepSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (state : State (F p)) (nextState : State (F p)) : Prop :=
+    (state : State (F p)) (nextState : State (F p)) (_ : Environment (F p)) : Prop :=
   Spec.femtoCairoMachineTransition program memory state = some nextState
 
 /--
@@ -611,7 +640,7 @@ def femtoCairoStepSpec
 def femtoCairoStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
-    (state : State (F p)) : Prop :=
+    (state : State (F p)) (_ : Environment (F p)) : Prop :=
   ValidProgramSize p programSize ∧
   ValidProgram program ∧
   (Spec.femtoCairoMachineTransition program memory state).isSome
