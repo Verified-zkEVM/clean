@@ -64,6 +64,22 @@ def Table.toRaw (table : Table F Row) : RawTable F where
   imply_soundness _ row := table.imply_soundness _ (fromElements row)
   implied_by_completeness _ row := table.implied_by_completeness _ (fromElements row)
 
+namespace Lookup
+def Contains (lookup : Lookup F) (env : Environment F) : Prop :=
+  lookup.table.Contains (env.tables lookup.table.name lookup.table.arity)
+    (lookup.entry.map env)
+
+@[circuit_norm]
+def Soundness (lookup : Lookup F) (env : Environment F) : Prop :=
+  lookup.table.Soundness (env.tables lookup.table.name lookup.table.arity)
+    (lookup.entry.map env)
+
+@[circuit_norm]
+def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
+  lookup.table.Completeness (env.tables lookup.table.name lookup.table.arity)
+    (lookup.entry.map env)
+end Lookup
+
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
 structure StaticTable (F : Type) (Row : TypeMap) [ProvableType Row] where

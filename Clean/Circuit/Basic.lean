@@ -146,8 +146,8 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
-  | .lookup { table, entry } :: ops =>
-    table.Contains (eval.tables table.name table.arity) (entry.map eval) ∧ ConstraintsHold eval ops
+  | .lookup l :: ops =>
+    l.Contains eval ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
 
@@ -159,8 +159,8 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
-  | .lookup { table, entry } :: ops =>
-    table.Soundness (eval.tables table.name table.arity) (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
+  | .lookup l :: ops =>
+    l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
 
@@ -172,8 +172,8 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
-  | .lookup { table, entry } :: ops =>
-    table.Completeness (eval.tables table.name table.arity) (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
+  | .lookup l :: ops =>
+    l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
