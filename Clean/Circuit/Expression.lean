@@ -19,6 +19,7 @@ export Expression (var)
 
 structure Environment (F : Type) where
   get : ℕ → F
+  tables : String → (n : ℕ) → Array (Vector F n)
 
 namespace Expression
 variable [Field F]
