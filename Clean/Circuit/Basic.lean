@@ -146,8 +146,8 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
-  | .lookup { table, entry, .. } :: ops =>
-    table.Contains (entry.map eval) ∧ ConstraintsHold eval ops
+  | .lookup { table, entry } :: ops =>
+    table.Contains (eval.tables table.name table.arity) (entry.map eval) ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
 
@@ -160,7 +160,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
   | .lookup { table, entry } :: ops =>
-    table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
+    table.Soundness (eval.tables table.name table.arity) (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
 
@@ -173,7 +173,7 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
   | .lookup { table, entry } :: ops =>
-    table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
+    table.Completeness (eval.tables table.name table.arity) (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
@@ -420,8 +420,9 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 
 -- witness generation
 
-def Environment.fromList (witnesses : List F) : Environment F :=
-  .mk fun i => witnesses[i]?.getD 0
+def Environment.fromList (witnesses : List F) : Environment F where
+  get i := witnesses[i]?.getD 0
+  tables _ _ := #[]
 
 def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with
   | .witness _ compute => (compute (.fromList acc)).toList
