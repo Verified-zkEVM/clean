@@ -94,3 +94,7 @@ end StaticTable
 @[circuit_norm]
 def Table.fromStatic (table : StaticTable F Row) : Table F Row :=
   StaticTable.toTable table
+
+def Environment.getTable (env : Environment F) {Row : TypeMap} [ProvableType Row]
+  (table : Table F Row) : Array (Row F) :=
+  env.tables table.name (size Row) |>.map fromElements
