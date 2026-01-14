@@ -363,12 +363,13 @@ def OffsetConsistent (table : TableConstraint W S F α) : Prop :=
 def windowEnv (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
   let assignment := table.finalAssignment
-  .mk fun i =>
-    if hi : i < assignment.offset then
-      match assignment.vars[i] with
-      | .input ⟨i, j⟩ => window.get i j
-      | .aux k => aux_env.get k
-    else aux_env.get (i + assignment.aux_length)
+  { get i :=
+      if hi : i < assignment.offset then
+        match assignment.vars[i] with
+        | .input ⟨i, j⟩ => window.get i j
+        | .aux k => aux_env.get k
+      else aux_env.get (i + assignment.aux_length)
+    tables _ _ := #[] }
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
