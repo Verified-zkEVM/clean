@@ -70,12 +70,18 @@ def Environment.getTable (env : Environment F) {Row : TypeMap} [ProvableType Row
   env.tables table.name (size Row) |>.map fromElements
 
 namespace Lookup
+variable {F : Type} [Field F]
+
 def Contains (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Contains (env.tables lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 def Soundness (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Soundness (env.tables lookup.table.name lookup.table.arity)
+    (lookup.entry.map env)
+
+def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
+  lookup.table.Completeness (env.tables lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 @[circuit_norm]
@@ -85,15 +91,29 @@ lemma soundess_def {Row : TypeMap} [ProvableType Row]
     lookup.Soundness env ↔ table.Soundness (env.getTable table) (eval env entry) := by
   rfl
 
-def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
-  lookup.table.Completeness (env.tables lookup.table.name lookup.table.arity)
-    (lookup.entry.map env)
+@[circuit_norm]
+lemma soundess_def_field {F : Type} [Field F]
+  (table : Table F field) (env : Environment F) (entry : Expression F) :
+    let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
+    lookup.Soundness env ↔ table.Soundness (env.getTable table) (entry.eval (F:=F) env) := by
+  simp only [Soundness, Table.toRaw, id_eq, Vector.map_mk, List.map_toArray, List.map_cons,
+    List.map_nil]
+  rfl
 
 @[circuit_norm]
 lemma completeness_def {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
     let lookup : Lookup F := { table := table.toRaw, entry := toElements entry };
     lookup.Completeness env ↔ table.Completeness (env.getTable table) (eval env entry) := by
+  rfl
+
+@[circuit_norm]
+lemma completeness_def_field {F : Type} [Field F]
+  (table : Table F field) (env : Environment F) (entry : Expression F) :
+    let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
+    lookup.Completeness env ↔ table.Completeness (env.getTable table) (entry.eval (F:=F) env) := by
+  simp only [Completeness, Table.toRaw, id_eq, Vector.map_mk, List.map_toArray, List.map_cons,
+    List.map_nil]
   rfl
 end Lookup
 
