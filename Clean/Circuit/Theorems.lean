@@ -136,7 +136,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   induction ops using Operations.induct with
   | empty => trivial
   | witness | assert | lookup =>
-    simp_all [circuit_norm, ConstraintsHold, Lookup.Contains, RawTable.imply_soundness]
+    simp_all [circuit_norm, ConstraintsHold, Lookup.Contains, Lookup.Soundness, RawTable.imply_soundness]
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
     dsimp only [ConstraintsHold] at h
@@ -304,7 +304,7 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all only [circuit_norm, true_and, and_congr_right_iff]
+    simp_all only [circuit_norm, true_and, and_congr_right_iff, Lookup.Soundness]
     try intros
     apply ih
 
@@ -317,7 +317,7 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all only [circuit_norm, true_and, and_congr_right_iff]
+    simp_all only [circuit_norm, true_and, and_congr_right_iff, Lookup.Completeness]
     try intros
     apply ih
 
@@ -335,7 +335,7 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.S
   | empty => intros; exact trivial
   | witness | assert | lookup =>
     simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
-      Lookup.Contains, RawTable.implied_by_completeness]
+      Lookup.Contains, Lookup.Completeness, RawTable.implied_by_completeness]
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
