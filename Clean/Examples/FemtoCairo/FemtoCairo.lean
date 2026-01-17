@@ -255,13 +255,10 @@ instance : ProvableStruct MemoryEntry where
 
 def MemoryTable : Table (F p) MemoryEntry where
   name := "memory"
-  Contains table entry := entry ∈ table
-  Soundness table entry := entry ∈ table
-  Completeness table entry := entry ∈ table
-  imply_soundness := by intros; assumption
-  implied_by_completeness := by intros; assumption
+  Contains table entry := ∃ (ha : entry.address.val < table.size),
+    entry = table[entry.address.val]
 
-def getMemory (env : Environment (F p)) (address : Expression (F p)) : F p :=
+def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
   let mem := env.getTable MemoryTable
   mem[(env address).val]?.getD 0 |>.value
 
@@ -302,11 +299,11 @@ def readFromMemory :
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
-    let value1 ← witness fun env => getMemory env addr1
+    let value1 ← witness fun env => memoryValue env addr1
 
     let addr2 <== mode.isDoubleAddressing * value1
 
-    let value2 ← witness fun env => getMemory env addr2
+    let value2 ← witness fun env => memoryValue env addr2
     lookup MemoryTable ⟨addr1, value1⟩
     lookup MemoryTable ⟨addr2, value2⟩
 
@@ -340,31 +337,37 @@ def readFromMemory :
   soundness := by
     circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess,
       Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
-      MemoryTable]
-    intro h_assumptions
+      memorySize, memoryValue, memory, MemoryEntry]
+    intro hm h_assumptions
+    set memoryTable := env.getTable MemoryTable with h_memory_table_def
+    simp only [MemoryTable] at h_holds
 
     -- circuit_proof_start did not unpack those, so we manually unpack here
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
 
-    simp only [Fin.ofNat_eq_cast, id_eq, eval, fromElements, size, toVars, toElements,
-      Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
-      ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
+    simp only [id_eq, fromElements, eval, size, toVars, toElements, Vector.map_mk, List.map_toArray,
+      List.map_cons, List.map_nil, Vector.getElem_mk, ↓List.getElem_toArray,
+      ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
       DecodedAddressingMode.mk.injEq] at h_holds h_assumptions h_input
     simp only [h_input] at h_holds
     simp only [Option.bind_eq_bind, id_eq]
-    set addr1 := env.get i₀
-    set value1 := env.get (i₀ + 1)
-    set addr2 := env.get (i₀ + 2)
-    set value2 := env.get (i₀ + 3)
-    set value := env.get (i₀ + 4)
-
-    simp only [and_assoc] at h_holds
-    obtain ⟨ h_addr1, h_addr2, h_value1, h_addr1_lt, h_value2, h_addr2_lt, h_final_constraint ⟩ := h_holds
-    rw [h_addr1] at h_addr1_lt h_value1
+    obtain ⟨ h_addr1, h_addr2, ⟨ h_addr1_lt, h_mem1 ⟩, ⟨ h_addr2_lt, h_mem2 ⟩, h_value ⟩ := h_holds
+    rw [MemoryEntry.mk.injEq] at h_mem1 h_mem2
+    obtain ⟨ h_addr1', h_value1 ⟩ := h_mem1
+    obtain ⟨ h_addr2', h_value2 ⟩ := h_mem2
+    simp only [h_addr1] at h_value1 h_addr1_lt
     rw [h_value1] at h_addr2
-    rw [h_addr2] at h_addr2_lt h_value2
-    clear h_addr1 h_addr2
+    simp only [h_addr2] at h_value2 h_addr2_lt
+    simp only [h_value1, h_value2] at h_value
+    clear h_input
+
+    -- set addr1 := env.get i₀
+    -- set value1 := env.get (i₀ + 1)
+    -- set addr2 := env.get (i₀ + 2)
+    -- set value2 := env.get (i₀ + 3)
+    -- set value := env.get (i₀ + 4)
+
 
     -- does the memory accesses return some or none?
     split
@@ -374,41 +377,31 @@ def readFromMemory :
     case h_2 x h_spec =>
       -- by cases on the addressing mode, the proof for each case is pretty simple
       rcases h_assumptions with h_mode|h_mode|h_mode|h_mode
-      · simp only [h_mode, one_mul, zero_mul, add_zero, ↓reduceIte, Option.bind_eq_none_iff,
-          Option.dite_none_right_eq_some, Option.some.injEq, dite_eq_right_iff, reduceCtorEq,
-          imp_false, not_lt, forall_exists_index, forall_apply_eq_imp_iff, and_self] at *
-        specialize h_spec h_addr1_lt
-        rw [←Fin.mk_val (@Nat.cast (Fin memorySize) (Fin.NatCast.instNatCast memorySize) (ZMod.val (ap + input_offset)))] at h_addr2_lt
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt] at h_addr2_lt
+      · simp only [h_mode, one_mul, zero_mul, add_zero, ↓reduceIte,
+        Option.bind_eq_none_iff, Option.dite_none_right_eq_some, Option.some.injEq,
+        dite_eq_right_iff, reduceCtorEq, forall_exists_index,
+        forall_apply_eq_imp_iff, and_self] at *
+        exact h_spec h_addr1_lt h_addr2_lt
+      · simp [h_mode] at h_spec h_addr1_lt
         linarith
-      · simp_all
-      · simp_all
-      · simp_all
+      · simp [h_mode] at h_spec h_addr1_lt
+        linarith
+      · simp [h_mode] at h_spec
 
     -- handle the case where all memory accesses are valid
     case h_1 rawInstrType _ _ value h_eq =>
       -- by cases on the addressing mode, the proof for each case is pretty simple
       rcases h_assumptions with h_mode|h_mode|h_mode|h_mode
-      <;> simp_all only [zero_mul, one_mul, zero_add, add_zero, ZMod.val_zero, zero_ne_one,
-        ↓reduceIte, ↓reduceDIte, Option.bind_some, Option.dite_none_right_eq_some, Option.some.injEq]
+      <;> simp [h_mode, memoryTable] at *
+      · simp only [h_addr1_lt, ↓reduceDIte, Option.bind_some, Option.dite_none_right_eq_some,
+        Option.some.injEq] at h_eq
+        obtain ⟨h, h_eq⟩ := h_eq
+        rw [← h_eq, h_value]
       · obtain ⟨h, h_eq⟩ := h_eq
-        rw [← h_eq]
-        -- first addressing
-        congr
-        rw [←Fin.val_eq_val]
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr2_lt]
-        -- second addressing
-        congr
-        rw [←Fin.val_eq_val]
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt]
-      · rw [← h_eq]
-        congr
-        rw [←Fin.val_eq_val]
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt]
-      · rw [← h_eq]
-        congr
-        rw [←Fin.val_eq_val]
-        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_addr1_lt]
+        rw [← h_eq, h_value]
+      · obtain ⟨h, h_eq⟩ := h_eq
+        rw [← h_eq, h_value]
+      · rw [← h_eq, h_value]
 
   completeness := by
     circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly, Spec.dataMemoryAccess]
