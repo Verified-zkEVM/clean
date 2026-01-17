@@ -26,11 +26,13 @@ structure Table (F : Type) (Row : TypeMap) [ProvableType Row] where
   we allow to rewrite the `Contains` property into two statements that are easier to work with
   in the context of soundness and completeness proofs.
   -/
-  Soundness : Array (Row F) → Row F → Prop
-  Completeness : Array (Row F) → Row F → Prop
+  Soundness : Array (Row F) → Row F → Prop := Contains
+  Completeness : Array (Row F) → Row F → Prop := Contains
 
   imply_soundness : ∀ table row, Contains table row → Soundness table row
+    := by intros; assumption
   implied_by_completeness : ∀ table row, Completeness table row → Contains table row
+    := by intros; assumption
 
 /--
 `RawTable` replaces the custom `Row` type with plain vector-valued entries, which
@@ -54,7 +56,6 @@ structure Lookup (F : Type) where
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
-@[circuit_norm]
 def Table.toRaw (table : Table F Row) : RawTable F where
   name := table.name
   arity := size Row
@@ -64,20 +65,36 @@ def Table.toRaw (table : Table F Row) : RawTable F where
   imply_soundness _ row := table.imply_soundness _ (fromElements row)
   implied_by_completeness _ row := table.implied_by_completeness _ (fromElements row)
 
+def Environment.getTable (env : Environment F) {Row : TypeMap} [ProvableType Row]
+  (table : Table F Row) : Array (Row F) :=
+  env.tables table.name (size Row) |>.map fromElements
+
 namespace Lookup
 def Contains (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Contains (env.tables lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
-@[circuit_norm]
 def Soundness (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Soundness (env.tables lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 @[circuit_norm]
+lemma soundess_def {Row : TypeMap} [ProvableType Row]
+  (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
+    let lookup : Lookup F := { table := table.toRaw, entry := toElements entry };
+    lookup.Soundness env ↔ table.Soundness (env.getTable table) (eval env entry) := by
+  rfl
+
 def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Completeness (env.tables lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
+
+@[circuit_norm]
+lemma completeness_def {Row : TypeMap} [ProvableType Row]
+  (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
+    let lookup : Lookup F := { table := table.toRaw, entry := toElements entry };
+    lookup.Completeness env ↔ table.Completeness (env.getTable table) (eval env entry) := by
+  rfl
 end Lookup
 
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
@@ -110,7 +127,3 @@ end StaticTable
 @[circuit_norm]
 def Table.fromStatic (table : StaticTable F Row) : Table F Row :=
   StaticTable.toTable table
-
-def Environment.getTable (env : Environment F) {Row : TypeMap} [ProvableType Row]
-  (table : Table F Row) : Array (Row F) :=
-  env.tables table.name (size Row) |>.map fromElements
