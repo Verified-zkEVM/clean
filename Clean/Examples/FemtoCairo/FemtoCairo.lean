@@ -362,13 +362,6 @@ def readFromMemory :
     simp only [h_value1, h_value2] at h_value
     clear h_input
 
-    -- set addr1 := env.get i₀
-    -- set value1 := env.get (i₀ + 1)
-    -- set addr2 := env.get (i₀ + 2)
-    -- set value2 := env.get (i₀ + 3)
-    -- set value := env.get (i₀ + 4)
-
-
     -- does the memory accesses return some or none?
     split
 
@@ -404,30 +397,43 @@ def readFromMemory :
       · rw [← h_eq, h_value]
 
   completeness := by
-    circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly, Spec.dataMemoryAccess]
+    circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly,
+      Spec.dataMemoryAccess, memory, memorySize, memoryValue]
     set addr1 := env.get i₀
     set value1 := env.get (i₀ + 1)
     set addr2 := env.get (i₀ + 2)
     set value2 := env.get (i₀ + 3)
     set value := env.get (i₀ + 4)
+
+    set memoryTable := env.getTable MemoryTable with h_memory_table_def
+
     -- get rid of most goals
-    simp only [h_env, Fin.ofNat_eq_cast, true_and, and_true]
+    simp only [h_env, MemoryTable, true_and, and_true]
     -- break up the addressing mode and state
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
     simp only [circuit_norm, explicit_provable_type, DecodedAddressingMode.mk.injEq, State.mk.injEq] at h_input
-    simp only [h_input, DecodedAddressingMode.val, memoryAccess] at h_assumptions ⊢
-    obtain ⟨ h_mode_encode, h_mem_access ⟩ := h_assumptions
-    have : memorySize > 0 := NeZero.pos _
+    simp only [h_input, DecodedAddressingMode.val, memoryAccess] at h_assumptions h_env ⊢
+    obtain ⟨ h_pos, h_mode_encode, h_mem_access ⟩ := h_assumptions
+    have : (env.getTable MemoryTable).size > 0 := NeZero.pos _
     -- by cases on the addressing mode
     rcases h_mode_encode with h_mode|h_mode|h_mode|h_mode
-    · simp_all only [one_mul, zero_mul, add_zero, reduceIte, Fin.ofNat_eq_cast]
+    · simp only [h_mode, one_mul, zero_mul, add_zero, reduceIte] at *
       simp only [Option.isSome_iff_exists, Option.bind_eq_bind, Option.dite_none_right_eq_some,
         Option.bind_eq_some_iff, Option.some.injEq, exists_exists_eq_and] at h_mem_access
-      obtain ⟨ _, h_value1, h_value2, _ ⟩ := h_mem_access
-      use h_value1
-      rw [←Fin.mk_val (@Nat.cast (Fin memorySize) (Fin.NatCast.instNatCast memorySize) (ZMod.val (ap + input_offset)))]
-      simp only [Fin.val_natCast, Nat.mod_eq_of_lt h_value1]
+      obtain ⟨ value2', h_value1, h_value2, _ ⟩ := h_mem_access
+      have h_mem_address : ap + input_offset =
+          (env.getTable MemoryTable)[ZMod.val (ap + input_offset)].address := by
+        sorry
+      constructor
+      · use h_value1
+        rw [MemoryEntry.mk.injEq]
+        use h_mem_address
+        congr
+        simp [h_value1]
+      simp [h_value1]
+      use h_value2
+      rw [MemoryEntry.mk.injEq]
       exact h_value2
     · simp_all
     · simp_all
@@ -610,9 +616,9 @@ def femtoCairoStepElaboratedCircuit
       let decoded ← decodeInstruction rawInstrType
 
       -- Perform relevant memory accesses
-      let v1 ← readFromMemory memory h_memorySize { state, offset := op1, mode := decoded.mode1 }
-      let v2 ← readFromMemory memory h_memorySize { state, offset := op2, mode := decoded.mode2 }
-      let v3 ← readFromMemory memory h_memorySize { state, offset := op3, mode := decoded.mode3 }
+      let v1 ← readFromMemory { state, offset := op1, mode := decoded.mode1 }
+      let v2 ← readFromMemory { state, offset := op2, mode := decoded.mode2 }
+      let v3 ← readFromMemory { state, offset := op3, mode := decoded.mode3 }
 
       -- Compute next state
       nextState { state, decoded, v1, v2, v3 }
