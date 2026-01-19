@@ -23,8 +23,7 @@ inductive NestedOperations (F : Type) where
 
 def NestedOperations.toFlat {F : Type} : NestedOperations F → List (FlatOperation F)
   | .single op => [op]
-  | .nested (_, []) => []
-  | .nested (s, op :: ops) => toFlat op ++ toFlat (.nested (s, ops))
+  | .nested (_, lst) => List.flatMap toFlat lst
 
 namespace FlatOperation
 instance [Repr F] : Repr (FlatOperation F) where
