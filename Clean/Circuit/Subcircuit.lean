@@ -33,6 +33,12 @@ lemma constraintsHold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Env
       exact constraintsHold_cons.mpr ⟨ h_op, h_rest ⟩
 end FlatOperation
 
+@[circuit_norm]
+lemma Operations.toNested_toFlat (ops : Operations F) {name : String} :
+    (NestedOperations.nested ⟨ name, ops.toNested ⟩).toFlat = ops.toFlat := by
+  induction ops using Operations.induct
+  <;> simp_all [toNested, toFlat, NestedOperations.toFlat]
+
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 section
@@ -61,14 +67,16 @@ Theorem and implementation that allows us to take a formal circuit and use it as
 def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
   let ops := circuit.main input_var |>.operations n
+  let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   have imply_soundness : ∀ env : Environment F,
     let input := eval env input_var
     let output := eval env (circuit.output input_var n)
-    ConstraintsHoldFlat env ops.toFlat → circuit.Assumptions input → circuit.Spec input output := by
+    ConstraintsHoldFlat env nestedOps.toFlat → circuit.Assumptions input → circuit.Spec input output := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
     intro env input output h_holds (as : circuit.Assumptions input)
+    rw [ops.toNested_toFlat] at h_holds
     show circuit.Spec input output
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
@@ -81,12 +89,13 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     exact constraintsHold_toFlat_iff.mp h_holds
 
   have implied_by_completeness : ∀ env : Environment F,
-      env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n →
-      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env ops.toFlat := by
+      env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
+      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env nestedOps.toFlat := by
     -- we are given that the assumptions are true
     intro env h_env
     let input := eval env input_var
     intro (as : circuit.Assumptions input)
+    rw [ops.toNested_toFlat] at h_env ⊢
 
     have h_env : env.UsesLocalWitnesses n ops := by
       guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
@@ -102,7 +111,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     exact can_replace_completeness h_consistent h_env h_holds
 
   {
-    ops := ops.toFlat,
+    ops := nestedOps,
     Soundness env := circuit.Assumptions (eval env input_var) →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
     Completeness env := circuit.Assumptions (eval env input_var),
@@ -120,7 +129,8 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       exact imply_soundness env h_holds as
 
     localLength_eq := by
-      rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
+      rw [ops.toNested_toFlat, ←circuit.localLength_eq input_var n,
+        FlatOperation.localLength_toFlat]
   }
 
 /--
@@ -129,10 +139,11 @@ Theorem and implementation that allows us to take a formal assertion and use it 
 def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
     (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
   let ops := circuit.main input_var |>.operations n
+  let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   {
-    ops := ops.toFlat,
+    ops := nestedOps,
     Soundness env := circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var),
     Completeness env := circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var),
     UsesLocalWitnesses _ := True,
@@ -144,6 +155,7 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       let input : β F := eval env input_var
       rintro (as : circuit.Assumptions input)
       show circuit.Spec input
+      rw [ops.toNested_toFlat] at h_holds
 
       -- by soundness of the circuit, the spec is satisfied if only the constraints hold
       suffices h: ConstraintsHold.Soundness env ops by
@@ -160,6 +172,7 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
 
       let input := eval env input_var
       have as : circuit.Assumptions input ∧ circuit.Spec input := h_completeness
+      rw [ops.toNested_toFlat] at h_env ⊢
 
       have h_env : env.UsesLocalWitnesses n ops := by
         guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
@@ -177,7 +190,8 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
     imply_usesLocalWitnesses := by intros; exact trivial
 
     localLength_eq := by
-      rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
+      rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
+        FlatOperation.localLength_toFlat]
   }
 
 /--
@@ -186,22 +200,25 @@ Theorem and implementation that allows us to take a formal circuit and use it as
 def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
   let ops := circuit.main input_var |>.operations n
+  let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   have imply_soundness : ∀ env : Environment F,
       let input := eval env input_var
       let output := eval env (circuit.output input_var n)
-      ConstraintsHoldFlat env ops.toFlat → circuit.Spec input output := by
+      ConstraintsHoldFlat env nestedOps.toFlat → circuit.Spec input output := by
     intro env input output h_holds
+    rw [ops.toNested_toFlat] at h_holds
     apply circuit.soundness n env input_var input rfl
     apply can_replace_soundness
     exact constraintsHold_toFlat_iff.mp h_holds
 
   have implied_by_completeness : ∀ env : Environment F,
-      env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n →
-      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env ops.toFlat := by
+      env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
+      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env nestedOps.toFlat := by
     intro env h_env assumptions
     set input := eval env input_var
+    rw [ops.toNested_toFlat] at h_env ⊢
     rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env
     rw [constraintsHold_toFlat_iff]
     apply can_replace_completeness h_consistent h_env
@@ -209,7 +226,7 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     apply circuit.completeness n env input_var h_env_completeness input rfl assumptions
 
   {
-    ops := ops.toFlat,
+    ops := nestedOps,
     Soundness env := circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
     Completeness env := circuit.Assumptions (eval env input_var),
     UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) →
@@ -223,7 +240,8 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
       implied_by_completeness env h_env assumptions |> imply_soundness env
 
     localLength_eq := by
-      rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
+      rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
+        FlatOperation.localLength_toFlat]
   }
 end
 

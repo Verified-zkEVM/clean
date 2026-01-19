@@ -17,6 +17,14 @@ inductive FlatOperation (F : Type) where
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
 
+inductive NestedOperations (F : Type) where
+  | single : FlatOperation F → NestedOperations F
+  | nested : String × List (NestedOperations F) → NestedOperations F
+
+def NestedOperations.toFlat {F : Type} : NestedOperations F → List (FlatOperation F)
+  | .single op => [op]
+  | .nested (_, lst) => List.flatMap toFlat lst
+
 namespace FlatOperation
 instance [Repr F] : Repr (FlatOperation F) where
   reprPrec
@@ -78,7 +86,7 @@ To enable composition of formal proofs, subcircuits come with custom `Soundness`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
 structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
-  ops : List (FlatOperation F)
+  ops : NestedOperations F
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
@@ -93,22 +101,21 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
 
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
-    ConstraintsHoldFlat env ops → Soundness env
+    ConstraintsHoldFlat env ops.toFlat → Soundness env
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
-    Completeness env → ConstraintsHoldFlat env ops
-
+  implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
+    Completeness env → ConstraintsHoldFlat env ops.toFlat
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
+  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
     UsesLocalWitnesses env
 
   -- `localLength` must be consistent with the operations
-  localLength_eq : localLength = FlatOperation.localLength ops
+  localLength_eq : localLength = FlatOperation.localLength ops.toFlat
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
-  (FlatOperation.localWitnesses env sc.ops).cast sc.localLength_eq.symm
+  (FlatOperation.localWitnesses env sc.ops.toFlat).cast sc.localLength_eq.symm
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -128,7 +135,7 @@ instance [Repr F] : Repr (Operation F) where
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
-    | subcircuit { ops, .. } => "(Subcircuit " ++ reprStr ops ++ ")"
+    | subcircuit { ops, .. } => "(Subcircuit " ++ reprStr ops.toFlat ++ ")"
 
 /--
 The number of witness variables introduced by this operation.
@@ -163,7 +170,14 @@ def toFlat : Operations F → List (FlatOperation F)
   | .witness m c :: ops => .witness m c :: toFlat ops
   | .assert e :: ops => .assert e :: toFlat ops
   | .lookup l :: ops => .lookup l :: toFlat ops
-  | .subcircuit s :: ops => s.ops ++ toFlat ops
+  | .subcircuit s :: ops => s.ops.toFlat ++ toFlat ops
+
+def toNested : Operations F → List (NestedOperations F)
+  | [] => []
+  | .witness m c :: ops => .single (.witness m c) :: toNested ops
+  | .assert e :: ops => .single (.assert e) :: toNested ops
+  | .lookup l :: ops => .single (.lookup l) :: toNested ops
+  | .subcircuit s :: ops => s.ops :: toNested ops
 
 /--
 The number of witness variables introduced by these operations.
@@ -305,4 +319,4 @@ def FlatOperation.forAll (offset : ℕ) (condition : Condition F) : List (FlatOp
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
 
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
-  forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops } ops
+  forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops.toFlat } ops

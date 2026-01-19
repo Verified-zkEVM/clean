@@ -149,7 +149,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | .lookup { table, entry, .. } :: ops =>
     table.Contains (entry.map eval) ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
-    ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
+    ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
@@ -214,6 +214,7 @@ It contains the main circuit plus some of its properties in elaborated form, to 
 faster to reason about them in proofs.
 -/
 class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output] where
+  name : String := "anonymous"
   main : Var Input F → Circuit F (Var Output F)
 
   /-- how many local witnesses this circuit introduces -/
@@ -473,7 +474,7 @@ def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment 
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
-  | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
+  | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops.toFlat) ++ witnessGenerators ops
 
 -- statements about constant length or output
 
