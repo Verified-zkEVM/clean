@@ -200,10 +200,11 @@ Theorem and implementation that allows us to take a formal assertion changing mu
 def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChangingMultiset F β)
     (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
   let ops := circuit.main input_var |>.operations n
+  let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   {
-    ops := ops.toFlat,
+    ops := nestedOps,
     Soundness env :=
       let adds := circuit.localAdds input_var env n
       circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) adds,
@@ -217,6 +218,7 @@ def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChang
     imply_soundness := by
       intro env h_holds adds as
       let input : β F := eval env input_var
+      rw [ops.toNested_toFlat] at h_holds
 
       suffices h: ConstraintsHold.Soundness env ops by
         apply circuit.soundness n env input_var input rfl as h
@@ -233,8 +235,10 @@ def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChang
 
       have h_env' : env.UsesLocalWitnesses n ops := by
         rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
+        rw [ops.toNested_toFlat] at h_env
         exact h_env
 
+      rw [ops.toNested_toFlat]
       apply constraintsHold_toFlat_iff.mpr
       apply can_replace_completeness h_consistent h_env'
       apply circuit.completeness n env input_var
@@ -243,7 +247,8 @@ def FormalAssertionChangingMultiset.toSubcircuit (circuit : FormalAssertionChang
     imply_usesLocalWitnesses := by intros; exact trivial
 
     localLength_eq := by
-      rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
+      rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
+        FlatOperation.localLength_toFlat]
   }
 
 /--

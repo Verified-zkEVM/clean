@@ -339,6 +339,7 @@ def toFlat : Operations F → List (FlatOperation F)
   | .witness m c :: ops => .witness m c :: toFlat ops
   | .assert e :: ops => .assert e :: toFlat ops
   | .lookup l :: ops => .lookup l :: toFlat ops
+  | .add mult nl :: ops => .add mult nl :: toFlat ops
   | .subcircuit s :: ops => s.ops.toFlat ++ toFlat ops
 
 def toNested : Operations F → List (NestedOperations F)
@@ -346,8 +347,8 @@ def toNested : Operations F → List (NestedOperations F)
   | .witness m c :: ops => .single (.witness m c) :: toNested ops
   | .assert e :: ops => .single (.assert e) :: toNested ops
   | .lookup l :: ops => .single (.lookup l) :: toNested ops
+  | .add mult nl :: ops => .single (.add mult nl) :: toNested ops
   | .subcircuit s :: ops => s.ops :: toNested ops
-  | .add mult nl :: ops => .add mult nl :: toFlat ops
 
 /--
 The number of witness variables introduced by these operations.
