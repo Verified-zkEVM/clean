@@ -17,9 +17,13 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-structure Environment (F : Type) where
+structure WitnessEnvironment (F : Type) where
   get : ℕ → F
+
+structure TableEnvironment (F : Type) where
   tables : String → (n : ℕ) → Array (Vector F n)
+
+structure Environment (F : Type) extends WitnessEnvironment F, TableEnvironment F
 
 namespace Expression
 variable [Field F]

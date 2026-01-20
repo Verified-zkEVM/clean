@@ -65,7 +65,7 @@ def Table.toRaw (table : Table F Row) : RawTable F where
   imply_soundness _ row := table.imply_soundness _ (fromElements row)
   implied_by_completeness _ row := table.implied_by_completeness _ (fromElements row)
 
-def Environment.getTable (env : Environment F) {Row : TypeMap} [ProvableType Row]
+def TableEnvironment.getTable (env : TableEnvironment F) {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) : Array (Row F) :=
   env.tables table.name (size Row) |>.map fromElements
 
