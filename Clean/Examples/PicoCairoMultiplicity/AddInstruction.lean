@@ -33,7 +33,6 @@ If enabled, executes the ADD instruction and emits multiplicity operations.
 -/
 def main
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
 
   let enabled := input.enabled
@@ -61,19 +60,19 @@ def main
   assertZero (decoded.instrType.isAdd - 1)
 
   -- Step 6: Read operands from memory using addressing modes
-  let v1 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
+  let v1 ← readFromMemory {
     state := preState,
     offset := rawInstruction.op1,
     mode := decoded.mode1
   }
 
-  let v2 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
+  let v2 ← readFromMemory {
     state := preState,
     offset := rawInstruction.op2,
     mode := decoded.mode2
   }
 
-  let v3 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
+  let v3 ← readFromMemory {
     state := preState,
     offset := rawInstruction.op3,
     mode := decoded.mode3
@@ -111,10 +110,9 @@ def localAdds
 ElaboratedCircuit for ADD instruction step.
 -/
 def elaborated
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
-  main := main program h_programSize memory h_memorySize
+  main := main program h_programSize
   -- assertBool(0) + emitStateWhen(0) + fetchInstruction(4) + conditionalDecode(8) + assertZero(0) + 3×readMemory(5) + assertZero(0) + emitStateWhen(0) = 27
   localLength _ := 27
   output _ _ := ()
@@ -141,7 +139,7 @@ Assumptions for the ADD instruction step.
 -/
 def Assumptions
     {programSize : ℕ} [NeZero programSize]
-    (input : InstructionStepInput (F p)) : Prop :=
+    (input : InstructionStepInput (F p)) (_ : Environment (F p)) : Prop :=
   IsBool input.enabled ∧
   ZMod.val input.preState.pc + 3 < programSize
 
@@ -151,8 +149,8 @@ If enabled, the pre-state consumed and post-state produced must reflect a valid 
 -/
 def Spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (input : InstructionStepInput (F p)) (adds : InteractionDelta (F p)) : Prop :=
+    (input : InstructionStepInput (F p)) (_ : Unit) (env : Environment (F p)) (adds : InteractionDelta (F p)) : Prop :=
+  ∃ _ : NeZero (memorySize env.toTableEnvironment),
   if input.enabled = 1 then
     -- When enabled, we need to verify:
     -- 1. The pre-state is consumed (multiplicity -1)
@@ -163,9 +161,9 @@ def Spec
       match Spec.decodeInstruction rawInstr.rawInstrType with
       | some (instrType, mode1, mode2, mode3) =>
         if instrType = 0 then  -- Must be ADD
-          match Spec.dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp,
-                Spec.dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp,
-                Spec.dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp with
+          match Spec.dataMemoryAccess (memory env.toTableEnvironment) rawInstr.op1 mode1 input.preState.ap input.preState.fp,
+                Spec.dataMemoryAccess (memory env.toTableEnvironment) rawInstr.op2 mode2 input.preState.ap input.preState.fp,
+                Spec.dataMemoryAccess (memory env.toTableEnvironment) rawInstr.op3 mode3 input.preState.ap input.preState.fp with
           | some v1, some v2, some v3 =>
             v1 + v2 = v3 ∧
             adds = InteractionDelta.single ⟨"state", [input.preState.pc, input.preState.ap, input.preState.fp]⟩ (-1) +
@@ -179,21 +177,21 @@ def Spec
     adds.toFinsupp = 0
 
 /--
-FormalAssertionChangingMultiset for the ADD instruction step.
+GeneralFormalCircuitChangingMultiset for the ADD instruction step.
 -/
 def circuit
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    FormalAssertionChangingMultiset (F p) InstructionStepInput where
-  elaborated := elaborated program h_programSize memory h_memorySize
-  Assumptions := Assumptions (programSize := programSize)
-  Spec := Spec program memory
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
+    GeneralFormalCircuitChangingMultiset (F p) InstructionStepInput unit where
+  elaborated := elaborated program h_programSize
+  Assumptions := Assumptions (programSize:=programSize)
+  Spec input _ env delta := Assumptions (programSize:=programSize) input env → Spec program input () env delta
   soundness := by
     circuit_proof_start [elaborated, main, Assumptions, Spec, FemtoCairo.fetchInstruction,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
       readFromMemory, FemtoCairo.decodeInstruction]
 
     -- Extract assumptions
+    intro h_assumptions
     obtain ⟨h_enabled_bool, h_pc_bound⟩ := h_assumptions
     obtain ⟨h_input_enabled, h_input_preState⟩ := h_input
 
@@ -324,14 +322,12 @@ Takes a vector of inputs with given capacity and executes ADD instructions for e
 -/
 def stepBody
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit :=
-  (AddInstruction.circuit program h_programSize memory h_memorySize) input
+  AddInstruction.circuit program h_programSize input
 
 instance stepBody_constantLength
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    Circuit.ConstantLength (stepBody program h_programSize memory h_memorySize) where
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
+    Circuit.ConstantLength (stepBody program h_programSize) where
   localLength := 27
   localLength_eq _ _ := by
     simp only [stepBody, circuit_norm]

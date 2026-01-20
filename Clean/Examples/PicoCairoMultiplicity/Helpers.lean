@@ -103,14 +103,14 @@ Takes ConditionalDecodeInput and returns decoded instruction or dummy.
 def conditionalDecodeCircuit :
     GeneralFormalCircuit (F p) ConditionalDecodeInput DecodedInstruction where
   elaborated := conditionalDecodeElaborated
-  Assumptions := fun input =>
+  Assumptions := fun input _ =>
     IsBool input.enabled ∧ input.rawInstrType.val < 256
-  Spec := fun input output =>
+  Spec := fun input output env =>
     IsBool input.enabled →
     if input.enabled = 0 then
       output = input.dummy
     else
-      decodeInstruction.Spec input.rawInstrType output
+      decodeInstruction.Spec input.rawInstrType output env
   soundness := by
     circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstruction]
     intro h_assumptions
