@@ -256,19 +256,27 @@ instance : ProvableStruct MemoryEntry where
 def MemoryTable : Table (F p) MemoryEntry where
   name := "memory"
   Contains table entry := ∃ (ha : entry.address.val < table.size),
-    entry = table[entry.address.val]
-
-def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
-  let mem := env.getTable MemoryTable
-  mem[(env address).val]?.getD 0 |>.value
+    entry.address = table[entry.address.val].address ∧
+    entry.value = table[entry.address.val].value
 
 def memorySize (env : Environment (F p)) : ℕ :=
   let mem := env.getTable MemoryTable
   mem.size
 
+def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
+  let mem := env.getTable MemoryTable
+  if he : (env address).val < memorySize env then
+    mem[(env address).val].value
+  else 0
+
 def memory (env : Environment (F p)) : Fin (memorySize env) → F p :=
   let mem := env.getTable MemoryTable
   fun i => mem[i.val].value
+
+-- to satisfy memory lookup constraints, the prover needs to make sure that `memory[addr] = (addr, ·)`
+def MemoryCompletenessAssumption (env : Environment (F p)) : Prop :=
+  let mem := env.getTable MemoryTable;
+  ∀ (addr : F p) (ha : addr.val < mem.size), mem[addr.val].address = addr
 
 /--
   Circuit that reads a value from a read-only memory, given a state, an offset,
@@ -321,15 +329,16 @@ def readFromMemory :
 
   Assumptions
   | { state, offset, mode }, env =>
-    ∃ hm : NeZero (memorySize env),
-    -- for completeness, we assume that the memory access succeeds
     mode.isEncodedCorrectly ∧
+    MemoryCompletenessAssumption env ∧
+    -- for completeness, we assume that the memory access succeeds
+    ∃ hm : NeZero (memorySize env),
     (Spec.dataMemoryAccess (memory env) offset mode.val state.ap state.fp).isSome
 
   Spec
   | {state, offset, mode}, output, env =>
-    ∀ hm : NeZero (memorySize env),
     mode.isEncodedCorrectly →
+    ∃ hm : NeZero (memorySize env),
     match Spec.dataMemoryAccess (memory env) offset mode.val state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
@@ -338,7 +347,7 @@ def readFromMemory :
     circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess,
       Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
       memorySize, memoryValue, memory, MemoryEntry]
-    intro hm h_assumptions
+    intro h_assumptions
     set memoryTable := env.getTable MemoryTable with h_memory_table_def
     simp only [MemoryTable] at h_holds
 
@@ -353,9 +362,13 @@ def readFromMemory :
     simp only [h_input] at h_holds
     simp only [Option.bind_eq_bind, id_eq]
     obtain ⟨ h_addr1, h_addr2, ⟨ h_addr1_lt, h_mem1 ⟩, ⟨ h_addr2_lt, h_mem2 ⟩, h_value ⟩ := h_holds
-    rw [MemoryEntry.mk.injEq] at h_mem1 h_mem2
     obtain ⟨ h_addr1', h_value1 ⟩ := h_mem1
     obtain ⟨ h_addr2', h_value2 ⟩ := h_mem2
+
+    -- prove that memory is non-empty
+    have hm : NeZero (env.getTable MemoryTable).size := NeZero.of_gt h_addr1_lt
+    use hm
+
     simp only [h_addr1] at h_value1 h_addr1_lt
     rw [h_value1] at h_addr2
     simp only [h_addr2] at h_value2 h_addr2_lt
@@ -406,38 +419,46 @@ def readFromMemory :
     set value := env.get (i₀ + 4)
 
     set memoryTable := env.getTable MemoryTable with h_memory_table_def
+    simp only [MemoryTable]
+    obtain ⟨ addr1_def, value1_def, addr2_def, value2_def, value_def ⟩ := h_env
+    use addr1_def, addr2_def
+    simp only [value_def, and_true]
 
-    -- get rid of most goals
-    simp only [h_env, MemoryTable, true_and, and_true]
     -- break up the addressing mode and state
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
     simp only [circuit_norm, explicit_provable_type, DecodedAddressingMode.mk.injEq, State.mk.injEq] at h_input
-    simp only [h_input, DecodedAddressingMode.val, memoryAccess] at h_assumptions h_env ⊢
-    obtain ⟨ h_pos, h_mode_encode, h_mem_access ⟩ := h_assumptions
+    simp only [h_input, DecodedAddressingMode.val, memoryAccess, MemoryCompletenessAssumption] at h_assumptions addr1_def addr2_def ⊢
+    obtain ⟨ h_mode_encode, h_mem_completeness, h_pos, h_mem_access ⟩ := h_assumptions
+
+    -- simplify the goal using MemoryCompletenessAssumption and witness info
+    suffices h_goal : addr1.val < memoryTable.size ∧ addr2.val < memoryTable.size by
+      obtain ⟨ h_addr1_lt, h_addr2_lt ⟩ := h_goal
+      constructor
+      · use h_addr1_lt
+        use h_mem_completeness addr1 h_addr1_lt |>.symm
+        rw [value1_def]
+        split_ifs <;> trivial
+      · use h_addr2_lt
+        use h_mem_completeness addr2 h_addr2_lt |>.symm
+        rw [value2_def]
+        split_ifs <;> trivial
+
     have : (env.getTable MemoryTable).size > 0 := NeZero.pos _
     -- by cases on the addressing mode
     rcases h_mode_encode with h_mode|h_mode|h_mode|h_mode
-    · simp only [h_mode, one_mul, zero_mul, add_zero, reduceIte] at *
-      simp only [Option.isSome_iff_exists, Option.bind_eq_bind, Option.dite_none_right_eq_some,
-        Option.bind_eq_some_iff, Option.some.injEq, exists_exists_eq_and] at h_mem_access
-      obtain ⟨ value2', h_value1, h_value2, _ ⟩ := h_mem_access
-      have h_mem_address : ap + input_offset =
-          (env.getTable MemoryTable)[ZMod.val (ap + input_offset)].address := by
-        sorry
-      constructor
-      · use h_value1
-        rw [MemoryEntry.mk.injEq]
-        use h_mem_address
-        congr
-        simp [h_value1]
-      simp [h_value1]
-      use h_value2
-      rw [MemoryEntry.mk.injEq]
-      exact h_value2
-    · simp_all
-    · simp_all
-    · simp_all
+    <;> simp only [h_mode, one_mul, zero_mul, add_zero, zero_add, reduceIte] at *
+    · simp only [Option.bind_eq_bind, Option.isSome_iff_exists, Option.bind_eq_some_iff,
+      Option.dite_none_right_eq_some, Option.some.injEq, exists_exists_eq_and, ↓existsAndEq,
+      exists_prop, and_true] at h_mem_access
+      obtain ⟨ h_addr1_lt, h_addr2_lt ⟩ := h_mem_access
+      simp [addr1, addr1_def, addr2, addr2_def, value1_def, memoryTable, h_addr1_lt, h_addr2_lt]
+    · simp at h_mem_access
+      simp [addr1, addr2, *]
+    · simp at h_mem_access
+      simp [addr1, addr2, *]
+    · simp at h_mem_access
+      simp [addr1, addr2, *]
 
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
