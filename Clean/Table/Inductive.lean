@@ -76,7 +76,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     )
 
 namespace InductiveTable
-variable {F : Type} [Field F] {State Input : TypeMap} [ProvableType State] [ProvableType Input]
+variable {F : Type} [Field F] [DecidableEq F] {State Input : TypeMap} [ProvableType State] [ProvableType Input]
 
 /-
 we show that every `InductiveTable` can be used to define a `FormalTable`,

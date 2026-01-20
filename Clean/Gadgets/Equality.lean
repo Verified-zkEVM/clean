@@ -4,7 +4,7 @@ and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
 import Clean.Circuit.Loops
 
-variable {F : Type} [Field F]
+variable {F : Type} [Field F] [DecidableEq F]
 open Circuit (ConstraintsHold)
 
 namespace Gadgets
@@ -29,6 +29,12 @@ def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circu
   let diffs := (toVars x).zip (toVars y) |>.map (fun (xi, yi) => xi - yi)
   .forEach diffs assertZero
 
+theorem main_collectAdds {α : TypeMap} [ProvableType α] (input : Var (ProvablePair α α) F) (env : Environment F) (offset : ℕ) :
+    (main input |>.operations offset).collectAdds env = 0 := by
+  simp only [main]
+  apply Circuit.collectAdds_forEach
+  intro x n; simp only [circuit_norm, Operations.collectAdds]
+
 @[reducible]
 instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
   main
@@ -36,6 +42,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   output _ _ := ()
 
   localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
+  localAdds_eq := by intro _ _ _; simp only [main_collectAdds, InteractionDelta.toFinsupp]
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
 @[simps! (attr := circuit_norm) (config := {isSimp := false})]
@@ -117,47 +124,47 @@ end Gadgets
 -- Defines a unified `===` notation for asserting equality in circuits.
 
 @[circuit_norm]
-def assertEquals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+def assertEquals {F : Type} [Field F] [DecidableEq F] {α : TypeMap} [ProvableType α]
     (x y : α (Expression F)) : Circuit F Unit :=
   Gadgets.Equality.circuit α (x, y)
 
 @[circuit_norm, reducible]
-def Expression.assertEquals {F : Type} [Field F]
+def Expression.assertEquals {F : Type} [Field F] [DecidableEq F]
     (x y : Expression F) : Circuit F Unit :=
   Gadgets.Equality.circuit id (x, y)
 
-class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
+class HasAssertEq (β : Type) (F : outParam Type) [Field F] [DecidableEq F] where
   assert_eq : β → β → Circuit F Unit
 
-instance {F : Type} [Field F] : HasAssertEq (Expression F) F where
+instance {F : Type} [Field F] [DecidableEq F] : HasAssertEq (Expression F) F where
   assert_eq := Expression.assertEquals
 
-instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
+instance {F : Type} [Field F] [DecidableEq F] {α : TypeMap} [ProvableType α] :
   HasAssertEq (α (Expression F)) F where
-  assert_eq := @assertEquals F _ α _
+  assert_eq := @assertEquals F _ _ α _
 
 attribute [circuit_norm] HasAssertEq.assert_eq
 infix:50 " === " => HasAssertEq.assert_eq
 
 -- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
 
-class HasAssignEq (β : Type) (F : outParam Type) [Field F] where
+class HasAssignEq (β : Type) (F : outParam Type) [Field F] [DecidableEq F] where
   assignEq : β → Circuit F β
 
-instance {F : Type} [Field F] : HasAssignEq (Expression F) F where
+instance {F : Type} [Field F] [DecidableEq F] : HasAssignEq (Expression F) F where
   assignEq := fun rhs => do
     let witness ← witnessField fun env => rhs.eval env
     witness === rhs
     return witness
 
-instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
+instance {F : Type} [Field F] [DecidableEq F] {α : TypeMap} [ProvableType α] :
   HasAssignEq (α (Expression F)) F where
   assignEq := fun rhs => do
     let witness ← ProvableType.witness fun env => eval env rhs
     witness === rhs
     return witness
 
-instance {F : Type} [Field F] {n : ℕ} : HasAssignEq (Vector (Expression F) n) F :=
+instance {F : Type} [Field F] [DecidableEq F] {n : ℕ} : HasAssignEq (Vector (Expression F) n) F :=
   inferInstanceAs (HasAssignEq (fields n (Expression F)) F)
 
 attribute [circuit_norm] HasAssignEq.assignEq

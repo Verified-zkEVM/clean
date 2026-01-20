@@ -204,6 +204,8 @@ def circuit : FormalAssertion (F p) U64 where
   Assumptions _ := True
   Spec inputs := inputs.Normalized
 
+  localAdds_eq _ _ _ := by simp [main, circuit_norm]
+
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as

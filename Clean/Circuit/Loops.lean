@@ -364,6 +364,15 @@ def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F Unit :=
   xs.forM body
 
+@[circuit_norm]
+theorem forEach_cons {m : ℕ} (x : α) (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+    (constant : ConstantLength body) :
+    forEach (Vector.cons x xs) body constant = body x *> forEach xs body constant := by
+  unfold forEach
+  rw [Vector.forM_toList, Vector.cons, Vector.toList_mk, List.forM_cons]
+  rw [←Vector.forM_toList]
+  rfl
+
 def map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F (Vector β m) :=
   xs.mapM body
@@ -657,5 +666,176 @@ lemma foldlRange.usesLocalWitnesses :
   simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
 
 end foldlRange
+
+theorem collectAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (h_body : ∀ x n, Operations.collectAdds env ((body x) n).2 = 0) :
+    Operations.collectAdds env ((forEach xs body constant) offset).2 = 0 := by
+  induction xs using Vector.induct generalizing offset
+  · rfl
+  case cons n a as ih =>
+    simp only [circuit_norm, Operations.collectAdds_append]
+    rw [h_body, ih]
+    rfl
+
+/-- General version of collectAdds_forEach that relates forEach to Finset.sum via toFinsupp.
+    Each step's collectAdds equals the corresponding localAdds_fn applied to that element. -/
+theorem collectAdds_forEach_sum [DecidableEq F] {m : ℕ} (xs : Vector α m) [Inhabited α]
+    (body : α → Circuit F Unit)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (localAdds_fn : α → InteractionDelta F)
+    (h_body : ∀ x n, Operations.collectAdds env ((body x) n).2 = localAdds_fn x) :
+    (Operations.collectAdds env ((forEach xs body constant) offset).2).toFinsupp =
+    ∑ i : Fin m, (localAdds_fn xs[i]).toFinsupp := by
+  induction xs using Vector.induct generalizing offset
+  case nil =>
+    simp only [Finset.univ_eq_empty, Finset.sum_empty]
+    rfl
+  case cons n a as ih =>
+    simp only [circuit_norm, Operations.collectAdds_append]
+    rw [← InteractionDelta.add_eq_append, InteractionDelta.toFinsupp_add, h_body, ih]
+    rw [Fin.sum_univ_succ]
+    rfl
+
+/-- Version of collectAdds_forEach_sum using toFinsupp equality for h_body.
+    This is useful when the body's localAdds_eq gives toFinsupp equality. -/
+theorem collectAdds_forEach_sum' [DecidableEq F] {m : ℕ} (xs : Vector α m) [Inhabited α]
+    (body : α → Circuit F Unit)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (localAdds_fn : α → InteractionDelta F)
+    (h_body : ∀ x n, (Operations.collectAdds env ((body x) n).2).toFinsupp = (localAdds_fn x).toFinsupp) :
+    (Operations.collectAdds env ((forEach xs body constant) offset).2).toFinsupp =
+    ∑ i : Fin m, (localAdds_fn xs[i]).toFinsupp := by
+  induction xs using Vector.induct generalizing offset
+  case nil =>
+    simp only [Finset.univ_eq_empty, Finset.sum_empty]
+    rfl
+  case cons n a as ih =>
+    simp only [circuit_norm, Operations.collectAdds_append]
+    rw [← InteractionDelta.add_eq_append, InteractionDelta.toFinsupp_add, h_body, ih]
+    rw [Fin.sum_univ_succ]
+    rfl
+
+omit [Field F] in
+/-- For InteractionDelta accumulator functions, foldl starting from `init` equals
+    prepending `init` to foldl starting from 0. -/
+private theorem InteractionDelta.foldl_init_eq_append {β : Type*} (f : InteractionDelta F → β → InteractionDelta F)
+    (hf : ∀ acc x, f acc x = acc + f 0 x)
+    (init : InteractionDelta F) (xs : List β) :
+    init ++ xs.foldl f 0 = xs.foldl f init := by
+  induction xs generalizing init with
+  | nil => simp only [List.foldl_nil, InteractionDelta.zero_eq_nil, List.append_nil]
+  | cons y ys ih =>
+    simp only [List.foldl_cons]
+    rw [← ih (f 0 y), ← ih (f init y)]
+    show init ++ ((f 0 y) ++ _) = (f init y) ++ _
+    rw [hf init y, InteractionDelta.add_eq_append, List.append_assoc]
+
+/-- Helper: In forEach cons case, the tail's foldl matches the shifted indexing pattern. -/
+private theorem forEach_cons_foldl_eq {n : ℕ} (a : α) (as : Vector α n) (body : α → Circuit F Unit)
+    (env : Environment F) (offset k : ℕ) :
+    (List.finRange n).foldl (fun acc (i : Fin n) =>
+      acc + Operations.collectAdds env ((body as[i]) (offset + k + i * k)).2) 0 =
+    (List.finRange n).foldl (fun acc (i : Fin n) =>
+      acc + Operations.collectAdds env ((body (a :: as.toList)[↑(Fin.succ i)]) (offset + ↑(Fin.succ i) * k)).2) 0 := by
+  congr 1; funext acc i
+  have h1 : (a :: as.toList)[(Fin.succ i : Fin (n+1))] = as[i] := by
+    show (a :: as.toList)[i.val + 1] = as[i.val]
+    simp only [List.getElem_cons_succ, Vector.getElem_toList]
+  have h2 : offset + k + i * k = offset + (↑i + 1) * k := by ring
+  simp only [h1, h2, Fin.val_succ]
+
+/-- Relates collectAdds of forEach to a foldl over finRange.
+    This is useful for proving Bundle.localAdds_eq where localAdds is defined via foldl. -/
+theorem collectAdds_forEach_foldl {m : ℕ} (xs : Vector α m) [Inhabited α]
+    (body : α → Circuit F Unit) (constant : ConstantLength body)
+    (env : Environment F) (offset : ℕ) :
+    Operations.collectAdds env ((forEach xs body constant) offset).2 =
+    (List.finRange m).foldl (fun acc (i : Fin m) =>
+      acc + Operations.collectAdds env ((body xs[i]) (offset + i * constant.localLength)).2) 0 := by
+  induction xs using Vector.induct generalizing offset
+  case nil => rfl
+  case cons n a as ih =>
+    simp only [circuit_norm, Operations.collectAdds_append]
+    have h_len : (body a).localLength offset = constant.localLength := constant.localLength_eq a offset
+    simp only [Circuit.localLength] at h_len
+    rw [h_len, ih]
+    simp only [List.finRange_succ, List.foldl_cons, List.foldl_map, List.nil_append,
+      Fin.val_zero, zero_mul, add_zero, Vector.cons, Vector.getElem_mk,
+      List.getElem_toArray, List.getElem_cons_zero]
+    rw [forEach_cons_foldl_eq a as body env offset constant.localLength]
+    exact InteractionDelta.foldl_init_eq_append _ (fun _ _ => rfl) _ _
+
+theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (h_body : ∀ x n, ((body x).operations n).collectAdds env = 0) :
+    ((map xs body constant).operations offset).collectAdds env = 0 := by
+  unfold map
+  induction xs using Vector.induct generalizing offset
+  case nil =>
+    simp [Circuit.operations, Circuit.pure_operations_eq, Operations.collectAdds]
+  case cons x xs ih =>
+    simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
+    rw [Operations.collectAdds_append, Operations.collectAdds_append]
+    simp only [Operations.collectAdds, h_body, InteractionDelta.add_zero', ih]
+
+theorem collectAdds_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (h_body : ∀ i n, ((body i).operations n).collectAdds env = 0) :
+    ((mapFinRange m body constant).operations offset).collectAdds env = 0 := by
+  unfold mapFinRange Vector.mapFinRangeM
+  exact collectAdds_map (Vector.finRange m) body constant env offset h_body
+
+/-- Version of collectAdds_mapFinRange using `.2` syntax for easier matching in proofs. -/
+theorem collectAdds_mapFinRange' (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (h_body : ∀ i n, Operations.collectAdds env ((body i) n).2 = 0) :
+    Operations.collectAdds env ((mapFinRange m body constant) offset).2 = 0 :=
+  collectAdds_mapFinRange m body constant env offset h_body
+
+theorem collectAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector α m)
+    (init : β) (body : β → α → Circuit F β)
+    (const_out : ConstantOutput (fun (s, a) => body s a))
+    (constant : ConstantLength (fun (s, a) => body s a))
+    (env : Environment F) (offset : ℕ)
+    (h_body : ∀ s x n, ((body s x).operations n).collectAdds env = 0) :
+    ((foldl xs init body const_out constant).operations offset).collectAdds env = 0 := by
+  induction xs using Vector.induct generalizing offset init
+  case nil =>
+    simp only [foldl]
+    rw [Vector.foldlM_toList, Vector.toList_mk, List.foldlM_nil]
+    simp only [Operations.collectAdds]
+  case cons x xs ih =>
+    simp only [foldl]
+    rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]
+    simp only [Circuit.bind_operations_eq, Operations.collectAdds_append]
+    rw [h_body, InteractionDelta.zero_add', ←Vector.foldlM_toList]
+    exact ih _ _
+
+theorem collectAdds_foldlRange [Inhabited β] {m : ℕ} [inst : Inhabited (Fin m)]
+    (init : β) (body : β → Fin m → Circuit F β)
+    (const_out : ConstantOutput (fun (s, a) => body s a))
+    (constant : ConstantLength (fun (s, a) => body s a))
+    (env : Environment F) (offset : ℕ)
+    (h_body : ∀ s i n, ((body s i).operations n).collectAdds env = 0) :
+    ((foldlRange m init body constant).operations offset).collectAdds env = 0 := by
+  unfold foldlRange
+  exact collectAdds_foldl (Vector.finRange m) init body const_out constant env offset h_body
+
+/-- Version of collectAdds_foldlRange that works for all m including 0. -/
+theorem collectAdds_foldlRange' [Inhabited β] {m : ℕ}
+    (init : β) (body : β → Fin m → Circuit F β)
+    (constant : ConstantLength (fun (s, a) => body s a))
+    (env : Environment F) (offset : ℕ)
+    (h_body : ∀ s i n, ((body s i).operations n).collectAdds env = 0) :
+    ((foldlRange m init body constant).operations offset).collectAdds env = 0 := by
+  simp only [foldlRange]
+  rw [Vector.foldlM_toList]
+  induction (Vector.finRange m).toList generalizing offset init with
+  | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.collectAdds]
+  | cons x xs ih =>
+    simp only [List.foldlM_cons, Circuit.bind_operations_eq, Operations.collectAdds_append]
+    rw [h_body, InteractionDelta.zero_add']
+    exact ih ((body init x).output offset) (offset + (body init x).localLength offset)
 
 end Circuit

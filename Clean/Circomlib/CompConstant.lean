@@ -96,11 +96,14 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 
 def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   main := main c
-  localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
-  localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
-  subcircuitsConsistent input n := by
+  localLength _ := 127 + 1 + 135 + 1
+  output _ i0 := varFromOffset field (i0 + 127 + 1 + 135)
+  output_eq := by
+    intro offset
     simp only [circuit_norm, main, Num2Bits.circuit]
-    and_intros <;> ac_rfl
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds, circuit_norm]
 
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1

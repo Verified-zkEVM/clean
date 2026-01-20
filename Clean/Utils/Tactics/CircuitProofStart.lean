@@ -18,10 +18,13 @@ partial def circuitProofStartCore : TacticM Unit := do
     let headConst? := goalType.getAppFn.constName?
     let isSoundness := headConst? == some ``Soundness ||
                        headConst? == some ``FormalAssertion.Soundness ||
-                       headConst? == some ``GeneralFormalCircuit.Soundness
+                       headConst? == some ``GeneralFormalCircuit.Soundness ||
+                       headConst? == some ``FormalAssertion.SoundnessChangingMultiset ||
+                       headConst? == some ``GeneralFormalCircuit.SoundnessChangingMultiset
     let isCompleteness := headConst? == some ``Completeness ||
                           headConst? == some ``FormalAssertion.Completeness ||
-                          headConst? == some ``GeneralFormalCircuit.Completeness
+                          headConst? == some ``GeneralFormalCircuit.Completeness ||
+                          headConst? == some ``FormalAssertion.CompletenessChangingMultiset
 
     if isSoundness then
       match headConst? with
@@ -37,6 +40,16 @@ partial def circuitProofStartCore : TacticM Unit := do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``GeneralFormalCircuit.Soundness =>
         evalTactic (← `(tactic| unfold GeneralFormalCircuit.Soundness))
+        let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``FormalAssertion.SoundnessChangingMultiset =>
+        evalTactic (← `(tactic| unfold FormalAssertion.SoundnessChangingMultiset))
+        let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``GeneralFormalCircuit.SoundnessChangingMultiset =>
+        evalTactic (← `(tactic| unfold GeneralFormalCircuit.SoundnessChangingMultiset))
         let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
@@ -60,11 +73,16 @@ partial def circuitProofStartCore : TacticM Unit := do
         let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``FormalAssertion.CompletenessChangingMultiset =>
+        evalTactic (← `(tactic| unfold FormalAssertion.CompletenessChangingMultiset))
+        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_spec]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()
       return
     else
       -- Goal is not a supported Soundness or Completeness type
-      throwError "circuitProofStartCore can only be used on Soundness, Completeness, FormalAssertion.Soundness, FormalAssertion.Completeness, GeneralFormalCircuit.Soundness, or GeneralFormalCircuit.Completeness goals"
+      throwError "circuitProofStartCore can only be used on Soundness, Completeness, FormalAssertion.Soundness, FormalAssertion.Completeness, GeneralFormalCircuit.Soundness, GeneralFormalCircuit.Completeness, or their ChangingMultiset variants"
 
 /--
   Standard tactic for starting soundness and completeness proofs.
@@ -78,7 +96,9 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   **Supported goal types**: This tactic works on `Soundness`, `Completeness`,
   `FormalAssertion.Soundness`, `FormalAssertion.Completeness`,
-  `GeneralFormalCircuit.Soundness`, or `GeneralFormalCircuit.Completeness` goals.
+  `GeneralFormalCircuit.Soundness`, `GeneralFormalCircuit.Completeness`,
+  and their `ChangingMultiset` variants (`FormalAssertion.SoundnessChangingMultiset`,
+  `FormalAssertion.CompletenessChangingMultiset`, `GeneralFormalCircuit.SoundnessChangingMultiset`).
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`

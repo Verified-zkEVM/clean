@@ -62,6 +62,9 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
 
+  localAdds_eq _ _ _ := by
+    simp only [main, circuit_norm, Operations.collectAdds]
+
   soundness := by
     -- introductions
     rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds

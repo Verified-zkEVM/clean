@@ -14,7 +14,7 @@ The composite circuit:
 - Has a spec stating that there exists an intermediate value such that both component specs hold
 -/
 def FormalCircuit.concat
-    {F : Type} [Field F]
+    {F : Type} [Field F] [DecidableEq F]
     {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
     (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)
@@ -36,6 +36,9 @@ def FormalCircuit.concat
     output_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+    localAdds_eq := by
+      intro input env offset
+      simp only [Circuit.bind_def, circuit_norm, Operations.collectAdds]
   }
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
@@ -51,7 +54,7 @@ def FormalCircuit.concat
 }
 
 @[circuit_norm]
-lemma FormalCircuit.concat_assumptions {F Input Mid Output} [Field F] [ProvableType Input] [ProvableType Mid] [ProvableType Output]
+lemma FormalCircuit.concat_assumptions {F Input Mid Output} [Field F] [DecidableEq F] [ProvableType Input] [ProvableType Mid] [ProvableType Output]
     (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
   simp only [FormalCircuit.concat]
@@ -70,7 +73,7 @@ The requirements are:
 - The stronger spec and the assumption imply the weaker spec
 -/
 def FormalCircuit.weakenSpec
-    {F : Type} [Field F]
+    {F : Type} [Field F] [DecidableEq F]
     {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output)
     (WeakerSpec : Input F → Output F → Prop)
@@ -95,7 +98,41 @@ def FormalCircuit.weakenSpec
 }
 
 @[circuit_norm]
-lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [DecidableEq F] [ProvableType Input] [ProvableType Output]
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]
+
+/--
+Weaken the specification of a GeneralFormalCircuitChangingMultiset.
+
+This is the clean version that doesn't require a sorry because
+`GeneralFormalCircuit.Completeness` doesn't depend on Spec.
+-/
+def GeneralFormalCircuitChangingMultiset.weakenSpec
+    {F : Type} [Field F] [DecidableEq F]
+    {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuitChangingMultiset F Input Output)
+    (WeakerSpec : Input F → Output F → InteractionDelta F → Prop)
+    (h_spec_implication : ∀ input output adds,
+      circuit.Spec input output adds →
+      WeakerSpec input output adds) :
+    GeneralFormalCircuitChangingMultiset F Input Output := {
+  elaborated := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := WeakerSpec
+  soundness := by
+    intro offset env input_var input h_eval h_holds
+    have h_strong_spec := circuit.soundness offset env input_var input h_eval h_holds
+    exact h_spec_implication input _ _ h_strong_spec
+  completeness := circuit.completeness
+}
+
+@[circuit_norm]
+lemma GeneralFormalCircuitChangingMultiset.weakenSpec_assumptions
+    {F Input Output} [Field F] [DecidableEq F] [ProvableType Input] [ProvableType Output]
+    (c : GeneralFormalCircuitChangingMultiset F Input Output)
+    (WeakerSpec : Input F → Output F → InteractionDelta F → Prop)
+    h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
+  simp only [GeneralFormalCircuitChangingMultiset.weakenSpec]

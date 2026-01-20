@@ -75,6 +75,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
+  localAdds_eq input env offset := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds, circuit_norm]
+
   soundness := by
     simp only [circuit_norm, main]
     intro offset env input_var input h_input h_assumptions h_output
@@ -187,6 +191,10 @@ def circuit : FormalCircuit (F p) Inputs field where
   Spec input output :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
+
+  localAdds_eq input env offset := by
+    simp only [circuit_norm, main]
+    exact (MultiMux1.circuit 1).localAdds_eq { c := #v[(input.c[0], input.c[1])], s := input.s } env offset
 
   soundness := by
     simp only [circuit_norm, main]

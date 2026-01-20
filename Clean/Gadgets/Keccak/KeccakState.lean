@@ -75,6 +75,12 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
   Assumptions _ := True
   Spec block := block.Normalized
   localLength_eq _ _ := by simp +arith only [circuit_norm, U64.AssertNormalized.circuit]
+  localAdds_eq := by
+    intro block env offset
+    simp only [circuit_norm]
+    apply InteractionDelta.toFinsupp_zero_of_eq_zero
+    apply Circuit.collectAdds_forEach
+    intro x n; simp only [circuit_norm, Operations.collectAdds]
   soundness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]

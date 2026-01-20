@@ -98,6 +98,9 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
 def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := decodeInstructionMain
   localLength _ := 8
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, decodeInstructionMain]
+    simp only [Operations.collectAdds, circuit_norm]
 
   Assumptions
   | instruction => instruction.val < 256
@@ -174,6 +177,7 @@ def fetchInstruction
 
   localLength _ := 4
   output _ i₀ := varFromOffset RawInstruction i₀
+  localAdds_eq _ _ _ := by simp [circuit_norm]
 
   Assumptions
   | pc => pc.val + 3 < programSize
@@ -295,6 +299,7 @@ def readFromMemory
 
   localLength _ := 5
   output _ i₀ := var ⟨i₀ + 4⟩
+  localAdds_eq _ _ _ := by simp [Operations.collectAdds, circuit_norm]
 
   Assumptions
   | { state, offset, mode } =>
@@ -446,6 +451,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 
   localLength _ := 3
   output _ i₀ := varFromOffset State i₀
+  localAdds_eq := by sorry
 
   Assumptions
   | {state, decoded, v1, v2, v3} =>
@@ -595,6 +601,9 @@ def femtoCairoStepElaboratedCircuit
       -- Compute next state
       nextState { state, decoded, v1, v2, v3 }
     localLength := 30
+    localAdds_eq _ _ _ := by
+      simp only [circuit_norm]
+      simp only [Operations.collectAdds, circuit_norm]
 
 def femtoCairoStepSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
@@ -642,7 +651,7 @@ def femtoCairoStepSoundness
 
     split at c_decode
     case h_2 =>
-      -- impossible, decodeInstructionCircuit ensures that
+      -- impossible, decodeInstruction.circuit ensures that
       -- instruction decode is always successful
       contradiction
     case h_1 instr_type mode1 mode2 mode3 h_eq_decode =>
