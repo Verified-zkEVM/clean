@@ -330,16 +330,16 @@ def readFromMemory :
   Assumptions
   | { state, offset, mode }, env =>
     mode.isEncodedCorrectly ∧
-    MemoryCompletenessAssumption env.toTableEnvironment ∧
+    MemoryCompletenessAssumption env ∧
     -- for completeness, we assume that the memory access succeeds
-    ∃ hm : NeZero (memorySize env.toTableEnvironment),
-    (Spec.dataMemoryAccess (memory env.toTableEnvironment) offset mode.val state.ap state.fp).isSome
+    ∃ hm : NeZero (memorySize env),
+    (Spec.dataMemoryAccess (memory env) offset mode.val state.ap state.fp).isSome
 
   Spec
   | {state, offset, mode}, output, env =>
     mode.isEncodedCorrectly →
-    ∃ hm : NeZero (memorySize env.toTableEnvironment),
-    match Spec.dataMemoryAccess (memory env.toTableEnvironment) offset mode.val state.ap state.fp with
+    ∃ hm : NeZero (memorySize env),
+    match Spec.dataMemoryAccess (memory env) offset mode.val state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
 
@@ -646,9 +646,9 @@ def femtoCairoStepElaboratedCircuit
 
 def femtoCairoStepSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    (state : State (F p)) (nextState : State (F p)) (env : Environment (F p)) : Prop :=
-  ∃ _hm : NeZero (memorySize env.toTableEnvironment),
-  Spec.femtoCairoMachineTransition program (memory env.toTableEnvironment) state = some nextState
+    (state : State (F p)) (nextState : State (F p)) (env : TableEnvironment (F p)) : Prop :=
+  ∃ _hm : NeZero (memorySize env),
+  Spec.femtoCairoMachineTransition program (memory env) state = some nextState
 
 /--
   Assumptions required for the FemtoCairo step circuit completeness.
@@ -659,12 +659,12 @@ def femtoCairoStepSpec
 -/
 def femtoCairoStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (state : State (F p)) (env : Environment (F p)) : Prop :=
+    (state : State (F p)) (env : TableEnvironment (F p)) : Prop :=
   ValidProgramSize p programSize ∧
   ValidProgram program ∧
-  MemoryCompletenessAssumption env.toTableEnvironment ∧
-  ∃ _hm : NeZero (memorySize env.toTableEnvironment),
-  (Spec.femtoCairoMachineTransition program (memory env.toTableEnvironment) state).isSome
+  MemoryCompletenessAssumption env ∧
+  ∃ _hm : NeZero (memorySize env),
+  (Spec.femtoCairoMachineTransition program (memory env) state).isSome
 
 def femtoCairoStepSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
