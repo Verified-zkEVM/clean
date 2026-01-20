@@ -130,21 +130,6 @@ def main (input : Vector (Expression (F p)) 254) := do
   -- Convert bits to number
   Bits2Num.main 254 input
 
-lemma mapFinRange_eq_map {α β : Type} {n : ℕ} (v : Vector α n) (f : α → β) :
-    Vector.mapFinRange n (fun i => f v[i]) = v.map f := by
-  ext i
-  simp only [Vector.getElem_mapFinRange, Vector.getElem_map]
-  simp
-
-omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
-lemma fieldFromBits_eq_mapFinRange_cast {n} {f : Fin n → F p} :
-    fieldFromBits (Vector.mapFinRange n f) = (fromBits (Vector.mapFinRange n fun i => (f i).val) : F p) := by
-  unfold fieldFromBits
-  apply congrArg (Nat.cast : ℕ → F p)
-  apply congrArg fromBits
-  ext i
-  simp only [Vector.getElem_map, Vector.getElem_mapFinRange]
-
 set_option linter.constructorNameAsVariable false
 
 def circuit : GeneralFormalCircuit (F p) (fields 254) field where
@@ -177,7 +162,7 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     simp_all only [implies_true, forall_const]
     obtain ⟨ h_bits, h_eq ⟩ := assumptions
     rw [← ZMod.val_natCast_of_lt h_bits]
-    rw [← mapFinRange_eq_map]
+    rw [← Vector.mapFinRange_eq_map]
     rw [← fieldFromBits_eq_mapFinRange_cast]
     conv =>
           rhs

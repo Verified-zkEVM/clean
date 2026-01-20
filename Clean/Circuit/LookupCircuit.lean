@@ -11,7 +11,6 @@ Besides that, a `name` is required, to identify the table created from this circ
 -/
 structure LookupCircuit (F : Type) [Field F] [DecidableEq F] (α β : TypeMap) [ProvableType α] [ProvableType β]
     extends circuit : FormalCircuit F α β where
-  name : String
   computableWitnesses : circuit.ComputableWitnesses
 
 namespace LookupCircuit

@@ -52,6 +52,22 @@ instance : ToJson (FlatOperation F) where
     | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
     | FlatOperation.add mult nl => Json.mkObj [("add", Json.mkObj [("multiplicity", toJson mult), ("list", toJson nl)])]
 
+def NestedOperations.listToJson : List (NestedOperations F) → Array Json
+  | [] => #[]
+  | .single op :: ops => #[toJson op] ++ listToJson ops
+  | .nested (name, ops') :: ops =>
+    let obj := Json.mkObj [
+      ("name", Json.str name),
+      ("operations", Json.arr (listToJson ops'))]
+    #[obj] ++ listToJson ops
+
+instance : ToJson (NestedOperations F) where
+  toJson
+    | .single op => toJson op
+    | .nested ⟨ name, ops ⟩ => Json.mkObj [
+      ("name", Json.str name),
+      ("operations", Json.arr (NestedOperations.listToJson ops))]
+
 instance : ToJson (Operation F) where
   toJson
     | Operation.witness m _ => Json.mkObj [("witness", toJson m)]
