@@ -228,7 +228,8 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     blocks_compressed := muxedBlocksCompressed
   }
 
-def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i (_ : inputs.length = i) (state : ProcessBlocksState (F p)) :=
+def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i
+  (_ : inputs.length = i) (state : ProcessBlocksState (F p)) (_ : TableEnvironment (F p)) :=
     inputs.length < 2^32 →
     initialState.Normalized ∧
     (∀ input ∈ inputs, input.Normalized) ∧
@@ -353,10 +354,11 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp_all only [circuit_norm]
     omega
 
-def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initialState.Normalized
+def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) (_ : TableEnvironment (F p)) :=
+  initialState.Normalized
 
-def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
-    input.Normalized ∧ i < 2^32
+def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : TableEnvironment (F p)) :=
+  input.Normalized ∧ i < 2^32
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
@@ -434,8 +436,8 @@ The InductiveTable for processBlocks.
 def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   step
   Spec
-  InitialStateAssumptions initialState := initialState.Normalized
-  InputAssumptions i input := input.Normalized ∧ i < 2^32
+  InitialStateAssumptions initialState _ := initialState.Normalized
+  InputAssumptions i input _ := input.Normalized ∧ i < 2^32
   soundness
   completeness
   subcircuitsConsistent := by

@@ -25,7 +25,7 @@ def table : InductiveTable (F p) Row unit where
     let z ← Addition32.circuit { x := row.x, y := row.y }
     return { x := row.y, y := z }
 
-  Spec _ _ i _ row : Prop :=
+  Spec _ _ i _ row _ : Prop :=
     row.x.value = fib32 i ∧
     row.y.value = fib32 (i + 1) ∧
     row.x.Normalized ∧ row.y.Normalized
@@ -40,9 +40,9 @@ def table : InductiveTable (F p) Row unit where
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output
 
 -- The table's statement implies that the output row contains the nth Fibonacci number
-theorem tableStatement (output : Row (F p)) : ∀ n > 0, ∀ trace,
-    (formalTable output).statement n trace → output.y.value = fib32 n := by
-  intro n hn trace Spec
+theorem tableStatement (output : Row (F p)) : ∀ n > 0, ∀ trace env,
+    (formalTable output).statement n trace env → output.y.value = fib32 n := by
+  intro n hn trace env Spec
   simp only [FormalTable.statement, formalTable, InductiveTable.toFormal, table] at Spec
   replace Spec := Spec ⟨hn, (by simp [fib32, U32.fromByte_value, U32.fromByte_normalized])⟩
   simp_all +arith

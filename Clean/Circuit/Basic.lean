@@ -152,8 +152,8 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
-  | .lookup { table, entry, .. } :: ops =>
-    table.Contains (entry.map eval) ∧ ConstraintsHold eval ops
+  | .lookup l :: ops =>
+    l.Contains eval ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
   | .add _ _ :: ops => ConstraintsHold eval ops
@@ -166,8 +166,8 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
-  | .lookup { table, entry } :: ops =>
-    table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
+  | .lookup l :: ops =>
+    l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
   | .add _ _ :: ops => ConstraintsHold.Soundness eval ops
@@ -180,8 +180,8 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
-  | .lookup { table, entry } :: ops =>
-    table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
+  | .lookup l :: ops =>
+    l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
   | .add _ _ :: ops => ConstraintsHold.Completeness eval ops
@@ -367,7 +367,8 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [DecidableEq F]
   output _ _ := ()
 
 @[circuit_norm]
-def GeneralFormalCircuit.Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Output F → Prop) :=
+def GeneralFormalCircuit.Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
+    (Spec : Input F → Output F → Environment F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
   -- for all inputs
@@ -376,16 +377,17 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] [DecidableEq F] (circuit
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output
+  Spec input output env
 
 @[circuit_norm]
-def GeneralFormalCircuit.Completeness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :=
+def GeneralFormalCircuit.Completeness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Environment F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  Assumptions input env →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
 
@@ -406,8 +408,8 @@ add the range assumption to the soundness statement, thus making the circuit har
 -/
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Prop -- the statement to be assumed for completeness
-  Spec : Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
+  Assumptions : Input F → Environment F → Prop -- the statement to be assumed for completeness
+  Spec : Input F → Output F → Environment F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 
@@ -475,20 +477,21 @@ structure FormalAssertionChangingMultiset (F : Type) (Input : TypeMap) [Field F]
 /-- Soundness for general circuits that change interactions -/
 @[circuit_norm]
 def GeneralFormalCircuit.SoundnessChangingMultiset (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
-    (Spec : Input F → Output F → InteractionDelta F → Prop)
+    (Spec : Input F → Output F → Environment F → InteractionDelta F → Prop)
     (localAdds : Var Input F → Environment F → ℕ → InteractionDelta F) :=
   ∀ offset : ℕ, ∀ env,
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   let output := eval env (circuit.output input_var offset)
   let adds := localAdds input_var env offset
-  Spec input output adds
+  Spec input output env adds
 
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
-structure GeneralFormalCircuitChangingMultiset (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F] [ProvableType Input] [ProvableType Output]
+structure GeneralFormalCircuitChangingMultiset (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
+    [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Prop
-  Spec : Input F → Output F → InteractionDelta F → Prop
+  Assumptions : Input F → Environment F → Prop
+  Spec : Input F → Output F → Environment F → InteractionDelta F → Prop
   soundness : GeneralFormalCircuit.SoundnessChangingMultiset F elaborated Spec elaborated.localAdds
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 
@@ -521,8 +524,9 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 
 -- witness generation
 
-def Environment.fromList (witnesses : List F) : Environment F :=
-  .mk fun i => witnesses[i]?.getD 0
+def Environment.fromList (witnesses : List F) : Environment F where
+  get i := witnesses[i]?.getD 0
+  tables _ _ := #[]
 
 def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with
   | .witness _ compute => (compute (.fromList acc)).toList
