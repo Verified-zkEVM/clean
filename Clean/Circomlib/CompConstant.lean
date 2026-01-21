@@ -250,10 +250,13 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       have h_sout_val : parts.sum.val = sout.val := congrArg ZMod.val h_sout'
       simpa [h_sout_val] using h_parts_sum_lt
 
-    refine And.intro ?_ (And.intro h_sout (And.intro h_sout_lt h_out))
-    ext i hi
-    have h_parts_i := h_parts ⟨i, hi⟩
-    simpa [Vector.getElem_map, Vector.getElem_mapRange] using h_parts_i
+    and_intros
+    · ext i hi
+      have h_parts_i := h_parts ⟨i, hi⟩
+      simpa [Vector.getElem_map, Vector.getElem_mapRange] using h_parts_i
+    · exact h_sout
+    · exact h_sout_lt
+    · exact h_out
 
 end CompConstant
 
