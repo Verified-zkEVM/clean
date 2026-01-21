@@ -82,6 +82,20 @@ lemma bit_and_one_cases (n : ℕ) : n &&& 1 = 0 ∨ n &&& 1 = 1 := by
   have h : n &&& 1 ≤ 1 := Nat.and_le_right
   exact (Nat.le_one_iff_eq_zero_or_eq_one).mp h
 
+/-! ### Helper lemmas for bit manipulation -/
+
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] [Fact p.Prime] in
+/-- Low bit extraction from pair: n % 4 % 2 = n % 2 -/
+lemma mod4_mod2_eq_mod2 (n : ℕ) : n % 4 % 2 = n % 2 := by omega
+
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] [Fact p.Prime] in
+/-- High bit extraction from pair: n % 4 / 2 = n / 2 % 2 -/
+lemma mod4_div2_eq_div2_mod2 (n : ℕ) : n % 4 / 2 = n / 2 % 2 := by omega
+
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] [Fact p.Prime] in
+/-- Power identity for odd positions: 2^(k*2 + 1) = 2^(k*2) * 2 -/
+lemma pow_double_succ (k : ℕ) : 2 ^ (k * 2 + 1) = 2 ^ (k * 2) * 2 := by ring
+
 omit [Fact (p < 2 ^ 254)] in
 /-- Key characterization: computePart encodes pair comparison. -/
 lemma computePart_characterization (i : ℕ) (hi : i < 127) (slsb smsb : F p)
@@ -224,24 +238,22 @@ lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
         rw [hpow_eq]
         have h_bp_eq : bit_pos = h_pair_pos * 2 := by omega
         rw [h_bp_eq]
-        have hm : ∀ n : ℕ, n % 4 % 2 = n % 2 := fun n => by omega
         have h_low : x / 2^(h_pair_pos * 2) % 2 = y / 2^(h_pair_pos * 2) % 2 := by
-          calc x / 2^(h_pair_pos * 2) % 2 = (x / 2^(h_pair_pos * 2) % 4) % 2 := by rw [hm]
+          calc x / 2^(h_pair_pos * 2) % 2 = (x / 2^(h_pair_pos * 2) % 4) % 2 := by rw [mod4_mod2_eq_mod2]
             _ = (y / 2^(h_pair_pos * 2) % 4) % 2 := by rw [h_pair_eq]
-            _ = y / 2^(h_pair_pos * 2) % 2 := by rw [hm]
+            _ = y / 2^(h_pair_pos * 2) % 2 := by rw [mod4_mod2_eq_mod2]
         simp only [h_low]
       · have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
         rw [hpow_eq]
         have h_bp_eq : bit_pos = h_pair_pos * 2 + 1 := by omega
         rw [h_bp_eq]
-        have hd : ∀ n : ℕ, n % 4 / 2 = n / 2 % 2 := fun n => by omega
-        have hpow : 2 ^ (h_pair_pos * 2 + 1) = 2 ^ (h_pair_pos * 2) * 2 := by ring
+        have hpow := pow_double_succ h_pair_pos
         have h_high : x / 2 ^ (h_pair_pos * 2 + 1) % 2 = y / 2 ^ (h_pair_pos * 2 + 1) % 2 := by
           calc x / 2 ^ (h_pair_pos * 2 + 1) % 2 = x / (2 ^ (h_pair_pos * 2) * 2) % 2 := by rw [hpow]
             _ = x / 2 ^ (h_pair_pos * 2) / 2 % 2 := by rw [Nat.div_div_eq_div_mul]
-            _ = x / 2 ^ (h_pair_pos * 2) % 4 / 2 := by rw [hd]
+            _ = x / 2 ^ (h_pair_pos * 2) % 4 / 2 := by rw [mod4_div2_eq_div2_mod2]
             _ = y / 2 ^ (h_pair_pos * 2) % 4 / 2 := by rw [h_pair_eq]
-            _ = y / 2 ^ (h_pair_pos * 2) / 2 % 2 := by rw [hd]
+            _ = y / 2 ^ (h_pair_pos * 2) / 2 % 2 := by rw [mod4_div2_eq_div2_mod2]
             _ = y / (2 ^ (h_pair_pos * 2) * 2) % 2 := by rw [Nat.div_div_eq_div_mul]
             _ = y / 2 ^ (h_pair_pos * 2 + 1) % 2 := by rw [hpow]
         simp only [h_high]
@@ -345,24 +357,22 @@ lemma eq_of_all_pairs_eq (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254)
       rw [h_i_eq]
       simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
       have h_low : x / 2 ^ (k.val * 2) % 2 = y / 2 ^ (k.val * 2) % 2 := by
-        have hm : ∀ n : ℕ, n % 4 % 2 = n % 2 := fun n => by omega
-        calc x / 2 ^ (k.val * 2) % 2 = x / 2 ^ (k.val * 2) % 4 % 2 := by rw [hm]
+        calc x / 2 ^ (k.val * 2) % 2 = x / 2 ^ (k.val * 2) % 4 % 2 := by rw [mod4_mod2_eq_mod2]
           _ = y / 2 ^ (k.val * 2) % 4 % 2 := by rw [h_pair_eq]
-          _ = y / 2 ^ (k.val * 2) % 2 := by rw [hm]
+          _ = y / 2 ^ (k.val * 2) % 2 := by rw [mod4_mod2_eq_mod2]
       simp only [h_low]
     · have h_i_eq : i = k.val * 2 + 1 := by
         have hk_def : k.val = i / 2 := rfl
         omega
       rw [h_i_eq]
       simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
+      have hpow := pow_double_succ k.val
       have h_high : x / 2 ^ (k.val * 2 + 1) % 2 = y / 2 ^ (k.val * 2 + 1) % 2 := by
-        have hd : ∀ n : ℕ, n % 4 / 2 = n / 2 % 2 := fun n => by omega
-        have hpow : 2 ^ (k.val * 2 + 1) = 2 ^ (k.val * 2) * 2 := by ring
         calc x / 2 ^ (k.val * 2 + 1) % 2 = x / (2 ^ (k.val * 2) * 2) % 2 := by rw [hpow]
           _ = x / 2 ^ (k.val * 2) / 2 % 2 := by rw [Nat.div_div_eq_div_mul]
-          _ = x / 2 ^ (k.val * 2) % 4 / 2 := by rw [hd]
+          _ = x / 2 ^ (k.val * 2) % 4 / 2 := by rw [mod4_div2_eq_div2_mod2]
           _ = y / 2 ^ (k.val * 2) % 4 / 2 := by rw [h_pair_eq]
-          _ = y / 2 ^ (k.val * 2) / 2 % 2 := by rw [hd]
+          _ = y / 2 ^ (k.val * 2) / 2 % 2 := by rw [mod4_div2_eq_div2_mod2]
           _ = y / (2 ^ (k.val * 2) * 2) % 2 := by rw [Nat.div_div_eq_div_mul]
           _ = y / 2 ^ (k.val * 2 + 1) % 2 := by rw [hpow]
       simp only [h_high]
@@ -712,6 +722,41 @@ lemma parts_sum_lt_p (parts : Vector (F p) 127)
     _ = 127 * 2^128 := by simp [Vector.length_toList]
     _ < p := by linarith
 
+omit [Fact (p < 2 ^ 254)] in
+/-- Helper: computePart value when signal pair wins -/
+lemma computePart_val_when_win (i : Fin 127) (input : Vector (F p) 254) (ct : ℕ)
+    (h_bits : ∀ j (_ : j < 254), input[j] = 0 ∨ input[j] = 1)
+    (h_win : signalPairValF input[i.val * 2] input[i.val * 2 + 1] > constPairValAt i.val ct) :
+    (computePart i.val input[i.val * 2] input[i.val * 2 + 1] ct).val = 2^128 - 2^i.val := by
+  have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
+    (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
+  simp only [signalPairValF] at this h_win
+  simp only [this, h_win, ↓reduceIte]
+
+omit [Fact (p < 2 ^ 254)] in
+/-- Helper: computePart value when signal pair ties -/
+lemma computePart_val_when_tie (i : Fin 127) (input : Vector (F p) 254) (ct : ℕ)
+    (h_bits : ∀ j (_ : j < 254), input[j] = 0 ∨ input[j] = 1)
+    (h_tie : signalPairValF input[i.val * 2] input[i.val * 2 + 1] = constPairValAt i.val ct) :
+    (computePart i.val input[i.val * 2] input[i.val * 2 + 1] ct).val = 0 := by
+  have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
+    (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
+  simp only [signalPairValF] at this h_tie
+  simp only [this, h_tie, lt_irrefl, ↓reduceIte]
+
+omit [Fact (p < 2 ^ 254)] in
+/-- Helper: computePart value when signal pair loses -/
+lemma computePart_val_when_lose (i : Fin 127) (input : Vector (F p) 254) (ct : ℕ)
+    (h_bits : ∀ j (_ : j < 254), input[j] = 0 ∨ input[j] = 1)
+    (h_lose : signalPairValF input[i.val * 2] input[i.val * 2 + 1] < constPairValAt i.val ct) :
+    (computePart i.val input[i.val * 2] input[i.val * 2 + 1] ct).val = 2^i.val := by
+  have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
+    (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
+  simp only [signalPairValF] at this h_lose
+  have h_not_gt : ¬(input[i.val * 2 + 1].val * 2 + input[i.val * 2].val > constPairValAt i.val ct) := by omega
+  have h_not_eq : ¬(input[i.val * 2 + 1].val * 2 + input[i.val * 2].val = constPairValAt i.val ct) := by omega
+  simp only [this, h_not_gt, h_not_eq, ↓reduceIte]
+
 set_option maxHeartbeats 400000 in
 omit [Fact (p < 2 ^ 254)] in
 lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
@@ -829,10 +874,7 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
         intro i hi
         simp only [ties, Finset.mem_filter, Finset.mem_univ, true_and] at hi
         rw [h_parts i]
-        have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
-          (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
-        simp only [signalPairValF] at this hi
-        simp only [this, hi, lt_irrefl, ↓reduceIte]
+        exact computePart_val_when_tie i input ct h_bits hi
 
       have h_wins_val : wins.sum (fun i => parts[i].val) = wins.card * 2^128 - W := by
         have h_eq : wins.sum (fun i => parts[i].val) = wins.sum (fun i => 2^128 - 2^i.val) := by
@@ -840,10 +882,7 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
           intro i hi
           simp only [wins, Finset.mem_filter, Finset.mem_univ, true_and] at hi
           rw [h_parts i]
-          have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
-            (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
-          simp only [signalPairValF] at this hi
-          simp only [this, hi, ↓reduceIte]
+          exact computePart_val_when_win i input ct h_bits hi
         rw [h_eq]
         have h_sum_sub : ∀ (t : Finset (Fin 127)),
             t.sum (fun i => 2^128 - 2^i.val) = t.card * 2^128 - t.sum (fun i => 2^i.val) := by
@@ -870,14 +909,7 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
         intro i hi
         simp only [losses, Finset.mem_filter, Finset.mem_univ, true_and] at hi
         rw [h_parts i]
-        have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
-          (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
-        simp only [signalPairValF] at this hi
-        have h_not_gt : ¬(input[i.val * 2 + 1].val * 2 + input[i.val * 2].val >
-                          constPairValAt i.val ct) := by omega
-        have h_not_eq : ¬(input[i.val * 2 + 1].val * 2 + input[i.val * 2].val =
-                          constPairValAt i.val ct) := by omega
-        simp only [this, h_not_gt, h_not_eq, ↓reduceIte]
+        exact computePart_val_when_lose i input ct h_bits hi
 
       calc (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val)
           = (wins ∪ losses ∪ ties).sum (fun i => parts[i].val) := by rw [h_union]
