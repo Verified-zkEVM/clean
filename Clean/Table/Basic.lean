@@ -370,7 +370,7 @@ def windowEnv (table : TableConstraint W S F Unit)
         | .input ⟨i, j⟩ => window.get i j
         | .aux k => aux_env.get k
       else aux_env.get (i + assignment.aux_length)
-    tables := aux_env.tables }
+    data := aux_env.data }
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -488,14 +488,13 @@ export TableOperation (boundary everyRow everyRowExceptLast)
 
 structure TableEnvironments (F : Type) where
   /-- environment for each constraint, for each row -/
-  witnessEnvs : ℕ → ℕ → WitnessEnvironment F
-  /-- stable environment representing other tables -/
-  otherTables : TableEnvironment F
+  witnessEnvs : (constraint : ℕ) → (row : ℕ) → (varIndex : ℕ) → F
+  /-- auxiliary data available to all rows -/
+  data : ProverData F
 
-def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (ic ir : ℕ) : Environment F :=
-  { get := (envs.witnessEnvs ic ir).get,
-    tables := envs.otherTables.tables }
-
+def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=
+  { get := envs.witnessEnvs constraint row,
+    data := envs.data }
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
@@ -565,18 +564,18 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   constraints : List (TableOperation S F)
 
   /-- optional assumption on the table length and other tables in the environment -/
-  Assumption : ℕ → TableEnvironment F → Prop := fun _ _ => True
+  Assumption : ℕ → ProverData F → Prop := fun _ _ => True
 
   /-- specification for the table -/
-  Spec {N : ℕ}  : TraceOfLength F S N → TableEnvironment F → Prop
+  Spec {N : ℕ}  : TraceOfLength F S N → ProverData F → Prop
 
   /-- the soundness states that if the assumptions hold, then
       the constraints hold implies that the spec holds. -/
   soundness :
     ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
-    Assumption N env.otherTables →
+    Assumption N env.data →
     TableConstraintsHold constraints trace env →
-    Spec trace env.otherTables
+    Spec trace env.data
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
       constraint is consistent with the number of variables introduced in the circuit. -/
@@ -588,7 +587,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
       | .everyRowExceptLast constraint => constraint.OffsetConsistent
     := by repeat constructor
 
-def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironment F) : Prop :=
+def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLength F S N) (env : ProverData F) : Prop :=
   table.Assumption N env → table.Spec trace env
 
 -- add some important lemmas to simp sets

@@ -55,7 +55,7 @@ def fib8 : ℕ -> ℕ
   | 1 => 1
   | (n + 2) => (fib8 n + fib8 (n + 1)) % 256
 
-def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : TableEnvironment (F p)) : Prop :=
+def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : ProverData (F p)) : Prop :=
   trace.ForAllRowsOfTraceWithIndex fun row index =>
     (row.x.val = fib8 index) ∧
     (row.y.val = fib8 (index + 1))

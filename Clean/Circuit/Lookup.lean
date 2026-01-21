@@ -9,7 +9,7 @@ that all rows in the table must satisfy.
 This representation is deliberately not very concrete, to allow for cases where e.g. the table
 is only built after all lookups into it are defined.
 
-In principle, the type allows you to define "impossible" tables, e.g. `Contains _ := False`, and use
+In principle, the type allows you to define "impossible" tables, e.g. `Contains _ _ := False`, and use
 them in a circuit, yielding spurious correctness proofs. To avoid this, it is encouraged to only define
 tables via auxiliary constructions like `StaticTable` or `LookupCircuit`, which guarantee the table
 can be instantiated into a concrete table of field elements, such that `Contains` can be proved to hold
@@ -19,15 +19,16 @@ structure Table (F : Type) (Row : TypeMap) [ProvableType Row] where
   name : String
   /--
   `Contains` captures what it means to be in the table.
+  Read it like "`table` contains `row`".
   -/
-  Contains : Array (Row F) → Row F → Prop
+  Contains : (table: Array (Row F)) → (row: Row F) → Prop
 
   /--
   we allow to rewrite the `Contains` property into two statements that are easier to work with
   in the context of soundness and completeness proofs.
   -/
-  Soundness : Array (Row F) → Row F → Prop := Contains
-  Completeness : Array (Row F) → Row F → Prop := Contains
+  Soundness : (table: Array (Row F)) → (row: Row F) → Prop := Contains
+  Completeness : (table: Array (Row F)) → (row: Row F) → Prop := Contains
 
   imply_soundness : ∀ table row, Contains table row → Soundness table row
     := by intros; assumption
@@ -65,37 +66,37 @@ def Table.toRaw (table : Table F Row) : RawTable F where
   imply_soundness _ row := table.imply_soundness _ (fromElements row)
   implied_by_completeness _ row := table.implied_by_completeness _ (fromElements row)
 
-def TableEnvironment.getTable (env : TableEnvironment F) {Row : TypeMap} [ProvableType Row]
+def ProverData.getTable (data : ProverData F) {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) : Array (Row F) :=
-  env.tables table.name (size Row) |>.map fromElements
+  data table.name (size Row) |>.map fromElements
 
 namespace Lookup
 variable {F : Type} [Field F]
 
 def Contains (lookup : Lookup F) (env : Environment F) : Prop :=
-  lookup.table.Contains (env.tables lookup.table.name lookup.table.arity)
+  lookup.table.Contains (env.data lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 def Soundness (lookup : Lookup F) (env : Environment F) : Prop :=
-  lookup.table.Soundness (env.tables lookup.table.name lookup.table.arity)
+  lookup.table.Soundness (env.data lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
-  lookup.table.Completeness (env.tables lookup.table.name lookup.table.arity)
+  lookup.table.Completeness (env.data lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 @[circuit_norm]
 lemma soundess_def {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
     let lookup : Lookup F := { table := table.toRaw, entry := toElements entry };
-    lookup.Soundness env ↔ table.Soundness (env.getTable table) (eval env entry) := by
+    lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (eval env entry) := by
   rfl
 
 @[circuit_norm]
 lemma soundess_def_field {F : Type} [Field F]
   (table : Table F field) (env : Environment F) (entry : Expression F) :
     let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
-    lookup.Soundness env ↔ table.Soundness (env.getTable table) (entry.eval (F:=F) env) := by
+    lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (entry.eval (F:=F) env) := by
   simp only [Soundness, Table.toRaw, id_eq, Vector.map_mk, List.map_toArray, List.map_cons,
     List.map_nil]
   rfl
@@ -104,14 +105,14 @@ lemma soundess_def_field {F : Type} [Field F]
 lemma completeness_def {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
     let lookup : Lookup F := { table := table.toRaw, entry := toElements entry };
-    lookup.Completeness env ↔ table.Completeness (env.getTable table) (eval env entry) := by
+    lookup.Completeness env ↔ table.Completeness (env.data.getTable table) (eval env entry) := by
   rfl
 
 @[circuit_norm]
 lemma completeness_def_field {F : Type} [Field F]
   (table : Table F field) (env : Environment F) (entry : Expression F) :
     let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
-    lookup.Completeness env ↔ table.Completeness (env.getTable table) (entry.eval (F:=F) env) := by
+    lookup.Completeness env ↔ table.Completeness (env.data.getTable table) (entry.eval (F:=F) env) := by
   simp only [Completeness, Table.toRaw, id_eq, Vector.map_mk, List.map_toArray, List.map_cons,
     List.map_nil]
   rfl

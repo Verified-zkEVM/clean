@@ -17,13 +17,20 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-structure WitnessEnvironment (F : Type) where
+/-- Arbitrary data a prover can witness and refer to in a circuit spec -/
+def ProverData (F : Type) :=
+  String → (n : ℕ) → Array (Vector F n)
+
+/--
+  `Environment` represents the data that is provided at proving time to concretely
+  instantiate a circuit.
+ -/
+structure Environment (F : Type) where
+  /-- Assignment of a circuit's variables to field elements -/
   get : ℕ → F
-
-structure TableEnvironment (F : Type) where
-  tables : String → (n : ℕ) → Array (Vector F n)
-
-structure Environment (F : Type) extends WitnessEnvironment F, TableEnvironment F
+  /-- Additional prover data not part of the current circuit's witness, such as the content
+   of lookup tables, or auxiliary data made available for potential witnessing. -/
+  data : ProverData F
 
 namespace Expression
 variable [Field F]

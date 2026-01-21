@@ -72,7 +72,7 @@ def fib32Table : List (TableOperation RowType (F p)) := [
   - the second U32 value is the (i+1)-th fibonacci number
   - both U32 values are normalized
 -/
-def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : TableEnvironment (F p)) : Prop :=
+def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : ProverData (F p)) : Prop :=
   trace.ForAllRowsOfTraceWithIndex fun row index =>
     (row.x.value = fib32 index) ∧
     (row.y.value = fib32 (index + 1)) ∧
