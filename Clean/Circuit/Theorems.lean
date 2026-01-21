@@ -296,8 +296,9 @@ namespace Circuit
 
 theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
-    assert _ e := env e = 0,
-    lookup _ l := l.Soundness env,
+    assert _ e := env e = 0
+    lookup _ l := l.Soundness env
+    add _ mult msg := msg.IsAdded env mult
     subcircuit _ _ s := s.Soundness env
   } := by
   induction ops using Operations.induct generalizing n with
@@ -309,8 +310,9 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
 
 theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
-    assert _ e := env e = 0,
-    lookup _ l := l.Completeness env,
+    assert _ e := env e = 0
+    lookup _ l := l.Completeness env
+    add _ mult msg := msg.IsAdded env mult
     subcircuit _ _ s := s.Completeness env
   } := by
   induction ops using Operations.induct generalizing n with
@@ -375,6 +377,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
+    add _ mult msg := msg.IsAdded env mult,
     subcircuit _ _ s := s.Soundness env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
@@ -383,6 +386,7 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
+    add _ mult msg := msg.IsAdded env mult,
     subcircuit _ _ s := s.Completeness env
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]

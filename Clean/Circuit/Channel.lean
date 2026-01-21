@@ -4,6 +4,7 @@ import Clean.Circuit.SimpGadget
 import Mathlib.Data.Finsupp.Defs
 
 variable {F : Type} [Field F] {α : Type} {n : ℕ}
+variable {Message : TypeMap} [ProvableType Message]
 
 /--
 A named list of field elements, used for multiset add operations.
@@ -21,6 +22,15 @@ def eval (env : Environment F) (nl : NamedList (Expression F)) : NamedList F :=
   { name := nl.name, values := nl.values.map (Expression.eval env) }
 
 end NamedList
+
+structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
+  name : String
+
+def NamedList.IsAdded (env : Environment F) (nl : NamedList (Expression F)) (mult : Expression F) : Prop :=
+  let n := nl.values.length
+  let interactions := env.channels nl.name n
+  let element : Vector F n := ⟨ .mk (nl.values.map env), List.length_map .. ⟩
+  (env mult, element) ∈ interactions
 
 /--
 An `InteractionDelta` represents a change to an interaction (multiset argument), as a list

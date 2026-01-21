@@ -156,7 +156,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
     l.Contains eval ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
-  | .add _ _ :: ops => ConstraintsHold eval ops
+  | .add mult msg :: ops => msg.IsAdded eval mult ∧ ConstraintsHold eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
@@ -170,7 +170,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
     l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
-  | .add _ _ :: ops => ConstraintsHold.Soundness eval ops
+  | .add mult msg :: ops => msg.IsAdded eval mult ∧ ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -184,7 +184,7 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
     l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
-  | .add _ _ :: ops => ConstraintsHold.Completeness eval ops
+  | .add mult msg :: ops => msg.IsAdded eval mult ∧ ConstraintsHold.Completeness eval ops
 end Circuit
 
 /--
@@ -526,6 +526,7 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 
 def Environment.fromList (witnesses : List F) : Environment F where
   get i := witnesses[i]?.getD 0
+  channels _ _ := []
   data _ _ := #[]
 
 def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with

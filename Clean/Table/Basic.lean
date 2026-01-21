@@ -364,13 +364,12 @@ def OffsetConsistent (table : TableConstraint W S F α) : Prop :=
 def windowEnv (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
   let assignment := table.finalAssignment
-  { get i :=
+  { aux_env with get i :=
       if hi : i < assignment.offset then
         match assignment.vars[i] with
         | .input ⟨i, j⟩ => window.get i j
         | .aux k => aux_env.get k
-      else aux_env.get (i + assignment.aux_length)
-    data := aux_env.data }
+      else aux_env.get (i + assignment.aux_length) }
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -490,11 +489,11 @@ structure TableEnvironments (F : Type) where
   /-- environment for each constraint, for each row -/
   witnessEnvs : (constraint : ℕ) → (row : ℕ) → (varIndex : ℕ) → F
   /-- auxiliary data available to all rows -/
+  channels : RawChannels F
   data : ProverData F
 
 def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=
-  { get := envs.witnessEnvs constraint row,
-    data := envs.data }
+  { envs with get := envs.witnessEnvs constraint row }
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
