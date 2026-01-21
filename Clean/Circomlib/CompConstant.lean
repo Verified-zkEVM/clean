@@ -43,7 +43,6 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   let out <== bits[127]
   return out
 
--- set_option maxHeartbeats 12000000 in
 set_option maxRecDepth 2000 in
 def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field where
   main := main c
@@ -218,15 +217,16 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       exact computePart_val_bound' i.val i.isLt _ _
         (h_assumptions (i.val * 2) (by omega)) (h_assumptions (i.val * 2 + 1) (by omega)) c
 
+    have h_sum_bound' : (parts.toList.map ZMod.val).sum ≤ parts.toList.length * 2^128 := by
+      apply list_sum_val_bound'
+      intro x hx
+      rw [List.mem_iff_getElem] at hx
+      obtain ⟨i, hi, rfl⟩ := hx
+      simp only [Vector.getElem_toList]
+      rw [Vector.length_toList] at hi
+      exact h_parts_bounded ⟨i, hi⟩
+
     have h_sum_bound : (parts.toList.map ZMod.val).sum ≤ 127 * 2^128 := by
-      have h_sum_bound' : (parts.toList.map ZMod.val).sum ≤ parts.toList.length * 2^128 := by
-        apply list_sum_val_bound'
-        intro x hx
-        rw [List.mem_iff_getElem] at hx
-        obtain ⟨i, hi, rfl⟩ := hx
-        simp only [Vector.getElem_toList]
-        rw [Vector.length_toList] at hi
-        exact h_parts_bounded ⟨i, hi⟩
       simpa [Vector.length_toList] using h_sum_bound'
 
     have h_sum_lt_2_135 : (parts.toList.map ZMod.val).sum < 2^135 := by
