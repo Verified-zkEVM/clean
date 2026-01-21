@@ -29,17 +29,22 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 def emitAdd (name : String) (multiplicity : Expression (F p)) (values : List (Expression (F p))) : Circuit (F p) Unit := fun _ =>
   ((), [.add multiplicity { name, values }])
 
+def StateChannel : Channel (F p) State where
+  name := "state"
+
 /-- Emit a state with given multiplicity -/
 @[circuit_norm]
 def emitState (multiplicity : Expression (F p)) (state : Var State (F p)) : Circuit (F p) Unit :=
-  emitAdd "state" multiplicity [state.pc, state.ap, state.fp]
+  StateChannel.emit multiplicity state
 
 /-- Emit a state conditionally: multiplicity is scaled by enabled.
     When enabled = 0, multiplicity becomes 0 (no effect).
     When enabled = 1, multiplicity is unchanged. -/
 @[circuit_norm]
 def emitStateWhen (enabled : Expression (F p)) (multiplicity : Expression (F p)) (state : Var State (F p)) : Circuit (F p) Unit :=
-  emitAdd "state" (enabled * multiplicity) [state.pc, state.ap, state.fp]
+  StateChannel.emit (enabled * multiplicity) state
+
+
 
 /-!
 ## Conditional decode infrastructure
