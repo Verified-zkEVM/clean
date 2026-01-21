@@ -123,14 +123,14 @@ def assertZero (e : Expression F) : Circuit F Unit := fun _ =>
 def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
   ((), [.lookup { table := table.toRaw, entry := toElements entry }])
 
+end Circuit
+
 /-- Emit an add operation to the global multiset -/
 @[circuit_norm]
 def Channel.emit {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
     (channel : Channel F Message)
     (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
   ((), [.add mult { name := channel.name, values := (toElements msg).toList }])
-
-end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
