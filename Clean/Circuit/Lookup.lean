@@ -9,7 +9,7 @@ that all rows in the table must satisfy.
 This representation is deliberately not very concrete, to allow for cases where e.g. the table
 is only built after all lookups into it are defined.
 
-In principle, the type allows you to define "impossible" tables, e.g. `Contains _ := False`, and use
+In principle, the type allows you to define "impossible" tables, e.g. `Contains _ _ := False`, and use
 them in a circuit, yielding spurious correctness proofs. To avoid this, it is encouraged to only define
 tables via auxiliary constructions like `StaticTable` or `LookupCircuit`, which guarantee the table
 can be instantiated into a concrete table of field elements, such that `Contains` can be proved to hold
@@ -19,15 +19,16 @@ structure Table (F : Type) (Row : TypeMap) [ProvableType Row] where
   name : String
   /--
   `Contains` captures what it means to be in the table.
+  Read it like "`table` contains `row`".
   -/
-  Contains : Array (Row F) → Row F → Prop
+  Contains : (table: Array (Row F)) → (row: Row F) → Prop
 
   /--
   we allow to rewrite the `Contains` property into two statements that are easier to work with
   in the context of soundness and completeness proofs.
   -/
-  Soundness : Array (Row F) → Row F → Prop := Contains
-  Completeness : Array (Row F) → Row F → Prop := Contains
+  Soundness : (table: Array (Row F)) → (row: Row F) → Prop := Contains
+  Completeness : (table: Array (Row F)) → (row: Row F) → Prop := Contains
 
   imply_soundness : ∀ table row, Contains table row → Soundness table row
     := by intros; assumption

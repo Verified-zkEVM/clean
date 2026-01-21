@@ -487,12 +487,12 @@ export TableOperation (boundary everyRow everyRowExceptLast)
 
 structure TableEnvironments (F : Type) where
   /-- environment for each constraint, for each row -/
-  witnessEnvs : ℕ → ℕ → WitnessEnvironment F
-  /-- stable environment representing other tables -/
+  witnessEnvs : (constraint : ℕ) → (row : ℕ) → (varIndex : ℕ) → F
+  /-- auxiliary data available to all rows -/
   data : ProverData F
 
-def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (ic ir : ℕ) : Environment F :=
-  { get := (envs.witnessEnvs ic ir).get,
+def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=
+  { get := envs.witnessEnvs constraint row,
     data := envs.data }
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
