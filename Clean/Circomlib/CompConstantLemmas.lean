@@ -757,6 +757,158 @@ lemma computePart_val_when_lose (i : Fin 127) (input : Vector (F p) 254) (ct : �
   have h_not_eq : ¬(input[i.val * 2 + 1].val * 2 + input[i.val * 2].val = constPairValAt i.val ct) := by omega
   simp only [this, h_not_gt, h_not_eq, ↓reduceIte]
 
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+lemma geom_sum_filter_eq (k : Fin 127) :
+    (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i : Fin 127 => 2^i.val)
+    = (Finset.univ : Finset (Fin k.val)).sum (fun i => 2^i.val) := by
+  symm
+  apply Finset.sum_bij (fun (i : Fin k.val) _ => (⟨i.val, Nat.lt_trans i.isLt k.isLt⟩ : Fin 127))
+  · intro i _; simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact i.isLt
+  · intro _ _ _ _ h; simp only [Fin.mk.injEq] at h; exact Fin.ext h
+  · intro j hj
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+    exact ⟨⟨j.val, hj⟩, Finset.mem_univ _, rfl⟩
+  · intro _ _; rfl
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+lemma sum_sub_pow_eq (t : Finset (Fin 127)) :
+    t.sum (fun i => 2^128 - 2^i.val) = t.card * 2^128 - t.sum (fun i => 2^i.val) := by
+  induction t using Finset.induction with
+  | empty => simp
+  | @insert a s ha ih =>
+    have h_a_ge : 2^a.val ≤ 2^128 :=
+      Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans a.isLt (by omega : 127 < 128)))
+    have h_s_ge : ∀ i ∈ s, 2^i.val ≤ 2^128 := fun i _ =>
+      Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans i.isLt (by omega : 127 < 128)))
+    simp only [Finset.sum_insert ha, Finset.card_insert_of_notMem ha]
+    rw [ih]
+    have h_sum_le : s.sum (fun i => 2^i.val) ≤ s.card * 2^128 := by
+      calc s.sum (fun i => 2^i.val)
+          ≤ s.sum (fun _ => 2^128) := Finset.sum_le_sum (fun i hi => h_s_ge i hi)
+        _ = s.card * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
+    omega
+
+omit [Fact (p < 2 ^ 254)] in
+lemma ties_sum_zero (ct : ℕ) (input : Vector (F p) 254)
+    (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
+    (parts : Vector (F p) 127)
+    (h_parts : ∀ i : Fin 127, parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] ct)
+    (ties : Finset (Fin 127))
+    (h_ties : ties = Finset.filter (fun i : Fin 127 =>
+      signalPairValF input[i.val * 2] input[i.val * 2 + 1] = constPairValAt i.val ct) Finset.univ) :
+    ties.sum (fun i => parts[i].val) = 0 := by
+  apply Finset.sum_eq_zero
+  intro i hi
+  rw [h_ties] at hi
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hi
+  rw [h_parts i]
+  exact computePart_val_when_tie i input ct h_bits hi
+
+omit [Fact (p < 2 ^ 254)] in
+lemma wins_sum_val (ct : ℕ) (input : Vector (F p) 254)
+    (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
+    (parts : Vector (F p) 127)
+    (h_parts : ∀ i : Fin 127, parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] ct)
+    (wins : Finset (Fin 127))
+    (h_wins : wins = Finset.filter (fun i : Fin 127 =>
+      signalPairValF input[i.val * 2] input[i.val * 2 + 1] > constPairValAt i.val ct) Finset.univ) :
+    wins.sum (fun i => parts[i].val) = wins.card * 2^128 - wins.sum (fun i => 2^i.val) := by
+  have h_eq : wins.sum (fun i => parts[i].val) = wins.sum (fun i => 2^128 - 2^i.val) := by
+    apply Finset.sum_congr rfl
+    intro i hi
+    rw [h_wins] at hi
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hi
+    rw [h_parts i]
+    exact computePart_val_when_win i input ct h_bits hi
+  rw [h_eq, sum_sub_pow_eq]
+
+omit [Fact (p < 2 ^ 254)] in
+lemma losses_sum_val (ct : ℕ) (input : Vector (F p) 254)
+    (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
+    (parts : Vector (F p) 127)
+    (h_parts : ∀ i : Fin 127, parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] ct)
+    (losses : Finset (Fin 127))
+    (h_losses : losses = Finset.filter (fun i : Fin 127 =>
+      signalPairValF input[i.val * 2] input[i.val * 2 + 1] < constPairValAt i.val ct) Finset.univ) :
+    losses.sum (fun i => parts[i].val) = losses.sum (fun i => 2^i.val) := by
+  apply Finset.sum_congr rfl
+  intro i hi
+  rw [h_losses] at hi
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hi
+  rw [h_parts i]
+  exact computePart_val_when_lose i input ct h_bits hi
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+lemma parts_list_sum_eq_finset_sum (parts : Vector (F p) 127) :
+    (parts.toList.map ZMod.val).sum = (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val) := by
+  trans (List.ofFn (fun i : Fin 127 => parts[i].val)).sum
+  · congr 1
+    apply List.ext_getElem
+    · rw [List.length_map, Vector.length_toList, List.length_ofFn]
+    · intro i h1 h2
+      rw [List.length_map, Vector.length_toList] at h1
+      simp only [List.getElem_map, Vector.getElem_toList, List.getElem_ofFn]
+      rfl
+  · simp only [List.sum_ofFn]
+
+omit [Fact (p < 2 ^ 254)] in
+lemma sum_partition (ct : ℕ) (input : Vector (F p) 254)
+    (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
+    (parts : Vector (F p) 127)
+    (h_parts : ∀ i : Fin 127, parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] ct) :
+    let wins := Finset.filter (fun i : Fin 127 =>
+      signalPairValF input[i.val * 2] input[i.val * 2 + 1] > constPairValAt i.val ct) Finset.univ
+    let losses := Finset.filter (fun i : Fin 127 =>
+      signalPairValF input[i.val * 2] input[i.val * 2 + 1] < constPairValAt i.val ct) Finset.univ
+    let W := wins.sum (fun i => 2^i.val)
+    let Λ := losses.sum (fun i => 2^i.val)
+    (parts.toList.map ZMod.val).sum = wins.card * 2^128 - W + Λ := by
+  intro wins losses W Λ
+  rw [parts_list_sum_eq_finset_sum]
+
+  let ties := Finset.filter (fun i : Fin 127 =>
+    signalPairValF input[i.val * 2] input[i.val * 2 + 1] = constPairValAt i.val ct) Finset.univ
+
+  have h_disjoint_wl : Disjoint wins losses := by
+    simp only [wins, losses, Finset.disjoint_filter]; intro i _ h1 h2; omega
+  have h_disjoint_wt : Disjoint wins ties := by
+    simp only [wins, ties, Finset.disjoint_filter]; intro i _ h1 h2; omega
+  have h_disjoint_lt : Disjoint losses ties := by
+    simp only [losses, ties, Finset.disjoint_filter]; intro i _ h1 h2; omega
+
+  have h_union : wins ∪ losses ∪ ties = Finset.univ := by
+    ext i; simp only [Finset.mem_union, wins, losses, ties, Finset.mem_filter,
+                      Finset.mem_univ, true_and, iff_true]; omega
+
+  have h_ties_zero : ties.sum (fun i => parts[i].val) = 0 :=
+    ties_sum_zero ct input h_bits parts h_parts ties rfl
+
+  have h_wins_val : wins.sum (fun i => parts[i].val) = wins.card * 2^128 - W :=
+    wins_sum_val ct input h_bits parts h_parts wins rfl
+
+  have h_losses_val : losses.sum (fun i => parts[i].val) = Λ :=
+    losses_sum_val ct input h_bits parts h_parts losses rfl
+
+  calc (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val)
+      = (wins ∪ losses ∪ ties).sum (fun i => parts[i].val) := by rw [h_union]
+    _ = (wins ∪ losses).sum (fun i => parts[i].val) + ties.sum (fun i => parts[i].val) := by
+        have h_wl_t_disj : Disjoint (wins ∪ losses) ties := by
+          rw [Finset.disjoint_union_left]; exact ⟨h_disjoint_wt, h_disjoint_lt⟩
+        exact Finset.sum_union h_wl_t_disj
+    _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) +
+        ties.sum (fun i => parts[i].val) := by
+        rw [Finset.sum_union h_disjoint_wl]
+    _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) := by
+        rw [h_ties_zero]; ring
+    _ = wins.card * 2^128 - W + Λ := by rw [h_wins_val, h_losses_val]
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+lemma pow_sum_bound (s : Finset (Fin 127)) : s.sum (fun i => 2^i.val) ≤ 2^127 - 1 := by
+  calc s.sum (fun i => 2^i.val)
+      ≤ (Finset.univ : Finset (Fin 127)).sum (fun i => 2^i.val) :=
+        Finset.sum_le_sum_of_subset (fun _ _ => Finset.mem_univ _)
+    _ = 2^127 - 1 := sum_pow_two_fin 127
+
 set_option maxHeartbeats 400000 in
 omit [Fact (p < 2 ^ 254)] in
 lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
@@ -815,25 +967,12 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
         Finset.sum_le_sum_of_subset h_losses_subset
       have h2 : (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i : Fin 127 => 2^i.val)
               ≤ 2^k.val - 1 := by
-        have h_sum_eq : (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i : Fin 127 => 2^i.val)
-            = (Finset.univ : Finset (Fin k.val)).sum (fun i => 2^i.val) := by
-          symm
-          apply Finset.sum_bij (fun (i : Fin k.val) _ => (⟨i.val, Nat.lt_trans i.isLt k.isLt⟩ : Fin 127))
-          · intro i _; simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact i.isLt
-          · intro _ _ _ _ h; simp only [Fin.mk.injEq] at h; exact Fin.ext h
-          · intro j hj
-            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
-            exact ⟨⟨j.val, hj⟩, Finset.mem_univ _, rfl⟩
-          · intro _ _; rfl
+        have h_sum_eq := geom_sum_filter_eq k
         rw [h_sum_eq, sum_pow_two_fin]
       have h3 : 2^k.val - 1 < 2^k.val := Nat.sub_one_lt (Nat.two_pow_pos k.val).ne'
       exact Nat.lt_of_le_of_lt (Nat.le_trans h1 h2) h3
     have hW_gt_Λ : W > Λ := Nat.lt_of_lt_of_le hΛ_lt hW_ge
-    have hW_bound : W ≤ 2^127 - 1 := by
-      show W ≤ 2^127 - 1
-      calc W ≤ (Finset.univ : Finset (Fin 127)).sum (fun i => 2^i.val) :=
-              Finset.sum_le_sum_of_subset (fun _ _ => Finset.mem_univ _)
-        _ = 2^127 - 1 := sum_pow_two_fin 127
+    have hW_bound : W ≤ 2^127 - 1 := pow_sum_bound wins
     have hW_sub_Λ_bound : W - Λ < 2^127 := Nat.lt_of_le_of_lt (Nat.sub_le W Λ) (Nat.lt_of_le_of_lt hW_bound (by native_decide))
     have hW_sub_Λ_pos : W - Λ > 0 := Nat.sub_pos_of_lt hW_gt_Λ
 
@@ -842,87 +981,7 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
 
     have h_sum_partition : (parts.toList.map ZMod.val).sum =
         wins.card * 2^128 - W + Λ := by
-      have h_sum_eq : (parts.toList.map ZMod.val).sum =
-          (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val) := by
-        trans (List.ofFn (fun i : Fin 127 => parts[i].val)).sum
-        · congr 1
-          apply List.ext_getElem
-          · rw [List.length_map, Vector.length_toList, List.length_ofFn]
-          · intro i h1 h2
-            rw [List.length_map, Vector.length_toList] at h1
-            simp only [List.getElem_map, Vector.getElem_toList, List.getElem_ofFn]
-            rfl
-        · simp only [List.sum_ofFn]
-      rw [h_sum_eq]
-
-      let ties := Finset.filter (fun i : Fin 127 =>
-        signalPairValF input[i.val * 2] input[i.val * 2 + 1] = constPairValAt i.val ct) Finset.univ
-
-      have h_disjoint_wl : Disjoint wins losses := by
-        simp only [wins, losses, Finset.disjoint_filter]; intro i _ h1 h2; omega
-      have h_disjoint_wt : Disjoint wins ties := by
-        simp only [wins, ties, Finset.disjoint_filter]; intro i _ h1 h2; omega
-      have h_disjoint_lt : Disjoint losses ties := by
-        simp only [losses, ties, Finset.disjoint_filter]; intro i _ h1 h2; omega
-
-      have h_union : wins ∪ losses ∪ ties = Finset.univ := by
-        ext i; simp only [Finset.mem_union, wins, losses, ties, Finset.mem_filter,
-                          Finset.mem_univ, true_and, iff_true]; omega
-
-      have h_ties_zero : ties.sum (fun i => parts[i].val) = 0 := by
-        apply Finset.sum_eq_zero
-        intro i hi
-        simp only [ties, Finset.mem_filter, Finset.mem_univ, true_and] at hi
-        rw [h_parts i]
-        exact computePart_val_when_tie i input ct h_bits hi
-
-      have h_wins_val : wins.sum (fun i => parts[i].val) = wins.card * 2^128 - W := by
-        have h_eq : wins.sum (fun i => parts[i].val) = wins.sum (fun i => 2^128 - 2^i.val) := by
-          apply Finset.sum_congr rfl
-          intro i hi
-          simp only [wins, Finset.mem_filter, Finset.mem_univ, true_and] at hi
-          rw [h_parts i]
-          exact computePart_val_when_win i input ct h_bits hi
-        rw [h_eq]
-        have h_sum_sub : ∀ (t : Finset (Fin 127)),
-            t.sum (fun i => 2^128 - 2^i.val) = t.card * 2^128 - t.sum (fun i => 2^i.val) := by
-          intro t
-          induction t using Finset.induction with
-          | empty => simp
-          | @insert a s ha ih =>
-            have h_a_ge : 2^a.val ≤ 2^128 :=
-              Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans a.isLt (by omega : 127 < 128)))
-            have h_s_ge : ∀ i ∈ s, 2^i.val ≤ 2^128 := fun i _ =>
-              Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans i.isLt (by omega : 127 < 128)))
-            simp only [Finset.sum_insert ha, Finset.card_insert_of_notMem ha]
-            rw [ih]
-            have h_sum_le : s.sum (fun i => 2^i.val) ≤ s.card * 2^128 := by
-              calc s.sum (fun i => 2^i.val)
-                  ≤ s.sum (fun _ => 2^128) := Finset.sum_le_sum (fun i hi => h_s_ge i hi)
-                _ = s.card * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
-            omega
-        rw [h_sum_sub wins]
-
-      have h_losses_val : losses.sum (fun i => parts[i].val) = Λ := by
-        simp only [Λ]
-        apply Finset.sum_congr rfl
-        intro i hi
-        simp only [losses, Finset.mem_filter, Finset.mem_univ, true_and] at hi
-        rw [h_parts i]
-        exact computePart_val_when_lose i input ct h_bits hi
-
-      calc (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val)
-          = (wins ∪ losses ∪ ties).sum (fun i => parts[i].val) := by rw [h_union]
-        _ = (wins ∪ losses).sum (fun i => parts[i].val) + ties.sum (fun i => parts[i].val) := by
-            have h_wl_t_disj : Disjoint (wins ∪ losses) ties := by
-              rw [Finset.disjoint_union_left]; exact ⟨h_disjoint_wt, h_disjoint_lt⟩
-            exact Finset.sum_union h_wl_t_disj
-        _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) +
-            ties.sum (fun i => parts[i].val) := by
-            rw [Finset.sum_union h_disjoint_wl]
-        _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) := by
-            rw [h_ties_zero]; ring
-        _ = wins.card * 2^128 - W + Λ := by rw [h_wins_val, h_losses_val]
+      simpa [wins, losses, W, Λ] using (sum_partition ct input h_bits parts h_parts)
 
     rw [vector_sum_eq_list_sum', list_sum_val_eq' h_sum_lt_p, h_sum_partition]
 
@@ -1030,18 +1089,10 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
           exact h_wins_lt_k j hj
         have h1 : W ≤ (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i => 2^i.val) :=
           Finset.sum_le_sum_of_subset h_wins_subset
-        have h_sum_eq : (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i : Fin 127 => 2^i.val)
-            = (Finset.univ : Finset (Fin k.val)).sum (fun i => 2^i.val) := by
-          symm
-          apply Finset.sum_bij (fun (i : Fin k.val) _ => (⟨i.val, Nat.lt_trans i.isLt k.isLt⟩ : Fin 127))
-          · intro i _; simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact i.isLt
-          · intro _ _ _ _ h; simp only [Fin.mk.injEq] at h; exact Fin.ext h
-          · intro j hj
-            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
-            exact ⟨⟨j.val, hj⟩, Finset.mem_univ _, rfl⟩
-          · intro _ _; rfl
         have h2 : (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i => 2^i.val)
-                ≤ 2^k.val - 1 := by rw [h_sum_eq, sum_pow_two_fin]
+                ≤ 2^k.val - 1 := by
+          have h_sum_eq := geom_sum_filter_eq k
+          rw [h_sum_eq, sum_pow_two_fin]
         have h3 : 2^k.val - 1 < 2^k.val := Nat.sub_one_lt (Nat.two_pow_pos k.val).ne'
         exact Nat.lt_of_le_of_lt (Nat.le_trans h1 h2) h3
 
@@ -1052,116 +1103,17 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
 
       have hW_lt_Λ : W < Λ := by omega
 
-      have hΛ_bound : Λ ≤ 2^127 - 1 := by
-        calc Λ ≤ (Finset.univ : Finset (Fin 127)).sum (fun i => 2^i.val) :=
-                Finset.sum_le_sum_of_subset (by intro _ _; exact Finset.mem_univ _)
-          _ = 2^127 - 1 := sum_pow_two_fin 127
+      have hΛ_bound : Λ ≤ 2^127 - 1 := pow_sum_bound losses
 
       have h_sum_partition : (parts.toList.map ZMod.val).sum =
           wins.card * 2^128 - W + Λ := by
-        have h_sum_eq : (parts.toList.map ZMod.val).sum =
-            (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val) := by
-          trans (List.ofFn (fun i : Fin 127 => parts[i].val)).sum
-          · congr 1
-            apply List.ext_getElem
-            · rw [List.length_map, Vector.length_toList, List.length_ofFn]
-            · intro i h1 h2
-              rw [List.length_map, Vector.length_toList] at h1
-              simp only [List.getElem_map, Vector.getElem_toList, List.getElem_ofFn]
-              rfl
-          · simp only [List.sum_ofFn]
-        rw [h_sum_eq]
-
-        let ties := Finset.filter (fun i : Fin 127 =>
-          signalPairValF input[i.val * 2] input[i.val * 2 + 1] = constPairValAt i.val ct) Finset.univ
-
-        have h_disjoint_wl : Disjoint wins losses := by
-          simp only [wins, losses, Finset.disjoint_filter]; intro i _ h1 h2; omega
-        have h_disjoint_wt : Disjoint wins ties := by
-          simp only [wins, ties, Finset.disjoint_filter]; intro i _ h1 h2; omega
-        have h_disjoint_lt : Disjoint losses ties := by
-          simp only [losses, ties, Finset.disjoint_filter]; intro i _ h1 h2; omega
-
-        have h_union : wins ∪ losses ∪ ties = Finset.univ := by
-          ext i; simp only [Finset.mem_union, wins, losses, ties, Finset.mem_filter,
-                            Finset.mem_univ, true_and, iff_true]; omega
-
-        have h_ties_zero : ties.sum (fun i => parts[i].val) = 0 := by
-          apply Finset.sum_eq_zero
-          intro i hi
-          simp only [ties, Finset.mem_filter, Finset.mem_univ, true_and] at hi
-          rw [h_parts i]
-          have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
-            (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
-          simp only [signalPairValF] at this hi
-          simp only [this, hi, lt_irrefl, ↓reduceIte]
-
-        have h_wins_val : wins.sum (fun i => parts[i].val) = wins.card * 2^128 - W := by
-          have h_eq : wins.sum (fun i => parts[i].val) = wins.sum (fun i => 2^128 - 2^i.val) := by
-            apply Finset.sum_congr rfl
-            intro i hi
-            simp only [wins, Finset.mem_filter, Finset.mem_univ, true_and] at hi
-            rw [h_parts i]
-            have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
-              (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
-            simp only [signalPairValF] at this hi
-            simp only [this, hi, ↓reduceIte]
-          rw [h_eq]
-          have h_sum_sub : ∀ (t : Finset (Fin 127)),
-              t.sum (fun i => 2^128 - 2^i.val) = t.card * 2^128 - t.sum (fun i => 2^i.val) := by
-            intro t
-            induction t using Finset.induction with
-            | empty => simp
-            | @insert a s ha ih =>
-              have h_a_ge : 2^a.val ≤ 2^128 :=
-                Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans a.isLt (by omega : 127 < 128)))
-              have h_s_ge : ∀ i ∈ s, 2^i.val ≤ 2^128 := fun i _ =>
-                Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans i.isLt (by omega : 127 < 128)))
-              simp only [Finset.sum_insert ha, Finset.card_insert_of_notMem ha]
-              rw [ih]
-              have h_sum_le : s.sum (fun i => 2^i.val) ≤ s.card * 2^128 := by
-                calc s.sum (fun i => 2^i.val)
-                    ≤ s.sum (fun _ => 2^128) := Finset.sum_le_sum (fun i hi => h_s_ge i hi)
-                  _ = s.card * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
-              omega
-          rw [h_sum_sub wins]
-
-        have h_losses_val : losses.sum (fun i => parts[i].val) = Λ := by
-          simp only [Λ]
-          apply Finset.sum_congr rfl
-          intro i hi
-          simp only [losses, Finset.mem_filter, Finset.mem_univ, true_and] at hi
-          rw [h_parts i]
-          have := computePart_characterization i.val i.isLt input[i.val * 2] input[i.val * 2 + 1]
-            (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
-          simp only [signalPairValF] at this hi
-          have h_not_gt : ¬(input[i.val * 2 + 1].val * 2 + input[i.val * 2].val >
-                            constPairValAt i.val ct) := by omega
-          have h_not_eq : ¬(input[i.val * 2 + 1].val * 2 + input[i.val * 2].val =
-                            constPairValAt i.val ct) := by omega
-          simp only [this, h_not_gt, h_not_eq, ↓reduceIte]
-
-        calc (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val)
-            = (wins ∪ losses ∪ ties).sum (fun i => parts[i].val) := by rw [h_union]
-          _ = (wins ∪ losses).sum (fun i => parts[i].val) + ties.sum (fun i => parts[i].val) := by
-              have h_wl_t_disj : Disjoint (wins ∪ losses) ties := by
-                rw [Finset.disjoint_union_left]; exact ⟨h_disjoint_wt, h_disjoint_lt⟩
-              exact Finset.sum_union h_wl_t_disj
-          _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) +
-              ties.sum (fun i => parts[i].val) := by
-              rw [Finset.sum_union h_disjoint_wl]
-          _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) := by
-              rw [h_ties_zero]; ring
-          _ = wins.card * 2^128 - W + Λ := by rw [h_wins_val, h_losses_val]
+        simpa [wins, losses, W, Λ] using (sum_partition ct input h_bits parts h_parts)
 
       rw [vector_sum_eq_list_sum', list_sum_val_eq' h_sum_lt_p, h_sum_partition]
 
       have h_Λ_W_bound : Λ - W < 2^127 := by omega
 
-      have hW_bound : W ≤ 2^127 - 1 := by
-        calc W ≤ (Finset.univ : Finset (Fin 127)).sum (fun i => 2^i.val) :=
-              Finset.sum_le_sum_of_subset (by intro _ _; exact Finset.mem_univ _)
-          _ = 2^127 - 1 := sum_pow_two_fin 127
+      have hW_bound : W ≤ 2^127 - 1 := pow_sum_bound wins
 
       have h_key : (wins.card * 2^128 - W + Λ) / 2^127 = 2 * wins.card := by
         by_cases h_wins_zero : wins.card = 0
