@@ -11,6 +11,10 @@ namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 instance hp135 : Fact (p > 2^135) := .mk (by linarith [‹Fact (p > 2^253)›.elim])
+instance hppre254 : Fact (p - 1 < 2^254) := .mk (by
+  calc
+    p - 1 ≤ p := by grind
+    _ < _ := by linarith [‹Fact (p < 2^254)›.elim])
 
 namespace AliasCheck
 /-
@@ -42,12 +46,29 @@ def circuit : FormalAssertion (F p) (fields 254) where
     simp only [circuit_norm, main, CompConstant.circuit]
     simp_all
     have : p > 2^135 := hp135.elim
+    have ppre_small : p - 1 < 2^254 := hppre254.elim
+    intros offset env input_var h_binary h_sub
+    specialize h_sub ppre_small
+    simp only [h_sub]
+    split
+    · intro h_false
+      apply False.elim
+      clear * - h_false
+      apply one_ne_zero h_false
     omega
 
   completeness := by
     simp only [circuit_norm, main, CompConstant.circuit]
     simp_all
-    omega
+    have ppre_small : p - 1 < 2^254 := hppre254.elim
+    intros offset env input_var h_sub h_binary h_psmall
+    specialize h_sub h_binary ppre_small
+    simp only [h_sub]
+    and_intros
+    · assumption
+    split
+    · omega
+    rfl
 end AliasCheck
 
 end Circomlib
