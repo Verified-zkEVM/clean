@@ -96,9 +96,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by
         rw [Int.cast_sub, Nat.cast_sub h_pow_le]
         simp only [Int.cast_pow, Int.cast_ofNat, Nat.cast_pow, Nat.cast_ofNat]
-      have h_int_eq_nat_pow : ((2^(i : ℕ) : ℤ) : F p) = ((2^(i : ℕ) : ℕ) : F p) := by
-        simp only [Int.cast_pow, Int.cast_ofNat, Nat.cast_pow, Nat.cast_ofNat]
-      simp_rw [h_int_eq_nat_sub, h_int_eq_nat_pow]
+      simp_rw [h_int_eq_nat_sub]
       simp only [Nat.cast_pow, Nat.cast_ofNat, Nat.cast_sub h_pow_le]
       split_ifs <;> ring
 
