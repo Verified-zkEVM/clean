@@ -136,7 +136,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   induction ops using Operations.induct with
   | empty => trivial
   | witness | assert | lookup =>
-    simp_all [ConstraintsHold.Soundness, ConstraintsHold, RawTable.imply_soundness]
+    simp_all [circuit_norm, ConstraintsHold, Lookup.Contains, Lookup.Soundness, RawTable.imply_soundness]
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
     dsimp only [ConstraintsHold] at h
@@ -298,26 +298,26 @@ namespace Circuit
 theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.Soundness (l.entry.map env),
+    lookup _ l := l.Soundness env,
     subcircuit _ _ s := s.Soundness env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all only [ConstraintsHold.Soundness, Operations.forAll, true_and, and_congr_right_iff]
+    simp_all only [circuit_norm, true_and, and_congr_right_iff, Lookup.Soundness]
     try intros
     apply ih
 
 theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.Completeness (l.entry.map env),
+    lookup _ l := l.Completeness env,
     subcircuit _ _ s := s.Completeness env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and, and_congr_right_iff]
+    simp_all only [circuit_norm, true_and, and_congr_right_iff, Lookup.Completeness]
     try intros
     apply ih
 
@@ -334,7 +334,8 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.S
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
-    simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, RawTable.implied_by_completeness]
+    simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
+      Lookup.Contains, Lookup.Completeness, RawTable.implied_by_completeness]
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
@@ -374,7 +375,7 @@ theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
 theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.Soundness (l.entry.map env),
+    lookup _ l := l.Soundness env,
     subcircuit _ _ s := s.Soundness env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
@@ -382,7 +383,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
 theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.Completeness (l.entry.map env),
+    lookup _ l := l.Completeness env,
     subcircuit _ _ s := s.Completeness env
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]
@@ -594,8 +595,8 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Fi
   let Spec input output := orig.Assumptions input → orig.Spec input output
   exact {
     elaborated := orig.elaborated,
-    Assumptions := orig.Assumptions,
-    Spec,
+    Assumptions i _ := orig.Assumptions i,
+    Spec i o _ := Spec i o,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
       intros
@@ -617,8 +618,8 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
   let Spec input (_ : Unit) := orig.Assumptions input → orig.Spec input
   exact {
     elaborated := orig.elaborated,
-    Assumptions input := orig.Assumptions input ∧ orig.Spec input,
-    Spec,
+    Assumptions input _ := orig.Assumptions input ∧ orig.Spec input,
+    Spec i o _ := Spec i o,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
       intros

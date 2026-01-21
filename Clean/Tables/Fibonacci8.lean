@@ -55,7 +55,7 @@ def fib8 : ℕ -> ℕ
   | 1 => 1
   | (n + 2) => (fib8 n + fib8 (n + 1)) % 256
 
-def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : ProverData (F p)) : Prop :=
   trace.ForAllRowsOfTraceWithIndex fun row index =>
     (row.x.val = fib8 index) ∧
     (row.y.val = fib8 (index + 1))
@@ -96,7 +96,7 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)
 
 def formalFibTable : FormalTable (F p) RowType := {
   constraints := fibTable
-  Spec := Spec
+  Spec
 
   soundness := by
     intro N trace envs _
@@ -107,7 +107,7 @@ def formalFibTable : FormalTable (F p) RowType := {
     | zero => simp [table_norm]
     | one first_row =>
       simp [table_norm]
-      exact boundary_step first_row (envs 0 0)
+      exact boundary_step first_row (envs.toEnvironment 0 0)
     | more curr next rest ih1 ih2 =>
       -- first, we prove the inductive part of the Spec
       -- TODO this should be easier, or there should be a custom induction for it
@@ -129,7 +129,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       replace ConstraintsHold := ConstraintsHold.left
       simp [table_norm] at ConstraintsHold
 
-      set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
+      set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs.toEnvironment 1 (rest.len + 1))
 
       simp only [fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
           Gadgets.Addition8.circuit] at ConstraintsHold
