@@ -113,7 +113,7 @@ def GeneralFormalCircuitChangingMultiset.weakenSpec
     {F : Type} [Field F] [DecidableEq F]
     {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : GeneralFormalCircuitChangingMultiset F Input Output)
-    (WeakerSpec : Input F → Output F → ProverData F → InteractionDelta F → Prop)
+    (WeakerSpec : Input F → Output F → Environment F → InteractionDelta F → Prop)
     (h_spec_implication : ∀ input output data adds,
       circuit.Spec input output data adds →
       WeakerSpec input output data adds) :
@@ -132,7 +132,7 @@ def GeneralFormalCircuitChangingMultiset.weakenSpec
 lemma GeneralFormalCircuitChangingMultiset.weakenSpec_assumptions
     {F Input Output} [Field F] [DecidableEq F] [ProvableType Input] [ProvableType Output]
     (c : GeneralFormalCircuitChangingMultiset F Input Output)
-    (WeakerSpec : Input F → Output F → ProverData F → InteractionDelta F → Prop)
+    (WeakerSpec : Input F → Output F → Environment F → InteractionDelta F → Prop)
     h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [GeneralFormalCircuitChangingMultiset.weakenSpec]

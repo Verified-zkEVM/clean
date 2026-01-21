@@ -45,6 +45,51 @@ Using `F` avoids ambiguity in converting `F → ℤ` and allows direct multiplic
 -/
 abbrev InteractionDelta (F : Type) := List (NamedList F × F)
 
+def Environment.getInteractions (env : Environment F) (channel : Channel F Message) : List (F × Message F) :=
+  env.channels channel.name (size Message)
+  |>.map fun (mult, elts) => (mult, fromElements elts)
+
+@[circuit_norm]
+lemma isAdded_def (channel : Channel F Message) (env : Environment F)
+  (msg : Message (Expression F)) (mult : Expression F) :
+    NamedList.IsAdded env { name := channel.name, values := (toElements msg).toList } mult ↔
+    (env mult, eval env msg) ∈ env.getInteractions channel := by
+  -- TODO this proof is much more annoying that I expected
+  -- TODO I think the List / Vector mismatch makes it much harder, remove that!
+  simp only [NamedList.IsAdded, Environment.getInteractions, circuit_norm]
+  have h_size : (toElements msg).toArray.size = size Message := by simp
+  have h_size' : (toElements msg).toList.length = size Message := by simp
+  simp only [List.mem_map]
+  set v1 : Vector F _ := ⟨ .mk <| List.map (fun x ↦ Expression.eval env x) (toElements msg).toList, _ ⟩
+  set v1' : Vector F (size Message) := (toElements msg).map env
+  have h_v1 : v1 = v1'.cast h_size.symm := by
+    simp only [Vector.mk_eq, Vector.toArray_cast, Vector.toArray_map, v1, v1']
+    rw [←Array.toList_map]
+    rfl
+  have h_channels : env.channels channel.name (toElements msg).toList.length =
+      List.map (fun t => (t.1, t.2.cast h_size.symm)) (env.channels channel.name (size Message)) := by
+    apply List.ext_getElem
+    · simp only [List.length_map]; congr
+    · simp only [List.length_map, List.getElem_map]
+      intro i h_i h_i'
+      rw [Prod.mk.injEq]
+      constructor
+      · congr!
+      · rw [Vector.cast, Vector.eq_mk]
+        congr!
+  rw [h_v1, h_channels, List.mem_map]
+  simp only [Prod.mk.injEq, Vector.cast_eq_cast, Vector.cast_rfl]
+  constructor
+  · intro ⟨ a, h_mem, h_eq1, h_eq2 ⟩
+    use a, h_mem, h_eq1
+    rw [h_eq2]
+    rfl
+  · intro ⟨ a, h_mem, h_eq1, h_eq2 ⟩
+    use a, h_mem, h_eq1
+    have h_eq2' := congrArg toElements h_eq2
+    simp only [eval, ProvableType.toElements_fromElements] at h_eq2'
+    exact h_eq2'
+
 namespace InteractionDelta
 variable {F : Type}
 

@@ -123,6 +123,13 @@ def assertZero (e : Expression F) : Circuit F Unit := fun _ =>
 def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
   ((), [.lookup { table := table.toRaw, entry := toElements entry }])
 
+/-- Emit an add operation to the global multiset -/
+@[circuit_norm]
+def Channel.emit {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
+    (channel : Channel F Message)
+    (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  ((), [.add mult { name := channel.name, values := (toElements msg).toList }])
+
 end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
@@ -476,24 +483,34 @@ structure FormalAssertionChangingMultiset (F : Type) (Input : TypeMap) [Field F]
 
 /-- Soundness for general circuits that change interactions -/
 @[circuit_norm]
-def GeneralFormalCircuit.SoundnessChangingMultiset (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
-    (Spec : Input F → Output F → ProverData F → InteractionDelta F → Prop)
+def GeneralFormalCircuit.SoundnessChangingMultiset (F : Type) [Field F] [DecidableEq F](circuit : ElaboratedCircuit F Input Output)
+    (Spec : Input F → Output F → Environment F → InteractionDelta F → Prop)
     (localAdds : Var Input F → Environment F → ℕ → InteractionDelta F) :=
   ∀ offset : ℕ, ∀ env,
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   let output := eval env (circuit.output input_var offset)
   let adds := localAdds input_var env offset
-  Spec input output env.data adds
+  Spec input output env adds
+
+@[circuit_norm]
+def GeneralFormalCircuit.CompletenessChangingMultiset (F : Type) [Field F] [DecidableEq F]
+    (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Environment F → Prop) :=
+  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  ∀ input : Input F, eval env input_var = input →
+  Assumptions input env →
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
 
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
 structure GeneralFormalCircuitChangingMultiset (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
     [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → ProverData F → Prop
-  Spec : Input F → Output F → ProverData F → InteractionDelta F → Prop
+  Assumptions : Input F → Environment F → Prop
+  Spec : Input F → Output F → Environment F → InteractionDelta F → Prop
   soundness : GeneralFormalCircuit.SoundnessChangingMultiset F elaborated Spec elaborated.localAdds
-  completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
+  completeness : GeneralFormalCircuit.CompletenessChangingMultiset F elaborated Assumptions
 
 end
 
