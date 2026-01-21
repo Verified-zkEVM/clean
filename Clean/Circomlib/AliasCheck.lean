@@ -31,7 +31,7 @@ template AliasCheck() {
 -/
 def main (input : Vector (Expression (F p)) 254) := do
   -- CompConstant(-1) means we're comparing against p-1 (since -1 ≡ p-1 mod p)
-  let comp_out ← CompConstant.circuit (p - 1) input
+  let comp_out ← CompConstant.circuit (p - 1) hppre254.elim input
   comp_out === 0
 
 def circuit : FormalAssertion (F p) (fields 254) where
@@ -48,27 +48,13 @@ def circuit : FormalAssertion (F p) (fields 254) where
     have : p > 2^135 := hp135.elim
     have ppre_small : p - 1 < 2^254 := hppre254.elim
     intros offset env input_var h_binary h_sub
-    specialize h_sub ppre_small
-    simp only [h_sub]
-    split
-    · intro h_false
-      apply False.elim
-      clear * - h_false
-      apply one_ne_zero h_false
     omega
 
   completeness := by
     simp only [circuit_norm, main, CompConstant.circuit]
     simp_all
     have ppre_small : p - 1 < 2^254 := hppre254.elim
-    intros offset env input_var h_sub h_binary h_psmall
-    specialize h_sub h_binary ppre_small
-    simp only [h_sub]
-    and_intros
-    · assumption
-    split
-    · omega
-    rfl
+    omega
 end AliasCheck
 
 end Circomlib

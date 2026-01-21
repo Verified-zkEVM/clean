@@ -45,7 +45,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 
 -- set_option maxHeartbeats 12000000 in
 set_option maxRecDepth 2000 in
-def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
+def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
   localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
@@ -54,14 +54,13 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
     and_intros <;> ac_rfl
 
   Assumptions input :=
-    (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ c < 2^254
+    (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
 
   Spec bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
   soundness := by
     circuit_proof_start [Num2Bits.circuit]
-    rcases h_assumptions with ⟨h_bits, h_ct⟩
     rcases h_holds with ⟨h_parts, h_holds⟩
     rcases h_holds with ⟨h_sout, h_holds⟩
     rcases h_holds with ⟨h_num2bits, h_out⟩
@@ -103,7 +102,7 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
       simp only [Nat.cast_pow, Nat.cast_ofNat, Nat.cast_sub h_pow_le]
       split_ifs <;> ring
 
-    have h_sum_encodes := sum_bit127_encodes_gt c h_ct input h_bits parts h_parts'
+    have h_sum_encodes := sum_bit127_encodes_gt c h_c input h_assumptions parts h_parts'
 
     have h_sout' : parts.sum = sout := by
       show (Vector.mapRange 127 fun i => env.get (i₀ + i)).sum = env.get (i₀ + 127)
@@ -158,7 +157,6 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   completeness := by
     circuit_proof_start [Num2Bits.circuit]
     -- no simp needed here
-    rcases h_assumptions with ⟨h_bits, h_ct⟩
     rcases h_env with ⟨h_parts, h_sout, h_num2bits, h_out⟩
 
     let parts : Vector (F p) 127 := Vector.mapRange 127 fun i => env.get (i₀ + i)
@@ -220,7 +218,7 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
       intro i
       rw [h_parts' i]
       exact computePart_val_bound' i.val i.isLt _ _
-        (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) c
+        (h_assumptions (i.val * 2) (by omega)) (h_assumptions (i.val * 2 + 1) (by omega)) c
 
     have h_sum_bound : (parts.toList.map ZMod.val).sum ≤ 127 * 2^128 := by
       have h_sum_bound' : (parts.toList.map ZMod.val).sum ≤ parts.toList.length * 2^128 := by
