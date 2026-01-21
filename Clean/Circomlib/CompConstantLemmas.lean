@@ -38,6 +38,50 @@ def signalPairValF (slsb smsb : F p) : ℕ := smsb.val * 2 + slsb.val
 def constPairValAt (i : ℕ) (ct : ℕ) : ℕ :=
   ((ct >>> (i * 2 + 1)) &&& 1) * 2 + ((ct >>> (i * 2)) &&& 1)
 
+/-! ### Helper lemmas for coefficients -/
+
+omit [Fact (p < 2 ^ 254)] [Fact p.Prime] in
+/-- The aCoeff value is in range for field operations -/
+lemma aCoeff_lt_p (i : ℕ) (_hi : i < 127) : 2^i < p := by
+  have h1 : 2^i < 2^127 := Nat.pow_lt_pow_right (by omega) _hi
+  have h2 : 2^127 < 2^253 := by native_decide
+  linarith [‹Fact (p > 2^253)›.elim]
+
+omit [Fact (p < 2 ^ 254)] [Fact p.Prime] in
+/-- The bCoeff value is in range for field operations -/
+lemma bCoeff_lt_p (i : ℕ) : 2^128 - 2^i < p := by
+  have h1 : 2^128 - 2^i < 2^128 := by
+    have : 2^i ≥ 1 := Nat.one_le_two_pow
+    omega
+  have h2 : 2^128 < 2^253 := by native_decide
+  linarith [‹Fact (p > 2^253)›.elim]
+
+omit [Fact (p < 2 ^ 254)] in
+/-- The field value of aCoeff equals its natural number value -/
+lemma aCoeff_val (i : ℕ) (hi : i < 127) : (aCoeff i : F p).val = 2^i := by
+  have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
+  have h_a_bound : 2^i < p := aCoeff_lt_p i hi
+  simp only [aCoeff, Int.cast_pow, Int.cast_ofNat]
+  have h_pow_cast : (2 : F p)^i = ((2^i : ℕ) : F p) := by simp only [Nat.cast_pow]; rfl
+  rw [h_pow_cast, ZMod.val_natCast_of_lt h_a_bound]
+
+omit [Fact (p < 2 ^ 254)] in
+/-- The field value of bCoeff equals its natural number value -/
+lemma bCoeff_val (i : ℕ) (hi : i < 127) : (bCoeff i : F p).val = 2^128 - 2^i := by
+  have h_b_bound : 2^128 - 2^i < p := bCoeff_lt_p i
+  have h_2i_lt_128 : 2^i < 2^128 := Nat.pow_lt_pow_right (by omega) (by omega : i < 128)
+  simp only [bCoeff]
+  have h_eq : ((2 : ℤ)^128 - 2^i : ℤ) = ((2^128 - 2^i : ℕ) : ℤ) := by
+    rw [Int.ofNat_sub (le_of_lt h_2i_lt_128)]
+    simp only [Nat.cast_pow, Nat.cast_ofNat]
+  rw [h_eq, Int.cast_natCast, ZMod.val_natCast_of_lt h_b_bound]
+
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] [Fact p.Prime] in
+/-- Bit extraction with &&& 1 is either 0 or 1 -/
+lemma bit_and_one_cases (n : ℕ) : n &&& 1 = 0 ∨ n &&& 1 = 1 := by
+  have h : n &&& 1 ≤ 1 := Nat.and_le_right
+  exact (Nat.le_one_iff_eq_zero_or_eq_one).mp h
+
 omit [Fact (p < 2 ^ 254)] in
 /-- Key characterization: computePart encodes pair comparison. -/
 lemma computePart_characterization (i : ℕ) (hi : i < 127) (slsb smsb : F p)
@@ -51,42 +95,12 @@ lemma computePart_characterization (i : ℕ) (hi : i < 127) (slsb smsb : F p)
   have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
   have h_val_0 : (0 : F p).val = 0 := ZMod.val_zero
   have h_val_1 : (1 : F p).val = 1 := @ZMod.val_one p ⟨hp_gt_1⟩
-
-  have h_a_bound : 2^i < p := by
-    have h1 : 2^i < 2^127 := Nat.pow_lt_pow_right (by omega) hi
-    have h2 : 2^127 < 2^253 := by native_decide
-    linarith [‹Fact (p > 2^253)›.elim]
-  have h_b_bound : 2^128 - 2^i < p := by
-    have h1 : 2^128 - 2^i < 2^128 := by
-      have : 2^i ≥ 1 := Nat.one_le_two_pow
-      omega
-    have h2 : 2^128 < 2^253 := by native_decide
-    linarith [‹Fact (p > 2^253)›.elim]
-  have h_2i_lt_128 : 2^i < 2^128 := Nat.pow_lt_pow_right (by omega) (by omega : i < 128)
-
-  have h_aCoeff_val : (aCoeff i : F p).val = 2^i := by
-    simp only [aCoeff, Int.cast_pow, Int.cast_ofNat]
-    have h_pow_cast : (2 : F p)^i = ((2^i : ℕ) : F p) := by simp only [Nat.cast_pow]; rfl
-    rw [h_pow_cast, ZMod.val_natCast_of_lt h_a_bound]
-
-  have h_bCoeff_val : (bCoeff i : F p).val = 2^128 - 2^i := by
-    simp only [bCoeff]
-    have h_eq : ((2 : ℤ)^128 - 2^i : ℤ) = ((2^128 - 2^i : ℕ) : ℤ) := by
-      rw [Int.ofNat_sub (le_of_lt h_2i_lt_128)]
-      simp only [Nat.cast_pow, Nat.cast_ofNat]
-    rw [h_eq, Int.cast_natCast, ZMod.val_natCast_of_lt h_b_bound]
-
-  have h_cm_cases : (ct >>> (i * 2 + 1)) &&& 1 = 0 ∨ (ct >>> (i * 2 + 1)) &&& 1 = 1 := by
-    have h : (ct >>> (i * 2 + 1)) &&& 1 ≤ 1 := by
-      exact Nat.and_le_right
-    exact (Nat.le_one_iff_eq_zero_or_eq_one).mp h
-  have h_cl_cases : (ct >>> (i * 2)) &&& 1 = 0 ∨ (ct >>> (i * 2)) &&& 1 = 1 := by
-    have h : (ct >>> (i * 2)) &&& 1 ≤ 1 := by
-      exact Nat.and_le_right
-    exact (Nat.le_one_iff_eq_zero_or_eq_one).mp h
+  have h_aCoeff_val : (aCoeff i : F p).val = 2^i := aCoeff_val i hi
+  have h_bCoeff_val : (bCoeff i : F p).val = 2^128 - 2^i := bCoeff_val i hi
+  have h_cm_cases := bit_and_one_cases (ct >>> (i * 2 + 1))
+  have h_cl_cases := bit_and_one_cases (ct >>> (i * 2))
 
   simp only [signalPairValF, constPairValAt, computePart]
-
   rcases h_smsb with rfl | rfl <;> rcases h_slsb with rfl | rfl <;>
   rcases h_cm_cases with h_cm | h_cm <;> rcases h_cl_cases with h_cl | h_cl <;>
   simp only [h_val_0, h_val_1, h_cm, h_cl, mul_zero, zero_mul, add_zero, zero_add,
@@ -313,6 +327,55 @@ lemma lt_of_high_eq_and_pair_lt (x y k : ℕ)
   rw [hx_eq, hy_eq, h_high_eq]
   omega
 
+/-- If all 2-bit pairs are equal, then the numbers are equal (for numbers < 2^254). -/
+lemma eq_of_all_pairs_eq (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254)
+    (h_all_eq : ∀ i : Fin 127, (x >>> (i.val * 2)) % 4 = (y >>> (i.val * 2)) % 4) :
+    x = y := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  by_cases hi_bound : i < 254
+  · let k : Fin 127 := ⟨i / 2, by omega⟩
+    have h_pair_eq := h_all_eq k
+    simp only [Nat.testBit, Nat.shiftRight_eq_div_pow]
+    rw [Nat.and_comm, Nat.and_one_is_mod, Nat.and_comm, Nat.and_one_is_mod]
+    by_cases h_even : i % 2 = 0
+    · have h_i_eq : i = k.val * 2 := by
+        have hk_def : k.val = i / 2 := rfl
+        omega
+      rw [h_i_eq]
+      simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
+      have h_low : x / 2 ^ (k.val * 2) % 2 = y / 2 ^ (k.val * 2) % 2 := by
+        have hm : ∀ n : ℕ, n % 4 % 2 = n % 2 := fun n => by omega
+        calc x / 2 ^ (k.val * 2) % 2 = x / 2 ^ (k.val * 2) % 4 % 2 := by rw [hm]
+          _ = y / 2 ^ (k.val * 2) % 4 % 2 := by rw [h_pair_eq]
+          _ = y / 2 ^ (k.val * 2) % 2 := by rw [hm]
+      simp only [h_low]
+    · have h_i_eq : i = k.val * 2 + 1 := by
+        have hk_def : k.val = i / 2 := rfl
+        omega
+      rw [h_i_eq]
+      simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
+      have h_high : x / 2 ^ (k.val * 2 + 1) % 2 = y / 2 ^ (k.val * 2 + 1) % 2 := by
+        have hd : ∀ n : ℕ, n % 4 / 2 = n / 2 % 2 := fun n => by omega
+        have hpow : 2 ^ (k.val * 2 + 1) = 2 ^ (k.val * 2) * 2 := by ring
+        calc x / 2 ^ (k.val * 2 + 1) % 2 = x / (2 ^ (k.val * 2) * 2) % 2 := by rw [hpow]
+          _ = x / 2 ^ (k.val * 2) / 2 % 2 := by rw [Nat.div_div_eq_div_mul]
+          _ = x / 2 ^ (k.val * 2) % 4 / 2 := by rw [hd]
+          _ = y / 2 ^ (k.val * 2) % 4 / 2 := by rw [h_pair_eq]
+          _ = y / 2 ^ (k.val * 2) / 2 % 2 := by rw [hd]
+          _ = y / (2 ^ (k.val * 2) * 2) % 2 := by rw [Nat.div_div_eq_div_mul]
+          _ = y / 2 ^ (k.val * 2 + 1) % 2 := by rw [hpow]
+      simp only [h_high]
+  · have hx_high : x.testBit i = false := by
+      apply Nat.testBit_eq_false_of_lt
+      calc x < 2^254 := hx
+        _ ≤ 2^i := Nat.pow_le_pow_right (by omega) (by omega)
+    have hy_high : y.testBit i = false := by
+      apply Nat.testBit_eq_false_of_lt
+      calc y < 2^254 := hy
+        _ ≤ 2^i := Nat.pow_le_pow_right (by omega) (by omega)
+    rw [hx_high, hy_high]
+
 /-- Key lemma: fromBits comparison implies existence of differing pair. -/
 lemma exists_msb_win_from_gt (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254) (h_gt : x > y) :
     ∃ k : Fin 127,
@@ -330,51 +393,7 @@ lemma exists_msb_win_from_gt (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254) (h_gt
       have : i ∈ diff_finset := by simp [diff_finset, diff_positions, h_ne]
       rw [h_empty] at this
       exact Finset.notMem_empty _ this
-    have h_x_eq_y : x = y := by
-      apply Nat.eq_of_testBit_eq
-      intro i
-      by_cases hi_bound : i < 254
-      · let k : Fin 127 := ⟨i / 2, by omega⟩
-        have h_pair_eq := h_all_eq k
-        simp only [Nat.testBit, Nat.shiftRight_eq_div_pow]
-        rw [Nat.and_comm, Nat.and_one_is_mod, Nat.and_comm, Nat.and_one_is_mod]
-        by_cases h_even : i % 2 = 0
-        · have h_i_eq : i = k.val * 2 := by
-            have hk_def : k.val = i / 2 := rfl
-            omega
-          rw [h_i_eq]
-          simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
-          have h_low : x / 2 ^ (k.val * 2) % 2 = y / 2 ^ (k.val * 2) % 2 := by
-            have hm : ∀ n : ℕ, n % 4 % 2 = n % 2 := fun n => by omega
-            calc x / 2 ^ (k.val * 2) % 2 = x / 2 ^ (k.val * 2) % 4 % 2 := by rw [hm]
-              _ = y / 2 ^ (k.val * 2) % 4 % 2 := by rw [h_pair_eq]
-              _ = y / 2 ^ (k.val * 2) % 2 := by rw [hm]
-          simp only [h_low]
-        · have h_i_eq : i = k.val * 2 + 1 := by
-            have hk_def : k.val = i / 2 := rfl
-            omega
-          rw [h_i_eq]
-          simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
-          have h_high : x / 2 ^ (k.val * 2 + 1) % 2 = y / 2 ^ (k.val * 2 + 1) % 2 := by
-            have hd : ∀ n : ℕ, n % 4 / 2 = n / 2 % 2 := fun n => by omega
-            have hpow : 2 ^ (k.val * 2 + 1) = 2 ^ (k.val * 2) * 2 := by ring
-            calc x / 2 ^ (k.val * 2 + 1) % 2 = x / (2 ^ (k.val * 2) * 2) % 2 := by rw [hpow]
-              _ = x / 2 ^ (k.val * 2) / 2 % 2 := by rw [Nat.div_div_eq_div_mul]
-              _ = x / 2 ^ (k.val * 2) % 4 / 2 := by rw [hd]
-              _ = y / 2 ^ (k.val * 2) % 4 / 2 := by rw [h_pair_eq]
-              _ = y / 2 ^ (k.val * 2) / 2 % 2 := by rw [hd]
-              _ = y / (2 ^ (k.val * 2) * 2) % 2 := by rw [Nat.div_div_eq_div_mul]
-              _ = y / 2 ^ (k.val * 2 + 1) % 2 := by rw [hpow]
-          simp only [h_high]
-      · have hx_high : x.testBit i = false := by
-          apply Nat.testBit_eq_false_of_lt
-          calc x < 2^254 := hx
-            _ ≤ 2^i := Nat.pow_le_pow_right (by omega) (by omega)
-        have hy_high : y.testBit i = false := by
-          apply Nat.testBit_eq_false_of_lt
-          calc y < 2^254 := hy
-            _ ≤ 2^i := Nat.pow_le_pow_right (by omega) (by omega)
-        rw [hx_high, hy_high]
+    have h_x_eq_y : x = y := eq_of_all_pairs_eq x y hx hy h_all_eq
     omega
 
   let k := diff_finset.max' h_nonempty
@@ -664,6 +683,35 @@ lemma list_sum_val_bound' {l : List (F p)} {bound : ℕ}
     have := ih h_xs
     linarith
 
+omit [Fact (p < 2 ^ 254)] in
+/-- Helper: All parts are bounded by 2^128 -/
+lemma parts_val_bounded (input : Vector (F p) 254)
+    (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
+    (parts : Vector (F p) 127) (ct : ℕ)
+    (h_parts : ∀ i : Fin 127, parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] ct) :
+    ∀ i : Fin 127, parts[i].val ≤ 2^128 := by
+  intro i
+  rw [h_parts i]
+  exact computePart_val_bound' i.val i.isLt _ _
+    (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
+
+omit [Fact (p < 2 ^ 254)] [Fact p.Prime] in
+/-- Helper: Sum of parts is less than p -/
+lemma parts_sum_lt_p (parts : Vector (F p) 127)
+    (h_parts_bounded : ∀ i : Fin 127, parts[i].val ≤ 2^128) :
+    (parts.toList.map ZMod.val).sum < p := by
+  have hp : p > 2^253 := ‹Fact (p > 2^253)›.elim
+  calc (parts.toList.map ZMod.val).sum
+      ≤ parts.toList.length * 2^128 := list_sum_val_bound' (by
+          intro x hx
+          rw [List.mem_iff_getElem] at hx
+          obtain ⟨i, hi, rfl⟩ := hx
+          simp only [Vector.getElem_toList]
+          rw [Vector.length_toList] at hi
+          exact h_parts_bounded ⟨i, hi⟩)
+    _ = 127 * 2^128 := by simp [Vector.length_toList]
+    _ < p := by linarith
+
 set_option maxHeartbeats 400000 in
 omit [Fact (p < 2 ^ 254)] in
 lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
@@ -681,25 +729,8 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
   -- Case 1: input > ct → sum.val / 2^127 is odd
   · intro h_gt
     obtain ⟨k, h_win_k, h_tie_above⟩ := exists_msb_win_position ct h_ct input h_bits h_gt
-
-    have h_parts_bounded : ∀ i : Fin 127, parts[i].val ≤ 2^128 := by
-      intro i
-      rw [h_parts i]
-      exact computePart_val_bound' i.val i.isLt _ _
-        (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
-
-    have hp : p > 2^253 := ‹Fact (p > 2^253)›.elim
-    have h_sum_lt_p : (parts.toList.map ZMod.val).sum < p := by
-      calc (parts.toList.map ZMod.val).sum
-          ≤ parts.toList.length * 2^128 := list_sum_val_bound' (by
-              intro x hx
-              rw [List.mem_iff_getElem] at hx
-              obtain ⟨i, hi, rfl⟩ := hx
-              simp only [Vector.getElem_toList]
-              rw [Vector.length_toList] at hi
-              exact h_parts_bounded ⟨i, hi⟩)
-        _ = 127 * 2^128 := by simp [Vector.length_toList]
-        _ < p := by linarith
+    have h_parts_bounded := parts_val_bounded input h_bits parts ct h_parts
+    have h_sum_lt_p := parts_sum_lt_p parts h_parts_bounded
 
     let wins := Finset.filter (fun i : Fin 127 =>
       signalPairValF input[i.val * 2] input[i.val * 2 + 1] > constPairValAt i.val ct) Finset.univ
@@ -932,24 +963,8 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
         exact this
       simp only [h_sum_zero, ZMod.val_zero, Nat.zero_div, Nat.zero_mod]
 
-    · have h_parts_bounded : ∀ i : Fin 127, parts[i].val ≤ 2^128 := by
-        intro i
-        rw [h_parts i]
-        exact computePart_val_bound' i.val i.isLt _ _
-          (h_bits (i.val * 2) (by omega)) (h_bits (i.val * 2 + 1) (by omega)) ct
-
-      have hp : p > 2^253 := ‹Fact (p > 2^253)›.elim
-      have h_sum_lt_p : (parts.toList.map ZMod.val).sum < p := by
-        calc (parts.toList.map ZMod.val).sum
-            ≤ parts.toList.length * 2^128 := list_sum_val_bound' (by
-                intro x hx
-                rw [List.mem_iff_getElem] at hx
-                obtain ⟨i, hi, rfl⟩ := hx
-                simp only [Vector.getElem_toList]
-                rw [Vector.length_toList] at hi
-                exact h_parts_bounded ⟨i, hi⟩)
-          _ = 127 * 2^128 := by simp [Vector.length_toList]
-          _ < p := by linarith
+    · have h_parts_bounded := parts_val_bounded input h_bits parts ct h_parts
+      have h_sum_lt_p := parts_sum_lt_p parts h_parts_bounded
 
       let wins := Finset.filter (fun i : Fin 127 =>
         signalPairValF input[i.val * 2] input[i.val * 2 + 1] > constPairValAt i.val ct) Finset.univ
