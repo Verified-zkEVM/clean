@@ -20,8 +20,11 @@ export Expression (var)
 structure WitnessEnvironment (F : Type) where
   get : ℕ → F
 
+def ProverData (F : Type) :=
+  String → (n : ℕ) → Array (Vector F n)
+
 structure TableEnvironment (F : Type) where
-  tables : String → (n : ℕ) → Array (Vector F n)
+  data : ProverData F
 
 structure Environment (F : Type) extends WitnessEnvironment F, TableEnvironment F
 

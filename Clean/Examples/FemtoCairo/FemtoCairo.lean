@@ -259,22 +259,22 @@ def MemoryTable : Table (F p) MemoryEntry where
     entry.address = table[entry.address.val].address ∧
     entry.value = table[entry.address.val].value
 
-def memorySize (env : TableEnvironment (F p)) : ℕ :=
-  let mem := env.getTable MemoryTable
+def memorySize (data : ProverData (F p)) : ℕ :=
+  let mem := data.getTable MemoryTable
   mem.size
 
 def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
-  let mem := env.getTable MemoryTable
+  let mem := env.data.getTable MemoryTable
   if he : (env address).val < mem.size then
     mem[(env address).val].value
   else 0
 
-def memory (env : TableEnvironment (F p)) : Fin (memorySize env) → F p :=
+def memory (env : ProverData (F p)) : Fin (memorySize env) → F p :=
   let mem := env.getTable MemoryTable
   fun i => mem[i.val].value
 
 -- to satisfy memory lookup constraints, the prover needs to make sure that `memory[addr] = (addr, ·)`
-def MemoryCompletenessAssumption (env : TableEnvironment (F p)) : Prop :=
+def MemoryCompletenessAssumption (env : ProverData (F p)) : Prop :=
   let mem := env.getTable MemoryTable;
   ∀ (addr : F p) (ha : addr.val < mem.size), mem[addr.val].address = addr
 
@@ -348,7 +348,7 @@ def readFromMemory :
       Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
       memorySize, memoryValue, memory, MemoryEntry]
     intro h_assumptions
-    set memoryTable := env.getTable MemoryTable with h_memory_table_def
+    set memoryTable := env.data.getTable MemoryTable with h_memory_table_def
     simp only [MemoryTable] at h_holds
 
     -- circuit_proof_start did not unpack those, so we manually unpack here
@@ -366,7 +366,7 @@ def readFromMemory :
     obtain ⟨ h_addr2', h_value2 ⟩ := h_mem2
 
     -- prove that memory is non-empty
-    have hm : NeZero (env.getTable MemoryTable).size := NeZero.of_gt h_addr1_lt
+    have hm : NeZero (env.data.getTable MemoryTable).size := NeZero.of_gt h_addr1_lt
     use hm
 
     simp only [h_addr1] at h_value1 h_addr1_lt
@@ -418,7 +418,7 @@ def readFromMemory :
     set value2 := env.get (i₀ + 3)
     set value := env.get (i₀ + 4)
 
-    set memoryTable := env.getTable MemoryTable with h_memory_table_def
+    set memoryTable := env.data.getTable MemoryTable with h_memory_table_def
     simp only [MemoryTable]
     obtain ⟨ addr1_def, value1_def, addr2_def, value2_def, value_def ⟩ := h_env
     use addr1_def, addr2_def
@@ -444,7 +444,7 @@ def readFromMemory :
         rw [value2_def]
         split_ifs <;> trivial
 
-    have : (env.getTable MemoryTable).size > 0 := NeZero.pos _
+    have : (env.data.getTable MemoryTable).size > 0 := NeZero.pos _
     -- by cases on the addressing mode
     rcases h_mode_encode with h_mode|h_mode|h_mode|h_mode
     <;> simp only [h_mode, one_mul, zero_mul, add_zero, zero_add, reduceIte] at *
@@ -646,9 +646,9 @@ def femtoCairoStepElaboratedCircuit
 
 def femtoCairoStepSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    (state : State (F p)) (nextState : State (F p)) (env : TableEnvironment (F p)) : Prop :=
-  ∃ _hm : NeZero (memorySize env),
-  Spec.femtoCairoMachineTransition program (memory env) state = some nextState
+    (state : State (F p)) (nextState : State (F p)) (data : ProverData (F p)) : Prop :=
+  ∃ _hm : NeZero (memorySize data),
+  Spec.femtoCairoMachineTransition program (memory data) state = some nextState
 
 /--
   Assumptions required for the FemtoCairo step circuit completeness.
@@ -659,12 +659,12 @@ def femtoCairoStepSpec
 -/
 def femtoCairoStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (state : State (F p)) (env : TableEnvironment (F p)) : Prop :=
+    (state : State (F p)) (data : ProverData (F p)) : Prop :=
   ValidProgramSize p programSize ∧
   ValidProgram program ∧
-  MemoryCompletenessAssumption env ∧
-  ∃ _hm : NeZero (memorySize env),
-  (Spec.femtoCairoMachineTransition program (memory env) state).isSome
+  MemoryCompletenessAssumption data ∧
+  ∃ _hm : NeZero (memorySize data),
+  (Spec.femtoCairoMachineTransition program (memory data) state).isSome
 
 def femtoCairoStepSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
@@ -765,11 +765,11 @@ def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program
 
   -- Decompose transition into components
   have h_decompose := Spec.transition_isSome_implies_computeNextState_isSome
-    program (memory env.toTableEnvironment) input h_transition_isSome
+    program (memory env.data) input h_transition_isSome
   obtain ⟨raw, decode, v1, v2, v3, h_fetch, h_decode, h_v1, h_v2, h_v3, h_computeNext⟩ := h_decompose
 
   have h_fetch_isSome : (Spec.fetchInstruction program input.pc).isSome := by
-    exact Spec.transition_isSome_implies_fetch_isSome program (memory env.toTableEnvironment) input h_transition_isSome
+    exact Spec.transition_isSome_implies_fetch_isSome program (memory env.data) input h_transition_isSome
   have h_pc_bound : input.pc.val + 3 < programSize :=
     Spec.fetchInstruction_isSome_implies_pc_bound program h_valid_size input.pc h_fetch_isSome
   have h_instr_bound : raw.rawInstrType.val < 256 := by
@@ -847,15 +847,15 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
 theorem femtoCairoTableStatement (finalState : State (F p)) :
   let initialState : State (F p) := { pc := 0, ap := 0, fp := 0 };
 
-  ∀ n > 0, ∀ trace env (_ : NeZero (memorySize env)),
+  ∀ n > 0, ∀ trace data (_ : NeZero (memorySize data)),
 
   let table := femtoCairoTable program h_programSize h_program n
     |>.toFormal initialState finalState
 
-  table.statement n trace env →
-    (Spec.femtoCairoMachineBoundedExecution program (memory env) (some initialState) (n - 1)) = some finalState
+  table.statement n trace data →
+    (Spec.femtoCairoMachineBoundedExecution program (memory data) (some initialState) (n - 1)) = some finalState
   := by
-  intro initialState n hn trace env hm table Spec
+  intro initialState n hn trace data hm table Spec
   simp only [table, FormalTable.statement, InductiveTable.toFormal, femtoCairoTable,
     FemtoCairo.Spec.femtoCairoMachineBoundedExecution] at Spec
   simp_all [exists_true_left]
