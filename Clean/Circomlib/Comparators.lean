@@ -265,21 +265,21 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simp [hlt]
 
     have hdiff_lt : ZMod.val (input.1 + 2^n - input.2) < 2^n := by
-      rw[ZMod.val_sub]
-      · rw[ZMod.val_add_of_lt]
+      rw [ZMod.val_sub]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           calc
             ZMod.val input.1 + 2^n - ZMod.val input.2 <  ZMod.val input.2 + 2^n - ZMod.val input.2 := by omega
             _ = 2^n := by omega
         · have easy_lemma: 2 * 2^n = 2^(n+1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
-      · rw[ZMod.val_add_of_lt]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           omega
         · have easy_lemma: 2 * 2^n = 2^(n+1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
 
@@ -287,9 +287,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have h3 := h_holds.right
     have h2 := h_holds.left.right
 
-    rw[add_assoc] at hout
-    rw[← hout] at h3
-    rw[h3]
+    rw [add_assoc] at hout
+    rw [← hout] at h3
+    rw [h3]
     --simp the goal basic math
 
     unfold fieldToBits at h2
@@ -302,27 +302,27 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
     simp only [← sub_eq_add_neg, Nat.testBit_eq_false_of_lt hdiff_lt, Bool.false_eq_true,
       ↓reduceIte] at h2
-    rw[h2]
+    rw [h2]
     simp only [neg_zero, add_zero]
 
     -- CASE input.1 >= input.2
     simp only [id_eq, hlt, ↓reduceIte]
     have hdiff_ge : ZMod.val (input.1 + 2^n - input.2) >= 2^n := by
-      rw[ZMod.val_sub]
+      rw [ZMod.val_sub]
       · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           calc
             ZMod.val input.1 + 2^n - ZMod.val input.2 ≥ ZMod.val input.1 + 2^n - ZMod.val input.1 := by omega
             _ = 2^n := by omega
         · have easy_lemma: 2 * 2^n = 2^(n+1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
-      · rw[ZMod.val_add_of_lt]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           omega
         · have easy_lemma: 2 * 2^n = 2^(n+1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
 
@@ -331,9 +331,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have h2 := h_holds.left.right
     have h1 := h_holds.left.left
 
-    rw[add_assoc] at hout
-    rw[← hout] at h3
-    rw[h3]
+    rw [add_assoc] at hout
+    rw [← hout] at h3
+    rw [h3]
     --simp the goal basic math
     unfold fieldToBits at h2
     unfold toBits at h2
@@ -385,21 +385,21 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       exact Fact.out
 
     have hdiff_lt_basic : ZMod.val (input.1 + 2^n - input.2) < 2^(n+1) := by
-      rw[ZMod.val_sub]
-      · rw[ZMod.val_add_of_lt]
+      rw [ZMod.val_sub]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           calc
             ZMod.val input.1 + 2^n - ZMod.val input.2 <  2^n + 2^n := by omega
             _ = 2^(n + 1) := by rw[pow_succ, mul_two]
         · have easy_lemma: 2 * 2^n = 2^(n + 1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
-      · rw[ZMod.val_add_of_lt]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           omega
         · have easy_lemma: 2 * 2^n = 2^(n + 1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
 
