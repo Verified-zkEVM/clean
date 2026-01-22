@@ -228,7 +228,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   output _ i := var ⟨ i + n + 1 ⟩
   output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
 
-  Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+  Assumptions := fun (x, y) => x.val < 2^n ∧ y.val ≤ 2^n
 
   Spec := fun (x, y) output =>
     output = (if x.val < y.val then 1 else 0)
@@ -242,7 +242,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have hy_eval : Expression.eval env input_var.2 = input.2 := by
       simpa using congrArg Prod.snd h_input
 
-    simp [hx_eval, hy_eval] at h_holds
+    simp only [hx_eval, hy_eval, id_eq] at h_holds
 
     set out := env.get (i₀ + n + 1) with hout
     have two_exp_n_small : 2^n < p := by
@@ -252,45 +252,42 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have heq: ZMod.val ((2 : F p)^n) = 2^n := by
       rw [ZMod.val_pow]
       rw [ZMod.val_ofNat_of_lt]
-      · simp_all
-        exact Fact.out
+      · simp_all [Fact.out]
       convert two_exp_n_small
       rw [ZMod.val_ofNat_of_lt]
-      simp_all
-      exact Fact.out
+      simp_all [Fact.out]
 
     by_cases hlt : ZMod.val input.1 < ZMod.val input.2
 
     -- CASE input.1 < input.2
-    simp [hlt]
+    simp only [id_eq, hlt, ↓reduceIte]
 
     have hdiff_lt : ZMod.val (input.1 + 2^n - input.2) < 2^n := by
-      rw[ZMod.val_sub]
-      · rw[ZMod.val_add_of_lt]
+      rw [ZMod.val_sub]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           calc
             ZMod.val input.1 + 2^n - ZMod.val input.2 <  ZMod.val input.2 + 2^n - ZMod.val input.2 := by omega
             _ = 2^n := by omega
         · have easy_lemma: 2 * 2^n = 2^(n+1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
-      · rw[ZMod.val_add_of_lt]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           omega
         · have easy_lemma: 2 * 2^n = 2^(n+1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
 
     -- split h_holds to h1 h2 h3
     have h3 := h_holds.right
     have h2 := h_holds.left.right
-    have h1 := h_holds.left.left
 
-    rw[add_assoc] at hout
-    rw[← hout] at h3
-    rw[h3]
+    rw [add_assoc] at hout
+    rw [← hout] at h3
+    rw [h3]
     --simp the goal basic math
 
     unfold fieldToBits at h2
@@ -303,27 +300,27 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
     simp only [← sub_eq_add_neg, Nat.testBit_eq_false_of_lt hdiff_lt, Bool.false_eq_true,
       ↓reduceIte] at h2
-    rw[h2]
+    rw [h2]
     simp only [neg_zero, add_zero]
 
     -- CASE input.1 >= input.2
-    simp [hlt]
+    simp only [id_eq, hlt, ↓reduceIte]
     have hdiff_ge : ZMod.val (input.1 + 2^n - input.2) >= 2^n := by
-      rw[ZMod.val_sub]
+      rw [ZMod.val_sub]
       · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           calc
             ZMod.val input.1 + 2^n - ZMod.val input.2 ≥ ZMod.val input.1 + 2^n - ZMod.val input.1 := by omega
             _ = 2^n := by omega
         · have easy_lemma: 2 * 2^n = 2^(n+1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
-      · rw[ZMod.val_add_of_lt]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           omega
         · have easy_lemma: 2 * 2^n = 2^(n+1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
 
@@ -332,9 +329,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have h2 := h_holds.left.right
     have h1 := h_holds.left.left
 
-    rw[add_assoc] at hout
-    rw[← hout] at h3
-    rw[h3]
+    rw [add_assoc] at hout
+    rw [← hout] at h3
+    rw [h3]
     --simp the goal basic math
     unfold fieldToBits at h2
     unfold toBits at h2
@@ -369,7 +366,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       simpa using congrArg Prod.fst h_input
     have hy_eval : Expression.eval env input_var.2 = input.2 := by
       simpa using congrArg Prod.snd h_input
-    simp [hx_eval, hy_eval] at *
+    simp only [hx_eval, hy_eval, Prod.mk.eta, id_eq] at *
     set out := env.get (i₀ + n + 1) with hout
     have two_exp_n_small : 2^n < p := by
       have : 2^n ≤ 2^(n+1) := by gcongr; repeat linarith
@@ -378,29 +375,27 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have heq: ZMod.val ((2 : F p) ^ n) = 2^n := by
       rw [ZMod.val_pow]
       rw [ZMod.val_ofNat_of_lt]
-      · simp_all
-        exact Fact.out
+      · simp_all [Fact.out]
       convert two_exp_n_small
       rw [ZMod.val_ofNat_of_lt]
-      simp_all
-      exact Fact.out
+      simp_all [Fact.out]
 
     have hdiff_lt_basic : ZMod.val (input.1 + 2^n - input.2) < 2^(n+1) := by
-      rw[ZMod.val_sub]
-      · rw[ZMod.val_add_of_lt]
+      rw [ZMod.val_sub]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           calc
             ZMod.val input.1 + 2^n - ZMod.val input.2 <  2^n + 2^n := by omega
             _ = 2^(n + 1) := by rw[pow_succ, mul_two]
         · have easy_lemma: 2 * 2^n = 2^(n + 1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
-      · rw[ZMod.val_add_of_lt]
+      · rw [ZMod.val_add_of_lt]
         · simp only [heq] at *
           omega
         · have easy_lemma: 2 * 2^n = 2^(n + 1) := by
-            rw[pow_succ, two_mul]
+            rw [pow_succ, two_mul]
             omega
           omega
 
@@ -435,24 +430,51 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     output = (if x.val <= y.val then 1 else 0)
 
   soundness := by
-    intro i env input (x, y) h_input assumptions h_holds
+    intro i env input (x, y) h_input h_assumptions h_holds
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
-    have : 2^n < 2^(n+1) := by gcongr; repeat linarith
-    have hy : y.val + (1 : F p).val < p := by
-      simp only [ZMod.val_one]; linarith
-    rw [ZMod.val_add_of_lt hy, ZMod.val_one] at h_holds
-    by_cases hy : y.val + 1 = 2^n
-    case neg =>
-      specialize h_holds (by omega)
-      simp_all [Nat.lt_add_one_iff]
-    -- TODO the spec of LessThan is not strong enough to handle this case
-    sorry
+
+    have two_exp_n_lt_p : 2^n < p := by
+      have : 2^n ≤ 2^(n+1) := by
+        simp [pow_succ]
+      exact lt_of_le_of_lt this hn
+
+    have hy_p : y.val + 1 < p :=
+      lt_of_le_of_lt (Nat.succ_le_of_lt h_assumptions.right) two_exp_n_lt_p
+
+    have hy_val : (y + 1).val = y.val + 1 := by
+      have hy_p' : y.val + (1 : F p).val < p := by
+        simpa [ZMod.val_one] using hy_p
+      simpa [ZMod.val_one] using (ZMod.val_add_of_lt hy_p')
+
+    have hy_le : (y + 1).val ≤ 2^n := by
+      rw [hy_val]
+      exact Nat.succ_le_of_lt h_assumptions.right
+
+    have h_lt := h_holds hy_le
+    simpa [hy_val, Nat.lt_add_one_iff] using h_lt
 
   completeness := by
-    intro i env input h_env (x, y) h_input assumptions
+    intro i env input h_env (x, y) h_input h_assumptions
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
-    -- TODO impossible to prove
-    sorry
+
+    have two_exp_n_lt_p : 2^n < p := by
+      have : 2^n ≤ 2^(n+1) := by
+        simp [pow_succ]
+      exact lt_of_le_of_lt this hn
+
+    have hy_p : y.val + 1 < p :=
+      lt_of_le_of_lt (Nat.succ_le_of_lt h_assumptions.right) two_exp_n_lt_p
+
+    have hy_val : (y + 1).val = y.val + 1 := by
+      have hy_p' : y.val + (1 : F p).val < p := by
+        simpa [ZMod.val_one] using hy_p
+      simpa [ZMod.val_one] using (ZMod.val_add_of_lt hy_p')
+
+    have hy_le : (y + 1).val ≤ 2^n := by
+      rw [hy_val]
+      exact Nat.succ_le_of_lt h_assumptions.right
+
+    exact hy_le
 end LessEqThan
 
 namespace GreaterThan
@@ -480,10 +502,19 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     output = (if x.val > y.val then 1 else 0)
 
   soundness := by
-    simp_all [circuit_norm, LessThan.circuit]
+    intro i env input (x, y) h_input h_assumptions h_holds
+    simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
+
+    have hx_le : x.val ≤ 2^n := Nat.le_of_lt h_assumptions.left
+    have h_lt := h_holds hx_le
+    simpa using h_lt
 
   completeness := by
-    simp_all [circuit_norm, LessThan.circuit]
+    intro i env input h_env (x, y) h_input h_assumptions
+    simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
+
+    have hx_le : x.val ≤ 2^n := Nat.le_of_lt h_assumptions.left
+    exact hx_le
 end GreaterThan
 
 namespace GreaterEqThan
@@ -510,12 +541,51 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     output = (if x.val >= y.val then 1 else 0)
 
   soundness := by
-    simp only [circuit_norm]
-    sorry
+    intro i env input (x, y) h_input h_assumptions h_holds
+    simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
+
+    have two_exp_n_lt_p : 2^n < p := by
+      have : 2^n ≤ 2^(n+1) := by
+        simp [pow_succ]
+      exact lt_of_le_of_lt this hn
+
+    have hx_p : x.val + 1 < p :=
+      lt_of_le_of_lt (Nat.succ_le_of_lt h_assumptions.left) two_exp_n_lt_p
+
+    have hx_val : (x + 1).val = x.val + 1 := by
+      have hx_p' : x.val + (1 : F p).val < p := by
+        simpa [ZMod.val_one] using hx_p
+      simpa [ZMod.val_one] using (ZMod.val_add_of_lt hx_p')
+
+    have hx_le : (x + 1).val ≤ 2^n := by
+      rw [hx_val]
+      exact Nat.succ_le_of_lt h_assumptions.left
+
+    have h_lt := h_holds hx_le
+    simpa [hx_val, Nat.lt_add_one_iff] using h_lt
 
   completeness := by
-    simp only [circuit_norm]
-    sorry
+    intro i env input h_env (x, y) h_input h_assumptions
+    simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
+
+    have two_exp_n_lt_p : 2^n < p := by
+      have : 2^n ≤ 2^(n+1) := by
+        simp [pow_succ]
+      exact lt_of_le_of_lt this hn
+
+    have hx_p : x.val + 1 < p :=
+      lt_of_le_of_lt (Nat.succ_le_of_lt h_assumptions.left) two_exp_n_lt_p
+
+    have hx_val : (x + 1).val = x.val + 1 := by
+      have hx_p' : x.val + (1 : F p).val < p := by
+        simpa [ZMod.val_one] using hx_p
+      simpa [ZMod.val_one] using (ZMod.val_add_of_lt hx_p')
+
+    have hx_le : (x + 1).val ≤ 2^n := by
+      rw [hx_val]
+      exact Nat.succ_le_of_lt h_assumptions.left
+
+    exact hx_le
 end GreaterEqThan
 
 end Circomlib
