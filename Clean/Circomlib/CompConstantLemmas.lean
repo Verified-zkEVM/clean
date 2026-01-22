@@ -257,6 +257,10 @@ omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma div_mod_eq_self (n d : ℕ) (_hd : 0 < d) : n = n / d * d + n % d := by
   have := Nat.div_add_mod n d; linarith
 
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- 4^k is always positive -/
+lemma four_pow_pos (k : ℕ) : 0 < 4^k := Nat.pow_pos (by omega : 0 < 4)
+
 /-- Helper lemma: If x and y agree on all pairs above position k, then their high parts are equal. -/
 lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
     (h_above : ∀ j : Fin 127, j.val > k → (x >>> (j.val * 2)) % 4 = (y >>> (j.val * 2)) % 4)
@@ -303,7 +307,7 @@ lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
 lemma mod_four_pow_succ (x k : ℕ) : x % 4^(k+1) = (x / 4^k % 4) * 4^k + x % 4^k := by
   have h41 : (4:ℕ)^(k+1) = 4 * 4^k := by ring
   rw [h41]
-  have h_4k_pos : 0 < 4^k := Nat.pow_pos (by omega : 0 < 4)
+  have h_4k_pos : 0 < 4^k := four_pow_pos k
   have h_rem : x % 4^k < 4^k := Nat.mod_lt x h_4k_pos
   have h_qmod : x / 4^k % 4 < 4 := Nat.mod_lt _ (by omega : 0 < 4)
   have h_sum_lt : x / 4^k % 4 * 4^k + x % 4^k < 4 * 4^k := by nlinarith
@@ -338,9 +342,9 @@ lemma lt_of_high_eq_and_pair_lt (x y k : ℕ)
   have h_x_low := mod_four_pow_succ x k
   have h_y_low := mod_four_pow_succ y k
 
-  have h_rem_x : x % 4^k < 4^k := Nat.mod_lt x (Nat.pow_pos (by omega : 0 < 4))
-  have h_rem_y : y % 4^k < 4^k := Nat.mod_lt y (Nat.pow_pos (by omega : 0 < 4))
-  have h_4k_pos : 0 < 4^k := Nat.pow_pos (by omega : 0 < 4)
+  have h_rem_x : x % 4^k < 4^k := Nat.mod_lt x (four_pow_pos k)
+  have h_rem_y : y % 4^k < 4^k := Nat.mod_lt y (four_pow_pos k)
+  have h_4k_pos : 0 < 4^k := four_pow_pos k
 
   have h_mod_lt : x % 4^(k+1) < y % 4^(k+1) := by
     rw [h_x_low, h_y_low]
@@ -351,7 +355,7 @@ lemma lt_of_high_eq_and_pair_lt (x y k : ℕ)
       _ ≤ (y / 4^k % 4) * 4^k := Nat.mul_le_mul_right _ h_xp_lt_yp
       _ ≤ (y / 4^k % 4) * 4^k + y % 4^k := Nat.le_add_right _ _
 
-  have h_4k1_pos : 0 < 4^(k+1) := Nat.pow_pos (by omega : 0 < 4)
+  have h_4k1_pos : 0 < 4^(k+1) := four_pow_pos (k+1)
   have hx_eq := div_mod_eq_self x (4^(k+1)) h_4k1_pos
   have hy_eq := div_mod_eq_self y (4^(k+1)) h_4k1_pos
   rw [hx_eq, hy_eq, h_high_eq]
