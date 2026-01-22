@@ -286,7 +286,6 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     -- split h_holds to h1 h2 h3
     have h3 := h_holds.right
     have h2 := h_holds.left.right
-    have h1 := h_holds.left.left
 
     rw[add_assoc] at hout
     rw[← hout] at h3
@@ -307,7 +306,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simp only [neg_zero, add_zero]
 
     -- CASE input.1 >= input.2
-    simp [hlt]
+    simp only [id_eq, hlt, ↓reduceIte]
     have hdiff_ge : ZMod.val (input.1 + 2^n - input.2) >= 2^n := by
       rw[ZMod.val_sub]
       · rw [ZMod.val_add_of_lt]
