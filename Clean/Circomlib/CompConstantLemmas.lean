@@ -192,8 +192,7 @@ lemma fromBits_testBit_eq {n : ℕ} (bits : Vector ℕ n) (k : ℕ)
     bits[k] = (fromBits bits) / 2^k % 2 := by
   have h_tb := toBits_fromBits bits h_bits
   have h_eq : (toBits n (fromBits bits))[k] = bits[k] := by rw [h_tb]
-  simp only [toBits, Vector.getElem_mapRange] at h_eq
-  simp only [Nat.testBit, Nat.shiftRight_eq_div_pow] at h_eq
+  simp only [toBits, Vector.getElem_mapRange, Nat.testBit, Nat.shiftRight_eq_div_pow] at h_eq
   rw [Nat.and_comm, Nat.and_one_is_mod] at h_eq
   have h_mod2 : fromBits bits / 2 ^ k % 2 = 0 ∨ fromBits bits / 2 ^ k % 2 = 1 := Nat.mod_two_eq_zero_or_one _
   rcases h_bits k hk with hb | hb <;> rcases h_mod2 with hm | hm <;> simp_all
