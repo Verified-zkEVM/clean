@@ -388,42 +388,54 @@ lemma eq_of_all_pairs_eq (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254)
     have hy_high := testBit_false_of_bound y 254 i hy (by omega : 254 ≤ i)
     rw [hx_high, hy_high]
 
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- If all pairs are equal, then numbers must be equal -/
+lemma diff_finset_nonempty_of_ne (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254) (h_ne : x ≠ y)
+    (diff_finset : Finset (Fin 127))
+    (h_def : diff_finset = { i : Fin 127 | (x >>> (i.val * 2)) % 4 ≠ (y >>> (i.val * 2)) % 4 }.toFinset) :
+    diff_finset.Nonempty := by
+  rw [Finset.nonempty_iff_ne_empty]
+  intro h_empty
+  have h_all_eq : ∀ i : Fin 127, (x >>> (i.val * 2)) % 4 = (y >>> (i.val * 2)) % 4 := by
+    intro i
+    by_contra h_ne_pair
+    have : i ∈ diff_finset := by simp [h_def, h_ne_pair]
+    rw [h_empty] at this
+    exact Finset.notMem_empty _ this
+  have h_x_eq_y : x = y := eq_of_all_pairs_eq x y hx hy h_all_eq
+  exact absurd h_x_eq_y h_ne
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- All positions above max of diff_finset have equal pairs -/
+lemma above_max_pairs_eq (x y : ℕ) (diff_finset : Finset (Fin 127)) (h_nonempty : diff_finset.Nonempty)
+    (h_def : diff_finset = { i : Fin 127 | (x >>> (i.val * 2)) % 4 ≠ (y >>> (i.val * 2)) % 4 }.toFinset)
+    (k : Fin 127) (hk : k = diff_finset.max' h_nonempty) :
+    ∀ j : Fin 127, j > k → (x >>> (j.val * 2)) % 4 = (y >>> (j.val * 2)) % 4 := by
+  intro j hj
+  by_contra h_ne
+  have hj_mem : j ∈ diff_finset := by
+    simp only [h_def, Set.mem_toFinset, Set.mem_setOf_eq]
+    exact h_ne
+  have h_le := Finset.le_max' diff_finset j hj_mem
+  rw [← hk] at h_le
+  have h_lt := lt_of_lt_of_le hj h_le
+  exact (lt_irrefl _ h_lt)
+
 /-- Key lemma: fromBits comparison implies existence of differing pair. -/
 lemma exists_msb_win_from_gt (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254) (h_gt : x > y) :
     ∃ k : Fin 127,
       (x >>> (k.val * 2)) % 4 > (y >>> (k.val * 2)) % 4 ∧
       ∀ j : Fin 127, j > k → (x >>> (j.val * 2)) % 4 = (y >>> (j.val * 2)) % 4 := by
-  let diff_positions := { i : Fin 127 | (x >>> (i.val * 2)) % 4 ≠ (y >>> (i.val * 2)) % 4 }
-  let diff_finset := diff_positions.toFinset
-
-  have h_nonempty : diff_finset.Nonempty := by
-    rw [Finset.nonempty_iff_ne_empty]
-    intro h_empty
-    have h_all_eq : ∀ i : Fin 127, (x >>> (i.val * 2)) % 4 = (y >>> (i.val * 2)) % 4 := by
-      intro i
-      by_contra h_ne
-      have : i ∈ diff_finset := by simp [diff_finset, diff_positions, h_ne]
-      rw [h_empty] at this
-      exact Finset.notMem_empty _ this
-    have h_x_eq_y : x = y := eq_of_all_pairs_eq x y hx hy h_all_eq
-    omega
-
+  let diff_finset := { i : Fin 127 | (x >>> (i.val * 2)) % 4 ≠ (y >>> (i.val * 2)) % 4 }.toFinset
+  have h_nonempty := diff_finset_nonempty_of_ne x y hx hy (by omega) diff_finset rfl
   let k := diff_finset.max' h_nonempty
 
   have hk_mem : (x >>> (k.val * 2)) % 4 ≠ (y >>> (k.val * 2)) % 4 := by
     have : k ∈ diff_finset := Finset.max'_mem diff_finset h_nonempty
-    simp only [diff_finset, diff_positions, Set.mem_toFinset, Set.mem_setOf_eq] at this
+    simp only [diff_finset, Set.mem_toFinset, Set.mem_setOf_eq] at this
     exact this
 
-  have h_above_eq : ∀ j : Fin 127, j > k → (x >>> (j.val * 2)) % 4 = (y >>> (j.val * 2)) % 4 := by
-    intro j hj
-    by_contra h_ne
-    have hj_mem : j ∈ diff_finset := by
-      simp only [diff_finset, diff_positions, Set.mem_toFinset, Set.mem_setOf_eq]
-      exact h_ne
-    have h_le := Finset.le_max' diff_finset j hj_mem
-    have h_lt := lt_of_lt_of_le hj h_le
-    exact (lt_irrefl _ h_lt)
+  have h_above_eq := above_max_pairs_eq x y diff_finset h_nonempty rfl k rfl
 
   by_cases h_pair_gt : (x >>> (k.val * 2)) % 4 > (y >>> (k.val * 2)) % 4
   · exact ⟨k, h_pair_gt, h_above_eq⟩
