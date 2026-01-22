@@ -203,9 +203,8 @@ lemma fromBits_shiftRight_mod4 {n : ℕ} (bits : Vector ℕ n) (k : ℕ)
     (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1)
     (hk : k + 1 < n) :
     (fromBits bits >>> k) % 4 = bits[k] + 2 * bits[k + 1] := by
-  rw [shiftRight_mod4_eq_bits]
-  rw [fromBits_testBit_eq bits k h_bits (Nat.lt_of_succ_lt hk)]
-  rw [fromBits_testBit_eq bits (k+1) h_bits hk]
+  rw [shiftRight_mod4_eq_bits, fromBits_testBit_eq bits k h_bits (Nat.lt_of_succ_lt hk),
+      fromBits_testBit_eq bits (k+1) h_bits hk]
 
 /-- Helper: 4^k = 2^(2*k) -/
 lemma four_pow_eq_two_pow_double (k : ℕ) : (4:ℕ)^k = 2^(2*k) := by
@@ -269,8 +268,7 @@ lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
   simp only [Nat.testBit, Nat.shiftRight_eq_div_pow]
   rw [Nat.div_div_eq_div_mul, Nat.div_div_eq_div_mul]
   have h4pow : (4 : ℕ)^(k+1) = 2^(2*(k+1)) := four_pow_eq_two_pow_double (k+1)
-  rw [h4pow]
-  rw [Nat.and_comm, Nat.and_one_is_mod, Nat.and_comm, Nat.and_one_is_mod]
+  rw [h4pow, Nat.and_comm, Nat.and_one_is_mod, Nat.and_comm, Nat.and_one_is_mod]
   let bit_pos := 2*(k+1) + i
   have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
   by_cases hbound : bit_pos < 254
@@ -667,8 +665,7 @@ lemma list_sum_val_eq {l : List (F p)} (h : (l.map ZMod.val).sum < p) :
       have : x.val < p := ZMod.val_lt x
       linarith
     have ih' := ih h_xs
-    rw [ZMod.val_add, ih']
-    rw [Nat.mod_eq_of_lt h]
+    rw [ZMod.val_add, ih', Nat.mod_eq_of_lt h]
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma list_sum_val_eq' {l : List (F p)} (h : (l.map ZMod.val).sum < p) :
@@ -681,8 +678,7 @@ lemma list_sum_val_eq' {l : List (F p)} (h : (l.map ZMod.val).sum < p) :
       have : x.val < p := ZMod.val_lt x
       linarith
     have ih' := ih h_xs
-    rw [ZMod.val_add, ih']
-    rw [Nat.mod_eq_of_lt h]
+    rw [ZMod.val_add, ih', Nat.mod_eq_of_lt h]
 
 omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma list_sum_val_bound' {l : List (F p)} {bound : ℕ}
@@ -1011,9 +1007,7 @@ lemma div_wins_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127 -
       _ = (2 * n - 1) * 2^127 + (2^127 - (W - Λ)) := by omega
   rw [h_expand]
   have h_remainder_lt : 2^127 - (W - Λ) < 2^127 := Nat.sub_lt (Nat.two_pow_pos 127) h_WΛ_pos
-  rw [Nat.add_comm]
-  rw [Nat.add_mul_div_right _ _ (Nat.two_pow_pos 127)]
-  rw [Nat.div_eq_of_lt h_remainder_lt]
+  rw [Nat.add_comm, Nat.add_mul_div_right _ _ (Nat.two_pow_pos 127), Nat.div_eq_of_lt h_remainder_lt]
   simp
 
 omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
