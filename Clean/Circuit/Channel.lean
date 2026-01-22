@@ -294,3 +294,91 @@ theorem toFinsupp_foldl_finRange [DecidableEq F] {n : ℕ} (f : Fin n → Intera
     rw [toFinsupp_add, ih', Fin.sum_univ_castSucc]
 
 end InteractionDelta
+
+-- abstract theory of channel consistency
+
+namespace Channel
+
+-- we assume some initial channel interactions (for modelling lookup tables)
+variable (initial : List (F × Message F))
+-- we have some global property about the initial interactions and all interactions of a channel
+variable (GlobalProp : List (F × Message F) → List (F × Message F) → ProverData F → Prop)
+-- also, there are some abstract "local" properties, "constraints" and "spec", that may depend on local interactions
+variable (LocalConstraints LocalSpec : List (F × Message F) → ProverData F → Prop)
+
+-- requirements / guarantees are meant to be called on a current interaction
+-- plus all previous interactions. this naturally defines what it means for them to be satisfied
+-- on a given list of interactions.
+
+def RequirementsSatisfied (channel : Channel F Message) (data : ProverData F) (initial : List (F × Message F)) :
+    List (F × Message F) → Prop
+  | [] => True
+  | (mult, msg) :: interactions =>
+    channel.Requirements mult msg initial data ∧
+    channel.RequirementsSatisfied data initial interactions
+
+def GuaranteesSatisfied (channel : Channel F Message) (data : ProverData F) (initial : List (F × Message F)) :
+    List (F × Message F) → Prop
+  | [] => True
+  | (mult, msg) :: interactions =>
+    channel.Guarantees mult msg initial data ∧
+    channel.GuaranteesSatisfied data initial interactions
+
+/--
+A channel is consistent (parametrized by the global property) if
+- the requirements are satisfied on all the initial interactions
+- all requirements taken together for a given channel interactions length imply all guarantees
+ -/
+def Consistent (channel : Channel F Message) (data : ProverData F) : Prop :=
+  ∀ (localInteractions globalInteractions : List (F × Message F)),
+  GlobalProp initial (initial ++ globalInteractions ++ localInteractions) data →
+    channel.RequirementsSatisfied data initial localInteractions ∧
+    (channel.RequirementsSatisfied data (initial ++ globalInteractions) localInteractions →
+    channel.GuaranteesSatisfied data (initial ++ globalInteractions) localInteractions)
+
+/-- Let's assume that a circuit locally proves the following soundness theorem: -/
+def LocalSoundness (channel : Channel F Message) (data : ProverData F) (localInteractions : List (F × Message F)) : Prop :=
+  ∀ (globalInteractions : List (F × Message F)),
+    LocalConstraints localInteractions data →
+    channel.GuaranteesSatisfied data globalInteractions localInteractions →
+    LocalSpec localInteractions data ∧ channel.RequirementsSatisfied data (globalInteractions ++ localInteractions) localInteractions
+
+/--
+  Main result:
+  Consistency + local soundness imply that the local soundness theorem holds in a
+  stronger sense of not relying on the guarantees; and also, the guarantees actually hold.
+
+  TODO: this doesn't work, we're missing several things, such as:
+  - requirements/guarantees are monotone in the initial interactions
+  - global prop is preserved when adding local interactions
+  but I think the structure hints at a working argument, I'm going to revisit the abstract version
+  after making it work in a concrete example.
+  -/
+def globalSoundness (channel : Channel F Message) (data : ProverData F) (localInteractions : List (F × Message F)) :
+  channel.Consistent initial GlobalProp data →
+  channel.LocalSoundness LocalConstraints LocalSpec data localInteractions →
+  ∀ (globalInteractions : List (F × Message F)),
+    GlobalProp initial (initial ++ globalInteractions ++ localInteractions) data →
+    -- guarantees actually hold
+    channel.GuaranteesSatisfied data (initial ++ globalInteractions) localInteractions ∧
+    -- stronger local soundness
+    (LocalConstraints localInteractions data → LocalSpec localInteractions data) := by
+  intros h_consistent h_localSoundness globalInteractions h_globalProp
+  simp only [Consistent, LocalSoundness] at h_consistent h_localSoundness
+  specialize h_consistent localInteractions globalInteractions h_globalProp
+  specialize h_localSoundness (initial ++ globalInteractions)
+  -- it suffices to show that requirements hold
+  suffices h_requirements : channel.RequirementsSatisfied data (initial ++ globalInteractions) localInteractions by
+    obtain ⟨ _, h_implies ⟩ := h_consistent
+    have h_guarantees := h_implies h_requirements
+    use h_guarantees
+    intro h_localConstraints
+    exact (h_localSoundness h_localConstraints h_guarantees).1
+  -- let's do induction on the globalInteractions to show the requirements
+  induction globalInteractions with
+  | nil => simp_all only [List.append_nil]
+  | cons hd tl ih =>
+
+    sorry
+
+end Channel
