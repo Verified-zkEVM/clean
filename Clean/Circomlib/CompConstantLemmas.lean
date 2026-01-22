@@ -976,6 +976,66 @@ lemma wins_below_lose_position (input : Vector (F p) 254) (ct : ℕ) (k : Fin 12
     simp only [signalPairValF] at h_win h_lose_k
     omega
 
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- When W > Λ with wins nonempty, division computes to odd number -/
+lemma div_wins_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127 - 1)
+    (hW_gt_Λ : W > Λ) (hW_sub_Λ_bound : W - Λ < 2^127) :
+    (n * 2^128 - W + Λ) / 2^127 = 2 * n - 1 := by
+  have h_W_ge_Λ : W ≥ Λ := Nat.le_of_lt hW_gt_Λ
+  have h_rearrange : n * 2^128 - W + Λ = n * 2^128 - (W - Λ) := by
+    have : W - Λ + Λ = W := Nat.sub_add_cancel h_W_ge_Λ
+    have h_W_le : W ≤ n * 2^128 := by
+      have h_W_lt : W < 2^127 := Nat.lt_of_le_of_lt hW_bound (Nat.sub_one_lt (Nat.two_pow_pos 127).ne')
+      have h1 : (2 : ℕ)^127 ≤ 1 * 2^128 := by
+        calc (2 : ℕ)^127 ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega)
+          _ = 1 * 2^128 := by ring
+      have h2 : 1 * 2^128 ≤ n * 2^128 := Nat.mul_le_mul_right _ h_n_pos
+      have h3 : W < n * 2^128 := calc W < 2^127 := h_W_lt
+        _ ≤ 1 * 2^128 := h1
+        _ ≤ n * 2^128 := h2
+      exact Nat.le_of_lt h3
+    omega
+  rw [h_rearrange]
+  have h_WΛ_pos : W - Λ > 0 := Nat.sub_pos_of_lt hW_gt_Λ
+  have h_expand : n * 2^128 - (W - Λ) = (2 * n - 1) * 2^127 + (2^127 - (W - Λ)) := by
+    have h1 : n * 2^128 = 2 * n * 2^127 := by ring
+    have h2 : 2 * n * 2^127 = (2 * n - 1) * 2^127 + 2^127 := by
+      have : 2 * n - 1 + 1 = 2 * n := Nat.sub_add_cancel (by omega : 2 * n ≥ 1)
+      calc 2 * n * 2^127 = (2 * n - 1 + 1) * 2^127 := by rw [this]
+        _ = (2 * n - 1) * 2^127 + 1 * 2^127 := by ring
+        _ = (2 * n - 1) * 2^127 + 2^127 := by ring
+    calc n * 2^128 - (W - Λ) = 2 * n * 2^127 - (W - Λ) := by rw [h1]
+      _ = (2 * n - 1) * 2^127 + 2^127 - (W - Λ) := by rw [h2]
+      _ = (2 * n - 1) * 2^127 + (2^127 - (W - Λ)) := by omega
+  rw [h_expand]
+  have h_remainder_lt : 2^127 - (W - Λ) < 2^127 := Nat.sub_lt (Nat.two_pow_pos 127) h_WΛ_pos
+  rw [Nat.add_comm]
+  rw [Nat.add_mul_div_right _ _ (Nat.two_pow_pos 127)]
+  rw [Nat.div_eq_of_lt h_remainder_lt]
+  simp
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- When W < Λ with losses nonempty, division computes to even number -/
+lemma div_losses_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127 - 1)
+    (hΛ_bound : Λ ≤ 2^127 - 1) (hW_lt_Λ : W < Λ) :
+    (n * 2^128 - W + Λ) / 2^127 = 2 * n := by
+  have h_W_le : W ≤ n * 2^128 := by
+    have h1 : W ≤ 2^127 - 1 := hW_bound
+    have h2 : (2 : ℕ)^127 - 1 < 2^128 := by
+      calc (2 : ℕ)^127 - 1 < 2^127 := Nat.sub_one_lt (Nat.two_pow_pos 127).ne'
+        _ ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega)
+    have h3 : (1 : ℕ) * 2^128 ≤ n * 2^128 := Nat.mul_le_mul_right _ h_n_pos
+    omega
+  have h_rearrange : n * 2^128 - W + Λ = n * 2^128 + (Λ - W) := by omega
+  rw [h_rearrange]
+  have h_expand : n * 2^128 + (Λ - W) = 2 * n * 2^127 + (Λ - W) := by ring
+  rw [h_expand]
+  apply Nat.div_eq_of_lt_le
+  · omega
+  · have h_Λ_W_bound : Λ - W < 2^127 := by omega
+    calc 2 * n * 2^127 + (Λ - W) < 2 * n * 2^127 + 2^127 := by omega
+      _ = (2 * n + 1) * 2^127 := by ring
+
 set_option maxHeartbeats 400000 in
 omit [Fact (p < 2 ^ 254)] in
 lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
@@ -1030,42 +1090,7 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
     rw [vector_sum_eq_list_sum', list_sum_val_eq' h_sum_lt_p, h_sum_partition]
 
     have h_n_pos : wins.card ≥ 1 := h_wins_card_pos
-    have h_key : (wins.card * 2^128 - W + Λ) / 2^127 = 2 * wins.card - 1 := by
-      have h_W_ge_Λ : W ≥ Λ := Nat.le_of_lt hW_gt_Λ
-      have h_rearrange : wins.card * 2^128 - W + Λ = wins.card * 2^128 - (W - Λ) := by
-        have : W - Λ + Λ = W := Nat.sub_add_cancel h_W_ge_Λ
-        have h_W_le : W ≤ wins.card * 2^128 := by
-          have h_W_lt : W < 2^127 := Nat.lt_of_le_of_lt hW_bound (Nat.sub_one_lt (Nat.two_pow_pos 127).ne')
-          have h1 : (2 : ℕ)^127 ≤ 1 * 2^128 := by
-            calc (2 : ℕ)^127 ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega)
-              _ = 1 * 2^128 := by ring
-          have h2 : 1 * 2^128 ≤ wins.card * 2^128 := Nat.mul_le_mul_right _ h_n_pos
-          have h3 : W < wins.card * 2^128 := calc W < 2^127 := h_W_lt
-            _ ≤ 1 * 2^128 := h1
-            _ ≤ wins.card * 2^128 := h2
-          exact Nat.le_of_lt h3
-        omega
-      rw [h_rearrange]
-      have h_WΛ_pos : W - Λ > 0 := hW_sub_Λ_pos
-      have h_WΛ_bound : W - Λ < 2^127 := hW_sub_Λ_bound
-      have h_expand : wins.card * 2^128 - (W - Λ) = (2 * wins.card - 1) * 2^127 + (2^127 - (W - Λ)) := by
-        have h1 : wins.card * 2^128 = 2 * wins.card * 2^127 := by ring
-        have h2 : 2 * wins.card * 2^127 = (2 * wins.card - 1) * 2^127 + 2^127 := by
-          have : 2 * wins.card - 1 + 1 = 2 * wins.card := Nat.sub_add_cancel (by omega : 2 * wins.card ≥ 1)
-          calc 2 * wins.card * 2^127 = (2 * wins.card - 1 + 1) * 2^127 := by rw [this]
-            _ = (2 * wins.card - 1) * 2^127 + 1 * 2^127 := by ring
-            _ = (2 * wins.card - 1) * 2^127 + 2^127 := by ring
-        calc wins.card * 2^128 - (W - Λ) = 2 * wins.card * 2^127 - (W - Λ) := by rw [h1]
-          _ = (2 * wins.card - 1) * 2^127 + 2^127 - (W - Λ) := by rw [h2]
-          _ = (2 * wins.card - 1) * 2^127 + (2^127 - (W - Λ)) := by omega
-      rw [h_expand]
-      have h_remainder_lt : 2^127 - (W - Λ) < 2^127 := Nat.sub_lt (Nat.two_pow_pos 127) h_WΛ_pos
-      have h_div : ((2 * wins.card - 1) * 2^127 + (2^127 - (W - Λ))) / 2^127 = 2 * wins.card - 1 := by
-        rw [Nat.add_comm]
-        rw [Nat.add_mul_div_right _ _ (Nat.two_pow_pos 127)]
-        rw [Nat.div_eq_of_lt h_remainder_lt]
-        simp
-      exact h_div
+    have h_key := div_wins_case wins.card W Λ h_n_pos hW_bound hW_gt_Λ hW_sub_Λ_bound
 
     rw [h_key]
     have : 2 * wins.card - 1 = 2 * (wins.card - 1) + 1 := by omega
@@ -1144,22 +1169,7 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
           have hΛ_lt : Λ < 2^127 := by omega
           rw [Nat.div_eq_of_lt hΛ_lt]
         · have h_wins_pos : wins.card ≥ 1 := Nat.one_le_iff_ne_zero.mpr h_wins_zero
-          have h_W_le : W ≤ wins.card * 2^128 := by
-            have h1 : W ≤ 2^127 - 1 := hW_bound
-            have h2 : (2 : ℕ)^127 - 1 < 2^128 := by
-              calc (2 : ℕ)^127 - 1 < 2^127 := Nat.sub_one_lt (Nat.two_pow_pos 127).ne'
-                _ ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega)
-            have h3 : (1 : ℕ) * 2^128 ≤ wins.card * 2^128 := Nat.mul_le_mul_right _ h_wins_pos
-            omega
-          have h_rearrange : wins.card * 2^128 - W + Λ = wins.card * 2^128 + (Λ - W) := by
-            omega
-          rw [h_rearrange]
-          have h_expand : wins.card * 2^128 + (Λ - W) = 2 * wins.card * 2^127 + (Λ - W) := by ring
-          rw [h_expand]
-          apply Nat.div_eq_of_lt_le
-          · omega
-          · calc 2 * wins.card * 2^127 + (Λ - W) < 2 * wins.card * 2^127 + 2^127 := by omega
-              _ = (2 * wins.card + 1) * 2^127 := by ring
+          exact div_losses_case wins.card W Λ h_wins_pos hW_bound hΛ_bound hW_lt_Λ
 
       rw [h_key]
       omega
