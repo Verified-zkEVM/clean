@@ -140,12 +140,6 @@ lemma sum_pow_two_fin (k : ℕ) :
     ring_nf
     omega
 
-/-- Signal pair value at position i (extracted from Vector) -/
-def signalPairAt (i : ℕ) (hi : i < 127) (input : Vector (F p) 254) : ℕ :=
-  have hi2 : i * 2 < 254 := by omega
-  have hi21 : i * 2 + 1 < 254 := by omega
-  input[i * 2 + 1].val * 2 + input[i * 2].val
-
 /-- Helper: relates (x >>> k) % 4 to bits at positions k and k+1. -/
 lemma shiftRight_mod4_eq_bits (x k : ℕ) :
     (x >>> k) % 4 = (x / 2^k % 2) + 2 * (x / 2^(k+1) % 2) := by
@@ -561,17 +555,6 @@ lemma vector_sum_eq_list_sum' {α} [AddCommMonoid α] {n : ℕ} (v : Vector α n
     v.sum = v.toList.sum := by
   rw [Vector.sum_mk, ← Array.sum_eq_sum_toList]
   rfl
-
-omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
-/-- Helper: Expression.eval distributes over List.sum. -/
-lemma list_sum_map_eval (env : Environment (F p)) (l : List (Expression (F p))) :
-    (l.map (Expression.eval env)).sum = Expression.eval env l.sum := by
-  induction l with
-  | nil => simp only [List.map_nil, List.sum_nil, circuit_norm]
-  | cons x xs ih =>
-    simp only [List.map_cons, List.sum_cons]
-    rw [ih]
-    simp only [circuit_norm]
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma list_sum_val_eq {l : List (F p)} (h : (l.map ZMod.val).sum < p) :
