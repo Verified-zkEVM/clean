@@ -106,7 +106,7 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   localLength : ℕ
 
   -- compute the local interaction delta from this subcircuit's operations (defaults to empty)
-  localAdds : Environment F → InteractionDelta F := fun _ => 0
+  localAdds : Environment F → List (RawInteraction F) := fun _ => []
 
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
@@ -236,54 +236,54 @@ def induct {motive : Operations F → Sort*}
   | .add i :: ops => add i ops (induct empty witness assert lookup subcircuit add ops)
 
 /-- Collect all add operations from the operations list, evaluating their expressions -/
-def collectAdds (env : Environment F) : Operations F → InteractionDelta F
-  | [] => 0
-  | .witness _ _ :: ops => collectAdds env ops
-  | .assert _ :: ops => collectAdds env ops
-  | .lookup _ :: ops => collectAdds env ops
-  | .add i :: ops => InteractionDelta.single ⟨ i.channel.name, (i.msg.map env).toList ⟩ (i.mult.eval env) + collectAdds env ops
-  | .subcircuit s :: ops => s.localAdds env + collectAdds env ops
+def localAdds (env : Environment F) : Operations F → List (RawInteraction F)
+  | [] => []
+  | .witness _ _ :: ops => localAdds env ops
+  | .assert _ :: ops => localAdds env ops
+  | .lookup _ :: ops => localAdds env ops
+  | .add i :: ops => i :: localAdds env ops
+  | .subcircuit s :: ops => s.localAdds env ++ localAdds env ops
+
+-- TODO move all this to a theorems/lemmas file
 
 @[circuit_norm]
-theorem collectAdds_nil (env : Environment F) : collectAdds env ([] : Operations F) = 0 := rfl
+theorem localAdds_nil (env : Environment F) : localAdds env ([] : Operations F) = [] := rfl
+@[circuit_norm]
+theorem localAdds_assert (env : Environment F) (e : Expression F) (ops : Operations F) :
+    localAdds env (.assert e :: ops) = localAdds env ops := rfl
 
 @[circuit_norm]
-theorem collectAdds_assert (env : Environment F) (e : Expression F) (ops : Operations F) :
-    collectAdds env (.assert e :: ops) = collectAdds env ops := rfl
+theorem localAdds_witness (env : Environment F) (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+    localAdds env (.witness m c :: ops) = localAdds env ops := rfl
+@[circuit_norm]
+theorem localAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operations F) :
+    localAdds env (.lookup l :: ops) = localAdds env ops := rfl
 
 @[circuit_norm]
-theorem collectAdds_witness (env : Environment F) (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
-    collectAdds env (.witness m c :: ops) = collectAdds env ops := rfl
-
-@[circuit_norm]
-theorem collectAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operations F) :
-    collectAdds env (.lookup l :: ops) = collectAdds env ops := rfl
-
-@[circuit_norm]
-theorem collectAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
-    collectAdds env (ops1 ++ ops2) = collectAdds env ops1 + collectAdds env ops2 := by
+theorem localAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
+    localAdds env (ops1 ++ ops2) = localAdds env ops1 ++ localAdds env ops2 := by
   induction ops1 with
-  | nil => simp only [List.nil_append, collectAdds, InteractionDelta.zero_add']
+  | nil => simp only [List.nil_append, localAdds, List.nil_append]
   | cons op ops1 ih =>
-    cases op <;> simp only [List.cons_append, collectAdds, ih, InteractionDelta.add_assoc']
+    cases op <;> simp only [List.cons_append, localAdds, ih, List.append_assoc]
 
 -- Helper: a + foldl (+) 0 xs = foldl (+) a xs for InteractionDelta
-private theorem foldl_add_start {xs : List (InteractionDelta F)} {a : InteractionDelta F} :
-    a + xs.foldl (· + ·) 0 = xs.foldl (· + ·) a := by
+omit [Field F] in
+private theorem foldl_add_start {xs : List (List (RawInteraction F))} {a : List (RawInteraction F)} :
+    a ++ xs.foldl (· ++ ·) [] = xs.foldl (· ++ ·) a := by
   induction xs generalizing a with
-  | nil => simp only [List.foldl_nil, InteractionDelta.add_zero']
+  | nil => simp [List.foldl_nil]
   | cons y ys ih =>
-    simp only [List.foldl_cons, InteractionDelta.zero_add']
-    rw [←ih (a:=y), ←ih (a:=a+y)]
-    rw [InteractionDelta.add_assoc']
+    simp only [List.foldl_cons, List.nil_append]
+    rw [←ih (a:=y), ←ih (a:=a++y), List.append_assoc]
 
-theorem collectAdds_flatten (env : Environment F) (opss : List (Operations F)) :
-    collectAdds env opss.flatten = (opss.map (collectAdds env)).foldl (· + ·) 0 := by
+theorem localAdds_flatten (env : Environment F) (opss : List (Operations F)) :
+    localAdds env opss.flatten = (opss.map (localAdds env)).foldl (· ++ ·) [] := by
   induction opss with
   | nil => rfl
   | cons ops opss ih =>
-    simp only [List.flatten_cons, collectAdds_append, List.map_cons, List.foldl_cons,
-      InteractionDelta.zero_add', ih, foldl_add_start]
+    simp [List.flatten_cons, localAdds_append, List.map_cons, List.foldl_cons,
+      ih, foldl_add_start]
 
 -- Helper to convert between foldl forms
 private theorem foldl_ofFn_eq {m : ℕ} {β : Type*} (f : Fin m → β) (g : β → β → β) (init : β) :
@@ -294,17 +294,17 @@ private theorem foldl_ofFn_eq {m : ℕ} {β : Type*} (f : Fin m → β) (g : β 
     simp only [List.ofFn_succ, List.finRange_succ, List.foldl_cons, List.foldl_map]
     exact ih (fun i => f i.succ) (g init (f 0))
 
-theorem collectAdds_ofFn_flatten {m : ℕ} (env : Environment F) (f : Fin m → Operations F) :
-    collectAdds env (List.ofFn f).flatten =
-    (List.finRange m).foldl (fun acc i => acc + collectAdds env (f i)) 0 := by
-  rw [collectAdds_flatten, List.map_ofFn, foldl_ofFn_eq]
+theorem localAdds_ofFn_flatten {m : ℕ} (env : Environment F) (f : Fin m → Operations F) :
+    localAdds env (List.ofFn f).flatten =
+    (List.finRange m).foldl (fun acc i => acc ++ localAdds env (f i)) [] := by
+  rw [localAdds_flatten, List.map_ofFn, foldl_ofFn_eq]
   simp only [Function.comp_apply]
 
 -- Version where f takes Nat and uses Fin.val coercion implicitly
-theorem collectAdds_ofFn_flatten' {m : ℕ} (env : Environment F) (f : ℕ → Operations F) :
-    collectAdds env (List.ofFn (fun i : Fin m => f ↑i)).flatten =
-    (List.finRange m).foldl (fun acc i => acc + collectAdds env (f i.val)) 0 :=
-  collectAdds_ofFn_flatten env (fun i => f ↑i)
+theorem localAdds_ofFn_flatten' {m : ℕ} (env : Environment F) (f : ℕ → Operations F) :
+    localAdds env (List.ofFn (fun i : Fin m => f ↑i)).flatten =
+    (List.finRange m).foldl (fun acc i => acc ++ localAdds env (f i.val)) [] :=
+  localAdds_ofFn_flatten env (fun i => f ↑i)
 
 end Operations
 
