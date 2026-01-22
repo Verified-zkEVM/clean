@@ -788,13 +788,12 @@ lemma sum_sub_pow_eq (t : Finset (Fin 127)) :
   | @insert a s ha ih =>
     have h_a_ge : 2^a.val ≤ 2^128 :=
       Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans a.isLt (by omega : 127 < 128)))
-    have h_s_ge : ∀ i ∈ s, 2^i.val ≤ 2^128 := fun i _ =>
-      Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans i.isLt (by omega : 127 < 128)))
     simp only [Finset.sum_insert ha, Finset.card_insert_of_notMem ha]
     rw [ih]
     have h_sum_le : s.sum (fun i => 2^i.val) ≤ s.card * 2^128 := by
       calc s.sum (fun i => 2^i.val)
-          ≤ s.sum (fun _ => 2^128) := Finset.sum_le_sum (fun i hi => h_s_ge i hi)
+          ≤ s.sum (fun _ => 2^128) := Finset.sum_le_sum (fun i _ =>
+            Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans i.isLt (by omega : 127 < 128))))
         _ = s.card * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
     omega
 
@@ -1077,9 +1076,7 @@ lemma sum_bit127_one_when_gt (ct : ℕ) (h_ct : ct < 2^254)
 
   have hW_ge : W ≥ 2^k.val := pow_sum_ge_of_mem wins k hk_in_wins
   have hΛ_lt : Λ < 2^k.val := pow_sum_lt_of_all_below losses k h_losses_lt_k
-  have hW_gt_Λ : W > Λ := Nat.lt_of_lt_of_le hΛ_lt hW_ge
   have hW_bound : W ≤ 2^127 - 1 := pow_sum_bound wins
-  have hW_sub_Λ_bound : W - Λ < 2^127 := Nat.lt_of_le_of_lt (Nat.sub_le W Λ) (Nat.lt_of_le_of_lt hW_bound (by native_decide))
 
   have h_wins_nonempty : wins.Nonempty := ⟨k, hk_in_wins⟩
   have h_wins_card_pos : 0 < wins.card := Finset.card_pos.mpr h_wins_nonempty
@@ -1090,7 +1087,9 @@ lemma sum_bit127_one_when_gt (ct : ℕ) (h_ct : ct < 2^254)
   rw [vector_sum_eq_list_sum', list_sum_val_eq' h_sum_lt_p, h_sum_partition]
 
   have h_n_pos : wins.card ≥ 1 := h_wins_card_pos
-  have h_key := div_wins_case wins.card W Λ h_n_pos hW_bound hW_gt_Λ hW_sub_Λ_bound
+  have h_key := div_wins_case wins.card W Λ h_n_pos hW_bound
+    (Nat.lt_of_lt_of_le hΛ_lt hW_ge)
+    (Nat.lt_of_le_of_lt (Nat.sub_le W Λ) (Nat.lt_of_le_of_lt hW_bound (by native_decide)))
 
   rw [h_key]
   have : 2 * wins.card - 1 = 2 * (wins.card - 1) + 1 := by omega
@@ -1161,7 +1160,6 @@ lemma sum_bit127_zero_when_loss (ct : ℕ)
 
   have hW_lt : W < 2^k.val := pow_sum_lt_of_all_below wins k h_wins_lt_k
   have hΛ_ge : Λ ≥ 2^k.val := pow_sum_ge_of_mem losses k hk_in_losses
-  have hW_lt_Λ : W < Λ := by omega
   have hΛ_bound : Λ ≤ 2^127 - 1 := pow_sum_bound losses
   have hW_bound : W ≤ 2^127 - 1 := pow_sum_bound wins
 
@@ -1178,7 +1176,7 @@ lemma sum_bit127_zero_when_loss (ct : ℕ)
       have hΛ_lt : Λ < 2^127 := by omega
       rw [Nat.div_eq_of_lt hΛ_lt]
     · have h_wins_pos : wins.card ≥ 1 := Nat.one_le_iff_ne_zero.mpr h_wins_zero
-      exact div_losses_case wins.card W Λ h_wins_pos hW_bound hΛ_bound hW_lt_Λ
+      exact div_losses_case wins.card W Λ h_wins_pos hW_bound hΛ_bound (by omega)
 
   rw [h_key]
   omega
