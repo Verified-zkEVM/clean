@@ -14,6 +14,11 @@ structure NamedList (F : Type) where
   values : List F
 deriving DecidableEq, Repr
 
+def Environment.rawInteractions (env : Environment F) (channelName : String) (n : ℕ) :
+    List (F × Vector F n) :=
+  env.channelInteractions.filterMap fun (name, mult, elts) =>
+    if name = channelName then some (mult, .ofArray n elts) else none
+
 namespace NamedList
 variable [Field F]
 
@@ -23,7 +28,7 @@ def eval (env : Environment F) (nl : NamedList (Expression F)) : NamedList F :=
 
 def IsAdded (env : Environment F) (nl : NamedList (Expression F)) (mult : Expression F) : Prop :=
   let n := nl.values.length
-  let interactions := env.channels nl.name n
+  let interactions := env.rawInteractions nl.name n
   let element : Vector F n := ⟨ .mk (nl.values.map env), List.length_map .. ⟩
   (env mult, element) ∈ interactions
 end NamedList
@@ -85,26 +90,26 @@ def Channel.toRaw (channel : Channel F Message) : RawChannel F where
 def ChannelInteraction.toRaw : ChannelInteraction F Message → RawInteraction F
   | { channel, mult, msg } => ⟨ channel.toRaw, mult, toElements msg ⟩
 
-def Environment.getInteractions (env : Environment F) (channel : Channel F Message) :
+def Environment.interactions (env : Environment F) (channel : Channel F Message) :
     List (F × Message F) :=
-  env.channels channel.name (size Message)
+  env.rawInteractions channel.name (size Message)
   |>.map fun (mult, elts) => (mult, fromElements elts)
 
 @[circuit_norm]
 def ChannelInteraction.IsAdded (i : ChannelInteraction F Message) (env : Environment F) : Prop :=
-  (env i.mult, eval env i.msg) ∈ env.getInteractions i.channel
+  (env i.mult, eval env i.msg) ∈ env.interactions i.channel
 
 def RawInteraction.IsAdded (i : RawInteraction F) (env : Environment F) : Prop :=
   let n := i.channel.arity
-  let interactions := env.channels i.channel.name n
+  let interactions := env.rawInteractions i.channel.name n
   (env i.mult, i.msg.map env) ∈ interactions
 
 @[circuit_norm]
-def RawInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction F Message) :
+lemma RawInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction F Message) :
     int.toRaw.IsAdded env ↔ int.IsAdded env := by
   rcases int with ⟨channel, mult, msg⟩
   simp only [circuit_norm, RawInteraction.IsAdded, ChannelInteraction.IsAdded,
-    ChannelInteraction.toRaw, Environment.getInteractions,
+    ChannelInteraction.toRaw, Environment.interactions,
     List.mem_map, Prod.mk.injEq, Prod.exists, ↓existsAndEq, true_and]
   constructor
   · intro h_mem
@@ -114,6 +119,17 @@ def RawInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction F
     simp only [ProvableType.eval, ProvableType.toElements_fromElements] at h_eq
     subst h_eq
     exact h_mem
+
+@[circuit_norm]
+def ChannelInteraction.Guarantees (i : ChannelInteraction F Message) (env : Environment F) : Prop :=
+  i.channel.Guarantees (env i.mult) (eval env i.msg) (env.interactions i.channel) env.data
+
+def RawInteraction.Guarantees (i : RawInteraction F) (env : Environment F) : Prop :=
+  i.channel.Guarantees (env i.mult) (i.msg.map env) (env.rawInteractions i.channel.name i.channel.arity) env.data
+
+@[circuit_norm]
+lemma RawInteraction.guarantees_def (env : Environment F) (int : ChannelInteraction F Message) :
+  int.toRaw.Guarantees env ↔ int.Guarantees env := by rfl
 
 /--
 An `InteractionDelta` represents a change to an interaction (multiset argument), as a list
@@ -132,10 +148,10 @@ abbrev InteractionDelta (F : Type) := List (NamedList F × F)
 lemma NamedList.isAdded_def (channel : Channel F Message) (env : Environment F)
   (msg : Message (Expression F)) (mult : Expression F) :
     NamedList.IsAdded env { name := channel.name, values := (toElements msg).toList } mult ↔
-    (env mult, ProvableType.eval env msg) ∈ env.getInteractions channel := by
+    (env mult, ProvableType.eval env msg) ∈ env.interactions channel := by
   -- TODO this proof is much more annoying that I expected
   -- TODO I think the List / Vector mismatch makes it much harder, remove that!
-  simp only [NamedList.IsAdded, Environment.getInteractions, circuit_norm]
+  simp only [NamedList.IsAdded, Environment.interactions, circuit_norm]
   have h_size : (toElements msg).toArray.size = size Message := by simp
   have h_size' : (toElements msg).toList.length = size Message := by simp
   simp only [List.mem_map]
@@ -145,8 +161,8 @@ lemma NamedList.isAdded_def (channel : Channel F Message) (env : Environment F)
     simp only [Vector.mk_eq, Vector.toArray_cast, Vector.toArray_map, v1, v1']
     rw [←Array.toList_map]
     rfl
-  have h_channels : env.channels channel.name (toElements msg).toList.length =
-      List.map (fun t => (t.1, t.2.cast h_size.symm)) (env.channels channel.name (size Message)) := by
+  have h_channels : env.rawInteractions channel.name (toElements msg).toList.length =
+      List.map (fun t => (t.1, t.2.cast h_size.symm)) (env.rawInteractions channel.name (size Message)) := by
     apply List.ext_getElem
     · simp only [List.length_map]; congr
     · simp only [List.length_map, List.getElem_map]

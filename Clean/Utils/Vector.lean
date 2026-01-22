@@ -402,4 +402,8 @@ lemma map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n)
   ext k h_k
   simp only [Vector.getElem_map, Vector.getElem_take, Vector.getElem_cast]
 
+/-- coerce any Array to a Vector of the given size -/
+def ofArray [Inhabited α] (n : ℕ) (arr : Array α) : Vector α n :=
+  ⟨ arr.take n |>.rightpad n default, by simp ⟩
+
 end Vector
