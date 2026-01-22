@@ -909,6 +909,73 @@ lemma pow_sum_bound (s : Finset (Fin 127)) : s.sum (fun i => 2^i.val) ≤ 2^127 
         Finset.sum_le_sum_of_subset (fun _ _ => Finset.mem_univ _)
     _ = 2^127 - 1 := sum_pow_two_fin 127
 
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- If k is in a set s, then the sum of 2^i over s is at least 2^k -/
+lemma pow_sum_ge_of_mem (s : Finset (Fin 127)) (k : Fin 127) (hk : k ∈ s) :
+    s.sum (fun i => 2^i.val) ≥ 2^k.val := by
+  show 2^k.val ≤ s.sum (fun i => 2^i.val)
+  exact Finset.single_le_sum (f := fun i : Fin 127 => 2^i.val) (fun _ _ => Nat.zero_le _) hk
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- If all elements of s are less than k, then their power sum is less than 2^k -/
+lemma pow_sum_lt_of_all_below (s : Finset (Fin 127)) (k : Fin 127)
+    (h_all_lt : ∀ j ∈ s, j < k) : s.sum (fun i => 2^i.val) < 2^k.val := by
+  have h_subset : s ⊆ Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ := by
+    intro j hj
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    exact h_all_lt j hj
+  have h1 : s.sum (fun i => 2^i.val) ≤
+      (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i => 2^i.val) :=
+    Finset.sum_le_sum_of_subset h_subset
+  have h2 : (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i : Fin 127 => 2^i.val)
+          ≤ 2^k.val - 1 := by
+    have h_sum_eq := geom_sum_filter_eq k
+    rw [h_sum_eq, sum_pow_two_fin]
+  have h3 : 2^k.val - 1 < 2^k.val := Nat.sub_one_lt (Nat.two_pow_pos k.val).ne'
+  exact Nat.lt_of_le_of_lt (Nat.le_trans h1 h2) h3
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- When k wins and positions above k tie, all losses must be below k -/
+lemma losses_below_win_position (input : Vector (F p) 254) (ct : ℕ) (k : Fin 127)
+    (h_win_k : signalPairValF input[k.val * 2] input[k.val * 2 + 1] > constPairValAt k.val ct)
+    (h_tie_above : ∀ j : Fin 127, j > k →
+      signalPairValF input[j.val * 2] input[j.val * 2 + 1] = constPairValAt j.val ct)
+    (i : Fin 127)
+    (h_loss : signalPairValF input[i.val * 2] input[i.val * 2 + 1] < constPairValAt i.val ct) :
+    i < k := by
+  by_contra h_not_lt
+  push_neg at h_not_lt
+  have h_ge_k : k ≤ i := h_not_lt
+  rcases Nat.lt_or_eq_of_le h_ge_k with h_gt_k | h_eq_k
+  · have h_tie := h_tie_above i h_gt_k
+    simp only [signalPairValF] at h_loss h_tie
+    omega
+  · have h_eq : k = i := Fin.ext h_eq_k
+    subst h_eq
+    simp only [signalPairValF] at h_loss h_win_k
+    omega
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- When k loses and positions above k tie, all wins must be below k -/
+lemma wins_below_lose_position (input : Vector (F p) 254) (ct : ℕ) (k : Fin 127)
+    (h_lose_k : signalPairValF input[k.val * 2] input[k.val * 2 + 1] < constPairValAt k.val ct)
+    (h_tie_above : ∀ j : Fin 127, j > k →
+      signalPairValF input[j.val * 2] input[j.val * 2 + 1] = constPairValAt j.val ct)
+    (i : Fin 127)
+    (h_win : signalPairValF input[i.val * 2] input[i.val * 2 + 1] > constPairValAt i.val ct) :
+    i < k := by
+  by_contra h_not_lt
+  push_neg at h_not_lt
+  have h_ge_k : k ≤ i := h_not_lt
+  rcases Nat.lt_or_eq_of_le h_ge_k with h_gt_k | h_eq_k
+  · have h_tie := h_tie_above i h_gt_k
+    simp only [signalPairValF] at h_win h_tie
+    omega
+  · have h_eq : k = i := Fin.ext h_eq_k
+    subst h_eq
+    simp only [signalPairValF] at h_win h_lose_k
+    omega
+
 set_option maxHeartbeats 400000 in
 omit [Fact (p < 2 ^ 254)] in
 lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
@@ -940,37 +1007,14 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
 
     have h_losses_lt_k : ∀ j ∈ losses, j < k := by
       intro j hj
-      by_contra h_ge_k
-      push_neg at h_ge_k
-      rcases h_ge_k.lt_or_eq with h_gt_k | h_eq_k
-      · have h_tie := h_tie_above j h_gt_k
-        simp only [losses, Finset.mem_filter, Finset.mem_univ, true_and, signalPairValF] at hj
-        simp only [signalPairValF] at h_tie
-        omega
-      · subst h_eq_k
-        simp only [losses, Finset.mem_filter, Finset.mem_univ, true_and, signalPairValF] at hj h_win_k
-        omega
+      simp only [losses, Finset.mem_filter, Finset.mem_univ, true_and] at hj
+      exact losses_below_win_position input ct k h_win_k h_tie_above j hj
 
     let W := wins.sum (fun i => 2^i.val)
     let Λ := losses.sum (fun i => 2^i.val)
 
-    have hW_ge : W ≥ 2^k.val := by
-      show 2^k.val ≤ W
-      exact Finset.single_le_sum (f := fun i : Fin 127 => 2^i.val)
-        (fun _ _ => Nat.zero_le _) hk_in_wins
-    have hΛ_lt : Λ < 2^k.val := by
-      have h_losses_subset : losses ⊆ Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ := by
-        intro j hj
-        simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-        exact h_losses_lt_k j hj
-      have h1 : Λ ≤ (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i => 2^i.val) :=
-        Finset.sum_le_sum_of_subset h_losses_subset
-      have h2 : (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i : Fin 127 => 2^i.val)
-              ≤ 2^k.val - 1 := by
-        have h_sum_eq := geom_sum_filter_eq k
-        rw [h_sum_eq, sum_pow_two_fin]
-      have h3 : 2^k.val - 1 < 2^k.val := Nat.sub_one_lt (Nat.two_pow_pos k.val).ne'
-      exact Nat.lt_of_le_of_lt (Nat.le_trans h1 h2) h3
+    have hW_ge : W ≥ 2^k.val := pow_sum_ge_of_mem wins k hk_in_wins
+    have hΛ_lt : Λ < 2^k.val := pow_sum_lt_of_all_below losses k h_losses_lt_k
     have hW_gt_Λ : W > Λ := Nat.lt_of_lt_of_le hΛ_lt hW_ge
     have hW_bound : W ≤ 2^127 - 1 := pow_sum_bound wins
     have hW_sub_Λ_bound : W - Λ < 2^127 := Nat.lt_of_le_of_lt (Nat.sub_le W Λ) (Nat.lt_of_le_of_lt hW_bound (by native_decide))
@@ -1068,38 +1112,15 @@ lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)
 
       have h_wins_lt_k : ∀ j ∈ wins, j < k := by
         intro j hj
-        by_contra h_ge_k
-        push_neg at h_ge_k
-        rcases h_ge_k.lt_or_eq with h_gt_k | h_eq_k
-        · have h_tie := h_tie_above j h_gt_k
-          simp only [wins, Finset.mem_filter, Finset.mem_univ, true_and, signalPairValF] at hj
-          simp only [signalPairValF] at h_tie
-          omega
-        · subst h_eq_k
-          simp only [wins, Finset.mem_filter, Finset.mem_univ, true_and, signalPairValF] at hj h_lose_k
-          omega
+        simp only [wins, Finset.mem_filter, Finset.mem_univ, true_and] at hj
+        exact wins_below_lose_position input ct k h_lose_k h_tie_above j hj
 
       let W := wins.sum (fun i => 2^i.val)
       let Λ := losses.sum (fun i => 2^i.val)
 
-      have hW_lt : W < 2^k.val := by
-        have h_wins_subset : wins ⊆ Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ := by
-          intro j hj
-          simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-          exact h_wins_lt_k j hj
-        have h1 : W ≤ (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i => 2^i.val) :=
-          Finset.sum_le_sum_of_subset h_wins_subset
-        have h2 : (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i => 2^i.val)
-                ≤ 2^k.val - 1 := by
-          have h_sum_eq := geom_sum_filter_eq k
-          rw [h_sum_eq, sum_pow_two_fin]
-        have h3 : 2^k.val - 1 < 2^k.val := Nat.sub_one_lt (Nat.two_pow_pos k.val).ne'
-        exact Nat.lt_of_le_of_lt (Nat.le_trans h1 h2) h3
+      have hW_lt : W < 2^k.val := pow_sum_lt_of_all_below wins k h_wins_lt_k
 
-      have hΛ_ge : Λ ≥ 2^k.val := by
-        show 2^k.val ≤ Λ
-        exact Finset.single_le_sum (f := fun i : Fin 127 => 2^i.val)
-          (fun _ _ => Nat.zero_le _) hk_in_losses
+      have hΛ_ge : Λ ≥ 2^k.val := pow_sum_ge_of_mem losses k hk_in_losses
 
       have hW_lt_Λ : W < Λ := by omega
 
