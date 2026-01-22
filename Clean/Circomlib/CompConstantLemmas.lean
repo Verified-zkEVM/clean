@@ -214,6 +214,44 @@ lemma four_pow_eq_two_pow_double (k : ℕ) : (4:ℕ)^k = 2^(2*k) := by
   calc (4:ℕ)^k = (2^2)^k := by norm_num
     _ = 2^(2*k) := by rw [← Nat.pow_mul]
 
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- Extract low bit from 2-bit pair: both numbers have same low bit if pairs are equal -/
+lemma low_bit_eq_of_pair_eq (x y pos : ℕ) (h_eq : x / 2^(pos * 2) % 4 = y / 2^(pos * 2) % 4) :
+    x / 2^(pos * 2) % 2 = y / 2^(pos * 2) % 2 := by
+  calc x / 2^(pos * 2) % 2 = (x / 2^(pos * 2) % 4) % 2 := by rw [mod4_mod2_eq_mod2]
+    _ = (y / 2^(pos * 2) % 4) % 2 := by rw [h_eq]
+    _ = y / 2^(pos * 2) % 2 := by rw [mod4_mod2_eq_mod2]
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- Extract high bit from 2-bit pair: both numbers have same high bit if pairs are equal -/
+lemma high_bit_eq_of_pair_eq (x y pos : ℕ) (h_eq : x / 2^(pos * 2) % 4 = y / 2^(pos * 2) % 4) :
+    x / 2^(pos * 2 + 1) % 2 = y / 2^(pos * 2 + 1) % 2 := by
+  have hpow := pow_double_succ pos
+  calc x / 2 ^ (pos * 2 + 1) % 2 = x / (2 ^ (pos * 2) * 2) % 2 := by rw [hpow]
+    _ = x / 2 ^ (pos * 2) / 2 % 2 := by rw [Nat.div_div_eq_div_mul]
+    _ = x / 2 ^ (pos * 2) % 4 / 2 := by rw [mod4_div2_eq_div2_mod2]
+    _ = y / 2 ^ (pos * 2) % 4 / 2 := by rw [h_eq]
+    _ = y / 2 ^ (pos * 2) / 2 % 2 := by rw [mod4_div2_eq_div2_mod2]
+    _ = y / (2 ^ (pos * 2) * 2) % 2 := by rw [Nat.div_div_eq_div_mul]
+    _ = y / 2 ^ (pos * 2 + 1) % 2 := by rw [hpow]
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- Division by power larger than bound equals zero -/
+lemma div_pow_eq_zero_of_lt (x n bound : ℕ) (hx : x < 2^bound) (hn : bound ≤ n) :
+    x / 2^n = 0 := by
+  apply Nat.div_eq_zero_iff.mpr
+  right
+  calc x < 2^bound := hx
+    _ ≤ 2^n := Nat.pow_le_pow_right (by omega) hn
+
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- testBit is false when index exceeds the bound -/
+lemma testBit_false_of_bound (x bound i : ℕ) (hx : x < 2^bound) (hi : bound ≤ i) :
+    x.testBit i = false := by
+  apply Nat.testBit_eq_false_of_lt
+  calc x < 2^bound := hx
+    _ ≤ 2^i := Nat.pow_le_pow_right (by omega) hi
+
 /-- Helper lemma: If x and y agree on all pairs above position k, then their high parts are equal. -/
 lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
     (h_above : ∀ j : Fin 127, j.val > k → (x >>> (j.val * 2)) % 4 = (y >>> (j.val * 2)) % 4)
@@ -238,24 +276,13 @@ lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
         rw [hpow_eq]
         have h_bp_eq : bit_pos = h_pair_pos * 2 := by omega
         rw [h_bp_eq]
-        have h_low : x / 2^(h_pair_pos * 2) % 2 = y / 2^(h_pair_pos * 2) % 2 := by
-          calc x / 2^(h_pair_pos * 2) % 2 = (x / 2^(h_pair_pos * 2) % 4) % 2 := by rw [mod4_mod2_eq_mod2]
-            _ = (y / 2^(h_pair_pos * 2) % 4) % 2 := by rw [h_pair_eq]
-            _ = y / 2^(h_pair_pos * 2) % 2 := by rw [mod4_mod2_eq_mod2]
+        have h_low := low_bit_eq_of_pair_eq x y h_pair_pos h_pair_eq
         simp only [h_low]
       · have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
         rw [hpow_eq]
         have h_bp_eq : bit_pos = h_pair_pos * 2 + 1 := by omega
         rw [h_bp_eq]
-        have hpow := pow_double_succ h_pair_pos
-        have h_high : x / 2 ^ (h_pair_pos * 2 + 1) % 2 = y / 2 ^ (h_pair_pos * 2 + 1) % 2 := by
-          calc x / 2 ^ (h_pair_pos * 2 + 1) % 2 = x / (2 ^ (h_pair_pos * 2) * 2) % 2 := by rw [hpow]
-            _ = x / 2 ^ (h_pair_pos * 2) / 2 % 2 := by rw [Nat.div_div_eq_div_mul]
-            _ = x / 2 ^ (h_pair_pos * 2) % 4 / 2 := by rw [mod4_div2_eq_div2_mod2]
-            _ = y / 2 ^ (h_pair_pos * 2) % 4 / 2 := by rw [h_pair_eq]
-            _ = y / 2 ^ (h_pair_pos * 2) / 2 % 2 := by rw [mod4_div2_eq_div2_mod2]
-            _ = y / (2 ^ (h_pair_pos * 2) * 2) % 2 := by rw [Nat.div_div_eq_div_mul]
-            _ = y / 2 ^ (h_pair_pos * 2 + 1) % 2 := by rw [hpow]
+        have h_high := high_bit_eq_of_pair_eq x y h_pair_pos h_pair_eq
         simp only [h_high]
     · have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
       rw [hpow_eq]
@@ -263,17 +290,8 @@ lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
       omega
   · have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
     rw [hpow_eq]
-    have h_pos : 0 < 2^bit_pos := Nat.pow_pos (by omega : 0 < 2)
-    have hx_div : x / 2^bit_pos = 0 := by
-      apply Nat.div_eq_zero_iff.mpr
-      right
-      calc x < 2^254 := hx
-        _ ≤ 2^bit_pos := Nat.pow_le_pow_right (by omega) (by omega)
-    have hy_div : y / 2^bit_pos = 0 := by
-      apply Nat.div_eq_zero_iff.mpr
-      right
-      calc y < 2^254 := hy
-        _ ≤ 2^bit_pos := Nat.pow_le_pow_right (by omega) (by omega)
+    have hx_div := div_pow_eq_zero_of_lt x bit_pos 254 hx (by omega : 254 ≤ bit_pos)
+    have hy_div := div_pow_eq_zero_of_lt y bit_pos 254 hy (by omega : 254 ≤ bit_pos)
     rw [hx_div, hy_div]
 
 /-- Helper: x % (4 * 4^k) = (x / 4^k % 4) * 4^k + x % 4^k -/
@@ -356,34 +374,17 @@ lemma eq_of_all_pairs_eq (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254)
         omega
       rw [h_i_eq]
       simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
-      have h_low : x / 2 ^ (k.val * 2) % 2 = y / 2 ^ (k.val * 2) % 2 := by
-        calc x / 2 ^ (k.val * 2) % 2 = x / 2 ^ (k.val * 2) % 4 % 2 := by rw [mod4_mod2_eq_mod2]
-          _ = y / 2 ^ (k.val * 2) % 4 % 2 := by rw [h_pair_eq]
-          _ = y / 2 ^ (k.val * 2) % 2 := by rw [mod4_mod2_eq_mod2]
+      have h_low := low_bit_eq_of_pair_eq x y k.val h_pair_eq
       simp only [h_low]
     · have h_i_eq : i = k.val * 2 + 1 := by
         have hk_def : k.val = i / 2 := rfl
         omega
       rw [h_i_eq]
       simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
-      have hpow := pow_double_succ k.val
-      have h_high : x / 2 ^ (k.val * 2 + 1) % 2 = y / 2 ^ (k.val * 2 + 1) % 2 := by
-        calc x / 2 ^ (k.val * 2 + 1) % 2 = x / (2 ^ (k.val * 2) * 2) % 2 := by rw [hpow]
-          _ = x / 2 ^ (k.val * 2) / 2 % 2 := by rw [Nat.div_div_eq_div_mul]
-          _ = x / 2 ^ (k.val * 2) % 4 / 2 := by rw [mod4_div2_eq_div2_mod2]
-          _ = y / 2 ^ (k.val * 2) % 4 / 2 := by rw [h_pair_eq]
-          _ = y / 2 ^ (k.val * 2) / 2 % 2 := by rw [mod4_div2_eq_div2_mod2]
-          _ = y / (2 ^ (k.val * 2) * 2) % 2 := by rw [Nat.div_div_eq_div_mul]
-          _ = y / 2 ^ (k.val * 2 + 1) % 2 := by rw [hpow]
+      have h_high := high_bit_eq_of_pair_eq x y k.val h_pair_eq
       simp only [h_high]
-  · have hx_high : x.testBit i = false := by
-      apply Nat.testBit_eq_false_of_lt
-      calc x < 2^254 := hx
-        _ ≤ 2^i := Nat.pow_le_pow_right (by omega) (by omega)
-    have hy_high : y.testBit i = false := by
-      apply Nat.testBit_eq_false_of_lt
-      calc y < 2^254 := hy
-        _ ≤ 2^i := Nat.pow_le_pow_right (by omega) (by omega)
+  · have hx_high := testBit_false_of_bound x 254 i hx (by omega : 254 ≤ i)
+    have hy_high := testBit_false_of_bound y 254 i hy (by omega : 254 ≤ i)
     rw [hx_high, hy_high]
 
 /-- Key lemma: fromBits comparison implies existence of differing pair. -/
