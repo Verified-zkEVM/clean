@@ -17,8 +17,10 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
+/-- Channel interaction (channel name, multiplicity, message) -/
+abbrev RawInteraction (F : Type) := String × F × Array F
 /-- Channel interactions (channel name, multiplicity, message) -/
-def RawInteractions (F : Type) := List (String × F × Array F)
+abbrev RawInteractions (F : Type) := List (String × F × Array F)
 
 /-- Arbitrary data a prover can witness and refer to in a circuit spec -/
 def ProverData (F : Type) :=

@@ -249,7 +249,7 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
     := by intros; rfl
 
   /-- compute local interaction delta from operations (defaults to empty for circuits that don't change interactions) -/
-  localAdds : Var Input F → ℕ → List (RawInteraction F)
+  localAdds : Var Input F → ℕ → List (AbstractInteraction F)
     := fun _ _ => []
 
   /-- correctness of `localAdds` (up to semantic equivalence via sameDelta) -/

@@ -17,7 +17,7 @@ inductive FlatOperation (F : Type) where
   | witness : (m : ℕ) → (Environment F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
-  | interact : RawInteraction F → FlatOperation F
+  | interact : AbstractInteraction F → FlatOperation F
 
 inductive NestedOperations (F : Type) where
   | single : FlatOperation F → NestedOperations F
@@ -106,7 +106,7 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   localLength : ℕ
 
   -- the local channel interactions in this subcircuit
-  localAdds : List (RawInteraction F)
+  localAdds : List (AbstractInteraction F)
 
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
@@ -136,7 +136,7 @@ inductive Operation (F : Type) [Field F] where
   | witness : (m : ℕ) → (compute : Environment F → Vector F m) → Operation F
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
-  | interact : RawInteraction F → Operation F
+  | interact : AbstractInteraction F → Operation F
   | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
 
 namespace Operation
@@ -236,7 +236,7 @@ def induct {motive : Operations F → Sort*}
   | .interact i :: ops => interact i ops (induct empty witness assert lookup subcircuit interact ops)
 
 /-- Collect all add operations from the operations list, evaluating their expressions -/
-def localAdds : Operations F → List (RawInteraction F)
+def localAdds : Operations F → List (AbstractInteraction F)
   | [] => []
   | .witness _ _ :: ops => localAdds ops
   | .assert _ :: ops => localAdds ops
@@ -269,7 +269,7 @@ theorem localAdds_append (ops1 ops2 : Operations F) :
 
 -- Helper: a + foldl (+) 0 xs = foldl (+) a xs for InteractionDelta
 omit [Field F] in
-private theorem foldl_add_start {xs : List (List (RawInteraction F))} {a : List (RawInteraction F)} :
+private theorem foldl_add_start {xs : List (List (AbstractInteraction F))} {a : List (AbstractInteraction F)} :
     a ++ xs.foldl (· ++ ·) [] = xs.foldl (· ++ ·) a := by
   induction xs generalizing a with
   | nil => simp [List.foldl_nil]
@@ -318,7 +318,7 @@ structure Condition (F : Type) [Field F] where
   witness (offset : ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
   assert (offset : ℕ) (_ : Expression F) : Prop := True
   lookup (offset : ℕ) (_ : Lookup F) : Prop := True
-  add (offset : ℕ) (_ : RawInteraction F) : Prop := True
+  add (offset : ℕ) (_ : AbstractInteraction F) : Prop := True
   subcircuit (offset : ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True
 
 @[circuit_norm]
@@ -337,11 +337,11 @@ def Condition.implies (c c': Condition F) : Condition F where
   add offset i := c.add offset i → c'.add offset i
 
 structure ConditionWithInteractions (F : Type) [Field F] where
-  witness (offset : ℕ) (is : List (RawInteraction F)) (m : ℕ) (_ : Environment F → Vector F m) : Prop := True
-  assert (offset : ℕ) (is : List (RawInteraction F)) (_ : Expression F) : Prop := True
-  lookup (offset : ℕ) (is : List (RawInteraction F)) (_ : Lookup F) : Prop := True
-  add (offset : ℕ) (is : List (RawInteraction F)) (_ : RawInteraction F) : Prop := True
-  subcircuit (offset : ℕ) (is : List (RawInteraction F)) {m : ℕ} (_ : Subcircuit F m) : Prop := True
+  witness (offset : ℕ) (is : RawInteractions F) (m : ℕ) (_ : Environment F → Vector F m) : Prop := True
+  assert (offset : ℕ) (is : RawInteractions F) (_ : Expression F) : Prop := True
+  lookup (offset : ℕ) (is : RawInteractions F) (_ : Lookup F) : Prop := True
+  add (offset : ℕ) (is : RawInteractions F) (_ : AbstractInteraction F) : Prop := True
+  subcircuit (offset : ℕ) (is : RawInteractions F) {m : ℕ} (_ : Subcircuit F m) : Prop := True
 
 namespace Operations
 /--
@@ -429,16 +429,16 @@ def forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) →
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
   | .interact i :: ops => condition.add offset i ∧ forAll offset condition ops
 
-def forAllWithInteractions (offset : ℕ) (is : List (RawInteraction F))
+def forAllWithInteractions (env : Environment F) (offset : ℕ) (is : RawInteractions F)
     (condition : ConditionWithInteractions F) : List (FlatOperation F) → Prop
   | [] => True
-  | .witness m c :: ops => condition.witness offset is m c ∧ forAllWithInteractions (m + offset) is condition ops
-  | .assert e :: ops => condition.assert offset is e ∧ forAllWithInteractions offset is condition ops
-  | .lookup l :: ops => condition.lookup offset is l ∧ forAllWithInteractions offset is condition ops
-  | .interact i :: ops => condition.add offset is i ∧ forAllWithInteractions offset (i :: is) condition ops
+  | .witness m c :: ops => condition.witness offset is m c ∧ forAllWithInteractions env (m + offset) is condition ops
+  | .assert e :: ops => condition.assert offset is e ∧ forAllWithInteractions env offset is condition ops
+  | .lookup l :: ops => condition.lookup offset is l ∧ forAllWithInteractions env offset is condition ops
+  | .interact i :: ops => condition.add offset is i ∧ forAllWithInteractions env offset (i.eval env :: is) condition ops
 
-def ConstraintsHoldWithInteractions (eval : Environment F) (offset : ℕ) (is : List (RawInteraction F)) :=
-  forAllWithInteractions offset is {
+def ConstraintsHoldWithInteractions (eval : Environment F) (offset : ℕ) (is : RawInteractions F) :=
+  forAllWithInteractions eval offset is {
     assert _ _ e := eval e = 0
     lookup _ _ l := l.Contains eval
     add _ is i := i.Guarantees eval is
@@ -452,16 +452,16 @@ def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations 
 namespace Operations
 -- aggregating properties with access to local interactions
 
-def forAllWithInteractions (offset : ℕ) (is : List (RawInteraction F)) (condition : ConditionWithInteractions F) : Operations F → Prop
+def forAllWithInteractions (env : Environment F) (offset : ℕ) (is : RawInteractions F) (condition : ConditionWithInteractions F) : Operations F → Prop
   | [] => True
-  | .witness m c :: ops => condition.witness offset is m c ∧ forAllWithInteractions (m + offset) is condition ops
-  | .assert e :: ops => condition.assert offset is e ∧ forAllWithInteractions offset is condition ops
-  | .lookup l :: ops => condition.lookup offset is l ∧ forAllWithInteractions offset is condition ops
-  | .interact i :: ops => condition.add offset is i ∧ forAllWithInteractions offset (i :: is) condition ops
-  | .subcircuit s :: ops => condition.subcircuit offset is s ∧ forAllWithInteractions (s.localLength + offset) (s.localAdds ++ is) condition ops
+  | .witness m c :: ops => condition.witness offset is m c ∧ forAllWithInteractions env (m + offset) is condition ops
+  | .assert e :: ops => condition.assert offset is e ∧ forAllWithInteractions env offset is condition ops
+  | .lookup l :: ops => condition.lookup offset is l ∧ forAllWithInteractions env offset is condition ops
+  | .interact i :: ops => condition.add offset is i ∧ forAllWithInteractions env offset (i.eval env :: is) condition ops
+  | .subcircuit s :: ops => condition.subcircuit offset is s ∧ forAllWithInteractions env (s.localLength + offset) (s.localAdds ++ is) condition ops
 end Operations
 
-def ConstraintsHoldWithInteractions.Soundness (eval : Environment F) (is : List (RawInteraction F))
+def ConstraintsHoldWithInteractions.Soundness (eval : Environment F) (is : List (AbstractInteraction F))
     (ops : Operations F) : Prop :=
   ops.forAllWithInteractions 0 is {
     assert _ _ e := eval e = 0
@@ -470,7 +470,7 @@ def ConstraintsHoldWithInteractions.Soundness (eval : Environment F) (is : List 
     subcircuit _ _ _ s := s.Soundness eval
   }
 
-def ConstraintsHoldWithInteractions.Requirements (eval : Environment F) (is : List (RawInteraction F))
+def ConstraintsHoldWithInteractions.Requirements (eval : Environment F) (is : List (AbstractInteraction F))
     (ops : Operations F) : Prop :=
   ops.forAllWithInteractions 0 is {
     assert _ _ e := eval e = 0
@@ -480,7 +480,7 @@ def ConstraintsHoldWithInteractions.Requirements (eval : Environment F) (is : Li
   }
 
 -- currently unused bc I don't think we need the interactions for completeness
-def ConstraintsHoldWithInteractions.Completeness (eval : Environment F) (is : List (RawInteraction F))
+def ConstraintsHoldWithInteractions.Completeness (eval : Environment F) (is : List (AbstractInteraction F))
     (ops : Operations F) : Prop :=
   ops.forAllWithInteractions 0 is {
     assert _ _ e := eval e = 0

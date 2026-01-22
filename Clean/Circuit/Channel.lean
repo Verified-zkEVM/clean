@@ -62,18 +62,19 @@ structure RawChannel (F : Type) where
   Requirements (mult : F) (message : Vector F arity) (interactions : List (F × Vector F arity))
     (data : ProverData F) : Prop
 
-structure RawInteraction (F : Type) where
+structure AbstractInteraction (F : Type) where
   channel : RawChannel F
   mult : Expression F
   msg : Vector (Expression F) channel.arity
 
-instance [Repr F] : Repr (RawInteraction F) where
+instance [Repr F] : Repr (AbstractInteraction F) where
   reprPrec i _ :=
-    "(RawInteraction channel=" ++ i.channel.name ++
+    "(Interaction channel=" ++ i.channel.name ++
     ", mult=" ++ repr i.mult ++ ", msg=" ++ repr i.msg ++ ")"
 
-def Channel.interactionToRaw (interaction : F × Message F) :
-    F × Vector F (size Message) := (interaction.1, toElements interaction.2)
+def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) :
+    RawInteraction F :=
+  (i.channel.name,env i.mult, (i.msg.map env).toArray)
 
 def Channel.interactionFromRaw (interaction : F × Vector F (size Message)) :
     F × Message F := (interaction.1, fromElements interaction.2)
@@ -87,7 +88,7 @@ def Channel.toRaw (channel : Channel F Message) : RawChannel F where
   Requirements mult message is data :=
     channel.Requirements mult (fromElements message) (is.map interactionFromRaw) data
 
-def ChannelInteraction.toRaw : ChannelInteraction F Message → RawInteraction F
+def ChannelInteraction.toRaw : ChannelInteraction F Message → AbstractInteraction F
   | { channel, mult, msg } => ⟨ channel.toRaw, mult, toElements msg ⟩
 
 def Channel.interactions (env : Environment F) (channel : Channel F Message) :
@@ -99,15 +100,15 @@ def Channel.interactions (env : Environment F) (channel : Channel F Message) :
 def ChannelInteraction.IsAdded (i : ChannelInteraction F Message) (env : Environment F) : Prop :=
   (env i.mult, eval env i.msg) ∈ i.channel.interactions env
 
-def RawInteraction.IsAdded (i : RawInteraction F) (env : Environment F) : Prop :=
+def AbstractInteraction.IsAdded (i : AbstractInteraction F) (env : Environment F) : Prop :=
   let n := i.channel.arity
   (env i.mult, i.msg.map env) ∈ env.rawInteractions i.channel.name n
 
 @[circuit_norm]
-lemma RawInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction F Message) :
+lemma AbstractInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction F Message) :
     int.toRaw.IsAdded env ↔ int.IsAdded env := by
   rcases int with ⟨channel, mult, msg⟩
-  simp only [circuit_norm, RawInteraction.IsAdded, ChannelInteraction.IsAdded,
+  simp only [circuit_norm, AbstractInteraction.IsAdded, ChannelInteraction.IsAdded,
     ChannelInteraction.toRaw, Channel.interactions,
     List.mem_map, Prod.mk.injEq, Prod.exists, ↓existsAndEq, true_and]
   constructor
@@ -119,35 +120,33 @@ lemma RawInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction
     subst h_eq
     exact h_mem
 
-def RawChannel.filterBy (channel : RawChannel F) (is : List (RawInteraction F)) :
-    List (Expression F × Vector (Expression F) (channel.arity)) :=
-  is.filterMap fun ⟨ c, mult, elts ⟩ =>
-    if h : c.name = channel.name ∧ c.arity = channel.arity
-      then some (mult, elts.cast h.2)
+def RawChannel.filter (channel : RawChannel F) (is : RawInteractions F) :
+    List (F × Vector F (channel.arity)) :=
+  is.filterMap fun ⟨ name, mult, elts ⟩ =>
+    if h : name = channel.name ∧ elts.size = channel.arity
+      then some (mult, ⟨ elts, h.2 ⟩)
       else none
 
-def Channel.filterBy (channel : Channel F Message) (is : List (RawInteraction F)) :
-    List (Expression F × Message (Expression F)) :=
-  channel.toRaw.filterBy is
+def Channel.filter (channel : Channel F Message) (is : RawInteractions F) :
+    List (F × Message F) :=
+  channel.toRaw.filter is
   |>.map fun (mult, elts) => (mult, fromElements elts)
 
 @[circuit_norm]
 def ChannelInteraction.Guarantees (i : ChannelInteraction F Message) (env : Environment F)
-    (is : List (RawInteraction F)) : Prop :=
-  let interactions : List (F × Vector F (size Message)) := i.channel.toRaw.filterBy is
-    |>.map fun (mult, msg) => (env mult, msg.map env)
+    (is : RawInteractions F) : Prop :=
+  let interactions : List (F × Vector F (size Message)) := i.channel.toRaw.filter is
   let interactions' := interactions.map Channel.interactionFromRaw
   i.channel.Guarantees (env i.mult) (eval env i.msg) interactions' env.data
 
-def RawInteraction.Guarantees (i : RawInteraction F) (env : Environment F)
-    (is : List (RawInteraction F)) : Prop :=
-  let interactions := i.channel.filterBy is
-    |>.map fun (mult, msg) => (env mult, msg.map env)
+def AbstractInteraction.Guarantees (i : AbstractInteraction F) (env : Environment F)
+    (is : RawInteractions F) : Prop :=
+  let interactions := i.channel.filter is
   i.channel.Guarantees (env i.mult) (i.msg.map env) interactions env.data
 
 @[circuit_norm]
-lemma RawInteraction.guarantees_def (env : Environment F) (int : ChannelInteraction F Message)
-    (is : List (RawInteraction F)) :
+lemma AbstractInteraction.guarantees_def (env : Environment F) (int : ChannelInteraction F Message)
+    (is : RawInteractions F) :
     int.toRaw.Guarantees env is ↔ int.Guarantees env is := by
   rfl
 
@@ -155,10 +154,8 @@ def RawInteractions.getMultiplicity [DecidableEq F] (nl : String × Array F) (d 
   d.foldl (fun acc ( name, mult, msg ) =>
     if name = nl.1 ∧ msg = nl.2 then acc + mult else acc) 0
 
-def sameDelta [DecidableEq F] (env : Environment F) (i1 i2 : List (RawInteraction F)) : Prop :=
-  let i1v : RawInteractions F := i1.map fun ⟨ c, mult, msg ⟩ => (c.name, env mult, (msg.map env).toArray)
-  let i2v : RawInteractions F := i2.map fun ⟨ c, mult, msg ⟩ => (c.name, env mult, (msg.map env).toArray)
-  ∀ (nl : String × Array F), i1v.getMultiplicity nl = i2v.getMultiplicity nl
+def sameDelta [DecidableEq F] (i1 i2 : RawInteractions F) : Prop :=
+  ∀ nl : String × Array F, i1.getMultiplicity nl = i2.getMultiplicity nl
 
 /--
 An `InteractionDelta` represents a change to an interaction (multiset argument), as a list
