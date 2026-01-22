@@ -17,7 +17,7 @@ inductive FlatOperation (F : Type) where
   | witness : (m : ℕ) → (Environment F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
-  | add : RawInteraction F → FlatOperation F
+  | interact : RawInteraction F → FlatOperation F
 
 inductive NestedOperations (F : Type) where
   | single : FlatOperation F → NestedOperations F
@@ -33,7 +33,7 @@ instance [Repr F] : Repr (FlatOperation F) where
   | witness m _, _ => "(Witness " ++ reprStr m ++ ")"
   | assert e, _ => "(Assert " ++ reprStr e ++ " == 0)"
   | lookup l, _ => reprStr l
-  | add interaction, _ => "(Add " ++ reprStr interaction ++ ")"
+  | interact i, _ => "(Interact " ++ reprStr i ++ ")"
 
 /--
 What it means that "constraints hold" on a list of flat operations:
@@ -46,20 +46,20 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval ops
     | lookup l => l.Contains eval ∧ ConstraintsHoldFlat eval ops
-    | add i => i.Guarantees eval ∧ ConstraintsHoldFlat eval ops
+    | interact i => i.IsAdded eval ∧ ConstraintsHoldFlat eval ops
     | _ => ConstraintsHoldFlat eval ops
 
 @[circuit_norm]
 def localLength : List (FlatOperation F) → ℕ
   | [] => 0
   | witness m _ :: ops => m + localLength ops
-  | assert _ :: ops | lookup _ :: ops | add _ :: ops => localLength ops
+  | assert _ :: ops | lookup _ :: ops | interact _ :: ops => localLength ops
 
 @[circuit_norm]
 def localWitnesses (env : Environment F) : (l : List (FlatOperation F)) → Vector F (localLength l)
   | [] => #v[]
   | witness _ compute :: ops => compute env ++ localWitnesses env ops
-  | assert _ :: ops | lookup _ :: ops | add _ :: ops => localWitnesses env ops
+  | assert _ :: ops | lookup _ :: ops | interact _ :: ops => localWitnesses env ops
 
 /-- Induction principle for `FlatOperation`s. -/
 def induct {motive : List (FlatOperation F) → Sort*}
@@ -67,14 +67,14 @@ def induct {motive : List (FlatOperation F) → Sort*}
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
   (lookup : ∀ l ops, motive ops → motive (.lookup l :: ops))
-  (add : ∀ i ops, motive ops → motive (.add i :: ops))
+  (interact : ∀ i ops, motive ops → motive (.interact i :: ops))
     (ops : List (FlatOperation F)) : motive ops :=
   match ops with
   | [] => empty
-  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup add ops)
-  | .assert e :: ops => assert e ops (induct empty witness assert lookup add ops)
-  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup add ops)
-  | .add i :: ops => add i ops (induct empty witness assert lookup add ops)
+  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup interact ops)
+  | .assert e :: ops => assert e ops (induct empty witness assert lookup interact ops)
+  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup interact ops)
+  | .interact i :: ops => interact i ops (induct empty witness assert lookup interact ops)
 end FlatOperation
 
 export FlatOperation (ConstraintsHoldFlat)
@@ -105,8 +105,8 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- even though it could be derived from the operations
   localLength : ℕ
 
-  -- compute the local interaction delta from this subcircuit's operations (defaults to empty)
-  localAdds : Environment F → List (RawInteraction F) := fun _ => []
+  -- the local channel interactions in this subcircuit
+  localAdds : List (RawInteraction F)
 
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
@@ -136,7 +136,7 @@ inductive Operation (F : Type) [Field F] where
   | witness : (m : ℕ) → (compute : Environment F → Vector F m) → Operation F
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
-  | add : RawInteraction F → Operation F
+  | interact : RawInteraction F → Operation F
   | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
 
 namespace Operation
@@ -145,7 +145,7 @@ instance [Repr F] : Repr (Operation F) where
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
-    | add i => reprStr i
+    | interact i => reprStr i
     | subcircuit { ops, .. } => "(Subcircuit " ++ reprStr ops.toFlat ++ ")"
 
 /--
@@ -156,15 +156,15 @@ def localLength : Operation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
+  | .interact _ => 0
   | .subcircuit s => s.localLength
-  | .add _ => 0
 
 def localWitnesses (env : Environment F) : (op : Operation F) → Vector F op.localLength
   | .witness _ c => c env
   | .assert _ => #v[]
   | .lookup _ => #v[]
+  | .interact _ => #v[]
   | .subcircuit s => s.witnesses env
-  | .add _ => #v[]
 end Operation
 
 /--
@@ -183,7 +183,7 @@ def toFlat : Operations F → List (FlatOperation F)
   | .witness m c :: ops => .witness m c :: toFlat ops
   | .assert e :: ops => .assert e :: toFlat ops
   | .lookup l :: ops => .lookup l :: toFlat ops
-  | .add i :: ops => .add i :: toFlat ops
+  | .interact i :: ops => .interact i :: toFlat ops
   | .subcircuit s :: ops => s.ops.toFlat ++ toFlat ops
 
 def toNested : Operations F → List (NestedOperations F)
@@ -191,7 +191,7 @@ def toNested : Operations F → List (NestedOperations F)
   | .witness m c :: ops => .single (.witness m c) :: toNested ops
   | .assert e :: ops => .single (.assert e) :: toNested ops
   | .lookup l :: ops => .single (.lookup l) :: toNested ops
-  | .add i :: ops => .single (.add i) :: toNested ops
+  | .interact i :: ops => .single (.interact i) :: toNested ops
   | .subcircuit s :: ops => s.ops :: toNested ops
 
 /--
@@ -203,8 +203,8 @@ def localLength : Operations F → ℕ
   | .witness m _ :: ops => m + localLength ops
   | .assert _ :: ops => localLength ops
   | .lookup _ :: ops => localLength ops
+  | .interact _ :: ops => localLength ops
   | .subcircuit s :: ops => s.localLength + localLength ops
-  | .add _ :: ops => localLength ops
 
 /--
 The actual vector of witnesses created by these operations in the given environment.
@@ -215,8 +215,8 @@ def localWitnesses (env : Environment F) : (ops : Operations F) → Vector F ops
   | .witness _ c :: ops => c env ++ localWitnesses env ops
   | .assert _ :: ops => localWitnesses env ops
   | .lookup _ :: ops => localWitnesses env ops
+  | .interact _ :: ops => localWitnesses env ops
   | .subcircuit s :: ops => s.witnesses env ++ localWitnesses env ops
-  | .add _ :: ops => localWitnesses env ops
 
 /-- Induction principle for `Operations`. -/
 def induct {motive : Operations F → Sort*}
@@ -225,43 +225,43 @@ def induct {motive : Operations F → Sort*}
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
   (lookup : ∀ l ops, motive ops → motive (.lookup l :: ops))
   (subcircuit : ∀ {n} (s : Subcircuit F n) ops, motive ops → motive (.subcircuit s :: ops))
-  (add : ∀ i ops, motive ops → motive (.add i :: ops))
+  (interact : ∀ i ops, motive ops → motive (.interact i :: ops))
     (ops : Operations F) : motive ops :=
   match ops with
   | [] => empty
-  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup subcircuit add ops)
-  | .assert e :: ops => assert e ops (induct empty witness assert lookup subcircuit add ops)
-  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit add ops)
-  | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit add ops)
-  | .add i :: ops => add i ops (induct empty witness assert lookup subcircuit add ops)
+  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup subcircuit interact ops)
+  | .assert e :: ops => assert e ops (induct empty witness assert lookup subcircuit interact ops)
+  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit interact ops)
+  | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit interact ops)
+  | .interact i :: ops => interact i ops (induct empty witness assert lookup subcircuit interact ops)
 
 /-- Collect all add operations from the operations list, evaluating their expressions -/
-def localAdds (env : Environment F) : Operations F → List (RawInteraction F)
+def localAdds : Operations F → List (RawInteraction F)
   | [] => []
-  | .witness _ _ :: ops => localAdds env ops
-  | .assert _ :: ops => localAdds env ops
-  | .lookup _ :: ops => localAdds env ops
-  | .add i :: ops => i :: localAdds env ops
-  | .subcircuit s :: ops => s.localAdds env ++ localAdds env ops
+  | .witness _ _ :: ops => localAdds ops
+  | .assert _ :: ops => localAdds ops
+  | .lookup _ :: ops => localAdds ops
+  | .interact i :: ops => i :: localAdds ops
+  | .subcircuit s :: ops => s.localAdds ++ localAdds ops
 
 -- TODO move all this to a theorems/lemmas file
 
 @[circuit_norm]
-theorem localAdds_nil (env : Environment F) : localAdds env ([] : Operations F) = [] := rfl
+theorem localAdds_nil : localAdds ([] : Operations F) = [] := rfl
 @[circuit_norm]
-theorem localAdds_assert (env : Environment F) (e : Expression F) (ops : Operations F) :
-    localAdds env (.assert e :: ops) = localAdds env ops := rfl
+theorem localAdds_assert (e : Expression F) (ops : Operations F) :
+    localAdds (.assert e :: ops) = localAdds ops := rfl
 
 @[circuit_norm]
-theorem localAdds_witness (env : Environment F) (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
-    localAdds env (.witness m c :: ops) = localAdds env ops := rfl
+theorem localAdds_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+    localAdds (.witness m c :: ops) = localAdds ops := rfl
 @[circuit_norm]
-theorem localAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operations F) :
-    localAdds env (.lookup l :: ops) = localAdds env ops := rfl
+theorem localAdds_lookup (l : Lookup F) (ops : Operations F) :
+    localAdds (.lookup l :: ops) = localAdds ops := rfl
 
 @[circuit_norm]
-theorem localAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
-    localAdds env (ops1 ++ ops2) = localAdds env ops1 ++ localAdds env ops2 := by
+theorem localAdds_append (ops1 ops2 : Operations F) :
+    localAdds (ops1 ++ ops2) = localAdds ops1 ++ localAdds ops2 := by
   induction ops1 with
   | nil => simp only [List.nil_append, localAdds, List.nil_append]
   | cons op ops1 ih =>
@@ -277,8 +277,8 @@ private theorem foldl_add_start {xs : List (List (RawInteraction F))} {a : List 
     simp only [List.foldl_cons, List.nil_append]
     rw [←ih (a:=y), ←ih (a:=a++y), List.append_assoc]
 
-theorem localAdds_flatten (env : Environment F) (opss : List (Operations F)) :
-    localAdds env opss.flatten = (opss.map (localAdds env)).foldl (· ++ ·) [] := by
+theorem localAdds_flatten (opss : List (Operations F)) :
+    localAdds opss.flatten = (opss.map localAdds).foldl (· ++ ·) [] := by
   induction opss with
   | nil => rfl
   | cons ops opss ih =>
@@ -294,17 +294,17 @@ private theorem foldl_ofFn_eq {m : ℕ} {β : Type*} (f : Fin m → β) (g : β 
     simp only [List.ofFn_succ, List.finRange_succ, List.foldl_cons, List.foldl_map]
     exact ih (fun i => f i.succ) (g init (f 0))
 
-theorem localAdds_ofFn_flatten {m : ℕ} (env : Environment F) (f : Fin m → Operations F) :
-    localAdds env (List.ofFn f).flatten =
-    (List.finRange m).foldl (fun acc i => acc ++ localAdds env (f i)) [] := by
+theorem localAdds_ofFn_flatten {m : ℕ} (f : Fin m → Operations F) :
+    localAdds (List.ofFn f).flatten =
+    (List.finRange m).foldl (fun acc i => acc ++ localAdds (f i)) [] := by
   rw [localAdds_flatten, List.map_ofFn, foldl_ofFn_eq]
   simp only [Function.comp_apply]
 
 -- Version where f takes Nat and uses Fin.val coercion implicitly
-theorem localAdds_ofFn_flatten' {m : ℕ} (env : Environment F) (f : ℕ → Operations F) :
-    localAdds env (List.ofFn (fun i : Fin m => f ↑i)).flatten =
-    (List.finRange m).foldl (fun acc i => acc ++ localAdds env (f i.val)) [] :=
-  localAdds_ofFn_flatten env (fun i => f ↑i)
+theorem localAdds_ofFn_flatten' {m : ℕ} (f : ℕ → Operations F) :
+    localAdds (List.ofFn (fun i : Fin m => f ↑i)).flatten =
+    (List.finRange m).foldl (fun acc i => acc ++ localAdds (f i.val)) [] :=
+  localAdds_ofFn_flatten (fun i => f ↑i)
 
 end Operations
 
@@ -326,7 +326,7 @@ def Condition.apply (condition : Condition F) (offset : ℕ) : Operation F → P
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
-  | .add i => condition.add offset i
+  | .interact i => condition.add offset i
   | .subcircuit s => condition.subcircuit offset s
 
 def Condition.implies (c c': Condition F) : Condition F where
@@ -335,6 +335,13 @@ def Condition.implies (c c': Condition F) : Condition F where
   lookup offset l := c.lookup offset l → c'.lookup offset l
   subcircuit offset _ s := c.subcircuit offset s → c'.subcircuit offset s
   add offset i := c.add offset i → c'.add offset i
+
+structure ConditionWithInteractions (F : Type) [Field F] where
+  witness (offset : ℕ) (is : List (RawInteraction F)) (m : ℕ) (_ : Environment F → Vector F m) : Prop := True
+  assert (offset : ℕ) (is : List (RawInteraction F)) (_ : Expression F) : Prop := True
+  lookup (offset : ℕ) (is : List (RawInteraction F)) (_ : Lookup F) : Prop := True
+  add (offset : ℕ) (is : List (RawInteraction F)) (_ : RawInteraction F) : Prop := True
+  subcircuit (offset : ℕ) (is : List (RawInteraction F)) {m : ℕ} (_ : Subcircuit F m) : Prop := True
 
 namespace Operations
 /--
@@ -347,7 +354,7 @@ def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
-  | .add i :: ops => condition.add offset i ∧ forAll offset condition ops
+  | .interact i :: ops => condition.add offset i ∧ forAll offset condition ops
   | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (s.localLength + offset) condition ops
 
 /--
@@ -374,22 +381,22 @@ def inductConsistent {motive : (ops : Operations F) → (n : ℕ) → ops.Subcir
     motive (.assert e :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (lookup : ∀ n l ops {h}, motive ops n h →
     motive (.lookup l :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
+  (interact : ∀ n i ops {h}, motive ops n h →
+    motive (.interact i :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (subcircuit : ∀ n (s : Subcircuit F n) ops {h}, motive ops (s.localLength + n) h →
     motive (.subcircuit s :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
-  (add : ∀ n i ops {h}, motive ops n h →
-    motive (.add i :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
     (ops : Operations F) (n : ℕ) (h : ops.SubcircuitsConsistent n) : motive ops n h :=
   motive' ops n h
 where motive' : (ops : Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsistent n) → motive ops n h
   | [], n, _ => empty n
   | .witness m c :: ops, n, h | .assert e :: ops, n, h
-  | .lookup e :: ops, n, h | .add i :: ops, n, h => by
+  | .lookup e :: ops, n, h | .interact i :: ops, n, h => by
     rw [SubcircuitsConsistent, forAll] at h
     first
     | exact witness _ _ _ _ (motive' ops _ h.right)
     | exact assert _ _ _ (motive' ops _ h.right)
     | exact lookup _ _ _ (motive' ops _ h.right)
-    | exact add _ _ _ (motive' ops _ h.right)
+    | exact interact _ _ _ (motive' ops _ h.right)
   | .subcircuit s :: ops, n', h => by
     rename_i n
     rw [SubcircuitsConsistent, forAll] at h
@@ -405,20 +412,79 @@ def Condition.applyFlat (condition : Condition F) (offset : ℕ) : FlatOperation
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
-  | .add i => condition.add offset i
+  | .interact i => condition.add offset i
 
-def FlatOperation.singleLocalLength : FlatOperation F → ℕ
+namespace FlatOperation
+
+def singleLocalLength : FlatOperation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
-  | .add _ => 0
+  | .interact _ => 0
 
-def FlatOperation.forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
+def forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
-  | .add i :: ops => condition.add offset i ∧ forAll offset condition ops
+  | .interact i :: ops => condition.add offset i ∧ forAll offset condition ops
+
+def forAllWithInteractions (offset : ℕ) (is : List (RawInteraction F))
+    (condition : ConditionWithInteractions F) : List (FlatOperation F) → Prop
+  | [] => True
+  | .witness m c :: ops => condition.witness offset is m c ∧ forAllWithInteractions (m + offset) is condition ops
+  | .assert e :: ops => condition.assert offset is e ∧ forAllWithInteractions offset is condition ops
+  | .lookup l :: ops => condition.lookup offset is l ∧ forAllWithInteractions offset is condition ops
+  | .interact i :: ops => condition.add offset is i ∧ forAllWithInteractions offset (i :: is) condition ops
+
+def ConstraintsHoldWithInteractions (eval : Environment F) (offset : ℕ) (is : List (RawInteraction F)) :=
+  forAllWithInteractions offset is {
+    assert _ _ e := eval e = 0
+    lookup _ _ l := l.Contains eval
+    add _ is i := i.Guarantees eval is
+  }
+
+end FlatOperation
 
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops.toFlat } ops
+
+namespace Operations
+-- aggregating properties with access to local interactions
+
+def forAllWithInteractions (offset : ℕ) (is : List (RawInteraction F)) (condition : ConditionWithInteractions F) : Operations F → Prop
+  | [] => True
+  | .witness m c :: ops => condition.witness offset is m c ∧ forAllWithInteractions (m + offset) is condition ops
+  | .assert e :: ops => condition.assert offset is e ∧ forAllWithInteractions offset is condition ops
+  | .lookup l :: ops => condition.lookup offset is l ∧ forAllWithInteractions offset is condition ops
+  | .interact i :: ops => condition.add offset is i ∧ forAllWithInteractions offset (i :: is) condition ops
+  | .subcircuit s :: ops => condition.subcircuit offset is s ∧ forAllWithInteractions (s.localLength + offset) (s.localAdds ++ is) condition ops
+end Operations
+
+def ConstraintsHoldWithInteractions.Soundness (eval : Environment F) (is : List (RawInteraction F))
+    (ops : Operations F) : Prop :=
+  ops.forAllWithInteractions 0 is {
+    assert _ _ e := eval e = 0
+    lookup _ _ l := l.Soundness eval
+    add _ is i := i.Guarantees eval is
+    subcircuit _ _ _ s := s.Soundness eval
+  }
+
+def ConstraintsHoldWithInteractions.Requirements (eval : Environment F) (is : List (RawInteraction F))
+    (ops : Operations F) : Prop :=
+  ops.forAllWithInteractions 0 is {
+    assert _ _ e := eval e = 0
+    lookup _ _ l := l.Soundness eval
+    add _ is i := i.Requirements eval is
+    subcircuit _ _ _ s := s.Soundness eval
+  }
+
+-- currently unused bc I don't think we need the interactions for completeness
+def ConstraintsHoldWithInteractions.Completeness (eval : Environment F) (is : List (RawInteraction F))
+    (ops : Operations F) : Prop :=
+  ops.forAllWithInteractions 0 is {
+    assert _ _ e := eval e = 0
+    lookup _ _ l := l.Completeness eval
+    add _ is i := True
+    subcircuit _ _ _ s := s.Completeness eval
+  }

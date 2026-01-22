@@ -130,7 +130,7 @@ end Circuit
 def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
   let interaction : ChannelInteraction F Message := ⟨ channel, mult, msg ⟩
-  ((), [.add interaction.toRaw])
+  ((), [.interact interaction.toRaw])
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
@@ -161,7 +161,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
   | .lookup l :: ops =>
     l.Contains eval ∧ ConstraintsHold eval ops
-  | .add i :: ops => i.IsAdded eval ∧ ConstraintsHold eval ops
+  | .interact i :: ops => i.IsAdded eval ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
 
@@ -175,7 +175,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
   | .lookup l :: ops =>
     l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
-  | .add i :: ops => i.IsAdded eval ∧ ConstraintsHold.Soundness eval ops
+  | .interact i :: ops => i.IsAdded eval ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
 
@@ -189,7 +189,7 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
   | .lookup l :: ops =>
     l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
-  | .add i :: ops => i.IsAdded eval ∧ ConstraintsHold.Completeness eval ops
+  | .interact i :: ops => i.IsAdded eval ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
@@ -213,7 +213,7 @@ def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : �
   | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
-  | .add _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
+  | .interact _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
@@ -249,12 +249,12 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
     := by intros; rfl
 
   /-- compute local interaction delta from operations (defaults to empty for circuits that don't change interactions) -/
-  localAdds : Var Input F → Environment F → ℕ → InteractionDelta F
-    := fun _ _ _ => 0
+  localAdds : Var Input F → ℕ → List (RawInteraction F)
+    := fun _ _ => []
 
-  /-- correctness of `localAdds` (up to semantic equivalence via toFinsupp) -/
+  /-- correctness of `localAdds` (up to semantic equivalence via sameDelta) -/
   localAdds_eq : ∀ input env offset,
-    ((main input |>.operations offset).collectAdds env).toFinsupp = (localAdds input env offset).toFinsupp
+    sameDelta env (main input |>.operations offset).localAdds (localAdds input offset)
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
@@ -420,81 +420,20 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [De
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 
-/-- Soundness for circuits that change interactions -/
-@[circuit_norm]
-def SoundnessChangingMultiset (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop)
-    (Spec : Input F → Output F → InteractionDelta F → Prop)
-    (localAdds : Var Input F → Environment F → ℕ → InteractionDelta F) :=
-  ∀ offset : ℕ, ∀ env,
-  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
-  let output := eval env (circuit.output input_var offset)
-  let adds := localAdds input_var env offset
-  Spec input output adds
-
-/-- FormalCircuit variant for circuits that change interactions -/
-structure FormalCircuitChangingMultiset (F : Type) [Field F] [DecidableEq F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
-    extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions (_ : Input F) : Prop := True
-  Spec : Input F → Output F → InteractionDelta F → Prop
-  soundness : SoundnessChangingMultiset F elaborated Assumptions Spec elaborated.localAdds
-  completeness : Completeness F elaborated Assumptions
-
-/-- Soundness for assertions that change interactions -/
-@[circuit_norm]
-def FormalAssertion.SoundnessChangingMultiset (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input unit)
-    (Assumptions : Input F → Prop)
-    (Spec : Input F → InteractionDelta F → Prop)
-    (localAdds : Var Input F → Environment F → ℕ → InteractionDelta F) :=
-  ∀ offset : ℕ, ∀ env,
-  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
-  let adds := localAdds input_var env offset
-  Spec input adds
-
-/-- Completeness for assertions that change interactions -/
-@[circuit_norm]
-def FormalAssertion.CompletenessChangingMultiset (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input unit)
-    (Assumptions : Input F → Prop)
-    (Spec : Input F → InteractionDelta F → Prop)
-    (localAdds : Var Input F → Environment F → ℕ → InteractionDelta F) :=
-  ∀ offset, ∀ env, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
-  ∀ input : Input F, eval env input_var = input →
-  let adds := localAdds input_var env offset
-  Assumptions input → Spec input adds →
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
-
-/-- FormalAssertion variant for assertions that change interactions -/
-structure FormalAssertionChangingMultiset (F : Type) (Input : TypeMap) [Field F] [DecidableEq F] [ProvableType Input]
-    extends elaborated : ElaboratedCircuit F Input unit where
-  Assumptions : Input F → Prop
-  Spec : Input F → InteractionDelta F → Prop
-  soundness : FormalAssertion.SoundnessChangingMultiset F elaborated Assumptions Spec elaborated.localAdds
-  completeness : FormalAssertion.CompletenessChangingMultiset F elaborated Assumptions Spec elaborated.localAdds
-
-  -- assertions commonly don't introduce internal witnesses, so this is a convenient default
-  localLength _ := 0
-  -- the output has to be unit
-  output _ _ := ()
-
 /-- Soundness for general circuits that change interactions -/
 @[circuit_norm]
-def GeneralFormalCircuit.SoundnessChangingMultiset (F : Type) [Field F] [DecidableEq F](circuit : ElaboratedCircuit F Input Output)
+def GeneralFormalCircuit.SoundnessWithInteractions (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
     (Spec : Input F → Output F → Environment F → InteractionDelta F → Prop)
     (localAdds : Var Input F → Environment F → ℕ → InteractionDelta F) :=
-  ∀ offset : ℕ, ∀ env,
+  ∀ offset : ℕ, ∀ env interactions,
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHoldWithInteractions.Soundness env interactions (circuit.main input_var |>.operations offset) →
   let output := eval env (circuit.output input_var offset)
   let adds := localAdds input_var env offset
   Spec input output env adds
 
 @[circuit_norm]
-def GeneralFormalCircuit.CompletenessChangingMultiset (F : Type) [Field F] [DecidableEq F]
+def GeneralFormalCircuit.CompletenessWithInteractions (F : Type) [Field F] [DecidableEq F]
     (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Environment F → Prop) :=
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
