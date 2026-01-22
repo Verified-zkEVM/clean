@@ -458,17 +458,16 @@ lemma signalPairAt_eq_fromBits_pair (i : ℕ) (input : Vector (F p) 254)
     (h_bits : ∀ j (_ : j < 254), input[j] = 0 ∨ input[j] = 1)
     (hi : i < 127) :
     signalPairAt i hi input = (fromBits (input.map ZMod.val) >>> (i * 2)) % 4 := by
-  have hk : i * 2 + 1 < 254 := by omega
-  have hk' : i * 2 < 254 := by omega
   have h_bits' : ∀ (j : ℕ) (hj : j < 254), (input.map ZMod.val)[j] = 0 ∨ (input.map ZMod.val)[j] = 1 := by
     intro j hj
-    have h := h_bits j hj
-    rcases h with h0 | h1
-    · left; simpa [Vector.getElem_map, ZMod.val_zero] using congrArg ZMod.val h0
+    simp only [Vector.getElem_map]
+    have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
+    rcases h_bits j hj with h0 | h1
+    · left; simp only [ZMod.val_eq_zero]; exact h0
     · right
-      have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
-      have h1' := congrArg ZMod.val h1
-      simpa [Vector.getElem_map, @ZMod.val_one p ⟨hp_gt_1⟩] using h1'
+      apply_fun ZMod.val at h1
+      simp only [@ZMod.val_one p ⟨hp_gt_1⟩] at h1
+      exact h1
   have h_mod4 := fromBits_shiftRight_mod4 (bits := input.map ZMod.val) (k := i*2) h_bits' (by omega)
   simp only [Vector.getElem_map] at h_mod4
   unfold signalPairAt
