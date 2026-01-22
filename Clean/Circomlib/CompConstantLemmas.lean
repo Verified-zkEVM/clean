@@ -252,6 +252,11 @@ lemma testBit_false_of_bound (x bound i : ℕ) (hx : x < 2^bound) (hi : bound �
   calc x < 2^bound := hx
     _ ≤ 2^i := Nat.pow_le_pow_right (by omega) hi
 
+omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- Standard form: n = (n / d) * d + (n % d) -/
+lemma div_mod_eq_self (n d : ℕ) (_hd : 0 < d) : n = n / d * d + n % d := by
+  have := Nat.div_add_mod n d; linarith
+
 /-- Helper lemma: If x and y agree on all pairs above position k, then their high parts are equal. -/
 lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
     (h_above : ∀ j : Fin 127, j.val > k → (x >>> (j.val * 2)) % 4 = (y >>> (j.val * 2)) % 4)
@@ -302,8 +307,7 @@ lemma mod_four_pow_succ (x k : ℕ) : x % 4^(k+1) = (x / 4^k % 4) * 4^k + x % 4^
   have h_rem : x % 4^k < 4^k := Nat.mod_lt x h_4k_pos
   have h_qmod : x / 4^k % 4 < 4 := Nat.mod_lt _ (by omega : 0 < 4)
   have h_sum_lt : x / 4^k % 4 * 4^k + x % 4^k < 4 * 4^k := by nlinarith
-  have h1 : x / 4^k = x / 4^k / 4 * 4 + x / 4^k % 4 := by
-    have := Nat.div_add_mod (x / 4^k) 4; linarith
+  have h1 := div_mod_eq_self (x / 4^k) 4 (by omega : 0 < 4)
   have h2 : x = x / 4^k / 4 * (4 * 4^k) + (x / 4^k % 4 * 4^k + x % 4^k) := by
     have h_base := Nat.div_add_mod x (4^k)
     have h_step1 : x = 4^k * (x / 4^k) + x % 4^k := by linarith
@@ -348,12 +352,8 @@ lemma lt_of_high_eq_and_pair_lt (x y k : ℕ)
       _ ≤ (y / 4^k % 4) * 4^k + y % 4^k := Nat.le_add_right _ _
 
   have h_4k1_pos : 0 < 4^(k+1) := Nat.pow_pos (by omega : 0 < 4)
-  have hx_eq : x = x / 4^(k+1) * 4^(k+1) + x % 4^(k+1) := by
-    have h := Nat.div_add_mod x (4^(k+1))
-    linarith
-  have hy_eq : y = y / 4^(k+1) * 4^(k+1) + y % 4^(k+1) := by
-    have h := Nat.div_add_mod y (4^(k+1))
-    linarith
+  have hx_eq := div_mod_eq_self x (4^(k+1)) h_4k1_pos
+  have hy_eq := div_mod_eq_self y (4^(k+1)) h_4k1_pos
   rw [hx_eq, hy_eq, h_high_eq]
   omega
 
