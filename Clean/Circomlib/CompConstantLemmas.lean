@@ -105,9 +105,8 @@ lemma computePart_characterization (i : ℕ) (hi : i < 127) (slsb smsb : F p)
       if s_pair > c_pair then 2^128 - 2^i
       else if s_pair = c_pair then 0
       else 2^i := by
-  have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
   have h_val_0 : (0 : F p).val = 0 := ZMod.val_zero
-  have h_val_1 : (1 : F p).val = 1 := @ZMod.val_one p ⟨hp_gt_1⟩
+  have h_val_1 : (1 : F p).val = 1 := @ZMod.val_one p ⟨Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim⟩
   have h_aCoeff_val : (aCoeff i : F p).val = 2^i := aCoeff_val i hi
   have h_bCoeff_val : (bCoeff i : F p).val = 2^128 - 2^i := bCoeff_val i hi
   have h_cm_cases := bit_and_one_cases (ct >>> (i * 2 + 1))
@@ -267,13 +266,12 @@ lemma mod_four_pow_succ (x k : ℕ) : x % 4^(k+1) = (x / 4^k % 4) * 4^k + x % 4^
   have h_rem : x % 4^k < 4^k := Nat.mod_lt x h_4k_pos
   have h_qmod : x / 4^k % 4 < 4 := Nat.mod_lt _ (by omega : 0 < 4)
   have h_sum_lt : x / 4^k % 4 * 4^k + x % 4^k < 4 * 4^k := by nlinarith
-  have h1 := div_mod_eq_self (x / 4^k) 4
   have h2 : x = x / 4^k / 4 * (4 * 4^k) + (x / 4^k % 4 * 4^k + x % 4^k) := by
     have h_base := Nat.div_add_mod x (4^k)
     have h_step1 : x = 4^k * (x / 4^k) + x % 4^k := by linarith
     have h_step2 : 4^k * (x / 4^k) = x / 4^k / 4 * (4 * 4^k) + x / 4^k % 4 * 4^k := by
       calc 4^k * (x / 4^k) = 4^k * (x / 4^k / 4 * 4 + x / 4^k % 4) := by
-             conv_lhs => rw [h1]
+             conv_lhs => rw [div_mod_eq_self (x / 4^k) 4]
         _ = x / 4^k / 4 * 4 * 4^k + x / 4^k % 4 * 4^k := by ring
         _ = x / 4^k / 4 * (4 * 4^k) + x / 4^k % 4 * 4^k := by ring
     linarith
@@ -502,12 +500,8 @@ lemma msb_determines_le (ct : ℕ) (h_ct : ct < 2^254)
   · right
     obtain ⟨k, hk_gt, hk_eq⟩ := exists_msb_win_from_gt ct x h_ct hx_lt h_lt
     use k
-    constructor
-    · rw [h_signal_pair k, h_const_pair k]
-      exact hk_gt
-    · intro j hj
-      rw [h_signal_pair j, h_const_pair j]
-      exact (hk_eq j hj).symm
+    exact ⟨by rw [h_signal_pair k, h_const_pair k]; exact hk_gt,
+           fun j hj => by rw [h_signal_pair j, h_const_pair j]; exact (hk_eq j hj).symm⟩
   · left
     intro i
     rw [h_signal_pair i, h_const_pair i]
@@ -785,12 +779,6 @@ lemma sum_partition (ct : ℕ) (input : Vector (F p) 254)
   have h_ties_zero : ties.sum (fun i => parts[i].val) = 0 :=
     ties_sum_zero ct input h_bits parts h_parts ties rfl
 
-  have h_wins_val : wins.sum (fun i => parts[i].val) = wins.card * 2^128 - W :=
-    wins_sum_val ct input h_bits parts h_parts wins rfl
-
-  have h_losses_val : losses.sum (fun i => parts[i].val) = Λ :=
-    losses_sum_val ct input h_bits parts h_parts losses rfl
-
   calc (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val)
       = (wins ∪ losses ∪ ties).sum (fun i => parts[i].val) := by rw [h_union]
     _ = (wins ∪ losses).sum (fun i => parts[i].val) + ties.sum (fun i => parts[i].val) :=
@@ -800,7 +788,9 @@ lemma sum_partition (ct : ℕ) (input : Vector (F p) 254)
         rw [Finset.sum_union h_disjoint_wl]
     _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) := by
         rw [h_ties_zero]; ring
-    _ = wins.card * 2^128 - W + Λ := by rw [h_wins_val, h_losses_val]
+    _ = wins.card * 2^128 - W + Λ := by
+        rw [wins_sum_val ct input h_bits parts h_parts wins rfl,
+            losses_sum_val ct input h_bits parts h_parts losses rfl]
 
 omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma pow_sum_bound (s : Finset (Fin 127)) : s.sum (fun i => 2^i.val) ≤ 2^127 - 1 := by
