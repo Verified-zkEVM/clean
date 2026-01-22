@@ -143,9 +143,10 @@ lemma sum_pow_two_fin (k : ℕ) :
 lemma contributions_below_k_bound (k : ℕ) (contributions : Fin k → ℕ)
     (h_bound : ∀ i, contributions i ≤ 2^128) :
     (Finset.univ : Finset (Fin k)).sum contributions < k * 2^128 + 1 := by
+  have h_sum_le : (Finset.univ : Finset (Fin k)).sum contributions ≤ (Finset.univ : Finset (Fin k)).sum (fun _ => 2^128) := by
+    apply Finset.sum_le_sum; intro i _; exact h_bound i
   calc (Finset.univ : Finset (Fin k)).sum contributions
-      ≤ (Finset.univ : Finset (Fin k)).sum (fun _ => 2^128) := by
-          apply Finset.sum_le_sum; intro i _; exact h_bound i
+      ≤ (Finset.univ : Finset (Fin k)).sum (fun _ => 2^128) := h_sum_le
     _ = k * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
     _ < k * 2^128 + 1 := by omega
 
@@ -710,14 +711,15 @@ lemma parts_sum_lt_p (parts : Vector (F p) 127)
     (h_parts_bounded : ∀ i : Fin 127, parts[i].val ≤ 2^128) :
     (parts.toList.map ZMod.val).sum < p := by
   have hp : p > 2^253 := ‹Fact (p > 2^253)›.elim
+  have h_bound : ∀ x, x ∈ parts.toList → x.val ≤ 2^128 := by
+    intro x hx
+    rw [List.mem_iff_getElem] at hx
+    obtain ⟨i, hi, rfl⟩ := hx
+    simp only [Vector.getElem_toList]
+    rw [Vector.length_toList] at hi
+    exact h_parts_bounded ⟨i, hi⟩
   calc (parts.toList.map ZMod.val).sum
-      ≤ parts.toList.length * 2^128 := list_sum_val_bound' (by
-          intro x hx
-          rw [List.mem_iff_getElem] at hx
-          obtain ⟨i, hi, rfl⟩ := hx
-          simp only [Vector.getElem_toList]
-          rw [Vector.length_toList] at hi
-          exact h_parts_bounded ⟨i, hi⟩)
+      ≤ parts.toList.length * 2^128 := list_sum_val_bound' h_bound
     _ = 127 * 2^128 := by simp [Vector.length_toList]
     _ < p := by linarith
 
@@ -779,11 +781,14 @@ lemma sum_sub_pow_eq (t : Finset (Fin 127)) :
       Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans a.isLt (by omega : 127 < 128)))
     simp only [Finset.sum_insert ha, Finset.card_insert_of_notMem ha]
     rw [ih]
+    have h_sum_bound : s.sum (fun i => 2^i.val) ≤ s.sum (fun _ => 2^128) :=
+      Finset.sum_le_sum (fun i _ =>
+        Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans i.isLt (by omega : 127 < 128))))
+    have h_sum_eq : s.sum (fun _ => 2^128) = s.card * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
     have h_sum_le : s.sum (fun i => 2^i.val) ≤ s.card * 2^128 := by
       calc s.sum (fun i => 2^i.val)
-          ≤ s.sum (fun _ => 2^128) := Finset.sum_le_sum (fun i _ =>
-            Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans i.isLt (by omega : 127 < 128))))
-        _ = s.card * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
+          ≤ s.sum (fun _ => 2^128) := h_sum_bound
+        _ = s.card * 2^128 := h_sum_eq
     omega
 
 omit [Fact (p < 2 ^ 254)] in
@@ -887,11 +892,12 @@ lemma sum_partition (ct : ℕ) (input : Vector (F p) 254)
   have h_losses_val : losses.sum (fun i => parts[i].val) = Λ :=
     losses_sum_val ct input h_bits parts h_parts losses rfl
 
+  have h_wl_t_disj : Disjoint (wins ∪ losses) ties := by
+    rw [Finset.disjoint_union_left]; exact ⟨h_disjoint_wt, h_disjoint_lt⟩
+
   calc (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val)
       = (wins ∪ losses ∪ ties).sum (fun i => parts[i].val) := by rw [h_union]
     _ = (wins ∪ losses).sum (fun i => parts[i].val) + ties.sum (fun i => parts[i].val) := by
-        have h_wl_t_disj : Disjoint (wins ∪ losses) ties := by
-          rw [Finset.disjoint_union_left]; exact ⟨h_disjoint_wt, h_disjoint_lt⟩
         exact Finset.sum_union h_wl_t_disj
     _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) +
         ties.sum (fun i => parts[i].val) := by
@@ -925,10 +931,9 @@ lemma pow_sum_lt_of_all_below (s : Finset (Fin 127)) (k : Fin 127)
   have h1 : s.sum (fun i => 2^i.val) ≤
       (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i => 2^i.val) :=
     Finset.sum_le_sum_of_subset h_subset
+  have h_sum_eq := geom_sum_filter_eq k
   have h2 : (Finset.filter (fun i : Fin 127 => i.val < k.val) Finset.univ).sum (fun i : Fin 127 => 2^i.val)
-          ≤ 2^k.val - 1 := by
-    have h_sum_eq := geom_sum_filter_eq k
-    rw [h_sum_eq, sum_pow_two_fin]
+          ≤ 2^k.val - 1 := by rw [h_sum_eq, sum_pow_two_fin]
   have h3 : 2^k.val - 1 < 2^k.val := Nat.sub_one_lt (Nat.two_pow_pos k.val).ne'
   exact Nat.lt_of_le_of_lt (Nat.le_trans h1 h2) h3
 
@@ -980,29 +985,27 @@ lemma div_wins_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127 -
     (hW_gt_Λ : W > Λ) (hW_sub_Λ_bound : W - Λ < 2^127) :
     (n * 2^128 - W + Λ) / 2^127 = 2 * n - 1 := by
   have h_W_ge_Λ : W ≥ Λ := Nat.le_of_lt hW_gt_Λ
-  have h_rearrange : n * 2^128 - W + Λ = n * 2^128 - (W - Λ) := by
-    have : W - Λ + Λ = W := Nat.sub_add_cancel h_W_ge_Λ
-    have h_W_le : W ≤ n * 2^128 := by
-      have h_W_lt : W < 2^127 := Nat.lt_of_le_of_lt hW_bound (Nat.sub_one_lt (Nat.two_pow_pos 127).ne')
-      have h1 : (2 : ℕ)^127 ≤ 1 * 2^128 := by
-        calc (2 : ℕ)^127 ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega)
-          _ = 1 * 2^128 := by ring
-      have h2 : 1 * 2^128 ≤ n * 2^128 := Nat.mul_le_mul_right _ h_n_pos
-      have h3 : W < n * 2^128 := calc W < 2^127 := h_W_lt
-        _ ≤ 1 * 2^128 := h1
-        _ ≤ n * 2^128 := h2
-      exact Nat.le_of_lt h3
-    omega
+  have h_W_lt : W < 2^127 := Nat.lt_of_le_of_lt hW_bound (Nat.sub_one_lt (Nat.two_pow_pos 127).ne')
+  have h1 : (2 : ℕ)^127 ≤ 1 * 2^128 := by
+    calc (2 : ℕ)^127 ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega)
+      _ = 1 * 2^128 := by ring
+  have h2 : 1 * 2^128 ≤ n * 2^128 := Nat.mul_le_mul_right _ h_n_pos
+  have h3 : W < n * 2^128 := calc W < 2^127 := h_W_lt
+    _ ≤ 1 * 2^128 := h1
+    _ ≤ n * 2^128 := h2
+  have h_W_le : W ≤ n * 2^128 := Nat.le_of_lt h3
+  have h_WmΛ_plus_Λ : W - Λ + Λ = W := Nat.sub_add_cancel h_W_ge_Λ
+  have h_rearrange : n * 2^128 - W + Λ = n * 2^128 - (W - Λ) := by omega
   rw [h_rearrange]
   have h_WΛ_pos : W - Λ > 0 := Nat.sub_pos_of_lt hW_gt_Λ
+  have h_mul_eq : n * 2^128 = 2 * n * 2^127 := by ring
+  have h_2n_sub_1_plus_1 : 2 * n - 1 + 1 = 2 * n := Nat.sub_add_cancel (by omega : 2 * n ≥ 1)
+  have h_2n_split : 2 * n * 2^127 = (2 * n - 1) * 2^127 + 2^127 := by
+    calc 2 * n * 2^127 = (2 * n - 1 + 1) * 2^127 := by rw [h_2n_sub_1_plus_1]
+      _ = (2 * n - 1) * 2^127 + 2^127 := by ring
   have h_expand : n * 2^128 - (W - Λ) = (2 * n - 1) * 2^127 + (2^127 - (W - Λ)) := by
-    have h1 : n * 2^128 = 2 * n * 2^127 := by ring
-    have h2 : 2 * n * 2^127 = (2 * n - 1) * 2^127 + 2^127 := by
-      have : 2 * n - 1 + 1 = 2 * n := Nat.sub_add_cancel (by omega : 2 * n ≥ 1)
-      calc 2 * n * 2^127 = (2 * n - 1 + 1) * 2^127 := by rw [this]
-        _ = (2 * n - 1) * 2^127 + 2^127 := by ring
-    calc n * 2^128 - (W - Λ) = 2 * n * 2^127 - (W - Λ) := by rw [h1]
-      _ = (2 * n - 1) * 2^127 + 2^127 - (W - Λ) := by rw [h2]
+    calc n * 2^128 - (W - Λ) = 2 * n * 2^127 - (W - Λ) := by rw [h_mul_eq]
+      _ = (2 * n - 1) * 2^127 + 2^127 - (W - Λ) := by rw [h_2n_split]
       _ = (2 * n - 1) * 2^127 + (2^127 - (W - Λ)) := by omega
   rw [h_expand]
   have h_remainder_lt : 2^127 - (W - Λ) < 2^127 := Nat.sub_lt (Nat.two_pow_pos 127) h_WΛ_pos
@@ -1014,22 +1017,23 @@ omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma div_losses_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127 - 1)
     (hΛ_bound : Λ ≤ 2^127 - 1) (hW_lt_Λ : W < Λ) :
     (n * 2^128 - W + Λ) / 2^127 = 2 * n := by
-  have h_W_le : W ≤ n * 2^128 := by
-    have h1 : W ≤ 2^127 - 1 := hW_bound
-    have h2 : (2 : ℕ)^127 - 1 < 2^128 := by
-      calc (2 : ℕ)^127 - 1 < 2^127 := Nat.sub_one_lt (Nat.two_pow_pos 127).ne'
-        _ ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega)
-    have h3 : (1 : ℕ) * 2^128 ≤ n * 2^128 := Nat.mul_le_mul_right _ h_n_pos
-    omega
+  have h1 : W ≤ 2^127 - 1 := hW_bound
+  have h2 : (2 : ℕ)^127 - 1 < 2^128 := by
+    calc (2 : ℕ)^127 - 1 < 2^127 := Nat.sub_one_lt (Nat.two_pow_pos 127).ne'
+      _ ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega)
+  have h3 : (1 : ℕ) * 2^128 ≤ n * 2^128 := Nat.mul_le_mul_right _ h_n_pos
+  have h_W_le : W ≤ n * 2^128 := by omega
   have h_rearrange : n * 2^128 - W + Λ = n * 2^128 + (Λ - W) := by omega
   rw [h_rearrange]
   have h_expand : n * 2^128 + (Λ - W) = 2 * n * 2^127 + (Λ - W) := by ring
   rw [h_expand]
-  apply Nat.div_eq_of_lt_le
-  · omega
-  · have h_Λ_W_bound : Λ - W < 2^127 := by omega
+  have h_Λ_W_bound : Λ - W < 2^127 := by omega
+  have h_upper : 2 * n * 2^127 + (Λ - W) < (2 * n + 1) * 2^127 := by
     calc 2 * n * 2^127 + (Λ - W) < 2 * n * 2^127 + 2^127 := by omega
       _ = (2 * n + 1) * 2^127 := by ring
+  apply Nat.div_eq_of_lt_le
+  · omega
+  · exact h_upper
 
 omit [Fact (p < 2 ^ 254)] in
 /-- Case 1 of sum_range_precise: when input > ct, bit 127 is 1 -/
