@@ -127,10 +127,10 @@ end Circuit
 
 /-- Emit an add operation to the global multiset -/
 @[circuit_norm]
-def Channel.emit {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
-    (channel : Channel F Message)
+def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  ((), [.add mult { name := channel.name, values := (toElements msg).toList }])
+  let interaction : ChannelInteraction F Message := ⟨ channel, mult, msg ⟩
+  ((), [.add interaction.toRaw])
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
@@ -161,9 +161,9 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
   | .lookup l :: ops =>
     l.Contains eval ∧ ConstraintsHold eval ops
+  | .add i :: ops => i.IsAdded eval ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
-  | .add mult msg :: ops => msg.IsAdded eval mult ∧ ConstraintsHold eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
@@ -175,9 +175,9 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
   | .lookup l :: ops =>
     l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+  | .add i :: ops => i.IsAdded eval ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
-  | .add mult msg :: ops => msg.IsAdded eval mult ∧ ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -189,9 +189,9 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
   | .lookup l :: ops =>
     l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
+  | .add i :: ops => i.IsAdded eval ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
-  | .add mult msg :: ops => msg.IsAdded eval mult ∧ ConstraintsHold.Completeness eval ops
 end Circuit
 
 /--
@@ -213,8 +213,8 @@ def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : �
   | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
+  | .add _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
-  | .add _ _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
@@ -550,7 +550,7 @@ def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F 
   | .witness _ compute => (compute (.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
-  | .add _ _ => []
+  | .add _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
@@ -591,7 +591,7 @@ def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (E
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
-  | .add _ _ :: ops => witnessGenerators ops
+  | .add _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
@@ -599,7 +599,7 @@ def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment 
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops.toFlat) ++ witnessGenerators ops
-  | .add _ _ :: ops => witnessGenerators ops
+  | .add _ :: ops => witnessGenerators ops
 
 -- statements about constant length or output
 
