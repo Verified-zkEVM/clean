@@ -515,6 +515,60 @@ lemma exists_msb_win_position (ct : ℕ) (h_ct : ct < 2^254)
     simpa [h_sig, h_const] using h_ab
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- fromBits of a bit vector is bounded by 2^n -/
+lemma fromBits_input_lt_pow (input : Vector (F p) 254)
+    (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) :
+    fromBits (input.map ZMod.val) < 2^254 := by
+  apply fromBits_lt
+  intro i hi
+  simp only [Vector.getElem_map]
+  have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
+  rcases h_bits i hi with h0 | h1
+  · left; simp only [ZMod.val_eq_zero]; exact h0
+  · right
+    apply_fun ZMod.val at h1
+    simp only [@ZMod.val_one p ⟨hp_gt_1⟩] at h1
+    exact h1
+
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- signalPairValF equals the 2-bit value at the shifted position -/
+lemma signalPairValF_eq_shiftRight_mod4 (input : Vector (F p) 254) (i : Fin 127)
+    (h_bits : ∀ j (_ : j < 254), input[j] = 0 ∨ input[j] = 1) :
+    signalPairValF input[i.val * 2] input[i.val * 2 + 1] =
+      (fromBits (input.map ZMod.val) >>> (i.val * 2)) % 4 := by
+  unfold signalPairValF
+  let bits := input.map ZMod.val
+  have h_bits_01 : ∀ (j : ℕ) (hj : j < 254), bits[j] = 0 ∨ bits[j] = 1 := by
+    intro j hj
+    simp only [Vector.getElem_map, bits]
+    have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
+    rcases h_bits j hj with h0 | h1
+    · left; simp only [ZMod.val_eq_zero]; exact h0
+    · right
+      apply_fun ZMod.val at h1
+      simp only [@ZMod.val_one p ⟨hp_gt_1⟩] at h1
+      exact h1
+  have hi_bound : i.val * 2 + 1 < 254 := by omega
+  have h_fb := fromBits_shiftRight_mod4 bits (i.val * 2) h_bits_01 hi_bound
+  simp only [Vector.getElem_map, bits] at h_fb
+  have h_idx : i.val * 2 + 1 = 1 + i.val * 2 := by omega
+  simp only [h_idx] at h_fb ⊢
+  rw [h_fb]
+  ac_rfl
+
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+/-- constPairValAt equals the 2-bit value at the shifted position -/
+lemma constPairValAt_eq_shiftRight_mod4' (ct : ℕ) (i : Fin 127) :
+    constPairValAt i.val ct = (ct >>> (i.val * 2)) % 4 := by
+  unfold constPairValAt
+  have h1 : (ct >>> (i.val * 2 + 1)) &&& 1 = (ct >>> (i.val * 2)) / 2 % 2 := by
+    simp only [Nat.shiftRight_add, Nat.shiftRight_one, Nat.and_one_is_mod]
+  have h2 : (ct >>> (i.val * 2)) &&& 1 = (ct >>> (i.val * 2)) % 2 := by
+    simp only [Nat.and_one_is_mod]
+  rw [h1, h2]
+  omega
+
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 /-- When input ≤ ct, either all pairs are ties, or the MSB differing position is a loss. -/
 lemma msb_determines_le (ct : ℕ) (h_ct : ct < 2^254)
     (input : Vector (F p) 254)
@@ -526,50 +580,14 @@ lemma msb_determines_le (ct : ℕ) (h_ct : ct < 2^254)
       ∀ j : Fin 127, j > k →
         signalPairValF input[j.val * 2] input[j.val * 2 + 1] = constPairValAt j.val ct) := by
   let x := fromBits (input.map ZMod.val)
-  have hx_lt : x < 2^254 := by
-    apply fromBits_lt
-    intro i hi
-    simp only [Vector.getElem_map]
-    have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
-    rcases h_bits i hi with h0 | h1
-    · left; simp only [ZMod.val_eq_zero]; exact h0
-    · right
-      apply_fun ZMod.val at h1
-      simp only [@ZMod.val_one p ⟨hp_gt_1⟩] at h1
-      exact h1
+  have hx_lt : x < 2^254 := fromBits_input_lt_pow input h_bits
 
   have h_signal_pair : ∀ i : Fin 127,
-      signalPairValF input[i.val * 2] input[i.val * 2 + 1] = (x >>> (i.val * 2)) % 4 := by
-    intro i
-    unfold signalPairValF
-    let bits := input.map ZMod.val
-    have h_bits_01 : ∀ (j : ℕ) (hj : j < 254), bits[j] = 0 ∨ bits[j] = 1 := by
-      intro j hj
-      simp only [Vector.getElem_map, bits]
-      have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
-      rcases h_bits j hj with h0 | h1
-      · left; simp only [ZMod.val_eq_zero]; exact h0
-      · right
-        apply_fun ZMod.val at h1
-        simp only [@ZMod.val_one p ⟨hp_gt_1⟩] at h1
-        exact h1
-    have hi_bound : i.val * 2 + 1 < 254 := by omega
-    have h_fb := fromBits_shiftRight_mod4 bits (i.val * 2) h_bits_01 hi_bound
-    simp only [Vector.getElem_map, bits] at h_fb
-    have h_idx : i.val * 2 + 1 = 1 + i.val * 2 := by omega
-    simp only [h_idx] at h_fb ⊢
-    rw [h_fb]
-    ac_rfl
+      signalPairValF input[i.val * 2] input[i.val * 2 + 1] = (x >>> (i.val * 2)) % 4 :=
+    fun i => signalPairValF_eq_shiftRight_mod4 input i h_bits
 
-  have h_const_pair : ∀ i : Fin 127, constPairValAt i.val ct = (ct >>> (i.val * 2)) % 4 := by
-    intro i
-    unfold constPairValAt
-    have h1 : (ct >>> (i.val * 2 + 1)) &&& 1 = (ct >>> (i.val * 2)) / 2 % 2 := by
-      simp only [Nat.shiftRight_add, Nat.shiftRight_one, Nat.and_one_is_mod]
-    have h2 : (ct >>> (i.val * 2)) &&& 1 = (ct >>> (i.val * 2)) % 2 := by
-      simp only [Nat.and_one_is_mod]
-    rw [h1, h2]
-    omega
+  have h_const_pair : ∀ i : Fin 127, constPairValAt i.val ct = (ct >>> (i.val * 2)) % 4 :=
+    fun i => constPairValAt_eq_shiftRight_mod4' ct i
 
   rcases Nat.lt_or_eq_of_le h_le with h_lt | h_eq
   · right
