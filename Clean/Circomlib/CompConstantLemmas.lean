@@ -345,11 +345,10 @@ lemma lt_of_high_eq_and_pair_lt (x y k : ℕ)
 
   have h_mod_lt : x % 4^(k+1) < y % 4^(k+1) := by
     rw [h_x_low, h_y_low]
-    have h_xp_lt_yp : x / 4^k % 4 + 1 ≤ y / 4^k % 4 := h_pair_lt'
     calc (x / 4^k % 4) * 4^k + x % 4^k
       < (x / 4^k % 4) * 4^k + 4^k := by omega
       _ = (x / 4^k % 4 + 1) * 4^k := by ring
-      _ ≤ (y / 4^k % 4) * 4^k := Nat.mul_le_mul_right _ h_xp_lt_yp
+      _ ≤ (y / 4^k % 4) * 4^k := Nat.mul_le_mul_right _ h_pair_lt'
       _ ≤ (y / 4^k % 4) * 4^k + y % 4^k := Nat.le_add_right _ _
 
   have hx_eq := div_mod_eq_self x (4^(k+1))
@@ -1013,7 +1012,6 @@ lemma div_wins_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127 -
     have h2 : 2 * n * 2^127 = (2 * n - 1) * 2^127 + 2^127 := by
       have : 2 * n - 1 + 1 = 2 * n := Nat.sub_add_cancel (by omega : 2 * n ≥ 1)
       calc 2 * n * 2^127 = (2 * n - 1 + 1) * 2^127 := by rw [this]
-        _ = (2 * n - 1) * 2^127 + 1 * 2^127 := by ring
         _ = (2 * n - 1) * 2^127 + 2^127 := by ring
     calc n * 2^128 - (W - Λ) = 2 * n * 2^127 - (W - Λ) := by rw [h1]
       _ = (2 * n - 1) * 2^127 + 2^127 - (W - Λ) := by rw [h2]
