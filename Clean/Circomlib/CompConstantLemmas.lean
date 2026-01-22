@@ -78,8 +78,8 @@ lemma bCoeff_val (i : ℕ) (hi : i < 127) : (bCoeff i : F p).val = 2^128 - 2^i :
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] [Fact p.Prime] in
 /-- Bit extraction with &&& 1 is either 0 or 1 -/
-lemma bit_and_one_cases (n : ℕ) : n &&& 1 = 0 ∨ n &&& 1 = 1 := by
-  exact (Nat.le_one_iff_eq_zero_or_eq_one).mp Nat.and_le_right
+lemma bit_and_one_cases (n : ℕ) : n &&& 1 = 0 ∨ n &&& 1 = 1 :=
+  (Nat.le_one_iff_eq_zero_or_eq_one).mp Nat.and_le_right
 
 /-! ### Helper lemmas for bit manipulation -/
 
@@ -609,8 +609,7 @@ lemma computePart_val_bound' (i : ℕ) (hi : i < 127) (slsb smsb : F p)
       exact h_val ▸ (by omega : 0 ≤ 2^128)
     · have h_val : (computePart i slsb smsb ct).val = 2^i := by
         simpa [h_gt, h_eq] using h_char
-      have h2 : 2^i ≤ 2^128 := by
-        exact Nat.pow_le_pow_right (by omega) (le_of_lt (by omega : i < 128))
+      have h2 : 2^i ≤ 2^128 := Nat.pow_le_pow_right (by omega) (le_of_lt (by omega : i < 128))
       exact h_val ▸ h2
 
 omit [Fact (p < 2 ^ 254)] in
@@ -1171,8 +1170,7 @@ lemma sum_bit127_zero_when_loss (ct : ℕ)
       simp only [h_wins_zero, hW_zero, Nat.zero_mul, Nat.zero_sub, Nat.zero_add]
       have hΛ_lt : Λ < 2^127 := by omega
       rw [Nat.div_eq_of_lt hΛ_lt]
-    · have h_wins_pos : wins.card ≥ 1 := Nat.one_le_iff_ne_zero.mpr h_wins_zero
-      exact div_losses_case wins.card W Λ h_wins_pos hW_bound hΛ_bound (by omega)
+    · exact div_losses_case wins.card W Λ (Nat.one_le_iff_ne_zero.mpr h_wins_zero) hW_bound hΛ_bound (by omega)
 
   rw [h_key]
   omega
