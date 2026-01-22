@@ -143,10 +143,9 @@ lemma sum_pow_two_fin (k : ℕ) :
 lemma contributions_below_k_bound (k : ℕ) (contributions : Fin k → ℕ)
     (h_bound : ∀ i, contributions i ≤ 2^128) :
     (Finset.univ : Finset (Fin k)).sum contributions < k * 2^128 + 1 := by
-  have h_sum_le : (Finset.univ : Finset (Fin k)).sum contributions ≤ (Finset.univ : Finset (Fin k)).sum (fun _ => 2^128) := by
-    apply Finset.sum_le_sum; intro i _; exact h_bound i
   calc (Finset.univ : Finset (Fin k)).sum contributions
-      ≤ (Finset.univ : Finset (Fin k)).sum (fun _ => 2^128) := h_sum_le
+      ≤ (Finset.univ : Finset (Fin k)).sum (fun _ => 2^128) := by
+        apply Finset.sum_le_sum; intro i _; exact h_bound i
     _ = k * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
     _ < k * 2^128 + 1 := by omega
 
@@ -166,11 +165,9 @@ lemma signalPairAt_le_3 (i : ℕ) (hi : i < 127) (input : Vector (F p) 254)
     (h_bits : ∀ j (_ : j < 254), input[j] = 0 ∨ input[j] = 1) :
     signalPairAt i hi input ≤ 3 := by
   unfold signalPairAt
-  have hi2 : i * 2 < 254 := by omega
-  have hi21 : i * 2 + 1 < 254 := by omega
   have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
-  have h_slsb := h_bits (i * 2) hi2
-  have h_smsb := h_bits (i * 2 + 1) hi21
+  have h_slsb := h_bits (i * 2) (by omega : i * 2 < 254)
+  have h_smsb := h_bits (i * 2 + 1) (by omega : i * 2 + 1 < 254)
   rcases h_slsb with h0_l | h1_l <;> rcases h_smsb with h0_m | h1_m
   · simp only [h0_l, h0_m, ZMod.val_zero]; omega
   · simp only [h0_l, h1_m, ZMod.val_zero, @ZMod.val_one p ⟨hp_gt_1⟩]; omega
@@ -889,13 +886,10 @@ lemma sum_partition (ct : ℕ) (input : Vector (F p) 254)
   have h_losses_val : losses.sum (fun i => parts[i].val) = Λ :=
     losses_sum_val ct input h_bits parts h_parts losses rfl
 
-  have h_wl_t_disj : Disjoint (wins ∪ losses) ties := by
-    rw [Finset.disjoint_union_left]; exact ⟨h_disjoint_wt, h_disjoint_lt⟩
-
   calc (Finset.univ : Finset (Fin 127)).sum (fun i => parts[i].val)
       = (wins ∪ losses ∪ ties).sum (fun i => parts[i].val) := by rw [h_union]
-    _ = (wins ∪ losses).sum (fun i => parts[i].val) + ties.sum (fun i => parts[i].val) := by
-        exact Finset.sum_union h_wl_t_disj
+    _ = (wins ∪ losses).sum (fun i => parts[i].val) + ties.sum (fun i => parts[i].val) :=
+        Finset.sum_union (by rw [Finset.disjoint_union_left]; exact ⟨h_disjoint_wt, h_disjoint_lt⟩)
     _ = wins.sum (fun i => parts[i].val) + losses.sum (fun i => parts[i].val) +
         ties.sum (fun i => parts[i].val) := by
         rw [Finset.sum_union h_disjoint_wl]
@@ -996,9 +990,8 @@ lemma div_wins_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127 -
   rw [h_rearrange]
   have h_WΛ_pos : W - Λ > 0 := Nat.sub_pos_of_lt hW_gt_Λ
   have h_mul_eq : n * 2^128 = 2 * n * 2^127 := by ring
-  have h_2n_sub_1_plus_1 : 2 * n - 1 + 1 = 2 * n := Nat.sub_add_cancel (by omega : 2 * n ≥ 1)
   have h_2n_split : 2 * n * 2^127 = (2 * n - 1) * 2^127 + 2^127 := by
-    calc 2 * n * 2^127 = (2 * n - 1 + 1) * 2^127 := by rw [h_2n_sub_1_plus_1]
+    calc 2 * n * 2^127 = (2 * n - 1 + 1) * 2^127 := by rw [Nat.sub_add_cancel (by omega : 2 * n ≥ 1)]
       _ = (2 * n - 1) * 2^127 + 2^127 := by ring
   have h_expand : n * 2^128 - (W - Λ) = (2 * n - 1) * 2^127 + (2^127 - (W - Λ)) := by
     calc n * 2^128 - (W - Λ) = 2 * n * 2^127 - (W - Λ) := by rw [h_mul_eq]
