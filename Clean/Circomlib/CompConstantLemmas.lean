@@ -79,8 +79,7 @@ lemma bCoeff_val (i : ℕ) (hi : i < 127) : (bCoeff i : F p).val = 2^128 - 2^i :
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] [Fact p.Prime] in
 /-- Bit extraction with &&& 1 is either 0 or 1 -/
 lemma bit_and_one_cases (n : ℕ) : n &&& 1 = 0 ∨ n &&& 1 = 1 := by
-  have h : n &&& 1 ≤ 1 := Nat.and_le_right
-  exact (Nat.le_one_iff_eq_zero_or_eq_one).mp h
+  exact (Nat.le_one_iff_eq_zero_or_eq_one).mp Nat.and_le_right
 
 /-! ### Helper lemmas for bit manipulation -/
 
@@ -400,8 +399,7 @@ lemma diff_finset_nonempty_of_ne (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254) (
     have : i ∈ diff_finset := by simp [h_def, h_ne_pair]
     rw [h_empty] at this
     exact Finset.notMem_empty _ this
-  have h_x_eq_y : x = y := eq_of_all_pairs_eq x y hx hy h_all_eq
-  exact absurd h_x_eq_y h_ne
+  exact absurd (eq_of_all_pairs_eq x y hx hy h_all_eq) h_ne
 
 omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 /-- All positions above max of diff_finset have equal pairs -/
@@ -416,8 +414,7 @@ lemma above_max_pairs_eq (x y : ℕ) (diff_finset : Finset (Fin 127)) (h_nonempt
     exact h_ne
   have h_le := Finset.le_max' diff_finset j hj_mem
   rw [← hk] at h_le
-  have h_lt := lt_of_lt_of_le hj h_le
-  exact (lt_irrefl _ h_lt)
+  exact (lt_irrefl _ (lt_of_lt_of_le hj h_le))
 
 /-- Key lemma: fromBits comparison implies existence of differing pair. -/
 lemma exists_msb_win_from_gt (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254) (h_gt : x > y) :
@@ -613,8 +610,7 @@ lemma computePart_val_bound' (i : ℕ) (hi : i < 127) (slsb smsb : F p)
     · have h_val : (computePart i slsb smsb ct).val = 2^i := by
         simpa [h_gt, h_eq] using h_char
       have h2 : 2^i ≤ 2^128 := by
-        have h' : i < 128 := by omega
-        exact Nat.pow_le_pow_right (by omega) (le_of_lt h')
+        exact Nat.pow_le_pow_right (by omega) (le_of_lt (by omega : i < 128))
       exact h_val ▸ h2
 
 omit [Fact (p < 2 ^ 254)] in
