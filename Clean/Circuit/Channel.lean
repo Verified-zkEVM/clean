@@ -16,7 +16,7 @@ deriving DecidableEq, Repr
 
 def Environment.rawInteractions (env : Environment F) (channelName : String) (n : ℕ) :
     List (F × Vector F n) :=
-  env.channelInteractions.filterMap fun (name, mult, elts) =>
+  env.interactions.filterMap fun (name, mult, elts) =>
     if name = channelName then some (mult, .ofArray n elts) else none
 
 namespace NamedList
