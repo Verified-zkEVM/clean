@@ -157,8 +157,7 @@ def signalPairAt (i : ℕ) (hi : i < 127) (input : Vector (F p) 254) : ℕ :=
 
 omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma signalPairAt_eq_signalPairValF (i : ℕ) (hi : i < 127) (input : Vector (F p) 254) :
-    signalPairAt i hi input = signalPairValF input[i * 2] input[i * 2 + 1] := by
-  unfold signalPairAt signalPairValF
+    signalPairAt i hi input = signalPairValF input[i * 2] input[i * 2 + 1] :=
   rfl
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
