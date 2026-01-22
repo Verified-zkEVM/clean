@@ -785,10 +785,7 @@ lemma sum_sub_pow_eq (t : Finset (Fin 127)) :
       Finset.sum_le_sum (fun i _ =>
         Nat.pow_le_pow_right (by omega) (Nat.le_of_lt (Nat.lt_trans i.isLt (by omega : 127 < 128))))
     have h_sum_eq : s.sum (fun _ => 2^128) = s.card * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
-    have h_sum_le : s.sum (fun i => 2^i.val) ≤ s.card * 2^128 := by
-      calc s.sum (fun i => 2^i.val)
-          ≤ s.sum (fun _ => 2^128) := h_sum_bound
-        _ = s.card * 2^128 := h_sum_eq
+    have h_sum_le : s.sum (fun i => 2^i.val) ≤ s.card * 2^128 := Nat.le_trans h_sum_bound (Nat.le_of_eq h_sum_eq)
     omega
 
 omit [Fact (p < 2 ^ 254)] in
