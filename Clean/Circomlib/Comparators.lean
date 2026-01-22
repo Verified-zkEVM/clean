@@ -242,7 +242,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have hy_eval : Expression.eval env input_var.2 = input.2 := by
       simpa using congrArg Prod.snd h_input
 
-    simp [hx_eval, hy_eval] at h_holds
+    simp only [hx_eval, hy_eval, id_eq] at h_holds
 
     set out := env.get (i₀ + n + 1) with hout
     have two_exp_n_small : 2^n < p := by
@@ -252,17 +252,15 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have heq: ZMod.val ((2 : F p)^n) = 2^n := by
       rw [ZMod.val_pow]
       rw [ZMod.val_ofNat_of_lt]
-      · simp_all
-        exact Fact.out
+      · simp_all [Fact.out]
       convert two_exp_n_small
       rw [ZMod.val_ofNat_of_lt]
-      simp_all
-      exact Fact.out
+      simp_all [Fact.out]
 
     by_cases hlt : ZMod.val input.1 < ZMod.val input.2
 
     -- CASE input.1 < input.2
-    simp [hlt]
+    simp only [id_eq, hlt, ↓reduceIte]
 
     have hdiff_lt : ZMod.val (input.1 + 2^n - input.2) < 2^n := by
       rw [ZMod.val_sub]
@@ -368,7 +366,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       simpa using congrArg Prod.fst h_input
     have hy_eval : Expression.eval env input_var.2 = input.2 := by
       simpa using congrArg Prod.snd h_input
-    simp [hx_eval, hy_eval] at *
+    simp only [hx_eval, hy_eval, Prod.mk.eta, id_eq] at *
     set out := env.get (i₀ + n + 1) with hout
     have two_exp_n_small : 2^n < p := by
       have : 2^n ≤ 2^(n+1) := by gcongr; repeat linarith
@@ -377,12 +375,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have heq: ZMod.val ((2 : F p) ^ n) = 2^n := by
       rw [ZMod.val_pow]
       rw [ZMod.val_ofNat_of_lt]
-      · simp_all
-        exact Fact.out
+      · simp_all [Fact.out]
       convert two_exp_n_small
       rw [ZMod.val_ofNat_of_lt]
-      simp_all
-      exact Fact.out
+      simp_all [Fact.out]
 
     have hdiff_lt_basic : ZMod.val (input.1 + 2^n - input.2) < 2^(n+1) := by
       rw [ZMod.val_sub]
