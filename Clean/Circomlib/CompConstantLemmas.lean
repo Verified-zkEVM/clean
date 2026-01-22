@@ -474,47 +474,6 @@ lemma signalPairAt_eq_fromBits_pair (i : ℕ) (input : Vector (F p) 254)
   simpa [Nat.mul_comm, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h_mod4.symm
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
-lemma exists_msb_win_position (ct : ℕ) (h_ct : ct < 2^254)
-    (input : Vector (F p) 254)
-    (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
-    (h_gt : fromBits (input.map ZMod.val) > ct) :
-    ∃ k : Fin 127,
-      signalPairValF input[k.val * 2] input[k.val * 2 + 1] > constPairValAt k.val ct ∧
-      ∀ j : Fin 127, j > k →
-        signalPairValF input[j.val * 2] input[j.val * 2 + 1] = constPairValAt j.val ct := by
-  have hx : fromBits (input.map ZMod.val) < 2^254 := by
-    exact (toBits_fromBits_aux (input.map ZMod.val) (by
-      intro i hi
-      have h := h_bits i hi
-      rcases h with h0 | h1
-      · left; simpa [Vector.getElem_map, ZMod.val_zero] using congrArg ZMod.val h0
-      · right
-        have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
-        have h1' := congrArg ZMod.val h1
-        simpa [Vector.getElem_map, @ZMod.val_one p ⟨hp_gt_1⟩] using h1')).1
-  have hy : ct < 2^254 := h_ct
-  obtain ⟨k, h_win, h_above⟩ := exists_msb_win_from_gt (fromBits (input.map ZMod.val)) ct hx hy h_gt
-  refine ⟨k, ?_, ?_⟩
-  · have h_sig : signalPairValF input[k.val * 2] input[k.val * 2 + 1] =
-      (fromBits (input.map ZMod.val) >>> (k.val * 2)) % 4 := by
-      have h1 := (signalPairAt_eq_signalPairValF k.val k.isLt input).symm
-      have h2 := signalPairAt_eq_fromBits_pair k.val input h_bits k.isLt
-      simpa [h1] using h2
-    have h_const : constPairValAt k.val ct = (ct >>> (k.val * 2)) % 4 :=
-      constPairAt_eq_shift_mod4 ct k.val
-    simpa [h_sig, h_const] using h_win
-  · intro j hj
-    have h_sig : signalPairValF input[j.val * 2] input[j.val * 2 + 1] =
-      (fromBits (input.map ZMod.val) >>> (j.val * 2)) % 4 := by
-      have h1 := (signalPairAt_eq_signalPairValF j.val j.isLt input).symm
-      have h2 := signalPairAt_eq_fromBits_pair j.val input h_bits j.isLt
-      simpa [h1] using h2
-    have h_const : constPairValAt j.val ct = (ct >>> (j.val * 2)) % 4 :=
-      constPairAt_eq_shift_mod4 ct j.val
-    have h_ab := h_above j hj
-    simpa [h_sig, h_const] using h_ab
-
-omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 /-- fromBits of a bit vector is bounded by 2^n -/
 lemma fromBits_input_lt_pow (input : Vector (F p) 254)
     (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) :
@@ -567,6 +526,28 @@ lemma constPairValAt_eq_shiftRight_mod4' (ct : ℕ) (i : Fin 127) :
     simp only [Nat.and_one_is_mod]
   rw [h1, h2]
   omega
+
+omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
+lemma exists_msb_win_position (ct : ℕ) (h_ct : ct < 2^254)
+    (input : Vector (F p) 254)
+    (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
+    (h_gt : fromBits (input.map ZMod.val) > ct) :
+    ∃ k : Fin 127,
+      signalPairValF input[k.val * 2] input[k.val * 2 + 1] > constPairValAt k.val ct ∧
+      ∀ j : Fin 127, j > k →
+        signalPairValF input[j.val * 2] input[j.val * 2 + 1] = constPairValAt j.val ct := by
+  have hx : fromBits (input.map ZMod.val) < 2^254 := fromBits_input_lt_pow input h_bits
+  have hy : ct < 2^254 := h_ct
+  obtain ⟨k, h_win, h_above⟩ := exists_msb_win_from_gt (fromBits (input.map ZMod.val)) ct hx hy h_gt
+  refine ⟨k, ?_, ?_⟩
+  · have h_sig := signalPairValF_eq_shiftRight_mod4 input k h_bits
+    have h_const := constPairValAt_eq_shiftRight_mod4' ct k
+    simpa [h_sig, h_const] using h_win
+  · intro j hj
+    have h_sig := signalPairValF_eq_shiftRight_mod4 input j h_bits
+    have h_const := constPairValAt_eq_shiftRight_mod4' ct j
+    have h_ab := h_above j hj
+    simpa [h_sig, h_const] using h_ab
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 /-- When input ≤ ct, either all pairs are ties, or the MSB differing position is a loss. -/
