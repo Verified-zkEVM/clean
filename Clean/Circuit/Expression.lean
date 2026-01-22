@@ -33,7 +33,7 @@ structure Environment (F : Type) where
   get : ℕ → F
 
   /-- Channel interactions done by this and other circuits sharing the same channel -/
-  channelInteractions : RawInteractions F
+  interactions : RawInteractions F
 
   /-- Additional prover data not part of the current circuit's witness, such as the content
    of lookup tables, or auxiliary data made available for potential witnessing. -/

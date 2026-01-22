@@ -90,26 +90,25 @@ def Channel.toRaw (channel : Channel F Message) : RawChannel F where
 def ChannelInteraction.toRaw : ChannelInteraction F Message → RawInteraction F
   | { channel, mult, msg } => ⟨ channel.toRaw, mult, toElements msg ⟩
 
-def Environment.interactions (env : Environment F) (channel : Channel F Message) :
+def Channel.interactions (env : Environment F) (channel : Channel F Message) :
     List (F × Message F) :=
   env.rawInteractions channel.name (size Message)
   |>.map fun (mult, elts) => (mult, fromElements elts)
 
 @[circuit_norm]
 def ChannelInteraction.IsAdded (i : ChannelInteraction F Message) (env : Environment F) : Prop :=
-  (env i.mult, eval env i.msg) ∈ env.interactions i.channel
+  (env i.mult, eval env i.msg) ∈ i.channel.interactions env
 
 def RawInteraction.IsAdded (i : RawInteraction F) (env : Environment F) : Prop :=
   let n := i.channel.arity
-  let interactions := env.rawInteractions i.channel.name n
-  (env i.mult, i.msg.map env) ∈ interactions
+  (env i.mult, i.msg.map env) ∈ env.rawInteractions i.channel.name n
 
 @[circuit_norm]
 lemma RawInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction F Message) :
     int.toRaw.IsAdded env ↔ int.IsAdded env := by
   rcases int with ⟨channel, mult, msg⟩
   simp only [circuit_norm, RawInteraction.IsAdded, ChannelInteraction.IsAdded,
-    ChannelInteraction.toRaw, Environment.interactions,
+    ChannelInteraction.toRaw, Channel.interactions,
     List.mem_map, Prod.mk.injEq, Prod.exists, ↓existsAndEq, true_and]
   constructor
   · intro h_mem
@@ -122,7 +121,7 @@ lemma RawInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction
 
 @[circuit_norm]
 def ChannelInteraction.Guarantees (i : ChannelInteraction F Message) (env : Environment F) : Prop :=
-  i.channel.Guarantees (env i.mult) (eval env i.msg) (env.interactions i.channel) env.data
+  i.channel.Guarantees (env i.mult) (eval env i.msg) (i.channel.interactions env) env.data
 
 def RawInteraction.Guarantees (i : RawInteraction F) (env : Environment F) : Prop :=
   i.channel.Guarantees (env i.mult) (i.msg.map env) (env.rawInteractions i.channel.name i.channel.arity) env.data
@@ -148,10 +147,10 @@ abbrev InteractionDelta (F : Type) := List (NamedList F × F)
 lemma NamedList.isAdded_def (channel : Channel F Message) (env : Environment F)
   (msg : Message (Expression F)) (mult : Expression F) :
     NamedList.IsAdded env { name := channel.name, values := (toElements msg).toList } mult ↔
-    (env mult, ProvableType.eval env msg) ∈ env.interactions channel := by
+    (env mult, ProvableType.eval env msg) ∈ channel.interactions env := by
   -- TODO this proof is much more annoying that I expected
   -- TODO I think the List / Vector mismatch makes it much harder, remove that!
-  simp only [NamedList.IsAdded, Environment.interactions, circuit_norm]
+  simp only [NamedList.IsAdded, Channel.interactions, circuit_norm]
   have h_size : (toElements msg).toArray.size = size Message := by simp
   have h_size' : (toElements msg).toList.length = size Message := by simp
   simp only [List.mem_map]
