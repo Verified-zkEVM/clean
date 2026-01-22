@@ -21,16 +21,71 @@ variable [Field F]
 def eval (env : Environment F) (nl : NamedList (Expression F)) : NamedList F :=
   { name := nl.name, values := nl.values.map (Expression.eval env) }
 
+def IsAdded (env : Environment F) (nl : NamedList (Expression F)) (mult : Expression F) : Prop :=
+  let n := nl.values.length
+  let interactions := env.channels nl.name n
+  let element : Vector F n := ⟨ .mk (nl.values.map env), List.length_map .. ⟩
+  (env mult, element) ∈ interactions
 end NamedList
 
 structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
   name : String
 
-def NamedList.IsAdded (env : Environment F) (nl : NamedList (Expression F)) (mult : Expression F) : Prop :=
-  let n := nl.values.length
-  let interactions := env.channels nl.name n
-  let element : Vector F n := ⟨ .mk (nl.values.map env), List.length_map .. ⟩
-  (env mult, element) ∈ interactions
+  /-- the guarantees you get from adding an interaction to the channel, to be used locally in your soundness proof -/
+  Guarantees (mult : F) (message : Message F)
+    (interactions : List (F × Message F)) (data : ProverData F) : Prop
+
+  /-- additional proof obligation from adding an interaction, to be _provided_ locally in your soundness proof.
+    intuition: the `Guarantees` for multiplicity `-m` should follow from the `Requirements` for multiplicity `m`,
+    so that pulling from the channel gives you a guarantee that is satisfied on the other side by the requirement for pushing
+    the same element.
+   -/
+  Requirements (mult : F) (message : Message F)
+    (interactions : List (F × Message F)) (data : ProverData F) : Prop
+
+structure ChannelInteraction (F : Type) (Message : TypeMap) [ProvableType Message] where
+  channel : Channel F Message
+  mult : F
+  msg : Message F
+
+/-- `Channel` with type argument removed, to be used in the core framework. -/
+structure RawChannel (F : Type) where
+  name : String
+  arity : ℕ
+  Guarantees (mult : F) (message : Vector F arity) (interactions : List (F × Vector F arity))
+    (data : ProverData F) : Prop
+  Requirements (mult : F) (message : Vector F arity) (interactions : List (F × Vector F arity))
+    (data : ProverData F) : Prop
+
+structure RawInteraction (F : Type) where
+  channel : RawChannel F
+  mult : F
+  msg : Vector F channel.arity
+
+instance [Repr F] : Repr (RawInteraction F) where
+  reprPrec i _ :=
+    "(RawInteraction channel=" ++ i.channel.name ++
+    ", mult=" ++ repr i.mult ++ ", msg=" ++ repr i.msg ++ ")"
+
+def Channel.interactionToRaw (interaction : F × Message F) :
+    F × Vector F (size Message) := (interaction.1, toElements interaction.2)
+
+def Channel.interactionFromRaw (interaction : F × Vector F (size Message)) :
+    F × Message F := (interaction.1, fromElements interaction.2)
+
+/-- Convert a `Channel` to a `RawChannel` by removing the type argument -/
+def Channel.toRaw (channel : Channel F Message) : RawChannel F where
+  name := channel.name
+  arity := size Message
+  Guarantees mult message is data :=
+    channel.Guarantees mult (fromElements message) (is.map interactionFromRaw) data
+  Requirements mult message is data :=
+    channel.Requirements mult (fromElements message) (is.map interactionFromRaw) data
+
+def Environment.getInteractions (env : Environment F) (channel : Channel F Message) :
+    List (F × Message F) :=
+  env.channels channel.name (size Message)
+  |>.map fun (mult, elts) => (mult, fromElements elts)
 
 /--
 An `InteractionDelta` represents a change to an interaction (multiset argument), as a list
@@ -45,9 +100,6 @@ Using `F` avoids ambiguity in converting `F → ℤ` and allows direct multiplic
 -/
 abbrev InteractionDelta (F : Type) := List (NamedList F × F)
 
-def Environment.getInteractions (env : Environment F) (channel : Channel F Message) : List (F × Message F) :=
-  env.channels channel.name (size Message)
-  |>.map fun (mult, elts) => (mult, fromElements elts)
 
 @[circuit_norm]
 lemma isAdded_def (channel : Channel F Message) (env : Environment F)
