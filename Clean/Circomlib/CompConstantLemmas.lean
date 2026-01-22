@@ -274,6 +274,7 @@ lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
   rw [h4pow]
   rw [Nat.and_comm, Nat.and_one_is_mod, Nat.and_comm, Nat.and_one_is_mod]
   let bit_pos := 2*(k+1) + i
+  have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
   by_cases hbound : bit_pos < 254
   · let h_pair_pos := bit_pos / 2
     have h_pair_bound : h_pair_pos ≥ k + 1 := by omega
@@ -281,24 +282,20 @@ lemma high_parts_eq_of_pairs_eq_above (x y k : ℕ)
     · have h_pair_eq := h_above ⟨h_pair_pos, h_pair_lt_127⟩ (by omega : h_pair_pos > k)
       simp only [Nat.shiftRight_eq_div_pow] at h_pair_eq
       by_cases h_even : bit_pos % 2 = 0
-      · have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
-        rw [hpow_eq]
+      · rw [hpow_eq]
         have h_bp_eq : bit_pos = h_pair_pos * 2 := by omega
         rw [h_bp_eq]
         have h_low := low_bit_eq_of_pair_eq x y h_pair_pos h_pair_eq
         simp only [h_low]
-      · have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
-        rw [hpow_eq]
+      · rw [hpow_eq]
         have h_bp_eq : bit_pos = h_pair_pos * 2 + 1 := by omega
         rw [h_bp_eq]
         have h_high := high_bit_eq_of_pair_eq x y h_pair_pos h_pair_eq
         simp only [h_high]
-    · have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
-      rw [hpow_eq]
+    · rw [hpow_eq]
       have h_bp_ge_254 : bit_pos ≥ 254 := by omega
       omega
-  · have hpow_eq : 2^(2*(k+1)) * 2^i = 2^bit_pos := by rw [← Nat.pow_add]
-    rw [hpow_eq]
+  · rw [hpow_eq]
     have hx_div := div_pow_eq_zero_of_lt x bit_pos 254 hx (by omega : 254 ≤ bit_pos)
     have hy_div := div_pow_eq_zero_of_lt y bit_pos 254 hy (by omega : 254 ≤ bit_pos)
     rw [hx_div, hy_div]
