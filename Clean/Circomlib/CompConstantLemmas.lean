@@ -140,39 +140,11 @@ lemma sum_pow_two_fin (k : ℕ) :
     ring_nf
     omega
 
-lemma contributions_below_k_bound (k : ℕ) (contributions : Fin k → ℕ)
-    (h_bound : ∀ i, contributions i ≤ 2^128) :
-    (Finset.univ : Finset (Fin k)).sum contributions < k * 2^128 + 1 := by
-  calc (Finset.univ : Finset (Fin k)).sum contributions
-      ≤ (Finset.univ : Finset (Fin k)).sum (fun _ => 2^128) := by
-        apply Finset.sum_le_sum; intro i _; exact h_bound i
-    _ = k * 2^128 := by simp [Finset.sum_const, smul_eq_mul]
-    _ < k * 2^128 + 1 := by omega
-
 /-- Signal pair value at position i (extracted from Vector) -/
 def signalPairAt (i : ℕ) (hi : i < 127) (input : Vector (F p) 254) : ℕ :=
   have hi2 : i * 2 < 254 := by omega
   have hi21 : i * 2 + 1 < 254 := by omega
   input[i * 2 + 1].val * 2 + input[i * 2].val
-
-omit [Fact (Nat.Prime p)] [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
-lemma signalPairAt_eq_signalPairValF (i : ℕ) (hi : i < 127) (input : Vector (F p) 254) :
-    signalPairAt i hi input = signalPairValF input[i * 2] input[i * 2 + 1] :=
-  rfl
-
-omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
-lemma signalPairAt_le_3 (i : ℕ) (hi : i < 127) (input : Vector (F p) 254)
-    (h_bits : ∀ j (_ : j < 254), input[j] = 0 ∨ input[j] = 1) :
-    signalPairAt i hi input ≤ 3 := by
-  unfold signalPairAt
-  have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
-  have h_slsb := h_bits (i * 2) (by omega : i * 2 < 254)
-  have h_smsb := h_bits (i * 2 + 1) (by omega : i * 2 + 1 < 254)
-  rcases h_slsb with h0_l | h1_l <;> rcases h_smsb with h0_m | h1_m
-  · simp only [h0_l, h0_m, ZMod.val_zero]; omega
-  · simp only [h0_l, h1_m, ZMod.val_zero, @ZMod.val_one p ⟨hp_gt_1⟩]; omega
-  · simp only [h1_l, h0_m, ZMod.val_zero, @ZMod.val_one p ⟨hp_gt_1⟩]; omega
-  · simp only [h1_l, h1_m, @ZMod.val_one p ⟨hp_gt_1⟩]; omega
 
 /-- Helper: relates (x >>> k) % 4 to bits at positions k and k+1. -/
 lemma shiftRight_mod4_eq_bits (x k : ℕ) :
@@ -435,46 +407,6 @@ lemma exists_msb_win_from_gt (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254) (h_gt
     have h_lt := lt_of_high_eq_and_pair_lt x y k.val h_high_eq h_pair_lt
     omega
 
-/-- Helper: x % 4 gives pair value at position 0. -/
-lemma shift_mod4_eq_pair (x : ℕ) : x % 4 = (x >>> 0) % 4 := by
-  simp
-
-/-- Helper: const pair value equals shift/mod4. -/
-lemma constPairAt_eq_shift_mod4 (ct i : ℕ) :
-    constPairValAt i ct = (ct >>> (i * 2)) % 4 := by
-  unfold constPairValAt
-  have h1 : (ct >>> (i * 2)) % 4 = (ct / 2^(i*2)) % 4 := by simp [Nat.shiftRight_eq_div_pow]
-  have h2 : (ct >>> (i * 2 + 1)) &&& 1 = (ct / 2^(i*2+1)) % 2 := by
-    simp [Nat.shiftRight_eq_div_pow, Nat.and_comm]
-  have h3 : (ct >>> (i * 2)) &&& 1 = (ct / 2^(i*2)) % 2 := by
-    simp [Nat.shiftRight_eq_div_pow, Nat.and_comm]
-  have h4 : (ct / 2^(i*2)) % 4 = (ct / 2^(i*2)) % 2 + 2 * (ct / 2^(i*2+1) % 2) := by
-    have := shiftRight_mod4_eq_bits ct (i*2)
-    simp [Nat.shiftRight_eq_div_pow] at this
-    exact this
-  omega
-
-omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
-/-- Helper: signal pair value equals fromBits shift/mod4. -/
-lemma signalPairAt_eq_fromBits_pair (i : ℕ) (input : Vector (F p) 254)
-    (h_bits : ∀ j (_ : j < 254), input[j] = 0 ∨ input[j] = 1)
-    (hi : i < 127) :
-    signalPairAt i hi input = (fromBits (input.map ZMod.val) >>> (i * 2)) % 4 := by
-  have h_bits' : ∀ (j : ℕ) (hj : j < 254), (input.map ZMod.val)[j] = 0 ∨ (input.map ZMod.val)[j] = 1 := by
-    intro j hj
-    simp only [Vector.getElem_map]
-    have hp_gt_1 : 1 < p := Nat.Prime.one_lt ‹Fact (Nat.Prime p)›.elim
-    rcases h_bits j hj with h0 | h1
-    · left; simp only [ZMod.val_eq_zero]; exact h0
-    · right
-      apply_fun ZMod.val at h1
-      simp only [@ZMod.val_one p ⟨hp_gt_1⟩] at h1
-      exact h1
-  have h_mod4 := fromBits_shiftRight_mod4 (bits := input.map ZMod.val) (k := i*2) h_bits' (by omega)
-  simp only [Vector.getElem_map] at h_mod4
-  unfold signalPairAt
-  simpa [Nat.mul_comm, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h_mod4.symm
-
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 /-- fromBits of a bit vector is bounded by 2^n -/
 lemma fromBits_input_lt_pow (input : Vector (F p) 254)
@@ -640,16 +572,6 @@ lemma list_sum_map_eval (env : Environment (F p)) (l : List (Expression (F p))) 
     simp only [List.map_cons, List.sum_cons]
     rw [ih]
     simp only [circuit_norm]
-
-omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
-/-- Helper: Expression.eval distributes over Vector.sum. -/
-lemma vector_sum_map_eval (env : Environment (F p)) (n : ℕ) (i₀ : ℕ) :
-    (Vector.map (Expression.eval env) (Vector.mapRange n fun i => var { index := i₀ + i })).sum =
-    Expression.eval env (Vector.mapRange n fun i => var { index := i₀ + i }).sum := by
-  simp only [Vector.sum, Vector.toArray_map]
-  conv_lhs => rw [← Array.sum_eq_sum_toList, Array.toList_map]
-  conv_rhs => rw [← Array.sum_eq_sum_toList]
-  exact list_sum_map_eval env _
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 lemma list_sum_val_eq {l : List (F p)} (h : (l.map ZMod.val).sum < p) :
