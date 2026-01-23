@@ -1311,4 +1311,41 @@ decreasing_by
   simp_wf
   exact h_size_lt
 
+theorem exists_path_from_source_to_sink'
+    (R : Run S) (s d : S)
+    (h_source : R.netFlow s = 1)
+    (h_others : ∀ x, x ≠ s → x ≠ d → R.netFlow x = 0) :
+    ∃ (path : List S), path.head? = some s ∧ path.getLast? = some d ∧
+      path ≠ [] ∧ R.containsPath path ∧ path.Nodup := by
+  -- we want to do induction on the size of R, for that we represent R as a List
+  have h_finite : Fintype S := by infer_instance
+  let R_list := Finset.univ.toList
+    |>.map (fun t => List.replicate (R t) t)
+    |>.flatten
+  -- now recompute R from R_list
+  have hR : R = R_list.count := by
+    funext t
+    simp [R_list]
+    sorry
+  simp only [hR] at h_source h_others ⊢
+  unfold Run.netFlow Run.containsPath countTransitionInPath at *
+  simp only at *
+  generalize R_list = Rl at *
+  clear hR R_list R
+  stop
+  match h : Rl with
+  | [] => simp_all
+  | (x,y) :: Rl =>
+    simp only [List.count_cons, beq_iff_eq] at *
+    -- TODO this would work by using an aux theorem about Rl
+    let ih := exists_path_from_source_to_sink' Rl.count s d
+    unfold Run.netFlow Run.containsPath countTransitionInPath at ih
+    simp only at ih
+    by_cases hxs : x = s
+    by_cases hys : y = s
+    · simp only [hxs, hys] at h_source h_others ih
+      simp_all
+      sorry
+    sorry
+
 end Utils.StateTransition

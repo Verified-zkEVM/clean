@@ -7,31 +7,28 @@ variable {F : Type} [Field F] {α : Type} {n : ℕ}
 variable {Message : TypeMap} [ProvableType Message]
 
 /--
-A named list of field elements, used for multiset add operations.
+A named array of field elements, used for multiset add operations.
 -/
-structure NamedList (F : Type) where
-  name : String
-  values : List F
-deriving DecidableEq, Repr
+abbrev NamedArray (F : Type) := String × Array F
 
 def Environment.rawInteractions (env : Environment F) (channelName : String) (n : ℕ) :
     List (F × Vector F n) :=
   env.interactions.filterMap fun (name, mult, elts) =>
     if h : name = channelName ∧ elts.size = n then some (mult, ⟨ elts, h.2 ⟩ ) else none
 
-namespace NamedList
+namespace NamedArray
 variable [Field F]
 
-/-- Evaluate a NamedList of expressions to a NamedList of field elements -/
-def eval (env : Environment F) (nl : NamedList (Expression F)) : NamedList F :=
-  { name := nl.name, values := nl.values.map (Expression.eval env) }
+/-- Evaluate a NamedArray of expressions to a NamedArray of field elements -/
+def eval (env : Environment F) (nl : NamedArray (Expression F)) : NamedArray F :=
+  (nl.1, nl.2.map (Expression.eval env))
 
-def IsAdded (env : Environment F) (nl : NamedList (Expression F)) (mult : Expression F) : Prop :=
-  let n := nl.values.length
-  let interactions := env.rawInteractions nl.name n
-  let element : Vector F n := ⟨ .mk (nl.values.map env), List.length_map .. ⟩
+def IsAdded (env : Environment F) (nl : NamedArray (Expression F)) (mult : Expression F) : Prop :=
+  let n := nl.2.size
+  let interactions := env.rawInteractions nl.1 n
+  let element : Vector F n := ⟨ nl.2.map env, Array.size_map .. ⟩
   (env mult, element) ∈ interactions
-end NamedList
+end NamedArray
 
 structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
   name : String
@@ -150,6 +147,24 @@ lemma AbstractInteraction.guarantees_def (env : Environment F) (int : ChannelInt
     int.toRaw.Guarantees env is ↔ int.Guarantees env is := by
   rfl
 
+@[circuit_norm]
+def ChannelInteraction.Requirements (i : ChannelInteraction F Message) (env : Environment F)
+    (is : RawInteractions F) : Prop :=
+  let interactions : List (F × Vector F (size Message)) := i.channel.toRaw.filter is
+  let interactions' := interactions.map Channel.interactionFromRaw
+  i.channel.Requirements (env i.mult) (eval env i.msg) interactions' env.data
+
+def AbstractInteraction.Requirements (i : AbstractInteraction F) (env : Environment F)
+    (is : RawInteractions F) : Prop :=
+  let interactions := i.channel.filter is
+  i.channel.Requirements (env i.mult) (i.msg.map env) interactions env.data
+
+@[circuit_norm]
+lemma AbstractInteraction.requirements_def (env : Environment F) (int : ChannelInteraction F Message)
+    (is : RawInteractions F) :
+    int.toRaw.Requirements env is ↔ int.Requirements env is := by
+  rfl
+
 def RawInteractions.getMultiplicity [DecidableEq F] (nl : String × Array F) (d : RawInteractions F) : F :=
   d.foldl (fun acc ( name, mult, msg ) =>
     if name = nl.1 ∧ msg = nl.2 then acc + mult else acc) 0
@@ -168,26 +183,23 @@ in conditional emission (e.g., `emitStateWhen enabled mult state`) is a field el
 Using `F` avoids ambiguity in converting `F → ℤ` and allows direct multiplication
 `enabled * mult` without coercion issues.
 -/
-abbrev InteractionDelta (F : Type) := List (NamedList F × F)
+abbrev InteractionDelta (F : Type) := RawInteractions F
 
 @[circuit_norm]
-lemma NamedList.isAdded_def (channel : Channel F Message) (env : Environment F)
+lemma NamedArray.isAdded_def (channel : Channel F Message) (env : Environment F)
   (msg : Message (Expression F)) (mult : Expression F) :
-    NamedList.IsAdded env { name := channel.name, values := (toElements msg).toList } mult ↔
+    NamedArray.IsAdded env (channel.name, (toElements msg).toArray) mult ↔
     (env mult, ProvableType.eval env msg) ∈ channel.interactions env := by
   -- TODO this proof is much more annoying that I expected
-  -- TODO I think the List / Vector mismatch makes it much harder, remove that!
-  simp only [NamedList.IsAdded, Channel.interactions, circuit_norm]
+  -- TODO I think the Array / Vector mismatch makes it much harder
+  simp only [NamedArray.IsAdded, Channel.interactions, circuit_norm]
   have h_size : (toElements msg).toArray.size = size Message := by simp
-  have h_size' : (toElements msg).toList.length = size Message := by simp
   simp only [List.mem_map]
-  set v1 : Vector F _ := ⟨ .mk <| List.map (fun x ↦ Expression.eval env x) (toElements msg).toList, _ ⟩
+  set v1 : Vector F _ := ⟨ Array.map (fun x ↦ Expression.eval env x) (toElements msg).toArray, _ ⟩
   set v1' : Vector F (size Message) := (toElements msg).map env
   have h_v1 : v1 = v1'.cast h_size.symm := by
     simp only [Vector.mk_eq, Vector.toArray_cast, Vector.toArray_map, v1, v1']
-    rw [←Array.toList_map]
-    rfl
-  have h_channels : env.rawInteractions channel.name (toElements msg).toList.length =
+  have h_channels : env.rawInteractions channel.name (toElements msg).toArray.size =
       List.map (fun t => (t.1, t.2.cast h_size.symm)) (env.rawInteractions channel.name (size Message)) := by
     apply List.ext_getElem
     · simp only [List.length_map]; congr
@@ -219,27 +231,27 @@ instance : Zero (InteractionDelta F) := ⟨[]⟩
 instance : Inhabited (InteractionDelta F) := ⟨0⟩
 
 /-- Create a singleton interaction delta with one named list and its multiplicity -/
-def single (nl : NamedList F) (mult : F) : InteractionDelta F :=
-  [(nl, mult)]
+def single (nl : NamedArray F) (mult : F) : InteractionDelta F :=
+  [(nl.1, mult, nl.2)]
 
 /-- Addition is list concatenation - semantic equality handles combining multiplicities -/
 instance : Add (InteractionDelta F) := ⟨List.append⟩
 
 /-- Negation: negate all multiplicities -/
 def neg [Neg F] (d : InteractionDelta F) : InteractionDelta F :=
-  d.map (fun (nl, m) => (nl, -m))
+  d.map (fun (name, mult, msg) => (name, -mult, msg))
 
 instance [Neg F] : Neg (InteractionDelta F) := ⟨neg⟩
 
 variable [Field F]
 
 /-- Get the total multiplicity for a key by summing all entries -/
-def getMultiplicity [DecidableEq F] (nl : NamedList F) (d : InteractionDelta F) : F :=
-  d.foldl (fun acc (k, v) => if k = nl then acc + v else acc) 0
+def getMultiplicity [DecidableEq F] (nl : NamedArray F) (d : InteractionDelta F) : F :=
+  d.foldl (fun acc (s, m, v) => if (s, v) = nl then acc + m else acc) 0
 
 /-- Convert to Finsupp for proofs (noncomputable) -/
-noncomputable def toFinsupp [DecidableEq F] (d : InteractionDelta F) : Finsupp (NamedList F) F :=
-  d.foldl (fun acc (nl, m) => acc + Finsupp.single nl m) 0
+noncomputable def toFinsupp [DecidableEq F] (d : InteractionDelta F) : Finsupp (NamedArray F) F :=
+  d.foldl (fun acc (s, m, v) => acc + Finsupp.single (s, v) m) 0
 
 omit [Field F] in
 @[circuit_norm] theorem add_eq_append (d1 d2 : InteractionDelta F) : d1 + d2 = d1 ++ d2 := rfl
@@ -269,42 +281,42 @@ instance instAddMonoid : AddMonoid (InteractionDelta F) where
   nsmul := nsmulRec
 
 @[circuit_norm]
-theorem single_zero (nl : NamedList F) : single nl 0 = [(nl, 0)] := rfl
+theorem single_zero (nl : NamedArray F) : single nl 0 = [(nl.1, 0, nl.2)] := rfl
 
 -- Semantic equality: two deltas are equal if they have the same toFinsupp
 theorem toFinsupp_add [DecidableEq F] (d1 d2 : InteractionDelta F) :
     (d1 + d2).toFinsupp = d1.toFinsupp + d2.toFinsupp := by
   simp only [toFinsupp, add_eq_append]
-  have h : ∀ (init : Finsupp (NamedList F) F) (l : List (NamedList F × F)),
-      List.foldl (fun acc x => acc + Finsupp.single x.1 x.2) init l =
-      init + List.foldl (fun acc x => acc + Finsupp.single x.1 x.2) 0 l := by
+  have h : ∀ (init : Finsupp (NamedArray F) F) (l : InteractionDelta F),
+      List.foldl (fun acc x => acc + Finsupp.single (x.1, x.2.2) x.2.1) init l =
+      init + List.foldl (fun acc x => acc + Finsupp.single (x.1, x.2.2) x.2.1) 0 l := by
     intro init l
     induction l generalizing init with
     | nil => simp
     | cons hd' tl' ih' =>
       simp only [List.foldl_cons]
-      rw [ih' (init + Finsupp.single hd'.1 hd'.2), ih' (0 + Finsupp.single hd'.1 hd'.2)]
+      rw [ih' (init + Finsupp.single _ _), ih' (0 + Finsupp.single _ _)]
       simp only [zero_add]
       rw [add_assoc]
   induction d1 with
   | nil => simp [List.foldl_nil]
   | cons hd tl ih =>
     simp only [List.cons_append, List.foldl_cons]
-    rw [h (0 + Finsupp.single hd.1 hd.2) (tl ++ d2)]
+    rw [h (0 + Finsupp.single _ _) (tl ++ d2)]
     simp only [zero_add]
     rw [ih]
-    rw [h (Finsupp.single hd.1 hd.2) tl]
+    rw [h (Finsupp.single (hd.1, hd.2.2) hd.2.1) tl]
     rw [add_assoc]
 
-theorem toFinsupp_single [DecidableEq F] (nl : NamedList F) (m : F) :
+theorem toFinsupp_single [DecidableEq F] (nl : NamedArray F) (m : F) :
     (single nl m).toFinsupp = Finsupp.single nl m := by
   simp only [single, toFinsupp, List.foldl_cons, List.foldl_nil, zero_add]
 
 theorem toFinsupp_zero [DecidableEq F] : toFinsupp (0 : InteractionDelta F) = 0 := by
   simp only [zero_eq_nil, toFinsupp, List.foldl_nil]
 
-theorem toFinsupp_zero_mult [DecidableEq F] (nl1 nl2 : NamedList F) :
-    toFinsupp ([(nl1, 0), (nl2, 0)] : InteractionDelta F) = 0 := by
+theorem toFinsupp_zero_mult [DecidableEq F] (nl1 nl2 : NamedArray F) :
+    toFinsupp ([(nl1.1, 0, nl1.2), (nl2.1, 0, nl2.2)] : InteractionDelta F) = 0 := by
   simp only [toFinsupp, List.foldl_cons, List.foldl_nil, Finsupp.single_zero, add_zero]
 
 /-- Helper lemma: equality of InteractionDeltas implies equality of their toFinsupp. -/
@@ -336,6 +348,9 @@ theorem toFinsupp_foldl_finRange [DecidableEq F] {n : ℕ} (f : Fin n → Intera
     rw [toFinsupp_add, ih', Fin.sum_univ_castSucc]
 
 end InteractionDelta
+
+noncomputable abbrev RawInteractions.toFinsupp [DecidableEq F] (d : RawInteractions F) : Finsupp (NamedArray F) F :=
+  InteractionDelta.toFinsupp d
 
 -- abstract theory of channel consistency
 

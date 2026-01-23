@@ -249,12 +249,12 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
     := by intros; rfl
 
   /-- compute local interaction delta from operations (defaults to empty for circuits that don't change interactions) -/
-  localAdds : Var Input F → ℕ → List (AbstractInteraction F)
-    := fun _ _ => []
+  localAdds : Var Input F → ℕ → Environment F → RawInteractions F
+    := fun _ _ _ => []
 
   /-- correctness of `localAdds` (up to semantic equivalence via sameDelta) -/
   localAdds_eq : ∀ input env offset,
-    sameDelta env (main input |>.operations offset).localAdds (localAdds input offset)
+    sameDelta ((main input |>.operations offset).localAdds env) (localAdds input offset env)
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
@@ -422,18 +422,17 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [De
 
 /-- Soundness for general circuits that change interactions -/
 @[circuit_norm]
-def GeneralFormalCircuit.SoundnessWithInteractions (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
-    (Spec : Input F → Output F → Environment F → InteractionDelta F → Prop)
-    (localAdds : Var Input F → Environment F → ℕ → InteractionDelta F) :=
+def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
+    (Spec : Input F → Output F → Environment F → Prop) :=
   ∀ offset : ℕ, ∀ env interactions,
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   ConstraintsHoldWithInteractions.Soundness env interactions (circuit.main input_var |>.operations offset) →
   let output := eval env (circuit.output input_var offset)
-  let adds := localAdds input_var env offset
-  Spec input output env adds
+  Spec input output env ∧
+  ConstraintsHoldWithInteractions.Requirements env interactions (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
-def GeneralFormalCircuit.CompletenessWithInteractions (F : Type) [Field F] [DecidableEq F]
+def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] [DecidableEq F]
     (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Environment F → Prop) :=
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
@@ -443,13 +442,13 @@ def GeneralFormalCircuit.CompletenessWithInteractions (F : Type) [Field F] [Deci
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
 
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
-structure GeneralFormalCircuitChangingMultiset (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
+structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
     [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions : Input F → Environment F → Prop
-  Spec : Input F → Output F → Environment F → InteractionDelta F → Prop
-  soundness : GeneralFormalCircuit.SoundnessChangingMultiset F elaborated Spec elaborated.localAdds
-  completeness : GeneralFormalCircuit.CompletenessChangingMultiset F elaborated Assumptions
+  Spec : Input F → Output F → Environment F → Prop
+  soundness : FormalCircuitWithInteractions.Soundness F elaborated Spec
+  completeness : FormalCircuitWithInteractions.Completeness F elaborated Assumptions
 
 end
 
@@ -482,14 +481,14 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 
 def Environment.fromList (witnesses : List F) : Environment F where
   get i := witnesses[i]?.getD 0
-  channels _ _ := []
+  interactions := []
   data _ _ := #[]
 
 def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with
   | .witness _ compute => (compute (.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
-  | .add _ => []
+  | .interact _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
@@ -530,15 +529,15 @@ def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (E
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
-  | .add _ :: ops => witnessGenerators ops
+  | .interact _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .interact _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops.toFlat) ++ witnessGenerators ops
-  | .add _ :: ops => witnessGenerators ops
 
 -- statements about constant length or output
 
