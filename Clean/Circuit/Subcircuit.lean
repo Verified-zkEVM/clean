@@ -289,7 +289,7 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) env →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env,
     localLength := circuit.localLength input_var
-    localAdds env := circuit.localAdds (eval env input_var) n
+    localAdds env := circuit.localAdds (eval env input_var) n env
 
 
     imply_soundness
@@ -568,7 +568,7 @@ Simplifies localAdds for FormalAssertionChangingMultiset.toSubcircuit.
 theorem FormalCircuitWithInteractions.toSubcircuit_localAdds
     {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuitWithInteractions F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = circuit.localAdds (eval env input_var) n := by
+    (circuit.toSubcircuit n input_var).localAdds env = circuit.localAdds (eval env input_var) n env := by
   rfl
 
 -- Simplification lemmas for toSubcircuit.Soundness

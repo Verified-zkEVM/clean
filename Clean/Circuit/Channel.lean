@@ -130,10 +130,36 @@ def Channel.filter (channel : Channel F Message) (is : RawInteractions F) :
   |>.map fun (mult, elts) => (mult, fromElements elts)
 
 -- normalize to Channel.filter
-omit [Field F] in
+-- TODO this is not picked up by simp
 @[circuit_norm]
 lemma RawChannel.filter_eq (channel : Channel F Message) (is : RawInteractions F) :
   (channel.toRaw.filter is).map Channel.interactionFromRaw = channel.filter is := rfl
+
+@[circuit_norm]
+lemma Channel.filter_self (channel : Channel F Message) (env : Environment F)
+  (mult : Expression F) (msg : Message (Expression F)) (is : RawInteractions F) :
+    let interaction : ChannelInteraction F Message := { channel, mult, msg };
+    channel.toRaw.filter ((AbstractInteraction.eval env interaction.toRaw) :: is) =
+      (env mult, (toElements msg).map env) :: channel.toRaw.filter is := by
+    sorry
+
+@[circuit_norm]
+lemma Channel.interactionFromRaw_eq (env : Environment F)
+  (mult : F) (msg : Message (Expression F)) :
+    Channel.interactionFromRaw (mult, (toElements msg).map env) = (mult, eval env msg) := by
+  rfl
+
+variable {Message' : TypeMap} [ProvableType Message']
+
+@[circuit_norm]
+lemma Channel.filter_other (channel : Channel F Message) (channel' : Channel F Message') (env : Environment F)
+  (mult : Expression F) (msg : Message' (Expression F)) (is : RawInteractions F) :
+    let interaction : ChannelInteraction F Message' := { channel := channel', mult, msg };
+    channel.toRaw.filter (AbstractInteraction.eval env interaction.toRaw :: is) =
+      if h : channel'.name = channel.name ∧ size Message' = size Message
+      then ((env mult, (toElements msg).map env |>.cast h.2) :: channel.toRaw.filter is)
+      else channel.toRaw.filter is := by
+    sorry
 
 @[circuit_norm]
 def ChannelInteraction.Guarantees (i : ChannelInteraction F Message) (env : Environment F)
