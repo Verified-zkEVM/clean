@@ -51,9 +51,8 @@ def add8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   localLength _ := 1
   output _ _ := ()
 
-  -- TODO it's wrong that we have to eval the inputs here
   localAdds
-  | (x, y, z), _ =>
+  | (x, y, z), _, _ =>
     BytesChannel.pulled x +
     BytesChannel.pulled y +
     BytesChannel.pulled z +
@@ -91,3 +90,85 @@ def add8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     apply FieldUtils.ext
     rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
     linarith [‹Fact (p > 512)›.elim]
+
+-- define valid Fibonacci state transitions
+
+def fibonacciStep : ℕ × ℕ → ℕ × ℕ
+  | (x, y) => (y, (x + y) % 256)
+
+def fibonacci : ℕ → (ℕ × ℕ) → (ℕ × ℕ)
+  | 0, state => state
+  | n + 1, state => fibonacciStep (fibonacci n state)
+
+instance FibonacciChannel : Channel (F p) fieldPair where
+  name := "fibonacci"
+
+  -- when pulling, we want the guarantee that the previous interactions pushed
+  -- some tuple equal to ours which represents a valid Fibonacci step
+  Guarantees
+  | m, (x, y), interactions, _ =>
+    if (m = -1)
+    then
+      -- (x, y) is a valid Fibonacci state
+      (∃ n : ℕ, (x.val, y.val) = fibonacci n (0, 1)) ∧
+      -- and was pushed in a previous interaction
+      (1, (x, y)) ∈ interactions
+    else True
+
+  Requirements
+  | m, (x, y), interactions, _ =>
+    if (m = 1)
+    then
+      -- (x, y) is a valid Fibonacci state
+      (∃ n : ℕ, (x.val, y.val) = fibonacci n (0, 1)) ∧
+      -- and is pushed (in this interaction! this is tautological)
+      (1, (x, y)) ∈ interactions
+    else True
+
+def fib8 : FormalCircuitWithInteractions (F p) fieldPair unit where
+  main | (x, y) => do
+    -- pull the current Fibonacci state
+    FibonacciChannel.pull (x, y)
+
+    -- witness the next Fibonacci value
+    let z ← witness fun eval => mod256 (eval (x + y))
+
+    -- pull from the Add8 channel to check addition
+    Add8Channel.pull (x, y, z)
+
+    -- push the next Fibonacci state
+    FibonacciChannel.push (y, z)
+
+  localLength _ := 1
+  output _ _ := ()
+
+  localAdds
+  | (x, y), i₀, env =>
+    let z := env.get i₀;
+    FibonacciChannel.pulled (x, y) +
+    Add8Channel.pulled (x, y, z) +
+    FibonacciChannel.pushed (y, z)
+
+  Assumptions | (x, y), _ => True
+  Spec _ _ _ := True
+
+  soundness := by
+    circuit_proof_start [reduceIte, seval, and_false]
+    rcases input with ⟨ x, y ⟩ -- TODO circuit_proof_start should have done this
+    simp only [Prod.mk.injEq] at h_input
+    -- why are these not simped?? maybe because fieldPair is not well-recognized
+    rw [RawChannel.filter_eq, RawChannel.filter_eq] at h_holds ⊢
+    rw [Channel.interactionFromRaw_eq] at h_holds
+    rw [Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq]
+    simp_all only [circuit_norm]
+    set fibInteractions := FibonacciChannel.filter interactions
+    set add8Interactions := Add8Channel.filter interactions
+    set z := env.get i₀
+    simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte] at h_holds ⊢
+    simp_all only [List.mem_cons, Prod.mk.injEq, true_or, and_true]
+    obtain ⟨ ⟨⟨ n, fiby ⟩, hfib_push⟩, hx, hy, hadd ⟩ := h_holds
+    use n + 1
+    simp only [fibonacci, fibonacciStep, ← fiby]
+
+  completeness := by
+    circuit_proof_start
