@@ -320,8 +320,8 @@ def assignmentFromCircuit (as : CellAssignment W S) : Operations F → CellAssig
   | .witness m _ :: ops => assignmentFromCircuit (as.pushVarsAux m) ops
   | .assert _ :: ops => assignmentFromCircuit as ops
   | .lookup _ :: ops => assignmentFromCircuit as ops
+  | .interact _ :: ops => assignmentFromCircuit as ops
   | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
-  | .add _ _ :: ops => assignmentFromCircuit as ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`
 def assignmentFromCircuit' (as : CellAssignment W S) (ops : Operations F) : CellAssignment W S where
@@ -489,7 +489,7 @@ structure TableEnvironments (F : Type) where
   /-- environment for each constraint, for each row -/
   witnessEnvs : (constraint : ℕ) → (row : ℕ) → (varIndex : ℕ) → F
   /-- auxiliary data available to all rows -/
-  channels : RawChannels F
+  interactions : RawInteractions F
   data : ProverData F
 
 def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=

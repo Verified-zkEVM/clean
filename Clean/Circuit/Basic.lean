@@ -249,12 +249,12 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
     := by intros; rfl
 
   /-- compute local interaction delta from operations (defaults to empty for circuits that don't change interactions) -/
-  localAdds : Var Input F → ℕ → Environment F → RawInteractions F
+  localAdds : Var Input F → ℕ → Environment F → InteractionDelta F
     := fun _ _ _ => []
 
-  /-- correctness of `localAdds` (up to semantic equivalence via sameDelta) -/
+  /-- correctness of `localAdds` (up to semantic equivalence via toFinsupp) -/
   localAdds_eq : ∀ input env offset,
-    sameDelta ((main input |>.operations offset).localAdds env) (localAdds input offset env)
+    ((main input |>.operations offset).localAdds env).toFinsupp = (localAdds input offset env).toFinsupp
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
