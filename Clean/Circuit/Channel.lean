@@ -252,19 +252,25 @@ noncomputable def toFinsupp [DecidableEq F] (d : InteractionDelta F) : Finsupp (
   d.foldl (fun acc (s, m, v) => acc + Finsupp.single (s, v) m) 0
 
 omit [Field F] in
-@[circuit_norm] theorem add_eq_append (d1 d2 : InteractionDelta F) : d1 + d2 = d1 ++ d2 := rfl
+@[circuit_norm] theorem append_eq_add (d1 d2 : InteractionDelta F) : d1 ++ d2 = d1 + d2 := rfl
 
 omit [Field F] in
-@[circuit_norm] theorem zero_eq_nil : (0 : InteractionDelta F) = [] := rfl
+theorem add_eq_append (d1 d2 : InteractionDelta F) : d1 + d2 = d1 ++ d2 := rfl
 
 omit [Field F] in
-@[circuit_norm] theorem add_zero' (d : InteractionDelta F) : d + 0 = d := List.append_nil d
+@[circuit_norm] theorem nil_eq_zero : [] = (0 : InteractionDelta F) := rfl
 
 omit [Field F] in
-@[circuit_norm] theorem zero_add' (d : InteractionDelta F) : 0 + d = d := List.nil_append d
+theorem zero_eq_nil : [] = (0 : InteractionDelta F) := rfl
 
 omit [Field F] in
-theorem add_assoc' (d1 d2 d3 : InteractionDelta F) : (d1 + d2) + d3 = d1 + (d2 + d3) :=
+theorem add_zero' (d : InteractionDelta F) : d + 0 = d := List.append_nil d
+
+omit [Field F] in
+theorem zero_add' (d : InteractionDelta F) : 0 + d = d := List.nil_append d
+
+omit [Field F] in
+theorem add_assoc' (d1 d2 d3 : InteractionDelta F) : d1 + d2 + d3 = d1 + (d2 + d3) :=
   List.append_assoc d1 d2 d3
 
 /-- AddMonoid instance for InteractionDelta.
@@ -308,7 +314,7 @@ theorem toFinsupp_single [DecidableEq F] (nl : NamedArray F) (m : F) :
   simp only [single, toFinsupp, List.foldl_cons, List.foldl_nil, zero_add]
 
 theorem toFinsupp_zero [DecidableEq F] : toFinsupp (0 : InteractionDelta F) = 0 := by
-  simp only [zero_eq_nil, toFinsupp, List.foldl_nil]
+  simp only [←nil_eq_zero, toFinsupp, List.foldl_nil]
 
 theorem toFinsupp_zero_mult [DecidableEq F] (nl1 nl2 : NamedArray F) :
     toFinsupp ([(nl1.1, 0, nl1.2), (nl2.1, 0, nl2.2)] : InteractionDelta F) = 0 := by
@@ -319,6 +325,7 @@ theorem toFinsupp_eq_of_eq [DecidableEq F] {a b : InteractionDelta F} (h : a = b
     a.toFinsupp = b.toFinsupp := by rw [h]
 
 /-- Helper lemma: if localAdds = 0, then toFinsupp of localAdds = toFinsupp 0. -/
+@[circuit_norm]
 theorem toFinsupp_zero_of_eq_zero [DecidableEq F] {a : InteractionDelta F} (h : a = 0) :
     a.toFinsupp = (0 : InteractionDelta F).toFinsupp := by rw [h]
 

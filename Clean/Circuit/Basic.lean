@@ -261,13 +261,13 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
     := by intros; rfl
 
   /-- compute local interaction delta from operations (defaults to empty for circuits that don't change interactions) -/
-  localAdds : Var Input F → ℕ → Environment F → InteractionDelta F
-    := fun _ _ _ => 0
+  localAdds : Input F → ℕ → InteractionDelta F
+    := fun _ _ => 0
 
   /-- correctness of `localAdds` (up to semantic equivalence via toFinsupp) -/
   localAdds_eq : ∀ input env offset,
-    ((main input |>.operations offset).localAdds env).toFinsupp = (localAdds input offset env).toFinsupp
-    := by intros; simp only [circuit_norm]
+    ((main input |>.operations offset).localAdds env).toFinsupp = (localAdds (eval env input) offset).toFinsupp
+    := by intros; simp only [circuit_norm, ←add_assoc]
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
@@ -637,6 +637,6 @@ attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
-attribute [circuit_norm] neg_mul one_mul add_zero
+attribute [circuit_norm] neg_mul one_mul add_zero zero_add
 
 attribute [circuit_norm] List.append_nil

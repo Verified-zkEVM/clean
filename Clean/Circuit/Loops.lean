@@ -692,9 +692,8 @@ theorem localAdds_forEach_sum [DecidableEq F] {m : ℕ} (xs : Vector α m) [Inha
     simp only [Finset.univ_eq_empty, Finset.sum_empty]
     rfl
   case cons n a as ih =>
-    simp only [circuit_norm, Operations.localAdds_append, RawInteractions.toFinsupp] at ih ⊢
-    rw [← InteractionDelta.add_eq_append, InteractionDelta.toFinsupp_add, h_body, ih]
-    rw [Fin.sum_univ_succ]
+    simp only [circuit_norm, Operations.localAdds_append] at ih ⊢
+    rw [InteractionDelta.toFinsupp_add, h_body, ih, Fin.sum_univ_succ]
     rfl
 
 /-- Version of localAdds_forEach_sum using toFinsupp equality for h_body.
@@ -711,9 +710,8 @@ theorem localAdds_forEach_sum' [DecidableEq F] {m : ℕ} (xs : Vector α m) [Inh
     simp only [Finset.univ_eq_empty, Finset.sum_empty]
     rfl
   case cons n a as ih =>
-    simp only [circuit_norm, Operations.localAdds_append, RawInteractions.toFinsupp] at *
-    rw [← InteractionDelta.add_eq_append, InteractionDelta.toFinsupp_add, h_body, ih]
-    rw [Fin.sum_univ_succ]
+    simp only [circuit_norm, Operations.localAdds_append] at *
+    rw [InteractionDelta.toFinsupp_add, h_body, ih, Fin.sum_univ_succ]
     rfl
 
 omit [Field F] in
@@ -724,7 +722,7 @@ private theorem InteractionDelta.foldl_init_eq_append {β : Type*} (f : Interact
     (init : InteractionDelta F) (xs : List β) :
     init ++ xs.foldl f 0 = xs.foldl f init := by
   induction xs generalizing init with
-  | nil => simp only [List.foldl_nil, InteractionDelta.zero_eq_nil, List.append_nil]
+  | nil => simp [InteractionDelta.nil_eq_zero]
   | cons y ys ih =>
     simp only [List.foldl_cons]
     rw [← ih (f 0 y), ← ih (f init y)]
@@ -760,7 +758,7 @@ theorem localAdds_forEach_foldl {m : ℕ} (xs : Vector α m) [Inhabited α]
     have h_len : (body a).localLength offset = constant.localLength := constant.localLength_eq a offset
     simp only [Circuit.localLength] at h_len
     rw [h_len, ih]
-    simp only [List.finRange_succ, List.foldl_cons, List.foldl_map, List.nil_append,
+    simp only [List.finRange_succ, List.foldl_cons, List.foldl_map,
       Fin.val_zero, zero_mul, add_zero, Vector.cons, Vector.getElem_mk,
       List.getElem_toArray, List.getElem_cons_zero]
     rw [forEach_cons_foldl_eq a as body env offset constant.localLength]
@@ -824,6 +822,7 @@ theorem localAdds_foldlRange [Inhabited β] {m : ℕ} [inst : Inhabited (Fin m)]
   exact localAdds_foldl (Vector.finRange m) init body const_out constant env offset h_body
 
 /-- Version of localAdds_foldlRange that works for all m including 0. -/
+@[circuit_norm]
 theorem localAdds_foldlRange' [Inhabited β] {m : ℕ}
     (init : β) (body : β → Fin m → Circuit F β)
     (constant : ConstantLength (fun (s, a) => body s a))

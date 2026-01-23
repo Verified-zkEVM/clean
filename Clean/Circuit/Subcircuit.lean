@@ -251,7 +251,6 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
   let ops := circuit.main input_var |>.operations n
   let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
-  let localInteractions := circuit.localAdds input_var n
 
   have imply_soundness : ∀ env : Environment F,
       let input := eval env input_var
@@ -290,7 +289,7 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) env →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env,
     localLength := circuit.localLength input_var
-    localAdds env := circuit.localAdds input_var n env
+    localAdds env := circuit.localAdds (eval env input_var) n
 
 
     imply_soundness
@@ -569,7 +568,7 @@ Simplifies localAdds for FormalAssertionChangingMultiset.toSubcircuit.
 theorem FormalCircuitWithInteractions.toSubcircuit_localAdds
     {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuitWithInteractions F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = circuit.localAdds input_var n env := by
+    (circuit.toSubcircuit n input_var).localAdds env = circuit.localAdds (eval env input_var) n := by
   rfl
 
 -- Simplification lemmas for toSubcircuit.Soundness
