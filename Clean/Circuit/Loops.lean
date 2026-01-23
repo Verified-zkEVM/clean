@@ -667,6 +667,7 @@ lemma foldlRange.usesLocalWitnesses :
 
 end foldlRange
 
+@[circuit_norm]
 theorem localAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
     (h_body : ∀ x n, Operations.localAdds env ((body x) n).2 = []) :
@@ -764,6 +765,7 @@ theorem localAdds_forEach_foldl {m : ℕ} (xs : Vector α m) [Inhabited α]
     rw [forEach_cons_foldl_eq a as body env offset constant.localLength]
     exact InteractionDelta.foldl_init_eq_append _ (fun _ _ => rfl) _ _
 
+@[circuit_norm]
 theorem localAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
     (h_body : ∀ x n, ((body x).operations n).localAdds env = 0) :

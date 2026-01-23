@@ -393,7 +393,7 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
   exact ⟨hf, hg⟩
 
 -- Helper theorem for localAdds
-theorem localAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environment (F p)) (offset : ℕ) :
+theorem localAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) (env : Environment (F p)) :
     (Operations.localAdds env ((main input).operations offset)).toFinsupp = InteractionDelta.toFinsupp 0 := by
   induction n using Nat.strong_induction_on generalizing offset with
   | _ n IH =>
@@ -406,7 +406,7 @@ theorem localAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environment
       simp only [Operations.localAdds, circuit_norm]
     | 2 =>
       simp only [main, Circuit.operations]
-      exact AND.circuit.localAdds_eq (input[0], input[1]) env offset
+      exact AND.circuit.localAdds_eq (input[0], input[1]) offset env
     | m + 3 =>
       rw [main]
       let n1 := (m + 3) / 2
@@ -422,7 +422,7 @@ theorem localAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environment
       have h2 := IH _ h_n2_lt input2 (offset + (main input1).localLength offset)
       simp only [InteractionDelta.toFinsupp_zero] at h1 h2 ⊢
       rw [h1, h2, zero_add, zero_add]
-      exact AND.circuit.localAdds_eq _ env _
+      exact AND.circuit.localAdds_eq _ _ env
 
 -- Helper theorem for subcircuitsConsistent
 theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :

@@ -29,12 +29,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   localLength _ := 400
   localLength_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
-  localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main]
-    apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.localAdds_map
-    intro ⟨i, s⟩ n
-    simp only [circuit_norm, Rotation64.circuit, Operations.localAdds]
+  localAdds_eq _ _ _ := by simp only [circuit_norm, main]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
 
 -- recharacterize rhoPi as a loop

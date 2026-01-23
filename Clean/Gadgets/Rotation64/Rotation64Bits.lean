@@ -44,13 +44,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   output _ i0 := output off i0
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
-  localAdds_eq input env offset := by
-    have : (main off input |>.operations offset).localAdds env = 0 := by
-      simp only [circuit_norm, main, List.append_nil, InteractionDelta.zero_eq_nil]
-      apply Circuit.localAdds_map
-      intro x n
-      simp only [circuit_norm, Operations.localAdds]
-    simp only [this, InteractionDelta.toFinsupp_zero]
+  localAdds_eq input offset env := by simp only [circuit_norm, main]
   output_eq _ _ := by
     simp only [circuit_norm, main, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U64.fromLimbs
