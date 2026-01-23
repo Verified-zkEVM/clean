@@ -132,6 +132,18 @@ def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F
   let interaction : ChannelInteraction F Message := ⟨ channel, mult, msg ⟩
   ((), [.interact interaction.toRaw])
 
+@[circuit_norm]
+def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction F Message := ⟨ channel, -1, msg ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
+def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction F Message := ⟨ channel, 1, msg ⟩
+  ((), [.interact interaction.toRaw])
+
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
 def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
@@ -255,6 +267,7 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
   /-- correctness of `localAdds` (up to semantic equivalence via toFinsupp) -/
   localAdds_eq : ∀ input env offset,
     ((main input |>.operations offset).localAdds env).toFinsupp = (localAdds input offset env).toFinsupp
+    := by intros; simp only [circuit_norm]
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
@@ -439,7 +452,7 @@ def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] [DecidableEq
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   ∀ input : Input F, eval env input_var = input →
   Assumptions input env →
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
 
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
 structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
@@ -625,3 +638,5 @@ attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isVal
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero
+
+attribute [circuit_norm] List.append_nil

@@ -129,6 +129,12 @@ def Channel.filter (channel : Channel F Message) (is : RawInteractions F) :
   channel.toRaw.filter is
   |>.map fun (mult, elts) => (mult, fromElements elts)
 
+-- normalize to Channel.filter
+omit [Field F] in
+@[circuit_norm]
+lemma RawChannel.filter_eq (channel : Channel F Message) (is : RawInteractions F) :
+  (channel.toRaw.filter is).map Channel.interactionFromRaw = channel.filter is := rfl
+
 @[circuit_norm]
 def ChannelInteraction.Guarantees (i : ChannelInteraction F Message) (env : Environment F)
     (is : RawInteractions F) : Prop :=

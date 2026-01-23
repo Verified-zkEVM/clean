@@ -258,16 +258,22 @@ def localAdds (env : Environment F) : Operations F → InteractionDelta F
 
 @[circuit_norm]
 theorem localAdds_nil (env : Environment F) : localAdds env ([] : Operations F) = [] := rfl
+
 @[circuit_norm]
 theorem localAdds_assert (env : Environment F) (e : Expression F) (ops : Operations F) :
     localAdds env (.assert e :: ops) = localAdds env ops := rfl
-
 @[circuit_norm]
 theorem localAdds_witness (env : Environment F) (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
     localAdds env (.witness m c :: ops) = localAdds env ops := rfl
 @[circuit_norm]
 theorem localAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operations F) :
     localAdds env (.lookup l :: ops) = localAdds env ops := rfl
+@[circuit_norm]
+theorem localAdds_interact (env : Environment F) (i : AbstractInteraction F) (ops : Operations F) :
+    localAdds env (.interact i :: ops) = .single (i.eval env) + localAdds env ops := rfl
+@[circuit_norm]
+theorem localAdds_subcircuit (env : Environment F) {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+    localAdds env (.subcircuit s :: ops) = s.localAdds env + localAdds env ops := rfl
 
 @[circuit_norm]
 theorem localAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
@@ -495,12 +501,11 @@ def ConstraintsHoldWithInteractions.Requirements (env : Environment F) (is : Raw
     interact _ is i := i.Requirements env (i.eval env :: is)
   }
 
--- currently unused bc I don't think we need the interactions for completeness
-def ConstraintsHoldWithInteractions.Completeness (env : Environment F) (is : RawInteractions F)
+def ConstraintsHoldWithInteractions.Completeness (env : Environment F)
     (ops : Operations F) : Prop :=
-  ops.forAllWithInteractions env 0 is {
-    assert _ _ e := env e = 0
-    lookup _ _ l := l.Completeness env
-    interact _ _ _ := True
-    subcircuit _ _ _ s := s.Completeness env
+  ops.forAll 0 {
+    assert _ e := env e = 0
+    lookup _ l := l.Completeness env
+    interact _ _ := True
+    subcircuit _ _ s := s.Completeness env
   }

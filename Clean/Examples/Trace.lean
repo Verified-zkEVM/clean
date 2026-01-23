@@ -6,8 +6,8 @@ import Clean.Table.Json
 open Tables.Fibonacci8Table
 
 -- generate trace using the witness generators from `EveryRowExceptLast` table constraint
-def fibRelationBabybear := fibRelation (p:=p_babybear)
-def initRow : RowType (F p_babybear) := { x := 0, y := 1 }
+def fibRelationBabybear := fibRelation (p:=pBabybear)
+def initRow : RowType (F pBabybear) := { x := 0, y := 1 }
 
 #eval witnesses fibRelationBabybear initRow 20
 

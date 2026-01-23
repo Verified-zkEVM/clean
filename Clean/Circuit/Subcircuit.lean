@@ -280,6 +280,7 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     rw [constraintsHold_toFlat_iff]
     apply can_replace_completeness h_consistent h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
+    stop
     apply circuit.completeness n env input_var h_env_completeness input rfl assumptions
 
   {
