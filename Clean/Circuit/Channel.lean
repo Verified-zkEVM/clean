@@ -171,13 +171,6 @@ lemma AbstractInteraction.requirements_def (env : Environment F) (int : ChannelI
     int.toRaw.Requirements env is ↔ int.Requirements env is := by
   rfl
 
-def RawInteractions.getMultiplicity [DecidableEq F] (nl : String × Array F) (d : RawInteractions F) : F :=
-  d.foldl (fun acc ( name, mult, msg ) =>
-    if name = nl.1 ∧ msg = nl.2 then acc + mult else acc) 0
-
-def sameDelta [DecidableEq F] (i1 i2 : RawInteractions F) : Prop :=
-  ∀ nl : String × Array F, i1.getMultiplicity nl = i2.getMultiplicity nl
-
 /--
 An `InteractionDelta` represents a change to an interaction (multiset argument), as a list
 of (NamedList, multiplicity) pairs. This representation is computable and supports efficient
@@ -285,9 +278,6 @@ instance instAddMonoid : AddMonoid (InteractionDelta F) where
   add_zero := add_zero'
   nsmul := nsmulRec
 
--- @[circuit_norm]
--- theorem single_zero (nl : NamedArray F) : single nl 0 = [(nl.1, 0, nl.2)] := rfl
-
 -- Semantic equality: two deltas are equal if they have the same toFinsupp
 theorem toFinsupp_add [DecidableEq F] (d1 d2 : InteractionDelta F) :
     (d1 + d2).toFinsupp = d1.toFinsupp + d2.toFinsupp := by
@@ -356,6 +346,35 @@ end InteractionDelta
 
 noncomputable abbrev RawInteractions.toFinsupp [DecidableEq F] (d : RawInteractions F) : Finsupp (NamedArray F) F :=
   InteractionDelta.toFinsupp d
+
+/-- normal form for channel interactions -/
+def Channel.emitted (chan : Channel F Message) (mult : F) (msg : Message F) :=
+  InteractionDelta.single (chan.name, mult, (toElements msg).toArray)
+
+/-- convenient way to specify channel interaction with multiplicity -1 -/
+def Channel.pulled (chan : Channel F Message) (msg : Message F) :=
+  InteractionDelta.single (chan.name, -1, (toElements msg).toArray)
+
+/-- convenient way to specify channel interaction with multiplicity 1 -/
+def Channel.pushed (chan : Channel F Message) (msg : Message F) :=
+  InteractionDelta.single (chan.name, 1, (toElements msg).toArray)
+
+@[circuit_norm]
+lemma Channel.pulled_def (chan : Channel F Message) (msg : Message F) :
+    chan.pulled msg = chan.emitted (-1) msg  := rfl
+
+@[circuit_norm]
+lemma Channel.pushed_def (chan : Channel F Message) (msg : Message F) :
+    chan.pushed msg = chan.emitted 1 msg := rfl
+
+@[circuit_norm]
+lemma InteractionDelta.single_eq_channel_emitted (channel : Channel F Message) (mult : Expression F)
+    (msg : Message (Expression F)) (env : Environment F) :
+    let interaction : ChannelInteraction F Message := { channel, mult, msg }
+    .single (interaction.toRaw.eval env) = channel.emitted (mult.eval env) (eval env msg) := by
+  simp only [Channel.emitted, AbstractInteraction.eval, InteractionDelta.single, ChannelInteraction.toRaw, eval,
+    ProvableType.toElements_fromElements]
+  rfl
 
 -- abstract theory of channel consistency
 

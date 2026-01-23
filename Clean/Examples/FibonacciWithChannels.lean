@@ -11,25 +11,7 @@ import Clean.Gadgets.Addition8.Theorems
 open ByteUtils (mod256 floorDiv256)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)
 
--- lemma to resolve (if -1 = 1 then T else E) = E
--- TODO move
-@[circuit_norm]
-lemma neg_one_neq_one {p : ℕ} [Fact p.Prime] [gt2 : Fact (p > 2)] :
-    ¬(-1 : F p) = 1 := by
-  intro h_eq
-  suffices h : (1 : F p) + 1 = 0 by
-    replace h := congrArg ZMod.val h
-    rw [ZMod.val_add] at h
-    simp [ZMod.val_one, Nat.mod_eq_of_lt gt2.elim] at h
-  nth_rw 1 [← h_eq]
-  ring
-
-@[circuit_norm]
-lemma one_neq_neg_one {p : ℕ} [Fact p.Prime] [gt2 : Fact (p > 2)] :
-    ¬(1 : F p) = -1 := fun h => neg_one_neq_one h.symm
-
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-instance : Fact (p > 2) := .mk (by linarith [‹Fact (p > 512)›.elim])
 
 instance BytesChannel : Channel (F p) field where
   name := "bytes"
@@ -48,45 +30,6 @@ instance Add8Channel : Channel (F p) fieldTriple where
   | mult, (x, y, z), _, _ =>
     if mult = 1 then x.val < 256 ∧ y.val < 256 ∧ z.val = (x.val + y.val) % 256
     else True
-
--- TODO move this stuff
-
--- normal form of channel interactions
-def Channel.emitted {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
-    (chan : Channel F Message) (mult : F) (msg : Message F) : InteractionDelta F :=
-  .single (chan.name, mult, (toElements msg).toArray)
-
-def Channel.pulled {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
-    (chan : Channel F Message) (msg : Message F) : InteractionDelta F :=
-  .single (chan.name, -1, (toElements msg).toArray)
-
-def Channel.pushed {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
-    (chan : Channel F Message) (msg : Message F) : InteractionDelta F :=
-  .single (chan.name, 1, (toElements msg).toArray)
-
-@[circuit_norm]
-lemma Channel.pulled_def {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
-    (chan : Channel F Message) (msg : Message F) :
-    chan.pulled msg = chan.emitted (-1) msg  := rfl
-
-@[circuit_norm]
-lemma Channel.pushed_def {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
-    (chan : Channel F Message) (msg : Message F) :
-    chan.pushed msg = chan.emitted 1 msg := rfl
-
-@[circuit_norm]
-lemma InteractionDelta.eq_channel_emitted {F : Type} [Field F] {Message : TypeMap} [ProvableType Message]
-    (channel : Channel F Message) (mult : Expression F) (msg : Message (Expression F)) (env : Environment F) :
-    let interaction : ChannelInteraction F Message := { channel, mult, msg }
-    .single (interaction.toRaw.eval env) = channel.emitted (mult.eval env) (eval env msg) := by
-  simp only [Channel.emitted, AbstractInteraction.eval, InteractionDelta.single, ChannelInteraction.toRaw, eval,
-    ProvableType.toElements_fromElements]
-  rfl
-
-attribute [circuit_norm]
-  ConstraintsHoldWithInteractions.Soundness Operations.forAllWithInteractions
-  ConstraintsHoldWithInteractions.Completeness
-  ConstraintsHoldWithInteractions.Requirements
 
 def add8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   main | (x, y, z) => do

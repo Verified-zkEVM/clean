@@ -1,6 +1,7 @@
 import Mathlib.Algebra.Field.ZMod
 import Mathlib.Algebra.Order.Star.Basic
 import Mathlib.Analysis.Normed.Ring.Lemmas
+import Clean.Circuit.SimpGadget
 
 -- main field definition
 def F p := ZMod p
@@ -194,6 +195,8 @@ omit p_prime in
 lemma two_lt : 2 < p := by
   linarith [‹Fact (p > 512)›.elim]
 
+instance : Fact (p > 2) := .mk two_lt
+
 lemma two_val : (2 : F p).val = 2 :=
   FieldUtils.val_lt_p 2 two_lt
 
@@ -206,6 +209,30 @@ lemma two_pow_val (n : ℕ) (hn : n ≤ 8) : (2^n : F p).val = 2^n := by
   rw [ZMod.val_pow, two_val]
   rw [two_val]
   exact two_pow_lt _ hn
+end
+
+section
+-- lemmas that only assume p > 2
+variable [gt2 : Fact (p > 2)]
+
+-- lemmas to resolve (if -1 = 1 then T else E) = E
+-- this is commonly needed to resolve the right statement in channel interactions,
+-- which split on the multiplicity (which is often 1 or -1)
+
+@[circuit_norm]
+lemma neg_one_neq_one :
+    ¬(-1 : F p) = 1 := by
+  intro h_eq
+  suffices h : (1 : F p) + 1 = 0 by
+    replace h := congrArg ZMod.val h
+    rw [ZMod.val_add] at h
+    simp [ZMod.val_one, Nat.mod_eq_of_lt gt2.elim] at h
+  nth_rw 1 [← h_eq]
+  ring
+
+@[circuit_norm]
+lemma one_neq_neg_one : ¬(1 : F p) = -1 :=
+  fun h => neg_one_neq_one h.symm
 end
 
 end FieldUtils

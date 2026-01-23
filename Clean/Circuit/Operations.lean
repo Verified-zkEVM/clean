@@ -468,6 +468,7 @@ def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations 
 namespace Operations
 -- aggregating properties with access to local interactions
 
+@[circuit_norm]
 def forAllWithInteractions (env : Environment F) (offset : ℕ) (is : RawInteractions F) (condition : ConditionWithInteractions F) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset is m c ∧ forAllWithInteractions env (m + offset) is condition ops
@@ -486,6 +487,7 @@ def ConstraintsHoldWithInteractions (env : Environment F) (is : RawInteractions 
     subcircuit _ _ _ s := ConstraintsHoldFlat env s.ops.toFlat
   }
 
+@[circuit_norm]
 def ConstraintsHoldWithInteractions.Soundness (env : Environment F) (is : RawInteractions F)
     (ops : Operations F) : Prop :=
   ops.forAllWithInteractions env 0 is {
@@ -495,12 +497,14 @@ def ConstraintsHoldWithInteractions.Soundness (env : Environment F) (is : RawInt
     subcircuit _ _ _ s := s.Soundness env
   }
 
+@[circuit_norm]
 def ConstraintsHoldWithInteractions.Requirements (env : Environment F) (is : RawInteractions F)
     (ops : Operations F) : Prop :=
   ops.forAllWithInteractions env 0 is {
     interact _ is i := i.Requirements env (i.eval env :: is)
   }
 
+@[circuit_norm]
 def ConstraintsHoldWithInteractions.Completeness (env : Environment F)
     (ops : Operations F) : Prop :=
   ops.forAll 0 {
