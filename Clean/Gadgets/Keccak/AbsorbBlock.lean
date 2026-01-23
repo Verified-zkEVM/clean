@@ -34,8 +34,8 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   localAdds_eq input env offset := by
-    simp only [circuit_norm, main, RATE, Xor64.circuit, Permutation.circuit, subcircuit, Operations.collectAdds]
-    rw [Circuit.collectAdds_mapFinRange' _ _ _ _ _ (by intros; simp only [subcircuit, Operations.collectAdds, FormalCircuit.toSubcircuit, InteractionDelta.zero_add'])]
+    simp only [circuit_norm, main, RATE, Xor64.circuit, Permutation.circuit, subcircuit, Operations.localAdds]
+    rw [Circuit.localAdds_mapFinRange' _ _ _ _ _ (by intros; simp only [subcircuit, Operations.localAdds, FormalCircuit.toSubcircuit, InteractionDelta.zero_add'])]
     rfl
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]

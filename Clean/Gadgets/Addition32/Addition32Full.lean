@@ -63,7 +63,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main, Addition8FullCarry.main, Operations.collectAdds]
+    simp only [circuit_norm, main, Addition8FullCarry.main, Operations.localAdds]
     repeat (first | rfl | constructor)
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by

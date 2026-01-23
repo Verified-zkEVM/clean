@@ -81,10 +81,10 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds, List.append_nil]
+    simp only [main, circuit_norm, Operations.localAdds, List.append_nil]
     apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.collectAdds_forEach
-    intro x n; simp only [circuit_norm, Operations.collectAdds]
+    apply Circuit.localAdds_forEach
+    intro x n; simp only [circuit_norm, Operations.localAdds]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
     omega
@@ -145,10 +145,10 @@ def circuit : FormalAssertion (F p) BlockInput where
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds]
+    simp only [main, circuit_norm, Operations.localAdds]
     apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.collectAdds_forEach
-    intro x n; simp only [circuit_norm, Operations.collectAdds]
+    apply Circuit.localAdds_forEach
+    intro x n; simp only [circuit_norm, Operations.localAdds]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   Assumptions _ := True

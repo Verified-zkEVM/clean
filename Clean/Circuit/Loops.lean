@@ -774,7 +774,6 @@ theorem localAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
   induction xs using Vector.induct generalizing offset
   case nil =>
     simp [Circuit.operations, Circuit.pure_operations_eq, Operations.localAdds]
-    rfl
   case cons x xs ih =>
     simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
     rw [Operations.localAdds_append, Operations.localAdds_append]
@@ -807,7 +806,6 @@ theorem localAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector α 
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.toList_mk, List.foldlM_nil]
     simp only [Operations.localAdds]
-    rfl
   case cons x xs ih =>
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]
@@ -835,7 +833,7 @@ theorem localAdds_foldlRange' [Inhabited β] {m : ℕ}
   simp only [foldlRange]
   rw [Vector.foldlM_toList]
   induction (Vector.finRange m).toList generalizing offset init with
-  | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.localAdds]; rfl
+  | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.localAdds]
   | cons x xs ih =>
     simp only [List.foldlM_cons, Circuit.bind_operations_eq, Operations.localAdds_append]
     rw [h_body]

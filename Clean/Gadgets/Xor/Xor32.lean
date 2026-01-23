@@ -52,7 +52,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   localLength _ := 4
   output _ i0 := varFromOffset U32 i0
   localAdds_eq _ _ _ := by
-    simp [main, circuit_norm, Operations.collectAdds]
+    simp [main, circuit_norm, Operations.localAdds]
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u32 {x y z : U32 (F p)}

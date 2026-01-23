@@ -32,9 +32,9 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
     apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.collectAdds_foldl
+    apply Circuit.localAdds_foldl
     intro state rc n
-    simp [circuit_norm, KeccakRound.circuit, Operations.collectAdds]
+    simp [circuit_norm, KeccakRound.circuit, Operations.localAdds]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
 

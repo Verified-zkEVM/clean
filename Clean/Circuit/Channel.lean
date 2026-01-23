@@ -231,8 +231,7 @@ instance : Zero (InteractionDelta F) := ⟨[]⟩
 instance : Inhabited (InteractionDelta F) := ⟨0⟩
 
 /-- Create a singleton interaction delta with one named list and its multiplicity -/
-def single (nl : NamedArray F) (mult : F) : InteractionDelta F :=
-  [(nl.1, mult, nl.2)]
+def single (nl : RawInteraction F) : InteractionDelta F := [nl]
 
 /-- Addition is list concatenation - semantic equality handles combining multiplicities -/
 instance : Add (InteractionDelta F) := ⟨List.append⟩
@@ -280,8 +279,8 @@ instance instAddMonoid : AddMonoid (InteractionDelta F) where
   add_zero := add_zero'
   nsmul := nsmulRec
 
-@[circuit_norm]
-theorem single_zero (nl : NamedArray F) : single nl 0 = [(nl.1, 0, nl.2)] := rfl
+-- @[circuit_norm]
+-- theorem single_zero (nl : NamedArray F) : single nl 0 = [(nl.1, 0, nl.2)] := rfl
 
 -- Semantic equality: two deltas are equal if they have the same toFinsupp
 theorem toFinsupp_add [DecidableEq F] (d1 d2 : InteractionDelta F) :
@@ -309,7 +308,7 @@ theorem toFinsupp_add [DecidableEq F] (d1 d2 : InteractionDelta F) :
     rw [add_assoc]
 
 theorem toFinsupp_single [DecidableEq F] (nl : NamedArray F) (m : F) :
-    (single nl m).toFinsupp = Finsupp.single nl m := by
+    (single (nl.1, m, nl.2)).toFinsupp = Finsupp.single nl m := by
   simp only [single, toFinsupp, List.foldl_cons, List.foldl_nil, zero_add]
 
 theorem toFinsupp_zero [DecidableEq F] : toFinsupp (0 : InteractionDelta F) = 0 := by
@@ -323,7 +322,7 @@ theorem toFinsupp_zero_mult [DecidableEq F] (nl1 nl2 : NamedArray F) :
 theorem toFinsupp_eq_of_eq [DecidableEq F] {a b : InteractionDelta F} (h : a = b) :
     a.toFinsupp = b.toFinsupp := by rw [h]
 
-/-- Helper lemma: if collectAdds = 0, then toFinsupp of collectAdds = toFinsupp 0. -/
+/-- Helper lemma: if localAdds = 0, then toFinsupp of localAdds = toFinsupp 0. -/
 theorem toFinsupp_zero_of_eq_zero [DecidableEq F] {a : InteractionDelta F} (h : a = 0) :
     a.toFinsupp = (0 : InteractionDelta F).toFinsupp := by rw [h]
 

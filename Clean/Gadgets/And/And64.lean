@@ -41,7 +41,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   localLength _ := 8
   output _ i := varFromOffset U64 i
   localAdds_eq _ _ _ := by
-    simp [main, circuit_norm, Operations.collectAdds]
+    simp [main, circuit_norm, Operations.localAdds]
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}

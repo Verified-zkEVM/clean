@@ -105,6 +105,8 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- even though it could be derived from the operations
   localLength : ℕ
 
+  localAdds : Environment F → InteractionDelta F := fun _ => 0
+
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
     ConstraintsHoldFlat env ops.toFlat → Soundness env
@@ -124,16 +126,16 @@ def Subcircuit.witnesses (sc : Subcircuit F n) env :=
   (FlatOperation.localWitnesses env sc.ops.toFlat).cast sc.localLength_eq.symm
 
 @[circuit_norm]
-def Subcircuit.localAdds (sc : Subcircuit F n) (env : Environment F) : RawInteractions F :=
-  localAdds' env sc.ops.toFlat
+def Subcircuit.actuallocalAdds (sc : Subcircuit F n) (env : Environment F) : RawInteractions F :=
+  actuallocalAdds' env sc.ops.toFlat
 where
   @[circuit_norm]
-  localAdds' : Environment F → List (FlatOperation F) → RawInteractions F
+  actuallocalAdds' : Environment F → List (FlatOperation F) → RawInteractions F
     | _, [] => []
-    | env, .witness _ _ :: ops => localAdds' env ops
-    | env, .assert _ :: ops => localAdds' env ops
-    | env, .lookup _ :: ops => localAdds' env ops
-    | env, .interact i :: ops => i.eval env :: localAdds' env ops
+    | env, .witness _ _ :: ops => actuallocalAdds' env ops
+    | env, .assert _ :: ops => actuallocalAdds' env ops
+    | env, .lookup _ :: ops => actuallocalAdds' env ops
+    | env, .interact i :: ops => i.eval env :: actuallocalAdds' env ops
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -244,13 +246,13 @@ def induct {motive : Operations F → Sort*}
   | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup interact subcircuit ops)
   | .interact i :: ops => interact i ops (induct empty witness assert lookup interact subcircuit ops)
 /-- Collect all add operations from the operations list, evaluating their expressions -/
-def localAdds (env : Environment F) : Operations F → RawInteractions F
-  | [] => []
+def localAdds (env : Environment F) : Operations F → InteractionDelta F
+  | [] => 0
   | .witness _ _ :: ops => localAdds env ops
   | .assert _ :: ops => localAdds env ops
   | .lookup _ :: ops => localAdds env ops
-  | .interact i :: ops => i.eval env :: localAdds env ops
-  | .subcircuit s :: ops => s.localAdds env ++ localAdds env ops
+  | .interact i :: ops => .single (i.eval env) + localAdds env ops
+  | .subcircuit s :: ops => s.localAdds env + localAdds env ops
 
 -- TODO move all this to a theorems/lemmas file
 
@@ -269,24 +271,24 @@ theorem localAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operations 
 
 @[circuit_norm]
 theorem localAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
-    localAdds env (ops1 ++ ops2) = localAdds env ops1 ++ localAdds env ops2 := by
+    localAdds env (ops1 ++ ops2) = localAdds env ops1 + localAdds env ops2 := by
   induction ops1 with
-  | nil => simp only [List.nil_append, localAdds, List.nil_append]
+  | nil => simp only [List.nil_append, localAdds, List.nil_append]; rfl
   | cons op ops1 ih =>
-    cases op <;> simp only [List.cons_append, localAdds, ih, List.append_assoc]
+    cases op <;> simp only [List.cons_append, localAdds, ih, add_assoc]
 
 -- Helper: a + foldl (+) 0 xs = foldl (+) a xs for InteractionDelta
 omit [Field F] in
 private theorem foldl_add_start {xs : List (RawInteractions F)} {a : RawInteractions F} :
-    a ++ xs.foldl (· ++ ·) [] = xs.foldl (· ++ ·) a := by
+    a + xs.foldl (· + ·) 0 = xs.foldl (· + ·) a := by
   induction xs generalizing a with
-  | nil => simp [List.foldl_nil]
+  | nil => simp only [List.foldl_nil, add_zero]
   | cons y ys ih =>
-    simp only [List.foldl_cons, List.nil_append]
-    rw [←ih (a:=y), ←ih (a:=a++y), List.append_assoc]
+    simp only [List.foldl_cons, zero_add]
+    rw [←ih (a:=y), ←ih (a:=a+y), add_assoc]
 
 theorem localAdds_flatten (env : Environment F) (opss : List (Operations F)) :
-    localAdds env opss.flatten = (opss.map (localAdds env)).foldl (· ++ ·) [] := by
+    localAdds env opss.flatten = (opss.map (localAdds env)).foldl (· + ·) 0 := by
   induction opss with
   | nil => rfl
   | cons ops opss ih =>
@@ -304,7 +306,7 @@ private theorem foldl_ofFn_eq {m : ℕ} {β : Type*} (f : Fin m → β) (g : β 
 
 theorem localAdds_ofFn_flatten {m : ℕ} (env : Environment F) (f : Fin m → Operations F) :
     localAdds env (List.ofFn f).flatten =
-    (List.finRange m).foldl (fun acc i => acc ++ localAdds env (f i)) [] := by
+    (List.finRange m).foldl (fun acc i => acc + localAdds env (f i)) 0 := by
   rw [localAdds_flatten, List.map_ofFn, foldl_ofFn_eq]
   simp only [Function.comp_apply]
 

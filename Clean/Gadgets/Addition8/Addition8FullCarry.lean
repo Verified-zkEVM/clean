@@ -63,7 +63,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
 
   localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds]
+    simp only [main, circuit_norm, Operations.localAdds]
 
   soundness := by
     -- introductions

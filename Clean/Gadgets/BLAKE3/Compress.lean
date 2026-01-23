@@ -32,7 +32,7 @@ instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State whe
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
+    simp only [Operations.localAdds, circuit_norm]
 
 def Assumptions (input : ApplyRounds.Inputs (F p)) : Prop :=
   ApplyRounds.Assumptions input

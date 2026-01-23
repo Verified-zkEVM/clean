@@ -63,7 +63,7 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
   localLength_eq _ n := by
     dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
   localAdds_eq _ _ _ := by
-    simp [circuit_norm, main, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, Operations.collectAdds]
+    simp [circuit_norm, main, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, Operations.localAdds]
   output_eq _ _ := by
     dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
   subcircuitsConsistent _ _ := by

@@ -300,10 +300,10 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
           fieldFromBits output + aux * (2^n : F p)
 
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main, Operations.collectAdds_append, Operations.collectAdds,
+    simp only [circuit_norm, main, Operations.localAdds_append, Operations.localAdds,
       FormalAssertion.toSubcircuit_localAdds]
     -- Handle the foldlRange part - all subcircuits have localAdds = 0
-    rw [Circuit.collectAdds_foldlRange' _ _ _ _ _ (by intros; simp only [Operations.collectAdds,
+    rw [Circuit.localAdds_foldlRange' _ _ _ _ _ (by intros; simp only [Operations.localAdds,
       FormalAssertion.toSubcircuit_localAdds, InteractionDelta.zero_add'])]
     rfl
 

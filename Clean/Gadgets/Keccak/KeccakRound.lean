@@ -30,7 +30,7 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit]
   localAdds_eq _ _ _ := by
-    simp [circuit_norm, main, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Operations.collectAdds]
+    simp [circuit_norm, main, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Operations.localAdds]
   output_eq state i0 := by
     simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
 

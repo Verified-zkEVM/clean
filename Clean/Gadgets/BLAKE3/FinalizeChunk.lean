@@ -104,7 +104,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) wher
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
+    simp only [Operations.localAdds, circuit_norm]
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧

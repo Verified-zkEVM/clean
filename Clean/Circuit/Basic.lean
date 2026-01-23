@@ -250,7 +250,7 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
 
   /-- compute local interaction delta from operations (defaults to empty for circuits that don't change interactions) -/
   localAdds : Var Input F → ℕ → Environment F → InteractionDelta F
-    := fun _ _ _ => []
+    := fun _ _ _ => 0
 
   /-- correctness of `localAdds` (up to semantic equivalence via toFinsupp) -/
   localAdds_eq : ∀ input env offset,

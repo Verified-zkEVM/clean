@@ -103,7 +103,7 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
     simp only [circuit_norm, main, Num2Bits.circuit]
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
+    simp only [Operations.localAdds, circuit_norm]
 
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
