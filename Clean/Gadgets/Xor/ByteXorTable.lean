@@ -31,7 +31,7 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
       · rw [hy]
         apply fromByte_lt
       rw [hx, hy, hz]
-      repeat rw [fromByte, FieldUtils.val_of_natToField_eq]
+      repeat rw [fromByte, FieldUtils.natToField_val]
       simp only [HXor.hXor, XorOp.xor, Fin.xor]
       rw [Nat.mod_eq_iff_lt (by norm_num)]
       apply Nat.xor_lt_two_pow (n:=8)
@@ -43,6 +43,6 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
       simp only [fromByte, FieldUtils.natToField_of_val_eq_iff, Fin.xor_val_of_uInt8Size,
         Prod.mk.injEq, true_and]
       apply FieldUtils.ext
-      simp [h, FieldUtils.val_of_natToField_eq]
+      simp [h, FieldUtils.natToField_val]
 }
 end Gadgets.Xor

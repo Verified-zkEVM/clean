@@ -96,7 +96,7 @@ theorem natToField_eq_natCast {n : ℕ} (lt : n < p) : ↑n = FieldUtils.natToFi
     rw [Fin.natCast_eq_mk]
   }
 
-theorem val_of_natToField_eq {n : ℕ} (lt : n < p) : (natToField n lt).val = n := by
+theorem natToField_val {n : ℕ} (lt : n < p) : (natToField n lt).val = n := by
   cases p
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
@@ -293,7 +293,7 @@ def fromByte (x : Fin 256) : F p :=
 
 lemma fromByte_lt (x : Fin 256) : (fromByte (p:=p) x).val < 256 := by
   dsimp [fromByte]
-  rw [FieldUtils.val_of_natToField_eq]
+  rw [natToField_val]
   exact x.is_lt
 
 lemma fromByte_eq (x : F p) (x_lt : x.val < 256) : fromByte ⟨ x.val, x_lt ⟩ = x := by
