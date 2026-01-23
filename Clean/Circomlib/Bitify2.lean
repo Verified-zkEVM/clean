@@ -50,13 +50,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   localLength_eq := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
   localAdds_eq input env offset := by
-    have h : (main input |>.operations offset).localAdds env = 0 := by
-      simp only [main, Num2Bits.main, circuit_norm, Operations.localAdds]
-      simp only [List.append_nil]
-      apply Circuit.localAdds_foldlRange'
-      intro (lc1, e2) i k
-      simp only [circuit_norm, Operations.localAdds, List.append_nil]
-    simp only [h, InteractionDelta.toFinsupp_zero]
+    simp only [main, Num2Bits.main, circuit_norm]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
@@ -234,14 +228,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   main := main n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
-  localAdds_eq input env offset := by
-    have h : (main n input |>.operations offset).localAdds env = 0 := by
-      simp only [main, circuit_norm, Operations.localAdds]
-      simp only [List.append_nil]
-      apply Circuit.localAdds_foldlRange'
-      intro lc1 i k
-      simp only [circuit_norm, Operations.localAdds, List.append_nil]
-    simp only [h, InteractionDelta.toFinsupp_zero]
+  localAdds_eq := by simp only [main, circuit_norm]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 

@@ -208,8 +208,8 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
     have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i := by
       have hi' : i < s + x + t + (s + x) := by linarith
-      have hi'' : i < 0 + (s + x) := by linarith
-      have hi''' : i < 0 + (s + x) + t := by linarith
+      have hi'' : i < s + x := by linarith
+      have hi''' : i < s + x + t := by linarith
       rw [h_env']
       simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
@@ -217,8 +217,8 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
     have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) := by
       have hi' : i + s < s + x + t + (s + x) := by linarith
-      have hi'' : i + s < 0 + (s + x) := by linarith
-      have hi''' : i + s < 0 + (s + x) + t := by linarith
+      have hi'' : i + s < s + x := by linarith
+      have hi''' : i + s < s + x + t := by linarith
       rw [h_env']
       simp +arith only [main_ops, s, t, x, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
@@ -261,10 +261,9 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp only [t, s, x]
       ac_rfl
 
-    simp only [x] at main_constraints
     have constraints : Circuit.ConstraintsHold.Soundness
         env' ((table.step curr_var.1 curr_var.2).operations (size State + size Input)) := by
-      simp only [curr_var, varFromOffset_pair]
+      simp only [curr_var, varFromOffset_pair, zero_add]
       exact main_constraints
 
     let xs := traceInputs ⟨ rest, rfl ⟩

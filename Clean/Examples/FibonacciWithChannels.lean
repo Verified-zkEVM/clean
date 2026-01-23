@@ -53,11 +53,11 @@ def add8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
 
   -- TODO it's wrong that we have to eval the inputs here
   localAdds
-  | (x, y, z), _, eval =>
-    BytesChannel.pulled (eval x) +
-    BytesChannel.pulled (eval y) +
-    BytesChannel.pulled (eval z) +
-    Add8Channel.pushed (eval x, eval y, eval z)
+  | (x, y, z), _ =>
+    BytesChannel.pulled x +
+    BytesChannel.pulled y +
+    BytesChannel.pulled z +
+    Add8Channel.pushed (x, y, z)
 
   -- TODO feels weird to put the entire spec in the completeness assumptions
   -- can we get something from the channel interactions??

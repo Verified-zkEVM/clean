@@ -24,11 +24,6 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 ## Emit operations for multiplicity tracking
 -/
 
-/-- Emit an add operation to the global multiset -/
-@[circuit_norm]
-def emitAdd (name : String) (multiplicity : Expression (F p)) (values : List (Expression (F p))) : Circuit (F p) Unit := fun _ =>
-  ((), [.add multiplicity { name, values }])
-
 def StateChannel : Channel (F p) State where
   name := "state"
 
@@ -97,9 +92,7 @@ def conditionalDecodeElaborated :
     ElaboratedCircuit (F p) ConditionalDecodeInput DecodedInstruction where
   main := conditionalDecodeMain
   localLength _ := 8  -- Same as decodeInstruction.circuit since Conditional adds 0
-  localAdds_eq _ _ _ := by
-    simp only [conditionalDecodeMain, circuit_norm, decodeInstruction, Gadgets.Conditional.circuit]
-    simp only [Operations.localAdds, circuit_norm]
+  localAdds_eq _ _ _ := by simp only [conditionalDecodeMain, circuit_norm]
 
 /--
 Conditional decode circuit as GeneralFormalCircuit.

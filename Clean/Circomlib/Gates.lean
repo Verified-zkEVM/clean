@@ -50,7 +50,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -96,7 +95,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -140,7 +138,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -184,7 +181,6 @@ def circuit : FormalCircuit (F p) field field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
 
   soundness := by
     rintro _ _ _ _ h_env h_in h_hold
@@ -230,7 +226,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -276,7 +271,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold

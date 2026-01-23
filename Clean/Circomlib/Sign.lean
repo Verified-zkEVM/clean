@@ -40,9 +40,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
   output input offset := (CompConstant.circuit ((p - 1) / 2)).output input offset
-  localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
+  localAdds_eq _ _ _ := by simp only [circuit_norm, main]
 
   Assumptions input :=
     -- Input should be binary representation of a field element

@@ -100,7 +100,6 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
   localLength _ := 8
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, decodeInstructionMain]
-    simp only [Operations.localAdds, circuit_norm]
 
   Assumptions
   | instruction, _ => instruction.val < 256
@@ -649,9 +648,6 @@ def femtoCairoStepElaboratedCircuit
       -- Compute next state
       nextState { state, decoded, v1, v2, v3 }
     localLength := 30
-    localAdds_eq _ _ _ := by
-      simp only [circuit_norm]
-      simp only [Operations.localAdds, circuit_norm]
 
 def femtoCairoStepSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))

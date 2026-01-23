@@ -77,7 +77,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   localAdds_eq input env offset := by
     simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
 
   soundness := by
     simp only [circuit_norm, main]
@@ -194,7 +193,6 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   localAdds_eq input env offset := by
     simp only [circuit_norm, main]
-    exact (MultiMux1.circuit 1).localAdds_eq { c := #v[(input.c[0], input.c[1])], s := input.s } env offset
 
   soundness := by
     simp only [circuit_norm, main]

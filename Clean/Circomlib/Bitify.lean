@@ -81,13 +81,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
 
-  localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.localAdds]
-    simp only [List.append_nil]
-    apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.localAdds_foldlRange'
-    intro (lc1, e2) i k
-    simp only [circuit_norm, Operations.localAdds, List.append_nil]
+  localAdds_eq := by simp only [main, circuit_norm]
 
   soundness := by
     circuit_proof_start
@@ -128,9 +122,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   Spec input output _ :=
     input.val < 2^n ∧ output = fieldToBits n input
 
-  localAdds_eq _ _ _ := by
-    simp only [circuit_norm]
-    simp only [Operations.localAdds, circuit_norm, GeneralFormalCircuit.toSubcircuit_localAdds]
+  localAdds_eq := by simp only [circuit_norm]
 
   soundness := by
     circuit_proof_start [arbitraryBitLengthCircuit]
@@ -203,9 +195,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     output = fieldFromBits input
     ∧ output.val < 2^n
 
-  localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
+  localAdds_eq := by simp only [circuit_norm, main]
 
   soundness := by
     circuit_proof_start

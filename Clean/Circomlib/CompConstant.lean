@@ -101,9 +101,7 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   output_eq := by
     intro offset
     simp only [circuit_norm, main, Num2Bits.circuit]
-  localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main]
-    simp only [Operations.localAdds, circuit_norm]
+  localAdds_eq _ _ _ := by simp only [circuit_norm, main]
 
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1

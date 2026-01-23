@@ -29,12 +29,7 @@ instance elaborated : ElaboratedCircuit F M field where
   localLength _ := 2 * size M
   localLength_eq := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
-  localAdds_eq := by
-    intro input env offset
-    simp [main, circuit_norm]
-    rw [Circuit.localAdds_foldlRange' _ _ _ _ _ (by intros; simp only [Operations.localAdds,
-      FormalCircuit.toSubcircuit_localAdds, InteractionDelta.zero_add'])]
-    rfl
+  localAdds_eq := by simp [main, circuit_norm]
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 
