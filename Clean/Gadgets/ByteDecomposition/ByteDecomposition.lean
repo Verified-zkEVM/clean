@@ -1,7 +1,7 @@
+import Clean.Circuit
 import Clean.Utils.Primes
 import Clean.Utils.Field
 import Clean.Gadgets.ByteDecomposition.Theorems
-import Init.Data.Nat.Div.Basic
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
@@ -12,11 +12,7 @@ open FieldUtils (mod floorDiv two_lt two_pow_lt two_val two_pow_val)
 structure Outputs (F : Type) where
   low : F
   high : F
-
-instance : ProvableStruct Outputs where
-  components := [field, field]
-  toComponents := fun { low, high } => .cons low (.cons high .nil)
-  fromComponents := fun (.cons low (.cons high .nil)) => { low, high }
+deriving ProvableStruct
 
 /--
   Decompose a byte into a low and a high part.

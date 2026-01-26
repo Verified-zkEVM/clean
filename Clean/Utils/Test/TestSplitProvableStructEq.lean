@@ -1,5 +1,5 @@
+import Clean.Circuit
 import Clean.Utils.Tactics
-import Clean.Circuit.Provable
 
 namespace TestSplitProvableStructEq
 
@@ -8,11 +8,7 @@ structure TestInputs (F : Type) where
   x : F
   y : F
   z : F
-
-instance : ProvableStruct TestInputs where
-  components := [field, field, field]
-  toComponents := fun { x, y, z } => .cons x (.cons y (.cons z .nil))
-  fromComponents := fun (.cons x (.cons y (.cons z .nil))) => { x, y, z }
+deriving ProvableStruct
 
 -- Structure without ProvableStruct instance
 structure NonProvableStruct (F : Type) where

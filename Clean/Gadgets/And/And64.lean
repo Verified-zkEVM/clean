@@ -1,5 +1,4 @@
 import Clean.Utils.Primes
-import Clean.Circuit.Subcircuit
 import Clean.Types.U64
 import Clean.Gadgets.And.And8
 
@@ -10,11 +9,7 @@ namespace Gadgets.And.And64
 structure Inputs (F : Type) where
   x: U64 F
   y: U64 F
-
-instance : ProvableStruct Inputs where
-  components := [U64, U64]
-  toComponents := fun { x, y } => .cons x (.cons y .nil)
-  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input

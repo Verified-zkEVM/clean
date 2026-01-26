@@ -1,6 +1,5 @@
+import Clean.Circuit
 import Clean.Utils.Tactics
-import Clean.Circuit.Provable
-import Clean.Circuit.Expression
 
 namespace TestSimplifyProvableStructEval
 
@@ -9,21 +8,13 @@ structure TestInputs (F : Type) where
   x : F
   y : F
   z : F
-
-instance : ProvableStruct TestInputs where
-  components := [field, field, field]
-  toComponents := fun { x, y, z } => .cons x (.cons y (.cons z .nil))
-  fromComponents := fun (.cons x (.cons y (.cons z .nil))) => { x, y, z }
+deriving ProvableStruct
 
 -- Another test structure
 structure SimpleStruct (F : Type) where
   a : F
   b : F
-
-instance : ProvableStruct SimpleStruct where
-  components := [field, field]
-  toComponents := fun { a, b } => .cons a (.cons b .nil)
-  fromComponents := fun (.cons a (.cons b .nil)) => { a, b }
+deriving ProvableStruct
 
 -- Test eval with struct literal on RHS
 lemma test_eval_eq_struct_literal {F : Type} [Field F] (env : Environment F)

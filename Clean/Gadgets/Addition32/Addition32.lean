@@ -11,11 +11,7 @@ open ByteUtils (mod256 floorDiv256)
 structure Inputs (F : Type) where
   x: U32 F
   y: U32 F
-
-instance : ProvableStruct Inputs where
-  components := [U32, U32]
-  toComponents := fun {x, y} => .cons x ( .cons y .nil)
-  fromComponents := fun (.cons x ( .cons y .nil)) => ⟨ x, y ⟩
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let ⟨x, y⟩ := input

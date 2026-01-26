@@ -139,11 +139,7 @@ template ForceEqualIfEnabled() {
 structure Inputs (F : Type) where
   enabled : F
   inp : fieldPair F
-
-instance : ProvableStruct Inputs where
-  components := [field, fieldPair]
-  toComponents := fun { enabled, inp } => .cons enabled (.cons inp .nil)
-  fromComponents := fun (.cons enabled (.cons inp .nil)) => { enabled, inp }
+deriving ProvableStruct
 
 def main (inputs : Var Inputs (F p)) := do
   let { enabled, inp } := inputs

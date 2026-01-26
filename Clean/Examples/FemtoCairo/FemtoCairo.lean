@@ -1,8 +1,8 @@
+import Clean.Circuit
 import Clean.Table.Inductive
 import Clean.Gadgets.Bits
 import Clean.Utils.Bits
 import Clean.Utils.Field
-import Clean.Table.Inductive
 
 import Clean.Examples.FemtoCairo.SpecLemmas
 import Clean.Examples.FemtoCairo.TypesLemmas
@@ -246,12 +246,7 @@ def fetchInstruction
 structure MemoryEntry F where
   address : F
   value : F
-
-instance : ProvableStruct MemoryEntry where
-  components := [field, field]
-  toComponents := fun { address, value} => .cons address (.cons value .nil)
-  fromComponents := fun (.cons address (.cons value .nil)) => { address, value }
-  combinedSize := 2
+deriving ProvableStruct
 
 def MemoryTable : Table (F p) MemoryEntry where
   name := "memory"
