@@ -45,14 +45,15 @@ Circuits are written using the `Circuit F α` monad, which accumulates operation
 ```lean
 def myCircuit (x : Expression F) : Circuit F (Expression F) := do
   let y ← witness fun env => env x + 1  -- witness a new variable
-  assertZero (y - x - 1)                 -- add constraint: y = x + 1
+  y === x + 1                           -- add constraint: y = x + 1
   return y
 ```
+
+In that example, `===` is custom syntax which adds an `assertZero` operation.
 
 ### Key Operations
 
 - `witness` / `witnessVar` / `witnessField`: Create new witness variables
-- `assertZero`: Add constraint that expression equals zero
 - `lookup`: Add lookup constraint (value must be in table)
 - `===`: Assert equality between two values
 - `<==`: Witness and constrain equal to expression
@@ -60,8 +61,10 @@ def myCircuit (x : Expression F) : Circuit F (Expression F) := do
 ### ProvableType and ProvableStruct
 
 Types that can appear in circuits implement `ProvableType`:
+
 - `field`: Single field element
-- `fields n`: Vector of n field elements  
+- `fieldPair`, `fieldTriple`: 2- and 3-tuples of field elements
+- `fields n`: Vector of n field elements
 - `ProvableVector α n`: Vector of n elements of type α
 - Custom structures via `ProvableStruct`
 
@@ -84,7 +87,7 @@ structure FormalCircuit (F : Type) (Input Output : TypeMap) where
   main : Var Input F → Circuit F (Var Output F)
   Assumptions : Input F → Prop      -- preconditions
   Spec : Input F → Output F → Prop  -- postcondition (input-output relation)
-  soundness : Soundness F ...       -- constraints → spec
+  soundness : Soundness F ...       -- constraints → assumptions → spec
   completeness : Completeness F ... -- assumptions → constraints satisfiable
 ```
 
@@ -93,11 +96,11 @@ structure FormalCircuit (F : Type) (Input Output : TypeMap) where
 
 ### Subcircuits
 
-Compose formal circuits using `subcircuit`:
+Compose formal circuits using the subcircuit mechanism and the `CoeFun` instance for `FormalCircuit`:
 
 ```lean
 def main (input : Var Inputs F) : Circuit F (Var Outputs F) := do
-  let result ← subcircuit innerCircuit input.someField
+  let result ← innerCircuit input.someField -- `innerCircuit : FormalCircuit ..` being used like a function
   ...
 ```
 
@@ -118,28 +121,6 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 
 - `circuit_norm`: Main simplification set for circuit reasoning
 - `explicit_provable_type`: Unfolds ProvableType definitions when needed
-
-### Common Proof Steps
-
-1. Destructure inputs: `obtain ⟨field1, field2⟩ := input`
-2. Use `h_input` to relate var and value versions
-3. Use `h_holds` for constraint implications
-4. Use `h_assumptions` for preconditions
-5. Apply domain-specific lemmas
-
-## Type Aliases for eval Control
-
-When `Vector F n` is used, the derived `ProvableStruct` maps it to `fields n`, which causes `eval` to expand under `circuit_norm`. To keep `eval` unexpanded, use a type alias:
-
-```lean
-@[reducible] def MyBuffer := ProvableVector field 64
-
-structure Inputs (F : Type) where
-  buffer : MyBuffer F  -- eval stays unexpanded
-deriving ProvableStruct
-```
-
-Examples: `BLAKE3State`, `BLAKE3Buffer`, `KeccakState`, `KeccakBlock`
 
 ## Conventions
 
@@ -166,34 +147,3 @@ Examples: `BLAKE3State`, `BLAKE3Buffer`, `KeccakState`, `KeccakBlock`
 3. Create `ElaboratedCircuit` instance with `localLength` and `output`
 4. Prove `soundness` and `completeness`
 5. Bundle into `FormalCircuit`
-
-### Adding a New ProvableStruct
-
-```lean
-structure MyStruct (F : Type) where
-  field1 : F
-  field2 : SomeType F
-deriving ProvableStruct
-```
-
-For complex cases, see `Clean/Utils/Tactics/ProvableStructDeriving.lean`.
-
-### Debugging Proofs
-
-- Add `set_option trace.Meta.Tactic.simp true` to see simp steps
-- Use `#check` and `#reduce` to inspect types/values
-- Try `simp only [circuit_norm]` to see normalized form
-- Check if subcircuit specs are being applied correctly
-
-## Build and Test
-
-```bash
-lake build        # Build everything
-lake build Clean  # Build main library
-```
-
-## Resources
-
-- Blog post: https://blog.zksecurity.xyz/posts/clean
-- Telegram: https://t.me/clean_zk
-- DeepWiki: https://deepwiki.com/Verified-zkEVM/clean
