@@ -94,16 +94,6 @@ def ParamInfo.name : ParamInfo → Name
   | .other n _ => n
 
 /--
-  Check if an expression is a bound variable at a specific index.
-  In forallTelescope, the first parameter is bvar 0 (after abstracting),
-  but in the args array, it's at index 0.
--/
-def isBVarAt (e : Expr) (idx : Nat) : Bool :=
-  match e with
-  | .bvar i => i == idx
-  | _ => false
-
-/--
   Analyze a field type to determine its TypeMap.
   `numParams` is the total number of parameters (including F)
   `fieldType` is the type of the field (may contain bvars referring to params)
