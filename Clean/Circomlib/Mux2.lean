@@ -18,11 +18,7 @@ namespace MultiMux2
 structure Inputs (n : ℕ) (F : Type) where
   c : ProvableVector (fields 4) n F  -- n vectors of 4 constants each
   s : Vector F 2                      -- 2-bit selector
-
-instance {n : ℕ} : ProvableStruct (Inputs n) where
-  components := [ProvableVector (fields 4) n, fields 2]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
+deriving ProvableStruct
 /-
 template MultiMux2(n) {
     signal input c[n][4];  // Constants
@@ -141,11 +137,7 @@ namespace Mux2
 structure Inputs (F : Type) where
   c : Vector F 4  -- 4 constants
   s : Vector F 2  -- 2-bit selector
-
-instance : ProvableStruct Inputs where
-  components := [fields 4, fields 2]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
+deriving ProvableStruct
 /-
 template Mux2() {
     var i;

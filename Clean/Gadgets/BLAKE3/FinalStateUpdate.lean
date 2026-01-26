@@ -13,11 +13,7 @@ open Specs.BLAKE3 (finalStateUpdate)
 structure Inputs (F : Type) where
   state : BLAKE3State F
   chaining_value : Vector (U32 F) 8
-
-instance : ProvableStruct Inputs where
-  components := [BLAKE3State, ProvableVector U32 8]
-  toComponents := fun { state, chaining_value } => .cons state (.cons chaining_value .nil)
-  fromComponents := fun (.cons state (.cons chaining_value .nil)) => { state, chaining_value }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, chaining_value } := input
