@@ -1,4 +1,4 @@
-import Clean.Circuit.Provable
+import Clean.Circuit
 import Clean.Utils.Field
 import Clean.Utils.Primes
 namespace Examples.FemtoCairo.Types
@@ -12,6 +12,15 @@ structure State (F : Type) where
   ap : F
   fp : F
 
+instance : ProvableType State where
+  size := 3
+  toElements := fun { pc, ap, fp } => #v[pc, ap, fp]
+  fromElements := fun elements => {
+    pc := elements[0],
+    ap := elements[1],
+    fp := elements[2]
+  }
+
 /--
   Raw instruction that is fetched from the program memory,
   represented as a structure (instrType, op1, op2, op3).
@@ -21,6 +30,16 @@ structure RawInstruction (F : Type) where
   op1 : F
   op2 : F
   op3 : F
+
+instance : ProvableType RawInstruction where
+  size := 4
+  toElements := fun { rawInstrType, op1, op2, op3 } => #v[rawInstrType, op1, op2, op3]
+  fromElements := fun elements => {
+    rawInstrType := elements[0],
+    op1 := elements[1],
+    op2 := elements[2],
+    op3 := elements[3]
+  }
 
 /--
   Decoded instruction type, represented as a one-hot encoding in a vector of 4 field elements.
@@ -36,6 +55,16 @@ structure DecodedInstructionType (F : Type) where
   isStoreState : F
   isLoadState : F
 
+instance : ProvableType DecodedInstructionType where
+  size := 4
+  toElements := fun { isAdd, isMul, isStoreState, isLoadState } => #v[isAdd, isMul, isStoreState, isLoadState]
+  fromElements := fun elements => {
+    isAdd := elements[0],
+    isMul := elements[1],
+    isStoreState := elements[2],
+    isLoadState := elements[3]
+  }
+
 /--
   Decoded addressing mode, represented as a one-hot encoding in a vector of 4 field elements.
   The four possible addressing modes are:
@@ -50,64 +79,6 @@ structure DecodedAddressingMode (F : Type) where
   isFpRelative : F
   isImmediate : F
 
-/--
-  Decoded instruction, containing the instruction type and the addressing modes for the three operands.
--/
-structure DecodedInstruction (F : Type) where
-  instrType : DecodedInstructionType F
-  mode1 : DecodedAddressingMode F
-  mode2 : DecodedAddressingMode F
-  mode3 : DecodedAddressingMode F
-
-/--
-  Input structure for the memory read circuit.
-  Contains the current machine state, the offset operand, and the addressing mode.
--/
-structure MemoryReadInput (F : Type) where
-  state : State F
-  offset : F
-  mode : DecodedAddressingMode F
-
-/--
-  Input structure for checking the validity of a state transition.
-  Contains the current state, the decoded instruction, and the values read from memory.
--/
-structure StateTransitionInput (F : Type) where
-  state : State F
-  decoded : DecodedInstruction F
-  v1 : F
-  v2 : F
-  v3 : F
-
-instance : ProvableType State where
-  size := 3
-  toElements := fun { pc, ap, fp } => #v[pc, ap, fp]
-  fromElements := fun elements => {
-    pc := elements[0],
-    ap := elements[1],
-    fp := elements[2]
-  }
-
-instance : ProvableType RawInstruction where
-  size := 4
-  toElements := fun { rawInstrType, op1, op2, op3 } => #v[rawInstrType, op1, op2, op3]
-  fromElements := fun elements => {
-    rawInstrType := elements[0],
-    op1 := elements[1],
-    op2 := elements[2],
-    op3 := elements[3]
-  }
-
-instance : ProvableType DecodedInstructionType where
-  size := 4
-  toElements := fun { isAdd, isMul, isStoreState, isLoadState } => #v[isAdd, isMul, isStoreState, isLoadState]
-  fromElements := fun elements => {
-    isAdd := elements[0],
-    isMul := elements[1],
-    isStoreState := elements[2],
-    isLoadState := elements[3]
-  }
-
 instance : ProvableType DecodedAddressingMode where
   size := 4
   toElements := fun { isDoubleAddressing, isApRelative, isFpRelative, isImmediate } => #v[isDoubleAddressing, isApRelative, isFpRelative,
@@ -119,27 +90,37 @@ instance : ProvableType DecodedAddressingMode where
     isImmediate := elements[3]
   }
 
-instance : ProvableStruct DecodedInstruction where
-  components := [DecodedInstructionType, DecodedAddressingMode, DecodedAddressingMode, DecodedAddressingMode]
-  toComponents := fun { instrType, mode1, mode2, mode3 } => .cons instrType (.cons mode1 (.cons mode2 (.cons mode3 .nil)))
-  fromComponents := fun (.cons instrType (.cons mode1 (.cons mode2 (.cons mode3 .nil)))) => {
-    instrType, mode1, mode2, mode3
-  }
+/--
+  Decoded instruction, containing the instruction type and the addressing modes for the three operands.
+-/
+structure DecodedInstruction (F : Type) where
+  instrType : DecodedInstructionType F
+  mode1 : DecodedAddressingMode F
+  mode2 : DecodedAddressingMode F
+  mode3 : DecodedAddressingMode F
+deriving ProvableStruct
 
-instance : ProvableStruct MemoryReadInput where
-  components := [State, field, DecodedAddressingMode]
-  toComponents := fun { state, offset, mode } => .cons state (.cons offset (.cons mode .nil))
-  fromComponents := fun (.cons state (.cons offset (.cons mode .nil))) => {
-    state, offset, mode
-  }
+/--
+  Input structure for the memory read circuit.
+  Contains the current machine state, the offset operand, and the addressing mode.
+-/
+structure MemoryReadInput (F : Type) where
+  state : State F
+  offset : F
+  mode : DecodedAddressingMode F
+deriving ProvableStruct
 
-instance : ProvableStruct StateTransitionInput where
-  components := [State, DecodedInstruction, field, field, field]
-  toComponents := fun { state, decoded, v1, v2, v3 } =>
-    .cons state (.cons decoded (.cons v1 (.cons v2 (.cons v3 .nil))))
-  fromComponents := fun (.cons state (.cons decoded (.cons v1 (.cons v2 (.cons v3 .nil))))) => {
-    state, decoded, v1, v2, v3
-  }
+/--
+  Input structure for checking the validity of a state transition.
+  Contains the current state, the decoded instruction, and the values read from memory.
+-/
+structure StateTransitionInput (F : Type) where
+  state : State F
+  decoded : DecodedInstruction F
+  v1 : F
+  v2 : F
+  v3 : F
+deriving ProvableStruct
 
 /--
   Convert the one-hot encoding of an instruction type back to its numeric representation.

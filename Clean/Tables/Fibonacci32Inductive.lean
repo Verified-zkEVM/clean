@@ -14,11 +14,7 @@ def fib32 : ℕ → ℕ
 structure Row (F : Type) where
   x: U32 F
   y: U32 F
-
-instance : ProvableStruct Row where
-  components := [U32, U32]
-  toComponents := fun { x, y } => .cons x (.cons y .nil)
-  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+deriving ProvableStruct
 
 def table : InductiveTable (F p) Row unit where
   step row _ := do
