@@ -78,6 +78,8 @@ structure MyInputs (F : Type) where
 deriving ProvableStruct
 ```
 
+For complex or more generic cases, one can always implement a `ProvableType` instance directly.
+
 ### FormalCircuit
 
 A `FormalCircuit` bundles a circuit with its correctness proofs:

@@ -36,11 +36,7 @@ structure Add8Inputs F where
   y : F
   z : F
   m : F -- multiplicity
-
-instance : ProvableStruct Add8Inputs where
-  components := [field, field, field, field]
-  toComponents := fun { x, y, z, m } => .cons x (.cons y (.cons z (.cons m .nil)))
-  fromComponents := fun (.cons x (.cons y (.cons z (.cons m .nil)))) => { x, y, z, m }
+deriving ProvableStruct
 
 def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   main | { x, y, z, m } => do
