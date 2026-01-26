@@ -1,11 +1,15 @@
-/-
-  Deriving handler for ProvableStruct.
+import Lean
+import Clean.Circuit.Provable
 
-  This macro generates `ProvableStruct` instances for structures where:
-  - All fields are of the form `M F` where `M : TypeMap` (i.e., `M : Type → Type`)
-  - Each `M` must have a `ProvableType M` or `ProvableStruct M` instance
+/-!
+  # Deriving handler for ProvableStruct
 
-  Example:
+  This macro generates `ProvableStruct` instances for structures where all fields
+  are of the form `M F` where `M : TypeMap` (i.e., `M : Type → Type`), and each `M`
+  must have a `ProvableType M` instance.
+
+  ## Basic usage
+
   ```lean
   structure MyState (F : Type) where
     pc : F
@@ -18,54 +22,58 @@
   ```lean
   instance : ProvableStruct MyState where
     components := [field, field, field]
-    toComponents := fun { pc, ap, fp } => .cons pc (.cons ap (.cons fp .nil))
-    fromComponents := fun (.cons pc (.cons ap (.cons fp .nil))) => { pc, ap, fp }
+    toComponents := fun ⟨pc, ap, fp⟩ => .cons pc (.cons ap (.cons fp .nil))
+    fromComponents := fun (.cons pc (.cons ap (.cons fp .nil))) => MyState.mk pc ap fp
   ```
 
-  Also supports extra type parameters:
+  ## Extra type parameters
+
+  Supports structures with additional parameters before `F`:
+
   ```lean
   structure Inputs (n : ℕ) (F : Type) where
     data : Vector F n
   deriving ProvableStruct
+  -- Generates: instance {n : ℕ} : ProvableStruct (Inputs n)
   ```
 
-  Generates:
-  ```lean
-  instance {n : ℕ} : ProvableStruct (Inputs n) where
-    components := [fields n]
-    ...
-  ```
+  For `TypeMap` parameters, automatically adds `ProvableType` constraints:
 
-  And TypeMap parameters with instance constraints:
   ```lean
   structure Inputs (M : TypeMap) (F : Type) where
     value : M F
   deriving ProvableStruct
+  -- Generates: instance {M : TypeMap} [ProvableType M] : ProvableStruct (Inputs M)
   ```
 
-  Generates:
-  ```lean
-  instance {M : TypeMap} [ProvableType M] : ProvableStruct (Inputs M) where
-    components := [M]
-    ...
-  ```
+  ## Vector field types
 
-  Also supports `Vector (M F) n` field types:
+  - `Vector F n` → mapped to `fields n` (eval expands to element-wise map)
+  - `Vector (M F) n` → mapped to `ProvableVector M n` (eval stays unexpanded)
+
   ```lean
   structure State (F : Type) where
-    message : Vector (U32 F) 16
+    data : Vector F 8           -- becomes: fields 8
+    words : Vector (U32 F) 16   -- becomes: ProvableVector U32 16
   deriving ProvableStruct
   ```
 
-  Generates:
+  ## Controlling eval expansion with type aliases
+
+  For `Vector F n` fields, the derived instance uses `fields n`, which causes `eval`
+  to expand to `Vector.map (Expression.eval env)` under `circuit_norm`. If you need
+  `eval` to stay unexpanded (e.g., for certain proof patterns), define a type alias:
+
   ```lean
-  instance : ProvableStruct State where
-    components := [ProvableVector U32 16]
-    ...
+  @[reducible] def MyBuffer := ProvableVector field 64
+
+  structure Inputs (F : Type) where
+    buffer : MyBuffer F   -- eval stays unexpanded
+  deriving ProvableStruct
   ```
+
+  This pattern is used in the codebase for types like `BLAKE3State`, `KeccakState`, etc.
 -/
-import Lean
-import Clean.Circuit.Provable
 
 open Lean Meta Elab Term Command Parser.Term
 
