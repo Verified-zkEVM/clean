@@ -24,18 +24,28 @@ instance Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
   Guarantees
   | mult, (x, y, z), _, _ =>
-    if mult = -1 then x.val < 256 ∧ y.val < 256 ∧ z.val = (x.val + y.val) % 256
+    if mult = -1 then x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
     else True
   Requirements
   | mult, (x, y, z), _, _ =>
-    if mult = 1 then x.val < 256 ∧ y.val < 256 ∧ z.val = (x.val + y.val) % 256
+    if mult = 1 then x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
     else True
 
-def add8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
-  main | (x, y, z) => do
-    -- range-check all three inputs using the bytes channel
-    BytesChannel.pull x
-    BytesChannel.pull y
+structure Add8Inputs F where
+  x : F
+  y : F
+  z : F
+  m : F -- multiplicity
+
+instance : ProvableStruct Add8Inputs where
+  components := [field, field, field, field]
+  toComponents := fun { x, y, z, m } => .cons x (.cons y (.cons z (.cons m .nil)))
+  fromComponents := fun (.cons x (.cons y (.cons z (.cons m .nil)))) => { x, y, z, m }
+
+def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
+  main | { x, y, z, m } => do
+    -- range-check z using the bytes channel
+    -- (x and y are guaranteed to be range-checked from earlier interactions)
     BytesChannel.pull z
 
     -- witness the output carry
@@ -45,31 +55,29 @@ def add8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     -- assert correctness
     x + y - z - carry * 256 === 0
 
-    -- push the interaction to the add8 channel
-    Add8Channel.push (x, y, z)
+    -- emit to the add8 channel with multiplicity `m`
+    Add8Channel.emit m (x, y, z)
 
   localLength _ := 1
   output _ _ := ()
 
   localAdds
-  | (x, y, z), _, _ =>
-    BytesChannel.pulled x +
-    BytesChannel.pulled y +
-    BytesChannel.pulled z +
-    Add8Channel.pushed (x, y, z)
+  | { x, y, z, m }, _, _ =>
+    BytesChannel.pulled z + Add8Channel.emitted m (x, y, z)
 
   -- TODO feels weird to put the entire spec in the completeness assumptions
   -- can we get something from the channel interactions??
-  Assumptions | (x, y, z), _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
+  Assumptions
+  | { x, y, z, m }, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
 
   soundness := by
     circuit_proof_start [BytesChannel, Add8Channel, reduceIte]
-    rcases input with ⟨ x, y, z ⟩ -- TODO circuit_proof_start should have done this
-    simp_all only [Prod.mk.injEq]
     set carry := env.get i₀
-    obtain ⟨ hx, hy, hz, hcarry, heq ⟩ := h_holds
-    have add_soundness := Theorems.soundness x y z 0 carry hx hy hz (by left; trivial) hcarry
+    obtain ⟨ hz, hcarry, heq, _ ⟩ := h_holds
+    split_ifs
+    intro hx hy
+    have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
 
   -- TODO: we didn't need to prove z < 256, but we could have
@@ -77,13 +85,11 @@ def add8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   -- what about the Requirements?
   completeness := by
     circuit_proof_start
-    rcases input with ⟨ x, y, z ⟩ -- TODO circuit_proof_start should have done this
-    simp only [Prod.mk.injEq] at h_input
     set carry := env.get i₀
     simp_all only
     rcases h_assumptions with ⟨ hx, hy, hz, heq ⟩
-    have add_completeness_bool := Theorems.completeness_bool x y 0 hx hy (by simp)
-    have add_completeness_add := Theorems.completeness_add x y 0 hx hy (by simp)
+    have add_completeness_bool := Theorems.completeness_bool input_x input_y 0 hx hy (by simp)
+    have add_completeness_add := Theorems.completeness_add input_x input_y 0 hx hy (by simp)
     simp only [add_zero] at add_completeness_bool add_completeness_add
     use add_completeness_bool
     convert add_completeness_add
@@ -99,6 +105,15 @@ def fibonacciStep : ℕ × ℕ → ℕ × ℕ
 def fibonacci : ℕ → (ℕ × ℕ) → (ℕ × ℕ)
   | 0, state => state
   | n + 1, state => fibonacciStep (fibonacci n state)
+
+/-- helper lemma: fibonacci states are bytes -/
+lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n (0, 1) → x < 256 ∧ y < 256 := by
+  induction n generalizing x y with
+  | zero => simp_all [fibonacci]
+  | succ n ih =>
+    specialize ih rfl
+    have : 0 < 256 := by norm_num
+    simp_all [fibonacci, fibonacciStep, Nat.mod_lt]
 
 instance FibonacciChannel : Channel (F p) fieldPair where
   name := "fibonacci"
@@ -165,10 +180,12 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldPair unit where
     set add8Interactions := Add8Channel.filter interactions
     set z := env.get i₀
     simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte] at h_holds ⊢
-    simp_all only [List.mem_cons, Prod.mk.injEq, true_or, and_true]
-    obtain ⟨ ⟨⟨ n, fiby ⟩, hfib_push⟩, hx, hy, hadd ⟩ := h_holds
+    simp only [List.mem_cons, Prod.mk.injEq, true_or, and_true]
+    obtain ⟨ ⟨⟨ n, fiby ⟩, hfib_push⟩, hadd ⟩ := h_holds
+    have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
     use n + 1
     simp only [fibonacci, fibonacciStep, ← fiby]
+    simp_all
 
   completeness := by
     circuit_proof_start
