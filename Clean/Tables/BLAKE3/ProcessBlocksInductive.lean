@@ -41,15 +41,7 @@ structure ProcessBlocksState (F : Type) where
   chaining_value : Vector (U32 F) 8    -- Current chaining value (8 × 32-bit words)
   chunk_counter : U32 F                 -- Which chunk number this is
   blocks_compressed : U32 F             -- Number of blocks compressed so far
-
-instance : ProvableStruct ProcessBlocksState where
-  components := [ProvableVector U32 8, U32, U32]
-  toComponents := fun { chaining_value, chunk_counter, blocks_compressed } =>
-    .cons chaining_value (.cons chunk_counter (.cons blocks_compressed .nil))
-  fromComponents := fun xss =>
-    match xss with
-    | .cons cv (.cons cc (.cons bc .nil)) =>
-      { chaining_value := cv, chunk_counter := cc, blocks_compressed := bc }
+deriving ProvableStruct
 
 /--
 Convert ProcessBlocksState to ChunkState for integration with the spec.
@@ -115,15 +107,7 @@ A chunk might contain less than 16 blocks, and `block_exists` indicates empty ro
 structure BlockInput (F : Type) where
   block_exists : F                      -- 0 or 1 (boolean flag)
   block_data : Vector (U32 F) 16        -- 16 words = 64 bytes when exists
-
-instance : ProvableStruct BlockInput where
-  components := [field, ProvableVector U32 16]
-  toComponents := fun { block_exists, block_data } =>
-    .cons block_exists (.cons block_data .nil)
-  fromComponents := fun xss =>
-    match xss with
-    | .cons block_exists (.cons data .nil) =>
-      { block_exists := block_exists, block_data := data }
+deriving ProvableStruct
 
 def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   IsBool input.block_exists ∧

@@ -14,6 +14,13 @@ We generalize this to work with any prime field by using (p-1)/2.
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
+omit [Fact (Nat.Prime p)] in
+lemma hppre_half_254 : ((p - 1) / 2 < 2^254) := by
+  calc
+    _ ≤ p - 1 := by grind
+    p - 1 ≤ p := by grind
+    _ < _ := by linarith [‹Fact (p < 2^254)›.elim]
+
 namespace Sign
 /-
 template Sign() {
@@ -34,12 +41,12 @@ template Sign() {
 
 def main (input : Vector (Expression (F p)) 254) :=
   -- Use (p-1)/2 as the constant for comparison
-  CompConstant.circuit ((p - 1) / 2) input
+  CompConstant.circuit ((p - 1) / 2) hppre_half_254 input
 
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
-  localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
-  output input offset := (CompConstant.circuit ((p - 1) / 2)).output input offset
+  localLength input := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).localLength input
+  output := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).output
   localAdds_eq _ _ _ := by simp only [circuit_norm, main]
 
   Assumptions input :=

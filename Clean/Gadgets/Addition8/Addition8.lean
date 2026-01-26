@@ -34,11 +34,7 @@ namespace Addition8
 structure Inputs (F : Type) where
   x: F
   y: F
-
-instance : ProvableStruct Inputs where
-  components := [field, field]
-  toComponents := fun { x, y } => .cons x (.cons y .nil)
-  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+deriving ProvableStruct
 
 /--
 Compute the 8-bit addition of two numbers.

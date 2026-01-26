@@ -3,7 +3,6 @@ import Clean.Gadgets.BLAKE3.BLAKE3State
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Rotation32.Rotation32
 import Clean.Specs.BLAKE3
-import Clean.Circuit.Provable
 import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.G
@@ -16,11 +15,7 @@ structure Inputs (F : Type) where
   state : BLAKE3State F
   x : U32 F
   y : U32 F
-
-instance : ProvableStruct Inputs where
-  components := [BLAKE3State, U32, U32]
-  toComponents := fun { state, x, y } => .cons state (.cons x (.cons y .nil))
-  fromComponents := fun (.cons state (.cons x (.cons y .nil))) => { state, x, y }
+deriving ProvableStruct
 
 def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, x, y } := input

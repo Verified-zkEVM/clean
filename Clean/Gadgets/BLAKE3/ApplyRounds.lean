@@ -407,13 +407,7 @@ structure Inputs (F : Type) where
   counter_low : U32 F
   block_len : U32 F
   flags : U32 F
-
-instance : ProvableStruct Inputs where
-  components := [ProvableVector U32 8, ProvableVector U32 16, U32, U32, U32, U32]
-  toComponents := fun { chaining_value, block_words, counter_high, counter_low, block_len, flags } =>
-    .cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))
-  fromComponents := fun (.cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))) =>
-    { chaining_value, block_words, counter_high, counter_low, block_len, flags }
+deriving ProvableStruct
 
 /--
 Initializes the BLAKE3 state vector from input variables.

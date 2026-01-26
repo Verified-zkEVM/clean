@@ -9,11 +9,7 @@ open Specs.Keccak256
 structure Input (F : Type) where
   state : KeccakState F
   block : KeccakBlock F
-
-instance : ProvableStruct Input where
-  components := [KeccakState, KeccakBlock]
-  toComponents := fun { state, block } => .cons state (.cons block .nil)
-  fromComponents := fun (.cons state (.cons block .nil)) => { state, block }
+deriving ProvableStruct
 
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let { state, block } := input
