@@ -111,35 +111,35 @@ lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n (0, 1) → x < 256 �
     have : 0 < 256 := by norm_num
     simp_all [fibonacci, fibonacciStep, Nat.mod_lt]
 
-instance FibonacciChannel : Channel (F p) fieldPair where
+instance FibonacciChannel : Channel (F p) fieldTriple where
   name := "fibonacci"
 
   -- when pulling, we want the guarantee that the previous interactions pushed
   -- some tuple equal to ours which represents a valid Fibonacci step
   Guarantees
-  | m, (x, y), interactions, _ =>
+  | m, (n, x, y), interactions, _ =>
     if (m = -1)
     then
       -- (x, y) is a valid Fibonacci state
-      (∃ n : ℕ, (x.val, y.val) = fibonacci n (0, 1)) ∧
+      (∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val) ∧
       -- and was pushed in a previous interaction
-      (1, (x, y)) ∈ interactions
+      (1, (n, x, y)) ∈ interactions
     else True
 
   Requirements
-  | m, (x, y), interactions, _ =>
+  | m, (n, x, y), interactions, _ =>
     if (m = 1)
     then
       -- (x, y) is a valid Fibonacci state
-      (∃ n : ℕ, (x.val, y.val) = fibonacci n (0, 1)) ∧
+      (∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val) ∧
       -- and is pushed (in this interaction! this is tautological)
-      (1, (x, y)) ∈ interactions
+      (1, (n, x, y)) ∈ interactions
     else True
 
-def fib8 : FormalCircuitWithInteractions (F p) fieldPair unit where
-  main | (x, y) => do
+def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
+  main | (n, x, y) => do
     -- pull the current Fibonacci state
-    FibonacciChannel.pull (x, y)
+    FibonacciChannel.pull (n, x, y)
 
     -- witness the next Fibonacci value
     let z ← witness fun eval => mod256 (eval (x + y))
@@ -148,40 +148,42 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldPair unit where
     Add8Channel.pull (x, y, z)
 
     -- push the next Fibonacci state
-    FibonacciChannel.push (y, z)
+    FibonacciChannel.push (n + 1, y, z)
 
   localLength _ := 1
   output _ _ := ()
 
   localAdds
-  | (x, y), i₀, env =>
+  | (n, x, y), i₀, env =>
     let z := env.get i₀;
-    FibonacciChannel.pulled (x, y) +
+    FibonacciChannel.pulled (n, x, y) +
     Add8Channel.pulled (x, y, z) +
-    FibonacciChannel.pushed (y, z)
+    FibonacciChannel.pushed (n + 1, y, z)
 
-  Assumptions | (x, y), _ => True
+  Assumptions | (n, x, y), _ => True
   Spec _ _ _ := True
 
   soundness := by
     circuit_proof_start [reduceIte, seval, and_false]
-    rcases input with ⟨ x, y ⟩ -- TODO circuit_proof_start should have done this
+    rcases input with ⟨ n, x, y ⟩ -- TODO circuit_proof_start should have done this
     simp only [Prod.mk.injEq] at h_input
     -- why are these not simped?? maybe because fieldPair is not well-recognized
-    rw [RawChannel.filter_eq, RawChannel.filter_eq] at h_holds ⊢
-    rw [Channel.interactionFromRaw_eq] at h_holds
+    rw [RawChannel.filter_eq] at h_holds ⊢
     rw [Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq]
     simp_all only [circuit_norm]
     set fibInteractions := FibonacciChannel.filter interactions
     set add8Interactions := Add8Channel.filter interactions
     set z := env.get i₀
     simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte] at h_holds ⊢
-    simp only [List.mem_cons, Prod.mk.injEq, true_or, and_true]
-    obtain ⟨ ⟨⟨ n, fiby ⟩, hfib_push⟩, hadd ⟩ := h_holds
+    simp only [List.mem_cons, true_or, and_true]
+    obtain ⟨ ⟨ ⟨k, fiby, hk⟩, hfib_push ⟩, hadd ⟩ := h_holds
     have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
-    use n + 1
+    use k + 1
     simp only [fibonacci, fibonacciStep, ← fiby]
+    rw [ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
     simp_all
 
   completeness := by
     circuit_proof_start
+
+-- define what global soundness means for the ensemble of circuits (tables) and channels
