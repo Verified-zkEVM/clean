@@ -18,7 +18,7 @@ instance BytesChannel : Channel (F p) field where
   Guarantees mult x _ _ :=
     if mult = -1 then x.val < 256 else True
   Requirements mult x _ _ :=
-    if mult = 1 then x.val < 256 else True
+    if ¬ mult = -1 then x.val < 256 else True
 
 instance Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -28,7 +28,7 @@ instance Add8Channel : Channel (F p) fieldTriple where
     else True
   Requirements
   | mult, (x, y, z), _, _ =>
-    if mult = 1 then x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
+    if ¬ mult = -1 then x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
     else True
 
 structure Add8Inputs F where
@@ -68,7 +68,7 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   Spec _ _ _ := True
 
   soundness := by
-    circuit_proof_start [BytesChannel, Add8Channel, reduceIte]
+    circuit_proof_start [BytesChannel, Add8Channel, reduceIte, not_true_eq_false]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq, _ ⟩ := h_holds
     split_ifs
@@ -164,7 +164,7 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   Spec _ _ _ := True
 
   soundness := by
-    circuit_proof_start [reduceIte, seval, and_false]
+    circuit_proof_start [reduceIte, seval, and_false, not_true_eq_false]
     rcases input with ⟨ n, x, y ⟩ -- TODO circuit_proof_start should have done this
     simp only [Prod.mk.injEq] at h_input
     -- why are these not simped?? maybe because fieldPair is not well-recognized
@@ -174,7 +174,7 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     set fibInteractions := FibonacciChannel.filter interactions
     set add8Interactions := Add8Channel.filter interactions
     set z := env.get i₀
-    simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte] at h_holds ⊢
+    simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte, not_true_eq_false] at h_holds ⊢
     simp only [List.mem_cons, true_or, and_true]
     obtain ⟨ ⟨ ⟨k, fiby, hk⟩, hfib_push ⟩, hadd ⟩ := h_holds
     have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
@@ -182,6 +182,68 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     simp only [fibonacci, fibonacciStep, ← fiby]
     rw [ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
     simp_all
+
+  completeness := by
+    circuit_proof_start
+
+-- additional circuits that pull/push remaining channel interactions
+-- these really wouldn't have to be circuits, need to find a better place for tying together channels
+
+-- bytes "circuit" that just pushes all bytes
+def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
+  main multiplicities := do
+    let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
+      BytesChannel.emit multiplicities[i] (const i)
+
+  localLength _ := 0
+  localLength_eq := by simp only [circuit_norm]
+  output _ _ := ()
+
+  localAdds
+  | multiplicities, _, _ =>
+    (List.finRange 256).flatMap fun ⟨ i, _ ⟩ =>
+      BytesChannel.emitted multiplicities[i] i
+
+  Assumptions | multiplicities, _ => True
+  Spec _ _ _ := True
+
+  -- TODO need better tools for finite range foreach, but probably this shouldn't be a circuit anyway
+  localAdds_eq := by sorry
+  soundness := by sorry
+  completeness := by sorry
+
+-- pushing initial state, pulling final state
+def fibonacciInputOutput : FormalCircuitWithInteractions (F p) fieldTriple unit where
+  main | (n_out, x_out, y_out) => do
+    -- push initial state
+    FibonacciChannel.push (0, 0, 1)
+
+    -- pull final state
+    FibonacciChannel.pull (n_out, x_out, y_out)
+
+  localLength _ := 0
+  output _ _ := ()
+  localAdds
+  | (n, x, y), _, _ =>
+    FibonacciChannel.pushed (0, 0, 1) +
+    FibonacciChannel.pulled (n, x, y)
+
+  Assumptions _ _ := True
+  Spec
+  | (n, x, y), _, _ =>
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+
+  soundness := by
+    circuit_proof_start [reduceIte, seval, and_false, not_true_eq_false]
+    rcases input with ⟨ n, x, y ⟩
+    simp only [Prod.mk.injEq] at h_input
+    rw [RawChannel.filter_eq] at h_holds ⊢
+    rw [Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq] at ⊢
+    rw [Channel.interactionFromRaw_eq] at h_holds
+    set fibInteractions := FibonacciChannel.filter interactions
+    simp_all only [circuit_norm, FibonacciChannel, reduceIte,
+      List.mem_cons, true_or, and_true, ZMod.val_zero, ZMod.val_one]
+    exact ⟨ 0, rfl, rfl ⟩
 
   completeness := by
     circuit_proof_start
