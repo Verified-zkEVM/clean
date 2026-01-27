@@ -261,7 +261,7 @@ variable {Input Output Message : TypeMap} [ProvableType Input] [ProvableType Out
 
 def FormalCircuitWithInteractions.instantiate (circuit : FormalCircuitWithInteractions F Input Output) : Circuit F Unit := do
   let input ← witnessAny Input
-  let _ ← circuit input -- we don't care about the output in this context)
+  let _ ← circuit input -- we don't care about the output in this context
 
 def FormalCircuitWithInteractions.size (circuit : FormalCircuitWithInteractions F Input Output) : ℕ :=
   circuit.instantiate.localLength 0
@@ -367,6 +367,16 @@ def Soundness (ens : Ensemble F) : Prop :=
     ens.BalancedChannels witness →
     ens.VerifierAccepts publicInput →
     ens.Spec publicInput
+
+/--
+Completeness for an ensemble states that for any public input satisfying the spec,
+the verifier accepts and there exists a witness such that constraints hold and the channels are balanced
+-/
+def Completeness (ens : Ensemble F) : Prop :=
+  ∀ publicInput,
+    ens.Spec publicInput →
+    ens.VerifierAccepts publicInput ∧
+    ∃ witness, ens.Constraints witness ∧ ens.BalancedChannels witness
 
 end Ensemble
 end
