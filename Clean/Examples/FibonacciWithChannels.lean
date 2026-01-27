@@ -214,7 +214,7 @@ def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
   completeness := by sorry
 
 -- completing Fibonacci channel with input and output
-def fibonacciInputOutput : FormalCircuitWithInteractions (F p) fieldTriple unit where
+def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit where
   main | (n, x, y) => do
     -- push initial state, pull the final state
     FibonacciChannel.push (0, 0, 1)
@@ -319,7 +319,7 @@ structure Ensemble (F : Type) [Field F] [DecidableEq F] where
   PublicIO : TypeMap
   [provablePublicIO : ProvableType PublicIO]
   verifier : FormalCircuitWithInteractions F PublicIO unit
-  verifier_length_zero : verifier.size = 0
+  verifier_length_zero : ∀ pi, (verifier (const pi)).localLength 0 = 0
 
   Spec : PublicIO F → Prop
 
@@ -331,27 +331,26 @@ structure EnsembleWitness (ens : Ensemble F) where
 def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { get _ := 0, data _ _ := #[], interactions := [] }
 
 instance (ens : Ensemble F) : ProvableType ens.PublicIO := ens.provablePublicIO
--- variable {ens : Ensemble F}
 
 namespace Ensemble
-def verifierWitness (ens : Ensemble F) : TableWitness F :=
-  { abstract := { circuit := ens.verifier}
-    table := [⟨ #[], by simp [ens.verifier_length_zero] ⟩]
-    data _ _ := #[] }
+def verifierInteractions (ens : Ensemble F) (channel : RawChannel F) (publicInput : ens.PublicIO F) : List (F × Vector F channel.arity) :=
+  let circuit := ens.verifier.main (const publicInput)
+  (circuit.operations 0).localAdds (emptyEnvironment F)
+  |> channel.filter
 
 def Constraints (ens : Ensemble F) (witness : EnsembleWitness ens) : Prop :=
   witness.tables.Forall fun table => table.Constraints
 
-def interactions (ens : Ensemble F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+def interactions (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
   witness.tables.flatMap (fun table => table.interactions channel)
-  ++ ens.verifierWitness.interactions channel
+  ++ ens.verifierInteractions channel publicInput
 
-def BalancedChannels (ens : Ensemble F) (witness : EnsembleWitness ens) : Prop :=
+def BalancedChannels (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   ens.channels.Forall fun channel =>
-    ((ens.interactions witness channel).map Prod.fst).sum = 0
+    ((ens.interactions publicInput witness channel).map Prod.fst).sum = 0
 
 def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
-  let circuit := ens.verifier (const publicInput)
+  let circuit := ens.verifier.main (const publicInput)
   ConstraintsHold (emptyEnvironment F) (circuit.operations 0)
 
 /--
@@ -361,10 +360,10 @@ Soundness for an ensemble states that if
 - and constraints hold on the verifier circuit, when given the public inputs (as constants)
 then the spec holds
 -/
-def Soundness (ens : Ensemble F) : Prop :=
+def Soundness (F : Type) [Field F] [DecidableEq F] (ens : Ensemble F) : Prop :=
   ∀ witness publicInput,
     ens.Constraints witness →
-    ens.BalancedChannels witness →
+    ens.BalancedChannels publicInput witness →
     ens.VerifierAccepts publicInput →
     ens.Spec publicInput
 
@@ -376,7 +375,30 @@ def Completeness (ens : Ensemble F) : Prop :=
   ∀ publicInput,
     ens.Spec publicInput →
     ens.VerifierAccepts publicInput ∧
-    ∃ witness, ens.Constraints witness ∧ ens.BalancedChannels witness
+    ∃ witness, ens.Constraints witness ∧ ens.BalancedChannels publicInput witness
 
 end Ensemble
 end
+
+-- let's try to prove soundness and completeness of the Fibonacci with channels example
+def fibonacciEnsemble : Ensemble (F p) where
+  tables := [ ⟨pushBytes⟩, ⟨add8⟩, ⟨fib8⟩ ]
+  channels := [ BytesChannel.toRaw, Add8Channel.toRaw, FibonacciChannel.toRaw ]
+  PublicIO := fieldTriple
+  verifier := fibonacciVerifier
+  verifier_length_zero := by simp only [fibonacciVerifier, circuit_norm]
+
+  Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+
+theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble := by
+  whnf
+  intro witness publicInput h_constraints h_balanced h_verifier
+  clear h_verifier
+  simp only [Ensemble.Constraints, Ensemble.BalancedChannels, Ensemble.interactions, Ensemble.verifierInteractions] at *
+  simp only [TableWitness.Constraints, TableWitness.interactions] at *
+  rcases publicInput with ⟨ n, x, y ⟩
+  have h_const : const (α:=fieldTriple) (n, x, y) = (.const n, .const x, .const y) := by simp only [circuit_norm, ProvableType.const, explicit_provable_type]
+  rw [h_const] at h_balanced
+  simp only [circuit_norm, List.Forall, fibonacciEnsemble, fibonacciVerifier, pushBytes, add8, fib8, emptyEnvironment] at h_balanced
+  -- rw [RawChannel.filter_eq] at h_balanced
+  sorry
