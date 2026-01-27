@@ -261,18 +261,30 @@ variable {Input Output Message : TypeMap} [ProvableType Input] [ProvableType Out
 
 def FormalCircuitWithInteractions.instantiate (circuit : FormalCircuitWithInteractions F Input Output) : Circuit F Unit := do
   let input ← witnessAny Input
-  let _ ← circuit input -- we don't care about the output in this context
+  let _ ← circuit input -- we don't care about the output in this context)
 
 def FormalCircuitWithInteractions.size (circuit : FormalCircuitWithInteractions F Input Output) : ℕ :=
   circuit.instantiate.localLength 0
 
-structure Table' (F : Type) [Field F] [DecidableEq F] where
+structure AbstractTable (F : Type) [Field F] [DecidableEq F] where
   {Input : TypeMap} {Output : TypeMap}
   [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
-
   circuit : FormalCircuitWithInteractions F Input Output
-  witness : List (Vector F circuit.size)
-  data : ProverData F := fun _ _ => #[]
+
+instance (t: AbstractTable F) : ProvableType t.Input := t.provableInput
+instance (t: AbstractTable F) : ProvableType t.Output := t.provableOutput
+
+namespace AbstractTable
+def operations (table : AbstractTable F) : Operations F :=
+  table.circuit.instantiate.operations 0
+
+def width (table : AbstractTable F) : ℕ := table.circuit.size
+end AbstractTable
+
+structure TableWitness (F : Type) [Field F] [DecidableEq F] where
+  abstract : AbstractTable F
+  table : List (Vector F abstract.circuit.size)
+  data : ProverData F
 
 def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
   ops.forAll 0 {
@@ -281,33 +293,27 @@ def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
     subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
   }
 
-namespace Table'
-instance (t: Table' F) : ProvableType t.Input := t.provableInput
-instance (t: Table' F) : ProvableType t.Output := t.provableOutput
+namespace TableWitness
+def width (t : TableWitness F) : ℕ := t.abstract.width
 
-def length (table : Table' F) : ℕ := table.witness.length
-def width (table : Table' F) : ℕ := table.circuit.size
-def operations (table : Table' F) : Operations F :=
-  table.circuit.instantiate.operations 0
-
-def environment (table : Table' F) (row : Vector F table.width) : Environment F where
+def environment (witness : TableWitness F) (row : Vector F witness.width) : Environment F where
   get j := row[j]?.getD 0
-  data := table.data
+  data := witness.data
   interactions := [] -- I think we can remove this field??
 
-def Constraints (table : Table' F) : Prop :=
-  table.witness.Forall fun row =>
-    ConstraintsHold (table.environment row) table.operations
+def Constraints (witness : TableWitness F) : Prop :=
+  witness.table.Forall fun row =>
+    ConstraintsHold (witness.environment row) witness.abstract.operations
 
-def interactions (table : Table' F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
-  table.witness.flatMap fun row =>
-    let env := table.environment row
-    table.operations.localAdds env
+def interactions (witness : TableWitness F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+  witness.table.flatMap fun row =>
+    let env := witness.environment row
+    witness.abstract.operations.localAdds env
   |> channel.filter
-end Table'
+end TableWitness
 
 structure Ensemble (F : Type) [Field F] [DecidableEq F] where
-  tables : List (Table' F)
+  tables : List (AbstractTable F)
   channels : List (RawChannel F)
 
   PublicIO : TypeMap
@@ -317,26 +323,32 @@ structure Ensemble (F : Type) [Field F] [DecidableEq F] where
 
   Spec : PublicIO F → Prop
 
-namespace Ensemble
-instance (ens : Ensemble F) : ProvableType ens.PublicIO := ens.provablePublicIO
+structure EnsembleWitness (ens : Ensemble F) where
+  tables : List (TableWitness F)
+  same_length : ens.tables.length = tables.length
+  same_circuits : ∀ i (hi : i < ens.tables.length), ens.tables[i] = tables[i].abstract
 
 def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { get _ := 0, data _ _ := #[], interactions := [] }
 
-def verifierTable (ens : Ensemble F) (data : ProverData F := fun _ _ => #[]) : Table' F where
-  circuit := ens.verifier
-  witness := [⟨ #[], by simp [ens.verifier_length_zero] ⟩]
-  data
+instance (ens : Ensemble F) : ProvableType ens.PublicIO := ens.provablePublicIO
+-- variable {ens : Ensemble F}
 
-def Constraints (ens : Ensemble F) : Prop :=
-  ens.tables.Forall fun table => table.Constraints
+namespace Ensemble
+def verifierWitness (ens : Ensemble F) : TableWitness F :=
+  { abstract := { circuit := ens.verifier}
+    table := [⟨ #[], by simp [ens.verifier_length_zero] ⟩]
+    data _ _ := #[] }
 
-def interactions (ens : Ensemble F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
-  (ens.tables.flatMap fun table => table.interactions channel)
-  ++ ens.verifierTable.interactions channel
+def Constraints (ens : Ensemble F) (witness : EnsembleWitness ens) : Prop :=
+  witness.tables.Forall fun table => table.Constraints
 
-def BalancedChannels (ens : Ensemble F) : Prop :=
+def interactions (ens : Ensemble F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+  witness.tables.flatMap (fun table => table.interactions channel)
+  ++ ens.verifierWitness.interactions channel
+
+def BalancedChannels (ens : Ensemble F) (witness : EnsembleWitness ens) : Prop :=
   ens.channels.Forall fun channel =>
-    ((ens.interactions channel).map Prod.fst).sum = 0
+    ((ens.interactions witness channel).map Prod.fst).sum = 0
 
 def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
   let circuit := ens.verifier (const publicInput)
@@ -349,9 +361,12 @@ Soundness for an ensemble states that if
 - and constraints hold on the verifier circuit, when given the public inputs (as constants)
 then the spec holds
 -/
-def Soundness (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
-  ens.Constraints → ens.BalancedChannels → ens.VerifierAccepts publicInput →
-  ens.Spec publicInput
+def Soundness (ens : Ensemble F) : Prop :=
+  ∀ witness publicInput,
+    ens.Constraints witness →
+    ens.BalancedChannels witness →
+    ens.VerifierAccepts publicInput →
+    ens.Spec publicInput
 
 end Ensemble
 end
