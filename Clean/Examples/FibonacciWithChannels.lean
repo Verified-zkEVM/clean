@@ -7,6 +7,7 @@ Goal - use three channels:
 - a "fibonacci" channel that that maintains state of the fibonacci table
 -/
 import Clean.Circuit
+import Clean.Circuit.Extensions
 import Clean.Gadgets.Addition8.Theorems
 open ByteUtils (mod256 floorDiv256)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)
@@ -212,14 +213,12 @@ def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
   soundness := by sorry
   completeness := by sorry
 
--- pushing initial state, pulling final state
+-- completing Fibonacci channel with input and output
 def fibonacciInputOutput : FormalCircuitWithInteractions (F p) fieldTriple unit where
-  main | (n_out, x_out, y_out) => do
-    -- push initial state
+  main | (n, x, y) => do
+    -- push initial state, pull the final state
     FibonacciChannel.push (0, 0, 1)
-
-    -- pull final state
-    FibonacciChannel.pull (n_out, x_out, y_out)
+    FibonacciChannel.pull (n, x, y)
 
   localLength _ := 0
   output _ _ := ()
@@ -248,4 +247,111 @@ def fibonacciInputOutput : FormalCircuitWithInteractions (F p) fieldTriple unit 
   completeness := by
     circuit_proof_start
 
--- define what global soundness means for the ensemble of circuits (tables) and channels
+section
+-- define what global soundness means for an ensemble of circuits/tables and channels
+
+-- table contains the concrete values on which we expect constraints to hold
+-- which also defines what concrete interactions are contained in each channel
+
+variable {F : Type} [Field F] [DecidableEq F]
+variable {Input Output Message : TypeMap} [ProvableType Input] [ProvableType Output] [ProvableType Message]
+
+-- tables need to be instantiated with a concrete circuit, not a family of circuits
+-- this is achieved for any FormalCircuit* by witnessing the inputs and plugging them in
+
+def FormalCircuitWithInteractions.instantiate (circuit : FormalCircuitWithInteractions F Input Output) : Circuit F Unit := do
+  let input ← witnessAny Input
+  let _ ← circuit input -- we don't care about the output in this context
+
+def FormalCircuitWithInteractions.size (circuit : FormalCircuitWithInteractions F Input Output) : ℕ :=
+  circuit.instantiate.localLength 0
+
+structure Table' (F : Type) [Field F] [DecidableEq F] where
+  {Input : TypeMap} {Output : TypeMap}
+  [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
+
+  circuit : FormalCircuitWithInteractions F Input Output
+  witness : List (Vector F circuit.size)
+  data : ProverData F := fun _ _ => #[]
+
+def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
+  ops.forAll 0 {
+    assert _ e := env e = 0
+    lookup _ l := l.Contains env
+    subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
+  }
+
+namespace Table'
+instance (t: Table' F) : ProvableType t.Input := t.provableInput
+instance (t: Table' F) : ProvableType t.Output := t.provableOutput
+
+def length (table : Table' F) : ℕ := table.witness.length
+def width (table : Table' F) : ℕ := table.circuit.size
+def operations (table : Table' F) : Operations F :=
+  table.circuit.instantiate.operations 0
+
+def environment (table : Table' F) (row : Vector F table.width) : Environment F where
+  get j := row[j]?.getD 0
+  data := table.data
+  interactions := [] -- I think we can remove this field??
+
+def Constraints (table : Table' F) : Prop :=
+  table.witness.Forall fun row =>
+    ConstraintsHold (table.environment row) table.operations
+
+def interactions (table : Table' F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+  table.witness.flatMap fun row =>
+    let env := table.environment row
+    table.operations.localAdds env
+  |> channel.filter
+end Table'
+
+structure Ensemble (F : Type) [Field F] [DecidableEq F] where
+  tables : List (Table' F)
+  channels : List (RawChannel F)
+
+  PublicIO : TypeMap
+  [provablePublicIO : ProvableType PublicIO]
+  verifier : FormalCircuitWithInteractions F PublicIO unit
+  verifier_length_zero : verifier.size = 0
+
+  Spec : PublicIO F → Prop
+
+namespace Ensemble
+instance (ens : Ensemble F) : ProvableType ens.PublicIO := ens.provablePublicIO
+
+def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { get _ := 0, data _ _ := #[], interactions := [] }
+
+def verifierTable (ens : Ensemble F) (data : ProverData F := fun _ _ => #[]) : Table' F where
+  circuit := ens.verifier
+  witness := [⟨ #[], by simp [ens.verifier_length_zero] ⟩]
+  data
+
+def Constraints (ens : Ensemble F) : Prop :=
+  ens.tables.Forall fun table => table.Constraints
+
+def interactions (ens : Ensemble F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+  (ens.tables.flatMap fun table => table.interactions channel)
+  ++ ens.verifierTable.interactions channel
+
+def BalancedChannels (ens : Ensemble F) : Prop :=
+  ens.channels.Forall fun channel =>
+    ((ens.interactions channel).map Prod.fst).sum = 0
+
+def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
+  let circuit := ens.verifier (const publicInput)
+  ConstraintsHold (emptyEnvironment F) (circuit.operations 0)
+
+/--
+Soundness for an ensemble states that if
+- constraints hold on all tables and
+- and interactions sum to zero
+- and constraints hold on the verifier circuit, when given the public inputs (as constants)
+then the spec holds
+-/
+def Soundness (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
+  ens.Constraints → ens.BalancedChannels → ens.VerifierAccepts publicInput →
+  ens.Spec publicInput
+
+end Ensemble
+end

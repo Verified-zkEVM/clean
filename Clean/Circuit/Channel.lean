@@ -131,6 +131,7 @@ def Channel.filter (channel : Channel F Message) (is : RawInteractions F) :
 
 -- normalize to Channel.filter
 -- TODO this is not picked up by simp
+omit [Field F] in
 @[circuit_norm]
 lemma RawChannel.filter_eq (channel : Channel F Message) (is : RawInteractions F) :
   (channel.toRaw.filter is).map Channel.interactionFromRaw = channel.filter is := rfl
