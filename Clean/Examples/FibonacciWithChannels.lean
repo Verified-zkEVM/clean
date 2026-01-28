@@ -806,10 +806,60 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       -- if z is pulled from BytesChannel somewhere in the ensemble
       (-1, #v[z]) ∈ fibonacciEnsemble.interactions (n, x, y) witness (BytesChannel.toRaw) →
       z.val < 256 := by
-    sorry -- Proof sketch:
-    -- 1. By balance, there's a matching push (1, #v[z])
-    -- 2. Pushes come from pushBytes (values 0..255) or add8 (z already < 256)
-    -- 3. Therefore z < 256
+    intro z h_pull
+    -- Core argument: BytesChannel pushes only come from pushBytes (values 0..255).
+    -- If z.val ≥ 256, then no pushes exist for #v[z], so balance would give sum = -1 ≠ 0.
+    -- Therefore z.val < 256.
+    by_contra h_ge
+    push_neg at h_ge
+    -- Extract balance for BytesChannel (first channel)
+    have h_bytes_bal := h_bal.1
+    set bytesInteractions := fibonacciEnsemble.interactions (n, x, y) witness (BytesChannel.toRaw)
+    -- Balance says sum of mults for message #v[z] is 0
+    have h_sum_zero := h_bytes_bal.2 #v[z]
+
+    -- Key structural fact: BytesChannel interactions with message #v[z] where z.val ≥ 256
+    -- can only be pulls (mult = -1), since pushBytes only pushes values 0..255.
+    -- This is because:
+    -- 1. BytesChannel interactions = pushBytes ++ add8 ++ fib8 ++ verifier contributions
+    -- 2. fib8 and verifier don't interact with BytesChannel (filter gives [])
+    -- 3. pushBytes pushes (mult_i, #v[i]) for i ∈ 0..255; if z.val ≥ 256, #v[z] ≠ #v[i]
+    -- 4. add8 only pulls from BytesChannel (mult = -1)
+    have h_only_pulls : ∀ entry ∈ bytesInteractions, entry.2 = #v[z] → entry.1 = -1 := by
+      sorry -- Requires structural analysis of localAdds for each circuit
+
+    -- Since h_pull gives us (-1, #v[z]) ∈ bytesInteractions, the filtered list is nonempty
+    have h_nonempty : (bytesInteractions.filter (·.2 = #v[z])).length > 0 :=
+      List.length_pos_of_mem (List.mem_filter.mpr ⟨h_pull, by simp⟩)
+
+    -- All entries in the filtered list have mult = -1
+    have h_all_neg : ∀ m ∈ (bytesInteractions.filter (·.2 = #v[z])).map Prod.fst, m = -1 := by
+      intro m hm
+      rw [List.mem_map] at hm
+      obtain ⟨⟨m', v⟩, hfilt, rfl⟩ := hm
+      simp only [List.mem_filter, decide_eq_true_eq] at hfilt
+      exact h_only_pulls _ hfilt.1 hfilt.2
+
+    -- Sum of all -1s = -(length) ≠ 0
+    have h_sum_neg := sum_neg_ones _ h_all_neg
+    -- h_sum_zero says sum = 0, h_sum_neg says sum = -(length)
+    -- Therefore length = 0, contradicting h_nonempty
+    -- Note: h_sum_zero uses expanded fibonacciEnsemble, h_sum_neg uses bytesInteractions abbreviation
+    -- They're definitionally equal, so we use `show` to normalize
+    have h_sum_zero' : ((bytesInteractions.filter (·.2 = #v[z])).map Prod.fst).sum = 0 := h_sum_zero
+    rw [h_sum_neg, neg_eq_zero] at h_sum_zero'
+    -- h_sum_zero' : ↑length = 0 in F p
+    -- Since length ≤ bytesInteractions.length < p, we have length < p
+    -- And (n : F p) = 0 with n < p implies n = 0
+    have h_len_bound : (bytesInteractions.filter (·.2 = #v[z])).length < p := by
+      calc _ ≤ bytesInteractions.length := List.length_filter_le _ _
+        _ < ringChar (F p) := h_bytes_bal.1
+        _ = p := ZMod.ringChar_zmod_n p
+    have h_len_zero : (bytesInteractions.filter (·.2 = #v[z])).length = 0 := by
+      have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero'
+      simp only [List.length_map] at hdvd
+      exact Nat.eq_zero_of_dvd_of_lt hdvd h_len_bound
+    omega
 
   -- Step 4b: Add8Channel guarantees
   -- Every add8 pull has guarantee: x < 256 → y < 256 → z = (x+y) % 256
