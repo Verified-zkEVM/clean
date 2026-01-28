@@ -758,14 +758,15 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     simp only [fibInteractions, Ensemble.interactions] at h_mem
     rcases List.mem_append.mp h_mem with h_table | h_verifier
     · -- From tables: the fibonacci channel is only used by fib8 table (3rd table)
-      -- fib8's localAdds for (n,x,y) is: pulled (n,x,y) + pulled (x,y,z) + pushed (n+1,y,z)
-      -- For FibonacciChannel: pulled uses mult=-1, pushed uses mult=1
-      -- The table interactions are: flatMap over all rows of (operations.localAdds env |> channel.filter)
-      simp only [fibonacciEnsemble, Ensemble.interactions] at h_table
-      -- The fibonacci channel interactions from tables come from fib8 table (3rd table)
-      -- Each row produces entries via localAdds, filtered for fibonacci channel
-      -- fib8's localAdds contains: FibonacciChannel.pulled + FibonacciChannel.pushed
-      -- which have multiplicity -1 and 1 respectively
+      -- Strategy: 
+      -- 1. Show the ensemble has 3 tables: pushBytes, add8, fib8
+      -- 2. Show pushBytes emits only to BytesChannel (not FibonacciChannel)
+      -- 3. Show add8 emits only to BytesChannel and Add8Channel (not FibonacciChannel)  
+      -- 4. Therefore all fibonacci table interactions come from fib8
+      -- 5. Show fib8's localAdds uses: FibonacciChannel.pulled (mult=-1) + 
+      --    Add8Channel.pulled + FibonacciChannel.pushed (mult=1)
+      -- 6. After filtering for FibonacciChannel, only pulled and pushed remain (mult ±1)
+      -- This requires analyzing the concrete table structures and their localAdds fields
       sorry
     · -- From verifier: the verifier interactions are exactly the two we proved above
       simp only [fibonacciEnsemble, Ensemble.interactions, Ensemble.verifierInteractions] at h_verifier
@@ -786,8 +787,12 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   -- - 2 * (number of fib8 rows) (each row does 1 pull + 1 push)
   -- We need: 2 + 2 * n_rows < p
   -- This is reasonable for any practical circuit (p > 512 >> typical row counts)
+  -- Strategy:
+  -- 1. Show fibInteractions.length = 2 + 2 * (witness.tables[2].table.length)
+  -- 2. Add assumption or derive that witness.tables[2].table.length < p/2 - 1
+  -- 3. This might need to be an ensemble-level assumption about witness validity
   have h_fib_bound : fibInteractions.length < p := by
-    sorry -- can be derived from ensemble structure + reasonable circuit size bound
+    sorry
 
   -- ── Step 5: Per-circuit soundness gives h_fib8_soundness ──
   -- For each non-verifier push, fib8.soundness tells us:
