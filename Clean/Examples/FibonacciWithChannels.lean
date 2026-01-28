@@ -395,6 +395,81 @@ def fibonacciEnsemble : Ensemble (F p) where
   Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
 
 /-!
+## Lifting lemma: from ConstraintsHold to ConstraintsHoldWithInteractions.Soundness
+
+The ensemble-level `ConstraintsHold` checks raw constraints (asserts, lookups, subcircuits)
+but ignores channel interactions (they default to `True`). The per-circuit soundness
+theorems need `ConstraintsHoldWithInteractions.Soundness`, which additionally requires
+channel guarantees to hold for each interaction.
+
+This lemma bridges the gap: given raw constraints hold AND channel guarantees hold
+at each interaction point, we can construct the full `ConstraintsHoldWithInteractions.Soundness`.
+-/
+
+/-- The interaction guarantees for a list of operations, threaded through `is`.
+    This extracts ONLY the guarantee conditions, with everything else set to True. -/
+def InteractionGuarantees (env : Environment (F p)) (is : RawInteractions (F p)) (ops : Operations (F p)) : Prop :=
+  ops.forAllWithInteractions env 0 is {
+    interact _ is i := i.Guarantees env is
+    subcircuit _ _ _ s := ConstraintsHoldFlat env s.ops.toFlat -- TODO: should use s.Soundness
+  }
+
+/-- Lifting lemma: raw constraints + interaction guarantees → full constraints with interactions.
+    Combines the assert/lookup conditions from ConstraintsHold with the interaction
+    guarantee conditions from InteractionGuarantees to produce the full
+    ConstraintsHoldWithInteractions.Soundness. -/
+lemma lift_constraints_with_guarantees (env : Environment (F p)) (is : RawInteractions (F p))
+    (ops : Operations (F p))
+    (h_raw : ops.forAll 0 {
+      assert _ e := env e = 0
+      lookup _ l := l.Contains env
+      subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
+    })
+    (h_guarantees : InteractionGuarantees env is ops) :
+    ConstraintsHoldWithInteractions.Soundness env is ops := by
+  -- We need a generalized version that works for any offset
+  suffices h_gen : ∀ (offset : ℕ) (is : RawInteractions (F p)) (ops : Operations (F p)),
+      ops.forAll offset {
+        assert _ e := env e = 0
+        lookup _ l := l.Contains env
+        subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
+      } →
+      ops.forAllWithInteractions env offset is {
+        interact _ is i := i.Guarantees env is
+        subcircuit _ _ _ s := ConstraintsHoldFlat env s.ops.toFlat
+      } →
+      ops.forAllWithInteractions env offset is {
+        assert _ _ e := env e = 0
+        lookup _ _ l := l.Soundness env
+        interact _ is i := i.Guarantees env is
+        subcircuit _ _ _ s := s.Soundness env
+      } by
+    exact h_gen 0 is ops h_raw h_guarantees
+  intro offset is' ops'
+  induction ops' generalizing offset is' with
+  | nil => intros; trivial
+  | cons op ops' ih =>
+    intro h_raw' h_guar'
+    cases op with
+    | witness m c =>
+      simp only [Operations.forAll, Operations.forAllWithInteractions] at *
+      exact ⟨ h_guar'.1, ih _ _ h_raw'.2 h_guar'.2 ⟩
+    | assert e =>
+      simp only [Operations.forAll, Operations.forAllWithInteractions] at *
+      exact ⟨ h_raw'.1, ih _ _ h_raw'.2 h_guar'.2 ⟩
+    | lookup l =>
+      simp only [Operations.forAll, Operations.forAllWithInteractions] at *
+      -- Need l.Contains → l.Soundness — this is a separate lemma
+      sorry
+    | interact i =>
+      simp only [Operations.forAll, Operations.forAllWithInteractions] at *
+      exact ⟨ h_guar'.1, ih _ _ h_raw'.2 h_guar'.2 ⟩
+    | subcircuit s =>
+      simp only [Operations.forAll, Operations.forAllWithInteractions] at *
+      -- Need ConstraintsHoldFlat → s.Soundness — this is can_replace_soundness
+      sorry
+
+/-!
 ## Helper lemmas for per-message channel balance
 -/
 
