@@ -552,24 +552,17 @@ lemma bytes_guarantee_of_balance_tables
     (h_balanced_bytes :
       Ensemble.BalancedChannel fibonacciEnsemble (n, x, y) witness BytesChannel.toRaw) :
     ∀ msg,
-      (-1, msg) ∈
-        (List.flatMap (fun table ↦ table.interactions BytesChannel.toRaw) witness.tables ++
-          BytesChannel.toRaw.filter
-            (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))) →
+      (-1, msg) ∈ fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw →
       (msg[0]'(h_bytes_arity_pos)).val < 256 := by
   set bytesInteractions :=
-    List.flatMap (fun table => table.interactions BytesChannel.toRaw) witness.tables ++
-      BytesChannel.toRaw.filter
-        (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))
+    fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw
   have h_const : const (α:=fieldTriple) (n, x, y) = (.const n, .const x, .const y) := by
     simp [circuit_norm, ProvableType.const, explicit_provable_type]
   have h_balanced_bytes' :
       ∀ msg,
         (List.filter (fun x ↦ decide (x.2 = msg)) bytesInteractions).length < ringChar (F p) ∧
           (List.map Prod.fst (List.filter (fun x ↦ decide (x.2 = msg)) bytesInteractions)).sum = 0 := by
-    simpa [Ensemble.BalancedChannel, Ensemble.interactions, Ensemble.verifierInteractions,
-      fibonacciEnsemble, fibonacciVerifier, pushBytes, add8, fib8, emptyEnvironment, h_const,
-      bytesInteractions, circuit_norm] using h_balanced_bytes
+    simpa [Ensemble.BalancedChannel, bytesInteractions] using h_balanced_bytes
   intro msg h_pull
   have h_balance_msg := h_balanced_bytes' msg
   have h_req : ∀ mult, (mult, msg) ∈ bytesInteractions → mult ≠ (-1 : F p) →
@@ -653,11 +646,10 @@ lemma bytes_guarantee_of_balance_tables
           simp [List.mem_append, List.mem_cons, Channel.toRaw, FibonacciChannel, Add8Channel] at h_raw_mem'
           cases h_raw_mem'
     ·
+      have h_verifier_empty :
+          fibonacciEnsemble.verifierInteractions BytesChannel.toRaw (n, x, y) = [] := by rfl
       have h_false : False := by
-        simp [RawChannel.filter, BytesChannel, Channel.toRaw, FibonacciChannel, Channel.emitted,
-          InteractionDelta.single] at h_ver
-        rw [InteractionDelta.add_eq_append] at h_ver
-        simp [List.mem_cons] at h_ver
+        simpa [h_verifier_empty] using h_ver
       exact h_false.elim
   exact bytes_guarantee_of_balance bytesInteractions msg h_bytes_arity_pos
     h_balance_msg.2 h_balance_msg.1 h_req h_pull
@@ -675,9 +667,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
 
   -- define the bytes interactions list for this public input
   set bytesInteractions :=
-    List.flatMap (fun table => table.interactions BytesChannel.toRaw) witness.tables ++
-      BytesChannel.toRaw.filter
-        (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))
+    fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw
 
   have h_bytes_arity_pos : 0 < (BytesChannel (p := p)).toRaw.arity := by
     have h_bytes_arity : (BytesChannel (p := p)).toRaw.arity = 1 := by rfl
