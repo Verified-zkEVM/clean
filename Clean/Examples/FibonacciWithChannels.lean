@@ -740,6 +740,39 @@ lemma add8_interactions_satisfy_requirements
     (Add8Channel (p := p)).toRaw.Requirements entry.1 entry.2 [] (fun _ _ => #[]) := by
   sorry
 
+-- ══════════════════════════════════════════════════════════════════════════════
+-- FibonacciChannel structural lemmas
+-- ══════════════════════════════════════════════════════════════════════════════
+
+/-- pushBytes's FibonacciChannel interactions are empty -/
+lemma pushBytes_fib_interactions_empty
+    (table : TableWitness (F p))
+    (h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩) :
+    table.interactions (FibonacciChannel.toRaw) = [] := by
+  sorry
+
+/-- add8's FibonacciChannel interactions are empty -/
+lemma add8_fib_interactions_empty
+    (table : TableWitness (F p))
+    (h_is_add8 : table.abstract = ⟨add8 (p := p)⟩) :
+    table.interactions (FibonacciChannel.toRaw) = [] := by
+  sorry
+
+/-- fib8 rows emit matching pull and push to FibonacciChannel:
+    For each push (1, (n+1, y, z)), the same row has pull (-1, (n, x, y)) -/
+lemma fib8_fib_push_has_matching_pull
+    (table : TableWitness (F p))
+    (h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩)
+    (h_constraints : table.Constraints)
+    (entry : F p × Vector (F p) 3)
+    (h_mem : entry ∈ table.interactions (FibonacciChannel.toRaw))
+    (h_push : entry.1 = 1) :
+    ∃ (n_i x_i y_i : F p),
+      (-1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ table.interactions (FibonacciChannel.toRaw) ∧
+      entry.2[0] = n_i + 1 ∧
+      entry.2[1] = y_i := by
+  sorry
+
 /-!
 ## Main ensemble soundness theorem
 -/
@@ -1110,22 +1143,33 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     rcases List.mem_append.mp h_mem with h_table | h_verifier
     · -- From tables: must be from fib8 (pushBytes/add8 don't emit to FibonacciChannel)
       right
-      -- Extract: entry came from some fib8 row with input (n_i, x_i, y_i)
-      -- The row's localAdds includes both:
-      --   - pull: (-1, (n_i, x_i, y_i))
-      --   - push: (1, (n_i + 1, y_i, z_i))
-      -- So entry.2 = (n_i + 1, y_i, z_i) for some z_i
-      sorry -- Structural: extract n_i, x_i, y_i, z_i from the row
-      -- Then show:
-      -- 1. (-1, #v[n_i, x_i, y_i]) ∈ fibInteractions (same row's pull)
-      -- 2. entry.2[0] = n_i + 1 (by construction)
-      -- 3. n_i.val + 1 < p (need assumption or derive from constraints)
-      -- 4. Validity transfer:
-      --    - Assume IsValidFibState n_i x_i y_i
-      --    - Then x_i, y_i < 256 (fibonacci_bytes)
-      --    - Add8 pull (x_i, y_i, z_i) has guarantee: z_i = (x_i + y_i) % 256
-      --    - Therefore (y_i, z_i) = fibonacciStep (x_i, y_i)
-      --    - So IsValidFibState (n_i + 1) y_i z_i
+      -- Extract: entry came from some table in witness.tables
+      rw [List.mem_flatMap] at h_table
+      obtain ⟨table, h_table_mem, h_entry_in_table⟩ := h_table
+
+      -- Determine which table this is - only fib8 emits to FibonacciChannel
+      -- Use sorry for now; the structural case split follows the same pattern as h_push_req
+      have h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩ := by
+        sorry -- Structural: table must be fib8 since only fib8 emits to FibonacciChannel
+      have h_table_constraints : table.Constraints := by
+        rw [List.forall_iff_forall_mem] at h_constraints
+        exact h_constraints table h_table_mem
+      -- Use fib8_fib_push_has_matching_pull to get the matching pull
+      obtain ⟨n_i, x_i, y_i, h_pull_in_table, h_n_eq, h_y_eq⟩ :=
+        fib8_fib_push_has_matching_pull table h_is_fib8 h_table_constraints entry h_entry_in_table h_push
+      use n_i, x_i, y_i
+      refine ⟨?_, h_n_eq, ?_, ?_⟩
+      · -- (-1, #v[n_i, x_i, y_i]) ∈ fibInteractions
+        simp only [fibInteractions, Ensemble.interactions]
+        apply List.mem_append_left
+        rw [List.mem_flatMap]
+        exact ⟨table, h_table_mem, h_pull_in_table⟩
+      · -- n_i.val + 1 < p
+        -- This requires an assumption about the fibonacci sequence not overflowing
+        sorry
+      · -- Validity transfer: IsValidFibState n_i x_i y_i → IsValidFibState entry.2[0] entry.2[1] entry.2[2]
+        -- This requires using h_add8_guarantees to get z_i = (x_i + y_i) % 256
+        sorry
     · -- From verifier: push is (0, 0, 1)
       left
       simp only [fibonacciEnsemble, Ensemble.verifierInteractions] at h_verifier
