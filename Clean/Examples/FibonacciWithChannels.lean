@@ -988,7 +988,11 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         case inl =>  -- i = 0: pushBytes table
           -- pushBytes's Add8Channel interactions are empty
           have h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩ := by
-            sorry -- Use witness.same_circuits 0 and h_table_eq
+            have h_same := witness.same_circuits 0 (by rw [h_ens_len]; omega)
+            simp only [fibonacciEnsemble, List.getElem_cons_zero] at h_same
+            have h_table_abstract := congrArg TableWitness.abstract h_table_eq
+            simp only [List.get_eq_getElem] at h_table_abstract
+            exact h_table_abstract.symm.trans h_same.symm
           have h_empty := pushBytes_add8_interactions_empty table h_is_pushBytes
           rw [h_empty] at h_entry_in_table
           cases h_entry_in_table
@@ -996,10 +1000,17 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         case inr.inl =>  -- i = 1: add8 table
           -- add8's interactions satisfy Requirements
           have h_is_add8 : table.abstract = ⟨add8 (p := p)⟩ := by
-            sorry -- Use witness.same_circuits 1 and h_table_eq
+            have h_same := witness.same_circuits 1 (by rw [h_ens_len]; omega)
+            simp only [fibonacciEnsemble, List.getElem_cons_succ, List.getElem_cons_zero] at h_same
+            have h_table_abstract := congrArg TableWitness.abstract h_table_eq
+            simp only [List.get_eq_getElem] at h_table_abstract
+            exact h_table_abstract.symm.trans h_same.symm
           -- Get constraints for this table
           have h_table_constraints : table.Constraints := by
-            sorry -- Extract from h_constraints using h_table_mem
+            -- h_constraints : List.Forall (fun table => table.Constraints) witness.tables
+            -- h_table_mem : table ∈ witness.tables
+            rw [List.forall_iff_forall_mem] at h_constraints
+            exact h_constraints table h_table_mem
           -- BytesChannel guarantees for entries in this table's interactions
           -- follow from h_bytes_guarantees since table interactions ⊆ ensemble interactions
           have h_table_bytes_guarantees : ∀ (z : F p),
@@ -1016,7 +1027,11 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         case inr.inr =>  -- i = 2: fib8 table
           -- fib8's Add8Channel interactions all have mult = -1
           have h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩ := by
-            sorry -- Use witness.same_circuits 2 and h_table_eq
+            have h_same := witness.same_circuits 2 (by rw [h_ens_len]; omega)
+            simp only [fibonacciEnsemble, List.getElem_cons_succ, List.getElem_cons_zero] at h_same
+            have h_table_abstract := congrArg TableWitness.abstract h_table_eq
+            simp only [List.get_eq_getElem] at h_table_abstract
+            exact h_table_abstract.symm.trans h_same.symm
           have h_mult_neg := fib8_add8_interactions_mult_neg table h_is_fib8 entry h_entry_in_table
           exact absurd h_mult_neg h_entry_not_neg
 
