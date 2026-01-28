@@ -524,6 +524,16 @@ lemma guarantee_of_balance {n : ℕ} (interactions : List (F p × Vector (F p) n
     exists_non_pull_of_pull interactions msg h_balance h_bound h_pull
   exact h_req mult h_mem h_ne
 
+omit [Fact (p > 512)] [Fact (Nat.Prime p)] in
+/-- `fromElements` for a byte message equals the first element. -/
+lemma fromElements_eq_getElem (msg : Vector (F p) 1) :
+    fromElements (M:=field) msg = msg[0]'(by decide) := by
+  cases msg using Vector.elimAsArray with
+  | mk arr hsize =>
+    rcases (Array.size_eq_one_iff.mp hsize) with ⟨a, h_arr⟩
+    subst h_arr
+    simp [explicit_provable_type]
+
 omit [Fact (p > 512)] in
 /-- Bytes-channel guarantees from balance + requirements for non-pulls. -/
 lemma bytes_guarantee_of_balance {n : ℕ} (interactions : List (F p × Vector (F p) n))
@@ -549,11 +559,13 @@ def fibonacciEnsemble : Ensemble (F p) where
 lemma bytes_guarantee_of_balance_tables
     (witness : EnsembleWitness fibonacciEnsemble) (n x y : F p)
     (h_bytes_arity_pos : 0 < (BytesChannel (p := p)).toRaw.arity)
-    (h_balanced_bytes :
-      Ensemble.BalancedChannel fibonacciEnsemble (n, x, y) witness BytesChannel.toRaw) :
-    ∀ msg,
-      (-1, msg) ∈ fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw →
-      (msg[0]'(h_bytes_arity_pos)).val < 256 := by
+    (h_balanced_bytes : fibonacciEnsemble.BalancedChannel (n, x, y) witness BytesChannel.toRaw) :
+    -- TODO generalize to any mult, not just -1 (the others are trivial)
+    ∀ msg, (-1, msg) ∈ fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw →
+      BytesChannel.Guarantees (-1) (fromElements (M:=field) msg)
+        ((fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw).map
+          Channel.interactionFromRaw)
+        (fun _ _ => #[]) := by
   set bytesInteractions :=
     fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw
   have h_const : const (α:=fieldTriple) (n, x, y) = (.const n, .const x, .const y) := by
@@ -649,10 +661,17 @@ lemma bytes_guarantee_of_balance_tables
       have h_verifier_empty :
           fibonacciEnsemble.verifierInteractions BytesChannel.toRaw (n, x, y) = [] := by rfl
       have h_false : False := by
-        simpa [h_verifier_empty] using h_ver
+        simp [h_verifier_empty] at h_ver
       exact h_false.elim
-  exact bytes_guarantee_of_balance bytesInteractions msg h_bytes_arity_pos
-    h_balance_msg.2 h_balance_msg.1 h_req h_pull
+  have h_val : (msg[0]'(h_bytes_arity_pos)).val < 256 :=
+    bytes_guarantee_of_balance bytesInteractions msg h_bytes_arity_pos
+      h_balance_msg.2 h_balance_msg.1 h_req h_pull
+  have h_val' : (fromElements (M:=field) msg).val < 256 := by
+    simpa [fromElements_eq_getElem] using h_val
+  have h_guar : BytesChannel.Guarantees (-1) (fromElements (M:=field) msg)
+      (bytesInteractions.map Channel.interactionFromRaw) (fun _ _ => #[]) := by
+    simpa [BytesChannel] using h_val'
+  simpa [bytesInteractions] using h_guar
 
 theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble := by
   whnf
@@ -674,8 +693,11 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     simp [h_bytes_arity]
 
   have h_bytes_guarantee : ∀ msg, (-1, msg) ∈ bytesInteractions → (msg[0]'(h_bytes_arity_pos)).val < 256 := by
-    simpa [bytesInteractions] using
-      bytes_guarantee_of_balance_tables witness n x y h_bytes_arity_pos h_balanced_bytes
+    intro msg h_pull
+    have h_guar := bytes_guarantee_of_balance_tables witness n x y h_bytes_arity_pos h_balanced_bytes msg h_pull
+    have h_val' : (fromElements (M:=field) msg).val < 256 := by
+      simpa [BytesChannel] using h_guar
+    simpa [fromElements_eq_getElem] using h_val'
 
   -- define the fibonacci interactions list for this public input
   set fibInteractions :=
