@@ -927,11 +927,38 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       -- 4. By add8.soundness, Requirements hold
       -- 5. Requirements include the Add8Channel.Requirements for the emit
 
-      sorry -- Proof requires:
-      -- a. Tracing entry back to a specific add8 row
-      -- b. Establishing ConstraintsHoldWithInteractions.Soundness for that row
-      -- c. Applying add8.soundness
-      -- d. Extracting the Add8Channel.Requirements
+      -- The proof requires these structural facts:
+      -- 1. verifier_add8_empty: verifier's Add8Channel interactions are empty
+      -- 2. pushBytes_add8_empty: pushBytes's Add8Channel interactions are empty
+      -- 3. fib8_add8_mult_neg: fib8's Add8Channel interactions all have mult = -1
+      -- 4. add8_satisfies_req: add8's Add8Channel interactions satisfy Requirements
+
+      -- Given these, the proof is:
+      -- - entry is from tables or verifier
+      -- - Not from verifier (empty by 1)
+      -- - From one of [pushBytes, add8, fib8]
+      -- - Not from pushBytes (empty by 2)
+      -- - Not from fib8 with mult ≠ -1 (by 3)
+      -- - So from add8, and satisfies Requirements by 4
+
+      -- For now, we directly unfold and prove the requirement
+      -- The requirement for Add8Channel with mult ≠ -1 is:
+      -- x < 256 → y < 256 → z = (x + y) % 256
+      simp only [Channel.toRaw, Add8Channel, reduceIte, h_entry_not_neg, not_false_eq_true]
+
+      -- Now need to prove the actual property
+      intro hx hy
+
+      -- This requires tracing entry back to an add8 row and using add8.soundness
+      -- The add8.soundness proof already establishes this property given:
+      -- - constraints hold (from h_constraints)
+      -- - BytesChannel guarantee for z (from h_bytes_guarantees)
+
+      sorry -- Structural proof needed:
+      -- 1. Show entry came from add8 table (not verifier, pushBytes, or fib8)
+      -- 2. Extract the specific add8 row
+      -- 3. Apply add8.soundness with appropriate guarantees
+      -- 4. Extract the Add8Channel requirement
 
     -- Case split on whether entry is a pull (mult = -1) or not
     by_cases h_is_pull : entry.1 = -1
