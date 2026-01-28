@@ -728,13 +728,25 @@ lemma fib_table_interaction_mult_pm_one
 /-- Verifier's Add8Channel interactions are empty (verifier only uses FibonacciChannel) -/
 lemma verifier_add8_interactions_empty (publicInput : fieldTriple (F p)) :
     (fibonacciEnsemble (p := p)).verifierInteractions (Add8Channel.toRaw) publicInput = [] := by
-  sorry
+  rcases publicInput with ⟨n, x, y⟩
+  simp only [Ensemble.verifierInteractions, fibonacciEnsemble, fibonacciVerifier, circuit_norm]
+  -- The verifier's localAdds only involves FibonacciChannel (name = "fibonacci")
+  -- not Add8Channel (name = "add8"). The filter removes all non-matching entries.
+  rw [Channel.toRaw, RawChannel.filter, InteractionDelta.add_eq_append, List.filterMap_append]
+  simp only [Channel.emitted, InteractionDelta.single, List.filterMap_cons, List.filterMap_nil,
+    FibonacciChannel, Add8Channel, and_false, reduceIte, List.append_nil]
+  rfl
 
 /-- pushBytes's Add8Channel interactions are empty (pushBytes only uses BytesChannel) -/
 lemma pushBytes_add8_interactions_empty
     (table : TableWitness (F p))
     (h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩) :
     table.interactions (Add8Channel.toRaw) = [] := by
+  -- pushBytes only emits to BytesChannel (name = "bytes"), not Add8Channel (name = "add8")
+  -- The proof needs:
+  -- 1. Operations.localAdds for pushBytes equals pushBytes.localAdds (from localAdds_eq)
+  -- 2. pushBytes.localAdds only contains BytesChannel entries (by definition)
+  -- 3. Filtering BytesChannel entries by Add8Channel gives empty (name mismatch)
   sorry
 
 /-- fib8's Add8Channel interactions all have mult = -1 (fib8 only pulls from Add8Channel) -/
