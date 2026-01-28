@@ -345,11 +345,14 @@ def interactions (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : En
   witness.tables.flatMap (fun table => table.interactions channel)
   ++ ens.verifierInteractions channel publicInput
 
+def BalancedChannel (ens : Ensemble F) (publicInput : ens.PublicIO F)
+    (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
+  ∀ msg : Vector F channel.arity,
+    let is := (ens.interactions publicInput witness channel).filter (·.2 = msg)
+    is.length < ringChar F ∧ (is.map Prod.fst).sum = 0
+
 def BalancedChannels (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) : Prop :=
-  ens.channels.Forall fun channel =>
-    ∀ msg : Vector F channel.arity,
-      let is := (ens.interactions publicInput witness channel).filter (·.2 = msg)
-      is.length < ringChar F ∧ (is.map Prod.fst).sum = 0
+  ens.channels.Forall fun channel => ens.BalancedChannel publicInput witness channel
 
 def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
   let circuit := ens.verifier.main (const publicInput)
@@ -547,18 +550,7 @@ lemma bytes_guarantee_of_balance_tables
     (witness : EnsembleWitness fibonacciEnsemble) (n x y : F p)
     (h_bytes_arity_pos : 0 < (BytesChannel (p := p)).toRaw.arity)
     (h_balanced_bytes :
-      ∀ msg,
-        (List.filter (fun x ↦ decide (x.2 = msg))
-            (List.flatMap (fun table ↦ table.interactions BytesChannel.toRaw) witness.tables ++
-              BytesChannel.toRaw.filter
-                (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y)))).length <
-          ringChar (F p) ∧
-        (List.map Prod.fst
-              (List.filter (fun x ↦ decide (x.2 = msg))
-                (List.flatMap (fun table ↦ table.interactions BytesChannel.toRaw) witness.tables ++
-                  BytesChannel.toRaw.filter
-                    (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))))).sum =
-          0) :
+      Ensemble.BalancedChannel fibonacciEnsemble (n, x, y) witness BytesChannel.toRaw) :
     ∀ msg,
       (-1, msg) ∈
         (List.flatMap (fun table ↦ table.interactions BytesChannel.toRaw) witness.tables ++
@@ -569,11 +561,15 @@ lemma bytes_guarantee_of_balance_tables
     List.flatMap (fun table => table.interactions BytesChannel.toRaw) witness.tables ++
       BytesChannel.toRaw.filter
         (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))
+  have h_const : const (α:=fieldTriple) (n, x, y) = (.const n, .const x, .const y) := by
+    simp [circuit_norm, ProvableType.const, explicit_provable_type]
   have h_balanced_bytes' :
       ∀ msg,
         (List.filter (fun x ↦ decide (x.2 = msg)) bytesInteractions).length < ringChar (F p) ∧
           (List.map Prod.fst (List.filter (fun x ↦ decide (x.2 = msg)) bytesInteractions)).sum = 0 := by
-    simpa [bytesInteractions] using h_balanced_bytes
+    simpa [Ensemble.BalancedChannel, Ensemble.interactions, Ensemble.verifierInteractions,
+      fibonacciEnsemble, fibonacciVerifier, pushBytes, add8, fib8, emptyEnvironment, h_const,
+      bytesInteractions, circuit_norm] using h_balanced_bytes
   intro msg h_pull
   have h_balance_msg := h_balanced_bytes' msg
   have h_req : ∀ mult, (mult, msg) ∈ bytesInteractions → mult ≠ (-1 : F p) →
@@ -670,12 +666,8 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   whnf
   intro witness publicInput h_constraints h_balanced h_verifier
   clear h_constraints h_verifier
-  simp only [Ensemble.BalancedChannels, Ensemble.interactions, Ensemble.verifierInteractions] at h_balanced
   rcases publicInput with ⟨ n, x, y ⟩
-  have h_const : const (α:=fieldTriple) (n, x, y) = (.const n, .const x, .const y) := by
-    simp only [circuit_norm, ProvableType.const, explicit_provable_type]
-  rw [h_const] at h_balanced
-  simp only [circuit_norm, List.Forall, fibonacciEnsemble, fibonacciVerifier, pushBytes, add8, fib8, emptyEnvironment] at h_balanced
+  simp [Ensemble.BalancedChannels, List.Forall, fibonacciEnsemble] at h_balanced
   -- extract the channel balance hypotheses
   have h_balanced_bytes := h_balanced.1
   have h_balanced_add8 := h_balanced.2.1
@@ -702,7 +694,15 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))
   -- message vector for (n, x, y)
   set fibMsg : Vector (F p) 3 := #v[n, x, y]
-  have h_balanced_msg := h_balanced_fib fibMsg
+  have h_const : const (α:=fieldTriple) (n, x, y) = (.const n, .const x, .const y) := by
+    simp [circuit_norm, ProvableType.const, explicit_provable_type]
+  have h_balanced_msg :
+      (List.filter (fun x ↦ decide (x.2 = fibMsg)) fibInteractions).length < ringChar (F p) ∧
+        (List.map Prod.fst
+            (List.filter (fun x ↦ decide (x.2 = fibMsg)) fibInteractions)).sum = 0 := by
+    simpa [Ensemble.BalancedChannel, Ensemble.interactions, Ensemble.verifierInteractions,
+      fibonacciEnsemble, fibonacciVerifier, pushBytes, add8, fib8, emptyEnvironment, h_const,
+      fibInteractions, circuit_norm] using h_balanced_fib fibMsg
 
   -- show the verifier pull is in the global fibonacci interactions
   have h_pull_mem : (-1, fibMsg) ∈ fibInteractions := by
