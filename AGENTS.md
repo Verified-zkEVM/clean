@@ -149,3 +149,7 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 3. Create `ElaboratedCircuit` instance with `localLength` and `output`
 4. Prove `soundness` and `completeness`
 5. Bundle into `FormalCircuit`
+
+### Working on Lean Proofs
+
+When writing or debugging Lean proofs, the **lean-mcp skill** is essential for inspecting proof states interactively. See `skills/lean-mcp/SKILL.md` for setup and usage.
