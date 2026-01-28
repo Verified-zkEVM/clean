@@ -39,18 +39,21 @@ instance : ToJson (Lookup F) where
     ("entry", toJson l.entry.toArray),
   ]
 
-instance : ToJson (NamedList (Expression F)) where
+instance : ToJson (NamedArray (Expression F)) where
   toJson nl := Json.mkObj [
-    ("name", toJson nl.name),
-    ("values", toJson nl.values.toArray),
+    ("name", toJson nl.1),
+    ("values", toJson nl.2),
   ]
 
 instance : ToJson (FlatOperation F) where
   toJson
-    | FlatOperation.witness m _ => Json.mkObj [("witness", toJson m)]
-    | FlatOperation.assert e => Json.mkObj [("assert", toJson e)]
-    | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
-    | FlatOperation.add mult nl => Json.mkObj [("add", Json.mkObj [("multiplicity", toJson mult), ("list", toJson nl)])]
+    | .witness m _ => Json.mkObj [("witness", toJson m)]
+    | .assert e => Json.mkObj [("assert", toJson e)]
+    | .lookup l => Json.mkObj [("lookup", toJson l)]
+    | .interact i => Json.mkObj [("interact", Json.mkObj [
+      ("channel", toJson i.channel.name),
+      ("multiplicity", toJson i.mult),
+      ("message", toJson i.msg.toArray)])]
 
 def NestedOperations.listToJson : List (NestedOperations F) → Array Json
   | [] => #[]
@@ -70,11 +73,14 @@ instance : ToJson (NestedOperations F) where
 
 instance : ToJson (Operation F) where
   toJson
-    | Operation.witness m _ => Json.mkObj [("witness", toJson m)]
-    | Operation.assert e => Json.mkObj [("assert", toJson e)]
-    | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
-    | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
-    | Operation.add mult nl => Json.mkObj [("add", Json.mkObj [("multiplicity", toJson mult), ("list", toJson nl)])]
+    | .witness m _ => Json.mkObj [("witness", toJson m)]
+    | .assert e => Json.mkObj [("assert", toJson e)]
+    | .lookup l => Json.mkObj [("lookup", toJson l)]
+    | .subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
+    | .interact i => Json.mkObj [("interact", Json.mkObj [
+      ("channel", toJson i.channel.name),
+      ("multiplicity", toJson i.mult),
+      ("message", toJson i.msg.toArray)])]
 
 instance : ToJson (Operations F) where
   toJson ops := toJson ops.toList

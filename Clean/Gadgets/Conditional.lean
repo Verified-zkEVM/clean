@@ -2,6 +2,7 @@ import Clean.Circuit.Provable
 import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Boolean
 import Clean.Utils.Tactics
+import Clean.Utils.Tactics.ProvableStructDeriving
 
 namespace Gadgets.Conditional
 
@@ -19,11 +20,7 @@ structure Inputs (M : TypeMap) (F : Type) where
   selector : F
   ifTrue : M F
   ifFalse : M F
-
-instance : ProvableStruct (Inputs M) where
-  components := [field, M, M]
-  toComponents := fun { selector, ifTrue, ifFalse } => .cons selector (.cons ifTrue (.cons ifFalse .nil))
-  fromComponents := fun (.cons selector (.cons ifTrue (.cons ifFalse .nil))) => { selector, ifTrue, ifFalse }
+deriving ProvableStruct
 
 def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { selector, ifTrue, ifFalse } := input

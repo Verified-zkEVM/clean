@@ -43,7 +43,7 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   localLength _ := 16
   output _ i0 := output off i0
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main, Rotation64Bytes.circuit, Rotation64Bits.circuit, Operations.collectAdds]
+    simp only [circuit_norm, main, Rotation64Bytes.circuit, Rotation64Bits.circuit, Operations.localAdds]
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds

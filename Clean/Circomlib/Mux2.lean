@@ -18,11 +18,7 @@ namespace MultiMux2
 structure Inputs (n : ℕ) (F : Type) where
   c : ProvableVector (fields 4) n F  -- n vectors of 4 constants each
   s : Vector F 2                      -- 2-bit selector
-
-instance {n : ℕ} : ProvableStruct (Inputs n) where
-  components := [ProvableVector (fields 4) n, fields 2]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
+deriving ProvableStruct
 /-
 template MultiMux2(n) {
     signal input c[n][4];  // Constants
@@ -37,7 +33,7 @@ template MultiMux2(n) {
     signal  s10;
     s10 <== s[1] * s[0];
 
-    for (var i=0; i<n; i++) {
+    for (var i=0; i < n; i++) {
           a10[i] <==  ( c[i][ 3]-c[i][ 2]-c[i][ 1]+c[i][ 0] ) * s10;
            a1[i] <==  ( c[i][ 2]-c[i][ 0] ) * s[1];
            a0[i] <==  ( c[i][ 1]-c[i][ 0] ) * s[0];
@@ -88,7 +84,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   localAdds_eq input env offset := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     simp only [circuit_norm, main]
@@ -145,11 +140,7 @@ namespace Mux2
 structure Inputs (F : Type) where
   c : Vector F 4  -- 4 constants
   s : Vector F 2  -- 2-bit selector
-
-instance : ProvableStruct Inputs where
-  components := [fields 4, fields 2]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
+deriving ProvableStruct
 /-
 template Mux2() {
     var i;
@@ -201,7 +192,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     output = c[idx]
 
   localAdds_eq input env offset := by
-    simp only [main, MultiMux2.circuit, circuit_norm, Operations.collectAdds]
+    simp only [main, MultiMux2.circuit, circuit_norm, Operations.localAdds]
 
   soundness := by
     simp only [circuit_norm, main]

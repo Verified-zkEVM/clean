@@ -50,13 +50,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   localLength_eq := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
   localAdds_eq input env offset := by
-    have h : (main input |>.operations offset).collectAdds env = 0 := by
-      simp only [main, Num2Bits.main, circuit_norm, Operations.collectAdds]
-      simp only [List.append_nil]
-      apply Circuit.collectAdds_foldlRange'
-      intro (lc1, e2) i k
-      simp only [circuit_norm, Operations.collectAdds, List.append_nil]
-    simp only [h, InteractionDelta.toFinsupp_zero]
+    simp only [main, Num2Bits.main, circuit_norm]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
@@ -138,13 +132,13 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   localLength_eq := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
   localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds, Bits2Num.main]
+    simp only [main, circuit_norm, Operations.localAdds, Bits2Num.main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions input := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
+  Assumptions input _ := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
 
-  Spec input output :=
+  Spec input output _ :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) → output.val = fromBits (input.map ZMod.val)
 
   soundness := by
@@ -234,20 +228,13 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   main := main n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
-  localAdds_eq input env offset := by
-    have h : (main n input |>.operations offset).collectAdds env = 0 := by
-      simp only [main, circuit_norm, Operations.collectAdds]
-      simp only [List.append_nil]
-      apply Circuit.collectAdds_foldlRange'
-      intro lc1 i k
-      simp only [circuit_norm, Operations.collectAdds, List.append_nil]
-    simp only [h, InteractionDelta.toFinsupp_zero]
+  localAdds_eq := by simp only [main, circuit_norm]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 
-  Assumptions input := input.val < 2^n
+  Assumptions input _ := input.val < 2^n
 
-  Spec input output :=
+  Spec input output _ :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
   soundness := by

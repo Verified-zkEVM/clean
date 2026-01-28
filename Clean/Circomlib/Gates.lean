@@ -50,7 +50,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -96,7 +95,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -140,7 +138,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -184,7 +181,6 @@ def circuit : FormalCircuit (F p) field field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ _ _ h_env h_in h_hold
@@ -230,7 +226,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -276,7 +271,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -398,21 +392,21 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
   rw [bind_forAll]
   exact ⟨hf, hg⟩
 
--- Helper theorem for collectAdds
-theorem collectAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environment (F p)) (offset : ℕ) :
-    (Operations.collectAdds env ((main input).operations offset)).toFinsupp = InteractionDelta.toFinsupp 0 := by
+-- Helper theorem for localAdds
+theorem localAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) (env : Environment (F p)) :
+    (Operations.localAdds env ((main input).operations offset)).toFinsupp = InteractionDelta.toFinsupp 0 := by
   induction n using Nat.strong_induction_on generalizing offset with
   | _ n IH =>
     match n with
     | 0 =>
       simp only [main, Circuit.operations, Circuit.pure_def]
-      simp only [Operations.collectAdds, circuit_norm]
+      simp only [Operations.localAdds, circuit_norm]
     | 1 =>
       simp only [main, Circuit.operations, Circuit.pure_def]
-      simp only [Operations.collectAdds, circuit_norm]
+      simp only [Operations.localAdds, circuit_norm]
     | 2 =>
       simp only [main, Circuit.operations]
-      exact AND.circuit.localAdds_eq (input[0], input[1]) env offset
+      exact AND.circuit.localAdds_eq (input[0], input[1]) offset env
     | m + 3 =>
       rw [main]
       let n1 := (m + 3) / 2
@@ -422,13 +416,13 @@ theorem collectAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environme
       let input1 : Var (fields n1) (F p) := Vector.cast (by simp only [Nat.min_def, n1]; split <;> omega) (input.take n1)
       let input2 : Var (fields n2) (F p) := Vector.cast (by omega) (input.drop n1)
       simp only [Circuit.operations, Circuit.bind_def]
-      rw [Operations.collectAdds_append, Operations.collectAdds_append]
+      rw [Operations.localAdds_append, Operations.localAdds_append]
       rw [InteractionDelta.toFinsupp_add, InteractionDelta.toFinsupp_add]
       have h1 := IH _ h_n1_lt input1 offset
       have h2 := IH _ h_n2_lt input2 (offset + (main input1).localLength offset)
       simp only [InteractionDelta.toFinsupp_zero] at h1 h2 ⊢
       rw [h1, h2, zero_add, zero_add]
-      exact AND.circuit.localAdds_eq _ env _
+      exact AND.circuit.localAdds_eq _ _ env
 
 -- Helper theorem for subcircuitsConsistent
 theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
@@ -1083,7 +1077,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   localLength_eq := localLength_eq n
   subcircuitsConsistent := subcircuitsConsistent n
 
-  localAdds_eq := collectAdds_eq n
+  localAdds_eq := localAdds_eq n
 
   Assumptions := Assumptions n
   Spec := Spec n

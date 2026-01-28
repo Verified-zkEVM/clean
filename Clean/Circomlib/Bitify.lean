@@ -72,22 +72,16 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := input.val < 2^n
+  Assumptions input _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
-  Spec input bits :=
+  Spec input bits _ :=
     input.val < 2^n
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
 
-  localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds]
-    simp only [List.append_nil]
-    apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.collectAdds_foldlRange'
-    intro (lc1, e2) i k
-    simp only [circuit_norm, Operations.collectAdds, List.append_nil]
+  localAdds_eq := by simp only [main, circuit_norm]
 
   soundness := by
     circuit_proof_start
@@ -123,14 +117,12 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  Assumptions input := input.val < 2^n
+  Assumptions input _ := input.val < 2^n
 
-  Spec input output :=
+  Spec input output _ :=
     input.val < 2^n ∧ output = fieldToBits n input
 
-  localAdds_eq _ _ _ := by
-    simp only [circuit_norm]
-    simp only [Operations.collectAdds, circuit_norm, GeneralFormalCircuit.toSubcircuit_localAdds]
+  localAdds_eq := by simp only [circuit_norm]
 
   soundness := by
     circuit_proof_start [arbitraryBitLengthCircuit]
@@ -203,9 +195,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     output = fieldFromBits input
     ∧ output.val < 2^n
 
-  localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
+  localAdds_eq := by simp only [circuit_norm, main]
 
   soundness := by
     circuit_proof_start

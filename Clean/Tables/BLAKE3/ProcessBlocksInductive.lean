@@ -41,15 +41,7 @@ structure ProcessBlocksState (F : Type) where
   chaining_value : Vector (U32 F) 8    -- Current chaining value (8 × 32-bit words)
   chunk_counter : U32 F                 -- Which chunk number this is
   blocks_compressed : U32 F             -- Number of blocks compressed so far
-
-instance : ProvableStruct ProcessBlocksState where
-  components := [ProvableVector U32 8, U32, U32]
-  toComponents := fun { chaining_value, chunk_counter, blocks_compressed } =>
-    .cons chaining_value (.cons chunk_counter (.cons blocks_compressed .nil))
-  fromComponents := fun xss =>
-    match xss with
-    | .cons cv (.cons cc (.cons bc .nil)) =>
-      { chaining_value := cv, chunk_counter := cc, blocks_compressed := bc }
+deriving ProvableStruct
 
 /--
 Convert ProcessBlocksState to ChunkState for integration with the spec.
@@ -80,11 +72,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
   main
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-  localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds, List.append_nil]
-    apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.collectAdds_forEach
-    intro x n; simp only [circuit_norm, Operations.collectAdds]
+  localAdds_eq _ _ _ := by simp only [main, circuit_norm]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
     omega
@@ -119,15 +107,7 @@ A chunk might contain less than 16 blocks, and `block_exists` indicates empty ro
 structure BlockInput (F : Type) where
   block_exists : F                      -- 0 or 1 (boolean flag)
   block_data : Vector (U32 F) 16        -- 16 words = 64 bytes when exists
-
-instance : ProvableStruct BlockInput where
-  components := [field, ProvableVector U32 16]
-  toComponents := fun { block_exists, block_data } =>
-    .cons block_exists (.cons block_data .nil)
-  fromComponents := fun xss =>
-    match xss with
-    | .cons block_exists (.cons data .nil) =>
-      { block_exists := block_exists, block_data := data }
+deriving ProvableStruct
 
 def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   IsBool input.block_exists ∧
@@ -144,11 +124,7 @@ def circuit : FormalAssertion (F p) BlockInput where
   main
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-  localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds]
-    apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.collectAdds_forEach
-    intro x n; simp only [circuit_norm, Operations.collectAdds]
+  localAdds_eq _ _ _ := by simp only [main, circuit_norm]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   Assumptions _ := True
@@ -228,7 +204,8 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     blocks_compressed := muxedBlocksCompressed
   }
 
-def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i (_ : inputs.length = i) (state : ProcessBlocksState (F p)) :=
+def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i
+  (_ : inputs.length = i) (state : ProcessBlocksState (F p)) (_ : ProverData (F p)) :=
     inputs.length < 2^32 →
     initialState.Normalized ∧
     (∀ input ∈ inputs, input.Normalized) ∧
@@ -353,10 +330,11 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp_all only [circuit_norm]
     omega
 
-def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initialState.Normalized
+def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) (_ : ProverData (F p)) :=
+  initialState.Normalized
 
-def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
-    input.Normalized ∧ i < 2^32
+def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : ProverData (F p)) :=
+  input.Normalized ∧ i < 2^32
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
@@ -434,8 +412,8 @@ The InductiveTable for processBlocks.
 def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   step
   Spec
-  InitialStateAssumptions initialState := initialState.Normalized
-  InputAssumptions i input := input.Normalized ∧ i < 2^32
+  InitialStateAssumptions initialState _ := initialState.Normalized
+  InputAssumptions i input _ := input.Normalized ∧ i < 2^32
   soundness
   completeness
   subcircuitsConsistent := by

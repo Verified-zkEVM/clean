@@ -3,6 +3,7 @@ import Clean.Gadgets.BLAKE3.BLAKE3G
 import Clean.Specs.BLAKE3
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics
+import Clean.Utils.Tactics.ProvableStructDeriving
 
 namespace Gadgets.BLAKE3.Round
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -13,11 +14,7 @@ open Specs.BLAKE3 (round roundConstants)
 structure Inputs (F : Type) where
   state : BLAKE3State F
   message : Vector (U32 F) 16
-
-instance : ProvableStruct Inputs where
-  components := [BLAKE3State, ProvableVector U32 16]
-  toComponents := fun { state, message } => .cons state (.cons message .nil)
-  fromComponents := fun (.cons state (.cons message .nil)) => { state, message }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, message } := input
@@ -40,7 +37,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   localLength_eq input i0 := by
     simp only [main, circuit_norm, G.circuit, G.elaborated]
   localAdds_eq _ _ _ := by
-    simp [circuit_norm, main, G.circuit, G.elaborated, Operations.collectAdds]
+    simp [circuit_norm, main, G.circuit, G.elaborated, Operations.localAdds]
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input

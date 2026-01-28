@@ -14,11 +14,11 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     KeccakBlock.normalized block
     AbsorbBlock.circuit { state, block }
 
-  Spec _ blocks i _ state : Prop :=
+  Spec _ blocks i _ state _ : Prop :=
     state.Normalized
     ∧ state.value = absorbBlocks (blocks.map KeccakBlock.value)
 
-  InputAssumptions i block := block.Normalized
+  InputAssumptions i block _ := block.Normalized
 
   soundness := by
     intro initialState i env state_var block_var state block blocks _ h_input h_holds spec_previous
@@ -46,10 +46,10 @@ lemma initialState_normalized : (initialState (p:=p)).Normalized := by
 def formalTable (output : KeccakState (F p)) := table.toFormal initialState output
 
 -- The table's statement implies that the output state is the result of keccak-hashing some list of input blocks
-theorem tableStatement (output : KeccakState (F p)) : ∀ n > 0, ∀ trace, ∃ blocks, blocks.length = n - 1 ∧
-  (formalTable output).statement n trace →
+theorem tableStatement (output : KeccakState (F p)) : ∀ n > 0, ∀ trace env, ∃ blocks, blocks.length = n - 1 ∧
+  (formalTable output).statement n trace env →
     output.Normalized ∧ output.value = absorbBlocks blocks := by
-  intro n hn trace
+  intro n hn trace env
   use (InductiveTable.traceInputs trace.tail).map KeccakBlock.value
   intro Spec
   simp only [formalTable, FormalTable.statement, table, InductiveTable.toFormal] at Spec

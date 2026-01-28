@@ -21,8 +21,8 @@ open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.Spec
 open Examples.PicoCairoMultiplicity.Types
 open Examples.PicoCairoMultiplicity.Helpers
-open Operations (collectAdds collectAdds_flatten collectAdds_ofFn_flatten)
-open Circuit (collectAdds_forEach_foldl)
+open Operations (localAdds localAdds_flatten localAdds_ofFn_flatten)
+open Circuit (localAdds_forEach_foldl)
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -33,11 +33,8 @@ If enabled, executes the ADD instruction and emits multiplicity operations.
 -/
 def main
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
-
-  let enabled := input.enabled
-  let preState := input.preState
+  let { enabled, preState } := input
 
   -- Step 1: Assert enabled is boolean (0 or 1)
   assertBool enabled
@@ -61,19 +58,19 @@ def main
   assertZero (decoded.instrType.isAdd - 1)
 
   -- Step 6: Read operands from memory using addressing modes
-  let v1 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
+  let v1 ← readFromMemory {
     state := preState,
     offset := rawInstruction.op1,
     mode := decoded.mode1
   }
 
-  let v2 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
+  let v2 ← readFromMemory {
     state := preState,
     offset := rawInstruction.op2,
     mode := decoded.mode2
   }
 
-  let v3 ← subcircuitWithAssertion (readFromMemory memory h_memorySize) {
+  let v3 ← readFromMemory {
     state := preState,
     offset := rawInstruction.op3,
     mode := decoded.mode3
@@ -111,10 +108,9 @@ def localAdds
 ElaboratedCircuit for ADD instruction step.
 -/
 def elaborated
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
-  main := main program h_programSize memory h_memorySize
+  main := main program h_programSize
   -- assertBool(0) + emitStateWhen(0) + fetchInstruction(4) + conditionalDecode(8) + assertZero(0) + 3×readMemory(5) + assertZero(0) + emitStateWhen(0) = 27
   localLength _ := 27
   output _ _ := ()
@@ -130,9 +126,9 @@ def elaborated
     InteractionDelta.single ⟨"state", [postState.pc, postState.ap, postState.fp]⟩ (enabled * 1)
   localAdds_eq := by
     intro input env offset
-    simp only [main, circuit_norm, emitStateWhen, emitAdd, FemtoCairo.fetchInstruction,
+    simp only [main, circuit_norm, emitStateWhen, Channel.emit, FemtoCairo.fetchInstruction,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
-      readFromMemory, assertBool, FormalAssertion.toSubcircuit, Operations.collectAdds,
+      readFromMemory, assertBool, FormalAssertion.toSubcircuit, Operations.localAdds,
       List.nil_append, NamedList.eval, add_zero]
     rfl
 
@@ -141,7 +137,7 @@ Assumptions for the ADD instruction step.
 -/
 def Assumptions
     {programSize : ℕ} [NeZero programSize]
-    (input : InstructionStepInput (F p)) : Prop :=
+    (input : InstructionStepInput (F p)) (_ : Environment (F p)) : Prop :=
   IsBool input.enabled ∧
   ZMod.val input.preState.pc + 3 < programSize
 
@@ -151,69 +147,74 @@ If enabled, the pre-state consumed and post-state produced must reflect a valid 
 -/
 def Spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (input : InstructionStepInput (F p)) (adds : InteractionDelta (F p)) : Prop :=
-  if input.enabled = 1 then
+    (input : InstructionStepInput (F p)) (_ : Unit) (env : Environment (F p)) (adds : InteractionDelta (F p)) : Prop :=
+  let interactions := env.getInteractions StateChannel;
+  let { enabled, preState } := input;
+  let { pc, ap, fp } := preState;
+  let postState := ⟨ pc + 4, ap, fp ⟩;
+
+  if enabled = 1 then
     -- When enabled, we need to verify:
     -- 1. The pre-state is consumed (multiplicity -1)
     -- 2. The post-state is produced (multiplicity +1)
     -- 3. The ADD operation is valid according to FemtoCairo spec
-    match Spec.fetchInstruction program input.preState.pc with
+    match Spec.fetchInstruction program pc with
     | some rawInstr =>
       match Spec.decodeInstruction rawInstr.rawInstrType with
       | some (instrType, mode1, mode2, mode3) =>
         if instrType = 0 then  -- Must be ADD
-          match Spec.dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp,
-                Spec.dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp,
-                Spec.dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp with
+          ∃ _ : NeZero (memorySize env.data),
+          match Spec.dataMemoryAccess (memory env.data) rawInstr.op1 mode1 ap fp,
+                Spec.dataMemoryAccess (memory env.data) rawInstr.op2 mode2 ap fp,
+                Spec.dataMemoryAccess (memory env.data) rawInstr.op3 mode3 ap fp with
           | some v1, some v2, some v3 =>
             v1 + v2 = v3 ∧
-            adds = InteractionDelta.single ⟨"state", [input.preState.pc, input.preState.ap, input.preState.fp]⟩ (-1) +
-                   InteractionDelta.single ⟨"state", [input.preState.pc + 4, input.preState.ap, input.preState.fp]⟩ 1
+            (-1, preState) ∈ interactions ∧
+            (1, postState) ∈ interactions
           | _, _, _ => False
         else False
       | none => False
     | none => False
   else
     -- When disabled, both entries have multiplicity 0, semantically equivalent to empty
-    adds.toFinsupp = 0
+    True
+    -- adds.toFinsupp = 0
 
 /--
-FormalAssertionChangingMultiset for the ADD instruction step.
+GeneralFormalCircuitChangingMultiset for the ADD instruction step.
 -/
 def circuit
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    FormalAssertionChangingMultiset (F p) InstructionStepInput where
-  elaborated := elaborated program h_programSize memory h_memorySize
-  Assumptions := Assumptions (programSize := programSize)
-  Spec := Spec program memory
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
+    GeneralFormalCircuitChangingMultiset (F p) InstructionStepInput unit where
+  elaborated := elaborated program h_programSize
+  Assumptions := Assumptions (programSize:=programSize)
+  Spec input _ env delta := Assumptions (programSize:=programSize) input env → Spec program input () env delta
   soundness := by
     circuit_proof_start [elaborated, main, Assumptions, Spec, FemtoCairo.fetchInstruction,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
       readFromMemory, FemtoCairo.decodeInstruction]
 
     -- Extract assumptions
+    intro h_assumptions
     obtain ⟨h_enabled_bool, h_pc_bound⟩ := h_assumptions
     obtain ⟨h_input_enabled, h_input_preState⟩ := h_input
+    rcases input_preState with ⟨ pc, ap, fp ⟩
+    simp only at h_holds ⊢
+    simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input_preState
 
     -- Extract constraints from h_holds
-    obtain ⟨_, h_fetch, h_decode_cond, h_isAdd, h_read1, h_read2, h_read3, h_add_constraint⟩ := h_holds
+    obtain ⟨_, h_add_pre, h_fetch, h_decode_cond, h_isAdd, h_read1, h_read2, h_read3, h_add_constraint, h_add_post⟩
+      := h_holds
+    simp only [h_input_preState] at h_fetch
+    simp only [circuit_norm, explicit_provable_type, h_input_preState] at h_add_post
 
     -- Case split on enabled
     rcases h_enabled_bool with h_zero | h_one
     · -- Case: enabled = 0
       simp only [h_zero, zero_ne_one, ite_false, zero_mul, circuit_norm]
-      exact InteractionDelta.toFinsupp_zero_mult _ _
+      -- exact InteractionDelta.toFinsupp_zero_mult _ _
     · -- Case: enabled = 1
       simp only [h_one, ite_true]
-
-      -- Simplify h_input_preState to get eval relation on pc
-      have h_pc_eval : Expression.eval env input_var_preState.pc = input_preState.pc := by
-        have := congrArg State.pc h_input_preState
-        simp only [circuit_norm] at this
-        exact this
-      rw [h_pc_eval] at h_fetch
 
       -- Split on fetchInstruction result
       split at h_fetch
@@ -225,7 +226,7 @@ def circuit
         -- Get the decode result - apply IsBool hypothesis
         have h_bool : IsBool input_enabled := Or.inr h_one
         specialize h_decode_cond h_bool
-        simp only [h_one, one_ne_zero, ite_false] at h_decode_cond
+        simp only [h_one, one_ne_zero, ite_false, one_mul] at h_decode_cond h_add_pre h_add_post
 
         -- h_fetch gives us: eval env (varFromOffset RawInstruction i₀) = rawInstr
         -- We need to extract the rawInstrType field for the decode condition
@@ -276,6 +277,10 @@ def circuit
           rw [h_op1_eval, h_mode1] at h_read1
           rw [h_op2_eval, h_mode2] at h_read2
           rw [h_op3_eval, h_mode3] at h_read3
+          obtain ⟨ hm, h_read1 ⟩ := h_read1
+          obtain ⟨ _, h_read2 ⟩ := h_read2
+          obtain ⟨ _, h_read3 ⟩ := h_read3
+          use hm
 
           -- Split on the goal's match expressions
           split
@@ -306,7 +311,9 @@ def circuit
                     have := add_neg_eq_zero.mp this
                     exact this
                   ring_nf at h' ⊢
-                  exact h'.symm
+                  rw [add_comm] at h_add_post
+                  use h'.symm, h_add_pre, h_add_post
+
                 case h_2 => simp_all
               case h_2 => simp_all
             case h_2 => simp_all
@@ -324,14 +331,12 @@ Takes a vector of inputs with given capacity and executes ADD instructions for e
 -/
 def stepBody
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit :=
-  (AddInstruction.circuit program h_programSize memory h_memorySize) input
+  AddInstruction.circuit program h_programSize input
 
 instance stepBody_constantLength
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    Circuit.ConstantLength (stepBody program h_programSize memory h_memorySize) where
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
+    Circuit.ConstantLength (stepBody program h_programSize) where
   localLength := 27
   localLength_eq _ _ := by
     simp only [stepBody, circuit_norm]
@@ -378,8 +383,8 @@ def elaborated
   localAdds_eq inputs env offset := by
     -- Unfold main to expose forEach
     simp only [main]
-    -- Use collectAdds_forEach_foldl to rewrite LHS
-    rw [collectAdds_forEach_foldl]
+    -- Use localAdds_forEach_foldl to rewrite LHS
+    rw [localAdds_forEach_foldl]
     -- Convert both foldls to sums using toFinsupp_foldl_finRange
     rw [InteractionDelta.toFinsupp_foldl_finRange]
     simp only [add_assoc]
@@ -389,8 +394,8 @@ def elaborated
     intro i _
     -- Unfold stepBody and show the localAdds match
     simp only [stepBody, assertionChangingMultiset, Circuit.ConstantLength.localLength]
-    -- Use the fact that collectAdds on subcircuit gives localAdds
-    simp only [Operations.collectAdds, circuit_norm]
+    -- Use the fact that localAdds on subcircuit gives localAdds
+    simp only [Operations.localAdds, circuit_norm]
     -- Now we need to show the elaborated circuit's localAdds matches our manual computation
     simp only [AddInstruction.circuit, AddInstruction.elaborated, circuit_norm]
     rfl

@@ -18,11 +18,7 @@ namespace MultiMux1
 structure Inputs (n : ℕ) (F : Type) where
   c : ProvableVector fieldPair n F  -- n pairs of constants
   s : F                              -- selector
-
-instance {n : ℕ} : ProvableStruct (Inputs n) where
-  components := [ProvableVector fieldPair n, field]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
+deriving ProvableStruct
 /-
 template MultiMux1(n) {
     signal input c[n][2]; // Constants
@@ -77,7 +73,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   localAdds_eq input env offset := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     simp only [circuit_norm, main]
@@ -140,11 +135,8 @@ namespace Mux1
 structure Inputs (F : Type) where
   c : Vector F 2  -- 2 constants
   s : F           -- selector
+deriving ProvableStruct
 
-instance : ProvableStruct Inputs where
-  components := [fields 2, field]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
 /-
 template Mux1() {
     var i;
@@ -194,7 +186,6 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   localAdds_eq input env offset := by
     simp only [circuit_norm, main]
-    exact (MultiMux1.circuit 1).localAdds_eq { c := #v[(input.c[0], input.c[1])], s := input.s } env offset
 
   soundness := by
     simp only [circuit_norm, main]

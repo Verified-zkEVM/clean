@@ -38,7 +38,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
     rfl
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, Round.circuit, Permute.circuit, Operations.collectAdds]
+    simp only [circuit_norm, Round.circuit, Permute.circuit, Operations.localAdds]
   output := fun input offset =>
     let state_out := Round.circuit.output input offset
     let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
@@ -407,13 +407,7 @@ structure Inputs (F : Type) where
   counter_low : U32 F
   block_len : U32 F
   flags : U32 F
-
-instance : ProvableStruct Inputs where
-  components := [ProvableVector U32 8, ProvableVector U32 16, U32, U32, U32, U32]
-  toComponents := fun { chaining_value, block_words, counter_high, counter_low, block_len, flags } =>
-    .cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))
-  fromComponents := fun (.cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))) =>
-    { chaining_value, block_words, counter_high, counter_low, block_len, flags }
+deriving ProvableStruct
 
 /--
 Initializes the BLAKE3 state vector from input variables.
@@ -449,7 +443,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
       List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
       Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main, Operations.collectAdds]
+    simp only [circuit_norm, main, Operations.localAdds]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input

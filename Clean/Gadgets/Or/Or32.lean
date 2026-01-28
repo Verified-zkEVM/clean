@@ -1,4 +1,3 @@
-import Clean.Circuit.Provable
 import Clean.Utils.Tactics
 import Clean.Types.U32
 import Clean.Gadgets.Or.Or8
@@ -12,11 +11,7 @@ open Gadgets.Or
 structure Inputs (F : Type) where
   x : U32 F
   y : U32 F
-
-instance : ProvableStruct Inputs where
-  components := [U32, U32]
-  toComponents := fun { x, y } => .cons x (.cons y .nil)
-  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
@@ -40,7 +35,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main
   localLength _ := 4
   localAdds_eq _ _ _ := by
-    simp [main, circuit_norm, Operations.collectAdds]
+    simp [main, circuit_norm, Operations.localAdds]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start

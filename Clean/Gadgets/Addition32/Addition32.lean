@@ -11,11 +11,7 @@ open ByteUtils (mod256 floorDiv256)
 structure Inputs (F : Type) where
   x: U32 F
   y: U32 F
-
-instance : ProvableStruct Inputs where
-  components := [U32, U32]
-  toComponents := fun {x, y} => .cons x ( .cons y .nil)
-  fromComponents := fun (.cons x ( .cons y .nil)) => ⟨ x, y ⟩
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let ⟨x, y⟩ := input
@@ -37,7 +33,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main := main
   localLength _ := 8
   output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
-  localAdds_eq _ _ _ := by simp only [circuit_norm, main, Operations.collectAdds]
+  localAdds_eq _ _ _ := by simp only [circuit_norm, main, Operations.localAdds]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
