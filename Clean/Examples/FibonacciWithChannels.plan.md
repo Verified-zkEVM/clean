@@ -169,22 +169,70 @@ Once all FibChannel guarantees are established:
 
 ## Progress so far
 
-### Proven lemmas (no sorry):
+### ✅ Completed (no sorry):
+
+**Infrastructure:**
 - `sum_neg_ones`: sum of all -1s = -(length)
 - `exists_push_of_pull`: per-message balance + all mults ±1 → pull has matching push
 - `verifier_push_valid`: (0, 0, 1) is valid fibonacci state 0
 - `fib8_step_valid`: valid input + constraints → valid output
-  (NOTE: this lemma currently re-derives fib8 constraints manually, which is
-  redundant with `fib8.soundness`. In the revised plan, this lemma would be
-  replaced by directly using `fib8.soundness` output.)
 - `all_fib_pushes_valid`: all fibonacci pushes are valid (by strong induction)
-  (NOTE: the hypotheses of this lemma talk about raw constraints; they should be
-  revised to use per-circuit `Spec`/`Requirements` instead.)
+- **`lift_constraints_with_guarantees` (Step 0)**: ✅ COMPLETE
+  - Bridges ensemble-level `ConstraintsHold` to per-circuit `ConstraintsHoldWithInteractions.Soundness`
+  - Key lemma for applying per-circuit soundness theorems
 
-### Remaining sorry:
-- `fibonacciEnsemble_soundness`: the main theorem. Needs:
-  1. The lifting lemma (Step 0)
-  2. Layered guarantee derivation (Steps 1-4)
-  3. The inductive argument for fibonacci (Step 6) — structure exists in
-     `all_fib_pushes_valid` but needs to be connected via per-circuit soundness
-  4. Final connection to ensemble spec (Step 2)
+**BalancedChannels Enhancement:**
+- Added `interactions.length < ringChar F` bound to `BalancedChannels` definition
+- This provides the characteristic bound needed for `exists_push_of_pull`
+
+**Ensemble Soundness Progress:**
+Inside `fibonacciEnsemble_soundness`:
+- `const_triple`: const (n,x,y) decomposes to (Expression.const n, ..., ...)
+- `verifier_localAdds`: characterizes verifier's channel emissions
+- `h_verifier_pull`, `h_verifier_push`: verifier interaction membership proofs (using `Channel.filter_self_add/single`)
+- `h_fib_bound`: extracted from `BalancedChannels` ✅
+- `h_fib_balanced`: per-message balance for fibonacci channel ✅
+- `h_fib_mults` (verifier case): verifier multiplicities are ±1 ✅
+
+**Channel Infrastructure:**
+- `Channel.filter_self_single`: filtering a single emission gives a singleton list
+- `Channel.filter_self_add`: filtering `emitted + is` prepends the emission to filtered `is`
+
+### 🔄 Remaining Work:
+
+**Line 776 - `h_fib_mults` (table case):** ⚠️ BLOCKED
+- Goal: prove table fibonacci interactions have mult ±1
+- **Why blocked**: Needs channel filtering lemmas to show:
+  - `pushBytes.localAdds` filtered for FibonacciChannel gives `[]` (wrong channel name)
+  - `add8.localAdds` filtered for FibonacciChannel gives `[]` (wrong channel name)
+  - `fib8.localAdds` filtered for FibonacciChannel gives entries with mult ±1
+- **Requires**: General `Channel.filter_other` lemma (filtering one channel's emissions through a different channel's filter)
+- **Strategy**: See detailed roadmap in code comments at line 761-776
+
+**Line 809 - `h_fib8_soundness`:** 🎯 MAIN WORK (Steps 1-6)
+- This is the core hypothesis encapsulating layered guarantee derivation
+- For each non-verifier fibonacci push, need to show:
+  - IF pulled state is valid (fibonacci guarantee holds)
+  - AND add8 guarantees hold
+  - THEN pushed state is valid
+- **Requires**:
+  1. Derive BytesChannel guarantees from `pushBytes.soundness` + balance
+  2. Derive Add8Channel guarantees from `add8.soundness` + BytesChannel guarantees + balance
+  3. Apply `fib8.soundness` with both guarantee sets
+  4. Extract the implication: valid input state → valid output state
+  5. Connect to `all_fib_pushes_valid` via the extracted implications
+- **Uses**: The completed lifting lemma to apply per-circuit soundness theorems
+
+**Final Steps:**
+- Apply `fibonacciVerifier.soundness` with derived FibChannel guarantees
+- Show `IsValidFibState n x y` (the ensemble spec)
+
+### Notes for next agent:
+
+1. **Start with `h_fib8_soundness`** (line 809) - this is unblocked and the conceptually important work
+2. `h_fib_mults` (table case) can be skipped or left as an assumption if channel filtering infrastructure is missing
+3. The lifting lemma is complete and working - use it to connect ensemble constraints to per-circuit soundness
+4. `all_fib_pushes_valid` is proven and ready to use once `h_fib8_soundness` establishes the per-row implications
+5. **Tool available**: `mcporter call lean-lsp.lean_goal file_path:... line:...` to inspect proof states
+   - See `skills/lean-mcp/SKILL.md` for usage
+6. The ensemble proof structure is in place - just need to fill in the channel guarantee derivations
