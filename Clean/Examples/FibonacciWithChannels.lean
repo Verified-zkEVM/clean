@@ -347,13 +347,9 @@ def interactions (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : En
 
 def BalancedChannels (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   ens.channels.Forall fun channel =>
-    let interactions := ens.interactions publicInput witness channel
-    (∀ mult msg, (mult, msg) ∈ interactions → mult ≠ -1 →
-      channel.Requirements mult msg interactions (fun _ _ => #[])) ∧
-    (∀ msg, (-1, msg) ∈ interactions →
-      if channel.name = "fibonacci"
-      then (1, msg) ∈ interactions
-      else ∃ mult, mult ≠ -1 ∧ (mult, msg) ∈ interactions)
+    ∀ msg : Vector F channel.arity,
+      let is := (ens.interactions publicInput witness channel).filter (·.2 = msg)
+      is.length < ringChar F ∧ (is.map Prod.fst).sum = 0
 
 def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
   let circuit := ens.verifier.main (const publicInput)
@@ -408,7 +404,6 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   simp only [circuit_norm, List.Forall, fibonacciEnsemble, fibonacciVerifier, pushBytes, add8, fib8, emptyEnvironment] at h_balanced
   -- extract the fibonacci-channel balance hypotheses
   have h_balanced_fib := h_balanced.2.2
-  rcases h_balanced_fib with ⟨ h_fib_requirements, h_fib_matching ⟩
 
   -- define the fibonacci interactions list for this public input
   set fibInteractions :=
@@ -417,20 +412,14 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))
   -- message vector for (n, x, y)
   set fibMsg : Vector (F p) 3 := #v[n, x, y]
-  have h_fib_requirements' :
-      ∀ mult msg, (mult, msg) ∈ fibInteractions → mult ≠ -1 →
-        FibonacciChannel.toRaw.Requirements mult msg fibInteractions (fun _ _ => #[]) := by
-    simpa [fibInteractions] using h_fib_requirements
-  have h_fib_matching' :
-      ∀ msg, (-1, msg) ∈ fibInteractions → (1, msg) ∈ fibInteractions := by
-    simpa [fibInteractions, FibonacciChannel] using h_fib_matching
+  have h_balanced_msg := h_balanced_fib fibMsg
 
   -- show the verifier pull is in the global fibonacci interactions
   have h_pull_mem : (-1, fibMsg) ∈ fibInteractions := by
     apply (List.mem_append).2
     refine Or.inr ?_
     -- the verifier interactions are exactly [push, pull]
-    simp [fibMsg, RawChannel.filter, FibonacciChannel,
+    simp [fibInteractions, fibMsg, RawChannel.filter, FibonacciChannel,
       Channel.emitted, InteractionDelta.single]
     constructor
     ·
@@ -446,13 +435,17 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     ·
       exact rfl
 
-  -- balance gives a matching push, whose requirements yield the fibonacci spec
-  have h_push_mem : (1, fibMsg) ∈ fibInteractions := h_fib_matching' _ h_pull_mem
-  have h_one_ne : (1 : F p) ≠ -1 := by
-    have h2 : Fact (p > 2) := ⟨by linarith [‹Fact (p > 512)›.elim]⟩
-    let _ : Fact (p > 2) := h2
-    simpa using (FieldUtils.one_neq_neg_one (p:=p))
-  have h_req := h_fib_requirements' 1 fibMsg h_push_mem h_one_ne
+  -- derive a matching push for the pulled message
+  have h_push_mem : (1, fibMsg) ∈ fibInteractions := by
+    -- TODO: derive from h_balanced_msg and localAdds structure of the fibonacci channel
+    -- (this is the remaining "Fibonacci channel induction" obligation)
+    sorry
+
+  -- derive Fibonacci requirements for the matching push
+  have h_req : FibonacciChannel.toRaw.Requirements 1 fibMsg fibInteractions (fun _ _ => #[]) := by
+    -- TODO: derive from constraints + fib8 soundness (or from the fibonacci induction)
+    sorry
+
   have h_req' : (∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val) := by
     -- unfold the raw-channel requirements and simplify the message
     have h_req'' : (∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val) ∧
