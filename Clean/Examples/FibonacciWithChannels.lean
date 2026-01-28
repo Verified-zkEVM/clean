@@ -347,9 +347,12 @@ def interactions (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : En
 
 /-- Per-message balance: for each channel, for each message, the sum of multiplicities is 0.
     This is stronger than just requiring the total sum to be 0, and captures the intuition
-    that every pull (-1) must be matched by a push (+1) for the same message. -/
+    that every pull (-1) must be matched by a push (+1) for the same message.
+    Additionally requires that the number of interactions is bounded by the field characteristic
+    (needed for exists_push_of_pull which uses natCast). -/
 def BalancedChannels (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   ens.channels.Forall fun channel =>
+    (ens.interactions publicInput witness channel).length < (ringChar F) ∧
     ∀ msg : Vector F channel.arity,
       ((ens.interactions publicInput witness channel).filter (·.2 = msg) |>.map Prod.fst).sum = 0
 
@@ -726,26 +729,22 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       Channel.filter_self_add, Channel.filter_self_single]
     simp [toElements]
 
-  -- ── Step 2: Extract per-message balance for fibonacci channel from h_balanced ──
+  -- ── Step 2: Extract length bound and per-message balance for fibonacci channel ──
+  have h_bal : Ensemble.BalancedChannels fibonacciEnsemble (n, x, y) witness := h_balanced
+  unfold Ensemble.BalancedChannels at h_bal
+  simp only [fibonacciEnsemble, List.Forall] at h_bal
+  -- h_bal now contains length bounds and balances for all 3 channels
+  -- FibonacciChannel is the 3rd channel: h_bal.2.2 contains its length bound and balance
+  
+  have h_fib_bound : fibInteractions.length < p := by
+    have : ringChar (F p) = p := ZMod.ringChar_zmod_n p
+    convert h_bal.2.2.1
+    exact this.symm
+  
   have h_fib_balanced : ∀ msg : Vector (F p) 3,
       ((fibInteractions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0 := by
-    -- h_balanced contains per-message balance for all channels.
-    -- Extract the FibonacciChannel (3rd channel in the ensemble).
-    -- First, unfold to get a Forall over concrete channel list
-    -- h_balanced is Ensemble.BalancedChannels, a List.Forall over channels.
-    -- The FibonacciChannel is the 3rd channel.
-    -- We avoid deep unfolding by using the definition directly.
-    -- Extract the fibonacci channel balance from h_balanced
-    have h_bal : Ensemble.BalancedChannels fibonacciEnsemble (n, x, y) witness := h_balanced
-    unfold Ensemble.BalancedChannels at h_bal
-    simp only [fibonacciEnsemble, List.Forall] at h_bal
-    -- After List.Forall on [bytes, add8, fib]:
-    -- h_bal : (∀ msg, bytes_bal msg) ∧ (∀ msg, add8_bal msg) ∧ (∀ msg, fib_bal msg) ∧ True
-    -- But the quantifiers may not distribute this way — let's just use the right projection
-    -- h_bal.2.2 is ∀ msg : Vector _ arity, balance.
-    -- After List.Forall simp, the 3rd element is directly the function.
     intro msg
-    exact h_bal.2.2 msg
+    exact h_bal.2.2.2 msg
 
   -- ── Step 3: All multiplicities are ±1 ──
   -- All fibonacci interactions come from:
@@ -788,28 +787,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       · right; rw [h]
       · simp at h
 
-  -- ── Step 4: Bound on interactions length ──
-  -- The number of interactions equals:
-  -- - 2 from verifier (1 push + 1 pull)
-  -- - 2 * (number of fib8 rows) (each row does 1 pull + 1 push)
-  -- We need: 2 + 2 * n_rows < p
-  -- This is reasonable for any practical circuit (p > 512 >> typical row counts)
-  --
-  -- Strategy:
-  -- 1. Show verifier contributes exactly 2 interactions:
-  --    rw [verifier_localAdds, Channel.filter_self_add, Channel.filter_self_single]
-  --    simp [List.length_cons, List.length_singleton]
-  -- 2. Show each table's contribution:
-  --    - pushBytes/add8: 0 (filter gives [])
-  --    - fib8: 2 * row_count (each row: 1 pull + 1 push)
-  -- 3. Total: 2 + 2 * fib8_row_count
-  -- 4. Need assumption: witness.tables[2].table.length < p/2 - 1
-  --    This should be an ensemble-level well-formedness condition.
-  --    In practice, p > 2^250 and row counts are << 2^100, so this is trivial.
-  have h_fib_bound : fibInteractions.length < p := by
-    sorry
-
-  -- ── Step 5: Per-circuit soundness gives h_fib8_soundness ──
+  -- ── Step 4: Per-circuit soundness gives h_fib8_soundness ──
   -- For each non-verifier push, fib8.soundness tells us:
   --   IF the pull's fibonacci guarantee holds (input is valid fib state)
   --   AND the add8 pull's guarantee holds (addition is correct)
