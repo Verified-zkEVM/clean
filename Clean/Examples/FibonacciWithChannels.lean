@@ -419,7 +419,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     apply (List.mem_append).2
     refine Or.inr ?_
     -- the verifier interactions are exactly [push, pull]
-    simp [fibInteractions, fibMsg, RawChannel.filter, FibonacciChannel,
+    simp [fibMsg, RawChannel.filter, FibonacciChannel,
       Channel.emitted, InteractionDelta.single]
     constructor
     ·
@@ -450,9 +450,110 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       have h_mem_fib : (mult, fibMsg) ∈ fibInteractions := List.mem_of_mem_filter h_mem
       rcases List.mem_append.1 h_mem_fib with h_tables | h_ver
       ·
-        -- TODO: show table interactions for the Fibonacci channel only emit ±1
-        -- (this is the remaining localAdds-based lemma)
-        sorry
+        rcases List.mem_flatMap.1 h_tables with ⟨table, h_table_mem, h_mem_table⟩
+        rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
+        have h_len : witness.tables.length = 3 := by
+          simpa [fibonacciEnsemble] using witness.same_length.symm
+        have hi' : i < 3 := by
+          simpa [h_len] using hi
+        have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
+          simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
+        have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := by
+          simpa using h_same.symm
+        -- split on which table it is: pushBytes / add8 / fib8
+        cases i with
+        | zero =>
+          simp [fibonacciEnsemble] at h_table_abs
+          -- pushBytes has no fibonacci interactions
+          have h_mem_table' : (mult, fibMsg) ∈ table.interactions FibonacciChannel.toRaw := h_mem_table
+          rcases (by
+            simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
+          ) with ⟨row, h_row_mem, h_raw_mem⟩
+          -- reduce to membership in pushBytes localAdds
+          have h_raw_mem' := h_raw_mem
+          rw [h_table_abs] at h_raw_mem'
+          simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, pushBytes, circuit_norm] at h_raw_mem'
+          rcases h_raw_mem' with ⟨i, h_mem_emitted⟩
+          have h_mem_emitted' := h_mem_emitted
+          simp [BytesChannel, Channel.emitted, InteractionDelta.single] at h_mem_emitted'
+          rcases h_mem_emitted' with ⟨h_name, _, _⟩
+          have h_fib_name : (FibonacciChannel (p:=p)).toRaw.name = "fibonacci" := rfl
+          have h_ne : (FibonacciChannel (p:=p)).toRaw.name ≠ "bytes" := by simp [h_fib_name]
+          exact (False.elim (h_ne h_name))
+        | succ i1 =>
+          cases i1 with
+          | zero =>
+            simp [fibonacciEnsemble] at h_table_abs
+            -- add8 has no fibonacci interactions
+            have h_mem_table' : (mult, fibMsg) ∈ table.interactions FibonacciChannel.toRaw := h_mem_table
+            rcases (by
+              simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
+            ) with ⟨row, h_row_mem, h_raw_mem⟩
+            -- reduce to membership in add8 localAdds
+            have h_raw_mem' := h_raw_mem
+            rw [h_table_abs] at h_raw_mem'
+            simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, add8, circuit_norm] at h_raw_mem'
+            -- localAdds is bytes pull + add8 emit
+            rcases List.mem_append.1 h_raw_mem' with h_bytes | h_add8
+            ·
+              have h_bytes' := h_bytes
+              simp [BytesChannel, Channel.emitted, InteractionDelta.single] at h_bytes'
+              rcases h_bytes' with ⟨h_name, _, _⟩
+              have h_fib_name : (FibonacciChannel (p:=p)).toRaw.name = "fibonacci" := rfl
+              have h_ne : (FibonacciChannel (p:=p)).toRaw.name ≠ "bytes" := by
+                simp [h_fib_name]
+              exact (False.elim (h_ne h_name))
+            ·
+              have h_add8' := h_add8
+              simp [Add8Channel, Channel.emitted, InteractionDelta.single] at h_add8'
+              rcases h_add8' with ⟨h_name, _, _⟩
+              have h_fib_name : (FibonacciChannel (p:=p)).toRaw.name = "fibonacci" := rfl
+              have h_ne : (FibonacciChannel (p:=p)).toRaw.name ≠ "add8" := by
+                simp [h_fib_name]
+              exact (False.elim (h_ne h_name))
+          | succ i2 =>
+            cases i2 with
+            | zero =>
+              simp [fibonacciEnsemble] at h_table_abs
+              -- fib8 interactions only emit ±1
+              have h_mem_table' : (mult, fibMsg) ∈ table.interactions FibonacciChannel.toRaw := h_mem_table
+              rcases (by
+                simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
+              ) with ⟨row, h_row_mem, h_raw_mem⟩
+              have h_raw_mem' := h_raw_mem
+              rw [h_table_abs] at h_raw_mem'
+              simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, fib8, circuit_norm,
+                FibonacciChannel, Add8Channel, Channel.pull, Channel.push, Channel.pulled, Channel.pushed,
+                InteractionDelta.single] at h_raw_mem'
+              have h_raw_mem'' := h_raw_mem'
+              simp [InteractionDelta.add_eq_append] at h_raw_mem''
+              rcases h_raw_mem'' with h_left | h_rest
+              ·
+                exact Or.inl h_left.2.1
+              ·
+                rcases h_rest with h_mem0 | h_rest
+                · cases h_mem0
+                ·
+                  rcases h_rest with h_add8 | h_rest
+                  · exact Or.inl h_add8.2.1
+                  ·
+                    rcases h_rest with h_mem0 | h_rest
+                    · cases h_mem0
+                    ·
+                      rcases h_rest with h_right | h_mem0
+                      · exact Or.inr h_right.2.1
+                      · cases h_mem0
+            | succ i3 =>
+              -- impossible since i < 3
+              have hi'' : i3 + 4 < 3 := by
+                have hi'' := hi'
+                simp [Nat.add_left_comm, Nat.add_comm] at hi''
+              have h_ge : 3 ≤ i3 + 4 := by
+                have h1 : 4 ≤ i3 + 4 := Nat.le_add_left 4 i3
+                have h2 : 3 ≤ 4 := by decide
+                exact Nat.le_trans h2 h1
+              have : False := (Nat.not_lt_of_ge h_ge) hi''
+              exact this.elim
       ·
         -- verifier interactions are exactly one push and one pull
         have h_ver' : (mult, fibMsg) ∈
@@ -512,7 +613,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         · exact h_len
         ·
           have h_neg' : (-1 : F p) ≠ 0 := by
-            simpa using (neg_ne_zero.mpr (one_ne_zero : (1 : F p) ≠ 0))
+            simp
           cases (h_neg' h_neg)
       have h_ringChar : ringChar (F p) = p := by
         simpa [F] using ZMod.ringChar_zmod_n p
