@@ -142,7 +142,10 @@ lemma Channel.filter_self (channel : Channel F Message) (env : Environment F)
     let interaction : ChannelInteraction F Message := { channel, mult, msg };
     channel.toRaw.filter ((AbstractInteraction.eval env interaction.toRaw) :: is) =
       (env mult, (toElements msg).map env) :: channel.toRaw.filter is := by
-    sorry
+    simp only [RawChannel.filter, AbstractInteraction.eval, ChannelInteraction.toRaw, Channel.toRaw,
+      List.filterMap_cons, Vector.toArray_map, Array.size_map, Vector.size_toArray,
+      and_self, ↓reduceDIte]
+    congr 1
 
 @[circuit_norm]
 lemma Channel.interactionFromRaw_eq (env : Environment F)

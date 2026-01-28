@@ -787,17 +787,45 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       · right; rw [h]
       · simp at h
 
-  -- ── Step 4: Per-circuit soundness gives h_fib8_soundness ──
-  -- For each non-verifier push, fib8.soundness tells us:
-  --   IF the pull's fibonacci guarantee holds (input is valid fib state)
-  --   AND the add8 pull's guarantee holds (addition is correct)
-  --   THEN the push is a valid fibonacci state
+  -- ══════════════════════════════════════════════════════════════════════════
+  -- STEP 4: Layered channel guarantee derivation
+  -- ══════════════════════════════════════════════════════════════════════════
   --
-  -- For the add8 guarantee to hold, we need the layered derivation:
-  --   pushBytes requirements → bytes guarantees → add8 soundness → add8 requirements → add8 guarantees
+  -- The channel dependency graph is:
+  --   pushBytes → BytesChannel → add8 → Add8Channel → fib8 → FibonacciChannel
   --
-  -- This layered derivation would be done once, establishing add8 guarantees for all pulls.
-  -- Then for each fib8 row, IF the fib pull guarantee holds, the push requirement holds.
+  -- We derive guarantees layer by layer:
+  -- (a) BytesChannel guarantees: from pushBytes requirements + balance
+  -- (b) Add8Channel guarantees: from add8 soundness (using bytes guarantees) + balance
+  -- (c) FibonacciChannel: handled by induction in all_fib_pushes_valid
+
+  -- Step 4a: BytesChannel guarantees
+  -- Every bytes pull has guarantee: x.val < 256
+  -- This follows from: pushBytes pushes 0..255 (requirements), balance matches pulls to pushes
+  have h_bytes_guarantees : ∀ (z : F p),
+      -- if z is pulled from BytesChannel somewhere in the ensemble
+      (-1, #v[z]) ∈ fibonacciEnsemble.interactions (n, x, y) witness (BytesChannel.toRaw) →
+      z.val < 256 := by
+    sorry -- Proof sketch:
+    -- 1. By balance, there's a matching push (1, #v[z])
+    -- 2. Pushes come from pushBytes (values 0..255) or add8 (z already < 256)
+    -- 3. Therefore z < 256
+
+  -- Step 4b: Add8Channel guarantees
+  -- Every add8 pull has guarantee: x < 256 → y < 256 → z = (x+y) % 256
+  -- This follows from: add8 soundness (using bytes guarantees) + balance
+  have h_add8_guarantees : ∀ (x' y' z' : F p),
+      (-1, #v[x', y', z']) ∈ fibonacciEnsemble.interactions (n, x, y) witness (Add8Channel.toRaw) →
+      (x'.val < 256 → y'.val < 256 → z'.val = (x'.val + y'.val) % 256) := by
+    sorry -- Proof sketch:
+    -- 1. By balance, there's a matching push (1, #v[x', y', z'])
+    -- 2. Pushes come from add8 rows
+    -- 3. add8.soundness: with bytes guarantee (z' < 256), proves the add8 requirement
+    -- 4. Therefore the guarantee holds
+
+  -- ══════════════════════════════════════════════════════════════════════════
+  -- STEP 5: h_fib8_soundness - validity transfers through fib8 rows
+  -- ══════════════════════════════════════════════════════════════════════════
 
   have h_fib8_soundness : ∀ entry ∈ fibInteractions, entry.1 = 1 →
       entry.2 = (#v[(0 : F p), 0, 1] : Vector (F p) 3) ∨
@@ -806,11 +834,51 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         entry.2[0] = n_i + 1 ∧
         n_i.val + 1 < p ∧
         (IsValidFibState n_i x_i y_i → IsValidFibState entry.2[0] entry.2[1] entry.2[2]) := by
-    sorry -- requires:
-    -- (a) lifting lemma to get ConstraintsHoldWithInteractions.Soundness for each fib8 row
-    -- (b) applying fib8.soundness to each row
-    -- (c) layered guarantee derivation for bytes/add8 channels
-    -- (d) extracting the conditional (fib guarantee → fib requirement) from fib8.soundness output
+    intro entry h_mem h_push
+    -- Case split: entry from tables or verifier?
+    simp only [fibInteractions, Ensemble.interactions] at h_mem
+    rcases List.mem_append.mp h_mem with h_table | h_verifier
+    · -- From tables: must be from fib8 (pushBytes/add8 don't emit to FibonacciChannel)
+      right
+      -- Extract: entry came from some fib8 row with input (n_i, x_i, y_i)
+      -- The row's localAdds includes both:
+      --   - pull: (-1, (n_i, x_i, y_i))
+      --   - push: (1, (n_i + 1, y_i, z_i))
+      -- So entry.2 = (n_i + 1, y_i, z_i) for some z_i
+      sorry -- Structural: extract n_i, x_i, y_i, z_i from the row
+      -- Then show:
+      -- 1. (-1, #v[n_i, x_i, y_i]) ∈ fibInteractions (same row's pull)
+      -- 2. entry.2[0] = n_i + 1 (by construction)
+      -- 3. n_i.val + 1 < p (need assumption or derive from constraints)
+      -- 4. Validity transfer:
+      --    - Assume IsValidFibState n_i x_i y_i
+      --    - Then x_i, y_i < 256 (fibonacci_bytes)
+      --    - Add8 pull (x_i, y_i, z_i) has guarantee: z_i = (x_i + y_i) % 256
+      --    - Therefore (y_i, z_i) = fibonacciStep (x_i, y_i)
+      --    - So IsValidFibState (n_i + 1) y_i z_i
+    · -- From verifier: push is (0, 0, 1)
+      left
+      simp only [fibonacciEnsemble, Ensemble.verifierInteractions] at h_verifier
+      rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
+          Channel.filter_self_add, Channel.filter_self_single] at h_verifier
+      simp only [toElements, List.mem_cons, List.not_mem_nil, or_false] at h_verifier
+      rcases h_verifier with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+      · rfl  -- push case: entry = (1, #v[0,0,1])
+      · -- pull case: entry.1 = -1, contradicts h_push (entry.1 = 1)
+        simp only at h_push
+        -- h_push : -1 = 1, which is false in F p (since p > 2)
+        have hp : p > 2 := by linarith [Fact.elim ‹Fact (p > 512)›]
+        have h_ne : (1 : F p) ≠ -1 := by
+          have h2ne : (2 : F p) ≠ 0 := by
+            rw [ne_eq, ← Nat.cast_ofNat, ZMod.natCast_eq_zero_iff]
+            intro hdvd
+            exact Nat.not_lt.mpr (Nat.le_of_dvd (by omega) hdvd) hp
+          intro h
+          apply h2ne
+          calc (2 : F p) = 1 + 1 := by ring
+            _ = 1 + (-1) := by rw [← h]
+            _ = 0 := by ring
+        exact absurd h_push.symm h_ne
 
   -- ── Step 6: Apply all_fib_pushes_valid ──
   have h_all_valid := all_fib_pushes_valid fibInteractions
