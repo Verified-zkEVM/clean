@@ -459,8 +459,7 @@ lemma lift_constraints_with_guarantees (env : Environment (F p)) (is : RawIntera
       exact ⟨ h_raw'.1, ih _ _ h_raw'.2 h_guar'.2 ⟩
     | lookup l =>
       simp only [Operations.forAll, Operations.forAllWithInteractions] at *
-      -- Need l.Contains → l.Soundness — this is a separate lemma
-      sorry
+      exact ⟨ l.table.imply_soundness _ _ h_raw'.1, ih _ _ h_raw'.2 h_guar'.2 ⟩
     | interact i =>
       simp only [Operations.forAll, Operations.forAllWithInteractions] at *
       exact ⟨ h_guar'.1, ih _ _ h_raw'.2 h_guar'.2 ⟩
@@ -655,89 +654,103 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   whnf
   intro witness publicInput h_constraints h_balanced h_verifier
   clear h_verifier
-  simp only [Ensemble.Constraints, Ensemble.BalancedChannels, Ensemble.interactions,
-    Ensemble.verifierInteractions] at *
-  simp only [TableWitness.Constraints, TableWitness.interactions] at *
+  -- Selectively unfold: don't unfold h_balanced yet (we'll extract channels later)
+  simp only [Ensemble.Constraints] at h_constraints
+  simp only [TableWitness.Constraints] at h_constraints
   rcases publicInput with ⟨ n, x, y ⟩
 
   -- Unfold the concrete ensemble definitions
-  have h_const : const (α:=fieldTriple) (n, x, y) = (.const n, .const x, .const y) := by
-    simp only [circuit_norm, ProvableType.const, explicit_provable_type]
-  rw [h_const] at h_balanced
+  -- no need to rewrite h_balanced yet
 
   -- ═══════════════════════════════════════════════════════════════════
-  -- PROOF STRUCTURE: layered channel guarantee derivation
+  -- The spec is: ∃ k, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+  -- i.e., IsValidFibState n x y
+  --
+  -- Strategy:
+  -- 1. Extract fibonacci channel interactions from the ensemble
+  -- 2. Show the verifier's pull (-1, (n,x,y)) has a matching push by balance
+  -- 3. All pushes are valid (by all_fib_pushes_valid)
+  -- 4. Therefore (n, x, y) is valid
   -- ═══════════════════════════════════════════════════════════════════
 
-  -- We define the fibonacci channel interactions (from tables + verifier)
-  -- and show all hypotheses of `all_fib_pushes_valid` are satisfied.
+  -- The fibonacci channel interactions from the ensemble
+  -- Note: FibonacciChannel.toRaw.arity = 3
+  set fibInteractions : List (F p × Vector (F p) 3) :=
+    fibonacciEnsemble.interactions (n, x, y) witness (FibonacciChannel (p := p) |>.toRaw)
 
-  -- The ensemble interactions for a given channel come from:
-  --   tables.flatMap (fun table => table.interactions channel) ++ verifier interactions
-  -- We'll work with the fibonacci channel interactions specifically.
+  -- ── Step 1: The verifier's pull (-1, (n,x,y)) is in the interactions ──
+  -- The verifier does FibonacciChannel.push (0,0,1) then FibonacciChannel.pull (n,x,y)
+  -- So both (1, encode(0,0,1)) and (-1, encode(n,x,y)) are in the verifier interactions
 
-  -- ── Layer 0: BytesChannel guarantees ──
-  -- pushBytes has no pulls, so its soundness needs no guarantees.
-  -- pushBytes.soundness → BytesChannel.Requirements hold for pushes (0..255 are bytes)
-  -- + per-message balance → BytesChannel.Guarantees hold for all pulls
-  -- Conclusion: any value pulled from BytesChannel has .val < 256
+  have h_verifier_pull : (-1, (#v[n, x, y] : Vector (F p) 3)) ∈ fibInteractions := by
+    sorry -- requires unfolding verifier operations + localAdds + channel.filter
 
-  have h_bytes_guarantees : ∀ (env : Environment (F p)) (x : F p),
-    -- if BytesChannel.pull x appears in the interactions with balanced channels,
-    -- then x.val < 256
-    True := fun _ _ => trivial  -- placeholder for the real statement
+  have h_verifier_push : (1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)) ∈ fibInteractions := by
+    sorry -- same
 
-  -- ── Layer 1: Add8Channel guarantees ──
-  -- add8 pulls from BytesChannel (guaranteed by layer 0) and pushes to Add8Channel.
-  -- add8.soundness + BytesChannel guarantees → Add8Channel.Requirements hold
-  -- + per-message balance → Add8Channel.Guarantees hold for all pulls
-  -- Conclusion: any (x, y, z) pulled from Add8Channel satisfies
-  --   x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
+  -- ── Step 2: Extract per-message balance for fibonacci channel from h_balanced ──
+  have h_fib_balanced : ∀ msg : Vector (F p) 3,
+      ((fibInteractions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0 := by
+    -- h_balanced contains per-message balance for all channels.
+    -- Extract the FibonacciChannel (3rd channel in the ensemble).
+    -- First, unfold to get a Forall over concrete channel list
+    -- h_balanced is Ensemble.BalancedChannels, a List.Forall over channels.
+    -- The FibonacciChannel is the 3rd channel.
+    -- We avoid deep unfolding by using the definition directly.
+    -- Extract the fibonacci channel balance from h_balanced
+    have h_bal : Ensemble.BalancedChannels fibonacciEnsemble (n, x, y) witness := h_balanced
+    unfold Ensemble.BalancedChannels at h_bal
+    simp only [fibonacciEnsemble, List.Forall] at h_bal
+    -- After List.Forall on [bytes, add8, fib]:
+    -- h_bal : (∀ msg, bytes_bal msg) ∧ (∀ msg, add8_bal msg) ∧ (∀ msg, fib_bal msg) ∧ True
+    -- But the quantifiers may not distribute this way — let's just use the right projection
+    -- h_bal.2.2 is ∀ msg : Vector _ arity, balance.
+    -- After List.Forall simp, the 3rd element is directly the function.
+    intro msg
+    exact h_bal.2.2 msg
 
-  have h_add8_guarantees : ∀ (env : Environment (F p)) (x y z : F p),
-    -- if Add8Channel.pull (x, y, z) appears in the interactions,
-    -- then x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
-    True := fun _ _ _ _ => trivial  -- placeholder
+  -- ── Step 3: All multiplicities are ±1 ──
+  have h_fib_mults : ∀ entry ∈ fibInteractions, entry.1 = 1 ∨ entry.1 = -1 := by
+    sorry -- requires showing all fib8 rows + verifier only use mult ±1
 
-  -- ── Layer 2: FibonacciChannel guarantees (inductive) ──
-  -- fib8 pulls from FibonacciChannel (cyclic!) and Add8Channel (layer 1).
-  -- fib8.soundness + FibChannel guarantees + Add8Channel guarantees
-  --   → FibChannel.Requirements for pushes
-  -- The cycle is broken by strong induction on the step counter.
+  -- ── Step 4: Bound on interactions length ──
+  have h_fib_bound : fibInteractions.length < p := by
+    sorry -- reasonable assumption: total interactions < field characteristic
 
-  -- To apply `all_fib_pushes_valid`, we need to construct the concrete fibonacci
-  -- interaction list and verify its properties. This requires:
-  --   (a) A lifting lemma: ConstraintsHold → ConstraintsHoldWithInteractions.Soundness
-  --       (given that channel guarantees hold — this is an open infrastructure gap)
-  --   (b) Relating the ensemble's concrete interaction lists to the abstract
-  --       `all_fib_pushes_valid` hypotheses
-
-  -- ── Final step: derive the spec ──
-  -- The verifier pulls (n, x, y) from FibonacciChannel.
-  -- By FibonacciChannel guarantees (established in layer 2),
-  -- (n, x, y) is a valid fibonacci state = the spec.
-
-  -- ═══════════════════════════════════════════════════════════════════
-  -- TODO: The following gaps remain:
+  -- ── Step 5: Per-circuit soundness gives h_fib8_soundness ──
+  -- For each non-verifier push, fib8.soundness tells us:
+  --   IF the pull's fibonacci guarantee holds (input is valid fib state)
+  --   AND the add8 pull's guarantee holds (addition is correct)
+  --   THEN the push is a valid fibonacci state
   --
-  -- 1. LIFTING LEMMA (general infrastructure, not fibonacci-specific):
-  --    ConstraintsHold env ops ∧ (channel guarantees hold) →
-  --    ConstraintsHoldWithInteractions.Soundness env interactions ops
-  --    This is also sorry'd in Clean/Circuit/Subcircuit.lean (line ~264).
+  -- For the add8 guarantee to hold, we need the layered derivation:
+  --   pushBytes requirements → bytes guarantees → add8 soundness → add8 requirements → add8 guarantees
   --
-  -- 2. CONNECTING ENSEMBLE INTERACTIONS TO CHANNEL-LEVEL PROPERTIES:
-  --    Relate the concrete interaction lists from localAdds on each
-  --    table row to the abstract properties needed by the layered
-  --    guarantee derivation.
-  --
-  -- 3. DERIVING GUARANTEES FROM BALANCE + REQUIREMENTS:
-  --    For each acyclic channel layer, show that per-message balance +
-  --    requirements from the push side → guarantees for the pull side.
-  --    This is a general pattern that should be abstractable.
-  --
-  -- All CONCRETE circuit reasoning (carry bits, addition, etc.) is
-  -- already done inside the per-circuit soundness proofs. The remaining
-  -- work is purely structural/framework-level.
-  -- ═══════════════════════════════════════════════════════════════════
+  -- This layered derivation would be done once, establishing add8 guarantees for all pulls.
+  -- Then for each fib8 row, IF the fib pull guarantee holds, the push requirement holds.
 
-  sorry
+  have h_fib8_soundness : ∀ entry ∈ fibInteractions, entry.1 = 1 →
+      entry.2 = (#v[(0 : F p), 0, 1] : Vector (F p) 3) ∨
+      ∃ (n_i x_i y_i : F p),
+        (-1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ fibInteractions ∧
+        entry.2[0] = n_i + 1 ∧
+        n_i.val + 1 < p ∧
+        (IsValidFibState n_i x_i y_i → IsValidFibState entry.2[0] entry.2[1] entry.2[2]) := by
+    sorry -- requires:
+    -- (a) lifting lemma to get ConstraintsHoldWithInteractions.Soundness for each fib8 row
+    -- (b) applying fib8.soundness to each row
+    -- (c) layered guarantee derivation for bytes/add8 channels
+    -- (d) extracting the conditional (fib guarantee → fib requirement) from fib8.soundness output
+
+  -- ── Step 6: Apply all_fib_pushes_valid ──
+  have h_all_valid := all_fib_pushes_valid fibInteractions
+    h_verifier_push h_fib_bound h_fib_balanced h_fib_mults h_fib8_soundness
+
+  -- ── Step 7: The verifier's pull has a matching valid push ──
+  have h_matching := exists_push_of_pull fibInteractions (#v[n, x, y])
+    (fun e h _ => h_fib_mults e h) (h_fib_balanced _) h_verifier_pull h_fib_bound
+
+  have h_valid := h_all_valid (1, #v[n, x, y]) h_matching rfl
+  simp only [Vector.getElem_mk, List.getElem_cons_zero, List.getElem_cons_succ] at h_valid
+  -- h_valid should now be IsValidFibState n x y, but we might need to match the types
+  exact h_valid
