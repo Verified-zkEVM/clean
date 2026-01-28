@@ -767,10 +767,18 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       -- fib8's localAdds contains: FibonacciChannel.pulled + FibonacciChannel.pushed
       -- which have multiplicity -1 and 1 respectively
       sorry
-    · -- From verifier: we know the only two entries are h_verifier_push and h_verifier_pull
-      -- which have mult=1 and mult=-1 respectively
-      -- Use that entry is one of these two
-      sorry
+    · -- From verifier: the verifier interactions are exactly the two we proved above
+      simp only [fibonacciEnsemble, Ensemble.interactions, Ensemble.verifierInteractions] at h_verifier
+      rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
+          Channel.filter_self_add, Channel.filter_self_single] at h_verifier
+      simp only [ProvableType.toElements] at h_verifier
+      -- h_verifier : entry ∈ [(1, #v[0,0,1]), (-1, #v[n,x,y])]
+      simp only [List.mem_cons] at h_verifier
+      -- h_verifier : entry = (1, #v[0,0,1]) ∨ entry = (-1, #v[n,x,y]) ∨ entry ∈ []
+      rcases h_verifier with h | h | h
+      · left; rw [h]
+      · right; rw [h]
+      · simp at h
 
   -- ── Step 4: Bound on interactions length ──
   -- The number of interactions equals:
