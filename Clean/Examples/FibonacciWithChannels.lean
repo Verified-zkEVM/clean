@@ -190,7 +190,16 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
 -- additional circuits that pull/push remaining channel interactions
 -- these really wouldn't have to be circuits, need to find a better place for tying together channels
 
--- bytes "circuit" that just pushes all bytes
+/-- Bytes "circuit" that pushes all byte values (0..255) to BytesChannel.
+
+    The input `multiplicities : fields 256` specifies the multiplicity for each byte value.
+    For a balanced ensemble, `multiplicities[i]` should equal the number of times byte `i`
+    is pulled elsewhere (e.g., by add8 circuits). This is NOT necessarily ±1 — if byte 42
+    is pulled 5 times across different add8 rows, then `multiplicities[42] = 5`.
+
+    The key property is that pushBytes only emits byte values 0..255, regardless of
+    the multiplicities. This is used to prove that any non-pull BytesChannel entry
+    has value < 256. -/
 def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
   main multiplicities := do
     let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
@@ -417,6 +426,7 @@ def InteractionGuarantees (env : Environment (F p)) (is : RawInteractions (F p))
     subcircuit _ _ _ s := ConstraintsHoldFlat env s.ops.toFlat -- TODO: should use s.Soundness
   }
 
+omit [Fact (p > 512)] in
 /-- Lifting lemma: raw constraints + interaction guarantees → full constraints with interactions.
     Combines the assert/lookup conditions from ConstraintsHold with the interaction
     guarantee conditions from InteractionGuarantees to produce the full
@@ -488,6 +498,7 @@ lemma sum_neg_ones {F : Type} [Ring F] (l : List F) (h : ∀ x ∈ l, x = (-1 : 
     simp only [List.sum_cons, List.length_cons, Nat.cast_succ, neg_add_rev]
     rw [h hd (List.mem_cons.mpr (Or.inl rfl)), ih (fun x hx => h x (List.mem_cons.mpr (Or.inr hx)))]
 
+omit [Fact (p > 512)] in
 /-- In a list of interactions where all multiplicities are 1 or -1,
     if the per-message sum is 0 and (-1, msg) appears, then (1, msg) also appears.
     Requires that the characteristic is larger than the list length. -/
@@ -537,6 +548,7 @@ lemma exists_push_of_pull {n : ℕ}
 def IsValidFibState (n x y : F p) : Prop :=
   ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
 
+omit [Fact (p > 512)] in
 /-- The verifier push (0, 0, 1) is a valid fibonacci state -/
 lemma verifier_push_valid : IsValidFibState (0 : F p) 0 1 :=
   ⟨ 0, by simp [fibonacci, ZMod.val_zero, ZMod.val_one], by simp ⟩
@@ -635,7 +647,7 @@ lemma all_fib_pushes_valid
     rcases h_fib8_soundness entry h_mem h_push with h_veq | ⟨ n_i, x_i, y_i, h_pull_mem, h_step_eq, h_no_wrap, h_valid_implies ⟩
     · -- Verifier push: entry.2 = #v[0, 0, 1]
       rw [h_veq]
-      simp only [Vector.getElem_mk, List.getElem_cons_zero, List.getElem_cons_succ]
+      simp only [Vector.getElem_mk]
       exact verifier_push_valid
     · -- Fib8 push: valid if input is valid
       -- By per-message balance, the pull (-1, (n_i, x_i, y_i)) has a matching push
@@ -648,7 +660,7 @@ lemma all_fib_pushes_valid
         have h_lt : n_i.val < n := by
           rw [← h_step, h_step_eq, ZMod.val_add, ZMod.val_one, Nat.mod_eq_of_lt h_no_wrap]; omega
         have h_push_valid := ih n_i.val h_lt (1, #v[n_i, x_i, y_i]) h_matching rfl rfl
-        simp only [Vector.getElem_mk, List.getElem_cons_zero] at h_push_valid
+        simp only [Vector.getElem_mk] at h_push_valid
         exact h_push_valid
       exact h_valid_implies h_input_valid
 
@@ -662,21 +674,22 @@ We state them at the level of table witness interactions, which is what the
 ensemble soundness proof actually needs.
 -/
 
-/-- For any BytesChannel interaction in the ensemble where z.val ≥ 256,
-    the multiplicity is -1 (i.e., it's a pull, not a push).
+/-- For any BytesChannel entry with mult ≠ -1 (i.e., not a pull), the value is < 256.
 
-    This follows from:
-    - pushBytes only pushes values 0..255
-    - add8 only pulls from BytesChannel (mult = -1)
-    - fib8 and verifier don't interact with BytesChannel -/
-lemma bytes_interaction_large_val_is_pull
+    BytesChannel interactions come from:
+    - pushBytes: emits values 0..255 with arbitrary multiplicities (to balance all pulls)
+    - add8: pulls (mult = -1) with arbitrary values (the witness z)
+    - fib8, verifier: no BytesChannel interactions
+
+    So any entry with mult ≠ -1 must be from pushBytes, hence val ∈ {0..255}. -/
+lemma bytes_push_val_lt_256
     (witness : EnsembleWitness (fibonacciEnsemble (p := p)))
     (publicInput : fieldTriple (F p))
     (entry : F p × Vector (F p) 1)
     (h_mem : entry ∈ (fibonacciEnsemble (p := p)).interactions publicInput witness
                       ((BytesChannel (p := p)).toRaw))
-    (h_large : entry.2[0].val ≥ 256) :
-    entry.1 = -1 := by
+    (h_push : entry.1 ≠ -1) :
+    entry.2[0].val < 256 := by
   sorry
 
 /-- For any FibonacciChannel interaction from the tables (not verifier),
@@ -800,7 +813,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     · -- From tables: use the structural lemma
       exact fib_table_interaction_mult_pm_one witness entry h_table
     · -- From verifier: the verifier interactions are exactly the two we proved above
-      simp only [fibonacciEnsemble, Ensemble.interactions, Ensemble.verifierInteractions] at h_verifier
+      simp only [fibonacciEnsemble, Ensemble.verifierInteractions] at h_verifier
       rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
           Channel.filter_self_add, Channel.filter_self_single] at h_verifier
       simp only [ProvableType.toElements] at h_verifier
@@ -826,60 +839,59 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
 
   -- Step 4a: BytesChannel guarantees
   -- Every bytes pull has guarantee: x.val < 256
-  -- This follows from: pushBytes pushes 0..255 (requirements), balance matches pulls to pushes
+  -- This follows from: if z.val ≥ 256, all entries for #v[z] are pulls, so sum < 0, contradicting balance
   have h_bytes_guarantees : ∀ (z : F p),
       -- if z is pulled from BytesChannel somewhere in the ensemble
       (-1, #v[z]) ∈ fibonacciEnsemble.interactions (n, x, y) witness (BytesChannel.toRaw) →
       z.val < 256 := by
     intro z h_pull
-    -- Core argument: BytesChannel pushes only come from pushBytes (values 0..255).
-    -- If z.val ≥ 256, then no pushes exist for #v[z], so balance would give sum = -1 ≠ 0.
-    -- Therefore z.val < 256.
-    by_contra h_ge
-    push_neg at h_ge
     -- Extract balance for BytesChannel (first channel)
     have h_bytes_bal := h_bal.1
     set bytesInteractions := fibonacciEnsemble.interactions (n, x, y) witness (BytesChannel.toRaw)
-    -- Balance says sum of mults for message #v[z] is 0
-    have h_sum_zero := h_bytes_bal.2 #v[z]
 
-    -- Key structural fact: BytesChannel interactions with message #v[z] where z.val ≥ 256
-    -- can only be pulls (mult = -1), since pushBytes only pushes values 0..255.
-    have h_only_pulls : ∀ entry ∈ bytesInteractions, entry.2 = #v[z] → entry.1 = -1 := by
-      intro entry h_entry h_eq
-      apply bytes_interaction_large_val_is_pull witness (n, x, y) entry h_entry
-      simp only [Vector.getElem_mk, List.getElem_cons_zero, h_eq]
-      exact h_ge
+    by_contra h_ge
+    push_neg at h_ge  -- z.val ≥ 256
 
-    -- Since h_pull gives us (-1, #v[z]) ∈ bytesInteractions, the filtered list is nonempty
+    -- Key fact: any entry with mult ≠ -1 has val < 256 (by bytes_push_val_lt_256)
+    -- Contrapositive: if val ≥ 256, then mult = -1
+    have h_all_pulls : ∀ entry ∈ bytesInteractions, entry.2 = #v[z] → entry.1 = -1 := by
+      intro entry h_mem h_eq
+      by_contra h_not_pull
+      have h_lt := bytes_push_val_lt_256 witness (n, x, y) entry h_mem h_not_pull
+      -- entry.2 = #v[z], so entry.2[0] = z, so entry.2[0].val = z.val
+      simp only [h_eq, Vector.getElem_mk] at h_lt
+      -- h_lt : z.val < 256, h_ge : z.val ≥ 256
+      exact Nat.not_lt.mpr h_ge h_lt
+
+    -- The filtered list for message #v[z] is nonempty (contains our pull)
     have h_nonempty : (bytesInteractions.filter (·.2 = #v[z])).length > 0 :=
       List.length_pos_of_mem (List.mem_filter.mpr ⟨h_pull, by simp⟩)
 
-    -- All entries in the filtered list have mult = -1
+    -- All mults in the filtered list are -1
     have h_all_neg : ∀ m ∈ (bytesInteractions.filter (·.2 = #v[z])).map Prod.fst, m = -1 := by
       intro m hm
       rw [List.mem_map] at hm
       obtain ⟨⟨m', v⟩, hfilt, rfl⟩ := hm
       simp only [List.mem_filter, decide_eq_true_eq] at hfilt
-      exact h_only_pulls _ hfilt.1 hfilt.2
+      exact h_all_pulls _ hfilt.1 hfilt.2
 
-    -- Sum of all -1s = -(length) ≠ 0
+    -- Sum of -1s = -(length)
     have h_sum_neg := sum_neg_ones _ h_all_neg
-    -- h_sum_zero says sum = 0, h_sum_neg says sum = -(length)
-    -- Therefore length = 0, contradicting h_nonempty
-    -- Note: h_sum_zero uses expanded fibonacciEnsemble, h_sum_neg uses bytesInteractions abbreviation
-    -- They're definitionally equal, so we use `show` to normalize
-    have h_sum_zero' : ((bytesInteractions.filter (·.2 = #v[z])).map Prod.fst).sum = 0 := h_sum_zero
-    rw [h_sum_neg, neg_eq_zero] at h_sum_zero'
-    -- h_sum_zero' : ↑length = 0 in F p
-    -- Since length ≤ bytesInteractions.length < p, we have length < p
-    -- And (n : F p) = 0 with n < p implies n = 0
+
+    -- But balance says sum = 0
+    have h_sum_zero : ((bytesInteractions.filter (·.2 = #v[z])).map Prod.fst).sum = 0 :=
+      h_bytes_bal.2 #v[z]
+
+    -- So -(length) = 0 in F_p, meaning p | length
+    rw [h_sum_neg, neg_eq_zero] at h_sum_zero
+
+    -- But 0 < length < p, contradiction
     have h_len_bound : (bytesInteractions.filter (·.2 = #v[z])).length < p := by
       calc _ ≤ bytesInteractions.length := List.length_filter_le _ _
         _ < ringChar (F p) := h_bytes_bal.1
         _ = p := ZMod.ringChar_zmod_n p
     have h_len_zero : (bytesInteractions.filter (·.2 = #v[z])).length = 0 := by
-      have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero'
+      have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero
       simp only [List.length_map] at hdvd
       exact Nat.eq_zero_of_dvd_of_lt hdvd h_len_bound
     omega
@@ -955,7 +967,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
 
   -- ── Step 6: Apply all_fib_pushes_valid ──
   have h_all_valid := all_fib_pushes_valid fibInteractions
-    h_verifier_push h_fib_bound h_fib_balanced h_fib_mults h_fib8_soundness
+    h_fib_bound h_fib_balanced h_fib_mults h_fib8_soundness
 
   -- ── Step 7: The verifier's pull has a matching valid push ──
   have h_matching := exists_push_of_pull fibInteractions (#v[n, x, y])

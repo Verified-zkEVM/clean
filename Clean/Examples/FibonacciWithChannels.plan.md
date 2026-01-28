@@ -135,34 +135,46 @@ grep -n "sorry" Clean/Examples/FibonacciWithChannels.lean
 
 | Line | Location | Type | Description |
 |------|----------|------|-------------|
-| 212-214 | `pushBytes` | Infrastructure | Peripheral - not blocking main proof |
-| 681 | `bytes_interaction_large_val_is_pull` | Structural helper | Cleanly stated, needs mechanical proof |
-| 696 | `fib_table_interaction_mult_pm_one` | Structural helper | Cleanly stated, needs mechanical proof |
-| 894 | `h_add8_guarantees` | Semantic | Needs layered derivation |
-| 922 | `h_fib8_soundness` (fib8 case) | Semantic | Needs structural extraction |
+| 220-222 | `pushBytes` | Infrastructure | Peripheral - not blocking main proof |
+| 684 | `bytes_push_val_lt_256` | Structural helper | BytesChannel non-pulls have val < 256 |
+| 699 | `fib_table_interaction_mult_pm_one` | Structural helper | FibChannel table mults are ±1 |
+| 896 | `h_add8_guarantees` | Semantic | Needs layered derivation |
+| 924 | `h_fib8_soundness` (fib8 case) | Semantic | Needs structural extraction |
 
 ### What's proven in main theorem
 
-- ✅ `h_bytes_guarantees` - Uses `bytes_interaction_large_val_is_pull` helper
+- ✅ `h_bytes_guarantees` - Uses contradiction: if val ≥ 256, all entries are pulls, sum < 0
 - ✅ `h_fib_mults` - Uses `fib_table_interaction_mult_pm_one` helper  
 - ✅ `h_fib8_soundness` (verifier case) - Push is (0, 0, 1)
 - ✅ Final chain: `all_fib_pushes_valid → h_matching → h_valid → spec`
 
+### Key insight about multiplicities
+
+**BytesChannel multiplicities are NOT ±1!** The `pushBytes` circuit pushes each byte value
+with an arbitrary multiplicity (whatever balances the pulls from add8). For example, if
+byte 42 is pulled 5 times across different add8 rows (each with mult -1), then pushBytes
+pushes byte 42 with multiplicity 5.
+
+This means we can't use `exists_push_of_pull` for BytesChannel. Instead, `h_bytes_guarantees`
+uses a different argument: if `z.val ≥ 256`, then there are no pushes for `#v[z]` (since
+pushBytes only pushes 0..255), so all entries for `#v[z]` are pulls (mult = -1), making
+the sum negative, which contradicts balance.
+
 ### Proof architecture in the code
 
 ```
-bytes_interaction_large_val_is_pull  ───┐
-       (sorry - line 681)               │
-                                        ▼
-h_bytes_guarantees  ◄───────────────── DONE (uses helper)
+bytes_push_val_lt_256  ────────────────┐
+       (sorry - line 684)              │
+                                       ▼
+h_bytes_guarantees  ◄───────────────── DONE (contradiction: val ≥ 256 → sum < 0)
                                         
-h_add8_guarantees   ◄───────────────── sorry (line 894)
+h_add8_guarantees   ◄───────────────── sorry (line 896)
        (similar pattern)                │
                                         ▼
-h_fib8_soundness (fib8 case) ◄──────── sorry (line 922)
+h_fib8_soundness (fib8 case) ◄──────── sorry (line 924)
                                         │
 fib_table_interaction_mult_pm_one  ────┤
-       (sorry - line 696)               │
+       (sorry - line 699)               │
                                         ▼
 h_fib_mults  ◄──────────────────────── DONE (uses helper)
                                         │
@@ -175,37 +187,36 @@ h_valid = spec  ◄────────────────────�
 
 ## Next steps for continuation
 
-### Priority 1: Structural helper lemmas (lines 681, 696)
+### Priority 1: Break down structural helpers into simpler building blocks
 
-These are cleanly stated and can be proven mechanically:
+The helpers `bytes_push_val_lt_256` and `fib_table_interaction_mult_pm_one` should be
+reduced to simpler per-circuit statements like:
+- "add8's BytesChannel interactions have mult = -1"
+- "fib8's BytesChannel interactions are `[]`"
+- "verifier's BytesChannel interactions are `[]`"
+- "pushBytes's BytesChannel interactions have values in 0..255"
 
-**`bytes_interaction_large_val_is_pull` (line 681)**:
-- Statement: For BytesChannel interactions where `entry.2[0].val ≥ 256`, we have `entry.1 = -1`
-- Proof approach:
-  1. BytesChannel interactions come from: pushBytes, add8, fib8, verifier
-  2. fib8 and verifier don't emit to BytesChannel (their `localAdds` filtered gives `[]`)
-  3. pushBytes only pushes values 0..255 (so no entry with val ≥ 256)
-  4. add8 only pulls from BytesChannel (mult = -1)
-  5. Therefore any entry with val ≥ 256 must be from add8, hence mult = -1
+The ensemble-level helpers then follow by combining these per-circuit facts.
 
-**`fib_table_interaction_mult_pm_one` (line 696)**:
-- Statement: For FibonacciChannel table interactions, `entry.1 = 1 ∨ entry.1 = -1`
-- Proof approach:
-  1. FibonacciChannel table interactions come from: pushBytes, add8, fib8
-  2. pushBytes doesn't emit to FibonacciChannel (different channel name)
-  3. add8 doesn't emit to FibonacciChannel (different channel name)
-  4. fib8 only pulls (mult=-1) and pushes (mult=1) to FibonacciChannel
+**Per-circuit BytesChannel interaction characterizations:**
+- `add8_bytes_localAdds`: add8 emits `[(-1, #v[z])]` to BytesChannel (z is witness)
+- `fib8_bytes_localAdds_empty`: fib8 emits `[]` to BytesChannel
+- `verifier_bytes_localAdds_empty`: verifier emits `[]` to BytesChannel  
+- `pushBytes_bytes_localAdds`: pushBytes emits `[(m[i], #v[i]) for i in 0..255]`
 
-Both require unfolding `localAdds` definitions and using `Channel.filter_self_add`, `Channel.filter_self_single`, and showing filtering for wrong channel gives `[]`.
+**Per-circuit FibonacciChannel interaction characterizations:**
+- `pushBytes_fib_localAdds_empty`: pushBytes emits `[]` to FibonacciChannel
+- `add8_fib_localAdds_empty`: add8 emits `[]` to FibonacciChannel
+- `fib8_fib_localAdds`: fib8 emits `[(-1, pull), (1, push)]` to FibonacciChannel
 
-### Priority 2: `h_add8_guarantees` (line 894)
+### Priority 2: `h_add8_guarantees` (line 888)
 
 Similar structure to `h_bytes_guarantees`:
 - For each add8 pull, show the guarantee holds (x < 256 → y < 256 → z = (x+y) % 256)
 - Use balance to find matching push
 - Pushes come from add8 rows, which satisfy the requirement by add8.soundness
 
-### Priority 3: `h_fib8_soundness` fib8 case (line 922)
+### Priority 3: `h_fib8_soundness` fib8 case (line 916)
 
 For each fib8 push entry:
 1. Extract the corresponding row's input (n_i, x_i, y_i) and output z_i
