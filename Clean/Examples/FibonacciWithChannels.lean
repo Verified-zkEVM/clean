@@ -757,16 +757,23 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     -- entry is either from tables or verifier
     simp only [fibInteractions, Ensemble.interactions] at h_mem
     rcases List.mem_append.mp h_mem with h_table | h_verifier
-    · -- From tables: the fibonacci channel is only used by fib8 table (3rd table)
-      -- Strategy: 
-      -- 1. Show the ensemble has 3 tables: pushBytes, add8, fib8
-      -- 2. Show pushBytes emits only to BytesChannel (not FibonacciChannel)
-      -- 3. Show add8 emits only to BytesChannel and Add8Channel (not FibonacciChannel)  
-      -- 4. Therefore all fibonacci table interactions come from fib8
-      -- 5. Show fib8's localAdds uses: FibonacciChannel.pulled (mult=-1) + 
-      --    Add8Channel.pulled + FibonacciChannel.pushed (mult=1)
-      -- 6. After filtering for FibonacciChannel, only pulled and pushed remain (mult ±1)
-      -- This requires analyzing the concrete table structures and their localAdds fields
+    · -- From tables: show entry comes from fib8 and fib8 only uses mult ±1
+      -- Detailed roadmap:
+      -- 1. Use List.mem_flatMap to extract: ∃ table ∈ witness.tables, entry ∈ table.interactions FibonacciChannel
+      -- 2. Use witness.same_circuits to relate table.abstract to ensemble.tables[i]
+      -- 3. Show ensemble.tables = [pushBytes, add8, fib8] (by definition)
+      -- 4. Case on i:
+      --    i=0 (pushBytes): 
+      --      - pushBytes.localAdds only emits BytesChannel
+      --      - Show filtering for FibonacciChannel.toRaw gives []
+      --      - Lemma: Channel.filter_other_channel for different channel names
+      --    i=1 (add8):
+      --      - add8.localAdds: BytesChannel.pulled + Add8Channel.emitted
+      --      - Show filtering for FibonacciChannel gives []
+      --    i=2 (fib8):
+      --      - fib8.localAdds: FibonacciChannel.pulled + Add8Channel.pulled + FibonacciChannel.pushed
+      --      - Use Channel.filter_self_add to show filtered result has entries with mult ±1
+      --      - pulled has mult=-1, pushed has mult=1
       sorry
     · -- From verifier: the verifier interactions are exactly the two we proved above
       simp only [fibonacciEnsemble, Ensemble.interactions, Ensemble.verifierInteractions] at h_verifier
@@ -787,10 +794,18 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   -- - 2 * (number of fib8 rows) (each row does 1 pull + 1 push)
   -- We need: 2 + 2 * n_rows < p
   -- This is reasonable for any practical circuit (p > 512 >> typical row counts)
+  --
   -- Strategy:
-  -- 1. Show fibInteractions.length = 2 + 2 * (witness.tables[2].table.length)
-  -- 2. Add assumption or derive that witness.tables[2].table.length < p/2 - 1
-  -- 3. This might need to be an ensemble-level assumption about witness validity
+  -- 1. Show verifier contributes exactly 2 interactions:
+  --    rw [verifier_localAdds, Channel.filter_self_add, Channel.filter_self_single]
+  --    simp [List.length_cons, List.length_singleton]
+  -- 2. Show each table's contribution:
+  --    - pushBytes/add8: 0 (filter gives [])
+  --    - fib8: 2 * row_count (each row: 1 pull + 1 push)
+  -- 3. Total: 2 + 2 * fib8_row_count
+  -- 4. Need assumption: witness.tables[2].table.length < p/2 - 1
+  --    This should be an ensemble-level well-formedness condition.
+  --    In practice, p > 2^250 and row counts are << 2^100, so this is trivial.
   have h_fib_bound : fibInteractions.length < p := by
     sorry
 
