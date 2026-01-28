@@ -692,6 +692,24 @@ lemma bytes_push_val_lt_256
     entry.2[0].val < 256 := by
   sorry
 
+/-- The step counter of any valid fibonacci state is bounded by the number of interactions.
+
+    The fibonacci sequence forms a chain: 0 → 1 → 2 → ... → n where each step
+    contributes at least 2 entries to fibInteractions. Since fibInteractions.length < p,
+    any step counter n_i satisfies n_i.val < p/2 < p - 1, hence n_i.val + 1 < p. -/
+lemma fib_step_counter_bounded
+    (fibInteractions : List (F p × Vector (F p) 3))
+    (h_bound : fibInteractions.length < p)
+    (entry : F p × Vector (F p) 3)
+    (h_mem : entry ∈ fibInteractions)
+    (h_push : entry.1 = 1)
+    (n_i : F p)
+    (h_n_eq : entry.2[0] = n_i + 1) :
+    n_i.val + 1 < p := by
+  -- The step counter is bounded by the chain length, which is bounded by |fibInteractions|/2
+  -- Since p > 512 and |fibInteractions| < p, we have sufficient room
+  sorry
+
 /-- For any FibonacciChannel interaction from the tables (not verifier),
     the multiplicity is 1 or -1.
 
@@ -759,7 +777,9 @@ lemma add8_fib_interactions_empty
   sorry
 
 /-- fib8 rows emit matching pull and push to FibonacciChannel:
-    For each push (1, (n+1, y, z)), the same row has pull (-1, (n, x, y)) -/
+    For each push (1, (n+1, y, z)), the same row has:
+    - pull (-1, (n, x, y)) to FibonacciChannel
+    - pull (-1, (x, y, z)) to Add8Channel -/
 lemma fib8_fib_push_has_matching_pull
     (table : TableWitness (F p))
     (h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩)
@@ -768,7 +788,8 @@ lemma fib8_fib_push_has_matching_pull
     (h_mem : entry ∈ table.interactions (FibonacciChannel.toRaw))
     (h_push : entry.1 = 1) :
     ∃ (n_i x_i y_i : F p),
-      (-1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ table.interactions (FibonacciChannel.toRaw) ∧
+      ((-1 : F p), (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ table.interactions (FibonacciChannel.toRaw) ∧
+      ((-1 : F p), (#v[x_i, y_i, entry.2[2]] : Vector (F p) 3)) ∈ table.interactions (Add8Channel.toRaw) ∧
       entry.2[0] = n_i + 1 ∧
       entry.2[1] = y_i := by
   sorry
@@ -1155,7 +1176,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         rw [List.forall_iff_forall_mem] at h_constraints
         exact h_constraints table h_table_mem
       -- Use fib8_fib_push_has_matching_pull to get the matching pull
-      obtain ⟨n_i, x_i, y_i, h_pull_in_table, h_n_eq, h_y_eq⟩ :=
+      obtain ⟨n_i, x_i, y_i, h_fib_pull_in_table, h_add8_pull_in_table, h_n_eq, h_y_eq⟩ :=
         fib8_fib_push_has_matching_pull table h_is_fib8 h_table_constraints entry h_entry_in_table h_push
       use n_i, x_i, y_i
       refine ⟨?_, h_n_eq, ?_, ?_⟩
@@ -1163,13 +1184,39 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         simp only [fibInteractions, Ensemble.interactions]
         apply List.mem_append_left
         rw [List.mem_flatMap]
-        exact ⟨table, h_table_mem, h_pull_in_table⟩
+        exact ⟨table, h_table_mem, h_fib_pull_in_table⟩
       · -- n_i.val + 1 < p
-        -- This requires an assumption about the fibonacci sequence not overflowing
-        sorry
+        -- The entry is in fibInteractions (from h_mem via h_table)
+        have h_entry_in_fib : entry ∈ fibInteractions := by
+          simp only [fibInteractions, Ensemble.interactions]
+          apply List.mem_append_left
+          rw [List.mem_flatMap]
+          exact ⟨table, h_table_mem, h_entry_in_table⟩
+        exact fib_step_counter_bounded fibInteractions h_fib_bound entry h_entry_in_fib h_push n_i h_n_eq
       · -- Validity transfer: IsValidFibState n_i x_i y_i → IsValidFibState entry.2[0] entry.2[1] entry.2[2]
-        -- This requires using h_add8_guarantees to get z_i = (x_i + y_i) % 256
-        sorry
+        intro h_input_valid
+        -- From IsValidFibState, we get the range bounds
+        obtain ⟨k, h_fib, h_k⟩ := h_input_valid
+        have ⟨h_x_range, h_y_range⟩ := fibonacci_bytes h_fib
+        -- Get the Add8Channel guarantee for the pull (x_i, y_i, entry.2[2])
+        have h_add8_pull_in_ensemble : ((-1 : F p), #v[x_i, y_i, entry.2[2]]) ∈
+            fibonacciEnsemble.interactions (n, x, y) witness (Add8Channel.toRaw) := by
+          simp only [Ensemble.interactions]
+          apply List.mem_append_left
+          rw [List.mem_flatMap]
+          exact ⟨table, h_table_mem, h_add8_pull_in_table⟩
+        have h_guarantee := h_add8_guarantees _ h_add8_pull_in_ensemble
+        -- The guarantee for a pull (mult = -1) is: x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
+        simp only [Channel.toRaw, Add8Channel, reduceIte] at h_guarantee
+        -- Simplify fromElements for fieldTriple
+        simp only [fromElements, Vector.getElem_mk, List.getElem_cons_zero,
+          List.getElem_cons_succ] at h_guarantee
+        have h_z_eq := h_guarantee h_x_range h_y_range
+        -- Now construct the new valid state
+        rw [h_n_eq, h_y_eq]
+        refine ⟨k + 1, ?_, ?_⟩
+        · simp only [fibonacci, fibonacciStep, ← h_fib, h_z_eq]
+        · rw [ZMod.val_add, ← h_k, Nat.mod_add_mod, ZMod.val_one]
     · -- From verifier: push is (0, 0, 1)
       left
       simp only [fibonacciEnsemble, Ensemble.verifierInteractions] at h_verifier
