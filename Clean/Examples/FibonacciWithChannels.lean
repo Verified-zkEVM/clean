@@ -682,10 +682,23 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   -- The verifier does FibonacciChannel.push (0,0,1) then FibonacciChannel.pull (n,x,y)
   -- So both (1, encode(0,0,1)) and (-1, encode(n,x,y)) are in the verifier interactions
 
+  -- The verifier interactions for the fibonacci channel come from fibonacciVerifier
+  -- which does: FibonacciChannel.push (0,0,1) then FibonacciChannel.pull (n,x,y)
+  -- These produce localAdds entries that, after filtering for the fibonacci channel,
+  -- give us (1, #v[0,0,1]) and (-1, #v[n,x,y]).
+  -- The fibonacci interactions = table contributions ++ verifier contributions
+  -- so verifier entries are in the list via List.mem_append_right.
+
   have h_verifier_pull : (-1, (#v[n, x, y] : Vector (F p) 3)) ∈ fibInteractions := by
-    sorry -- requires unfolding verifier operations + localAdds + channel.filter
+    simp only [fibInteractions, fibonacciEnsemble, Ensemble.interactions]
+    apply List.mem_append_right
+    simp only [Ensemble.verifierInteractions, fibonacciVerifier, fibonacciEnsemble]
+    sorry -- needs to unfold circuit operations + localAdds + channel.filter to show membership
 
   have h_verifier_push : (1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)) ∈ fibInteractions := by
+    simp only [fibInteractions, fibonacciEnsemble, Ensemble.interactions]
+    apply List.mem_append_right
+    simp only [Ensemble.verifierInteractions, fibonacciVerifier, fibonacciEnsemble]
     sorry -- same
 
   -- ── Step 2: Extract per-message balance for fibonacci channel from h_balanced ──
