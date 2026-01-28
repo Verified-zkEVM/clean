@@ -897,28 +897,21 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     omega
 
   -- Step 4b: Add8Channel guarantees
-  -- Every add8 pull has guarantee: x < 256 → y < 256 → z = (x+y) % 256
+  -- Every add8 pull has guarantee (using generic channel types for reusability)
   -- This follows from: add8 soundness (using bytes guarantees) + balance
-  have h_add8_guarantees : ∀ (x' y' z' : F p),
-      (-1, #v[x', y', z']) ∈ fibonacciEnsemble.interactions (n, x, y) witness (Add8Channel.toRaw) →
-      (x'.val < 256 → y'.val < 256 → z'.val = (x'.val + y'.val) % 256) := by
-    intro x' y' z' h_pull
+  have h_add8_guarantees : ∀ entry ∈ fibonacciEnsemble.interactions (n, x, y) witness (Add8Channel.toRaw),
+      (Add8Channel (p := p)).toRaw.Guarantees entry.1 entry.2 [] (fun _ _ => #[]) := by
+    intro entry h_entry_mem
 
     -- Extract balance for Add8Channel (second channel)
     have h_add8_bal := h_bal.2.1
     set add8Interactions := fibonacciEnsemble.interactions (n, x, y) witness (Add8Channel.toRaw)
 
-    -- Add8Channel has arity 3
-    have h_arity : (Add8Channel (p := p)).toRaw.arity = 3 := rfl
-
-    -- Key fact: any Add8Channel entry with mult ≠ -1 satisfies the requirement.
+    -- Key fact: any Add8Channel entry with mult ≠ -1 satisfies the Requirements.
     -- This follows from add8.soundness applied to each add8 row.
+    -- Note: For Add8Channel, Requirements for pushes = Guarantees for pulls (same property)
     have h_push_req : ∀ entry ∈ add8Interactions, entry.1 ≠ -1 →
-        (entry.2[0]'(by rw [h_arity]; omega)).val < 256 →
-        (entry.2[1]'(by rw [h_arity]; omega)).val < 256 →
-        (entry.2[2]'(by rw [h_arity]; omega)).val =
-          ((entry.2[0]'(by rw [h_arity]; omega)).val +
-           (entry.2[1]'(by rw [h_arity]; omega)).val) % 256 := by
+        (Add8Channel (p := p)).toRaw.Requirements entry.1 entry.2 [] (fun _ _ => #[]) := by
       intro entry h_entry_mem h_entry_not_neg
       -- entry is in add8Interactions = tables.flatMap table.interactions + verifier.interactions
       -- verifier doesn't emit to Add8Channel, so entry is from tables
@@ -927,83 +920,76 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       -- fib8 (table 2) only pulls from Add8Channel (mult = -1)
       -- So if mult ≠ -1, entry must be from add8 (table 1)
 
-      -- Structural lemmas needed:
-      -- 1. add8_add8_interactions_req: entries from add8 table satisfy the requirement
-      --    (uses add8.soundness + h_bytes_guarantees)
-      -- 2. fib8_add8_interactions_mult_neg: entries from fib8 table have mult = -1
-      -- 3. pushBytes_add8_interactions_empty: pushBytes doesn't emit to Add8Channel
-      -- 4. verifier_add8_interactions_empty: verifier doesn't emit to Add8Channel
-
-      -- For now, we directly derive the requirement using the generic soundness pattern:
+      -- The generic proof pattern:
       -- 1. The entry came from some add8 row
       -- 2. For that row, constraints hold (from h_constraints for add8 table)
       -- 3. BytesChannel guarantee holds for the row's pull (from h_bytes_guarantees)
       -- 4. By add8.soundness, Requirements hold
-      -- 5. Requirements include the Add8Channel requirement for the emit
+      -- 5. Requirements include the Add8Channel.Requirements for the emit
 
       sorry -- Proof requires:
       -- a. Tracing entry back to a specific add8 row
       -- b. Establishing ConstraintsHoldWithInteractions.Soundness for that row
       -- c. Applying add8.soundness
-      -- d. Extracting the Add8Channel requirement
+      -- d. Extracting the Add8Channel.Requirements
 
-    -- Now use balance to show the property holds
-    -- The argument: if x' ≥ 256 or y' ≥ 256, the property is vacuously true
-    -- Otherwise, we need z' = (x' + y') % 256
-    intro hx' hy'
+    -- Case split on whether entry is a pull (mult = -1) or not
+    by_cases h_is_pull : entry.1 = -1
+    case pos =>
+      -- entry is a pull: need to show Guarantees hold
+      -- By balance, there's a push with the same message
+      -- The push satisfies Requirements, which equals Guarantees for this channel
 
-    -- By balance, sum of mults for message #v[x', y', z'] is 0
-    have h_sum_zero := h_add8_bal.2 #v[x', y', z']
+      -- Unfold the Guarantees definition for pulls
+      simp only [Channel.toRaw, Add8Channel, reduceIte, h_is_pull]
 
-    -- We have a pull (-1, #v[x', y', z']), so filtered list is nonempty
-    have h_nonempty : (add8Interactions.filter (·.2 = #v[x', y', z'])).length > 0 :=
-      List.length_pos_of_mem (List.mem_filter.mpr ⟨h_pull, by simp⟩)
+      -- Need: x < 256 → y < 256 → z = (x+y) % 256 where entry.2 = #v[x, y, z]
+      intro hx hy
 
-    -- If all entries have mult = -1, sum would be negative, contradicting balance
-    -- So there must be an entry with mult ≠ -1
-    by_contra h_z_ne
-    push_neg at h_z_ne
+      -- By balance, sum of mults for this message is 0
+      have h_sum_zero := h_add8_bal.2 entry.2
 
-    -- Suppose all entries for this message have mult = -1
-    -- Then sum = -(length) which is < 0 (in ℤ), so ≠ 0 in F_p when length < p
-    -- Unless there exists an entry with mult ≠ -1 that satisfies the requirement
-    -- In that case, z' = (x' + y') % 256, contradicting h_z_ne
+      -- We have a pull, so filtered list is nonempty
+      have h_nonempty : (add8Interactions.filter (·.2 = entry.2)).length > 0 :=
+        List.length_pos_of_mem (List.mem_filter.mpr ⟨h_entry_mem, by simp⟩)
 
-    -- There must exist an entry with mult ≠ -1 (otherwise sum ≠ 0)
-    have h_exists_push : ∃ entry ∈ add8Interactions, entry.2 = #v[x', y', z'] ∧ entry.1 ≠ -1 := by
-      by_contra h_all_neg
-      push_neg at h_all_neg
-      -- h_all_neg : ∀ entry ∈ add8Interactions, entry.2 = #v[x', y', z'] → entry.1 = -1
-      -- Sum of -1s = -(length) ≠ 0
-      have h_all_neg_mults : ∀ m ∈ (add8Interactions.filter (·.2 = #v[x', y', z'])).map Prod.fst, m = -1 := by
-        intro m hm
-        rw [List.mem_map] at hm
-        obtain ⟨⟨m', v⟩, hfilt, rfl⟩ := hm
-        simp only [List.mem_filter, decide_eq_true_eq] at hfilt
-        exact h_all_neg _ hfilt.1 hfilt.2
-      have h_sum_neg := sum_neg_ones _ h_all_neg_mults
-      -- h_sum_zero uses the expanded definition, convert to use add8Interactions
-      have h_sum_zero' : ((add8Interactions.filter (·.2 = #v[x', y', z'])).map Prod.fst).sum = 0 := h_sum_zero
-      rw [h_sum_neg, neg_eq_zero] at h_sum_zero'
-      have h_len_bound : (add8Interactions.filter (·.2 = #v[x', y', z'])).length < p := by
-        calc _ ≤ add8Interactions.length := List.length_filter_le _ _
-          _ < ringChar (F p) := h_add8_bal.1
-          _ = p := ZMod.ringChar_zmod_n p
-      have h_len_zero : (add8Interactions.filter (·.2 = #v[x', y', z'])).length = 0 := by
-        have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero'
-        simp only [List.length_map] at hdvd
-        exact Nat.eq_zero_of_dvd_of_lt hdvd h_len_bound
-      omega
+      -- There must exist an entry with mult ≠ -1 (otherwise sum of -1s ≠ 0)
+      have h_exists_push : ∃ entry' ∈ add8Interactions, entry'.2 = entry.2 ∧ entry'.1 ≠ -1 := by
+        by_contra h_all_neg
+        push_neg at h_all_neg
+        have h_all_neg_mults : ∀ m ∈ (add8Interactions.filter (·.2 = entry.2)).map Prod.fst, m = -1 := by
+          intro m hm
+          rw [List.mem_map] at hm
+          obtain ⟨⟨m', v⟩, hfilt, rfl⟩ := hm
+          simp only [List.mem_filter, decide_eq_true_eq] at hfilt
+          exact h_all_neg _ hfilt.1 hfilt.2
+        have h_sum_neg := sum_neg_ones _ h_all_neg_mults
+        have h_sum_zero' : ((add8Interactions.filter (·.2 = entry.2)).map Prod.fst).sum = 0 := h_sum_zero
+        rw [h_sum_neg, neg_eq_zero] at h_sum_zero'
+        have h_len_bound : (add8Interactions.filter (·.2 = entry.2)).length < p := by
+          calc _ ≤ add8Interactions.length := List.length_filter_le _ _
+            _ < ringChar (F p) := h_add8_bal.1
+            _ = p := ZMod.ringChar_zmod_n p
+        have h_len_zero : (add8Interactions.filter (·.2 = entry.2)).length = 0 := by
+          have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero'
+          simp only [List.length_map] at hdvd
+          exact Nat.eq_zero_of_dvd_of_lt hdvd h_len_bound
+        omega
 
-    -- Get the push entry
-    obtain ⟨entry, h_entry_mem, h_entry_eq, h_entry_not_neg⟩ := h_exists_push
+      -- Get the push entry and apply h_push_req
+      obtain ⟨entry', h_entry'_mem, h_entry'_eq, h_entry'_not_neg⟩ := h_exists_push
+      have h_req := h_push_req entry' h_entry'_mem h_entry'_not_neg
 
-    -- Apply h_push_req to get the requirement
-    have h_req := h_push_req entry h_entry_mem h_entry_not_neg
+      -- Unfold Requirements for the push (same property as Guarantees for pull)
+      simp only [Channel.toRaw, Add8Channel, reduceIte, h_entry'_not_neg, not_false_eq_true] at h_req
 
-    -- entry.2 = #v[x', y', z'], so entry.2[i] = the corresponding component
-    simp only [h_entry_eq, Vector.getElem_mk] at h_req
-    exact h_z_ne (h_req hx' hy')
+      -- entry'.2 = entry.2, so the property transfers
+      rw [h_entry'_eq] at h_req
+      exact h_req hx hy
+
+    case neg =>
+      -- entry is not a pull (mult ≠ -1): Guarantees is True
+      simp only [Channel.toRaw, Add8Channel, reduceIte, h_is_pull]
 
   -- ══════════════════════════════════════════════════════════════════════════
   -- STEP 5: h_fib8_soundness - validity transfers through fib8 rows
