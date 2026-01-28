@@ -919,17 +919,33 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         (entry.2[2]'(by rw [h_arity]; omega)).val =
           ((entry.2[0]'(by rw [h_arity]; omega)).val +
            (entry.2[1]'(by rw [h_arity]; omega)).val) % 256 := by
-      sorry -- TODO: Apply add8.soundness to each add8 row
-      -- Structure:
-      -- 1. entry comes from some table's interactions
-      -- 2. For Add8Channel, entries come from add8 (emits) or fib8 (pulls only, mult=-1)
-      -- 3. If mult ≠ -1, entry must be from add8
-      -- 4. For each add8 row:
-      --    a. Raw constraints hold (from h_constraints)
-      --    b. BytesChannel guarantee holds (from h_bytes_guarantees)
-      --    c. By lift_constraints_with_guarantees, get ConstraintsHoldWithInteractions.Soundness
-      --    d. By add8.soundness, get Requirements
-      --    e. Requirements include: the emit satisfies x<256 → y<256 → z=(x+y)%256
+      intro entry h_entry_mem h_entry_not_neg
+      -- entry is in add8Interactions = tables.flatMap table.interactions + verifier.interactions
+      -- verifier doesn't emit to Add8Channel, so entry is from tables
+      -- pushBytes (table 0) doesn't emit to Add8Channel
+      -- add8 (table 1) emits to Add8Channel with arbitrary mult
+      -- fib8 (table 2) only pulls from Add8Channel (mult = -1)
+      -- So if mult ≠ -1, entry must be from add8 (table 1)
+
+      -- Structural lemmas needed:
+      -- 1. add8_add8_interactions_req: entries from add8 table satisfy the requirement
+      --    (uses add8.soundness + h_bytes_guarantees)
+      -- 2. fib8_add8_interactions_mult_neg: entries from fib8 table have mult = -1
+      -- 3. pushBytes_add8_interactions_empty: pushBytes doesn't emit to Add8Channel
+      -- 4. verifier_add8_interactions_empty: verifier doesn't emit to Add8Channel
+
+      -- For now, we directly derive the requirement using the generic soundness pattern:
+      -- 1. The entry came from some add8 row
+      -- 2. For that row, constraints hold (from h_constraints for add8 table)
+      -- 3. BytesChannel guarantee holds for the row's pull (from h_bytes_guarantees)
+      -- 4. By add8.soundness, Requirements hold
+      -- 5. Requirements include the Add8Channel requirement for the emit
+
+      sorry -- Proof requires:
+      -- a. Tracing entry back to a specific add8 row
+      -- b. Establishing ConstraintsHoldWithInteractions.Soundness for that row
+      -- c. Applying add8.soundness
+      -- d. Extracting the Add8Channel requirement
 
     -- Now use balance to show the property holds
     -- The argument: if x' ≥ 256 or y' ≥ 256, the property is vacuously true

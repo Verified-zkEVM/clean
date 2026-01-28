@@ -209,12 +209,27 @@ The ensemble-level helpers then follow by combining these per-circuit facts.
 - `add8_fib_localAdds_empty`: add8 emits `[]` to FibonacciChannel
 - `fib8_fib_localAdds`: fib8 emits `[(-1, pull), (1, push)]` to FibonacciChannel
 
-### Priority 2: `h_add8_guarantees` (line 888)
+### Priority 2: `h_add8_guarantees` - STRUCTURE COMPLETE
 
-Similar structure to `h_bytes_guarantees`:
-- For each add8 pull, show the guarantee holds (x < 256 → y < 256 → z = (x+y) % 256)
-- Use balance to find matching push
-- Pushes come from add8 rows, which satisfy the requirement by add8.soundness
+The proof structure is now complete with one remaining sorry at line 944 (`h_push_req`).
+
+**Proven parts:**
+- Balance argument: if there's a pull, there must be a push (entry with mult ≠ -1)
+- Application of h_push_req to conclude the guarantee
+
+**Remaining sorry (`h_push_req`):**
+Statement: Any Add8Channel entry with mult ≠ -1 satisfies the requirement.
+
+Proof approach using `add8.soundness`:
+1. Entry came from some add8 row (since fib8 only has mult=-1, pushBytes/verifier don't emit to Add8Channel)
+2. For that add8 row, constraints hold (from h_constraints)
+3. The row's BytesChannel pull is in the ensemble's BytesChannel interactions
+4. By h_bytes_guarantees, the BytesChannel guarantee holds (z.val < 256)
+5. By lift_constraints_with_guarantees, get ConstraintsHoldWithInteractions.Soundness
+6. By add8.soundness, Requirements hold
+7. Add8Channel.Requirements for emit (mult ≠ -1) says: x<256 → y<256 → z=(x+y)%256
+
+This follows the pattern: use per-circuit soundness + channel guarantees → circuit requirements.
 
 ### Priority 3: `h_fib8_soundness` fib8 case (line 916)
 
