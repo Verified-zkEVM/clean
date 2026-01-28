@@ -10,7 +10,8 @@ goal with `suffices`.
 
 Report back to the user when either:
 
-- You have finished the proof. In this case, start you message with "SUCCESS!"
+- You have finished the proof. In this case, start you message with "SUCCESS!".
+  - Hard requirement for calling success: `lake build  Clean.Examples.FibonacciWithChannels` succeeds.
 - You feel entirely stuck. You have tried to make progress from a lot of different angles, but you're at a point where no further progress seems to be possible. In this case, start your message with "I am entirely stuck, because".
 
 ## What we learned so far
