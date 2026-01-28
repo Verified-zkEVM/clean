@@ -12,57 +12,168 @@ Report back to the user when either:
 - You have finished the proof. In this case, start your message with "SUCCESS!"
 - You feel entirely stuck. You have tried to make progress from a lot of different angles, but you're at a point where no further progress seems to be possible. In this case, start your message with "I am entirely stuck, because".
 
-## Current Status (Updated 2026-01-28)
+## What we learned so far
 
-### Sorries remaining in main theorem
+- The soundness proof must **derive the ensemble spec from the given hypotheses**
+  (`Constraints`, `BalancedChannels`, `VerifierAccepts`), without modifying their intent.
+- It is **invalid** to finish by deriving `False` from the hypotheses (e.g. by
+  changing `ConstraintsHold` or collapsing `VerifierAccepts` into a contradiction).
+- The local soundness theorems for `FormalCircuitWithInteractions` are the key:
+  each circuit proves
+  ```
+  (constraints ∧ channel guarantees) ⇒ (spec ∧ channel requirements).
+  ```
+  If we can establish **channel guarantees globally**, we can upgrade these to
+  ```
+  constraints ⇒ spec.
+  ```
+- The **channel balance** hypothesis is intended to derive global guarantees
+  from requirements: a pulled element (multiplicity -1) should be matched by a
+  push (positive multiplicity), and the push side is where requirements are proved.
+- **Do NOT re-derive circuit-specific facts at the ensemble level.** All concrete
+  constraint reasoning (e.g., what the assert equations mean, how carry bits work)
+  is already done inside each circuit's soundness proof. The ensemble proof should
+  ONLY use the abstract `Spec` and `Requirements` outputs of per-circuit soundness.
+  For example, `fib8.soundness` already proves that IF the fibonacci channel
+  guarantees hold for the pull AND the add8 channel guarantees hold for the pull,
+  THEN the push satisfies fibonacci requirements. We should use this directly,
+  not re-derive it from raw constraints.
+
+## Key type-level structure
+
+### Per-circuit soundness (`FormalCircuitWithInteractions.Soundness`)
 
 ```
+∀ offset env interactions input_var input,
+  eval env input_var = input →
+  ConstraintsHoldWithInteractions.Soundness env interactions ops →
+  Spec input output env ∧
+  ConstraintsHoldWithInteractions.Requirements env interactions ops
+```
+
+Where:
+- `ConstraintsHoldWithInteractions.Soundness` = raw constraints (asserts, lookups) 
+  **PLUS channel guarantees** for each interaction
+- `ConstraintsHoldWithInteractions.Requirements` = channel **requirements** output
+  by each interaction
+
+So the per-circuit soundness says:
+**constraints + guarantees ⇒ spec + requirements**
+
+### Ensemble-level `ConstraintsHold` (in the ensemble file)
+
+```
+ops.forAll 0 { assert _ e := env e = 0, lookup _ l := l.Contains env, ... }
+```
+
+This checks raw constraints only — NO channel guarantees. Interactions default to `True`.
+
+### The lifting problem
+
+The core challenge: go from raw `ConstraintsHold` (ensemble level) to
+`ConstraintsHoldWithInteractions.Soundness` (needed for per-circuit soundness).
+This requires establishing that **channel guarantees hold globally**.
+
+## High-level plan
+
+### Step 0: Lifting lemma ✅ DONE
+
+Prove a general lemma:
+```
+ConstraintsHold env ops ∧ (all channel guarantees hold for these interactions) →
+ConstraintsHoldWithInteractions.Soundness env interactions ops
+```
+
+This lemma bridges the ensemble-level constraint representation to the per-circuit
+soundness input. **This is implemented as `lift_constraints_with_guarantees`.**
+
+### Step 1: Derive channel guarantees layer by layer
+
+The channel dependency graph for this ensemble is **acyclic except for fibonacci**:
+
+```
+pushBytes ──pushes──→ BytesChannel ──guarantees──→ add8 (pulls bytes)
+add8      ──pushes──→ Add8Channel  ──guarantees──→ fib8 (pulls add8)
+fib8      ──pushes──→ FibChannel   ──guarantees──→ fib8 (pulls fib — CYCLIC)
+verifier  ──pushes──→ FibChannel   ──guarantees──→ verifier (pulls fib)
+```
+
+**Acyclic channels (bytes, add8):**
+1. Apply `pushBytes.soundness` (needs no guarantees, since pushBytes has no pulls)
+   → get `pushBytes.Requirements` for all emitted bytes
+2. From per-message balance on BytesChannel + pushBytes requirements
+   → derive BytesChannel **guarantees** for all pulls
+3. Apply `add8.soundness` with BytesChannel guarantees
+   → get `add8.Spec` + `add8.Requirements` for add8 emissions
+4. From per-message balance on Add8Channel + add8 requirements
+   → derive Add8Channel **guarantees** for all pulls
+
+**Cyclic channel (fibonacci):**
+5. Apply `fib8.soundness` with FibChannel + Add8Channel guarantees
+   → get `fib8.Requirements` for fibonacci pushes (the next valid state)
+   → BUT this requires FibChannel guarantees for the pull, creating a cycle
+
+6. Break the cycle with **strong induction on the step counter** (as in
+   `all_fib_pushes_valid`). The verifier's push of `(0, 0, 1)` provides the
+   base case. Each fib8 row's push at step k+1 depends on a pull at step k,
+   which by per-message balance must have a matching push at step k.
+   By the IH, that push satisfies FibChannel requirements/guarantees.
+
+### Step 2: Conclude the spec
+
+Once all FibChannel guarantees are established:
+- The verifier pulls `(n, x, y)` with guaranteed `IsValidFibState n x y`
+- Apply `fibonacciVerifier.soundness` → get the ensemble spec
+
+## Current Status (Updated 2026-01-28)
+
+### Sorries remaining
+
+```bash
 grep -n "sorry" Clean/Examples/FibonacciWithChannels.lean
 ```
 
-| Line | Location | Type | Status |
-|------|----------|------|--------|
+| Line | Location | Type | Description |
+|------|----------|------|-------------|
 | 212-214 | `pushBytes` | Infrastructure | Peripheral - not blocking main proof |
-| 681 | `bytes_interaction_large_val_is_pull` | Structural helper | **NEW** - cleanly stated |
-| 696 | `fib_table_interaction_mult_pm_one` | Structural helper | **NEW** - cleanly stated |
+| 681 | `bytes_interaction_large_val_is_pull` | Structural helper | Cleanly stated, needs mechanical proof |
+| 696 | `fib_table_interaction_mult_pm_one` | Structural helper | Cleanly stated, needs mechanical proof |
 | 894 | `h_add8_guarantees` | Semantic | Needs layered derivation |
 | 922 | `h_fib8_soundness` (fib8 case) | Semantic | Needs structural extraction |
 
-### What's proven
+### What's proven in main theorem
 
-- ✅ `h_bytes_guarantees` - Complete! Uses `bytes_interaction_large_val_is_pull`
-- ✅ `h_fib_mults` - Complete! Uses `fib_table_interaction_mult_pm_one`
+- ✅ `h_bytes_guarantees` - Uses `bytes_interaction_large_val_is_pull` helper
+- ✅ `h_fib_mults` - Uses `fib_table_interaction_mult_pm_one` helper  
 - ✅ `h_fib8_soundness` (verifier case) - Push is (0, 0, 1)
-- ✅ Full proof chain: `all_fib_pushes_valid → h_matching → h_valid → spec`
+- ✅ Final chain: `all_fib_pushes_valid → h_matching → h_valid → spec`
 
-### Proof architecture (in the code)
+### Proof architecture in the code
 
 ```
 bytes_interaction_large_val_is_pull  ───┐
-       (sorry - line 681)              │
-                                       ▼
-h_bytes_guarantees  ◄──────────────── uses helper
-       (DONE!)                         
-                                       
-h_add8_guarantees   ◄──────────────── similar pattern to h_bytes_guarantees
-       (sorry - line 894)              
-                                       ▼
-h_fib8_soundness (fib8 case) ◄──────── uses add8 guarantees
-       (sorry - line 922)              
-                                       ▼
-fib_table_interaction_mult_pm_one  ───┐
-       (sorry - line 696)              │
-                                       ▼
-h_fib_mults  ◄─────────────────────── uses helper
-       (DONE!)                         
-                                       ▼
-all_fib_pushes_valid  ◄──────────────  
-       (DONE!)                         
-                                       ▼
-h_valid = spec  ◄──────────────────── DONE!
+       (sorry - line 681)               │
+                                        ▼
+h_bytes_guarantees  ◄───────────────── DONE (uses helper)
+                                        
+h_add8_guarantees   ◄───────────────── sorry (line 894)
+       (similar pattern)                │
+                                        ▼
+h_fib8_soundness (fib8 case) ◄──────── sorry (line 922)
+                                        │
+fib_table_interaction_mult_pm_one  ────┤
+       (sorry - line 696)               │
+                                        ▼
+h_fib_mults  ◄──────────────────────── DONE (uses helper)
+                                        │
+                                        ▼
+all_fib_pushes_valid  ◄──────────────── DONE (proven earlier)
+                                        │
+                                        ▼
+h_valid = spec  ◄───────────────────── DONE!
 ```
 
-## Next steps for the next agent
+## Next steps for continuation
 
 ### Priority 1: Structural helper lemmas (lines 681, 696)
 
@@ -104,13 +215,22 @@ For each fib8 push entry:
    - Use fibonacci_bytes to get `x_i, y_i < 256` from input validity
    - Conclude output is next fibonacci state
 
-## Key lemmas available
+## Key infrastructure already proven
 
 - `sum_neg_ones`: sum of -1s = -(length)
 - `exists_push_of_pull`: balance + mults ±1 → pull has matching push
 - `all_fib_pushes_valid`: strong induction proving all fib pushes are valid
 - `lift_constraints_with_guarantees`: bridges raw constraints to per-circuit soundness
 - `Channel.filter_self_add`, `Channel.filter_self_single`: for filtering channel interactions
+- `verifier_push_valid`: (0, 0, 1) is valid fibonacci state 0
+- `fib8_step_valid`: valid input + constraints → valid output
+
+## Likely challenges / notes
+
+- **Balance strength**: `BalancedChannels` uses per-message balance (sum of multiplicities per message = 0)
+- **Characteristic bound**: `interactions.length < p` is included in `BalancedChannels`
+- **Finite field arithmetic**: Use `ZMod.natCast_eq_zero_iff` for `(n : F p) = 0 ↔ p ∣ n`
+- **h_bytes_guarantees proof pattern**: Uses contradiction - if z.val ≥ 256, all interactions for #v[z] are pulls (sum of -1s), but balance says sum = 0, so list is empty, contradicting that we have a pull
 
 ## Tools
 
@@ -128,9 +248,3 @@ lake build Clean.Examples.FibonacciWithChannels 2>&1 | grep "error:"
 ```bash
 grep -n "sorry" Clean/Examples/FibonacciWithChannels.lean
 ```
-
-## Historical notes
-
-- The proof uses a contradiction argument for `h_bytes_guarantees`: if z.val ≥ 256, then all interactions for #v[z] are pulls (sum of -1s), but balance says sum = 0, so the list is empty, contradicting that we have a pull.
-- The channel filtering infrastructure (`Channel.filter_self`, `Channel.filter_other`) has some sorries in `Clean/Circuit/Channel.lean` but the key lemmas `filter_self_add` and `filter_self_single` are proven.
-- `ZMod.natCast_eq_zero_iff` is useful for finite field arithmetic: `(n : F p) = 0 ↔ p ∣ n`.
