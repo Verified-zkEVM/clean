@@ -593,7 +593,6 @@ soundness proofs and is not repeated here.
 lemma all_fib_pushes_valid
     (fibInteractions : List (F p × Vector (F p) 3))
     -- the verifier pushes (0, 0, 1)
-    (h_verifier_push : (1, (#v[0, 0, 1] : Vector (F p) 3)) ∈ fibInteractions)
     -- list is shorter than the field characteristic
     (h_bound : fibInteractions.length < p)
     -- per-message balance
@@ -777,12 +776,12 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   simp only [fibonacciEnsemble, List.Forall] at h_bal
   -- h_bal now contains length bounds and balances for all 3 channels
   -- FibonacciChannel is the 3rd channel: h_bal.2.2 contains its length bound and balance
-  
+
   have h_fib_bound : fibInteractions.length < p := by
     have : ringChar (F p) = p := ZMod.ringChar_zmod_n p
     convert h_bal.2.2.1
     exact this.symm
-  
+
   have h_fib_balanced : ∀ msg : Vector (F p) 3,
       ((fibInteractions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0 := by
     intro msg
