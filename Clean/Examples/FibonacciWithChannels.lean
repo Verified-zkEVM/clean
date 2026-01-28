@@ -654,6 +654,48 @@ lemma all_fib_pushes_valid
       exact h_valid_implies h_input_valid
 
 /-!
+## Structural lemmas about channel interactions
+
+These lemmas characterize which circuits emit to which channels with what multiplicities.
+They are purely mechanical - just unfolding definitions and filtering.
+
+We state them at the level of table witness interactions, which is what the
+ensemble soundness proof actually needs.
+-/
+
+/-- For any BytesChannel interaction in the ensemble where z.val ≥ 256,
+    the multiplicity is -1 (i.e., it's a pull, not a push).
+
+    This follows from:
+    - pushBytes only pushes values 0..255
+    - add8 only pulls from BytesChannel (mult = -1)
+    - fib8 and verifier don't interact with BytesChannel -/
+lemma bytes_interaction_large_val_is_pull
+    (witness : EnsembleWitness (fibonacciEnsemble (p := p)))
+    (publicInput : fieldTriple (F p))
+    (entry : F p × Vector (F p) 1)
+    (h_mem : entry ∈ (fibonacciEnsemble (p := p)).interactions publicInput witness
+                      ((BytesChannel (p := p)).toRaw))
+    (h_large : entry.2[0].val ≥ 256) :
+    entry.1 = -1 := by
+  sorry
+
+/-- For any FibonacciChannel interaction from the tables (not verifier),
+    the multiplicity is 1 or -1.
+
+    This follows from:
+    - pushBytes doesn't emit to FibonacciChannel
+    - add8 doesn't emit to FibonacciChannel
+    - fib8 only pulls (mult=-1) and pushes (mult=1) to FibonacciChannel -/
+lemma fib_table_interaction_mult_pm_one
+    (witness : EnsembleWitness (fibonacciEnsemble (p := p)))
+    (entry : F p × Vector (F p) 3)
+    (h_mem : entry ∈ witness.tables.flatMap
+              (fun table => table.interactions ((FibonacciChannel (p := p)).toRaw))) :
+    entry.1 = 1 ∨ entry.1 = -1 := by
+  sorry
+
+/-!
 ## Main ensemble soundness theorem
 -/
 
@@ -756,24 +798,8 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     -- entry is either from tables or verifier
     simp only [fibInteractions, Ensemble.interactions] at h_mem
     rcases List.mem_append.mp h_mem with h_table | h_verifier
-    · -- From tables: show entry comes from fib8 and fib8 only uses mult ±1
-      -- Detailed roadmap:
-      -- 1. Use List.mem_flatMap to extract: ∃ table ∈ witness.tables, entry ∈ table.interactions FibonacciChannel
-      -- 2. Use witness.same_circuits to relate table.abstract to ensemble.tables[i]
-      -- 3. Show ensemble.tables = [pushBytes, add8, fib8] (by definition)
-      -- 4. Case on i:
-      --    i=0 (pushBytes): 
-      --      - pushBytes.localAdds only emits BytesChannel
-      --      - Show filtering for FibonacciChannel.toRaw gives []
-      --      - Lemma: Channel.filter_other_channel for different channel names
-      --    i=1 (add8):
-      --      - add8.localAdds: BytesChannel.pulled + Add8Channel.emitted
-      --      - Show filtering for FibonacciChannel gives []
-      --    i=2 (fib8):
-      --      - fib8.localAdds: FibonacciChannel.pulled + Add8Channel.pulled + FibonacciChannel.pushed
-      --      - Use Channel.filter_self_add to show filtered result has entries with mult ±1
-      --      - pulled has mult=-1, pushed has mult=1
-      sorry
+    · -- From tables: use the structural lemma
+      exact fib_table_interaction_mult_pm_one witness entry h_table
     · -- From verifier: the verifier interactions are exactly the two we proved above
       simp only [fibonacciEnsemble, Ensemble.interactions, Ensemble.verifierInteractions] at h_verifier
       rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
@@ -820,13 +846,11 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
 
     -- Key structural fact: BytesChannel interactions with message #v[z] where z.val ≥ 256
     -- can only be pulls (mult = -1), since pushBytes only pushes values 0..255.
-    -- This is because:
-    -- 1. BytesChannel interactions = pushBytes ++ add8 ++ fib8 ++ verifier contributions
-    -- 2. fib8 and verifier don't interact with BytesChannel (filter gives [])
-    -- 3. pushBytes pushes (mult_i, #v[i]) for i ∈ 0..255; if z.val ≥ 256, #v[z] ≠ #v[i]
-    -- 4. add8 only pulls from BytesChannel (mult = -1)
     have h_only_pulls : ∀ entry ∈ bytesInteractions, entry.2 = #v[z] → entry.1 = -1 := by
-      sorry -- Requires structural analysis of localAdds for each circuit
+      intro entry h_entry h_eq
+      apply bytes_interaction_large_val_is_pull witness (n, x, y) entry h_entry
+      simp only [Vector.getElem_mk, List.getElem_cons_zero, h_eq]
+      exact h_ge
 
     -- Since h_pull gives us (-1, #v[z]) ∈ bytesInteractions, the filtered list is nonempty
     have h_nonempty : (bytesInteractions.filter (·.2 = #v[z])).length > 0 :=
