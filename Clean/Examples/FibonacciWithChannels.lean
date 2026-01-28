@@ -465,8 +465,12 @@ lemma lift_constraints_with_guarantees (env : Environment (F p)) (is : RawIntera
       exact ⟨ h_guar'.1, ih _ _ h_raw'.2 h_guar'.2 ⟩
     | subcircuit s =>
       simp only [Operations.forAll, Operations.forAllWithInteractions] at *
-      -- Need ConstraintsHoldFlat → s.Soundness — this is can_replace_soundness
-      sorry
+      -- Need ConstraintsHoldFlat → s.Soundness AND continue with rest of ops
+      constructor
+      · -- s.Soundness follows from imply_soundness
+        exact s.imply_soundness _ h_raw'.1
+      · -- Continue with the rest of the operations
+        exact ih _ _ h_raw'.2 h_guar'.2
 
 /-!
 ## Helper lemmas for per-message channel balance
@@ -689,17 +693,38 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   -- The fibonacci interactions = table contributions ++ verifier contributions
   -- so verifier entries are in the list via List.mem_append_right.
 
+  -- Lemma: const decomposes for triples
+  have const_triple :
+      (const (n, x, y) : Var fieldTriple (F p)) =
+      (Expression.const n, Expression.const x, Expression.const y) := by
+    simp [circuit_norm, const, explicit_provable_type]
+
+  -- First prove a direct characterization of the verifier's localAdds
+  have verifier_localAdds :
+      let circuit := fibonacciVerifier.main (const (n, x, y))
+      let env := emptyEnvironment (F p)
+      (circuit.operations 0).localAdds env =
+        FibonacciChannel.pushed (0, 0, 1) + FibonacciChannel.pulled (n, x, y) := by
+    unfold fibonacciVerifier
+    simp only [circuit_norm, emptyEnvironment]
+    rw [const_triple]
+    simp only [Expression.eval]
+
   have h_verifier_pull : (-1, (#v[n, x, y] : Vector (F p) 3)) ∈ fibInteractions := by
-    simp only [fibInteractions, fibonacciEnsemble, Ensemble.interactions]
+    simp only [fibInteractions, Ensemble.interactions, fibonacciEnsemble]
     apply List.mem_append_right
-    simp only [Ensemble.verifierInteractions, fibonacciVerifier, fibonacciEnsemble]
-    sorry -- needs to unfold circuit operations + localAdds + channel.filter to show membership
+    simp only [Ensemble.verifierInteractions]
+    rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
+      Channel.filter_self_add, Channel.filter_self_single]
+    simp [toElements]
 
   have h_verifier_push : (1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)) ∈ fibInteractions := by
-    simp only [fibInteractions, fibonacciEnsemble, Ensemble.interactions]
+    simp only [fibInteractions, Ensemble.interactions, fibonacciEnsemble]
     apply List.mem_append_right
-    simp only [Ensemble.verifierInteractions, fibonacciVerifier, fibonacciEnsemble]
-    sorry -- same
+    simp only [Ensemble.verifierInteractions]
+    rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
+      Channel.filter_self_add, Channel.filter_self_single]
+    simp [toElements]
 
   -- ── Step 2: Extract per-message balance for fibonacci channel from h_balanced ──
   have h_fib_balanced : ∀ msg : Vector (F p) 3,
@@ -723,12 +748,38 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     exact h_bal.2.2 msg
 
   -- ── Step 3: All multiplicities are ±1 ──
+  -- All fibonacci interactions come from:
+  -- - verifier: push (mult=1) and pull (mult=-1)
+  -- - fib8 rows: each does pull (mult=-1) and push (mult=1)
+  -- So all are ±1 by construction
   have h_fib_mults : ∀ entry ∈ fibInteractions, entry.1 = 1 ∨ entry.1 = -1 := by
-    sorry -- requires showing all fib8 rows + verifier only use mult ±1
+    intro entry h_mem
+    -- entry is either from tables or verifier
+    simp only [fibInteractions, Ensemble.interactions] at h_mem
+    rcases List.mem_append.mp h_mem with h_table | h_verifier
+    · -- From tables: the fibonacci channel is only used by fib8 table (3rd table)
+      -- fib8's localAdds for (n,x,y) is: pulled (n,x,y) + pulled (x,y,z) + pushed (n+1,y,z)
+      -- For FibonacciChannel: pulled uses mult=-1, pushed uses mult=1
+      -- The table interactions are: flatMap over all rows of (operations.localAdds env |> channel.filter)
+      simp only [fibonacciEnsemble, Ensemble.interactions] at h_table
+      -- The fibonacci channel interactions from tables come from fib8 table (3rd table)
+      -- Each row produces entries via localAdds, filtered for fibonacci channel
+      -- fib8's localAdds contains: FibonacciChannel.pulled + FibonacciChannel.pushed
+      -- which have multiplicity -1 and 1 respectively
+      sorry
+    · -- From verifier: we know the only two entries are h_verifier_push and h_verifier_pull
+      -- which have mult=1 and mult=-1 respectively
+      -- Use that entry is one of these two
+      sorry
 
   -- ── Step 4: Bound on interactions length ──
+  -- The number of interactions equals:
+  -- - 2 from verifier (1 push + 1 pull)
+  -- - 2 * (number of fib8 rows) (each row does 1 pull + 1 push)
+  -- We need: 2 + 2 * n_rows < p
+  -- This is reasonable for any practical circuit (p > 512 >> typical row counts)
   have h_fib_bound : fibInteractions.length < p := by
-    sorry -- reasonable assumption: total interactions < field characteristic
+    sorry -- can be derived from ensemble structure + reasonable circuit size bound
 
   -- ── Step 5: Per-circuit soundness gives h_fib8_soundness ──
   -- For each non-verifier push, fib8.soundness tells us:

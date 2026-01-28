@@ -410,6 +410,18 @@ lemma InteractionDelta.single_eq_channel_emitted (channel : Channel F Message) (
     ProvableType.toElements_fromElements]
   rfl
 
+omit [Field F] in
+lemma Channel.filter_self_single (channel : Channel F Message)
+  (mult : F) (msg : Message F) :
+    channel.toRaw.filter (channel.emitted mult msg) = [(mult, toElements msg)] := by
+  simp [Channel.emitted, InteractionDelta.single, Channel.toRaw, RawChannel.filter]
+
+omit [Field F] in
+lemma Channel.filter_self_add (channel : Channel F Message)
+  (mult : F) (msg : Message F) (is : RawInteractions F) :
+    channel.toRaw.filter (channel.emitted mult msg + is) = (mult, toElements msg) :: channel.toRaw.filter is := by
+  simp [Channel.emitted, InteractionDelta.single, InteractionDelta.add_eq_append, Channel.toRaw, RawChannel.filter]
+
 -- abstract theory of channel consistency
 
 namespace Channel
