@@ -707,6 +707,39 @@ lemma fib_table_interaction_mult_pm_one
     entry.1 = 1 ∨ entry.1 = -1 := by
   sorry
 
+/-- Verifier's Add8Channel interactions are empty (verifier only uses FibonacciChannel) -/
+lemma verifier_add8_interactions_empty (publicInput : fieldTriple (F p)) :
+    (fibonacciEnsemble (p := p)).verifierInteractions (Add8Channel.toRaw) publicInput = [] := by
+  sorry
+
+/-- pushBytes's Add8Channel interactions are empty (pushBytes only uses BytesChannel) -/
+lemma pushBytes_add8_interactions_empty
+    (table : TableWitness (F p))
+    (h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩) :
+    table.interactions (Add8Channel.toRaw) = [] := by
+  sorry
+
+/-- fib8's Add8Channel interactions all have mult = -1 (fib8 only pulls from Add8Channel) -/
+lemma fib8_add8_interactions_mult_neg
+    (table : TableWitness (F p))
+    (h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩)
+    (entry : F p × Vector (F p) 3)
+    (h_mem : entry ∈ table.interactions (Add8Channel.toRaw)) :
+    entry.1 = -1 := by
+  sorry
+
+/-- add8's Add8Channel interactions satisfy Requirements when BytesChannel guarantees hold -/
+lemma add8_interactions_satisfy_requirements
+    (table : TableWitness (F p))
+    (h_is_add8 : table.abstract = ⟨add8 (p := p)⟩)
+    (h_constraints : table.Constraints)
+    (h_bytes_guarantees : ∀ (z : F p),
+        (-1, #v[z]) ∈ table.interactions (BytesChannel.toRaw) → z.val < 256)
+    (entry : F p × Vector (F p) 3)
+    (h_mem : entry ∈ table.interactions (Add8Channel.toRaw)) :
+    (Add8Channel (p := p)).toRaw.Requirements entry.1 entry.2 [] (fun _ _ => #[]) := by
+  sorry
+
 /-!
 ## Main ensemble soundness theorem
 -/
@@ -920,45 +953,72 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       -- fib8 (table 2) only pulls from Add8Channel (mult = -1)
       -- So if mult ≠ -1, entry must be from add8 (table 1)
 
-      -- The generic proof pattern:
-      -- 1. The entry came from some add8 row
-      -- 2. For that row, constraints hold (from h_constraints for add8 table)
-      -- 3. BytesChannel guarantee holds for the row's pull (from h_bytes_guarantees)
-      -- 4. By add8.soundness, Requirements hold
-      -- 5. Requirements include the Add8Channel.Requirements for the emit
+      -- Step 1: entry is from tables or verifier
+      simp only [add8Interactions, Ensemble.interactions, fibonacciEnsemble] at h_entry_mem
+      rcases List.mem_append.mp h_entry_mem with h_from_tables | h_from_verifier
 
-      -- The proof requires these structural facts:
-      -- 1. verifier_add8_empty: verifier's Add8Channel interactions are empty
-      -- 2. pushBytes_add8_empty: pushBytes's Add8Channel interactions are empty
-      -- 3. fib8_add8_mult_neg: fib8's Add8Channel interactions all have mult = -1
-      -- 4. add8_satisfies_req: add8's Add8Channel interactions satisfy Requirements
+      case inr =>
+        -- From verifier: but verifier's Add8Channel interactions are empty
+        have h_empty := verifier_add8_interactions_empty (p := p) (n, x, y)
+        simp only [fibonacciEnsemble] at h_empty
+        rw [h_empty] at h_from_verifier
+        cases h_from_verifier
 
-      -- Given these, the proof is:
-      -- - entry is from tables or verifier
-      -- - Not from verifier (empty by 1)
-      -- - From one of [pushBytes, add8, fib8]
-      -- - Not from pushBytes (empty by 2)
-      -- - Not from fib8 with mult ≠ -1 (by 3)
-      -- - So from add8, and satisfies Requirements by 4
+      case inl =>
+        -- From tables: entry ∈ tables.flatMap table.interactions
+        rw [List.mem_flatMap] at h_from_tables
+        obtain ⟨table, h_table_mem, h_entry_in_table⟩ := h_from_tables
 
-      -- For now, we directly unfold and prove the requirement
-      -- The requirement for Add8Channel with mult ≠ -1 is:
-      -- x < 256 → y < 256 → z = (x + y) % 256
-      simp only [Channel.toRaw, Add8Channel, reduceIte, h_entry_not_neg, not_false_eq_true]
+        -- witness.tables has 3 elements: [pushBytes_table, add8_table, fib8_table]
+        -- Use witness.same_circuits to identify which circuit each table corresponds to
+        have h_tables_len : witness.tables.length = 3 := by
+          rw [← witness.same_length]; rfl
 
-      -- Now need to prove the actual property
-      intro hx hy
+        -- Get the index of table in witness.tables
+        obtain ⟨⟨i, hi⟩, h_table_eq⟩ := List.mem_iff_get.mp h_table_mem
+        simp only [h_tables_len] at hi
 
-      -- This requires tracing entry back to an add8 row and using add8.soundness
-      -- The add8.soundness proof already establishes this property given:
-      -- - constraints hold (from h_constraints)
-      -- - BytesChannel guarantee for z (from h_bytes_guarantees)
+        -- fibonacciEnsemble.tables.length = 3
+        have h_ens_len : (fibonacciEnsemble (p := p)).tables.length = 3 := rfl
 
-      sorry -- Structural proof needed:
-      -- 1. Show entry came from add8 table (not verifier, pushBytes, or fib8)
-      -- 2. Extract the specific add8 row
-      -- 3. Apply add8.soundness with appropriate guarantees
-      -- 4. Extract the Add8Channel requirement
+        -- i ∈ {0, 1, 2} since length = 3
+        have hi' : i = 0 ∨ i = 1 ∨ i = 2 := by omega
+        rcases hi' with rfl | rfl | rfl
+
+        case inl =>  -- i = 0: pushBytes table
+          -- pushBytes's Add8Channel interactions are empty
+          have h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩ := by
+            sorry -- Use witness.same_circuits 0 and h_table_eq
+          have h_empty := pushBytes_add8_interactions_empty table h_is_pushBytes
+          rw [h_empty] at h_entry_in_table
+          cases h_entry_in_table
+
+        case inr.inl =>  -- i = 1: add8 table
+          -- add8's interactions satisfy Requirements
+          have h_is_add8 : table.abstract = ⟨add8 (p := p)⟩ := by
+            sorry -- Use witness.same_circuits 1 and h_table_eq
+          -- Get constraints for this table
+          have h_table_constraints : table.Constraints := by
+            sorry -- Extract from h_constraints using h_table_mem
+          -- BytesChannel guarantees for entries in this table's interactions
+          -- follow from h_bytes_guarantees since table interactions ⊆ ensemble interactions
+          have h_table_bytes_guarantees : ∀ (z : F p),
+              (-1, #v[z]) ∈ table.interactions (BytesChannel.toRaw) → z.val < 256 := by
+            intro z h_z_mem
+            apply h_bytes_guarantees
+            simp only [Ensemble.interactions, fibonacciEnsemble]
+            apply List.mem_append_left
+            rw [List.mem_flatMap]
+            exact ⟨table, h_table_mem, h_z_mem⟩
+          exact add8_interactions_satisfy_requirements table h_is_add8 h_table_constraints
+            h_table_bytes_guarantees entry h_entry_in_table
+
+        case inr.inr =>  -- i = 2: fib8 table
+          -- fib8's Add8Channel interactions all have mult = -1
+          have h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩ := by
+            sorry -- Use witness.same_circuits 2 and h_table_eq
+          have h_mult_neg := fib8_add8_interactions_mult_neg table h_is_fib8 entry h_entry_in_table
+          exact absurd h_mult_neg h_entry_not_neg
 
     -- Case split on whether entry is a pull (mult = -1) or not
     by_cases h_is_pull : entry.1 = -1
