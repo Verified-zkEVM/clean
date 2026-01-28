@@ -543,6 +543,129 @@ def fibonacciEnsemble : Ensemble (F p) where
 
   Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
 
+lemma bytes_guarantee_of_balance_tables
+    (witness : EnsembleWitness fibonacciEnsemble) (n x y : F p)
+    (h_bytes_arity_pos : 0 < (BytesChannel (p := p)).toRaw.arity)
+    (h_balanced_bytes :
+      ∀ msg,
+        (List.filter (fun x ↦ decide (x.2 = msg))
+            (List.flatMap (fun table ↦ table.interactions BytesChannel.toRaw) witness.tables ++
+              BytesChannel.toRaw.filter
+                (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y)))).length <
+          ringChar (F p) ∧
+        (List.map Prod.fst
+              (List.filter (fun x ↦ decide (x.2 = msg))
+                (List.flatMap (fun table ↦ table.interactions BytesChannel.toRaw) witness.tables ++
+                  BytesChannel.toRaw.filter
+                    (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))))).sum =
+          0) :
+    ∀ msg,
+      (-1, msg) ∈
+        (List.flatMap (fun table ↦ table.interactions BytesChannel.toRaw) witness.tables ++
+          BytesChannel.toRaw.filter
+            (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))) →
+      (msg[0]'(h_bytes_arity_pos)).val < 256 := by
+  set bytesInteractions :=
+    List.flatMap (fun table => table.interactions BytesChannel.toRaw) witness.tables ++
+      BytesChannel.toRaw.filter
+        (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y))
+  have h_balanced_bytes' :
+      ∀ msg,
+        (List.filter (fun x ↦ decide (x.2 = msg)) bytesInteractions).length < ringChar (F p) ∧
+          (List.map Prod.fst (List.filter (fun x ↦ decide (x.2 = msg)) bytesInteractions)).sum = 0 := by
+    simpa [bytesInteractions] using h_balanced_bytes
+  intro msg h_pull
+  have h_balance_msg := h_balanced_bytes' msg
+  have h_req : ∀ mult, (mult, msg) ∈ bytesInteractions → mult ≠ (-1 : F p) →
+      (msg[0]'(h_bytes_arity_pos)).val < 256 := by
+    intro mult h_mem h_ne
+    rcases List.mem_append.1 h_mem with h_tables | h_ver
+    ·
+      rcases List.mem_flatMap.1 h_tables with ⟨table, h_table_mem, h_mem_table⟩
+      rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
+      have h_len : witness.tables.length = 3 := by
+        simpa [fibonacciEnsemble] using witness.same_length.symm
+      have hi' : i < 3 := by
+        simpa [h_len] using hi
+      have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
+        simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
+      have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := by
+        simpa using h_same.symm
+      cases i with
+      | zero =>
+        simp [fibonacciEnsemble] at h_table_abs
+        have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
+        rcases (by
+          simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
+        ) with ⟨row, h_row_mem, h_raw_mem⟩
+        have h_raw_mem' := h_raw_mem
+        rw [h_table_abs] at h_raw_mem'
+        simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, pushBytes, circuit_norm] at h_raw_mem'
+        rcases h_raw_mem' with ⟨i, h_mem_emitted⟩
+        have h_mem_emitted' := h_mem_emitted
+        simp [BytesChannel, Channel.emitted, InteractionDelta.single] at h_mem_emitted'
+        rcases h_mem_emitted' with ⟨h_name, h_mult, h_msg_arr⟩
+        change Vector (F p) 1 at msg
+        have h_msg0 : msg[0]'(h_bytes_arity_pos) = (i : F p) := by
+          simp [← Vector.getElem_toArray (xs := msg) (i:=0), h_msg_arr]
+        have h_i_lt : (i.val : ℕ) < 256 := i.isLt
+        have h_i_lt_p : (i.val : ℕ) < p := by
+          have hp : 256 < p := lt_trans (by decide : 256 < 512)
+            (Fact.elim (by infer_instance : Fact (p > 512)))
+          exact lt_trans h_i_lt hp
+        have h_val : (i : F p).val = i.val := by
+          simpa [F] using (ZMod.val_cast_of_lt h_i_lt_p)
+        have h_msg_val : (msg[0]'(h_bytes_arity_pos)).val = i.val := by
+          simp [h_msg0, h_val]
+        exact h_msg_val ▸ h_i_lt
+      | succ i1 =>
+        cases i1 with
+        | zero =>
+          simp [fibonacciEnsemble] at h_table_abs
+          have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
+          rcases (by
+            simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
+          ) with ⟨row, h_row_mem, h_raw_mem⟩
+          have h_raw_mem' := h_raw_mem
+          rw [h_table_abs] at h_raw_mem'
+          simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, add8, circuit_norm,
+            BytesChannel, Channel.emitted, InteractionDelta.single] at h_raw_mem'
+          rw [InteractionDelta.add_eq_append] at h_raw_mem'
+          have h_raw_mem'' := h_raw_mem'
+          simp [List.mem_append, List.mem_cons] at h_raw_mem''
+          rcases h_raw_mem'' with ⟨_, h_mult, _⟩ | h_mem1 | ⟨h_name, _, _⟩ | h_mem2
+          ·
+            exact (False.elim (h_ne h_mult))
+          ·
+            cases h_mem1
+          ·
+            have h_name' := h_name
+            simp [Add8Channel, Channel.toRaw] at h_name'
+          ·
+            cases h_mem2
+        | succ i2 =>
+          simp [fibonacciEnsemble] at h_table_abs
+          have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
+          rcases (by
+            simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
+          ) with ⟨row, h_row_mem, h_raw_mem⟩
+          have h_raw_mem' := h_raw_mem
+          rw [h_table_abs] at h_raw_mem'
+          simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, fib8, circuit_norm,
+            BytesChannel, Channel.emitted, InteractionDelta.single] at h_raw_mem'
+          rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_raw_mem'
+          simp [List.mem_append, List.mem_cons, Channel.toRaw, FibonacciChannel, Add8Channel] at h_raw_mem'
+          cases h_raw_mem'
+    ·
+      have h_false : False := by
+        simp [RawChannel.filter, BytesChannel, Channel.toRaw, FibonacciChannel, Channel.emitted,
+          InteractionDelta.single] at h_ver
+        rw [InteractionDelta.add_eq_append] at h_ver
+        simp [List.mem_cons] at h_ver
+      exact h_false.elim
+  exact bytes_guarantee_of_balance bytesInteractions msg h_bytes_arity_pos
+    h_balance_msg.2 h_balance_msg.1 h_req h_pull
+
 theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble := by
   whnf
   intro witness publicInput h_constraints h_balanced h_verifier
@@ -569,98 +692,8 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     simp [h_bytes_arity]
 
   have h_bytes_guarantee : ∀ msg, (-1, msg) ∈ bytesInteractions → (msg[0]'(h_bytes_arity_pos)).val < 256 := by
-    intro msg h_pull
-    have h_balance_msg := h_balanced_bytes msg
-    have h_req : ∀ mult, (mult, msg) ∈ bytesInteractions → mult ≠ (-1 : F p) → (msg[0]'(h_bytes_arity_pos)).val < 256 := by
-      intro mult h_mem h_ne
-      rcases List.mem_append.1 h_mem with h_tables | h_ver
-      ·
-        rcases List.mem_flatMap.1 h_tables with ⟨table, h_table_mem, h_mem_table⟩
-        rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
-        have h_len : witness.tables.length = 3 := by
-          simpa [fibonacciEnsemble] using witness.same_length.symm
-        have hi' : i < 3 := by
-          simpa [h_len] using hi
-        have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
-          simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
-        have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := by
-          simpa using h_same.symm
-        cases i with
-        | zero =>
-          simp [fibonacciEnsemble] at h_table_abs
-          have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
-          rcases (by
-            simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
-          ) with ⟨row, h_row_mem, h_raw_mem⟩
-          have h_raw_mem' := h_raw_mem
-          rw [h_table_abs] at h_raw_mem'
-          simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, pushBytes, circuit_norm] at h_raw_mem'
-          rcases h_raw_mem' with ⟨i, h_mem_emitted⟩
-          have h_mem_emitted' := h_mem_emitted
-          simp [BytesChannel, Channel.emitted, InteractionDelta.single] at h_mem_emitted'
-          rcases h_mem_emitted' with ⟨h_name, h_mult, h_msg_arr⟩
-          change Vector (F p) 1 at msg
-          have h_msg0 : msg[0]'(h_bytes_arity_pos) = (i : F p) := by
-            simp [← Vector.getElem_toArray (xs := msg) (i:=0), h_msg_arr]
-
-          have h_i_lt : (i.val : ℕ) < 256 := i.isLt
-          have h_i_lt_p : (i.val : ℕ) < p := by
-            have hp : 256 < p := lt_trans (by decide : 256 < 512)
-              (Fact.elim (by infer_instance : Fact (p > 512)))
-            exact lt_trans h_i_lt hp
-          have h_val : (i : F p).val = i.val := by
-            simpa [F] using (ZMod.val_cast_of_lt h_i_lt_p)
-          -- value is in range because i < 256
-          have h_msg_val : (msg[0]'(h_bytes_arity_pos)).val = i.val := by
-            simp [h_msg0, h_val]
-          exact h_msg_val ▸ h_i_lt
-        | succ i1 =>
-          cases i1 with
-          | zero =>
-            simp [fibonacciEnsemble] at h_table_abs
-            have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
-            rcases (by
-              simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
-            ) with ⟨row, h_row_mem, h_raw_mem⟩
-            have h_raw_mem' := h_raw_mem
-            rw [h_table_abs] at h_raw_mem'
-            simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, add8, circuit_norm,
-              BytesChannel, Channel.emitted, InteractionDelta.single] at h_raw_mem'
-            rw [InteractionDelta.add_eq_append] at h_raw_mem'
-            have h_raw_mem'' := h_raw_mem'
-            simp [List.mem_append, List.mem_cons] at h_raw_mem''
-            rcases h_raw_mem'' with ⟨_, h_mult, _⟩ | h_mem1 | ⟨h_name, _, _⟩ | h_mem2
-            ·
-              exact (False.elim (h_ne h_mult))
-            ·
-              cases h_mem1
-            ·
-              have h_name' := h_name
-              simp [Add8Channel, Channel.toRaw] at h_name'
-            ·
-              cases h_mem2
-          | succ i2 =>
-            simp [fibonacciEnsemble] at h_table_abs
-            have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
-            rcases (by
-              simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
-            ) with ⟨row, h_row_mem, h_raw_mem⟩
-            have h_raw_mem' := h_raw_mem
-            rw [h_table_abs] at h_raw_mem'
-            simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, fib8, circuit_norm,
-              BytesChannel, Channel.emitted, InteractionDelta.single] at h_raw_mem'
-            rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_raw_mem'
-            simp [List.mem_append, List.mem_cons, Channel.toRaw, FibonacciChannel, Add8Channel] at h_raw_mem'
-            cases h_raw_mem'
-      ·
-        have h_false : False := by
-          simp [RawChannel.filter, BytesChannel, Channel.toRaw, FibonacciChannel, Channel.emitted,
-            InteractionDelta.single] at h_ver
-          rw [InteractionDelta.add_eq_append] at h_ver
-          simp [List.mem_cons] at h_ver
-        exact h_false.elim
-    exact bytes_guarantee_of_balance bytesInteractions msg h_bytes_arity_pos
-      h_balance_msg.2 h_balance_msg.1 h_req h_pull
+    simpa [bytesInteractions] using
+      bytes_guarantee_of_balance_tables witness n x y h_bytes_arity_pos h_balanced_bytes
 
   -- define the fibonacci interactions list for this public input
   set fibInteractions :=
