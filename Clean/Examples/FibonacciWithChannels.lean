@@ -437,9 +437,93 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
 
   -- derive a matching push for the pulled message
   have h_push_mem : (1, fibMsg) ∈ fibInteractions := by
-    -- TODO: derive from h_balanced_msg and localAdds structure of the fibonacci channel
-    -- (this is the remaining "Fibonacci channel induction" obligation)
-    sorry
+    set is := fibInteractions.filter (·.2 = fibMsg) with h_is
+    have h_balanced_msg' : is.length < ringChar (F p) ∧ (is.map Prod.fst).sum = 0 := by
+      simpa [h_is] using h_balanced_msg
+    have h_pull_in_is : (-1, fibMsg) ∈ is := by
+      apply List.mem_filter.2
+      exact ⟨h_pull_mem, by simp⟩
+    have h_len_pos : 0 < is.length := List.length_pos_of_mem h_pull_in_is
+    -- use h_balanced_msg' and the fact that all multiplicities are ±1 to show (1, fibMsg) ∈ is
+    have h_mult_pm1 : ∀ mult, (mult, fibMsg) ∈ is → mult = -1 ∨ mult = 1 := by
+      intro mult h_mem
+      have h_mem_fib : (mult, fibMsg) ∈ fibInteractions := List.mem_of_mem_filter h_mem
+      rcases List.mem_append.1 h_mem_fib with h_tables | h_ver
+      ·
+        -- TODO: show table interactions for the Fibonacci channel only emit ±1
+        -- (this is the remaining localAdds-based lemma)
+        sorry
+      ·
+        -- verifier interactions are exactly one push and one pull
+        have h_ver' : (mult, fibMsg) ∈
+            FibonacciChannel.toRaw.filter
+              (FibonacciChannel.emitted 1 (0, 0, 1) + FibonacciChannel.emitted (-1) (n, x, y)) := h_ver
+        rcases List.mem_filterMap.mp h_ver' with ⟨raw, h_raw_mem, h_raw_some⟩
+        have h_raw_mem' :
+            raw ∈ [("fibonacci", (1 : F p), (toElements (M:=fieldTriple) ((0 : F p), (0 : F p), (1 : F p))).toArray)] ++
+              [("fibonacci", (-1 : F p), (toElements (M:=fieldTriple) ((n, x, y) : fieldTriple (F p))).toArray)] := by
+          simpa [FibonacciChannel, Channel.emitted, InteractionDelta.single, explicit_provable_type,
+            InteractionDelta.add_eq_append] using h_raw_mem
+        rcases List.mem_append.1 h_raw_mem' with h_left | h_right
+        ·
+          rcases List.mem_singleton.1 h_left with h_raw_eq
+          subst h_raw_eq
+          have h_some' : 1 = mult ∧ 3 = size fieldTriple ∧ #[0, 0, 1] = fibMsg.toArray := by
+            simpa [RawChannel.filter, FibonacciChannel, Channel.toRaw, Channel.emitted,
+              explicit_provable_type] using h_raw_some
+          exact Or.inr h_some'.1.symm
+        ·
+          rcases List.mem_singleton.1 h_right with h_raw_eq
+          subst h_raw_eq
+          have h_some' : -1 = mult ∧ 3 = size fieldTriple ∧ #[n, x, y] = fibMsg.toArray := by
+            simpa [RawChannel.filter, FibonacciChannel, Channel.toRaw, Channel.emitted,
+              explicit_provable_type] using h_raw_some
+          exact Or.inl h_some'.1.symm
+    have h_one_in_is : (1, fibMsg) ∈ is := by
+      classical
+      by_contra h_no_one
+      have h_all_neg : ∀ mult, (mult, fibMsg) ∈ is → mult = -1 := by
+        intro mult h_mem
+        rcases h_mult_pm1 mult h_mem with h_neg | h_pos
+        · exact h_neg
+        · exfalso
+          apply h_no_one
+          simpa [h_pos] using h_mem
+      have h_map_eq' : is.map Prod.fst = List.replicate (is.map Prod.fst).length (-1 : F p) := by
+        apply (List.eq_replicate_length (a := (-1 : F p))).2
+        intro b h_mem
+        rcases List.mem_map.1 h_mem with ⟨pair, h_pair, rfl⟩
+        rcases pair with ⟨mult, msg⟩
+        have h_msg : msg = fibMsg := by
+          exact of_decide_eq_true (List.mem_filter.1 h_pair).2
+        have h_neg : mult = -1 := by
+          apply h_all_neg
+          simpa [h_msg] using h_pair
+        simp [h_neg]
+      have h_map_eq : is.map Prod.fst = List.replicate is.length (-1 : F p) := by
+        simpa [List.length_map] using h_map_eq'
+      have h_sum_eq : (is.length : F p) * (-1) = 0 := by
+        have h_sum' : (is.map Prod.fst).sum = 0 := h_balanced_msg'.2
+        -- sum of a replicate list
+        simpa [h_map_eq, nsmul_eq_mul, mul_comm] using h_sum'
+      have h_len_cast : (is.length : F p) = 0 := by
+        have h_mul := mul_eq_zero.mp h_sum_eq
+        rcases h_mul with h_len | h_neg
+        · exact h_len
+        ·
+          have h_neg' : (-1 : F p) ≠ 0 := by
+            simpa using (neg_ne_zero.mpr (one_ne_zero : (1 : F p) ≠ 0))
+          cases (h_neg' h_neg)
+      have h_ringChar : ringChar (F p) = p := by
+        simpa [F] using ZMod.ringChar_zmod_n p
+      have h_len_lt : is.length < p := by
+        simpa [h_ringChar] using h_balanced_msg'.1
+      have _ : CharP (F p) p := by
+        simpa [F] using (ZMod.charP p)
+      have h_div : p ∣ is.length :=
+        (CharP.cast_eq_zero_iff (R := F p) (p := p) is.length).1 h_len_cast
+      exact (Nat.not_dvd_of_pos_of_lt h_len_pos h_len_lt) h_div
+    exact List.mem_of_mem_filter h_one_in_is
 
   -- derive Fibonacci requirements for the matching push
   have h_req : FibonacciChannel.toRaw.Requirements 1 fibMsg fibInteractions (fun _ _ => #[]) := by

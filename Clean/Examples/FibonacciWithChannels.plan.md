@@ -69,11 +69,11 @@ Report back to the user when either:
 
 ## Likely challenges / extra hypotheses
 
-- **Balance strength**:
-  The current `BalancedChannels` checks only the _sum of multiplicities_, not
-  per-message balance. To justify “every `-1` has a matching `+1` for the same
-  message,” we may need a stronger balance notion (e.g. equality of
-  `toFinsupp`/multiset over messages).
+- **Balance strength (resolved)**:
+  `BalancedChannels` now uses per-message filtering plus a length bound:
+  for each message, the filtered interactions have `length < ringChar F`
+  and `sum = 0`. This gives a concrete, data-structure-level balance
+  condition without using `toFinsupp`.
 
 - **No-overflow assumption**:
   The balance-to-matching argument uses a “no overflow” intuition. We may need
