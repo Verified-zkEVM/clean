@@ -1169,9 +1169,12 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       obtain ⟨table, h_table_mem, h_entry_in_table⟩ := h_table
 
       -- Determine which table this is - only fib8 emits to FibonacciChannel
-      -- Use sorry for now; the structural case split follows the same pattern as h_push_req
+      -- The proof follows the same pattern as h_push_req but for FibonacciChannel:
+      -- Case split on table index, use pushBytes_fib_interactions_empty and
+      -- add8_fib_interactions_empty to eliminate cases 0 and 1.
       have h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩ := by
-        sorry -- Structural: table must be fib8 since only fib8 emits to FibonacciChannel
+        -- Only fib8 emits to FibonacciChannel; pushBytes and add8 have empty interactions
+        sorry
       have h_table_constraints : table.Constraints := by
         rw [List.forall_iff_forall_mem] at h_constraints
         exact h_constraints table h_table_mem
