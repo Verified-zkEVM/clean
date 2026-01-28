@@ -590,47 +590,79 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     simp only [circuit_norm, ProvableType.const, explicit_provable_type]
   rw [h_const] at h_balanced
 
-  -- The spec is: ∃ k, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+  -- ═══════════════════════════════════════════════════════════════════
+  -- PROOF STRUCTURE: layered channel guarantee derivation
+  -- ═══════════════════════════════════════════════════════════════════
 
-  -- Step 1: Identify the Fibonacci channel interactions
-  -- The Fibonacci channel interactions come from:
-  --   - fib8 table rows (pulls and pushes)
-  --   - the verifier (push (0,0,1) and pull (n,x,y))
+  -- We define the fibonacci channel interactions (from tables + verifier)
+  -- and show all hypotheses of `all_fib_pushes_valid` are satisfied.
 
-  -- Step 2: From per-message balance on fibonacci channel, the verifier's pull (-1, (n,x,y))
-  -- means there must be a matching push (1, (n,x,y))
+  -- The ensemble interactions for a given channel come from:
+  --   tables.flatMap (fun table => table.interactions channel) ++ verifier interactions
+  -- We'll work with the fibonacci channel interactions specifically.
 
-  -- Step 3: All pushes are valid fibonacci states (by all_fib_pushes_valid)
+  -- ── Layer 0: BytesChannel guarantees ──
+  -- pushBytes has no pulls, so its soundness needs no guarantees.
+  -- pushBytes.soundness → BytesChannel.Requirements hold for pushes (0..255 are bytes)
+  -- + per-message balance → BytesChannel.Guarantees hold for all pulls
+  -- Conclusion: any value pulled from BytesChannel has .val < 256
 
-  -- Step 4: Therefore (n, x, y) is a valid fibonacci state = spec
+  have h_bytes_guarantees : ∀ (env : Environment (F p)) (x : F p),
+    -- if BytesChannel.pull x appears in the interactions with balanced channels,
+    -- then x.val < 256
+    True := fun _ _ => trivial  -- placeholder for the real statement
 
-  -- The main difficulty is extracting the concrete interaction structure from the
-  -- unfolded hypotheses. This requires relating the circuit operations of fib8/verifier
-  -- to the abstract interaction lists.
+  -- ── Layer 1: Add8Channel guarantees ──
+  -- add8 pulls from BytesChannel (guaranteed by layer 0) and pushes to Add8Channel.
+  -- add8.soundness + BytesChannel guarantees → Add8Channel.Requirements hold
+  -- + per-message balance → Add8Channel.Guarantees hold for all pulls
+  -- Conclusion: any (x, y, z) pulled from Add8Channel satisfies
+  --   x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
 
-  -- For now, we state the key intermediate results with sorry, demonstrating the
-  -- proof structure is sound:
+  have h_add8_guarantees : ∀ (env : Environment (F p)) (x y z : F p),
+    -- if Add8Channel.pull (x, y, z) appears in the interactions,
+    -- then x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
+    True := fun _ _ _ _ => trivial  -- placeholder
 
-  -- Define the fibonacci channel's raw form
-  -- let fibChannel := FibonacciChannel.toRaw -- the raw fibonacci channel
+  -- ── Layer 2: FibonacciChannel guarantees (inductive) ──
+  -- fib8 pulls from FibonacciChannel (cyclic!) and Add8Channel (layer 1).
+  -- fib8.soundness + FibChannel guarantees + Add8Channel guarantees
+  --   → FibChannel.Requirements for pushes
+  -- The cycle is broken by strong induction on the step counter.
 
-  -- The fibonacci interactions from all tables + verifier
-  -- This is an existential: there exists a concrete interaction list with the right properties
-  suffices h_valid : IsValidFibState n x y by
-    exact h_valid
+  -- To apply `all_fib_pushes_valid`, we need to construct the concrete fibonacci
+  -- interaction list and verify its properties. This requires:
+  --   (a) A lifting lemma: ConstraintsHold → ConstraintsHoldWithInteractions.Soundness
+  --       (given that channel guarantees hold — this is an open infrastructure gap)
+  --   (b) Relating the ensemble's concrete interaction lists to the abstract
+  --       `all_fib_pushes_valid` hypotheses
 
-  -- The verifier pulls (n, x, y) from fibonacci channel.
-  -- By per-message balance, (1, (n, x, y)) must exist in the interactions.
-  -- By all_fib_pushes_valid, all such pushes are valid fibonacci states.
-  -- Therefore IsValidFibState n x y.
+  -- ── Final step: derive the spec ──
+  -- The verifier pulls (n, x, y) from FibonacciChannel.
+  -- By FibonacciChannel guarantees (established in layer 2),
+  -- (n, x, y) is a valid fibonacci state = the spec.
 
-  -- This step requires unfolding the concrete operations to extract the fibonacci
-  -- channel interactions, which involves significant term-level computation with
-  -- the circuit operations of pushBytes, add8, fib8, and fibonacciVerifier.
-  -- The key building blocks are all proven:
-  --   - exists_push_of_pull: balance → pull has matching push
-  --   - all_fib_pushes_valid: all pushes are valid (by strong induction)
-  --   - fib8_step_valid: single step preservation
-  --   - verifier_push_valid: base case
+  -- ═══════════════════════════════════════════════════════════════════
+  -- TODO: The following gaps remain:
+  --
+  -- 1. LIFTING LEMMA (general infrastructure, not fibonacci-specific):
+  --    ConstraintsHold env ops ∧ (channel guarantees hold) →
+  --    ConstraintsHoldWithInteractions.Soundness env interactions ops
+  --    This is also sorry'd in Clean/Circuit/Subcircuit.lean (line ~264).
+  --
+  -- 2. CONNECTING ENSEMBLE INTERACTIONS TO CHANNEL-LEVEL PROPERTIES:
+  --    Relate the concrete interaction lists from localAdds on each
+  --    table row to the abstract properties needed by the layered
+  --    guarantee derivation.
+  --
+  -- 3. DERIVING GUARANTEES FROM BALANCE + REQUIREMENTS:
+  --    For each acyclic channel layer, show that per-message balance +
+  --    requirements from the push side → guarantees for the pull side.
+  --    This is a general pattern that should be abstractable.
+  --
+  -- All CONCRETE circuit reasoning (carry bits, addition, etc.) is
+  -- already done inside the per-circuit soundness proofs. The remaining
+  -- work is purely structural/framework-level.
+  -- ═══════════════════════════════════════════════════════════════════
 
   sorry
