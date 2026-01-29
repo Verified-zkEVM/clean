@@ -549,6 +549,28 @@ structure LookupChannel (Message : TypeMap) [ProvableType Message] where
   requirements_iff : ∀ mult msg is data,
     channel.Requirements mult msg is data ↔ (mult ≠ -1 → P msg)
 
+section
+variable (p : ℕ) [Fact p.Prime] [Fact (p > 512)]
+
+/-- Lookup-channel instance for bytes. -/
+@[circuit_norm]
+def bytesLookupChannel : LookupChannel (p := p) (Message := field) := by
+  refine
+    { channel := (BytesChannel (p := p))
+      P := fun x => x.val < 256
+      guarantees_iff := ?_
+      requirements_iff := ?_ }
+  · intro mult msg is data
+    by_cases h : mult = -1
+    · subst h; simp [BytesChannel]
+    · simp [BytesChannel, h]
+  · intro mult msg is data
+    by_cases h : mult = -1
+    · subst h; simp [BytesChannel]
+    · simp [BytesChannel, h]
+
+end
+
 omit [Fact (p > 512)] in
 /-- Balance + non-pull predicate ⇒ pull guarantees for lookup-like channels. -/
 lemma lookup_channel_guarantee_of_balance
@@ -615,15 +637,7 @@ lemma bytes_guarantee_of_balance_tables
     simpa [Ensemble.BalancedChannel, bytesInteractions] using h_balanced_bytes
   intro msg h_pull
   have h_balance_msg := h_balanced_bytes' msg
-  let lc : LookupChannel (Message := field) :=
-    { channel := (BytesChannel (p := p))
-      P := fun x => x.val < 256
-      guarantees_iff := by
-        intro mult msg is data
-        simp [BytesChannel]
-      requirements_iff := by
-        intro mult msg is data
-        simp [BytesChannel] }
+  let lc : LookupChannel (Message := field) := bytesLookupChannel p
   have h_req : ∀ mult, (mult, msg) ∈ bytesInteractions → mult ≠ (-1 : F p) →
       lc.P (fromElements (M:=field) msg) := by
     intro mult h_mem h_ne
