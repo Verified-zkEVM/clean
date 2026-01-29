@@ -534,6 +534,44 @@ lemma fromElements_eq_getElem (msg : Vector (F p) 1) :
     subst h_arr
     simp [explicit_provable_type]
 
+omit [Fact (p > 512)] [Fact (Nat.Prime p)] in
+lemma fromElements_eq_getElem' (msg : Vector (F p) 1) (h : 0 < 1) :
+    fromElements (M:=field) msg = msg[0]'h := by
+  simpa using (fromElements_eq_getElem msg)
+
+
+/-- Lookup-like channels expose a predicate via both requirements and guarantees. -/
+structure LookupChannel (Message : TypeMap) [ProvableType Message] where
+  channel : Channel (F p) Message
+  P : Message (F p) → Prop
+  guarantees_iff : ∀ mult msg is data,
+    channel.Guarantees mult msg is data ↔ (mult = -1 → P msg)
+  requirements_iff : ∀ mult msg is data,
+    channel.Requirements mult msg is data ↔ (mult ≠ -1 → P msg)
+
+omit [Fact (p > 512)] in
+/-- Balance + non-pull predicate ⇒ pull guarantees for lookup-like channels. -/
+lemma lookup_channel_guarantee_of_balance
+    {Message : TypeMap} [ProvableType Message]
+    (lc : LookupChannel (Message := Message))
+    (interactions : List (F p × Vector (F p) lc.channel.toRaw.arity))
+    (msg : Vector (F p) lc.channel.toRaw.arity)
+    (h_balance : ((interactions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0)
+    (h_bound : (interactions.filter (fun x => x.2 = msg)).length < ringChar (F p))
+    (h_req : ∀ mult, (mult, msg) ∈ interactions → mult ≠ (-1 : F p) →
+      lc.P (fromElements msg))
+    (h_pull : (-1, msg) ∈ interactions) :
+    lc.channel.Guarantees (-1) (fromElements msg)
+      (interactions.map Channel.interactionFromRaw) (fun _ _ => #[]) := by
+  have h_val : lc.P (fromElements msg) :=
+    guarantee_of_balance interactions msg (fun v => lc.P (fromElements v))
+      h_balance h_bound h_req h_pull
+  have h_guar : (-1 : F p) = -1 → lc.P (fromElements msg) := by
+    intro _
+    exact h_val
+  exact (lc.guarantees_iff (-1) (fromElements msg)
+    (interactions.map Channel.interactionFromRaw) (fun _ _ => #[])).2 h_guar
+
 omit [Fact (p > 512)] in
 /-- Bytes-channel guarantees from balance + requirements for non-pulls. -/
 lemma bytes_guarantee_of_balance {n : ℕ} (interactions : List (F p × Vector (F p) n))
@@ -577,8 +615,17 @@ lemma bytes_guarantee_of_balance_tables
     simpa [Ensemble.BalancedChannel, bytesInteractions] using h_balanced_bytes
   intro msg h_pull
   have h_balance_msg := h_balanced_bytes' msg
+  let lc : LookupChannel (Message := field) :=
+    { channel := (BytesChannel (p := p))
+      P := fun x => x.val < 256
+      guarantees_iff := by
+        intro mult msg is data
+        simp [BytesChannel]
+      requirements_iff := by
+        intro mult msg is data
+        simp [BytesChannel] }
   have h_req : ∀ mult, (mult, msg) ∈ bytesInteractions → mult ≠ (-1 : F p) →
-      (msg[0]'(h_bytes_arity_pos)).val < 256 := by
+      lc.P (fromElements (M:=field) msg) := by
     intro mult h_mem h_ne
     rcases List.mem_append.1 h_mem with h_tables | h_ver
     ·
@@ -618,7 +665,9 @@ lemma bytes_guarantee_of_balance_tables
           simpa [F] using (ZMod.val_cast_of_lt h_i_lt_p)
         have h_msg_val : (msg[0]'(h_bytes_arity_pos)).val = i.val := by
           simp [h_msg0, h_val]
-        exact h_msg_val ▸ h_i_lt
+        have h_val : (msg[0]'(h_bytes_arity_pos)).val < 256 :=
+          h_msg_val ▸ h_i_lt
+        simpa [fromElements_eq_getElem', lc] using h_val
       | succ i1 =>
         cases i1 with
         | zero =>
@@ -663,14 +712,11 @@ lemma bytes_guarantee_of_balance_tables
       have h_false : False := by
         simp [h_verifier_empty] at h_ver
       exact h_false.elim
-  have h_val : (msg[0]'(h_bytes_arity_pos)).val < 256 :=
-    bytes_guarantee_of_balance bytesInteractions msg h_bytes_arity_pos
-      h_balance_msg.2 h_balance_msg.1 h_req h_pull
-  have h_val' : (fromElements (M:=field) msg).val < 256 := by
-    simpa [fromElements_eq_getElem] using h_val
   have h_guar : BytesChannel.Guarantees (-1) (fromElements (M:=field) msg)
       (bytesInteractions.map Channel.interactionFromRaw) (fun _ _ => #[]) := by
-    simpa [BytesChannel] using h_val'
+    simpa [lc] using
+      (lookup_channel_guarantee_of_balance lc bytesInteractions msg
+        h_balance_msg.2 h_balance_msg.1 h_req h_pull)
   simpa [bytesInteractions] using h_guar
 
 theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble := by
@@ -697,7 +743,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     have h_guar := bytes_guarantee_of_balance_tables witness n x y h_bytes_arity_pos h_balanced_bytes msg h_pull
     have h_val' : (fromElements (M:=field) msg).val < 256 := by
       simpa [BytesChannel] using h_guar
-    simpa [fromElements_eq_getElem] using h_val'
+    simpa [fromElements_eq_getElem'] using h_val'
 
   -- define the fibonacci interactions list for this public input
   set fibInteractions :=
