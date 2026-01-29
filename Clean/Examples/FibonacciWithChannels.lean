@@ -737,6 +737,9 @@ lemma fib_table_interaction_mult_pm_one
     (h_mem : entry ∈ witness.tables.flatMap
               (fun table => table.interactions ((FibonacciChannel (p := p)).toRaw))) :
     entry.1 = 1 ∨ entry.1 = -1 := by
+  -- The proof follows the same pattern as bytes_push_val_lt_256:
+  -- Case split on which table, show pushBytes/add8 have no FibonacciChannel interactions,
+  -- and fib8 only emits with mult = ±1.
   sorry
 
 /-- Verifier's Add8Channel interactions are empty (verifier only uses FibonacciChannel) -/
