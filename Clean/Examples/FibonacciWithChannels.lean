@@ -856,7 +856,25 @@ lemma fib8_add8_interactions_mult_neg
     (entry : F p × Vector (F p) 3)
     (h_mem : entry ∈ table.interactions (Add8Channel.toRaw)) :
     entry.1 = -1 := by
-  sorry
+  -- fib8 emits to Add8Channel only with pulled (mult = -1)
+  simp only [TableWitness.interactions, AbstractTable.operations] at h_mem
+  rcases List.mem_flatMap.1 h_mem with ⟨row, h_row_mem, h_in_filter⟩
+  rw [h_is_fib8] at h_in_filter
+  simp only [RawChannel.filter, fib8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
+    circuit_norm, FibonacciChannel, BytesChannel, Add8Channel, Channel.emitted, Channel.pulled,
+    InteractionDelta.single, Channel.toRaw] at h_in_filter
+  rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_in_filter
+  simp only [List.filterMap_append, List.filterMap_cons,
+    show ("fibonacci" : String) = "add8" ↔ False by decide, false_and, dite_false,
+    show ("add8" : String) = "add8" ↔ True by decide, true_and, toElements] at h_in_filter
+  simp only [show ([_,_,_] : List (F p)).toArray.size = 3 by rfl, dite_true] at h_in_filter
+  -- `0` in List context represents InteractionDelta.zero = []
+  -- Simplify using the fact that InteractionDelta.zero = []
+  simp only [show (0 : InteractionDelta (F p)) = [] by rfl,
+    List.filterMap_nil, List.nil_append, List.append_nil,
+    List.mem_cons, List.not_mem_nil, or_false] at h_in_filter
+  -- Now h_in_filter says entry = (-1, ...)
+  rw [h_in_filter]
 
 /-- add8's Add8Channel interactions satisfy Requirements when BytesChannel guarantees hold -/
 lemma add8_interactions_satisfy_requirements
