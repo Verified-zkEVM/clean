@@ -354,16 +354,23 @@ def interactions (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : En
   witness.tables.flatMap (fun table => table.interactions channel)
   ++ ens.verifierInteractions channel publicInput
 
+/-- Per-message balance for a single channel: for each message, the sum of multiplicities is 0,
+    and the filtered list length is bounded by the field characteristic.
+    Also requires that the total interaction count is bounded. -/
+def BalancedChannel (ens : Ensemble F) (publicInput : ens.PublicIO F)
+    (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
+  (ens.interactions publicInput witness channel).length < ringChar F ∧
+  ∀ msg : Vector F channel.arity,
+    let is := (ens.interactions publicInput witness channel).filter (·.2 = msg)
+    is.length < ringChar F ∧ (is.map Prod.fst).sum = 0
+
 /-- Per-message balance: for each channel, for each message, the sum of multiplicities is 0.
     This is stronger than just requiring the total sum to be 0, and captures the intuition
     that every pull (-1) must be matched by a push (+1) for the same message.
     Additionally requires that the number of interactions is bounded by the field characteristic
     (needed for exists_push_of_pull which uses natCast). -/
 def BalancedChannels (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) : Prop :=
-  ens.channels.Forall fun channel =>
-    (ens.interactions publicInput witness channel).length < (ringChar F) ∧
-    ∀ msg : Vector F channel.arity,
-      ((ens.interactions publicInput witness channel).filter (·.2 = msg) |>.map Prod.fst).sum = 0
+  ens.channels.Forall fun channel => ens.BalancedChannel publicInput witness channel
 
 def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
   let circuit := ens.verifier.main (const publicInput)
@@ -893,18 +900,23 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   have h_bal : Ensemble.BalancedChannels fibonacciEnsemble (n, x, y) witness := h_balanced
   unfold Ensemble.BalancedChannels at h_bal
   simp only [fibonacciEnsemble, List.Forall] at h_bal
-  -- h_bal now contains length bounds and balances for all 3 channels
-  -- FibonacciChannel is the 3rd channel: h_bal.2.2 contains its length bound and balance
+  -- h_bal now contains BalancedChannel for all 3 channels
+  -- h_bal.1 : BalancedChannel for BytesChannel
+  -- h_bal.2.1 : BalancedChannel for Add8Channel
+  -- h_bal.2.2 : BalancedChannel for FibonacciChannel
+
+  have h_fib_bal := h_bal.2.2
+  simp only [Ensemble.BalancedChannel, fibonacciEnsemble] at h_fib_bal
 
   have h_fib_bound : fibInteractions.length < p := by
     have : ringChar (F p) = p := ZMod.ringChar_zmod_n p
-    convert h_bal.2.2.1
-    exact this.symm
+    calc fibInteractions.length < ringChar (F p) := h_fib_bal.1
+      _ = p := this
 
   have h_fib_balanced : ∀ msg : Vector (F p) 3,
       ((fibInteractions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0 := by
     intro msg
-    exact h_bal.2.2.2 msg
+    exact (h_fib_bal.2 msg).2
 
   -- ── Step 3: All multiplicities are ±1 ──
   -- All fibonacci interactions come from:
@@ -953,6 +965,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     intro z h_pull
     -- Extract balance for BytesChannel (first channel)
     have h_bytes_bal := h_bal.1
+    simp only [Ensemble.BalancedChannel, fibonacciEnsemble] at h_bytes_bal
     set bytesInteractions := fibonacciEnsemble.interactions (n, x, y) witness (BytesChannel.toRaw)
 
     by_contra h_ge
@@ -986,15 +999,15 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
 
     -- But balance says sum = 0
     have h_sum_zero : ((bytesInteractions.filter (·.2 = #v[z])).map Prod.fst).sum = 0 :=
-      h_bytes_bal.2 #v[z]
+      (h_bytes_bal.2 #v[z]).2
 
     -- So -(length) = 0 in F_p, meaning p | length
     rw [h_sum_neg, neg_eq_zero] at h_sum_zero
 
     -- But 0 < length < p, contradiction
     have h_len_bound : (bytesInteractions.filter (·.2 = #v[z])).length < p := by
-      calc _ ≤ bytesInteractions.length := List.length_filter_le _ _
-        _ < ringChar (F p) := h_bytes_bal.1
+      have h := (h_bytes_bal.2 #v[z]).1
+      calc _ < ringChar (F p) := h
         _ = p := ZMod.ringChar_zmod_n p
     have h_len_zero : (bytesInteractions.filter (·.2 = #v[z])).length = 0 := by
       have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero
@@ -1011,6 +1024,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
 
     -- Extract balance for Add8Channel (second channel)
     have h_add8_bal := h_bal.2.1
+    simp only [Ensemble.BalancedChannel, fibonacciEnsemble] at h_add8_bal
     set add8Interactions := fibonacciEnsemble.interactions (n, x, y) witness (Add8Channel.toRaw)
 
     -- Key fact: any Add8Channel entry with mult ≠ -1 satisfies the Requirements.
@@ -1122,7 +1136,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       intro hx hy
 
       -- By balance, sum of mults for this message is 0
-      have h_sum_zero := h_add8_bal.2 entry.2
+      have h_sum_zero := (h_add8_bal.2 entry.2).2
 
       -- We have a pull, so filtered list is nonempty
       have h_nonempty : (add8Interactions.filter (·.2 = entry.2)).length > 0 :=
@@ -1142,8 +1156,8 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         have h_sum_zero' : ((add8Interactions.filter (·.2 = entry.2)).map Prod.fst).sum = 0 := h_sum_zero
         rw [h_sum_neg, neg_eq_zero] at h_sum_zero'
         have h_len_bound : (add8Interactions.filter (·.2 = entry.2)).length < p := by
-          calc _ ≤ add8Interactions.length := List.length_filter_le _ _
-            _ < ringChar (F p) := h_add8_bal.1
+          have h := (h_add8_bal.2 entry.2).1
+          calc _ < ringChar (F p) := h
             _ = p := ZMod.ringChar_zmod_n p
         have h_len_zero : (add8Interactions.filter (·.2 = entry.2)).length = 0 := by
           have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero'
