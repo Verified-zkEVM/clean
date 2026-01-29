@@ -737,10 +737,84 @@ lemma fib_table_interaction_mult_pm_one
     (h_mem : entry ∈ witness.tables.flatMap
               (fun table => table.interactions ((FibonacciChannel (p := p)).toRaw))) :
     entry.1 = 1 ∨ entry.1 = -1 := by
-  -- The proof follows the same pattern as bytes_push_val_lt_256:
-  -- Case split on which table, show pushBytes/add8 have no FibonacciChannel interactions,
-  -- and fib8 only emits with mult = ±1.
-  sorry
+  -- Entry is from some table's FibonacciChannel interactions
+  rcases List.mem_flatMap.1 h_mem with ⟨table, h_table_mem, h_entry_in_table⟩
+  rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
+  have h_len : witness.tables.length = 3 := by
+    simpa [fibonacciEnsemble] using witness.same_length.symm
+  have hi' : i < 3 := by simpa [h_len] using hi
+  have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
+    simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
+  have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := h_same.symm
+  match i with
+  | 0 => -- pushBytes: no FibonacciChannel interactions
+    simp only [fibonacciEnsemble] at h_table_abs
+    rcases (by
+      simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_entry_in_table
+    ) with ⟨row, h_row_mem, h_raw_mem⟩
+    rw [h_table_abs] at h_raw_mem
+    simp only [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, pushBytes, circuit_norm,
+      FibonacciChannel, BytesChannel, Channel.emitted, InteractionDelta.single, Channel.toRaw] at h_raw_mem
+    -- h_raw_mem : ∃ a a_1 b, (a, a_1, b) ∈ flatMap (...) ∧ (a = "fibonacci" ∧ ...)
+    -- The flatMap produces ("bytes", ...) tuples, but filter requires a = "fibonacci"
+    obtain ⟨a, _, _, h_in_flatmap, ⟨h_fib, _⟩, _⟩ := h_raw_mem
+    simp only [List.mem_flatMap, List.mem_cons, List.not_mem_nil, or_false] at h_in_flatmap
+    obtain ⟨_, _, h_tuple_eq | h_empty⟩ := h_in_flatmap
+    · -- h_tuple_eq : (a, _, _) = ("bytes", _, _)
+      have h_a_bytes : a = "bytes" := congrArg (·.1) h_tuple_eq
+      simp only [h_a_bytes] at h_fib  -- h_fib : "bytes" = "fibonacci"
+      exact absurd h_fib (by decide)
+    · -- h_empty : (a, _, _) ∈ [] (displayed as 0)
+      cases h_empty
+  | 1 => -- add8: no FibonacciChannel interactions
+    simp only [fibonacciEnsemble] at h_table_abs
+    rcases (by
+      simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_entry_in_table
+    ) with ⟨row, h_row_mem, h_raw_mem⟩
+    rw [h_table_abs] at h_raw_mem
+    simp only [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, add8, circuit_norm,
+      FibonacciChannel, BytesChannel, Add8Channel, Channel.emitted, InteractionDelta.single, Channel.toRaw] at h_raw_mem
+    -- h_raw_mem has structure: ∃ a a_1 b, (a,_,_) ∈ [bytes_tuple] ++ [add8_tuple] ∧ (a = "fibonacci" ∧ ...)
+    -- Both bytes and add8 tuples have different names than "fibonacci", contradiction
+    obtain ⟨a, _, _, h_disj, ⟨h_fib, _⟩, _⟩ := h_raw_mem
+    rw [InteractionDelta.add_eq_append] at h_disj
+    simp only [List.append_nil, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at h_disj
+    rcases h_disj with (h_bytes | h_empty1) | (h_add8 | h_empty2)
+    · have h_a : a = "bytes" := congrArg (·.1) h_bytes
+      simp only [h_a] at h_fib
+      exact absurd h_fib (by decide)
+    · cases h_empty1
+    · have h_a : a = "add8" := congrArg (·.1) h_add8
+      simp only [h_a] at h_fib
+      exact absurd h_fib (by decide)
+    · cases h_empty2
+  | 2 => -- fib8: pulls and pushes to FibonacciChannel with mult = ±1
+    simp only [fibonacciEnsemble] at h_table_abs
+    rcases (by
+      simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_entry_in_table
+    ) with ⟨row, h_row_mem, h_raw_mem⟩
+    rw [h_table_abs] at h_raw_mem
+    simp only [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, fib8, circuit_norm,
+      FibonacciChannel, BytesChannel, Add8Channel, Channel.emitted, InteractionDelta.single, Channel.toRaw] at h_raw_mem
+    -- h_raw_mem: ∃ a a_1 b, (((fib_pull ∨ []) ∨ add8_pull ∨ []) ∨ fib_push ∨ []) ∧ (a = "fibonacci" ∧ ...)
+    -- fib_pull has mult = -1, add8_pull has name "add8" ≠ "fibonacci", fib_push has mult = 1
+    obtain ⟨a, mult, _, h_disj, ⟨h_fib, _⟩, h_entry_eq⟩ := h_raw_mem
+    rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_disj
+    simp only [List.append_nil, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at h_disj
+    rcases h_disj with ((h_fib_pull | h_e1) | (h_add8 | h_e2)) | (h_fib_push | h_e3)
+    · -- fib_pull: mult = -1
+      have h_mult : mult = -1 := congrArg (·.2.1) h_fib_pull
+      rw [← h_entry_eq, h_mult]; right; rfl
+    · cases h_e1
+    · -- add8: name = "add8" ≠ "fibonacci"
+      have h_a : a = "add8" := congrArg (·.1) h_add8
+      simp only [h_a] at h_fib
+      exact absurd h_fib (by decide)
+    · cases h_e2
+    · -- fib_push: mult = 1
+      have h_mult : mult = 1 := congrArg (·.2.1) h_fib_push
+      rw [← h_entry_eq, h_mult]; left; rfl
+    · cases h_e3
 
 /-- Verifier's Add8Channel interactions are empty (verifier only uses FibonacciChannel) -/
 lemma verifier_add8_interactions_empty (publicInput : fieldTriple (F p)) :
