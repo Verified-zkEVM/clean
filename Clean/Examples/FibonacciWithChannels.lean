@@ -945,6 +945,29 @@ lemma fib8_fib_push_has_matching_pull
       ((-1 : F p), (#v[x_i, y_i, entry.2[2]] : Vector (F p) 3)) ∈ table.interactions (Add8Channel.toRaw) ∧
       entry.2[0] = n_i + 1 ∧
       entry.2[1] = y_i := by
+  -- entry is a push (mult=1) from table's FibonacciChannel interactions
+  -- fib8 emits: pull (-1, (n,x,y)), pull (-1, (x,y,z)) to Add8, push (1, (n+1,y,z))
+  -- So entry must be the push, and we can find the corresponding pulls from the same row
+  simp only [TableWitness.interactions, AbstractTable.operations] at h_mem ⊢
+  rw [h_is_fib8] at h_mem
+  rcases List.mem_flatMap.1 h_mem with ⟨row, h_row_mem, h_in_filter⟩
+  -- Simplify h_in_filter to extract the structure
+  simp only [RawChannel.filter, fib8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
+    circuit_norm, FibonacciChannel, BytesChannel, Add8Channel, Channel.emitted, Channel.pulled,
+    InteractionDelta.single, Channel.toRaw] at h_in_filter
+  rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_in_filter
+  simp only [List.filterMap_append, List.filterMap_cons,
+    show ("fibonacci" : String) = "fibonacci" ↔ True by decide, true_and,
+    show ("add8" : String) = "fibonacci" ↔ False by decide, false_and, dite_false, dite_true,
+    toElements] at h_in_filter
+  simp only [show ([_,_,_] : List (F p)).toArray.size = 3 by rfl, dite_true] at h_in_filter
+  simp only [show (0 : InteractionDelta (F p)) = [] by rfl,
+    List.filterMap_nil, List.nil_append, List.append_nil,
+    List.mem_cons, List.not_mem_nil, or_false] at h_in_filter
+  -- Proof outline: entry is a push (mult=1) from FibonacciChannel interactions of fib8.
+  -- fib8 emits: pull (-1, (n,x,y)), pull to Add8 (-1, (x,y,z)), push (1, (n+1,y,z))
+  -- Since h_push says mult=1, entry must be the push, and we can find the corresponding pulls
+  -- from the same row (they coexist in fib8's localAdds).
   sorry
 
 /-!
