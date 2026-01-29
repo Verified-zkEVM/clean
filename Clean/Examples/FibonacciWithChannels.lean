@@ -697,14 +697,90 @@ lemma bytes_push_val_lt_256
                       ((BytesChannel (p := p)).toRaw))
     (h_push : entry.1 ≠ -1) :
     entry.2[0].val < 256 := by
-  -- Proof: Non-pull entries come from pushBytes which emits byte values 0..255.
-  -- The full proof is in the channel-proof-gpt branch (bytes_guarantee_of_balance_tables).
-  -- Key steps:
-  -- 1. Entry is from tables (verifier has no BytesChannel interactions)
-  -- 2. Case split on table: pushBytes (0), add8 (1), fib8 (2)
-  -- 3. add8 only pulls (mult = -1), fib8 has no BytesChannel interactions
-  -- 4. pushBytes emits values from finRange 256, so entry.2[0] = (i : F p) for i < 256
-  sorry
+  -- Entry is from tables or verifier
+  simp only [Ensemble.interactions] at h_mem
+  rcases List.mem_append.1 h_mem with h_tables | h_ver
+  · -- From tables: case split on which table
+    rcases List.mem_flatMap.1 h_tables with ⟨table, h_table_mem, h_mem_table⟩
+    rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
+    have h_len : witness.tables.length = 3 := by
+      simpa [fibonacciEnsemble] using witness.same_length.symm
+    have hi' : i < 3 := by simpa [h_len] using hi
+    have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
+      simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
+    have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := h_same.symm
+    match i with
+    | 0 => -- pushBytes: emits byte values 0..255
+      simp only [fibonacciEnsemble] at h_table_abs
+      simp only [TableWitness.interactions, AbstractTable.operations, h_table_abs] at h_mem_table
+      rcases List.mem_flatMap.1 h_mem_table with ⟨row, h_row_mem, h_in_filter⟩
+      rw [h_table_abs] at h_in_filter
+      simp only [RawChannel.filter, pushBytes, witnessAny, getOffset,
+        FormalCircuitWithInteractions.instantiate, circuit_norm, BytesChannel,
+        Channel.emitted, InteractionDelta.single, Channel.toRaw,
+        List.filterMap_flatMap] at h_in_filter
+      rcases List.mem_flatMap.1 h_in_filter with ⟨idx, h_idx_mem, h_entry_mem⟩
+      -- h_entry_mem says entry is in filterMap applied to singleton list, giving entry = (_, #v[idx])
+      simp only [List.filterMap_cons,
+        show ("bytes" : String) = "bytes" ↔ True by decide, true_and,
+        show (#[(_ : F p)] : Array (F p)).size = 1 by rfl, dite_true,
+        show (0 : InteractionDelta (F p)) = [] by rfl, List.filterMap_nil,
+        List.mem_cons, List.not_mem_nil, or_false] at h_entry_mem
+      -- h_entry_mem : entry = (_, #v[↑↑idx]) where idx : Fin 256
+      -- idx.val < 256 by definition
+      have h_idx_lt : idx.val < 256 := idx.isLt
+      have h_idx_lt_p : idx.val < p := by
+        have hp : p > 512 := Fact.elim (by infer_instance : Fact (p > 512))
+        omega
+      have h_val : (idx.val : F p).val = idx.val := ZMod.val_natCast_of_lt h_idx_lt_p
+      -- entry.2[0] = idx (as F p), so entry.2[0].val = idx.val < 256
+      rw [h_entry_mem]
+      -- Goal: ZMod.val ((_, #v[↑↑idx]).2)[0] < 256
+      -- #v[↑↑idx][0] = ↑↑idx = (idx.val : F p)
+      -- So ZMod.val (↑↑idx) = idx.val < 256
+      calc ZMod.val ((_, #v[(idx.val : F p)]).2)[0]
+        = ZMod.val (#v[(idx.val : F p)])[0] := rfl
+        _ = ZMod.val (idx.val : F p) := by congr 1
+        _ = idx.val := h_val
+        _ < 256 := h_idx_lt
+    | 1 => -- add8: only pulls (mult = -1), contradicts h_push
+      simp only [fibonacciEnsemble] at h_table_abs
+      simp only [TableWitness.interactions, AbstractTable.operations, h_table_abs] at h_mem_table
+      rcases List.mem_flatMap.1 h_mem_table with ⟨row, h_row_mem, h_in_filter⟩
+      rw [h_table_abs] at h_in_filter
+      simp only [RawChannel.filter, add8, witnessAny, getOffset,
+        FormalCircuitWithInteractions.instantiate, circuit_norm, BytesChannel, Add8Channel,
+        Channel.emitted, Channel.pulled, InteractionDelta.single, Channel.toRaw] at h_in_filter
+      rw [InteractionDelta.add_eq_append] at h_in_filter
+      simp only [List.filterMap_append, List.filterMap_cons,
+        show ("bytes" : String) = "bytes" ↔ True by decide, true_and,
+        show ("add8" : String) = "bytes" ↔ False by decide, false_and, dite_false, dite_true,
+        show (#[(_ : F p)] : Array (F p)).size = 1 by rfl,
+        show (0 : InteractionDelta (F p)) = [] by rfl,
+        List.filterMap_nil, List.nil_append, List.append_nil,
+        List.mem_cons, List.not_mem_nil, or_false] at h_in_filter
+      -- h_in_filter : entry = (-1, #v[z])
+      -- But h_push says entry.1 ≠ -1, contradiction
+      rw [h_in_filter] at h_push
+      simp only [ne_eq, not_true_eq_false] at h_push
+    | 2 => -- fib8: no BytesChannel interactions
+      simp only [fibonacciEnsemble] at h_table_abs
+      simp only [TableWitness.interactions, AbstractTable.operations, h_table_abs] at h_mem_table
+      rcases List.mem_flatMap.1 h_mem_table with ⟨row, h_row_mem, h_in_filter⟩
+      rw [h_table_abs] at h_in_filter
+      simp only [RawChannel.filter, fib8, witnessAny, getOffset,
+        FormalCircuitWithInteractions.instantiate, circuit_norm, BytesChannel, Add8Channel,
+        FibonacciChannel, Channel.emitted, Channel.pulled, InteractionDelta.single, Channel.toRaw] at h_in_filter
+      rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_in_filter
+      simp only [List.filterMap_append, List.filterMap_cons,
+        show ("fibonacci" : String) = "bytes" ↔ False by decide, false_and, dite_false,
+        show ("add8" : String) = "bytes" ↔ False by decide,
+        show (0 : InteractionDelta (F p)) = [] by rfl,
+        List.filterMap_nil, List.nil_append, List.append_nil, List.not_mem_nil] at h_in_filter
+  · -- From verifier: verifier has no BytesChannel interactions
+    have h_verifier_empty :
+        fibonacciEnsemble.verifierInteractions BytesChannel.toRaw publicInput = [] := by rfl
+    simp only [h_verifier_empty, List.not_mem_nil] at h_ver
 
 /-- The step counter of any valid fibonacci state is bounded by the number of interactions.
 
