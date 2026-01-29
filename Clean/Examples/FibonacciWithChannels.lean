@@ -834,11 +834,20 @@ lemma pushBytes_add8_interactions_empty
     (h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩) :
     table.interactions (Add8Channel.toRaw) = [] := by
   -- pushBytes only emits to BytesChannel (name = "bytes"), not Add8Channel (name = "add8")
-  -- The proof needs:
-  -- 1. Operations.localAdds for pushBytes equals pushBytes.localAdds (from localAdds_eq)
-  -- 2. pushBytes.localAdds only contains BytesChannel entries (by definition)
-  -- 3. Filtering BytesChannel entries by Add8Channel gives empty (name mismatch)
-  sorry
+  simp only [TableWitness.interactions, AbstractTable.operations]
+  rw [List.flatMap_eq_nil_iff]
+  intro row h_row_mem
+  rw [h_is_pushBytes]
+  -- Unfold to get the actual localAdds list for pushBytes
+  simp only [RawChannel.filter, pushBytes, witnessAny, getOffset,
+    FormalCircuitWithInteractions.instantiate, circuit_norm, BytesChannel, Add8Channel,
+    Channel.emitted, InteractionDelta.single, Channel.toRaw, List.filterMap_flatMap,
+    List.flatMap_eq_nil_iff]
+  intro i _
+  -- Each entry has name "bytes" ≠ "add8", so filter removes it
+  simp only [List.filterMap_cons]
+  simp only [show ("bytes" : String) = "add8" ↔ False by decide, false_and, dite_false]
+  rfl
 
 /-- fib8's Add8Channel interactions all have mult = -1 (fib8 only pulls from Add8Channel) -/
 lemma fib8_add8_interactions_mult_neg
