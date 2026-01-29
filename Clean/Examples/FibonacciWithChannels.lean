@@ -1334,7 +1334,25 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       -- add8_fib_interactions_empty to eliminate cases 0 and 1.
       have h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩ := by
         -- Only fib8 emits to FibonacciChannel; pushBytes and add8 have empty interactions
-        sorry
+        rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
+        have h_len : witness.tables.length = 3 := by
+          simpa [fibonacciEnsemble] using witness.same_length.symm
+        have hi' : i < 3 := by simpa [h_len] using hi
+        have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
+          simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
+        match i with
+        | 0 =>
+          -- pushBytes has empty FibonacciChannel interactions
+          have h_empty := pushBytes_fib_interactions_empty table (by simp [fibonacciEnsemble] at h_same ⊢; exact h_same.symm)
+          simp only [h_empty, List.not_mem_nil] at h_entry_in_table
+        | 1 =>
+          -- add8 has empty FibonacciChannel interactions
+          have h_empty := add8_fib_interactions_empty table (by simp [fibonacciEnsemble] at h_same ⊢; exact h_same.symm)
+          simp only [h_empty, List.not_mem_nil] at h_entry_in_table
+        | 2 =>
+          -- fib8 is the only one that emits to FibonacciChannel
+          simp [fibonacciEnsemble] at h_same ⊢
+          exact h_same.symm
       have h_table_constraints : table.Constraints := by
         rw [List.forall_iff_forall_mem] at h_constraints
         exact h_constraints table h_table_mem
