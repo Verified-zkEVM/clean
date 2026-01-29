@@ -690,6 +690,13 @@ lemma bytes_push_val_lt_256
                       ((BytesChannel (p := p)).toRaw))
     (h_push : entry.1 ≠ -1) :
     entry.2[0].val < 256 := by
+  -- Proof: Non-pull entries come from pushBytes which emits byte values 0..255.
+  -- The full proof is in the channel-proof-gpt branch (bytes_guarantee_of_balance_tables).
+  -- Key steps:
+  -- 1. Entry is from tables (verifier has no BytesChannel interactions)
+  -- 2. Case split on table: pushBytes (0), add8 (1), fib8 (2)
+  -- 3. add8 only pulls (mult = -1), fib8 has no BytesChannel interactions
+  -- 4. pushBytes emits values from finRange 256, so entry.2[0] = (i : F p) for i < 256
   sorry
 
 /-- The step counter of any valid fibonacci state is bounded by the number of interactions.
