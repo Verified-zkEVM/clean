@@ -897,14 +897,37 @@ lemma pushBytes_fib_interactions_empty
     (table : TableWitness (F p))
     (h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩) :
     table.interactions (FibonacciChannel.toRaw) = [] := by
-  sorry
+  -- pushBytes only emits to BytesChannel (name = "bytes"), not FibonacciChannel (name = "fibonacci")
+  simp only [TableWitness.interactions, AbstractTable.operations]
+  rw [List.flatMap_eq_nil_iff]
+  intro row h_row_mem
+  rw [h_is_pushBytes]
+  simp only [RawChannel.filter, pushBytes, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
+    circuit_norm, BytesChannel, FibonacciChannel, Channel.emitted, InteractionDelta.single,
+    Channel.toRaw, List.filterMap_flatMap, List.flatMap_eq_nil_iff]
+  intro i _
+  simp only [List.filterMap_cons]
+  simp only [show ("bytes" : String) = "fibonacci" ↔ False by decide, false_and, dite_false]
+  rfl
 
 /-- add8's FibonacciChannel interactions are empty -/
 lemma add8_fib_interactions_empty
     (table : TableWitness (F p))
     (h_is_add8 : table.abstract = ⟨add8 (p := p)⟩) :
     table.interactions (FibonacciChannel.toRaw) = [] := by
-  sorry
+  -- add8 only emits to BytesChannel and Add8Channel, not FibonacciChannel
+  simp only [TableWitness.interactions, AbstractTable.operations]
+  rw [List.flatMap_eq_nil_iff]
+  intro row h_row_mem
+  rw [h_is_add8]
+  simp only [RawChannel.filter, add8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
+    circuit_norm, BytesChannel, Add8Channel, FibonacciChannel, Channel.emitted, Channel.pulled,
+    InteractionDelta.single, Channel.toRaw]
+  rw [InteractionDelta.add_eq_append]
+  simp only [List.filterMap_append, List.filterMap_cons,
+    show ("bytes" : String) = "fibonacci" ↔ False by decide, false_and, dite_false,
+    show ("add8" : String) = "fibonacci" ↔ False by decide]
+  simp only [show (0 : InteractionDelta (F p)) = [] by rfl, List.filterMap_nil, List.append_nil]
 
 /-- fib8 rows emit matching pull and push to FibonacciChannel:
     For each push (1, (n+1, y, z)), the same row has:
