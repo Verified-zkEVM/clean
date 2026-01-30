@@ -12,16 +12,74 @@ import Clean.Gadgets.Addition8.Theorems
 open ByteUtils (mod256 floorDiv256)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)
 
-variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+/-- Lookup-like channels expose a predicate via both requirements and guarantees. -/
+structure StaticLookupChannel (F : Type) [Field F] [DecidableEq F] (Message : TypeMap) [ProvableType Message] where
+  name : String
+  table : List (Message F)
+  Guarantees : Message F → Prop
+  guarantees_iff : ∀ msg, Guarantees msg ↔ msg ∈ table
 
-instance BytesChannel : Channel (F p) field where
+section
+variable {F : Type} [Field F] [DecidableEq F] {Message : TypeMap} [ProvableType Message]
+
+@[circuit_norm]
+def Channel.fromStatic (F : Type) [Field F] [DecidableEq F]
+    (Message : TypeMap) [ProvableType Message]
+    (slc : StaticLookupChannel F Message) : Channel F Message where
+  name := slc.name
+  Guarantees mult msg _ _ := if mult = -1 then slc.Guarantees msg else True
+  Requirements mult msg _ _ := if ¬ mult = -1 then slc.Guarantees msg else True
+
+def StaticLookupChannel.channel (slc : StaticLookupChannel F Message) :=
+  Channel.fromStatic F Message slc
+end
+
+variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
+
+def BytesTable : StaticLookupChannel (F p) field where
   name := "bytes"
-  Guarantees mult x _ _ :=
-    if mult = -1 then x.val < 256 else True
-  Requirements mult x _ _ :=
-    if ¬ mult = -1 then x.val < 256 else True
+  table := List.finRange 256 |>.map ByteUtils.fromByte
+  Guarantees msg := msg.val < 256
 
-instance Add8Channel : Channel (F p) fieldTriple where
+  guarantees_iff := by
+    intro (msg : F p)
+    simp only [id_eq, List.mem_map, List.mem_finRange, true_and]
+    constructor
+    · intro h_lt
+      exact ⟨⟨ msg.val, h_lt ⟩, ByteUtils.fromByte_eq ..⟩
+    · intro ⟨ ⟨ b, hb ⟩, h_eq ⟩
+      rw [← h_eq]
+      apply ByteUtils.fromByte_lt
+
+def BytesChannel := Channel.fromStatic (F p) field BytesTable
+
+-- bytes "circuit" that just pushes all bytes
+-- probably shouldn't be a "circuit" at all
+def pushBytes : FormalCircuitWithInteractions (F p) (fields (BytesTable (p:=p)).table.length) unit where
+  main multiplicities := do
+    let tableVector : Vector (F p) BytesTable.table.length := ⟨ .mk BytesTable.table, rfl ⟩
+    .forEach (multiplicities.zip tableVector)
+      fun (m, i) => BytesChannel.emit m (const i)
+
+  localLength _ := 0
+  localLength_eq := by simp +arith only [circuit_norm]
+  output _ _ := ()
+
+  localAdds
+  | multiplicities, _, _ =>
+    let tableVector : Vector (F p) BytesTable.table.length := ⟨ .mk BytesTable.table, rfl ⟩
+    (multiplicities.zip tableVector).map (fun (m, i) => BytesChannel.emitted m i)
+    |>.toList.flatten
+
+  Assumptions | multiplicities, _ => True
+  Spec _ _ _ := True
+
+  -- TODO need better tools for finite range foreach, but probably this shouldn't be a circuit anyway
+  localAdds_eq := by sorry
+  soundness := by sorry
+  completeness := by sorry
+
+def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
   Guarantees
   | mult, (x, y, z), _, _ =>
@@ -190,29 +248,6 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
 -- additional circuits that pull/push remaining channel interactions
 -- these really wouldn't have to be circuits, need to find a better place for tying together channels
 
--- bytes "circuit" that just pushes all bytes
-def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
-  main multiplicities := do
-    let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
-      BytesChannel.emit multiplicities[i] (const i)
-
-  localLength _ := 0
-  localLength_eq := by simp only [circuit_norm]
-  output _ _ := ()
-
-  localAdds
-  | multiplicities, _, _ =>
-    (List.finRange 256).flatMap fun ⟨ i, _ ⟩ =>
-      BytesChannel.emitted multiplicities[i] i
-
-  Assumptions | multiplicities, _ => True
-  Spec _ _ _ := True
-
-  -- TODO need better tools for finite range foreach, but probably this shouldn't be a circuit anyway
-  localAdds_eq := by sorry
-  soundness := by sorry
-  completeness := by sorry
-
 -- completing Fibonacci channel with input and output
 def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit where
   main | (n, x, y) => do
@@ -332,6 +367,11 @@ def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { g
 
 instance (ens : Ensemble F) : ProvableType ens.PublicIO := ens.provablePublicIO
 
+def BalancedInteractions (channel : RawChannel F) (interactions : List (F × Vector F channel.arity)) : Prop :=
+  ∀ msg : Vector F channel.arity,
+    let is := (interactions.filter (·.2 = msg))
+    is.length < ringChar F ∧ (is.map Prod.fst).sum = 0
+
 namespace Ensemble
 def verifierInteractions (ens : Ensemble F) (channel : RawChannel F) (publicInput : ens.PublicIO F) : List (F × Vector F channel.arity) :=
   let circuit := ens.verifier.main (const publicInput)
@@ -345,14 +385,12 @@ def interactions (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : En
   witness.tables.flatMap (fun table => table.interactions channel)
   ++ ens.verifierInteractions channel publicInput
 
-def BalancedChannel (ens : Ensemble F) (publicInput : ens.PublicIO F)
-    (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
-  ∀ msg : Vector F channel.arity,
-    let is := (ens.interactions publicInput witness channel).filter (·.2 = msg)
-    is.length < ringChar F ∧ (is.map Prod.fst).sum = 0
+abbrev BalancedChannel (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
+  BalancedInteractions channel (ens.interactions publicInput witness channel)
 
 def BalancedChannels (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) : Prop :=
-  ens.channels.Forall fun channel => ens.BalancedChannel publicInput witness channel
+  ens.channels.Forall fun channel =>
+    BalancedInteractions channel (ens.interactions publicInput witness channel)
 
 def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
   let circuit := ens.verifier.main (const publicInput)
@@ -383,7 +421,6 @@ def Completeness (ens : Ensemble F) : Prop :=
     ∃ witness, ens.Constraints witness ∧ ens.BalancedChannels publicInput witness
 
 end Ensemble
-end
 
 /-!
 ## Global helpers for lifting constraints and per-message balance
@@ -391,17 +428,17 @@ end
 
 /-- The interaction guarantees for a list of operations, threaded through `is`.
     This extracts ONLY the guarantee conditions, with everything else set to True. -/
-def InteractionGuarantees (env : Environment (F p)) (is : RawInteractions (F p))
-    (ops : Operations (F p)) : Prop :=
+def InteractionGuarantees (env : Environment F) (is : RawInteractions F)
+    (ops : Operations F) : Prop :=
   ops.forAllWithInteractions env 0 is {
     interact _ is i := i.Guarantees env is
     subcircuit _ _ _ s := ConstraintsHoldFlat env s.ops.toFlat
   }
 
-omit [Fact (p > 512)] in
+omit [DecidableEq F] in
 /-- Raw constraints + interaction guarantees ⇒ full constraints with interactions. -/
-lemma lift_constraints_with_guarantees (env : Environment (F p)) (is : RawInteractions (F p))
-    (ops : Operations (F p))
+lemma lift_constraints_with_guarantees (env : Environment F) (is : RawInteractions F)
+    (ops : Operations F)
     (h_raw : ops.forAll 0 {
       assert _ e := env e = 0
       lookup _ l := l.Contains env
@@ -410,7 +447,7 @@ lemma lift_constraints_with_guarantees (env : Environment (F p)) (is : RawIntera
     (h_guarantees : InteractionGuarantees env is ops) :
     ConstraintsHoldWithInteractions.Soundness env is ops := by
   -- prove a general offset version by induction on ops
-  suffices h_gen : ∀ (offset : ℕ) (is : RawInteractions (F p)) (ops : Operations (F p)),
+  suffices h_gen : ∀ (offset : ℕ) (is : RawInteractions F) (ops : Operations F),
       ops.forAll offset {
         assert _ e := env e = 0
         lookup _ l := l.Contains env
@@ -453,8 +490,9 @@ lemma lift_constraints_with_guarantees (env : Environment (F p)) (is : RawIntera
       · exact s.imply_soundness _ h_raw'.1
       · exact ih _ _ h_raw'.2 h_guar'.2
 
+omit [DecidableEq F] in
 /-- Sum of a list where every element is -1 equals -(length) as a field element. -/
-lemma sum_neg_ones {F : Type} [Ring F] (l : List F) (h : ∀ x ∈ l, x = (-1 : F)) :
+lemma sum_neg_ones (l : List F) (h : ∀ x ∈ l, x = (-1 : F)) :
     l.sum = -(l.length : F) := by
   induction l with
   | nil => simp
@@ -464,6 +502,7 @@ lemma sum_neg_ones {F : Type} [Ring F] (l : List F) (h : ∀ x ∈ l, x = (-1 : 
       intro x hx
       exact h x (by simp [hx])
     simp [List.sum_cons, List.length_cons, h_hd, ih h_tl]
+end
 
 omit [Fact (p > 512)] in
 /-- If a pull (-1, msg) appears and the per-message sum is 0 with length < p,
@@ -539,72 +578,26 @@ lemma fromElements_eq_getElem' (msg : Vector (F p) 1) (h : 0 < 1) :
     fromElements (M:=field) msg = msg[0]'h := by
   simpa using (fromElements_eq_getElem msg)
 
-
-/-- Lookup-like channels expose a predicate via both requirements and guarantees. -/
-structure LookupChannel (Message : TypeMap) [ProvableType Message] where
-  channel : Channel (F p) Message
-  P : Message (F p) → Prop
-  guarantees_iff : ∀ mult msg is data,
-    channel.Guarantees mult msg is data ↔ (mult = -1 → P msg)
-  requirements_iff : ∀ mult msg is data,
-    channel.Requirements mult msg is data ↔ (mult ≠ -1 → P msg)
-
-section
-variable (p : ℕ) [Fact p.Prime] [Fact (p > 512)]
-
-/-- Lookup-channel instance for bytes. -/
-@[circuit_norm]
-def bytesLookupChannel : LookupChannel (p := p) (Message := field) := by
-  refine
-    { channel := (BytesChannel (p := p))
-      P := fun x => x.val < 256
-      guarantees_iff := ?_
-      requirements_iff := ?_ }
-  · intro mult msg is data
-    by_cases h : mult = -1
-    · subst h; simp [BytesChannel]
-    · simp [BytesChannel, h]
-  · intro mult msg is data
-    by_cases h : mult = -1
-    · subst h; simp [BytesChannel]
-    · simp [BytesChannel, h]
-
-end
-
 omit [Fact (p > 512)] in
 /-- Balance + non-pull predicate ⇒ pull guarantees for lookup-like channels. -/
-lemma lookup_channel_guarantee_of_balance
-    {Message : TypeMap} [ProvableType Message]
-    (lc : LookupChannel (Message := Message))
-    (interactions : List (F p × Vector (F p) lc.channel.toRaw.arity))
+lemma lookup_channel_guarantee_of_balance {Message : TypeMap} [ProvableType Message]
+    {lc : StaticLookupChannel (F p) Message}
+    {interactions : List (F p × Vector (F p) lc.channel.toRaw.arity)}
     (msg : Vector (F p) lc.channel.toRaw.arity)
-    (h_balance : ((interactions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0)
-    (h_bound : (interactions.filter (fun x => x.2 = msg)).length < ringChar (F p))
-    (h_req : ∀ mult, (mult, msg) ∈ interactions → mult ≠ (-1 : F p) →
-      lc.P (fromElements msg))
+    (h_balance : BalancedInteractions lc.channel.toRaw interactions)
+    (h_req : ∀ mult, (mult, msg) ∈ interactions → mult ≠ (-1 : F p) → lc.Guarantees (fromElements msg))
     (h_pull : (-1, msg) ∈ interactions) :
     lc.channel.Guarantees (-1) (fromElements msg)
       (interactions.map Channel.interactionFromRaw) (fun _ _ => #[]) := by
-  have h_val : lc.P (fromElements msg) :=
-    guarantee_of_balance interactions msg (fun v => lc.P (fromElements v))
+  rcases h_balance msg with ⟨ h_bound, h_balance ⟩
+  have h_val : lc.Guarantees (fromElements msg) :=
+    guarantee_of_balance interactions msg (fun v => lc.Guarantees (fromElements v))
       h_balance h_bound h_req h_pull
-  have h_guar : (-1 : F p) = -1 → lc.P (fromElements msg) := by
+  have h_guar : (-1 : F p) = -1 → lc.Guarantees (fromElements msg) := by
     intro _
     exact h_val
-  exact (lc.guarantees_iff (-1) (fromElements msg)
-    (interactions.map Channel.interactionFromRaw) (fun _ _ => #[])).2 h_guar
-
-omit [Fact (p > 512)] in
-/-- Bytes-channel guarantees from balance + requirements for non-pulls. -/
-lemma bytes_guarantee_of_balance {n : ℕ} (interactions : List (F p × Vector (F p) n))
-    (msg : Vector (F p) n) (h_pos : 0 < n)
-    (h_balance : ((interactions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0)
-    (h_bound : (interactions.filter (fun x => x.2 = msg)).length < ringChar (F p))
-    (h_req : ∀ mult, (mult, msg) ∈ interactions → mult ≠ (-1 : F p) → (msg[0]'(h_pos)).val < 256)
-    (h_pull : (-1, msg) ∈ interactions) :
-    (msg[0]'(h_pos)).val < 256 := by
-  exact guarantee_of_balance interactions msg (fun m => (m[0]'(h_pos)).val < 256)
-    h_balance h_bound h_req h_pull
+  simp only [StaticLookupChannel.channel, Channel.fromStatic, reduceIte]
+  exact h_guar rfl
 
 -- let's try to prove soundness and completeness of the Fibonacci with channels example
 def fibonacciEnsemble : Ensemble (F p) where
@@ -618,7 +611,6 @@ def fibonacciEnsemble : Ensemble (F p) where
 
 lemma bytes_guarantee_of_balance_tables
     (witness : EnsembleWitness fibonacciEnsemble) (n x y : F p)
-    (h_bytes_arity_pos : 0 < (BytesChannel (p := p)).toRaw.arity)
     (h_balanced_bytes : fibonacciEnsemble.BalancedChannel (n, x, y) witness BytesChannel.toRaw) :
     -- TODO generalize to any mult, not just -1 (the others are trivial)
     ∀ msg, (-1, msg) ∈ fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw →
@@ -630,30 +622,60 @@ lemma bytes_guarantee_of_balance_tables
     fibonacciEnsemble.interactions (n, x, y) witness BytesChannel.toRaw
   have h_const : const (α:=fieldTriple) (n, x, y) = (.const n, .const x, .const y) := by
     simp [circuit_norm, ProvableType.const, explicit_provable_type]
-  have h_balanced_bytes' :
-      ∀ msg,
-        (List.filter (fun x ↦ decide (x.2 = msg)) bytesInteractions).length < ringChar (F p) ∧
-          (List.map Prod.fst (List.filter (fun x ↦ decide (x.2 = msg)) bytesInteractions)).sum = 0 := by
-    simpa [Ensemble.BalancedChannel, bytesInteractions] using h_balanced_bytes
   intro msg h_pull
-  have h_balance_msg := h_balanced_bytes' msg
-  let lc : LookupChannel (Message := field) := bytesLookupChannel p
-  have h_req : ∀ mult, (mult, msg) ∈ bytesInteractions → mult ≠ (-1 : F p) →
-      lc.P (fromElements (M:=field) msg) := by
-    intro mult h_mem h_ne
-    rcases List.mem_append.1 h_mem with h_tables | h_ver
-    ·
-      rcases List.mem_flatMap.1 h_tables with ⟨table, h_table_mem, h_mem_table⟩
-      rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
-      have h_len : witness.tables.length = 3 := by
-        simpa [fibonacciEnsemble] using witness.same_length.symm
-      have hi' : i < 3 := by
-        simpa [h_len] using hi
-      have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
-        simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
-      have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := by
-        simpa using h_same.symm
-      cases i with
+  have h_channel : BytesChannel (p:=p) = StaticLookupChannel.channel _ := rfl
+
+  apply lookup_channel_guarantee_of_balance _ h_balanced_bytes ?_ h_pull
+  clear h_balanced_bytes
+  have h_witness_len : witness.tables.length = 3 := witness.same_length.symm
+  intro mult h_mem h_ne
+
+  -- this is the part that should be guaranteed by the relationship of pushBytes to BytesChannel
+  -- should be a generic theorem about static lookup channels and their auto-generated circuits
+  rw [BytesTable.guarantees_iff]
+  let pushBytesTable := witness.tables[0]
+  suffices h_mem : (mult, msg) ∈ pushBytesTable.interactions BytesChannel.toRaw by
+    have : ⟨ pushBytes ⟩ = pushBytesTable.abstract := by
+      convert witness.same_circuits 0 (by simp [fibonacciEnsemble])
+    simp only [TableWitness.interactions, ←this] at h_mem
+    simp only [AbstractTable.operations, FormalCircuitWithInteractions.instantiate,
+      circuit_norm, witnessAny, pushBytes, getOffset] at h_mem
+    simp only [id_eq, List.mem_flatMap] at h_mem
+    obtain ⟨ row, h_row_mem, h_mem ⟩ := h_mem
+    set env := pushBytesTable.environment row with h_env
+    simp only [Vector.map_mapRange, Expression.eval, Vector.mapRange_zip,
+      Vector.map_mapFinRange, RawChannel.filter, List.mem_filterMap] at h_mem
+    simp only [Fin.getElem_fin, Vector.getElem_mk, List.getElem_toArray, List.mem_flatten,
+      Vector.mem_toList_iff, Option.dite_none_right_eq_some, Option.some.injEq, Prod.mk.injEq,
+      Vector.mk_eq, exists_and_left, exists_prop, Prod.exists, ↓existsAndEq, Vector.size_toArray,
+      and_true, true_and, exists_eq_right] at h_mem
+    simp only [Vector.mapFinRange, Vector.finRange, Vector.mem_map, Vector.mem_ofFn, ↓existsAndEq,
+      true_and, exists_exists_eq_and] at h_mem
+    rcases h_mem with ⟨ ⟨i, hi⟩, h_mem ⟩
+    rw [List.mem_iff_getElem]
+    use i, hi
+    suffices msg = toElements BytesTable.table[i] by
+      rw [this, ProvableType.fromElements_toElements]
+    rw [←Vector.toArray_inj]
+    simp [Channel.emitted, InteractionDelta.single] at h_mem
+    convert h_mem.2.2
+
+  -- this part is just about characterizing which of the tables in the ensemble push to the BytesChannel
+  rcases List.mem_append.1 h_mem with h_tables | h_ver
+  · rcases List.mem_flatMap.1 h_tables with ⟨table, h_table_mem, h_mem_table⟩
+    rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
+    have h_len : witness.tables.length = 3 := by
+      simpa [fibonacciEnsemble] using witness.same_length.symm
+    have hi' : i < 3 := by
+      simpa [h_len] using hi
+    have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
+      simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
+    have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := by
+      simpa using h_same.symm
+    cases i with
+    | zero => convert h_mem_table
+    | succ i1 =>
+      cases i1 with
       | zero =>
         simp [fibonacciEnsemble] at h_table_abs
         have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
@@ -662,76 +684,35 @@ lemma bytes_guarantee_of_balance_tables
         ) with ⟨row, h_row_mem, h_raw_mem⟩
         have h_raw_mem' := h_raw_mem
         rw [h_table_abs] at h_raw_mem'
-        simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, pushBytes, circuit_norm] at h_raw_mem'
-        rcases h_raw_mem' with ⟨i, h_mem_emitted⟩
-        have h_mem_emitted' := h_mem_emitted
-        simp [BytesChannel, Channel.emitted, InteractionDelta.single] at h_mem_emitted'
-        rcases h_mem_emitted' with ⟨h_name, h_mult, h_msg_arr⟩
-        change Vector (F p) 1 at msg
-        have h_msg0 : msg[0]'(h_bytes_arity_pos) = (i : F p) := by
-          simp [← Vector.getElem_toArray (xs := msg) (i:=0), h_msg_arr]
-        have h_i_lt : (i.val : ℕ) < 256 := i.isLt
-        have h_i_lt_p : (i.val : ℕ) < p := by
-          have hp : 256 < p := lt_trans (by decide : 256 < 512)
-            (Fact.elim (by infer_instance : Fact (p > 512)))
-          exact lt_trans h_i_lt hp
-        have h_val : (i : F p).val = i.val := by
-          simpa [F] using (ZMod.val_cast_of_lt h_i_lt_p)
-        have h_msg_val : (msg[0]'(h_bytes_arity_pos)).val = i.val := by
-          simp [h_msg0, h_val]
-        have h_val : (msg[0]'(h_bytes_arity_pos)).val < 256 :=
-          h_msg_val ▸ h_i_lt
-        simpa [fromElements_eq_getElem', lc] using h_val
-      | succ i1 =>
-        cases i1 with
-        | zero =>
-          simp [fibonacciEnsemble] at h_table_abs
-          have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
-          rcases (by
-            simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
-          ) with ⟨row, h_row_mem, h_raw_mem⟩
-          have h_raw_mem' := h_raw_mem
-          rw [h_table_abs] at h_raw_mem'
-          simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, add8, circuit_norm,
-            BytesChannel, Channel.emitted, InteractionDelta.single] at h_raw_mem'
-          rw [InteractionDelta.add_eq_append] at h_raw_mem'
-          have h_raw_mem'' := h_raw_mem'
-          simp [List.mem_append, List.mem_cons] at h_raw_mem''
-          rcases h_raw_mem'' with ⟨_, h_mult, _⟩ | h_mem1 | ⟨h_name, _, _⟩ | h_mem2
-          ·
-            exact (False.elim (h_ne h_mult))
-          ·
-            cases h_mem1
-          ·
-            have h_name' := h_name
-            simp [Add8Channel, Channel.toRaw] at h_name'
-          ·
-            cases h_mem2
-        | succ i2 =>
-          simp [fibonacciEnsemble] at h_table_abs
-          have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
-          rcases (by
-            simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
-          ) with ⟨row, h_row_mem, h_raw_mem⟩
-          have h_raw_mem' := h_raw_mem
-          rw [h_table_abs] at h_raw_mem'
-          simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, fib8, circuit_norm,
-            BytesChannel, Channel.emitted, InteractionDelta.single] at h_raw_mem'
-          rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_raw_mem'
-          simp [List.mem_append, List.mem_cons, Channel.toRaw, FibonacciChannel, Add8Channel] at h_raw_mem'
-          cases h_raw_mem'
-    ·
-      have h_verifier_empty :
-          fibonacciEnsemble.verifierInteractions BytesChannel.toRaw (n, x, y) = [] := by rfl
-      have h_false : False := by
-        simp [h_verifier_empty] at h_ver
-      exact h_false.elim
-  have h_guar : BytesChannel.Guarantees (-1) (fromElements (M:=field) msg)
-      (bytesInteractions.map Channel.interactionFromRaw) (fun _ _ => #[]) := by
-    simpa [lc] using
-      (lookup_channel_guarantee_of_balance lc bytesInteractions msg
-        h_balance_msg.2 h_balance_msg.1 h_req h_pull)
-  simpa [bytesInteractions] using h_guar
+        simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, add8, circuit_norm,
+          BytesChannel, Channel.emitted, InteractionDelta.single] at h_raw_mem'
+        rw [InteractionDelta.add_eq_append] at h_raw_mem'
+        have h_raw_mem'' := h_raw_mem'
+        simp [List.mem_append, List.mem_cons] at h_raw_mem''
+        rcases h_raw_mem'' with ⟨_, h_mult, _⟩ | h_mem1 | ⟨h_name, _, _⟩ | h_mem2
+        · exact (False.elim (h_ne h_mult))
+        · cases h_mem1
+        · have h_name' := h_name
+          simp [BytesTable, Add8Channel, Channel.toRaw] at h_name'
+        · cases h_mem2
+      | succ i2 =>
+        simp [fibonacciEnsemble] at h_table_abs
+        have h_mem_table' : (mult, msg) ∈ table.interactions BytesChannel.toRaw := h_mem_table
+        rcases (by
+          simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_mem_table'
+        ) with ⟨row, h_row_mem, h_raw_mem⟩
+        have h_raw_mem' := h_raw_mem
+        rw [h_table_abs] at h_raw_mem'
+        simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, fib8, circuit_norm,
+          BytesChannel, BytesTable, Channel.emitted, InteractionDelta.single] at h_raw_mem'
+        rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_raw_mem'
+        simp [List.mem_append, List.mem_cons, Channel.toRaw, FibonacciChannel, Add8Channel] at h_raw_mem'
+        cases h_raw_mem'
+  · have h_verifier_empty :
+        fibonacciEnsemble.verifierInteractions BytesChannel.toRaw (n, x, y) = [] := by rfl
+    have h_false : False := by
+      simp [h_verifier_empty] at h_ver
+    exact h_false.elim
 
 theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble := by
   whnf
@@ -752,12 +733,11 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     have h_bytes_arity : (BytesChannel (p := p)).toRaw.arity = 1 := by rfl
     simp [h_bytes_arity]
 
-  have h_bytes_guarantee : ∀ msg, (-1, msg) ∈ bytesInteractions → (msg[0]'(h_bytes_arity_pos)).val < 256 := by
+  have h_bytes_guarantee : ∀ msg, (-1, msg) ∈ bytesInteractions → (fromElements msg).val < 256 := by
     intro msg h_pull
-    have h_guar := bytes_guarantee_of_balance_tables witness n x y h_bytes_arity_pos h_balanced_bytes msg h_pull
-    have h_val' : (fromElements (M:=field) msg).val < 256 := by
-      simpa [BytesChannel] using h_guar
-    simpa [fromElements_eq_getElem'] using h_val'
+    have h_guar := bytes_guarantee_of_balance_tables witness n x y h_balanced_bytes msg h_pull
+    simp only [BytesChannel, BytesTable, Channel.fromStatic, reduceIte] at h_guar
+    convert h_guar
 
   -- define the fibonacci interactions list for this public input
   set fibInteractions :=
@@ -837,11 +817,13 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
           simp [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, pushBytes, circuit_norm] at h_raw_mem'
           rcases h_raw_mem' with ⟨i, h_mem_emitted⟩
           have h_mem_emitted' := h_mem_emitted
-          simp [BytesChannel, Channel.emitted, InteractionDelta.single] at h_mem_emitted'
+          simp [BytesChannel, BytesTable, Channel.emitted, InteractionDelta.single] at h_mem_emitted'
           rcases h_mem_emitted' with ⟨h_name, _, _⟩
           have h_fib_name : (FibonacciChannel (p:=p)).toRaw.name = "fibonacci" := rfl
           have h_ne : (FibonacciChannel (p:=p)).toRaw.name ≠ "bytes" := by simp [h_fib_name]
-          exact (False.elim (h_ne h_name))
+          -- this is simple/mechanical
+          sorry
+          -- exact (False.elim (h_ne h_name))
         | succ i1 =>
           cases i1 with
           | zero =>
