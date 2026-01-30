@@ -1050,8 +1050,16 @@ lemma add8_interactions_satisfy_requirements
       simp only [input_var, circuit_norm, Add8Channel, h_mult, reduceIte]
       simp only [BytesChannel, reduceIte]
       apply h_bytes_guarantees (env.get 2)
-      -- reduced to: something is in interactions
-      sorry
+      -- Need to show (-1, #v[env.get 2]) ∈ table.interactions BytesChannel.toRaw
+      -- This follows because add8 pulls z from BytesChannel
+      simp only [TableWitness.interactions, AbstractTable.operations]
+      rw [List.mem_flatMap]
+      refine ⟨row, h_row_mem, ?_⟩
+      rw [h_is_add8]
+      simp only [RawChannel.filter, add8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
+        circuit_norm, BytesChannel, Channel.pulled, InteractionDelta.single, Channel.toRaw,
+        toElements]
+      simp [InteractionDelta.add_eq_append, env]
 
     -- Use bridge lemma to get ConstraintsHoldWithInteractions.Soundness
     have h_soundness : ConstraintsHoldWithInteractions.Soundness env [] ops := by
