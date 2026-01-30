@@ -1,6 +1,6 @@
 # FibonacciWithChannels Soundness Proof Plan
 
-## Current Status: Proof structure complete, sorries for structural lemmas
+## Current Status: `add8_interactions_satisfy_requirements` structured using `add8.soundness` abstractly
 
 ## Completed Steps
 
@@ -30,40 +30,47 @@
   - Verifier case: push is `(0, 0, 1)` ✓
   - Tables case: use `fib8_fib_push_has_matching_pull`
 
+## `add8_interactions_satisfy_requirements` Proof Structure
+
+Successfully wired up to use `add8.soundness` abstractly:
+
+1. **Extract constraints**: From `table.Constraints`, we get `h_row_constraints : ConstraintsHoldFlat env ops.toFlat`
+   - `table.abstract.operations` unfolds to `[witness inputs, subcircuit add8]`
+   - `ConstraintsHold` skips witnesses and extracts `ConstraintsHoldFlat` from subcircuits
+   - `toSubcircuit.ops.toFlat = ops.toFlat` by `Operations.toNested_toFlat`
+
+2. **Build Guarantees**: `h_guarantees : ops.forAllWithInteractions env 0 [] { interact := i.Guarantees }`
+   - BytesChannel.pull needs `z.val < 256` (**sorry** - needs extraction from `h_bytes_guarantees`)
+   - Add8Channel.emit has `Guarantees = True`
+
+3. **Bridge lemma**: `constraintsHoldFlat_to_soundness` converts `ConstraintsHoldFlat + Guarantees → ConstraintsHoldWithInteractions.Soundness`
+   (**sorry** - lemma needs proof)
+
+4. **Apply add8.soundness**: Gets `Spec ∧ Requirements`
+
+5. **Extract Requirements**: Simplify to get the concrete implication about `z.val = (x.val + y.val) % 256`
+
+6. **Finish**: Apply with `h_mult`, `h_x_range`, `h_y_range`
+
 ## Remaining Sorries
 
-### Infrastructure (peripheral)
-| Line | Description |
-|------|-------------|
-| 221-223 | `pushBytes` ElaboratedCircuit instance |
-
-### User has in other branch
-| Line | Description |
-|------|-------------|
-| 693 | `bytes_push_val_lt_256` |
-| 708 | `fib_table_interaction_mult_pm_one` |
-
-### Add8Channel structural lemmas
+### Bridge infrastructure
 | Line | Lemma | Description |
 |------|-------|-------------|
-| 713 | `verifier_add8_interactions_empty` | Verifier only uses FibonacciChannel |
-| 720 | `pushBytes_add8_interactions_empty` | pushBytes only uses BytesChannel |
-| 729 | `fib8_add8_interactions_mult_neg` | fib8 only pulls from Add8Channel |
-| 741 | `add8_interactions_satisfy_requirements` | add8 pushes satisfy Requirements |
+| 957 | `constraintsHoldFlat_to_soundness` | Bridge: ConstraintsHoldFlat + Guarantees → Soundness |
 
-### FibonacciChannel structural lemmas
-| Line | Lemma | Description |
-|------|-------|-------------|
-| 752 | `pushBytes_fib_interactions_empty` | pushBytes doesn't use FibonacciChannel |
-| 759 | `add8_fib_interactions_empty` | add8 doesn't use FibonacciChannel |
-| 774 | `fib8_fib_push_has_matching_pull` | fib8 pushes have matching pulls |
-
-### Main proof
+### In `add8_interactions_satisfy_requirements`
 | Line | Description |
 |------|-------------|
-| 1153 | `h_is_fib8`: table is fib8 (same pattern as h_push_req) |
-| 1169 | `n_i.val + 1 < p`: overflow check |
-| 1172 | Validity transfer: `IsValidFibState n_i → IsValidFibState (n_i+1)` |
+| 1049 | `h_guarantees` - need `z.val < 256` from `h_bytes_guarantees` |
+| 1059 | `h_eval_eq` - definitional equality, needs ProvableStruct simp |
+
+### Other infrastructure (peripheral)
+| Line | Description |
+|------|-------------|
+| 203 | `pushBytes` ElaboratedCircuit instance (4 sorries) |
+| 790 | something else |
+| 1130 | something else |
 
 ## Architecture Notes
 
@@ -73,25 +80,14 @@ The structural lemmas characterize which circuits emit what to each channel:
 Circuit      | BytesChannel | Add8Channel | FibonacciChannel
 -------------|--------------|-------------|------------------
 pushBytes    | push (many)  | empty       | empty
-add8         | pull (3x)    | push (1x)   | empty
+add8         | pull (1x)    | push (1x)   | empty
 fib8         | empty        | pull (1x)   | push+pull
 verifier     | empty        | empty       | push+pull
 ```
 
-## Proof Flow
+## Key Insight
 
-1. Balance guarantees every pull has matching push
-2. BytesChannel: all pushes have `val < 256` (pushBytes table contains 0..255)
-3. Add8Channel: pulls satisfy `z = (x + y) % 256`
-4. FibonacciChannel:
-   - Every push either is `(0, 0, 1)` (initial) or has a matching pull predecessor
-   - Validity transfers through the chain
-   - Public input `(n, x, y)` is valid
-
-## Next Steps
-
-1. Prove the structural lemmas (mainly about circuit structure)
-2. The overflow check `n_i.val + 1 < p` needs either:
-   - An assumption in the circuit constraints
-   - Derivation from the fibonacci sequence length being bounded
-3. The validity transfer needs to use `h_add8_guarantees` to get `z_i = (x_i + y_i) % 256`
+The proof uses `add8.soundness` abstractly rather than manually unfolding circuit constraints:
+- `add8.soundness` proves `ConstraintsHoldWithInteractions.Soundness → Spec ∧ Requirements`
+- `Requirements` for Add8Channel says: if push, then `z.val = (x.val + y.val) % 256`
+- We provide the `Soundness` via the bridge lemma from `ConstraintsHoldFlat + Guarantees`

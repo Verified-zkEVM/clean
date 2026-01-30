@@ -425,6 +425,14 @@ lemma Channel.filter_self_add (channel : Channel F Message)
     channel.toRaw.filter (channel.emitted mult msg + is) = (mult, toElements msg) :: channel.toRaw.filter is := by
   simp [Channel.emitted, InteractionDelta.single, InteractionDelta.add_eq_append, Channel.toRaw, RawChannel.filter]
 
+@[circuit_norm]
+lemma RawChannel.filter_zero (channel : Channel F Message) :
+  (channel.toRaw.filter 0).map Channel.interactionFromRaw = [] := rfl
+
+@[circuit_norm]
+lemma Channel.filter_zero (channel : Channel F Message) :
+  channel.filter 0 = [] := rfl
+
 -- abstract theory of channel consistency
 
 namespace Channel
