@@ -416,6 +416,33 @@ def Completeness (ens : Ensemble F) : Prop :=
     ∃ witness, ens.Constraints witness ∧ ens.BalancedChannels publicInput witness
 
 end Ensemble
+
+omit [DecidableEq F] in
+/-- Bridge lemma: ConstraintsHold + channel Guarantees → ConstraintsHoldWithInteractions.Soundness
+    This lemma allows us to use circuit soundness proofs by providing the required Guarantees externally. -/
+lemma constraintsHold_to_soundness
+    (env : Environment F)
+    (interactions : RawInteractions F)
+    (ops : Operations F)
+    (h_constraints : ConstraintsHold env ops)
+    -- For each interact operation, we can prove its Guarantees
+    (h_guarantees : ops.forAllWithInteractions env 0 interactions
+      { interact := fun _ is i => i.Guarantees env is }) :
+    ConstraintsHoldWithInteractions.Soundness env interactions ops := by
+  simp only [ConstraintsHold] at h_constraints
+  simp only [ConstraintsHoldWithInteractions.Soundness]
+  generalize 0 = n at *
+  induction ops using Operations.induct generalizing n interactions with
+  | empty => trivial
+  | witness | assert | interact =>
+    simp_all [Operations.forAll, Operations.forAllWithInteractions]
+  | lookup l =>
+    simp_all only [Lookup.Contains, Lookup.Soundness, Operations.forAll,
+      Operations.forAllWithInteractions, true_and, and_true]
+    exact l.table.imply_soundness _ _ (h_constraints.1)
+  | subcircuit s ops ih =>
+    simp_all only [Operations.forAll, Operations.forAllWithInteractions, true_and, and_true]
+    exact s.imply_soundness _ h_constraints.1
 end
 
 -- let's try to prove soundness and completeness of the Fibonacci with channels example
@@ -807,11 +834,24 @@ lemma fib_step_counter_bounded
     (h_mem : entry ∈ fibInteractions)
     (h_push : entry.1 = 1)
     (n_i : F p)
-    (h_n_eq : entry.2[0] = n_i + 1) :
+    (h_n_eq : entry.2[0] = n_i + 1)
+    (h_nonzero : entry.2[0] ≠ 0) :
     n_i.val + 1 < p := by
-  -- The step counter is bounded by the chain length, which is bounded by |fibInteractions|/2
-  -- Since p > 512 and |fibInteractions| < p, we have sufficient room
-  sorry
+  -- We prove by contradiction: if n_i.val + 1 ≥ p, then n_i + 1 = 0 in ZMod p
+  by_contra h_overflow
+  push_neg at h_overflow
+  -- Since n_i.val < p (always true for ZMod), n_i.val + 1 ≥ p means n_i.val = p - 1
+  have h_ni_max : n_i.val = p - 1 := by
+    have := ZMod.val_lt n_i
+    omega
+  -- Then n_i + 1 = 0 in ZMod p (wraparound)
+  have h_wrap : n_i + 1 = 0 := by
+    have hp : 0 < p := Nat.Prime.pos (Fact.out (p := Nat.Prime p))
+    rw [← ZMod.val_eq_zero, ZMod.val_add, ZMod.val_one, h_ni_max]
+    simp only [Nat.sub_add_cancel hp, Nat.mod_self]
+  -- But entry.2[0] = n_i + 1 = 0, contradicting h_nonzero
+  rw [h_n_eq, h_wrap] at h_nonzero
+  exact h_nonzero rfl
 
 /-- For any FibonacciChannel interaction from the tables (not verifier),
     the multiplicity is 1 or -1.
@@ -965,19 +1005,6 @@ lemma fib8_add8_interactions_mult_neg
     List.mem_cons, List.not_mem_nil, or_false] at h_in_filter
   -- Now h_in_filter says entry = (-1, ...)
   rw [h_in_filter]
-
-/-- Bridge lemma: ConstraintsHold + channel Guarantees → ConstraintsHoldWithInteractions.Soundness
-    This lemma allows us to use circuit soundness proofs by providing the required Guarantees externally. -/
-lemma constraintsHold_to_soundness
-    (env : Environment (F p))
-    (interactions : RawInteractions (F p))
-    (ops : Operations (F p))
-    (h_constraints : ConstraintsHold env ops)
-    -- For each interact operation, we can prove its Guarantees
-    (h_guarantees : ops.forAllWithInteractions env 0 interactions
-      { interact := fun _ is i => i.Guarantees env is }) :
-    ConstraintsHoldWithInteractions.Soundness env interactions ops := by
-  sorry
 
 set_option maxHeartbeats 500000
 
@@ -1598,7 +1625,34 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
           apply List.mem_append_left
           rw [List.mem_flatMap]
           exact ⟨table, h_table_mem, h_entry_in_table⟩
-        exact fib_step_counter_bounded fibInteractions h_fib_bound entry h_entry_in_fib h_push n_i h_n_eq
+        -- entry.2[0] = n_i + 1 ≠ 0: If n_i + 1 = 0, then n_i = -1, but the chain can't reach step p-1
+        have h_nonzero : entry.2[0] ≠ 0 := by
+          rw [h_n_eq]
+          intro h_zero
+          -- n_i + 1 = 0 means n_i = -1 in ZMod p
+          have h_ni_neg : n_i = -1 := add_eq_zero_iff_eq_neg.mp h_zero
+          -- The pull (-1, #v[n_i, x_i, y_i]) = (-1, #v[-1, x_i, y_i]) is in fibInteractions
+          have h_pull_in_fib : ((-1 : F p), #v[n_i, x_i, y_i]) ∈ fibInteractions := by
+            simp only [fibInteractions, Ensemble.interactions]
+            apply List.mem_append_left
+            rw [List.mem_flatMap]
+            exact ⟨table, h_table_mem, h_fib_pull_in_table⟩
+          -- By balance, the sum of mults for msg #v[n_i, x_i, y_i] is 0
+          -- The pull contributes -1, so there must be at least one push (mult = 1)
+          have h_bal_msg := h_fib_balanced #v[n_i, x_i, y_i]
+          -- Get a push with this message: (1, #v[n_i, x_i, y_i]) = (1, #v[-1, x_i, y_i])
+          have h_push_exists := exists_push_of_pull fibInteractions #v[n_i, x_i, y_i]
+            (fun e h _ => h_fib_mults e h) h_bal_msg h_pull_in_fib h_fib_bound
+          -- This push (1, #v[-1, x_i, y_i]) is in fibInteractions
+          -- It's not the verifier push (1, #v[0, 0, 1]) since -1 ≠ 0 in F p
+          rw [h_ni_neg] at h_push_exists
+          -- So it must come from fib8, meaning there's a fib8 row that pushes step counter -1
+          -- But fib8 pushes have step counter n' + 1, so n' = -2
+          -- And that requires a pull at step -2, needing a push at -2, etc.
+          -- The chain 0 → 1 → ... → p-1 needs p pushes, but fibInteractions.length < p
+          -- For now, leave as sorry - needs chain counting lemma
+          sorry
+        exact fib_step_counter_bounded fibInteractions h_fib_bound entry h_entry_in_fib h_push n_i h_n_eq h_nonzero
       · -- Validity transfer: IsValidFibState n_i x_i y_i → IsValidFibState entry.2[0] entry.2[1] entry.2[2]
         intro h_input_valid
         -- From IsValidFibState, we get the range bounds
