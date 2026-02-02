@@ -892,7 +892,7 @@ lemma fib_step_counter_bounded
       have h0 : entry.2[0] = 0 := by simp [h_base]
       have h_cast : ((n + 1 : ℕ) : F p) = 0 := by simpa [h_step] using h0
       have hval := ZMod.val_cast_of_lt h_n_lt
-      have : (n + 1 : ℕ) = 0 := by simpa [h_cast] using hval
+      have : (n + 1 : ℕ) = 0 := by simp [h_cast] at hval
       exact Nat.succ_ne_zero _ this
     · -- predecessor pull gives predecessor push
       have h_push_prev : (1, (#v[n_prev, x, y] : Vector (F p) 3)) ∈ fibInteractions :=
@@ -1331,7 +1331,7 @@ lemma fib_push_pred
         entry = (-1, (#v[n, x, y] : Vector (F p) 3)) := by
       simpa [h_verifier_interactions] using h_verifier
     rcases h_verifier' with h_ver | h_ver
-    · simpa [h_ver]
+    · simp [h_ver]
     · exfalso
       have hneq : (-1 : F p) ≠ (1 : F p) := by
         have : Fact (2 < p) := ⟨by
