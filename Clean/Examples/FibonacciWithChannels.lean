@@ -830,28 +830,67 @@ lemma bytes_push_val_lt_256
 lemma fib_step_counter_bounded
     (fibInteractions : List (F p × Vector (F p) 3))
     (h_bound : fibInteractions.length < p)
+    (h_mults : ∀ e ∈ fibInteractions, e.1 = 1 ∨ e.1 = -1)
+    (h_balanced : ∀ msg, (fibInteractions.filter (·.2 = msg) |>.map (·.1)).sum = 0)
+    (h_push_pred :
+      ∀ entry ∈ fibInteractions, entry.1 = 1 →
+        entry.2 = (#v[(0 : F p), 0, 1] : Vector (F p) 3) ∨
+        ∃ (n x y : F p), ((-1 : F p), (#v[n, x, y] : Vector (F p) 3)) ∈ fibInteractions ∧
+          entry.2[0] = n + 1)
     (entry : F p × Vector (F p) 3)
     (h_mem : entry ∈ fibInteractions)
     (h_push : entry.1 = 1)
     (n_i : F p)
-    (h_n_eq : entry.2[0] = n_i + 1)
-    (h_nonzero : entry.2[0] ≠ 0) :
+    (h_n_eq : entry.2[0] = n_i) :
     n_i.val + 1 < p := by
-  -- We prove by contradiction: if n_i.val + 1 ≥ p, then n_i + 1 = 0 in ZMod p
-  by_contra h_overflow
-  push_neg at h_overflow
-  -- Since n_i.val < p (always true for ZMod), n_i.val + 1 ≥ p means n_i.val = p - 1
-  have h_ni_max : n_i.val = p - 1 := by
-    have := ZMod.val_lt n_i
-    omega
-  -- Then n_i + 1 = 0 in ZMod p (wraparound)
-  have h_wrap : n_i + 1 = 0 := by
-    have hp : 0 < p := Nat.Prime.pos (Fact.out (p := Nat.Prime p))
-    rw [← ZMod.val_eq_zero, ZMod.val_add, ZMod.val_one, h_ni_max]
-    simp only [Nat.sub_add_cancel hp, Nat.mod_self]
-  -- But entry.2[0] = n_i + 1 = 0, contradicting h_nonzero
-  rw [h_n_eq, h_wrap] at h_nonzero
-  exact h_nonzero rfl
+  -- Prove a stronger statement by induction on Nat counters < p
+  suffices h : ∀ n : ℕ, n < p →
+      ∀ entry ∈ fibInteractions, entry.1 = 1 → entry.2[0] = (n : F p) → n + 1 ≤ fibInteractions.length by
+    have h_step : entry.2[0] = (n_i.val : F p) := by
+      exact h_n_eq.trans (ZMod.natCast_zmod_val n_i).symm
+    have h_le := h n_i.val (ZMod.val_lt n_i) entry h_mem h_push h_step
+    exact lt_of_le_of_lt h_le h_bound
+  intro n h_n_lt
+  induction n with
+  | zero =>
+    intro entry h_mem h_push h_step
+    have : 1 ≤ fibInteractions.length := Nat.succ_le_of_lt (List.length_pos_of_mem h_mem)
+    simpa using this
+  | succ n ih =>
+    intro entry h_mem h_push h_step
+    have h_pred := h_push_pred entry h_mem h_push
+    rcases h_pred with h_base | ⟨n_prev, x, y, h_pull, h_step_prev⟩
+    · -- base push gives counter 0, contradicting h_step = (n+1)
+      exfalso
+      have h0 : entry.2[0] = 0 := by
+        simp only [h_base, Vector.getElem_mk]
+      have h_cast : ((n + 1 : ℕ) : F p) = 0 := by
+        simpa [h_step] using h0
+      have hval := ZMod.val_cast_of_lt h_n_lt
+      have : (n + 1 : ℕ) = 0 := by
+        simpa [h_cast] using hval
+      exact Nat.succ_ne_zero _ this
+    · -- predecessor pull gives predecessor push
+      have h_push_prev : (1, (#v[n_prev, x, y] : Vector (F p) 3)) ∈ fibInteractions :=
+        exists_push_of_pull fibInteractions (#v[n_prev, x, y])
+          (fun e h _ => h_mults e h) (h_balanced _) h_pull h_bound
+      -- relate n_prev to n via the counter equations
+      have h_eq : n_prev = (n : F p) := by
+        have h' : n_prev + 1 = (n + 1 : F p) := by
+          simpa [h_step_prev] using h_step
+        -- rewrite (n+1 : F p) as (n : F p) + 1
+        have h'' : n_prev + 1 = (n : F p) + 1 := by
+          simpa [Nat.cast_add] using h'
+        exact add_right_cancel h''
+      -- Apply IH for n < p to predecessor push
+      have h_prev : n + 1 ≤ fibInteractions.length := by
+        have h_step_prev' : (#v[n_prev, x, y] : Vector (F p) 3)[0] = (n : F p) := by
+          simp [h_eq]
+        exact ih (Nat.lt_of_succ_lt h_n_lt)
+          (1, (#v[n_prev, x, y] : Vector (F p) 3)) h_push_prev rfl
+          (by simpa using h_step_prev')
+      exact Nat.succ_le_succ h_prev
+
 
 /-- For any FibonacciChannel interaction from the tables (not verifier),
     the multiplicity is 1 or -1.
@@ -1625,34 +1664,8 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
           apply List.mem_append_left
           rw [List.mem_flatMap]
           exact ⟨table, h_table_mem, h_entry_in_table⟩
-        -- entry.2[0] = n_i + 1 ≠ 0: If n_i + 1 = 0, then n_i = -1, but the chain can't reach step p-1
-        have h_nonzero : entry.2[0] ≠ 0 := by
-          rw [h_n_eq]
-          intro h_zero
-          -- n_i + 1 = 0 means n_i = -1 in ZMod p
-          have h_ni_neg : n_i = -1 := add_eq_zero_iff_eq_neg.mp h_zero
-          -- The pull (-1, #v[n_i, x_i, y_i]) = (-1, #v[-1, x_i, y_i]) is in fibInteractions
-          have h_pull_in_fib : ((-1 : F p), #v[n_i, x_i, y_i]) ∈ fibInteractions := by
-            simp only [fibInteractions, Ensemble.interactions]
-            apply List.mem_append_left
-            rw [List.mem_flatMap]
-            exact ⟨table, h_table_mem, h_fib_pull_in_table⟩
-          -- By balance, the sum of mults for msg #v[n_i, x_i, y_i] is 0
-          -- The pull contributes -1, so there must be at least one push (mult = 1)
-          have h_bal_msg := h_fib_balanced #v[n_i, x_i, y_i]
-          -- Get a push with this message: (1, #v[n_i, x_i, y_i]) = (1, #v[-1, x_i, y_i])
-          have h_push_exists := exists_push_of_pull fibInteractions #v[n_i, x_i, y_i]
-            (fun e h _ => h_fib_mults e h) h_bal_msg h_pull_in_fib h_fib_bound
-          -- This push (1, #v[-1, x_i, y_i]) is in fibInteractions
-          -- It's not the verifier push (1, #v[0, 0, 1]) since -1 ≠ 0 in F p
-          rw [h_ni_neg] at h_push_exists
-          -- So it must come from fib8, meaning there's a fib8 row that pushes step counter -1
-          -- But fib8 pushes have step counter n' + 1, so n' = -2
-          -- And that requires a pull at step -2, needing a push at -2, etc.
-          -- The chain 0 → 1 → ... → p-1 needs p pushes, but fibInteractions.length < p
-          -- For now, leave as sorry - needs chain counting lemma
-          sorry
-        exact fib_step_counter_bounded fibInteractions h_fib_bound entry h_entry_in_fib h_push n_i h_n_eq h_nonzero
+        exact fib_step_counter_bounded fibInteractions h_fib_bound h_fib_mults h_fib_balanced
+          entry h_entry_in_fib h_push n_i h_n_eq
       · -- Validity transfer: IsValidFibState n_i x_i y_i → IsValidFibState entry.2[0] entry.2[1] entry.2[2]
         intro h_input_valid
         -- From IsValidFibState, we get the range bounds
