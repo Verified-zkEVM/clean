@@ -878,44 +878,46 @@ lemma fib_step_counter_bounded
   induction n with
   | zero =>
     intro entry h_mem h_push h_step k k_le_0
+    have hk : k = 0 := by linarith
+    subst hk
     use entry, h_mem
     simp only [Nat.cast_zero] at h_step
-    rw [h_step, ZMod.val_zero]
-    linarith
+    simp [h_step, ZMod.val_zero]
   | succ n ih =>
-    intro entry h_mem h_push h_step
+    intro entry h_mem h_push h_step k hk
     have h_pred := h_push_pred entry h_mem h_push
     rcases h_pred with h_base | ⟨n_prev, x, y, h_pull, h_step_prev⟩
-    · -- base push gives counter 0, contradicting h_step = (n+1)
+    · -- base push contradicts counter n+1
       exfalso
-      have h0 : entry.2[0] = 0 := by
-        simp only [h_base, Vector.getElem_mk]
-      have h_cast : ((n + 1 : ℕ) : F p) = 0 := by
-        simpa [h_step] using h0
+      have h0 : entry.2[0] = 0 := by simp [h_base]
+      have h_cast : ((n + 1 : ℕ) : F p) = 0 := by simpa [h_step] using h0
       have hval := ZMod.val_cast_of_lt h_n_lt
-      have : (n + 1 : ℕ) = 0 := by
-        simpa [h_cast] using hval
+      have : (n + 1 : ℕ) = 0 := by simpa [h_cast] using hval
       exact Nat.succ_ne_zero _ this
     · -- predecessor pull gives predecessor push
       have h_push_prev : (1, (#v[n_prev, x, y] : Vector (F p) 3)) ∈ fibInteractions :=
         exists_push_of_pull fibInteractions (#v[n_prev, x, y])
           (fun e h _ => h_mults e h) (h_balanced _) h_pull h_bound
-      -- relate n_prev to n via the counter equations
       have h_eq : n_prev = (n : F p) := by
-        have h' : n_prev + 1 = (n + 1 : F p) := by
-          simpa [h_step_prev] using h_step
-        -- rewrite (n+1 : F p) as (n : F p) + 1
-        have h'' : n_prev + 1 = (n : F p) + 1 := by
-          simpa [Nat.cast_add] using h'
+        have h' : n_prev + 1 = (n + 1 : F p) := by simpa [h_step_prev] using h_step
+        have h'' : n_prev + 1 = (n : F p) + 1 := by simpa [Nat.cast_add] using h'
         exact add_right_cancel h''
-      -- Apply IH for n < p to predecessor push
-      have h_prev : n + 1 ≤ fibInteractions.length := by
-        have h_step_prev' : (#v[n_prev, x, y] : Vector (F p) 3)[0] = (n : F p) := by
-          simp [h_eq]
-        exact ih (Nat.lt_of_succ_lt h_n_lt)
-          (1, (#v[n_prev, x, y] : Vector (F p) 3)) h_push_prev rfl
-          (by simpa using h_step_prev')
-      exact Nat.succ_le_succ h_prev
+      -- if k = n+1, use current entry; otherwise use IH on predecessor
+      have hk_cases : k = n + 1 ∨ k ≤ n := by
+        exact Nat.lt_or_eq_of_le hk |>.elim (fun hlt => Or.inr (Nat.le_of_lt_succ hlt)) (fun heq => Or.inl heq)
+      cases hk_cases with
+      | inl hk_eq =>
+          subst hk_eq
+          use entry, h_mem
+          -- counter value is n+1
+          have hval := ZMod.val_cast_of_lt h_n_lt
+          simpa [h_step] using hval
+      | inr hk_le =>
+          have h_step_prev' : (#v[n_prev, x, y] : Vector (F p) 3)[0] = (n : F p) := by
+            simp [h_eq]
+          have := ih (Nat.lt_of_succ_lt h_n_lt)
+            (1, (#v[n_prev, x, y] : Vector (F p) 3)) h_push_prev rfl h_step_prev' k hk_le
+          exact this
 
 
 /-- For any FibonacciChannel interaction from the tables (not verifier),
