@@ -845,17 +845,25 @@ lemma fib_step_counter_bounded
     n_i.val + 1 < p := by
   -- Prove a stronger statement by induction on Nat counters < p
   suffices h : ∀ n : ℕ, n < p →
-      ∀ entry ∈ fibInteractions, entry.1 = 1 → entry.2[0] = (n : F p) → n + 1 ≤ fibInteractions.length by
+      ∀ entry ∈ fibInteractions, entry.1 = 1 → entry.2[0] = (n : F p) → (n + 1 ≤ fibInteractions.length) by
     have h_step : entry.2[0] = (n_i.val : F p) := by
       exact h_n_eq.trans (ZMod.natCast_zmod_val n_i).symm
     have h_le := h n_i.val (ZMod.val_lt n_i) entry h_mem h_push h_step
     exact lt_of_le_of_lt h_le h_bound
   intro n h_n_lt
+  suffices h : ∀ entry ∈ fibInteractions,
+    entry.1 = 1 → entry.2[0] = (n : F p) → ∀ k ≤ n, ∃ entry' ∈ fibInteractions, entry'.2[0].val = k by
+    intro entry h_mem h_push h_step
+    -- this is should be very easy: there are n+1 distinct entries in the chain (0..n),
+    -- therefore the chain length is at least n+1
+    sorry
   induction n with
   | zero =>
-    intro entry h_mem h_push h_step
-    have : 1 ≤ fibInteractions.length := Nat.succ_le_of_lt (List.length_pos_of_mem h_mem)
-    simpa using this
+    intro entry h_mem h_push h_step k k_le_0
+    use entry, h_mem
+    simp only [Nat.cast_zero] at h_step
+    rw [h_step, ZMod.val_zero]
+    linarith
   | succ n ih =>
     intro entry h_mem h_push h_step
     have h_pred := h_push_pred entry h_mem h_push
