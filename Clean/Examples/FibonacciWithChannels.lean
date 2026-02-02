@@ -1773,8 +1773,19 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
           simp [Ensemble.verifierInteractions, verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
             Channel.filter_self_add, Channel.filter_self_single, toElements]
         have h_push_pred := fib_push_pred witness n x y h_constraints fibInteractions rfl h_verifier_interactions
-        exact fib_step_counter_bounded fibInteractions h_fib_bound h_fib_mults h_fib_balanced
-          h_push_pred entry h_entry_in_fib h_push n_i h_n_eq
+        -- Use predecessor push at counter n_i
+        have h_push_at_n : (1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ fibInteractions := by
+          have h_pull_in_fib : (-1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ fibInteractions := by
+            simp only [fibInteractions, Ensemble.interactions]
+            apply List.mem_append_left
+            rw [List.mem_flatMap]
+            exact ⟨table, h_table_mem, h_fib_pull_in_table⟩
+          exact exists_push_of_pull fibInteractions (#v[n_i, x_i, y_i])
+            (fun e h _ => h_fib_mults e h) (h_fib_balanced _) h_pull_in_fib h_fib_bound
+        have h_bound_n : n_i.val + 1 < p :=
+          fib_step_counter_bounded fibInteractions h_fib_bound h_fib_mults h_fib_balanced
+            h_push_pred (1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) h_push_at_n rfl n_i rfl
+        exact h_bound_n
       · -- Validity transfer: IsValidFibState n_i x_i y_i → IsValidFibState entry.2[0] entry.2[1] entry.2[2]
         intro h_input_valid
         -- From IsValidFibState, we get the range bounds
