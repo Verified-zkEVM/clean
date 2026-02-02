@@ -1266,6 +1266,81 @@ lemma fib8_fib_push_has_matching_pull
   -- from the same row (they coexist in fib8's localAdds).
   sorry
 
+/-- Push-predecessor characterization for FibonacciChannel interactions. -/
+lemma fib_push_pred
+    (witness : EnsembleWitness fibonacciEnsemble)
+    (n x y : F p)
+    (h_constraints : List.Forall
+      (fun table => List.Forall (fun row => ConstraintsHold (table.environment row) table.abstract.operations) table.table)
+      witness.tables)
+    (fibInteractions : List (F p × Vector (F p) 3))
+    (h_fibInteractions : fibInteractions = fibonacciEnsemble.interactions (n, x, y) witness FibonacciChannel.toRaw)
+    (h_verifier_interactions :
+      fibonacciEnsemble.verifierInteractions FibonacciChannel.toRaw (n, x, y) =
+        [(1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)), (-1, (#v[n, x, y] : Vector (F p) 3))]) :
+    ∀ entry ∈ fibInteractions, entry.1 = 1 →
+      entry.2 = (#v[(0 : F p), 0, 1] : Vector (F p) 3) ∨
+      ∃ (n_i x_i y_i : F p),
+        ((-1 : F p), (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ fibInteractions ∧
+        entry.2[0] = n_i + 1 := by
+  intro entry h_mem h_push
+  -- split by table vs verifier interactions
+  have h_mem' : entry ∈
+      witness.tables.flatMap (fun table => table.interactions FibonacciChannel.toRaw) ++
+        fibonacciEnsemble.verifierInteractions FibonacciChannel.toRaw (n, x, y) := by
+    simpa [h_fibInteractions, Ensemble.interactions] using h_mem
+  rcases List.mem_append.mp h_mem' with h_table | h_verifier
+  · -- From tables: must be fib8
+    right
+    rw [List.mem_flatMap] at h_table
+    obtain ⟨table, h_table_mem, h_entry_in_table⟩ := h_table
+    -- Determine which table this is - only fib8 emits to FibonacciChannel
+    have h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩ := by
+      rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
+      have h_len : witness.tables.length = 3 := by
+        simpa [fibonacciEnsemble] using witness.same_length.symm
+      have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
+        simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
+      have hi' : i < 3 := by
+        simpa [h_len] using hi
+      match i with
+      | 0 =>
+        have h_empty := pushBytes_fib_interactions_empty table (by simp [fibonacciEnsemble] at h_same ⊢; exact h_same.symm)
+        simp only [h_empty, List.not_mem_nil] at h_entry_in_table
+      | 1 =>
+        have h_empty := add8_fib_interactions_empty table (by simp [fibonacciEnsemble] at h_same ⊢; exact h_same.symm)
+        simp only [h_empty, List.not_mem_nil] at h_entry_in_table
+      | 2 =>
+        simp [fibonacciEnsemble] at h_same ⊢
+        exact h_same.symm
+    have h_table_constraints : table.Constraints := by
+      rw [List.forall_iff_forall_mem] at h_constraints
+      exact h_constraints table h_table_mem
+    obtain ⟨n_i, x_i, y_i, h_pull_in_table, _, h_n_eq, _⟩ :=
+      fib8_fib_push_has_matching_pull table h_is_fib8 h_table_constraints entry h_entry_in_table h_push
+    refine ⟨n_i, x_i, y_i, ?_, h_n_eq⟩
+    -- lift pull into fibInteractions
+    simp only [h_fibInteractions, Ensemble.interactions]
+    apply List.mem_append_left
+    rw [List.mem_flatMap]
+    exact ⟨table, h_table_mem, h_pull_in_table⟩
+  · -- From verifier: only base push has mult=1
+    left
+    -- verifier interactions are exactly [push (0,0,1), pull (n,x,y)]
+    have h_verifier' : entry = (1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)) ∨
+        entry = (-1, (#v[n, x, y] : Vector (F p) 3)) := by
+      simpa [h_verifier_interactions] using h_verifier
+    rcases h_verifier' with h_ver | h_ver
+    · simpa [h_ver]
+    · exfalso
+      have hneq : (-1 : F p) ≠ (1 : F p) := by
+        have : Fact (2 < p) := ⟨by
+          have : p > 512 := Fact.out
+          linarith⟩
+        simpa using (ZMod.neg_one_ne_one (n := p))
+      have h_eq : (-1 : F p) = (1 : F p) := by simpa [h_ver] using h_push
+      exact hneq h_eq
+
 /-!
 ## Main ensemble soundness theorem
 -/
@@ -1692,8 +1767,14 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
           apply List.mem_append_left
           rw [List.mem_flatMap]
           exact ⟨table, h_table_mem, h_entry_in_table⟩
+        have h_verifier_interactions :
+            fibonacciEnsemble.verifierInteractions FibonacciChannel.toRaw (n, x, y) =
+              [(1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)), (-1, (#v[n, x, y] : Vector (F p) 3))] := by
+          simp [Ensemble.verifierInteractions, verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
+            Channel.filter_self_add, Channel.filter_self_single, toElements]
+        have h_push_pred := fib_push_pred witness n x y h_constraints fibInteractions rfl h_verifier_interactions
         exact fib_step_counter_bounded fibInteractions h_fib_bound h_fib_mults h_fib_balanced
-          entry h_entry_in_fib h_push n_i h_n_eq
+          h_push_pred entry h_entry_in_fib h_push n_i h_n_eq
       · -- Validity transfer: IsValidFibState n_i x_i y_i → IsValidFibState entry.2[0] entry.2[1] entry.2[2]
         intro h_input_valid
         -- From IsValidFibState, we get the range bounds
