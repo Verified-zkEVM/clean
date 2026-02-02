@@ -1234,7 +1234,6 @@ lemma add8_fib_interactions_empty
 lemma fib8_fib_push_has_matching_pull
     (table : TableWitness (F p))
     (h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩)
-    (h_constraints : table.Constraints)
     (entry : F p × Vector (F p) 3)
     (h_mem : entry ∈ table.interactions (FibonacciChannel.toRaw))
     (h_push : entry.1 = 1) :
@@ -1246,7 +1245,7 @@ lemma fib8_fib_push_has_matching_pull
   -- entry is a push (mult=1) from table's FibonacciChannel interactions
   -- fib8 emits: pull (-1, (n,x,y)), pull (-1, (x,y,z)) to Add8, push (1, (n+1,y,z))
   -- So entry must be the push, and we can find the corresponding pulls from the same row
-  simp only [TableWitness.interactions, AbstractTable.operations] at h_mem ⊢
+  simp only [TableWitness.interactions, AbstractTable.operations] at h_mem
   rw [h_is_fib8] at h_mem
   rcases List.mem_flatMap.1 h_mem with ⟨row, h_row_mem, h_in_filter⟩
   -- Simplify h_in_filter to extract the structure
@@ -1260,11 +1259,64 @@ lemma fib8_fib_push_has_matching_pull
   simp only [show ([_,_,_] : List (F p)).toArray.size = 3 by rfl, dite_true] at h_in_filter
   simp only [show (0 : InteractionDelta (F p)) = [] by rfl,
     List.filterMap_nil, List.append_nil] at h_in_filter
-  -- Proof outline: entry is a push (mult=1) from FibonacciChannel interactions of fib8.
-  -- fib8 emits: pull (-1, (n,x,y)), pull to Add8 (-1, (x,y,z)), push (1, (n+1,y,z))
-  -- Since h_push says mult=1, entry must be the push, and we can find the corresponding pulls
-  -- from the same row (they coexist in fib8's localAdds).
-  sorry
+
+  -- entry is in [pull] ++ [push]
+  have h_in_filter' := h_in_filter
+  simp only [List.mem_append, List.mem_singleton] at h_in_filter'
+  rcases h_in_filter' with h_pull | h_push_eq
+  · -- entry is the pull: contradicts h_push
+    have hneg : entry.1 = (-1 : F p) := by simp [h_pull]
+    have hneq : (-1 : F p) ≠ (1 : F p) := by
+      have : Fact (2 < p) := ⟨by
+        have : p > 512 := Fact.out
+        linarith⟩
+      simpa using (ZMod.neg_one_ne_one (n := p))
+    have hcon : False := by
+      apply hneq
+      simpa [hneg] using h_push
+    cases hcon
+  · -- entry is the push
+    -- set aliases
+    set env := table.environment row
+    use env.get 0, env.get 1, env.get 2
+    -- show fib pull in fibInteractions
+    and_intros
+    · -- FibonacciChannel pull is in table interactions
+      simp [TableWitness.interactions, AbstractTable.operations]
+      refine ⟨row, h_row_mem, ?_⟩
+      rw [h_is_fib8]
+      simp only [RawChannel.filter, fib8, witnessAny, getOffset,
+        FormalCircuitWithInteractions.instantiate, circuit_norm, FibonacciChannel, Add8Channel,
+        Channel.emitted, Channel.pulled, InteractionDelta.single, Channel.toRaw]
+      rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append]
+      simp only [List.filterMap_append, List.filterMap_cons, true_and,
+        show ("add8" : String) = "fibonacci" ↔ False by decide, false_and, dite_false,
+        toElements]
+      simp only [show ([_,_,_] : List (F p)).toArray.size = 3 by rfl, dite_true]
+      simp only [show (0 : InteractionDelta (F p)) = [] by rfl,
+        List.filterMap_nil, List.append_nil, List.mem_append, List.mem_singleton]
+      left
+      simp [env]
+    · -- Add8Channel pull is in table interactions
+      simp [TableWitness.interactions, AbstractTable.operations]
+      refine ⟨row, h_row_mem, ?_⟩
+      rw [h_is_fib8]
+      simp only [RawChannel.filter, fib8, witnessAny, getOffset,
+        FormalCircuitWithInteractions.instantiate, circuit_norm, FibonacciChannel, Add8Channel,
+        Channel.emitted, Channel.pulled, InteractionDelta.single, Channel.toRaw]
+      rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append]
+      simp only [List.filterMap_append, List.filterMap_cons, true_and,
+        show ("fibonacci" : String) = "add8" ↔ False by decide, false_and, dite_false,
+        toElements]
+      simp only [show ([_,_,_] : List (F p)).toArray.size = 3 by rfl, dite_true]
+      simp only [show (0 : InteractionDelta (F p)) = [] by rfl,
+        List.filterMap_nil, List.append_nil, List.mem_append, List.mem_singleton]
+      right
+      simp [h_push_eq, env]
+    · -- entry.2[0] = n_i + 1
+      simp [h_push_eq, env]
+    · -- entry.2[1] = y_i
+      simp [h_push_eq, env]
 
 /-- Push-predecessor characterization for FibonacciChannel interactions. -/
 lemma fib_push_pred
@@ -1313,11 +1365,8 @@ lemma fib_push_pred
       | 2 =>
         simp [fibonacciEnsemble] at h_same ⊢
         exact h_same.symm
-    have h_table_constraints : table.Constraints := by
-      rw [List.forall_iff_forall_mem] at h_constraints
-      exact h_constraints table h_table_mem
     obtain ⟨n_i, x_i, y_i, h_pull_in_table, _, h_n_eq, _⟩ :=
-      fib8_fib_push_has_matching_pull table h_is_fib8 h_table_constraints entry h_entry_in_table h_push
+      fib8_fib_push_has_matching_pull table h_is_fib8 entry h_entry_in_table h_push
     refine ⟨n_i, x_i, y_i, ?_, h_n_eq⟩
     -- lift pull into fibInteractions
     simp only [h_fibInteractions, Ensemble.interactions]
@@ -1747,12 +1796,9 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
           -- fib8 is the only one that emits to FibonacciChannel
           simp [fibonacciEnsemble] at h_same ⊢
           exact h_same.symm
-      have h_table_constraints : table.Constraints := by
-        rw [List.forall_iff_forall_mem] at h_constraints
-        exact h_constraints table h_table_mem
       -- Use fib8_fib_push_has_matching_pull to get the matching pull
       obtain ⟨n_i, x_i, y_i, h_fib_pull_in_table, h_add8_pull_in_table, h_n_eq, h_y_eq⟩ :=
-        fib8_fib_push_has_matching_pull table h_is_fib8 h_table_constraints entry h_entry_in_table h_push
+        fib8_fib_push_has_matching_pull table h_is_fib8 entry h_entry_in_table h_push
       use n_i, x_i, y_i
       refine ⟨?_, h_n_eq, ?_, ?_⟩
       · -- (-1, #v[n_i, x_i, y_i]) ∈ fibInteractions
