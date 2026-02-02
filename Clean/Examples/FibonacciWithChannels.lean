@@ -856,7 +856,25 @@ lemma fib_step_counter_bounded
     intro entry h_mem h_push h_step
     -- this is should be very easy: there are n+1 distinct entries in the chain (0..n),
     -- therefore the chain length is at least n+1
-    sorry
+    specialize h entry h_mem h_push h_step
+    clear h_mem h_push h_step entry h_n_lt h_n_eq
+    clear h_mem h_push entry n_i h_push_pred
+    -- let's map the list to ℕ counters and use List.map_length
+    -- and then talk about Finsets
+    let as := fibInteractions.map (fun e => ZMod.val e.2[0])
+    suffices h_natList : (∀ k ≤ n, k ∈ as) → n + 1 ≤ as.length by simp_all [as]
+    intro hk
+    simp only [← List.mem_toFinset] at hk
+    suffices n + 1 ≤ as.toFinset.card by
+      grw [List.toFinset_card_le] at this
+      linarith
+    generalize as.toFinset = s at *
+    rw [← Finset.card_range (n + 1)]
+    apply Finset.card_le_card
+    intro k hk'
+    simp_all only [Finset.mem_range]
+    exact hk k (by linarith)
+
   induction n with
   | zero =>
     intro entry h_mem h_push h_step k k_le_0
