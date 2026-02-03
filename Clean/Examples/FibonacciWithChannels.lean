@@ -16,21 +16,17 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
 instance BytesChannel : Channel (F p) field where
   name := "bytes"
-  Guarantees mult x _ _ :=
-    if mult = -1 then x.val < 256 else True
-  Requirements mult x _ _ :=
-    if ¬ mult = -1 then x.val < 256 else True
+  Guarantees mult x _ _ := mult = -1 → x.val < 256
+  Requirements mult x _ _ := mult ≠ -1 → x.val < 256
 
 instance Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
   Guarantees
   | mult, (x, y, z), _, _ =>
-    if mult = -1 then x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
-    else True
+    mult = -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
   Requirements
   | mult, (x, y, z), _, _ =>
-    if ¬ mult = -1 then x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
-    else True
+    mult ≠ -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
 
 structure Add8Inputs F where
   x : F
@@ -72,8 +68,8 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
     circuit_proof_start [BytesChannel, Add8Channel, reduceIte, not_true_eq_false]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq, _ ⟩ := h_holds
-    split_ifs
-    intro hx hy
+    simp only [ne_eq, not_true_eq_false, IsEmpty.forall_iff, true_and]
+    intro hm hx hy
     have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
 
@@ -175,8 +171,10 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     set fibInteractions := FibonacciChannel.filter interactions
     set add8Interactions := Add8Channel.filter interactions
     set z := env.get i₀
-    simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte, not_true_eq_false] at h_holds ⊢
-    simp only [List.mem_cons, true_or, and_true]
+    simp only [circuit_norm, FibonacciChannel, Add8Channel] at h_holds ⊢
+    simp only [ne_eq, not_true_eq_false, IsEmpty.forall_iff, String.reduceEq, ↓reduceDIte, reduceIte,
+      Prod.mk.eta, List.map_cons, List.mem_cons, List.mem_map, Prod.exists, true_or, and_true,
+      true_and] at h_holds ⊢
     obtain ⟨ ⟨ ⟨k, fiby, hk⟩, hfib_push ⟩, hadd ⟩ := h_holds
     have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
     use k + 1
@@ -420,19 +418,16 @@ end Ensemble
 omit [DecidableEq F] in
 /-- Bridge lemma: ConstraintsHold + channel Guarantees → ConstraintsHoldWithInteractions.Soundness
     This lemma allows us to use circuit soundness proofs by providing the required Guarantees externally. -/
-lemma constraintsHold_to_soundness
-    (env : Environment F)
-    (interactions : RawInteractions F)
-    (ops : Operations F)
+lemma constraintsHold_to_soundness {env : Environment F} {ins : RawInteractions F} {ops : Operations F}
     (h_constraints : ConstraintsHold env ops)
     -- For each interact operation, we can prove its Guarantees
-    (h_guarantees : ops.forAllWithInteractions env 0 interactions
+    (h_guarantees : ops.forAllWithInteractions env 0 ins
       { interact := fun _ is i => i.Guarantees env is }) :
-    ConstraintsHoldWithInteractions.Soundness env interactions ops := by
+    ConstraintsHoldWithInteractions.Soundness env ins ops := by
   simp only [ConstraintsHold] at h_constraints
   simp only [ConstraintsHoldWithInteractions.Soundness]
   generalize 0 = n at *
-  induction ops using Operations.induct generalizing n interactions with
+  induction ops using Operations.induct generalizing n ins with
   | empty => trivial
   | witness | assert | interact =>
     simp_all [Operations.forAll, Operations.forAllWithInteractions]
@@ -1073,8 +1068,6 @@ lemma fib8_add8_interactions_mult_neg
   -- Now h_in_filter says entry = (-1, ...)
   rw [h_in_filter]
 
-set_option maxHeartbeats 500000
-
 /-- add8's Add8Channel interactions satisfy Requirements when BytesChannel guarantees hold -/
 lemma add8_interactions_satisfy_requirements
     (table : TableWitness (F p))
@@ -1115,7 +1108,7 @@ lemma add8_interactions_satisfy_requirements
   -- Note: (table.environment row).get j = row[j]?.getD 0
   by_cases h_mult : (table.environment row).get 3 = (-1 : F p)
   · simp [h_mult]
-  · simp only [h_mult, reduceIte, not_false_eq_true]
+  · simp only [Nat.reduceAdd, ne_eq, h_mult, not_false_eq_true, forall_const]
     -- Need to prove: x < 256 → y < 256 → z = (x + y) % 256
     intro h_x_range h_y_range
 
@@ -1141,8 +1134,8 @@ lemma add8_interactions_satisfy_requirements
       simp only [ops, circuit_norm, add8, Operations.forAllWithInteractions]
       simp only [id_eq, OfNat.one_ne_ofNat, and_false, ↓reduceDIte]
       rw [RawChannel.filter_zero, RawChannel.filter_zero]
-      simp only [input_var, circuit_norm, Add8Channel, h_mult, reduceIte]
-      simp only [BytesChannel, reduceIte]
+      simp only [input_var, circuit_norm, Add8Channel, h_mult, false_implies, and_true]
+      simp only [BytesChannel, true_implies]
       apply h_bytes_guarantees (env.get 2)
       -- Need to show (-1, #v[env.get 2]) ∈ table.interactions BytesChannel.toRaw
       -- This follows because add8 pulls z from BytesChannel
@@ -1157,7 +1150,7 @@ lemma add8_interactions_satisfy_requirements
 
     -- Use bridge lemma to get ConstraintsHoldWithInteractions.Soundness
     have h_soundness : ConstraintsHoldWithInteractions.Soundness env [] ops := by
-      apply constraintsHold_to_soundness env [] ops h_row_constraints h_guarantees
+      apply constraintsHold_to_soundness h_row_constraints h_guarantees
 
     -- Apply add8.soundness with the correct offset
     have h_eval_eq : eval env input_var = { x := env.get 0, y := env.get 1, z := env.get 2, m := env.get 3 } := by
@@ -1173,14 +1166,15 @@ lemma add8_interactions_satisfy_requirements
     -- Simplify to get the concrete requirement
     simp only [ConstraintsHoldWithInteractions.Requirements, circuit_norm, add8,
       Operations.forAllWithInteractions, Add8Channel, BytesChannel,
-      Expression.eval, input_var,
-      not_true_eq_false, ↓reduceIte, true_and] at h_requirements
+      Expression.eval, input_var, ne_self_iff_false, false_implies, true_and,
+      false_implies
+    ] at h_requirements
 
     -- Simplify goal
     simp only [fromElements] at h_x_range h_y_range ⊢
 
     -- Reduce the if in h_requirements using h_mult
-    simp only [h_mult] at h_requirements
+    simp only [ne_eq, h_mult, not_false_eq_true, true_implies] at h_requirements
 
     -- Apply the requirement
     exact h_requirements h_x_range h_y_range
@@ -1700,10 +1694,10 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       -- The push satisfies Requirements, which equals Guarantees for this channel
 
       -- Unfold the Guarantees definition for pulls
-      simp only [Channel.toRaw, Add8Channel, reduceIte, h_is_pull]
+      simp only [Channel.toRaw, Add8Channel, h_is_pull, true_implies]
 
       -- Need: x < 256 → y < 256 → z = (x+y) % 256 where entry.2 = #v[x, y, z]
-      intro hx hy
+      intro hy
 
       -- By balance, sum of mults for this message is 0
       have h_sum_zero := (h_add8_bal.2 entry.2).2
@@ -1740,15 +1734,15 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       have h_req := h_push_req entry' h_entry'_mem h_entry'_not_neg
 
       -- Unfold Requirements for the push (same property as Guarantees for pull)
-      simp only [Channel.toRaw, Add8Channel, reduceIte, h_entry'_not_neg, not_false_eq_true] at h_req
+      simp only [Channel.toRaw, Add8Channel, ne_eq, true_implies, h_entry'_not_neg, not_false_eq_true] at h_req
 
       -- entry'.2 = entry.2, so the property transfers
       rw [h_entry'_eq] at h_req
-      exact h_req hx hy
+      exact h_req hy
 
     case neg =>
       -- entry is not a pull (mult ≠ -1): Guarantees is True
-      simp only [Channel.toRaw, Add8Channel, reduceIte, h_is_pull]
+      simp only [Channel.toRaw, Add8Channel, ne_eq, false_implies, h_is_pull]
 
   -- ══════════════════════════════════════════════════════════════════════════
   -- STEP 5: h_fib8_soundness - validity transfers through fib8 rows
@@ -1846,7 +1840,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
           exact ⟨table, h_table_mem, h_add8_pull_in_table⟩
         have h_guarantee := h_add8_guarantees _ h_add8_pull_in_ensemble
         -- The guarantee for a pull (mult = -1) is: x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
-        simp only [Channel.toRaw, Add8Channel, reduceIte] at h_guarantee
+        simp only [Channel.toRaw, Add8Channel, ne_eq, true_implies] at h_guarantee
         -- Simplify fromElements for fieldTriple
         simp only [fromElements] at h_guarantee
         have h_z_eq := h_guarantee h_x_range h_y_range
