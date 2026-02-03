@@ -142,7 +142,10 @@ lemma Channel.filter_self (channel : Channel F Message) (env : Environment F)
     let interaction : ChannelInteraction F Message := { channel, mult, msg };
     channel.toRaw.filter ((AbstractInteraction.eval env interaction.toRaw) :: is) =
       (env mult, (toElements msg).map env) :: channel.toRaw.filter is := by
-    sorry
+    simp only [RawChannel.filter, AbstractInteraction.eval, ChannelInteraction.toRaw, Channel.toRaw,
+      List.filterMap_cons, Vector.toArray_map, Array.size_map, Vector.size_toArray,
+      and_self, ↓reduceDIte]
+    congr 1
 
 @[circuit_norm]
 lemma Channel.interactionFromRaw_eq (env : Environment F)
@@ -409,6 +412,26 @@ lemma InteractionDelta.single_eq_channel_emitted (channel : Channel F Message) (
   simp only [Channel.emitted, AbstractInteraction.eval, InteractionDelta.single, ChannelInteraction.toRaw, eval,
     ProvableType.toElements_fromElements]
   rfl
+
+omit [Field F] in
+lemma Channel.filter_self_single (channel : Channel F Message)
+  (mult : F) (msg : Message F) :
+    channel.toRaw.filter (channel.emitted mult msg) = [(mult, toElements msg)] := by
+  simp [Channel.emitted, InteractionDelta.single, Channel.toRaw, RawChannel.filter]
+
+omit [Field F] in
+lemma Channel.filter_self_add (channel : Channel F Message)
+  (mult : F) (msg : Message F) (is : RawInteractions F) :
+    channel.toRaw.filter (channel.emitted mult msg + is) = (mult, toElements msg) :: channel.toRaw.filter is := by
+  simp [Channel.emitted, InteractionDelta.single, InteractionDelta.add_eq_append, Channel.toRaw, RawChannel.filter]
+
+@[circuit_norm]
+lemma RawChannel.filter_zero (channel : Channel F Message) :
+  (channel.toRaw.filter 0).map Channel.interactionFromRaw = [] := rfl
+
+@[circuit_norm]
+lemma Channel.filter_zero (channel : Channel F Message) :
+  channel.filter 0 = [] := rfl
 
 -- abstract theory of channel consistency
 
