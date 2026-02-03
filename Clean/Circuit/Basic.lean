@@ -437,12 +437,12 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [De
 @[circuit_norm]
 def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
     (Spec : Input F → Output F → Environment F → Prop) :=
-  ∀ offset : ℕ, ∀ env interactions,
+  ∀ offset : ℕ, ∀ env,
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
-  ConstraintsHoldWithInteractions.Soundness env interactions (circuit.main input_var |>.operations offset) →
+  ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
   let output := eval env (circuit.output input_var offset)
   Spec input output env ∧
-  ConstraintsHoldWithInteractions.Requirements env interactions (circuit.main input_var |>.operations offset)
+  ConstraintsHoldWithInteractions.Requirements env (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
 def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] [DecidableEq F]
@@ -463,6 +463,20 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   soundness : FormalCircuitWithInteractions.Soundness F elaborated Spec
   completeness : FormalCircuitWithInteractions.Completeness F elaborated Assumptions
 
+  -- expose the channel guarantees and requirements, for end-to-end proofs
+  channelsWithGuarantees : List (RawChannel F) := []
+  guarantees_iff : ∀ input_var offset env,
+    let ops := (elaborated.main input_var).operations offset
+    ops.Guarantees env ↔
+    channelsWithGuarantees.Forall fun channel =>
+      ops.ChannelGuarantees channel env
+
+  channelsWithRequirements : List (RawChannel F) := []
+  requirements_iff : ∀ input_var offset env,
+    let ops := (elaborated.main input_var).operations offset
+    ops.Requirements env ↔
+    channelsWithRequirements.Forall fun channel =>
+      ops.ChannelRequirements channel env
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
@@ -597,6 +611,7 @@ end Circuit
 
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies implies_true forall_const gt_iff_lt
+  not_true_eq_false ne_eq false_implies and_false false_and
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form

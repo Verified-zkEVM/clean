@@ -122,10 +122,14 @@ def FormalCircuitWithInteractions.weakenSpec
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   soundness := by
-    intro offset env is input_var input h_eval h_holds
-    have h_strong_spec := circuit.soundness offset env is input_var input h_eval h_holds
+    intro offset env input_var input h_eval h_holds
+    have h_strong_spec := circuit.soundness offset env input_var input h_eval h_holds
     exact ⟨ h_spec_implication input _ _ h_strong_spec.1, h_strong_spec.2 ⟩
   completeness := circuit.completeness
+  channelsWithGuarantees := circuit.channelsWithGuarantees
+  guarantees_iff := circuit.guarantees_iff
+  channelsWithRequirements := circuit.channelsWithRequirements
+  requirements_iff := circuit.requirements_iff
 }
 
 @[circuit_norm]

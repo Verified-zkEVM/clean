@@ -44,7 +44,7 @@ partial def circuitProofStartCore : TacticM Unit := do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``FormalCircuitWithInteractions.Soundness =>
         evalTactic (← `(tactic| unfold FormalCircuitWithInteractions.Soundness))
-        let names := [`i₀, `env, `interactions, `input_var, `input, `h_input, `h_holds]
+        let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()

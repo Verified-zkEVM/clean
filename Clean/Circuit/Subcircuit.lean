@@ -260,13 +260,13 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     rw [ops.toNested_toFlat] at h_holds
     -- TODO proper proofs here
     replace h_holds := constraintsHold_toFlat_iff.mp h_holds
-    have h_holds_magic : ConstraintsHoldWithInteractions env env.interactions ops :=
+    have h_holds_magic : ops.ConstraintsHold env :=
       by sorry
     have can_replace_soundness_magic :
-      ConstraintsHoldWithInteractions env env.interactions ops ↔
-      ConstraintsHoldWithInteractions.Soundness env env.interactions ops := by
+      ops.ConstraintsHold env ↔
+      ConstraintsHoldWithInteractions.Soundness env ops := by
       sorry
-    have ⟨ h, _ ⟩ := circuit.soundness n env env.interactions input_var input rfl (can_replace_soundness_magic.mp h_holds_magic)
+    have ⟨ h, _ ⟩ := circuit.soundness n env input_var input rfl (can_replace_soundness_magic.mp h_holds_magic)
     exact h
 
   have implied_by_completeness : ∀ env : Environment F,

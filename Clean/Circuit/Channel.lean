@@ -34,16 +34,14 @@ structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
   name : String
 
   /-- the guarantees you get from adding an interaction to the channel, to be used locally in your soundness proof -/
-  Guarantees (mult : F) (message : Message F)
-    (interactions : List (F × Message F)) (data : ProverData F) : Prop
+  Guarantees (mult : F) (message : Message F) (data : ProverData F) : Prop
 
   /-- additional proof obligation from adding an interaction, to be _provided_ locally in your soundness proof.
     intuition: the `Guarantees` for multiplicity `-m` should follow from the `Requirements` for multiplicity `m`,
     so that pulling from the channel gives you a guarantee that is satisfied on the other side by the requirement for pushing
     the same element.
    -/
-  Requirements (mult : F) (message : Message F)
-    (interactions : List (F × Message F)) (data : ProverData F) : Prop
+  Requirements (mult : F) (message : Message F) (data : ProverData F) : Prop
 
 structure ChannelInteraction (F : Type) (Message : TypeMap) [ProvableType Message] where
   channel : Channel F Message
@@ -54,10 +52,8 @@ structure ChannelInteraction (F : Type) (Message : TypeMap) [ProvableType Messag
 structure RawChannel (F : Type) where
   name : String
   arity : ℕ
-  Guarantees (mult : F) (message : Vector F arity) (interactions : List (F × Vector F arity))
-    (data : ProverData F) : Prop
-  Requirements (mult : F) (message : Vector F arity) (interactions : List (F × Vector F arity))
-    (data : ProverData F) : Prop
+  Guarantees (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
+  Requirements (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
 
 structure AbstractInteraction (F : Type) where
   channel : RawChannel F
@@ -80,10 +76,14 @@ def Channel.interactionFromRaw (interaction : F × Vector F (size Message)) :
 def Channel.toRaw (channel : Channel F Message) : RawChannel F where
   name := channel.name
   arity := size Message
-  Guarantees mult message is data :=
-    channel.Guarantees mult (fromElements message) (is.map interactionFromRaw) data
-  Requirements mult message is data :=
-    channel.Requirements mult (fromElements message) (is.map interactionFromRaw) data
+  Guarantees mult message data :=
+    channel.Guarantees mult (fromElements message) data
+  Requirements mult message data :=
+    channel.Requirements mult (fromElements message) data
+
+instance : CoeOut (Channel F Message) (RawChannel F) where
+  coe := Channel.toRaw
+
 
 def ChannelInteraction.toRaw : ChannelInteraction F Message → AbstractInteraction F
   | { channel, mult, msg } => ⟨ channel.toRaw, mult, toElements msg ⟩
@@ -118,7 +118,7 @@ lemma AbstractInteraction.isAdded_def (env : Environment F) (int : ChannelIntera
     exact h_mem
 
 def RawChannel.filter (channel : RawChannel F) (is : RawInteractions F) :
-    List (F × Vector F (channel.arity)) :=
+    List (F × Vector F channel.arity) :=
   is.filterMap fun ⟨ name, mult, elts ⟩ =>
     if h : name = channel.name ∧ elts.size = channel.arity
       then some (mult, ⟨ elts, h.2 ⟩)
@@ -166,39 +166,27 @@ lemma Channel.filter_other (channel : Channel F Message) (channel' : Channel F M
     sorry
 
 @[circuit_norm]
-def ChannelInteraction.Guarantees (i : ChannelInteraction F Message) (env : Environment F)
-    (is : RawInteractions F) : Prop :=
-  let interactions : List (F × Vector F (size Message)) := i.channel.toRaw.filter is
-  let interactions' := interactions.map Channel.interactionFromRaw
-  i.channel.Guarantees (env i.mult) (eval env i.msg) interactions' env.data
+def ChannelInteraction.Guarantees (i : ChannelInteraction F Message) (env : Environment F) : Prop :=
+  i.channel.Guarantees (env i.mult) (eval env i.msg) env.data
 
-def AbstractInteraction.Guarantees (i : AbstractInteraction F) (env : Environment F)
-    (is : RawInteractions F) : Prop :=
-  let interactions := i.channel.filter is
-  i.channel.Guarantees (env i.mult) (i.msg.map env) interactions env.data
+def AbstractInteraction.Guarantees (i : AbstractInteraction F) (env : Environment F) : Prop :=
+  i.channel.Guarantees (env i.mult) (i.msg.map env) env.data
 
 @[circuit_norm]
-lemma AbstractInteraction.guarantees_def (env : Environment F) (int : ChannelInteraction F Message)
-    (is : RawInteractions F) :
-    int.toRaw.Guarantees env is ↔ int.Guarantees env is := by
+lemma AbstractInteraction.guarantees_def (env : Environment F) (int : ChannelInteraction F Message) :
+    int.toRaw.Guarantees env ↔ int.Guarantees env := by
   rfl
 
 @[circuit_norm]
-def ChannelInteraction.Requirements (i : ChannelInteraction F Message) (env : Environment F)
-    (is : RawInteractions F) : Prop :=
-  let interactions : List (F × Vector F (size Message)) := i.channel.toRaw.filter is
-  let interactions' := interactions.map Channel.interactionFromRaw
-  i.channel.Requirements (env i.mult) (eval env i.msg) interactions' env.data
+def ChannelInteraction.Requirements (i : ChannelInteraction F Message) (env : Environment F) : Prop :=
+  i.channel.Requirements (env i.mult) (eval env i.msg) env.data
 
-def AbstractInteraction.Requirements (i : AbstractInteraction F) (env : Environment F)
-    (is : RawInteractions F) : Prop :=
-  let interactions := i.channel.filter is
-  i.channel.Requirements (env i.mult) (i.msg.map env) interactions env.data
+def AbstractInteraction.Requirements (i : AbstractInteraction F) (env : Environment F) : Prop :=
+  i.channel.Requirements (env i.mult) (i.msg.map env) env.data
 
 @[circuit_norm]
-lemma AbstractInteraction.requirements_def (env : Environment F) (int : ChannelInteraction F Message)
-    (is : RawInteractions F) :
-    int.toRaw.Requirements env is ↔ int.Requirements env is := by
+lemma AbstractInteraction.requirements_def (env : Environment F) (int : ChannelInteraction F Message) :
+    int.toRaw.Requirements env ↔ int.Requirements env := by
   rfl
 
 /--
@@ -425,10 +413,12 @@ lemma Channel.filter_self_add (channel : Channel F Message)
     channel.toRaw.filter (channel.emitted mult msg + is) = (mult, toElements msg) :: channel.toRaw.filter is := by
   simp [Channel.emitted, InteractionDelta.single, InteractionDelta.add_eq_append, Channel.toRaw, RawChannel.filter]
 
+omit [Field F] in
 @[circuit_norm]
 lemma RawChannel.filter_zero (channel : Channel F Message) :
   (channel.toRaw.filter 0).map Channel.interactionFromRaw = [] := rfl
 
+omit [Field F] in
 @[circuit_norm]
 lemma Channel.filter_zero (channel : Channel F Message) :
   channel.filter 0 = [] := rfl
@@ -444,23 +434,14 @@ variable (GlobalProp : List (F × Message F) → List (F × Message F) → Prove
 -- also, there are some abstract "local" properties, "constraints" and "spec", that may depend on local interactions
 variable (LocalConstraints LocalSpec : List (F × Message F) → ProverData F → Prop)
 
--- requirements / guarantees are meant to be called on a current interaction
--- plus all previous interactions. this naturally defines what it means for them to be satisfied
--- on a given list of interactions.
+-- requirements / guarantees are meant to be called on a current interaction.
+-- this naturally defines what it means for them to be satisfied on a given list of interactions.
 
-def RequirementsSatisfied (channel : Channel F Message) (data : ProverData F) (initial : List (F × Message F)) :
-    List (F × Message F) → Prop
-  | [] => True
-  | (mult, msg) :: interactions =>
-    channel.Requirements mult msg initial data ∧
-    channel.RequirementsSatisfied data initial interactions
+def RequirementsSatisfied (channel : Channel F Message) (data : ProverData F) (ins : List (F × Message F)) : Prop :=
+  ins.Forall fun (mult, msg) => channel.Requirements mult msg data
 
-def GuaranteesSatisfied (channel : Channel F Message) (data : ProverData F) (initial : List (F × Message F)) :
-    List (F × Message F) → Prop
-  | [] => True
-  | (mult, msg) :: interactions =>
-    channel.Guarantees mult msg initial data ∧
-    channel.GuaranteesSatisfied data initial interactions
+def GuaranteesSatisfied (channel : Channel F Message) (data : ProverData F) (ins : List (F × Message F)) : Prop :=
+  ins.Forall fun (mult, msg) => channel.Guarantees mult msg data
 
 /--
 A channel is consistent (parametrized by the global property) if
@@ -468,18 +449,16 @@ A channel is consistent (parametrized by the global property) if
 - all requirements taken together for a given channel interactions length imply all guarantees
  -/
 def Consistent (channel : Channel F Message) (data : ProverData F) : Prop :=
-  ∀ (localInteractions globalInteractions : List (F × Message F)),
-  GlobalProp initial (initial ++ globalInteractions ++ localInteractions) data →
-    channel.RequirementsSatisfied data initial localInteractions ∧
-    (channel.RequirementsSatisfied data (initial ++ globalInteractions) localInteractions →
-    channel.GuaranteesSatisfied data (initial ++ globalInteractions) localInteractions)
+  ∀ (ins : List (F × Message F)),
+  GlobalProp initial (initial ++ ins) data →
+    channel.RequirementsSatisfied data initial ∧
+    (channel.RequirementsSatisfied data (initial ++ ins) → channel.GuaranteesSatisfied data (initial ++ ins))
 
 /-- Let's assume that a circuit locally proves the following soundness theorem: -/
 def LocalSoundness (channel : Channel F Message) (data : ProverData F) (localInteractions : List (F × Message F)) : Prop :=
-  ∀ (globalInteractions : List (F × Message F)),
     LocalConstraints localInteractions data →
-    channel.GuaranteesSatisfied data globalInteractions localInteractions →
-    LocalSpec localInteractions data ∧ channel.RequirementsSatisfied data (globalInteractions ++ localInteractions) localInteractions
+    channel.GuaranteesSatisfied data localInteractions →
+    LocalSpec localInteractions data ∧ channel.RequirementsSatisfied data localInteractions
 
 /--
   Main result:
@@ -492,31 +471,26 @@ def LocalSoundness (channel : Channel F Message) (data : ProverData F) (localInt
   but I think the structure hints at a working argument, I'm going to revisit the abstract version
   after making it work in a concrete example.
   -/
-def globalSoundness (channel : Channel F Message) (data : ProverData F) (localInteractions : List (F × Message F)) :
+def globalSoundness (channel : Channel F Message) (data : ProverData F) (ins : List (F × Message F)) :
   channel.Consistent initial GlobalProp data →
-  channel.LocalSoundness LocalConstraints LocalSpec data localInteractions →
-  ∀ (globalInteractions : List (F × Message F)),
-    GlobalProp initial (initial ++ globalInteractions ++ localInteractions) data →
+  channel.LocalSoundness LocalConstraints LocalSpec data ins →
+  GlobalProp initial (initial ++ ins) data →
     -- guarantees actually hold
-    channel.GuaranteesSatisfied data (initial ++ globalInteractions) localInteractions ∧
+    channel.GuaranteesSatisfied data (initial ++ ins) ∧
     -- stronger local soundness
-    (LocalConstraints localInteractions data → LocalSpec localInteractions data) := by
-  intros h_consistent h_localSoundness globalInteractions h_globalProp
+    (LocalConstraints ins data → LocalSpec ins data) := by
+  intros h_consistent h_localSoundness h_globalProp
   simp only [Consistent, LocalSoundness] at h_consistent h_localSoundness
-  specialize h_consistent localInteractions globalInteractions h_globalProp
-  specialize h_localSoundness (initial ++ globalInteractions)
+  specialize h_consistent ins h_globalProp
   -- it suffices to show that requirements hold
-  suffices h_requirements : channel.RequirementsSatisfied data (initial ++ globalInteractions) localInteractions by
+  suffices h_requirements : channel.RequirementsSatisfied data (initial ++ ins) by
     obtain ⟨ _, h_implies ⟩ := h_consistent
     have h_guarantees := h_implies h_requirements
     use h_guarantees
     intro h_localConstraints
-    exact (h_localSoundness h_localConstraints h_guarantees).1
-  -- let's do induction on the globalInteractions to show the requirements
-  induction globalInteractions with
-  | nil => simp_all only [List.append_nil]
-  | cons hd tl ih =>
-
-    sorry
+    have : channel.GuaranteesSatisfied data ins := by simp_all [GuaranteesSatisfied]
+    exact (h_localSoundness h_localConstraints this).1
+  -- cyclic reasoning
+  sorry
 
 end Channel
