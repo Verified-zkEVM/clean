@@ -47,6 +47,7 @@ structure ChannelInteraction (F : Type) (Message : TypeMap) [ProvableType Messag
   channel : Channel F Message
   mult : Expression F
   msg : Message (Expression F)
+  assumeGuarantees : Bool
 
 /-- `Channel` with type argument removed, to be used in the core framework. -/
 structure RawChannel (F : Type) where
@@ -59,6 +60,7 @@ structure AbstractInteraction (F : Type) where
   channel : RawChannel F
   mult : Expression F
   msg : Vector (Expression F) channel.arity
+  assumeGuarantees : Bool
 
 instance [Repr F] : Repr (AbstractInteraction F) where
   reprPrec i _ :=
@@ -86,7 +88,11 @@ instance : CoeOut (Channel F Message) (RawChannel F) where
 
 
 def ChannelInteraction.toRaw : ChannelInteraction F Message → AbstractInteraction F
-  | { channel, mult, msg } => ⟨ channel.toRaw, mult, toElements msg ⟩
+  | { channel, mult, msg, assumeGuarantees } => ⟨ channel.toRaw, mult, toElements msg, assumeGuarantees ⟩
+
+@[circuit_norm]
+lemma ChannelInteraction.toRaw_assumeGuarantees (i : ChannelInteraction F Message) :
+    i.toRaw.assumeGuarantees = i.assumeGuarantees := rfl
 
 def Channel.interactions (env : Environment F) (channel : Channel F Message) :
     List (F × Message F) :=
@@ -104,7 +110,7 @@ def AbstractInteraction.IsAdded (i : AbstractInteraction F) (env : Environment F
 @[circuit_norm]
 lemma AbstractInteraction.isAdded_def (env : Environment F) (int : ChannelInteraction F Message) :
     int.toRaw.IsAdded env ↔ int.IsAdded env := by
-  rcases int with ⟨channel, mult, msg⟩
+  rcases int with ⟨channel, mult, msg, assumeGuarantees ⟩
   simp only [circuit_norm, AbstractInteraction.IsAdded, ChannelInteraction.IsAdded,
     ChannelInteraction.toRaw, Channel.interactions,
     List.mem_map, Prod.mk.injEq, Prod.exists, ↓existsAndEq, true_and]
@@ -138,8 +144,8 @@ lemma RawChannel.filter_eq (channel : Channel F Message) (is : RawInteractions F
 
 @[circuit_norm]
 lemma Channel.filter_self (channel : Channel F Message) (env : Environment F)
-  (mult : Expression F) (msg : Message (Expression F)) (is : RawInteractions F) :
-    let interaction : ChannelInteraction F Message := { channel, mult, msg };
+  (mult : Expression F) (msg : Message (Expression F)) (assumeGuarantees : Bool) (is : RawInteractions F) :
+    let interaction : ChannelInteraction F Message := { channel, mult, msg, assumeGuarantees };
     channel.toRaw.filter ((AbstractInteraction.eval env interaction.toRaw) :: is) =
       (env mult, (toElements msg).map env) :: channel.toRaw.filter is := by
     simp only [RawChannel.filter, AbstractInteraction.eval, ChannelInteraction.toRaw, Channel.toRaw,
@@ -157,8 +163,8 @@ variable {Message' : TypeMap} [ProvableType Message']
 
 @[circuit_norm]
 lemma Channel.filter_other (channel : Channel F Message) (channel' : Channel F Message') (env : Environment F)
-  (mult : Expression F) (msg : Message' (Expression F)) (is : RawInteractions F) :
-    let interaction : ChannelInteraction F Message' := { channel := channel', mult, msg };
+  (mult : Expression F) (msg : Message' (Expression F)) (assumeGuarantees : Bool) (is : RawInteractions F) :
+    let interaction : ChannelInteraction F Message' := { channel := channel', mult, msg, assumeGuarantees };
     channel.toRaw.filter (AbstractInteraction.eval env interaction.toRaw :: is) =
       if h : channel'.name = channel.name ∧ size Message' = size Message
       then ((env mult, (toElements msg).map env |>.cast h.2) :: channel.toRaw.filter is)
@@ -394,8 +400,8 @@ lemma Channel.pushed_def (chan : Channel F Message) (msg : Message F) :
 
 @[circuit_norm]
 lemma InteractionDelta.single_eq_channel_emitted (channel : Channel F Message) (mult : Expression F)
-    (msg : Message (Expression F)) (env : Environment F) :
-    let interaction : ChannelInteraction F Message := { channel, mult, msg }
+    (msg : Message (Expression F)) (assumeGuarantees : Bool) (env : Environment F) :
+    let interaction : ChannelInteraction F Message := { channel, mult, msg, assumeGuarantees }
     .single (interaction.toRaw.eval env) = channel.emitted (mult.eval env) (eval env msg) := by
   simp only [Channel.emitted, AbstractInteraction.eval, InteractionDelta.single, ChannelInteraction.toRaw, eval,
     ProvableType.toElements_fromElements]

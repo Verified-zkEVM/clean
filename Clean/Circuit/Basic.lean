@@ -125,23 +125,23 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 
 end Circuit
 
-/-- Emit an add operation to the global multiset -/
+/-- Emit an interaction to the channel -/
 @[circuit_norm]
 def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction F Message := ⟨ channel, mult, msg ⟩
+  let interaction : ChannelInteraction F Message := ⟨ channel, mult, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
 def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction F Message := ⟨ channel, -1, msg ⟩
+  let interaction : ChannelInteraction F Message := ⟨ channel, -1, msg, true ⟩
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction F Message := ⟨ channel, 1, msg ⟩
+  let interaction : ChannelInteraction F Message := ⟨ channel, 1, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 /-- Create a new variable of an arbitrary "provable type". -/

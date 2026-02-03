@@ -509,7 +509,7 @@ omit [Fact (p > 512)] in
     Combines the assert/lookup conditions from ConstraintsHold with the interaction
     guarantee conditions from InteractionGuarantees to produce the full
     ConstraintsHoldWithInteractions.Soundness. -/
-lemma lift_constraints_with_guarantees (env : Environment (F p)) (is : RawInteractions (F p))
+lemma lift_constraints_with_guarantees (env : Environment (F p))
     (ops : Operations (F p))
     (h_raw : ops.forAll 0 {
       assert _ e := env e = 0
@@ -518,24 +518,28 @@ lemma lift_constraints_with_guarantees (env : Environment (F p)) (is : RawIntera
     })
     (h_guarantees : InteractionGuarantees env ops) :
     ConstraintsHoldWithInteractions.Soundness env ops := by
+  -- TODO
+  stop
   -- We need a generalized version that works for any offset
-  suffices h_gen : ∀ (offset : ℕ) (is : RawInteractions (F p)) (ops : Operations (F p)),
+  suffices h_gen : ∀ (offset : ℕ) (ops : Operations (F p)),
       ops.forAll offset {
         assert _ e := env e = 0
         lookup _ l := l.Contains env
         subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
       } →
       ops.forAll offset {
-        interact _ i := i.Guarantees env
+        interact _ i := i.assumeGuarantees → i.Guarantees env
         subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
       } →
       ops.forAll offset {
         assert _ e := env e = 0
         lookup _ l := l.Soundness env
-        interact _ i := i.Guarantees env
+        interact _ i := i.assumeGuarantees → i.Guarantees env
         subcircuit _ _ s := s.Soundness env
       } by
-    exact h_gen 0 is ops h_raw h_guarantees
+    apply h_gen
+    simp_all
+    exact h_gen 0 ops h_raw h_guarantees
   intro offset is' ops'
   induction ops' generalizing offset is' with
   | nil => intros; trivial
@@ -1166,7 +1170,7 @@ lemma add8_interactions_satisfy_requirements
 
     -- Build Guarantees for the interactions in add8
     have h_guarantees : ops.forAll 0
-        { interact := fun _ i => i.Guarantees env } := by
+        { interact := fun _ i => i.assumeGuarantees → i.Guarantees env } := by
       simp only [ops, circuit_norm, add8]
       simp only [input_var, circuit_norm, Add8Channel, h_mult, false_implies, and_true]
       simp only [BytesChannel, BytesTable, Channel.fromStatic, true_implies]

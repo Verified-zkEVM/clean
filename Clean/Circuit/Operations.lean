@@ -473,7 +473,7 @@ def ConstraintsHoldWithInteractions (eval : Environment F) (offset : ℕ) :=
   forAll offset {
     assert _ e := eval e = 0
     lookup _ l := l.Contains eval
-    interact _ i := i.Guarantees eval
+    interact _ i := i.assumeGuarantees → i.Guarantees eval
   }
 
 end FlatOperation
@@ -490,14 +490,15 @@ def Operations.ConstraintsHold (env : Environment F)
   }
 
 def Operations.Guarantees {F : Type} [Field F] (env : Environment F) (ops : Operations F) : Prop :=
-  ops.forAll 0 { interact _ i := i.Guarantees env }
+  ops.forAll 0 { interact _ i := i.assumeGuarantees → i.Guarantees env }
 
 def Operations.Requirements {F : Type} [Field F] (env : Environment F) (ops : Operations F) : Prop :=
   ops.forAll 0 { interact _ i := i.Requirements env }
 
 def Operations.ChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
-  ops.forAll 0 { interact _ i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.Guarantees env }
+  ops.forAll 0 { interact _ i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
+    i.assumeGuarantees → i.Guarantees env }
 
 def Operations.ChannelRequirements {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
@@ -509,7 +510,7 @@ def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
   ops.forAll 0 {
     assert _ e := env e = 0
     lookup _ l := l.Soundness env
-    interact _ i := i.Guarantees env
+    interact _ i := i.assumeGuarantees → i.Guarantees env
     subcircuit _ _ s := s.Soundness env
   }
 
