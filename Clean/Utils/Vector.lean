@@ -184,6 +184,12 @@ lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
   simp only [Vector.getElem_mapFinRange, Vector.getElem_map]
   simp
 
+lemma map_mapFinRange {n : ℕ} {create : Fin n → α} {f : α → β} :
+  Vector.map f (Vector.mapFinRange n create) =
+    Vector.mapFinRange n (fun i => f (create i)) := by
+  rw [Vector.ext_iff]
+  simp [getElem_mapFinRange, getElem_map]
+
 def mapRange (n : ℕ) (create : ℕ → α) : Vector α n :=
   match n with
   | 0 => #v[]
@@ -216,6 +222,14 @@ theorem map_mapRange {n} {create : ℕ → α} {f : α → β} :
     Vector.mapRange n (fun i => f (create i)) := by
   rw [Vector.ext_iff]
   simp [getElem_mapRange, getElem_map]
+
+theorem zip_mapRange {n} {create1 : ℕ → α} (v : Vector β n) :
+    Vector.zip (mapRange n create1) v =
+      Vector.mapFinRange n fun i => (create1 i.val, v[i]) := by
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_zip, Vector.getElem_mapFinRange, Vector.getElem_mapRange]
+  rfl
 
 theorem mapRange_add_eq_append {n m} (create : ℕ → α) :
     mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by
