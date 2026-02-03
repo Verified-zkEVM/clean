@@ -5,17 +5,21 @@
 ## Completed Steps
 
 ### Step 1: Verifier interaction analysis ✓
+
 - Proved verifier emits pull `(-1, (n, x, y))` and push `(1, (0, 0, 1))`
 
 ### Step 2: Channel balance extraction ✓
+
 - Extracted `h_fib_balanced` from `h_balanced`
 - Proved `h_fib_mults`: all multiplicities in FibonacciChannel are ±1
 
 ### Step 3: h_bytes_guarantees ✓
+
 - Proved BytesChannel pulls have `z.val < 256`
 - Uses contradiction: if `z.val ≥ 256`, then all entries for `#v[z]` have `mult = -1`, so sum < 0
 
 ### Step 4: h_add8_guarantees ✓
+
 - Proved Add8Channel pull guarantees hold
 - Structure:
   - Case split: entry from tables or verifier
@@ -25,6 +29,7 @@
   - Tables at i=2 (fib8): `fib8_add8_interactions_mult_neg`
 
 ### Step 5: h_fib8_soundness ✓
+
 - Structure complete for validity transfer
 - Case split: entry from tables or verifier
   - Verifier case: push is `(0, 0, 1)` ✓
@@ -55,22 +60,25 @@ Successfully wired up to use `add8.soundness` abstractly:
 ## Remaining Sorries
 
 ### Bridge infrastructure
-| Line | Lemma | Description |
-|------|-------|-------------|
-| 957 | `constraintsHoldFlat_to_soundness` | Bridge: ConstraintsHoldFlat + Guarantees → Soundness |
+
+| Line | Lemma                              | Description                                          |
+| ---- | ---------------------------------- | ---------------------------------------------------- |
+| 957  | `constraintsHoldFlat_to_soundness` | Bridge: ConstraintsHoldFlat + Guarantees → Soundness |
 
 ### In `add8_interactions_satisfy_requirements`
-| Line | Description |
-|------|-------------|
-| 1049 | `h_guarantees` - need `z.val < 256` from `h_bytes_guarantees` |
+
+| Line | Description                                                    |
+| ---- | -------------------------------------------------------------- |
+| 1049 | `h_guarantees` - need `z.val < 256` from `h_bytes_guarantees`  |
 | 1059 | `h_eval_eq` - definitional equality, needs ProvableStruct simp |
 
 ### Other infrastructure (peripheral)
-| Line | Description |
-|------|-------------|
-| 203 | `pushBytes` ElaboratedCircuit instance (4 sorries) |
-| 790 | something else |
-| 1130 | something else |
+
+| Line | Description                                        |
+| ---- | -------------------------------------------------- |
+| 203  | `pushBytes` ElaboratedCircuit instance (4 sorries) |
+| 790  | something else                                     |
+| 1130 | something else                                     |
 
 ## Architecture Notes
 
@@ -88,6 +96,7 @@ verifier     | empty        | empty       | push+pull
 ## Key Insight
 
 The proof uses `add8.soundness` abstractly rather than manually unfolding circuit constraints:
+
 - `add8.soundness` proves `ConstraintsHoldWithInteractions.Soundness → Spec ∧ Requirements`
 - `Requirements` for Add8Channel says: if push, then `z.val = (x.val + y.val) % 256`
 - We provide the `Soundness` via the bridge lemma from `ConstraintsHoldFlat + Guarantees`
