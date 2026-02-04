@@ -20,26 +20,31 @@ def toVar : Expression F → Circuit F (Variable F)
 
 def getOffset : Circuit F ℕ := fun n => (n, [])
 
-def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
+def valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
   fromElements <| .mapRange _ fun i => env.get (offset + i)
+
+theorem eval_varFromOffset_valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) :
+    eval env (varFromOffset α offset) = valueFromOffset α offset env := by
+  simp only [varFromOffset, valueFromOffset, fromVars, ProvableType.eval_fromElements, Vector.map_mapRange]
+  rfl
 
 def witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
   let offset ← getOffset
-  witness (computeValueFromOffset α offset)
+  witness (valueFromOffset α offset)
 
 theorem witnessAny_localWitnesses (n : ℕ) (env : Environment F) :
     env.UsesLocalWitnessesCompleteness n (witnessAny α |>.operations n) ↔ True := by
-  simp only [circuit_norm, getOffset, witnessAny, computeValueFromOffset,
+  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
     ProvableType.toElements_fromElements]
 
 @[circuit_norm]
 theorem witnessAny_interactionsWithChannel {n : ℕ} {channel : RawChannel F} {env : Environment F} :
     (witnessAny α |>.operations n).interactionsWithChannel channel env = [] := by
-  simp only [circuit_norm, getOffset, witnessAny, computeValueFromOffset,
+  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
     ProvableType.toElements_fromElements]
 
 @[circuit_norm]
 theorem witnessAny_output {n : ℕ} :
     (witnessAny (F:=F) α |>.output n) = varFromOffset α n  := by
-  simp only [circuit_norm, getOffset, witnessAny, computeValueFromOffset,
+  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
     ProvableType.toElements_fromElements]

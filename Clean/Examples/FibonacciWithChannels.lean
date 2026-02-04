@@ -298,139 +298,14 @@ def FormalCircuitWithInteractions.instantiate (circuit : FormalCircuitWithIntera
   let input ← witnessAny Input
   let _ ← circuit input -- we don't care about the output in this context
 
+@[circuit_norm]
+def FormalCircuitWithInteractions.instantiatedOutput (circuit : FormalCircuitWithInteractions F Input Output)
+    (env : Environment F) : Output F :=
+  let outputVar := (circuit (varFromOffset Input 0)).output (size Input)
+  eval env outputVar
+
 def FormalCircuitWithInteractions.size (circuit : FormalCircuitWithInteractions F Input Output) : ℕ :=
   circuit.instantiate.localLength 0
-
-structure AbstractTable (F : Type) [Field F] [DecidableEq F] where
-  {Input : TypeMap} {Output : TypeMap}
-  [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
-  circuit : FormalCircuitWithInteractions F Input Output
-
-instance (t: AbstractTable F) : ProvableType t.Input := t.provableInput
-instance (t: AbstractTable F) : ProvableType t.Output := t.provableOutput
-
-namespace AbstractTable
-def operations (table : AbstractTable F) : Operations F :=
-  table.circuit.instantiate.operations 0
-
-def width (table : AbstractTable F) : ℕ := table.circuit.size
-end AbstractTable
-
-structure TableWitness (F : Type) [Field F] [DecidableEq F] where
-  abstract : AbstractTable F
-  table : List (Vector F abstract.circuit.size)
-  data : ProverData F
-
-lemma constraintsHold_instantiate
-    (circuit : FormalCircuitWithInteractions F Input Output)
-    (env : Environment F) :
-    (circuit.instantiate.operations 0).ConstraintsHold env →
-    ((circuit.main (varFromOffset Input 0)).operations (size Input)).ConstraintsHold env := by
-  simp only [FormalCircuitWithInteractions.instantiate, circuit_norm, witnessAny, getOffset]
-  simp only [FormalCircuitWithInteractions.toSubcircuit]
-  rw [Operations.toNested_toFlat, Circuit.constraintsHold_toFlat_iff, zero_add, add_zero,
-    Circuit.constraintsHold_iff_forAll']
-  set ops := ((circuit.main (varFromOffset Input 0)).operations (size Input))
-  show _ → ops.forAllNoOffset _
-  induction ops using Operations.induct
-  <;> simp_all [Operations.forAllNoOffset]
-
-namespace TableWitness
-def width (t : TableWitness F) : ℕ := t.abstract.width
-
-def environment (witness : TableWitness F) (row : Vector F witness.width) : Environment F where
-  get j := row[j]?.getD 0
-  data := witness.data
-  interactions := [] -- I think we can remove this field??
-
-def Constraints (witness : TableWitness F) : Prop :=
-  witness.table.Forall fun row =>
-    witness.abstract.operations.ConstraintsHold (witness.environment row)
-
-def interactions (witness : TableWitness F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
-  witness.table.flatMap fun row =>
-    witness.abstract.operations.interactionsWithChannel channel (witness.environment row)
-end TableWitness
-
-structure Ensemble (F : Type) [Field F] [DecidableEq F] where
-  tables : List (AbstractTable F)
-  channels : List (RawChannel F)
-
-  PublicIO : TypeMap
-  [provablePublicIO : ProvableType PublicIO]
-  verifier : FormalCircuitWithInteractions F PublicIO unit
-  verifier_length_zero : ∀ pi, (verifier (const pi)).localLength 0 = 0
-
-  Spec : PublicIO F → Prop
-
-structure EnsembleWitness (ens : Ensemble F) where
-  tables : List (TableWitness F)
-  same_length : ens.tables.length = tables.length
-  same_circuits : ∀ i (hi : i < ens.tables.length), ens.tables[i] = tables[i].abstract
-
-def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { get _ := 0, data _ _ := #[], interactions := [] }
-
-instance (ens : Ensemble F) : ProvableType ens.PublicIO := ens.provablePublicIO
-
-namespace Ensemble
-def verifierInteractions (ens : Ensemble F) (channel : RawChannel F) (publicInput : ens.PublicIO F) : List (F × Vector F channel.arity) :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).interactionsWithChannel channel (emptyEnvironment F)
-
-def Constraints (ens : Ensemble F) (witness : EnsembleWitness ens) : Prop :=
-  witness.tables.Forall fun table => table.Constraints
-
-def interactions (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
-  witness.tables.flatMap (fun table => table.interactions channel)
-  ++ ens.verifierInteractions channel publicInput
-
-/-- Per-message balance for a single channel: for each message, the sum of multiplicities is 0,
-    and the filtered list length is bounded by the field characteristic.
-    Also requires that the total interaction count is bounded. -/
-def BalancedChannel (ens : Ensemble F) (publicInput : ens.PublicIO F)
-    (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
-  (ens.interactions publicInput witness channel).length < ringChar F ∧
-  ∀ msg : Vector F channel.arity,
-    let is := (ens.interactions publicInput witness channel).filter (·.2 = msg)
-    is.length < ringChar F ∧ (is.map Prod.fst).sum = 0
-
-/-- Per-message balance: for each channel, for each message, the sum of multiplicities is 0.
-    This is stronger than just requiring the total sum to be 0, and captures the intuition
-    that every pull (-1) must be matched by a push (+1) for the same message.
-    Additionally requires that the number of interactions is bounded by the field characteristic
-    (needed for exists_push_of_pull which uses natCast). -/
-def BalancedChannels (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness : EnsembleWitness ens) : Prop :=
-  ens.channels.Forall fun channel => ens.BalancedChannel publicInput witness channel
-
-def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).ConstraintsHold (emptyEnvironment F)
-
-/--
-Soundness for an ensemble states that if
-- constraints hold on all tables and
-- and interactions sum to zero
-- and constraints hold on the verifier circuit, when given the public inputs (as constants)
-then the spec holds
--/
-def Soundness (F : Type) [Field F] [DecidableEq F] (ens : Ensemble F) : Prop :=
-  ∀ witness publicInput,
-    ens.Constraints witness →
-    ens.BalancedChannels publicInput witness →
-    ens.VerifierAccepts publicInput →
-    ens.Spec publicInput
-
-/--
-Completeness for an ensemble states that for any public input satisfying the spec,
-the verifier accepts and there exists a witness such that constraints hold and the channels are balanced
--/
-def Completeness (ens : Ensemble F) : Prop :=
-  ∀ publicInput,
-    ens.Spec publicInput →
-    ens.VerifierAccepts publicInput ∧
-    ∃ witness, ens.Constraints witness ∧ ens.BalancedChannels publicInput witness
-
-end Ensemble
 
 omit [DecidableEq F] in
 /-- Bridge lemma: ConstraintsHold + channel Guarantees → ConstraintsHoldWithInteractions.Soundness
@@ -455,102 +330,265 @@ lemma constraintsHold_to_soundness {env : Environment F} {ops : Operations F}
   | subcircuit s ops ih =>
     simp_all only [forall_const, Operations.forAllNoOffset, true_and, and_true]
     exact s.imply_soundness _ h_constraints.1
+
+structure AbstractTable (F : Type) [Field F] [DecidableEq F] where
+  {Input : TypeMap} {Output : TypeMap}
+  [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
+  circuit : FormalCircuitWithInteractions F Input Output
+
+instance (t: AbstractTable F) : ProvableType t.Input := t.provableInput
+instance (t: AbstractTable F) : ProvableType t.Output := t.provableOutput
+
+namespace AbstractTable
+def operations (table : AbstractTable F) : Operations F :=
+  table.circuit.instantiate.operations 0
+
+def width (table : AbstractTable F) : ℕ := table.circuit.size
+
+def Spec (table : AbstractTable F) (env : Environment F) : Prop :=
+  -- first `size Input` elements of the environment are the input
+  let input := valueFromOffset table.Input 0 env
+  -- output is whatever the circuit computes on the input
+  let output := table.circuit.instantiatedOutput env
+  -- Spec on input + output
+  table.circuit.Spec input output env
+
+lemma constraintsHold_instantiate
+    (circuit : FormalCircuitWithInteractions F Input Output)
+    (env : Environment F) :
+    (circuit.instantiate.operations 0).ConstraintsHold env ↔
+    ((circuit.main (varFromOffset Input 0)).operations (size Input)).ConstraintsHold env := by
+  simp only [FormalCircuitWithInteractions.instantiate, circuit_norm, witnessAny, getOffset]
+  simp only [FormalCircuitWithInteractions.toSubcircuit]
+  rw [Operations.toNested_toFlat, Circuit.constraintsHold_toFlat_iff, zero_add, add_zero,
+    Circuit.constraintsHold_iff_forAll']
+
+lemma guarantees_instantiate
+    (circuit : FormalCircuitWithInteractions F Input Output)
+    (env : Environment F) :
+    (circuit.instantiate.operations 0).Guarantees env ↔
+    ((circuit.main (varFromOffset Input 0)).operations (size Input)).Guarantees env := by
+  simp only [FormalCircuitWithInteractions.instantiate, circuit_norm, witnessAny, getOffset]
+  sorry
+  -- not provable, subcircuit guarantees are currently just True
+
+lemma requirements_instantiate
+    (circuit : FormalCircuitWithInteractions F Input Output)
+    (env : Environment F) :
+    (circuit.instantiate.operations 0).Requirements env ↔
+    ((circuit.main (varFromOffset Input 0)).operations (size Input)).Requirements env := by
+  sorry
+
+-- this is the circuit's soundness theorem, stated in "instantiated" form
+theorem weakSoundness {table : AbstractTable F} {env : Environment F} :
+    table.operations.ConstraintsHold env →
+    table.operations.Guarantees env →
+      table.Spec env ∧ table.operations.Requirements env := by
+  intro h_constraints h_guarantees
+  simp only [AbstractTable.operations, AbstractTable.Spec] at *
+  simp only [constraintsHold_instantiate] at h_constraints
+  simp only [guarantees_instantiate] at h_guarantees
+  simp only [requirements_instantiate]
+  have h_soundness := table.circuit.soundness (size table.Input) env (varFromOffset table.Input 0)
+    (valueFromOffset table.Input 0 env) (eval_varFromOffset_valueFromOffset ..)
+  have h_goal := h_soundness (constraintsHold_to_soundness h_constraints h_guarantees)
+  convert h_goal
+
+end AbstractTable
+
+structure TableWitness (F : Type) [Field F] [DecidableEq F] where
+  abstract : AbstractTable F
+  table : List (Vector F abstract.circuit.size)
+  data : ProverData F
+
+namespace TableWitness
+def width (t : TableWitness F) : ℕ := t.abstract.width
+
+def environment (witness : TableWitness F) (row : Vector F witness.width) : Environment F where
+  get j := row[j]?.getD 0
+  data := witness.data
+  interactions := [] -- I think we can remove this field??
+
+def Constraints (witness : TableWitness F) : Prop :=
+  witness.table.Forall fun row =>
+    witness.abstract.operations.ConstraintsHold (witness.environment row)
+
+def Guarantees (witness : TableWitness F) : Prop :=
+  witness.table.Forall fun row =>
+    witness.abstract.operations.Guarantees (witness.environment row)
+
+def Requirements (witness : TableWitness F) : Prop :=
+  witness.table.Forall fun row =>
+    witness.abstract.operations.Requirements (witness.environment row)
+
+def Spec (witness : TableWitness F) : Prop :=
+  witness.table.Forall fun row =>
+    witness.abstract.Spec (witness.environment row)
+
+def interactions (witness : TableWitness F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+  witness.table.flatMap fun row =>
+    witness.abstract.operations.interactionsWithChannel channel (witness.environment row)
+end TableWitness
+
+def FormalCircuitWithInteractions.empty (F : Type) [Field F] [DecidableEq F]
+    (Input : TypeMap) [ProvableType Input] : FormalCircuitWithInteractions F Input unit where
+  main _ := return
+  localLength _ := 0
+  output _ _ := ()
+  localAdds | _, _, _ => []
+  Assumptions | _, _ => True
+  Spec _ _ _ := True
+  soundness := by circuit_proof_start
+  completeness := by circuit_proof_start
+
+structure Ensemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
+  tables : List (AbstractTable F)
+  channels : List (RawChannel F)
+  verifier : FormalCircuitWithInteractions F PublicIO unit := .empty F PublicIO
+  verifier_length_zero : ∀ pi, (verifier (const pi)).localLength 0 = 0 := by
+    simp only [FormalCircuitWithInteractions.empty, circuit_norm]
+  Spec : PublicIO F → Prop
+
+variable {PublicIO : TypeMap} [ProvableType PublicIO]
+
+structure EnsembleWitness (ens : Ensemble F PublicIO) where
+  tables : List (TableWitness F)
+  same_length : ens.tables.length = tables.length
+  same_circuits : ∀ i (hi : i < ens.tables.length), ens.tables[i] = tables[i].abstract
+
+def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { get _ := 0, data _ _ := #[], interactions := [] }
+
+namespace Ensemble
+def verifierInteractions (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) : List (F × Vector F channel.arity) :=
+  let circuit := ens.verifier.main (const publicInput)
+  (circuit.operations 0).interactionsWithChannel channel (emptyEnvironment F)
+
+def Constraints (ens : Ensemble F PublicIO) (witness : EnsembleWitness ens) : Prop :=
+  witness.tables.Forall fun table => table.Constraints
+
+def interactions (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+  witness.tables.flatMap (fun table => table.interactions channel)
+  ++ ens.verifierInteractions channel publicInput
+
+/-- Per-message balance for a single channel: for each message, the sum of multiplicities is 0,
+    and the filtered list length is bounded by the field characteristic.
+    Also requires that the total interaction count is bounded. -/
+def BalancedChannel (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
+    (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
+  (ens.interactions publicInput witness channel).length < ringChar F ∧
+  ∀ msg : Vector F channel.arity,
+    let is := (ens.interactions publicInput witness channel).filter (·.2 = msg)
+    is.length < ringChar F ∧ (is.map Prod.fst).sum = 0
+
+/-- Per-message balance: for each channel, for each message, the sum of multiplicities is 0.
+    This is stronger than just requiring the total sum to be 0, and captures the intuition
+    that every pull (-1) must be matched by a push (+1) for the same message.
+    Additionally requires that the number of interactions is bounded by the field characteristic
+    (needed for exists_push_of_pull which uses natCast). -/
+def BalancedChannels (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
+  ens.channels.Forall fun channel => ens.BalancedChannel publicInput witness channel
+
+def VerifierAccepts (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
+  let circuit := ens.verifier.main (const publicInput)
+  (circuit.operations 0).ConstraintsHold (emptyEnvironment F)
+
+/--
+Soundness for an ensemble states that if
+- constraints hold on all tables and
+- and interactions sum to zero
+- and constraints hold on the verifier circuit, when given the public inputs (as constants)
+then the spec holds
+-/
+def Soundness (F : Type) [Field F] [DecidableEq F] (ens : Ensemble F PublicIO) : Prop :=
+  ∀ witness publicInput,
+    ens.Constraints witness →
+    ens.BalancedChannels publicInput witness →
+    ens.VerifierAccepts publicInput →
+    ens.Spec publicInput
+
+/--
+Completeness for an ensemble states that for any public input satisfying the spec,
+the verifier accepts and there exists a witness such that constraints hold and the channels are balanced
+-/
+def Completeness (ens : Ensemble F PublicIO) : Prop :=
+  ∀ publicInput,
+    ens.Spec publicInput →
+    ens.VerifierAccepts publicInput ∧
+    ∃ witness, ens.Constraints witness ∧ ens.BalancedChannels publicInput witness
+
+end Ensemble
+
+-- infrastructure for iteratively adding tables to an ensemble such that we can always fill in
+-- the next table's guarantees
+
+namespace Ensemble
+def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] : Ensemble F PublicIO where
+  tables := []
+  channels := []
+  Spec _ := True
+
+-- weaker version of BalancedChannel that works with ensembles that aren't fully specified yet,
+-- so we don't have information about the _full_ list of interaction but we can assume our interactions are
+-- a sublist of some larger list which is balanced
+def PartialBalancedChannel (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
+    (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
+  ∃ interactions,
+    (ens.interactions publicInput witness channel).Sublist interactions ∧
+    interactions.length < ringChar F ∧
+    ∀ msg : Vector F channel.arity,
+      (interactions.filter (·.2 = msg) |>.map Prod.fst).sum = 0
+
+def PartialBalancedChannels (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
+  ens.channels.Forall fun channel => ens.PartialBalancedChannel publicInput witness channel
+
+-- sound channels means that we can eliminate the Guarantees from each table, assuming constraints and partial balance
+-- this is basically what's needed for Soundness, together with per-table soundness implying global soundness
+def SoundChannels (ens : Ensemble F PublicIO) : Prop :=
+  ∀ witness publicInput,
+  PartialBalancedChannels ens publicInput witness →
+  ens.Constraints witness →
+  witness.tables.Forall fun table => table.Guarantees
+
+/--
+partial balance + sound channels gives you the full soundness statement
+on each table without assuming guarantees
+-/
+lemma soundChannels_imply_soundness (ens : Ensemble F PublicIO) :
+  ens.SoundChannels →
+  ∀ witness publicInput,
+    ens.PartialBalancedChannels publicInput witness →
+    -- assuming the constraints hold, the spec and the requirements hold as well
+    ens.Constraints witness →
+    witness.tables.Forall fun table =>
+      table.Spec ∧ table.Requirements
+     := by
+  simp only [SoundChannels, Constraints]
+  intro sound_channels witness publicInput partial_balance constraints
+  simp only [List.forall_iff_forall_mem] at *
+  intro table h_mem_table
+  have guarantees := sound_channels witness publicInput partial_balance constraints table h_mem_table
+  clear sound_channels
+  specialize constraints table h_mem_table
+  simp only [TableWitness.Guarantees, TableWitness.Requirements, TableWitness.Spec, TableWitness.Constraints] at *
+  set env := table.environment
+  rcases table with ⟨ table, witness, data ⟩
+  simp only [List.forall_iff_forall_mem] at *
+  suffices (∀ row ∈ witness, table.Spec (env row) ∧ table.operations.Requirements (env row)) by
+    simp_all
+  intro row h_mem_row
+  exact AbstractTable.weakSoundness (constraints row h_mem_row) (guarantees row h_mem_row)
+
+end Ensemble
 end
 
 -- let's try to prove soundness and completeness of the Fibonacci with channels example
-def fibonacciEnsemble : Ensemble (F p) where
+def fibonacciEnsemble : Ensemble (F p) fieldTriple where
   tables := [ ⟨pushBytes⟩, ⟨add8⟩, ⟨fib8⟩ ]
   channels := [ BytesChannel.toRaw, Add8Channel.toRaw, FibonacciChannel.toRaw ]
-  PublicIO := fieldTriple
   verifier := fibonacciVerifier
   verifier_length_zero := by simp only [fibonacciVerifier, circuit_norm]
 
   Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-
-/-!
-## Lifting lemma: from ConstraintsHold to ConstraintsHoldWithInteractions.Soundness
-
-The ensemble-level `ConstraintsHold` checks raw constraints (asserts, lookups, subcircuits)
-but ignores channel interactions (they default to `True`). The per-circuit soundness
-theorems need `ConstraintsHoldWithInteractions.Soundness`, which additionally requires
-channel guarantees to hold for each interaction.
-
-This lemma bridges the gap: given raw constraints hold AND channel guarantees hold
-at each interaction point, we can construct the full `ConstraintsHoldWithInteractions.Soundness`.
--/
-
-/-- The interaction guarantees for a list of operations, threaded through `is`.
-    This extracts ONLY the guarantee conditions, with everything else set to True. -/
-def InteractionGuarantees (env : Environment (F p)) (ops : Operations (F p)) : Prop :=
-  ops.forAll 0 {
-    interact _ i := i.Guarantees env
-    subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat -- TODO: should use s.Soundness
-  }
-
-omit [Fact (p > 512)] in
-/-- Lifting lemma: raw constraints + interaction guarantees → full constraints with interactions.
-    Combines the assert/lookup conditions from ConstraintsHold with the interaction
-    guarantee conditions from InteractionGuarantees to produce the full
-    ConstraintsHoldWithInteractions.Soundness. -/
-lemma lift_constraints_with_guarantees (env : Environment (F p))
-    (ops : Operations (F p))
-    (h_raw : ops.forAll 0 {
-      assert _ e := env e = 0
-      lookup _ l := l.Contains env
-      subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
-    })
-    (h_guarantees : InteractionGuarantees env ops) :
-    ConstraintsHoldWithInteractions.Soundness env ops := by
-  -- TODO
-  stop
-  -- We need a generalized version that works for any offset
-  suffices h_gen : ∀ (offset : ℕ) (ops : Operations (F p)),
-      ops.forAll offset {
-        assert _ e := env e = 0
-        lookup _ l := l.Contains env
-        subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
-      } →
-      ops.forAll offset {
-        interact _ i := i.assumeGuarantees → i.Guarantees env
-        subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
-      } →
-      ops.forAll offset {
-        assert _ e := env e = 0
-        lookup _ l := l.Soundness env
-        interact _ i := i.assumeGuarantees → i.Guarantees env
-        subcircuit _ _ s := s.Soundness env
-      } by
-    apply h_gen
-    simp_all
-    exact h_gen 0 ops h_raw h_guarantees
-  intro offset is' ops'
-  induction ops' generalizing offset is' with
-  | nil => intros; trivial
-  | cons op ops' ih =>
-    intro h_raw' h_guar'
-    cases op with
-    | witness m c =>
-      simp only [Operations.forAll] at *
-      simp_all
-    | assert e =>
-      simp only [Operations.forAll ] at *
-      simp_all
-    | lookup l =>
-      simp only [Operations.forAll ] at *
-      sorry
-      -- exact ⟨ l.table.imply_soundness _ _ h_raw'.1, ih _ _ h_raw'.2 h_guar'.2 ⟩
-    | interact i =>
-      simp only [Operations.forAll ] at *
-      simp_all
-    | subcircuit s =>
-      simp only [Operations.forAll ] at *
-      -- Need ConstraintsHoldFlat → s.Soundness AND continue with rest of ops
-      constructor
-      · -- s.Soundness follows from imply_soundness
-        exact s.imply_soundness _ h_raw'.1
-      · -- Continue with the rest of the operations
-        sorry
-        -- exact ih _ _ h_raw'.2 h_guar'.2
 
 /-!
 ## Helper lemmas for per-message channel balance
@@ -1089,7 +1127,7 @@ lemma add8_interactions_satisfy_requirements
     rw [List.forall_iff_forall_mem] at h_constraints
     exact h_constraints row h_row_mem
 
-  replace h_row_constraints := constraintsHold_instantiate _ _ h_row_constraints
+  simp only [AbstractTable.operations, AbstractTable.constraintsHold_instantiate] at h_row_constraints
   rw [h_is_add8] at h_row_constraints
   simp only at h_row_constraints
 
