@@ -39,8 +39,6 @@ def emitState (multiplicity : Expression (F p)) (state : Var State (F p)) : Circ
 def emitStateWhen (enabled : Expression (F p)) (multiplicity : Expression (F p)) (state : Var State (F p)) : Circuit (F p) Unit :=
   StateChannel.emit (enabled * multiplicity) state
 
-
-
 /-!
 ## Conditional decode infrastructure
 -/

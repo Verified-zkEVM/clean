@@ -36,7 +36,6 @@ def StaticLookupChannel.channel (slc : StaticLookupChannel F Message) :=
   Channel.fromStatic F Message slc
 end
 
-
 variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
 
 def BytesTable : StaticLookupChannel (F p) field where
@@ -79,10 +78,7 @@ def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
   soundness := by sorry
   completeness := by sorry
 
-  channelsWithGuarantees := [ BytesChannel.toRaw ]
-  guarantees_iff := by sorry
-  requirements_iff := by sorry
-
+  channelsWithRequirements := [ BytesChannel.toRaw ]
 
 instance Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -126,8 +122,8 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   -- TODO make coercion work without .toRaw
   channelsWithGuarantees := [ BytesChannel.toRaw ]
   channelsWithRequirements := [ Add8Channel.toRaw ]
-  guarantees_iff := by sorry
-  requirements_iff := by sorry
+  requirements_iff := by
+    simp only [circuit_norm, List.Forall, seval, BytesChannel]
 
   -- TODO feels weird to put the entire spec in the completeness assumptions
   -- can we get something from the channel interactions??
@@ -138,7 +134,7 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   soundness := by
     circuit_proof_start [BytesChannel, Add8Channel]
     set carry := env.get i₀
-    obtain ⟨ hz, hcarry, heq, _ ⟩ := h_holds
+    obtain ⟨ hz, hcarry, heq ⟩ := h_holds
     intro hm hx hy
     have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
@@ -225,8 +221,6 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
 
   channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
-  guarantees_iff := by sorry
-  requirements_iff := by sorry
 
   Assumptions | (n, x, y), _ => True
   Spec _ _ _ := True
@@ -270,8 +264,6 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
 
   channelsWithGuarantees := [ FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
-  guarantees_iff := by sorry
-  requirements_iff := by sorry
 
   Assumptions _ _ := True
   Spec
@@ -392,8 +384,7 @@ instance (ens : Ensemble F) : ProvableType ens.PublicIO := ens.provablePublicIO
 namespace Ensemble
 def verifierInteractions (ens : Ensemble F) (channel : RawChannel F) (publicInput : ens.PublicIO F) : List (F × Vector F channel.arity) :=
   let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).localAdds (emptyEnvironment F)
-  |> channel.filter
+  (circuit.operations 0).interactionsWithChannel channel (emptyEnvironment F)
 
 def Constraints (ens : Ensemble F) (witness : EnsembleWitness ens) : Prop :=
   witness.tables.Forall fun table => table.Constraints
@@ -465,12 +456,12 @@ lemma constraintsHold_to_soundness {env : Environment F} {ops : Operations F}
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness | assert | interact =>
-    simp_all [Operations.forAll]
+    simp_all [Operations.forAll, Operations.forAllNoOffset]
   | lookup l =>
-    simp_all only [Lookup.Contains, Lookup.Soundness, Operations.forAll, true_and, and_true]
+    simp_all only [Lookup.Contains, Lookup.Soundness, Operations.forAll, Operations.forAllNoOffset, true_and, and_true]
     exact l.table.imply_soundness _ _ (h_constraints.1)
   | subcircuit s ops ih =>
-    simp_all only [Operations.forAll, true_and, and_true]
+    simp_all only [Operations.forAll, Operations.forAllNoOffset, true_and, and_true]
     exact s.imply_soundness _ h_constraints.1
 end
 
@@ -955,7 +946,6 @@ lemma fib_step_counter_bounded
             (1, (#v[n_prev, x, y] : Vector (F p) 3)) h_push_prev rfl h_step_prev' k hk_le
           exact this
 
-
 /-- For any FibonacciChannel interaction from the tables (not verifier),
     the multiplicity is 1 or -1.
 
@@ -1051,14 +1041,8 @@ lemma fib_table_interaction_mult_pm_one
 /-- Verifier's Add8Channel interactions are empty (verifier only uses FibonacciChannel) -/
 lemma verifier_add8_interactions_empty (publicInput : fieldTriple (F p)) :
     (fibonacciEnsemble (p := p)).verifierInteractions (Add8Channel.toRaw) publicInput = [] := by
-  rcases publicInput with ⟨n, x, y⟩
-  simp only [Ensemble.verifierInteractions, fibonacciEnsemble, fibonacciVerifier, circuit_norm]
-  -- The verifier's localAdds only involves FibonacciChannel (name = "fibonacci")
-  -- not Add8Channel (name = "add8"). The filter removes all non-matching entries.
-  rw [Channel.toRaw, RawChannel.filter, InteractionDelta.add_eq_append, List.filterMap_append]
-  simp only [Channel.emitted, InteractionDelta.single, List.filterMap_cons, List.filterMap_nil,
+  simp [circuit_norm, Ensemble.verifierInteractions, fibonacciEnsemble, fibonacciVerifier,
     FibonacciChannel, Add8Channel]
-  rfl
 
 /-- pushBytes's Add8Channel interactions are empty (pushBytes only uses BytesChannel) -/
 lemma pushBytes_add8_interactions_empty
@@ -1169,11 +1153,8 @@ lemma add8_interactions_satisfy_requirements
     set ops := (add8.main input_var).operations offset
 
     -- Build Guarantees for the interactions in add8
-    have h_guarantees : ops.forAll 0
-        { interact := fun _ i => i.assumeGuarantees → i.Guarantees env } := by
-      simp only [ops, circuit_norm, add8]
-      simp only [input_var, circuit_norm, Add8Channel, h_mult, false_implies, and_true]
-      simp only [BytesChannel, BytesTable, Channel.fromStatic, true_implies]
+    have h_guarantees : ops.Guarantees env := by
+      simp only [ops, circuit_norm, add8, input_var, BytesChannel, BytesTable]
       apply h_bytes_guarantees (env.get 2)
       -- Need to show (-1, #v[env.get 2]) ∈ table.interactions BytesChannel.toRaw
       -- This follows because add8 pulls z from BytesChannel
@@ -1468,31 +1449,18 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     simp [circuit_norm, const, explicit_provable_type]
 
   -- First prove a direct characterization of the verifier's localAdds
-  have verifier_localAdds :
-      let circuit := fibonacciVerifier.main (const (n, x, y))
-      let env := emptyEnvironment (F p)
-      (circuit.operations 0).localAdds env =
-        FibonacciChannel.pushed (0, 0, 1) + FibonacciChannel.pulled (n, x, y) := by
-    unfold fibonacciVerifier
-    simp only [circuit_norm, emptyEnvironment]
+  have h_verifier_interactions :
+    fibonacciEnsemble.verifierInteractions FibonacciChannel.toRaw (n, x, y) =
+      [(1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)), (-1, (#v[n, x, y] : Vector (F p) 3))] := by
+    simp only [circuit_norm, fibonacciEnsemble, Ensemble.verifierInteractions, fibonacciVerifier, emptyEnvironment]
     rw [const_triple]
-    simp only [Expression.eval]
+    simp [reduceDIte, circuit_norm, explicit_provable_type]
 
   have h_verifier_pull : (-1, (#v[n, x, y] : Vector (F p) 3)) ∈ fibInteractions := by
-    simp only [fibInteractions, Ensemble.interactions, fibonacciEnsemble]
-    apply List.mem_append_right
-    simp only [Ensemble.verifierInteractions]
-    rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
-      Channel.filter_self_add, Channel.filter_self_single]
-    simp [toElements]
+    simp [fibInteractions, Ensemble.interactions, h_verifier_interactions]
 
   have h_verifier_push : (1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)) ∈ fibInteractions := by
-    simp only [fibInteractions, Ensemble.interactions, fibonacciEnsemble]
-    apply List.mem_append_right
-    simp only [Ensemble.verifierInteractions]
-    rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
-      Channel.filter_self_add, Channel.filter_self_single]
-    simp [toElements]
+    simp [fibInteractions, Ensemble.interactions, h_verifier_interactions]
 
   -- ── Step 2: Extract length bound and per-message balance for fibonacci channel ──
   have h_bal : Ensemble.BalancedChannels fibonacciEnsemble (n, x, y) witness := h_balanced
@@ -1529,17 +1497,8 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     · -- From tables: use the structural lemma
       exact fib_table_interaction_mult_pm_one witness entry h_table
     · -- From verifier: the verifier interactions are exactly the two we proved above
-      simp only [fibonacciEnsemble, Ensemble.verifierInteractions] at h_verifier
-      rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
-          Channel.filter_self_add, Channel.filter_self_single] at h_verifier
-      simp only [ProvableType.toElements] at h_verifier
-      -- h_verifier : entry ∈ [(1, #v[0,0,1]), (-1, #v[n,x,y])]
-      simp only [List.mem_cons] at h_verifier
-      -- h_verifier : entry = (1, #v[0,0,1]) ∨ entry = (-1, #v[n,x,y]) ∨ entry ∈ []
-      rcases h_verifier with h | h | h
-      · left; rw [h]
-      · right; rw [h]
-      · simp at h
+      simp [h_verifier_interactions, List.mem_cons, List.not_mem_nil, or_false] at h_verifier
+      rcases h_verifier with rfl|rfl <;> simp
 
   -- ══════════════════════════════════════════════════════════════════════════
   -- STEP 4: Layered channel guarantee derivation
@@ -1841,11 +1800,6 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
           apply List.mem_append_left
           rw [List.mem_flatMap]
           exact ⟨table, h_table_mem, h_entry_in_table⟩
-        have h_verifier_interactions :
-            fibonacciEnsemble.verifierInteractions FibonacciChannel.toRaw (n, x, y) =
-              [(1, (#v[(0 : F p), 0, 1] : Vector (F p) 3)), (-1, (#v[n, x, y] : Vector (F p) 3))] := by
-          simp [Ensemble.verifierInteractions, verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
-            Channel.filter_self_add, Channel.filter_self_single, toElements]
         have h_push_pred := fib_push_pred witness n x y fibInteractions rfl h_verifier_interactions
         -- Use predecessor push at counter n_i
         have h_push_at_n : (1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ fibInteractions := by
@@ -1885,27 +1839,11 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         · rw [ZMod.val_add, ← h_k, Nat.mod_add_mod, ZMod.val_one]
     · -- From verifier: push is (0, 0, 1)
       left
-      simp only [fibonacciEnsemble, Ensemble.verifierInteractions] at h_verifier
-      rw [verifier_localAdds, Channel.pushed_def, Channel.pulled_def,
-          Channel.filter_self_add, Channel.filter_self_single] at h_verifier
-      simp only [toElements, List.mem_cons, List.not_mem_nil, or_false] at h_verifier
-      rcases h_verifier with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+      simp only [h_verifier_interactions, List.mem_cons, List.not_mem_nil, or_false] at h_verifier
+      rcases h_verifier with rfl | rfl
       · rfl  -- push case: entry = (1, #v[0,0,1])
       · -- pull case: entry.1 = -1, contradicts h_push (entry.1 = 1)
-        simp only at h_push
-        -- h_push : -1 = 1, which is false in F p (since p > 2)
-        have hp : p > 2 := by linarith [Fact.elim ‹Fact (p > 512)›]
-        have h_ne : (1 : F p) ≠ -1 := by
-          have h2ne : (2 : F p) ≠ 0 := by
-            rw [ne_eq, ← Nat.cast_ofNat, ZMod.natCast_eq_zero_iff]
-            intro hdvd
-            exact Nat.not_lt.mpr (Nat.le_of_dvd (by omega) hdvd) hp
-          intro h
-          apply h2ne
-          calc (2 : F p) = 1 + 1 := by ring
-            _ = 1 + (-1) := by rw [← h]
-            _ = 0 := by ring
-        exact absurd h_push.symm h_ne
+        simp [circuit_norm] at h_push
 
   -- ── Step 6: Apply all_fib_pushes_valid ──
   have h_all_valid := all_fib_pushes_valid fibInteractions

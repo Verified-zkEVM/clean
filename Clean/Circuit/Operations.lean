@@ -383,6 +383,13 @@ structure ConditionWithInteractions (F : Type) [Field F] where
   interact (offset : ℕ) (is : RawInteractions F) (_ : AbstractInteraction F) : Prop := True
   subcircuit (offset : ℕ) (is : RawInteractions F) {m : ℕ} (_ : Subcircuit F m) : Prop := True
 
+structure ConditionNoOffset (F : Type) [Field F] where
+  witness (m : ℕ) (_ : Environment F → Vector F m) : Prop := True
+  assert (_ : Expression F) : Prop := True
+  lookup (_ : Lookup F) : Prop := True
+  interact (_ : AbstractInteraction F) : Prop := True
+  subcircuit {m : ℕ} (_ : Subcircuit F m) : Prop := True
+
 namespace Operations
 /--
 Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
@@ -396,6 +403,19 @@ def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
   | .interact i :: ops => condition.interact offset i ∧ forAll offset condition ops
   | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (s.localLength + offset) condition ops
+
+/--
+Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
+The function expects the initial offset as an argument.
+-/
+ @[circuit_norm]
+def forAllNoOffset (condition : ConditionNoOffset F) : Operations F → Prop
+  | [] => True
+  | .witness m c :: ops => condition.witness m c ∧ forAllNoOffset condition ops
+  | .assert e :: ops => condition.assert e ∧ forAllNoOffset condition ops
+  | .lookup l :: ops => condition.lookup l ∧ forAllNoOffset condition ops
+  | .interact i :: ops => condition.interact i ∧ forAllNoOffset condition ops
+  | .subcircuit s :: ops => condition.subcircuit s ∧ forAllNoOffset condition ops
 
 /--
 Subcircuits start at the same variable offset that the circuit currently is.
@@ -483,26 +503,30 @@ def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations 
 
 def Operations.ConstraintsHold (env : Environment F)
     (ops : Operations F) : Prop :=
-  ops.forAll 0 {
-    assert _ e := env e = 0
-    lookup _ l := l.Contains env
-    subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
+  ops.forAllNoOffset {
+    assert e := env e = 0
+    lookup l := l.Contains env
+    subcircuit s := ConstraintsHoldFlat env s.ops.toFlat
   }
 
+@[circuit_norm]
 def Operations.Guarantees {F : Type} [Field F] (env : Environment F) (ops : Operations F) : Prop :=
-  ops.forAll 0 { interact _ i := i.assumeGuarantees → i.Guarantees env }
+  ops.forAllNoOffset { interact i := i.assumeGuarantees → i.Guarantees env }
 
+@[circuit_norm]
 def Operations.Requirements {F : Type} [Field F] (env : Environment F) (ops : Operations F) : Prop :=
-  ops.forAll 0 { interact _ i := i.Requirements env }
+  ops.forAllNoOffset { interact i := i.Requirements env }
 
+@[circuit_norm]
 def Operations.ChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
-  ops.forAll 0 { interact _ i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
+  ops.forAllNoOffset { interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
     i.assumeGuarantees → i.Guarantees env }
 
+@[circuit_norm]
 def Operations.ChannelRequirements {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
-  ops.forAll 0 { interact _ i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.Requirements env }
+  ops.forAllNoOffset { interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.Requirements env }
 
 @[circuit_norm]
 def ConstraintsHoldWithInteractions.Soundness (env : Environment F)

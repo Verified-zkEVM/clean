@@ -470,6 +470,10 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     ops.Guarantees env ↔
     channelsWithGuarantees.Forall fun channel =>
       ops.ChannelGuarantees channel env
+    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
+    := by
+      simp only [circuit_norm, List.Forall, seval]
+      try tauto -- for permuting conjunctions
 
   channelsWithRequirements : List (RawChannel F) := []
   requirements_iff : ∀ input_var offset env,
@@ -477,6 +481,10 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     ops.Requirements env ↔
     channelsWithRequirements.Forall fun channel =>
       ops.ChannelRequirements channel env
+    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
+    := by
+      simp only [circuit_norm, List.Forall, seval]
+      try tauto -- for permuting conjunctions
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
@@ -612,6 +620,7 @@ end Circuit
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies implies_true forall_const gt_iff_lt
   not_true_eq_false ne_eq false_implies and_false false_and
+  Bool.false_eq_true Bool.true_eq_false
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form

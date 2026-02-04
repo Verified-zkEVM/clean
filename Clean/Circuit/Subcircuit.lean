@@ -291,7 +291,6 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     localLength := circuit.localLength input_var
     localAdds env := circuit.localAdds (eval env input_var) n env
 
-
     imply_soundness
     implied_by_completeness
     imply_usesLocalWitnesses env h_env assumptions :=

@@ -115,7 +115,7 @@ end ForM
 
 namespace MapM
 variable {circuit : α → Circuit F β} {xs : Vector α m} [constant: ConstantLength circuit]
-  {prop : Condition F}
+  {prop : Condition F} {prop' : ConditionNoOffset F}
 
 theorem localLength_eq : (xs.mapM circuit).localLength n = m * constant.localLength := by
   induction xs using Vector.inductPush
@@ -495,7 +495,7 @@ end map
 
 section mapFinRange
 variable {env : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
-  {constant : ConstantLength body} {prop : Condition F}
+  {constant : ConstantLength body} {prop : Condition F} {prop' : ConditionNoOffset F}
 
 @[circuit_norm ↓]
 lemma mapFinRange.localLength_eq :
@@ -516,6 +516,13 @@ lemma mapFinRange.forAll :
     ∀ i : Fin m, (body i |>.forAll (n + i*(body 0).localLength) prop) := by
   simp only [mapFinRange, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
+
+@[circuit_norm ↓]
+lemma mapFinRange.forAll' :
+  Operations.forAllNoOffset prop' (mapFinRange m body constant n |>.2) ↔
+    ∀ i : Fin m, ((body i (n + i*(body 0).localLength)).2 |> Operations.forAllNoOffset prop') := by
+  simp only [mapFinRange]
+  sorry
 
 @[circuit_norm ↓]
 lemma mapFinRange.soundness :

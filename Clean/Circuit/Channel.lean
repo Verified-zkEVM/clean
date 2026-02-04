@@ -86,10 +86,25 @@ def Channel.toRaw (channel : Channel F Message) : RawChannel F where
 instance : CoeOut (Channel F Message) (RawChannel F) where
   coe := Channel.toRaw
 
+@[circuit_norm]
+lemma Channel.toRaw_name (channel : Channel F Message) :
+    channel.toRaw.name = channel.name := rfl
+@[circuit_norm]
+lemma Channel.toRaw_arity (channel : Channel F Message) :
+    channel.toRaw.arity = size Message := rfl
 
 def ChannelInteraction.toRaw : ChannelInteraction F Message → AbstractInteraction F
   | { channel, mult, msg, assumeGuarantees } => ⟨ channel.toRaw, mult, toElements msg, assumeGuarantees ⟩
 
+@[circuit_norm]
+lemma ChannelInteraction.toRaw_channel (i : ChannelInteraction F Message) :
+    i.toRaw.channel = i.channel.toRaw := rfl
+@[circuit_norm]
+lemma ChannelInteraction.toRaw_mult (i : ChannelInteraction F Message) :
+    i.toRaw.mult = i.mult := rfl
+@[circuit_norm]
+lemma ChannelInteraction.toRaw_msg (i : ChannelInteraction F Message) :
+    i.toRaw.msg = toElements i.msg := rfl
 @[circuit_norm]
 lemma ChannelInteraction.toRaw_assumeGuarantees (i : ChannelInteraction F Message) :
     i.toRaw.assumeGuarantees = i.assumeGuarantees := rfl
