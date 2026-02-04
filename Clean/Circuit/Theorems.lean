@@ -298,7 +298,6 @@ theorem constraintsHold_iff_forAll (n : ℕ) (env : Environment F) (ops : Operat
   ConstraintsHold env ops ↔ ops.forAll n {
     assert _ e := env e = 0
     lookup _ l := l.Contains env
-    interact _ i := i.IsAdded env
     subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
   } := by
   induction ops using Operations.induct generalizing n with
@@ -312,7 +311,6 @@ theorem constraintsHold_iff_forAll' (env : Environment F) (ops : Operations F) :
   ConstraintsHold env ops ↔ ops.forAllNoOffset {
     assert e := env e = 0
     lookup l := l.Contains env
-    interact i := i.IsAdded env
     subcircuit s := ConstraintsHoldFlat env s.ops.toFlat
   } := by
   induction ops using Operations.induct <;> simp_all only [circuit_norm]
@@ -321,7 +319,6 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0
     lookup _ l := l.Soundness env
-    interact _ i := i.IsAdded env
     subcircuit _ _ s := s.Soundness env
   } := by
   induction ops using Operations.induct generalizing n with
@@ -335,7 +332,6 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0
     lookup _ l := l.Completeness env
-    interact _ i := i.IsAdded env
     subcircuit _ _ s := s.Completeness env
   } := by
   induction ops using Operations.induct generalizing n with
@@ -400,7 +396,6 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
-    interact _ i := i.IsAdded env,
     subcircuit _ _ s := s.Soundness env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
@@ -409,7 +404,6 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
-    interact _ i := i.IsAdded env,
     subcircuit _ _ s := s.Completeness env
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]

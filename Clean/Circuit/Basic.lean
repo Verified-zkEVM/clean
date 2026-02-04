@@ -173,7 +173,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
   | .lookup l :: ops =>
     l.Contains eval ∧ ConstraintsHold eval ops
-  | .interact i :: ops => i.IsAdded eval ∧ ConstraintsHold eval ops
+  | .interact _ :: ops => ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
 
@@ -187,7 +187,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
   | .lookup l :: ops =>
     l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
-  | .interact i :: ops => i.IsAdded eval ∧ ConstraintsHold.Soundness eval ops
+  | .interact _ :: ops => ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
 
@@ -201,7 +201,7 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
   | .lookup l :: ops =>
     l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
-  | .interact i :: ops => i.IsAdded eval ∧ ConstraintsHold.Completeness eval ops
+  | .interact _ :: ops => ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit

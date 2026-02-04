@@ -46,7 +46,7 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval ops
     | lookup l => l.Contains eval ∧ ConstraintsHoldFlat eval ops
-    | interact i => i.IsAdded eval ∧ ConstraintsHoldFlat eval ops
+    | interact _ => ConstraintsHoldFlat eval ops
     | _ => ConstraintsHoldFlat eval ops
 
 @[circuit_norm]
