@@ -44,7 +44,7 @@ def BytesTable : StaticLookupChannel (F p) field where
   Guarantees msg := msg.val < 256
   guarantees_iff := by
     intro (msg : F p)
-    simp only [id_eq, List.mem_map, List.mem_finRange, true_and]
+    simp only [List.mem_map, List.mem_finRange, true_and]
     constructor
     · intro h_lt
       exact ⟨⟨ msg.val, h_lt ⟩, ByteUtils.fromByte_eq ..⟩
@@ -293,6 +293,7 @@ variable {Input Output Message : TypeMap} [ProvableType Input] [ProvableType Out
 -- tables need to be instantiated with a concrete circuit, not a family of circuits
 -- this is achieved for any FormalCircuit* by witnessing the inputs and plugging them in
 
+@[circuit_norm]
 def FormalCircuitWithInteractions.instantiate (circuit : FormalCircuitWithInteractions F Input Output) : Circuit F Unit := do
   let input ← witnessAny Input
   let _ ← circuit input -- we don't care about the output in this context
@@ -320,27 +321,19 @@ structure TableWitness (F : Type) [Field F] [DecidableEq F] where
   table : List (Vector F abstract.circuit.size)
   data : ProverData F
 
-def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
-  ops.forAll 0 {
-    assert _ e := env e = 0
-    lookup _ l := l.Contains env
-    subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
-  }
-
-lemma constraints_hold_instantiate
+lemma constraintsHold_instantiate
     (circuit : FormalCircuitWithInteractions F Input Output)
     (env : Environment F) :
-    ConstraintsHold env (circuit.instantiate.operations 0) →
-    ConstraintsHold env ((circuit.main (varFromOffset Input 0)).operations (size Input)) := by
-  simp only [ConstraintsHold, FormalCircuitWithInteractions.instantiate, circuit_norm, witnessAny, getOffset]
+    (circuit.instantiate.operations 0).ConstraintsHold env →
+    ((circuit.main (varFromOffset Input 0)).operations (size Input)).ConstraintsHold env := by
+  simp only [FormalCircuitWithInteractions.instantiate, circuit_norm, witnessAny, getOffset]
   simp only [FormalCircuitWithInteractions.toSubcircuit]
   rw [Operations.toNested_toFlat, Circuit.constraintsHold_toFlat_iff, zero_add, add_zero,
-    Circuit.constraintsHold_iff_forAll 0]
+    Circuit.constraintsHold_iff_forAll']
   set ops := ((circuit.main (varFromOffset Input 0)).operations (size Input))
-  show _ → ops.forAll 0 _
-  generalize 0 = n
-  induction ops using Operations.induct generalizing n
-  <;> simp_all [Operations.forAll]
+  show _ → ops.forAllNoOffset _
+  induction ops using Operations.induct
+  <;> simp_all [Operations.forAllNoOffset]
 
 namespace TableWitness
 def width (t : TableWitness F) : ℕ := t.abstract.width
@@ -352,13 +345,11 @@ def environment (witness : TableWitness F) (row : Vector F witness.width) : Envi
 
 def Constraints (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
-    ConstraintsHold (witness.environment row) witness.abstract.operations
+    witness.abstract.operations.ConstraintsHold (witness.environment row)
 
 def interactions (witness : TableWitness F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
   witness.table.flatMap fun row =>
-    let env := witness.environment row
-    witness.abstract.operations.localAdds env
-  |> channel.filter
+    witness.abstract.operations.interactionsWithChannel channel (witness.environment row)
 end TableWitness
 
 structure Ensemble (F : Type) [Field F] [DecidableEq F] where
@@ -413,7 +404,7 @@ def BalancedChannels (ens : Ensemble F) (publicInput : ens.PublicIO F) (witness 
 
 def VerifierAccepts (ens : Ensemble F) (publicInput : ens.PublicIO F) : Prop :=
   let circuit := ens.verifier.main (const publicInput)
-  ConstraintsHold (emptyEnvironment F) (circuit.operations 0)
+  (circuit.operations 0).ConstraintsHold (emptyEnvironment F)
 
 /--
 Soundness for an ensemble states that if
@@ -445,23 +436,24 @@ omit [DecidableEq F] in
 /-- Bridge lemma: ConstraintsHold + channel Guarantees → ConstraintsHoldWithInteractions.Soundness
     This lemma allows us to use circuit soundness proofs by providing the required Guarantees externally. -/
 lemma constraintsHold_to_soundness {env : Environment F} {ops : Operations F}
-    (h_constraints : ConstraintsHold env ops)
+    (h_constraints : ops.ConstraintsHold env)
     -- For each interact operation, we can prove its Guarantees
     (h_guarantees : ops.Guarantees env) :
     ConstraintsHoldWithInteractions.Soundness env ops := by
-  simp only [ConstraintsHold] at h_constraints
+  simp only [Operations.ConstraintsHold] at h_constraints
   simp only [Operations.Guarantees] at h_guarantees
   simp only [ConstraintsHoldWithInteractions.Soundness]
   generalize 0 = n at *
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness | assert | interact =>
-    simp_all [Operations.forAll, Operations.forAllNoOffset]
+    simp_all [Operations.forAllNoOffset]
   | lookup l =>
-    simp_all only [Lookup.Contains, Lookup.Soundness, Operations.forAll, Operations.forAllNoOffset, true_and, and_true]
+    simp_all only [Lookup.Contains, Lookup.Soundness, forall_const, Operations.forAllNoOffset,
+      true_and, and_true]
     exact l.table.imply_soundness _ _ (h_constraints.1)
   | subcircuit s ops ih =>
-    simp_all only [Operations.forAll, Operations.forAllNoOffset, true_and, and_true]
+    simp_all only [forall_const, Operations.forAllNoOffset, true_and, and_true]
     exact s.imply_soundness _ h_constraints.1
 end
 
@@ -975,68 +967,27 @@ lemma fib_table_interaction_mult_pm_one
       simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_entry_in_table
     ) with ⟨row, h_row_mem, h_raw_mem⟩
     rw [h_table_abs] at h_raw_mem
-    simp only [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, pushBytes, circuit_norm,
-      FibonacciChannel, BytesChannel, Channel.emitted, InteractionDelta.single, Channel.toRaw] at h_raw_mem
-    -- h_raw_mem : ∃ a a_1 b, (a, a_1, b) ∈ flatMap (...) ∧ (a = "fibonacci" ∧ ...)
-    -- The flatMap produces ("bytes", ...) tuples, but filter requires a = "fibonacci"
-    obtain ⟨a, _, _, h_in_flatmap, ⟨h_fib, _⟩, _⟩ := h_raw_mem
-    simp only [List.mem_flatMap, List.mem_cons] at h_in_flatmap
-    obtain ⟨_, _, h_tuple_eq | h_empty⟩ := h_in_flatmap
-    · -- h_tuple_eq : (a, _, _) = ("bytes", _, _)
-      have h_a_bytes : a = "bytes" := congrArg (·.1) h_tuple_eq
-      simp only [h_a_bytes] at h_fib  -- h_fib : "bytes" = "fibonacci"
-      exact absurd h_fib (by decide)
-    · -- h_empty : (a, _, _) ∈ [] (displayed as 0)
-      cases h_empty
+    simp [circuit_norm, pushBytes, FibonacciChannel, BytesChannel, Channel.emitted, RawChannel.filter] at h_raw_mem
   | 1 => -- add8: no FibonacciChannel interactions
     simp only [fibonacciEnsemble] at h_table_abs
     rcases (by
       simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_entry_in_table
     ) with ⟨row, h_row_mem, h_raw_mem⟩
     rw [h_table_abs] at h_raw_mem
-    simp only [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, add8, circuit_norm,
-      FibonacciChannel, BytesChannel, Add8Channel, Channel.emitted, InteractionDelta.single, Channel.toRaw] at h_raw_mem
-    -- h_raw_mem has structure: ∃ a a_1 b, (a,_,_) ∈ [bytes_tuple] ++ [add8_tuple] ∧ (a = "fibonacci" ∧ ...)
-    -- Both bytes and add8 tuples have different names than "fibonacci", contradiction
-    obtain ⟨a, _, _, h_disj, ⟨h_fib, _⟩, _⟩ := h_raw_mem
-    rw [InteractionDelta.add_eq_append] at h_disj
-    simp only [List.mem_append, List.mem_cons] at h_disj
-    rcases h_disj with (h_bytes | h_empty1) | (h_add8 | h_empty2)
-    · have h_a : a = "bytes" := congrArg (·.1) h_bytes
-      simp only [h_a] at h_fib
-      exact absurd h_fib (by decide)
-    · cases h_empty1
-    · have h_a : a = "add8" := congrArg (·.1) h_add8
-      simp only [h_a] at h_fib
-      exact absurd h_fib (by decide)
-    · cases h_empty2
+    simp only [add8, circuit_norm, FibonacciChannel, BytesChannel, Add8Channel, Channel.emitted, RawChannel.filter,
+      InteractionDelta.single] at h_raw_mem
+    simp [InteractionDelta.zero_eq_nil, InteractionDelta.add_eq_append] at h_raw_mem
   | 2 => -- fib8: pulls and pushes to FibonacciChannel with mult = ±1
     simp only [fibonacciEnsemble] at h_table_abs
     rcases (by
       simpa [TableWitness.interactions, AbstractTable.operations, RawChannel.filter, h_table_abs] using h_entry_in_table
     ) with ⟨row, h_row_mem, h_raw_mem⟩
+    set env := table.environment row
     rw [h_table_abs] at h_raw_mem
-    simp only [witnessAny, getOffset, FormalCircuitWithInteractions.instantiate, fib8, circuit_norm,
-      FibonacciChannel, Add8Channel, Channel.emitted, InteractionDelta.single, Channel.toRaw] at h_raw_mem
-    -- h_raw_mem: ∃ a a_1 b, (((fib_pull ∨ []) ∨ add8_pull ∨ []) ∨ fib_push ∨ []) ∧ (a = "fibonacci" ∧ ...)
-    -- fib_pull has mult = -1, add8_pull has name "add8" ≠ "fibonacci", fib_push has mult = 1
-    obtain ⟨a, mult, _, h_disj, ⟨h_fib, _⟩, h_entry_eq⟩ := h_raw_mem
-    rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_disj
-    simp only [List.mem_append, List.mem_cons] at h_disj
-    rcases h_disj with ((h_fib_pull | h_e1) | (h_add8 | h_e2)) | (h_fib_push | h_e3)
-    · -- fib_pull: mult = -1
-      have h_mult : mult = -1 := congrArg (·.2.1) h_fib_pull
-      rw [← h_entry_eq, h_mult]; right; rfl
-    · cases h_e1
-    · -- add8: name = "add8" ≠ "fibonacci"
-      have h_a : a = "add8" := congrArg (·.1) h_add8
-      simp only [h_a] at h_fib
-      exact absurd h_fib (by decide)
-    · cases h_e2
-    · -- fib_push: mult = 1
-      have h_mult : mult = 1 := congrArg (·.2.1) h_fib_push
-      rw [← h_entry_eq, h_mult]; left; rfl
-    · cases h_e3
+    simp only [fib8, circuit_norm, FibonacciChannel, Add8Channel, Channel.emitted,
+      InteractionDelta.single, RawChannel.filter] at h_raw_mem
+    simp [InteractionDelta.zero_eq_nil, InteractionDelta.add_eq_append] at h_raw_mem
+    rcases h_raw_mem with rfl | rfl <;> simp
 
 /-- Verifier's Add8Channel interactions are empty (verifier only uses FibonacciChannel) -/
 lemma verifier_add8_interactions_empty (publicInput : fieldTriple (F p)) :
@@ -1127,76 +1078,68 @@ lemma add8_interactions_satisfy_requirements
 
   -- The Requirements are: if mult ≠ -1 then x < 256 → y < 256 → z = (x + y) % 256
   simp only [Add8Channel, Channel.toRaw]
+  set env := table.environment row with h_env_def
+  intro (h_mult : env.get 3 ≠ (-1 : F p)) h_x_range h_y_range
 
-  -- We need to split on whether mult = -1 or not
-  -- Note: (table.environment row).get j = row[j]?.getD 0
-  by_cases h_mult : (table.environment row).get 3 = (-1 : F p)
-  · simp [h_mult]
-  · simp only [Nat.reduceAdd, ne_eq, h_mult, not_false_eq_true, forall_const]
-    -- Need to prove: x < 256 → y < 256 → z = (x + y) % 256
-    intro h_x_range h_y_range
+  -- Need to prove: x < 256 → y < 256 → z = (x + y) % 256
 
-    -- Get the constraints for this row
-    have h_row_constraints : ConstraintsHold (table.environment row) table.abstract.operations := by
-      simp only [TableWitness.Constraints] at h_constraints
-      rw [List.forall_iff_forall_mem] at h_constraints
-      exact h_constraints row h_row_mem
+  -- Get the constraints for this row
+  have h_row_constraints : table.abstract.operations.ConstraintsHold env := by
+    simp only [TableWitness.Constraints] at h_constraints
+    rw [List.forall_iff_forall_mem] at h_constraints
+    exact h_constraints row h_row_mem
 
-    set env := table.environment row with h_env_def
-    replace h_row_constraints := constraints_hold_instantiate _ _ h_row_constraints
-    rw [h_is_add8] at h_row_constraints
-    simp only at h_row_constraints
+  replace h_row_constraints := constraintsHold_instantiate _ _ h_row_constraints
+  rw [h_is_add8] at h_row_constraints
+  simp only at h_row_constraints
 
-    -- Set up aliases
-    set input_var : Var Add8Inputs (F p) := varFromOffset Add8Inputs 0
-    set offset := size Add8Inputs
-    set ops := (add8.main input_var).operations offset
+  -- Set up aliases
+  set input_var : Var Add8Inputs (F p) := varFromOffset Add8Inputs 0
+  set offset := size Add8Inputs
+  set ops := (add8.main input_var).operations offset
 
-    -- Build Guarantees for the interactions in add8
-    have h_guarantees : ops.Guarantees env := by
-      simp only [ops, circuit_norm, add8, input_var, BytesChannel, BytesTable]
-      apply h_bytes_guarantees (env.get 2)
-      -- Need to show (-1, #v[env.get 2]) ∈ table.interactions BytesChannel.toRaw
-      -- This follows because add8 pulls z from BytesChannel
-      simp only [TableWitness.interactions, AbstractTable.operations]
-      rw [List.mem_flatMap]
-      refine ⟨row, h_row_mem, ?_⟩
-      rw [h_is_add8]
-      simp only [RawChannel.filter, add8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
-        circuit_norm, BytesChannel, Channel.pulled, InteractionDelta.single, Channel.toRaw,
-        toElements]
-      simp [InteractionDelta.add_eq_append, env]
+  -- Build Guarantees for the interactions in add8
+  have h_guarantees : ops.Guarantees env := by
+    simp only [ops, circuit_norm, add8, input_var, BytesChannel, BytesTable]
+    apply h_bytes_guarantees (env.get 2)
+    -- Need to show (-1, #v[env.get 2]) ∈ table.interactions BytesChannel.toRaw
+    -- This follows because add8 pulls z from BytesChannel
+    simp only [TableWitness.interactions, AbstractTable.operations]
+    rw [List.mem_flatMap]
+    refine ⟨row, h_row_mem, ?_⟩
+    rw [h_is_add8]
+    simp only [RawChannel.filter, add8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
+      circuit_norm, BytesChannel, Channel.pulled, InteractionDelta.single, Channel.toRaw,
+      toElements]
+    simp [InteractionDelta.add_eq_append, env]
 
-    -- Use bridge lemma to get ConstraintsHoldWithInteractions.Soundness
-    have h_soundness : ConstraintsHoldWithInteractions.Soundness env ops := by
-      apply constraintsHold_to_soundness h_row_constraints h_guarantees
+  -- Use bridge lemma to get ConstraintsHoldWithInteractions.Soundness
+  have h_soundness : ConstraintsHoldWithInteractions.Soundness env ops := by
+    apply constraintsHold_to_soundness h_row_constraints h_guarantees
 
-    -- Apply add8.soundness with the correct offset
-    have h_eval_eq : eval env input_var = { x := env.get 0, y := env.get 1, z := env.get 2, m := env.get 3 } := by
-      simp only [circuit_norm, input_var]
-    have h_add8_result := add8.soundness offset env input_var
-        { x := env.get 0, y := env.get 1, z := env.get 2, m := env.get 3 }
-        h_eval_eq
-        h_soundness
+  -- Apply add8.soundness with the correct offset
+  have h_eval_eq : eval env input_var = { x := env.get 0, y := env.get 1, z := env.get 2, m := env.get 3 } := by
+    simp only [circuit_norm, input_var]
+  have h_add8_result := add8.soundness offset env input_var
+      { x := env.get 0, y := env.get 1, z := env.get 2, m := env.get 3 }
+      h_eval_eq
+      h_soundness
 
-    -- Extract Requirements
-    have h_requirements := h_add8_result.2
+  -- Extract Requirements
+  have h_requirements := h_add8_result.2
 
-    -- Simplify to get the concrete requirement
-    simp only [ConstraintsHoldWithInteractions.Requirements, circuit_norm, add8,
-      Add8Channel, BytesChannel, BytesTable,
-      Expression.eval, input_var, false_implies, true_and,
-      false_implies
-    ] at h_requirements
+  -- Simplify to get the concrete requirement
+  simp only [circuit_norm, add8, Add8Channel, BytesChannel, BytesTable,
+    Expression.eval, input_var] at h_requirements
 
-    -- Simplify goal
-    simp only [fromElements] at h_x_range h_y_range ⊢
+  -- Simplify goal
+  simp only [fromElements] at h_x_range h_y_range ⊢
 
-    -- Reduce the if in h_requirements using h_mult
-    simp only [h_mult, not_false_eq_true, true_implies] at h_requirements
+  -- Reduce the if in h_requirements using h_mult
+  simp only [h_mult, not_false_eq_true, true_implies] at h_requirements
 
-    -- Apply the requirement
-    exact h_requirements h_x_range h_y_range
+  -- Apply the requirement
+  exact h_requirements h_x_range h_y_range
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- FibonacciChannel structural lemmas

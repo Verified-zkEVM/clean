@@ -300,7 +300,7 @@ omit [Field F] in
 @[circuit_norm] theorem nil_eq_zero : [] = (0 : InteractionDelta F) := rfl
 
 omit [Field F] in
-theorem zero_eq_nil : [] = (0 : InteractionDelta F) := rfl
+theorem zero_eq_nil : (0 : InteractionDelta F) = [] := rfl
 
 omit [Field F] in
 theorem add_zero' (d : InteractionDelta F) : d + 0 = d := List.append_nil d
@@ -387,6 +387,11 @@ theorem toFinsupp_foldl_finRange [DecidableEq F] {n : ℕ} (f : Fin n → Intera
       simp only [Function.comp_def] at this
       exact this
     rw [toFinsupp_add, ih', Fin.sum_univ_castSucc]
+
+@[circuit_norm]
+lemma flatMap_eq_map {α β : Type} {f : α → RawInteraction β} {l : List α} :
+    l.flatMap (fun x ↦ InteractionDelta.single (f x)) = l.map f := by
+  simp only [InteractionDelta.single, ← List.map_eq_flatMap]
 
 end InteractionDelta
 

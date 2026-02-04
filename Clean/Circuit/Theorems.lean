@@ -308,6 +308,15 @@ theorem constraintsHold_iff_forAll (n : ℕ) (env : Environment F) (ops : Operat
     intros
     apply ih
 
+theorem constraintsHold_iff_forAll' (env : Environment F) (ops : Operations F) :
+  ConstraintsHold env ops ↔ ops.forAllNoOffset {
+    assert e := env e = 0
+    lookup l := l.Contains env
+    interact i := i.IsAdded env
+    subcircuit s := ConstraintsHoldFlat env s.ops.toFlat
+  } := by
+  induction ops using Operations.induct <;> simp_all only [circuit_norm]
+
 theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0

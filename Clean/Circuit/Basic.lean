@@ -442,7 +442,7 @@ def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] [DecidableEq F]
   ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
   let output := eval env (circuit.output input_var offset)
   Spec input output env ∧
-  ConstraintsHoldWithInteractions.Requirements env (circuit.main input_var |>.operations offset)
+  Operations.Requirements env (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
 def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] [DecidableEq F]

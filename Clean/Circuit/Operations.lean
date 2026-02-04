@@ -501,6 +501,7 @@ end FlatOperation
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops.toFlat } ops
 
+@[circuit_norm]
 def Operations.ConstraintsHold (env : Environment F)
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
@@ -531,26 +532,19 @@ def Operations.ChannelRequirements {F : Type} [Field F] (channel : RawChannel F)
 @[circuit_norm]
 def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
     (ops : Operations F) : Prop :=
-  ops.forAll 0 {
-    assert _ e := env e = 0
-    lookup _ l := l.Soundness env
-    interact _ i := i.assumeGuarantees → i.Guarantees env
-    subcircuit _ _ s := s.Soundness env
-  }
-
-@[circuit_norm]
-def ConstraintsHoldWithInteractions.Requirements (env : Environment F)
-    (ops : Operations F) : Prop :=
-  ops.forAll 0 {
-    interact _ i := i.Requirements env
+  ops.forAllNoOffset {
+    assert e := env e = 0
+    lookup l := l.Soundness env
+    interact i := i.assumeGuarantees → i.Guarantees env
+    subcircuit s := s.Soundness env
   }
 
 @[circuit_norm]
 def ConstraintsHoldWithInteractions.Completeness (env : Environment F)
     (ops : Operations F) : Prop :=
-  ops.forAll 0 {
-    assert _ e := env e = 0
-    lookup _ l := l.Completeness env
-    interact _ _ := True
-    subcircuit _ _ s := s.Completeness env
+  ops.forAllNoOffset {
+    assert e := env e = 0
+    lookup l := l.Completeness env
+    interact _ := True
+    subcircuit s := s.Completeness env
   }
