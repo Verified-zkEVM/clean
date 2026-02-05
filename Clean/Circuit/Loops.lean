@@ -524,14 +524,8 @@ lemma mapFinRange.subcircuitChannelsWithGuarantees :
   simp only [Operations.subcircuitChannelsWithGuarantees]
   congr
   simp
-  apply List.ext_getElem
-  simp only [List.ofFn_eq_map, List.map_flatten, List.length_flatten, List.length_map,
-    List.length_finRange, List.map_map]
-  show ((List.finRange m).map (fun i ↦ Circuit.operations _ _ |>.map _ |>.length)).sum = m
-  simp only [List.length_map]
   -- sadly, this theorem is not true..
   sorry
-
 
 @[circuit_norm ↓]
 lemma mapFinRange.subcircuitChannelsWithRequirements :
