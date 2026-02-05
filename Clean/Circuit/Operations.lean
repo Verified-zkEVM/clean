@@ -641,14 +641,16 @@ def FullRequirements {F : Type} [Field F] (env : Environment F) (ops : Operation
 def ChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
-    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.assumeGuarantees → i.Guarantees env
+    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
+      i.assumeGuarantees → i.Guarantees env
   }
 
 @[circuit_norm]
 def FullChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
-    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.assumeGuarantees → i.Guarantees env
+    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
+      i.assumeGuarantees → i.Guarantees env
     subcircuit s := FlatOperation.ChannelGuarantees channel env s.ops.toFlat
   }
 
