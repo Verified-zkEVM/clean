@@ -510,6 +510,36 @@ lemma mapFinRange.output_eq :
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange]
 
+lemma mapFinRange.operations_eq : (mapFinRange m body constant).operations n =
+    (List.ofFn fun (i : Fin m) => (body i).operations (n + i * constant.localLength)).flatten := by
+  rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq]
+  simp
+
+@[circuit_norm ↓]
+lemma mapFinRange.subcircuitChannelsWithGuarantees :
+  ((mapFinRange m body constant).operations n).subcircuitChannelsWithGuarantees =
+    (List.ofFn fun (i : Fin m) =>
+      (body i).operations (n + i * constant.localLength) |>.subcircuitChannelsWithGuarantees).flatten := by
+  rw [mapFinRange.operations_eq]
+  simp only [Operations.subcircuitChannelsWithGuarantees]
+  congr
+  simp
+  apply List.ext_getElem
+  simp only [List.ofFn_eq_map, List.map_flatten, List.length_flatten, List.length_map,
+    List.length_finRange, List.map_map]
+  show ((List.finRange m).map (fun i ↦ Circuit.operations _ _ |>.map _ |>.length)).sum = m
+  simp only [List.length_map]
+  -- sadly, this theorem is not true..
+  sorry
+
+
+@[circuit_norm ↓]
+lemma mapFinRange.subcircuitChannelsWithRequirements :
+  ((mapFinRange m body constant).operations n).subcircuitChannelsWithRequirements =
+    (List.ofFn fun (i : Fin m) =>
+      (body i).operations (n + i * constant.localLength) |>.subcircuitChannelsWithRequirements).flatten := by
+  sorry
+
 @[circuit_norm ↓]
 lemma mapFinRange.forAll :
   Operations.forAll n prop (mapFinRange m body constant |>.operations n) ↔

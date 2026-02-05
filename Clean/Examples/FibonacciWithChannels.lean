@@ -122,8 +122,13 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   -- TODO make coercion work without .toRaw
   channelsWithGuarantees := [ BytesChannel.toRaw ]
   channelsWithRequirements := [ Add8Channel.toRaw ]
+  guarantees_iff := by
+    -- TODO subcircuit operations
+    simp only [circuit_norm, seval]
+    tauto
   requirements_iff := by
-    simp only [circuit_norm, List.Forall, seval, BytesChannel]
+    simp only [circuit_norm, seval]
+    tauto
 
   -- TODO feels weird to put the entire spec in the completeness assumptions
   -- can we get something from the channel interactions??

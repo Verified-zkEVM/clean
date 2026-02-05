@@ -379,6 +379,7 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
           specialize h_channel_guarantees_flat channel this
           exact h_channel_guarantees_flat.left
         simp_all [circuit_norm]
+    -- same proof as above, might want to extract common logic
     requirements_iff := by sorry
   }
 end
@@ -519,225 +520,114 @@ theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
 attribute [circuit_norm] Circuit.subcircuit_localLength_eq Circuit.assertion_localLength_eq
   Circuit.subcircuitWithAssertion_localLength_eq Circuit.subcircuitWithInteractions_localLength_eq
 
+section
+variable {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+variable {env : Environment F} {input_var : Var Input F} {n : ℕ}
+
 -- Simplification lemmas for toSubcircuit.UsesLocalWitnesses
 
-/--
-Simplifies UsesLocalWitnesses for FormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalCircuit.toSubcircuit_usesLocalWitnesses
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
-    (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
-  rfl
+theorem FormalCircuit.toSubcircuit_usesLocalWitnesses (circuit : FormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
+  (circuit.Assumptions (eval env input_var)
+    → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := rfl
 
-/--
-Simplifies UsesLocalWitnesses for GeneralFormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
-    (circuit.Assumptions (eval env input_var) env.data →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data) := by
-  rfl
+theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses (circuit : GeneralFormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
+  (circuit.Assumptions (eval env input_var) env.data →
+    circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data) := rfl
 
-/--
-Simplifies UsesLocalWitnesses for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalAssertion.toSubcircuit_usesLocalWitnesses
-    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
-    (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env = True := by
-  rfl
+theorem FormalAssertion.toSubcircuit_usesLocalWitnesses (circuit : FormalAssertion F Input) :
+  (circuit.toSubcircuit n input_var).UsesLocalWitnesses env = True := rfl
 
-/--
-Simplifies UsesLocalWitnesses for FormalCircuitWithInteractions.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
 theorem FormalCircuitWithInteractions.toSubcircuit_usesLocalWitnesses
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuitWithInteractions F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
-    (circuit.Assumptions (eval env input_var) env →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env) := by
-  rfl
+  (circuit : FormalCircuitWithInteractions F Input Output) :
+  (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
+  (circuit.Assumptions (eval env input_var) env →
+    circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env) := rfl
 
 -- Simplification lemmas for toSubcircuit.localLength
 
-/--
-Simplifies localLength for FormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalCircuit.toSubcircuit_localLength
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) :
-    (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
-  rfl
+theorem FormalCircuit.toSubcircuit_localLength (circuit : FormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := rfl
 
-/--
-Simplifies localLength for GeneralFormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem GeneralFormalCircuit.toSubcircuit_localLength
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) :
-    (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
-  rfl
+theorem GeneralFormalCircuit.toSubcircuit_localLength (circuit : GeneralFormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := rfl
 
-/--
-Simplifies localLength for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalAssertion.toSubcircuit_localLength
-    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
-    (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) :
-    (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
-  rfl
+theorem FormalAssertion.toSubcircuit_localLength (circuit : FormalAssertion F Input) :
+  (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := rfl
 
-/--
-Simplifies localLength for FormalCircuitWithInteractions.toSubcircuit.
--/
 @[circuit_norm]
 theorem FormalCircuitWithInteractions.toSubcircuit_localLength
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuitWithInteractions F Input Output) (n : ℕ) (input_var : Var Input F) :
-    (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
-  rfl
+  (circuit : FormalCircuitWithInteractions F Input Output) :
+  (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := rfl
 
 -- Simplification lemmas for toSubcircuit.localAdds
 
-/--
-Simplifies localAdds for FormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalCircuit.toSubcircuit_localAdds
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = 0 := by
-  rfl
+theorem FormalCircuit.toSubcircuit_localAdds (circuit : FormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).localAdds env = 0 := rfl
 
-/--
-Simplifies localAdds for GeneralFormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem GeneralFormalCircuit.toSubcircuit_localAdds
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = 0 := by
-  rfl
+theorem GeneralFormalCircuit.toSubcircuit_localAdds (circuit : GeneralFormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).localAdds env = 0 := rfl
 
-/--
-Simplifies localAdds for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalAssertion.toSubcircuit_localAdds
-    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
-    (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = 0 := by
-  rfl
+theorem FormalAssertion.toSubcircuit_localAdds (circuit : FormalAssertion F Input) :
+  (circuit.toSubcircuit n input_var).localAdds env = 0 := rfl
 
-/--
-Simplifies localAdds for FormalAssertionChangingMultiset.toSubcircuit.
--/
 @[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_localAdds
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuitWithInteractions F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = circuit.localAdds (eval env input_var) n env := by
-  rfl
+theorem FormalCircuitWithInteractions.toSubcircuit_localAdds (circuit : FormalCircuitWithInteractions F Input Output) :
+  (circuit.toSubcircuit n input_var).localAdds env = circuit.localAdds (eval env input_var) n env := rfl
 
 -- Simplification lemmas for toSubcircuit.Soundness
 
-/--
-Simplifies Soundness for FormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalCircuit.toSubcircuit_soundness
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Soundness env =
-    (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
-  rfl
+theorem FormalCircuit.toSubcircuit_soundness (circuit : FormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).Soundness env =
+  (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := rfl
 
-/--
-Simplifies Soundness for GeneralFormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem GeneralFormalCircuit.toSubcircuit_soundness
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Soundness env =
-    circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data := by
-  rfl
+theorem GeneralFormalCircuit.toSubcircuit_soundness (circuit : GeneralFormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).Soundness env =
+  circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data := rfl
 
-/--
-Simplifies Soundness for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalAssertion.toSubcircuit_soundness
-    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
-    (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Soundness env =
-    (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var)) := by
-  rfl
+theorem FormalAssertion.toSubcircuit_soundness (circuit : FormalAssertion F Input) :
+  (circuit.toSubcircuit n input_var).Soundness env =
+  (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var)) := rfl
 
-/--
-Simplifies Soundness for FormalCircuitWithInteractions.toSubcircuit.
--/
 @[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_soundness
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuitWithInteractions F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Soundness env =
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env := by
-  rfl
+theorem FormalCircuitWithInteractions.toSubcircuit_soundness (circuit : FormalCircuitWithInteractions F Input Output) :
+  (circuit.toSubcircuit n input_var).Soundness env =
+    circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env := rfl
 
 -- Simplification lemmas for toSubcircuit.Completeness
 
-/--
-Simplifies Completeness for FormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalCircuit.toSubcircuit_completeness
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Completeness env =
-    circuit.Assumptions (eval env input_var) := by
-  rfl
+theorem FormalCircuit.toSubcircuit_completeness  (circuit : FormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).Completeness env =
+    circuit.Assumptions (eval env input_var) := rfl
 
-/--
-Simplifies Completeness for GeneralFormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem GeneralFormalCircuit.toSubcircuit_completeness
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Completeness env =
-    circuit.Assumptions (eval env input_var) env.data := by
-  rfl
+theorem GeneralFormalCircuit.toSubcircuit_completeness (circuit : GeneralFormalCircuit F Input Output) :
+  (circuit.toSubcircuit n input_var).Completeness env =
+    circuit.Assumptions (eval env input_var) env.data := rfl
 
-/--
-Simplifies Completeness for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
-theorem FormalAssertion.toSubcircuit_completeness
-    {F : Type} [Field F] [DecidableEq F] {Input : TypeMap} [ProvableType Input]
-    (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Completeness env =
-    (circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var)) := by
-  rfl
+theorem FormalAssertion.toSubcircuit_completeness (circuit : FormalAssertion F Input) :
+  (circuit.toSubcircuit n input_var).Completeness env =
+    (circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var)) := rfl
 
-/--
-Simplifies Completeness for FormalCircuitWithInteractions.toSubcircuit.
--/
 @[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_completeness
-    {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuitWithInteractions F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Completeness env =
-    circuit.Assumptions (eval env input_var) env := by
-  rfl
+theorem FormalCircuitWithInteractions.toSubcircuit_completeness (circuit : FormalCircuitWithInteractions F Input Output) :
+  (circuit.toSubcircuit n input_var).Completeness env =
+    circuit.Assumptions (eval env input_var) env := rfl
+
+end

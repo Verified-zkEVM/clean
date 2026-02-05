@@ -662,3 +662,17 @@ attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isVal
 attribute [circuit_norm] neg_mul one_mul add_zero zero_add
 
 attribute [circuit_norm] List.append_nil
+
+-- simp lemmas useful to unfold subcircuit channels
+
+attribute [circuit_norm] List.Forall List.flatten_cons List.flatten_nil List.Sublist.refl
+
+@[circuit_norm]
+lemma List.ofFn_singleton_flatten {α : Type} {m : ℕ} (f : Fin m → α) :
+    (List.ofFn fun i : Fin m => [f i]).flatten = List.ofFn f := by
+  induction m <;> simp_all
+
+@[circuit_norm]
+lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
+    (List.ofFn fun _ : Fin m => ([] : List α)).flatten = [] := by
+  simp
