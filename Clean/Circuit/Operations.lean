@@ -75,6 +75,54 @@ def induct {motive : List (FlatOperation F) → Sort*}
   | .assert e :: ops => assert e ops (induct empty witness assert lookup interact ops)
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup interact ops)
   | .interact i :: ops => interact i ops (induct empty witness assert lookup interact ops)
+
+/--
+A `Condition` lets you define a predicate on operations, given the type and content of the
+current operation as well as the current offset.
+-/
+structure Condition (F : Type) [Field F] where
+  witness : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
+  assert (_ : Expression F) : Prop := True
+  lookup (_ : Lookup F) : Prop := True
+  interact (_ : AbstractInteraction F) : Prop := True
+
+/--
+Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
+The function expects the initial offset as an argument.
+-/
+ @[circuit_norm]
+def forAllNoOffset (condition : Condition F) (ops : List (FlatOperation F)) : Prop :=
+  ops.Forall fun
+  | .witness m c => condition.witness m c
+  | .assert e => condition.assert e
+  | .lookup l => condition.lookup l
+  | .interact i => condition.interact i
+
+@[circuit_norm]
+def ConstraintsHoldWithInteractions (eval : Environment F) :=
+  forAllNoOffset {
+    assert e := eval e = 0
+    lookup l := l.Contains eval
+    interact i := i.assumeGuarantees → i.Guarantees eval
+  }
+
+ @[circuit_norm]
+def Guarantees (env : Environment F) : List (FlatOperation F) → Prop :=
+  forAllNoOffset { interact i := i.assumeGuarantees → i.Guarantees env }
+
+ @[circuit_norm]
+def Requirements (env : Environment F) : List (FlatOperation F) → Prop :=
+  forAllNoOffset { interact i := i.Requirements env }
+
+ @[circuit_norm]
+def ChannelGuarantees (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
+  forAllNoOffset { interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
+    i.assumeGuarantees → i.Guarantees env }
+
+@[circuit_norm]
+def ChannelRequirements (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
+  forAllNoOffset { interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity)
+    → i.Requirements env }
 end FlatOperation
 
 export FlatOperation (ConstraintsHoldFlat)
@@ -120,6 +168,20 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops.toFlat
+
+    -- expose the channel guarantees and requirements, for end-to-end proofs
+  channelsWithGuarantees : List (RawChannel F) := []
+  channelsWithRequirements : List (RawChannel F) := []
+
+  -- TODO maybe we don't need that, if we have a lawfulness property separately
+  guarantees_iff : ∀ env,
+    Guarantees env ops.toFlat ↔
+    channelsWithGuarantees.Forall fun channel =>
+      ChannelGuarantees channel env ops.toFlat
+  requirements_iff : ∀ env,
+    Requirements env ops.toFlat ↔
+    channelsWithRequirements.Forall fun channel =>
+      ChannelRequirements channel env ops.toFlat
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
@@ -475,48 +537,18 @@ def Condition.applyFlat (condition : Condition F) (offset : ℕ) : FlatOperation
   | .interact i => condition.interact offset i
 
 namespace FlatOperation
-
 def singleLocalLength : FlatOperation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
   | .interact _ => 0
 
-def forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
+def forAll (offset : ℕ) (condition : _root_.Condition F) : List (FlatOperation F) → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
   | .interact i :: ops => condition.interact offset i ∧ forAll offset condition ops
-
-def forAllNoOffset (condition : ConditionNoOffset F) : List (FlatOperation F) → Prop
-  | [] => True
-  | .witness m c :: ops => condition.witness m c ∧ forAllNoOffset condition ops
-  | .assert e :: ops => condition.assert e ∧ forAllNoOffset condition ops
-  | .lookup l :: ops => condition.lookup l ∧ forAllNoOffset condition ops
-  | .interact i :: ops => condition.interact i ∧ forAllNoOffset condition ops
-
-def ConstraintsHoldWithInteractions (eval : Environment F) :=
-  forAllNoOffset {
-    assert e := eval e = 0
-    lookup l := l.Contains eval
-    interact i := i.assumeGuarantees → i.Guarantees eval
-  }
-
-def Guarantees (env : Environment F) : List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := i.assumeGuarantees → i.Guarantees env }
-
-def Requirements (env : Environment F) : List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := i.Requirements env }
-
-def ChannelGuarantees (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
-    i.assumeGuarantees → i.Guarantees env }
-
-def ChannelRequirements (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity)
-    → i.Requirements env }
-
 end FlatOperation
 
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
@@ -532,17 +564,37 @@ def Operations.ConstraintsHold (env : Environment F)
   }
 
 @[circuit_norm]
+def Operations.subcircuitChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) :=
+  ops.flatMap fun
+    | .subcircuit s => s.channelsWithGuarantees
+    | .witness _ _ | .assert _ | .lookup _ | .interact _ => []
+
+@[circuit_norm]
+def Operations.subcircuitChannelsWithRequirements (ops : Operations F) : List (RawChannel F) :=
+  ops.flatMap fun
+    | .subcircuit s => s.channelsWithRequirements
+    | .witness _ _ | .assert _ | .lookup _ | .interact _ => []
+
+@[circuit_norm]
 def Operations.Guarantees {F : Type} [Field F] (env : Environment F) (ops : Operations F) : Prop :=
+  ops.forAllNoOffset { interact i := i.assumeGuarantees → i.Guarantees env }
+
+@[circuit_norm]
+def Operations.FullGuarantees {F : Type} [Field F] (env : Environment F) (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
     interact i := i.assumeGuarantees → i.Guarantees env
-    -- subcircuit s := FlatOperation.Guarantees env s.ops.toFlat
+    subcircuit s := FlatOperation.Guarantees env s.ops.toFlat
   }
 
 @[circuit_norm]
 def Operations.Requirements {F : Type} [Field F] (env : Environment F) (ops : Operations F) : Prop :=
+  ops.forAllNoOffset { interact i := i.Requirements env }
+
+@[circuit_norm]
+def Operations.FullRequirements {F : Type} [Field F] (env : Environment F) (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
     interact i := i.Requirements env
-    -- subcircuit s := FlatOperation.Requirements env s.ops.toFlat
+    subcircuit s := FlatOperation.Requirements env s.ops.toFlat
   }
 
 @[circuit_norm]
@@ -550,7 +602,14 @@ def Operations.ChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
     interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.assumeGuarantees → i.Guarantees env
-    -- subcircuit s := FlatOperation.ChannelGuarantees channel env s.ops.toFlat
+  }
+
+@[circuit_norm]
+def Operations.FullChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
+    (ops : Operations F) : Prop :=
+  ops.forAllNoOffset {
+    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.assumeGuarantees → i.Guarantees env
+    subcircuit s := FlatOperation.ChannelGuarantees channel env s.ops.toFlat
   }
 
 @[circuit_norm]
@@ -558,7 +617,14 @@ def Operations.ChannelRequirements {F : Type} [Field F] (channel : RawChannel F)
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
     interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.Requirements env
-    -- subcircuit s := FlatOperation.ChannelRequirements channel env s.ops.toFlat
+  }
+
+@[circuit_norm]
+def Operations.FullChannelRequirements {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
+    (ops : Operations F) : Prop :=
+  ops.forAllNoOffset {
+    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.Requirements env
+    subcircuit s := FlatOperation.ChannelRequirements channel env s.ops.toFlat
   }
 
 @[circuit_norm]

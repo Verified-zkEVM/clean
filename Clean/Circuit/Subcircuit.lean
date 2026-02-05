@@ -131,6 +131,9 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     localLength_eq := by
       rw [ops.toNested_toFlat, ←circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
+
+    guarantees_iff := sorry
+    requirements_iff := sorry
   }
 
 /--
@@ -192,6 +195,9 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
+
+    guarantees_iff := sorry
+    requirements_iff := sorry
   }
 
 /--
@@ -242,7 +248,20 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
+
+    guarantees_iff := sorry
+    requirements_iff := sorry
   }
+
+lemma FlatOperation.channelGuarantees_of_guarantees
+  {env : Environment F} {ops : List (FlatOperation F)} {channel : RawChannel F} :
+    FlatOperation.Guarantees env ops → FlatOperation.ChannelGuarantees channel env ops := by
+  induction ops using FlatOperation.induct <;> simp_all [circuit_norm]
+
+lemma FlatOperation.channelGuarantees_toFlat_of_channelGuarantees
+  {env : Environment F} {ops : Operations F} {channel : RawChannel F} :
+    FlatOperation.ChannelGuarantees channel env ops.toFlat → ops.ChannelGuarantees channel env := by
+  induction ops using Operations.induct <;> simp_all [circuit_norm, Operations.toFlat]
 
 -- TODO this is not done, if we really decide to have a variant of constraints-hold with interactions,
 -- then we need to change the Subcircuit structure to include them as well
@@ -300,6 +319,67 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
+
+    channelsWithGuarantees := circuit.channelsWithGuarantees
+    channelsWithRequirements := circuit.channelsWithRequirements
+
+    guarantees_iff := by
+      intro env
+      -- one direction is trivial
+      constructor
+      · simp only [List.forall_iff_forall_mem]
+        intro h_guarantees channel h_mem_channel
+        apply FlatOperation.channelGuarantees_of_guarantees
+        assumption
+      have h_goal := circuit.guarantees_iff input_var n env
+      rw [ops.toNested_toFlat] at *
+      simp only [List.forall_iff_forall_mem] at *
+      have h_ops : (circuit.main input_var).operations n = ops := rfl
+      simp only [h_ops] at h_goal
+      intro h_channel_guarantees_flat
+      suffices h_full_guarantees : ops.FullGuarantees env by
+        simp only [FlatOperation.Guarantees]
+        rw [FlatOperation.forAll_toFlat_iff]
+        exact h_full_guarantees
+      generalize ops = ops at *
+      clear imply_soundness implied_by_completeness h_consistent h_ops
+      obtain ⟨ h_sublist, h_guarantees_iff ⟩ := h_goal
+      have h_channel_guarantees : ∀ c ∈ circuit.channelsWithGuarantees, ops.ChannelGuarantees c env := by
+        intro c h_mem
+        apply FlatOperation.channelGuarantees_toFlat_of_channelGuarantees
+        exact h_channel_guarantees_flat c h_mem
+      rw [←h_guarantees_iff] at h_channel_guarantees
+      clear h_guarantees_iff
+      induction ops using Operations.induct with
+      | empty => simp_all [circuit_norm]
+      | witness | assert | lookup => simp_all [circuit_norm, Operations.toFlat]
+      | interact i ops ih =>
+        simp only [Operations.FullGuarantees, Operations.forAllNoOffset]
+        show _ ∧ Operations.FullGuarantees env ops
+        change _ ∧ Operations.Guarantees env ops at h_channel_guarantees
+        simp_all [circuit_norm, Operations.toFlat]
+      | subcircuit s ops ih =>
+        simp only [Operations.FullGuarantees, Operations.forAllNoOffset]
+        show _ ∧ Operations.FullGuarantees env ops
+        rw [s.guarantees_iff env, List.forall_iff_forall_mem]
+        have s_sublist : s.channelsWithGuarantees.Sublist circuit.channelsWithGuarantees := by
+          simp_all [circuit_norm, List.append_sublist_iff]
+          grind
+        have ops_sublist : ops.subcircuitChannelsWithGuarantees.Sublist circuit.channelsWithGuarantees := by
+          simp_all [circuit_norm, List.append_sublist_iff]
+          grind
+        simp only [Operations.toFlat, FlatOperation.ChannelGuarantees, FlatOperation.forAllNoOffset,
+          List.forall_append] at h_channel_guarantees_flat
+        change ∀ c ∈ circuit.channelsWithGuarantees,
+          FlatOperation.ChannelGuarantees c env _ ∧ FlatOperation.ChannelGuarantees c env _
+        at h_channel_guarantees_flat
+        constructor
+        · intro channel h_mem_channel
+          have : channel ∈ circuit.channelsWithGuarantees := s_sublist.mem h_mem_channel
+          specialize h_channel_guarantees_flat channel this
+          exact h_channel_guarantees_flat.left
+        simp_all [circuit_norm]
+    requirements_iff := by sorry
   }
 end
 

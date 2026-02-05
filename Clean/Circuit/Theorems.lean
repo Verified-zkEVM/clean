@@ -159,14 +159,14 @@ lemma localLength_append {F} {a b: List (FlatOperation F)} :
   | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih =>
     simp only [List.cons_append, localLength, ih]
 
-theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
+theorem forAll_empty {condition : _root_.Condition F} {n : ℕ} : forAll n condition [] = True := rfl
 
-theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : FlatOperation F} {ops : List (FlatOperation F)} :
+theorem forAll_cons {condition : _root_.Condition F} {offset : ℕ} {op : FlatOperation F} {ops : List (FlatOperation F)} :
   forAll offset condition (op :: ops) ↔
     condition.applyFlat offset op ∧ forAll (op.singleLocalLength + offset) condition ops := by
   cases op <;> simp [forAll, Condition.applyFlat, singleLocalLength]
 
-lemma forAll_append {condition : Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
+lemma forAll_append {condition : _root_.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
   forAll n condition (ops ++ ops') ↔
     forAll n condition ops ∧ forAll (localLength ops + n) condition ops' := by
   induction ops generalizing n with
@@ -453,7 +453,7 @@ end Circuit
 -- more theorems about forAll / forAllFlat
 
 namespace FlatOperation
-theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : List (FlatOperation F)} :
+theorem forAll_implies {c c' : _root_.Condition F} (n : ℕ) {ops : List (FlatOperation F)} :
     (forAll n (c.implies c').ignoreSubcircuit ops) → (forAll n c ops → forAll n c' ops) := by
   simp only [Condition.implies, Condition.ignoreSubcircuit]
   intro h
@@ -476,6 +476,14 @@ lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F)
     rw [FlatOperation.forAll_append, s.localLength_eq]
     simp_all
 end Operations
+
+lemma FlatOperation.forAll_toFlat_iff (condition : Condition F) (ops : Operations F) :
+    FlatOperation.forAllNoOffset condition ops.toFlat ↔ ops.forAllNoOffset {
+      condition with
+      subcircuit s := FlatOperation.forAllNoOffset condition s.ops.toFlat
+    } := by
+  induction ops using Operations.induct
+  <;> simp_all [circuit_norm, Operations.toFlat]
 
 /-- An environment respects local witnesses iff it does so in the flattened variant. -/
 lemma Environment.usesLocalWitnesses_iff_flat {n : ℕ} {ops : Operations F} {env : Environment F} :
