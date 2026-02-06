@@ -93,6 +93,19 @@ lemma Channel.toRaw_name (channel : Channel F Message) :
 lemma Channel.toRaw_arity (channel : Channel F Message) :
     channel.toRaw.arity = size Message := rfl
 
+omit [Field F] in
+-- TODO the HEq between functions is ugly, let's see how provable that is
+@[circuit_norm]
+lemma Channel.toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2] (channel1 : Channel F Message) (channel2 : Channel F Message2) :
+    channel1.toRaw = channel2.toRaw ↔
+    channel1.name = channel2.name ∧
+    size Message = size Message2 ∧
+    ((fun mult message data ↦ channel1.Guarantees mult (fromElements message) data) ≍ fun mult message data ↦
+        channel2.Guarantees mult (fromElements message) data) ∧
+    (fun mult message data ↦ channel1.Requirements mult (fromElements message) data) ≍ fun mult message data ↦
+        channel2.Requirements mult (fromElements message) data := by
+  simp only [Channel.toRaw, RawChannel.mk.injEq]
+
 def ChannelInteraction.toRaw : ChannelInteraction F Message → AbstractInteraction F
   | { channel, mult, msg, assumeGuarantees } => ⟨ channel.toRaw, mult, toElements msg, assumeGuarantees ⟩
 

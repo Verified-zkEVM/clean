@@ -665,6 +665,7 @@ attribute [circuit_norm] List.append_nil
 
 -- simp lemmas useful to unfold subcircuit channels
 
+attribute [circuit_norm] List.nil_subset List.subset_cons_of_subset List.Subset.refl
 attribute [circuit_norm] List.Forall List.flatten_cons List.flatten_nil List.Sublist.refl
 
 @[circuit_norm]

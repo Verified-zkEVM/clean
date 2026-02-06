@@ -79,6 +79,8 @@ def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
   completeness := by sorry
 
   channelsWithRequirements := [ BytesChannel.toRaw ]
+  requirements_iff := by
+    simp only [circuit_norm]
 
 instance Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -123,12 +125,9 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   channelsWithGuarantees := [ BytesChannel.toRaw ]
   channelsWithRequirements := [ Add8Channel.toRaw ]
   guarantees_iff := by
-    -- TODO subcircuit operations
-    simp only [circuit_norm, seval]
-    tauto
+    simp only [circuit_norm, seval, BytesChannel, Add8Channel]
   requirements_iff := by
-    simp only [circuit_norm, seval]
-    tauto
+    simp only [circuit_norm, seval, BytesChannel, Add8Channel]
 
   -- TODO feels weird to put the entire spec in the completeness assumptions
   -- can we get something from the channel interactions??
@@ -430,7 +429,7 @@ def Spec (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
     witness.abstract.Spec (witness.environment row)
 
-def interactions (witness : TableWitness F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+noncomputable def interactions (witness : TableWitness F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
   witness.table.flatMap fun row =>
     witness.abstract.operations.interactionsWithChannel channel (witness.environment row)
 end TableWitness
@@ -464,14 +463,14 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
 def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { get _ := 0, data _ _ := #[], interactions := [] }
 
 namespace Ensemble
-def verifierInteractions (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) : List (F × Vector F channel.arity) :=
+noncomputable def verifierInteractions (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) : List (F × Vector F channel.arity) :=
   let circuit := ens.verifier.main (const publicInput)
   (circuit.operations 0).interactionsWithChannel channel (emptyEnvironment F)
 
 def Constraints (ens : Ensemble F PublicIO) (witness : EnsembleWitness ens) : Prop :=
   witness.tables.Forall fun table => table.Constraints
 
-def interactions (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+noncomputable def interactions (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
   witness.tables.flatMap (fun table => table.interactions channel)
   ++ ens.verifierInteractions channel publicInput
 
@@ -880,7 +879,10 @@ lemma bytes_push_val_lt_256
         List.filterMap_nil, List.append_nil, List.not_mem_nil] at h_in_filter
   · -- From verifier: verifier has no BytesChannel interactions
     have h_verifier_empty :
-        fibonacciEnsemble.verifierInteractions BytesChannel.toRaw publicInput = [] := by rfl
+        fibonacciEnsemble.verifierInteractions BytesChannel.toRaw publicInput = [] := by
+      -- TODO `circuit_norm` alone here should use `Channel.toRaw_ext_iff` but doesn't,
+      -- it seems to need `seval` to discharge side conditions? not clear to me why
+      simp only [fibonacciEnsemble, Ensemble.verifierInteractions, fibonacciVerifier, circuit_norm, seval]
     simp only [h_verifier_empty, List.not_mem_nil] at h_ver
 
 omit [Fact (p > 512)] in
