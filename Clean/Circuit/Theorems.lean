@@ -144,6 +144,54 @@ theorem can_replace_soundness {ops : Operations F} {env} :
       sorry)
     exact ⟨ h_sound.1, ih h.right ⟩
 
+/--
+Channel-aware soundness lifting: recursive constraints plus flattened guarantees
+imply `ConstraintsHoldWithInteractions.Soundness`.
+-/
+theorem can_replace_soundness_with_interactions {ops : Operations F} {env} :
+  ConstraintsHold env ops →
+  FlatOperation.Guarantees env ops.toFlat →
+  ConstraintsHoldWithInteractions.Soundness env ops := by
+  intro h_constraints h_guarantees
+  induction ops using Operations.induct with
+  | empty => trivial
+  | witness | assert | interact =>
+    simp_all [circuit_norm, Operations.toFlat]
+  | lookup l ops ih =>
+    constructor
+    · have h_lookup_contains : l.Contains env := by
+        simp_all [circuit_norm]
+      exact l.table.imply_soundness _ _ h_lookup_contains
+    · simp_all [circuit_norm, Operations.toFlat]
+  | subcircuit s ops ih =>
+    have h_sub_guarantees : FlatOperation.Guarantees env s.ops.toFlat := by
+      simp_all [circuit_norm, Operations.toFlat]
+    have h_sub_sound := s.imply_soundness env h_constraints.1 h_sub_guarantees
+    constructor
+    · exact h_sub_sound.1
+    · simp_all [circuit_norm, Operations.toFlat]
+
+/--
+Recursive requirements lifting from top-level requirements, given recursive constraints
+and flattened guarantees.
+-/
+theorem requirements_toFlat_of_soundness_with_interactions {ops : Operations F} {env} :
+  ConstraintsHold env ops →
+  FlatOperation.Guarantees env ops.toFlat →
+  Operations.Requirements env ops →
+  FlatOperation.Requirements env ops.toFlat := by
+  intro h_constraints h_guarantees h_requirements
+  induction ops using Operations.induct with
+  | empty => trivial
+  | witness | assert | lookup | interact =>
+    simp_all [circuit_norm, Operations.toFlat]
+  | subcircuit s ops ih =>
+    have h_sub_guarantees : FlatOperation.Guarantees env s.ops.toFlat := by
+      simp_all [circuit_norm, Operations.toFlat]
+    have h_sub_req : FlatOperation.Requirements env s.ops.toFlat :=
+      (s.imply_soundness env h_constraints.1 h_sub_guarantees).2
+    simp_all [circuit_norm, Operations.toFlat]
+
 end Circuit
 
 -- more about `FlatOperation`, and relationships to `Operations`
