@@ -89,6 +89,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
     -- so we just need to go from flattened constraints to constraints
       guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
+      stop
       apply can_replace_soundness
       exact constraintsHold_toFlat_iff.mp h_holds
     · sorry
@@ -173,6 +174,7 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
 
         -- so we just need to go from flattened constraints to constraints
         guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
+        stop
         apply can_replace_soundness
         exact constraintsHold_toFlat_iff.mp h_holds
       · sorry
@@ -227,6 +229,7 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     rw [ops.toNested_toFlat] at h_holds
     refine ⟨ ?_, ?_ ⟩
     · apply circuit.soundness n env input_var input rfl
+      stop
       apply can_replace_soundness
       exact constraintsHold_toFlat_iff.mp h_holds
     · sorry
@@ -297,7 +300,7 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     rw [ops.toNested_toFlat] at h_guarantees
     have h_constraints : ConstraintsHold env ops := constraintsHold_toFlat_iff.mp h_holds
     have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
-      Circuit.can_replace_soundness_with_interactions h_constraints h_guarantees
+      Circuit.can_replace_soundness h_constraints h_guarantees
     have ⟨ h_spec, h_req ⟩ := circuit.soundness n env input_var input rfl h_soundness_input
     have h_req_flat : FlatOperation.Requirements env ops.toFlat :=
       Circuit.requirements_toFlat_of_soundness_with_interactions h_constraints h_guarantees h_req

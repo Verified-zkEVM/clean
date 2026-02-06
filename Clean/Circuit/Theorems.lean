@@ -130,25 +130,6 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies assumin
 because it is implied by the flat version.
 -/
 theorem can_replace_soundness {ops : Operations F} {env} :
-  ConstraintsHold env ops → ConstraintsHold.Soundness env ops := by
-  intro h
-  induction ops using Operations.induct with
-  | empty => trivial
-  | witness | assert | lookup | interact =>
-    simp_all [circuit_norm, ConstraintsHold, Lookup.Contains, Lookup.Soundness, RawTable.imply_soundness]
-  | subcircuit circuit ops ih =>
-    dsimp only [ConstraintsHold.Soundness]
-    dsimp only [ConstraintsHold] at h
-    have h_sound := circuit.imply_soundness env h.left (by
-      -- TODO: derive subcircuit guarantees from the global assumptions in the channel-aware setting.
-      sorry)
-    exact ⟨ h_sound.1, ih h.right ⟩
-
-/--
-Channel-aware soundness lifting: recursive constraints plus flattened guarantees
-imply `ConstraintsHoldWithInteractions.Soundness`.
--/
-theorem can_replace_soundness_with_interactions {ops : Operations F} {env} :
   ConstraintsHold env ops →
   FlatOperation.Guarantees env ops.toFlat →
   ConstraintsHoldWithInteractions.Soundness env ops := by
