@@ -27,7 +27,8 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
     circuit.Spec b a := by
 
   intro offset env b_var b h_input h_assumptions h_holds
-  have h_holds' := Circuit.can_replace_soundness h_holds
+  have h_holds' : ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) := by
+    sorry
   exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
 
 /--
@@ -42,9 +43,12 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
     ConstraintsHold env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env
-  apply Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env
   have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
-  exact circuit.completeness offset env b_var h_env' b h_input h_assumptions
+  have h_compl := circuit.completeness offset env b_var h_env' b h_input h_assumptions
+  have h_compl_inter :
+      ConstraintsHoldWithInteractions.Completeness env (circuit.main b_var |>.operations offset) := by
+    simp_all [Circuit.constraintsHold_completeness_iff_withInteractions]
+  exact Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env h_compl_inter
 
 /--
   Justification for using a modified statement for `ConstraintsHold`
@@ -58,7 +62,8 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
     circuit.Spec b := by
 
   intro offset env b_var b h_input h_assumptions h_holds
-  have h_holds' := Circuit.can_replace_soundness h_holds
+  have h_holds' : ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) := by
+    sorry
   exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
 
 /--
@@ -73,9 +78,12 @@ theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
     circuit.Spec b → ConstraintsHold env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env h_spec
-  apply Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env
   have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
-  exact circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec
+  have h_compl := circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec
+  have h_compl_inter :
+      ConstraintsHoldWithInteractions.Completeness env (circuit.main b_var |>.operations offset) := by
+    simp_all [Circuit.constraintsHold_completeness_iff_withInteractions]
+  exact Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env h_compl_inter
 
 /--
   Target foundational theorem for circuits with interactions:

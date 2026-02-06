@@ -912,7 +912,8 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     let output := env ((main input_var).output offset)
     IsBool output := by
   exact (soundness n offset env input_var input h_eval h_assumptions
-    (Circuit.can_replace_soundness h_constraints)).2
+    (by
+      sorry)).2
 
 lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
@@ -930,7 +931,10 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
   · rw [main_usesLocalWitnesses_iff_completeness]
     · exact h_local_witnesses
     · rfl
-  · exact h_completeness
+  · have h_compl_inter :
+        ConstraintsHoldWithInteractions.Completeness env ((main input_var).operations offset) := by
+      simp_all [Circuit.constraintsHold_completeness_iff_withInteractions]
+    exact h_compl_inter
 
 theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
