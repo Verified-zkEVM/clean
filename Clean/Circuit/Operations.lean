@@ -116,13 +116,11 @@ def Requirements (env : Environment F) : List (FlatOperation F) → Prop :=
 
  @[circuit_norm]
 def ChannelGuarantees (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
-    i.assumeGuarantees → i.Guarantees env }
+  forAllNoOffset { interact i := i.channel = channel → i.assumeGuarantees → i.Guarantees env }
 
 @[circuit_norm]
 def ChannelRequirements (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity)
-    → i.Requirements env }
+  forAllNoOffset { interact i := i.channel = channel → i.Requirements env }
 end FlatOperation
 
 export FlatOperation (ConstraintsHoldFlat)
@@ -319,15 +317,16 @@ def localAdds (env : Environment F) : Operations F → InteractionDelta F
 
 /-- This could be channel.filter localAdds, but the direct definition will improve unfolding -/
 @[circuit_norm]
-def interactionsWithChannel (channel : RawChannel F) (env : Environment F) : Operations F → List (F × Vector F channel.arity)
+noncomputable def interactionsWithChannel (channel : RawChannel F) (env : Environment F) : Operations F → List (F × Vector F channel.arity)
   | [] => []
   | .witness _ _ :: ops => interactionsWithChannel channel env ops
   | .assert _ :: ops => interactionsWithChannel channel env ops
   | .lookup _ :: ops => interactionsWithChannel channel env ops
-  | .interact i :: ops =>
-    if h : i.channel.name = channel.name ∧ i.channel.arity = channel.arity
-      then (i.mult.eval env, (i.msg.map env).cast h.2) :: interactionsWithChannel channel env ops
-      else interactionsWithChannel channel env ops
+  | .interact i :: ops => by
+    classical -- so that channel equality becomes decidable and we can use if-then-else
+    exact (if h : i.channel = channel
+      then (i.mult.eval env, (i.msg.map env).cast (by rw [h])) :: interactionsWithChannel channel env ops
+      else interactionsWithChannel channel env ops)
   | .subcircuit s :: ops =>
     channel.filter (s.localAdds env) ++ interactionsWithChannel channel env ops
 
@@ -641,16 +640,14 @@ def FullRequirements {F : Type} [Field F] (env : Environment F) (ops : Operation
 def ChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
-    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
-      i.assumeGuarantees → i.Guarantees env
+    interact i := i.channel = channel → i.assumeGuarantees → i.Guarantees env
   }
 
 @[circuit_norm]
 def FullChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
-    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) →
-      i.assumeGuarantees → i.Guarantees env
+    interact i := i.channel = channel → i.assumeGuarantees → i.Guarantees env
     subcircuit s := FlatOperation.ChannelGuarantees channel env s.ops.toFlat
   }
 
@@ -658,14 +655,14 @@ def FullChannelGuarantees {F : Type} [Field F] (channel : RawChannel F)  (env : 
 def ChannelRequirements {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
-    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.Requirements env
+    interact i := i.channel = channel → i.Requirements env
   }
 
 @[circuit_norm]
 def FullChannelRequirements {F : Type} [Field F] (channel : RawChannel F)  (env : Environment F)
     (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
-    interact i := (i.channel.name = channel.name ∧ i.channel.arity = channel.arity) → i.Requirements env
+    interact i := i.channel = channel → i.Requirements env
     subcircuit s := FlatOperation.ChannelRequirements channel env s.ops.toFlat
   }
 end Operations
