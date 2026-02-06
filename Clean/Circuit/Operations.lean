@@ -159,9 +159,9 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
     FlatOperation.Guarantees env ops.toFlat →
     Soundness env ∧ FlatOperation.Requirements env ops.toFlat
 
-  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
+  -- `Completeness` needs to imply constraints and guarantees, when using the locally declared witness generators
   implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
-    Completeness env → ConstraintsHoldFlat env ops.toFlat
+    Completeness env → ConstraintsHoldFlat env ops.toFlat ∧ FlatOperation.Guarantees env ops.toFlat
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
   imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
     UsesLocalWitnesses env
@@ -685,6 +685,6 @@ def ConstraintsHoldWithInteractions.Completeness (env : Environment F)
   ops.forAllNoOffset {
     assert e := env e = 0
     lookup l := l.Completeness env
-    interact _ := True
+    interact i := i.assumeGuarantees → i.Guarantees env
     subcircuit s := s.Completeness env
   }

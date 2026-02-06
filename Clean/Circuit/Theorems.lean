@@ -374,17 +374,6 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
     apply ih
 
 /--
-`ConstraintsHold.Completeness` and `ConstraintsHoldWithInteractions.Completeness`
-are equivalent on `Operations`: interact ops are ignored on the former and carry `True`
-on the latter.
--/
-theorem constraintsHold_completeness_iff_withInteractions
-    (env : Environment F) (ops : Operations F) :
-    ConstraintsHold.Completeness env ops ↔
-    ConstraintsHoldWithInteractions.Completeness env ops := by
-  induction ops using Operations.induct <;> simp_all [circuit_norm]
-
-/--
 Completeness theorem which proves that we can replace constraints in subcircuits
 with their `completeness` statement.
 
@@ -392,8 +381,11 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies only pr
 `ConstraintsHold.Completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
-theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) : env.UsesLocalWitnesses n ops →
-    ConstraintsHoldWithInteractions.Completeness env ops → ConstraintsHold env ops := by
+theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ}
+    (h : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ConstraintsHoldWithInteractions.Completeness env ops →
+    ConstraintsHold env ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
   | witness | assert | lookup | interact =>
@@ -403,11 +395,47 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.S
     simp_all only [ConstraintsHold, ConstraintsHoldWithInteractions.Completeness,
       Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll]
     intro h_env h_compl
+    have h_sub : ConstraintsHoldFlat env circuit.ops.toFlat ∧ FlatOperation.Guarantees env circuit.ops.toFlat :=
+      Subcircuit.implied_by_completeness circuit env (by
+        rw [←Environment.usesLocalWitnessesFlat_iff_extends]
+        exact h_env.left) h_compl.left
     constructor
-    · apply circuit.implied_by_completeness env ?_ h_compl.left
-      rw [←Environment.usesLocalWitnessesFlat_iff_extends]
-      exact h_env.left
+    · exact h_sub.1
     · exact ih h_env.right h_compl.right
+
+theorem can_replace_completeness_guarantees {env} {ops : Operations F} {n : ℕ}
+    (h : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ConstraintsHoldWithInteractions.Completeness env ops →
+    FlatOperation.Guarantees env ops.toFlat := by
+  induction ops, n, h using Operations.inductConsistent with
+  | empty =>
+    intros
+    exact trivial
+  | witness | assert | lookup | interact =>
+    simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
+      FlatOperation.Guarantees, Operations.toFlat]
+  | subcircuit n circuit ops ih =>
+    simp_all only [ConstraintsHoldWithInteractions.Completeness,
+      Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
+      FlatOperation.Guarantees, Operations.toFlat]
+    intro h_env h_compl
+    have h_sub : ConstraintsHoldFlat env circuit.ops.toFlat ∧ FlatOperation.Guarantees env circuit.ops.toFlat :=
+      Subcircuit.implied_by_completeness circuit env (by
+        rw [←Environment.usesLocalWitnessesFlat_iff_extends]
+        exact h_env.left) h_compl.left
+    have h_sub_guarantees : FlatOperation.Guarantees env circuit.ops.toFlat := h_sub.2
+    have h_rest_guarantees := ih h_env.right h_compl.right
+    simp_all [circuit_norm]
+
+theorem can_replace_completeness_and_guarantees {env} {ops : Operations F} {n : ℕ}
+    (h : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ConstraintsHoldWithInteractions.Completeness env ops →
+    (ConstraintsHold env ops ∧ FlatOperation.Guarantees env ops.toFlat) := by
+  intro h_env h_compl
+  exact ⟨ can_replace_completeness h h_env h_compl,
+    can_replace_completeness_guarantees h h_env h_compl ⟩
 end Circuit
 
 namespace Circuit
