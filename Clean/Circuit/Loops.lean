@@ -522,17 +522,22 @@ lemma mapFinRange.subcircuitChannelsWithGuarantees :
       (body i).operations (n + i * constant.localLength) |>.subcircuitChannelsWithGuarantees).flatten := by
   rw [mapFinRange.operations_eq]
   simp only [Operations.subcircuitChannelsWithGuarantees]
-  congr
-  simp
-  -- sadly, this theorem is not true..
-  sorry
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
 
 @[circuit_norm ↓]
 lemma mapFinRange.subcircuitChannelsWithRequirements :
   ((mapFinRange m body constant).operations n).subcircuitChannelsWithRequirements =
     (List.ofFn fun (i : Fin m) =>
       (body i).operations (n + i * constant.localLength) |>.subcircuitChannelsWithRequirements).flatten := by
-  sorry
+  rw [mapFinRange.operations_eq]
+  simp only [Operations.subcircuitChannelsWithRequirements, List.flatMap]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
 
 @[circuit_norm ↓]
 lemma mapFinRange.forAll :
