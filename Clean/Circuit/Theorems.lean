@@ -156,7 +156,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
 Recursive requirements lifting from top-level requirements, given recursive constraints
 and flattened guarantees.
 -/
-theorem requirements_toFlat_of_soundness_with_interactions {ops : Operations F} {env} :
+theorem requirements_toFlat_of_soundness {ops : Operations F} {env} :
   ConstraintsHold env ops →
   FlatOperation.Guarantees env ops.toFlat →
   Operations.Requirements env ops →

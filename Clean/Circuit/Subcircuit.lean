@@ -303,7 +303,7 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
       Circuit.can_replace_soundness h_constraints h_guarantees
     have ⟨ h_spec, h_req ⟩ := circuit.soundness n env input_var input rfl h_soundness_input
     have h_req_flat : FlatOperation.Requirements env ops.toFlat :=
-      Circuit.requirements_toFlat_of_soundness_with_interactions h_constraints h_guarantees h_req
+      Circuit.requirements_toFlat_of_soundness h_constraints h_guarantees h_req
     exact ⟨ h_spec, by
       rw [ops.toNested_toFlat]
       exact h_req_flat ⟩
