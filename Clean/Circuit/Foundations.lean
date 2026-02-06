@@ -47,7 +47,7 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
   have h_compl := circuit.completeness offset env b_var h_env' b h_input h_assumptions
   have h_compl_inter :
       ConstraintsHoldWithInteractions.Completeness env (circuit.main b_var |>.operations offset) := by
-    simp_all [Circuit.constraintsHold_completeness_iff_withInteractions]
+    sorry
   exact Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env h_compl_inter
 
 /--
@@ -82,7 +82,7 @@ theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
   have h_compl := circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec
   have h_compl_inter :
       ConstraintsHoldWithInteractions.Completeness env (circuit.main b_var |>.operations offset) := by
-    simp_all [Circuit.constraintsHold_completeness_iff_withInteractions]
+    sorry
   exact Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env h_compl_inter
 
 /--

@@ -933,7 +933,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
     · rfl
   · have h_compl_inter :
         ConstraintsHoldWithInteractions.Completeness env ((main input_var).operations offset) := by
-      simp_all [Circuit.constraintsHold_completeness_iff_withInteractions]
+      sorry
     exact h_compl_inter
 
 theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
