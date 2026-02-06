@@ -76,3 +76,17 @@ theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
   apply Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env
   have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
   exact circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec
+
+/--
+  Target foundational theorem for circuits with interactions:
+  full constraints + full guarantees imply spec + full requirements.
+-/
+theorem FormalCircuitWithInteractions.original_full_soundness
+    (circuit : FormalCircuitWithInteractions F β α) :
+    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b →
+    ConstraintsHold env (circuit.main b_var |>.operations offset) →
+    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) →
+    let a := eval env (circuit.output b_var offset)
+    circuit.Spec b a env ∧
+      Operations.FullRequirements env (circuit.main b_var |>.operations offset) := by
+  sorry

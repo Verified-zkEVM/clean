@@ -139,7 +139,10 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
     dsimp only [ConstraintsHold] at h
-    exact ⟨ circuit.imply_soundness env h.left, ih h.right ⟩
+    have h_sound := circuit.imply_soundness env h.left (by
+      -- TODO: derive subcircuit guarantees from the global assumptions in the channel-aware setting.
+      sorry)
+    exact ⟨ h_sound.1, ih h.right ⟩
 
 end Circuit
 

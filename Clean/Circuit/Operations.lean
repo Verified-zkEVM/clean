@@ -153,9 +153,11 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
 
   localAdds : Environment F → InteractionDelta F := fun _ => 0
 
-  -- `Soundness` needs to follow from the constraints for any witness
+  -- `Soundness` and local requirements need to follow from constraints and guarantees.
   imply_soundness : ∀ env,
-    ConstraintsHoldFlat env ops.toFlat → Soundness env
+    ConstraintsHoldFlat env ops.toFlat →
+    FlatOperation.Guarantees env ops.toFlat →
+    Soundness env ∧ FlatOperation.Requirements env ops.toFlat
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
   implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
