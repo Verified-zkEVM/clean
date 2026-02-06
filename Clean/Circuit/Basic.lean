@@ -471,7 +471,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     (ops.Guarantees env ↔ channelsWithGuarantees.Forall (ops.ChannelGuarantees · env))
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
     := by
-      simp only [circuit_norm, List.Forall, seval]
+      simp only [circuit_norm, seval]
       try tauto -- for permuting conjunctions
 
   channelsWithRequirements : List (RawChannel F) := []
@@ -481,7 +481,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     (ops.Requirements env ↔ channelsWithRequirements.Forall (ops.ChannelRequirements · env))
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
     := by
-      simp only [circuit_norm, List.Forall, seval]
+      simp only [circuit_norm, seval]
       try tauto -- for permuting conjunctions
 end
 

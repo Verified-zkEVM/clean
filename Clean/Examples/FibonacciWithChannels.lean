@@ -79,8 +79,6 @@ def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
   completeness := by sorry
 
   channelsWithRequirements := [ BytesChannel.toRaw ]
-  requirements_iff := by
-    simp only [circuit_norm]
 
 instance Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -124,8 +122,6 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   -- TODO make coercion work without .toRaw
   channelsWithGuarantees := [ BytesChannel.toRaw ]
   channelsWithRequirements := [ Add8Channel.toRaw ]
-  guarantees_iff := by
-    simp only [circuit_norm, seval, BytesChannel, Add8Channel]
   requirements_iff := by
     simp only [circuit_norm, seval, BytesChannel, Add8Channel]
 
