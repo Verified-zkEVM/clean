@@ -154,11 +154,16 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
     have add_completeness_bool := Theorems.completeness_bool input_x input_y 0 hx hy (by simp)
     have add_completeness_add := Theorems.completeness_add input_x input_y 0 hx hy (by simp)
     simp only [add_zero] at add_completeness_bool add_completeness_add
-    use add_completeness_bool
-    convert add_completeness_add
-    apply FieldUtils.ext
-    rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-    linarith [‹Fact (p > 512)›.elim]
+    have h_input_z : input_z = mod256 (input_x + input_y) := by
+      apply FieldUtils.ext
+      rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+      linarith [hx, hy, ‹Fact (p > 512)›.elim]
+    have h_bytes_guarantee : BytesChannel.Guarantees (-1) input_z env.data := by
+      simpa [BytesChannel, Channel.fromStatic, BytesTable] using hz
+    refine ⟨h_bytes_guarantee, ?_⟩
+    refine ⟨ ?_, ?_ ⟩
+    · simpa [floorDiv256] using add_completeness_bool
+    · simpa [h_input_z, floorDiv256] using add_completeness_add
 
 -- define valid Fibonacci state transitions
 
@@ -226,7 +231,9 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
 
-  Assumptions | (n, x, y), _ => True
+  Assumptions
+  | (n, x, y), _ =>
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
   Spec _ _ _ := True
 
   soundness := by
@@ -247,7 +254,13 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     simp_all
 
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [reduceIte]
+    rcases input with ⟨ n, x, y ⟩
+    simp only [Prod.mk.injEq] at h_input
+    simp_all only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte]
+    intro hx hy
+    rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+    linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
 -- additional circuits that pull/push remaining channel interactions
 -- these really wouldn't have to be circuits, need to find a better place for tying together channels
@@ -269,7 +282,9 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
   channelsWithGuarantees := [ FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
 
-  Assumptions _ _ := True
+  Assumptions
+  | (n, x, y), _ =>
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
   Spec
   | (n, x, y), _, _ =>
     ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
@@ -283,7 +298,10 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
     exact ⟨ 0, rfl, rfl ⟩
 
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [reduceIte]
+    rcases input with ⟨ n, x, y ⟩
+    simp only [Prod.mk.injEq] at h_input
+    simpa [circuit_norm, FibonacciChannel, reduceIte] using h_assumptions
 
 section
 -- define what global soundness means for an ensemble of circuits/tables and channels
@@ -1174,12 +1192,16 @@ lemma add8_interactions_satisfy_requirements
         (assertBool.toSubcircuit (offset + 1) boolInput)
       let eqSc :=
         ((Gadgets.Equality.circuit id).toSubcircuit (offset + 1) eqInput)
-      have h_bool_channels : boolSc.channelsWithGuarantees = [] := rfl
-      have h_eq_channels : eqSc.channelsWithGuarantees = [] := rfl
+      have h_bool_channels : boolSc.channelsWithGuarantees = [] := by
+        simp [boolSc, FormalAssertion.toSubcircuit]
+      have h_eq_channels : eqSc.channelsWithGuarantees = [] := by
+        simp [eqSc, FormalAssertion.toSubcircuit]
       have h_bool_guarantees : FlatOperation.Guarantees env boolSc.ops.toFlat := by
-        exact (boolSc.guarantees_iff env).2 (by simpa [h_bool_channels])
+        refine (boolSc.guarantees_iff env).2 ?_
+        simpa [h_bool_channels]
       have h_eq_guarantees : FlatOperation.Guarantees env eqSc.ops.toFlat := by
-        exact (eqSc.guarantees_iff env).2 (by simpa [h_eq_channels])
+        refine (eqSc.guarantees_iff env).2 ?_
+        simpa [h_eq_channels]
       exact ⟨h_bool_guarantees, h_eq_guarantees⟩
 
   -- Use bridge lemma to get ConstraintsHoldWithInteractions.Soundness
