@@ -111,10 +111,15 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
     -- by completeness of the circuit, this means we can make the constraints hold
     have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as
+    have h_holds_inter : ConstraintsHoldWithInteractions.Completeness env ops := by
+      change ConstraintsHoldWithInteractions.Completeness env
+        ((circuit.main input_var).operations n)
+      exact (Circuit.constraintsHold_completeness_iff_withInteractions env
+        ((circuit.main input_var).operations n)).mp h_holds
 
     -- so we just need to go from constraints to flattened constraints
     apply constraintsHold_toFlat_iff.mpr
-    exact can_replace_completeness h_consistent h_env h_holds
+    exact can_replace_completeness h_consistent h_env h_holds_inter
 
   {
     ops := nestedOps,
@@ -195,10 +200,15 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
 
       -- by completeness of the circuit, this means we can make the constraints hold
       have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
+      have h_holds_inter : ConstraintsHoldWithInteractions.Completeness env ops := by
+        change ConstraintsHoldWithInteractions.Completeness env
+          ((circuit.main input_var).operations n)
+        exact (Circuit.constraintsHold_completeness_iff_withInteractions env
+          ((circuit.main input_var).operations n)).mp h_holds
 
       -- so we just need to go from constraints to flattened constraints
       apply constraintsHold_toFlat_iff.mpr
-      exact can_replace_completeness h_consistent h_env h_holds
+      exact can_replace_completeness h_consistent h_env h_holds_inter
 
     imply_usesLocalWitnesses := by intros; exact trivial
 
@@ -242,9 +252,14 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     rw [ops.toNested_toFlat] at h_env ⊢
     rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env
     rw [constraintsHold_toFlat_iff]
-    apply can_replace_completeness h_consistent h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
-    apply circuit.completeness n env input_var h_env_completeness input rfl assumptions
+    have h_holds := circuit.completeness n env input_var h_env_completeness input rfl assumptions
+    have h_holds_inter : ConstraintsHoldWithInteractions.Completeness env ops := by
+      change ConstraintsHoldWithInteractions.Completeness env
+        ((circuit.main input_var).operations n)
+      exact (Circuit.constraintsHold_completeness_iff_withInteractions env
+        ((circuit.main input_var).operations n)).mp h_holds
+    exact can_replace_completeness h_consistent h_env h_holds_inter
 
   {
     ops := nestedOps,

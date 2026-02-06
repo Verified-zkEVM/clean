@@ -374,6 +374,17 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
     apply ih
 
 /--
+`ConstraintsHold.Completeness` and `ConstraintsHoldWithInteractions.Completeness`
+are equivalent on `Operations`: interact ops are ignored on the former and carry `True`
+on the latter.
+-/
+theorem constraintsHold_completeness_iff_withInteractions
+    (env : Environment F) (ops : Operations F) :
+    ConstraintsHold.Completeness env ops ↔
+    ConstraintsHoldWithInteractions.Completeness env ops := by
+  induction ops using Operations.induct <;> simp_all [circuit_norm]
+
+/--
 Completeness theorem which proves that we can replace constraints in subcircuits
 with their `completeness` statement.
 
@@ -382,18 +393,21 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies only pr
 because it already implies the flat version.
 -/
 theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) : env.UsesLocalWitnesses n ops →
-    ConstraintsHold.Completeness env ops → ConstraintsHold env ops := by
+    ConstraintsHoldWithInteractions.Completeness env ops → ConstraintsHold env ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
   | witness | assert | lookup | interact =>
     simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
       Lookup.Contains, Lookup.Completeness, RawTable.implied_by_completeness]
   | subcircuit n circuit ops ih =>
-    simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
+    simp_all only [ConstraintsHold, ConstraintsHoldWithInteractions.Completeness,
+      Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll]
     intro h_env h_compl
-    apply circuit.implied_by_completeness env ?_ h_compl.left
-    rw [←Environment.usesLocalWitnessesFlat_iff_extends]
-    exact h_env.left
+    constructor
+    · apply circuit.implied_by_completeness env ?_ h_compl.left
+      rw [←Environment.usesLocalWitnessesFlat_iff_extends]
+      exact h_env.left
+    · exact ih h_env.right h_compl.right
 end Circuit
 
 namespace Circuit
