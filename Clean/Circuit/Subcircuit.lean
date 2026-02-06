@@ -362,35 +362,19 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
         simp only [Operations.FullGuarantees, Operations.forAllNoOffset]
         show _ ∧ Operations.FullGuarantees env ops
         rw [s.guarantees_iff env, List.forall_iff_forall_mem]
-        have s_sublist : s.channelsWithGuarantees.Sublist circuit.channelsWithGuarantees := by
-          simp_all [circuit_norm, List.append_sublist_iff]
-          grind
-        have ops_sublist : ops.subcircuitChannelsWithGuarantees.Sublist circuit.channelsWithGuarantees := by
-          simp_all [circuit_norm, List.append_sublist_iff]
-          grind
+        have s_sublist : s.channelsWithGuarantees ⊆ circuit.channelsWithGuarantees := by
+          simp_all [circuit_norm]
+        have ops_sublist : ops.subcircuitChannelsWithGuarantees ⊆ circuit.channelsWithGuarantees := by
+          simp_all [circuit_norm]
         simp only [Operations.toFlat, FlatOperation.ChannelGuarantees, FlatOperation.forAllNoOffset,
           List.forall_append] at h_channel_guarantees_flat
         change ∀ c ∈ circuit.channelsWithGuarantees,
           FlatOperation.ChannelGuarantees c env _ ∧ FlatOperation.ChannelGuarantees c env _
         at h_channel_guarantees_flat
-        -- trying to find a weaker version of s_sublist that's still enough here,
-        -- since the sublist version is very restrictive
-        have s_subset (propMap : {self : RawChannel F} → (F → Vector F self.arity → ProverData F → Prop) → Prop) :
-            circuit.channelsWithGuarantees.Forall (fun c => propMap c.Guarantees) →
-            s.channelsWithGuarantees.Forall (fun c => propMap c.Guarantees) := by
-          simp only [List.forall_iff_forall_mem]
-          intro h_propMap c h_mem
-          have : c ∈ circuit.channelsWithGuarantees := s_sublist.mem h_mem
-          exact h_propMap c this
-        have s_subset_weak {propMap : RawChannel F → Prop} :
-            (∀ c ∈ circuit.channelsWithGuarantees, propMap c) → (∀ c ∈ s.channelsWithGuarantees, propMap c) := by
-          intro h_propMap c h_mem
-          have : c ∈ circuit.channelsWithGuarantees := s_sublist.mem h_mem
-          exact h_propMap c this
-        clear s_sublist
         constructor
         · intro channel h_mem_channel
-          exact (s_subset_weak h_channel_guarantees_flat channel h_mem_channel).left
+          have : channel ∈ circuit.channelsWithGuarantees := s_sublist h_mem_channel
+          exact (h_channel_guarantees_flat channel this).left
         simp_all [circuit_norm]
     -- same proof as above, might want to extract common logic
     requirements_iff := by sorry

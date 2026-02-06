@@ -467,7 +467,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   channelsWithGuarantees : List (RawChannel F) := []
   guarantees_iff : ∀ input_var offset env,
     let ops := (elaborated.main input_var).operations offset
-    ops.subcircuitChannelsWithGuarantees.Sublist channelsWithGuarantees ∧
+    ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
     (ops.Guarantees env ↔ channelsWithGuarantees.Forall (ops.ChannelGuarantees · env))
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
     := by
@@ -477,7 +477,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   channelsWithRequirements : List (RawChannel F) := []
   requirements_iff : ∀ input_var offset env,
     let ops := (elaborated.main input_var).operations offset
-    ops.subcircuitChannelsWithRequirements.Sublist channelsWithRequirements ∧
+    ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
     (ops.Requirements env ↔ channelsWithRequirements.Forall (ops.ChannelRequirements · env))
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
     := by
