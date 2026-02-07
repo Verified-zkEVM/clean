@@ -95,7 +95,6 @@ instance : HDiv (Expression F) ℕ (Expression F) where
 -- TODO probably should just make Variable F := ℕ
 instance {n : ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
-end Expression
 
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
   coe env x := x.eval env
@@ -105,6 +104,15 @@ instance [Field F] : Inhabited F where
 
 instance [Field F] : Inhabited (Expression F) where
   default := .const 0
+
+-- simplify expressions like `(-1) * 2` to a single constant `-2`
+def reduceConstants : Expression F → Expression F
+  | add (const x) (const y) => const (x + y)
+  | mul (const x) (const y) => const (x * y)
+  | add x y => add (reduceConstants x) (reduceConstants y)
+  | mul x y => mul (reduceConstants x) (reduceConstants y)
+  | e => e
+end Expression
 
 /-! ## Lemmas about Expression evaluation -/
 

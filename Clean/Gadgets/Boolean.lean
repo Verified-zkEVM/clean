@@ -200,12 +200,13 @@ Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 -/
 @[circuit_norm]
 def assertBool : FormalAssertion (F p) field where
-  main (x : Expression (F p)) := assertZero (x * (x - 1))
-  Assumptions _ := True
-  Spec (x : F p) := IsBool x
+  main x := assertZero (x * (x - 1))
 
-  soundness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
-  completeness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
+  Assumptions _ := True
+  Spec x := IsBool x
+
+  soundness := by circuit_proof_all [IsBool, mul_eq_zero, add_neg_eq_zero]
+  completeness := by circuit_proof_all [IsBool, mul_eq_zero, add_neg_eq_zero]
 end Boolean
 
 export Boolean (assertBool)
