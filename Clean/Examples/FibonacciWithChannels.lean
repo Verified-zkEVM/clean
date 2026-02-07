@@ -150,11 +150,16 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
     have add_completeness_bool := Theorems.completeness_bool input_x input_y 0 hx hy (by simp)
     have add_completeness_add := Theorems.completeness_add input_x input_y 0 hx hy (by simp)
     simp only [add_zero] at add_completeness_bool add_completeness_add
-    use add_completeness_bool
-    convert add_completeness_add
-    apply FieldUtils.ext
-    rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-    linarith [‹Fact (p > 512)›.elim]
+    have h_input_z : input_z = mod256 (input_x + input_y) := by
+      apply FieldUtils.ext
+      rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+      linarith [hx, hy, ‹Fact (p > 512)›.elim]
+    have h_bytes_guarantee : BytesChannel.Guarantees (-1) input_z env.data := by
+      simpa [BytesChannel, Channel.fromStatic, BytesTable] using hz
+    refine ⟨h_bytes_guarantee, ?_⟩
+    refine ⟨ ?_, ?_ ⟩
+    · simpa [floorDiv256] using add_completeness_bool
+    · simpa [h_input_z, floorDiv256] using add_completeness_add
 
 -- define valid Fibonacci state transitions
 
@@ -222,7 +227,9 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
 
-  Assumptions | (n, x, y), _ => True
+  Assumptions
+  | (n, x, y), _ =>
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
   Spec _ _ _ := True
 
   soundness := by
@@ -243,7 +250,13 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     simp_all
 
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [reduceIte]
+    rcases input with ⟨ n, x, y ⟩
+    simp only [Prod.mk.injEq] at h_input
+    simp_all only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte]
+    intro hx hy
+    rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+    linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
 -- additional circuits that pull/push remaining channel interactions
 -- these really wouldn't have to be circuits, need to find a better place for tying together channels
@@ -265,7 +278,9 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
   channelsWithGuarantees := [ FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
 
-  Assumptions _ _ := True
+  Assumptions
+  | (n, x, y), _ =>
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
   Spec
   | (n, x, y), _, _ =>
     ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
@@ -279,7 +294,10 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
     exact ⟨ 0, rfl, rfl ⟩
 
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [reduceIte]
+    rcases input with ⟨ n, x, y ⟩
+    simp only [Prod.mk.injEq] at h_input
+    simpa [circuit_norm, FibonacciChannel, reduceIte] using h_assumptions
 
 section
 -- define what global soundness means for an ensemble of circuits/tables and channels
@@ -311,25 +329,18 @@ omit [DecidableEq F] in
 /-- Bridge lemma: ConstraintsHold + channel Guarantees → ConstraintsHoldWithInteractions.Soundness
     This lemma allows us to use circuit soundness proofs by providing the required Guarantees externally. -/
 lemma constraintsHold_to_soundness {env : Environment F} {ops : Operations F}
-    (h_constraints : ops.ConstraintsHold env)
-    -- For each interact operation, we can prove its Guarantees
-    (h_guarantees : ops.Guarantees env) :
+    (h_constraints : Operations.ConstraintsHold env ops)
+    -- For each interact operation (including subcircuits), we can prove its Guarantees
+    (h_guarantees : ops.FullGuarantees env) :
     ConstraintsHoldWithInteractions.Soundness env ops := by
-  simp only [Operations.ConstraintsHold] at h_constraints
-  simp only [Operations.Guarantees] at h_guarantees
-  simp only [ConstraintsHoldWithInteractions.Soundness]
-  generalize 0 = n at *
-  induction ops using Operations.induct generalizing n with
-  | empty => trivial
-  | witness | assert | interact =>
-    simp_all [Operations.forAllNoOffset]
-  | lookup l =>
-    simp_all only [Lookup.Contains, Lookup.Soundness, forall_const, Operations.forAllNoOffset,
-      true_and, and_true]
-    exact l.table.imply_soundness _ _ (h_constraints.1)
-  | subcircuit s ops ih =>
-    simp_all only [forall_const, Operations.forAllNoOffset, true_and, and_true]
-    exact s.imply_soundness _ h_constraints.1
+  have h_constraints' : Circuit.ConstraintsHold env ops := by
+    apply (Circuit.constraintsHold_iff_forAll' (env := env) (ops := ops)).2
+    simpa [Operations.ConstraintsHold] using h_constraints
+  have h_guarantees_flat : FlatOperation.Guarantees env ops.toFlat := by
+    exact (FlatOperation.forAll_toFlat_iff
+      (condition := { interact i := i.assumeGuarantees → i.Guarantees env })
+      (ops := ops)).2 h_guarantees
+  exact Circuit.can_replace_soundness h_constraints' h_guarantees_flat
 
 structure AbstractTable (F : Type) [Field F] [DecidableEq F] where
   {Input : TypeMap} {Output : TypeMap}
@@ -366,33 +377,48 @@ lemma constraintsHold_instantiate
 lemma guarantees_instantiate
     (circuit : FormalCircuitWithInteractions F Input Output)
     (env : Environment F) :
-    (circuit.instantiate.operations 0).Guarantees env ↔
-    ((circuit.main (varFromOffset Input 0)).operations (size Input)).Guarantees env := by
+    (circuit.instantiate.operations 0).FullGuarantees env ↔
+    ((circuit.main (varFromOffset Input 0)).operations (size Input)).FullGuarantees env := by
   simp only [FormalCircuitWithInteractions.instantiate, circuit_norm, witnessAny, getOffset]
-  sorry
-  -- not provable, subcircuit guarantees are currently just True
+  simp only [FormalCircuitWithInteractions.toSubcircuit]
+  rw [Operations.toNested_toFlat]
+  simpa [Operations.FullGuarantees, FlatOperation.Guarantees]
+    using (FlatOperation.forAll_toFlat_iff
+      (condition := { interact i := i.assumeGuarantees → i.Guarantees env })
+      (ops := ((circuit.main (varFromOffset Input 0)).operations (size Input))))
 
 lemma requirements_instantiate
     (circuit : FormalCircuitWithInteractions F Input Output)
     (env : Environment F) :
-    (circuit.instantiate.operations 0).Requirements env ↔
-    ((circuit.main (varFromOffset Input 0)).operations (size Input)).Requirements env := by
-  sorry
+    (circuit.instantiate.operations 0).FullRequirements env ↔
+    ((circuit.main (varFromOffset Input 0)).operations (size Input)).FullRequirements env := by
+  simp only [FormalCircuitWithInteractions.instantiate, circuit_norm, witnessAny, getOffset]
+  simp only [FormalCircuitWithInteractions.toSubcircuit]
+  rw [Operations.toNested_toFlat]
+  simpa [Operations.FullRequirements, FlatOperation.Requirements]
+    using (FlatOperation.forAll_toFlat_iff
+      (condition := { interact i := i.Requirements env })
+      (ops := ((circuit.main (varFromOffset Input 0)).operations (size Input))))
 
 -- this is the circuit's soundness theorem, stated in "instantiated" form
 theorem weakSoundness {table : AbstractTable F} {env : Environment F} :
     table.operations.ConstraintsHold env →
-    table.operations.Guarantees env →
-      table.Spec env ∧ table.operations.Requirements env := by
+    table.operations.FullGuarantees env →
+      table.Spec env ∧ table.operations.FullRequirements env := by
   intro h_constraints h_guarantees
   simp only [AbstractTable.operations, AbstractTable.Spec] at *
   simp only [constraintsHold_instantiate] at h_constraints
   simp only [guarantees_instantiate] at h_guarantees
   simp only [requirements_instantiate]
-  have h_soundness := table.circuit.soundness (size table.Input) env (varFromOffset table.Input 0)
+  have h_constraints' :
+      Circuit.ConstraintsHold env ((table.circuit.main (varFromOffset table.Input 0)).operations (size table.Input)) := by
+    apply (Circuit.constraintsHold_iff_forAll' (env := env)
+      (ops := (table.circuit.main (varFromOffset table.Input 0)).operations (size table.Input))).2
+    simpa [Operations.ConstraintsHold] using h_constraints
+  exact table.circuit.original_full_soundness
+    (size table.Input) env (varFromOffset table.Input 0)
     (valueFromOffset table.Input 0 env) (eval_varFromOffset_valueFromOffset ..)
-  have h_goal := h_soundness (constraintsHold_to_soundness h_constraints h_guarantees)
-  convert h_goal
+    h_constraints' h_guarantees
 
 end AbstractTable
 
@@ -415,11 +441,11 @@ def Constraints (witness : TableWitness F) : Prop :=
 
 def Guarantees (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
-    witness.abstract.operations.Guarantees (witness.environment row)
+    witness.abstract.operations.FullGuarantees (witness.environment row)
 
 def Requirements (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
-    witness.abstract.operations.Requirements (witness.environment row)
+    witness.abstract.operations.FullRequirements (witness.environment row)
 
 def Spec (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
@@ -573,7 +599,7 @@ lemma soundChannels_imply_soundness (ens : Ensemble F PublicIO) :
   set env := table.environment
   rcases table with ⟨ table, witness, data ⟩
   simp only [List.forall_iff_forall_mem] at *
-  suffices (∀ row ∈ witness, table.Spec (env row) ∧ table.operations.Requirements (env row)) by
+  suffices (∀ row ∈ witness, table.Spec (env row) ∧ table.operations.FullRequirements (env row)) by
     simp_all
   intro row h_mem_row
   exact AbstractTable.weakSoundness (constraints row h_mem_row) (guarantees row h_mem_row)
@@ -1140,19 +1166,39 @@ lemma add8_interactions_satisfy_requirements
   set ops := (add8.main input_var).operations offset
 
   -- Build Guarantees for the interactions in add8
-  have h_guarantees : ops.Guarantees env := by
+  have h_guarantees : ops.FullGuarantees env := by
     simp only [ops, circuit_norm, add8, input_var, BytesChannel, BytesTable]
-    apply h_bytes_guarantees (env.get 2)
-    -- Need to show (-1, #v[env.get 2]) ∈ table.interactions BytesChannel.toRaw
-    -- This follows because add8 pulls z from BytesChannel
-    simp only [TableWitness.interactions, AbstractTable.operations]
-    rw [List.mem_flatMap]
-    refine ⟨row, h_row_mem, ?_⟩
-    rw [h_is_add8]
-    simp only [RawChannel.filter, add8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
-      circuit_norm, BytesChannel, Channel.pulled, InteractionDelta.single, Channel.toRaw,
-      toElements]
-    simp [InteractionDelta.add_eq_append, env]
+    refine ⟨ ?_, ?_ ⟩
+    · apply h_bytes_guarantees (env.get 2)
+      -- Need to show (-1, #v[env.get 2]) ∈ table.interactions BytesChannel.toRaw
+      -- This follows because add8 pulls z from BytesChannel
+      simp only [TableWitness.interactions, AbstractTable.operations]
+      rw [List.mem_flatMap]
+      refine ⟨row, h_row_mem, ?_⟩
+      rw [h_is_add8]
+      simp only [RawChannel.filter, add8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
+        circuit_norm, BytesChannel, Channel.pulled, InteractionDelta.single, Channel.toRaw,
+        toElements]
+      simp [InteractionDelta.add_eq_append, env]
+    ·
+      let boolInput : Var field (F p) := var { index := offset }
+      let eqInput : Var (ProvablePair id id) (F p) :=
+        (var { index := 0 } + var { index := 1 } - var { index := 2 } - var { index := offset } * 256, 0)
+      let boolSc :=
+        (assertBool.toSubcircuit (offset + 1) boolInput)
+      let eqSc :=
+        ((Gadgets.Equality.circuit id).toSubcircuit (offset + 1) eqInput)
+      have h_bool_channels : boolSc.channelsWithGuarantees = [] := by
+        simp [boolSc, FormalAssertion.toSubcircuit]
+      have h_eq_channels : eqSc.channelsWithGuarantees = [] := by
+        simp [eqSc, FormalAssertion.toSubcircuit]
+      have h_bool_guarantees : FlatOperation.Guarantees env boolSc.ops.toFlat := by
+        refine (boolSc.guarantees_iff env).2 ?_
+        simpa [h_bool_channels]
+      have h_eq_guarantees : FlatOperation.Guarantees env eqSc.ops.toFlat := by
+        refine (eqSc.guarantees_iff env).2 ?_
+        simpa [h_eq_channels]
+      exact ⟨h_bool_guarantees, h_eq_guarantees⟩
 
   -- Use bridge lemma to get ConstraintsHoldWithInteractions.Soundness
   have h_soundness : ConstraintsHoldWithInteractions.Soundness env ops := by

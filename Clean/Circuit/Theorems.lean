@@ -130,16 +130,48 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies assumin
 because it is implied by the flat version.
 -/
 theorem can_replace_soundness {ops : Operations F} {env} :
-  ConstraintsHold env ops → ConstraintsHold.Soundness env ops := by
-  intro h
+  ConstraintsHold env ops →
+  FlatOperation.Guarantees env ops.toFlat →
+  ConstraintsHoldWithInteractions.Soundness env ops := by
+  intro h_constraints h_guarantees
+  induction ops using Operations.induct with
+  | empty => trivial
+  | witness | assert | interact =>
+    simp_all [circuit_norm, Operations.toFlat]
+  | lookup l ops ih =>
+    constructor
+    · have h_lookup_contains : l.Contains env := by
+        simp_all [circuit_norm]
+      exact l.table.imply_soundness _ _ h_lookup_contains
+    · simp_all [circuit_norm, Operations.toFlat]
+  | subcircuit s ops ih =>
+    have h_sub_guarantees : FlatOperation.Guarantees env s.ops.toFlat := by
+      simp_all [circuit_norm, Operations.toFlat]
+    have h_sub_sound := s.imply_soundness env h_constraints.1 h_sub_guarantees
+    constructor
+    · exact h_sub_sound.1
+    · simp_all [circuit_norm, Operations.toFlat]
+
+/--
+Recursive requirements lifting from top-level requirements, given recursive constraints
+and flattened guarantees.
+-/
+theorem requirements_toFlat_of_soundness {ops : Operations F} {env} :
+  ConstraintsHold env ops →
+  FlatOperation.Guarantees env ops.toFlat →
+  Operations.Requirements env ops →
+  FlatOperation.Requirements env ops.toFlat := by
+  intro h_constraints h_guarantees h_requirements
   induction ops using Operations.induct with
   | empty => trivial
   | witness | assert | lookup | interact =>
-    simp_all [circuit_norm, ConstraintsHold, Lookup.Contains, Lookup.Soundness, RawTable.imply_soundness]
-  | subcircuit circuit ops ih =>
-    dsimp only [ConstraintsHold.Soundness]
-    dsimp only [ConstraintsHold] at h
-    exact ⟨ circuit.imply_soundness env h.left, ih h.right ⟩
+    simp_all [circuit_norm, Operations.toFlat]
+  | subcircuit s ops ih =>
+    have h_sub_guarantees : FlatOperation.Guarantees env s.ops.toFlat := by
+      simp_all [circuit_norm, Operations.toFlat]
+    have h_sub_req : FlatOperation.Requirements env s.ops.toFlat :=
+      (s.imply_soundness env h_constraints.1 h_sub_guarantees).2
+    simp_all [circuit_norm, Operations.toFlat]
 
 end Circuit
 
@@ -349,19 +381,61 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies only pr
 `ConstraintsHold.Completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
-theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) : env.UsesLocalWitnesses n ops →
-    ConstraintsHold.Completeness env ops → ConstraintsHold env ops := by
+theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ}
+    (h : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ConstraintsHoldWithInteractions.Completeness env ops →
+    ConstraintsHold env ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
   | witness | assert | lookup | interact =>
     simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
       Lookup.Contains, Lookup.Completeness, RawTable.implied_by_completeness]
   | subcircuit n circuit ops ih =>
-    simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
+    simp_all only [ConstraintsHold, ConstraintsHoldWithInteractions.Completeness,
+      Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll]
     intro h_env h_compl
-    apply circuit.implied_by_completeness env ?_ h_compl.left
-    rw [←Environment.usesLocalWitnessesFlat_iff_extends]
-    exact h_env.left
+    have h_sub : ConstraintsHoldFlat env circuit.ops.toFlat ∧ FlatOperation.Guarantees env circuit.ops.toFlat :=
+      Subcircuit.implied_by_completeness circuit env (by
+        rw [←Environment.usesLocalWitnessesFlat_iff_extends]
+        exact h_env.left) h_compl.left
+    constructor
+    · exact h_sub.1
+    · exact ih h_env.right h_compl.right
+
+theorem can_replace_completeness_guarantees {env} {ops : Operations F} {n : ℕ}
+    (h : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ConstraintsHoldWithInteractions.Completeness env ops →
+    FlatOperation.Guarantees env ops.toFlat := by
+  induction ops, n, h using Operations.inductConsistent with
+  | empty =>
+    intros
+    exact trivial
+  | witness | assert | lookup | interact =>
+    simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
+      FlatOperation.Guarantees, Operations.toFlat]
+  | subcircuit n circuit ops ih =>
+    simp_all only [ConstraintsHoldWithInteractions.Completeness,
+      Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
+      FlatOperation.Guarantees, Operations.toFlat]
+    intro h_env h_compl
+    have h_sub : ConstraintsHoldFlat env circuit.ops.toFlat ∧ FlatOperation.Guarantees env circuit.ops.toFlat :=
+      Subcircuit.implied_by_completeness circuit env (by
+        rw [←Environment.usesLocalWitnessesFlat_iff_extends]
+        exact h_env.left) h_compl.left
+    have h_sub_guarantees : FlatOperation.Guarantees env circuit.ops.toFlat := h_sub.2
+    have h_rest_guarantees := ih h_env.right h_compl.right
+    simp_all [circuit_norm]
+
+theorem can_replace_completeness_and_guarantees {env} {ops : Operations F} {n : ℕ}
+    (h : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ConstraintsHoldWithInteractions.Completeness env ops →
+    (ConstraintsHold env ops ∧ FlatOperation.Guarantees env ops.toFlat) := by
+  intro h_env h_compl
+  exact ⟨ can_replace_completeness h h_env h_compl,
+    can_replace_completeness_guarantees h h_env h_compl ⟩
 end Circuit
 
 namespace Circuit
