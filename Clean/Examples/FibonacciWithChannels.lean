@@ -574,9 +574,12 @@ def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableTyp
   channels := []
   Spec _ := True
 
--- weaker version of BalancedChannel that works with ensembles that aren't fully specified yet,
--- so we don't have information about the _full_ list of interaction but we can assume our interactions are
--- a sublist of some larger list which is balanced
+/--
+weaker version of BalancedChannels that works with ensembles that aren't fully specified yet,
+where we assume our interactions are a subset of some larger list which is balanced.
+
+designed to be used for proving soundness by adding one table after another.
+-/
 def PartialBalancedChannels (ens : Ensemble F PublicIO) {finished : List (RawChannel F)} (_ : finished.Subset ens.channels)
     (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
@@ -585,16 +588,29 @@ def PartialBalancedChannels (ens : Ensemble F PublicIO) {finished : List (RawCha
     ens.channels.Forall (fun channel =>
       BalancedInteractions (ens.interactions publicInput witness channel ++ channel.filter extraInteractions)) ∧
     -- for "finished" channels, we already _assume_ that requirements on future interactions hold unconditionally
-    -- (this restricts the order in which tables can be added)
+    -- (this restricts the order in which tables can be added;
+    --  and it's what gives us the final piece in the "all interactions satisfy requirements" statement we need to prove
+    --  the guarantees for the next added table)
     finished.Forall (fun channel =>
       (channel.filter extraInteractions).Forall fun (mult, message) =>
         channel.Requirements mult message witness.data)
+
+lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
+    {publicInput : PublicIO F} {witness : EnsembleWitness ens}
+    {finished : List (RawChannel F)} {h_finished : finished ⊆ ens.channels} :
+  ens.BalancedChannels publicInput witness →
+    ens.PartialBalancedChannels h_finished publicInput witness := by
+  intro balanced
+  simp only [PartialBalancedChannels, BalancedChannels, List.forall_iff_forall_mem] at *
+  use []
+  have (c : RawChannel F) : c.filter [] = [] := rfl
+  simpa [this] using balanced
 
 -- sound channels means that we can eliminate the Guarantees from each table, assuming constraints and a partial balance
 -- assumption
 -- this is basically what's needed for Soundness, together with per-table soundness implying global soundness
 def SoundChannels (ens : Ensemble F PublicIO) {finished : List (RawChannel F)}
-    (h_finished : finished.Subset ens.channels) : Prop :=
+    (h_finished : finished ⊆ ens.channels) : Prop :=
   ∀ witness publicInput,
     ens.PartialBalancedChannels h_finished publicInput witness →
     ens.Constraints witness →
@@ -606,7 +622,7 @@ partial balance + sound channels gives you the full soundness statement
 on each table without assuming guarantees
 -/
 lemma table_soundness_of_soundChannels {ens : Ensemble F PublicIO} (finished : List (RawChannel F))
-    (h_finished : finished.Subset ens.channels) :
+    (h_finished : finished ⊆ ens.channels) :
   ens.SoundChannels h_finished →
   ∀ witness publicInput,
     ens.PartialBalancedChannels h_finished publicInput witness →
@@ -645,20 +661,14 @@ def SpecConsistency (ens : Ensemble F PublicIO) : Prop :=
     ens.Spec publicInput
 
 theorem soundness_of_soundChannels_and_specConsistency (ens : Ensemble F PublicIO) :
-  (∃ (finished : List (RawChannel F)) (h_finished : finished.Subset ens.channels), ens.SoundChannels h_finished) →
+  (∃ (finished : List (RawChannel F)) (h_finished : finished ⊆ ens.channels), ens.SoundChannels h_finished) →
     ens.SpecConsistency →
     ens.Soundness := by
   simp only [Soundness, SoundChannels, SpecConsistency]
   rintro ⟨finished, h_finished, sound_channels⟩ spec_consistency witness publicInput balance constraints verifier_accepts
   have table_soundness := table_soundness_of_soundChannels finished h_finished sound_channels witness publicInput
-    ?partial_balance constraints verifier_accepts
+    (partialBalancedChannels_of_balancedChannels balance) constraints verifier_accepts
   apply spec_consistency publicInput witness <;> simp_all [List.forall_iff_forall_mem]
-  -- need to prove partial balanced channels from balanced channels
-  simp only [PartialBalancedChannels, BalancedChannels, List.forall_iff_forall_mem] at *
-  specialize sound_channels witness publicInput
-  use []
-  have (c : RawChannel F) : c.filter [] = [] := rfl
-  simpa [this] using balance
 
 end Ensemble
 end
