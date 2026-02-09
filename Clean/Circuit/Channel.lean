@@ -492,8 +492,8 @@ def GuaranteesSatisfied (channel : Channel F Message) (data : ProverData F) (ins
 A channel is consistent (parametrized by the global property) if
 - the requirements are satisfied on all the initial interactions
 - all requirements taken together for a given channel interactions length imply all guarantees
- -/
-def Consistent (channel : Channel F Message) (data : ProverData F) : Prop :=
+-/
+def Consistent' (channel : Channel F Message) (data : ProverData F) : Prop :=
   ∀ (ins : List (F × Message F)),
   GlobalProp initial (initial ++ ins) data →
     channel.RequirementsSatisfied data initial ∧
@@ -517,7 +517,7 @@ def LocalSoundness (channel : Channel F Message) (data : ProverData F) (localInt
   after making it work in a concrete example.
   -/
 def globalSoundness (channel : Channel F Message) (data : ProverData F) (ins : List (F × Message F)) :
-  channel.Consistent initial GlobalProp data →
+  channel.Consistent' initial GlobalProp data →
   channel.LocalSoundness LocalConstraints LocalSpec data ins →
   GlobalProp initial (initial ++ ins) data →
     -- guarantees actually hold
@@ -525,7 +525,7 @@ def globalSoundness (channel : Channel F Message) (data : ProverData F) (ins : L
     -- stronger local soundness
     (LocalConstraints ins data → LocalSpec ins data) := by
   intros h_consistent h_localSoundness h_globalProp
-  simp only [Consistent, LocalSoundness] at h_consistent h_localSoundness
+  simp only [Consistent', LocalSoundness] at h_consistent h_localSoundness
   specialize h_consistent ins h_globalProp
   -- it suffices to show that requirements hold
   suffices h_requirements : channel.RequirementsSatisfied data (initial ++ ins) by
