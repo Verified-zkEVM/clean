@@ -656,6 +656,11 @@ lemma table_soundness_of_soundChannels {ens : Ensemble F PublicIO} (finished : L
 /-- specs on all tables + verifier spec imply ensemble spec -/
 def SpecConsistency (ens : Ensemble F PublicIO) : Prop :=
   ∀ publicInput (witness : EnsembleWitness ens),
+    -- TODO maybe we could add balanced channels + channel reqs / grts here as well, to enable you to prove
+    -- something at the global level from the max interaction length, like we do below for fibonacci
+    -- where we prove the counter does not overflow.
+    -- but it's awkward that the public input is not clearly related to the channel, only via the verifier circuit.
+    -- which shows that "circuit" probably isn't the best way to model the verifier.
     (witness.tables.Forall fun table => table.Spec) →
     ens.VerifierSpec publicInput →
     ens.Spec publicInput
@@ -666,9 +671,32 @@ theorem soundness_of_soundChannels_and_specConsistency (ens : Ensemble F PublicI
     ens.Soundness := by
   simp only [Soundness, SoundChannels, SpecConsistency]
   rintro ⟨finished, h_finished, sound_channels⟩ spec_consistency witness publicInput balance constraints verifier_accepts
+  have partialBalance : ens.PartialBalancedChannels h_finished publicInput witness :=
+    partialBalancedChannels_of_balancedChannels balance
   have table_soundness := table_soundness_of_soundChannels finished h_finished sound_channels witness publicInput
-    (partialBalancedChannels_of_balancedChannels balance) constraints verifier_accepts
+    partialBalance constraints verifier_accepts
   apply spec_consistency publicInput witness <;> simp_all [List.forall_iff_forall_mem]
+end Ensemble
+
+/--
+we call a channel "consistent" if balancedness + requirements on all interacions
+imply guarantees on all interactions.
+
+this can be proved for individual channels without reference to any constraints,
+essentially just means that reqs and grts are reasonably related.
+-/
+def Channel.Consistent (channel : RawChannel F) : Prop :=
+  ∀ interactions (data : ProverData F), BalancedInteractions interactions →
+    (∀ i ∈ interactions, channel.Requirements i.1 i.2 data) →
+    (∀ i ∈ interactions, channel.Guarantees i.1 i.2 data)
+
+-- adding one table to a SoundChannels ensemble preserves SoundChannels under some
+-- easy-to-prove assumptions on what channels the new table uses
+
+namespace Ensemble
+def addTable (ens : Ensemble F PublicIO) (table : AbstractTable F) : Ensemble F PublicIO :=
+  { ens with tables := ens.tables ++ [table] }
+
 
 end Ensemble
 end
