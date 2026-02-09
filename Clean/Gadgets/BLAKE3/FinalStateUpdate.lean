@@ -82,11 +82,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
   dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
-  simp only [FormalCircuit.toSubcircuit, Circuit.operations, ElaboratedCircuit.main,
-    ElaboratedCircuit.localLength, Xor32.Assumptions,
+  simp only [Xor32.Assumptions,
     ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents, components, toComponents,
-    ProvableStruct.eval.go, getElem_eval_vector, h_input, Xor32.Spec, ElaboratedCircuit.output,
-    and_imp, Nat.add_zero, add_zero, and_true] at h_holds
+    ProvableStruct.eval.go, getElem_eval_vector, h_input, Xor32.Spec,
+    and_imp, add_zero, and_true] at h_holds
 
   ring_nf at h_holds
 

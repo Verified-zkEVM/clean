@@ -63,8 +63,8 @@ def circuit : FormalCircuit (F p) field field where
     circuit_proof_start
     cases h_env with
     | intro left right =>
-      simp only [left, ne_eq, id_eq, ite_not, mul_ite, mul_zero] at right
-      simp only [id_eq, right, left, ne_eq, ite_not, mul_ite, mul_zero, mul_eq_zero, true_and]
+      simp only [left, id_eq, ite_not, mul_ite, mul_zero] at right
+      simp only [id_eq, right, left, ite_not, mul_ite, mul_zero, mul_eq_zero, true_and]
       split_ifs <;> aesop
 
 end IsZero

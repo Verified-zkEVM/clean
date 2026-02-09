@@ -131,7 +131,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
 def traceInputs {N : ℕ} (trace : TraceOfLength F (ProvablePair State Input) N) : List (Input F) :=
   trace.val.toList.map Prod.snd
 
-omit [Field F] in
+omit [Field F] [DecidableEq F] in
 lemma traceInputs_length {N : ℕ} (trace : TraceOfLength F (ProvablePair State Input) N) :
     (traceInputs trace).length = N := by
   rw [traceInputs, List.length_map, trace.val.toList_length, trace.prop]

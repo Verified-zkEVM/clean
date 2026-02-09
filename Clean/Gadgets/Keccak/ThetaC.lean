@@ -34,7 +34,6 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
     apply Circuit.localAdds_mapFinRange
     intro i n
     simp [circuit_norm, Xor64.circuit]
-    repeat (first | rfl | constructor)
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 
 -- rewrite thetaC as a loop

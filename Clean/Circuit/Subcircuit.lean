@@ -6,6 +6,7 @@ variable {F : Type} [Field F] [DecidableEq F]
 namespace FlatOperation
 open Circuit (ConstraintsHold.Completeness ConstraintsHold)
 
+omit [DecidableEq F] in
 lemma constraintsHold_cons : ∀ {op : FlatOperation F}, ∀ {ops : List (FlatOperation F)}, ∀ {env : Environment F},
     ConstraintsHoldFlat env (op :: ops) ↔ ConstraintsHoldFlat env [op] ∧ ConstraintsHoldFlat env ops := by
   intro op ops env
@@ -15,6 +16,7 @@ lemma constraintsHold_cons : ∀ {op : FlatOperation F}, ∀ {ops : List (FlatOp
     split at h
     <;> simp_all only [ConstraintsHoldFlat, and_self])
 
+omit [DecidableEq F] in
 lemma constraintsHold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Environment F},
     ConstraintsHoldFlat env (a ++ b) ↔ ConstraintsHoldFlat env a ∧ ConstraintsHoldFlat env b := by
   intro a b env
@@ -33,6 +35,7 @@ lemma constraintsHold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Env
       exact constraintsHold_cons.mpr ⟨ h_op, h_rest ⟩
 end FlatOperation
 
+omit [DecidableEq F] in
 @[circuit_norm]
 lemma Operations.toNested_toFlat (ops : Operations F) {name : String} :
     (NestedOperations.nested ⟨ name, ops.toNested ⟩).toFlat = ops.toFlat := by
@@ -45,6 +48,7 @@ section
 open Circuit
 open FlatOperation (constraintsHold_cons constraintsHold_append)
 
+omit [DecidableEq F] in
 /--
 Consistency theorem which proves that flattened constraints are equivalent to the
 constraints created from the inductive `Operations` type, using flat constraints for subcircuits.
@@ -285,11 +289,13 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     requirements_iff := sorry
   }
 
+omit [DecidableEq F] in
 lemma FlatOperation.channelGuarantees_of_guarantees
   {env : Environment F} {ops : List (FlatOperation F)} {channel : RawChannel F} :
     FlatOperation.Guarantees env ops → FlatOperation.ChannelGuarantees channel env ops := by
   induction ops using FlatOperation.induct <;> simp_all [circuit_norm]
 
+omit [DecidableEq F] in
 lemma FlatOperation.channelGuarantees_toFlat_of_channelGuarantees
   {env : Environment F} {ops : Operations F} {channel : RawChannel F} :
     FlatOperation.ChannelGuarantees channel env ops.toFlat → ops.ChannelGuarantees channel env := by
