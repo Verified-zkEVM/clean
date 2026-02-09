@@ -499,6 +499,21 @@ noncomputable def verifierInteractions (ens : Ensemble F PublicIO) (channel : Ra
   let circuit := ens.verifier.main (const publicInput)
   (circuit.operations 0).interactionsWithChannel channel (emptyEnvironment F)
 
+def VerifierAccepts (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
+  let circuit := ens.verifier.main (const publicInput)
+  (circuit.operations 0).ConstraintsHold (emptyEnvironment F)
+
+def VerifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
+  let circuit := ens.verifier.main (const publicInput)
+  (circuit.operations 0).FullGuarantees (emptyEnvironment F)
+
+def VerifierRequirements (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
+  let circuit := ens.verifier.main (const publicInput)
+  (circuit.operations 0).FullRequirements (emptyEnvironment F)
+
+def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
+  ens.verifier.Spec publicInput () (emptyEnvironment F)
+
 def Constraints (ens : Ensemble F PublicIO) (witness : EnsembleWitness ens) : Prop :=
   witness.tables.Forall fun table => table.Constraints
 
@@ -522,10 +537,6 @@ def BalancedChannels (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (wit
   ens.channels.Forall fun channel =>
     BalancedInteractions (ens.interactions publicInput witness channel)
 
-def VerifierAccepts (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).ConstraintsHold (emptyEnvironment F)
-
 /--
 Soundness for an ensemble states that if
 - constraints hold on all tables and
@@ -535,8 +546,8 @@ then the spec holds
 -/
 def Soundness (F : Type) [Field F] [DecidableEq F] (ens : Ensemble F PublicIO) : Prop :=
   ∀ witness publicInput,
-    ens.Constraints witness →
     ens.BalancedChannels publicInput witness →
+    ens.Constraints witness →
     ens.VerifierAccepts publicInput →
     ens.Spec publicInput
 
@@ -568,9 +579,7 @@ def PartialBalancedChannel (ens : Ensemble F PublicIO) (publicInput : PublicIO F
     (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
   ∃ interactions,
     (ens.interactions publicInput witness channel).Sublist interactions ∧
-    interactions.length < ringChar F ∧
-    ∀ msg : Vector F channel.arity,
-      (interactions.filter (·.2 = msg) |>.map Prod.fst).sum = 0
+    BalancedInteractions interactions
 
 def PartialBalancedChannels (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   ens.channels.Forall fun channel => ens.PartialBalancedChannel publicInput witness channel
@@ -579,38 +588,65 @@ def PartialBalancedChannels (ens : Ensemble F PublicIO) (publicInput : PublicIO 
 -- this is basically what's needed for Soundness, together with per-table soundness implying global soundness
 def SoundChannels (ens : Ensemble F PublicIO) : Prop :=
   ∀ witness publicInput,
-  PartialBalancedChannels ens publicInput witness →
-  ens.Constraints witness →
-  witness.tables.Forall fun table => table.Guarantees
+    PartialBalancedChannels ens publicInput witness →
+    ens.Constraints witness →
+      (witness.tables.Forall fun table => table.Guarantees) ∧
+      ens.VerifierGuarantees publicInput
 
 /--
 partial balance + sound channels gives you the full soundness statement
 on each table without assuming guarantees
 -/
-lemma soundChannels_imply_soundness (ens : Ensemble F PublicIO) :
+lemma table_soundness_of_soundChannels (ens : Ensemble F PublicIO) :
   ens.SoundChannels →
   ∀ witness publicInput,
     ens.PartialBalancedChannels publicInput witness →
     -- assuming the constraints hold, the spec and the requirements hold as well
     ens.Constraints witness →
-    witness.tables.Forall fun table =>
-      table.Spec ∧ table.Requirements
-     := by
+    ens.VerifierAccepts publicInput →
+      (witness.tables.Forall fun table => table.Spec ∧ table.Requirements) ∧
+      (ens.VerifierSpec publicInput ∧ ens.VerifierRequirements publicInput) := by
   simp only [SoundChannels, Constraints]
-  intro sound_channels witness publicInput partial_balance constraints
+  intro sound_channels witness publicInput partial_balance constraints verifier_accepts
   simp only [List.forall_iff_forall_mem] at *
-  intro table h_mem_table
-  have guarantees := sound_channels witness publicInput partial_balance constraints table h_mem_table
-  clear sound_channels
-  specialize constraints table h_mem_table
-  simp only [TableWitness.Guarantees, TableWitness.Requirements, TableWitness.Spec, TableWitness.Constraints] at *
-  set env := table.environment
-  rcases table with ⟨ table, witness, data ⟩
-  simp only [List.forall_iff_forall_mem] at *
-  suffices (∀ row ∈ witness, table.Spec (env row) ∧ table.operations.FullRequirements (env row)) by
-    simp_all
-  intro row h_mem_row
-  exact AbstractTable.weakSoundness (constraints row h_mem_row) (guarantees row h_mem_row)
+  constructor
+  · intro table h_mem_table
+    have guarantees := (sound_channels witness publicInput partial_balance constraints).1 table h_mem_table
+    clear sound_channels
+    replace constraints := constraints table h_mem_table
+    simp only [TableWitness.Guarantees, TableWitness.Requirements, TableWitness.Spec, TableWitness.Constraints] at *
+    set env := table.environment
+    rcases table with ⟨ table, witness, data ⟩
+    simp only [List.forall_iff_forall_mem] at *
+    suffices (∀ row ∈ witness, table.Spec (env row) ∧ table.operations.FullRequirements (env row)) by
+      simp_all
+    intro row h_mem_row
+    exact AbstractTable.weakSoundness (constraints row h_mem_row) (guarantees row h_mem_row)
+  · apply ens.verifier.original_full_soundness
+    · apply ProvableType.eval_const
+    · rw [Circuit.constraintsHold_iff_forAll']
+      exact verifier_accepts
+    · exact (sound_channels _ _ partial_balance constraints).2
+
+/-- specs on all tables + verifier spec imply ensemble spec -/
+def SpecConsistency (ens : Ensemble F PublicIO) : Prop :=
+  ∀ publicInput (witness : EnsembleWitness ens),
+    (witness.tables.Forall fun table => table.Spec) →
+    ens.VerifierSpec publicInput →
+    ens.Spec publicInput
+
+theorem soundness_of_soundChannels_and_specConsistency (ens : Ensemble F PublicIO) :
+  ens.SoundChannels → ens.SpecConsistency → ens.Soundness := by
+  simp only [Soundness, SoundChannels, SpecConsistency]
+  intro sound_channels spec_consistency witness publicInput balance constraints verifier_accepts
+  have table_soundness := table_soundness_of_soundChannels ens sound_channels witness publicInput
+    ?partial_balance constraints verifier_accepts
+  apply spec_consistency publicInput witness <;> simp_all [List.forall_iff_forall_mem]
+  -- need to prove partial balanced channels from balanced channels
+  simp only [PartialBalancedChannels, PartialBalancedChannel, BalancedChannels, List.forall_iff_forall_mem] at *
+  intro channel h_mem_channel
+  use ens.interactions publicInput witness channel
+  simp_all
 
 end Ensemble
 end
@@ -1443,7 +1479,7 @@ lemma fib_push_pred
 
 theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble := by
   whnf
-  intro witness publicInput h_constraints h_balanced h_verifier
+  intro witness publicInput h_balanced h_constraints h_verifier
   clear h_verifier
   -- Selectively unfold: don't unfold h_balanced yet (we'll extract channels later)
   simp only [Ensemble.Constraints] at h_constraints
