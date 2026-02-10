@@ -685,7 +685,7 @@ imply guarantees on all interactions.
 this can be proved for individual channels without reference to any constraints,
 essentially just means that reqs and grts are reasonably related.
 -/
-def Channel.Consistent (channel : RawChannel F) : Prop :=
+def RawChannel.Consistent (channel : RawChannel F) : Prop :=
   ∀ interactions (data : ProverData F), BalancedInteractions interactions →
     (∀ i ∈ interactions, channel.Requirements i.1 i.2 data) →
     (∀ i ∈ interactions, channel.Guarantees i.1 i.2 data)
@@ -697,6 +697,21 @@ namespace Ensemble
 def addTable (ens : Ensemble F PublicIO) (table : AbstractTable F) : Ensemble F PublicIO :=
   { ens with tables := ens.tables ++ [table] }
 
+theorem soundChannels_addTable (ens : Ensemble F PublicIO)
+    -- given a sound channels ensemble with a list of finished, consistent channels
+    {finished : List (RawChannel F)} (h_finished : finished ⊆ ens.channels)
+    (h_sound : ens.SoundChannels h_finished)
+    (h_consistent : ∀ channel ∈ finished, channel.Consistent)
+    -- and given a new table
+    (table : AbstractTable F) :
+  -- assuming that the table's channelsWithGuarantees are all finished
+  (table.circuit.channelsWithGuarantees ⊆ finished) →
+  -- and that the table's channelsWithRequirements contain none of the finished ones
+  -- (so that we don't get new requirements to prove)
+  (∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
+  -- the ensemble with the new table also satisfies SoundChannels!
+    (ens.addTable table).SoundChannels h_finished := by
+  sorry
 
 end Ensemble
 end
