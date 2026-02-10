@@ -443,9 +443,17 @@ def Guarantees (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
     witness.abstract.operations.FullGuarantees (witness.environment row)
 
+def ChannelGuarantees (witness : TableWitness F) (channel : RawChannel F) : Prop :=
+  witness.table.Forall fun row =>
+    witness.abstract.operations.ChannelGuarantees channel (witness.environment row)
+
 def Requirements (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
     witness.abstract.operations.FullRequirements (witness.environment row)
+
+def ChannelRequirements (witness : TableWitness F) (channel : RawChannel F) : Prop :=
+  witness.table.Forall fun row =>
+    witness.abstract.operations.ChannelRequirements channel (witness.environment row)
 
 def Spec (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
@@ -697,6 +705,8 @@ namespace Ensemble
 def addTable (ens : Ensemble F PublicIO) (table : AbstractTable F) : Ensemble F PublicIO :=
   { ens with tables := ens.tables ++ [table] }
 
+-- TODO maybe should add consistency of finished channels to the SoundChannels definition
+
 theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     -- given a sound channels ensemble with a list of finished, consistent channels
     {finished : List (RawChannel F)} (h_finished : finished ⊆ ens.channels)
@@ -704,13 +714,64 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     (h_consistent : ∀ channel ∈ finished, channel.Consistent)
     -- and given a new table
     (table : AbstractTable F) :
-  -- assuming that the table's channelsWithGuarantees are all finished
-  (table.circuit.channelsWithGuarantees ⊆ finished) →
-  -- and that the table's channelsWithRequirements contain none of the finished ones
-  -- (so that we don't get new requirements to prove)
-  (∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
-  -- the ensemble with the new table also satisfies SoundChannels!
+    -- assuming that the table's channelsWithGuarantees are all finished
+    (table.circuit.channelsWithGuarantees ⊆ finished) →
+    -- and that the table's channelsWithRequirements contain none of the finished ones
+    -- (so that we don't get new requirements to prove)
+    (∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
+    -- the ensemble with the new table also satisfies SoundChannels!
     (ens.addTable table).SoundChannels h_finished := by
+  intro grts_subset_finished reqs_disjoint_finished witness publicInput partial_balance constraints
+  whnf at h_sound
+  -- simp only [PartialBalancedChannels] at *
+  -- we need to make use of soundness of the original ensemble; that'll give us most of the guarantees we need
+  -- witness is just our witness but without the new table
+  let witness' : EnsembleWitness ens := {
+    tables := witness.tables.dropLast,
+    data := witness.data,
+    same_length := by sorry,
+    same_circuits := by sorry,
+    same_prover_data := by sorry
+  }
+  specialize h_sound witness' publicInput
+  rcases partial_balance with ⟨ extraInteractions, balance_extra, reqs_extra ⟩
+  -- we instantiate partial balance by moving the new table's interactions to `extraInteractions`
+  have partial_balance' : ens.PartialBalancedChannels h_finished publicInput witness' := by
+    sorry
+  -- constraints for the smaller ensemble follow easily from the larger one
+  have constraints' : ens.Constraints witness' := by
+    sorry
+  specialize h_sound partial_balance' constraints'
+  let tableWitness := witness.tables.getLast (by sorry)
+  -- now we only need to prove guarantees for the last table!
+  suffices tableWitness.Guarantees by
+    sorry
+  -- we can restrict to finished channels because the table's channels with guarantees are all finished
+  suffices ∀ channel ∈ finished, tableWitness.ChannelGuarantees channel by
+    sorry
+  intro channel h_mem_finished
+  -- this easily follows from a much stronger statement: guarantees for hold on ALL finished channel interactions
+  let channelInteractions := (ens.addTable table).interactions publicInput witness channel
+      ++ channel.filter extraInteractions;
+  suffices channelInteractions.Forall fun (mult, message) =>
+      channel.Guarantees mult message witness.data by
+    sorry
+  -- since finished channels are consistent, this follows from requirements + balance
+  suffices channelInteractions.Forall fun (mult, message) =>
+      channel.Requirements mult message witness.data by
+    sorry
+  -- requirements for the new table follow from the assumption on its channelsWithRequirements
+  have new_requirements : tableWitness.ChannelRequirements channel := by
+    sorry
+  -- requirements for the old tables follows from soundness + constraints
+  have old_requirements : (ens.interactions publicInput witness' channel).Forall fun (mult, message) =>
+      channel.Requirements mult message witness.data := by
+    sorry
+  -- requirements for the extra interactions is part of the partial balance assumption
+  have extra_requirements : (channel.filter extraInteractions).Forall fun (mult, message) =>
+      channel.Requirements mult message witness.data := by
+    sorry
+  -- taken together, this concludes the proof
   sorry
 
 end Ensemble
