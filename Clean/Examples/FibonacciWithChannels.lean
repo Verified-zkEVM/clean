@@ -445,7 +445,7 @@ def Guarantees (witness : TableWitness F) : Prop :=
 
 def ChannelGuarantees (witness : TableWitness F) (channel : RawChannel F) : Prop :=
   witness.table.Forall fun row =>
-    witness.abstract.operations.ChannelGuarantees channel (witness.environment row)
+    witness.abstract.operations.FullChannelGuarantees channel (witness.environment row)
 
 def Requirements (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
@@ -453,7 +453,7 @@ def Requirements (witness : TableWitness F) : Prop :=
 
 def ChannelRequirements (witness : TableWitness F) (channel : RawChannel F) : Prop :=
   witness.table.Forall fun row =>
-    witness.abstract.operations.ChannelRequirements channel (witness.environment row)
+    witness.abstract.operations.FullChannelRequirements channel (witness.environment row)
 
 def Spec (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
@@ -462,6 +462,34 @@ def Spec (witness : TableWitness F) : Prop :=
 noncomputable def interactions (witness : TableWitness F) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
   witness.table.flatMap fun row =>
     witness.abstract.operations.interactionsWithChannel channel (witness.environment row)
+
+lemma guarantees_of_channelGuarantees
+    {finished : List (RawChannel F)}
+    (tableWitness : TableWitness F)
+    (h_subset : tableWitness.abstract.circuit.channelsWithGuarantees ⊆ finished)
+    (h_channels : ∀ channel ∈ finished, tableWitness.ChannelGuarantees channel) :
+    tableWitness.Guarantees := by
+  simp only [TableWitness.Guarantees, TableWitness.ChannelGuarantees, List.forall_iff_forall_mem] at h_channels ⊢
+  intro row h_row
+  let s := tableWitness.abstract.circuit.toSubcircuit (0 + size tableWitness.abstract.Input)
+    (varFromOffset tableWitness.abstract.Input 0)
+  have h_channels' :
+      s.channelsWithGuarantees.Forall
+        (fun ch => FlatOperation.ChannelGuarantees ch (tableWitness.environment row) s.ops.toFlat) := by
+    simp [s, List.forall_iff_forall_mem]
+    intro ch hch
+    have hfin : ch ∈ finished := h_subset (by simpa [s, circuit_norm] using hch)
+    have h_row_full :
+        tableWitness.abstract.operations.FullChannelGuarantees ch (tableWitness.environment row) :=
+      h_channels ch hfin row h_row
+    simpa [TableWitness.ChannelGuarantees, AbstractTable.operations,
+      FormalCircuitWithInteractions.instantiate, witnessAny, getOffset, s, circuit_norm]
+      using h_row_full
+  have hguar : FlatOperation.Guarantees (tableWitness.environment row) s.ops.toFlat :=
+    (s.guarantees_iff (env := tableWitness.environment row)).2 h_channels'
+  simpa [TableWitness.Guarantees, AbstractTable.operations,
+    FormalCircuitWithInteractions.instantiate, witnessAny, getOffset, s, circuit_norm]
+    using hguar
 end TableWitness
 
 def FormalCircuitWithInteractions.empty (F : Type) [Field F] [DecidableEq F]
@@ -819,18 +847,48 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     · simpa [Ensemble.VerifierGuarantees, Ensemble.addTable] using h_verifier
   -- we can restrict to finished channels because the table's channels with guarantees are all finished
   suffices ∀ channel ∈ finished, tableWitness.ChannelGuarantees channel by
-    sorry
+    have hlen : witness.tables.length = ens.tables.length + 1 := by
+      simpa [Ensemble.addTable, List.length_append] using witness.same_length.symm
+    have h_ne : witness.tables ≠ [] := by
+      intro hnil
+      have : 0 < witness.tables.length := by simpa [hlen]
+      simpa [hnil] using this
+    have h_last_idx_lt : ens.tables.length < witness.tables.length := by
+      simpa [hlen]
+    have h_last_eq : tableWitness = witness.tables[ens.tables.length]'h_last_idx_lt := by
+      dsimp [tableWitness]
+      have hlast : witness.tables.getLast h_ne = witness.tables[witness.tables.length - 1] := by
+        simpa using (List.getLast_eq_getElem (l := witness.tables) h_ne)
+      have hidx : witness.tables.length - 1 = ens.tables.length := by
+        simpa [hlen]
+      simpa [hidx] using hlast
+    have h_tw_abs : tableWitness.abstract = table := by
+      have h_idx_add : ens.tables.length < (ens.addTable table).tables.length := by
+        simpa [Ensemble.addTable, List.length_append] using Nat.lt_succ_self ens.tables.length
+      have hsc_last := witness.same_circuits ens.tables.length h_idx_add
+      have h_last_table : table = witness.tables[ens.tables.length].abstract := by
+        calc
+          table = (ens.addTable table).tables[ens.tables.length]'h_idx_add := by
+            simp [Ensemble.addTable, List.getElem_append_right]
+          _ = witness.tables[ens.tables.length].abstract := hsc_last
+      simpa [h_last_eq] using h_last_table.symm
+    have h_grts_subset_finished' :
+        tableWitness.abstract.circuit.channelsWithGuarantees ⊆ finished := by
+      intro ch hch
+      have hch' : ch ∈ table.circuit.channelsWithGuarantees := by
+        rw [← h_tw_abs]
+        exact hch
+      exact grts_subset_finished hch'
+    exact TableWitness.guarantees_of_channelGuarantees
+      (finished := finished) tableWitness h_grts_subset_finished' this
   intro channel h_mem_finished
   -- this easily follows from a much stronger statement: guarantees for hold on ALL finished channel interactions
   let channelInteractions := (ens.addTable table).interactions publicInput witness channel
       ++ channel.filter extraInteractions;
   suffices channelInteractions.Forall fun (mult, message) =>
       channel.Guarantees mult message witness.data by
-    simp [TableWitness.ChannelGuarantees, AbstractTable.operations,
-      FormalCircuitWithInteractions.instantiate, witnessAny, getOffset, circuit_norm]
-    induction tableWitness.table with
-    | nil => simp
-    | cons _ _ ih => simpa [ih]
+    simp only [TableWitness.ChannelGuarantees, circuit_norm]
+    sorry
   -- since finished channels are consistent, this follows from requirements + balance
   suffices channelInteractions.Forall fun (mult, message) =>
       channel.Requirements mult message witness.data by
@@ -846,11 +904,8 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     simpa [List.forall_iff_forall_mem] using h_grt_mem
   -- requirements for the new table follow from the assumption on its channelsWithRequirements
   have new_requirements : tableWitness.ChannelRequirements channel := by
-    simp [TableWitness.ChannelRequirements, AbstractTable.operations,
-      FormalCircuitWithInteractions.instantiate, witnessAny, getOffset, circuit_norm]
-    induction tableWitness.table with
-    | nil => simp
-    | cons _ _ ih => simpa [ih]
+    simp only [TableWitness.ChannelRequirements, circuit_norm]
+    sorry
   -- requirements for the old tables follows from soundness + constraints
   have old_requirements : (ens.interactions publicInput witness' channel).Forall fun (mult, message) =>
       channel.Requirements mult message witness.data := by

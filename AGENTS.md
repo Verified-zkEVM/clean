@@ -164,11 +164,12 @@ Practical recommendations:
   - do not use `simpa`, which is a closing tactic and will often fail. use `simp` and `simp_all`, which can advance the goal state without failing.
 - Definitional equality is a **superpower** to perform otherwise tricky unifications. The following tactics force Lean to look past definitions and elaborate as far as possible:
   - try `rfl` when the goal is an equality
-  - try `convert` when one of the assumptions has the same shape as the conclusion but differs in 1-2 places
+  - try `convert <assumption>` when one of the assumptions has the same shape as the conclusion but differs in 1-2 places
   - try `congr` when proving two sides of an equality that already have the same shape but differ in 1-2 places
-  - use `change <new type> (at <hypothesis>)` to rewrite a hypothesis or the goal into any form that is definitionally equal.
+  - use `change <new type> (at <assumption>)` to rewrite a hypothesis or the goal into any form that is definitionally equal.
 - Always fix failures first, by targeted changes to the relevant lines. When getting a tactic error from `lean_goal`, do not revert the entire (mostly working) proof block to `sorry`. Addressing the error concretely is more likely to move you forward. Treat errors as feedback for iterative proving, not as catastrophic.
 - If stuck, use `lean_multi_attempt` to quickly test candidate tactics.
+- If proof steps get complicated, move them into a local helper lemma. Make the lemma as general as possible and leave out hypotheses of the current proof likely not needed for that lemma. That reduces noise in the lemma's goal state and makes proving it easier.
 - In general, avoid non-lean-mcp commands like `lake build <file>` (full dependency rebuild) and `lake env lean <file>` (targeted check without rebuild). Their output is way too large. Use these commands only as a fallback to get maximum information when you feel lost.
 
 Check `doc/proving-guide.md` for more tips especially related to user-facing circuit formalization proofs.
