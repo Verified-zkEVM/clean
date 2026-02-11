@@ -127,7 +127,6 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 ## Conventions
 
 - Use `F p` for field type where `p` is prime
-- Use `Var α F` for circuit variables of type `α`
 - Specs are pure Lean propositions relating inputs to outputs
 - Assumptions capture preconditions (e.g., value ranges)
 - Follow Mathlib naming conventions
@@ -156,14 +155,13 @@ When writing or debugging Lean proofs, the **lean-mcp skill** in `skills/lean-mc
 
 Practical recommendations:
 
-1. Reproduce with a targeted check first:
-   - `lake env lean Clean/Path/To/File.lean`
-   - or `lake build Clean/Path/To/File.lean` when dependent modules need to be rebuilt
-   - avoid full `lake build` unless you need whole-repo confirmation.
-2. Inspect exact goal state with `lean_goal` at the failing line.
-3. Prefer robust simplification, and use the library's custom `circuit_norm` simp set.
-   - start with `simp_all only [circuit_norm]` (or `simp_all [circuit_norm]` when closing a goal),
-   - avoid brittle `exact h.1.2` style proofs unless the shape is stable.
-4. If stuck, use `lean_multi_attempt` to quickly test candidate tactics.
+- To get an overview of failing steps and sorries, run `lake build Clean/Path/To/File.lean` (full dependency rebuild) or
+  `lake env lean Clean/Path/To/File.lean` (cheaper) ONCE. Do NOT run these commands frequently, since their output is large.
+- After finding out where the gaps are, work on **one at a time**, not all at once.
+- When iterating on a proof gap, inspect exact goal state with `lean_goal` (lean-mcp skill) at the relevant line number.
+- Prefer robust simplification, and use the library's custom `circuit_norm` simp set.
+  - start with `simp_all only [circuit_norm]` (or `simp_all [circuit_norm]` when closing a goal),
+  - avoid brittle `exact h.1.2` style proofs unless the shape is stable.
+- If stuck, use `lean_multi_attempt` to quickly test candidate tactics.
 
 Check `doc/proving-guide.md` for more tips especially related to user-facing circuit formalization proofs.
