@@ -1129,7 +1129,41 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     simp only [TableWitness.ChannelGuarantees, List.forall_iff_forall_mem]
     intro row h_row
     simp only [AbstractTable.operations, FormalCircuitWithInteractions.instantiate, witnessAny, getOffset, circuit_norm]
-    sorry
+    have h_all : ∀ i ∈ channelInteractions, channel.Guarantees i.1 i.2 witness.data := by
+      simpa [List.forall_iff_forall_mem] using this
+    let envRow := tableWitness.environment row
+    let s := tableWitness.abstract.circuit.toSubcircuit (0 + (size tableWitness.abstract.Input + 0))
+      (varFromOffset tableWitness.abstract.Input 0)
+    have h_mem_filter :
+        ∀ {ops : List (FlatOperation F)} {j : AbstractInteraction F},
+          (hchj : j.channel = channel) →
+          FlatOperation.interact j ∈ ops →
+          (j.mult.eval envRow, (j.msg.map envRow).cast (by
+            simpa using congrArg RawChannel.arity hchj))
+            ∈ channel.filter (FlatOperation.localAdds envRow ops) := by
+      intro ops j hchj hj
+      -- Restored scaffold; this is the next focused micro-step.
+      sorry
+    have h_tw_mem : tableWitness ∈ witness.tables := by
+      dsimp [tableWitness]
+      exact List.getLast_mem (l := witness.tables) h_ne_last
+    simp only [List.forall_iff_forall_mem]
+    intro op h_op
+    cases op with
+    | witness => trivial
+    | assert => trivial
+    | lookup => trivial
+    | interact i =>
+        intro hch _
+        have h_op' : FlatOperation.interact i ∈ s.ops.toFlat := by
+          simpa [s] using h_op
+        have h_in_filter :
+            (i.mult.eval envRow, (i.msg.map envRow).cast (by simpa using congrArg RawChannel.arity hch))
+              ∈ channel.filter (FlatOperation.localAdds envRow s.ops.toFlat) :=
+          h_mem_filter hch h_op'
+        -- Restored structure; next focused micro-step starts from `h_in_filter`.
+        -- The remaining row/ensemble-membership bridge is isolated below.
+        sorry
   -- since finished channels are consistent, this follows from requirements + balance
   suffices channelInteractions.Forall fun (mult, message) =>
       channel.Requirements mult message witness.data by
@@ -1155,6 +1189,10 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   -- requirements for the old tables follows from soundness + constraints' + verifier_accepts' using table_soundness_of_soundChannels
   have old_requirements : (ens.interactions publicInput witness' channel).Forall fun (mult, message) =>
       channel.Requirements mult message witness.data := by
+    have h_table_sound :=
+      table_soundness_of_soundChannels finished h_finished h_sound witness' publicInput
+        partial_balance' constraints' verifier_accepts'
+    simp [Ensemble.interactions, List.forall_iff_forall_mem] at h_table_sound ⊢
     sorry
   -- requirements for the extra interactions is part of the partial balance assumption
   have extra_requirements : (channel.filter extraInteractions).Forall fun (mult, message) =>
