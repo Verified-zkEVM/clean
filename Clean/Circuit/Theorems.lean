@@ -850,4 +850,51 @@ theorem FormalCircuitWithInteractions.requirements_of_not_mem
   apply Operations.requirements_of_not_mem
   apply circuit.in_channels_or_requirements_full
   assumption
+
+omit [DecidableEq F] in
+theorem Operations.guarantees_iff (ops : Operations F)
+  (channels : List (RawChannel F)) (env : Environment F) :
+    ops.InChannelsOrGuaranteesFull channels env →
+    (ops.FullGuarantees env ↔
+      ∀ channel ∈ channels, ops.FullChannelGuarantees channel env) := by
+  intro h_in_or_reqs
+  induction ops using Operations.induct with
+  | empty => simp [circuit_norm]
+  | witness | assert | lookup =>
+    simp_all [Operations.InChannelsOrGuaranteesFull, circuit_norm]
+  | interact i ops ih =>
+    simp_all only [Operations.InChannelsOrGuaranteesFull, circuit_norm]
+    rcases h_in_or_reqs with ⟨ h_mem | h_requirements, _ ⟩
+    · constructor
+      · simp_all
+      · simp_all only [implies_true, and_true]
+        rintro h_guarantees
+        specialize h_guarantees i.channel h_mem
+        simp_all
+    · simp_all
+  | subcircuit s ops ih =>
+    simp_all only [Operations.InChannelsOrGuaranteesFull, circuit_norm]
+    rcases h_in_or_reqs with ⟨ h_in_or_reqs, h_dead ⟩
+    generalize s.ops.toFlat = sub_ops at *
+    constructor <;> simp_all only [and_true, and_imp]
+    · induction sub_ops using FlatOperation.induct <;> (
+      simp_all only [circuit_norm, List.Forall, List.forall_cons, FlatOperation.InChannelsOrGuarantees]
+      try tauto)
+    · induction sub_ops using FlatOperation.induct <;> (
+      simp_all only [circuit_norm, List.Forall, List.forall_cons, FlatOperation.InChannelsOrGuarantees]
+      try tauto)
+      rcases h_in_or_reqs with ⟨ h_mem | h_requirements, _ ⟩
+      · rename_i i ops _
+        rintro h_guarantees
+        specialize h_guarantees i.channel h_mem
+        simp_all
+      · simp_all
+
+theorem FormalCircuitWithInteractions.guarantees_iff'
+  (circuit : FormalCircuitWithInteractions F Input Output) (input_var : Var Input F) (n : ℕ) (env : Environment F) :
+    let ops := circuit.main input_var |>.operations n;
+    ops.FullGuarantees env ↔
+      ∀ channel ∈ circuit.channelsWithGuarantees, ops.FullChannelGuarantees channel env := by
+  apply Operations.guarantees_iff
+  apply circuit.in_channels_or_guarantees_full
 end
