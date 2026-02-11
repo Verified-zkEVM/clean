@@ -702,6 +702,9 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
       exact h_env i (by linarith)
 end FlatOperation
 
+section
+variable {F : Type} {Input Output : TypeMap} [Field F] [DecidableEq F] [ProvableType Output] [ProvableType Input]
+
 -- theorem about relationship between FormalCircuit and GeneralFormalCircuit
 
 /--
@@ -709,7 +712,7 @@ end FlatOperation
 `FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
-def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F] [ProvableType Output] [ProvableType Input]
+def FormalCircuit.isGeneralFormalCircuit
     (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
   let Spec input output := orig.Assumptions input → orig.Spec input output
   exact {
@@ -732,7 +735,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Fi
 `FormalAssertion`.  The idea is to make `FormalAssertion.Spec` available in the completeness
 by putting it within `GeneralFormalCircuit.Assumption`.
 -/
-def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F] [DecidableEq F] [ProvableType Input]
+def FormalAssertion.isGeneralFormalCircuit
     (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit := by
   let Spec input (_ : Unit) := orig.Assumptions input → orig.Spec input
   exact {
@@ -749,3 +752,102 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
       rintro _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }
+
+-- theorems that strengthen `guarantees_iff` and `requirements_iff` on formal circuits
+
+namespace FormalCircuitWithInteractions
+theorem in_channels_or_guarantees_full
+  (circuit : FormalCircuitWithInteractions F Input Output)
+  (input_var : Var Input F) (n : ℕ) (env : Environment F) :
+    circuit.main input_var |>.operations n
+    |>.InChannelsOrGuaranteesFull circuit.channelsWithGuarantees env := by
+  have h_goal := circuit.guarantees_iff input_var n env
+  simp only at h_goal ⊢
+  generalize circuit.channelsWithGuarantees = channels at *
+  generalize (circuit.main input_var).operations n = ops at *
+  obtain ⟨ h_sublist, h_guarantees_iff ⟩ := h_goal
+  simp only [Operations.InChannelsOrGuaranteesFull, Operations.InChannelsOrGuarantees] at *
+  induction ops using Operations.induct with
+  | empty | witness | assert | lookup | interact => simp_all [circuit_norm]
+  | subcircuit s ops ih =>
+    simp_all only [circuit_norm, List.append_subset]
+    have h_guarantees_iff := s.guarantees_iff env
+    simp_all only [FlatOperation.InChannelsOrGuarantees, FlatOperation.forAllNoOffset,
+        List.forall_iff_forall_mem]
+    intro ops h_mem_ops
+    specialize h_guarantees_iff ops h_mem_ops
+    cases ops <;> simp_all only
+    rcases h_guarantees_iff with h_mem | h_guarantees
+    · left; exact h_sublist.1 h_mem
+    · right; exact h_guarantees
+
+theorem in_channels_or_requirements_full
+  (circuit : FormalCircuitWithInteractions F Input Output)
+  (input_var : Var Input F) (n : ℕ) (env : Environment F) :
+    circuit.main input_var |>.operations n
+    |>.InChannelsOrRequirementsFull circuit.channelsWithRequirements env := by
+  have h_goal := circuit.requirements_iff input_var n env
+  simp only at h_goal ⊢
+  generalize circuit.channelsWithRequirements = channels at *
+  generalize (circuit.main input_var).operations n = ops at *
+  obtain ⟨ h_sublist, h_requirements_iff ⟩ := h_goal
+  simp only [Operations.InChannelsOrRequirementsFull, Operations.InChannelsOrRequirements] at *
+  induction ops using Operations.induct with
+  | empty | witness | assert | lookup | interact => simp_all [circuit_norm]
+  | subcircuit s ops ih =>
+    simp_all only [circuit_norm, List.append_subset]
+    have h_requirements_iff := s.requirements_iff env
+    simp_all only [FlatOperation.InChannelsOrRequirements, FlatOperation.forAllNoOffset,
+        List.forall_iff_forall_mem]
+    intro ops h_mem_ops
+    specialize h_requirements_iff ops h_mem_ops
+    cases ops <;> simp_all only
+    rcases h_requirements_iff with h_mem | h_requirements
+    · left; exact h_sublist.1 h_mem
+    · right; exact h_requirements
+end FormalCircuitWithInteractions
+
+omit [DecidableEq F] in
+theorem Operations.requirements_of_not_mem (ops : Operations F)
+  (channels : List (RawChannel F)) (env : Environment F) :
+    ops.InChannelsOrRequirementsFull channels env →
+    ∀ channel, channel ∉ channels →
+      ops.FullChannelRequirements channel env := by
+  intro h_in_or_reqs channel h_not_mem
+  induction ops using Operations.induct with
+  | empty => simp [circuit_norm]
+  | witness | assert | lookup =>
+    simp_all [Operations.InChannelsOrRequirementsFull, Operations.FullChannelRequirements, circuit_norm]
+  | interact i ops ih =>
+    simp_all only [Operations.InChannelsOrRequirementsFull, Operations.FullChannelRequirements, circuit_norm]
+    rcases h_in_or_reqs with ⟨ h_mem | h_requirements, _ ⟩
+    · suffices i.channel ≠ channel by simp_all
+      rintro rfl
+      contradiction
+    · simp_all
+  | subcircuit s ops ih =>
+    simp_all only [InChannelsOrRequirementsFull, FlatOperation.InChannelsOrRequirements,
+      FullChannelRequirements, FlatOperation.ChannelRequirements, forAllNoOffset, and_true,
+      forall_const]
+    rcases h_in_or_reqs with ⟨ h_in_or_reqs, h_dead ⟩
+    clear h_dead
+    generalize s.ops.toFlat = sub_ops at *
+    induction sub_ops using FlatOperation.induct <;>
+      simp_all only [circuit_norm, List.Forall, List.forall_cons]
+    rename_i i ops
+    rcases h_in_or_reqs with ⟨ h_mem | h_requirements, _ ⟩
+    · suffices i.channel ≠ channel by simp_all
+      rintro rfl
+      contradiction
+    · simp_all
+
+theorem FormalCircuitWithInteractions.requirements_of_not_mem
+  (circuit : FormalCircuitWithInteractions F Input Output) (channel : RawChannel F)
+  (input_var : Var Input F) (n : ℕ) (env : Environment F)
+  (h_not_mem : channel ∉ circuit.channelsWithRequirements) :
+    circuit.main input_var |>.operations n
+    |>.FullChannelRequirements channel env := by
+  apply Operations.requirements_of_not_mem
+  apply circuit.in_channels_or_requirements_full
+  assumption
+end

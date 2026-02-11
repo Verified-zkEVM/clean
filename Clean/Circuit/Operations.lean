@@ -122,6 +122,14 @@ def ChannelGuarantees (channel : RawChannel F) (env : Environment F) : List (Fla
 def ChannelRequirements (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
   forAllNoOffset { interact i := i.channel = channel → i.Requirements env }
 
+def InChannelsOrGuarantees (channels : List (RawChannel F)) (env : Environment F) :
+    List (FlatOperation F) → Prop :=
+  forAllNoOffset { interact i := i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env) }
+
+def InChannelsOrRequirements (channels : List (RawChannel F)) (env : Environment F) :
+    List (FlatOperation F) → Prop :=
+  forAllNoOffset { interact i := i.channel ∈ channels ∨ i.Requirements env }
+
 @[circuit_norm]
 def localAdds (env : Environment F) : List (FlatOperation F) → InteractionDelta F
   | [] => 0
@@ -186,13 +194,9 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
 
   -- TODO maybe we don't need that, if we have a lawfulness property separately
   guarantees_iff : ∀ env,
-    Guarantees env ops.toFlat ↔
-    channelsWithGuarantees.Forall fun channel =>
-      ChannelGuarantees channel env ops.toFlat
+    InChannelsOrGuarantees channelsWithGuarantees env ops.toFlat
   requirements_iff : ∀ env,
-    Requirements env ops.toFlat ↔
-    channelsWithRequirements.Forall fun channel =>
-      ChannelRequirements channel env ops.toFlat
+    InChannelsOrRequirements channelsWithRequirements env ops.toFlat
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
@@ -665,6 +669,30 @@ def FullChannelRequirements {F : Type} [Field F] (channel : RawChannel F)  (env 
   ops.forAllNoOffset {
     interact i := i.channel = channel → i.Requirements env
     subcircuit s := FlatOperation.ChannelRequirements channel env s.ops.toFlat
+  }
+
+@[circuit_norm]
+def InChannelsOrGuarantees {F : Type} [Field F] (channels : List (RawChannel F)) (env : Environment F)
+    (ops : Operations F) : Prop :=
+  ops.forAllNoOffset { interact i := i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env) }
+
+def InChannelsOrGuaranteesFull {F : Type} [Field F] (channels : List (RawChannel F)) (env : Environment F)
+    (ops : Operations F) : Prop :=
+  ops.forAllNoOffset {
+    interact i := i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env)
+    subcircuit s := FlatOperation.InChannelsOrGuarantees channels env s.ops.toFlat
+  }
+
+@[circuit_norm]
+def InChannelsOrRequirements {F : Type} [Field F] (channels : List (RawChannel F)) (env : Environment F)
+    (ops : Operations F) : Prop :=
+  ops.forAllNoOffset { interact i := i.channel ∈ channels ∨ i.Requirements env }
+
+def InChannelsOrRequirementsFull {F : Type} [Field F] (channels : List (RawChannel F)) (env : Environment F)
+    (ops : Operations F) : Prop :=
+  ops.forAllNoOffset {
+    interact i := i.channel ∈ channels ∨ i.Requirements env
+    subcircuit s := FlatOperation.InChannelsOrRequirements channels env s.ops.toFlat
   }
 end Operations
 

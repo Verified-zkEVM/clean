@@ -468,7 +468,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   guarantees_iff : ∀ input_var offset env,
     let ops := (elaborated.main input_var).operations offset
     ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
-    (ops.Guarantees env ↔ channelsWithGuarantees.Forall (ops.ChannelGuarantees · env))
+    ops.InChannelsOrGuarantees channelsWithGuarantees env
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
     := by
       simp only [circuit_norm, seval]
@@ -478,7 +478,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   requirements_iff : ∀ input_var offset env,
     let ops := (elaborated.main input_var).operations offset
     ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-    (ops.Requirements env ↔ channelsWithRequirements.Forall (ops.ChannelRequirements · env))
+    ops.InChannelsOrRequirements channelsWithRequirements env
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
     := by
       simp only [circuit_norm, seval]
@@ -618,6 +618,7 @@ end Circuit
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies implies_true forall_const gt_iff_lt
   not_true_eq_false ne_eq false_implies and_false false_and
+  and_self or_self or_true or_false true_or false_or
   Bool.false_eq_true Bool.true_eq_false
 
 /-
@@ -667,6 +668,7 @@ attribute [circuit_norm] List.append_nil
 
 attribute [circuit_norm] List.nil_subset List.subset_cons_of_subset List.Subset.refl
 attribute [circuit_norm] List.Forall List.flatten_cons List.flatten_nil List.Sublist.refl
+attribute [circuit_norm] List.mem_cons List.mem_nil_iff
 
 @[circuit_norm]
 lemma List.ofFn_singleton_flatten {α : Type} {m : ℕ} (f : Fin m → α) :

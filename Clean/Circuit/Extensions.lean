@@ -18,6 +18,7 @@ def toVar : Expression F → Circuit F (Variable F)
 -- these could be used if you want to witness _any_ value and don't care which
 -- (typically useless, because in completeness proofs you will often have to prove some assumption about the value)
 
+@[circuit_norm]
 def getOffset : Circuit F ℕ := fun n => (n, [])
 
 def valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
