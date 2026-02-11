@@ -1029,6 +1029,38 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
       rw [← witness.same_length]
       simp [Ensemble.addTable, List.length_append]
     exact List.ne_nil_of_length_pos hlen)
+  have hlen_last : witness.tables.length = ens.tables.length + 1 := by
+    simpa [Ensemble.addTable, List.length_append] using witness.same_length.symm
+  have h_ne_last : witness.tables ≠ [] := by
+    intro hnil
+    have : 0 < witness.tables.length := by simpa [hlen_last]
+    simpa [hnil] using this
+  have h_last_idx_lt : ens.tables.length < witness.tables.length := by
+    simpa [hlen_last]
+  have h_last_eq : tableWitness = witness.tables[ens.tables.length]'h_last_idx_lt := by
+    dsimp [tableWitness]
+    have hlast : witness.tables.getLast h_ne_last = witness.tables[witness.tables.length - 1] := by
+      simpa using (List.getLast_eq_getElem (l := witness.tables) h_ne_last)
+    have hidx : witness.tables.length - 1 = ens.tables.length := by
+      simpa [hlen_last]
+    simpa [hidx] using hlast
+  have h_tw_abs_global : tableWitness.abstract = table := by
+    have h_idx_add : ens.tables.length < (ens.addTable table).tables.length := by
+      simpa [Ensemble.addTable, List.length_append] using Nat.lt_succ_self ens.tables.length
+    have hsc_last := witness.same_circuits ens.tables.length h_idx_add
+    have h_last_table : table = witness.tables[ens.tables.length].abstract := by
+      calc
+        table = (ens.addTable table).tables[ens.tables.length]'h_idx_add := by
+          simp [Ensemble.addTable, List.getElem_append_right]
+        _ = witness.tables[ens.tables.length].abstract := hsc_last
+    simpa [h_last_eq] using h_last_table.symm
+  have h_tw_data_global : tableWitness.data = witness.data := by
+    have h_idx_add : ens.tables.length < (ens.addTable table).tables.length := by
+      simpa [Ensemble.addTable, List.length_append] using Nat.lt_succ_self ens.tables.length
+    calc
+      tableWitness.data = (witness.tables[ens.tables.length]'h_last_idx_lt).data := by
+        simpa using congrArg TableWitness.data h_last_eq
+      _ = witness.data := witness.same_prover_data ens.tables.length h_idx_add
   -- now we only need to prove guarantees for the last table!
   suffices tableWitness.Guarantees by
     rcases h_sound' with ⟨ h_old, h_verifier ⟩
@@ -1113,8 +1145,13 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     simpa [List.forall_iff_forall_mem] using h_grt_mem
   -- requirements for the new table follow from the assumption on its channelsWithRequirements
   have new_requirements : tableWitness.ChannelRequirements channel := by
-    simp only [TableWitness.ChannelRequirements, circuit_norm]
-    sorry
+    have h_not_req : channel ∉ tableWitness.abstract.circuit.channelsWithRequirements := by
+      intro h_mem_req
+      have h_mem_req_table : channel ∈ table.circuit.channelsWithRequirements := by
+        rw [← h_tw_abs_global]
+        exact h_mem_req
+      exact (reqs_disjoint_finished channel h_mem_finished) h_mem_req_table
+    exact tableWitness.requirements_of_not_mem h_not_req
   -- requirements for the old tables follows from soundness + constraints' + verifier_accepts' using table_soundness_of_soundChannels
   have old_requirements : (ens.interactions publicInput witness' channel).Forall fun (mult, message) =>
       channel.Requirements mult message witness.data := by
