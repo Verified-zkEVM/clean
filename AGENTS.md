@@ -155,13 +155,20 @@ When writing or debugging Lean proofs, the **lean-mcp skill** in `skills/lean-mc
 
 Practical recommendations:
 
-- To get an overview of failing steps and sorries, run `lake build Clean/Path/To/File.lean` (full dependency rebuild) or
-  `lake env lean Clean/Path/To/File.lean` (cheaper) ONCE. Do NOT run these commands frequently, since their output is large.
-- After finding out where the gaps are, work on **one at a time**, not all at once.
-- When iterating on a proof gap, inspect exact goal state with `lean_goal` (lean-mcp skill) at the relevant line number.
+- To get an overview of failing steps and sorries, use the `lean_diagnostic_messages` command.
+- After finding out where the holes are, work on **one at a time**, not all at once.
+- When iterating on a proof hole, inspect exact goal state with `lean_goal` (lean-mcp skill) at the relevant line number.
 - Prefer robust simplification, and use the library's custom `circuit_norm` simp set.
   - start with `simp_all only [circuit_norm]` (or `simp_all [circuit_norm]` when closing a goal),
-  - avoid brittle `exact h.1.2` style proofs unless the shape is stable.
+  - avoid brittle `exact h.1.2` style proofs unless the shape is stable. `simp_all` can do the same work of using the right assumptions, in a more robust way.
+  - do not use `simpa`, which is a closing tactic and will often fail. use `simp` and `simp_all`, which can advance the goal state without failing.
+- Definitional equality is a **superpower** to perform otherwise tricky unifications. The following tactics force Lean to look past definitions and elaborate as far as possible:
+  - try `rfl` when the goal is an equality
+  - try `convert` when one of the assumptions has the same shape as the conclusion but differs in 1-2 places
+  - try `congr` when proving two sides of an equality that already have the same shape but differ in 1-2 places
+  - use `change <new type> (at <hypothesis>)` to rewrite a hypothesis or the goal into any form that is definitionally equal.
+- Always fix failures first, by targeted changes to the relevant lines. When getting a tactic error from `lean_goal`, do not revert the entire (mostly working) proof block to `sorry`. Addressing the error concretely is more likely to move you forward. Treat errors as feedback for iterative proving, not as catastrophic.
 - If stuck, use `lean_multi_attempt` to quickly test candidate tactics.
+- In general, avoid non-lean-mcp commands like `lake build <file>` (full dependency rebuild) and `lake env lean <file>` (targeted check without rebuild). Their output is way too large. Use these commands only as a fallback to get maximum information when you feel lost.
 
 Check `doc/proving-guide.md` for more tips especially related to user-facing circuit formalization proofs.
