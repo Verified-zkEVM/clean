@@ -250,6 +250,23 @@ lemma localWitnesses_toFlat {ops : Operations F} {env} :
     rw [←ih]
     try rw [localWitnesses_append]
     try simp only [localLength, localWitnesses, Vector.toArray_append, Subcircuit.witnesses, Vector.toArray_cast]
+
+lemma localAdds_append {a b: List (FlatOperation F)} {env} :
+    localAdds env (a ++ b) = localAdds env a ++ localAdds env b := by
+  induction a using FlatOperation.localLength.induct <;>
+    simp_all only [circuit_norm]
+
+lemma localAdds_toFlat {ops : Operations F} {env} :
+  localAdds env ops.toFlat = ops.localAdds env := by
+  induction ops using Operations.induct with
+  | empty => trivial
+  | witness | assert | lookup =>
+    simp_all only [circuit_norm, Operations.toFlat]
+  | interact =>
+    simp_all only [circuit_norm, Operations.toFlat]
+    rfl
+  | subcircuit s ops ih =>
+    simp_all only [circuit_norm, Operations.toFlat, localAdds_append, s.localAdds_eq]
 end FlatOperation
 
 namespace Environment

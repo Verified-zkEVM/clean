@@ -151,6 +151,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
     guarantees_iff := sorry
     requirements_iff := sorry
+    localAdds_eq := by sorry
   }
 
 /--
@@ -221,6 +222,7 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
 
     guarantees_iff := sorry
     requirements_iff := sorry
+    localAdds_eq := by sorry
   }
 
 /--
@@ -287,6 +289,7 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
 
     guarantees_iff := sorry
     requirements_iff := sorry
+    localAdds_eq := by sorry
   }
 
 omit [DecidableEq F] in
@@ -362,6 +365,13 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
+    localAdds_eq := by
+      intro env
+      rw [ops.toNested_toFlat, FlatOperation.localAdds_toFlat]
+      -- TODO we need to switch from exact equality to .toFinsupp equality here,
+      -- or in the other direction in circuit.localAdds_eq
+      -- rw [← circuit.localAdds_eq]
+      sorry
 
     channelsWithGuarantees := circuit.channelsWithGuarantees
     channelsWithRequirements := circuit.channelsWithRequirements

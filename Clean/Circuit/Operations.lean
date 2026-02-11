@@ -121,6 +121,14 @@ def ChannelGuarantees (channel : RawChannel F) (env : Environment F) : List (Fla
 @[circuit_norm]
 def ChannelRequirements (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
   forAllNoOffset { interact i := i.channel = channel → i.Requirements env }
+
+@[circuit_norm]
+def localAdds (env : Environment F) : List (FlatOperation F) → InteractionDelta F
+  | [] => 0
+  | .witness _ _ :: ops => localAdds env ops
+  | .assert _ :: ops => localAdds env ops
+  | .lookup _ :: ops => localAdds env ops
+  | .interact i :: ops => i.eval env :: localAdds env ops
 end FlatOperation
 
 export FlatOperation (ConstraintsHoldFlat)
@@ -169,6 +177,9 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops.toFlat
 
+  -- `localAdds` must be consistent with the operations
+  localAdds_eq : ∀ env, localAdds env = FlatOperation.localAdds env ops.toFlat
+
     -- expose the channel guarantees and requirements, for end-to-end proofs
   channelsWithGuarantees : List (RawChannel F) := []
   channelsWithRequirements : List (RawChannel F) := []
@@ -186,18 +197,6 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
   (FlatOperation.localWitnesses env sc.ops.toFlat).cast sc.localLength_eq.symm
-
-@[circuit_norm]
-def Subcircuit.actuallocalAdds (sc : Subcircuit F n) (env : Environment F) : RawInteractions F :=
-  actuallocalAdds' env sc.ops.toFlat
-where
-  @[circuit_norm]
-  actuallocalAdds' : Environment F → List (FlatOperation F) → RawInteractions F
-    | _, [] => []
-    | env, .witness _ _ :: ops => actuallocalAdds' env ops
-    | env, .assert _ :: ops => actuallocalAdds' env ops
-    | env, .lookup _ :: ops => actuallocalAdds' env ops
-    | env, .interact i :: ops => i.eval env :: actuallocalAdds' env ops
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
