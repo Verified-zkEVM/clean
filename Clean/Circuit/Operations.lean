@@ -49,6 +49,8 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
     | interact _ => ConstraintsHoldFlat eval ops
     | _ => ConstraintsHoldFlat eval ops
 
+-- extracting individual types of operations
+
 @[circuit_norm]
 def localLength : List (FlatOperation F) → ℕ
   | [] => 0
@@ -60,6 +62,21 @@ def localWitnesses (env : Environment F) : (l : List (FlatOperation F)) → Vect
   | [] => #v[]
   | witness _ compute :: ops => compute env ++ localWitnesses env ops
   | assert _ :: ops | lookup _ :: ops | interact _ :: ops => localWitnesses env ops
+
+def constraints : List (FlatOperation F) → List (Expression F)
+  | [] => []
+  | assert e :: ops => e :: constraints ops
+  | witness _ _ :: ops | lookup _ :: ops | interact _ :: ops => constraints ops
+
+def lookups : List (FlatOperation F) → List (Lookup F)
+  | [] => []
+  | lookup l :: ops => l :: lookups ops
+  | witness _ _ :: ops | assert _ :: ops | interact _ :: ops => lookups ops
+
+def interactions : List (FlatOperation F) → List (AbstractInteraction F)
+  | [] => []
+  | interact i :: ops => i :: interactions ops
+  | witness _ _ :: ops | assert _ :: ops | lookup _ :: ops => interactions ops
 
 /-- Induction principle for `FlatOperation`s. -/
 def induct {motive : List (FlatOperation F) → Sort*}
@@ -141,6 +158,7 @@ end FlatOperation
 
 export FlatOperation (ConstraintsHoldFlat)
 
+-- TODO witness input here, and localWitnesses, should be arrays not vectors
 @[circuit_norm]
 def Environment.ExtendsVector (env : Environment F) (wit : Vector F n) (offset : ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
