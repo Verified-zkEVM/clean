@@ -130,27 +130,32 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies assumin
 because it is implied by the flat version.
 -/
 theorem can_replace_soundness {ops : Operations F} {env} :
-  ConstraintsHold env ops →
-  FlatOperation.Guarantees env ops.toFlat →
+  ops.ConstraintsHold env →
+  ops.FullGuarantees env →
   ConstraintsHoldWithInteractions.Soundness env ops := by
   intro h_constraints h_guarantees
   induction ops using Operations.induct with
   | empty => trivial
   | witness | assert | interact =>
-    simp_all [circuit_norm, Operations.toFlat]
+    simp_all [circuit_norm, Operations.constraints,
+      Operations.lookups, Operations.interactions]
   | lookup l ops ih =>
     constructor
     · have h_lookup_contains : l.Contains env := by
-        simp_all [circuit_norm]
+        simp_all [circuit_norm, Operations.lookups]
       exact l.table.imply_soundness _ _ h_lookup_contains
-    · simp_all [circuit_norm, Operations.toFlat]
+    · simp_all [circuit_norm, Operations.lookups, Operations.constraints, Operations.lookups, Operations.interactions]
   | subcircuit s ops ih =>
+    simp only [circuit_norm, Operations.constraints,
+      Operations.interactions, Operations.lookups, List.mem_append] at *
     have h_sub_guarantees : FlatOperation.Guarantees env s.ops.toFlat := by
-      simp_all [circuit_norm, Operations.toFlat]
-    have h_sub_sound := s.imply_soundness env h_constraints.1 h_sub_guarantees
+      simp_all [circuit_norm]
+    have h_sub_constraints : ConstraintsHoldFlat env s.ops.toFlat := by
+      simp_all [FlatOperation.constraintsHoldFlat_iff_forall_mem, circuit_norm]
+    have h_sub_sound := s.imply_soundness env h_sub_constraints h_sub_guarantees
     constructor
     · exact h_sub_sound.1
-    · simp_all [circuit_norm, Operations.toFlat]
+    · simp_all [circuit_norm]
 
 /--
 Recursive requirements lifting from top-level requirements, given recursive constraints

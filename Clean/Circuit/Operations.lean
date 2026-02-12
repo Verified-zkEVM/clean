@@ -105,6 +105,14 @@ lemma interactions_append {ops1 ops2 : List (FlatOperation F)} :
     interactions (ops1 ++ ops2) = interactions ops1 ++ interactions ops2 := by
   induction ops1 using FlatOperation.induct <;> simp_all [interactions]
 
+lemma constraintsHoldFlat_iff_forall_mem {eval : Environment F} {ops : List (FlatOperation F)} :
+  ConstraintsHoldFlat eval ops ↔
+    (∀ e ∈ constraints ops, eval e = 0) ∧
+    (∀ l ∈ lookups ops, l.Contains eval) := by
+  induction ops using FlatOperation.induct <;>
+    simp_all [ConstraintsHoldFlat, constraints, lookups, and_assoc]
+  tauto
+
 /--
 A `Condition` lets you define a predicate on operations, given the type and content of the
 current operation as well as the current offset.
@@ -834,17 +842,6 @@ def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
     interact i := i.assumeGuarantees → i.Guarantees env
     subcircuit s := s.Soundness env
   }
-
--- open Operations in
--- lemma constraintsHoldWithInteractions_soundness_iff_forall_mem {env : Environment F} {ops : Operations F} :
---     ConstraintsHoldWithInteractions.Soundness env ops ↔
---     (∀ e ∈ ops.constraints, env e = 0) ∧
---     (∀ l ∈ ops.lookups, l.Soundness env) ∧
---     (∀ i ∈ ops.shallowInteractions, i.assumeGuarantees → i.Guarantees env) ∧
---     (∀ s ∈ ops.subcircuits, s.2.Soundness env) := by
---   simp only [ConstraintsHoldWithInteractions.Soundness]
---   induction ops using Operations.induct <;>
---     simp_all [circuit_norm, constraints, lookups, shallowInteractions, subcircuits]
 
 @[circuit_norm]
 def ConstraintsHoldWithInteractions.Completeness (env : Environment F)
