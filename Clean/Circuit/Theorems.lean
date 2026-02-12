@@ -132,7 +132,7 @@ because it is implied by the flat version.
 theorem can_replace_soundness {ops : Operations F} {env} :
   ops.ConstraintsHold env →
   ops.FullGuarantees env →
-  ConstraintsHoldWithInteractions.Soundness env ops := by
+    ConstraintsHoldWithInteractions.Soundness env ops := by
   intro h_constraints h_guarantees
   induction ops using Operations.induct with
   | empty => trivial
@@ -157,26 +157,34 @@ theorem can_replace_soundness {ops : Operations F} {env} :
     · exact h_sub_sound.1
     · simp_all [circuit_norm]
 
+open Operations in
 /--
 Recursive requirements lifting from top-level requirements, given recursive constraints
 and flattened guarantees.
 -/
 theorem requirements_toFlat_of_soundness {ops : Operations F} {env} :
-  ConstraintsHold env ops →
-  FlatOperation.Guarantees env ops.toFlat →
-  Operations.Requirements env ops →
-  FlatOperation.Requirements env ops.toFlat := by
+  ops.ConstraintsHold env →
+  ops.FullGuarantees env →
+  ops.Requirements env →
+    ops.FullRequirements env := by
+  simp only [Operations.ConstraintsHold, Operations.FullGuarantees, Operations.FullRequirements,
+    Operations.requirements_iff_forall_mem]
   intro h_constraints h_guarantees h_requirements
   induction ops using Operations.induct with
   | empty => trivial
   | witness | assert | lookup | interact =>
-    simp_all [circuit_norm, Operations.toFlat]
+    simp_all [circuit_norm, constraints, interactions, shallowInteractions, lookups]
   | subcircuit s ops ih =>
+    simp only [circuit_norm, constraints, interactions, shallowInteractions, lookups, List.mem_append] at *
     have h_sub_guarantees : FlatOperation.Guarantees env s.ops.toFlat := by
-      simp_all [circuit_norm, Operations.toFlat]
+      simp_all [circuit_norm]
+    have h_sub_constraints : ConstraintsHoldFlat env s.ops.toFlat := by
+      simp_all [FlatOperation.constraintsHoldFlat_iff_forall_mem, circuit_norm]
     have h_sub_req : FlatOperation.Requirements env s.ops.toFlat :=
-      (s.imply_soundness env h_constraints.1 h_sub_guarantees).2
-    simp_all [circuit_norm, Operations.toFlat]
+      (s.imply_soundness env h_sub_constraints h_sub_guarantees).2
+    intro i
+    simp_all [circuit_norm, FlatOperation.requirements_iff_forall_mem, ←Operations.interactions_toFlat]
+    tauto
 
 end Circuit
 
