@@ -783,6 +783,19 @@ theorem subcircuitChannelsWithGuarantees_subcircuit {n : ℕ} (s : Subcircuit F 
     subcircuitChannelsWithGuarantees (.subcircuit s :: ops) =
     s.channelsWithGuarantees ++ subcircuitChannelsWithGuarantees ops := rfl
 
+lemma subcircuitChannelsWithGuarantees_eq_subcircuits_map {ops : Operations F} :
+    subcircuitChannelsWithGuarantees ops = (ops.subcircuits
+    |>.map (fun s => s.2.channelsWithGuarantees) |>.flatten) := by
+  induction ops using induct <;>
+  simp_all [subcircuitChannelsWithGuarantees, Operations.subcircuits]
+
+lemma subcircuitChannelsWithGuarantees_subset_iff_forall {ops : Operations F} {channels : List (RawChannel F)} :
+  subcircuitChannelsWithGuarantees ops ⊆ channels ↔
+    ∀ s ∈ ops.subcircuits, ∀ c ∈ s.2.channelsWithGuarantees, c ∈ channels := by
+  rw [subcircuitChannelsWithGuarantees_eq_subcircuits_map, List.subset_def]
+  simp
+  tauto
+
 def subcircuitChannelsWithRequirements (ops : Operations F) : List (RawChannel F) :=
   ops.map (fun
     | .subcircuit s => s.channelsWithRequirements
@@ -808,6 +821,20 @@ theorem subcircuitChannelsWithRequirements_interact (i : AbstractInteraction F) 
 theorem subcircuitChannelsWithRequirements_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
     subcircuitChannelsWithRequirements (.subcircuit s :: ops) =
     s.channelsWithRequirements ++ subcircuitChannelsWithRequirements ops := rfl
+
+
+lemma subcircuitChannelsWithRequirements_eq_subcircuits_map {ops : Operations F} :
+    subcircuitChannelsWithRequirements ops = (ops.subcircuits
+    |>.map (fun s => s.2.channelsWithRequirements) |>.flatten) := by
+  induction ops using induct <;>
+  simp_all [subcircuitChannelsWithRequirements, Operations.subcircuits]
+
+lemma subcircuitChannelsWithRequirements_subset_iff_forall {ops : Operations F} {channels : List (RawChannel F)} :
+  subcircuitChannelsWithRequirements ops ⊆ channels ↔
+    ∀ s ∈ ops.subcircuits, ∀ c ∈ s.2.channelsWithRequirements, c ∈ channels := by
+  rw [subcircuitChannelsWithRequirements_eq_subcircuits_map, List.subset_def]
+  simp
+  tauto
 
 -- TODO rename to ShallowGuarantees
 @[circuit_norm]

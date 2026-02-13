@@ -334,6 +334,15 @@ theorem usesLocalWitnesses_iff_forAll (n : ℕ) {env : Environment F} {ops : Ope
     subcircuit n _ s := FlatOperation.forAll n { witness n _ c := env.ExtendsVector (c env) n} s.ops.toFlat
   } := by
   simp only [UsesLocalWitnesses, Operations.forAllFlat]
+
+lemma usesLocalWitnesses_to_subcircuit {env : Environment F} {ops : Operations F} {n : ℕ}
+  (h_consistent : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ∀ s ∈ ops.subcircuits, env.UsesLocalWitnessesFlat s.1 s.2.ops.toFlat := by
+  intro h_env
+  induction ops, n, h_consistent using Operations.inductConsistent <;>
+    simp_all [circuit_norm, Environment.UsesLocalWitnesses, Environment.UsesLocalWitnessesFlat,
+      Operations.forAllFlat, Operations.subcircuits]
 end Environment
 
 namespace Circuit
@@ -394,60 +403,51 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies only pr
 because it already implies the flat version.
 -/
 theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ}
-    (h : ops.SubcircuitsConsistent n) :
+  (h_consistent : ops.SubcircuitsConsistent n) :
     env.UsesLocalWitnesses n ops →
     ConstraintsHoldWithInteractions.Completeness env ops →
-    ConstraintsHold env ops := by
-  induction ops, n, h using Operations.inductConsistent with
-  | empty => intros; exact trivial
-  | witness | assert | lookup | interact =>
-    simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
-      Lookup.Contains, Lookup.Completeness, RawTable.implied_by_completeness]
-  | subcircuit n circuit ops ih =>
-    simp_all only [ConstraintsHold, ConstraintsHoldWithInteractions.Completeness,
-      Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll]
-    intro h_env h_compl
-    have h_sub : ConstraintsHoldFlat env circuit.ops.toFlat ∧ FlatOperation.Guarantees env circuit.ops.toFlat :=
-      Subcircuit.implied_by_completeness circuit env (by
-        rw [←Environment.usesLocalWitnessesFlat_iff_extends]
-        exact h_env.left) h_compl.left
-    constructor
-    · exact h_sub.1
-    · exact ih h_env.right h_compl.right
+    ops.ConstraintsHold env := by
+  rw [constraintsHoldWithInteractions_completeness_iff_forall_mem,
+    Operations.ConstraintsHold, Operations.forall_constraints_iff, Operations.forall_lookups_iff]
+  intro h_env ⟨ h_constraints, h_lookups, h_guarantees, h_subcircuit ⟩
+  have lookups_contains : (∀ l ∈ ops.shallowLookups, l.Contains env) := by
+    intro l h_mem
+    apply l.table.implied_by_completeness
+    apply h_lookups l h_mem
+  simp_all only [implies_true, true_and, ←forall_and]
+  intro ⟨n', s⟩ h_mem
+  have h := s.implied_by_completeness env
+  rw [FlatOperation.guarantees_iff_forall_mem, FlatOperation.constraintsHoldFlat_iff_forall_mem,
+    ←Environment.usesLocalWitnessesFlat_iff_extends] at h
+  suffices env.UsesLocalWitnessesFlat n' s.ops.toFlat by
+    exact (h this (h_subcircuit _ h_mem)).1
+  apply Environment.usesLocalWitnesses_to_subcircuit h_consistent h_env _ h_mem
 
 theorem can_replace_completeness_guarantees {env} {ops : Operations F} {n : ℕ}
-    (h : ops.SubcircuitsConsistent n) :
+  (h_consistent : ops.SubcircuitsConsistent n) :
     env.UsesLocalWitnesses n ops →
     ConstraintsHoldWithInteractions.Completeness env ops →
-    FlatOperation.Guarantees env ops.toFlat := by
-  induction ops, n, h using Operations.inductConsistent with
-  | empty =>
-    intros
-    exact trivial
-  | witness | assert | lookup | interact =>
-    simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
-      FlatOperation.Guarantees, Operations.toFlat]
-  | subcircuit n circuit ops ih =>
-    simp_all only [ConstraintsHoldWithInteractions.Completeness,
-      Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
-      FlatOperation.Guarantees, Operations.toFlat]
-    intro h_env h_compl
-    have h_sub : ConstraintsHoldFlat env circuit.ops.toFlat ∧ FlatOperation.Guarantees env circuit.ops.toFlat :=
-      Subcircuit.implied_by_completeness circuit env (by
-        rw [←Environment.usesLocalWitnessesFlat_iff_extends]
-        exact h_env.left) h_compl.left
-    have h_sub_guarantees : FlatOperation.Guarantees env circuit.ops.toFlat := h_sub.2
-    have h_rest_guarantees := ih h_env.right h_compl.right
-    simp_all [circuit_norm]
+    ops.FullGuarantees env := by
+  rw [constraintsHoldWithInteractions_completeness_iff_forall_mem,
+    Operations.FullGuarantees, Operations.forall_interactions_iff]
+  intro h_env ⟨ h_constraints, h_lookups, h_guarantees, h_subcircuit ⟩
+  use h_guarantees
+  intro ⟨n', s⟩ h_mem
+  have h := s.implied_by_completeness env
+  rw [FlatOperation.guarantees_iff_forall_mem, ←Environment.usesLocalWitnessesFlat_iff_extends] at h
+  suffices env.UsesLocalWitnessesFlat n' s.ops.toFlat by
+    exact (h this (h_subcircuit _ h_mem)).2
+  apply Environment.usesLocalWitnesses_to_subcircuit h_consistent h_env _ h_mem
 
+-- TODO prove this first and the previous two as trivial consequences
 theorem can_replace_completeness_and_guarantees {env} {ops : Operations F} {n : ℕ}
-    (h : ops.SubcircuitsConsistent n) :
+  (h_consistent : ops.SubcircuitsConsistent n) :
     env.UsesLocalWitnesses n ops →
     ConstraintsHoldWithInteractions.Completeness env ops →
-    (ConstraintsHold env ops ∧ FlatOperation.Guarantees env ops.toFlat) := by
+    (ops.ConstraintsHold env ∧ ops.FullGuarantees env) := by
   intro h_env h_compl
-  exact ⟨ can_replace_completeness h h_env h_compl,
-    can_replace_completeness_guarantees h h_env h_compl ⟩
+  exact ⟨ can_replace_completeness h_consistent h_env h_compl,
+    can_replace_completeness_guarantees h_consistent h_env h_compl ⟩
 end Circuit
 
 namespace Circuit
@@ -761,20 +761,14 @@ theorem in_channels_or_guarantees_full
   generalize circuit.channelsWithGuarantees = channels at *
   generalize (circuit.main input_var).operations n = ops at *
   obtain ⟨ h_sublist, h_guarantees_iff ⟩ := h_goal
-  simp only [Operations.InChannelsOrGuaranteesFull, Operations.InChannelsOrGuarantees] at *
-  induction ops using Operations.induct with
-  | empty | witness | assert | lookup | interact => simp_all [circuit_norm]
-  | subcircuit s ops ih =>
-    simp_all only [circuit_norm, List.append_subset]
-    have h_guarantees_iff := s.guarantees_iff env
-    simp_all only [FlatOperation.InChannelsOrGuarantees, FlatOperation.forAllNoOffset,
-        List.forall_iff_forall_mem]
-    intro ops h_mem_ops
-    specialize h_guarantees_iff ops h_mem_ops
-    cases ops <;> simp_all only
-    rcases h_guarantees_iff with h_mem | h_guarantees
-    · left; exact h_sublist.1 h_mem
-    · right; exact h_guarantees
+  simp only [Operations.InChannelsOrGuaranteesFull, Operations.inChannelsOrGuarantees_iff_forall_mem,
+    Operations.forall_interactions_iff, Operations.subcircuitChannelsWithGuarantees_subset_iff_forall] at *
+  simp_all only [implies_true, true_and]
+  intro ⟨n, s⟩ s_mem i i_mem
+  have h_guarantees_iff := s.guarantees_iff env
+  rw [FlatOperation.inChannelsOrGuarantees_iff_forall_mem] at h_guarantees_iff
+  specialize h_guarantees_iff i i_mem
+  tauto
 
 theorem in_channels_or_requirements_full
   (circuit : FormalCircuitWithInteractions F Input Output)
@@ -786,62 +780,33 @@ theorem in_channels_or_requirements_full
   generalize circuit.channelsWithRequirements = channels at *
   generalize (circuit.main input_var).operations n = ops at *
   obtain ⟨ h_sublist, h_requirements_iff ⟩ := h_goal
-  simp only [Operations.InChannelsOrRequirementsFull, Operations.InChannelsOrRequirements] at *
-  induction ops using Operations.induct with
-  | empty | witness | assert | lookup | interact => simp_all [circuit_norm]
-  | subcircuit s ops ih =>
-    simp_all only [circuit_norm, List.append_subset]
-    have h_requirements_iff := s.requirements_iff env
-    simp_all only [FlatOperation.InChannelsOrRequirements, FlatOperation.forAllNoOffset,
-        List.forall_iff_forall_mem]
-    intro ops h_mem_ops
-    specialize h_requirements_iff ops h_mem_ops
-    cases ops <;> simp_all only
-    rcases h_requirements_iff with h_mem | h_requirements
-    · left; exact h_sublist.1 h_mem
-    · right; exact h_requirements
+  simp only [Operations.InChannelsOrRequirementsFull, Operations.inChannelsOrRequirements_iff_forall_mem,
+    Operations.forall_interactions_iff, Operations.subcircuitChannelsWithRequirements_subset_iff_forall] at *
+  simp_all only [implies_true, true_and]
+  intro ⟨n, s⟩ s_mem i i_mem
+  have h_requirements_iff := s.requirements_iff env
+  rw [FlatOperation.inChannelsOrRequirements_iff_forall_mem] at h_requirements_iff
+  specialize h_requirements_iff i i_mem
+  tauto
 end FormalCircuitWithInteractions
 
 omit [DecidableEq F] in
 theorem Operations.requirements_of_not_mem (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :
     ops.InChannelsOrRequirementsFull channels env →
-    ∀ channel, channel ∉ channels →
-      ops.FullChannelRequirements channel env := by
-  intro h_in_or_reqs channel h_not_mem
-  induction ops using Operations.induct with
-  | empty => simp [circuit_norm]
-  | witness | assert | lookup =>
-    simp_all [Operations.InChannelsOrRequirementsFull, Operations.FullChannelRequirements, circuit_norm]
-  | interact i ops ih =>
-    simp_all only [Operations.InChannelsOrRequirementsFull, Operations.FullChannelRequirements, circuit_norm]
-    rcases h_in_or_reqs with ⟨ h_mem | h_requirements, _ ⟩
-    · suffices i.channel ≠ channel by simp_all
-      rintro rfl
-      contradiction
-    · simp_all
-  | subcircuit s ops ih =>
-    simp_all only [InChannelsOrRequirementsFull, FlatOperation.InChannelsOrRequirements,
-      FullChannelRequirements, FlatOperation.ChannelRequirements, forAllNoOffset, and_true,
-      forall_const]
-    rcases h_in_or_reqs with ⟨ h_in_or_reqs, h_dead ⟩
-    clear h_dead
-    generalize s.ops.toFlat = sub_ops at *
-    induction sub_ops using FlatOperation.induct <;>
-      simp_all only [circuit_norm, List.Forall, List.forall_cons]
-    rename_i i ops
-    rcases h_in_or_reqs with ⟨ h_mem | h_requirements, _ ⟩
-    · suffices i.channel ≠ channel by simp_all
-      rintro rfl
-      contradiction
-    · simp_all
+    ∀ channel, channel ∉ channels → ops.ChannelRequirements channel env := by
+  simp only [circuit_norm]
+  intro h_in_or_reqs channel h_not_mem i i_mem h_eq
+  specialize h_in_or_reqs i i_mem
+  rw [h_eq] at h_in_or_reqs
+  tauto
 
 theorem FormalCircuitWithInteractions.requirements_of_not_mem
   (circuit : FormalCircuitWithInteractions F Input Output) (channel : RawChannel F)
   (input_var : Var Input F) (n : ℕ) (env : Environment F)
   (h_not_mem : channel ∉ circuit.channelsWithRequirements) :
     circuit.main input_var |>.operations n
-    |>.FullChannelRequirements channel env := by
+    |>.ChannelRequirements channel env := by
   apply Operations.requirements_of_not_mem
   apply circuit.in_channels_or_requirements_full
   assumption
@@ -851,45 +816,20 @@ theorem Operations.guarantees_iff (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :
     ops.InChannelsOrGuaranteesFull channels env →
     (ops.FullGuarantees env ↔
-      ∀ channel ∈ channels, ops.FullChannelGuarantees channel env) := by
-  intro h_in_or_reqs
-  induction ops using Operations.induct with
-  | empty => simp [circuit_norm]
-  | witness | assert | lookup =>
-    simp_all [Operations.InChannelsOrGuaranteesFull, circuit_norm]
-  | interact i ops ih =>
-    simp_all only [Operations.InChannelsOrGuaranteesFull, circuit_norm]
-    rcases h_in_or_reqs with ⟨ h_mem | h_requirements, _ ⟩
-    · constructor
-      · simp_all
-      · simp_all only [implies_true, and_true]
-        rintro h_guarantees
-        specialize h_guarantees i.channel h_mem
-        simp_all
-    · simp_all
-  | subcircuit s ops ih =>
-    simp_all only [Operations.InChannelsOrGuaranteesFull, circuit_norm]
-    rcases h_in_or_reqs with ⟨ h_in_or_reqs, h_dead ⟩
-    generalize s.ops.toFlat = sub_ops at *
-    constructor <;> simp_all only [and_true, and_imp]
-    · induction sub_ops using FlatOperation.induct <;> (
-      simp_all only [circuit_norm, List.Forall, List.forall_cons, FlatOperation.InChannelsOrGuarantees]
-      try tauto)
-    · induction sub_ops using FlatOperation.induct <;> (
-      simp_all only [circuit_norm, List.Forall, List.forall_cons, FlatOperation.InChannelsOrGuarantees]
-      try tauto)
-      rcases h_in_or_reqs with ⟨ h_mem | h_requirements, _ ⟩
-      · rename_i i ops _
-        rintro h_guarantees
-        specialize h_guarantees i.channel h_mem
-        simp_all
-      · simp_all
+      ∀ channel ∈ channels, ops.ChannelGuarantees channel env) := by
+  simp only [circuit_norm]
+  intro h_in_or_guars
+  constructor
+  · tauto
+  intro h_guars i hi
+  specialize h_in_or_guars i hi
+  tauto
 
 theorem FormalCircuitWithInteractions.guarantees_iff'
   (circuit : FormalCircuitWithInteractions F Input Output) (input_var : Var Input F) (n : ℕ) (env : Environment F) :
     let ops := circuit.main input_var |>.operations n;
     ops.FullGuarantees env ↔
-      ∀ channel ∈ circuit.channelsWithGuarantees, ops.FullChannelGuarantees channel env := by
+      ∀ channel ∈ circuit.channelsWithGuarantees, ops.ChannelGuarantees channel env := by
   apply Operations.guarantees_iff
   apply circuit.in_channels_or_guarantees_full
 end
