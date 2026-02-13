@@ -14,18 +14,26 @@ import Clean.Gadgets.Addition8.Theorems
 open ByteUtils (mod256 floorDiv256)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)
 
-structure Interaction (F : Type) (channel : RawChannel F) where
+-- TODO should we encode the channel width in the type, or not?
+-- if not, we have trouble passing interactions to channel.Guarantees / Requirements
+-- if we do, we have to define a channel filtering mechanism that establishes the output type
+-- we could also define a wrapper around channel.Guarantees / Requirements that returns True if the type doesn't match
+structure Interaction (F : Type) where
+  channel : RawChannel F
   mult : F
-  msg : Vector F channel.arity
+  msg : Array F
   assumeGuarantees : Bool
+  same_size : msg.size = channel.arity
 
 section
 variable {F : Type} [Field F] [DecidableEq F] {Message : TypeMap} [ProvableType Message]
 
-def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) : Interaction F i.channel where
+def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
+  channel := i.channel
   mult := env i.mult
-  msg := i.msg.map env
+  msg := (i.msg.map env).toArray
   assumeGuarantees := i.assumeGuarantees
+  same_size := by simp
 
 /-- Lookup-like channels expose a predicate via both requirements and guarantees. -/
 structure StaticLookupChannel (F : Type) [Field F] [DecidableEq F] (Message : TypeMap) [ProvableType Message] where
@@ -469,10 +477,10 @@ def Spec (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
     witness.abstract.Spec (witness.environment row)
 
-noncomputable def interactions (witness : TableWitness F) (channel : RawChannel F) : List (Interaction F channel) :=
+noncomputable def interactions (witness : TableWitness F) (channel : RawChannel F) : List (Interaction F) :=
   witness.table.flatMap fun row =>
     witness.abstract.operations.interactionsWith channel
-    |>.map fun i => i.eval (witness.environment row)
+    |>.map (AbstractInteraction.eval (witness.environment row))
 
 lemma guarantees_iff_channelGuarantees
     (tableWitness : TableWitness F) :
@@ -510,7 +518,7 @@ lemma interactions_requirements_of_not_mem
     {channel : RawChannel F}
     (h_not_req : channel ∉ tableWitness.abstract.circuit.channelsWithRequirements) :
     (tableWitness.interactions channel).Forall fun i =>
-      channel.Requirements i.mult i.msg tableWitness.data := by
+      channel.Requirements i.mult ⟨ i.msg, by rw[i.same_size]; sorry ⟩ tableWitness.data := by
   suffices tableWitness.ChannelRequirements channel by
     sorry
   apply tableWitness.requirements_of_not_mem h_not_req
@@ -546,12 +554,12 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
 
 def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { get _ := 0, data _ _ := #[], interactions := [] }
 
-def BalancedInteractions {n : ℕ} (interactions : List (F × Vector F n)) : Prop :=
+def BalancedInteractions (interactions : List (Interaction F)) : Prop :=
   interactions.length < ringChar F ∧
-  ∀ msg : Vector F n, (interactions |>.filter (·.2 = msg) |>.map Prod.fst).sum = 0
+  ∀ msg : Array F, (interactions |>.filter (·.msg = msg) |>.map (·.mult)).sum = 0
 
-lemma balancedInteractions_of_perm {n : ℕ}
-    {interactions1 interactions2 : List (F × Vector F n)}
+lemma balancedInteractions_of_perm
+    {interactions1 interactions2 : List (Interaction F)}
     (h_perm : List.Perm interactions1 interactions2) :
     BalancedInteractions interactions1 → BalancedInteractions interactions2 := by
   intro h_bal
@@ -560,26 +568,27 @@ lemma balancedInteractions_of_perm {n : ℕ}
   · intro msg
     have h_perm_msg :
         List.Perm
-          ((interactions1.filter (fun x => x.2 = msg)).map Prod.fst)
-          ((interactions2.filter (fun x => x.2 = msg)).map Prod.fst) := by
-      exact (h_perm.filter (fun x => x.2 = msg)).map Prod.fst
+          ((interactions1.filter (fun x => x.msg = msg)).map (·.mult))
+          ((interactions2.filter (fun x => x.msg = msg)).map (·.mult)) := by
+      exact (h_perm.filter (fun x => x.msg = msg)).map (·.mult)
     have h_sum_eq :
-        ((interactions1.filter (fun x => x.2 = msg)).map Prod.fst).sum =
-          ((interactions2.filter (fun x => x.2 = msg)).map Prod.fst).sum := by
+        ((interactions1.filter (fun x => x.msg = msg)).map (·.mult)).sum =
+          ((interactions2.filter (fun x => x.msg = msg)).map (·.mult)).sum := by
       simpa using h_perm_msg.sum_eq
     rw [← h_sum_eq]
     exact h_bal.2 msg
 
-lemma msgInteractions_lt_ringChar {n : ℕ} {ins : List (F × Vector F n)} {msg : Vector F n}
+lemma msgInteractions_lt_ringChar {ins : List (Interaction F)} {msg : Array F}
     (h_bal : BalancedInteractions ins) :
-    (ins |>.filter (·.2 = msg)).length < ringChar F := by
+    (ins |>.filter (·.msg = msg)).length < ringChar F := by
   grw [List.length_filter_le]
   exact h_bal.1
 
 namespace Ensemble
-noncomputable def verifierInteractions (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) : List (F × Vector F channel.arity) :=
+noncomputable def verifierInteractions (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) : List (Interaction F) :=
   let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).interactionsWithChannel channel (emptyEnvironment F)
+  (circuit.operations 0).interactionsWith channel
+  |>.map (AbstractInteraction.eval (emptyEnvironment F))
 
 def VerifierAccepts (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
   let circuit := ens.verifier.main (const publicInput)
@@ -599,7 +608,7 @@ def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :
 def Constraints (ens : Ensemble F PublicIO) (witness : EnsembleWitness ens) : Prop :=
   witness.tables.Forall fun table => table.Constraints
 
-noncomputable def interactions (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
+noncomputable def interactions (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (Interaction F) :=
   ens.verifierInteractions channel publicInput
   ++ witness.tables.flatMap (fun table => table.interactions channel)
 
@@ -648,6 +657,10 @@ end Ensemble
 -- infrastructure for iteratively adding tables to an ensemble such that we can always fill in
 -- the next table's guarantees
 
+open Classical in
+noncomputable def RawChannel.filter' (channel : RawChannel F) (interactions : List (Interaction F)) : List (Interaction F) :=
+  interactions.filter (fun i => i.channel = channel)
+
 namespace Ensemble
 def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] : Ensemble F PublicIO where
   tables := []
@@ -663,17 +676,17 @@ designed to be used for proving soundness by adding one table after another.
 def PartialBalancedChannels (ens : Ensemble F PublicIO) {finished : List (RawChannel F)} (_ : finished.Subset ens.channels)
     (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
-  ∃ (extraInteractions : RawInteractions F),
+  ∃ (extraInteractions : List (Interaction F)),
     -- the total of known + unknown interactions is balanced for each channel
     ens.channels.Forall (fun channel =>
-      BalancedInteractions (ens.interactions publicInput witness channel ++ channel.filter extraInteractions)) ∧
+      BalancedInteractions (ens.interactions publicInput witness channel ++ channel.filter' extraInteractions)) ∧
     -- for "finished" channels, we already _assume_ that requirements on future interactions hold unconditionally
     -- (this restricts the order in which tables can be added;
     --  and it's what gives us the final piece in the "all interactions satisfy requirements" statement we need to prove
     --  the guarantees for the next added table)
     finished.Forall (fun channel =>
-      (channel.filter extraInteractions).Forall fun (mult, message) =>
-        channel.Requirements mult message witness.data)
+      (channel.filter' extraInteractions).Forall fun i =>
+        channel.Requirements i.mult ⟨ i.msg, by sorry ⟩ witness.data)
 
 lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
     {publicInput : PublicIO F} {witness : EnsembleWitness ens}
@@ -683,7 +696,7 @@ lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
   intro balanced
   simp only [PartialBalancedChannels, BalancedChannels, List.forall_iff_forall_mem] at *
   use []
-  have (c : RawChannel F) : c.filter [] = [] := rfl
+  have (c : RawChannel F) : c.filter' [] = [] := rfl
   simpa [this] using balanced
 
 -- sound channels means that we can eliminate the Guarantees from each table, assuming constraints and a partial balance
@@ -728,7 +741,8 @@ lemma table_soundness_of_soundChannels {ens : Ensemble F PublicIO} (finished : L
       simp_all
     intro row h_mem_row
     exact AbstractTable.weakSoundness (constraints row h_mem_row) (guarantees row h_mem_row)
-  · apply ens.verifier.original_full_soundness
+  · stop
+    apply ens.verifier.original_full_soundness
     · apply ProvableType.eval_const
     · rw [Circuit.constraintsHold_iff_forAll']
       exact verifier_accepts
@@ -767,9 +781,9 @@ this can be proved for individual channels without reference to any constraints,
 essentially just means that reqs and grts are reasonably related.
 -/
 def RawChannel.Consistent (channel : RawChannel F) : Prop :=
-  ∀ interactions (data : ProverData F), BalancedInteractions interactions →
-    (∀ i ∈ interactions, channel.Requirements i.1 i.2 data) →
-    (∀ i ∈ interactions, channel.Guarantees i.1 i.2 data)
+  ∀ (interactions : List (Interaction F)) (data : ProverData F), BalancedInteractions interactions →
+    (∀ i ∈ interactions, channel.Requirements i.mult i.msg data) →
+    (∀ i ∈ interactions, channel.Guarantees i.mult i.msg data)
 
 -- adding one table to a SoundChannels ensemble preserves SoundChannels under some
 -- easy-to-prove assumptions on what channels the new table uses
