@@ -8,7 +8,7 @@ use p3_field::{ExtensionField, Field, PrimeField32};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
 use crate::{
-    ByteRangeAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Val, VerifyingKey, VK,
+    ByteRangeAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Val, VerifyingKey,
 };
 
 /// Represents a lookup AIR with its calculated main trace
