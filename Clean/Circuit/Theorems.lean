@@ -130,32 +130,21 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies assumin
 because it is implied by the flat version.
 -/
 theorem can_replace_soundness {ops : Operations F} {env} :
-  ops.ConstraintsHold env →
-  ops.FullGuarantees env →
+  ops.ConstraintsHold env → ops.FullGuarantees env →
     ConstraintsHoldWithInteractions.Soundness env ops := by
-  intro h_constraints h_guarantees
-  induction ops using Operations.induct with
-  | empty => trivial
-  | witness | assert | interact =>
-    simp_all [circuit_norm, Operations.constraints,
-      Operations.lookups, Operations.interactions]
-  | lookup l ops ih =>
-    constructor
-    · have h_lookup_contains : l.Contains env := by
-        simp_all [circuit_norm, Operations.lookups]
-      exact l.table.imply_soundness _ _ h_lookup_contains
-    · simp_all [circuit_norm, Operations.lookups, Operations.constraints, Operations.lookups, Operations.interactions]
-  | subcircuit s ops ih =>
-    simp only [circuit_norm, Operations.constraints,
-      Operations.interactions, Operations.lookups, List.mem_append] at *
-    have h_sub_guarantees : FlatOperation.Guarantees env s.ops.toFlat := by
-      simp_all [circuit_norm]
-    have h_sub_constraints : ConstraintsHoldFlat env s.ops.toFlat := by
-      simp_all [FlatOperation.constraintsHoldFlat_iff_forall_mem, circuit_norm]
-    have h_sub_sound := s.imply_soundness env h_sub_constraints h_sub_guarantees
-    constructor
-    · exact h_sub_sound.1
-    · simp_all [circuit_norm]
+  simp only [Operations.ConstraintsHold, Operations.FullGuarantees,
+    constraintsHoldWithInteractions_soundness_iff_forall_mem, Operations.forall_constraints_iff,
+    Operations.forall_lookups_iff, Operations.forall_interactions_iff]
+  rintro ⟨⟨h_constraints, h_sub_constraints⟩, ⟨h_lookups, h_sub_lookups⟩⟩ ⟨h_guarantees, h_sub_guarantees⟩
+  simp_all only [implies_true, true_and]
+  constructor
+  · intro l h_mem
+    apply l.table.imply_soundness _ _ (h_lookups l h_mem)
+  · intro s h_mem
+    have soundness := s.2.imply_soundness env
+    rw [FlatOperation.constraintsHoldFlat_iff_forall_mem,
+      FlatOperation.guarantees_iff_forall_mem] at soundness
+    exact soundness ⟨h_sub_constraints s h_mem, h_sub_lookups s h_mem⟩ (h_sub_guarantees s h_mem) |>.1
 
 open Operations in
 /--
@@ -163,28 +152,21 @@ Recursive requirements lifting from top-level requirements, given recursive cons
 and flattened guarantees.
 -/
 theorem requirements_toFlat_of_soundness {ops : Operations F} {env} :
-  ops.ConstraintsHold env →
-  ops.FullGuarantees env →
-  ops.Requirements env →
+  ops.ConstraintsHold env → ops.FullGuarantees env → ops.Requirements env →
     ops.FullRequirements env := by
   simp only [Operations.ConstraintsHold, Operations.FullGuarantees, Operations.FullRequirements,
-    Operations.requirements_iff_forall_mem]
+    requirements_iff_forall_mem]
   intro h_constraints h_guarantees h_requirements
-  induction ops using Operations.induct with
-  | empty => trivial
-  | witness | assert | lookup | interact =>
-    simp_all [circuit_norm, constraints, interactions, shallowInteractions, lookups]
-  | subcircuit s ops ih =>
-    simp only [circuit_norm, constraints, interactions, shallowInteractions, lookups, List.mem_append] at *
-    have h_sub_guarantees : FlatOperation.Guarantees env s.ops.toFlat := by
-      simp_all [circuit_norm]
-    have h_sub_constraints : ConstraintsHoldFlat env s.ops.toFlat := by
-      simp_all [FlatOperation.constraintsHoldFlat_iff_forall_mem, circuit_norm]
-    have h_sub_req : FlatOperation.Requirements env s.ops.toFlat :=
-      (s.imply_soundness env h_sub_constraints h_sub_guarantees).2
-    intro i
-    simp_all [circuit_norm, FlatOperation.requirements_iff_forall_mem, ←Operations.interactions_toFlat]
-    tauto
+  rw [Operations.forall_interactions_iff]
+  use h_requirements
+  intro s h_mem
+  have soundness := s.2.imply_soundness env
+  rw [FlatOperation.constraintsHoldFlat_iff_forall_mem,
+    FlatOperation.guarantees_iff_forall_mem, FlatOperation.requirements_iff_forall_mem] at soundness
+  rw [Operations.forall_constraints_iff, Operations.forall_lookups_iff] at h_constraints
+  rw [Operations.forall_interactions_iff] at h_guarantees
+  specialize soundness ⟨h_constraints.1.2 s h_mem, h_constraints.2.2 s h_mem⟩ (h_guarantees.2 s h_mem)
+  exact soundness.2
 
 end Circuit
 

@@ -398,11 +398,23 @@ def constraints : Operations F → List (Expression F)
   | .subcircuit s :: ops => FlatOperation.constraints s.ops.toFlat ++ constraints ops
   | .witness _ _ :: ops | .lookup _ :: ops | .interact _ :: ops => constraints ops
 
+def shallowConstraints : Operations F → List (Expression F)
+  | [] => []
+  | .assert e :: ops => e :: shallowConstraints ops
+  | .witness _ _ :: ops | .lookup _ :: ops | .interact _ :: ops | .subcircuit _ :: ops
+    => shallowConstraints ops
+
 def lookups : Operations F → List (Lookup F)
   | [] => []
   | .lookup l :: ops => l :: lookups ops
   | .subcircuit s :: ops => FlatOperation.lookups s.ops.toFlat ++ lookups ops
   | .witness _ _ :: ops | .assert _ :: ops | .interact _ :: ops => lookups ops
+
+def shallowLookups : Operations F → List (Lookup F)
+  | [] => []
+  | .lookup l :: ops => l :: shallowLookups ops
+  | .witness _ _ :: ops | .assert _ :: ops | .interact _ :: ops | .subcircuit _ :: ops
+    => shallowLookups ops
 
 def interactions : Operations F → List (AbstractInteraction F)
   | [] => []
@@ -421,6 +433,12 @@ def witnessOperations : Operations F → List (WitnessOperation F)
   | .witness m c :: ops => ⟨m, c⟩ :: witnessOperations ops
   | .subcircuit s :: ops => FlatOperation.witnessOperations s.ops.toFlat ++ witnessOperations ops
   | .assert _ :: ops | .lookup _ :: ops | .interact _ :: ops => witnessOperations ops
+
+def shallowWitnessOperations : Operations F → List (WitnessOperation F)
+  | [] => []
+  | .witness m c :: ops => ⟨m, c⟩ :: shallowWitnessOperations ops
+  | .assert _ :: ops | .lookup _ :: ops | .interact _ :: ops | .subcircuit _ :: ops
+    => shallowWitnessOperations ops
 
 def subcircuits : Operations F → List ((n : ℕ) ×' Subcircuit F n)
   | [] => []
@@ -444,6 +462,40 @@ def induct {motive : Operations F → Sort*}
   | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup interact subcircuit ops)
   | .interact i :: ops => interact i ops (induct empty witness assert lookup interact subcircuit ops)
 
+-- link lemmas between flat and nested operations
+
+lemma forall_constraints_iff {ops : Operations F} {motive : Expression F → Prop} :
+  (∀ e ∈ constraints ops, motive e) ↔
+    (∀ e ∈ shallowConstraints ops, motive e) ∧
+    (∀ s ∈ subcircuits ops, ∀ e ∈ FlatOperation.constraints s.2.ops.toFlat, motive e) := by
+  induction ops using induct; all_goals
+  simp only [constraints, shallowConstraints, subcircuits, List.mem_append, List.mem_cons, or_imp, forall_and, forall_eq]
+  try tauto
+
+lemma forall_lookups_iff {ops : Operations F} {motive : Lookup F → Prop} :
+  (∀ l ∈ lookups ops, motive l) ↔
+    (∀ l ∈ shallowLookups ops, motive l) ∧
+    (∀ s ∈ subcircuits ops, ∀ l ∈ FlatOperation.lookups s.2.ops.toFlat, motive l) := by
+  induction ops using induct; all_goals
+  simp only [lookups, shallowLookups, subcircuits, List.mem_append, List.mem_cons, or_imp, forall_and, forall_eq]
+  try tauto
+
+lemma forall_interactions_iff {ops : Operations F} {motive : AbstractInteraction F → Prop} :
+  (∀ i ∈ interactions ops, motive i) ↔
+    (∀ i ∈ shallowInteractions ops, motive i) ∧
+    (∀ s ∈ subcircuits ops, ∀ i ∈ FlatOperation.interactions s.2.ops.toFlat, motive i) := by
+  induction ops using induct; all_goals
+  simp only [interactions, shallowInteractions, subcircuits, List.mem_append, List.mem_cons, or_imp, forall_and, forall_eq]
+  try tauto
+
+lemma forall_witnessOperations_iff {ops : Operations F} {motive : WitnessOperation F → Prop} :
+  (∀ t ∈ witnessOperations ops, motive t) ↔
+    (∀ t ∈ shallowWitnessOperations ops, motive t) ∧
+    (∀ s ∈ subcircuits ops, ∀ t ∈ FlatOperation.witnessOperations s.2.ops.toFlat, motive t) := by
+  induction ops using induct; all_goals
+  simp only [witnessOperations, shallowWitnessOperations, subcircuits, List.mem_append, List.mem_cons, or_imp, forall_and, forall_eq]
+  try tauto
+
 /-- Collect all add operations from the operations list, evaluating their expressions -/
 def localAdds (env : Environment F) : Operations F → InteractionDelta F
   | [] => 0
@@ -453,6 +505,7 @@ def localAdds (env : Environment F) : Operations F → InteractionDelta F
   | .interact i :: ops => .single (i.eval env) + localAdds env ops
   | .subcircuit s :: ops => s.localAdds env + localAdds env ops
 
+-- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
 open Classical in
 @[circuit_norm]
 noncomputable def interactionsWith (channel : RawChannel F) (ops : Operations F) :
@@ -686,17 +739,19 @@ namespace Operations
 def forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops.toFlat } ops
 
--- class Condition.Consistent (F : Type) [Field F] (condition : ConditionNoOffset F) : Prop where
---   consistent : ∀ s, condition.subcircuit s ↔ FlatOperation.forAllNoOffset condition s.ops.toFlat
-
--- not true in general, would need consistency condition
--- lemma forAllNoOffset_iff_forall_mem {condition : ConditionNoOffset F} {ops : Operations F} :
---   forAllNoOffset condition ops ↔
---     (∀ e ∈ constraints ops, condition.assert e) ∧
---     (∀ l ∈ lookups ops, condition.lookup l) ∧
---     (∀ i ∈ interactions ops, condition.interact i) ∧
---     (∀ t ∈ witnessOperations ops, condition.witness t.1 t.2) := by
---   sorry
+lemma forAllNoOffset_iff_forall_mem {condition : ConditionNoOffset F} {ops : Operations F} :
+  forAllNoOffset condition ops ↔
+    (∀ e ∈ shallowConstraints ops, condition.assert e) ∧
+    (∀ l ∈ shallowLookups ops, condition.lookup l) ∧
+    (∀ i ∈ shallowInteractions ops, condition.interact i) ∧
+    (∀ t ∈ shallowWitnessOperations ops, condition.witness t.1 t.2) ∧
+    (∀ s ∈ subcircuits ops, condition.subcircuit s.2) := by
+  induction ops using induct
+  all_goals
+  simp only [forAllNoOffset, shallowConstraints, shallowLookups, shallowInteractions,
+    shallowWitnessOperations, subcircuits,
+    List.mem_cons, or_imp, forall_and, forall_eq]
+  tauto
 
 @[circuit_norm]
 def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
@@ -708,7 +763,7 @@ def subcircuitChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) 
     | .witness _ _ | .assert _ | .lookup _ | .interact _ => [])
   |> List.flatten
 
--- simp lemmas
+-- simp lemmas; TODO put elsewhere
 @[circuit_norm]
 theorem subcircuitChannelsWithGuarantees_nil : subcircuitChannelsWithGuarantees ([] : Operations F) = [] := rfl
 @[circuit_norm]
@@ -734,7 +789,7 @@ def subcircuitChannelsWithRequirements (ops : Operations F) : List (RawChannel F
     | .witness _ _ | .assert _ | .lookup _ | .interact _ => [])
   |> List.flatten
 
--- simp lemmas
+-- simp lemmas; TODO put elsewhere
 @[circuit_norm]
 theorem subcircuitChannelsWithRequirements_nil : subcircuitChannelsWithRequirements ([] : Operations F) = [] := rfl
 @[circuit_norm]
@@ -770,9 +825,7 @@ lemma interactions_toFlat {ops : Operations F} :
 lemma guarantees_iff_forall_mem {env : Environment F} {ops : Operations F} :
     Guarantees env ops ↔
     ∀ i ∈ ops.shallowInteractions, i.assumeGuarantees → i.Guarantees env := by
-  simp only [Guarantees]
-  induction ops using Operations.induct <;>
-    simp_all [circuit_norm, shallowInteractions]
+  simp [Guarantees, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
 def FullGuarantees (env : Environment F) (ops : Operations F) : Prop :=
@@ -786,9 +839,7 @@ def Requirements (env : Environment F) (ops : Operations F) : Prop :=
 lemma requirements_iff_forall_mem {env : Environment F} {ops : Operations F} :
     Requirements env ops ↔
     ∀ i ∈ ops.shallowInteractions, i.Requirements env := by
-  simp only [Requirements]
-  induction ops using Operations.induct <;>
-    simp_all [circuit_norm, shallowInteractions]
+  simp [Requirements, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
 def FullRequirements (env : Environment F) (ops : Operations F) : Prop :=
@@ -810,8 +861,7 @@ def InChannelsOrGuarantees (channels : List (RawChannel F)) (env : Environment F
 lemma inChannelsOrGuarantees_iff_forall_mem {channels : List (RawChannel F)} {env : Environment F} {ops : Operations F} :
     InChannelsOrGuarantees channels env ops ↔
     ∀ i ∈ ops.shallowInteractions, i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env) := by
-  simp only [InChannelsOrGuarantees]
-  induction ops using Operations.induct <;> simp_all [circuit_norm, shallowInteractions]
+  simp [InChannelsOrGuarantees, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
 def InChannelsOrGuaranteesFull (channels : List (RawChannel F)) (env : Environment F) (ops : Operations F) : Prop :=
@@ -825,8 +875,7 @@ def InChannelsOrRequirements (channels : List (RawChannel F)) (env : Environment
 lemma inChannelsOrRequirements_iff_forall_mem {channels : List (RawChannel F)} {env : Environment F} {ops : Operations F} :
     InChannelsOrRequirements channels env ops ↔
     ∀ i ∈ ops.shallowInteractions, i.channel ∈ channels ∨ i.Requirements env := by
-  simp only [InChannelsOrRequirements]
-  induction ops using Operations.induct <;> simp_all [circuit_norm, shallowInteractions]
+  simp [InChannelsOrRequirements, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
 def InChannelsOrRequirementsFull (channels : List (RawChannel F)) (env : Environment F) (ops : Operations F) : Prop :=
@@ -843,6 +892,14 @@ def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
     subcircuit s := s.Soundness env
   }
 
+lemma constraintsHoldWithInteractions_soundness_iff_forall_mem {env : Environment F} {ops : Operations F} :
+    ConstraintsHoldWithInteractions.Soundness env ops ↔
+    (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
+    (∀ l ∈ ops.shallowLookups, l.Soundness env) ∧
+    (∀ i ∈ ops.shallowInteractions, i.assumeGuarantees → i.Guarantees env) ∧
+    (∀ s ∈ ops.subcircuits, s.2.Soundness env) := by
+  simp [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_iff_forall_mem]
+
 @[circuit_norm]
 def ConstraintsHoldWithInteractions.Completeness (env : Environment F)
     (ops : Operations F) : Prop :=
@@ -852,3 +909,11 @@ def ConstraintsHoldWithInteractions.Completeness (env : Environment F)
     interact i := i.assumeGuarantees → i.Guarantees env
     subcircuit s := s.Completeness env
   }
+
+lemma constraintsHoldWithInteractions_completeness_iff_forall_mem {env : Environment F} {ops : Operations F} :
+    ConstraintsHoldWithInteractions.Completeness env ops ↔
+    (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
+    (∀ l ∈ ops.shallowLookups, l.Completeness env) ∧
+    (∀ i ∈ ops.shallowInteractions, i.assumeGuarantees → i.Guarantees env) ∧
+    (∀ s ∈ ops.subcircuits, s.2.Completeness env) := by
+  simp [ConstraintsHoldWithInteractions.Completeness, Operations.forAllNoOffset_iff_forall_mem]
