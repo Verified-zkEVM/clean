@@ -39,11 +39,6 @@ theorem witnessAny_localWitnesses (n : ℕ) (env : Environment F) :
     ProvableType.toElements_fromElements]
 
 @[circuit_norm]
-theorem witnessAny_interactionsWith {n : ℕ} {channel : RawChannel F} :
-    (witnessAny α |>.operations n).interactionsWith channel = [] := by
-  simp [circuit_norm, witnessAny, valueFromOffset, ProvableType.toElements_fromElements]
-
-@[circuit_norm]
 theorem witnessAny_output {n : ℕ} :
     (witnessAny (F:=F) α |>.output n) = varFromOffset α n  := by
   simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,

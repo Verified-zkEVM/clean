@@ -14,26 +14,47 @@ import Clean.Gadgets.Addition8.Theorems
 open ByteUtils (mod256 floorDiv256)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)
 
+section
+variable {F : Type} [Field F] [DecidableEq F] {Message : TypeMap} [ProvableType Message]
 -- TODO should we encode the channel width in the type, or not?
 -- if not, we have trouble passing interactions to channel.Guarantees / Requirements
 -- if we do, we have to define a channel filtering mechanism that establishes the output type
 -- we could also define a wrapper around channel.Guarantees / Requirements that returns True if the type doesn't match
-structure Interaction (F : Type) where
-  channel : RawChannel F
-  mult : F
-  msg : Array F
+structure InteractionVar (F : Type) (channel : RawChannel F) where
+  mult : Expression F
+  msg : Vector (Expression F) channel.arity
   assumeGuarantees : Bool
-  same_size : msg.size = channel.arity
 
-section
-variable {F : Type} [Field F] [DecidableEq F] {Message : TypeMap} [ProvableType Message]
+structure Interaction (F : Type) (channel : RawChannel F) where
+  mult : F
+  msg : Vector F channel.arity
+  assumeGuarantees : Bool
 
-def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
-  channel := i.channel
+def InteractionVar.eval {channel : RawChannel F} (env : Environment F) (i : InteractionVar F channel) : Interaction F channel where
   mult := env i.mult
-  msg := (i.msg.map env).toArray
+  msg := i.msg.map env
   assumeGuarantees := i.assumeGuarantees
-  same_size := by simp
+
+-- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
+open Classical in
+noncomputable def Operations.interactionsWith (channel : RawChannel F) (ops : Operations F)
+    (env : Environment F) : List (Interaction F channel) :=
+  ops.interactions.filterMap (fun i =>
+    if h : i.channel = channel
+      then some { i with msg := ⟨ i.msg.toArray, by simp [h] ⟩ }
+      else none)
+    |>.map (InteractionVar.eval env)
+
+-- @[circuit_norm]
+-- theorem interactionsWith_append (channel: RawChannel F) (ops1 ops2 : Operations F) :
+--     interactionsWith channel (ops1 ++ ops2) = interactionsWith channel ops1 ++ interactionsWith channel ops2 := by
+--   simp only [interactionsWith, Operations.interactions_append, List.filter_append]
+
+@[circuit_norm]
+theorem witnessAny_interactionsWith {α : TypeMap} [ProvableType α] {n : ℕ} {channel : RawChannel F}
+  {env : Environment F} :
+    (witnessAny α |>.operations n).interactionsWith channel env = [] := by
+  simp [circuit_norm, witnessAny, valueFromOffset, ProvableType.toElements_fromElements]
 
 /-- Lookup-like channels expose a predicate via both requirements and guarantees. -/
 structure StaticLookupChannel (F : Type) [Field F] [DecidableEq F] (Message : TypeMap) [ProvableType Message] where

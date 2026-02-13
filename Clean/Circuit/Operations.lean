@@ -505,13 +505,6 @@ def localAdds (env : Environment F) : Operations F → InteractionDelta F
   | .interact i :: ops => .single (i.eval' env) + localAdds env ops
   | .subcircuit s :: ops => s.localAdds env + localAdds env ops
 
--- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
-open Classical in
-@[circuit_norm]
-noncomputable def interactionsWith (channel : RawChannel F) (ops : Operations F) :
-    List (AbstractInteraction F) :=
-  ops.interactions.filter fun i => i.channel = channel
-
 -- TODO move all this to a theorems/lemmas file
 
 @[circuit_norm]
@@ -548,11 +541,6 @@ theorem interactions_append (ops1 ops2 : Operations F) :
   | nil => rfl
   | cons op ops1 ih =>
     cases op <;> simp_all only [List.cons_append, interactions, List.append_assoc]
-
-@[circuit_norm]
-theorem interactionsWith_append (channel: RawChannel F) (ops1 ops2 : Operations F) :
-    interactionsWith channel (ops1 ++ ops2) = interactionsWith channel ops1 ++ interactionsWith channel ops2 := by
-  simp only [interactionsWith, interactions_append, List.filter_append]
 
 -- Helper: a + foldl (+) 0 xs = foldl (+) a xs for InteractionDelta
 omit [Field F] in
