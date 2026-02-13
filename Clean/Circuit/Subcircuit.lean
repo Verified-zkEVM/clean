@@ -1,12 +1,36 @@
 import Clean.Circuit.Basic
 import Clean.Circuit.Theorems
 
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F : Type} [Field F]
 
 namespace FlatOperation
 open Circuit (ConstraintsHold.Completeness ConstraintsHold)
 
-omit [DecidableEq F] in
+omit [Field F] in
+lemma constraints_append {ops1 ops2 : List (FlatOperation F)} :
+    constraints (ops1 ++ ops2) = constraints ops1 ++ constraints ops2 := by
+  induction ops1 using FlatOperation.induct <;> simp_all [constraints]
+
+omit [Field F] in
+lemma lookups_append {ops1 ops2 : List (FlatOperation F)} :
+    lookups (ops1 ++ ops2) = lookups ops1 ++ lookups ops2 := by
+  induction ops1 using FlatOperation.induct <;> simp_all [lookups]
+
+lemma constraints_toFlat {ops : Operations F} :
+    constraints ops.toFlat = ops.constraints := by
+  induction ops using Operations.induct <;>
+    simp_all [Operations.toFlat, Operations.constraints, constraints, constraints_append]
+
+lemma lookups_toFlat {ops : Operations F} :
+    lookups ops.toFlat = ops.lookups := by
+  induction ops using Operations.induct <;>
+    simp_all [Operations.toFlat, Operations.lookups, lookups, lookups_append]
+
+lemma interactions_toFlat {ops : Operations F} :
+    interactions ops.toFlat = ops.interactions := by
+  induction ops using Operations.induct <;>
+    simp_all [Operations.toFlat, Operations.interactions, interactions, interactions_append]
+
 lemma constraintsHold_cons : ∀ {op : FlatOperation F}, ∀ {ops : List (FlatOperation F)}, ∀ {env : Environment F},
     ConstraintsHoldFlat env (op :: ops) ↔ ConstraintsHoldFlat env [op] ∧ ConstraintsHoldFlat env ops := by
   intro op ops env
@@ -16,7 +40,6 @@ lemma constraintsHold_cons : ∀ {op : FlatOperation F}, ∀ {ops : List (FlatOp
     split at h
     <;> simp_all only [ConstraintsHoldFlat, and_self])
 
-omit [DecidableEq F] in
 lemma constraintsHold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Environment F},
     ConstraintsHoldFlat env (a ++ b) ↔ ConstraintsHoldFlat env a ∧ ConstraintsHoldFlat env b := by
   intro a b env
@@ -33,37 +56,62 @@ lemma constraintsHold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Env
       obtain ⟨ h_op, h_ops ⟩ := constraintsHold_cons.mp h_a
       have h_rest := ih.mpr ⟨ h_ops, h_b ⟩
       exact constraintsHold_cons.mpr ⟨ h_op, h_rest ⟩
+
+lemma channelGuarantees_of_guarantees
+  {env : Environment F} {ops : List (FlatOperation F)} {channel : RawChannel F} :
+    FlatOperation.Guarantees env ops → FlatOperation.ChannelGuarantees channel env ops := by
+  simp_all [circuit_norm]
+
+lemma channelGuarantees_toFlat
+  {env : Environment F} {ops : Operations F} {channel : RawChannel F} :
+    FlatOperation.ChannelGuarantees channel env ops.toFlat ↔
+    ops.ChannelGuarantees channel env := by
+  simp_all [circuit_norm, interactions_toFlat]
+
+lemma guarantees_toFlat {env : Environment F} {ops : Operations F} :
+    FlatOperation.Guarantees env ops.toFlat ↔ ops.FullGuarantees env := by
+  simp_all [guarantees_iff_forall_mem, Operations.FullGuarantees, interactions_toFlat]
+
+lemma requirements_toFlat {env : Environment F} {ops : Operations F} :
+    FlatOperation.Requirements env ops.toFlat ↔ ops.FullRequirements env := by
+  simp_all [requirements_iff_forall_mem, Operations.FullRequirements, interactions_toFlat]
+
+lemma inChannelsOrGuarantees_toFlat {env : Environment F} {ops : Operations F}
+  {channels : List (RawChannel F)} :
+    FlatOperation.InChannelsOrGuarantees channels env ops.toFlat ↔
+    ops.InChannelsOrGuaranteesFull channels env := by
+  simp_all [inChannelsOrGuarantees_iff_forall_mem, Operations.InChannelsOrGuaranteesFull,
+    interactions_toFlat]
+
+lemma inChannelsOrRequirements_toFlat {env : Environment F} {ops : Operations F}
+  {channels : List (RawChannel F)} :
+    FlatOperation.InChannelsOrRequirements channels env ops.toFlat ↔
+    ops.InChannelsOrRequirementsFull channels env := by
+  simp_all [inChannelsOrRequirements_iff_forall_mem, Operations.InChannelsOrRequirementsFull,
+    interactions_toFlat]
 end FlatOperation
 
-omit [DecidableEq F] in
 @[circuit_norm]
 lemma Operations.toNested_toFlat (ops : Operations F) {name : String} :
     (NestedOperations.nested ⟨ name, ops.toNested ⟩).toFlat = ops.toFlat := by
   induction ops using Operations.induct
   <;> simp_all [toNested, toFlat, NestedOperations.toFlat]
 
-variable {α β: TypeMap} [ProvableType α] [ProvableType β]
-
-section
-open Circuit
-open FlatOperation (constraintsHold_cons constraintsHold_append)
-
-omit [DecidableEq F] in
 /--
 Consistency theorem which proves that flattened constraints are equivalent to the
 constraints created from the inductive `Operations` type, using flat constraints for subcircuits.
 -/
-theorem Circuit.constraintsHold_toFlat_iff : ∀ {ops : Operations F}, ∀ {env : Environment F},
-    ConstraintsHoldFlat env ops.toFlat ↔ ConstraintsHold env ops := by
-  intro ops env
-  induction ops using Operations.induct with
-  | empty => trivial
-  -- we can handle all non-empty cases at once
-  | witness | assert | lookup | subcircuit | interact =>
-    dsimp only [Operations.toFlat]
-    try rw [constraintsHold_cons]
-    try rw [constraintsHold_append]
-    simp_all only [ConstraintsHold, ConstraintsHoldFlat, and_true, true_and]
+theorem Circuit.constraintsHold_toFlat_iff {ops : Operations F} {env : Environment F} :
+    ConstraintsHoldFlat env ops.toFlat ↔ ops.ConstraintsHold env := by
+  simp only [FlatOperation.constraintsHoldFlat_iff_forall_mem, Operations.ConstraintsHold,
+    FlatOperation.constraints_toFlat, FlatOperation.lookups_toFlat]
+
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
+variable [DecidableEq F]
+
+section
+open Circuit
+open FlatOperation (constraintsHold_cons constraintsHold_append)
 
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
@@ -292,18 +340,6 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     localAdds_eq := by sorry
   }
 
-omit [DecidableEq F] in
-lemma FlatOperation.channelGuarantees_of_guarantees
-  {env : Environment F} {ops : List (FlatOperation F)} {channel : RawChannel F} :
-    FlatOperation.Guarantees env ops → FlatOperation.ChannelGuarantees channel env ops := by
-  induction ops using FlatOperation.induct <;> simp_all [circuit_norm]
-
-omit [DecidableEq F] in
-lemma FlatOperation.channelGuarantees_toFlat_of_channelGuarantees
-  {env : Environment F} {ops : Operations F} {channel : RawChannel F} :
-    FlatOperation.ChannelGuarantees channel env ops.toFlat → ops.ChannelGuarantees channel env := by
-  induction ops using Operations.induct <;> simp_all [circuit_norm, Operations.toFlat]
-
 -- TODO this is not done, if we really decide to have a variant of constraints-hold with interactions,
 -- then we need to change the Subcircuit structure to include them as well
 def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInteractions F β α)
@@ -319,17 +355,15 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
       FlatOperation.Guarantees env nestedOps.toFlat →
       (circuit.Spec input output env ∧ FlatOperation.Requirements env nestedOps.toFlat) := by
     intro env input output h_holds h_guarantees
-    rw [ops.toNested_toFlat] at h_holds
-    rw [ops.toNested_toFlat] at h_guarantees
-    have h_constraints : ConstraintsHold env ops := constraintsHold_toFlat_iff.mp h_holds
+    rw [ops.toNested_toFlat] at *
+    rw [constraintsHold_toFlat_iff] at h_holds
+    rw [FlatOperation.guarantees_toFlat] at h_guarantees
+    rw [FlatOperation.requirements_toFlat]
     have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
-      Circuit.can_replace_soundness h_constraints h_guarantees
+      can_replace_soundness h_holds h_guarantees
     have ⟨ h_spec, h_req ⟩ := circuit.soundness n env input_var input rfl h_soundness_input
-    have h_req_flat : FlatOperation.Requirements env ops.toFlat :=
-      Circuit.requirements_toFlat_of_soundness h_constraints h_guarantees h_req
-    exact ⟨ h_spec, by
-      rw [ops.toNested_toFlat]
-      exact h_req_flat ⟩
+    use h_spec
+    exact requirements_toFlat_of_soundness h_holds h_guarantees h_req
 
   have implied_by_completeness : ∀ env : Environment F,
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
@@ -341,8 +375,8 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
     have h_holds_inter := circuit.completeness n env input_var h_env_completeness input rfl assumptions
-    have h_pair := can_replace_completeness_and_guarantees h_consistent h_env h_holds_inter
-    exact ⟨ constraintsHold_toFlat_iff.mpr h_pair.1, h_pair.2 ⟩
+    rw [constraintsHold_toFlat_iff, FlatOperation.guarantees_toFlat]
+    exact can_replace_completeness_and_guarantees h_consistent h_env h_holds_inter
 
   {
     ops := nestedOps,
@@ -378,36 +412,12 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
 
     guarantees_iff := by
       intro env
-      have h_goal := circuit.guarantees_iff input_var n env
-      set channels := circuit.channelsWithGuarantees
-      rw [ops.toNested_toFlat] at *
-      have h_ops : (circuit.main input_var).operations n = ops := rfl
-      simp only [h_ops] at h_goal
-      suffices h_full_guarantees : ops.InChannelsOrGuaranteesFull channels env by
-        simp only [FlatOperation.InChannelsOrGuarantees]
-        rw [FlatOperation.forAll_toFlat_iff]
-        exact h_full_guarantees
-      generalize ops = ops at *
-      clear imply_soundness implied_by_completeness h_consistent h_ops
-      obtain ⟨ h_sublist, h_guarantees_iff ⟩ := h_goal
-      simp only [Operations.InChannelsOrGuaranteesFull, Operations.InChannelsOrGuarantees] at *
-      induction ops using Operations.induct with
-      | empty => simp_all [circuit_norm]
-      | witness | assert | lookup | interact =>
-        simp_all [circuit_norm]
-      | subcircuit s ops ih =>
-        simp_all only [circuit_norm, List.append_subset]
-        have h_guarantees_iff := s.guarantees_iff env
-        simp_all only [FlatOperation.InChannelsOrGuarantees, FlatOperation.forAllNoOffset,
-           List.forall_iff_forall_mem]
-        intro ops h_mem_ops
-        specialize h_guarantees_iff ops h_mem_ops
-        cases ops <;> simp_all only
-        rcases h_guarantees_iff with h_mem | h_guarantees
-        · left; exact h_sublist.1 h_mem
-        · right; exact h_guarantees
-    -- same proof as above, might want to extract common logic
-    requirements_iff := by sorry
+      rw [ops.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
+      apply in_channels_or_guarantees_full
+    requirements_iff := by
+      intro env
+      rw [ops.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
+      apply in_channels_or_requirements_full
   }
 end
 
