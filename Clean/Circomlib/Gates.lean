@@ -908,7 +908,7 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : input = eval env input_var)
     (h_assumptions : Assumptions n input)
-    (h_constraints : Circuit.ConstraintsHold env ((main input_var).operations offset)) :
+    (h_constraints : Operations.ConstraintsHold env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
     IsBool output := by
   exact (soundness n offset env input_var input h_eval h_assumptions

@@ -230,7 +230,7 @@ def localAdds (env : Environment F) : List (FlatOperation F) → InteractionDelt
   | .witness _ _ :: ops => localAdds env ops
   | .assert _ :: ops => localAdds env ops
   | .lookup _ :: ops => localAdds env ops
-  | .interact i :: ops => i.eval env :: localAdds env ops
+  | .interact i :: ops => i.eval' env :: localAdds env ops
 end FlatOperation
 
 export FlatOperation (ConstraintsHoldFlat)
@@ -502,7 +502,7 @@ def localAdds (env : Environment F) : Operations F → InteractionDelta F
   | .witness _ _ :: ops => localAdds env ops
   | .assert _ :: ops => localAdds env ops
   | .lookup _ :: ops => localAdds env ops
-  | .interact i :: ops => .single (i.eval env) + localAdds env ops
+  | .interact i :: ops => .single (i.eval' env) + localAdds env ops
   | .subcircuit s :: ops => s.localAdds env + localAdds env ops
 
 -- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
@@ -528,7 +528,7 @@ theorem localAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operations 
     localAdds env (.lookup l :: ops) = localAdds env ops := rfl
 @[circuit_norm]
 theorem localAdds_interact (env : Environment F) (i : AbstractInteraction F) (ops : Operations F) :
-    localAdds env (.interact i :: ops) = .single (i.eval env) + localAdds env ops := rfl
+    localAdds env (.interact i :: ops) = .single (i.eval' env) + localAdds env ops := rfl
 @[circuit_norm]
 theorem localAdds_subcircuit (env : Environment F) {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
     localAdds env (.subcircuit s :: ops) = s.localAdds env + localAdds env ops := rfl
@@ -944,3 +944,67 @@ lemma constraintsHoldWithInteractions_completeness_iff_forall_mem {env : Environ
     (∀ i ∈ ops.shallowInteractions, i.assumeGuarantees → i.Guarantees env) ∧
     (∀ s ∈ ops.subcircuits, s.2.Completeness env) := by
   simp [ConstraintsHoldWithInteractions.Completeness, Operations.forAllNoOffset_iff_forall_mem]
+
+namespace Operations
+-- simp lemmas for suboperations
+
+@[circuit_norm] lemma constraints_nil : constraints ([] : Operations F) = [] := rfl
+@[circuit_norm] lemma constraints_assert (e : Expression F) (ops : Operations F) :
+  constraints (.assert e :: ops) = e :: constraints ops := rfl
+@[circuit_norm] lemma constraints_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  constraints (.witness m c :: ops) = constraints ops := rfl
+@[circuit_norm] lemma constraints_lookup (l : Lookup F) (ops : Operations F) :
+  constraints (.lookup l :: ops) = constraints ops := rfl
+@[circuit_norm] lemma constraints_interact (i : AbstractInteraction F) (ops : Operations F) :
+  constraints (.interact i :: ops) = constraints ops := rfl
+@[circuit_norm] lemma constraints_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  constraints (.subcircuit s :: ops) = FlatOperation.constraints s.ops.toFlat ++ constraints ops := rfl
+
+@[circuit_norm] lemma lookups_nil : lookups ([] : Operations F) = [] := rfl
+@[circuit_norm] lemma lookups_assert (e : Expression F) (ops : Operations F) :
+  lookups (.assert e :: ops) = lookups ops := rfl
+@[circuit_norm] lemma lookups_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  lookups (.witness m c :: ops) = lookups ops := rfl
+@[circuit_norm] lemma lookups_lookup (l : Lookup F) (ops : Operations F) :
+  lookups (.lookup l :: ops) = l :: lookups ops := rfl
+@[circuit_norm] lemma lookups_interact (i : AbstractInteraction F) (ops : Operations F) :
+  lookups (.interact i :: ops) = lookups ops := rfl
+@[circuit_norm] lemma lookups_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  lookups (.subcircuit s :: ops) = FlatOperation.lookups s.ops.toFlat ++ lookups ops := rfl
+
+@[circuit_norm] lemma interactions_nil : interactions ([] : Operations F) = [] := rfl
+@[circuit_norm] lemma interactions_assert (e : Expression F) (ops : Operations F) :
+  interactions (.assert e :: ops) = interactions ops := rfl
+@[circuit_norm] lemma interactions_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  interactions (.witness m c :: ops) = interactions ops := rfl
+@[circuit_norm] lemma interactions_lookup (l : Lookup F) (ops : Operations F) :
+  interactions (.lookup l :: ops) = interactions ops := rfl
+@[circuit_norm] lemma interactions_interact (i : AbstractInteraction F) (ops : Operations F) :
+  interactions (.interact i :: ops) = i :: interactions ops := rfl
+@[circuit_norm] lemma interactions_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  interactions (.subcircuit s :: ops) = FlatOperation.interactions s.ops.toFlat ++ interactions ops := rfl
+
+@[circuit_norm] lemma witnessOperations_nil : witnessOperations ([] : Operations F) = [] := rfl
+@[circuit_norm] lemma witnessOperations_assert (e : Expression F) (ops : Operations F) :
+  witnessOperations (.assert e :: ops) = witnessOperations ops := rfl
+@[circuit_norm] lemma witnessOperations_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  witnessOperations (.witness m c :: ops) = ⟨m, c⟩ :: witnessOperations ops := rfl
+@[circuit_norm] lemma witnessOperations_lookup (l : Lookup F) (ops : Operations F) :
+  witnessOperations (.lookup l :: ops) = witnessOperations ops := rfl
+@[circuit_norm] lemma witnessOperations_interact (i : AbstractInteraction F) (ops : Operations F) :
+  witnessOperations (.interact i :: ops) = witnessOperations ops := rfl
+@[circuit_norm] lemma witnessOperations_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  witnessOperations (.subcircuit s :: ops) = FlatOperation.witnessOperations s.ops.toFlat ++ witnessOperations ops := rfl
+
+@[circuit_norm] lemma subcircuits_nil : subcircuits ([] : Operations F) = [] := rfl
+@[circuit_norm] lemma subcircuits_assert (e : Expression F) (ops : Operations F) :
+  subcircuits (.assert e :: ops) = subcircuits ops := rfl
+@[circuit_norm] lemma subcircuits_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  subcircuits (.witness m c :: ops) = subcircuits ops := rfl
+@[circuit_norm] lemma subcircuits_lookup (l : Lookup F) (ops : Operations F) :
+  subcircuits (.lookup l :: ops) = subcircuits ops := rfl
+@[circuit_norm] lemma subcircuits_interact (i : AbstractInteraction F) (ops : Operations F) :
+  subcircuits (.interact i :: ops) = subcircuits ops := rfl
+@[circuit_norm] lemma subcircuits_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  subcircuits (.subcircuit s :: ops) = ⟨n, s⟩ :: subcircuits ops := rfl
+end Operations

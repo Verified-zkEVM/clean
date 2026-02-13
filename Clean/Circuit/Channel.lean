@@ -67,7 +67,7 @@ instance [Repr F] : Repr (AbstractInteraction F) where
     "(Interaction channel=" ++ i.channel.name ++
     ", mult=" ++ repr i.mult ++ ", msg=" ++ repr i.msg ++ ")"
 
-def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) :
+def AbstractInteraction.eval' (env : Environment F) (i : AbstractInteraction F) :
     RawInteraction F :=
   (i.channel.name,env i.mult, (i.msg.map env).toArray)
 
@@ -180,9 +180,9 @@ lemma RawChannel.filter_eq (channel : Channel F Message) (is : RawInteractions F
 lemma Channel.filter_self (channel : Channel F Message) (env : Environment F)
   (mult : Expression F) (msg : Message (Expression F)) (assumeGuarantees : Bool) (is : RawInteractions F) :
     let interaction : ChannelInteraction F Message := { channel, mult, msg, assumeGuarantees };
-    channel.toRaw.filter ((AbstractInteraction.eval env interaction.toRaw) :: is) =
+    channel.toRaw.filter ((AbstractInteraction.eval' env interaction.toRaw) :: is) =
       (env mult, (toElements msg).map env) :: channel.toRaw.filter is := by
-    simp only [RawChannel.filter, AbstractInteraction.eval, ChannelInteraction.toRaw, Channel.toRaw,
+    simp only [RawChannel.filter, AbstractInteraction.eval', ChannelInteraction.toRaw, Channel.toRaw,
       List.filterMap_cons, Vector.toArray_map, Array.size_map, Vector.size_toArray,
       and_self, ↓reduceDIte]
     congr 1
@@ -199,7 +199,7 @@ variable {Message' : TypeMap} [ProvableType Message']
 lemma Channel.filter_other (channel : Channel F Message) (channel' : Channel F Message') (env : Environment F)
   (mult : Expression F) (msg : Message' (Expression F)) (assumeGuarantees : Bool) (is : RawInteractions F) :
     let interaction : ChannelInteraction F Message' := { channel := channel', mult, msg, assumeGuarantees };
-    channel.toRaw.filter (AbstractInteraction.eval env interaction.toRaw :: is) =
+    channel.toRaw.filter (AbstractInteraction.eval' env interaction.toRaw :: is) =
       if h : channel'.name = channel.name ∧ size Message' = size Message
       then ((env mult, (toElements msg).map env |>.cast h.2) :: channel.toRaw.filter is)
       else channel.toRaw.filter is := by
@@ -441,8 +441,8 @@ lemma Channel.pushed_def (chan : Channel F Message) (msg : Message F) :
 lemma InteractionDelta.single_eq_channel_emitted (channel : Channel F Message) (mult : Expression F)
     (msg : Message (Expression F)) (assumeGuarantees : Bool) (env : Environment F) :
     let interaction : ChannelInteraction F Message := { channel, mult, msg, assumeGuarantees }
-    .single (interaction.toRaw.eval env) = channel.emitted (mult.eval env) (eval env msg) := by
-  simp only [Channel.emitted, AbstractInteraction.eval, InteractionDelta.single, ChannelInteraction.toRaw, eval,
+    .single (interaction.toRaw.eval' env) = channel.emitted (mult.eval env) (eval env msg) := by
+  simp only [Channel.emitted, AbstractInteraction.eval', InteractionDelta.single, ChannelInteraction.toRaw, eval,
     ProvableType.toElements_fromElements]
   rfl
 

@@ -342,7 +342,7 @@ lemma usesLocalWitnesses_to_subcircuit {env : Environment F} {ops : Operations F
   intro h_env
   induction ops, n, h_consistent using Operations.inductConsistent <;>
     simp_all [circuit_norm, Environment.UsesLocalWitnesses, Environment.UsesLocalWitnessesFlat,
-      Operations.forAllFlat, Operations.subcircuits]
+      Operations.forAllFlat]
 end Environment
 
 namespace Circuit
