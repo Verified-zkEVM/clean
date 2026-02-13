@@ -18,38 +18,40 @@ section
 variable {F : Type} [Field F] [DecidableEq F] {Message : TypeMap} [ProvableType Message]
 -- TODO should we encode the channel width in the type, or not?
 -- if not, we have trouble passing interactions to channel.Guarantees / Requirements
+-- => but that doesn't really matter, we can always do (i.channel = channel) → i.Guarantees ...
 -- if we do, we have to define a channel filtering mechanism that establishes the output type
--- we could also define a wrapper around channel.Guarantees / Requirements that returns True if the type doesn't match
-structure InteractionVar (F : Type) (channel : RawChannel F) where
-  mult : Expression F
-  msg : Vector (Expression F) channel.arity
-  assumeGuarantees : Bool
-
-structure Interaction (F : Type) (channel : RawChannel F) where
+structure Interaction (F : Type) where
+  channel : RawChannel F
   mult : F
   msg : Vector F channel.arity
   assumeGuarantees : Bool
 
-def InteractionVar.eval {channel : RawChannel F} (env : Environment F) (i : InteractionVar F channel) : Interaction F channel where
+def InteractionVar.eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
+  channel := i.channel
   mult := env i.mult
   msg := i.msg.map env
   assumeGuarantees := i.assumeGuarantees
 
 -- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
 open Classical in
-noncomputable def Operations.interactionsWith (channel : RawChannel F) (ops : Operations F)
-    (env : Environment F) : List (Interaction F channel) :=
+@[circuit_norm]
+noncomputable def Operations.interactionsWith (channel : RawChannel F) (env : Environment F)
+    (ops : Operations F) : List (Interaction F) :=
   ops.interactions.filterMap (fun i =>
     if h : i.channel = channel
       then some { i with msg := ⟨ i.msg.toArray, by simp [h] ⟩ }
       else none)
     |>.map (InteractionVar.eval env)
 
--- @[circuit_norm]
--- theorem interactionsWith_append (channel: RawChannel F) (ops1 ops2 : Operations F) :
---     interactionsWith channel (ops1 ++ ops2) = interactionsWith channel ops1 ++ interactionsWith channel ops2 := by
---   simp only [interactionsWith, Operations.interactions_append, List.filter_append]
+omit [DecidableEq F] in
+@[circuit_norm]
+theorem Operations.interactionsWith_append {channel: RawChannel F} {env : Environment F}
+  {ops1 ops2 : Operations F} :
+    interactionsWith channel env (ops1 ++ ops2) =
+    interactionsWith channel env ops1 ++ interactionsWith channel env ops2 := by
+  simp [interactionsWith, interactions_append]
 
+omit [DecidableEq F] in
 @[circuit_norm]
 theorem witnessAny_interactionsWith {α : TypeMap} [ProvableType α] {n : ℕ} {channel : RawChannel F}
   {env : Environment F} :
@@ -466,6 +468,14 @@ def environment (witness : TableWitness F) (row : Vector F witness.width) : Envi
   data := witness.data
   interactions := [] -- I think we can remove this field??
 
+@[circuit_norm]
+def channelsWithGuarantees (witness : TableWitness F) : List (RawChannel F) :=
+  witness.abstract.circuit.channelsWithGuarantees
+
+@[circuit_norm]
+def channelsWithRequirements (witness : TableWitness F) : List (RawChannel F) :=
+  witness.abstract.circuit.channelsWithRequirements
+
 def Constraints (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
     witness.abstract.operations.ConstraintsHold (witness.environment row)
@@ -498,47 +508,43 @@ def Spec (witness : TableWitness F) : Prop :=
   witness.table.Forall fun row =>
     witness.abstract.Spec (witness.environment row)
 
-noncomputable def interactions (witness : TableWitness F) (channel : RawChannel F) : List (Interaction F) :=
+noncomputable
+def interactionsWith (witness : TableWitness F) (channel : RawChannel F) : List (Interaction F channel) :=
   witness.table.flatMap fun row =>
-    witness.abstract.operations.interactionsWith channel
-    |>.map (AbstractInteraction.eval (witness.environment row))
+    witness.abstract.operations.interactionsWith channel (witness.environment row)
 
-lemma guarantees_iff_channelGuarantees
-    (tableWitness : TableWitness F) :
+lemma guarantees_iff_channelGuarantees (tableWitness : TableWitness F) :
     tableWitness.Guarantees ↔
-      (∀ channel ∈ tableWitness.abstract.circuit.channelsWithGuarantees,
-        tableWitness.ChannelGuarantees channel) := by
+    ∀ channel ∈ tableWitness.channelsWithGuarantees,
+      tableWitness.ChannelGuarantees channel := by
   simp only [TableWitness.Guarantees, TableWitness.ChannelGuarantees, List.forall_iff_forall_mem,
-    AbstractTable.operations]
+    AbstractTable.operations, channelsWithGuarantees]
   simp only [AbstractTable.guarantees_instantiate, AbstractTable.channelGuarantees_instantiate]
   simp only [FormalCircuitWithInteractions.guarantees_iff']
   constructor <;> simp_all
 
 lemma in_channels_or_requirements_full (tableWitness : TableWitness F) :
-    tableWitness.InChannelsOrRequirements tableWitness.abstract.circuit.channelsWithRequirements := by
-  simp only [InChannelsOrRequirements, List.forall_iff_forall_mem, AbstractTable.operations]
+    tableWitness.InChannelsOrRequirements tableWitness.channelsWithRequirements := by
+  simp only [InChannelsOrRequirements, List.forall_iff_forall_mem, AbstractTable.operations,
+  channelsWithRequirements]
   intro row h_row
   rw [AbstractTable.inChannelsOrRequirements_instantiate]
   apply tableWitness.abstract.circuit.in_channels_or_requirements_full
 
-lemma requirements_of_not_mem
-    (tableWitness : TableWitness F)
-    {channel : RawChannel F}
-    (h_not_req : channel ∉ tableWitness.abstract.circuit.channelsWithRequirements) :
+lemma requirements_of_not_mem (tableWitness : TableWitness F)
+  {channel : RawChannel F} (h_not_req : channel ∉ tableWitness.channelsWithRequirements) :
     tableWitness.ChannelRequirements channel := by
   have h_in_or_req := tableWitness.in_channels_or_requirements_full
   simp only [ChannelRequirements, InChannelsOrRequirements, List.forall_iff_forall_mem] at *
   intro row h_row
   specialize h_in_or_req row h_row
-  apply Operations.requirements_of_not_mem _ (tableWitness.abstract.circuit.channelsWithRequirements)
+  apply Operations.requirements_of_not_mem _ (tableWitness.channelsWithRequirements)
   assumption
   assumption
 
-lemma interactions_requirements_of_not_mem
-    (tableWitness : TableWitness F)
-    {channel : RawChannel F}
-    (h_not_req : channel ∉ tableWitness.abstract.circuit.channelsWithRequirements) :
-    (tableWitness.interactions channel).Forall fun i =>
+lemma interactions_requirements_of_not_mem (tableWitness : TableWitness F) {channel : RawChannel F}
+  (h_not_req : channel ∉ tableWitness.channelsWithRequirements) :
+    (tableWitness.interactionsWith channel).Forall fun i =>
       channel.Requirements i.mult ⟨ i.msg, by rw[i.same_size]; sorry ⟩ tableWitness.data := by
   suffices tableWitness.ChannelRequirements channel by
     sorry
