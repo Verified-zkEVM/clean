@@ -14,10 +14,6 @@ This workflow is demonstrated by the tests in this repo, specifically in [`tests
 The integration test generates a Fibonacci trace from Lean and proves it with plonky3:
 
 ```bash
-# Ensure Lean's lake is on PATH (required for trace generation)
-export PATH="$HOME/.elan/bin:$PATH"
-
-# Run the test
 cd backends/plonky3
 cargo test --release -- --nocapture test_clean_fib
 ```

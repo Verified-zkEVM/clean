@@ -15,3 +15,28 @@ jobs:
       - name: Check for consecutive empty lines
         run: python3 scripts/check-consecutive-empty-lines.py
       - uses: leanprover/lean-action@v1
+
+  plonky3-backend:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          # Cache Lean build for trace generation
+          use-mathlib-cache: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            backends/plonky3/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('backends/plonky3/Cargo.lock') }}
+      - name: Run plonky3 integration test
+        run: |
+          cd backends/plonky3
+          cargo test --release -- --nocapture test_clean_fib
