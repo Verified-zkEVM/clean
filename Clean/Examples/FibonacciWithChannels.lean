@@ -15,7 +15,9 @@ open ByteUtils (mod256 floorDiv256)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)
 
 section
-variable {F : Type} [Field F] [DecidableEq F] {Message : TypeMap} [ProvableType Message]
+variable {F : Type} [Field F] [DecidableEq F]
+variable {Input Output Message : TypeMap} [ProvableType Input] [ProvableType Output] [ProvableType Message]
+
 -- TODO should we encode the channel width in the type, or not?
 -- if not, we have trouble passing interactions to channel.Guarantees / Requirements
 -- => but that doesn't really matter, we can always do (i.channel = channel) → i.Guarantees ...
@@ -26,37 +28,58 @@ structure Interaction (F : Type) where
   msg : Vector F channel.arity
   assumeGuarantees : Bool
 
-def InteractionVar.eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
+namespace Interaction
+def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
+  i.assumeGuarantees → i.channel.Guarantees i.mult i.msg data
+
+def Requirements (i : Interaction F) (data : ProverData F) : Prop :=
+  i.channel.Requirements i.mult i.msg data
+end Interaction
+
+def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
   channel := i.channel
   mult := env i.mult
   msg := i.msg.map env
   assumeGuarantees := i.assumeGuarantees
 
+@[circuit_norm]
+def Operations.interactionValues (ops : Operations F)
+    (env : Environment F) : List (Interaction F) :=
+  ops.interactions.map (AbstractInteraction.eval env)
+
 -- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
 open Classical in
+noncomputable def Operations.interactionsWith (channel : RawChannel F)
+    (ops : Operations F) : List (AbstractInteraction F) :=
+  ops.interactions.filter (fun i => i.channel = channel)
+
+open Classical in
 @[circuit_norm]
-noncomputable def Operations.interactionsWith (channel : RawChannel F) (env : Environment F)
-    (ops : Operations F) : List (Interaction F) :=
-  ops.interactions.filterMap (fun i =>
-    if h : i.channel = channel
-      then some { i with msg := ⟨ i.msg.toArray, by simp [h] ⟩ }
-      else none)
-    |>.map (InteractionVar.eval env)
+noncomputable def Operations.interactionValuesWith (channel : RawChannel F)
+    (ops : Operations F) (env : Environment F) : List (Interaction F) :=
+  ops.interactionsWith channel |>.map (AbstractInteraction.eval env)
 
 omit [DecidableEq F] in
 @[circuit_norm]
-theorem Operations.interactionsWith_append {channel: RawChannel F} {env : Environment F}
-  {ops1 ops2 : Operations F} :
-    interactionsWith channel env (ops1 ++ ops2) =
-    interactionsWith channel env ops1 ++ interactionsWith channel env ops2 := by
+theorem Operations.interactionsWith_append {channel: RawChannel F} {ops1 ops2 : Operations F} :
+    interactionsWith channel (ops1 ++ ops2) =
+    interactionsWith channel ops1 ++ interactionsWith channel ops2 := by
   simp [interactionsWith, interactions_append]
 
 omit [DecidableEq F] in
 @[circuit_norm]
-theorem witnessAny_interactionsWith {α : TypeMap} [ProvableType α] {n : ℕ} {channel : RawChannel F}
-  {env : Environment F} :
-    (witnessAny α |>.operations n).interactionsWith channel env = [] := by
-  simp [circuit_norm, witnessAny, valueFromOffset, ProvableType.toElements_fromElements]
+lemma Operations.forall_interactionsWith_iff {channel : RawChannel F} {ops : Operations F}
+  {motive : AbstractInteraction F → Prop} :
+    (∀ i ∈ ops.interactionsWith channel, motive i) ↔
+    (∀ i ∈ ops.interactions, i.channel = channel → motive i) := by
+  simp [interactionsWith]
+
+omit [DecidableEq F] in
+@[circuit_norm]
+theorem witnessAny_interactionsWith {n : ℕ} {channel : RawChannel F} :
+    (witnessAny Message |>.operations n).interactionsWith channel = [] := by
+  simp [circuit_norm, witnessAny, valueFromOffset, ProvableType.toElements_fromElements,
+    Operations.interactionsWith]
 
 /-- Lookup-like channels expose a predicate via both requirements and guarantees. -/
 structure StaticLookupChannel (F : Type) [Field F] [DecidableEq F] (Message : TypeMap) [ProvableType Message] where
@@ -75,279 +98,11 @@ def Channel.fromStatic (F : Type) [Field F] [DecidableEq F]
 
 def StaticLookupChannel.channel (slc : StaticLookupChannel F Message) :=
   Channel.fromStatic F Message slc
-end
 
-variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
-
-def BytesTable : StaticLookupChannel (F p) field where
-  name := "bytes"
-  table := List.finRange 256 |>.map ByteUtils.fromByte
-  Guarantees msg := msg.val < 256
-  guarantees_iff := by
-    intro (msg : F p)
-    simp only [List.mem_map, List.mem_finRange, true_and]
-    constructor
-    · intro h_lt
-      exact ⟨⟨ msg.val, h_lt ⟩, ByteUtils.fromByte_eq ..⟩
-    · intro ⟨ ⟨ b, hb ⟩, h_eq ⟩
-      rw [← h_eq]
-      apply ByteUtils.fromByte_lt
-
-def BytesChannel := Channel.fromStatic (F p) field BytesTable
-
--- bytes "circuit" that just pushes all bytes
--- probably shouldn't be a "circuit" at all
-def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
-  main multiplicities := do
-    let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
-      BytesChannel.emit multiplicities[i] (const i)
-
-  localLength _ := 0
-  localLength_eq := by simp +arith only [circuit_norm]
-  output _ _ := ()
-
-  localAdds
-  | multiplicities, _, _ =>
-    (List.finRange 256).flatMap fun ⟨ i, _ ⟩ =>
-      BytesChannel.emitted multiplicities[i] i
-
-  Assumptions | multiplicities, _ => True
-  Spec _ _ _ := True
-
-  -- TODO need better tools for finite range foreach, but probably this shouldn't be a circuit anyway
-  localAdds_eq := by sorry
-  soundness := by sorry
-  completeness := by sorry
-
-  channelsWithRequirements := [ BytesChannel.toRaw ]
-
-instance Add8Channel : Channel (F p) fieldTriple where
-  name := "add8"
-  Guarantees
-  | mult, (x, y, z), _ =>
-    mult = -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
-  Requirements
-  | mult, (x, y, z), _ =>
-    mult ≠ -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
-
-structure Add8Inputs F where
-  x : F
-  y : F
-  z : F
-  m : F -- multiplicity
-deriving ProvableStruct
-
-def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
-  main | { x, y, z, m } => do
-    -- range-check z using the bytes channel
-    -- (x and y are guaranteed to be range-checked from earlier interactions)
-    BytesChannel.pull z
-
-    -- witness the output carry
-    let carry ← witness fun eval => floorDiv256 (eval (x + y))
-    assertBool carry
-
-    -- assert correctness
-    x + y - z - carry * 256 === 0
-
-    -- emit to the add8 channel with multiplicity `m`
-    Add8Channel.emit m (x, y, z)
-
-  localLength _ := 1
-  output _ _ := ()
-
-  localAdds
-  | { x, y, z, m }, _, _ =>
-    BytesChannel.pulled z + Add8Channel.emitted m (x, y, z)
-
-  -- TODO make coercion work without .toRaw
-  channelsWithGuarantees := [ BytesChannel.toRaw ]
-  channelsWithRequirements := [ Add8Channel.toRaw ]
-  requirements_iff := by
-    simp only [circuit_norm, seval, BytesChannel, Add8Channel]
-
-  -- TODO feels weird to put the entire spec in the completeness assumptions
-  -- can we get something from the channel interactions??
-  Assumptions
-  | { x, y, z, m }, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
-  Spec _ _ _ := True
-
-  soundness := by
-    circuit_proof_start [BytesChannel, Add8Channel]
-    set carry := env.get i₀
-    obtain ⟨ hz, hcarry, heq ⟩ := h_holds
-    intro hm hx hy
-    have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
-    simp_all
-
-  -- TODO: we didn't need to prove z < 256, but we could have
-  -- for completeness, it would make sense to require proving the Guarantees as well
-  -- what about the Requirements?
-  completeness := by
-    circuit_proof_start
-    set carry := env.get i₀
-    simp_all only
-    rcases h_assumptions with ⟨ hx, hy, hz, heq ⟩
-    have add_completeness_bool := Theorems.completeness_bool input_x input_y 0 hx hy (by simp)
-    have add_completeness_add := Theorems.completeness_add input_x input_y 0 hx hy (by simp)
-    simp only [add_zero] at add_completeness_bool add_completeness_add
-    have h_input_z : input_z = mod256 (input_x + input_y) := by
-      apply FieldUtils.ext
-      rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-      linarith [hx, hy, ‹Fact (p > 512)›.elim]
-    have h_bytes_guarantee : BytesChannel.Guarantees (-1) input_z env.data := by
-      simpa [BytesChannel, Channel.fromStatic, BytesTable] using hz
-    refine ⟨h_bytes_guarantee, ?_⟩
-    refine ⟨ ?_, ?_ ⟩
-    · simpa [floorDiv256] using add_completeness_bool
-    · simpa [h_input_z, floorDiv256] using add_completeness_add
-
--- define valid Fibonacci state transitions
-
-def fibonacciStep : ℕ × ℕ → ℕ × ℕ
-  | (x, y) => (y, (x + y) % 256)
-
-def fibonacci : ℕ → (ℕ × ℕ) → (ℕ × ℕ)
-  | 0, state => state
-  | n + 1, state => fibonacciStep (fibonacci n state)
-
-/-- helper lemma: fibonacci states are bytes -/
-lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n (0, 1) → x < 256 ∧ y < 256 := by
-  induction n generalizing x y with
-  | zero => simp_all [fibonacci]
-  | succ n ih =>
-    specialize ih rfl
-    have : 0 < 256 := by norm_num
-    simp_all [fibonacci, fibonacciStep, Nat.mod_lt]
-
-instance FibonacciChannel : Channel (F p) fieldTriple where
-  name := "fibonacci"
-
-  -- when pulling, we want the guarantee that the previous interactions pushed
-  -- some tuple equal to ours which represents a valid Fibonacci step
-  Guarantees
-  | m, (n, x, y), _ =>
-    if (m = -1)
-    then
-      -- (x, y) is a valid Fibonacci state
-      ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-    else True
-
-  Requirements
-  | m, (n, x, y), _ =>
-    if (m = 1)
-    then
-      -- (x, y) is a valid Fibonacci state
-      ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-    else True
-
-def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
-  main | (n, x, y) => do
-    -- pull the current Fibonacci state
-    FibonacciChannel.pull (n, x, y)
-
-    -- witness the next Fibonacci value
-    let z ← witness fun eval => mod256 (eval (x + y))
-
-    -- pull from the Add8 channel to check addition
-    Add8Channel.pull (x, y, z)
-
-    -- push the next Fibonacci state
-    FibonacciChannel.push (n + 1, y, z)
-
-  localLength _ := 1
-  output _ _ := ()
-
-  localAdds
-  | (n, x, y), i₀, env =>
-    let z := env.get i₀;
-    FibonacciChannel.pulled (n, x, y) +
-    Add8Channel.pulled (x, y, z) +
-    FibonacciChannel.pushed (n + 1, y, z)
-
-  channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
-  channelsWithRequirements := [ FibonacciChannel.toRaw ]
-
-  Assumptions
-  | (n, x, y), _ =>
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-  Spec _ _ _ := True
-
-  soundness := by
-    circuit_proof_start [reduceIte, seval]
-    rcases input with ⟨ n, x, y ⟩ -- TODO circuit_proof_start should have done this
-    simp only [Prod.mk.injEq] at h_input
-    -- why are these not simped?? maybe because fieldPair is not well-recognized
-    -- rw [RawChannel.filter_eq] at h_holds ⊢
-    -- rw [Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq]
-    simp_all only [circuit_norm]
-    set z := env.get i₀
-    simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte] at h_holds ⊢
-    obtain ⟨ ⟨k, fiby, hk⟩, hadd ⟩ := h_holds
-    have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
-    use k + 1
-    simp only [fibonacci, fibonacciStep, ← fiby]
-    rw [ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
-    simp_all
-
-  completeness := by
-    circuit_proof_start [reduceIte]
-    rcases input with ⟨ n, x, y ⟩
-    simp only [Prod.mk.injEq] at h_input
-    simp_all only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte]
-    intro hx hy
-    rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-    linarith [hx, hy, ‹Fact (p > 512)›.elim]
-
--- additional circuits that pull/push remaining channel interactions
--- these really wouldn't have to be circuits, need to find a better place for tying together channels
-
--- completing Fibonacci channel with input and output
-def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit where
-  main | (n, x, y) => do
-    -- push initial state, pull the final state
-    FibonacciChannel.push (0, 0, 1)
-    FibonacciChannel.pull (n, x, y)
-
-  localLength _ := 0
-  output _ _ := ()
-  localAdds
-  | (n, x, y), _, _ =>
-    FibonacciChannel.pushed (0, 0, 1) +
-    FibonacciChannel.pulled (n, x, y)
-
-  channelsWithGuarantees := [ FibonacciChannel.toRaw ]
-  channelsWithRequirements := [ FibonacciChannel.toRaw ]
-
-  Assumptions
-  | (n, x, y), _ =>
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-  Spec
-  | (n, x, y), _, _ =>
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-
-  soundness := by
-    circuit_proof_start [reduceIte]
-    rcases input with ⟨ n, x, y ⟩
-    simp only [Prod.mk.injEq] at h_input
-    simp_all only [circuit_norm, FibonacciChannel, reduceIte,
-      and_true, ZMod.val_zero, ZMod.val_one]
-    exact ⟨ 0, rfl, rfl ⟩
-
-  completeness := by
-    circuit_proof_start [reduceIte]
-    rcases input with ⟨ n, x, y ⟩
-    simp only [Prod.mk.injEq] at h_input
-    simpa [circuit_norm, FibonacciChannel, reduceIte] using h_assumptions
-
-section
 -- define what global soundness means for an ensemble of circuits/tables and channels
 
 -- table contains the concrete values on which we expect constraints to hold
 -- which also defines what concrete interactions are contained in each channel
-
-variable {F : Type} [Field F] [DecidableEq F]
-variable {Input Output Message : TypeMap} [ProvableType Input] [ProvableType Output] [ProvableType Message]
 
 -- tables need to be instantiated with a concrete circuit, not a family of circuits
 -- this is achieved for any FormalCircuit* by witnessing the inputs and plugging them in
@@ -385,7 +140,6 @@ instance (t: AbstractTable F) : ProvableType t.Input := t.provableInput
 instance (t: AbstractTable F) : ProvableType t.Output := t.provableOutput
 
 namespace AbstractTable
-@[circuit_norm]
 def operations (table : AbstractTable F) : Operations F :=
   table.circuit.instantiate.operations 0
 
@@ -429,6 +183,14 @@ lemma channelGuarantees_instantiate
     (env : Environment F) (channel : RawChannel F) :
     (circuit.instantiate.operations 0).ChannelGuarantees channel env ↔
     ((circuit.main (varFromOffset Input 0)).operations (size Input)).ChannelGuarantees channel env := by
+  simp only [circuit_norm, witnessAny, FormalCircuitWithInteractions.instantiate]
+  simp [FormalCircuitWithInteractions.toSubcircuit, Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
+
+lemma channelRequirements_instantiate
+    (circuit : FormalCircuitWithInteractions F Input Output)
+    (env : Environment F) (channel : RawChannel F) :
+    (circuit.instantiate.operations 0).ChannelRequirements channel env ↔
+    ((circuit.main (varFromOffset Input 0)).operations (size Input)).ChannelRequirements channel env := by
   simp only [circuit_norm, witnessAny, FormalCircuitWithInteractions.instantiate]
   simp [FormalCircuitWithInteractions.toSubcircuit, Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
 
@@ -477,78 +239,142 @@ def channelsWithRequirements (witness : TableWitness F) : List (RawChannel F) :=
   witness.abstract.circuit.channelsWithRequirements
 
 def Constraints (witness : TableWitness F) : Prop :=
-  witness.table.Forall fun row =>
+  ∀ row ∈ witness.table,
     witness.abstract.operations.ConstraintsHold (witness.environment row)
 
 def Guarantees (witness : TableWitness F) : Prop :=
-  witness.table.Forall fun row =>
+  ∀ row ∈ witness.table,
     witness.abstract.operations.FullGuarantees (witness.environment row)
 
 def ChannelGuarantees (witness : TableWitness F) (channel : RawChannel F) : Prop :=
-  witness.table.Forall fun row =>
+  ∀ row ∈ witness.table,
     witness.abstract.operations.ChannelGuarantees channel (witness.environment row)
 
 def InChannelsOrGuarantees (witness : TableWitness F) (channels : List (RawChannel F)) : Prop :=
-  witness.table.Forall fun row =>
+  ∀ row ∈ witness.table,
     witness.abstract.operations.InChannelsOrGuaranteesFull channels (witness.environment row)
 
 def Requirements (witness : TableWitness F) : Prop :=
-  witness.table.Forall fun row =>
+  ∀ row ∈ witness.table,
     witness.abstract.operations.FullRequirements (witness.environment row)
 
 def ChannelRequirements (witness : TableWitness F) (channel : RawChannel F) : Prop :=
-  witness.table.Forall fun row =>
+  ∀ row ∈ witness.table,
     witness.abstract.operations.ChannelRequirements channel (witness.environment row)
 
 def InChannelsOrRequirements (witness : TableWitness F) (channels : List (RawChannel F)) : Prop :=
-  witness.table.Forall fun row =>
+  ∀ row ∈ witness.table,
     witness.abstract.operations.InChannelsOrRequirementsFull channels (witness.environment row)
 
 def Spec (witness : TableWitness F) : Prop :=
-  witness.table.Forall fun row =>
+  ∀ row ∈ witness.table,
     witness.abstract.Spec (witness.environment row)
 
 noncomputable
-def interactionsWith (witness : TableWitness F) (channel : RawChannel F) : List (Interaction F channel) :=
+def interactions (witness : TableWitness F) : List (Interaction F) :=
   witness.table.flatMap fun row =>
-    witness.abstract.operations.interactionsWith channel (witness.environment row)
+    witness.abstract.operations.interactionValues (witness.environment row)
 
-lemma guarantees_iff_channelGuarantees (tableWitness : TableWitness F) :
-    tableWitness.Guarantees ↔
-    ∀ channel ∈ tableWitness.channelsWithGuarantees,
-      tableWitness.ChannelGuarantees channel := by
-  simp only [TableWitness.Guarantees, TableWitness.ChannelGuarantees, List.forall_iff_forall_mem,
+noncomputable
+def interactionsWith (witness : TableWitness F) (channel : RawChannel F) : List (Interaction F) :=
+  witness.table.flatMap fun row =>
+    witness.abstract.operations.interactionValuesWith channel (witness.environment row)
+
+lemma forall_interactions_iff (witness : TableWitness F) (motive : Interaction F → Prop) :
+    (∀ i ∈ witness.interactions, motive i) ↔
+    ∀ row ∈ witness.table, ∀ i ∈ witness.abstract.operations.interactions,
+      motive (i.eval (witness.environment row)) := by
+  simp only [interactions, Operations.interactionValues, List.mem_flatMap, List.mem_map,
+    forall_exists_index, and_imp]
+  constructor
+  · intro h row h_row i hi
+    set env := witness.environment row
+    exact h (i.eval env) row h_row i hi rfl
+  · intro h i row h_row i' hi' h_eq
+    rw [← h_eq]
+    exact h row h_row i' hi'
+
+lemma forall_interactionsWith_iff (witness : TableWitness F) (channel : RawChannel F)
+  (motive : Interaction F → Prop) :
+    (∀ i ∈ witness.interactionsWith channel, motive i) ↔
+    ∀ row ∈ witness.table, ∀ i ∈ witness.abstract.operations.interactions,
+      (i.channel = channel → motive (i.eval (witness.environment row))) := by
+  simp only [interactionsWith, List.mem_flatMap, List.mem_map,
+    forall_exists_index, and_imp, circuit_norm]
+  constructor
+  · intro h row h_row i hi h_channel
+    set env := witness.environment row
+    exact h (i.eval env) row h_row i hi h_channel rfl
+  · intro h i row h_row i' hi' h_channel h_eq
+    rw [← h_eq]
+    exact h row h_row i' hi' h_channel
+
+lemma guarantees_iff_forall (witness : TableWitness F) :
+    witness.Guarantees ↔
+    ∀ i ∈ witness.interactions, i.Guarantees witness.data := by
+  simp only [TableWitness.Guarantees, circuit_norm, forall_interactions_iff]
+  rfl
+
+lemma channelGuarantees_iff_forall (witness : TableWitness F) (channel : RawChannel F) :
+    witness.ChannelGuarantees channel ↔
+    ∀ i ∈ witness.interactionsWith channel, i.Guarantees witness.data := by
+  simp only [TableWitness.ChannelGuarantees, circuit_norm, forall_interactionsWith_iff]
+  rfl
+
+lemma guarantees_iff_channelGuarantees (witness : TableWitness F) :
+    witness.Guarantees ↔
+    ∀ channel ∈ witness.channelsWithGuarantees, witness.ChannelGuarantees channel := by
+  simp only [TableWitness.Guarantees, TableWitness.ChannelGuarantees,
     AbstractTable.operations, channelsWithGuarantees]
   simp only [AbstractTable.guarantees_instantiate, AbstractTable.channelGuarantees_instantiate]
   simp only [FormalCircuitWithInteractions.guarantees_iff']
   constructor <;> simp_all
 
-lemma in_channels_or_requirements_full (tableWitness : TableWitness F) :
-    tableWitness.InChannelsOrRequirements tableWitness.channelsWithRequirements := by
-  simp only [InChannelsOrRequirements, List.forall_iff_forall_mem, AbstractTable.operations,
+lemma requirements_iff_forall (witness : TableWitness F) :
+    witness.Requirements ↔
+    ∀ i ∈ witness.interactions, i.Requirements witness.data := by
+  simp only [TableWitness.Requirements, circuit_norm, forall_interactions_iff]
+  rfl
+
+lemma channelRequirements_iff_forall (witness : TableWitness F) (channel : RawChannel F) :
+    witness.ChannelRequirements channel ↔
+    ∀ i ∈ witness.interactionsWith channel, i.Requirements witness.data := by
+  simp only [TableWitness.ChannelRequirements, circuit_norm, forall_interactionsWith_iff]
+  rfl
+
+lemma requirements_iff_channelRequirements (witness : TableWitness F) :
+    witness.Requirements ↔
+    ∀ channel ∈ witness.channelsWithRequirements, witness.ChannelRequirements channel := by
+  simp only [TableWitness.Requirements, TableWitness.ChannelRequirements,
+    AbstractTable.operations, channelsWithRequirements]
+  simp only [AbstractTable.requirements_instantiate, AbstractTable.channelRequirements_instantiate]
+  simp only [FormalCircuitWithInteractions.requirements_iff']
+  constructor <;> simp_all
+
+lemma in_channels_or_requirements_full (witness : TableWitness F) :
+    witness.InChannelsOrRequirements witness.channelsWithRequirements := by
+  simp only [InChannelsOrRequirements, AbstractTable.operations,
   channelsWithRequirements]
   intro row h_row
   rw [AbstractTable.inChannelsOrRequirements_instantiate]
-  apply tableWitness.abstract.circuit.in_channels_or_requirements_full
+  apply witness.abstract.circuit.in_channels_or_requirements_full
 
-lemma requirements_of_not_mem (tableWitness : TableWitness F)
-  {channel : RawChannel F} (h_not_req : channel ∉ tableWitness.channelsWithRequirements) :
-    tableWitness.ChannelRequirements channel := by
-  have h_in_or_req := tableWitness.in_channels_or_requirements_full
-  simp only [ChannelRequirements, InChannelsOrRequirements, List.forall_iff_forall_mem] at *
+lemma requirements_of_not_mem (witness : TableWitness F)
+  {channel : RawChannel F} (h_not_req : channel ∉ witness.channelsWithRequirements) :
+    witness.ChannelRequirements channel := by
+  have h_in_or_req := witness.in_channels_or_requirements_full
+  simp only [ChannelRequirements, InChannelsOrRequirements] at *
   intro row h_row
   specialize h_in_or_req row h_row
-  apply Operations.requirements_of_not_mem _ (tableWitness.channelsWithRequirements)
+  apply Operations.requirements_of_not_mem _ (witness.channelsWithRequirements)
   assumption
   assumption
 
-lemma interactions_requirements_of_not_mem (tableWitness : TableWitness F) {channel : RawChannel F}
-  (h_not_req : channel ∉ tableWitness.channelsWithRequirements) :
-    (tableWitness.interactionsWith channel).Forall fun i =>
-      channel.Requirements i.mult ⟨ i.msg, by rw[i.same_size]; sorry ⟩ tableWitness.data := by
-  suffices tableWitness.ChannelRequirements channel by
-    sorry
-  apply tableWitness.requirements_of_not_mem h_not_req
+lemma interactions_requirements_of_not_mem (witness : TableWitness F) {channel : RawChannel F}
+  (h_not_req : channel ∉ witness.channelsWithRequirements) :
+    ∀ i ∈ witness.interactionsWith channel, i.Requirements witness.data := by
+  rw [← channelRequirements_iff_forall]
+  apply witness.requirements_of_not_mem h_not_req
 end TableWitness
 
 def FormalCircuitWithInteractions.empty (F : Type) [Field F] [DecidableEq F]
@@ -1233,6 +1059,271 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
 
 end Ensemble
 end
+
+-- CONCRETE EXAMPLE STARTS HERE
+
+variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
+
+def BytesTable : StaticLookupChannel (F p) field where
+  name := "bytes"
+  table := List.finRange 256 |>.map ByteUtils.fromByte
+  Guarantees msg := msg.val < 256
+  guarantees_iff := by
+    intro (msg : F p)
+    simp only [List.mem_map, List.mem_finRange, true_and]
+    constructor
+    · intro h_lt
+      exact ⟨⟨ msg.val, h_lt ⟩, ByteUtils.fromByte_eq ..⟩
+    · intro ⟨ ⟨ b, hb ⟩, h_eq ⟩
+      rw [← h_eq]
+      apply ByteUtils.fromByte_lt
+
+def BytesChannel := Channel.fromStatic (F p) field BytesTable
+
+-- bytes "circuit" that just pushes all bytes
+-- probably shouldn't be a "circuit" at all
+def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
+  main multiplicities := do
+    let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
+      BytesChannel.emit multiplicities[i] (const i)
+
+  localLength _ := 0
+  localLength_eq := by simp +arith only [circuit_norm]
+  output _ _ := ()
+
+  localAdds
+  | multiplicities, _, _ =>
+    (List.finRange 256).flatMap fun ⟨ i, _ ⟩ =>
+      BytesChannel.emitted multiplicities[i] i
+
+  Assumptions | multiplicities, _ => True
+  Spec _ _ _ := True
+
+  -- TODO need better tools for finite range foreach, but probably this shouldn't be a circuit anyway
+  localAdds_eq := by sorry
+  soundness := by sorry
+  completeness := by sorry
+
+  channelsWithRequirements := [ BytesChannel.toRaw ]
+
+instance Add8Channel : Channel (F p) fieldTriple where
+  name := "add8"
+  Guarantees
+  | mult, (x, y, z), _ =>
+    mult = -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
+  Requirements
+  | mult, (x, y, z), _ =>
+    mult ≠ -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
+
+structure Add8Inputs F where
+  x : F
+  y : F
+  z : F
+  m : F -- multiplicity
+deriving ProvableStruct
+
+def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
+  main | { x, y, z, m } => do
+    -- range-check z using the bytes channel
+    -- (x and y are guaranteed to be range-checked from earlier interactions)
+    BytesChannel.pull z
+
+    -- witness the output carry
+    let carry ← witness fun eval => floorDiv256 (eval (x + y))
+    assertBool carry
+
+    -- assert correctness
+    x + y - z - carry * 256 === 0
+
+    -- emit to the add8 channel with multiplicity `m`
+    Add8Channel.emit m (x, y, z)
+
+  localLength _ := 1
+  output _ _ := ()
+
+  localAdds
+  | { x, y, z, m }, _, _ =>
+    BytesChannel.pulled z + Add8Channel.emitted m (x, y, z)
+
+  -- TODO make coercion work without .toRaw
+  channelsWithGuarantees := [ BytesChannel.toRaw ]
+  channelsWithRequirements := [ Add8Channel.toRaw ]
+  requirements_iff := by
+    simp only [circuit_norm, seval, BytesChannel, Add8Channel]
+
+  -- TODO feels weird to put the entire spec in the completeness assumptions
+  -- can we get something from the channel interactions??
+  Assumptions
+  | { x, y, z, m }, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
+  Spec _ _ _ := True
+
+  soundness := by
+    circuit_proof_start [BytesChannel, Add8Channel]
+    set carry := env.get i₀
+    obtain ⟨ hz, hcarry, heq ⟩ := h_holds
+    intro hm hx hy
+    have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
+    simp_all
+
+  -- TODO: we didn't need to prove z < 256, but we could have
+  -- for completeness, it would make sense to require proving the Guarantees as well
+  -- what about the Requirements?
+  completeness := by
+    circuit_proof_start
+    set carry := env.get i₀
+    simp_all only
+    rcases h_assumptions with ⟨ hx, hy, hz, heq ⟩
+    have add_completeness_bool := Theorems.completeness_bool input_x input_y 0 hx hy (by simp)
+    have add_completeness_add := Theorems.completeness_add input_x input_y 0 hx hy (by simp)
+    simp only [add_zero] at add_completeness_bool add_completeness_add
+    have h_input_z : input_z = mod256 (input_x + input_y) := by
+      apply FieldUtils.ext
+      rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+      linarith [hx, hy, ‹Fact (p > 512)›.elim]
+    have h_bytes_guarantee : BytesChannel.Guarantees (-1) input_z env.data := by
+      simpa [BytesChannel, Channel.fromStatic, BytesTable] using hz
+    refine ⟨h_bytes_guarantee, ?_⟩
+    refine ⟨ ?_, ?_ ⟩
+    · simpa [floorDiv256] using add_completeness_bool
+    · simpa [h_input_z, floorDiv256] using add_completeness_add
+
+-- define valid Fibonacci state transitions
+
+def fibonacciStep : ℕ × ℕ → ℕ × ℕ
+  | (x, y) => (y, (x + y) % 256)
+
+def fibonacci : ℕ → (ℕ × ℕ) → (ℕ × ℕ)
+  | 0, state => state
+  | n + 1, state => fibonacciStep (fibonacci n state)
+
+/-- helper lemma: fibonacci states are bytes -/
+lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n (0, 1) → x < 256 ∧ y < 256 := by
+  induction n generalizing x y with
+  | zero => simp_all [fibonacci]
+  | succ n ih =>
+    specialize ih rfl
+    have : 0 < 256 := by norm_num
+    simp_all [fibonacci, fibonacciStep, Nat.mod_lt]
+
+instance FibonacciChannel : Channel (F p) fieldTriple where
+  name := "fibonacci"
+
+  -- when pulling, we want the guarantee that the previous interactions pushed
+  -- some tuple equal to ours which represents a valid Fibonacci step
+  Guarantees
+  | m, (n, x, y), _ =>
+    if (m = -1)
+    then
+      -- (x, y) is a valid Fibonacci state
+      ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+    else True
+
+  Requirements
+  | m, (n, x, y), _ =>
+    if (m = 1)
+    then
+      -- (x, y) is a valid Fibonacci state
+      ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+    else True
+
+def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
+  main | (n, x, y) => do
+    -- pull the current Fibonacci state
+    FibonacciChannel.pull (n, x, y)
+
+    -- witness the next Fibonacci value
+    let z ← witness fun eval => mod256 (eval (x + y))
+
+    -- pull from the Add8 channel to check addition
+    Add8Channel.pull (x, y, z)
+
+    -- push the next Fibonacci state
+    FibonacciChannel.push (n + 1, y, z)
+
+  localLength _ := 1
+  output _ _ := ()
+
+  localAdds
+  | (n, x, y), i₀, env =>
+    let z := env.get i₀;
+    FibonacciChannel.pulled (n, x, y) +
+    Add8Channel.pulled (x, y, z) +
+    FibonacciChannel.pushed (n + 1, y, z)
+
+  channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
+  channelsWithRequirements := [ FibonacciChannel.toRaw ]
+
+  Assumptions
+  | (n, x, y), _ =>
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+  Spec _ _ _ := True
+
+  soundness := by
+    circuit_proof_start [reduceIte, seval]
+    rcases input with ⟨ n, x, y ⟩ -- TODO circuit_proof_start should have done this
+    simp only [Prod.mk.injEq] at h_input
+    -- why are these not simped?? maybe because fieldPair is not well-recognized
+    -- rw [RawChannel.filter_eq] at h_holds ⊢
+    -- rw [Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq]
+    simp_all only [circuit_norm]
+    set z := env.get i₀
+    simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte] at h_holds ⊢
+    obtain ⟨ ⟨k, fiby, hk⟩, hadd ⟩ := h_holds
+    have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
+    use k + 1
+    simp only [fibonacci, fibonacciStep, ← fiby]
+    rw [ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
+    simp_all
+
+  completeness := by
+    circuit_proof_start [reduceIte]
+    rcases input with ⟨ n, x, y ⟩
+    simp only [Prod.mk.injEq] at h_input
+    simp_all only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte]
+    intro hx hy
+    rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+    linarith [hx, hy, ‹Fact (p > 512)›.elim]
+
+-- additional circuits that pull/push remaining channel interactions
+-- these really wouldn't have to be circuits, need to find a better place for tying together channels
+
+-- completing Fibonacci channel with input and output
+def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit where
+  main | (n, x, y) => do
+    -- push initial state, pull the final state
+    FibonacciChannel.push (0, 0, 1)
+    FibonacciChannel.pull (n, x, y)
+
+  localLength _ := 0
+  output _ _ := ()
+  localAdds
+  | (n, x, y), _, _ =>
+    FibonacciChannel.pushed (0, 0, 1) +
+    FibonacciChannel.pulled (n, x, y)
+
+  channelsWithGuarantees := [ FibonacciChannel.toRaw ]
+  channelsWithRequirements := [ FibonacciChannel.toRaw ]
+
+  Assumptions
+  | (n, x, y), _ =>
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+  Spec
+  | (n, x, y), _, _ =>
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+
+  soundness := by
+    circuit_proof_start [reduceIte]
+    rcases input with ⟨ n, x, y ⟩
+    simp only [Prod.mk.injEq] at h_input
+    simp_all only [circuit_norm, FibonacciChannel, reduceIte,
+      and_true, ZMod.val_zero, ZMod.val_one]
+    exact ⟨ 0, rfl, rfl ⟩
+
+  completeness := by
+    circuit_proof_start [reduceIte]
+    rcases input with ⟨ n, x, y ⟩
+    simp only [Prod.mk.injEq] at h_input
+    simpa [circuit_norm, FibonacciChannel, reduceIte] using h_assumptions
 
 -- let's try to prove soundness and completeness of the Fibonacci with channels example
 def fibonacciEnsemble : Ensemble (F p) fieldTriple where
