@@ -25,21 +25,26 @@ variable {Input Output Message : TypeMap} [ProvableType Input] [ProvableType Out
 structure Interaction (F : Type) where
   channel : RawChannel F
   mult : F
-  msg : Vector F channel.arity
+  msg : Array F
+  same_size : msg.size = channel.arity
   assumeGuarantees : Bool
 
 namespace Interaction
+def msgVector (i : Interaction F) : Vector F i.channel.arity :=
+  ⟨ i.msg, i.same_size ⟩
+
 def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
-  i.assumeGuarantees → i.channel.Guarantees i.mult i.msg data
+  i.assumeGuarantees → i.channel.Guarantees i.mult i.msgVector data
 
 def Requirements (i : Interaction F) (data : ProverData F) : Prop :=
-  i.channel.Requirements i.mult i.msg data
+  i.channel.Requirements i.mult i.msgVector data
 end Interaction
 
 def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
   channel := i.channel
   mult := env i.mult
-  msg := i.msg.map env
+  msg := (i.msg.map env).toArray
+  same_size := by simp
   assumeGuarantees := i.assumeGuarantees
 
 @[circuit_norm]
@@ -270,7 +275,6 @@ def Spec (witness : TableWitness F) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.Spec (witness.environment row)
 
-noncomputable
 def interactions (witness : TableWitness F) : List (Interaction F) :=
   witness.table.flatMap fun row =>
     witness.abstract.operations.interactionValues (witness.environment row)
@@ -407,6 +411,8 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
 
 def emptyEnvironment (F : Type) [Field F] [DecidableEq F] : Environment F := { get _ := 0, data _ _ := #[], interactions := [] }
 
+/-- Interaction balance: for any message, the sum of multiplicities is 0.
+    Also requires that the total interaction count is bounded. -/
 def BalancedInteractions (interactions : List (Interaction F)) : Prop :=
   interactions.length < ringChar F ∧
   ∀ msg : Array F, (interactions |>.filter (·.msg = msg) |>.map (·.mult)).sum = 0
@@ -438,7 +444,15 @@ lemma msgInteractions_lt_ringChar {ins : List (Interaction F)} {msg : Array F}
   exact h_bal.1
 
 namespace Ensemble
-noncomputable def verifierInteractions (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) : List (Interaction F) :=
+def verifierInteractions (ens : Ensemble F PublicIO)
+    (publicInput : PublicIO F) : List (Interaction F) :=
+  let circuit := ens.verifier.main (const publicInput)
+  (circuit.operations 0).interactions
+  |>.map (AbstractInteraction.eval (emptyEnvironment F))
+
+noncomputable
+def verifierInteractionsWith (ens : Ensemble F PublicIO) (channel : RawChannel F)
+    (publicInput : PublicIO F) : List (Interaction F) :=
   let circuit := ens.verifier.main (const publicInput)
   (circuit.operations 0).interactionsWith channel
   |>.map (AbstractInteraction.eval (emptyEnvironment F))
@@ -461,25 +475,26 @@ def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :
 def Constraints (ens : Ensemble F PublicIO) (witness : EnsembleWitness ens) : Prop :=
   witness.tables.Forall fun table => table.Constraints
 
-noncomputable def interactions (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (Interaction F) :=
-  ens.verifierInteractions channel publicInput
-  ++ witness.tables.flatMap (fun table => table.interactions channel)
+def interactions (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
+    (witness : EnsembleWitness ens) : List (Interaction F) :=
+  ens.verifierInteractions publicInput
+  ++ witness.tables.flatMap (fun table => table.interactions)
 
-/-- Per-message balance for a single channel: for each message, the sum of multiplicities is 0,
-    and the filtered list length is bounded by the field characteristic.
+noncomputable
+def interactionsWith (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (Interaction F) :=
+  ens.verifierInteractionsWith channel publicInput
+  ++ witness.tables.flatMap (fun table => table.interactionsWith channel)
+
+/-- Per-message balance for a single channel: for each message, the sum of multiplicities is 0.
     Also requires that the total interaction count is bounded. -/
 def BalancedChannel (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
     (witness : EnsembleWitness ens) (channel : RawChannel F) : Prop :=
-  BalancedInteractions (ens.interactions publicInput witness channel)
+  BalancedInteractions (ens.interactionsWith publicInput witness channel)
 
-/-- Per-message balance: for each channel, for each message, the sum of multiplicities is 0.
-    This is stronger than just requiring the total sum to be 0, and captures the intuition
-    that every pull (-1) must be matched by a push (+1) for the same message.
-    Additionally requires that the number of interactions is bounded by the field characteristic
-    (needed for exists_push_of_pull which uses natCast). -/
-def BalancedChannels (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
-  ens.channels.Forall fun channel =>
-    BalancedInteractions (ens.interactions publicInput witness channel)
+def BalancedChannels (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
+    (witness : EnsembleWitness ens) : Prop :=
+  ∀ channel ∈ ens.channels,
+    BalancedInteractions (ens.interactionsWith publicInput witness channel)
 
 /--
 Soundness for an ensemble states that if
@@ -511,14 +526,16 @@ end Ensemble
 -- the next table's guarantees
 
 open Classical in
-noncomputable def RawChannel.filter' (channel : RawChannel F) (interactions : List (Interaction F)) : List (Interaction F) :=
+noncomputable
+def RawChannel.filter' (channel : RawChannel F) (interactions : List (Interaction F)) :=
   interactions.filter (fun i => i.channel = channel)
 
 namespace Ensemble
-def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] : Ensemble F PublicIO where
-  tables := []
-  channels := []
-  Spec _ := True
+def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] :
+  Ensemble F PublicIO where
+    tables := []
+    channels := []
+    Spec _ := True
 
 /--
 weaker version of BalancedChannels that works with ensembles that aren't fully specified yet,
@@ -531,15 +548,13 @@ def PartialBalancedChannels (ens : Ensemble F PublicIO) {finished : List (RawCha
   -- `extraInteractions` represents the unknown interactions from tables added later
   ∃ (extraInteractions : List (Interaction F)),
     -- the total of known + unknown interactions is balanced for each channel
-    ens.channels.Forall (fun channel =>
-      BalancedInteractions (ens.interactions publicInput witness channel ++ channel.filter' extraInteractions)) ∧
+    (∀ channel ∈ ens.channels,
+      BalancedInteractions (ens.interactionsWith publicInput witness channel ++ channel.filter' extraInteractions)) ∧
     -- for "finished" channels, we already _assume_ that requirements on future interactions hold unconditionally
     -- (this restricts the order in which tables can be added;
     --  and it's what gives us the final piece in the "all interactions satisfy requirements" statement we need to prove
     --  the guarantees for the next added table)
-    finished.Forall (fun channel =>
-      (channel.filter' extraInteractions).Forall fun i =>
-        channel.Requirements i.mult ⟨ i.msg, by sorry ⟩ witness.data)
+    ∀ i ∈ extraInteractions, i.channel ∈ finished → i.Requirements witness.data
 
 lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
     {publicInput : PublicIO F} {witness : EnsembleWitness ens}
@@ -547,7 +562,7 @@ lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
   ens.BalancedChannels publicInput witness →
     ens.PartialBalancedChannels h_finished publicInput witness := by
   intro balanced
-  simp only [PartialBalancedChannels, BalancedChannels, List.forall_iff_forall_mem] at *
+  simp only [PartialBalancedChannels, BalancedChannels] at *
   use []
   have (c : RawChannel F) : c.filter' [] = [] := rfl
   simpa [this] using balanced
@@ -589,17 +604,17 @@ lemma table_soundness_of_soundChannels {ens : Ensemble F PublicIO} (finished : L
     simp only [TableWitness.Guarantees, TableWitness.Requirements, TableWitness.Spec, TableWitness.Constraints] at *
     set env := table.environment
     rcases table with ⟨ table, witness, data ⟩
-    simp only [List.forall_iff_forall_mem] at *
+    simp only at *
     suffices (∀ row ∈ witness, table.Spec (env row) ∧ table.operations.FullRequirements (env row)) by
       simp_all
     intro row h_mem_row
     exact AbstractTable.weakSoundness (constraints row h_mem_row) (guarantees row h_mem_row)
-  · stop
-    apply ens.verifier.original_full_soundness
-    · apply ProvableType.eval_const
-    · rw [Circuit.constraintsHold_iff_forAll']
-      exact verifier_accepts
-    · exact (sound_channels _ _ partial_balance constraints verifier_accepts).2
+  · sorry
+    -- apply ens.verifier.original_full_soundness
+    -- · apply ProvableType.eval_const
+    -- · rw [Circuit.constraintsHold_iff_forAll']
+    --   exact verifier_accepts
+    -- · exact (sound_channels _ _ partial_balance constraints verifier_accepts).2
 
 /-- specs on all tables + verifier spec imply ensemble spec -/
 def SpecConsistency (ens : Ensemble F PublicIO) : Prop :=
@@ -635,8 +650,8 @@ essentially just means that reqs and grts are reasonably related.
 -/
 def RawChannel.Consistent (channel : RawChannel F) : Prop :=
   ∀ (interactions : List (Interaction F)) (data : ProverData F), BalancedInteractions interactions →
-    (∀ i ∈ interactions, channel.Requirements i.mult i.msg data) →
-    (∀ i ∈ interactions, channel.Guarantees i.mult i.msg data)
+    (∀ i ∈ interactions, i.channel = channel → i.Requirements data) →
+    (∀ i ∈ interactions, i.channel = channel → i.Guarantees data)
 
 -- adding one table to a SoundChannels ensemble preserves SoundChannels under some
 -- easy-to-prove assumptions on what channels the new table uses
@@ -730,22 +745,18 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
         rw [← witness.same_length]
         simp [Ensemble.addTable, List.length_append]
       exact List.ne_nil_of_length_pos hlen)
-    let tableAdds : RawInteractions F :=
-      tableWitness.table.flatMap (fun row =>
-        tableWitness.abstract.operations.localAdds (tableWitness.environment row))
-    refine ⟨tableAdds ++ extraInteractions, ?_⟩
+    let tableAdds := tableWitness.interactions
+    refine ⟨tableWitness.interactions ++ extraInteractions, ?_⟩
     constructor
-    ·
-      simp only [List.forall_iff_forall_mem] at balance_extra ⊢
-      intro channel h_mem_channel
+    · intro channel h_mem_channel
       have h_bal :
           BalancedInteractions
-            ((ens.addTable table).interactions publicInput witness channel ++
-              channel.filter extraInteractions) := by
+            ((ens.addTable table).interactionsWith publicInput witness channel ++
+              channel.filter' extraInteractions) := by
         exact balance_extra channel (by simpa [Ensemble.addTable] using h_mem_channel)
       have h_eq :
-          ens.interactions publicInput witness' channel ++ channel.filter (tableAdds ++ extraInteractions) =
-            (ens.addTable table).interactions publicInput witness channel ++ channel.filter extraInteractions := by
+          ens.interactionsWith publicInput witness' channel ++ channel.filter' (tableAdds ++ extraInteractions) =
+            (ens.addTable table).interactionsWith publicInput witness channel ++ channel.filter' extraInteractions := by
         have h_ne : witness.tables ≠ [] := by
           intro hnil
           have : 0 < witness.tables.length := by
@@ -756,51 +767,51 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
           symm
           simpa [tableWitness] using List.dropLast_append_getLast (l := witness.tables) h_ne
         have h_table_inter :
-            tableWitness.interactions channel = channel.filter tableAdds := by
+            tableWitness.interactionsWith channel = channel.filter' tableAdds := by
           simp [TableWitness.interactions, tableAdds, AbstractTable.operations,
             FormalCircuitWithInteractions.instantiate, witnessAny, getOffset, tableWitness, RawChannel.filter,
             List.filterMap_flatMap, circuit_norm]
         calc
-          ens.interactions publicInput witness' channel ++ channel.filter (tableAdds ++ extraInteractions)
+          ens.interactionsWith publicInput witness' channel ++ channel.filter' (tableAdds ++ extraInteractions)
               =
-                (ens.verifierInteractions channel publicInput ++
-                  witness.tables.dropLast.flatMap (fun t => t.interactions channel)) ++
-                (channel.filter tableAdds ++ channel.filter extraInteractions) := by
-                  simp [Ensemble.interactions, witness', RawChannel.filter, List.filterMap_append]
+                (ens.verifierInteractionsWith channel publicInput ++
+                  witness.tables.dropLast.flatMap (fun t => t.interactionsWith channel)) ++
+                (channel.filter' tableAdds ++ channel.filter' extraInteractions) := by
+                  simp [Ensemble.interactionsWith, witness', RawChannel.filter', List.filterMap_append]
           _ =
-                ens.verifierInteractions channel publicInput ++
-                  ((witness.tables.dropLast.flatMap (fun t => t.interactions channel) ++
-                    channel.filter tableAdds) ++
-                    channel.filter extraInteractions) := by
+                ens.verifierInteractionsWith channel publicInput ++
+                  ((witness.tables.dropLast.flatMap (fun t => t.interactionsWith channel) ++
+                    channel.filter' tableAdds) ++
+                    channel.filter' extraInteractions) := by
                   simp [List.append_assoc]
           _ =
-                ens.verifierInteractions channel publicInput ++
-                  (((witness.tables.dropLast ++ [tableWitness]).flatMap (fun t => t.interactions channel)) ++
-                    channel.filter extraInteractions) := by
+                ens.verifierInteractionsWith channel publicInput ++
+                  (((witness.tables.dropLast ++ [tableWitness]).flatMap (fun t => t.interactionsWith channel)) ++
+                    channel.filter' extraInteractions) := by
                   simp [List.flatMap_append, h_table_inter, List.append_assoc]
           _ =
-                (ens.addTable table).interactions publicInput witness channel ++
-                  channel.filter extraInteractions := by
+                (ens.addTable table).interactionsWith publicInput witness channel ++
+                  channel.filter' extraInteractions := by
                   have h_ver :
-                      ens.verifierInteractions channel publicInput =
-                        (ens.addTable table).verifierInteractions channel publicInput := by
-                    simp [Ensemble.verifierInteractions, Ensemble.addTable]
+                      ens.verifierInteractionsWith channel publicInput =
+                        (ens.addTable table).verifierInteractionsWith channel publicInput := by
+                    simp [Ensemble.verifierInteractionsWith, Ensemble.addTable]
                   have h_tables :
-                      witness.tables.flatMap (fun t => t.interactions channel) =
-                        (witness.tables.dropLast ++ [tableWitness]).flatMap (fun t => t.interactions channel) := by
-                    exact congrArg (fun ts => ts.flatMap (fun t => t.interactions channel)) h_split
-                  simp [Ensemble.interactions, Ensemble.addTable, h_ver, h_tables, List.append_assoc]
+                      witness.tables.flatMap (fun t => t.interactionsWith channel) =
+                        (witness.tables.dropLast ++ [tableWitness]).flatMap (fun t => t.interactionsWith channel) := by
+                    exact congrArg (fun ts => ts.flatMap (fun t => t.interactionsWith channel)) h_split
+                  simp [Ensemble.interactionsWith, Ensemble.addTable, h_ver, h_tables, List.append_assoc]
       rw [h_eq]
       exact h_bal
-    ·
-      simp only [List.forall_iff_forall_mem] at reqs_extra ⊢
-      intro channel h_mem_finished
+    · intro i
+      simp only [List.mem_append, or_imp]
+      -- intro hi h_mem_finished
       have h_extra :
-          (channel.filter extraInteractions).Forall (fun (mult, message) =>
+          (i.channel.filter' extraInteractions).Forall (fun (mult, message) =>
             channel.Requirements mult message witness.data) := by
         simpa [List.forall_iff_forall_mem] using reqs_extra channel h_mem_finished
       have h_table :
-          (channel.filter tableAdds).Forall (fun (mult, message) =>
+          (channel.filter' tableAdds).Forall (fun (mult, message) =>
             channel.Requirements mult message witness.data) := by
         have h_not_req : channel ∉ tableWitness.abstract.circuit.channelsWithRequirements := by
           have hlen : witness.tables.length = ens.tables.length + 1 := by
