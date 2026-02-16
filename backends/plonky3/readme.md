@@ -18,13 +18,6 @@ cd backends/plonky3
 cargo test --release -- --nocapture test_clean_fib
 ```
 
-The test will:
-1. Generate a 512-row Fibonacci trace using `tests/TraceGen.lean`
-2. Parse the circuit constraints from `tests/clean_fib.json`
-3. Build the AIR with main trace + ByteRange lookup table
-4. Generate permutation traces for the lookup argument
-5. Prove and verify the computation
-
-Expected output: `test test_clean_fib ... ok` (takes ~2 seconds in release mode)
+Expected output: `test test_clean_fib ... ok` (test execution takes ~2 seconds in release mode)
 
 todo: For more details in how it works, check out the [blog post](https://example.com).
