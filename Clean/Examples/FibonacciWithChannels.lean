@@ -679,8 +679,6 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   intro grts_subset_finished reqs_disjoint_finished witness publicInput partial_balance constraints verifier_accepts
   -- we need to make use of soundness of the original ensemble; that'll give us most of the guarantees we need
   whnf at h_sound
-  -- verifier didn't change, so we can reuse the same verifier accepts statement
-  have verifier_accepts' : ens.VerifierAccepts publicInput := verifier_accepts
   -- witness is just our witness but without the new table
   have h_len : (ens.addTable table).tables.length = ens.tables.length + 1 := by
     simp [addTable]
@@ -705,210 +703,77 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   -- also extract the new table
   have h_wit_len_pos : 0 < witness.tables.length := by simp [h_witlen]
   have h_wit_ne_nil : witness.tables ≠ [] := List.ne_nil_of_length_pos h_wit_len_pos
-  let tableWitness : TableWitness F := witness.tables.getLast h_wit_ne_nil
+  set tableWitness : TableWitness F := witness.tables.getLast h_wit_ne_nil with h_tableWitness
   let tableInteractions := tableWitness.interactions
+  have h_table : table = tableWitness.abstract := by
+    simp only [tableWitness, List.getLast_eq_getElem]
+    rw [← witness.same_circuits]
+    simp only [addTable]
+    rw [List.getElem_append_right (by simp [h_witlen]), List.getElem_singleton]
+    simp [h_witlen, addTable]
+  rw [h_table] at grts_subset_finished reqs_disjoint_finished
+  have h_data_eq : witness.data = tableWitness.data := by
+    simp only [tableWitness, List.getLast_eq_getElem]
+    rw [witness.same_prover_data]
+    simp [h_witlen, addTable]
+  have h_split : witness.tables =  witness'.tables ++ [tableWitness] := by
+    rw [List.dropLast_append_getLast h_wit_ne_nil]
   -- we instantiate partial balance by moving the new table's interactions to `extraInteractions`
   rcases partial_balance with ⟨ extraInteractions, balance, reqs_extra ⟩
   have partial_balance' : ens.PartialBalancedChannels h_finished publicInput witness' := by
     refine ⟨tableInteractions ++ extraInteractions, ?_⟩
     constructor
     · intro channel h_mem_channel
+      -- balance holds because we're balancing the same list (just need to show that)
       specialize balance channel h_mem_channel
       convert balance using 1
-      simp only [interactionsWith, List.append_assoc, witness', RawChannel.filter',
-        tableInteractions]
+      simp only [interactionsWith, List.append_assoc, RawChannel.filter', tableInteractions]
       congr 1
-      nth_rw 2 [← List.dropLast_append_getLast h_wit_ne_nil]
-      simp [tableWitness, TableWitness.interactionsWith_eq_filter]
+      rw [h_split]
+      simp [TableWitness.interactionsWith_eq_filter]
     · intro i
       simp only [List.mem_append, or_imp]
-      -- intro hi h_mem_finished
-      have h_extra :
-          (i.channel.filter' extraInteractions).Forall (fun (mult, message) =>
-            channel.Requirements mult message witness.data) := by
-        simpa [List.forall_iff_forall_mem] using reqs_extra channel h_mem_finished
-      have h_table :
-          (channel.filter' tableAdds).Forall (fun (mult, message) =>
-            channel.Requirements mult message witness.data) := by
-        have h_not_req : channel ∉ tableWitness.abstract.circuit.channelsWithRequirements := by
-          have hlen : witness.tables.length = ens.tables.length + 1 := by
-            simpa [Ensemble.addTable, List.length_append] using witness.same_length.symm
-          have h_ne : witness.tables ≠ [] := by
-            intro hnil
-            have : 0 < witness.tables.length := by simpa [hlen]
-            simpa [hnil] using this
-          have h_last_idx_lt : ens.tables.length < witness.tables.length := by
-            simpa [hlen]
-          have h_last_eq : tableWitness = witness.tables[ens.tables.length]'h_last_idx_lt := by
-            dsimp [tableWitness]
-            have hlast : witness.tables.getLast h_ne = witness.tables[witness.tables.length - 1] := by
-              simpa using (List.getLast_eq_getElem (l := witness.tables) h_ne)
-            have hidx : witness.tables.length - 1 = ens.tables.length := by
-              simpa [hlen]
-            simpa [hidx] using hlast
-          have h_tw_abs_idx :
-              tableWitness.abstract = (witness.tables[ens.tables.length]'h_last_idx_lt).abstract := by
-            exact congrArg TableWitness.abstract h_last_eq
-          have h_idx_add : ens.tables.length < (ens.addTable table).tables.length := by
-            simpa [Ensemble.addTable, List.length_append] using Nat.lt_succ_self ens.tables.length
-          have hsc_last := witness.same_circuits ens.tables.length h_idx_add
-          have h_last_table : table = (witness.tables[ens.tables.length]'h_last_idx_lt).abstract := by
-            calc
-              table = (ens.addTable table).tables[ens.tables.length]'h_idx_add := by
-                simp [Ensemble.addTable, List.getElem_append_right]
-              _ = (witness.tables[ens.tables.length]'h_last_idx_lt).abstract := by
-                simpa [hlen] using hsc_last
-          have h_not_req_idx :
-              channel ∉ (witness.tables[ens.tables.length]'h_last_idx_lt).abstract.circuit.channelsWithRequirements := by
-            have h_not_req_table : channel ∉ table.circuit.channelsWithRequirements :=
-              reqs_disjoint_finished channel h_mem_finished
-            rw [h_last_table] at h_not_req_table
-            exact h_not_req_table
-          intro h_mem_req
-          apply h_not_req_idx
-          rw [h_tw_abs_idx] at h_mem_req
-          exact h_mem_req
-        have h_tw_data : tableWitness.data = witness.data := by
-          have hlen : witness.tables.length = ens.tables.length + 1 := by
-            simpa [Ensemble.addTable, List.length_append] using witness.same_length.symm
-          have h_ne : witness.tables ≠ [] := by
-            intro hnil
-            have : 0 < witness.tables.length := by simpa [hlen]
-            simpa [hnil] using this
-          have h_last_idx_lt : ens.tables.length < witness.tables.length := by
-            simpa [hlen]
-          have h_last_eq : tableWitness = witness.tables[ens.tables.length]'h_last_idx_lt := by
-            dsimp [tableWitness]
-            have hlast : witness.tables.getLast h_ne = witness.tables[witness.tables.length - 1] := by
-              simpa using (List.getLast_eq_getElem (l := witness.tables) h_ne)
-            have hidx : witness.tables.length - 1 = ens.tables.length := by
-              simpa [hlen]
-            simpa [hidx] using hlast
-          have h_idx_add : ens.tables.length < (ens.addTable table).tables.length := by
-            simpa [Ensemble.addTable, List.length_append] using Nat.lt_succ_self ens.tables.length
-          calc
-            tableWitness.data = (witness.tables[ens.tables.length]'h_last_idx_lt).data := by
-              simpa using congrArg TableWitness.data h_last_eq
-            _ = witness.data := witness.same_prover_data ens.tables.length h_idx_add
-        simpa [tableInteractions, TableWitness.interactions, AbstractTable.operations,
-          FormalCircuitWithInteractions.instantiate, witnessAny, getOffset, tableWitness, h_tw_data, RawChannel.filter,
-          List.filterMap_flatMap, circuit_norm] using
-          (tableWitness.interactions_requirements_of_not_mem
-            (channel := channel) h_not_req)
-      simp [RawChannel.filter, List.filterMap_append, witness']
-      simp only [List.forall_iff_forall_mem] at h_extra h_table
-      intro a b h_mem
-      rcases h_mem with h_mem | h_mem
-      · exact h_table (a, b) (by simp [RawChannel.filter, h_mem])
-      · exact h_extra (a, b) (by simp [RawChannel.filter, h_mem])
+      -- reqs hold on extra ins because we assumed that,
+      -- and on new table bc channelsWithReqs are disjoint from finished
+      refine ⟨ ?_, reqs_extra i ⟩
+      revert i
+      simp only [tableInteractions]
+      intro i hi h_mem_finished
+      have h_channel_not_mem : i.channel ∉ tableWitness.channelsWithRequirements := by
+        intro h_mem
+        apply reqs_disjoint_finished i.channel h_mem_finished
+        rw [TableWitness.channelsWithRequirements] at h_mem
+        exact h_mem
+      have h_req := tableWitness.requirements_of_not_mem h_channel_not_mem
+      rw [TableWitness.channelRequirements_iff_forall] at h_req
+      show i.Requirements witness.data
+      rw [h_data_eq]
+      apply h_req i
+      simp [TableWitness.interactionsWith_eq_filter, hi]
   -- constraints for the smaller ensemble follow easily from the larger one
   have constraints' : ens.Constraints witness' := by
-    simp only [Ensemble.Constraints, List.forall_iff_forall_mem] at constraints ⊢
+    simp only [Ensemble.Constraints] at constraints ⊢
     intro table' h_mem
     exact constraints table' (List.mem_of_mem_dropLast h_mem)
-  have h_sound' := h_sound' partial_balance' constraints' verifier_accepts'
-  let tableWitness := witness.tables.getLast (by
-    have hlen : 0 < witness.tables.length := by
-      rw [← witness.same_length]
-      simp [Ensemble.addTable, List.length_append]
-    exact List.ne_nil_of_length_pos hlen)
-  have hlen_last : witness.tables.length = ens.tables.length + 1 := by
-    simpa [Ensemble.addTable, List.length_append] using witness.same_length.symm
-  have h_ne_last : witness.tables ≠ [] := by
-    intro hnil
-    have : 0 < witness.tables.length := by simpa [hlen_last]
-    simpa [hnil] using this
-  have h_last_idx_lt : ens.tables.length < witness.tables.length := by
-    simpa [hlen_last]
-  have h_last_eq : tableWitness = witness.tables[ens.tables.length]'h_last_idx_lt := by
-    dsimp [tableWitness]
-    have hlast : witness.tables.getLast h_ne_last = witness.tables[witness.tables.length - 1] := by
-      simpa using (List.getLast_eq_getElem (l := witness.tables) h_ne_last)
-    have hidx : witness.tables.length - 1 = ens.tables.length := by
-      simpa [hlen_last]
-    simpa [hidx] using hlast
-  have h_tw_abs_global : tableWitness.abstract = table := by
-    have h_idx_add : ens.tables.length < (ens.addTable table).tables.length := by
-      simpa [Ensemble.addTable, List.length_append] using Nat.lt_succ_self ens.tables.length
-    have hsc_last := witness.same_circuits ens.tables.length h_idx_add
-    have h_last_table : table = witness.tables[ens.tables.length].abstract := by
-      calc
-        table = (ens.addTable table).tables[ens.tables.length]'h_idx_add := by
-          simp [Ensemble.addTable, List.getElem_append_right]
-        _ = witness.tables[ens.tables.length].abstract := hsc_last
-    simpa [h_last_eq] using h_last_table.symm
-  have h_tw_data_global : tableWitness.data = witness.data := by
-    have h_idx_add : ens.tables.length < (ens.addTable table).tables.length := by
-      simpa [Ensemble.addTable, List.length_append] using Nat.lt_succ_self ens.tables.length
-    calc
-      tableWitness.data = (witness.tables[ens.tables.length]'h_last_idx_lt).data := by
-        simpa using congrArg TableWitness.data h_last_eq
-      _ = witness.data := witness.same_prover_data ens.tables.length h_idx_add
+  -- verifier didn't change, so we can reuse the same verifier accepts statement
+  have verifier_accepts' : ens.VerifierAccepts publicInput := verifier_accepts
+  specialize h_sound' partial_balance' constraints' verifier_accepts'
+
   -- now we only need to prove guarantees for the last table!
   suffices tableWitness.Guarantees by
-    rcases h_sound' with ⟨ h_old, h_verifier ⟩
-    refine ⟨ ?_, ?_ ⟩
-    · have h_ne : witness.tables ≠ [] := by
-        intro hnil
-        have : 0 < witness.tables.length := by
-          rw [← witness.same_length]
-          simp [Ensemble.addTable, List.length_append]
-        simpa [hnil] using this
-      have h_split : witness.tables.dropLast ++ [tableWitness] = witness.tables := by
-        simpa [tableWitness] using List.dropLast_append_getLast (l := witness.tables) h_ne
-      have h_old' : List.Forall (fun table => table.Guarantees) witness.tables.dropLast := by
-        simpa [witness'] using h_old
-      rw [← h_split]
-      simp only [List.forall_iff_forall_mem] at h_old' this ⊢
-      intro t ht
-      rcases List.mem_append.mp ht with hmem | hmem
-      · exact h_old' t hmem
-      · simp only [List.mem_singleton] at hmem
-        simpa [hmem] using this
-    · simpa [Ensemble.VerifierGuarantees, Ensemble.addTable] using h_verifier
+    rcases h_sound' with ⟨ h_old, h_verifier_grts ⟩
+    refine ⟨ ?_, h_verifier_grts ⟩
+    simp only [h_split, List.mem_append, List.mem_singleton, or_imp]
+    intro table'
+    exact ⟨ h_old table', fun h => h ▸ this ⟩
   -- we can restrict to finished channels because the table's channels with guarantees are all finished
-  suffices ∀ channel ∈ finished, tableWitness.ChannelGuarantees channel by
-    have hlen : witness.tables.length = ens.tables.length + 1 := by
-      simpa [Ensemble.addTable, List.length_append] using witness.same_length.symm
-    have h_ne : witness.tables ≠ [] := by
-      intro hnil
-      have : 0 < witness.tables.length := by simpa [hlen]
-      simpa [hnil] using this
-    have h_last_idx_lt : ens.tables.length < witness.tables.length := by
-      simpa [hlen]
-    have h_last_eq : tableWitness = witness.tables[ens.tables.length]'h_last_idx_lt := by
-      dsimp [tableWitness]
-      have hlast : witness.tables.getLast h_ne = witness.tables[witness.tables.length - 1] := by
-        simpa using (List.getLast_eq_getElem (l := witness.tables) h_ne)
-      have hidx : witness.tables.length - 1 = ens.tables.length := by
-        simpa [hlen]
-      simpa [hidx] using hlast
-    have h_tw_abs : tableWitness.abstract = table := by
-      have h_idx_add : ens.tables.length < (ens.addTable table).tables.length := by
-        simpa [Ensemble.addTable, List.length_append] using Nat.lt_succ_self ens.tables.length
-      have hsc_last := witness.same_circuits ens.tables.length h_idx_add
-      have h_last_table : table = witness.tables[ens.tables.length].abstract := by
-        calc
-          table = (ens.addTable table).tables[ens.tables.length]'h_idx_add := by
-            simp [Ensemble.addTable, List.getElem_append_right]
-          _ = witness.tables[ens.tables.length].abstract := hsc_last
-      simpa [h_last_eq] using h_last_table.symm
-    have h_grts_subset_finished' :
-        tableWitness.abstract.circuit.channelsWithGuarantees ⊆ finished := by
-      intro ch hch
-      have hch' : ch ∈ table.circuit.channelsWithGuarantees := by
-        rw [← h_tw_abs]
-        exact hch
-      exact grts_subset_finished hch'
-    refine (tableWitness.guarantees_iff_channelGuarantees).2 ?_
-    intro ch hch
-    exact this ch (h_grts_subset_finished' hch)
+  rw [tableWitness.guarantees_iff_channelGuarantees]
   intro channel h_mem_finished
-  -- this easily follows from a much stronger statement: guarantees for hold on ALL finished channel interactions
-  let channelInteractions := (ens.addTable table).interactions publicInput witness channel
-      ++ channel.filter extraInteractions;
-  suffices channelInteractions.Forall fun (mult, message) =>
-      channel.Guarantees mult message witness.data by
+  replace h_mem_finished : channel ∈ finished := grts_subset_finished h_mem_finished
+  -- this easily follows from a much stronger statement: guarantees for hold on ALL channel interactions
+  let channelInteractions := (ens.addTable table).interactionsWith publicInput witness channel
+    ++ channel.filter' extraInteractions;
+  suffices ∀ i ∈ channelInteractions, i.Guarantees witness.data by
     simp only [TableWitness.ChannelGuarantees, List.forall_iff_forall_mem]
     intro row h_row
     simp only [AbstractTable.operations, FormalCircuitWithInteractions.instantiate, witnessAny, getOffset, circuit_norm]
