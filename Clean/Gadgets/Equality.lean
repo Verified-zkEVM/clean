@@ -10,6 +10,7 @@ open Circuit (ConstraintsHold)
 namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
+omit [DecidableEq F] in
 theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     ConstraintsHold.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
   simp only [allZero, circuit_norm]
@@ -17,6 +18,7 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
+omit [DecidableEq F] in
 theorem allZero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
@@ -29,11 +31,12 @@ def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circu
   let diffs := (toVars x).zip (toVars y) |>.map (fun (xi, yi) => xi - yi)
   .forEach diffs assertZero
 
-theorem main_collectAdds {α : TypeMap} [ProvableType α] (input : Var (ProvablePair α α) F) (env : Environment F) (offset : ℕ) :
-    (main input |>.operations offset).collectAdds env = 0 := by
+omit [DecidableEq F] in
+theorem main_localAdds {α : TypeMap} [ProvableType α] (input : Var (ProvablePair α α) F) (env : Environment F) (offset : ℕ) :
+    (main input |>.operations offset).localAdds env = 0 := by
   simp only [main]
-  apply Circuit.collectAdds_forEach
-  intro x n; simp only [circuit_norm, Operations.collectAdds]
+  apply Circuit.localAdds_forEach
+  intro x n; simp only [circuit_norm, Operations.localAdds]
 
 @[reducible]
 instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
@@ -42,7 +45,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   output _ _ := ()
 
   localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
-  localAdds_eq := by intro _ _ _; simp only [main_collectAdds, InteractionDelta.toFinsupp]
+  localAdds_eq := by intro _ _ _; simp only [main_localAdds, InteractionDelta.toFinsupp]
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
 @[simps! (attr := circuit_norm) (config := {isSimp := false})]

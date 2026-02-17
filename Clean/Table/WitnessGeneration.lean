@@ -58,7 +58,7 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
 
   -- evaluate the witness generators
   let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
-      let wit := compute ⟨ env ⟩
+      let wit := compute ⟨ env, [], fun _ _ => #[] ⟩
 
       -- insert the witness value to the next row
       let next_row := if h : idx < assignment.offset then

@@ -2,6 +2,7 @@ import Clean.Circuit.Provable
 import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Boolean
 import Clean.Utils.Tactics
+import Clean.Utils.Tactics.ProvableStructDeriving
 
 namespace Gadgets.Conditional
 
@@ -19,11 +20,7 @@ structure Inputs (M : TypeMap) (F : Type) where
   selector : F
   ifTrue : M F
   ifFalse : M F
-
-instance : ProvableStruct (Inputs M) where
-  components := [field, M, M]
-  toComponents := fun { selector, ifTrue, ifFalse } => .cons selector (.cons ifTrue (.cons ifFalse .nil))
-  fromComponents := fun (.cons selector (.cons ifTrue (.cons ifFalse .nil))) => { selector, ifTrue, ifFalse }
+deriving ProvableStruct
 
 def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { selector, ifTrue, ifFalse } := input
@@ -67,6 +64,7 @@ instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
   | { selector, ifTrue, ifFalse }, _ => output selector ifTrue ifFalse
   localAdds_eq _ _ _ := by simp [main, circuit_norm]
 
+omit [DecidableEq F] in
 theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
   circuit_proof_start [output]
   rcases input
@@ -94,6 +92,7 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
     simp only [if_true]
     ring_nf
 
+omit [DecidableEq F] in
 theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by
   circuit_proof_start
 
@@ -116,7 +115,7 @@ def ifElse [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M]
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F (M (Expression F)) :=
   circuit { selector, ifTrue, ifFalse }
 
-omit [Field F] in
+omit [Field F] [DecidableEq F] in
 /--
   Lemma to simplify the evaluated output
 -/

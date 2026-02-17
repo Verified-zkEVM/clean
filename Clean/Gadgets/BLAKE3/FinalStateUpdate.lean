@@ -13,11 +13,7 @@ open Specs.BLAKE3 (finalStateUpdate)
 structure Inputs (F : Type) where
   state : BLAKE3State F
   chaining_value : Vector (U32 F) 8
-
-instance : ProvableStruct Inputs where
-  components := [BLAKE3State, ProvableVector U32 8]
-  toComponents := fun { state, chaining_value } => .cons state (.cons chaining_value .nil)
-  fromComponents := fun (.cons state (.cons chaining_value .nil)) => { state, chaining_value }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, chaining_value } := input
@@ -71,7 +67,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   localLength_eq _ n := by
     dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated]
   localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds]
+    simp only [main, circuit_norm, Operations.localAdds]
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, chaining_value } := input
@@ -86,11 +82,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
   dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
-  simp only [FormalCircuit.toSubcircuit, Circuit.operations, ElaboratedCircuit.main,
-    ElaboratedCircuit.localLength, Xor32.Assumptions,
+  simp only [Xor32.Assumptions,
     ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents, components, toComponents,
-    ProvableStruct.eval.go, getElem_eval_vector, h_input, Xor32.Spec, ElaboratedCircuit.output,
-    and_imp, Nat.add_zero, add_zero, and_true] at h_holds
+    ProvableStruct.eval.go, getElem_eval_vector, h_input, Xor32.Spec,
+    and_imp, add_zero, and_true] at h_holds
 
   ring_nf at h_holds
 

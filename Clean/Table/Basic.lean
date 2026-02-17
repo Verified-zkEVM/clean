@@ -320,8 +320,8 @@ def assignmentFromCircuit (as : CellAssignment W S) : Operations F → CellAssig
   | .witness m _ :: ops => assignmentFromCircuit (as.pushVarsAux m) ops
   | .assert _ :: ops => assignmentFromCircuit as ops
   | .lookup _ :: ops => assignmentFromCircuit as ops
+  | .interact _ :: ops => assignmentFromCircuit as ops
   | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
-  | .add _ _ :: ops => assignmentFromCircuit as ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`
 def assignmentFromCircuit' (as : CellAssignment W S) (ops : Operations F) : CellAssignment W S where
@@ -364,12 +364,12 @@ def OffsetConsistent (table : TableConstraint W S F α) : Prop :=
 def windowEnv (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
   let assignment := table.finalAssignment
-  .mk fun i =>
-    if hi : i < assignment.offset then
-      match assignment.vars[i] with
-      | .input ⟨i, j⟩ => window.get i j
-      | .aux k => aux_env.get k
-    else aux_env.get (i + assignment.aux_length)
+  { aux_env with get i :=
+      if hi : i < assignment.offset then
+        match assignment.vars[i] with
+        | .input ⟨i, j⟩ => window.get i j
+        | .aux k => aux_env.get k
+      else aux_env.get (i + assignment.aux_length) }
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -485,6 +485,15 @@ instance [Repr F] : Repr (TableOperation S F) where
 
 export TableOperation (boundary everyRow everyRowExceptLast)
 
+structure TableEnvironments (F : Type) where
+  /-- environment for each constraint, for each row -/
+  witnessEnvs : (constraint : ℕ) → (row : ℕ) → (varIndex : ℕ) → F
+  /-- auxiliary data available to all rows -/
+  interactions : RawInteractions F
+  data : ProverData F
+
+def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=
+  { envs with get := envs.witnessEnvs constraint row }
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
@@ -492,8 +501,8 @@ export TableOperation (boundary everyRow everyRowExceptLast)
 -/
 @[table_norm]
 def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
-  (trace : TraceOfLength F S N) (env : ℕ → ℕ → Environment F) : Prop :=
-  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env i))
+  (trace : TraceOfLength F S N) (env : TableEnvironments F) : Prop :=
+  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env.toEnvironment i))
   foldl N constraints_and_envs trace.val constraints_and_envs
   where
   /--
@@ -553,19 +562,19 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   /-- list of constraints that are applied over the table -/
   constraints : List (TableOperation S F)
 
-  /-- optional assumption on the table length -/
-  Assumption : ℕ → Prop := fun _ => True
+  /-- optional assumption on the table length and other tables in the environment -/
+  Assumption : ℕ → ProverData F → Prop := fun _ _ => True
 
   /-- specification for the table -/
-  Spec {N : ℕ} : TraceOfLength F S N → Prop
+  Spec {N : ℕ}  : TraceOfLength F S N → ProverData F → Prop
 
   /-- the soundness states that if the assumptions hold, then
       the constraints hold implies that the spec holds. -/
   soundness :
-    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : ℕ → ℕ → Environment F),
-    Assumption N →
+    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
+    Assumption N env.data →
     TableConstraintsHold constraints trace env →
-    Spec trace
+    Spec trace env.data
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
       constraint is consistent with the number of variables introduced in the circuit. -/
@@ -577,8 +586,8 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
       | .everyRowExceptLast constraint => constraint.OffsetConsistent
     := by repeat constructor
 
-def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLength F S N) : Prop :=
-  table.Assumption N → table.Spec trace
+def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLength F S N) (env : ProverData F) : Prop :=
+  table.Assumption N env → table.Spec trace env
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go

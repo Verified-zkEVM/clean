@@ -1,7 +1,7 @@
+import Clean.Circuit
 import Clean.Utils.Primes
 import Clean.Utils.Field
 import Clean.Gadgets.ByteDecomposition.Theorems
-import Init.Data.Nat.Div.Basic
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
@@ -12,11 +12,7 @@ open FieldUtils (mod floorDiv two_lt two_pow_lt two_val two_pow_val)
 structure Outputs (F : Type) where
   low : F
   high : F
-
-instance : ProvableStruct Outputs where
-  components := [field, field]
-  toComponents := fun { low, high } => .cons low (.cons high .nil)
-  fromComponents := fun (.cons low (.cons high .nil)) => { low, high }
+deriving ProvableStruct
 
 /--
   Decompose a byte into a low and a high part.
@@ -46,7 +42,7 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main, Operations.collectAdds]
+    simp only [circuit_norm, main, Operations.localAdds]
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds

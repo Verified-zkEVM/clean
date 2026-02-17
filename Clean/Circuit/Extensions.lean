@@ -18,16 +18,28 @@ def toVar : Expression F → Circuit F (Variable F)
 -- these could be used if you want to witness _any_ value and don't care which
 -- (typically useless, because in completeness proofs you will often have to prove some assumption about the value)
 
+@[circuit_norm]
 def getOffset : Circuit F ℕ := fun n => (n, [])
 
-def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
+def valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
   fromElements <| .mapRange _ fun i => env.get (offset + i)
 
-def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
-  let offset ← getOffset
-  witness (computeValueFromOffset α offset)
+theorem eval_varFromOffset_valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) :
+    eval env (varFromOffset α offset) = valueFromOffset α offset env := by
+  simp only [varFromOffset, valueFromOffset, fromVars, ProvableType.eval_fromElements, Vector.map_mapRange]
+  rfl
 
-theorem ProvableType.witnessAny.localWitnesses (n : ℕ) (env : Environment F) :
-    env.UsesLocalWitnessesCompleteness n (ProvableType.witnessAny α |>.operations n) ↔ True := by
-  simp only [circuit_norm, getOffset, ProvableType.witnessAny, computeValueFromOffset,
+def witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
+  let offset ← getOffset
+  witness (valueFromOffset α offset)
+
+theorem witnessAny_localWitnesses (n : ℕ) (env : Environment F) :
+    env.UsesLocalWitnessesCompleteness n (witnessAny α |>.operations n) ↔ True := by
+  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
+    ProvableType.toElements_fromElements]
+
+@[circuit_norm]
+theorem witnessAny_output {n : ℕ} :
+    (witnessAny (F:=F) α |>.output n) = varFromOffset α n  := by
+  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
     ProvableType.toElements_fromElements]

@@ -15,23 +15,18 @@ instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 open Specs.BLAKE3
 open Tables.BLAKE3.ProcessBlocksInductive
 
+/-- 64-byte buffer represented as field elements (keeps eval unexpanded) -/
+@[reducible] def BLAKE3Buffer := ProvableVector field 64
+
 /--
 Input structure for finalizeChunk circuit.
 -/
 structure Inputs (F : Type) where
   state : ProcessBlocksState F          -- Current state (cv, counter, blocks_compressed)
   buffer_len : F                        -- Number of valid bytes (0-64)
-  buffer_data : Vector F 64             -- Buffer bytes (only first buffer_len are valid, rest are zeros)
+  buffer_data : BLAKE3Buffer F          -- Buffer bytes (only first buffer_len are valid, rest are zeros)
   base_flags : U32 F                    -- Additional flags (KEYED_HASH, etc.)
-
-instance : ProvableStruct Inputs where
-  components := [ProcessBlocksState, field, ProvableVector field 64, U32]
-  toComponents := fun { state, buffer_len, buffer_data, base_flags } =>
-    .cons state (.cons buffer_len (.cons buffer_data (.cons base_flags .nil)))
-  fromComponents := fun xss =>
-    match xss with
-    | .cons state (.cons buffer_len (.cons buffer_data (.cons base_flags .nil))) =>
-      { state, buffer_len, buffer_data, base_flags }
+deriving ProvableStruct
 
 /--
 Convert 64 bytes to 16 U32 words (little-endian).
@@ -102,9 +97,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
 instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
   main
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
-  localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, circuit_norm]
+  localAdds_eq := by simp only [circuit_norm, main]
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧

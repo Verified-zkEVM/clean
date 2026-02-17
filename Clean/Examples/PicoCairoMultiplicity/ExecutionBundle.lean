@@ -110,7 +110,7 @@ def elaborated
     intros inputs env offset
     simp only [main, circuit_norm, emitAdd]
     -- Use toSubcircuit_localAdds to relate subcircuit localAdds to bundle localAdds
-    simp only [Operations.collectAdds, FormalAssertionChangingMultiset.toSubcircuit_localAdds,
+    simp only [Operations.localAdds, FormalAssertionChangingMultiset.toSubcircuit_localAdds,
       add_zero]
     -- Simplify NamedList.eval and Expression.eval for the initial/final state terms
     simp only [NamedList.eval, Expression.eval, List.map]

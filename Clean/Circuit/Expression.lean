@@ -17,8 +17,29 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
+/-- Channel interaction (channel name, multiplicity, message) -/
+abbrev RawInteraction (F : Type) := String × F × Array F
+/-- Channel interactions (channel name, multiplicity, message) -/
+abbrev RawInteractions (F : Type) := List (String × F × Array F)
+
+/-- Arbitrary data a prover can witness and refer to in a circuit spec -/
+def ProverData (F : Type) :=
+  String → (n : ℕ) → Array (Vector F n)
+
+/--
+  `Environment` represents the data that is provided at proving time to concretely
+  instantiate a circuit.
+ -/
 structure Environment (F : Type) where
+  /-- Assignment of a circuit's variables to field elements -/
   get : ℕ → F
+
+  /-- Channel interactions done by this and other circuits sharing the same channel -/
+  interactions : RawInteractions F
+
+  /-- Additional prover data not part of the current circuit's witness, such as the content
+   of lookup tables, or auxiliary data made available for potential witnessing. -/
+  data : ProverData F
 
 namespace Expression
 variable [Field F]

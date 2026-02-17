@@ -30,7 +30,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main
   localLength _ := 120
   localAdds_eq _ _ _ := by
-    simp [circuit_norm, main, Rotation64.circuit, Xor64.circuit, Operations.collectAdds]
+    simp [circuit_norm, main, Rotation64.circuit, Xor64.circuit, Operations.localAdds]
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 

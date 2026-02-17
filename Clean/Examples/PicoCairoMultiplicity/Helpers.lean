@@ -24,22 +24,20 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 ## Emit operations for multiplicity tracking
 -/
 
-/-- Emit an add operation to the global multiset -/
-@[circuit_norm]
-def emitAdd (name : String) (multiplicity : Expression (F p)) (values : List (Expression (F p))) : Circuit (F p) Unit := fun _ =>
-  ((), [.add multiplicity { name, values }])
+def StateChannel : Channel (F p) State where
+  name := "state"
 
 /-- Emit a state with given multiplicity -/
 @[circuit_norm]
 def emitState (multiplicity : Expression (F p)) (state : Var State (F p)) : Circuit (F p) Unit :=
-  emitAdd "state" multiplicity [state.pc, state.ap, state.fp]
+  StateChannel.emit multiplicity state
 
 /-- Emit a state conditionally: multiplicity is scaled by enabled.
     When enabled = 0, multiplicity becomes 0 (no effect).
     When enabled = 1, multiplicity is unchanged. -/
 @[circuit_norm]
 def emitStateWhen (enabled : Expression (F p)) (multiplicity : Expression (F p)) (state : Var State (F p)) : Circuit (F p) Unit :=
-  emitAdd "state" (enabled * multiplicity) [state.pc, state.ap, state.fp]
+  StateChannel.emit (enabled * multiplicity) state
 
 /-!
 ## Conditional decode infrastructure
@@ -92,9 +90,7 @@ def conditionalDecodeElaborated :
     ElaboratedCircuit (F p) ConditionalDecodeInput DecodedInstruction where
   main := conditionalDecodeMain
   localLength _ := 8  -- Same as decodeInstruction.circuit since Conditional adds 0
-  localAdds_eq _ _ _ := by
-    simp only [conditionalDecodeMain, circuit_norm, decodeInstruction, Gadgets.Conditional.circuit]
-    simp only [Operations.collectAdds, circuit_norm]
+  localAdds_eq _ _ _ := by simp only [conditionalDecodeMain, circuit_norm]
 
 /--
 Conditional decode circuit as GeneralFormalCircuit.
@@ -103,14 +99,14 @@ Takes ConditionalDecodeInput and returns decoded instruction or dummy.
 def conditionalDecodeCircuit :
     GeneralFormalCircuit (F p) ConditionalDecodeInput DecodedInstruction where
   elaborated := conditionalDecodeElaborated
-  Assumptions := fun input =>
+  Assumptions := fun input _ =>
     IsBool input.enabled ∧ input.rawInstrType.val < 256
-  Spec := fun input output =>
+  Spec := fun input output env =>
     IsBool input.enabled →
     if input.enabled = 0 then
       output = input.dummy
     else
-      decodeInstruction.Spec input.rawInstrType output
+      decodeInstruction.Spec input.rawInstrType output env
   soundness := by
     circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstruction]
     intro h_assumptions

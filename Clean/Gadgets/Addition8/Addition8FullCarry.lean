@@ -1,4 +1,4 @@
-import Clean.Circuit.LookupCircuit
+import Clean.Circuit
 import Clean.Gadgets.ByteLookup
 import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
@@ -12,20 +12,12 @@ structure Inputs (F : Type) where
   x: F
   y: F
   carryIn: F
-
-instance : ProvableStruct Inputs where
-  components := [field, field, field]
-  toComponents := fun { x, y, carryIn } => .cons x (.cons y (.cons carryIn .nil))
-  fromComponents := fun (.cons x (.cons y (.cons carryIn .nil))) => { x, y, carryIn }
+deriving ProvableStruct
 
 structure Outputs (F : Type) where
   z: F
   carryOut: F
-
-instance : ProvableStruct Outputs where
-  components := [field, field]
-  toComponents := fun { z, carryOut } => .cons z (.cons carryOut .nil)
-  fromComponents := fun (.cons z (.cons carryOut .nil)) => { z, carryOut }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
@@ -63,7 +55,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
 
   localAdds_eq _ _ _ := by
-    simp only [main, circuit_norm, Operations.collectAdds]
+    simp only [main, circuit_norm, Operations.localAdds]
 
   soundness := by
     -- introductions

@@ -72,7 +72,7 @@ def fib32Table : List (TableOperation RowType (F p)) := [
   - the second U32 value is the (i+1)-th fibonacci number
   - both U32 values are normalized
 -/
-def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : ProverData (F p)) : Prop :=
   trace.ForAllRowsOfTraceWithIndex fun row index =>
     (row.x.value = fib32 index) ∧
     (row.y.value = fib32 (index + 1)) ∧
@@ -131,7 +131,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   simp only [table_norm, circuit_norm, recursiveRelation,
     assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
-  simp only [table_norm, circuit_norm, Nat.reduceAdd, zero_add] at h_add
+  simp only [table_norm, circuit_norm, Nat.reduceAdd] at h_add
   simp only [circuit_norm] at hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
@@ -204,7 +204,7 @@ def formalFib32Table : FormalTable (F p) RowType := {
     -- base case 2
     | one first_row =>
       simp [table_norm]
-      apply boundary_constraints first_row (envs 0 0)
+      apply boundary_constraints first_row (envs.toEnvironment 0 0)
 
     -- inductive step
     | more curr next rest ih1 ih2 =>
@@ -218,7 +218,7 @@ def formalFib32Table : FormalTable (F p) RowType := {
       let ⟨curr_fib0, curr_fib1, curr_normalized_x, curr_normalized_y⟩ := ih2.left
 
       -- simplfy constraints
-      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 _) ConstraintsHold
+      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs.toEnvironment 1 _) ConstraintsHold
 
       -- finish induction
       specialize add_spec curr_normalized_x curr_normalized_y

@@ -21,8 +21,8 @@ open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.Spec
 open Examples.PicoCairoMultiplicity.Types
 open Examples.PicoCairoMultiplicity.Helpers
-open Operations (collectAdds collectAdds_flatten collectAdds_ofFn_flatten)
-open Circuit (collectAdds_forEach_foldl)
+open Operations (localAdds localAdds_flatten localAdds_ofFn_flatten)
+open Circuit (localAdds_forEach_foldl)
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -118,7 +118,7 @@ def elaborated
     simp only [main, circuit_norm, emitStateWhen, emitAdd, FemtoCairo.fetchInstruction,
       conditionalDecodeCircuit, conditionalDecodeElaborated, conditionalDecodeMain,
       readFromMemory, assertBool, FormalAssertion.toSubcircuit,
-      Operations.collectAdds, List.nil_append, NamedList.eval,
+      Operations.localAdds, List.nil_append, NamedList.eval,
       add_zero]
     rfl
 
@@ -369,8 +369,8 @@ def elaborated
   localAdds_eq inputs env offset := by
     -- Unfold main to expose forEach
     simp only [main]
-    -- Use collectAdds_forEach_foldl to rewrite LHS
-    rw [collectAdds_forEach_foldl]
+    -- Use localAdds_forEach_foldl to rewrite LHS
+    rw [localAdds_forEach_foldl]
     -- Convert both foldls to sums using toFinsupp_foldl_finRange
     rw [InteractionDelta.toFinsupp_foldl_finRange]
     simp only [add_assoc]
@@ -380,7 +380,7 @@ def elaborated
     intro i _
     -- Unfold stepBody to assertionChangingMultiset which produces a subcircuit
     simp only [stepBody, assertionChangingMultiset, Circuit.ConstantLength.localLength, circuit_norm]
-    -- collectAdds on [.subcircuit s] = s.localAdds
+    -- localAdds on [.subcircuit s] = s.localAdds
     -- s.localAdds = circuit.localAdds by FormalAssertionChangingMultiset.toSubcircuit_localAdds
     -- circuit.localAdds = elaborated.localAdds by definition
     simp only [MulInstruction.circuit, MulInstruction.elaborated, circuit_norm]

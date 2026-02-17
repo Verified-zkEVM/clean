@@ -14,21 +14,12 @@ structure Inputs (F : Type) where
   x: U32 F
   y: U32 F
   carryIn: F
-
-instance : ProvableStruct Inputs where
-  components := [U32, U32, field]
-  toComponents := fun {x, y, carryIn} => .cons x ( .cons y ( .cons carryIn .nil))
-  fromComponents := fun (.cons x ( .cons y ( .cons carryIn .nil))) => ⟨ x, y, carryIn ⟩
+deriving ProvableStruct
 
 structure Outputs (F : Type) where
   z: U32 F
   carryOut: F
-deriving Repr
-
-instance : ProvableStruct Outputs where
-  components := [U32, field]
-  toComponents := fun {z, carryOut} => .cons z ( .cons carryOut .nil)
-  fromComponents := fun (.cons z ( .cons carryOut .nil)) => ⟨ z, carryOut ⟩
+deriving Repr, ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
@@ -63,8 +54,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main, Addition8FullCarry.main, Operations.collectAdds]
-    repeat (first | rfl | constructor)
+    simp only [circuit_norm, main, Addition8FullCarry.main, Operations.localAdds]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]

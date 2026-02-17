@@ -19,12 +19,11 @@ partial def circuitProofStartCore : TacticM Unit := do
     let isSoundness := headConst? == some ``Soundness ||
                        headConst? == some ``FormalAssertion.Soundness ||
                        headConst? == some ``GeneralFormalCircuit.Soundness ||
-                       headConst? == some ``FormalAssertion.SoundnessChangingMultiset ||
-                       headConst? == some ``GeneralFormalCircuit.SoundnessChangingMultiset
+                       headConst? == some ``FormalCircuitWithInteractions.Soundness
     let isCompleteness := headConst? == some ``Completeness ||
                           headConst? == some ``FormalAssertion.Completeness ||
                           headConst? == some ``GeneralFormalCircuit.Completeness ||
-                          headConst? == some ``FormalAssertion.CompletenessChangingMultiset
+                          headConst? == some ``FormalCircuitWithInteractions.Completeness
 
     if isSoundness then
       match headConst? with
@@ -43,13 +42,8 @@ partial def circuitProofStartCore : TacticM Unit := do
         let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
-      | some ``FormalAssertion.SoundnessChangingMultiset =>
-        evalTactic (← `(tactic| unfold FormalAssertion.SoundnessChangingMultiset))
-        let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
-        for name in names do
-          evalTactic (← `(tactic| intro $(mkIdent name):ident))
-      | some ``GeneralFormalCircuit.SoundnessChangingMultiset =>
-        evalTactic (← `(tactic| unfold GeneralFormalCircuit.SoundnessChangingMultiset))
+      | some ``FormalCircuitWithInteractions.Soundness =>
+        evalTactic (← `(tactic| unfold FormalCircuitWithInteractions.Soundness))
         let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
@@ -73,9 +67,9 @@ partial def circuitProofStartCore : TacticM Unit := do
         let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
-      | some ``FormalAssertion.CompletenessChangingMultiset =>
-        evalTactic (← `(tactic| unfold FormalAssertion.CompletenessChangingMultiset))
-        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_spec]
+      | some ``FormalCircuitWithInteractions.Completeness =>
+        evalTactic (← `(tactic| unfold FormalCircuitWithInteractions.Completeness))
+        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()
@@ -97,8 +91,7 @@ partial def circuitProofStartCore : TacticM Unit := do
   **Supported goal types**: This tactic works on `Soundness`, `Completeness`,
   `FormalAssertion.Soundness`, `FormalAssertion.Completeness`,
   `GeneralFormalCircuit.Soundness`, `GeneralFormalCircuit.Completeness`,
-  and their `ChangingMultiset` variants (`FormalAssertion.SoundnessChangingMultiset`,
-  `FormalAssertion.CompletenessChangingMultiset`, `GeneralFormalCircuit.SoundnessChangingMultiset`).
+  `FormalCircuitWithInteractions.Soundness`, `FormalCircuitWithInteractions.Completeness`.
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`

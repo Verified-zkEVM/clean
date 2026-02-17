@@ -31,10 +31,9 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
     apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.collectAdds_mapFinRange
+    apply Circuit.localAdds_mapFinRange
     intro i n
     simp [circuit_norm, Xor64.circuit]
-    repeat (first | rfl | constructor)
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 
 -- rewrite thetaC as a loop

@@ -9,11 +9,7 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 structure Inputs (F : Type) where
   state : KeccakState F
   d : KeccakRow F
-
-instance : ProvableStruct Inputs where
-  components := [KeccakState, KeccakRow]
-  toComponents := fun { state, d } => .cons state (.cons d .nil)
-  fromComponents := fun (.cons state (.cons d .nil)) => { state, d }
+deriving ProvableStruct
 
 def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
   | { state, d } => .mapFinRange 25 fun i =>
@@ -27,9 +23,9 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
     apply InteractionDelta.toFinsupp_zero_of_eq_zero
-    apply Circuit.collectAdds_mapFinRange
+    apply Circuit.localAdds_mapFinRange
     intro i n
-    simp only [circuit_norm, Xor64.circuit, Operations.collectAdds]
+    simp only [circuit_norm, Xor64.circuit, Operations.localAdds]
   subcircuitsConsistent _ i := by simp only [main, circuit_norm]
 
 def Assumptions (inputs : Inputs (F p)) : Prop :=

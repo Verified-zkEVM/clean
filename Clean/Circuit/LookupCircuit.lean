@@ -32,24 +32,24 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
   name := circuit.name
 
   -- for `(input, output)` to be contained in the lookup table defined by a circuit, means that:
-  Contains := fun (input, output) =>
+  Contains := fun _ (input, output) =>
     -- there exists an environment, such that
     ∃ n env,
     -- the circuit constraints hold
-    Circuit.ConstraintsHold env (circuit.main (const input) |>.operations n)
+    Operations.ConstraintsHold env (circuit.main (const input) |>.operations n)
     -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 
-  Soundness := fun (input, output) => circuit.Assumptions input → circuit.Spec input output
-  Completeness := fun (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput input
+  Soundness := fun _ (input, output) => circuit.Assumptions input → circuit.Spec input output
+  Completeness := fun _ (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput input
 
   imply_soundness := by
-    intro (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions
+    intro _ (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions
     simp only [h_output]
     exact circuit.original_soundness n env (const input) input ProvableType.eval_const h_assumptions h_holds
 
   implied_by_completeness := by
-    intro (input, output) ⟨h_assumptions, h_output⟩
+    intro _ (input, output) ⟨h_assumptions, h_output⟩
     use 0, circuit.proverEnvironment input
     simp only [h_output, LookupCircuit.constantOutput, and_true]
     set env := circuit.proverEnvironment input
