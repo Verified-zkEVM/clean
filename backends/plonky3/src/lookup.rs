@@ -1,3 +1,4 @@
+use alloc::string::String;
 use alloc::vec::Vec;
 use p3_air::{
     Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairCol, VirtualPairCol,
@@ -8,22 +9,17 @@ use p3_matrix::{dense::RowMajorMatrix, Matrix};
 use p3_uni_stark::{Entry, SymbolicExpression, SymbolicVariable};
 
 #[derive(Debug, Clone)]
-pub enum LookupType {
-    ByteRange,
-}
-
-#[derive(Debug, Clone)]
 pub struct Lookup<E> {
-    pub kind: LookupType,
+    pub table_name: String,
     // todo: support compressing multiple column values
     pub value: E,
     pub multiplicity: E,
 }
 
 impl<E> Lookup<E> {
-    pub fn new(kind: LookupType, value: E, multiplicity: E) -> Self {
+    pub fn new(table_name: String, value: E, multiplicity: E) -> Self {
         Self {
-            kind,
+            table_name,
             value,
             multiplicity,
         }
@@ -131,7 +127,7 @@ impl<F: Field> AirBuilderWithPublicValues for LookupBuilder<F> {
 impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F> {
     fn send(&mut self, l: Lookup<SymbolicExpression<F>>) {
         let l = Lookup::new(
-            l.kind,
+            l.table_name,
             symbolic_to_virtual_pair(&l.value),
             symbolic_to_virtual_pair(&l.multiplicity),
         );
@@ -140,7 +136,7 @@ impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F
 
     fn receive(&mut self, l: Lookup<SymbolicExpression<F>>) {
         let l = Lookup::new(
-            l.kind,
+            l.table_name,
             symbolic_to_virtual_pair(&l.value),
             symbolic_to_virtual_pair(&l.multiplicity),
         );
@@ -220,18 +216,28 @@ fn eval_symbolic_to_virtual_pair<F: Field>(
 }
 
 #[derive(Clone)]
-pub struct ByteRangeAir<F> {
+pub struct PreprocessedTableAir<F> {
+    pub name: String,
     pub preprocessed: RowMajorMatrix<F>,
 }
 
-impl<F: Field> ByteRangeAir<F> {
-    pub fn new() -> Self {
-        let preprocessed = RowMajorMatrix::new((0..256).map(|i| F::from_u8(i as u8)).collect(), 1);
-        Self { preprocessed }
+impl<F: Field> PreprocessedTableAir<F> {
+    pub fn new(name: String, preprocessed: RowMajorMatrix<F>) -> Self {
+        Self { name, preprocessed }
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.name
     }
 }
 
-impl<F: Field> BaseAir<F> for ByteRangeAir<F> {
+/// Convenience constructor for a byte-range (0..255) lookup table.
+pub fn byte_range_air<F: Field>() -> PreprocessedTableAir<F> {
+    let preprocessed = RowMajorMatrix::new((0..256).map(|i| F::from_u8(i as u8)).collect(), 1);
+    PreprocessedTableAir::new("Bytes".into(), preprocessed)
+}
+
+impl<F: Field> BaseAir<F> for PreprocessedTableAir<F> {
     /// One column for multiplicity
     fn width(&self) -> usize {
         1
@@ -242,19 +248,19 @@ impl<F: Field> BaseAir<F> for ByteRangeAir<F> {
     }
 }
 
-impl<AB: AirBuilder + BaseMessageBuilder> Air<AB> for ByteRangeAir<AB::F>
+impl<AB: AirBuilder + BaseMessageBuilder> Air<AB> for PreprocessedTableAir<AB::F>
 where
     AB::F: Field,
 {
     fn eval(&self, builder: &mut AB) {
         // generate receive lookups
         let main = builder.main();
-        let preprocessed = builder.preprocessed().expect("ByteRangeAir requires preprocessed trace");
+        let preprocessed = builder.preprocessed().expect("PreprocessedTableAir requires preprocessed trace");
 
         let local_mul = main.get(0, 0).unwrap().into();
         let local_preprocessed_val = preprocessed.get(0, 0).unwrap().into();
 
-        let receive = Lookup::new(LookupType::ByteRange, local_preprocessed_val, local_mul);
+        let receive = Lookup::new(self.name.clone(), local_preprocessed_val, local_mul);
         builder.receive(receive);
     }
 }

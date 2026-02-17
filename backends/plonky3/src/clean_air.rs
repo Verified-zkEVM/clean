@@ -9,7 +9,7 @@ use p3_matrix::Matrix;
 use crate::clean_ast::{
     AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation,
 };
-use crate::{BaseMessageBuilder, ByteRangeAir, Lookup};
+use crate::{BaseMessageBuilder, Lookup, PreprocessedTableAir};
 
 #[derive(Clone)]
 pub struct MainAir<F>
@@ -140,7 +140,7 @@ impl<F: Field> MainAir<F> {
     /// Process lookups for all operations (delegates to CleanOps)
     pub fn process_lookups<C>(&self, callback: C)
     where
-        C: FnMut(LookupRow, usize),
+        C: FnMut(LookupRow, usize, &str),
     {
         self.clean_ops.process_lookups(callback)
     }
@@ -155,18 +155,19 @@ impl<F: Field> MainAir<F> {
         AB: AirBuilder + BaseMessageBuilder,
         AB::F: Field + PrimeCharacteristicRing,
     {
-        use alloc::collections::BTreeSet;
+        use alloc::collections::BTreeMap;
+        use alloc::string::String;
 
-        let mut lookup_cols = BTreeSet::new();
-        self.process_lookups(|_r, c| {
-            lookup_cols.insert(c);
+        // Collect (column, table_name) pairs, deduplicating by column
+        let mut lookup_cols: BTreeMap<usize, String> = BTreeMap::new();
+        self.process_lookups(|_r, c, table_name| {
+            lookup_cols.insert(c, table_name.into());
         });
 
-        // For now, assume these lookups are for byte range
-        for &c in &lookup_cols {
+        for (&c, table_name) in &lookup_cols {
             let v = local[c].clone().into();
             let mul = AB::F::ONE.into();
-            let l = Lookup::new(crate::LookupType::ByteRange, v, mul);
+            let l = Lookup::new(table_name.clone(), v, mul);
             builder.send(l);
         }
     }
@@ -223,21 +224,31 @@ pub fn parse_init_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) 
 #[derive(Clone)]
 pub enum CleanAirInstance<F: Field> {
     Main(MainAir<F>),
-    ByteRange(ByteRangeAir<F>),
+    Preprocessed(PreprocessedTableAir<F>),
+}
+
+impl<F: Field> CleanAirInstance<F> {
+    /// Returns the table name if this is a preprocessed table AIR.
+    pub fn table_name(&self) -> Option<&str> {
+        match self {
+            CleanAirInstance::Main(_) => None,
+            CleanAirInstance::Preprocessed(air) => Some(air.table_name()),
+        }
+    }
 }
 
 impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
     fn width(&self) -> usize {
         match self {
             CleanAirInstance::Main(air) => air.width(),
-            CleanAirInstance::ByteRange(air) => air.width(),
+            CleanAirInstance::Preprocessed(air) => air.width(),
         }
     }
 
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
         match self {
             CleanAirInstance::Main(air) => air.preprocessed_trace(),
-            CleanAirInstance::ByteRange(air) => air.preprocessed_trace(),
+            CleanAirInstance::Preprocessed(air) => air.preprocessed_trace(),
         }
     }
 }
@@ -250,7 +261,7 @@ where
     fn eval(&self, builder: &mut AB) {
         match self {
             CleanAirInstance::Main(air) => air.eval(builder),
-            CleanAirInstance::ByteRange(air) => air.eval(builder),
+            CleanAirInstance::Preprocessed(air) => air.eval(builder),
         };
     }
 }

@@ -1,6 +1,6 @@
 use clean_backend::{
-    generate_multiplicity_traces, parse_init_trace, prove, verify, AirInfo, ByteRangeAir,
-    CleanAirInstance, MainAir, StarkConfig,
+    byte_range_air, generate_multiplicity_traces, parse_init_trace, prove, verify, AirInfo,
+    CleanAirInstance, MainAir, PreprocessedTableAir, StarkConfig,
 };
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
 use p3_challenger::DuplexChallenger;
@@ -128,8 +128,8 @@ fn test_clean_fib() {
     let air_instance = CleanAirInstance::Main(main_air);
 
     // Create a single VK with multiple AirInfo instances
-    let byte_range_air = ByteRangeAir::new();
-    let byte_range_air_instance = CleanAirInstance::ByteRange(byte_range_air);
+    let byte_range = byte_range_air::<BabyBear>();
+    let byte_range_air_instance = CleanAirInstance::Preprocessed(byte_range);
 
     // Create VK with multiple air instances (main + lookup)
     let air_instances = vec![
@@ -151,4 +151,95 @@ fn test_clean_fib() {
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, x];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("verification failed");
+}
+
+/// Test a 16-entry range-check table to demonstrate the generic lookup framework
+/// works with arbitrary table names and sizes.
+#[test]
+fn test_range_check_16() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    type Val = BabyBear;
+    type Perm = Poseidon2BabyBear<16>;
+    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
+    type Challenge = BinomialExtensionField<Val, 4>;
+    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    type Dft = Radix2DitParallel<Val>;
+    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    let mut rng = SmallRng::seed_from_u64(42);
+    let perm = Perm::new_from_rng_128(&mut rng);
+    let hash = MyHash::new(perm.clone());
+    let compress = MyCompress::new(perm.clone());
+    let val_mmcs = ValMmcs::new(hash, compress);
+    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+    let dft = Dft::default();
+    let config = create_test_fri_params(challenge_mmcs, 2);
+    let pcs = Pcs::new(dft, val_mmcs, config);
+    let challenger = Challenger::new(perm);
+    let config = MyConfig::new(pcs, challenger);
+
+    // Minimal JSON: an EveryRowExceptLast op with a lookup of column 0 into "Range16".
+    // No arithmetic constraints -- only the lookup.
+    let json_content = r#"[
+      {
+        "type": "EveryRowExceptLast",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "Range16",
+                "entry": [{ "type": "var", "index": 0 }]
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 }
+            ],
+            "offset": 1,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    // Main trace: 16 rows, 1 column. Column 0 has values in [0,15].
+    let num_rows = 16;
+    let width = 1;
+    let trace_data: Vec<BabyBear> = (0..num_rows)
+        .map(|i| BabyBear::from_u64(i as u64))
+        .collect();
+    let main_trace = RowMajorMatrix::new(trace_data, width);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, width);
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    // Create a 16-entry preprocessed table (values 0..15)
+    let range16_data: Vec<BabyBear> = (0..16).map(|i| BabyBear::from_u64(i as u64)).collect();
+    let range16_preprocessed = RowMajorMatrix::new(range16_data, 1);
+    let range16_air = PreprocessedTableAir::new("Range16".into(), range16_preprocessed);
+    let range16_instance = CleanAirInstance::Preprocessed(range16_air);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance, width),
+        AirInfo::new(range16_instance, 1),
+    ];
+
+    let lookup_traces =
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    // Public values: [0, 1, 1] (matching the default public_values in LookupBuilder)
+    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis).expect("range-check-16 verification failed");
 }

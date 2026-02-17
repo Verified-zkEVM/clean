@@ -7,15 +7,7 @@ use p3_air::{AirBuilder, ExtensionBuilder, PermutationAirBuilder, VirtualPairCol
 use p3_field::{ExtensionField, Field, PrimeField32};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
-use crate::{
-    ByteRangeAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Val, VerifyingKey,
-};
-
-/// Represents a lookup AIR with its calculated main trace
-pub struct LookupAirWithTrace<F: Field> {
-    pub air: ByteRangeAir<F>,
-    pub main_trace: RowMajorMatrix<F>,
-}
+use crate::{Lookup, StarkGenericConfig, Val, VerifyingKey};
 
 pub trait MultiTableBuilder: ExtensionBuilder {
     fn cumulative_sum(&self) -> Self::ExprEF {
@@ -23,16 +15,18 @@ pub trait MultiTableBuilder: ExtensionBuilder {
     }
 }
 
-/// Generates lookup tables with multiplicity traces,
+/// Generates multiplicity traces for all lookup tables,
 /// based on the lookup operations from the AirInfo instances.
 ///
 /// This function:
-/// 1. Uses the pre-computed lookup operations from the main air (index 0)
-/// 2. Collect lookups and multiplicity traces for each lookup type using other airs
-/// 3. Returns multiplicity traces
+/// 1. Gets send lookups from the main AIR (air_infos[0])
+/// 2. For each non-main AIR, extracts its receive table name
+/// 3. Matches sends to receives by table name
+/// 4. Uses preprocessed.height() for table size
+/// 5. Computes multiplicities over the matched sends
 ///
 /// # Arguments
-/// * `air_infos` - Vector of AirInfo instances (main + lookup airs)  
+/// * `air_infos` - Vector of AirInfo instances (main + lookup airs)
 /// * `main_trace` - The main execution trace (corresponds to air_infos[0])
 pub fn generate_multiplicity_traces<F, SC>(
     air_infos: &[crate::key::AirInfo<F>],
@@ -60,36 +54,41 @@ where
         "The main air should only send lookups, as it is not a lookup air"
     );
 
-    // Group lookups by type and find corresponding airs in the VK
-    // Process ByteRange lookups
-    let byte_range_sends: Vec<_> = sends
-        .iter()
-        .filter(|send| matches!(send.kind, LookupType::ByteRange))
-        .collect();
+    // For each non-main AIR (i.e. preprocessed table AIR), match sends by table name
+    for air_info in air_infos.iter().skip(1) {
+        let table_name = air_info
+            .air
+            .table_name()
+            .expect("Non-main AIR must be a preprocessed table with a name");
 
-    if !byte_range_sends.is_empty() {
-        // Find the corresponding ByteRange air in the VK
-        let _byte_range_air_info = air_infos
+        let table_size = air_info
+            .preprocessed
+            .as_ref()
+            .expect("Preprocessed table AIR must have a preprocessed trace")
+            .height();
+
+        // Collect sends that target this table
+        let table_sends: Vec<_> = sends
             .iter()
-            .find(|air_info| matches!(&air_info.air, CleanAirInstance::ByteRange(_)))
-            .expect("ByteRange air not found in VK");
+            .filter(|send| send.table_name == table_name)
+            .collect();
 
-        // Create multiplicity trace for byte range lookups (256 possible values, 0-255)
-        let mut multiplicity_trace = RowMajorMatrix::new(alloc::vec![F::ZERO; 256], 1);
+        // Create multiplicity trace for this table
+        let mut multiplicity_trace = RowMajorMatrix::new(alloc::vec![F::ZERO; table_size], 1);
 
         // Calculate multiplicities by evaluating lookup operations for each row
         for row_idx in 0..main_trace.height() {
-            for send in &byte_range_sends {
-                // Calculate the virtual column of the lookup values for the current row
+            for send in &table_sends {
                 let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
                 let v = send.value.apply::<F, F>(&[], &row_slice);
 
-                // Convert lookup value to index of multiplicity trace and increment multiplicity
                 let lookup_idx = v.as_canonical_u32() as usize;
                 assert!(
-                    lookup_idx < 256,
-                    "Lookup value out of range for byte range lookup: {}",
-                    lookup_idx
+                    lookup_idx < table_size,
+                    "Lookup value {} out of range for table '{}' (size {})",
+                    lookup_idx,
+                    table_name,
+                    table_size
                 );
 
                 let m = multiplicity_trace.row_mut(lookup_idx).get_mut(0).unwrap();
@@ -99,8 +98,6 @@ where
 
         lookup_traces.push(multiplicity_trace);
     }
-
-    // TODO: Add support for other lookup types as needed
 
     lookup_traces
 }
