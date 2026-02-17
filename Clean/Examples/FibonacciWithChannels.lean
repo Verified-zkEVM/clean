@@ -696,6 +696,14 @@ theorem soundness_of_soundChannels_and_specConsistency (ens : Ensemble F PublicI
   have table_soundness := table_soundness_of_soundChannels finished h_finished sound_channels witness publicInput
     partialBalance constraints verifier_accepts
   apply spec_consistency publicInput witness <;> simp_all
+
+/-- an empty ensemble satisfies SoundChannels -/
+theorem empty_soundChannels : (empty F PublicIO).SoundChannels (show [] ⊆ [] from List.Subset.refl _) := by
+  intro witness publicInput partial_balance constraints verifier_accepts
+  clear partial_balance constraints verifier_accepts
+  have tables_len_zero : witness.tables.length = 0 := (witness.same_length ..).symm
+  have tables_nil : witness.tables = [] := by rwa [List.eq_nil_iff_length_eq_zero]
+  simp_all only [empty, VerifierGuarantees, FormalCircuitWithInteractions.empty, circuit_norm]
 end Ensemble
 
 /--
@@ -715,9 +723,43 @@ def RawChannel.Consistent (channel : RawChannel F) : Prop :=
 
 namespace Ensemble
 def addTable (ens : Ensemble F PublicIO) (table : AbstractTable F) : Ensemble F PublicIO :=
-  { ens with tables := ens.tables ++ [table] }
+  { ens with tables := table :: ens.tables }
 
--- TODO maybe should add consistency of finished channels to the SoundChannels definition
+lemma addTable_witness (ens : Ensemble F PublicIO) (table : AbstractTable F)
+  (witness : EnsembleWitness (ens.addTable table)) :
+    ∃ (witness' : EnsembleWitness ens) (tableWitness : TableWitness F),
+      witness.tables = tableWitness :: witness'.tables ∧
+      witness.data = witness'.data ∧
+      table = tableWitness.abstract ∧
+      witness.data = tableWitness.data
+       := by
+  have h_len : (ens.addTable table).tables.length = ens.tables.length + 1 := by
+    simp [addTable]
+  have h_witlen : witness.tables.length = ens.tables.length + 1 := by
+    simp [←witness.same_length, addTable]
+  let witness' : EnsembleWitness ens := {
+    tables := witness.tables.tail,
+    data := witness.data,
+    same_length := by simp only [List.length_tail]; omega,
+    same_circuits := by
+      intro i hi
+      rw [List.getElem_tail, ← witness.same_circuits]
+      simp [addTable]
+      simp [addTable, hi]
+    same_prover_data := by
+      intro i hi
+      rw [List.getElem_tail, ← witness.same_prover_data]
+      simp [addTable, hi]
+  }
+  have h_wit_len_pos : 0 < witness.tables.length := by simp [h_witlen]
+  have h_wit_ne_nil : witness.tables ≠ [] := List.ne_nil_of_length_pos h_wit_len_pos
+  have h_lt : 0 < (ens.addTable table).tables.length := by simp [addTable]
+  let tableWitness : TableWitness F := witness.tables.head h_wit_ne_nil
+  use witness', tableWitness
+  rw [witness.tables.cons_head_tail]
+  simp only [tableWitness, List.head_eq_getElem]
+  rw [← witness.same_circuits _ h_lt, witness.same_prover_data _ h_lt]
+  simp [addTable, witness']
 
 theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     -- given a sound channels ensemble with a list of finished, consistent channels
@@ -740,42 +782,15 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   -- TODO maybe we could add separate lemmas about how an addTable witness is always split into an old witness + new table witness
   have h_len : (ens.addTable table).tables.length = ens.tables.length + 1 := by
     simp [addTable]
+  obtain ⟨ witness', tableWitness, h_split, h_data_eq, h_table, h_data_eq' ⟩ := addTable_witness ens table witness
   have h_witlen : witness.tables.length = ens.tables.length + 1 := by
     simp [←witness.same_length, addTable]
-  let witness' : EnsembleWitness ens := {
-    tables := witness.tables.dropLast,
-    data := witness.data,
-    same_length := by simp only [List.length_dropLast]; omega,
-    same_circuits := by
-      intro i hi
-      rw [List.getElem_dropLast, ← witness.same_circuits]
-      simp only [addTable]
-      rw [List.getElem_append_left]
-      grw [h_len, hi, Nat.lt_succ]
-    same_prover_data := by
-      intro i hi
-      rw [List.getElem_dropLast, ← witness.same_prover_data]
-      grw [h_len, hi, Nat.lt_succ]
-  }
   let h_sound' := h_sound witness' publicInput
-  -- also extract the new table
   have h_wit_len_pos : 0 < witness.tables.length := by simp [h_witlen]
   have h_wit_ne_nil : witness.tables ≠ [] := List.ne_nil_of_length_pos h_wit_len_pos
-  set tableWitness : TableWitness F := witness.tables.getLast h_wit_ne_nil with h_tableWitness
+  have h_wit_tail : witness'.tables = witness.tables.tail := by simp [h_split]
   let tableInteractions := tableWitness.interactions
-  have h_table : table = tableWitness.abstract := by
-    simp only [tableWitness, List.getLast_eq_getElem]
-    rw [← witness.same_circuits]
-    simp only [addTable]
-    rw [List.getElem_append_right (by simp [h_witlen]), List.getElem_singleton]
-    simp [h_witlen, addTable]
   rw [h_table] at grts_subset_finished reqs_disjoint_finished
-  have h_data_eq : witness.data = tableWitness.data := by
-    simp only [tableWitness, List.getLast_eq_getElem]
-    rw [witness.same_prover_data]
-    simp [h_witlen, addTable]
-  have h_split : witness.tables = witness'.tables ++ [tableWitness] := by
-    rw [List.dropLast_append_getLast h_wit_ne_nil]
   -- we instantiate partial balance by moving the new table's interactions to `extraInteractions`
   rcases partial_balance with ⟨ extraInteractions, balance, reqs_extra ⟩
   have partial_balance' : ens.PartialBalancedChannels h_finished publicInput witness' := by
@@ -784,13 +799,15 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     · intro channel h_mem_channel
       -- balance holds because we're balancing the same list (just need to show that)
       specialize balance channel h_mem_channel
-      convert balance using 1
-      simp only [interactionsWith, List.append_assoc, RawChannel.filter', tableInteractions]
-      congr 1
-      rw [h_split]
-      simp [TableWitness.interactionsWith_eq_filter]
+      apply balancedInteractions_of_perm ?_ balance
+      simp only [interactionsWith, verifierInteractionsWith, addTable, h_data_eq, h_split,
+        List.flatMap_cons, RawChannel.filter', List.append_assoc, List.filter_append,
+        tableInteractions]
+      rw [List.perm_append_left_iff, ←List.append_assoc,
+        ←List.append_assoc, List.perm_append_right_iff, TableWitness.interactionsWith_eq_filter]
+      apply List.perm_append_comm
     · intro i
-      simp only [List.mem_append, or_imp]
+      simp only [List.mem_append, or_imp, ← h_data_eq]
       -- reqs hold on extra ins because we assumed that,
       -- and on new table bc channelsWithReqs are disjoint from finished
       refine ⟨ ?_, reqs_extra i ⟩
@@ -805,24 +822,28 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
       have h_req := tableWitness.requirements_of_not_mem h_channel_not_mem
       rw [TableWitness.channelRequirements_iff_forall] at h_req
       show i.Requirements witness.data
-      rw [h_data_eq]
+      rw [h_data_eq']
       apply h_req i
       simp [TableWitness.interactionsWith_eq_filter, hi]
   -- constraints for the smaller ensemble follow easily from the larger one
   have constraints' : ens.Constraints witness' := by
     simp only [Ensemble.Constraints] at constraints ⊢
     intro table' h_mem
-    exact constraints table' (List.mem_of_mem_dropLast h_mem)
+    rw [h_wit_tail] at h_mem
+    exact constraints table' (List.mem_of_mem_tail h_mem)
   -- verifier didn't change, so we can reuse the same verifier accepts statement
-  have verifier_accepts' : ens.VerifierAccepts publicInput witness'.data := verifier_accepts
+  have verifier_accepts' : ens.VerifierAccepts publicInput witness'.data := by
+    rw [← h_data_eq]
+    exact verifier_accepts
   specialize h_sound' partial_balance' constraints' verifier_accepts'
   -- now we only need to prove guarantees for the last table!
   suffices tableWitness.Guarantees by
     rcases h_sound' with ⟨ h_old, h_verifier_grts ⟩
+    rw [← h_data_eq] at h_verifier_grts
     refine ⟨ ?_, h_verifier_grts ⟩
-    simp only [h_split, List.mem_append, List.mem_singleton, or_imp]
+    simp only [h_split, List.mem_cons, or_imp]
     intro table'
-    exact ⟨ h_old table', fun h => h ▸ this ⟩
+    exact ⟨ fun h => h ▸ this, h_old table' ⟩
   -- we can restrict to finished channels because the table's channels with guarantees are all finished
   rw [tableWitness.guarantees_iff_channelGuarantees]
   intro channel h_mem_finished
@@ -833,13 +854,14 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     ++ channel.filter' extraInteractions;
   replace balance : BalancedInteractions channelInteractions := balance channel (h_finished h_mem_finished)
   suffices goal : ∀ i ∈ channelInteractions, i.Guarantees witness.data by
-    rw [TableWitness.channelGuarantees_iff_forall, ← h_data_eq]
+    rw [TableWitness.channelGuarantees_iff_forall, ← h_data_eq']
     intro i h_mem
     simp only [List.mem_append, or_imp, channelInteractions] at goal
     apply (goal i).1
     simp only [interactionsWith, addTable, List.mem_append, List.mem_flatMap]
     right
-    exact ⟨ tableWitness, witness.tables.getLast_mem h_wit_ne_nil, h_mem ⟩
+    refine ⟨ tableWitness, ?_, h_mem ⟩
+    simp [h_split]
   -- since finished channels are consistent, this follows from requirements + balance
   have h_channel_eq : ∀ i ∈ channelInteractions, i.channel = channel := by
     intro i h_mem
@@ -860,7 +882,8 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
       i ∈ tableWitness.interactionsWith channel ∨
       i ∈ channel.filter' extraInteractions := by
     simp only [channelInteractions, List.mem_append, interactionsWith, h_split,
-      List.mem_append, List.flatMap_append, List.flatMap_singleton] at h_mem ⊢
+      List.mem_append, List.flatMap_cons] at h_mem ⊢
+    simp only [← h_data_eq]
     tauto
   simp only [mem_interactionsWith] at h_mem
   rcases h_mem with h_mem_old | h_mem_table | h_mem_extra
@@ -872,7 +895,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
       simp only [verifierInteractionsWith, List.mem_map, forall_exists_index, and_imp]
       rw [Operations.forall_interactionsWith_iff]
       intro i' i'_mem i'_channel_eq i'_eq
-      simp only [← i'_eq]
+      simp only [← i'_eq, h_data_eq]
       apply verifier_reqs _ i'_mem
     · have table_reqs := (table_sound table' h_table').2
       rw [TableWitness.requirements_iff_forall] at table_reqs
@@ -897,6 +920,104 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     exact h_channel_eq ▸ h_mem_finished
 
 end Ensemble
+
+structure SoundEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
+    extends ensemble : Ensemble F PublicIO where
+  finished : List (RawChannel F)
+  finished_subset : finished ⊆ channels
+  finished_consistent : ∀ channel ∈ finished, channel.Consistent
+  soundChannels : ensemble.SoundChannels finished_subset
+  specConsistency : ensemble.SpecConsistency
+
+namespace SoundEnsemble
+def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] :
+  SoundEnsemble F PublicIO where
+    ensemble := .empty F PublicIO
+    finished := []
+    finished_subset := List.Subset.refl _
+    finished_consistent := by simp
+    soundChannels := Ensemble.empty_soundChannels
+    specConsistency := by
+      simp only [circuit_norm, Ensemble.SpecConsistency, Ensemble.empty, FormalCircuitWithInteractions.empty]
+
+@[circuit_norm] lemma empty_tables : (empty F PublicIO).tables = [] := rfl
+@[circuit_norm] lemma empty_channels : (empty F PublicIO).channels = [] := rfl
+@[circuit_norm] lemma empty_finished : (empty F PublicIO).finished = [] := rfl
+
+def addTable (soundEns : SoundEnsemble F PublicIO) (table : AbstractTable F)
+    (grts_subset_finished : table.circuit.channelsWithGuarantees ⊆ soundEns.finished
+      := by simp [circuit_norm])
+    (reqs_disjoint_finished : ∀ channel ∈ soundEns.finished, channel ∉ table.circuit.channelsWithRequirements
+      := by simp [circuit_norm])
+    : SoundEnsemble F PublicIO where
+  ensemble := soundEns.ensemble.addTable table
+  finished := soundEns.finished
+  finished_subset := soundEns.finished_subset
+  finished_consistent := soundEns.finished_consistent
+  soundChannels := soundEns.ensemble.soundChannels_addTable soundEns.finished_subset soundEns.soundChannels
+      soundEns.finished_consistent table grts_subset_finished reqs_disjoint_finished
+  specConsistency := by
+    simp only [circuit_norm, Ensemble.SpecConsistency]
+    intro publicInput witness spec table_verifier_spec
+    obtain ⟨ witness', tableWitness, h_split, h_data_eq, h_table, h_data_eq' ⟩ := soundEns.ensemble.addTable_witness table witness
+    apply soundEns.specConsistency publicInput witness'
+    · simp_all
+    rw [← h_data_eq]
+    exact table_verifier_spec
+
+variable {soundEns : SoundEnsemble F PublicIO} {table : AbstractTable F}
+    {gsf : table.circuit.channelsWithGuarantees ⊆ soundEns.finished}
+    {rdf : ∀ channel ∈ soundEns.finished, channel ∉ table.circuit.channelsWithRequirements}
+
+@[circuit_norm] lemma addTable_tables :
+  (soundEns.addTable table gsf rdf).tables = table :: soundEns.tables := rfl
+
+@[circuit_norm] lemma addTable_channels :
+  (soundEns.addTable table gsf rdf).channels = soundEns.channels := rfl
+
+@[circuit_norm] lemma addTable_finished :
+  (soundEns.addTable table gsf rdf).finished = soundEns.finished := rfl
+
+def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) : SoundEnsemble F PublicIO where
+  ensemble := { soundEns.ensemble with channels := channel :: soundEns.channels }
+  finished := soundEns.finished
+  finished_subset := by simp [soundEns.finished_subset]
+  finished_consistent := soundEns.finished_consistent
+  soundChannels := by
+    intro witness publicInput partial_balance constraints verifier_accepts
+    let witness' : EnsembleWitness soundEns.ensemble := { witness with }
+    have partial_balance' : soundEns.ensemble.PartialBalancedChannels soundEns.finished_subset publicInput witness' := by
+      simp only [Ensemble.PartialBalancedChannels, List.mem_cons, Ensemble.interactionsWith,
+        Ensemble.verifierInteractionsWith, Lean.Elab.WF.paramLet, List.append_assoc,
+        forall_eq_or_imp] at partial_balance
+      rcases partial_balance with ⟨extraInteractions, ⟨ balance_ver, balance ⟩, reqs_extra⟩
+      refine ⟨ extraInteractions, ?_, reqs_extra ⟩
+      intro channel' h_mem_channel
+      specialize balance channel' h_mem_channel
+      convert balance using 1
+      rw [← List.append_assoc]
+      rfl
+    apply soundEns.soundChannels witness' publicInput partial_balance'
+    · simp only [Ensemble.Constraints] at constraints ⊢
+      intro table h_mem
+      exact constraints table h_mem
+    · exact verifier_accepts
+  specConsistency := by
+    intro publicInput witness spec table_verifier_spec
+    let witness' : EnsembleWitness soundEns.ensemble := { witness with }
+    apply soundEns.specConsistency publicInput witness' spec
+    exact table_verifier_spec
+
+@[circuit_norm] lemma addChannel_channels {channel : RawChannel F} :
+  (soundEns.addChannel channel).channels = channel :: soundEns.channels := rfl
+
+@[circuit_norm] lemma addChannel_tables {channel : RawChannel F} :
+  (soundEns.addChannel channel).tables = soundEns.tables := rfl
+
+@[circuit_norm] lemma addChannel_finished {channel : RawChannel F} :
+  (soundEns.addChannel channel).finished = soundEns.finished := rfl
+
+end SoundEnsemble
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
@@ -1172,6 +1293,13 @@ def fibonacciEnsemble : Ensemble (F p) fieldTriple where
   verifier_length_zero := by simp only [fibonacciVerifier, circuit_norm]
 
   Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+
+def fibonacciSoundEnsemble :=  SoundEnsemble.empty (F p) fieldTriple
+  |>.addChannel BytesChannel.toRaw
+  |>.addChannel Add8Channel.toRaw
+  |>.addTable ⟨pushBytes⟩ (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
+  -- TODO markFinished
+  -- |>.addTable ⟨add8⟩ (by simp [circuit_norm, add8]) (by simp [circuit_norm, add8])
 
 /-!
 ## Helper lemmas for per-message channel balance
