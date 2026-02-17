@@ -1,7 +1,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, PairBuilder};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues};
 use p3_field::Field;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
@@ -146,6 +146,10 @@ where
             self.row_index, x, y
         );
     }
+
+    fn preprocessed(&self) -> Option<Self::M> {
+        Some(self.preprocessed)
+    }
 }
 
 impl<F: Field> AirBuilderWithPublicValues for DebugConstraintBuilder<'_, F> {
@@ -153,12 +157,6 @@ impl<F: Field> AirBuilderWithPublicValues for DebugConstraintBuilder<'_, F> {
 
     fn public_values(&self) -> &[Self::F] {
         self.public_values
-    }
-}
-
-impl<F: Field> PairBuilder for DebugConstraintBuilder<'_, F> {
-    fn preprocessed(&self) -> Self::M {
-        self.preprocessed
     }
 }
 

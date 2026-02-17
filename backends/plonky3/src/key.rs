@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder,
+    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder,
     VirtualPairCol,
 };
 use p3_commit::{Pcs, PolynomialSpace};
@@ -27,7 +27,7 @@ type PcsData<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
     <SC as StarkGenericConfig>::Challenger,
 >>::ProverData;
 
-pub trait VerifyingKey<F> {
+pub trait VerifyingKey<F: Field> {
     fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)>
     where
         F: Field;
@@ -45,8 +45,8 @@ pub trait VerifyingKey<F> {
             + PermutationAirBuilder
             + MultiTableBuilder
             + AirBuilderWithPublicValues
-            + PairBuilder
-            + BaseMessageBuilder;
+            + BaseMessageBuilder,
+        AB::Var: Copy;
 }
 
 pub struct VK<SC: StarkGenericConfig> {
@@ -201,8 +201,8 @@ impl<F: Field> VerifyingKey<F> for AirInfo<F> {
             + PermutationAirBuilder
             + MultiTableBuilder
             + AirBuilderWithPublicValues
-            + PairBuilder
             + BaseMessageBuilder,
+        AB::Var: Copy,
     {
         self.air.eval(builder);
         eval_permutation_constraints(self.lookups(), builder);
@@ -225,7 +225,7 @@ impl<F: Field> BaseAir<F> for AirInfo<F> {
 
 impl<AB> Air<AB> for AirInfo<AB::F>
 where
-    AB: AirBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder,
+    AB: AirBuilder + AirBuilderWithPublicValues + BaseMessageBuilder,
     AB::F: Field,
 {
     fn eval(&self, builder: &mut AB) {

@@ -11,19 +11,19 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 
 # Plonky3 dependencies - using git for latest versions
-p3-air = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-challenger = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-commit = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-dft = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-field = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-fri = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-keccak = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-matrix = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-symmetric = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-uni-stark = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-maybe-rayon = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-util = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-p3-poseidon2 = { git = "https://github.com/Plonky3/Plonky3", rev="e784f44" }
-rand = { version = "0.9", features = ["small_rng"] }
+p3-air = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-challenger = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-commit = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-dft = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-field = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-fri = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-keccak = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-matrix = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-symmetric = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-uni-stark = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-maybe-rayon = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-util = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-poseidon2 = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+rand = "0.10"
