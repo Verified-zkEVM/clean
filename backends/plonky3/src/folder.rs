@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use p3_air::{
-    AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PairBuilder, PermutationAirBuilder,
+    AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PermutationAirBuilder,
 };
 use p3_matrix::dense::RowMajorMatrixView;
 use p3_matrix::stack::VerticalPair;
@@ -84,6 +84,10 @@ impl<'a, SC: StarkGenericConfig> AirBuilder for ProverConstraintFolder<'a, SC> {
         self.accumulator += Into::<PackedChallenge<SC>>::into(alpha_power) * x;
         self.constraint_index += 1;
     }
+
+    fn preprocessed(&self) -> Option<Self::M> {
+        Some(self.preprocessed)
+    }
 }
 
 impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for ProverConstraintFolder<'_, SC> {
@@ -92,12 +96,6 @@ impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for ProverConstraintFold
     #[inline]
     fn public_values(&self) -> &[Self::F] {
         self.public_values
-    }
-}
-
-impl<SC: StarkGenericConfig> PairBuilder for ProverConstraintFolder<'_, SC> {
-    fn preprocessed(&self) -> Self::M {
-        self.preprocessed
     }
 }
 
@@ -175,6 +173,10 @@ impl<'a, SC: StarkGenericConfig> AirBuilder for VerifierConstraintFolder<'a, SC>
         self.accumulator *= self.alpha;
         self.accumulator += x;
     }
+
+    fn preprocessed(&self) -> Option<Self::M> {
+        Some(self.preprocessed)
+    }
 }
 
 impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for VerifierConstraintFolder<'_, SC> {
@@ -182,12 +184,6 @@ impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for VerifierConstraintFo
 
     fn public_values(&self) -> &[Self::F] {
         self.public_values
-    }
-}
-
-impl<SC: StarkGenericConfig> PairBuilder for VerifierConstraintFolder<'_, SC> {
-    fn preprocessed(&self) -> Self::M {
-        self.preprocessed
     }
 }
 
