@@ -53,7 +53,9 @@ where
     challenger.observe_slice(public_values);
 
     // Sample permutation challenges for each air info.
-    let permutation_challenges: Vec<SC::Challenge> = (0..air_infos.len())
+    // Ensure at least 2 challenges: z (random point) and alpha_rlc (RLC compression).
+    let num_challenges = air_infos.len().max(2);
+    let permutation_challenges: Vec<SC::Challenge> = (0..num_challenges)
         .map(|_| challenger.sample_algebra_element())
         .collect();
 

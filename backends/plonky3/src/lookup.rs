@@ -11,16 +11,15 @@ use p3_uni_stark::{Entry, SymbolicExpression, SymbolicVariable};
 #[derive(Debug, Clone)]
 pub struct Lookup<E> {
     pub table_name: String,
-    // todo: support compressing multiple column values
-    pub value: E,
+    pub values: Vec<E>,
     pub multiplicity: E,
 }
 
 impl<E> Lookup<E> {
-    pub fn new(table_name: String, value: E, multiplicity: E) -> Self {
+    pub fn new(table_name: String, values: Vec<E>, multiplicity: E) -> Self {
         Self {
             table_name,
-            value,
+            values,
             multiplicity,
         }
     }
@@ -128,7 +127,10 @@ impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F
     fn send(&mut self, l: Lookup<SymbolicExpression<F>>) {
         let l = Lookup::new(
             l.table_name,
-            symbolic_to_virtual_pair(&l.value),
+            l.values
+                .iter()
+                .map(|v| symbolic_to_virtual_pair(v))
+                .collect(),
             symbolic_to_virtual_pair(&l.multiplicity),
         );
         self.sends.push(l);
@@ -137,7 +139,10 @@ impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F
     fn receive(&mut self, l: Lookup<SymbolicExpression<F>>) {
         let l = Lookup::new(
             l.table_name,
-            symbolic_to_virtual_pair(&l.value),
+            l.values
+                .iter()
+                .map(|v| symbolic_to_virtual_pair(v))
+                .collect(),
             symbolic_to_virtual_pair(&l.multiplicity),
         );
         self.receives.push(l);
@@ -255,12 +260,18 @@ where
     fn eval(&self, builder: &mut AB) {
         // generate receive lookups
         let main = builder.main();
-        let preprocessed = builder.preprocessed().expect("PreprocessedTableAir requires preprocessed trace");
+        let preprocessed = builder
+            .preprocessed()
+            .expect("PreprocessedTableAir requires preprocessed trace");
 
         let local_mul = main.get(0, 0).unwrap().into();
-        let local_preprocessed_val = preprocessed.get(0, 0).unwrap().into();
 
-        let receive = Lookup::new(self.name.clone(), local_preprocessed_val, local_mul);
+        // Multi-column: emit one value per preprocessed column
+        let values: Vec<AB::Expr> = (0..self.preprocessed.width())
+            .map(|col| preprocessed.get(0, col).unwrap().into())
+            .collect();
+
+        let receive = Lookup::new(self.name.clone(), values, local_mul);
         builder.receive(receive);
     }
 }

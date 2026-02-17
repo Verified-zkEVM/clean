@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use p3_air::{AirBuilder, ExtensionBuilder, PermutationAirBuilder, VirtualPairCol};
-use p3_field::{ExtensionField, Field, PrimeField32};
+use p3_field::{ExtensionField, Field, PrimeCharacteristicRing, PrimeField32};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
 use crate::{Lookup, StarkGenericConfig, Val, VerifyingKey};
@@ -13,6 +13,15 @@ pub trait MultiTableBuilder: ExtensionBuilder {
     fn cumulative_sum(&self) -> Self::ExprEF {
         unimplemented!("cumulative_sum is not implemented for this builder")
     }
+}
+
+/// Compress multiple values into a single field element using random linear combination.
+/// compressed = v[0] + alpha * v[1] + alpha^2 * v[2] + ...
+fn compress_values<EF: ExtensionField<F>, F: Field>(values: &[EF], alpha: EF) -> EF {
+    values
+        .iter()
+        .rev()
+        .fold(EF::ZERO, |acc, v| acc * alpha + *v)
 }
 
 /// Generates multiplicity traces for all lookup tables,
@@ -76,11 +85,12 @@ where
         // Create multiplicity trace for this table
         let mut multiplicity_trace = RowMajorMatrix::new(alloc::vec![F::ZERO; table_size], 1);
 
-        // Calculate multiplicities by evaluating lookup operations for each row
+        // Calculate multiplicities by evaluating lookup operations for each row.
+        // For multi-column tables, use values[0] (the address/index column) as the row index.
         for row_idx in 0..main_trace.height() {
             for send in &table_sends {
                 let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
-                let v = send.value.apply::<F, F>(&[], &row_slice);
+                let v = send.values[0].apply::<F, F>(&[], &row_slice);
 
                 let lookup_idx = v.as_canonical_u32() as usize;
                 assert!(
@@ -114,6 +124,7 @@ where
     SC: StarkGenericConfig,
 {
     let z = random_elements[0];
+    let alpha = random_elements[1]; // RLC compression challenge
     let lookups = air_info.lookups();
 
     let num_perm_cols = lookups.len() + 1; // +1 for cumulative sum column
@@ -137,11 +148,16 @@ where
         let main_row: Vec<Val<SC>> = main_trace.row(row).unwrap().into_iter().collect();
 
         for (i, (lookup, is_send)) in lookups.iter().enumerate() {
-            let lookup_value: EF = lookup
-                .value
-                .apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row)
-                .into();
-            let denominator: EF = z - lookup_value;
+            let values: Vec<EF> = lookup
+                .values
+                .iter()
+                .map(|v| {
+                    v.apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row)
+                        .into()
+                })
+                .collect();
+            let compressed = compress_values(&values, alpha);
+            let denominator: EF = z - compressed;
 
             let mut mult = lookup
                 .multiplicity
@@ -199,6 +215,7 @@ pub fn eval_permutation_constraints<AB>(
     let rands = builder.permutation_randomness();
     let rands: Vec<AB::ExprEF> = rands.iter().map(|x| (*x).into()).collect();
     let z = &rands[0];
+    let alpha_rlc = &rands[1]; // RLC compression challenge
 
     let main_local = main.row_slice(0).expect("main trace is empty?");
     let perm_local = perm.row_slice(0).expect("perm trace is empty?");
@@ -213,12 +230,24 @@ pub fn eval_permutation_constraints<AB>(
         let empty_preprocessed: &[AB::Var] = &[];
         let preprocessed_ref = preprocessed_row.as_deref().unwrap_or(empty_preprocessed);
 
-        let lookup_value: AB::ExprEF = lookup
-            .value
-            .apply::<AB::Expr, AB::Var>(preprocessed_ref, &main_local)
-            .into();
+        let lookup_values: Vec<AB::ExprEF> = lookup
+            .values
+            .iter()
+            .map(|v| {
+                v.apply::<AB::Expr, AB::Var>(preprocessed_ref, &main_local)
+                    .into()
+            })
+            .collect();
 
-        let denominator = z.clone() - lookup_value;
+        // RLC compress: v[0] + alpha * v[1] + alpha^2 * v[2] + ...
+        let compressed: AB::ExprEF = lookup_values
+            .iter()
+            .rev()
+            .fold(<AB::ExprEF as PrimeCharacteristicRing>::ZERO, |acc, v| {
+                acc * alpha_rlc.clone() + v.clone()
+            });
+
+        let denominator = z.clone() - compressed;
 
         let mut mult: AB::ExprEF = lookup
             .multiplicity
