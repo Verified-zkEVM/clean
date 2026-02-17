@@ -323,4 +323,22 @@ impl CleanOps {
         });
         AstUtils::find_lookup_ops(&ops.collect::<Vec<_>>())
     }
+
+    /// Get all lookup operations paired with their assignment context.
+    /// This is needed for expression-based lookups where var indices must
+    /// be resolved to trace columns via the assignment.
+    pub fn lookup_ops_with_assignments(&self) -> Vec<(LookupOp, Assignment)> {
+        let mut result = Vec::new();
+        for op in &self.ops {
+            let context = match op {
+                CleanOp::Boundary { context, .. } => context,
+                CleanOp::EveryRowExceptLast { context } => context,
+            };
+            let lookups = AstUtils::find_lookup_ops(&context.circuit);
+            for lookup in lookups {
+                result.push((lookup, context.assignment.clone()));
+            }
+        }
+        result
+    }
 }

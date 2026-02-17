@@ -149,25 +149,49 @@ impl<F: Field> MainAir<F> {
         self.clean_ops.lookup_ops()
     }
 
-    /// Apply lookup constraints for the air
+    /// Apply lookup constraints for the air.
+    /// Uses expression evaluation to support multi-column lookup entries.
     fn apply_lookup_constraints<AB>(&self, builder: &mut AB, local: &[AB::Var])
     where
         AB: AirBuilder + BaseMessageBuilder,
         AB::F: Field + PrimeCharacteristicRing,
     {
-        use alloc::collections::BTreeMap;
+        use alloc::collections::BTreeSet;
         use alloc::string::String;
 
-        // Collect (column, table_name) pairs, deduplicating by column
-        let mut lookup_cols: BTreeMap<usize, String> = BTreeMap::new();
-        self.process_lookups(|_r, c, table_name| {
-            lookup_cols.insert(c, table_name.into());
-        });
+        let ops_with_assignments = self.clean_ops.lookup_ops_with_assignments();
 
-        for (&c, table_name) in &lookup_cols {
-            let v = local[c].clone().into();
+        // Deduplicate by (table, entry debug repr) to avoid duplicate sends
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+
+        for (lookup_op, assignment) in &ops_with_assignments {
+            let key = alloc::format!("{}:{:?}", lookup_op.table, lookup_op.entry);
+            if !seen.insert(key) {
+                continue;
+            }
+
+            let load_var = |var_idx: usize| -> AB::Var {
+                let var = &assignment.vars[var_idx];
+                match var {
+                    // Lookup constraints are applied at every row unconditionally.
+                    // We always use local[column] regardless of the row reference,
+                    // because the VirtualPairCol framework only supports current-row.
+                    VarLocation::Cell { column, .. } => local[*column].clone(),
+                    VarLocation::Aux { .. } => {
+                        unreachable!("All aux vars should be already converted to cells")
+                    }
+                }
+            };
+            let load_pi = |_pi_idx: usize| -> AB::Expr { panic!("Pi not supported in lookups") };
+
+            let values: Vec<AB::Expr> = lookup_op
+                .entry
+                .iter()
+                .map(|e| AstUtils::lower_expr::<AB>(e, &load_var, &load_pi))
+                .collect();
+
             let mul = AB::F::ONE.into();
-            let l = Lookup::new(table_name.clone(), v, mul);
+            let l = Lookup::new(lookup_op.table.clone(), values, mul);
             builder.send(l);
         }
     }

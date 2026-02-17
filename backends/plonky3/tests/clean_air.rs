@@ -153,6 +153,219 @@ fn test_clean_fib() {
     verify(&config, &air_infos, &proof, &pis).expect("verification failed");
 }
 
+/// Test multi-column lookups with RLC compression.
+/// Demonstrates a 2-column preprocessed table (address, value) with
+/// multi-column sends from the main trace.
+#[test]
+fn test_multi_column_lookup() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    type Val = BabyBear;
+    type Perm = Poseidon2BabyBear<16>;
+    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
+    type Challenge = BinomialExtensionField<Val, 4>;
+    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    type Dft = Radix2DitParallel<Val>;
+    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    let mut rng = SmallRng::seed_from_u64(99);
+    let perm = Perm::new_from_rng_128(&mut rng);
+    let hash = MyHash::new(perm.clone());
+    let compress = MyCompress::new(perm.clone());
+    let val_mmcs = ValMmcs::new(hash, compress);
+    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+    let dft = Dft::default();
+    let config = create_test_fri_params(challenge_mmcs, 2);
+    let pcs = Pcs::new(dft, val_mmcs, config);
+    let challenger = Challenger::new(perm);
+    let config = MyConfig::new(pcs, challenger);
+
+    // Circuit JSON: lookup of (var0, var1) into "Memory" table.
+    // Two-column lookup: address (col 0) and value (col 1).
+    let json_content = r#"[
+      {
+        "type": "EveryRowExceptLast",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "Memory",
+                "entry": [
+                  { "type": "var", "index": 0 },
+                  { "type": "var", "index": 1 }
+                ]
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 },
+              { "row": 0, "column": 1 }
+            ],
+            "offset": 2,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    // Preprocessed "Memory" table: 16 rows × 2 columns (address, value).
+    // Row i: (i, 100*(i+1))
+    let num_rows = 16;
+    let memory_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            vec![
+                BabyBear::from_u64(i as u64),
+                BabyBear::from_u64(100 * (i + 1) as u64),
+            ]
+        })
+        .collect();
+    let memory_preprocessed = RowMajorMatrix::new(memory_data, 2);
+
+    // Main trace: 16 rows × 2 columns, matching the preprocessed table exactly.
+    let main_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            vec![
+                BabyBear::from_u64(i as u64),
+                BabyBear::from_u64(100 * (i + 1) as u64),
+            ]
+        })
+        .collect();
+    let main_trace = RowMajorMatrix::new(main_data, 2);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, 2);
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    let memory_air = PreprocessedTableAir::new("Memory".into(), memory_preprocessed);
+    let memory_instance = CleanAirInstance::Preprocessed(memory_air);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance, 2),
+        AirInfo::new(memory_instance, 1),
+    ];
+
+    let lookup_traces =
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis).expect("multi-column lookup verification failed");
+}
+
+/// Test multi-column lookups with expression entries (not just simple variable refs).
+/// Demonstrates lookup entries like (var0, var1 + const(1)).
+#[test]
+fn test_expression_lookup() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    type Val = BabyBear;
+    type Perm = Poseidon2BabyBear<16>;
+    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
+    type Challenge = BinomialExtensionField<Val, 4>;
+    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    type Dft = Radix2DitParallel<Val>;
+    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    let mut rng = SmallRng::seed_from_u64(77);
+    let perm = Perm::new_from_rng_128(&mut rng);
+    let hash = MyHash::new(perm.clone());
+    let compress = MyCompress::new(perm.clone());
+    let val_mmcs = ValMmcs::new(hash, compress);
+    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+    let dft = Dft::default();
+    let config = create_test_fri_params(challenge_mmcs, 2);
+    let pcs = Pcs::new(dft, val_mmcs, config);
+    let challenger = Challenger::new(perm);
+    let config = MyConfig::new(pcs, challenger);
+
+    // Circuit JSON: lookup of (var0, var0 + const(1)) into "Table".
+    // The second entry is an expression: column_0 + 1.
+    let json_content = r#"[
+      {
+        "type": "EveryRowExceptLast",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "Table",
+                "entry": [
+                  { "type": "var", "index": 0 },
+                  {
+                    "type": "add",
+                    "lhs": { "type": "var", "index": 0 },
+                    "rhs": { "type": "const", "value": 1 }
+                  }
+                ]
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 }
+            ],
+            "offset": 1,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    // Preprocessed table: 16 rows × 2 columns.
+    // Row i: (i, i+1) — matches the expression (var0, var0+1).
+    let num_rows = 16;
+    let table_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            vec![
+                BabyBear::from_u64(i as u64),
+                BabyBear::from_u64((i + 1) as u64),
+            ]
+        })
+        .collect();
+    let table_preprocessed = RowMajorMatrix::new(table_data, 2);
+
+    // Main trace: 16 rows × 1 column, values 0..15.
+    let main_data: Vec<BabyBear> = (0..num_rows)
+        .map(|i| BabyBear::from_u64(i as u64))
+        .collect();
+    let main_trace = RowMajorMatrix::new(main_data, 1);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, 1);
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    let table_air = PreprocessedTableAir::new("Table".into(), table_preprocessed);
+    let table_instance = CleanAirInstance::Preprocessed(table_air);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance, 1),
+        AirInfo::new(table_instance, 1),
+    ];
+
+    let lookup_traces =
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis).expect("expression lookup verification failed");
+}
+
 /// Test a 16-entry range-check table to demonstrate the generic lookup framework
 /// works with arbitrary table names and sizes.
 #[test]
