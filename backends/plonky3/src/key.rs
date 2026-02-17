@@ -126,7 +126,7 @@ impl<F: Field> AirInfo<F> {
             CleanAirInstance::Main(air) => {
                 air.eval(&mut lookup_builder);
             }
-            CleanAirInstance::ByteRange(air) => {
+            CleanAirInstance::Preprocessed(air) => {
                 air.eval(&mut lookup_builder);
             }
         }
