@@ -32,7 +32,8 @@ def buildAuxMap (as : CellAssignment W S) : Std.HashMap ℕ ℕ := Id.run do
   - According to `CellAssignment` for input cells, the input columns are assigned to
   the corresponding columns in the trace row.
 -/
-def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Array F :=
+def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F)
+    (proverData : ProverData F := fun _ _ => #[]) : Array F :=
   let ctx := (tc .empty).2
 
   let assignment := ctx.assignment
@@ -41,24 +42,22 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
     let aux_map := buildAuxMap assignment
   let next_row := Array.replicate cur_row.size 0
 
-  -- rules for fetching the values for expression variables
-  let env i :=
-    if h : i < assignment.offset then
-      match assignment.vars[i] with
-      | .input ⟨r, c⟩ =>
-        -- fetch input values
-          if r = 0 then cur_row[c]! else next_row[c]!
-      | .aux _ =>
-        -- assumption:
-        -- if expression var<i> corresponds to a aux type,
-        -- then the value is already allocated in aux columns of the next_row.
-        next_row[aux_map[i]!]!
-    -- todo: maybe provide Inhabited instance for Cell to remove this?
-    else panic! s!"Invalid variable index {i} in environment"
-
   -- evaluate the witness generators
+  -- Note: the `env` closure is defined inside the fold so it captures the
+  -- current `next_row` from the fold accumulator, not the initial all-zeros array.
   let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
-      let wit := compute ⟨ env, fun _ _ => #[] ⟩
+      let env i :=
+        if h : i < assignment.offset then
+          match assignment.vars[i] with
+          | .input ⟨r, c⟩ =>
+            -- fetch input values
+              if r = 0 then cur_row[c]! else next_row[c]!
+          | .aux _ =>
+            -- if expression var<i> corresponds to an aux type,
+            -- the value is already allocated in aux columns of the next_row.
+            next_row[aux_map[i]!]!
+        else panic! s!"Invalid variable index {i} in environment"
+      let wit := compute ⟨ env, proverData ⟩
 
       -- insert the witness value to the next row
       let next_row := if h : idx < assignment.offset then
@@ -83,7 +82,8 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
   table constraint's witness generators.
 -/
 def witnesses
-    (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ) : Array (Array F) := Id.run do
+    (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ)
+    (proverData : ProverData F := fun _ _ => #[]) : Array (Array F) := Id.run do
 
   -- append auxiliary columns to the current row
   let aux_cols := Array.replicate tc.finalAssignment.numAux 0
@@ -93,7 +93,7 @@ def witnesses
   let mut current := cur_row
 
   for _ in [: n-1] do
-    let next := generateNextRow tc current
+    let next := generateNextRow tc current proverData
     trace := trace.push next
     current := next
   trace

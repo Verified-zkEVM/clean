@@ -41,7 +41,7 @@ pub enum CleanOp {
 
 impl CleanOp {
     /// Recursively find all lookup operations
-    fn find_lookup_ops(&self, ctx: &Vec<CircuitOp>) -> Vec<LookupOp> {
+    fn find_lookup_ops(&self, ctx: &[CircuitOp]) -> Vec<LookupOp> {
         let mut lookup_ops = Vec::new();
         for op in ctx {
             match op {
@@ -49,7 +49,10 @@ impl CleanOp {
                     lookup_ops.push(lookup.clone());
                 }
                 CircuitOp::Subcircuit { subcircuit } => {
-                    lookup_ops.extend(self.find_lookup_ops(subcircuit));
+                    lookup_ops.extend(self.find_lookup_ops(subcircuit.operations()));
+                }
+                CircuitOp::NamedBlock { operations } => {
+                    lookup_ops.extend(self.find_lookup_ops(operations));
                 }
                 _ => {}
             }
@@ -71,13 +74,43 @@ pub struct OpContext {
     pub assignment: Assignment,
 }
 
+/// A named block of operations, used for subcircuit bodies and nested operation groups.
+/// Serialized from Lean as `{"operations": [...], "name": "..."}`.
+#[derive(Clone, Debug, Deserialize)]
+pub struct NamedBlock {
+    pub operations: Vec<CircuitOp>,
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// Body of a subcircuit operation. Supports both formats:
+/// - Direct array: `"subcircuit": [...]` (older Clean export)
+/// - Named block: `"subcircuit": {"operations": [...], "name": "..."}` (newer Clean export)
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+pub enum SubcircuitBody {
+    Named(NamedBlock),
+    Flat(Vec<CircuitOp>),
+}
+
+impl SubcircuitBody {
+    pub fn operations(&self) -> &[CircuitOp] {
+        match self {
+            SubcircuitBody::Named(block) => &block.operations,
+            SubcircuitBody::Flat(ops) => ops,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum CircuitOp {
     Witness { witness: usize },
     Assert { assert: AssertOp },
     Lookup { lookup: LookupOp },
-    Subcircuit { subcircuit: Vec<CircuitOp> },
+    Subcircuit { subcircuit: SubcircuitBody },
+    /// Named block appearing directly in an operations array (e.g. `{"operations": [...], "name": "anonymous"}`).
+    NamedBlock { operations: Vec<CircuitOp> },
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -208,7 +241,10 @@ impl AstUtils {
                     lookup_ops.push(lookup.clone());
                 }
                 CircuitOp::Subcircuit { subcircuit } => {
-                    lookup_ops.extend(Self::find_lookup_ops(subcircuit));
+                    lookup_ops.extend(Self::find_lookup_ops(subcircuit.operations()));
+                }
+                CircuitOp::NamedBlock { operations } => {
+                    lookup_ops.extend(Self::find_lookup_ops(operations));
                 }
                 _ => {}
             }

@@ -1,8 +1,5 @@
 use alloc::vec::Vec;
-use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder,
-    VirtualPairCol,
-};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::Field;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
@@ -15,7 +12,7 @@ use alloc::vec;
 
 use crate::clean_air::CleanAirInstance;
 use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
-use crate::{BaseMessageBuilder, Lookup, LookupBuilder, StarkGenericConfig, Val};
+use crate::{BaseMessageBuilder, Lookup, LookupBuilder, LookupExpr, StarkGenericConfig, Val};
 
 type Com<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
     <SC as StarkGenericConfig>::Challenge,
@@ -28,7 +25,7 @@ type PcsData<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
 >>::ProverData;
 
 pub trait VerifyingKey<F: Field> {
-    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)>
+    fn lookups(&self) -> &Vec<(Lookup<LookupExpr<F>>, bool)>
     where
         F: Field;
     /// Returns the width of the main trace
@@ -106,7 +103,7 @@ impl<SC: StarkGenericConfig> VK<SC> {
 #[derive(Clone)]
 pub struct AirInfo<F: Field> {
     pub air: CleanAirInstance<F>,
-    pub lookups: Vec<(Lookup<VirtualPairCol<F>>, bool)>,
+    pub lookups: Vec<(Lookup<LookupExpr<F>>, bool)>,
     pub preprocessed: Option<RowMajorMatrix<F>>,
 }
 
@@ -148,7 +145,7 @@ impl<F: Field> AirInfo<F> {
 }
 
 impl<F: Field> VerifyingKey<F> for AirInfo<F> {
-    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> {
+    fn lookups(&self) -> &Vec<(Lookup<LookupExpr<F>>, bool)> {
         &self.lookups
     }
 
@@ -185,8 +182,10 @@ impl<F: Field> VerifyingKey<F> for AirInfo<F> {
             .unwrap_or(0);
 
         let max_degree = if !self.lookups().is_empty() {
-            // if there are permutations, ensure the degree is at least 2, because of the multiplication with selectors.
-            max_degree.max(2)
+            // Send lookup constraints are wrapped in when_transition(), giving degree 3
+            // (entry * denom is degree 2, times is_transition selector is degree 3).
+            // Receive constraints have degree 2.
+            max_degree.max(3)
         } else {
             max_degree
         };

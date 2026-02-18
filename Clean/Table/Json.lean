@@ -21,14 +21,14 @@ instance : ToJson (CellAssignment W S) where
   toJson assignment :=
     let aux_map := buildAuxMap assignment
     -- iterate over the vars and convert aux cell to input cell with column from aux_map
-    let vars := assignment.vars.mapIdx fun idx cell =>
+    -- Aux cells are always mapped to the next row (row=1) at the mapped column
+    let vars : Vector Json assignment.vars.size := assignment.vars.mapIdx fun idx cell =>
       match cell with
-      | Cell.input off => Cell.input off
+      | Cell.input off => toJson off
       | Cell.aux _ =>
         let col := aux_map[idx]!
-        if h: col < (size S)
-          then Cell.input { row := 1, column := ⟨col, h⟩ }
-          else cell -- todo: might be better to refactor the buildAuxMap to return Fin (size S) instead
+        -- Directly emit JSON to handle columns >= size S (bypasses Fin constraint)
+        Json.mkObj [("row", (1 : Nat)), ("column", col)]
 
     Json.mkObj [
       ("offset", toJson assignment.offset),
@@ -45,11 +45,16 @@ instance : ToJson (TableContext W S F) where
 instance : ToJson (TableConstraint W S F α) where
   toJson table := toJson (table .empty).2
 
+instance : ToJson RowIndex where
+  toJson
+    | .fromStart n => toJson (n : Int)
+    | .fromEnd n => toJson (-(n : Int) - 1)
+
 instance : ToJson (TableOperation S F) where
   toJson
     | .boundary i c => Json.mkObj [
       ("type", Json.str "Boundary"),
-      ("row", reprStr i),
+      ("row", toJson i),
       ("context", toJson c)
     ]
     | .everyRow c => Json.mkObj [

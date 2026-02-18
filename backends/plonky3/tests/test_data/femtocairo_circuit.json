@@ -1,0 +1,1124 @@
+[{"type": "EveryRowExceptLast",
+  "context":
+  {"circuit":
+   [{"witness": 3},
+    {"subcircuit":
+     {"operations":
+      [{"operations":
+        [{"witness": 1},
+         {"witness": 1},
+         {"witness": 1},
+         {"witness": 1},
+         {"lookup":
+          {"table": "ReadOnlyMemory",
+           "entry":
+           [{"type": "var", "index": 0}, {"type": "var", "index": 3}]}},
+         {"lookup":
+          {"table": "ReadOnlyMemory",
+           "entry":
+           [{"type": "add",
+             "rhs": {"value": 1, "type": "const"},
+             "lhs": {"type": "var", "index": 0}},
+            {"type": "var", "index": 4}]}},
+         {"lookup":
+          {"table": "ReadOnlyMemory",
+           "entry":
+           [{"type": "add",
+             "rhs": {"value": 2, "type": "const"},
+             "lhs": {"type": "var", "index": 0}},
+            {"type": "var", "index": 5}]}},
+         {"lookup":
+          {"table": "ReadOnlyMemory",
+           "entry":
+           [{"type": "add",
+             "rhs": {"value": 3, "type": "const"},
+             "lhs": {"type": "var", "index": 0}},
+            {"type": "var", "index": 6}]}}],
+        "name": "anonymous"},
+       {"operations":
+        [{"operations":
+          [{"witness": 8},
+           {"operations":
+            [{"assert":
+              {"type": "mul",
+               "rhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"value": 1, "type": "const"},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs": {"type": "var", "index": 7}},
+               "lhs": {"type": "var", "index": 7}}}],
+            "name": "anonymous"},
+           {"operations":
+            [{"assert":
+              {"type": "mul",
+               "rhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"value": 1, "type": "const"},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs": {"type": "var", "index": 8}},
+               "lhs": {"type": "var", "index": 8}}}],
+            "name": "anonymous"},
+           {"operations":
+            [{"assert":
+              {"type": "mul",
+               "rhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"value": 1, "type": "const"},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs": {"type": "var", "index": 9}},
+               "lhs": {"type": "var", "index": 9}}}],
+            "name": "anonymous"},
+           {"operations":
+            [{"assert":
+              {"type": "mul",
+               "rhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"value": 1, "type": "const"},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs": {"type": "var", "index": 10}},
+               "lhs": {"type": "var", "index": 10}}}],
+            "name": "anonymous"},
+           {"operations":
+            [{"assert":
+              {"type": "mul",
+               "rhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"value": 1, "type": "const"},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs": {"type": "var", "index": 11}},
+               "lhs": {"type": "var", "index": 11}}}],
+            "name": "anonymous"},
+           {"operations":
+            [{"assert":
+              {"type": "mul",
+               "rhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"value": 1, "type": "const"},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs": {"type": "var", "index": 12}},
+               "lhs": {"type": "var", "index": 12}}}],
+            "name": "anonymous"},
+           {"operations":
+            [{"assert":
+              {"type": "mul",
+               "rhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"value": 1, "type": "const"},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs": {"type": "var", "index": 13}},
+               "lhs": {"type": "var", "index": 13}}}],
+            "name": "anonymous"},
+           {"operations":
+            [{"assert":
+              {"type": "mul",
+               "rhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"value": 1, "type": "const"},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs": {"type": "var", "index": 14}},
+               "lhs": {"type": "var", "index": 14}}}],
+            "name": "anonymous"},
+           {"operations":
+            [{"assert":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs": {"value": 128, "type": "const"},
+                  "lhs": {"type": "var", "index": 14}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"value": 64, "type": "const"},
+                   "lhs": {"type": "var", "index": 13}},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"value": 32, "type": "const"},
+                    "lhs": {"type": "var", "index": 12}},
+                   "lhs":
+                   {"type": "add",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"value": 16, "type": "const"},
+                     "lhs": {"type": "var", "index": 11}},
+                    "lhs":
+                    {"type": "add",
+                     "rhs":
+                     {"type": "mul",
+                      "rhs": {"value": 8, "type": "const"},
+                      "lhs": {"type": "var", "index": 10}},
+                     "lhs":
+                     {"type": "add",
+                      "rhs":
+                      {"type": "mul",
+                       "rhs": {"value": 4, "type": "const"},
+                       "lhs": {"type": "var", "index": 9}},
+                      "lhs":
+                      {"type": "add",
+                       "rhs":
+                       {"type": "mul",
+                        "rhs": {"value": 2, "type": "const"},
+                        "lhs": {"type": "var", "index": 8}},
+                       "lhs":
+                       {"type": "add",
+                        "rhs":
+                        {"type": "mul",
+                         "rhs": {"value": 1, "type": "const"},
+                         "lhs": {"type": "var", "index": 7}},
+                        "lhs": {"value": 0, "type": "const"}}}}}}}}},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 3}}}],
+            "name": "anonymous"}],
+          "name": "anonymous"}],
+        "name": "anonymous"},
+       {"operations":
+        [{"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "add",
+                 "rhs": {"type": "var", "index": 4},
+                 "lhs": {"type": "var", "index": 2}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 10},
+                   "lhs": {"type": "var", "index": 9}},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs": {"type": "var", "index": 10}}},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs":
+                 {"type": "add",
+                  "rhs": {"type": "var", "index": 4},
+                  "lhs": {"type": "var", "index": 1}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 10},
+                    "lhs": {"type": "var", "index": 9}},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"type": "var", "index": 9}}},
+                "lhs":
+                {"type": "mul",
+                 "rhs":
+                 {"type": "add",
+                  "rhs": {"type": "var", "index": 4},
+                  "lhs": {"type": "var", "index": 1}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 10},
+                   "lhs": {"type": "var", "index": 9}},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 10},
+                    "lhs": {"value": 2013265920, "type": "const"}},
+                   "lhs":
+                   {"type": "add",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 9},
+                     "lhs": {"value": 2013265920, "type": "const"}},
+                    "lhs": {"value": 1, "type": "const"}}}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 15}}}],
+          "name": "anonymous"},
+         {"witness": 1},
+         {"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "mul",
+               "rhs": {"type": "var", "index": 16},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 10},
+                 "lhs": {"type": "var", "index": 9}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 10},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 9},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"value": 1, "type": "const"}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 17}}}],
+          "name": "anonymous"},
+         {"witness": 1},
+         {"lookup":
+          {"table": "memory",
+           "entry":
+           [{"type": "var", "index": 15}, {"type": "var", "index": 16}]}},
+         {"lookup":
+          {"table": "memory",
+           "entry":
+           [{"type": "var", "index": 17}, {"type": "var", "index": 18}]}},
+         {"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 4},
+                "lhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 10},
+                 "lhs": {"type": "var", "index": 9}}},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 16},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 10},
+                    "lhs": {"type": "var", "index": 9}},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"type": "var", "index": 10}}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 16},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 10},
+                     "lhs": {"type": "var", "index": 9}},
+                    "lhs": {"value": 2013265920, "type": "const"}},
+                   "lhs": {"type": "var", "index": 9}}},
+                 "lhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 18},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 10},
+                    "lhs": {"type": "var", "index": 9}},
+                   "lhs":
+                   {"type": "add",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 10},
+                     "lhs": {"value": 2013265920, "type": "const"}},
+                    "lhs":
+                    {"type": "add",
+                     "rhs":
+                     {"type": "mul",
+                      "rhs": {"type": "var", "index": 9},
+                      "lhs": {"value": 2013265920, "type": "const"}},
+                     "lhs": {"value": 1, "type": "const"}}}}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 19}}}],
+          "name": "anonymous"}],
+        "name": "anonymous"},
+       {"operations":
+        [{"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "add",
+                 "rhs": {"type": "var", "index": 5},
+                 "lhs": {"type": "var", "index": 2}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 12},
+                   "lhs": {"type": "var", "index": 11}},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs": {"type": "var", "index": 12}}},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs":
+                 {"type": "add",
+                  "rhs": {"type": "var", "index": 5},
+                  "lhs": {"type": "var", "index": 1}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 12},
+                    "lhs": {"type": "var", "index": 11}},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"type": "var", "index": 11}}},
+                "lhs":
+                {"type": "mul",
+                 "rhs":
+                 {"type": "add",
+                  "rhs": {"type": "var", "index": 5},
+                  "lhs": {"type": "var", "index": 1}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 12},
+                   "lhs": {"type": "var", "index": 11}},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 12},
+                    "lhs": {"value": 2013265920, "type": "const"}},
+                   "lhs":
+                   {"type": "add",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 11},
+                     "lhs": {"value": 2013265920, "type": "const"}},
+                    "lhs": {"value": 1, "type": "const"}}}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 20}}}],
+          "name": "anonymous"},
+         {"witness": 1},
+         {"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "mul",
+               "rhs": {"type": "var", "index": 21},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 12},
+                 "lhs": {"type": "var", "index": 11}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 12},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 11},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"value": 1, "type": "const"}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 22}}}],
+          "name": "anonymous"},
+         {"witness": 1},
+         {"lookup":
+          {"table": "memory",
+           "entry":
+           [{"type": "var", "index": 20}, {"type": "var", "index": 21}]}},
+         {"lookup":
+          {"table": "memory",
+           "entry":
+           [{"type": "var", "index": 22}, {"type": "var", "index": 23}]}},
+         {"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 5},
+                "lhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 12},
+                 "lhs": {"type": "var", "index": 11}}},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 21},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 12},
+                    "lhs": {"type": "var", "index": 11}},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"type": "var", "index": 12}}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 21},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 12},
+                     "lhs": {"type": "var", "index": 11}},
+                    "lhs": {"value": 2013265920, "type": "const"}},
+                   "lhs": {"type": "var", "index": 11}}},
+                 "lhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 23},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 12},
+                    "lhs": {"type": "var", "index": 11}},
+                   "lhs":
+                   {"type": "add",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 12},
+                     "lhs": {"value": 2013265920, "type": "const"}},
+                    "lhs":
+                    {"type": "add",
+                     "rhs":
+                     {"type": "mul",
+                      "rhs": {"type": "var", "index": 11},
+                      "lhs": {"value": 2013265920, "type": "const"}},
+                     "lhs": {"value": 1, "type": "const"}}}}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 24}}}],
+          "name": "anonymous"}],
+        "name": "anonymous"},
+       {"operations":
+        [{"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "add",
+                 "rhs": {"type": "var", "index": 6},
+                 "lhs": {"type": "var", "index": 2}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 14},
+                   "lhs": {"type": "var", "index": 13}},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs": {"type": "var", "index": 14}}},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs":
+                 {"type": "add",
+                  "rhs": {"type": "var", "index": 6},
+                  "lhs": {"type": "var", "index": 1}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 14},
+                    "lhs": {"type": "var", "index": 13}},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"type": "var", "index": 13}}},
+                "lhs":
+                {"type": "mul",
+                 "rhs":
+                 {"type": "add",
+                  "rhs": {"type": "var", "index": 6},
+                  "lhs": {"type": "var", "index": 1}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 14},
+                   "lhs": {"type": "var", "index": 13}},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 14},
+                    "lhs": {"value": 2013265920, "type": "const"}},
+                   "lhs":
+                   {"type": "add",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 13},
+                     "lhs": {"value": 2013265920, "type": "const"}},
+                    "lhs": {"value": 1, "type": "const"}}}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 25}}}],
+          "name": "anonymous"},
+         {"witness": 1},
+         {"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "mul",
+               "rhs": {"type": "var", "index": 26},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 14},
+                 "lhs": {"type": "var", "index": 13}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 14},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 13},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"value": 1, "type": "const"}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 27}}}],
+          "name": "anonymous"},
+         {"witness": 1},
+         {"lookup":
+          {"table": "memory",
+           "entry":
+           [{"type": "var", "index": 25}, {"type": "var", "index": 26}]}},
+         {"lookup":
+          {"table": "memory",
+           "entry":
+           [{"type": "var", "index": 27}, {"type": "var", "index": 28}]}},
+         {"witness": 1},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 6},
+                "lhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 14},
+                 "lhs": {"type": "var", "index": 13}}},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 26},
+                 "lhs":
+                 {"type": "add",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 14},
+                    "lhs": {"type": "var", "index": 13}},
+                   "lhs": {"value": 2013265920, "type": "const"}},
+                  "lhs": {"type": "var", "index": 14}}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 26},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 14},
+                     "lhs": {"type": "var", "index": 13}},
+                    "lhs": {"value": 2013265920, "type": "const"}},
+                   "lhs": {"type": "var", "index": 13}}},
+                 "lhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 28},
+                  "lhs":
+                  {"type": "add",
+                   "rhs":
+                   {"type": "mul",
+                    "rhs": {"type": "var", "index": 14},
+                    "lhs": {"type": "var", "index": 13}},
+                   "lhs":
+                   {"type": "add",
+                    "rhs":
+                    {"type": "mul",
+                     "rhs": {"type": "var", "index": 14},
+                     "lhs": {"value": 2013265920, "type": "const"}},
+                    "lhs":
+                    {"type": "add",
+                     "rhs":
+                     {"type": "mul",
+                      "rhs": {"type": "var", "index": 13},
+                      "lhs": {"value": 2013265920, "type": "const"}},
+                     "lhs": {"value": 1, "type": "const"}}}}}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 29}}}],
+          "name": "anonymous"}],
+        "name": "anonymous"},
+       {"operations":
+        [{"witness": 3},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs": {"value": 0, "type": "const"},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "add",
+                 "rhs": {"type": "var", "index": 24},
+                 "lhs": {"type": "var", "index": 19}},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 29}},
+              "lhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 8},
+                "lhs": {"type": "var", "index": 7}},
+               "lhs":
+               {"type": "add",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 8},
+                 "lhs": {"value": 2013265920, "type": "const"}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs": {"type": "var", "index": 7},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs": {"value": 1, "type": "const"}}}}}}}],
+          "name": "anonymous"},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs": {"value": 0, "type": "const"},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 24},
+                 "lhs": {"type": "var", "index": 19}},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 29}},
+              "lhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 8},
+                 "lhs": {"type": "var", "index": 7}},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 7}}}}}],
+          "name": "anonymous"},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs": {"value": 0, "type": "const"},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 0},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 19}},
+              "lhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 8},
+                 "lhs": {"type": "var", "index": 7}},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 8}}}}}],
+          "name": "anonymous"},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs": {"value": 0, "type": "const"},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 1},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 24}},
+              "lhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 8},
+                 "lhs": {"type": "var", "index": 7}},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 8}}}}}],
+          "name": "anonymous"},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs": {"value": 0, "type": "const"},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 2},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 29}},
+              "lhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 8},
+                 "lhs": {"type": "var", "index": 7}},
+                "lhs": {"value": 2013265920, "type": "const"}},
+               "lhs": {"type": "var", "index": 8}}}}}],
+          "name": "anonymous"},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs":
+                {"type": "add",
+                 "rhs": {"value": 4, "type": "const"},
+                 "lhs": {"type": "var", "index": 0}},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 8},
+                   "lhs": {"type": "var", "index": 7}},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs": {"value": 1, "type": "const"}}},
+               "lhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 19},
+                "lhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 8},
+                 "lhs": {"type": "var", "index": 7}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 30}}}],
+          "name": "anonymous"},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 1},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 8},
+                   "lhs": {"type": "var", "index": 7}},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs": {"value": 1, "type": "const"}}},
+               "lhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 24},
+                "lhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 8},
+                 "lhs": {"type": "var", "index": 7}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 31}}}],
+          "name": "anonymous"},
+         {"operations":
+          [{"assert":
+            {"type": "add",
+             "rhs":
+             {"type": "mul",
+              "rhs":
+              {"type": "add",
+               "rhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 2},
+                "lhs":
+                {"type": "add",
+                 "rhs":
+                 {"type": "mul",
+                  "rhs":
+                  {"type": "mul",
+                   "rhs": {"type": "var", "index": 8},
+                   "lhs": {"type": "var", "index": 7}},
+                  "lhs": {"value": 2013265920, "type": "const"}},
+                 "lhs": {"value": 1, "type": "const"}}},
+               "lhs":
+               {"type": "mul",
+                "rhs": {"type": "var", "index": 29},
+                "lhs":
+                {"type": "mul",
+                 "rhs": {"type": "var", "index": 8},
+                 "lhs": {"type": "var", "index": 7}}}},
+              "lhs": {"value": 2013265920, "type": "const"}},
+             "lhs": {"type": "var", "index": 32}}}],
+          "name": "anonymous"}],
+        "name": "anonymous"}],
+      "name": "anonymous"}},
+    {"witness": 3},
+    {"subcircuit":
+     {"operations":
+      [{"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"type": "var", "index": 30},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 33}}},
+       {"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"type": "var", "index": 31},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 34}}},
+       {"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"type": "var", "index": 32},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 35}}}],
+      "name": "anonymous"}}],
+   "assignment":
+   {"vars":
+    [{"row": 0, "column": 0},
+     {"row": 0, "column": 1},
+     {"row": 0, "column": 2},
+     {"row": 1, "column": 3},
+     {"row": 1, "column": 4},
+     {"row": 1, "column": 5},
+     {"row": 1, "column": 6},
+     {"row": 1, "column": 7},
+     {"row": 1, "column": 8},
+     {"row": 1, "column": 9},
+     {"row": 1, "column": 10},
+     {"row": 1, "column": 11},
+     {"row": 1, "column": 12},
+     {"row": 1, "column": 13},
+     {"row": 1, "column": 14},
+     {"row": 1, "column": 15},
+     {"row": 1, "column": 16},
+     {"row": 1, "column": 17},
+     {"row": 1, "column": 18},
+     {"row": 1, "column": 19},
+     {"row": 1, "column": 20},
+     {"row": 1, "column": 21},
+     {"row": 1, "column": 22},
+     {"row": 1, "column": 23},
+     {"row": 1, "column": 24},
+     {"row": 1, "column": 25},
+     {"row": 1, "column": 26},
+     {"row": 1, "column": 27},
+     {"row": 1, "column": 28},
+     {"row": 1, "column": 29},
+     {"row": 1, "column": 30},
+     {"row": 1, "column": 31},
+     {"row": 1, "column": 32},
+     {"row": 1, "column": 0},
+     {"row": 1, "column": 1},
+     {"row": 1, "column": 2}],
+    "offset": 36,
+    "aux_length": 30}}},
+ {"type": "Boundary",
+  "row": 0,
+  "context":
+  {"circuit":
+   [{"witness": 3},
+    {"subcircuit":
+     {"operations":
+      [{"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"value": 0, "type": "const"},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 0}}},
+       {"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"value": 0, "type": "const"},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 1}}},
+       {"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"value": 0, "type": "const"},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 2}}}],
+      "name": "anonymous"}}],
+   "assignment":
+   {"vars":
+    [{"row": 0, "column": 0}, {"row": 0, "column": 1}, {"row": 0, "column": 2}],
+    "offset": 3,
+    "aux_length": 0}}},
+ {"type": "Boundary",
+  "row": -1,
+  "context":
+  {"circuit":
+   [{"witness": 3},
+    {"subcircuit":
+     {"operations":
+      [{"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"value": 12, "type": "const"},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 0}}},
+       {"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"value": 0, "type": "const"},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 1}}},
+       {"assert":
+        {"type": "add",
+         "rhs":
+         {"type": "mul",
+          "rhs": {"value": 0, "type": "const"},
+          "lhs": {"value": 2013265920, "type": "const"}},
+         "lhs": {"type": "var", "index": 2}}}],
+      "name": "anonymous"}}],
+   "assignment":
+   {"vars":
+    [{"row": 0, "column": 0}, {"row": 0, "column": 1}, {"row": 0, "column": 2}],
+    "offset": 3,
+    "aux_length": 0}}}]

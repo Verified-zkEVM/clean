@@ -1,8 +1,7 @@
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
-use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairCol, VirtualPairCol,
-};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir};
 use p3_field::Field;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
@@ -25,6 +24,77 @@ impl<E> Lookup<E> {
     }
 }
 
+/// Expression tree for lookup values that supports both current-row and next-row references.
+/// Unlike `VirtualPairCol` which only supports affine combinations of current-row columns,
+/// `LookupExpr` can represent arbitrary expressions over local, next, and preprocessed columns.
+#[derive(Debug, Clone)]
+pub enum LookupExpr<F> {
+    MainLocal(usize),
+    MainNext(usize),
+    Preprocessed(usize),
+    Const(F),
+    Add(Box<LookupExpr<F>>, Box<LookupExpr<F>>),
+    Sub(Box<LookupExpr<F>>, Box<LookupExpr<F>>),
+    Mul(Box<LookupExpr<F>>, Box<LookupExpr<F>>),
+    Neg(Box<LookupExpr<F>>),
+}
+
+impl<F: Field> LookupExpr<F> {
+    /// Evaluate the expression given concrete row values (for trace generation).
+    pub fn eval(&self, preprocessed: &[F], main_local: &[F], main_next: &[F]) -> F {
+        match self {
+            LookupExpr::MainLocal(col) => main_local[*col],
+            LookupExpr::MainNext(col) => main_next[*col],
+            LookupExpr::Preprocessed(col) => preprocessed[*col],
+            LookupExpr::Const(c) => *c,
+            LookupExpr::Add(a, b) => {
+                a.eval(preprocessed, main_local, main_next)
+                    + b.eval(preprocessed, main_local, main_next)
+            }
+            LookupExpr::Sub(a, b) => {
+                a.eval(preprocessed, main_local, main_next)
+                    - b.eval(preprocessed, main_local, main_next)
+            }
+            LookupExpr::Mul(a, b) => {
+                a.eval(preprocessed, main_local, main_next)
+                    * b.eval(preprocessed, main_local, main_next)
+            }
+            LookupExpr::Neg(a) => -a.eval(preprocessed, main_local, main_next),
+        }
+    }
+
+    /// Convert to an AirBuilder expression (for constraint evaluation).
+    pub fn to_air_expr<AB: AirBuilder<F = F>>(
+        &self,
+        preprocessed: &[AB::Var],
+        main_local: &[AB::Var],
+        main_next: &[AB::Var],
+    ) -> AB::Expr
+    where
+        AB::Var: Copy,
+    {
+        match self {
+            LookupExpr::MainLocal(col) => main_local[*col].into(),
+            LookupExpr::MainNext(col) => main_next[*col].into(),
+            LookupExpr::Preprocessed(col) => preprocessed[*col].into(),
+            LookupExpr::Const(c) => (*c).into(),
+            LookupExpr::Add(a, b) => {
+                a.to_air_expr::<AB>(preprocessed, main_local, main_next)
+                    + b.to_air_expr::<AB>(preprocessed, main_local, main_next)
+            }
+            LookupExpr::Sub(a, b) => {
+                a.to_air_expr::<AB>(preprocessed, main_local, main_next)
+                    - b.to_air_expr::<AB>(preprocessed, main_local, main_next)
+            }
+            LookupExpr::Mul(a, b) => {
+                a.to_air_expr::<AB>(preprocessed, main_local, main_next)
+                    * b.to_air_expr::<AB>(preprocessed, main_local, main_next)
+            }
+            LookupExpr::Neg(a) => -a.to_air_expr::<AB>(preprocessed, main_local, main_next),
+        }
+    }
+}
+
 pub trait MessageBuilder<L> {
     fn send(&mut self, _l: L) {}
     fn receive(&mut self, _l: L) {}
@@ -38,8 +108,8 @@ where
 {
     preprocessed: RowMajorMatrix<SymbolicVariable<F>>,
     main: RowMajorMatrix<SymbolicVariable<F>>,
-    sends: Vec<Lookup<VirtualPairCol<F>>>,
-    receives: Vec<Lookup<VirtualPairCol<F>>>,
+    sends: Vec<Lookup<LookupExpr<F>>>,
+    receives: Vec<Lookup<LookupExpr<F>>>,
     public_values: Vec<F>,
 }
 
@@ -75,8 +145,8 @@ impl<F: Field> LookupBuilder<F> {
     pub fn messages(
         &self,
     ) -> (
-        Vec<Lookup<VirtualPairCol<F>>>,
-        Vec<Lookup<VirtualPairCol<F>>>,
+        Vec<Lookup<LookupExpr<F>>>,
+        Vec<Lookup<LookupExpr<F>>>,
     ) {
         (self.sends.clone(), self.receives.clone())
     }
@@ -129,9 +199,9 @@ impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F
             l.table_name,
             l.values
                 .iter()
-                .map(|v| symbolic_to_virtual_pair(v))
+                .map(|v| symbolic_to_lookup_expr(v))
                 .collect(),
-            symbolic_to_virtual_pair(&l.multiplicity),
+            symbolic_to_lookup_expr(&l.multiplicity),
         );
         self.sends.push(l);
     }
@@ -141,9 +211,9 @@ impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F
             l.table_name,
             l.values
                 .iter()
-                .map(|v| symbolic_to_virtual_pair(v))
+                .map(|v| symbolic_to_lookup_expr(v))
                 .collect(),
-            symbolic_to_virtual_pair(&l.multiplicity),
+            symbolic_to_lookup_expr(&l.multiplicity),
         );
         self.receives.push(l);
     }
@@ -151,72 +221,34 @@ impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F
 
 impl<F: Field> BaseMessageBuilder for LookupBuilder<F> {}
 
-fn symbolic_to_virtual_pair<F: Field>(expression: &SymbolicExpression<F>) -> VirtualPairCol<F> {
-    if expression.degree_multiple() > 1 {
-        panic!("degree multiple is too high");
-    }
-
-    let (column_weights, constant) = eval_symbolic_to_virtual_pair(expression);
-
-    let column_weights = column_weights.into_iter().collect();
-
-    VirtualPairCol::new(column_weights, constant)
-}
-
-fn eval_symbolic_to_virtual_pair<F: Field>(
-    expression: &SymbolicExpression<F>,
-) -> (Vec<(PairCol, F)>, F) {
+/// Convert a `SymbolicExpression` to a `LookupExpr`.
+/// Supports current-row, next-row, and preprocessed column references,
+/// as well as arbitrary arithmetic expressions (not limited to affine).
+fn symbolic_to_lookup_expr<F: Field>(expression: &SymbolicExpression<F>) -> LookupExpr<F> {
     match expression {
-        SymbolicExpression::Constant(c) => (Vec::new(), *c),
+        SymbolicExpression::Constant(c) => LookupExpr::Const(*c),
         SymbolicExpression::Variable(v) => match v.entry {
-            Entry::Preprocessed { offset: 0 } => (
-                Vec::from([(PairCol::Preprocessed(v.index), F::ONE)]),
-                F::ZERO,
-            ),
-            Entry::Main { offset: 0 } => (Vec::from([(PairCol::Main(v.index), F::ONE)]), F::ZERO),
-            _ => panic!(
-                "not an affine expression in current row elements {:?}",
-                v.entry
-            ),
+            Entry::Preprocessed { offset: 0 } => LookupExpr::Preprocessed(v.index),
+            Entry::Main { offset: 0 } => LookupExpr::MainLocal(v.index),
+            Entry::Main { offset: 1 } => LookupExpr::MainNext(v.index),
+            _ => panic!("Unsupported entry type {:?}", v.entry),
         },
-        SymbolicExpression::Add { x, y, .. } => {
-            let (v_l, c_l) = eval_symbolic_to_virtual_pair(x);
-            let (v_r, c_r) = eval_symbolic_to_virtual_pair(y);
-            ([v_l, v_r].concat(), c_l + c_r)
-        }
-        SymbolicExpression::Sub { x, y, .. } => {
-            let (v_l, c_l) = eval_symbolic_to_virtual_pair(x);
-            let (v_r, c_r) = eval_symbolic_to_virtual_pair(y);
-            let neg_v_r = v_r.iter().map(|(c, w)| (*c, -*w)).collect();
-            ([v_l, neg_v_r].concat(), c_l - c_r)
-        }
+        SymbolicExpression::Add { x, y, .. } => LookupExpr::Add(
+            Box::new(symbolic_to_lookup_expr(x)),
+            Box::new(symbolic_to_lookup_expr(y)),
+        ),
+        SymbolicExpression::Sub { x, y, .. } => LookupExpr::Sub(
+            Box::new(symbolic_to_lookup_expr(x)),
+            Box::new(symbolic_to_lookup_expr(y)),
+        ),
+        SymbolicExpression::Mul { x, y, .. } => LookupExpr::Mul(
+            Box::new(symbolic_to_lookup_expr(x)),
+            Box::new(symbolic_to_lookup_expr(y)),
+        ),
         SymbolicExpression::Neg { x, .. } => {
-            let (v, c) = eval_symbolic_to_virtual_pair(x);
-            (v.iter().map(|(c, w)| (*c, -*w)).collect(), -c)
+            LookupExpr::Neg(Box::new(symbolic_to_lookup_expr(x)))
         }
-        SymbolicExpression::Mul { x, y, .. } => {
-            let (v_l, c_l) = eval_symbolic_to_virtual_pair(x);
-            let (v_r, c_r) = eval_symbolic_to_virtual_pair(y);
-
-            let mut v = Vec::new();
-            v.extend(v_l.iter().map(|(c, w)| (*c, *w * c_r)));
-            v.extend(v_r.iter().map(|(c, w)| (*c, *w * c_l)));
-
-            if !v_l.is_empty() && !v_r.is_empty() {
-                panic!("Not an affine expression")
-            }
-
-            (v, c_l * c_r)
-        }
-        SymbolicExpression::IsFirstRow => {
-            panic!("not an affine expression in current row elements for first row")
-        }
-        SymbolicExpression::IsLastRow => {
-            panic!("not an affine expression in current row elements for last row")
-        }
-        SymbolicExpression::IsTransition => {
-            panic!("not an affine expression in current row elements for transition row")
-        }
+        _ => panic!("Unsupported expression type in lookup conversion"),
     }
 }
 

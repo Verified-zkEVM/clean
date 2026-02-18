@@ -456,3 +456,133 @@ fn test_range_check_16() {
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("range-check-16 verification failed");
 }
+
+/// Test FemtoCairo: a minimal Cairo-like VM with multi-column lookups
+/// using next-row references (the core feature enabled by LookupExpr).
+///
+/// FemtoCairo architecture:
+/// - State: 3 fields (pc, ap, fp)
+/// - Step circuit: 30 auxiliary witness variables
+/// - Total trace width: 33 columns (3 state + 30 aux)
+/// - Tables: "ReadOnlyMemory" (program, 2-col), "memory" (data, 2-col)
+/// - 10 lookups per step: 4 program fetches + 6 memory reads
+#[test]
+fn test_femtocairo() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    type Val = BabyBear;
+    type Perm = Poseidon2BabyBear<16>;
+    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
+    type Challenge = BinomialExtensionField<Val, 4>;
+    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    type Dft = Radix2DitParallel<Val>;
+    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    let mut rng = SmallRng::seed_from_u64(42);
+    let perm = Perm::new_from_rng_128(&mut rng);
+    let hash = MyHash::new(perm.clone());
+    let compress = MyCompress::new(perm.clone());
+    let val_mmcs = ValMmcs::new(hash, compress);
+    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+    let dft = Dft::default();
+    // Use log_blowup=1 since traces are small (4 rows).
+    // FRI requires log_min_height > log_final_poly_len + log_blowup.
+    let config = create_test_fri_params(challenge_mmcs, 1);
+    let pcs = Pcs::new(dft, val_mmcs, config);
+    let challenger = Challenger::new(perm);
+    let config = MyConfig::new(pcs, challenger);
+
+    // Load circuit and trace JSON generated from Lean
+    let circuit_json = read_test_json("test_data/femtocairo_circuit.json");
+    let trace_json = read_test_json("test_data/femtocairo_trace.json");
+
+    // Parse trace: 4 rows × 33 columns
+    let init_trace = parse_init_trace::<BabyBear>(&trace_json);
+    let width = init_trace[0].len();
+    assert_eq!(width, 33, "FemtoCairo trace should have 33 columns");
+    assert_eq!(init_trace.len(), 4, "FemtoCairo trace should have 4 rows");
+
+    let main_trace: RowMajorMatrix<BabyBear> =
+        RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
+
+    // Create main AIR from circuit JSON
+    let main_air = MainAir::<BabyBear>::new(&circuit_json, width);
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    // ReadOnlyMemory preprocessed table: program data (16 rows × 2 columns).
+    // Program: 3 ADD instructions with immediate addressing + 1 padding instruction.
+    // Format: [instruction_byte, operand1, operand2, result] × 4
+    let program: Vec<(u64, u64)> = vec![
+        (0, 252),
+        (1, 1),
+        (2, 2),
+        (3, 3),
+        (4, 252),
+        (5, 10),
+        (6, 20),
+        (7, 30),
+        (8, 252),
+        (9, 100),
+        (10, 50),
+        (11, 150),
+        (12, 252),
+        (13, 0),
+        (14, 0),
+        (15, 0),
+    ];
+    let rom_data: Vec<BabyBear> = program
+        .iter()
+        .flat_map(|(addr, val)| {
+            vec![
+                BabyBear::from_u64(*addr),
+                BabyBear::from_u64(*val),
+            ]
+        })
+        .collect();
+    let rom_preprocessed = RowMajorMatrix::new(rom_data, 2);
+    let rom_air = PreprocessedTableAir::new("ReadOnlyMemory".into(), rom_preprocessed);
+    let rom_instance = CleanAirInstance::Preprocessed(rom_air);
+
+    // Memory preprocessed table: 4 rows × 2 columns.
+    // Immediate addressing mode uses dummy lookups to address 0.
+    // Padded to 4 rows to satisfy FRI minimum height requirements.
+    let mem_data: Vec<BabyBear> = vec![
+        BabyBear::ZERO,
+        BabyBear::ZERO, // (addr=0, val=0)
+        BabyBear::ONE,
+        BabyBear::ZERO, // (addr=1, val=0)
+        BabyBear::TWO,
+        BabyBear::ZERO, // (addr=2, val=0) padding
+        BabyBear::from_u64(3),
+        BabyBear::ZERO, // (addr=3, val=0) padding
+    ];
+    let mem_preprocessed = RowMajorMatrix::new(mem_data, 2);
+    let mem_air = PreprocessedTableAir::new("memory".into(), mem_preprocessed);
+    let mem_instance = CleanAirInstance::Preprocessed(mem_air);
+
+    // Build AirInfo instances
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance, width),
+        AirInfo::new(rom_instance, 1),
+        AirInfo::new(mem_instance, 1),
+    ];
+
+    // Generate multiplicity traces for lookup tables
+    let lookup_traces =
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    // Public values: [0, 1, 1] (matching the default)
+    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis).expect("FemtoCairo verification failed");
+}

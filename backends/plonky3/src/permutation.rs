@@ -3,11 +3,11 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use p3_air::{AirBuilder, ExtensionBuilder, PermutationAirBuilder, VirtualPairCol};
+use p3_air::{AirBuilder, ExtensionBuilder, PermutationAirBuilder};
 use p3_field::{ExtensionField, Field, PrimeCharacteristicRing, PrimeField32};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
-use crate::{Lookup, StarkGenericConfig, Val, VerifyingKey};
+use crate::{Lookup, LookupExpr, StarkGenericConfig, Val, VerifyingKey};
 
 pub trait MultiTableBuilder: ExtensionBuilder {
     fn cumulative_sum(&self) -> Self::ExprEF {
@@ -87,10 +87,16 @@ where
 
         // Calculate multiplicities by evaluating lookup operations for each row.
         // For multi-column tables, use values[0] (the address/index column) as the row index.
-        for row_idx in 0..main_trace.height() {
+        // Skip the last row since all sends come from EveryRowExceptLast (transition) constraints.
+        for row_idx in 0..main_trace.height() - 1 {
             for send in &table_sends {
                 let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
-                let v = send.values[0].apply::<F, F>(&[], &row_slice);
+                let next_row_slice: Vec<F> = if row_idx + 1 < main_trace.height() {
+                    main_trace.row(row_idx + 1).unwrap().into_iter().collect()
+                } else {
+                    main_trace.row(0).unwrap().into_iter().collect()
+                };
+                let v = send.values[0].eval(&[], &row_slice, &next_row_slice);
 
                 let lookup_idx = v.as_canonical_u32() as usize;
                 assert!(
@@ -146,13 +152,26 @@ where
             Vec::new()
         };
         let main_row: Vec<Val<SC>> = main_trace.row(row).unwrap().into_iter().collect();
+        let main_next_row: Vec<Val<SC>> = if row + 1 < main_trace.height() {
+            main_trace.row(row + 1).unwrap().into_iter().collect()
+        } else {
+            main_trace.row(0).unwrap().into_iter().collect()
+        };
+
+        let is_last_row = row == main_trace.height() - 1;
 
         for (i, (lookup, is_send)) in lookups.iter().enumerate() {
+            // Send lookups come from EveryRowExceptLast, so skip on the last row.
+            if is_last_row && *is_send {
+                r[i] = EF::ZERO;
+                continue;
+            }
+
             let values: Vec<EF> = lookup
                 .values
                 .iter()
                 .map(|v| {
-                    v.apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row)
+                    v.eval(&preprocessed_row, &main_row, &main_next_row)
                         .into()
                 })
                 .collect();
@@ -161,7 +180,7 @@ where
 
             let mut mult = lookup
                 .multiplicity
-                .apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row);
+                .eval(&preprocessed_row, &main_row, &main_next_row);
 
             if !is_send {
                 mult = -mult;
@@ -202,7 +221,7 @@ where
 
 /// Evaluates permutation constraints
 pub fn eval_permutation_constraints<AB>(
-    lookups: &[(Lookup<VirtualPairCol<AB::F>>, bool)],
+    lookups: &[(Lookup<LookupExpr<AB::F>>, bool)],
     builder: &mut AB,
 ) where
     AB: AirBuilder + PermutationAirBuilder + MultiTableBuilder,
@@ -218,23 +237,24 @@ pub fn eval_permutation_constraints<AB>(
     let alpha_rlc = &rands[1]; // RLC compression challenge
 
     let main_local = main.row_slice(0).expect("main trace is empty?");
+    let main_next = main.row_slice(1).expect("main trace only has 1 row?");
     let perm_local = perm.row_slice(0).expect("perm trace is empty?");
     let perm_next = perm.row_slice(1).expect("perm trace only has 1 row?");
+
+    // Get preprocessed row once or use empty slice
+    let preprocessed_row = preprocessed.as_ref().and_then(|p| p.row_slice(0));
+    let empty_preprocessed: &[AB::Var] = &[];
+    let preprocessed_ref = preprocessed_row.as_deref().unwrap_or(empty_preprocessed);
 
     // constrain permutation entries (except for the cumulative sum column)
     for ((lookup, is_send), entry) in lookups.iter().zip(perm_local.iter()) {
         let entry: AB::ExprEF = (*entry).into();
 
-        // Get preprocessed row once or use empty slice
-        let preprocessed_row = preprocessed.as_ref().and_then(|p| p.row_slice(0));
-        let empty_preprocessed: &[AB::Var] = &[];
-        let preprocessed_ref = preprocessed_row.as_deref().unwrap_or(empty_preprocessed);
-
         let lookup_values: Vec<AB::ExprEF> = lookup
             .values
             .iter()
             .map(|v| {
-                v.apply::<AB::Expr, AB::Var>(preprocessed_ref, &main_local)
+                v.to_air_expr::<AB>(preprocessed_ref, &main_local, &main_next)
                     .into()
             })
             .collect();
@@ -249,16 +269,22 @@ pub fn eval_permutation_constraints<AB>(
 
         let denominator = z.clone() - compressed;
 
-        let mut mult: AB::ExprEF = lookup
+        let mult: AB::ExprEF = lookup
             .multiplicity
-            .apply::<AB::Expr, AB::Var>(preprocessed_ref, &main_local)
+            .to_air_expr::<AB>(preprocessed_ref, &main_local, &main_next)
             .into();
 
-        if !is_send {
-            mult = -mult;
+        if *is_send {
+            // Send lookups come from EveryRowExceptLast constraints, so gate by
+            // when_transition. On the last row, is_transition=0, making the
+            // constraint trivially satisfied regardless of trace values.
+            builder
+                .when_transition()
+                .assert_eq_ext(entry * denominator, mult);
+        } else {
+            // Receive lookups apply on every row (preprocessed table).
+            builder.assert_eq_ext(entry * denominator, -mult);
         }
-
-        builder.assert_eq_ext(entry * denominator, mult);
     }
 
     let sum_local: AB::ExprEF = perm_local

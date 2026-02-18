@@ -108,7 +108,7 @@ where
         }
 
         // Apply constraints for lookup columns
-        self.apply_lookup_constraints(builder, &local);
+        self.apply_lookup_constraints(builder, &local, &next);
     }
 }
 
@@ -151,8 +151,13 @@ impl<F: Field> MainAir<F> {
 
     /// Apply lookup constraints for the air.
     /// Uses expression evaluation to support multi-column lookup entries.
-    fn apply_lookup_constraints<AB>(&self, builder: &mut AB, local: &[AB::Var])
-    where
+    /// Properly resolves row=0 to local and row=1 to next for next-row references.
+    fn apply_lookup_constraints<AB>(
+        &self,
+        builder: &mut AB,
+        local: &[AB::Var],
+        next: &[AB::Var],
+    ) where
         AB: AirBuilder + BaseMessageBuilder,
         AB::F: Field + PrimeCharacteristicRing,
     {
@@ -173,10 +178,11 @@ impl<F: Field> MainAir<F> {
             let load_var = |var_idx: usize| -> AB::Var {
                 let var = &assignment.vars[var_idx];
                 match var {
-                    // Lookup constraints are applied at every row unconditionally.
-                    // We always use local[column] regardless of the row reference,
-                    // because the VirtualPairCol framework only supports current-row.
-                    VarLocation::Cell { column, .. } => local[*column].clone(),
+                    VarLocation::Cell { row, column } => match *row {
+                        0 => local[*column].clone(),
+                        1 => next[*column].clone(),
+                        _ => panic!("Invalid row index: {}", row),
+                    },
                     VarLocation::Aux { .. } => {
                         unreachable!("All aux vars should be already converted to cells")
                     }
@@ -216,7 +222,15 @@ impl<F: Field> MainAir<F> {
                 CircuitOp::Subcircuit { subcircuit } => {
                     // Recursively process subcircuit operations
                     self.apply_clean_constraints::<AB>(
-                        subcircuit,
+                        subcircuit.operations(),
+                        load_var,
+                        load_pi,
+                        constraint_builder,
+                    );
+                }
+                CircuitOp::NamedBlock { operations } => {
+                    self.apply_clean_constraints::<AB>(
+                        operations,
                         load_var,
                         load_pi,
                         constraint_builder,
