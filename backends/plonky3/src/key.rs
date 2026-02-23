@@ -1,14 +1,14 @@
 use alloc::vec::Vec;
-use p3_air::lookup::Lookup;
+use p3_air::lookup::{Kind, Lookup, LookupData, LookupEvaluator};
 use p3_air::{
     Air, AirBuilder, AirBuilderWithPublicValues, BaseAir,
 };
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::Field;
 use p3_lookup::logup::LogUpGadget;
-use p3_lookup::lookup_traits::LookupGadget;
+use p3_lookup::lookup_traits::lookup_data_to_expr;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
-use p3_uni_stark::{get_symbolic_constraints, SymbolicExpression};
+use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 use p3_util::log2_ceil_usize;
 
 // Bring vec! macro into scope
@@ -116,6 +116,54 @@ impl<F: Field> AirInfo<F> {
     }
 }
 
+/// Evaluate all constraints (AIR + lookup) symbolically, returning both
+/// base and extension constraint expressions.
+///
+/// Mirrors the upstream batch-stark `get_symbolic_constraints` pattern:
+/// builds a `SymbolicAirBuilder` with proper permutation width and challenge
+/// count, then calls `eval_with_lookups` to collect ALL constraints.
+fn get_all_constraints_with_lookups<F: Field>(
+    air: &CleanAirInstance<F>,
+    lookups: &[Lookup<F>],
+    preprocessed_width: usize,
+    public_inputs: usize,
+) -> (Vec<SymbolicExpression<F>>, Vec<SymbolicExpression<F>>) {
+    let gadget = LogUpGadget::new();
+    let num_lookups = lookups.len();
+    let num_aux_cols = num_lookups * gadget.num_aux_cols();
+    let num_challenges = num_lookups * gadget.num_challenges();
+
+    let mut builder = SymbolicAirBuilder::new(
+        preprocessed_width,
+        air.width(),
+        public_inputs,
+        num_aux_cols,
+        num_challenges,
+    );
+
+    // Build dummy symbolic LookupData for global lookups
+    let lookup_data: Vec<LookupData<F>> = lookups
+        .iter()
+        .filter_map(|l| {
+            if let Kind::Global(name) = &l.kind {
+                Some(LookupData {
+                    name: name.clone(),
+                    aux_idx: l.columns[0],
+                    expected_cumulated: F::ZERO,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    let symbolic_lookup_data = lookup_data_to_expr(&lookup_data);
+
+    // Evaluate AIR + lookup constraints symbolically
+    air.eval_with_lookups(&mut builder, lookups, &symbolic_lookup_data, &gadget);
+
+    (builder.base_constraints(), builder.extension_constraints())
+}
+
 impl<F: Field> VerifyingKey<F> for AirInfo<F> {
     fn lookups(&self) -> &[Lookup<F>] {
         &self.lookups
@@ -126,48 +174,42 @@ impl<F: Field> VerifyingKey<F> for AirInfo<F> {
     }
 
     fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>> {
-        let preprocessed_width = if let Some(pre) = &self.preprocessed {
-            pre.width()
-        } else {
-            0
-        };
-
-        get_symbolic_constraints(&self.air, preprocessed_width, public_inputs)
+        let preprocessed_width = self.preprocessed.as_ref().map_or(0, |p| p.width());
+        let (base, _ext) = get_all_constraints_with_lookups(
+            &self.air,
+            &self.lookups,
+            preprocessed_width,
+            public_inputs,
+        );
+        base
     }
 
     fn count_constraints(&self, public_inputs: usize) -> usize {
-        let constraints = self.constraints(public_inputs);
-
-        if !self.lookups.is_empty() {
-            // For each lookup: 1 first-row + 1 transition + 1 last-row constraint = 3
-            self.lookups.len() * 3 + constraints.len()
-        } else {
-            constraints.len()
-        }
+        let preprocessed_width = self.preprocessed.as_ref().map_or(0, |p| p.width());
+        let (base, ext) = get_all_constraints_with_lookups(
+            &self.air,
+            &self.lookups,
+            preprocessed_width,
+            public_inputs,
+        );
+        base.len() + ext.len()
     }
 
     fn log_quotient_degree(&self, public_inputs: usize) -> usize {
-        let constraints = self.constraints(public_inputs);
-        let max_degree = constraints
+        let preprocessed_width = self.preprocessed.as_ref().map_or(0, |p| p.width());
+        let (base, ext) = get_all_constraints_with_lookups(
+            &self.air,
+            &self.lookups,
+            preprocessed_width,
+            public_inputs,
+        );
+        let max_degree = base
             .iter()
+            .chain(ext.iter())
             .map(|c| c.degree_multiple())
             .max()
-            .unwrap_or(0);
-
-        let max_degree = if !self.lookups.is_empty() {
-            // Use LogUpGadget::constraint_degree() to compute the actual degree per lookup,
-            // plus 1 for the row selector (is_first_row / is_last_row).
-            let gadget = LogUpGadget::new();
-            let lookup_degree = self
-                .lookups
-                .iter()
-                .map(|l| gadget.constraint_degree(l.clone()) + 1)
-                .max()
-                .unwrap_or(0);
-            max_degree.max(lookup_degree)
-        } else {
-            max_degree
-        };
+            .unwrap_or(0)
+            .max(2); // pad to at least degree 2
 
         // division by vanishing polynomial results in degree - 1
         log2_ceil_usize(max_degree - 1)
