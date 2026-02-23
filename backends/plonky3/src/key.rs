@@ -35,7 +35,6 @@ pub trait VerifyingKey<F: Field> {
     fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
         None
     }
-    fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>>;
     fn count_constraints(&self, public_inputs: usize) -> usize;
     fn log_quotient_degree(&self, public_inputs: usize) -> usize;
 }
@@ -171,17 +170,6 @@ impl<F: Field> VerifyingKey<F> for AirInfo<F> {
 
     fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
         self.preprocessed.clone()
-    }
-
-    fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>> {
-        let preprocessed_width = self.preprocessed.as_ref().map_or(0, |p| p.width());
-        let (base, _ext) = get_all_constraints_with_lookups(
-            &self.air,
-            &self.lookups,
-            preprocessed_width,
-            public_inputs,
-        );
-        base
     }
 
     fn count_constraints(&self, public_inputs: usize) -> usize {

@@ -2,7 +2,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
-use p3_air::lookup::{Kind, LookupData};
+use p3_air::lookup::{Kind, LookupData, LookupEvaluator};
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, PackedValue, PrimeCharacteristicRing};
@@ -101,8 +101,8 @@ where
         .filter(|l| matches!(l.kind, Kind::Global(_)))
         .count();
 
-    // Total permutation challenges: 2 per global lookup (alpha + beta)
-    let num_perm_challenges = 2 * num_global_lookups;
+    // Total permutation challenges: num_challenges() per global lookup
+    let num_perm_challenges = gadget.num_challenges() * num_global_lookups;
 
     // Get the challenges for the permutation trace calculation.
     let permutation_challenges: Vec<SC::Challenge> = (0..num_perm_challenges)
@@ -132,6 +132,7 @@ where
                 air_info,
                 main_air_lookups,
                 &permutation_challenges,
+                gadget.num_challenges(),
             );
 
             // Prepare lookup_data for global lookups
@@ -243,6 +244,7 @@ where
             air_info,
             main_air_lookups,
             &permutation_challenges,
+            gadget.num_challenges(),
         );
 
         quotient_values::<SC, _>(

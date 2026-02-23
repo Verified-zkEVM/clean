@@ -2,7 +2,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
-use p3_air::lookup::{Kind, LookupData};
+use p3_air::lookup::{Kind, LookupData, LookupEvaluator};
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, Field, PrimeCharacteristicRing};
@@ -56,6 +56,8 @@ where
     challenger.observe(vk.preprocessed_commitment().clone());
     challenger.observe_slice(public_values);
 
+    let gadget = LogUpGadget::new();
+
     // Determine the number of global lookups from the main AIR
     let main_air_lookups = &air_infos[0].lookups;
     let num_global_lookups = main_air_lookups
@@ -63,7 +65,7 @@ where
         .filter(|l| matches!(l.kind, Kind::Global(_)))
         .count();
 
-    let num_perm_challenges = 2 * num_global_lookups;
+    let num_perm_challenges = gadget.num_challenges() * num_global_lookups;
 
     // Sample permutation challenges for the permutation argument.
     let permutation_challenges: Vec<SC::Challenge> = (0..num_perm_challenges)
@@ -92,8 +94,6 @@ where
     let zeta: SC::Challenge = challenger.sample_algebra_element();
 
     let pcs = config.pcs();
-
-    let gadget = LogUpGadget::new();
 
     // First, collect all verification data and validate shapes for all AIRs
     let mut all_air_data = Vec::new();
@@ -296,6 +296,7 @@ where
             air_info,
             main_air_lookups,
             &permutation_challenges,
+            gadget.num_challenges(),
         );
 
         // Build lookup_data from proof's expected_cumulated values

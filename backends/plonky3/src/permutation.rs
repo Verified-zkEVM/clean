@@ -141,13 +141,15 @@ where
 
 /// Returns the permutation challenges relevant to a specific AIR.
 ///
-/// Main AIR (index 0) gets all challenges; table AIRs get the 2-element
-/// slice corresponding to their global lookup in the main AIR.
+/// Main AIR (index 0) gets all challenges; table AIRs get the
+/// `num_challenges_per_lookup`-element slice corresponding to their global
+/// lookup in the main AIR.
 pub fn challenges_for_air<F, C>(
     air_idx: usize,
     air_info: &crate::key::AirInfo<F>,
     main_air_lookups: &[Lookup<F>],
     all_challenges: &[C],
+    num_challenges_per_lookup: usize,
 ) -> Vec<C>
 where
     F: Field,
@@ -172,6 +174,7 @@ where
             })
             .expect("Table AIR must correspond to a main AIR lookup");
 
-        all_challenges[2 * main_lookup_idx..2 * main_lookup_idx + 2].to_vec()
+        let stride = num_challenges_per_lookup;
+        all_challenges[stride * main_lookup_idx..stride * main_lookup_idx + stride].to_vec()
     }
 }
