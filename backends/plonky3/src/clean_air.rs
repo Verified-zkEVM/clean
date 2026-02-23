@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir};
 use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
@@ -29,7 +29,7 @@ impl<F: Field> BaseAir<F> for MainAir<F> {
     }
 }
 
-impl<AB: AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder> Air<AB> for MainAir<AB::F>
+impl<AB: AirBuilderWithPublicValues + BaseMessageBuilder> Air<AB> for MainAir<AB::F>
 where
     AB::F: Field + PrimeCharacteristicRing,
 {
@@ -51,7 +51,7 @@ where
                         let var: VarLocation = context.assignment.vars[var_idx].clone();
                         match var {
                             VarLocation::Cell { row, column } => match row {
-                                0 => local[column],
+                                0 => local[column].clone(),
                                 _ => panic!("Invalid row index: {}", row),
                             },
                             VarLocation::Aux { .. } => {
@@ -81,8 +81,8 @@ where
                         let var: VarLocation = context.assignment.vars[var_idx].clone();
                         match var {
                             VarLocation::Cell { row, column } => match row {
-                                0 => local[column],
-                                1 => next[column],
+                                0 => local[column].clone(),
+                                1 => next[column].clone(),
                                 _ => panic!("Invalid row index: {}", row),
                             },
                             VarLocation::Aux { .. } => {
@@ -164,7 +164,7 @@ impl<F: Field> MainAir<F> {
 
         // For now, assume these lookups are for byte range
         for &c in &lookup_cols {
-            let v = local[c].into();
+            let v = local[c].clone().into();
             let mul = AB::F::ONE.into();
             let l = Lookup::new(crate::LookupType::ByteRange, v, mul);
             builder.send(l);
@@ -179,7 +179,7 @@ impl<F: Field> MainAir<F> {
         load_pi: &dyn Fn(usize) -> AB::Expr,
         constraint_builder: &mut dyn FnMut(AB::Expr),
     ) where
-        AB: AirBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder,
+        AB: AirBuilder + AirBuilderWithPublicValues + BaseMessageBuilder,
         AB::F: Field + PrimeCharacteristicRing,
     {
         for op in ops {
@@ -244,7 +244,7 @@ impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
 
 impl<AB> Air<AB> for CleanAirInstance<AB::F>
 where
-    AB: AirBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder,
+    AB: AirBuilder + AirBuilderWithPublicValues + BaseMessageBuilder,
     AB::F: Field,
 {
     fn eval(&self, builder: &mut AB) {

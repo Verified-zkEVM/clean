@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PairCol, VirtualPairCol,
+    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairCol, VirtualPairCol,
 };
 use p3_field::Field;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
@@ -114,11 +114,9 @@ impl<F: Field> AirBuilder for LookupBuilder<F> {
     }
 
     fn assert_zero<I: Into<Self::Expr>>(&mut self, _x: I) {}
-}
 
-impl<F: Field> PairBuilder for LookupBuilder<F> {
-    fn preprocessed(&self) -> Self::M {
-        self.preprocessed.clone()
+    fn preprocessed(&self) -> Option<Self::M> {
+        Some(self.preprocessed.clone())
     }
 }
 
@@ -244,14 +242,14 @@ impl<F: Field> BaseAir<F> for ByteRangeAir<F> {
     }
 }
 
-impl<AB: PairBuilder + BaseMessageBuilder> Air<AB> for ByteRangeAir<AB::F>
+impl<AB: AirBuilder + BaseMessageBuilder> Air<AB> for ByteRangeAir<AB::F>
 where
     AB::F: Field,
 {
     fn eval(&self, builder: &mut AB) {
         // generate receive lookups
         let main = builder.main();
-        let preprocessed = builder.preprocessed();
+        let preprocessed = builder.preprocessed().expect("ByteRangeAir requires preprocessed trace");
 
         let local_mul = main.get(0, 0).unwrap().into();
         let local_preprocessed_val = preprocessed.get(0, 0).unwrap().into();

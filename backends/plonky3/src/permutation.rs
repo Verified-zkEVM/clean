@@ -3,7 +3,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use p3_air::{AirBuilder, ExtensionBuilder, PairBuilder, PermutationAirBuilder, VirtualPairCol};
+use p3_air::{AirBuilder, ExtensionBuilder, PermutationAirBuilder, VirtualPairCol};
 use p3_field::{ExtensionField, Field, PrimeField32};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
@@ -192,7 +192,8 @@ pub fn eval_permutation_constraints<AB>(
     lookups: &[(Lookup<VirtualPairCol<AB::F>>, bool)],
     builder: &mut AB,
 ) where
-    AB: AirBuilder + PairBuilder + PermutationAirBuilder + MultiTableBuilder,
+    AB: AirBuilder + PermutationAirBuilder + MultiTableBuilder,
+    AB::Var: Copy,
 {
     let main = builder.main();
     let preprocessed = builder.preprocessed();
@@ -211,7 +212,7 @@ pub fn eval_permutation_constraints<AB>(
         let entry: AB::ExprEF = (*entry).into();
 
         // Get preprocessed row once or use empty slice
-        let preprocessed_row = preprocessed.row_slice(0);
+        let preprocessed_row = preprocessed.as_ref().and_then(|p| p.row_slice(0));
         let empty_preprocessed: &[AB::Var] = &[];
         let preprocessed_ref = preprocessed_row.as_deref().unwrap_or(empty_preprocessed);
 
