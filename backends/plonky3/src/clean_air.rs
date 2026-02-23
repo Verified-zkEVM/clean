@@ -163,23 +163,16 @@ impl<F: Field> MainAir<F> {
     /// Groups all lookup sends by table name and creates one global Lookup
     /// per table, with Direction::Receive (main AIR reads from tables).
     pub fn build_lookups(&mut self) -> Vec<Lookup<F>> {
-        use alloc::collections::BTreeSet;
-
         let symbolic_builder = SymbolicAirBuilder::<F>::new(0, self.width, 0, 0, 0);
         let symbolic_main = AirBuilder::main(&symbolic_builder);
         let symbolic_main_local = symbolic_main.row_slice(0).unwrap();
 
         let ops_with_assignments = self.clean_ops.lookup_ops_with_assignments();
 
-        // Deduplicate by (table, entry debug repr) and group by table
-        let mut seen: BTreeSet<String> = BTreeSet::new();
+        // Group by table
         let mut lookups_by_table: BTreeMap<String, Vec<LookupInput<F>>> = BTreeMap::new();
 
         for (lookup_op, assignment) in &ops_with_assignments {
-            let key = alloc::format!("{}:{:?}", lookup_op.table, lookup_op.entry);
-            if !seen.insert(key) {
-                continue;
-            }
 
             let load_var = |var_idx: usize| -> p3_uni_stark::SymbolicVariable<F> {
                 let var = &assignment.vars[var_idx];
