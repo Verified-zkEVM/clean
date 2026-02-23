@@ -39,6 +39,6 @@ pub struct OpenedValues<Challenge> {
     pub(crate) preprocessed_next: Vec<Challenge>,
     pub(crate) perm_local: Vec<Challenge>,
     pub(crate) perm_next: Vec<Challenge>,
-    pub(crate) local_cumulative_sum: Challenge,
+    pub(crate) expected_cumulated: Vec<Challenge>,
     pub(crate) quotient_chunks: Vec<Vec<Challenge>>,
 }

@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
+use p3_air::lookup::Lookup;
 use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder,
-    VirtualPairCol,
+    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir,
 };
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::Field;
@@ -14,8 +14,7 @@ extern crate alloc;
 use alloc::vec;
 
 use crate::clean_air::CleanAirInstance;
-use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
-use crate::{BaseMessageBuilder, Lookup, LookupBuilder, StarkGenericConfig, Val};
+use crate::{StarkGenericConfig, Val};
 
 type Com<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
     <SC as StarkGenericConfig>::Challenge,
@@ -28,9 +27,7 @@ type PcsData<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
 >>::ProverData;
 
 pub trait VerifyingKey<F: Field> {
-    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)>
-    where
-        F: Field;
+    fn lookups(&self) -> &[Lookup<F>];
     /// Returns the width of the main trace
     fn width(&self) -> usize;
     fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
@@ -39,14 +36,6 @@ pub trait VerifyingKey<F: Field> {
     fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>>;
     fn count_constraints(&self, public_inputs: usize) -> usize;
     fn log_quotient_degree(&self, public_inputs: usize) -> usize;
-    fn eval_constraints<AB>(&self, builder: &mut AB)
-    where
-        AB: AirBuilder<F = F>
-            + PermutationAirBuilder
-            + MultiTableBuilder
-            + AirBuilderWithPublicValues
-            + BaseMessageBuilder,
-        AB::Var: Copy;
 }
 
 pub struct VK<SC: StarkGenericConfig> {
@@ -106,39 +95,17 @@ impl<SC: StarkGenericConfig> VK<SC> {
 #[derive(Clone)]
 pub struct AirInfo<F: Field> {
     pub air: CleanAirInstance<F>,
-    pub lookups: Vec<(Lookup<VirtualPairCol<F>>, bool)>,
+    pub lookups: Vec<Lookup<F>>,
     pub preprocessed: Option<RowMajorMatrix<F>>,
 }
 
 impl<F: Field> AirInfo<F> {
-    /// Create a new VK from air instance and trace width, building lookups automatically
-    pub fn new(air: CleanAirInstance<F>, trace_width: usize) -> Self {
-        let preprocessed_width = if air.preprocessed_trace().is_some() {
-            air.preprocessed_trace().unwrap().width()
-        } else {
-            0
-        };
-
-        // Build lookups using LookupBuilder
-        let mut lookup_builder = LookupBuilder::new(preprocessed_width, trace_width);
-
-        match &air {
-            CleanAirInstance::Main(air) => {
-                air.eval(&mut lookup_builder);
-            }
-            CleanAirInstance::Preprocessed(air) => {
-                air.eval(&mut lookup_builder);
-            }
-        }
-
-        let (s, r) = lookup_builder.messages();
-        let lookups = s
-            .into_iter()
-            .map(|l| (l, true))
-            .chain(r.into_iter().map(|l| (l, false)))
-            .collect();
-
+    /// Create a new AirInfo from air instance, building lookups automatically
+    pub fn new(mut air: CleanAirInstance<F>) -> Self {
+        // Build lookups using the air's build_lookups method
+        let lookups = air.build_lookups();
         let preprocessed = air.preprocessed_trace();
+
         Self {
             air,
             lookups,
@@ -148,7 +115,7 @@ impl<F: Field> AirInfo<F> {
 }
 
 impl<F: Field> VerifyingKey<F> for AirInfo<F> {
-    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> {
+    fn lookups(&self) -> &[Lookup<F>] {
         &self.lookups
     }
 
@@ -170,7 +137,8 @@ impl<F: Field> VerifyingKey<F> for AirInfo<F> {
         let constraints = self.constraints(public_inputs);
 
         if !self.lookups.is_empty() {
-            self.lookups.len() + constraints.len() + 3 // 3 for the first row, last row, and transition constraints
+            // For each lookup: 1 first-row + 1 transition + 1 last-row constraint = 3
+            self.lookups.len() * 3 + constraints.len()
         } else {
             constraints.len()
         }
@@ -184,28 +152,17 @@ impl<F: Field> VerifyingKey<F> for AirInfo<F> {
             .max()
             .unwrap_or(0);
 
-        let max_degree = if !self.lookups().is_empty() {
-            // if there are permutations, ensure the degree is at least 2, because of the multiplication with selectors.
-            max_degree.max(2)
+        let max_degree = if !self.lookups.is_empty() {
+            // LogUpGadget constraints have degree 3 (for global lookups with selector):
+            // when_last_row constraint: is_last_row * (expected_cumulated - s) * denominator - numerator
+            // The denominator is degree 1 (alpha - value), selector is degree 1, so total is 3.
+            max_degree.max(3)
         } else {
             max_degree
         };
 
         // division by vanishing polynomial results in degree - 1
         log2_ceil_usize(max_degree - 1)
-    }
-
-    fn eval_constraints<AB>(&self, builder: &mut AB)
-    where
-        AB: AirBuilder<F = F>
-            + PermutationAirBuilder
-            + MultiTableBuilder
-            + AirBuilderWithPublicValues
-            + BaseMessageBuilder,
-        AB::Var: Copy,
-    {
-        self.air.eval(builder);
-        eval_permutation_constraints(self.lookups(), builder);
     }
 
     fn width(&self) -> usize {
@@ -225,11 +182,10 @@ impl<F: Field> BaseAir<F> for AirInfo<F> {
 
 impl<AB> Air<AB> for AirInfo<AB::F>
 where
-    AB: AirBuilder + AirBuilderWithPublicValues + BaseMessageBuilder,
+    AB: AirBuilder + AirBuilderWithPublicValues,
     AB::F: Field,
 {
     fn eval(&self, builder: &mut AB) {
         self.air.eval(builder);
-        // Note: Permutation constraints are handled separately in the proving/verification process
     }
 }

@@ -2,9 +2,12 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
+use p3_air::lookup::{Kind, LookupData};
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, PackedValue, PrimeCharacteristicRing};
+use p3_lookup::logup::LogUpGadget;
+use p3_lookup::lookup_traits::LookupGadget;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
 use p3_matrix::Matrix;
@@ -14,7 +17,6 @@ use p3_util::zip_eq::zip_eq;
 use tracing::{debug_span, info_span, instrument};
 
 use crate::{
-    permutation::{self, NUM_PERMUTATION_CHALLENGES},
     AirInfo, Commitments, Domain, OpenedValues, PackedChallenge, PackedVal, Proof,
     ProverConstraintFolder, StarkGenericConfig, Val, VerifyingKey, VK,
 };
@@ -31,6 +33,7 @@ where
 {
     let pcs = config.pcs();
     let mut challenger = config.initialise_challenger();
+    let gadget = LogUpGadget::new();
 
     // Ensure we have the same number of traces as air infos
     assert_eq!(
@@ -91,43 +94,127 @@ where
     challenger.observe(pre_commit.clone());
     challenger.observe_slice(public_values);
 
+    // Determine the number of global lookups from the main AIR (air_infos[0])
+    let main_air_lookups = &air_infos[0].lookups;
+    let num_global_lookups = main_air_lookups
+        .iter()
+        .filter(|l| matches!(l.kind, Kind::Global(_)))
+        .count();
+
+    // Total permutation challenges: 2 per global lookup (alpha + beta)
+    let num_perm_challenges = 2 * num_global_lookups;
+
     // Get the challenges for the permutation trace calculation.
-    let permutation_challenges: Vec<SC::Challenge> = (0..NUM_PERMUTATION_CHALLENGES)
+    let permutation_challenges: Vec<SC::Challenge> = (0..num_perm_challenges)
         .map(|_| challenger.sample_algebra_element())
         .collect_vec();
 
-    // compute permutation traces
-    let perm_traces = air_infos
+    // Compute permutation traces using LogUpGadget
+    let mut all_lookup_data: Vec<Vec<LookupData<SC::Challenge>>> = Vec::new();
+
+    let perm_traces: Vec<RowMajorMatrix<SC::Challenge>> = air_infos
         .iter()
+        .enumerate()
         .zip(traces.iter())
-        .map(|(air_info, trace)| {
-            permutation::generate_permutation_trace::<SC, SC::Challenge>(
-                air_info,
+        .map(|((air_idx, air_info), trace)| {
+            let lookups = &air_info.lookups;
+
+            if lookups.is_empty() {
+                // No lookups for this AIR - create empty permutation trace
+                let empty_perm =
+                    RowMajorMatrix::new(vec![SC::Challenge::ZERO; trace.height()], 1);
+                all_lookup_data.push(Vec::new());
+                return empty_perm;
+            }
+
+            // Determine which challenges this AIR gets
+            let air_challenges = if air_idx == 0 {
+                // Main AIR gets all challenges
+                permutation_challenges.clone()
+            } else {
+                // Table AIR i gets the challenges corresponding to its table
+                // Find which main AIR lookup index corresponds to this table
+                let table_name = air_info
+                    .air
+                    .table_name()
+                    .expect("Non-main AIR must have a table name");
+
+                let main_lookup_idx = main_air_lookups
+                    .iter()
+                    .position(|l| {
+                        if let Kind::Global(name) = &l.kind {
+                            name == table_name
+                        } else {
+                            false
+                        }
+                    })
+                    .expect("Table AIR must correspond to a main AIR lookup");
+
+                // This table's challenges are at index [2*main_lookup_idx .. 2*main_lookup_idx+2]
+                permutation_challenges[2 * main_lookup_idx..2 * main_lookup_idx + 2].to_vec()
+            };
+
+            // Prepare lookup_data for global lookups
+            let mut lookup_data: Vec<LookupData<SC::Challenge>> = lookups
+                .iter()
+                .filter_map(|l| {
+                    if let Kind::Global(name) = &l.kind {
+                        Some(LookupData {
+                            name: name.clone(),
+                            aux_idx: l.columns[0],
+                            expected_cumulated: SC::Challenge::default(),
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            let preprocessed = air_info.preprocessed.clone();
+
+            let perm_trace = gadget.generate_permutation::<SC>(
                 trace,
-                &permutation_challenges,
-            )
+                &preprocessed,
+                public_values,
+                lookups,
+                &mut lookup_data,
+                &air_challenges,
+            );
+
+            all_lookup_data.push(lookup_data);
+            perm_trace
         })
         .collect_vec();
 
-    let (perm_and_domains, last_sums): (Vec<_>, Vec<&SC::Challenge>) = zip_eq(
+    // Collect all expected_cumulated values for observation
+    let all_expected_cumulated: Vec<Vec<SC::Challenge>> = all_lookup_data
+        .iter()
+        .map(|data| data.iter().map(|d| d.expected_cumulated).collect())
+        .collect();
+
+    // Observe expected_cumulated values
+    challenger.observe_slice(
+        &all_expected_cumulated
+            .iter()
+            .flat_map(|v| {
+                v.iter()
+                    .flat_map(|s| s.as_basis_coefficients_slice().iter())
+            })
+            .cloned()
+            .collect_vec(),
+    );
+
+    let perm_and_domains: Vec<_> = zip_eq(
         trace_domains.iter(),
         perm_traces.iter(),
         "Trace domains and perm traces length mismatch",
     )
     .unwrap()
-    .map(|(domain, (perm_trace, last_sum))| {
+    .map(|(domain, perm_trace)| {
         tracing::info!("perm trace width: {}", perm_trace.width());
-        ((*domain, perm_trace.clone().flatten_to_base()), last_sum)
+        (*domain, perm_trace.clone().flatten_to_base())
     })
-    .unzip();
-
-    challenger.observe_slice(
-        &last_sums
-            .iter()
-            .flat_map(|s| s.as_basis_coefficients_slice().iter())
-            .cloned()
-            .collect_vec(),
-    );
+    .collect();
 
     let (perm_commit, perm_data) =
         info_span!("commit to permutation traces").in_scope(|| pcs.commit(perm_and_domains));
@@ -155,12 +242,12 @@ where
     .collect_vec();
 
     let quotient_values = zip_eq(
-        air_infos.iter(),
-        trace_domains.iter().enumerate(),
+        air_infos.iter().enumerate(),
+        trace_domains.iter(),
         "Air infos and trace domains length mismatch",
     )
     .unwrap()
-    .map(|(air_info, (i, trace_domain))| {
+    .map(|((i, air_info), trace_domain)| {
         let quotient_domain = quotient_domains[i];
         let trace_on_quotient_domain =
             pcs.get_evaluations_on_domain(&trace_data, i, quotient_domains[i]);
@@ -171,6 +258,27 @@ where
 
         let constraint_count = constraint_counts[i];
 
+        // Determine challenges for this AIR
+        let air_challenges = if i == 0 {
+            permutation_challenges.clone()
+        } else {
+            let table_name = air_info
+                .air
+                .table_name()
+                .expect("Non-main AIR must have a table name");
+            let main_lookup_idx = main_air_lookups
+                .iter()
+                .position(|l| {
+                    if let Kind::Global(name) = &l.kind {
+                        name == table_name
+                    } else {
+                        false
+                    }
+                })
+                .expect("Table AIR must correspond to a main AIR lookup");
+            permutation_challenges[2 * main_lookup_idx..2 * main_lookup_idx + 2].to_vec()
+        };
+
         quotient_values::<SC, _>(
             air_info,
             public_values,
@@ -179,9 +287,9 @@ where
             trace_on_quotient_domain,
             pre_on_quotient_domain,
             perm_on_quotient_domain,
-            *last_sums[i],
+            &all_lookup_data[i],
             alpha,
-            &permutation_challenges,
+            &air_challenges,
             constraint_count,
         )
     })
@@ -281,7 +389,7 @@ where
             preprocessed_next: preprocessed_opened_values[i][1].clone(),
             perm_local: perm_opened_values[i][0].clone(),
             perm_next: perm_opened_values[i][1].clone(),
-            local_cumulative_sum: *last_sums[i],
+            expected_cumulated: all_expected_cumulated[i].clone(),
             quotient_chunks: quotient_opened_values[i]
                 .iter()
                 .map(|v| v[0].clone())
@@ -307,7 +415,7 @@ fn quotient_values<SC, Mat>(
     trace_on_quotient_domain: Mat,
     pre_on_quotient_domain: Mat,
     perm_on_quotient_domain: Mat,
-    local_cumulative_sum: SC::Challenge,
+    lookup_data: &[LookupData<SC::Challenge>],
     alpha: SC::Challenge,
     perm_challenges: &[SC::Challenge],
     constraint_count: usize,
@@ -351,6 +459,20 @@ where
                 .collect()
         })
         .collect();
+
+    // Convert LookupData<SC::Challenge> to LookupData<PackedChallenge<SC>> for the prover folder
+    let lookup_data_packed: Vec<LookupData<PackedChallenge<SC>>> = lookup_data
+        .iter()
+        .map(|d| LookupData {
+            name: d.name.clone(),
+            aux_idx: d.aux_idx,
+            expected_cumulated: d.expected_cumulated.into(),
+        })
+        .collect();
+
+    let lookups = &air_info.lookups;
+    let gadget = LogUpGadget::new();
+
     (0..quotient_size)
         .into_par_iter()
         .step_by(PackedVal::<SC>::WIDTH)
@@ -450,11 +572,18 @@ where
                 alpha_powers: &alpha_powers,
                 decomposed_alpha_powers: &decomposed_alpha_powers,
                 perm_challenges,
-                local_cumulative_sum: local_cumulative_sum.into(),
                 accumulator,
                 constraint_index: 0,
             };
-            air_info.eval_constraints(&mut folder);
+
+            // Use eval_with_lookups to evaluate both AIR constraints and lookup constraints
+            use p3_air::Air;
+            air_info.air.eval_with_lookups(
+                &mut folder,
+                lookups,
+                &lookup_data_packed,
+                &gadget,
+            );
 
             // quotient(x) = constraints(x) / Z_H(x)
             let quotient = folder.accumulator * inv_vanishing;

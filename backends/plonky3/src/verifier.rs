@@ -2,9 +2,12 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
+use p3_air::lookup::{Kind, LookupData};
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, Field, PrimeCharacteristicRing};
+use p3_lookup::logup::LogUpGadget;
+use p3_lookup::lookup_traits::LookupGadget;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
 use p3_matrix::Matrix;
@@ -12,7 +15,7 @@ use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
 use crate::{
-    permutation::NUM_PERMUTATION_CHALLENGES, AirInfo, PcsError, Proof, StarkGenericConfig, Val,
+    AirInfo, PcsError, Proof, StarkGenericConfig, Val,
     VerifierConstraintFolder, VerifyingKey, VK,
 };
 
@@ -53,15 +56,29 @@ where
     challenger.observe(vk.preprocessed_commitment().clone());
     challenger.observe_slice(public_values);
 
+    // Determine the number of global lookups from the main AIR
+    let main_air_lookups = &air_infos[0].lookups;
+    let num_global_lookups = main_air_lookups
+        .iter()
+        .filter(|l| matches!(l.kind, Kind::Global(_)))
+        .count();
+
+    let num_perm_challenges = 2 * num_global_lookups;
+
     // Sample permutation challenges for the permutation argument.
-    let permutation_challenges: Vec<SC::Challenge> = (0..NUM_PERMUTATION_CHALLENGES)
+    let permutation_challenges: Vec<SC::Challenge> = (0..num_perm_challenges)
         .map(|_| challenger.sample_algebra_element())
         .collect();
 
+    // Observe expected_cumulated values from proof
     challenger.observe_slice(
         &opened_values
             .iter()
-            .flat_map(|o| o.local_cumulative_sum.as_basis_coefficients_slice())
+            .flat_map(|o| {
+                o.expected_cumulated
+                    .iter()
+                    .flat_map(|s| s.as_basis_coefficients_slice())
+            })
             .copied()
             .collect_vec(),
     );
@@ -75,6 +92,8 @@ where
     let zeta: SC::Challenge = challenger.sample_algebra_element();
 
     let pcs = config.pcs();
+
+    let gadget = LogUpGadget::new();
 
     // First, collect all verification data and validate shapes for all AIRs
     let mut all_air_data = Vec::new();
@@ -143,6 +162,7 @@ where
 
         // Store data needed for constraint evaluation later
         all_air_data.push((
+            i,
             air_info,
             trace_domain,
             quotient_chunks_domains.clone(),
@@ -198,7 +218,7 @@ where
     pcs.verify(coms_to_verify, opening_proof, &mut challenger)
         .map_err(VerificationError::InvalidOpeningArgument)?;
 
-    // Reconstruct the prmutation opening values as extension elements.
+    // Reconstruct the permutation opening values as extension elements.
     let unflatten = |v: &[SC::Challenge]| {
         v.chunks_exact(SC::Challenge::DIMENSION)
             .map(|chunk| {
@@ -206,7 +226,6 @@ where
                     .iter()
                     .enumerate()
                     .map(|(e_i, &x)| {
-                        // Using ith_basis_element which is available instead of monomial
                         SC::Challenge::ith_basis_element(e_i).unwrap() * x
                     })
                     .sum()
@@ -216,8 +235,12 @@ where
 
     // Init accumulative value for the cumulative sums
     let zero = SC::Challenge::default();
+
+    // Collect all expected_cumulated values for the global final value check
+    let mut all_expected_cumulated: Vec<SC::Challenge> = Vec::new();
+
     // Now process constraint evaluation for each AIR
-    for (air_info, trace_domain, quotient_chunks_domains, opened_values) in all_air_data {
+    for (air_idx, air_info, trace_domain, quotient_chunks_domains, opened_values) in all_air_data {
         let zps = quotient_chunks_domains
             .iter()
             .enumerate()
@@ -242,9 +265,6 @@ where
             .enumerate()
             .map(|(ch_i, ch)| {
                 tracing::info!("chi {}", ch_i);
-                // We checked in valid_shape the length of "ch" is equal to
-                // <SC::Challenge as BasedVectorSpace<Val<SC>>>::DIMENSION. Hence
-                // the unwrap() will never panic.
                 zps[ch_i]
                     * ch.iter()
                         .enumerate()
@@ -271,6 +291,52 @@ where
             RowMajorMatrixView::new_row(&unflattened_perm_next),
         );
 
+        // Determine challenges for this AIR
+        let air_challenges = if air_idx == 0 {
+            permutation_challenges.clone()
+        } else {
+            let table_name = air_info
+                .air
+                .table_name()
+                .expect("Non-main AIR must have a table name");
+            let main_lookup_idx = main_air_lookups
+                .iter()
+                .position(|l| {
+                    if let Kind::Global(name) = &l.kind {
+                        name == table_name
+                    } else {
+                        false
+                    }
+                })
+                .expect("Table AIR must correspond to a main AIR lookup");
+            permutation_challenges[2 * main_lookup_idx..2 * main_lookup_idx + 2].to_vec()
+        };
+
+        // Build lookup_data from proof's expected_cumulated values
+        let lookups = &air_info.lookups;
+        let mut lookup_data_idx = 0;
+        let lookup_data: Vec<LookupData<SC::Challenge>> = lookups
+            .iter()
+            .filter_map(|l| {
+                if let Kind::Global(name) = &l.kind {
+                    let data = LookupData {
+                        name: name.clone(),
+                        aux_idx: l.columns[0],
+                        expected_cumulated: opened_values.expected_cumulated[lookup_data_idx],
+                    };
+                    lookup_data_idx += 1;
+                    Some(data)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Collect expected_cumulated for global check
+        all_expected_cumulated.extend(
+            opened_values.expected_cumulated.iter().copied(),
+        );
+
         let mut folder: VerifierConstraintFolder<SC> = VerifierConstraintFolder {
             main,
             preprocessed,
@@ -281,10 +347,18 @@ where
             is_transition: sels.is_transition,
             alpha,
             accumulator: zero,
-            perm_challenges: &permutation_challenges,
-            local_cumulative_sum: opened_values.local_cumulative_sum,
+            perm_challenges: &air_challenges,
         };
-        air_info.eval_constraints(&mut folder);
+
+        // Use eval_with_lookups to evaluate both AIR and lookup constraints
+        use p3_air::Air;
+        air_info.air.eval_with_lookups(
+            &mut folder,
+            lookups,
+            &lookup_data,
+            &gadget,
+        );
+
         let folded_constraints = folder.accumulator;
 
         tracing::info!(
@@ -300,15 +374,10 @@ where
         }
     }
 
-    // check the sum of cumulative sums is zero
-    let cum_sums = opened_values
-        .iter()
-        .map(|o| o.local_cumulative_sum)
-        .sum::<SC::Challenge>();
-
-    if cum_sums != zero {
-        return Err(VerificationError::CumulativeSumMismatch);
-    }
+    // Check that the sum of all expected cumulated values is zero
+    gadget
+        .verify_global_final_value(&all_expected_cumulated)
+        .map_err(|_| VerificationError::CumulativeSumMismatch)?;
 
     Ok(())
 }

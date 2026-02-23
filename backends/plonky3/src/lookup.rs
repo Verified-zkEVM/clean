@@ -1,238 +1,82 @@
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
-use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairCol, VirtualPairCol,
-};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir};
+use p3_air::lookup::{Direction, Kind, Lookup, LookupInput};
 use p3_field::Field;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
-
-use p3_uni_stark::{Entry, SymbolicExpression, SymbolicVariable};
-
-#[derive(Debug, Clone)]
-pub struct Lookup<E> {
-    pub table_name: String,
-    pub values: Vec<E>,
-    pub multiplicity: E,
-}
-
-impl<E> Lookup<E> {
-    pub fn new(table_name: String, values: Vec<E>, multiplicity: E) -> Self {
-        Self {
-            table_name,
-            values,
-            multiplicity,
-        }
-    }
-}
-
-pub trait MessageBuilder<L> {
-    fn send(&mut self, _l: L) {}
-    fn receive(&mut self, _l: L) {}
-}
-
-pub trait BaseMessageBuilder: AirBuilder + MessageBuilder<Lookup<Self::Expr>> {}
-
-pub struct LookupBuilder<F>
-where
-    F: Field,
-{
-    preprocessed: RowMajorMatrix<SymbolicVariable<F>>,
-    main: RowMajorMatrix<SymbolicVariable<F>>,
-    sends: Vec<Lookup<VirtualPairCol<F>>>,
-    receives: Vec<Lookup<VirtualPairCol<F>>>,
-    public_values: Vec<F>,
-}
-
-impl<F: Field> LookupBuilder<F> {
-    pub fn new(preprocessed_width: usize, main_width: usize) -> Self {
-        let preprocessed_width = preprocessed_width.max(1);
-        let prep_values = [0, 1]
-            .into_iter()
-            .flat_map(|offset| {
-                (0..preprocessed_width).map(move |column| {
-                    SymbolicVariable::new(Entry::Preprocessed { offset }, column)
-                })
-            })
-            .collect();
-
-        let main_values = [0, 1]
-            .into_iter()
-            .flat_map(|offset| {
-                (0..main_width)
-                    .map(move |column| SymbolicVariable::new(Entry::Main { offset }, column))
-            })
-            .collect();
-
-        Self {
-            preprocessed: RowMajorMatrix::new(prep_values, preprocessed_width),
-            main: RowMajorMatrix::new(main_values, main_width),
-            sends: Vec::new(),
-            receives: Vec::new(),
-            public_values: Vec::from([F::ZERO, F::ONE, F::ONE]),
-        }
-    }
-
-    pub fn messages(
-        &self,
-    ) -> (
-        Vec<Lookup<VirtualPairCol<F>>>,
-        Vec<Lookup<VirtualPairCol<F>>>,
-    ) {
-        (self.sends.clone(), self.receives.clone())
-    }
-}
-
-impl<F: Field> AirBuilder for LookupBuilder<F> {
-    type F = F;
-    type Expr = SymbolicExpression<F>;
-    type Var = SymbolicVariable<F>;
-    type M = RowMajorMatrix<Self::Var>;
-
-    fn main(&self) -> Self::M {
-        self.main.clone()
-    }
-
-    fn is_first_row(&self) -> Self::Expr {
-        SymbolicExpression::IsFirstRow
-    }
-
-    fn is_last_row(&self) -> Self::Expr {
-        SymbolicExpression::IsLastRow
-    }
-
-    fn is_transition_window(&self, size: usize) -> Self::Expr {
-        if size == 2 {
-            SymbolicExpression::IsTransition
-        } else {
-            panic!("uni-stark only supports a window size of 2")
-        }
-    }
-
-    fn assert_zero<I: Into<Self::Expr>>(&mut self, _x: I) {}
-
-    fn preprocessed(&self) -> Option<Self::M> {
-        Some(self.preprocessed.clone())
-    }
-}
-
-impl<F: Field> AirBuilderWithPublicValues for LookupBuilder<F> {
-    type PublicVar = F;
-
-    fn public_values(&self) -> &[Self::PublicVar] {
-        &self.public_values
-    }
-}
-
-impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F> {
-    fn send(&mut self, l: Lookup<SymbolicExpression<F>>) {
-        let l = Lookup::new(
-            l.table_name,
-            l.values
-                .iter()
-                .map(|v| symbolic_to_virtual_pair(v))
-                .collect(),
-            symbolic_to_virtual_pair(&l.multiplicity),
-        );
-        self.sends.push(l);
-    }
-
-    fn receive(&mut self, l: Lookup<SymbolicExpression<F>>) {
-        let l = Lookup::new(
-            l.table_name,
-            l.values
-                .iter()
-                .map(|v| symbolic_to_virtual_pair(v))
-                .collect(),
-            symbolic_to_virtual_pair(&l.multiplicity),
-        );
-        self.receives.push(l);
-    }
-}
-
-impl<F: Field> BaseMessageBuilder for LookupBuilder<F> {}
-
-fn symbolic_to_virtual_pair<F: Field>(expression: &SymbolicExpression<F>) -> VirtualPairCol<F> {
-    if expression.degree_multiple() > 1 {
-        panic!("degree multiple is too high");
-    }
-
-    let (column_weights, constant) = eval_symbolic_to_virtual_pair(expression);
-
-    let column_weights = column_weights.into_iter().collect();
-
-    VirtualPairCol::new(column_weights, constant)
-}
-
-fn eval_symbolic_to_virtual_pair<F: Field>(
-    expression: &SymbolicExpression<F>,
-) -> (Vec<(PairCol, F)>, F) {
-    match expression {
-        SymbolicExpression::Constant(c) => (Vec::new(), *c),
-        SymbolicExpression::Variable(v) => match v.entry {
-            Entry::Preprocessed { offset: 0 } => (
-                Vec::from([(PairCol::Preprocessed(v.index), F::ONE)]),
-                F::ZERO,
-            ),
-            Entry::Main { offset: 0 } => (Vec::from([(PairCol::Main(v.index), F::ONE)]), F::ZERO),
-            _ => panic!(
-                "not an affine expression in current row elements {:?}",
-                v.entry
-            ),
-        },
-        SymbolicExpression::Add { x, y, .. } => {
-            let (v_l, c_l) = eval_symbolic_to_virtual_pair(x);
-            let (v_r, c_r) = eval_symbolic_to_virtual_pair(y);
-            ([v_l, v_r].concat(), c_l + c_r)
-        }
-        SymbolicExpression::Sub { x, y, .. } => {
-            let (v_l, c_l) = eval_symbolic_to_virtual_pair(x);
-            let (v_r, c_r) = eval_symbolic_to_virtual_pair(y);
-            let neg_v_r = v_r.iter().map(|(c, w)| (*c, -*w)).collect();
-            ([v_l, neg_v_r].concat(), c_l - c_r)
-        }
-        SymbolicExpression::Neg { x, .. } => {
-            let (v, c) = eval_symbolic_to_virtual_pair(x);
-            (v.iter().map(|(c, w)| (*c, -*w)).collect(), -c)
-        }
-        SymbolicExpression::Mul { x, y, .. } => {
-            let (v_l, c_l) = eval_symbolic_to_virtual_pair(x);
-            let (v_r, c_r) = eval_symbolic_to_virtual_pair(y);
-
-            let mut v = Vec::new();
-            v.extend(v_l.iter().map(|(c, w)| (*c, *w * c_r)));
-            v.extend(v_r.iter().map(|(c, w)| (*c, *w * c_l)));
-
-            if !v_l.is_empty() && !v_r.is_empty() {
-                panic!("Not an affine expression")
-            }
-
-            (v, c_l * c_r)
-        }
-        SymbolicExpression::IsFirstRow => {
-            panic!("not an affine expression in current row elements for first row")
-        }
-        SymbolicExpression::IsLastRow => {
-            panic!("not an affine expression in current row elements for last row")
-        }
-        SymbolicExpression::IsTransition => {
-            panic!("not an affine expression in current row elements for transition row")
-        }
-    }
-}
+use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
 #[derive(Clone)]
 pub struct PreprocessedTableAir<F> {
     pub name: String,
     pub preprocessed: RowMajorMatrix<F>,
+    pub num_lookups: usize,
 }
 
 impl<F: Field> PreprocessedTableAir<F> {
     pub fn new(name: String, preprocessed: RowMajorMatrix<F>) -> Self {
-        Self { name, preprocessed }
+        Self {
+            name,
+            preprocessed,
+            num_lookups: 0,
+        }
     }
 
     pub fn table_name(&self) -> &str {
         &self.name
+    }
+
+    /// Build the lookup descriptors for this table AIR.
+    ///
+    /// Creates a single global lookup with Direction::Send (table provides values).
+    /// The element expressions are the preprocessed columns and the multiplicity
+    /// is the main trace column 0.
+    pub fn build_lookups(&mut self) -> Vec<Lookup<F>> {
+        let prep_width = self.preprocessed.width();
+        let main_width = 1; // multiplicity column
+
+        let symbolic_builder = SymbolicAirBuilder::<F>::new(prep_width, main_width, 0, 0, 0);
+
+        let preprocessed = AirBuilder::preprocessed(&symbolic_builder).unwrap();
+        let main = AirBuilder::main(&symbolic_builder);
+
+        let prep_local = preprocessed.row_slice(0).unwrap();
+        let main_local = main.row_slice(0).unwrap();
+
+        // Preprocessed columns as lookup values
+        let values: Vec<SymbolicExpression<F>> = (0..prep_width)
+            .map(|col| prep_local[col].into())
+            .collect();
+
+        // Multiplicity from main trace
+        let mult: SymbolicExpression<F> = main_local[0].into();
+
+        let lookup_input: LookupInput<F> = (values, mult, Direction::Send);
+
+        // Build lookup manually
+        let columns = self.add_lookup_columns_impl();
+
+        let (element_exprs, multiplicities_exprs): (Vec<_>, Vec<_>) = vec![lookup_input]
+            .into_iter()
+            .map(|(elems, m, dir)| {
+                let multiplicity = dir.multiplicity(m);
+                (elems, multiplicity)
+            })
+            .unzip();
+
+        vec![Lookup::new(
+            Kind::Global(self.name.clone()),
+            element_exprs,
+            multiplicities_exprs,
+            columns,
+        )]
+    }
+
+    fn add_lookup_columns_impl(&mut self) -> Vec<usize> {
+        let idx = self.num_lookups;
+        self.num_lookups += 1;
+        vec![idx]
     }
 }
 
@@ -253,36 +97,12 @@ impl<F: Field> BaseAir<F> for PreprocessedTableAir<F> {
     }
 }
 
-impl<AB: AirBuilder + BaseMessageBuilder> Air<AB> for PreprocessedTableAir<AB::F>
+impl<AB: AirBuilder + AirBuilderWithPublicValues> Air<AB> for PreprocessedTableAir<AB::F>
 where
     AB::F: Field,
 {
-    fn eval(&self, builder: &mut AB) {
-        // generate receive lookups
-        let main = builder.main();
-        let preprocessed = builder
-            .preprocessed()
-            .expect("PreprocessedTableAir requires preprocessed trace");
-
-        let local_mul = main.get(0, 0).unwrap().into();
-
-        // Multi-column: emit one value per preprocessed column
-        let values: Vec<AB::Expr> = (0..self.preprocessed.width())
-            .map(|col| preprocessed.get(0, col).unwrap().into())
-            .collect();
-
-        let receive = Lookup::new(self.name.clone(), values, local_mul);
-        builder.receive(receive);
+    fn eval(&self, _builder: &mut AB) {
+        // Lookup constraints are handled via eval_with_lookups / LogUpGadget,
+        // not in eval() directly.
     }
 }
-
-// Implementation for SymbolicAirBuilder from p3_uni_stark
-impl<F> MessageBuilder<Lookup<p3_uni_stark::SymbolicExpression<F>>>
-    for p3_uni_stark::SymbolicAirBuilder<F>
-where
-    F: Field,
-{
-    // Default implementations are provided by the trait
-}
-
-impl<F> BaseMessageBuilder for p3_uni_stark::SymbolicAirBuilder<F> where F: Field {}

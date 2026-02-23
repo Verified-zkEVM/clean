@@ -19,6 +19,7 @@ p3-dft = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-field = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-fri = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-keccak = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-lookup = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-matrix = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-symmetric = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }

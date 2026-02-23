@@ -132,18 +132,13 @@ fn test_clean_fib() {
     let byte_range_air_instance = CleanAirInstance::Preprocessed(byte_range);
 
     // Create VK with multiple air instances (main + lookup)
-    let air_instances = vec![
-        (air_instance, main_trace.width()),
-        (byte_range_air_instance, 1), // ByteRange has width 1
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance),
+        AirInfo::new(byte_range_air_instance),
     ];
 
-    let air_infos: Vec<AirInfo<BabyBear>> = air_instances
-        .into_iter()
-        .map(|(air, trace_width)| AirInfo::new(air, trace_width))
-        .collect();
-
     // Generate lookup traces using the AirInfo instances from the VK
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     // Collect all traces: main trace + lookup traces
     let mut traces = vec![main_trace.clone()];
     traces.extend(lookup_traces);
@@ -247,12 +242,12 @@ fn test_multi_column_lookup() {
     let memory_instance = CleanAirInstance::Preprocessed(memory_air);
 
     let air_infos: Vec<AirInfo<BabyBear>> = vec![
-        AirInfo::new(air_instance, 2),
-        AirInfo::new(memory_instance, 1),
+        AirInfo::new(air_instance),
+        AirInfo::new(memory_instance),
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -352,12 +347,12 @@ fn test_expression_lookup() {
     let table_instance = CleanAirInstance::Preprocessed(table_air);
 
     let air_infos: Vec<AirInfo<BabyBear>> = vec![
-        AirInfo::new(air_instance, 1),
-        AirInfo::new(table_instance, 1),
+        AirInfo::new(air_instance),
+        AirInfo::new(table_instance),
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -442,12 +437,12 @@ fn test_range_check_16() {
     let range16_instance = CleanAirInstance::Preprocessed(range16_air);
 
     let air_infos: Vec<AirInfo<BabyBear>> = vec![
-        AirInfo::new(air_instance, width),
-        AirInfo::new(range16_instance, 1),
+        AirInfo::new(air_instance),
+        AirInfo::new(range16_instance),
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 

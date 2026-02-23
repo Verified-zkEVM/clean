@@ -1,15 +1,20 @@
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
+use p3_air::lookup::{Direction, Kind, Lookup, LookupInput};
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir};
 use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
+use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
 use crate::clean_ast::{
     AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation,
 };
-use crate::{BaseMessageBuilder, Lookup, PreprocessedTableAir};
+use crate::PreprocessedTableAir;
 
 #[derive(Clone)]
 pub struct MainAir<F>
@@ -20,6 +25,8 @@ where
     clean_ops: CleanOps,
     /// Width of the trace
     width: usize,
+    /// Number of registered lookups (for add_lookup_columns)
+    num_lookups: usize,
     _marker: PhantomData<F>,
 }
 
@@ -29,7 +36,7 @@ impl<F: Field> BaseAir<F> for MainAir<F> {
     }
 }
 
-impl<AB: AirBuilderWithPublicValues + BaseMessageBuilder> Air<AB> for MainAir<AB::F>
+impl<AB: AirBuilderWithPublicValues> Air<AB> for MainAir<AB::F>
 where
     AB::F: Field + PrimeCharacteristicRing,
 {
@@ -107,8 +114,8 @@ where
             }
         }
 
-        // Apply constraints for lookup columns
-        self.apply_lookup_constraints(builder, &local);
+        // Lookup constraints are NOT applied here - they are handled via
+        // eval_with_lookups / LogUpGadget.
     }
 }
 
@@ -119,6 +126,7 @@ impl<F: Field> MainAir<F> {
         Self {
             clean_ops,
             width,
+            num_lookups: 0,
             _marker: PhantomData,
         }
     }
@@ -128,6 +136,7 @@ impl<F: Field> MainAir<F> {
         Self {
             clean_ops,
             width,
+            num_lookups: 0,
             _marker: PhantomData,
         }
     }
@@ -149,20 +158,22 @@ impl<F: Field> MainAir<F> {
         self.clean_ops.lookup_ops()
     }
 
-    /// Apply lookup constraints for the air.
-    /// Uses expression evaluation to support multi-column lookup entries.
-    fn apply_lookup_constraints<AB>(&self, builder: &mut AB, local: &[AB::Var])
-    where
-        AB: AirBuilder + BaseMessageBuilder,
-        AB::F: Field + PrimeCharacteristicRing,
-    {
+    /// Build lookup descriptors for the main AIR.
+    ///
+    /// Groups all lookup sends by table name and creates one global Lookup
+    /// per table, with Direction::Receive (main AIR reads from tables).
+    pub fn build_lookups(&mut self) -> Vec<Lookup<F>> {
         use alloc::collections::BTreeSet;
-        use alloc::string::String;
+
+        let symbolic_builder = SymbolicAirBuilder::<F>::new(0, self.width, 0, 0, 0);
+        let symbolic_main = AirBuilder::main(&symbolic_builder);
+        let symbolic_main_local = symbolic_main.row_slice(0).unwrap();
 
         let ops_with_assignments = self.clean_ops.lookup_ops_with_assignments();
 
-        // Deduplicate by (table, entry debug repr) to avoid duplicate sends
+        // Deduplicate by (table, entry debug repr) and group by table
         let mut seen: BTreeSet<String> = BTreeSet::new();
+        let mut lookups_by_table: BTreeMap<String, Vec<LookupInput<F>>> = BTreeMap::new();
 
         for (lookup_op, assignment) in &ops_with_assignments {
             let key = alloc::format!("{}:{:?}", lookup_op.table, lookup_op.entry);
@@ -170,30 +181,61 @@ impl<F: Field> MainAir<F> {
                 continue;
             }
 
-            let load_var = |var_idx: usize| -> AB::Var {
+            let load_var = |var_idx: usize| -> p3_uni_stark::SymbolicVariable<F> {
                 let var = &assignment.vars[var_idx];
                 match var {
-                    // Lookup constraints are applied at every row unconditionally.
-                    // We always use local[column] regardless of the row reference,
-                    // because the VirtualPairCol framework only supports current-row.
-                    VarLocation::Cell { column, .. } => local[*column].clone(),
+                    VarLocation::Cell { column, .. } => symbolic_main_local[*column],
                     VarLocation::Aux { .. } => {
                         unreachable!("All aux vars should be already converted to cells")
                     }
                 }
             };
-            let load_pi = |_pi_idx: usize| -> AB::Expr { panic!("Pi not supported in lookups") };
+            let load_pi =
+                |_pi_idx: usize| -> SymbolicExpression<F> { panic!("Pi not supported in lookups") };
 
-            let values: Vec<AB::Expr> = lookup_op
+            let values: Vec<SymbolicExpression<F>> = lookup_op
                 .entry
                 .iter()
-                .map(|e| AstUtils::lower_expr::<AB>(e, &load_var, &load_pi))
+                .map(|e| AstUtils::lower_expr::<SymbolicAirBuilder<F>>(e, &load_var, &load_pi))
                 .collect();
 
-            let mul = AB::F::ONE.into();
-            let l = Lookup::new(lookup_op.table.clone(), values, mul);
-            builder.send(l);
+            let mult = SymbolicExpression::Constant(F::ONE);
+            let input: LookupInput<F> = (values, mult, Direction::Receive);
+
+            lookups_by_table
+                .entry(lookup_op.table.clone())
+                .or_default()
+                .push(input);
         }
+
+        // Create one Lookup per table
+        let mut lookups = Vec::new();
+        for (table_name, inputs) in lookups_by_table {
+            let columns = self.add_lookup_columns_impl();
+
+            let (element_exprs, multiplicities_exprs): (Vec<_>, Vec<_>) = inputs
+                .into_iter()
+                .map(|(elems, m, dir)| {
+                    let multiplicity = dir.multiplicity(m);
+                    (elems, multiplicity)
+                })
+                .unzip();
+
+            lookups.push(Lookup::new(
+                Kind::Global(table_name),
+                element_exprs,
+                multiplicities_exprs,
+                columns,
+            ));
+        }
+
+        lookups
+    }
+
+    fn add_lookup_columns_impl(&mut self) -> Vec<usize> {
+        let idx = self.num_lookups;
+        self.num_lookups += 1;
+        vec![idx]
     }
 
     /// Process circuit operations and apply constraints
@@ -204,7 +246,7 @@ impl<F: Field> MainAir<F> {
         load_pi: &dyn Fn(usize) -> AB::Expr,
         constraint_builder: &mut dyn FnMut(AB::Expr),
     ) where
-        AB: AirBuilder + AirBuilderWithPublicValues + BaseMessageBuilder,
+        AB: AirBuilder + AirBuilderWithPublicValues,
         AB::F: Field + PrimeCharacteristicRing,
     {
         for op in ops {
@@ -259,6 +301,14 @@ impl<F: Field> CleanAirInstance<F> {
             CleanAirInstance::Preprocessed(air) => Some(air.table_name()),
         }
     }
+
+    /// Build lookups for this AIR instance.
+    pub fn build_lookups(&mut self) -> Vec<Lookup<F>> {
+        match self {
+            CleanAirInstance::Main(air) => air.build_lookups(),
+            CleanAirInstance::Preprocessed(air) => air.build_lookups(),
+        }
+    }
 }
 
 impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
@@ -279,7 +329,7 @@ impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
 
 impl<AB> Air<AB> for CleanAirInstance<AB::F>
 where
-    AB: AirBuilder + AirBuilderWithPublicValues + BaseMessageBuilder,
+    AB: AirBuilder + AirBuilderWithPublicValues,
     AB::F: Field,
 {
     fn eval(&self, builder: &mut AB) {

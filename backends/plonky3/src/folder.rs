@@ -6,9 +6,8 @@ use p3_air::{
 use p3_matrix::dense::RowMajorMatrixView;
 use p3_matrix::stack::VerticalPair;
 
-use crate::permutation::MultiTableBuilder;
 use crate::{
-    BaseMessageBuilder, MessageBuilder, PackedChallenge, PackedVal, StarkGenericConfig, Val,
+    PackedChallenge, PackedVal, StarkGenericConfig, Val,
 };
 
 #[derive(Debug)]
@@ -22,7 +21,6 @@ pub struct ProverConstraintFolder<'a, SC: StarkGenericConfig> {
     pub is_transition: PackedVal<SC>,
     pub alpha_powers: &'a [SC::Challenge],
     pub perm_challenges: &'a [SC::Challenge],
-    pub local_cumulative_sum: PackedChallenge<SC>,
     pub decomposed_alpha_powers: &'a [Vec<Val<SC>>],
     pub accumulator: PackedChallenge<SC>,
     pub constraint_index: usize,
@@ -42,7 +40,6 @@ pub struct VerifierConstraintFolder<'a, SC: StarkGenericConfig> {
     pub alpha: SC::Challenge,
     pub accumulator: SC::Challenge,
     pub perm_challenges: &'a [SC::Challenge],
-    pub local_cumulative_sum: SC::Challenge,
 }
 
 impl<'a, SC: StarkGenericConfig> AirBuilder for ProverConstraintFolder<'a, SC> {
@@ -99,8 +96,6 @@ impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for ProverConstraintFold
     }
 }
 
-impl<'a, SC: StarkGenericConfig, E> MessageBuilder<E> for ProverConstraintFolder<'a, SC> {}
-impl<'a, SC: StarkGenericConfig> BaseMessageBuilder for ProverConstraintFolder<'a, SC> {}
 impl<'a, SC: StarkGenericConfig> ExtensionBuilder for ProverConstraintFolder<'a, SC> {
     type EF = SC::Challenge;
 
@@ -112,7 +107,6 @@ impl<'a, SC: StarkGenericConfig> ExtensionBuilder for ProverConstraintFolder<'a,
     where
         I: Into<Self::ExprEF>,
     {
-        // tracing::info!("constraint index: {}", self.constraint_index);
         let x: PackedChallenge<SC> = x.into();
         let alpha_power = self.alpha_powers[self.constraint_index];
         self.accumulator += Into::<PackedChallenge<SC>>::into(alpha_power) * x;
@@ -131,12 +125,6 @@ impl<'a, SC: StarkGenericConfig> PermutationAirBuilder for ProverConstraintFolde
 
     fn permutation_randomness(&self) -> &[Self::RandomVar] {
         self.perm_challenges
-    }
-}
-
-impl<'a, SC: StarkGenericConfig> MultiTableBuilder for ProverConstraintFolder<'a, SC> {
-    fn cumulative_sum(&self) -> Self::ExprEF {
-        self.local_cumulative_sum
     }
 }
 
@@ -187,8 +175,6 @@ impl<SC: StarkGenericConfig> AirBuilderWithPublicValues for VerifierConstraintFo
     }
 }
 
-impl<'a, SC: StarkGenericConfig, E> MessageBuilder<E> for VerifierConstraintFolder<'a, SC> {}
-impl<'a, SC: StarkGenericConfig> BaseMessageBuilder for VerifierConstraintFolder<'a, SC> {}
 impl<'a, SC: StarkGenericConfig> ExtensionBuilder for VerifierConstraintFolder<'a, SC> {
     type EF = SC::Challenge;
     type ExprEF = SC::Challenge;
@@ -214,11 +200,5 @@ impl<'a, SC: StarkGenericConfig> PermutationAirBuilder for VerifierConstraintFol
 
     fn permutation_randomness(&self) -> &[Self::RandomVar] {
         self.perm_challenges
-    }
-}
-
-impl<'a, SC: StarkGenericConfig> MultiTableBuilder for VerifierConstraintFolder<'a, SC> {
-    fn cumulative_sum(&self) -> Self::ExprEF {
-        self.local_cumulative_sum
     }
 }
