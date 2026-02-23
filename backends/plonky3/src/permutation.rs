@@ -9,6 +9,11 @@ use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
 use crate::{Lookup, StarkGenericConfig, Val, VerifyingKey};
 
+/// Number of challenges required by the LogUp permutation argument:
+/// - `[0]`: `z`, the random point for the lookup argument
+/// - `[1]`: `alpha_rlc`, the RLC compression challenge for multi-column lookups
+pub const NUM_PERMUTATION_CHALLENGES: usize = 2;
+
 pub trait MultiTableBuilder: ExtensionBuilder {
     fn cumulative_sum(&self) -> Self::ExprEF {
         unimplemented!("cumulative_sum is not implemented for this builder")

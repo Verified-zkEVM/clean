@@ -14,7 +14,8 @@ use p3_util::zip_eq::zip_eq;
 use tracing::{debug_span, info_span, instrument};
 
 use crate::{
-    permutation, AirInfo, Commitments, Domain, OpenedValues, PackedChallenge, PackedVal, Proof,
+    permutation::{self, NUM_PERMUTATION_CHALLENGES},
+    AirInfo, Commitments, Domain, OpenedValues, PackedChallenge, PackedVal, Proof,
     ProverConstraintFolder, StarkGenericConfig, Val, VerifyingKey, VK,
 };
 
@@ -91,9 +92,7 @@ where
     challenger.observe_slice(public_values);
 
     // Get the challenges for the permutation trace calculation.
-    // Ensure at least 2 challenges: z (random point) and alpha_rlc (RLC compression).
-    let num_challenges = air_infos.len().max(2);
-    let permutation_challenges: Vec<SC::Challenge> = (0..num_challenges)
+    let permutation_challenges: Vec<SC::Challenge> = (0..NUM_PERMUTATION_CHALLENGES)
         .map(|_| challenger.sample_algebra_element())
         .collect_vec();
 
