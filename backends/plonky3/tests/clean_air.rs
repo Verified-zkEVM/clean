@@ -183,7 +183,8 @@ fn test_multi_column_lookup() {
                 "entry": [
                   { "type": "var", "index": 0 },
                   { "type": "var", "index": 1 }
-                ]
+                ],
+                "direction": "receive"
               }
             }
           ],
@@ -280,7 +281,8 @@ fn test_expression_lookup() {
                     "lhs": { "type": "var", "index": 0 },
                     "rhs": { "type": "const", "value": 1 }
                   }
-                ]
+                ],
+                "direction": "receive"
               }
             }
           ],
@@ -335,6 +337,95 @@ fn test_expression_lookup() {
     verify(&config, &air_infos, &proof, &pis).expect("expression lookup verification failed");
 }
 
+/// Test Direction::Send from the main AIR.
+/// Both Send and Receive lookups target the same table "MemTable", forming
+/// a permutation check between two column pairs — no preprocessed table needed.
+#[test]
+fn test_main_air_send_direction() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    let config = setup::test_config(55);
+
+    // Circuit JSON: two lookups to "MemTable":
+    // 1. Send (col0, col1) with direction "send"
+    // 2. Receive (col2, col3) with direction "receive"
+    let json_content = r#"[
+      {
+        "type": "EveryRowExceptLast",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "MemTable",
+                "entry": [
+                  { "type": "var", "index": 0 },
+                  { "type": "var", "index": 1 }
+                ],
+                "direction": "send"
+              }
+            },
+            {
+              "lookup": {
+                "table": "MemTable",
+                "entry": [
+                  { "type": "var", "index": 2 },
+                  { "type": "var", "index": 3 }
+                ],
+                "direction": "receive"
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 },
+              { "row": 0, "column": 1 },
+              { "row": 0, "column": 2 },
+              { "row": 0, "column": 3 }
+            ],
+            "offset": 4,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    // Main trace: 16 rows × 4 columns.
+    // Cols (0,1) = (i, 10*i), Cols (2,3) = (15-i, 10*(15-i))
+    // This is a permutation (reverse) of the same multiset.
+    let num_rows = 16usize;
+    let main_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            let j = num_rows - 1 - i;
+            vec![
+                BabyBear::from_u64(i as u64),
+                BabyBear::from_u64(10 * i as u64),
+                BabyBear::from_u64(j as u64),
+                BabyBear::from_u64(10 * j as u64),
+            ]
+        })
+        .collect();
+    let main_trace = RowMajorMatrix::new(main_data, 4);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, 4, main_trace.height());
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    // Only the main AIR — no preprocessed tables needed
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![AirInfo::new(air_instance)];
+
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes,
+    );
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis)
+        .expect("send direction permutation check verification failed");
+}
+
 /// Test a 16-entry range-check table to demonstrate the generic lookup framework
 /// works with arbitrary table names and sizes.
 #[test]
@@ -355,7 +446,8 @@ fn test_range_check_16() {
             {
               "lookup": {
                 "table": "Range16",
-                "entry": [{ "type": "var", "index": 0 }]
+                "entry": [{ "type": "var", "index": 0 }],
+                "direction": "receive"
               }
             }
           ],
@@ -500,13 +592,15 @@ fn test_two_table_lookups() {
             {
               "lookup": {
                 "table": "Range8",
-                "entry": [{ "type": "var", "index": 0 }]
+                "entry": [{ "type": "var", "index": 0 }],
+                "direction": "receive"
               }
             },
             {
               "lookup": {
                 "table": "Squares",
-                "entry": [{ "type": "var", "index": 1 }]
+                "entry": [{ "type": "var", "index": 1 }],
+                "direction": "receive"
               }
             }
           ],

@@ -110,7 +110,8 @@
                     "type": "var",
                     "index": 3
                   }
-                ]
+                ],
+                "direction": "receive"
               }
             },
             {
