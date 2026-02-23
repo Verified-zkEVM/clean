@@ -2,8 +2,9 @@
 
 extern crate alloc;
 
+use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
-use p3_air::lookup::Lookup;
+use p3_air::lookup::{Kind, Lookup};
 use p3_field::{Field, PrimeField32};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 use p3_uni_stark::{Entry, SymbolicExpression};
@@ -75,11 +76,12 @@ where
             .table_name()
             .expect("Non-main AIR must be a preprocessed table with a name");
 
-        let table_size = air_info
+        let preprocessed = air_info
             .preprocessed
             .as_ref()
-            .expect("Preprocessed table AIR must have a preprocessed trace")
-            .height();
+            .expect("Preprocessed table AIR must have a preprocessed trace");
+
+        let table_size = preprocessed.height();
 
         // Find the main AIR lookup that targets this table (by global interaction name)
         let matching_lookups: Vec<&Lookup<F>> = main_air_lookups
@@ -93,30 +95,39 @@ where
             })
             .collect();
 
+        // Build index: map from column-value tuple → row index in the preprocessed table.
+        // This correctly handles tables whose column-0 values are not equal to the row index.
+        let mut row_index: BTreeMap<Vec<u32>, usize> = BTreeMap::new();
+        for row_idx in 0..table_size {
+            let prep_row: Vec<F> = preprocessed.row(row_idx).unwrap().into_iter().collect();
+            let key: Vec<u32> = prep_row.iter().map(|v| v.as_canonical_u32()).collect();
+            row_index.insert(key, row_idx);
+        }
+
         // Create multiplicity trace for this table
         let mut multiplicity_trace = RowMajorMatrix::new(alloc::vec![F::ZERO; table_size], 1);
 
-        // Calculate multiplicities by evaluating lookup expressions for each row.
-        // For each element tuple in the matching lookups, evaluate the first element
-        // (the address/index column) to determine which table row is accessed.
+        // Calculate multiplicities by evaluating ALL columns of each lookup tuple
+        // and looking up the resulting values in the preprocessed table index.
         for row_idx in 0..main_trace.height() {
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
 
             for lookup in &matching_lookups {
                 for tuple in &lookup.element_exprs {
-                    // Evaluate the first element expression to get the lookup index
-                    let v = eval_symbolic_on_row(&tuple[0], &row_slice, &[]);
-                    let lookup_idx = v.as_canonical_u32() as usize;
+                    // Evaluate ALL element expressions to get the full lookup key
+                    let values: Vec<u32> = tuple
+                        .iter()
+                        .map(|expr| eval_symbolic_on_row(expr, &row_slice, &[]).as_canonical_u32())
+                        .collect();
 
-                    assert!(
-                        lookup_idx < table_size,
-                        "Lookup value {} out of range for table '{}' (size {})",
-                        lookup_idx,
-                        table_name,
-                        table_size
-                    );
+                    let table_row = row_index.get(&values).unwrap_or_else(|| {
+                        panic!(
+                            "Lookup values {:?} not found in table '{}' (size {})",
+                            values, table_name, table_size
+                        )
+                    });
 
-                    let m = multiplicity_trace.row_mut(lookup_idx).get_mut(0).unwrap();
+                    let m = multiplicity_trace.row_mut(*table_row).get_mut(0).unwrap();
                     *m += F::ONE;
                 }
             }
@@ -126,4 +137,41 @@ where
     }
 
     lookup_traces
+}
+
+/// Returns the permutation challenges relevant to a specific AIR.
+///
+/// Main AIR (index 0) gets all challenges; table AIRs get the 2-element
+/// slice corresponding to their global lookup in the main AIR.
+pub fn challenges_for_air<F, C>(
+    air_idx: usize,
+    air_info: &crate::key::AirInfo<F>,
+    main_air_lookups: &[Lookup<F>],
+    all_challenges: &[C],
+) -> Vec<C>
+where
+    F: Field,
+    C: Clone,
+{
+    if air_idx == 0 {
+        all_challenges.to_vec()
+    } else {
+        let table_name = air_info
+            .air
+            .table_name()
+            .expect("Non-main AIR must have a table name");
+
+        let main_lookup_idx = main_air_lookups
+            .iter()
+            .position(|l| {
+                if let Kind::Global(name) = &l.kind {
+                    name == table_name
+                } else {
+                    false
+                }
+            })
+            .expect("Table AIR must correspond to a main AIR lookup");
+
+        all_challenges[2 * main_lookup_idx..2 * main_lookup_idx + 2].to_vec()
+    }
 }

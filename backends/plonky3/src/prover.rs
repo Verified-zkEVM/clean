@@ -17,8 +17,8 @@ use p3_util::zip_eq::zip_eq;
 use tracing::{debug_span, info_span, instrument};
 
 use crate::{
-    AirInfo, Commitments, Domain, OpenedValues, PackedChallenge, PackedVal, Proof,
-    ProverConstraintFolder, StarkGenericConfig, Val, VerifyingKey, VK,
+    challenges_for_air, AirInfo, Commitments, Domain, OpenedValues, PackedChallenge, PackedVal,
+    Proof, ProverConstraintFolder, StarkGenericConfig, Val, VerifyingKey, VK,
 };
 
 #[instrument(skip_all)]
@@ -127,32 +127,12 @@ where
                 return empty_perm;
             }
 
-            // Determine which challenges this AIR gets
-            let air_challenges = if air_idx == 0 {
-                // Main AIR gets all challenges
-                permutation_challenges.clone()
-            } else {
-                // Table AIR i gets the challenges corresponding to its table
-                // Find which main AIR lookup index corresponds to this table
-                let table_name = air_info
-                    .air
-                    .table_name()
-                    .expect("Non-main AIR must have a table name");
-
-                let main_lookup_idx = main_air_lookups
-                    .iter()
-                    .position(|l| {
-                        if let Kind::Global(name) = &l.kind {
-                            name == table_name
-                        } else {
-                            false
-                        }
-                    })
-                    .expect("Table AIR must correspond to a main AIR lookup");
-
-                // This table's challenges are at index [2*main_lookup_idx .. 2*main_lookup_idx+2]
-                permutation_challenges[2 * main_lookup_idx..2 * main_lookup_idx + 2].to_vec()
-            };
+            let air_challenges = challenges_for_air(
+                air_idx,
+                air_info,
+                main_air_lookups,
+                &permutation_challenges,
+            );
 
             // Prepare lookup_data for global lookups
             let mut lookup_data: Vec<LookupData<SC::Challenge>> = lookups
@@ -258,26 +238,12 @@ where
 
         let constraint_count = constraint_counts[i];
 
-        // Determine challenges for this AIR
-        let air_challenges = if i == 0 {
-            permutation_challenges.clone()
-        } else {
-            let table_name = air_info
-                .air
-                .table_name()
-                .expect("Non-main AIR must have a table name");
-            let main_lookup_idx = main_air_lookups
-                .iter()
-                .position(|l| {
-                    if let Kind::Global(name) = &l.kind {
-                        name == table_name
-                    } else {
-                        false
-                    }
-                })
-                .expect("Table AIR must correspond to a main AIR lookup");
-            permutation_challenges[2 * main_lookup_idx..2 * main_lookup_idx + 2].to_vec()
-        };
+        let air_challenges = challenges_for_air(
+            i,
+            air_info,
+            main_air_lookups,
+            &permutation_challenges,
+        );
 
         quotient_values::<SC, _>(
             air_info,

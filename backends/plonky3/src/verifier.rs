@@ -15,7 +15,7 @@ use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
 use crate::{
-    AirInfo, PcsError, Proof, StarkGenericConfig, Val,
+    challenges_for_air, AirInfo, PcsError, Proof, StarkGenericConfig, Val,
     VerifierConstraintFolder, VerifyingKey, VK,
 };
 
@@ -291,43 +291,38 @@ where
             RowMajorMatrixView::new_row(&unflattened_perm_next),
         );
 
-        // Determine challenges for this AIR
-        let air_challenges = if air_idx == 0 {
-            permutation_challenges.clone()
-        } else {
-            let table_name = air_info
-                .air
-                .table_name()
-                .expect("Non-main AIR must have a table name");
-            let main_lookup_idx = main_air_lookups
-                .iter()
-                .position(|l| {
-                    if let Kind::Global(name) = &l.kind {
-                        name == table_name
-                    } else {
-                        false
-                    }
-                })
-                .expect("Table AIR must correspond to a main AIR lookup");
-            permutation_challenges[2 * main_lookup_idx..2 * main_lookup_idx + 2].to_vec()
-        };
+        let air_challenges = challenges_for_air(
+            air_idx,
+            air_info,
+            main_air_lookups,
+            &permutation_challenges,
+        );
 
         // Build lookup_data from proof's expected_cumulated values
         let lookups = &air_info.lookups;
-        let mut lookup_data_idx = 0;
-        let lookup_data: Vec<LookupData<SC::Challenge>> = lookups
+        let global_lookups: Vec<_> = lookups
             .iter()
-            .filter_map(|l| {
-                if let Kind::Global(name) = &l.kind {
-                    let data = LookupData {
-                        name: name.clone(),
-                        aux_idx: l.columns[0],
-                        expected_cumulated: opened_values.expected_cumulated[lookup_data_idx],
-                    };
-                    lookup_data_idx += 1;
-                    Some(data)
-                } else {
-                    None
+            .filter(|l| matches!(l.kind, Kind::Global(_)))
+            .collect();
+        assert_eq!(
+            global_lookups.len(),
+            opened_values.expected_cumulated.len(),
+            "Mismatch between global lookups ({}) and expected_cumulated values ({})",
+            global_lookups.len(),
+            opened_values.expected_cumulated.len(),
+        );
+        let lookup_data: Vec<LookupData<SC::Challenge>> = global_lookups
+            .iter()
+            .zip(opened_values.expected_cumulated.iter())
+            .map(|(l, &expected)| {
+                let name = match &l.kind {
+                    Kind::Global(name) => name.clone(),
+                    _ => unreachable!(),
+                };
+                LookupData {
+                    name,
+                    aux_idx: l.columns[0],
+                    expected_cumulated: expected,
                 }
             })
             .collect();

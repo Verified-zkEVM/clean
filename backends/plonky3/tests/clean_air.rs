@@ -212,24 +212,33 @@ fn test_multi_column_lookup() {
     ]"#;
 
     // Preprocessed "Memory" table: 16 rows × 2 columns (address, value).
-    // Row i: (i, 100*(i+1))
-    let num_rows = 16;
-    let memory_data: Vec<BabyBear> = (0..num_rows)
-        .flat_map(|i| {
+    // Deliberately NON-sequential column-0 values to test that the multiplicity
+    // computation matches on all columns, not just column 0 as a row index.
+    let addresses: Vec<u64> = vec![
+        42, 7, 100, 3, 255, 10, 0, 99, 50, 15, 200, 1, 77, 33, 128, 64,
+    ];
+    let memory_data: Vec<BabyBear> = addresses
+        .iter()
+        .enumerate()
+        .flat_map(|(_i, &addr)| {
             vec![
-                BabyBear::from_u64(i as u64),
-                BabyBear::from_u64(100 * (i + 1) as u64),
+                BabyBear::from_u64(addr),
+                BabyBear::from_u64(addr * 10 + 1),
             ]
         })
         .collect();
     let memory_preprocessed = RowMajorMatrix::new(memory_data, 2);
 
-    // Main trace: 16 rows × 2 columns, matching the preprocessed table exactly.
-    let main_data: Vec<BabyBear> = (0..num_rows)
-        .flat_map(|i| {
+    // Main trace: 16 rows × 2 columns, matching the preprocessed table entries
+    // but NOT necessarily in the same order.
+    // Reverse the order to further stress the lookup.
+    let main_data: Vec<BabyBear> = addresses
+        .iter()
+        .rev()
+        .flat_map(|&addr| {
             vec![
-                BabyBear::from_u64(i as u64),
-                BabyBear::from_u64(100 * (i + 1) as u64),
+                BabyBear::from_u64(addr),
+                BabyBear::from_u64(addr * 10 + 1),
             ]
         })
         .collect();

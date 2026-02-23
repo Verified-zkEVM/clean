@@ -5,6 +5,8 @@ use p3_air::{
 };
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::Field;
+use p3_lookup::logup::LogUpGadget;
+use p3_lookup::lookup_traits::LookupGadget;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 use p3_uni_stark::{get_symbolic_constraints, SymbolicExpression};
 use p3_util::log2_ceil_usize;
@@ -153,10 +155,16 @@ impl<F: Field> VerifyingKey<F> for AirInfo<F> {
             .unwrap_or(0);
 
         let max_degree = if !self.lookups.is_empty() {
-            // LogUpGadget constraints have degree 3 (for global lookups with selector):
-            // when_last_row constraint: is_last_row * (expected_cumulated - s) * denominator - numerator
-            // The denominator is degree 1 (alpha - value), selector is degree 1, so total is 3.
-            max_degree.max(3)
+            // Use LogUpGadget::constraint_degree() to compute the actual degree per lookup,
+            // plus 1 for the row selector (is_first_row / is_last_row).
+            let gadget = LogUpGadget::new();
+            let lookup_degree = self
+                .lookups
+                .iter()
+                .map(|l| gadget.constraint_degree(l.clone()) + 1)
+                .max()
+                .unwrap_or(0);
+            max_degree.max(lookup_degree)
         } else {
             max_degree
         };
