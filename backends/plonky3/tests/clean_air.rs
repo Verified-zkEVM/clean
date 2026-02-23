@@ -460,3 +460,119 @@ fn test_range_check_16() {
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("range-check-16 verification failed");
 }
+
+/// Test two independent lookup tables to exercise multi-table challenge slicing.
+///
+/// This is the only test with `num_global_lookups = 2`, so it exercises:
+/// - `num_perm_challenges = gadget.num_challenges() * 2 = 4`
+/// - `challenges_for_air` returning `[0..2]` for the first table, `[2..4]` for the second
+/// - Multiplicity trace generation for 2 independent tables
+/// - Permutation trace with 2 auxiliary columns on the main AIR
+/// - Global cumulative sum check across 3 AIRs (1 main + 2 tables)
+#[test]
+fn test_two_table_lookups() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    type Val = BabyBear;
+    type Perm = Poseidon2BabyBear<16>;
+    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
+    type Challenge = BinomialExtensionField<Val, 4>;
+    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    type Dft = Radix2DitParallel<Val>;
+    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    let mut rng = SmallRng::seed_from_u64(200);
+    let perm = Perm::new_from_rng_128(&mut rng);
+    let hash = MyHash::new(perm.clone());
+    let compress = MyCompress::new(perm.clone());
+    let val_mmcs = ValMmcs::new(hash, compress);
+    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+    let dft = Dft::default();
+    let config = create_test_fri_params(challenge_mmcs, 2);
+    let pcs = Pcs::new(dft, val_mmcs, config);
+    let challenger = Challenger::new(perm);
+    let config = MyConfig::new(pcs, challenger);
+
+    // Circuit JSON: two lookups in one EveryRowExceptLast gate.
+    // col 0 looked up in "Range8", col 1 looked up in "Squares".
+    let json_content = r#"[
+      {
+        "type": "EveryRowExceptLast",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "Range8",
+                "entry": [{ "type": "var", "index": 0 }]
+              }
+            },
+            {
+              "lookup": {
+                "table": "Squares",
+                "entry": [{ "type": "var", "index": 1 }]
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 },
+              { "row": 0, "column": 1 }
+            ],
+            "offset": 2,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    // Main trace: 8 rows × 2 columns.
+    // col 0 = i  (looked up in Range8)
+    // col 1 = i² (looked up in Squares)
+    let num_rows = 8;
+    let main_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i: u64| vec![BabyBear::from_u64(i), BabyBear::from_u64(i * i)])
+        .collect();
+    let main_trace = RowMajorMatrix::new(main_data, 2);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, 2);
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    // "Range8" table: 8 rows × 1 column, values [0..7]
+    let range8_data: Vec<BabyBear> = (0..8).map(|i| BabyBear::from_u64(i as u64)).collect();
+    let range8_preprocessed = RowMajorMatrix::new(range8_data, 1);
+    let range8_air = PreprocessedTableAir::new("Range8".into(), range8_preprocessed);
+    let range8_instance = CleanAirInstance::Preprocessed(range8_air);
+
+    // "Squares" table: 8 rows × 1 column, values [0, 1, 4, 9, 16, 25, 36, 49]
+    let squares_data: Vec<BabyBear> = (0..8)
+        .map(|i: u64| BabyBear::from_u64(i * i))
+        .collect();
+    let squares_preprocessed = RowMajorMatrix::new(squares_data, 1);
+    let squares_air = PreprocessedTableAir::new("Squares".into(), squares_preprocessed);
+    let squares_instance = CleanAirInstance::Preprocessed(squares_air);
+
+    // 3 AIR instances: main + Range8 + Squares
+    // BTreeMap ordering in MainAir::build_lookups() sorts by table name alphabetically:
+    // "Range8" (index 0) before "Squares" (index 1).
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance),
+        AirInfo::new(range8_instance),
+        AirInfo::new(squares_instance),
+    ];
+
+    let lookup_traces =
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis).expect("two-table lookup verification failed");
+}
