@@ -12,7 +12,8 @@ use p3_matrix::Matrix;
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
 use crate::clean_ast::{
-    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation,
+    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupDirection, LookupOp, LookupRow,
+    VarLocation,
 };
 use crate::PreprocessedTableAir;
 
@@ -120,8 +121,9 @@ where
 
     /// Build lookup descriptors for the main AIR.
     ///
-    /// Groups all lookup sends by table name and creates one global Lookup
-    /// per table, with Direction::Receive (main AIR reads from tables).
+    /// Groups all lookups by table name and creates one global Lookup
+    /// per table. Each lookup's direction (Send or Receive) is determined
+    /// by the `direction` field in the JSON; defaults to Receive.
     fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
     where
         AB: PermutationAirBuilder + AirBuilderWithPublicValues,
@@ -157,7 +159,11 @@ where
                 .collect();
 
             let mult = SymbolicExpression::Constant(AB::F::ONE);
-            let input: LookupInput<AB::F> = (values, mult, Direction::Receive);
+            let direction = match &lookup_op.direction {
+                LookupDirection::Send => Direction::Send,
+                LookupDirection::Receive => Direction::Receive,
+            };
+            let input: LookupInput<AB::F> = (values, mult, direction);
 
             lookups_by_table
                 .entry(lookup_op.table.clone())

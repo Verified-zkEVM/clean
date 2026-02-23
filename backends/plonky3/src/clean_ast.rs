@@ -88,10 +88,18 @@ pub struct AssertOp {
     pub rhs: ExprNode,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LookupDirection {
+    Send,
+    Receive,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct LookupOp {
     pub table: String,
     pub entry: Vec<ExprNode>,
+    pub direction: LookupDirection,
 }
 
 /// Expression nodes for the JSON AST
