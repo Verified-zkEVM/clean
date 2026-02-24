@@ -12,6 +12,7 @@ tracing-subscriber = "0.3"
 
 # Plonky3 dependencies - using git for latest versions
 p3-air = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-batch-stark = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-challenger = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-commit = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
@@ -27,4 +28,5 @@ p3-uni-stark = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-maybe-rayon = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-util = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-poseidon2 = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+hashbrown = "0.15"
 rand = "0.10"
