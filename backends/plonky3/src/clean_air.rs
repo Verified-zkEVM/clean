@@ -15,7 +15,7 @@ use crate::clean_ast::{
     AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupDirection, LookupOp, LookupRow,
     VarLocation,
 };
-use crate::PreprocessedTableAir;
+use crate::lookup::{MainTraceTableAir, PreprocessedTableAir};
 
 #[derive(Clone)]
 pub struct MainAir<F>
@@ -246,7 +246,15 @@ impl<F: Field> MainAir<F> {
                 CircuitOp::Subcircuit { subcircuit } => {
                     // Recursively process subcircuit operations
                     self.apply_clean_constraints::<AB>(
-                        subcircuit,
+                        subcircuit.operations(),
+                        load_var,
+                        load_pi,
+                        constraint_builder,
+                    );
+                }
+                CircuitOp::NamedBlock(block) => {
+                    self.apply_clean_constraints::<AB>(
+                        &block.operations,
                         load_var,
                         load_pi,
                         constraint_builder,
@@ -279,14 +287,16 @@ pub fn parse_init_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) 
 pub enum CleanAirInstance<F: Field> {
     Main(MainAir<F>),
     Preprocessed(PreprocessedTableAir<F>),
+    MainTraceTable(MainTraceTableAir<F>),
 }
 
 impl<F: Field> CleanAirInstance<F> {
-    /// Returns the table name if this is a preprocessed table AIR.
+    /// Returns the table name if this is a table AIR (preprocessed or main-trace).
     pub fn table_name(&self) -> Option<&str> {
         match self {
             CleanAirInstance::Main(_) => None,
             CleanAirInstance::Preprocessed(air) => Some(air.table_name()),
+            CleanAirInstance::MainTraceTable(air) => Some(air.table_name()),
         }
     }
 }
@@ -296,6 +306,7 @@ impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
         match self {
             CleanAirInstance::Main(air) => air.width(),
             CleanAirInstance::Preprocessed(air) => air.width(),
+            CleanAirInstance::MainTraceTable(air) => air.width(),
         }
     }
 
@@ -303,6 +314,7 @@ impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
         match self {
             CleanAirInstance::Main(air) => air.preprocessed_trace(),
             CleanAirInstance::Preprocessed(air) => air.preprocessed_trace(),
+            CleanAirInstance::MainTraceTable(_) => None,
         }
     }
 }
@@ -316,6 +328,7 @@ where
         match self {
             CleanAirInstance::Main(air) => air.eval(builder),
             CleanAirInstance::Preprocessed(air) => air.eval(builder),
+            CleanAirInstance::MainTraceTable(air) => air.eval(builder),
         };
     }
 
@@ -326,6 +339,7 @@ where
         match self {
             CleanAirInstance::Main(air) => Air::<AB>::get_lookups(air),
             CleanAirInstance::Preprocessed(air) => Air::<AB>::get_lookups(air),
+            CleanAirInstance::MainTraceTable(air) => Air::<AB>::get_lookups(air),
         }
     }
 
@@ -333,6 +347,7 @@ where
         match self {
             CleanAirInstance::Main(air) => Air::<AB>::add_lookup_columns(air),
             CleanAirInstance::Preprocessed(air) => Air::<AB>::add_lookup_columns(air),
+            CleanAirInstance::MainTraceTable(air) => Air::<AB>::add_lookup_columns(air),
         }
     }
 }

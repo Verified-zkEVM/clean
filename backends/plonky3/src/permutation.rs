@@ -69,17 +69,19 @@ where
 {
     let mut lookup_traces = Vec::new();
 
-    // For each non-main AIR (i.e. preprocessed table AIR), match lookups by table name
+    // For each non-main AIR (i.e. preprocessed table AIR), match lookups by table name.
+    // Skip AIRs without a preprocessed trace (e.g. MainTraceTableAir) — their
+    // traces (including multiplicities) are built externally.
     for air_info in air_infos.iter().skip(1) {
+        let preprocessed = match air_info.preprocessed.as_ref() {
+            Some(p) => p,
+            None => continue, // main-trace table — skip
+        };
+
         let table_name = air_info
             .air
             .table_name()
-            .expect("Non-main AIR must be a preprocessed table with a name");
-
-        let preprocessed = air_info
-            .preprocessed
-            .as_ref()
-            .expect("Preprocessed table AIR must have a preprocessed trace");
+            .expect("Non-main AIR must be a table with a name");
 
         let table_size = preprocessed.height();
 

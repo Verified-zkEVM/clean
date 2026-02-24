@@ -49,7 +49,10 @@ impl CleanOp {
                     lookup_ops.push(lookup.clone());
                 }
                 CircuitOp::Subcircuit { subcircuit } => {
-                    lookup_ops.extend(self.find_lookup_ops(subcircuit));
+                    lookup_ops.extend(self.find_lookup_ops(&subcircuit.operations().to_vec()));
+                }
+                CircuitOp::NamedBlock(block) => {
+                    lookup_ops.extend(self.find_lookup_ops(&block.operations));
                 }
                 _ => {}
             }
@@ -71,13 +74,41 @@ pub struct OpContext {
     pub assignment: Assignment,
 }
 
+/// A block of operations with an optional name.
+/// Appears inside `SubcircuitBody::Named` or directly as a `CircuitOp::NamedBlock`.
+#[derive(Clone, Debug, Deserialize)]
+pub struct NamedBlock {
+    pub operations: Vec<CircuitOp>,
+    #[serde(default)]
+    pub name: String,
+}
+
+/// Body of a subcircuit: either a flat array of ops (old format)
+/// or a named block with `operations` + optional `name` (femtocairo format).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+pub enum SubcircuitBody {
+    Named(NamedBlock),
+    Flat(Vec<CircuitOp>),
+}
+
+impl SubcircuitBody {
+    pub fn operations(&self) -> &[CircuitOp] {
+        match self {
+            SubcircuitBody::Named(block) => &block.operations,
+            SubcircuitBody::Flat(ops) => ops,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum CircuitOp {
     Witness { witness: usize },
     Assert { assert: AssertOp },
     Lookup { lookup: LookupOp },
-    Subcircuit { subcircuit: Vec<CircuitOp> },
+    Subcircuit { subcircuit: SubcircuitBody },
+    NamedBlock(NamedBlock),
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -216,7 +247,10 @@ impl AstUtils {
                     lookup_ops.push(lookup.clone());
                 }
                 CircuitOp::Subcircuit { subcircuit } => {
-                    lookup_ops.extend(Self::find_lookup_ops(subcircuit));
+                    lookup_ops.extend(Self::find_lookup_ops(subcircuit.operations()));
+                }
+                CircuitOp::NamedBlock(block) => {
+                    lookup_ops.extend(Self::find_lookup_ops(&block.operations));
                 }
                 _ => {}
             }

@@ -1,20 +1,23 @@
 use clean_backend::{
-    byte_range_air, generate_multiplicity_traces, parse_init_trace, prove, verify, AirInfo,
-    CleanAirInstance, MainAir, PreprocessedTableAir, StarkConfig,
+    byte_range_air, eval_symbolic_on_row, generate_multiplicity_traces, parse_init_trace, prove,
+    verify, AirInfo, CleanAirInstance, MainAir, MainTraceTableAir, PreprocessedTableAir,
+    StarkConfig,
 };
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
 use p3_challenger::DuplexChallenger;
 use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
-use p3_field::{Field, PrimeCharacteristicRing};
-use p3_fri::{create_test_fri_params, TwoAdicFriPcs};
+use p3_field::{Field, PrimeCharacteristicRing, PrimeField32};
+use p3_fri::{create_test_fri_params, FriParameters, TwoAdicFriPcs};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use p3_merkle_tree::MerkleTreeMmcs;
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
+use p3_air::lookup::Kind;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
+use std::collections::BTreeMap;
 use std::process::Command;
 
 const JSON_PATH: &str = "clean_fib.json";
@@ -689,4 +692,192 @@ fn test_two_table_lookups() {
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("two-table lookup verification failed");
+}
+
+/// Test the femtocairo circuit: a main AIR with lookups into both a preprocessed
+/// ReadOnlyMemory table and a main-trace "memory" table (MainTraceTableAir).
+///
+/// Generates a 128-step execution trace where each step (except the initial row)
+/// executes an "add-immediate" instruction: given operands a, b, the circuit
+/// constrains c = a + b and writes all three to memory.
+#[test]
+fn test_femtocairo() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    type Val = BabyBear;
+    type Perm = Poseidon2BabyBear<16>;
+    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
+    type Challenge = BinomialExtensionField<Val, 4>;
+    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    type Dft = Radix2DitParallel<Val>;
+    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    let mut rng = SmallRng::seed_from_u64(123);
+    let perm = Perm::new_from_rng_128(&mut rng);
+    let hash = MyHash::new(perm.clone());
+    let compress = MyCompress::new(perm.clone());
+    let val_mmcs = ValMmcs::new(hash, compress);
+    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+    let dft = Dft::default();
+    // femtocairo's memory lookup has 6 inputs per Lookup, giving LogUp constraint
+    // degree 7 → log_num_quotient_chunks = 3, so we need log_blowup >= 3.
+    let fri_params = FriParameters {
+        log_blowup: 3,
+        log_final_poly_len: 2,
+        max_log_arity: 1,
+        num_queries: 2,
+        commit_proof_of_work_bits: 1,
+        query_proof_of_work_bits: 1,
+        mmcs: challenge_mmcs,
+    };
+    let pcs = Pcs::new(dft, val_mmcs, fri_params);
+    let challenger = Challenger::new(perm);
+    let config = MyConfig::new(pcs, challenger);
+
+    // Load the circuit JSON and patch the LastRow boundary PC check
+    // from the original 12 (4 steps) to 508 (128 steps: 4*127).
+    let num_steps: usize = 256;
+    let final_pc = 4 * (num_steps - 1) as u64;
+    let mut circuit_json = read_test_json("test_data/femtocairo_circuit.json");
+    // The LastRow boundary asserts col0 = 12, encoded as:
+    //   {"value": 12, "type": "const"} inside the assert for var[0].
+    // Replace "\"value\": 12," (only appears once in the LastRow boundary).
+    circuit_json = circuit_json.replacen(
+        &format!("\"value\": 12,"),
+        &format!("\"value\": {},", final_pc),
+        1,
+    );
+
+    let width = 33; // femtocairo trace width
+
+    // Generate a 128-row execution trace.
+    // Each step executes an add-immediate instruction (flags: v7=v8=0, v9..v14=1).
+    // Instruction: col3=252 (flag encoding), col4=a, col5=b, col6=a+b.
+    // Memory writes: 3 pairs at (0, a), (0, b), (0, a+b) — all to address 0.
+    // PC advances by 4 each step.
+    let mut trace_data = vec![BabyBear::ZERO; num_steps * width];
+    for i in 0..num_steps {
+        let row = &mut trace_data[i * width..(i + 1) * width];
+        let pc = (4 * i) as u64;
+        row[0] = BabyBear::from_u64(pc); // PC
+        // row[1] = 0 (ap), row[2] = 0 (fp)
+
+        if i > 0 {
+            // Instruction operands: use varying values per step
+            let a = (i * 3) as u64;
+            let b = (i * 7 + 1) as u64;
+            let c = a + b; // constraint: col6 = col4 + col5
+
+            row[3] = BabyBear::from_u64(252); // flag encoding: 0b11111100
+            row[4] = BabyBear::from_u64(a);
+            row[5] = BabyBear::from_u64(b);
+            row[6] = BabyBear::from_u64(c);
+            // row[7] = 0, row[8] = 0
+            for col in 9..=14 {
+                row[col] = BabyBear::ONE; // boolean flags all 1
+            }
+            // Memory pairs: with v9=v10=v11=v12=v13=v14=1, addresses are all 0,
+            // old values are 0, new values are a, b, c.
+            // col15=0 (addr1), col16=0 (old1), col17=0, col18=0
+            row[19] = BabyBear::from_u64(a); // new value 1
+            // col20=0 (addr2), col21=0 (old2), col22=0, col23=0
+            row[24] = BabyBear::from_u64(b); // new value 2
+            // col25=0 (addr3), col26=0 (old3), col27=0, col28=0
+            row[29] = BabyBear::from_u64(c); // new value 3
+            row[30] = BabyBear::from_u64(pc); // col30 = col0 (PC)
+            // row[31] = 0 (next ap), row[32] = 0 (next fp)
+        }
+        // Row 0 is all zeros (initial state)
+    }
+    let main_trace = RowMajorMatrix::new(trace_data, width);
+
+    // Build main AIR
+    let main_air = MainAir::<BabyBear>::new(&circuit_json, width);
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    // Build ReadOnlyMemory preprocessed table from trace data.
+    // ROM lookups: (col0, col3), (col0+1, col4), (col0+2, col5), (col0+3, col6)
+    // evaluated per row → 4 entries per row × 128 rows = 512 ROM entries.
+    let rom_data: Vec<BabyBear> = (0..num_steps)
+        .flat_map(|row_idx| {
+            let row: Vec<BabyBear> = main_trace.row(row_idx).unwrap().into_iter().collect();
+            let pc = row[0].as_canonical_u32() as u64;
+            vec![
+                BabyBear::from_u64(pc),
+                row[3],
+                BabyBear::from_u64(pc + 1),
+                row[4],
+                BabyBear::from_u64(pc + 2),
+                row[5],
+                BabyBear::from_u64(pc + 3),
+                row[6],
+            ]
+        })
+        .collect();
+    let rom_preprocessed = RowMajorMatrix::new(rom_data, 2);
+    let rom_air = PreprocessedTableAir::new("ReadOnlyMemory".into(), rom_preprocessed);
+    let rom_instance = CleanAirInstance::Preprocessed(rom_air);
+
+    // Build memory as MainTraceTableAir (data_width=2 → 3 cols: addr, val, multiplicity)
+    let memory_air = MainTraceTableAir::<BabyBear>::new("memory".into(), 2);
+    let memory_instance = CleanAirInstance::MainTraceTable(memory_air);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance),
+        AirInfo::new(rom_instance),
+        AirInfo::new(memory_instance),
+    ];
+
+    // Compute memory multiplicities by evaluating main AIR lookup expressions targeting "memory"
+    let main_air_lookups = &air_infos[0].lookups;
+    let memory_lookups: Vec<_> = main_air_lookups
+        .iter()
+        .filter(|l| matches!(&l.kind, Kind::Global(name) if name == "memory"))
+        .collect();
+
+    let mut memory_mults: BTreeMap<Vec<u32>, u64> = BTreeMap::new();
+    for row_idx in 0..main_trace.height() {
+        let row: Vec<BabyBear> = main_trace.row(row_idx).unwrap().into_iter().collect();
+        for lookup in &memory_lookups {
+            for tuple in &lookup.element_exprs {
+                let key: Vec<u32> = tuple
+                    .iter()
+                    .map(|expr| eval_symbolic_on_row(expr, &row, &[]).as_canonical_u32())
+                    .collect();
+                *memory_mults.entry(key).or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Build memory trace: [addr, val, multiplicity] for each unique entry,
+    // padded to next power of 2
+    let num_unique = memory_mults.len();
+    let mem_rows = num_unique.next_power_of_two().max(num_steps);
+    let mut memory_trace_data = vec![BabyBear::ZERO; mem_rows * 3];
+    for (i, (key, &mult)) in memory_mults.iter().enumerate() {
+        memory_trace_data[i * 3] = BabyBear::from_u64(key[0] as u64);
+        memory_trace_data[i * 3 + 1] = BabyBear::from_u64(key[1] as u64);
+        memory_trace_data[i * 3 + 2] = BabyBear::from_u64(mult);
+    }
+    let memory_trace = RowMajorMatrix::new(memory_trace_data, 3);
+
+    // Generate multiplicity traces (skips MainTraceTableAir automatically, only builds ROM mult)
+    let lookup_traces =
+        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, main_air_lookups);
+
+    // Assemble traces: [main_trace, rom_mult_trace, memory_trace]
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+    traces.push(memory_trace);
+
+    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis).expect("femtocairo verification failed");
 }

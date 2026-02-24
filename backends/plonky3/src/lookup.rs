@@ -34,6 +34,82 @@ pub fn byte_range_air<F: Field>() -> PreprocessedTableAir<F> {
     PreprocessedTableAir::new("Bytes".into(), preprocessed)
 }
 
+/// A table AIR whose data lives in the **main trace** (not preprocessed).
+///
+/// Layout: columns `0..data_width` are the table data, column `data_width`
+/// is the multiplicity.  The table sends via `Direction::Send`.
+#[derive(Clone)]
+pub struct MainTraceTableAir<F> {
+    pub name: String,
+    pub data_width: usize,
+    pub num_lookups: usize,
+    _marker: core::marker::PhantomData<F>,
+}
+
+impl<F: Field> MainTraceTableAir<F> {
+    pub fn new(name: String, data_width: usize) -> Self {
+        Self {
+            name,
+            data_width,
+            num_lookups: 0,
+            _marker: core::marker::PhantomData,
+        }
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl<F: Field> BaseAir<F> for MainTraceTableAir<F> {
+    /// Width = data columns + 1 multiplicity column
+    fn width(&self) -> usize {
+        self.data_width + 1
+    }
+}
+
+impl<AB: AirBuilder + AirBuilderWithPublicValues> Air<AB> for MainTraceTableAir<AB::F>
+where
+    AB::F: Field,
+{
+    fn eval(&self, _builder: &mut AB) {
+        // Lookup constraints are handled via LogUpGadget, not here.
+    }
+
+    /// Build the lookup descriptors for this main-trace table AIR.
+    ///
+    /// Creates a single global lookup with Direction::Send.
+    /// Data columns are the lookup values, last column is the multiplicity.
+    fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
+    where
+        AB: PermutationAirBuilder + AirBuilderWithPublicValues,
+    {
+        self.num_lookups = 0;
+        let total_width = self.data_width + 1; // data + multiplicity
+        let symbolic_builder = SymbolicAirBuilder::<AB::F>::new(0, total_width, 0, 0, 0);
+        let main = AirBuilder::main(&symbolic_builder);
+        let main_local = main.row_slice(0).unwrap();
+
+        // Data columns as lookup values
+        let values: Vec<SymbolicExpression<AB::F>> = (0..self.data_width)
+            .map(|col| main_local[col].into())
+            .collect();
+
+        // Multiplicity from the last main column
+        let mult: SymbolicExpression<AB::F> = main_local[self.data_width].into();
+
+        let lookup_input = (values, mult, Direction::Send);
+
+        vec![Air::<AB>::register_lookup(self, Kind::Global(self.name.clone()), &[lookup_input])]
+    }
+
+    fn add_lookup_columns(&mut self) -> Vec<usize> {
+        let idx = self.num_lookups;
+        self.num_lookups += 1;
+        vec![idx]
+    }
+}
+
 impl<F: Field> BaseAir<F> for PreprocessedTableAir<F> {
     /// One column for multiplicity
     fn width(&self) -> usize {
