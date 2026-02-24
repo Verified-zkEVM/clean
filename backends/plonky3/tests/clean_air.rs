@@ -17,6 +17,42 @@ use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use std::process::Command;
 
+mod setup {
+    use super::*;
+
+    pub type Val = BabyBear;
+    pub type Perm = Poseidon2BabyBear<16>;
+    pub type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    pub type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    pub type ValMmcs = MerkleTreeMmcs<
+        <Val as Field>::Packing,
+        <Val as Field>::Packing,
+        MyHash,
+        MyCompress,
+        8,
+    >;
+    pub type Challenge = BinomialExtensionField<Val, 4>;
+    pub type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    pub type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    pub type Dft = Radix2DitParallel<Val>;
+    pub type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    pub type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    pub fn test_config(seed: u64) -> MyConfig {
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let perm = Perm::new_from_rng_128(&mut rng);
+        let hash = MyHash::new(perm.clone());
+        let compress = MyCompress::new(perm.clone());
+        let val_mmcs = ValMmcs::new(hash, compress);
+        let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+        let dft = Dft::default();
+        let fri = create_test_fri_params(challenge_mmcs, 2);
+        let pcs = Pcs::new(dft, val_mmcs, fri);
+        let challenger = Challenger::new(perm);
+        MyConfig::new(pcs, challenger)
+    }
+}
+
 const JSON_PATH: &str = "clean_fib.json";
 
 /// Generate Fibonacci trace using the simplified Lean script
@@ -71,31 +107,7 @@ fn test_clean_fib() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(1);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(1);
 
     let steps = 512; // Number of steps for the Fibonacci sequence
                      // Generate trace from Lean with 256 steps, fallback to static file if it fails
@@ -138,7 +150,7 @@ fn test_clean_fib() {
     ];
 
     // Generate lookup traces using the AirInfo instances from the VK
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     // Collect all traces: main trace + lookup traces
     let mut traces = vec![main_trace.clone()];
     traces.extend(lookup_traces);
@@ -157,30 +169,7 @@ fn test_multi_column_lookup() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(99);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(99);
 
     // Circuit JSON: lookup of (var0, var1) into "Memory" table.
     // Two-column lookup: address (col 0) and value (col 1).
@@ -256,7 +245,7 @@ fn test_multi_column_lookup() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -273,30 +262,7 @@ fn test_expression_lookup() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(77);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(77);
 
     // Circuit JSON: lookup of (var0, var0 + const(1)) into "Table".
     // The second entry is an expression: column_0 + 1.
@@ -361,7 +327,7 @@ fn test_expression_lookup() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -378,30 +344,7 @@ fn test_range_check_16() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(42);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(42);
 
     // Minimal JSON: an EveryRowExceptLast op with a lookup of column 0 into "Range16".
     // No arithmetic constraints -- only the lookup.
@@ -451,7 +394,7 @@ fn test_range_check_16() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -472,30 +415,7 @@ fn test_lean_circuit_end_to_end() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(1);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(1);
 
     // --- Generate circuit JSON from Lean ---
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -538,7 +458,7 @@ fn test_lean_circuit_end_to_end() {
     ];
 
     // --- Prove and verify ---
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, MyConfig>(
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
         &air_infos,
         &main_trace,
         &air_infos[0].lookups,
@@ -568,30 +488,7 @@ fn test_two_table_lookups() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(200);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(200);
 
     // Circuit JSON: two lookups in one EveryRowExceptLast gate.
     // col 0 looked up in "Range8", col 1 looked up in "Squares".
@@ -661,7 +558,7 @@ fn test_two_table_lookups() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
