@@ -4,6 +4,11 @@ import Clean.Circuit.Json
 
 open Lean
 
+instance : ToJson RowIndex where
+  toJson
+    | .fromStart i => toJson (i : Int)
+    | .fromEnd i => toJson (-(↑i : Int) - 1)
+
 variable {F : Type} {S : Type → Type} [ProvableType S] {W : ℕ+} {α : Type} [Field F] [ToJson F]
 
 instance : ToJson (CellOffset W S) where
@@ -49,7 +54,7 @@ instance : ToJson (TableOperation S F) where
   toJson
     | .boundary i c => Json.mkObj [
       ("type", Json.str "Boundary"),
-      ("row", reprStr i),
+      ("row", toJson i),
       ("context", toJson c)
     ]
     | .everyRow c => Json.mkObj [
