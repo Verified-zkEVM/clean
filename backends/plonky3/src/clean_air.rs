@@ -62,7 +62,7 @@ where
                                 _ => panic!("Invalid row index: {}", row),
                             },
                             VarLocation::Aux { .. } => {
-                                unreachable!("All aux vars should be already converted to cells")
+                                panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
                             }
                         }
                     };
@@ -93,7 +93,7 @@ where
                                 _ => panic!("Invalid row index: {}", row),
                             },
                             VarLocation::Aux { .. } => {
-                                unreachable!("All aux vars should be already converted to cells")
+                                panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
                             }
                         }
                     };
@@ -179,7 +179,7 @@ impl<F: Field> MainAir<F> {
                 match var {
                     VarLocation::Cell { column, .. } => symbolic_main_local[*column],
                     VarLocation::Aux { .. } => {
-                        unreachable!("All aux vars should be already converted to cells")
+                        panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
                     }
                 }
             };

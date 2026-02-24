@@ -303,8 +303,7 @@ impl CleanOps {
                                     }
                                 }
                                 VarLocation::Aux { .. } => {
-                                    // Handle aux variables through the callback if needed
-                                    todo!()
+                                    panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
                                 }
                             }
                         }
