@@ -1,7 +1,7 @@
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};
 use p3_air::lookup::{Direction, Kind, Lookup, LookupInput};
 use p3_field::Field;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
@@ -33,6 +33,7 @@ impl<F: Field> PreprocessedTableAir<F> {
     /// The element expressions are the preprocessed columns and the multiplicity
     /// is the main trace column 0.
     pub fn build_lookups(&mut self) -> Vec<Lookup<F>> {
+        self.num_lookups = 0;
         let prep_width = self.preprocessed.width();
         let main_width = 1; // multiplicity column
 
@@ -73,7 +74,7 @@ impl<F: Field> PreprocessedTableAir<F> {
         )]
     }
 
-    fn add_lookup_columns_impl(&mut self) -> Vec<usize> {
+    pub(crate) fn add_lookup_columns_impl(&mut self) -> Vec<usize> {
         let idx = self.num_lookups;
         self.num_lookups += 1;
         vec![idx]
@@ -104,5 +105,16 @@ where
     fn eval(&self, _builder: &mut AB) {
         // Lookup constraints are handled via eval_with_lookups / LogUpGadget,
         // not in eval() directly.
+    }
+
+    fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
+    where
+        AB: PermutationAirBuilder + AirBuilderWithPublicValues,
+    {
+        self.build_lookups()
+    }
+
+    fn add_lookup_columns(&mut self) -> Vec<usize> {
+        self.add_lookup_columns_impl()
     }
 }

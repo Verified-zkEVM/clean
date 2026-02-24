@@ -1,12 +1,12 @@
 use alloc::vec::Vec;
 
-use p3_batch_stark::{BatchProof, CommonData, verify_batch};
+use p3_batch_stark::{BatchProof, ProverData, verify_batch};
 use p3_field::BasedVectorSpace;
-use p3_uni_stark::{SymbolicExpression, VerificationError};
+use p3_uni_stark::SymbolicExpression;
 use tracing::instrument;
 
 use crate::{AirInfo, CleanAirInstance, PcsError, StarkGenericConfig, Val};
-use crate::prover::build_prover_data;
+use p3_uni_stark::VerificationError;
 
 #[instrument(skip_all)]
 pub fn verify<SC>(
@@ -21,8 +21,11 @@ where
     SymbolicExpression<SC::Challenge>: From<SymbolicExpression<Val<SC>>>,
 {
     // Rebuild CommonData deterministically from air_infos (same as prover).
-    let prover_data = build_prover_data(config, air_infos);
-    let common: CommonData<SC> = prover_data.common;
+    let mut airs: Vec<CleanAirInstance<Val<SC>>> =
+        air_infos.iter().map(|ai| ai.air.clone()).collect();
+    let prover_data =
+        ProverData::from_airs_and_degrees(config, &mut airs, &proof.degree_bits);
+    let common = prover_data.common;
 
     let airs: Vec<CleanAirInstance<Val<SC>>> =
         air_infos.iter().map(|ai| ai.air.clone()).collect();

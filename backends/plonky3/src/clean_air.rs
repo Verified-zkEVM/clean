@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 use p3_air::lookup::{Direction, Kind, Lookup, LookupInput};
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};
 use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
@@ -117,6 +117,17 @@ where
         // Lookup constraints are NOT applied here - they are handled via
         // eval_with_lookups / LogUpGadget.
     }
+
+    fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
+    where
+        AB: PermutationAirBuilder + AirBuilderWithPublicValues,
+    {
+        self.build_lookups()
+    }
+
+    fn add_lookup_columns(&mut self) -> Vec<usize> {
+        self.add_lookup_columns_impl()
+    }
 }
 
 impl<F: Field> MainAir<F> {
@@ -163,6 +174,7 @@ impl<F: Field> MainAir<F> {
     /// Groups all lookup sends by table name and creates one global Lookup
     /// per table, with Direction::Receive (main AIR reads from tables).
     pub fn build_lookups(&mut self) -> Vec<Lookup<F>> {
+        self.num_lookups = 0;
         let symbolic_builder = SymbolicAirBuilder::<F>::new(0, self.width, 0, 0, 0);
         let symbolic_main = AirBuilder::main(&symbolic_builder);
         let symbolic_main_local = symbolic_main.row_slice(0).unwrap();
@@ -330,5 +342,22 @@ where
             CleanAirInstance::Main(air) => air.eval(builder),
             CleanAirInstance::Preprocessed(air) => air.eval(builder),
         };
+    }
+
+    fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
+    where
+        AB: PermutationAirBuilder + AirBuilderWithPublicValues,
+    {
+        match self {
+            CleanAirInstance::Main(air) => air.build_lookups(),
+            CleanAirInstance::Preprocessed(air) => air.build_lookups(),
+        }
+    }
+
+    fn add_lookup_columns(&mut self) -> Vec<usize> {
+        match self {
+            CleanAirInstance::Main(air) => air.add_lookup_columns_impl(),
+            CleanAirInstance::Preprocessed(air) => air.add_lookup_columns_impl(),
+        }
     }
 }
