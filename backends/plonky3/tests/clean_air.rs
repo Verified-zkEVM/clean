@@ -461,6 +461,40 @@ fn test_range_check_16() {
     verify(&config, &air_infos, &proof, &pis).expect("range-check-16 verification failed");
 }
 
+/// Test that Lean-generated circuit JSON parses correctly in the Rust backend.
+/// This catches regressions where the Lean JSON exporter is out of sync with
+/// the Rust deserializer (e.g., missing "direction" field on lookups).
+#[test]
+fn test_lean_circuit_json_parses() {
+    let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let tests_dir = backend_dir.join("tests");
+    let script_path = tests_dir.join("generate_circuit.sh");
+    let output_path = "output/lean_fib_circuit.json";
+
+    std::fs::create_dir_all(tests_dir.join("output")).unwrap();
+
+    let output = Command::new("bash")
+        .arg(&script_path)
+        .arg(output_path)
+        .current_dir(&tests_dir)
+        .output()
+        .expect("Failed to run circuit generation script");
+
+    assert!(
+        output.status.success(),
+        "Circuit generation failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json_path = tests_dir.join(output_path);
+    let json_content =
+        std::fs::read_to_string(&json_path).expect("Failed to read generated circuit JSON");
+
+    // This will panic if the JSON doesn't match the expected format
+    // (e.g., missing "direction" field on lookups)
+    let _air = MainAir::<BabyBear>::new(&json_content, 2);
+}
+
 /// Test two independent lookup tables to exercise multi-table challenge slicing.
 ///
 /// This is the only test with `num_global_lookups = 2`, so it exercises:
