@@ -17,11 +17,6 @@ instance : ToJson (CellOffset W S) where
     ("column", off.column)
   ]
 
-instance : ToJson (Cell W S) where
-  toJson
-    | .input off => toJson off
-    | .aux i => Json.mkObj [("aux", toJson i)]
-
 instance : ToJson (CellAssignment W S) where
   toJson assignment :=
     let aux_map := buildAuxMap assignment

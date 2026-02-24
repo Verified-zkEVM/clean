@@ -12,7 +12,7 @@ use p3_matrix::Matrix;
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
 use crate::clean_ast::{
-    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation,
+    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow,
 };
 use crate::PreprocessedTableAir;
 
@@ -55,15 +55,10 @@ where
             match op {
                 CleanOp::Boundary { row, context } => {
                     let load_var = |var_idx: usize| {
-                        let var: VarLocation = context.assignment.vars[var_idx].clone();
-                        match var {
-                            VarLocation::Cell { row, column } => match row {
-                                0 => local[column].clone(),
-                                _ => panic!("Invalid row index: {}", row),
-                            },
-                            VarLocation::Aux { .. } => {
-                                panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
-                            }
+                        let var = &context.assignment.vars[var_idx];
+                        match var.row {
+                            0 => local[var.column].clone(),
+                            _ => panic!("Invalid row index: {}", var.row),
                         }
                     };
 
@@ -85,16 +80,11 @@ where
                 }
                 CleanOp::EveryRowExceptLast { context } => {
                     let load_var = |var_idx: usize| {
-                        let var: VarLocation = context.assignment.vars[var_idx].clone();
-                        match var {
-                            VarLocation::Cell { row, column } => match row {
-                                0 => local[column].clone(),
-                                1 => next[column].clone(),
-                                _ => panic!("Invalid row index: {}", row),
-                            },
-                            VarLocation::Aux { .. } => {
-                                panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
-                            }
+                        let var = &context.assignment.vars[var_idx];
+                        match var.row {
+                            0 => local[var.column].clone(),
+                            1 => next[var.column].clone(),
+                            _ => panic!("Invalid row index: {}", var.row),
                         }
                     };
 
@@ -140,12 +130,7 @@ where
 
             let load_var = |var_idx: usize| -> p3_uni_stark::SymbolicVariable<AB::F> {
                 let var = &assignment.vars[var_idx];
-                match var {
-                    VarLocation::Cell { column, .. } => symbolic_main_local[*column],
-                    VarLocation::Aux { .. } => {
-                        panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
-                    }
-                }
+                symbolic_main_local[var.column]
             };
             let load_pi =
                 |_pi_idx: usize| -> SymbolicExpression<AB::F> { panic!("Pi not supported in lookups") };

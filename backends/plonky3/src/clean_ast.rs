@@ -126,11 +126,9 @@ pub struct Assignment {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase", untagged)]
-#[allow(clippy::large_enum_variant)]
-pub enum VarLocation {
-    Cell { row: usize, column: usize },
-    Aux { aux: usize },
+pub struct VarLocation {
+    pub row: usize,
+    pub column: usize,
 }
 
 /// Current or next row transition
@@ -261,50 +259,43 @@ impl CleanOps {
                         ExprNode::Var { index } => {
                             // todo: assume we would always lookup the current row
                             let var = &context.assignment.vars[*index];
-                            match var {
-                                VarLocation::Cell { row, column } => {
-                                    if let Some(boundary_row) = boundary_row {
-                                        // Convert usize row to boundary row for comparison
-                                        let expected_row_value = match boundary_row {
-                                            BoundaryRow::FirstRow => 0,
-                                            BoundaryRow::LastRow => panic!(
-                                                "LastRow boundary not supported in cell lookups"
-                                            ),
-                                        };
+                            if let Some(boundary_row) = boundary_row {
+                                // Convert usize row to boundary row for comparison
+                                let expected_row_value = match boundary_row {
+                                    BoundaryRow::FirstRow => 0,
+                                    BoundaryRow::LastRow => panic!(
+                                        "LastRow boundary not supported in cell lookups"
+                                    ),
+                                };
 
-                                        if *row != expected_row_value {
-                                            panic!(
-                                                "Boundary row {} does not match the lookup row {}",
-                                                expected_row_value, row
-                                            );
-                                        }
+                                if var.row != expected_row_value {
+                                    panic!(
+                                        "Boundary row {} does not match the lookup row {}",
+                                        expected_row_value, var.row
+                                    );
+                                }
 
-                                        callback(
-                                            LookupRow::Boundary {
-                                                row: boundary_row.clone(),
-                                            },
-                                            *column,
-                                            table_name,
-                                        );
-                                    } else if *row == 0 {
-                                        callback(
-                                            LookupRow::Transition(Transition::Current),
-                                            *column,
-                                            table_name,
-                                        );
-                                    } else if *row == 1 {
-                                        callback(
-                                            LookupRow::Transition(Transition::Next),
-                                            *column,
-                                            table_name,
-                                        );
-                                    } else {
-                                        panic!("Invalid row index in VarLocation");
-                                    }
-                                }
-                                VarLocation::Aux { .. } => {
-                                    panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
-                                }
+                                callback(
+                                    LookupRow::Boundary {
+                                        row: boundary_row.clone(),
+                                    },
+                                    var.column,
+                                    table_name,
+                                );
+                            } else if var.row == 0 {
+                                callback(
+                                    LookupRow::Transition(Transition::Current),
+                                    var.column,
+                                    table_name,
+                                );
+                            } else if var.row == 1 {
+                                callback(
+                                    LookupRow::Transition(Transition::Next),
+                                    var.column,
+                                    table_name,
+                                );
+                            } else {
+                                panic!("Invalid row index: {}", var.row);
                             }
                         }
                         _ => panic!("Invalid lookup entry"),
