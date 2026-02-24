@@ -8,8 +8,6 @@ use p3_matrix::stack::VerticalPair;
 use p3_matrix::Matrix;
 use tracing::instrument;
 
-use crate::lookup::MessageBuilder;
-use crate::BaseMessageBuilder;
 
 /// Runs constraint checks using a given AIR definition and trace matrix.
 ///
@@ -21,6 +19,7 @@ use crate::BaseMessageBuilder;
 /// - `air`: The AIR logic to run
 /// - `main`: The trace matrix (rows of witness values)
 /// - `public_values`: Public values provided to the builder
+#[allow(dead_code)]
 #[instrument(name = "check constraints", skip_all)]
 pub(crate) fn check_constraints<F, A>(
     air: &A,
@@ -160,28 +159,6 @@ impl<F: Field> AirBuilderWithPublicValues for DebugConstraintBuilder<'_, F> {
     }
 }
 
-impl<F: Field, E> MessageBuilder<E> for DebugConstraintBuilder<'_, F> {}
-
-impl<F: Field> BaseMessageBuilder for DebugConstraintBuilder<'_, F> {}
-
-// impl<F: Field> ExtensionBuilder for DebugConstraintBuilder<'_, F> {
-//     type EF = F;
-
-//     type ExprEF = F;
-
-//     type VarEF = F;
-
-//     fn assert_zero_ext<I: Into<Self::EF>>(&mut self, x: I) {
-//         self.assert_zero(x.into())
-//     }
-
-// }
-
-// impl<F: Field> MultiTableBuilder for DebugConstraintBuilder<'_, F> {
-//     fn cumulative_sum(&self) -> Self::EF {
-//         unimplemented!("cumulative_sum is not implemented for DebugConstraintBuilder")
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

@@ -240,10 +240,11 @@ impl CleanOps {
         &self.ops
     }
 
-    /// Process lookups for all operations
+    /// Process lookups for all operations.
+    /// The callback receives (LookupRow, column, table_name).
     pub fn process_lookups<C>(&self, mut callback: C)
     where
-        C: FnMut(LookupRow, usize),
+        C: FnMut(LookupRow, usize, &str),
     {
         for op in &self.ops {
             // Extract context and check for boundary row match if needed
@@ -254,6 +255,7 @@ impl CleanOps {
 
             // Process all lookups in the context
             for lookup in op.lookups() {
+                let table_name = &lookup.table;
                 for entry in lookup.entry.iter() {
                     match entry {
                         ExprNode::Var { index } => {
@@ -282,21 +284,26 @@ impl CleanOps {
                                                 row: boundary_row.clone(),
                                             },
                                             *column,
+                                            table_name,
                                         );
                                     } else if *row == 0 {
                                         callback(
                                             LookupRow::Transition(Transition::Current),
                                             *column,
+                                            table_name,
                                         );
                                     } else if *row == 1 {
-                                        callback(LookupRow::Transition(Transition::Next), *column);
+                                        callback(
+                                            LookupRow::Transition(Transition::Next),
+                                            *column,
+                                            table_name,
+                                        );
                                     } else {
                                         panic!("Invalid row index in VarLocation");
                                     }
                                 }
                                 VarLocation::Aux { .. } => {
-                                    // Handle aux variables through the callback if needed
-                                    todo!()
+                                    panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
                                 }
                             }
                         }
@@ -314,5 +321,23 @@ impl CleanOps {
             CleanOp::EveryRowExceptLast { context, .. } => context.circuit.clone(),
         });
         AstUtils::find_lookup_ops(&ops.collect::<Vec<_>>())
+    }
+
+    /// Get all lookup operations paired with their assignment context.
+    /// This is needed for expression-based lookups where var indices must
+    /// be resolved to trace columns via the assignment.
+    pub fn lookup_ops_with_assignments(&self) -> Vec<(LookupOp, Assignment)> {
+        let mut result = Vec::new();
+        for op in &self.ops {
+            let context = match op {
+                CleanOp::Boundary { context, .. } => context,
+                CleanOp::EveryRowExceptLast { context } => context,
+            };
+            let lookups = AstUtils::find_lookup_ops(&context.circuit);
+            for lookup in lookups {
+                result.push((lookup, context.assignment.clone()));
+            }
+        }
+        result
     }
 }
