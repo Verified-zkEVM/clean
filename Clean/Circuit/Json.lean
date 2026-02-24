@@ -37,7 +37,6 @@ instance : ToJson (Lookup F) where
   toJson l := Json.mkObj [
     ("table", toJson l.table.name),
     ("entry", toJson l.entry.toArray),
-    ("direction", Json.str "receive"),
   ]
 
 instance : ToJson (FlatOperation F) where
