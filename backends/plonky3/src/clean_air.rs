@@ -123,7 +123,7 @@ where
     ///
     /// Groups all lookups by table name and creates one global Lookup
     /// per table. Each lookup's direction (Send or Receive) is determined
-    /// by the `direction` field in the JSON; defaults to Receive.
+    /// by the required `direction` field in the JSON.
     fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
     where
         AB: PermutationAirBuilder + AirBuilderWithPublicValues,
