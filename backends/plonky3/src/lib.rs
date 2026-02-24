@@ -11,7 +11,6 @@ mod config;
 mod key;
 mod lookup;
 mod permutation;
-mod proof;
 mod prover;
 mod verifier;
 
@@ -22,6 +21,5 @@ pub use config::*;
 pub use key::*;
 pub use lookup::*;
 pub use permutation::*;
-pub use proof::*;
 pub use prover::prove;
 pub use verifier::verify;
