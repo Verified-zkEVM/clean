@@ -25,20 +25,22 @@ instance : ToJson (Cell W S) where
 instance : ToJson (CellAssignment W S) where
   toJson assignment :=
     let aux_map := buildAuxMap assignment
-    -- iterate over the vars and convert aux cell to input cell with column from aux_map
-    let vars := assignment.vars.mapIdx fun idx cell =>
+    -- Serialize each var to JSON, resolving aux cells to {"row": 1, "column": col}
+    -- using the column index from buildAuxMap. We serialize directly to Json
+    -- because aux columns can be >= size S, which cannot be represented as
+    -- Fin (size S) in CellOffset.
+    let vars : Array Json := (assignment.vars.mapIdx fun idx cell =>
       match cell with
-      | Cell.input off => Cell.input off
+      | Cell.input off => toJson off
       | Cell.aux _ =>
         let col := aux_map[idx]!
-        if h: col < (size S)
-          then Cell.input { row := 1, column := ⟨col, h⟩ }
-          else cell -- todo: might be better to refactor the buildAuxMap to return Fin (size S) instead
+        Json.mkObj [("row", toJson (1 : Nat)), ("column", toJson col)]
+    ).toArray
 
     Json.mkObj [
       ("offset", toJson assignment.offset),
       ("aux_length", toJson assignment.aux_length),
-      ("vars", toJson vars.toArray),
+      ("vars", Json.arr vars),
     ]
 
 instance : ToJson (TableContext W S F) where

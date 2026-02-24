@@ -461,38 +461,97 @@ fn test_range_check_16() {
     verify(&config, &air_infos, &proof, &pis).expect("range-check-16 verification failed");
 }
 
-/// Test that Lean-generated circuit JSON parses correctly in the Rust backend.
-/// This catches regressions where the Lean JSON exporter is out of sync with
-/// the Rust deserializer (e.g., missing "direction" field on lookups).
+/// End-to-end test: export circuit from Lean, generate trace from Lean, prove and verify.
+///
+/// Both the circuit (constraints + lookups) and the execution trace are produced
+/// by Lean, so this test exercises the full pipeline from Lean definitions down
+/// to a verified STARK proof in the Rust backend.
 #[test]
-fn test_lean_circuit_json_parses() {
+fn test_lean_circuit_end_to_end() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    type Val = BabyBear;
+    type Perm = Poseidon2BabyBear<16>;
+    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
+    type Challenge = BinomialExtensionField<Val, 4>;
+    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    type Dft = Radix2DitParallel<Val>;
+    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    let mut rng = SmallRng::seed_from_u64(1);
+    let perm = Perm::new_from_rng_128(&mut rng);
+    let hash = MyHash::new(perm.clone());
+    let compress = MyCompress::new(perm.clone());
+    let val_mmcs = ValMmcs::new(hash, compress);
+    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+    let dft = Dft::default();
+    let config = create_test_fri_params(challenge_mmcs, 2);
+    let pcs = Pcs::new(dft, val_mmcs, config);
+    let challenger = Challenger::new(perm);
+    let config = MyConfig::new(pcs, challenger);
+
+    // --- Generate circuit JSON from Lean ---
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests");
-    let script_path = tests_dir.join("generate_circuit.sh");
-    let output_path = "output/lean_fib_circuit.json";
-
     std::fs::create_dir_all(tests_dir.join("output")).unwrap();
 
-    let output = Command::new("bash")
-        .arg(&script_path)
-        .arg(output_path)
+    let circuit_output = Command::new("bash")
+        .arg(tests_dir.join("generate_circuit.sh"))
+        .arg("output/e2e_circuit.json")
         .current_dir(&tests_dir)
         .output()
         .expect("Failed to run circuit generation script");
-
     assert!(
-        output.status.success(),
+        circuit_output.status.success(),
         "Circuit generation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+        String::from_utf8_lossy(&circuit_output.stderr)
     );
+    let circuit_json = std::fs::read_to_string(tests_dir.join("output/e2e_circuit.json"))
+        .expect("Failed to read generated circuit JSON");
 
-    let json_path = tests_dir.join(output_path);
-    let json_content =
-        std::fs::read_to_string(&json_path).expect("Failed to read generated circuit JSON");
+    // --- Generate trace from Lean ---
+    let steps = 512;
+    let init_trace = generate_trace_from_lean::<BabyBear>(steps, "e2e_trace.json")
+        .expect("Failed to generate trace from Lean");
 
-    // This will panic if the JSON doesn't match the expected format
-    // (e.g., missing "direction" field on lookups)
-    let _air = MainAir::<BabyBear>::new(&json_content, 2);
+    let width = init_trace[0].len();
+    let main_trace: RowMajorMatrix<BabyBear> =
+        RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
+
+    // --- Build AIR instances from Lean-generated circuit ---
+    let main_air = MainAir::<BabyBear>::new(&circuit_json, main_trace.width());
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    let byte_range = byte_range_air::<BabyBear>();
+    let byte_range_instance = CleanAirInstance::Preprocessed(byte_range);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance),
+        AirInfo::new(byte_range_instance),
+    ];
+
+    // --- Prove and verify ---
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, MyConfig>(
+        &air_infos,
+        &main_trace,
+        &air_infos[0].lookups,
+    );
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    // The Lean circuit hardcodes initial Fibonacci values as constants (not public inputs),
+    // so no public inputs are needed for constraint satisfaction.
+    let pis = vec![];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis)
+        .expect("Lean end-to-end verification failed");
 }
 
 /// Test two independent lookup tables to exercise multi-table challenge slicing.
