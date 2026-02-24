@@ -58,62 +58,44 @@ where
         let pi_values = builder.public_values().to_vec();
         let load_pi = |pi_idx: usize| pi_values[pi_idx].into();
 
-        // Build constraints from clean ops
         for op in self.clean_ops.ops() {
-            match op {
-                CleanOp::Boundary { row, context } => {
-                    let load_var = |var_idx: usize| {
-                        let var = &context.assignment.vars[var_idx];
-                        match var.row {
-                            0 => local[var.column].clone(),
-                            _ => panic!("Invalid row index: {}", var.row),
-                        }
-                    };
+            let context = op.context();
+            let has_next = matches!(op, CleanOp::EveryRowExceptLast { .. });
+            let load_var = |var_idx: usize| {
+                let var = &context.assignment.vars[var_idx];
+                match var.row {
+                    0 => local[var.column].clone(),
+                    1 if has_next => next[var.column].clone(),
+                    r => panic!("Invalid row index: {}", r),
+                }
+            };
 
-                    let mut when_boundary = match row {
+            match op {
+                CleanOp::Boundary { row, .. } => {
+                    let mut wb = match row {
                         BoundaryRow::FirstRow => builder.when_first_row(),
                         BoundaryRow::LastRow => builder.when_last_row(),
                     };
-
-                    let mut constraint_builder = |expr: AB::Expr| {
-                        when_boundary.assert_zero(expr);
-                    };
-
                     self.apply_clean_constraints::<AB>(
-                        &context.circuit,
-                        &load_var,
-                        &load_pi,
-                        &mut constraint_builder,
+                        &context.circuit, &load_var, &load_pi,
+                        &mut |expr| wb.assert_zero(expr),
                     );
                 }
-                CleanOp::EveryRowExceptLast { context } => {
-                    let load_var = |var_idx: usize| {
-                        let var = &context.assignment.vars[var_idx];
-                        match var.row {
-                            0 => local[var.column].clone(),
-                            1 => next[var.column].clone(),
-                            _ => panic!("Invalid row index: {}", var.row),
-                        }
-                    };
-
-                    let mut when_transition = builder.when_transition();
-
-                    let mut constraint_builder = |expr: AB::Expr| {
-                        when_transition.assert_zero(expr);
-                    };
-
+                CleanOp::EveryRowExceptLast { .. } => {
+                    let mut wt = builder.when_transition();
                     self.apply_clean_constraints::<AB>(
-                        &context.circuit,
-                        &load_var,
-                        &load_pi,
-                        &mut constraint_builder,
+                        &context.circuit, &load_var, &load_pi,
+                        &mut |expr| wt.assert_zero(expr),
+                    );
+                }
+                CleanOp::EveryRow { .. } => {
+                    self.apply_clean_constraints::<AB>(
+                        &context.circuit, &load_var, &load_pi,
+                        &mut |expr| builder.assert_zero(expr),
                     );
                 }
             }
         }
-
-        // Lookup constraints are NOT applied here - they are handled via
-        // eval_with_lookups / LogUpGadget.
     }
 
     /// Build lookup descriptors for the main AIR.
@@ -157,8 +139,8 @@ where
                 .collect();
 
             // Use preprocessed 0/1 selector column as multiplicity filter when
-            // the scope has one.  Scopes without a preprocessed column (e.g. a
-            // future EveryRow scope) use a constant ONE multiplicity.
+            // the scope has one.  EveryRow has no preprocessed column and uses
+            // a constant ONE multiplicity instead.
             let mult: SymbolicExpression<AB::F> = match self.scope_to_prep_col.get(scope) {
                 Some(&col_idx) => {
                     let prep = symbolic_prep_local.as_ref()
@@ -215,6 +197,12 @@ impl<F: Field> MainAir<F> {
         let ops_with_assignments = clean_ops.lookup_ops_with_assignments();
         let mut scope_to_prep_col: BTreeMap<LookupRowScope, usize> = BTreeMap::new();
         for (_, _, scope) in &ops_with_assignments {
+            // EveryRow is active on every row, so it doesn't need a
+            // preprocessed selector column — constant ONE multiplicity
+            // is used instead (see the None arm in get_lookups).
+            if *scope == LookupRowScope::EveryRow {
+                continue;
+            }
             let next = scope_to_prep_col.len();
             scope_to_prep_col.entry(*scope).or_insert(next);
         }

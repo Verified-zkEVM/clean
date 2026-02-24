@@ -37,6 +37,19 @@ pub enum CleanOp {
     EveryRowExceptLast {
         context: OpContext,
     },
+    EveryRow {
+        context: OpContext,
+    },
+}
+
+impl CleanOp {
+    pub fn context(&self) -> &OpContext {
+        match self {
+            CleanOp::Boundary { context, .. }
+            | CleanOp::EveryRowExceptLast { context }
+            | CleanOp::EveryRow { context } => context,
+        }
+    }
 }
 
 
@@ -123,6 +136,8 @@ pub enum LookupRowScope {
     LastRow,
     /// Lookup applies on rows 0..height-1 (all except last).
     EveryRowExceptLast,
+    /// Lookup applies on every row (0..height).
+    EveryRow,
 }
 
 impl LookupRowScope {
@@ -135,6 +150,7 @@ impl LookupRowScope {
             LookupRowScope::FirstRow => row_idx == 0,
             LookupRowScope::LastRow => row_idx == height - 1,
             LookupRowScope::EveryRowExceptLast => row_idx < height - 1,
+            LookupRowScope::EveryRow => true,
         }
     }
 }
@@ -243,6 +259,8 @@ impl CleanOps {
                     (context, LookupRowScope::LastRow),
                 CleanOp::EveryRowExceptLast { context } =>
                     (context, LookupRowScope::EveryRowExceptLast),
+                CleanOp::EveryRow { context } =>
+                    (context, LookupRowScope::EveryRow),
             };
             let lookups = AstUtils::find_lookup_ops(&context.circuit);
             for lookup in lookups {

@@ -174,7 +174,7 @@ fn test_multi_column_lookup() {
     // Two-column lookup: address (col 0) and value (col 1).
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -268,7 +268,7 @@ fn test_expression_lookup() {
     // The second entry is an expression: column_0 + 1.
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -342,10 +342,6 @@ fn test_expression_lookup() {
 /// a permutation check between two column pairs — no preprocessed table needed.
 #[test]
 fn test_main_air_send_direction() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let config = setup::test_config(55);
 
     // Circuit JSON: two lookups to "MemTable":
@@ -353,7 +349,7 @@ fn test_main_air_send_direction() {
     // 2. Receive (col2, col3) with direction "receive"
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -440,7 +436,7 @@ fn test_range_check_16() {
     // No arithmetic constraints -- only the lookup.
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -586,7 +582,7 @@ fn test_two_table_lookups() {
     // col 0 looked up in "Range8", col 1 looked up in "Squares".
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -683,7 +679,8 @@ fn test_lookup_skips_last_row() {
             {
               "lookup": {
                 "table": "Bytes",
-                "entry": [{ "type": "var", "index": 0 }]
+                "entry": [{ "type": "var", "index": 0 }],
+                "direction": "receive"
               }
             }
           ],
