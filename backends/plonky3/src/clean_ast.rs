@@ -37,6 +37,9 @@ pub enum CleanOp {
     EveryRowExceptLast {
         context: OpContext,
     },
+    EveryRow {
+        context: OpContext,
+    },
 }
 
 impl CleanOp {
@@ -61,6 +64,7 @@ impl CleanOp {
         match self {
             CleanOp::Boundary { context, .. } => self.find_lookup_ops(&context.circuit),
             CleanOp::EveryRowExceptLast { context } => self.find_lookup_ops(&context.circuit),
+            CleanOp::EveryRow { context } => self.find_lookup_ops(&context.circuit),
         }
     }
 }
@@ -256,9 +260,10 @@ impl CleanOps {
     {
         for op in &self.ops {
             // Extract context and check for boundary row match if needed
-            let (context, boundary_row) = match op {
-                CleanOp::Boundary { context, row } => (context, Some(row)),
-                CleanOp::EveryRowExceptLast { context } => (context, None),
+            let (context, boundary_row, is_every_row) = match op {
+                CleanOp::Boundary { context, row } => (context, Some(row), false),
+                CleanOp::EveryRowExceptLast { context } => (context, None, false),
+                CleanOp::EveryRow { context } => (context, None, true),
             };
 
             // Process all lookups in the context
@@ -291,6 +296,19 @@ impl CleanOps {
                                             LookupRow::Boundary {
                                                 row: boundary_row.clone(),
                                             },
+                                            *column,
+                                            table_name,
+                                        );
+                                    } else if is_every_row {
+                                        // EveryRow: all vars are current-row only
+                                        if *row != 0 {
+                                            panic!(
+                                                "EveryRow lookups must reference row 0, got row {}",
+                                                row
+                                            );
+                                        }
+                                        callback(
+                                            LookupRow::Transition(Transition::Current),
                                             *column,
                                             table_name,
                                         );
@@ -327,6 +345,7 @@ impl CleanOps {
         let ops = self.ops.iter().flat_map(|op| match op {
             CleanOp::Boundary { context, .. } => context.circuit.clone(),
             CleanOp::EveryRowExceptLast { context, .. } => context.circuit.clone(),
+            CleanOp::EveryRow { context } => context.circuit.clone(),
         });
         AstUtils::find_lookup_ops(&ops.collect::<Vec<_>>())
     }
@@ -337,13 +356,25 @@ impl CleanOps {
     pub fn lookup_ops_with_assignments(&self) -> Vec<(LookupOp, Assignment)> {
         let mut result = Vec::new();
         for op in &self.ops {
-            let context = match op {
-                CleanOp::Boundary { context, .. } => context,
-                CleanOp::EveryRowExceptLast { context } => context,
-            };
-            let lookups = AstUtils::find_lookup_ops(&context.circuit);
-            for lookup in lookups {
-                result.push((lookup, context.assignment.clone()));
+            match op {
+                CleanOp::Boundary { context, .. } => {
+                    let lookups = AstUtils::find_lookup_ops(&context.circuit);
+                    if !lookups.is_empty() {
+                        panic!("Lookups are not allowed in Boundary blocks; move them to EveryRow");
+                    }
+                }
+                CleanOp::EveryRowExceptLast { context } => {
+                    let lookups = AstUtils::find_lookup_ops(&context.circuit);
+                    if !lookups.is_empty() {
+                        panic!("Lookups are not allowed in EveryRowExceptLast blocks; move them to EveryRow");
+                    }
+                }
+                CleanOp::EveryRow { context } => {
+                    let lookups = AstUtils::find_lookup_ops(&context.circuit);
+                    for lookup in lookups {
+                        result.push((lookup, context.assignment.clone()));
+                    }
+                }
             }
         }
         result

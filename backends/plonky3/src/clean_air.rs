@@ -112,6 +112,31 @@ where
                         &mut constraint_builder,
                     );
                 }
+                CleanOp::EveryRow { context } => {
+                    let load_var = |var_idx: usize| {
+                        let var: VarLocation = context.assignment.vars[var_idx].clone();
+                        match var {
+                            VarLocation::Cell { row, column } => match row {
+                                0 => local[column].clone(),
+                                _ => panic!("EveryRow only supports row 0, got row {}", row),
+                            },
+                            VarLocation::Aux { .. } => {
+                                panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
+                            }
+                        }
+                    };
+
+                    let mut constraint_builder = |expr: AB::Expr| {
+                        builder.assert_zero(expr);
+                    };
+
+                    self.apply_clean_constraints::<AB>(
+                        &context.circuit,
+                        &load_var,
+                        &load_pi,
+                        &mut constraint_builder,
+                    );
+                }
             }
         }
 

@@ -186,7 +186,7 @@ fn test_multi_column_lookup() {
     // Two-column lookup: address (col 0) and value (col 1).
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -303,7 +303,7 @@ fn test_expression_lookup() {
     // The second entry is an expression: column_0 + 1.
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -411,7 +411,7 @@ fn test_main_air_send_direction() {
     // 2. Receive (col2, col3) with default direction (receive)
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -518,7 +518,7 @@ fn test_range_check_16() {
     // No arithmetic constraints -- only the lookup.
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
@@ -650,7 +650,7 @@ fn test_two_table_lookups() {
     // col 0 looked up in "Range8", col 1 looked up in "Squares".
     let json_content = r#"[
       {
-        "type": "EveryRowExceptLast",
+        "type": "EveryRow",
         "context": {
           "circuit": [
             {
