@@ -12,8 +12,7 @@ use p3_matrix::Matrix;
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
 use crate::clean_ast::{
-    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupDirection, LookupOp, LookupRow,
-    VarLocation,
+    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupDirection, LookupOp, VarLocation,
 };
 use crate::PreprocessedTableAir;
 
@@ -237,14 +236,6 @@ impl<F: Field> MainAir<F> {
     /// Get reference to the clean operations
     pub fn clean_ops(&self) -> &CleanOps {
         &self.clean_ops
-    }
-
-    /// Process lookups for all operations (delegates to CleanOps)
-    pub fn process_lookups<C>(&self, callback: C)
-    where
-        C: FnMut(LookupRow, usize, &str),
-    {
-        self.clean_ops.process_lookups(callback)
     }
 
     pub fn lookup_ops(&self) -> Vec<LookupOp> {
