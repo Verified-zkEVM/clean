@@ -210,11 +210,8 @@ impl<F: Field> MainAir<F> {
         let ops_with_assignments = clean_ops.lookup_ops_with_assignments();
         let mut scope_to_prep_col: BTreeMap<LookupRowScope, usize> = BTreeMap::new();
         for (_, _, scope) in &ops_with_assignments {
-            scope_to_prep_col.entry(*scope).or_insert(0);
-        }
-        // Reassign column indices in deterministic BTreeMap key order
-        for (i, (_, v)) in scope_to_prep_col.iter_mut().enumerate() {
-            *v = i;
+            let next = scope_to_prep_col.len();
+            scope_to_prep_col.entry(*scope).or_insert(next);
         }
 
         let num_prep_cols = scope_to_prep_col.len();
