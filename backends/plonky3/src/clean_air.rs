@@ -11,7 +11,7 @@ use p3_matrix::Matrix;
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
 use crate::clean_ast::{
-    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRowScope,
+    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupRowScope,
 };
 use crate::PreprocessedTableAir;
 
@@ -118,8 +118,9 @@ where
 
     /// Build lookup descriptors for the main AIR.
     ///
-    /// Groups all lookup sends by table name and creates one global Lookup
-    /// per table, with Direction::Receive (main AIR reads from tables).
+    /// Groups all lookup sends by (table name, row scope) and creates one
+    /// global Lookup per group, with Direction::Receive (main AIR reads
+    /// from tables).
     fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
     where
         AB: PermutationAirBuilder + AirBuilderWithPublicValues,
@@ -250,10 +251,6 @@ impl<F: Field> MainAir<F> {
     /// Get reference to the clean operations
     pub fn clean_ops(&self) -> &CleanOps {
         &self.clean_ops
-    }
-
-    pub fn lookup_ops(&self) -> Vec<LookupOp> {
-        self.clean_ops.lookup_ops()
     }
 
     /// Process circuit operations and apply constraints

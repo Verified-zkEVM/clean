@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to generate Fibonacci circuit JSON from Lean
-# Usage: ./generate_circuit.sh <output_path>
+# Usage: ./generate_fib_circuit.sh <output_path>
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLEAN_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"

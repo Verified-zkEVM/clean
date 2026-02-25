@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Simplified script to generate Fibonacci traces from Lean
-# Usage: ./generate_trace.sh <steps> <output_path>
+# Usage: ./generate_fib_trace.sh <steps> <output_path>
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLEAN_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"

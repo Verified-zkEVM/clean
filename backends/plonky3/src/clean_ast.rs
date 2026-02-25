@@ -39,31 +39,6 @@ pub enum CleanOp {
     },
 }
 
-impl CleanOp {
-    /// Recursively find all lookup operations
-    fn find_lookup_ops(&self, ctx: &Vec<CircuitOp>) -> Vec<LookupOp> {
-        let mut lookup_ops = Vec::new();
-        for op in ctx {
-            match op {
-                CircuitOp::Lookup { lookup } => {
-                    lookup_ops.push(lookup.clone());
-                }
-                CircuitOp::Subcircuit { subcircuit } => {
-                    lookup_ops.extend(self.find_lookup_ops(subcircuit));
-                }
-                _ => {}
-            }
-        }
-        lookup_ops
-    }
-
-    pub fn lookups(&self) -> Vec<LookupOp> {
-        match self {
-            CleanOp::Boundary { context, .. } => self.find_lookup_ops(&context.circuit),
-            CleanOp::EveryRowExceptLast { context } => self.find_lookup_ops(&context.circuit),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct OpContext {
@@ -145,6 +120,9 @@ pub enum LookupRowScope {
 impl LookupRowScope {
     /// Whether this scope is active on the given row of a trace with `height` rows.
     pub fn is_active(self, row_idx: usize, height: usize) -> bool {
+        if height == 0 {
+            return false;
+        }
         match self {
             LookupRowScope::FirstRow => row_idx == 0,
             LookupRowScope::LastRow => row_idx == height - 1,
@@ -242,15 +220,6 @@ impl CleanOps {
     /// Get reference to the operations
     pub fn ops(&self) -> &[CleanOp] {
         &self.ops
-    }
-
-    /// Get all lookup operations from the clean operations
-    pub fn lookup_ops(&self) -> Vec<LookupOp> {
-        let ops = self.ops.iter().flat_map(|op| match op {
-            CleanOp::Boundary { context, .. } => context.circuit.clone(),
-            CleanOp::EveryRowExceptLast { context, .. } => context.circuit.clone(),
-        });
-        AstUtils::find_lookup_ops(&ops.collect::<Vec<_>>())
     }
 
     /// Get all lookup operations paired with their assignment context and row scope.

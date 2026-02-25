@@ -109,8 +109,7 @@ fn test_clean_fib() {
 
     let config = setup::test_config(1);
 
-    let steps = 512; // Number of steps for the Fibonacci sequence
-                     // Generate trace from Lean with 256 steps, fallback to static file if it fails
+    let steps = 512;
     let init_trace = match generate_trace_from_lean::<BabyBear>(steps, "trace.json") {
         Ok(trace) => {
             println!(
@@ -120,7 +119,7 @@ fn test_clean_fib() {
             trace
         }
         Err(e) => {
-            panic!("Warning: Could not generate trace from Lean: {}", e);
+            panic!("Could not generate trace from Lean: {}", e);
         }
     };
 
