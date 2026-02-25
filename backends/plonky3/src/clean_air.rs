@@ -27,7 +27,7 @@ where
     /// Number of registered lookups (for add_lookup_columns)
     num_lookups: usize,
     /// Row scope for each lookup, parallel to the lookups vec from get_lookups
-    pub lookup_row_scopes: Vec<LookupRowScope>,
+    lookup_row_scopes: Vec<LookupRowScope>,
     /// Preprocessed selector columns for lookup row scopes (0/1 values)
     preprocessed: Option<RowMajorMatrix<F>>,
     /// Maps each LookupRowScope to its preprocessed column index
