@@ -66,7 +66,7 @@ instance : ToJson (Operation F) where
     | Operation.witness m _ => Json.mkObj [("witness", toJson m)]
     | Operation.assert e => Json.mkObj [("assert", toJson e)]
     | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
-    | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
+    | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops.toFlat)]
 
 instance : ToJson (Operations F) where
   toJson ops := toJson ops.toList

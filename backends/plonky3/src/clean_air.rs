@@ -2,7 +2,6 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::marker::PhantomData;
 
 use p3_air::lookup::{Direction, Kind, Lookup, LookupInput};
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};
@@ -12,7 +11,7 @@ use p3_matrix::Matrix;
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
 use crate::clean_ast::{
-    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation,
+    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupRowScope,
 };
 use crate::PreprocessedTableAir;
 
@@ -27,12 +26,21 @@ where
     width: usize,
     /// Number of registered lookups (for add_lookup_columns)
     num_lookups: usize,
-    _marker: PhantomData<F>,
+    /// Row scope for each lookup, parallel to the lookups vec from get_lookups
+    lookup_row_scopes: Vec<LookupRowScope>,
+    /// Preprocessed selector columns for lookup row scopes (0/1 values)
+    preprocessed: Option<RowMajorMatrix<F>>,
+    /// Maps each LookupRowScope to its preprocessed column index
+    scope_to_prep_col: BTreeMap<LookupRowScope, usize>,
 }
 
 impl<F: Field> BaseAir<F> for MainAir<F> {
     fn width(&self) -> usize {
         self.width
+    }
+
+    fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
+        self.preprocessed.clone()
     }
 }
 
@@ -55,15 +63,10 @@ where
             match op {
                 CleanOp::Boundary { row, context } => {
                     let load_var = |var_idx: usize| {
-                        let var: VarLocation = context.assignment.vars[var_idx].clone();
-                        match var {
-                            VarLocation::Cell { row, column } => match row {
-                                0 => local[column].clone(),
-                                _ => panic!("Invalid row index: {}", row),
-                            },
-                            VarLocation::Aux { .. } => {
-                                panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
-                            }
+                        let var = &context.assignment.vars[var_idx];
+                        match var.row {
+                            0 => local[var.column].clone(),
+                            _ => panic!("Invalid row index: {}", var.row),
                         }
                     };
 
@@ -85,16 +88,11 @@ where
                 }
                 CleanOp::EveryRowExceptLast { context } => {
                     let load_var = |var_idx: usize| {
-                        let var: VarLocation = context.assignment.vars[var_idx].clone();
-                        match var {
-                            VarLocation::Cell { row, column } => match row {
-                                0 => local[column].clone(),
-                                1 => next[column].clone(),
-                                _ => panic!("Invalid row index: {}", row),
-                            },
-                            VarLocation::Aux { .. } => {
-                                panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
-                            }
+                        let var = &context.assignment.vars[var_idx];
+                        match var.row {
+                            0 => local[var.column].clone(),
+                            1 => next[var.column].clone(),
+                            _ => panic!("Invalid row index: {}", var.row),
                         }
                     };
 
@@ -120,35 +118,37 @@ where
 
     /// Build lookup descriptors for the main AIR.
     ///
-    /// Groups all lookup sends by table name and creates one global Lookup
-    /// per table, with Direction::Receive (main AIR reads from tables).
+    /// Groups all lookup sends by (table name, row scope) and creates one
+    /// global Lookup per group, with Direction::Receive (main AIR reads
+    /// from tables).
     fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
     where
         AB: PermutationAirBuilder + AirBuilderWithPublicValues,
     {
         self.num_lookups = 0;
-        let symbolic_builder = SymbolicAirBuilder::<AB::F>::new(0, self.width, 0, 0, 0);
+        let prep_width = self.scope_to_prep_col.len();
+        let symbolic_builder =
+            SymbolicAirBuilder::<AB::F>::new(prep_width, self.width, 0, 0, 0);
         let symbolic_main = AirBuilder::main(&symbolic_builder);
         let symbolic_main_local = symbolic_main.row_slice(0).unwrap();
 
         let ops_with_assignments = self.clean_ops.lookup_ops_with_assignments();
 
-        // Group by table
-        let mut lookups_by_table: BTreeMap<String, Vec<LookupInput<AB::F>>> = BTreeMap::new();
+        let symbolic_prep = AirBuilder::preprocessed(&symbolic_builder);
+        let symbolic_prep_local = symbolic_prep.as_ref().and_then(|m| m.row_slice(0));
 
-        for (lookup_op, assignment) in &ops_with_assignments {
+        // Group by (table_name, scope)
+        let mut lookups_by_key: BTreeMap<(String, LookupRowScope), Vec<LookupInput<AB::F>>> =
+            BTreeMap::new();
 
+        for (lookup_op, assignment, scope) in &ops_with_assignments {
             let load_var = |var_idx: usize| -> p3_uni_stark::SymbolicVariable<AB::F> {
                 let var = &assignment.vars[var_idx];
-                match var {
-                    VarLocation::Cell { column, .. } => symbolic_main_local[*column],
-                    VarLocation::Aux { .. } => {
-                        panic!("Aux variables are not supported in assignments; expected all variables to be resolved to cells")
-                    }
-                }
+                symbolic_main_local[var.column]
             };
-            let load_pi =
-                |_pi_idx: usize| -> SymbolicExpression<AB::F> { panic!("Pi not supported in lookups") };
+            let load_pi = |_pi_idx: usize| -> SymbolicExpression<AB::F> {
+                panic!("Pi not supported in lookups")
+            };
 
             let values: Vec<SymbolicExpression<AB::F>> = lookup_op
                 .entry
@@ -156,20 +156,33 @@ where
                 .map(|e| AstUtils::lower_expr::<SymbolicAirBuilder<AB::F>>(e, &load_var, &load_pi))
                 .collect();
 
-            let mult = SymbolicExpression::Constant(AB::F::ONE);
+            // Use preprocessed 0/1 selector column as multiplicity filter when
+            // the scope has one.  Scopes without a preprocessed column (e.g. a
+            // future EveryRow scope) use a constant ONE multiplicity.
+            let mult: SymbolicExpression<AB::F> = match self.scope_to_prep_col.get(scope) {
+                Some(&col_idx) => {
+                    let prep = symbolic_prep_local.as_ref()
+                        .expect("preprocessed trace required for scoped lookups");
+                    prep[col_idx].into()
+                }
+                None => SymbolicExpression::Constant(AB::F::ONE),
+            };
             let input: LookupInput<AB::F> = (values, mult, Direction::Receive);
 
-            lookups_by_table
-                .entry(lookup_op.table.clone())
+            lookups_by_key
+                .entry((lookup_op.table.clone(), *scope))
                 .or_default()
                 .push(input);
         }
 
-        // Create one Lookup per table
+        // Create one Lookup per (table, scope) group
         let mut lookups = Vec::new();
-        for (table_name, inputs) in lookups_by_table {
+        let mut scopes = Vec::new();
+        for ((table_name, scope), inputs) in lookups_by_key {
             lookups.push(Air::<AB>::register_lookup(self, Kind::Global(table_name), &inputs));
+            scopes.push(scope);
         }
+        self.lookup_row_scopes = scopes;
 
         lookups
     }
@@ -182,42 +195,62 @@ where
 }
 
 impl<F: Field> MainAir<F> {
-    /// Create a new CleanAir instance from JSON content and trace data
-    pub fn new(json_content: &str, width: usize) -> Self {
+    /// Create a new MainAir instance from JSON content and trace data
+    pub fn new(json_content: &str, width: usize, trace_height: usize) -> Self {
         let clean_ops = CleanOps::from_json(json_content);
+        Self::build(clean_ops, width, trace_height)
+    }
+
+    /// Create a new MainAir instance from CleanOps and trace data
+    pub fn from_ops(clean_ops: CleanOps, width: usize, trace_height: usize) -> Self {
+        Self::build(clean_ops, width, trace_height)
+    }
+
+    fn build(clean_ops: CleanOps, width: usize, trace_height: usize) -> Self {
+        // Collect distinct scopes used in lookups
+        let ops_with_assignments = clean_ops.lookup_ops_with_assignments();
+        let mut scope_to_prep_col: BTreeMap<LookupRowScope, usize> = BTreeMap::new();
+        for (_, _, scope) in &ops_with_assignments {
+            let next = scope_to_prep_col.len();
+            scope_to_prep_col.entry(*scope).or_insert(next);
+        }
+
+        let preprocessed = Self::build_selector_trace(&scope_to_prep_col, trace_height);
+
         Self {
             clean_ops,
             width,
             num_lookups: 0,
-            _marker: PhantomData,
+            lookup_row_scopes: Vec::new(),
+            preprocessed,
+            scope_to_prep_col,
         }
     }
 
-    /// Create a new CleanAir instance from CleanOps and trace data
-    pub fn from_ops(clean_ops: CleanOps, width: usize) -> Self {
-        Self {
-            clean_ops,
-            width,
-            num_lookups: 0,
-            _marker: PhantomData,
+    /// Build a preprocessed selector matrix with 0/1 columns, one per distinct
+    /// `LookupRowScope`.  Returns `None` when there are no scoped lookups.
+    fn build_selector_trace(
+        scope_to_prep_col: &BTreeMap<LookupRowScope, usize>,
+        trace_height: usize,
+    ) -> Option<RowMajorMatrix<F>> {
+        let num_cols = scope_to_prep_col.len();
+        if num_cols == 0 || trace_height == 0 {
+            return None;
         }
+        let mut data = vec![F::ZERO; trace_height * num_cols];
+        for (&scope, &col_idx) in scope_to_prep_col {
+            for row_idx in 0..trace_height {
+                if scope.is_active(row_idx, trace_height) {
+                    data[row_idx * num_cols + col_idx] = F::ONE;
+                }
+            }
+        }
+        Some(RowMajorMatrix::new(data, num_cols))
     }
 
     /// Get reference to the clean operations
     pub fn clean_ops(&self) -> &CleanOps {
         &self.clean_ops
-    }
-
-    /// Process lookups for all operations (delegates to CleanOps)
-    pub fn process_lookups<C>(&self, callback: C)
-    where
-        C: FnMut(LookupRow, usize, &str),
-    {
-        self.clean_ops.process_lookups(callback)
-    }
-
-    pub fn lookup_ops(&self) -> Vec<LookupOp> {
-        self.clean_ops.lookup_ops()
     }
 
     /// Process circuit operations and apply constraints
@@ -281,6 +314,14 @@ impl<F: Field> CleanAirInstance<F> {
         match self {
             CleanAirInstance::Main(_) => None,
             CleanAirInstance::Preprocessed(air) => Some(air.table_name()),
+        }
+    }
+
+    /// Returns the row scopes for each lookup (parallel to the lookups vec).
+    pub fn lookup_row_scopes(&self) -> Vec<LookupRowScope> {
+        match self {
+            CleanAirInstance::Main(air) => air.lookup_row_scopes.clone(),
+            CleanAirInstance::Preprocessed(_) => vec![],
         }
     }
 }

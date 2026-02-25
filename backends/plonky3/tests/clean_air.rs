@@ -17,6 +17,42 @@ use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use std::process::Command;
 
+mod setup {
+    use super::*;
+
+    pub type Val = BabyBear;
+    pub type Perm = Poseidon2BabyBear<16>;
+    pub type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+    pub type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
+    pub type ValMmcs = MerkleTreeMmcs<
+        <Val as Field>::Packing,
+        <Val as Field>::Packing,
+        MyHash,
+        MyCompress,
+        8,
+    >;
+    pub type Challenge = BinomialExtensionField<Val, 4>;
+    pub type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+    pub type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
+    pub type Dft = Radix2DitParallel<Val>;
+    pub type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
+    pub type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+
+    pub fn test_config(seed: u64) -> MyConfig {
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let perm = Perm::new_from_rng_128(&mut rng);
+        let hash = MyHash::new(perm.clone());
+        let compress = MyCompress::new(perm.clone());
+        let val_mmcs = ValMmcs::new(hash, compress);
+        let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+        let dft = Dft::default();
+        let fri = create_test_fri_params(challenge_mmcs, 2);
+        let pcs = Pcs::new(dft, val_mmcs, fri);
+        let challenger = Challenger::new(perm);
+        MyConfig::new(pcs, challenger)
+    }
+}
+
 const JSON_PATH: &str = "clean_fib.json";
 
 /// Generate Fibonacci trace using the simplified Lean script
@@ -25,8 +61,8 @@ fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
     output_filename: &str,
 ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let tests_dir = backend_dir.join("tests");
-    let script_path = tests_dir.join("generate_trace.sh");
+    let tests_dir = backend_dir.join("tests").join("fixtures");
+    let script_path = tests_dir.join("generate_fib_trace.sh");
     let output_path = format!("output/{}", output_filename);
 
     // Create the output directory if it doesn't exist
@@ -57,7 +93,7 @@ fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
 
 /// Helper function to read JSON file content from the tests directory
 fn read_test_json(filename: &str) -> String {
-    let tests_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let tests_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures");
     let json_path = tests_dir.join(filename);
     std::fs::read_to_string(json_path)
         .unwrap_or_else(|e| panic!("Failed to read JSON file '{}': {}", filename, e))
@@ -71,34 +107,9 @@ fn test_clean_fib() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
+    let config = setup::test_config(1);
 
-    let mut rng = SmallRng::seed_from_u64(1);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
-
-    let steps = 512; // Number of steps for the Fibonacci sequence
-                     // Generate trace from Lean with 256 steps, fallback to static file if it fails
+    let steps = 512;
     let init_trace = match generate_trace_from_lean::<BabyBear>(steps, "trace.json") {
         Ok(trace) => {
             println!(
@@ -108,7 +119,7 @@ fn test_clean_fib() {
             trace
         }
         Err(e) => {
-            panic!("Warning: Could not generate trace from Lean: {}", e);
+            panic!("Could not generate trace from Lean: {}", e);
         }
     };
 
@@ -124,7 +135,7 @@ fn test_clean_fib() {
     let json_content = read_test_json(JSON_PATH);
 
     // Create the MainAir from JSON content
-    let main_air = MainAir::new(&json_content, main_trace.width());
+    let main_air = MainAir::new(&json_content, main_trace.width(), main_trace.height());
     let air_instance = CleanAirInstance::Main(main_air);
 
     // Create a single VK with multiple AirInfo instances
@@ -138,7 +149,7 @@ fn test_clean_fib() {
     ];
 
     // Generate lookup traces using the AirInfo instances from the VK
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     // Collect all traces: main trace + lookup traces
     let mut traces = vec![main_trace.clone()];
     traces.extend(lookup_traces);
@@ -157,30 +168,7 @@ fn test_multi_column_lookup() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(99);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(99);
 
     // Circuit JSON: lookup of (var0, var1) into "Memory" table.
     // Two-column lookup: address (col 0) and value (col 1).
@@ -244,7 +232,7 @@ fn test_multi_column_lookup() {
         .collect();
     let main_trace = RowMajorMatrix::new(main_data, 2);
 
-    let main_air = MainAir::<BabyBear>::new(json_content, 2);
+    let main_air = MainAir::<BabyBear>::new(json_content, 2, main_trace.height());
     let air_instance = CleanAirInstance::Main(main_air);
 
     let memory_air = PreprocessedTableAir::new("Memory".into(), memory_preprocessed);
@@ -256,7 +244,7 @@ fn test_multi_column_lookup() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -273,30 +261,7 @@ fn test_expression_lookup() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(77);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(77);
 
     // Circuit JSON: lookup of (var0, var0 + const(1)) into "Table".
     // The second entry is an expression: column_0 + 1.
@@ -349,7 +314,7 @@ fn test_expression_lookup() {
         .collect();
     let main_trace = RowMajorMatrix::new(main_data, 1);
 
-    let main_air = MainAir::<BabyBear>::new(json_content, 1);
+    let main_air = MainAir::<BabyBear>::new(json_content, 1, main_trace.height());
     let air_instance = CleanAirInstance::Main(main_air);
 
     let table_air = PreprocessedTableAir::new("Table".into(), table_preprocessed);
@@ -361,7 +326,7 @@ fn test_expression_lookup() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -378,30 +343,7 @@ fn test_range_check_16() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(42);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(42);
 
     // Minimal JSON: an EveryRowExceptLast op with a lookup of column 0 into "Range16".
     // No arithmetic constraints -- only the lookup.
@@ -436,7 +378,7 @@ fn test_range_check_16() {
         .collect();
     let main_trace = RowMajorMatrix::new(trace_data, width);
 
-    let main_air = MainAir::<BabyBear>::new(json_content, width);
+    let main_air = MainAir::<BabyBear>::new(json_content, width, main_trace.height());
     let air_instance = CleanAirInstance::Main(main_air);
 
     // Create a 16-entry preprocessed table (values 0..15)
@@ -451,7 +393,7 @@ fn test_range_check_16() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -459,6 +401,77 @@ fn test_range_check_16() {
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("range-check-16 verification failed");
+}
+
+/// End-to-end test: export circuit from Lean, generate trace from Lean, prove and verify.
+///
+/// Both the circuit (constraints + lookups) and the execution trace are produced
+/// by Lean, so this test exercises the full pipeline from Lean definitions down
+/// to a verified STARK proof in the Rust backend.
+#[test]
+fn test_lean_circuit_end_to_end() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    let config = setup::test_config(1);
+
+    // --- Generate circuit JSON from Lean ---
+    let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let tests_dir = backend_dir.join("tests").join("fixtures");
+    std::fs::create_dir_all(tests_dir.join("output")).unwrap();
+
+    let circuit_output = Command::new("bash")
+        .arg(tests_dir.join("generate_fib_circuit.sh"))
+        .arg("output/e2e_circuit.json")
+        .current_dir(&tests_dir)
+        .output()
+        .expect("Failed to run circuit generation script");
+    assert!(
+        circuit_output.status.success(),
+        "Circuit generation failed: {}",
+        String::from_utf8_lossy(&circuit_output.stderr)
+    );
+    let circuit_json = std::fs::read_to_string(tests_dir.join("output/e2e_circuit.json"))
+        .expect("Failed to read generated circuit JSON");
+
+    // --- Generate trace from Lean ---
+    let steps = 512;
+    let init_trace = generate_trace_from_lean::<BabyBear>(steps, "e2e_trace.json")
+        .expect("Failed to generate trace from Lean");
+
+    let width = init_trace[0].len();
+    let main_trace: RowMajorMatrix<BabyBear> =
+        RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
+
+    // --- Build AIR instances from Lean-generated circuit ---
+    let main_air = MainAir::<BabyBear>::new(&circuit_json, main_trace.width(), main_trace.height());
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    let byte_range = byte_range_air::<BabyBear>();
+    let byte_range_instance = CleanAirInstance::Preprocessed(byte_range);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance),
+        AirInfo::new(byte_range_instance),
+    ];
+
+    // --- Prove and verify ---
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
+        &air_infos,
+        &main_trace,
+        &air_infos[0].lookups,
+        &air_infos[0].lookup_row_scopes,
+    );
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    // The Lean circuit hardcodes initial Fibonacci values as constants (not public inputs),
+    // so no public inputs are needed for constraint satisfaction.
+    let pis = vec![];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis)
+        .expect("Lean end-to-end verification failed");
 }
 
 /// Test two independent lookup tables to exercise multi-table challenge slicing.
@@ -475,30 +488,7 @@ fn test_two_table_lookups() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    type Val = BabyBear;
-    type Perm = Poseidon2BabyBear<16>;
-    type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
-    type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    type ValMmcs =
-        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
-    type Challenge = BinomialExtensionField<Val, 4>;
-    type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-    type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
-    type Dft = Radix2DitParallel<Val>;
-    type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
-    type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
-
-    let mut rng = SmallRng::seed_from_u64(200);
-    let perm = Perm::new_from_rng_128(&mut rng);
-    let hash = MyHash::new(perm.clone());
-    let compress = MyCompress::new(perm.clone());
-    let val_mmcs = ValMmcs::new(hash, compress);
-    let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let dft = Dft::default();
-    let config = create_test_fri_params(challenge_mmcs, 2);
-    let pcs = Pcs::new(dft, val_mmcs, config);
-    let challenger = Challenger::new(perm);
-    let config = MyConfig::new(pcs, challenger);
+    let config = setup::test_config(200);
 
     // Circuit JSON: two lookups in one EveryRowExceptLast gate.
     // col 0 looked up in "Range8", col 1 looked up in "Squares".
@@ -541,7 +531,7 @@ fn test_two_table_lookups() {
         .collect();
     let main_trace = RowMajorMatrix::new(main_data, 2);
 
-    let main_air = MainAir::<BabyBear>::new(json_content, 2);
+    let main_air = MainAir::<BabyBear>::new(json_content, 2, main_trace.height());
     let air_instance = CleanAirInstance::Main(main_air);
 
     // "Range8" table: 8 rows × 1 column, values [0..7]
@@ -568,11 +558,84 @@ fn test_two_table_lookups() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("two-table lookup verification failed");
+}
+
+/// Test that lookups inside `EveryRowExceptLast` skip the last row.
+///
+/// The last row contains a value (999) absent from the byte-range table.
+/// Under correct `EveryRowExceptLast` semantics the lookup should not apply
+/// on the last row, so this should succeed.
+#[test]
+fn test_lookup_skips_last_row() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    let config = setup::test_config(333);
+
+    // Circuit JSON: EveryRowExceptLast with a single lookup of column 0 into "Bytes".
+    let json_content = r#"[
+      {
+        "type": "EveryRowExceptLast",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "Bytes",
+                "entry": [{ "type": "var", "index": 0 }]
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 }
+            ],
+            "offset": 1,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    // Main trace: 8 rows × 1 column.
+    // Rows 0–6: valid byte values (0..6), present in the byte table.
+    // Row 7 (last): 999, NOT in the byte table.
+    let mut main_data: Vec<BabyBear> = (0u64..7).map(|i| BabyBear::from_u64(i)).collect();
+    main_data.push(BabyBear::from_u64(999));
+    let main_trace = RowMajorMatrix::new(main_data, 1);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, 1, main_trace.height());
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    // Reuse the 256-entry byte-range preprocessed table (values 0..255).
+    let byte_range = byte_range_air::<BabyBear>();
+    let byte_range_instance = CleanAirInstance::Preprocessed(byte_range);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance),
+        AirInfo::new(byte_range_instance),
+    ];
+
+    // This will panic on buggy code that iterates all rows.
+    // Once fixed, the lookup should skip the last row and succeed.
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
+        &air_infos,
+        &main_trace,
+        &air_infos[0].lookups,
+        &air_infos[0].lookup_row_scopes,
+    );
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis)
+        .expect("EveryRowExceptLast lookup should skip last row");
 }
