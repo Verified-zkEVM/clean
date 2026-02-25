@@ -16,7 +16,7 @@ use crate::clean_ast::LookupRowScope;
 ///
 /// Only supports expressions over current-row main and preprocessed variables
 /// (offset 0), constants, and arithmetic operations.
-pub fn eval_symbolic_on_row<F: Field>(
+fn eval_symbolic_on_row<F: Field>(
     expr: &SymbolicExpression<F>,
     main_row: &[F],
     preprocessed_row: &[F],
@@ -65,7 +65,7 @@ pub fn eval_symbolic_on_row<F: Field>(
 /// * `main_trace` - The main execution trace (corresponds to air_infos[0])
 /// * `main_air_lookups` - The lookups registered by the main AIR
 /// * `lookup_row_scopes` - Row scope for each lookup, parallel to `main_air_lookups`
-pub fn generate_multiplicity_traces<F, SC>(
+fn generate_multiplicity_traces<F, SC>(
     air_infos: &[crate::key::AirInfo<F>],
     table_data: &[&RowMajorMatrix<F>],
     main_trace: &RowMajorMatrix<F>,
@@ -167,7 +167,7 @@ where
 /// Used to build the full trace for a `ProverTableAir` from the
 /// prover-supplied data and the multiplicities computed by
 /// `generate_multiplicity_traces`.
-pub fn append_multiplicity_column<F: Field>(
+fn append_multiplicity_column<F: Field>(
     data: &RowMajorMatrix<F>,
     multiplicity: &RowMajorMatrix<F>,
 ) -> RowMajorMatrix<F> {
