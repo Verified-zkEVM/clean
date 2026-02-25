@@ -139,7 +139,7 @@ where
         let height = main_trace.height();
         for row_idx in 0..height {
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
-            let prep_slice: Vec<F> = selector_trace
+            let selector_row_slice: Vec<F> = selector_trace
                 .map(|s| s.row(row_idx).unwrap().into_iter().collect())
                 .unwrap_or_default();
 
@@ -151,7 +151,7 @@ where
                     // Evaluate ALL element expressions to get the full lookup key
                     let values: Vec<u32> = tuple
                         .iter()
-                        .map(|expr| eval_symbolic_on_row(expr, &row_slice, &prep_slice).as_canonical_u32())
+                        .map(|expr| eval_symbolic_on_row(expr, &row_slice, &selector_row_slice).as_canonical_u32())
                         .collect();
 
                     let table_row = row_index.get(&values).unwrap_or_else(|| {
@@ -166,7 +166,7 @@ where
                     let mult_contribution = eval_symbolic_on_row(
                         &lookup.multiplicities_exprs[tuple_idx],
                         &row_slice,
-                        &prep_slice,
+                        &selector_row_slice,
                     );
                     let m = multiplicity_trace.row_mut(*table_row).get_mut(0).unwrap();
                     *m += mult_contribution;
