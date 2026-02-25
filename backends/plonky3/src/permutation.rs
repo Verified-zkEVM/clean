@@ -49,18 +49,25 @@ pub fn eval_symbolic_on_row<F: Field>(
 /// based on the lookup operations from the main AIR's lookups.
 ///
 /// This function:
-/// 1. Gets the main AIR's global lookups (element tuples with Direction::Receive)
+/// 1. Gets the main AIR's global lookups (element tuples with their direction)
 /// 2. For each non-main AIR, extracts its table name
 /// 3. Matches main AIR lookups to table AIRs by global interaction name
-/// 4. Uses preprocessed.height() for table size
-/// 5. Computes multiplicities by evaluating symbolic expressions on each main trace row
+/// 4. Uses `table_data[i]` to build a reverse map (column values → row number)
+///    and determine table size
+/// 5. Computes multiplicities by evaluating the element expressions on
+///    each main trace row (adding F::ONE per match on active rows)
 ///
 /// # Arguments
-/// * `air_infos` - Vector of AirInfo instances (main + lookup airs)
+/// * `air_infos` - Vector of AirInfo instances (main + table AIRs)
+/// * `table_data` - Reference data per table, parallel to `air_infos[1..]`.
+///   For PreprocessedTableAir: the preprocessed trace.
+///   For ProverTableAir: a data-only matrix (just the data columns, no multiplicity).
 /// * `main_trace` - The main execution trace (corresponds to air_infos[0])
 /// * `main_air_lookups` - The lookups registered by the main AIR
+/// * `lookup_row_scopes` - Row scope for each lookup, parallel to `main_air_lookups`
 pub fn generate_multiplicity_traces<F, SC>(
     air_infos: &[crate::key::AirInfo<F>],
+    table_data: &[&RowMajorMatrix<F>],
     main_trace: &RowMajorMatrix<F>,
     main_air_lookups: &[Lookup<F>],
     lookup_row_scopes: &[LookupRowScope],
@@ -69,21 +76,28 @@ where
     F: Field + PrimeField32 + From<crate::Val<SC>> + Into<crate::Val<SC>>,
     SC: StarkGenericConfig,
 {
+    assert_eq!(
+        air_infos.len().checked_sub(1).expect("air_infos must not be empty"),
+        table_data.len(),
+        "table_data length must equal air_infos.len() - 1 (one per table AIR)"
+    );
+    assert_eq!(
+        main_air_lookups.len(),
+        lookup_row_scopes.len(),
+        "main_air_lookups and lookup_row_scopes must have the same length"
+    );
+
     let mut lookup_traces = Vec::new();
 
-    // For each non-main AIR (i.e. preprocessed table AIR), match lookups by table name
-    for air_info in air_infos.iter().skip(1) {
+    // For each non-main AIR (table AIR), match lookups by table name
+    for (i, air_info) in air_infos.iter().skip(1).enumerate() {
         let table_name = air_info
             .air
             .table_name()
-            .expect("Non-main AIR must be a preprocessed table with a name");
+            .expect("Non-main AIR must be a table with a name");
 
-        let preprocessed = air_info
-            .preprocessed
-            .as_ref()
-            .expect("Preprocessed table AIR must have a preprocessed trace");
-
-        let table_size = preprocessed.height();
+        let data = table_data[i];
+        let table_size = data.height();
 
         // Find the main AIR lookups that target this table (by global interaction name),
         // keeping track of original index for scope lookup.
@@ -99,12 +113,12 @@ where
             })
             .collect();
 
-        // Build index: map from column-value tuple → row index in the preprocessed table.
+        // Build index: map from column-value tuple → row index in the table data.
         // This correctly handles tables whose column-0 values are not equal to the row index.
         let mut row_index: BTreeMap<Vec<u32>, usize> = BTreeMap::new();
         for row_idx in 0..table_size {
-            let prep_row: Vec<F> = preprocessed.row(row_idx).unwrap().into_iter().collect();
-            let key: Vec<u32> = prep_row.iter().map(|v| v.as_canonical_u32()).collect();
+            let data_row: Vec<F> = data.row(row_idx).unwrap().into_iter().collect();
+            let key: Vec<u32> = data_row.iter().map(|v| v.as_canonical_u32()).collect();
             row_index.insert(key, row_idx);
         }
 
@@ -112,7 +126,7 @@ where
         let mut multiplicity_trace = RowMajorMatrix::new(alloc::vec![F::ZERO; table_size], 1);
 
         // Calculate multiplicities by evaluating ALL columns of each lookup tuple
-        // and looking up the resulting values in the preprocessed table index.
+        // and looking up the resulting values in the table data index.
         let height = main_trace.height();
         for row_idx in 0..height {
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
