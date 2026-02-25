@@ -28,6 +28,16 @@ where
         "Number of traces must match number of AirInfo instances"
     );
 
+    assert!(
+        !air_infos.is_empty() && air_infos[0].air.table_name().is_none(),
+        "air_infos[0] must be the main AIR (not a preprocessed table)"
+    );
+    assert!(
+        air_infos[1..].iter().all(|ai| ai.air.table_name().is_some()),
+        "air_infos[1..] must all be preprocessed table AIRs. \
+         Multiple main traces are not supported yet."
+    );
+
     let prover_data = build_prover_data(config, air_infos, traces);
 
     let instances: Vec<StarkInstance<'_, SC, CleanAirInstance<Val<SC>>>> = air_infos

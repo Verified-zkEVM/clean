@@ -20,6 +20,16 @@ where
     SC::Challenge: BasedVectorSpace<Val<SC>>,
     SymbolicExpression<SC::Challenge>: From<SymbolicExpression<Val<SC>>>,
 {
+    assert!(
+        !air_infos.is_empty() && air_infos[0].air.table_name().is_none(),
+        "air_infos[0] must be the main AIR (not a preprocessed table)"
+    );
+    assert!(
+        air_infos[1..].iter().all(|ai| ai.air.table_name().is_some()),
+        "air_infos[1..] must all be preprocessed table AIRs. \
+         Multiple main traces are not supported yet."
+    );
+
     // Rebuild CommonData deterministically from air_infos (same as prover).
     let mut airs: Vec<CleanAirInstance<Val<SC>>> =
         air_infos.iter().map(|ai| ai.air.clone()).collect();
