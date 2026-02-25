@@ -103,7 +103,6 @@ fn read_test_json(filename: &str) -> String {
 /// test fibonacci8 exported from clean
 #[test]
 fn test_clean_fib() {
-
     let config = setup::test_config(1);
 
     let steps = 512;
@@ -145,11 +144,11 @@ fn test_clean_fib() {
         AirInfo::new(byte_range_air_instance),
     ];
 
-    // Generate lookup traces using the AirInfo instances from the VK
+    // Generate table traces using the AirInfo instances from the VK
     let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
         &air_infos, &main_trace, &[],
     );
-    // Collect all traces: main trace + lookup traces
+    // Collect all traces: main trace + table traces
     let mut traces = vec![main_trace.clone()];
     traces.extend(table_traces);
 
@@ -163,7 +162,6 @@ fn test_clean_fib() {
 /// multi-column sends from the main trace.
 #[test]
 fn test_multi_column_lookup() {
-
     let config = setup::test_config(99);
 
     // Circuit JSON: lookup of (var0, var1) into "Memory" table.
@@ -254,7 +252,6 @@ fn test_multi_column_lookup() {
 /// Demonstrates lookup entries like (var0, var1 + const(1)).
 #[test]
 fn test_expression_lookup() {
-
     let config = setup::test_config(77);
 
     // Circuit JSON: lookup of (var0, var0 + const(1)) into "Table".
@@ -334,7 +331,6 @@ fn test_expression_lookup() {
 /// works with arbitrary table names and sizes.
 #[test]
 fn test_range_check_16() {
-
     let config = setup::test_config(42);
 
     // Minimal JSON: an EveryRowExceptLast op with a lookup of column 0 into "Range16".
@@ -403,7 +399,6 @@ fn test_range_check_16() {
 /// to a verified STARK proof in the Rust backend.
 #[test]
 fn test_lean_circuit_end_to_end() {
-
     let config = setup::test_config(1);
 
     // --- Generate circuit JSON from Lean ---
@@ -471,7 +466,6 @@ fn test_lean_circuit_end_to_end() {
 /// - Global cumulative sum check across 3 AIRs (1 main + 2 tables)
 #[test]
 fn test_two_table_lookups() {
-
     let config = setup::test_config(200);
 
     // Circuit JSON: two lookups in one EveryRowExceptLast gate.
@@ -559,7 +553,6 @@ fn test_two_table_lookups() {
 /// on the last row, so this should succeed.
 #[test]
 fn test_lookup_skips_last_row() {
-
     let config = setup::test_config(333);
 
     // Circuit JSON: EveryRowExceptLast with a single lookup of column 0 into "Bytes".
@@ -629,7 +622,6 @@ fn test_lookup_skips_last_row() {
 /// row 15 duplicates row 0 (the scope skips it).
 #[test]
 fn test_prover_table_lookup() {
-
     let config = setup::test_config(444);
 
     // Circuit JSON: EveryRowExceptLast lookup of (col0, col1) into "MemTable".
