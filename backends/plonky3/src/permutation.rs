@@ -57,12 +57,15 @@ pub fn eval_symbolic_on_row<F: Field>(
 ///    each main trace row (Direction::Receive adds, Direction::Send subtracts)
 ///
 /// # Arguments
-/// * `air_infos` - Vector of AirInfo instances (main + lookup airs)
-/// * `main_trace` - The main execution trace (corresponds to air_infos[0])
+/// * `table_air_infos` - The preprocessed-table AirInfo instances (excludes the main AIR)
+/// * `main_trace` - The main execution trace
+/// * `selector_trace` - The preprocessed selector trace for lookup row scopes (if any)
 /// * `main_air_lookups` - The lookups registered by the main AIR
+/// * `lookup_row_scopes` - Row scope for each lookup, parallel to `main_air_lookups`
 pub fn generate_multiplicity_traces<F, SC>(
-    air_infos: &[crate::key::AirInfo<F>],
+    table_air_infos: &[crate::key::AirInfo<F>],
     main_trace: &RowMajorMatrix<F>,
+    selector_trace: Option<&RowMajorMatrix<F>>,
     main_air_lookups: &[Lookup<F>],
     lookup_row_scopes: &[LookupRowScope],
 ) -> Vec<RowMajorMatrix<F>>
@@ -72,8 +75,8 @@ where
 {
     let mut lookup_traces = Vec::new();
 
-    // For each non-main AIR (i.e. preprocessed table AIR), match lookups by table name
-    for air_info in air_infos.iter().skip(1) {
+    // For each preprocessed table AIR, match lookups by table name
+    for air_info in table_air_infos {
         let table_name = air_info
             .air
             .table_name()
@@ -118,12 +121,11 @@ where
         // The signed multiplicity expression (from Lookup::multiplicities_exprs)
         // is evaluated to determine the contribution: Direction::Receive yields +1,
         // Direction::Send yields -1 (on active rows).
-        let main_prep = air_infos[0].preprocessed.as_ref();
         let height = main_trace.height();
         for row_idx in 0..height {
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
-            let prep_slice: Vec<F> = main_prep
-                .map(|p| p.row(row_idx).unwrap().into_iter().collect())
+            let prep_slice: Vec<F> = selector_trace
+                .map(|s| s.row(row_idx).unwrap().into_iter().collect())
                 .unwrap_or_default();
 
             for &(global_idx, ref lookup) in &matching_lookups {

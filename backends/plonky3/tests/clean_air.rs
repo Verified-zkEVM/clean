@@ -149,7 +149,7 @@ fn test_clean_fib() {
     ];
 
     // Generate lookup traces using the AirInfo instances from the VK
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     // Collect all traces: main trace + lookup traces
     let mut traces = vec![main_trace.clone()];
     traces.extend(lookup_traces);
@@ -245,7 +245,7 @@ fn test_multi_column_lookup() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -328,7 +328,7 @@ fn test_expression_lookup() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -411,7 +411,7 @@ fn test_main_air_send_direction() {
     let air_infos: Vec<AirInfo<BabyBear>> = vec![AirInfo::new(air_instance)];
 
     let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
-        &air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes,
+        &air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes,
     );
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
@@ -481,7 +481,7 @@ fn test_range_check_16() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -546,8 +546,9 @@ fn test_lean_circuit_end_to_end() {
 
     // --- Prove and verify ---
     let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
-        &air_infos,
+        &air_infos[1..],
         &main_trace,
+        air_infos[0].preprocessed.as_ref(),
         &air_infos[0].lookups,
         &air_infos[0].lookup_row_scopes,
     );
@@ -648,7 +649,7 @@ fn test_two_table_lookups() {
     ];
 
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -717,8 +718,9 @@ fn test_lookup_skips_last_row() {
     // This will panic on buggy code that iterates all rows.
     // Once fixed, the lookup should skip the last row and succeed.
     let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
-        &air_infos,
+        &air_infos[1..],
         &main_trace,
+        air_infos[0].preprocessed.as_ref(),
         &air_infos[0].lookups,
         &air_infos[0].lookup_row_scopes,
     );
