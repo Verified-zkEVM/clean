@@ -61,7 +61,7 @@ fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
     output_filename: &str,
 ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let tests_dir = backend_dir.join("tests");
+    let tests_dir = backend_dir.join("tests").join("fixtures");
     let script_path = tests_dir.join("generate_trace.sh");
     let output_path = format!("output/{}", output_filename);
 
@@ -93,7 +93,7 @@ fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
 
 /// Helper function to read JSON file content from the tests directory
 fn read_test_json(filename: &str) -> String {
-    let tests_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let tests_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures");
     let json_path = tests_dir.join(filename);
     std::fs::read_to_string(json_path)
         .unwrap_or_else(|e| panic!("Failed to read JSON file '{}': {}", filename, e))
@@ -419,7 +419,7 @@ fn test_lean_circuit_end_to_end() {
 
     // --- Generate circuit JSON from Lean ---
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let tests_dir = backend_dir.join("tests");
+    let tests_dir = backend_dir.join("tests").join("fixtures");
     std::fs::create_dir_all(tests_dir.join("output")).unwrap();
 
     let circuit_output = Command::new("bash")

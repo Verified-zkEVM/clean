@@ -4,7 +4,7 @@
 # Usage: ./generate_circuit.sh <output_path>
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLEAN_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+CLEAN_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Check arguments
 if [ $# -ne 1 ]; then
