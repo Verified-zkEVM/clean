@@ -214,25 +214,7 @@ impl<F: Field> MainAir<F> {
             scope_to_prep_col.entry(*scope).or_insert(next);
         }
 
-        let num_prep_cols = scope_to_prep_col.len();
-        let preprocessed = if num_prep_cols > 0 && trace_height > 0 {
-            let mut data = vec![F::ZERO; trace_height * num_prep_cols];
-            for (&scope, &col_idx) in &scope_to_prep_col {
-                for row_idx in 0..trace_height {
-                    let active = match scope {
-                        LookupRowScope::FirstRow => row_idx == 0,
-                        LookupRowScope::LastRow => row_idx == trace_height - 1,
-                        LookupRowScope::EveryRowExceptLast => row_idx < trace_height - 1,
-                    };
-                    if active {
-                        data[row_idx * num_prep_cols + col_idx] = F::ONE;
-                    }
-                }
-            }
-            Some(RowMajorMatrix::new(data, num_prep_cols))
-        } else {
-            None
-        };
+        let preprocessed = Self::build_selector_trace(&scope_to_prep_col, trace_height);
 
         Self {
             clean_ops,
@@ -242,6 +224,32 @@ impl<F: Field> MainAir<F> {
             preprocessed,
             scope_to_prep_col,
         }
+    }
+
+    /// Build a preprocessed selector matrix with 0/1 columns, one per distinct
+    /// `LookupRowScope`.  Returns `None` when there are no scoped lookups.
+    fn build_selector_trace(
+        scope_to_prep_col: &BTreeMap<LookupRowScope, usize>,
+        trace_height: usize,
+    ) -> Option<RowMajorMatrix<F>> {
+        let num_cols = scope_to_prep_col.len();
+        if num_cols == 0 || trace_height == 0 {
+            return None;
+        }
+        let mut data = vec![F::ZERO; trace_height * num_cols];
+        for (&scope, &col_idx) in scope_to_prep_col {
+            for row_idx in 0..trace_height {
+                let active = match scope {
+                    LookupRowScope::FirstRow => row_idx == 0,
+                    LookupRowScope::LastRow => row_idx == trace_height - 1,
+                    LookupRowScope::EveryRowExceptLast => row_idx < trace_height - 1,
+                };
+                if active {
+                    data[row_idx * num_cols + col_idx] = F::ONE;
+                }
+            }
+        }
+        Some(RowMajorMatrix::new(data, num_cols))
     }
 
     /// Get reference to the clean operations
