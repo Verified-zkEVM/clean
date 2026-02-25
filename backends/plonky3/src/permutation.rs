@@ -118,11 +118,8 @@ where
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
 
             for &(global_idx, ref lookup) in &matching_lookups {
-                let scope = lookup_row_scopes[global_idx];
-                match scope {
-                    LookupRowScope::FirstRow => { if row_idx != 0 { continue; } }
-                    LookupRowScope::LastRow => { if row_idx != height - 1 { continue; } }
-                    LookupRowScope::EveryRowExceptLast => { if row_idx == height - 1 { continue; } }
+                if !lookup_row_scopes[global_idx].is_active(row_idx, height) {
+                    continue;
                 }
                 for tuple in &lookup.element_exprs {
                     // Evaluate ALL element expressions to get the full lookup key

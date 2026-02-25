@@ -142,6 +142,17 @@ pub enum LookupRowScope {
     EveryRowExceptLast,
 }
 
+impl LookupRowScope {
+    /// Whether this scope is active on the given row of a trace with `height` rows.
+    pub fn is_active(self, row_idx: usize, height: usize) -> bool {
+        match self {
+            LookupRowScope::FirstRow => row_idx == 0,
+            LookupRowScope::LastRow => row_idx == height - 1,
+            LookupRowScope::EveryRowExceptLast => row_idx < height - 1,
+        }
+    }
+}
+
 /// AST expression utilities
 pub struct AstUtils;
 

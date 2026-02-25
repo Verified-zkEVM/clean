@@ -239,12 +239,7 @@ impl<F: Field> MainAir<F> {
         let mut data = vec![F::ZERO; trace_height * num_cols];
         for (&scope, &col_idx) in scope_to_prep_col {
             for row_idx in 0..trace_height {
-                let active = match scope {
-                    LookupRowScope::FirstRow => row_idx == 0,
-                    LookupRowScope::LastRow => row_idx == trace_height - 1,
-                    LookupRowScope::EveryRowExceptLast => row_idx < trace_height - 1,
-                };
-                if active {
+                if scope.is_active(row_idx, trace_height) {
                     data[row_idx * num_cols + col_idx] = F::ONE;
                 }
             }
