@@ -8,6 +8,8 @@ use p3_uni_stark::SymbolicExpression;
 use p3_util::log2_strict_usize;
 use tracing::instrument;
 
+use p3_air::BaseAir;
+
 use crate::{AirInfo, CleanAirInstance, StarkGenericConfig, Val};
 
 #[instrument(skip_all)]
@@ -37,6 +39,15 @@ where
         "air_infos[1..] must all be preprocessed table AIRs. \
          Multiple main traces are not supported yet."
     );
+
+    for (i, (ai, trace)) in air_infos.iter().zip(traces.iter()).enumerate() {
+        assert_eq!(
+            trace.width(),
+            ai.air.width(),
+            "traces[{}] width ({}) does not match air_infos[{}] width ({})",
+            i, trace.width(), i, ai.air.width()
+        );
+    }
 
     let prover_data = build_prover_data(config, air_infos, traces);
 

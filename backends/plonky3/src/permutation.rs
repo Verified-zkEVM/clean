@@ -73,6 +73,21 @@ where
     F: Field + PrimeField32 + From<crate::Val<SC>> + Into<crate::Val<SC>>,
     SC: StarkGenericConfig,
 {
+    assert_eq!(
+        main_air_lookups.len(),
+        lookup_row_scopes.len(),
+        "main_air_lookups and lookup_row_scopes must have the same length"
+    );
+    if let Some(sel) = selector_trace {
+        assert_eq!(
+            sel.height(),
+            main_trace.height(),
+            "selector_trace height ({}) must match main_trace height ({})",
+            sel.height(),
+            main_trace.height()
+        );
+    }
+
     let mut lookup_traces = Vec::new();
 
     // For each preprocessed table AIR, match lookups by table name

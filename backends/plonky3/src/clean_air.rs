@@ -119,7 +119,10 @@ where
         let symbolic_prep = AirBuilder::preprocessed(&symbolic_builder);
         let symbolic_prep_local = symbolic_prep.as_ref().and_then(|m| m.row_slice(0));
 
-        // Group by (table_name, scope)
+        // Group by (table_name, scope).  Lookups with different directions
+        // (Send/Receive) to the same table and scope are combined into a
+        // single Lookup and share one LogUp challenge — each input carries
+        // its own signed multiplicity so the protocol remains correct.
         let mut lookups_by_key: BTreeMap<(String, LookupRowScope), Vec<LookupInput<AB::F>>> =
             BTreeMap::new();
 
