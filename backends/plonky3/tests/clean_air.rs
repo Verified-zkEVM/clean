@@ -249,7 +249,7 @@ fn test_multi_column_lookup() {
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
-    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let pis = vec![];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("multi-column lookup verification failed");
 }
@@ -332,7 +332,7 @@ fn test_expression_lookup() {
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
-    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let pis = vec![];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("expression lookup verification failed");
 }
@@ -416,7 +416,7 @@ fn test_main_air_send_direction() {
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
-    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let pis = vec![];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis)
         .expect("send direction permutation check verification failed");
@@ -486,7 +486,7 @@ fn test_range_check_16() {
     traces.extend(lookup_traces);
 
     // Public values: [0, 1, 1] (matching the default public_values in LookupBuilder)
-    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let pis = vec![];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("range-check-16 verification failed");
 }
@@ -653,7 +653,7 @@ fn test_two_table_lookups() {
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
-    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let pis = vec![];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("two-table lookup verification failed");
 }
@@ -727,7 +727,7 @@ fn test_lookup_skips_last_row() {
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
-    let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
+    let pis = vec![];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis)
         .expect("EveryRowExceptLast lookup should skip last row");
