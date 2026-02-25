@@ -62,7 +62,7 @@ fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
 ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests").join("fixtures");
-    let script_path = tests_dir.join("generate_trace.sh");
+    let script_path = tests_dir.join("generate_fib_trace.sh");
     let output_path = format!("output/{}", output_filename);
 
     // Create the output directory if it doesn't exist
@@ -423,7 +423,7 @@ fn test_lean_circuit_end_to_end() {
     std::fs::create_dir_all(tests_dir.join("output")).unwrap();
 
     let circuit_output = Command::new("bash")
-        .arg(tests_dir.join("generate_circuit.sh"))
+        .arg(tests_dir.join("generate_fib_circuit.sh"))
         .arg("output/e2e_circuit.json")
         .current_dir(&tests_dir)
         .output()

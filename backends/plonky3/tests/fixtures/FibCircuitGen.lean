@@ -13,4 +13,4 @@ def generateCircuit (output_path : String) : IO Unit := do
 def main (args : List String) : IO Unit := do
   match args with
   | [output_path] => generateCircuit output_path
-  | _ => IO.println "Usage: lake env lean --run CircuitGen.lean <output_path>"
+  | _ => IO.println "Usage: lake env lean --run FibCircuitGen.lean <output_path>"

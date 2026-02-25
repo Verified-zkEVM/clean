@@ -21,7 +21,7 @@ echo "Generating circuit JSON -> $output_path"
 cd "$CLEAN_ROOT" || exit 1
 
 # Run Lean with the circuit generator using lake
-lake env lean --run "$SCRIPT_DIR/CircuitGen.lean" "$SCRIPT_DIR/$output_path"
+lake env lean --run "$SCRIPT_DIR/FibCircuitGen.lean" "$SCRIPT_DIR/$output_path"
 
 exit_code=$?
 cd "$SCRIPT_DIR" || exit 1

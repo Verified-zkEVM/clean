@@ -22,7 +22,7 @@ echo "Generating trace with $steps steps -> $output_path"
 cd "$CLEAN_ROOT" || exit 1
 
 # Run Lean with the trace generator using lake
-lake env lean --run "$SCRIPT_DIR/TraceGen.lean" "$steps" "$SCRIPT_DIR/$output_path"
+lake env lean --run "$SCRIPT_DIR/FibTraceGen.lean" "$steps" "$SCRIPT_DIR/$output_path"
 
 exit_code=$?
 cd "$SCRIPT_DIR" || exit 1

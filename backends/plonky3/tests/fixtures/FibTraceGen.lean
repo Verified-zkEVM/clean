@@ -27,4 +27,4 @@ def main (args : List String) : IO Unit := do
     | some steps => generateTrace steps output_path
     | none => IO.println "Error: Invalid number of steps"
   | _ =>
-    IO.println "Usage: lake lean TraceGen.lean -- <steps> <output_path>"
+    IO.println "Usage: lake env lean --run FibTraceGen.lean <steps> <output_path>"
