@@ -195,3 +195,77 @@ pub fn append_multiplicity_column<F: Field>(
 
     RowMajorMatrix::new(combined, new_width)
 }
+
+/// Generate the table traces needed by `prove()`, one per table AIR in
+/// `air_infos[1..]`.
+///
+/// For `PreprocessedTableAir`: returns the width-1 multiplicity trace.
+/// For `ProverTableAir`: returns the data + multiplicity combined trace.
+///
+/// `prover_table_data` supplies the data matrices for `ProverTableAir`
+/// instances, matched by table name.  Pass `&[]` when all tables are
+/// preprocessed.
+pub fn generate_table_traces<F, SC>(
+    air_infos: &[crate::key::AirInfo<F>],
+    main_trace: &RowMajorMatrix<F>,
+    prover_table_data: &[(&str, &RowMajorMatrix<F>)],
+) -> Vec<RowMajorMatrix<F>>
+where
+    F: Field + PrimeField32 + From<crate::Val<SC>> + Into<crate::Val<SC>>,
+    SC: StarkGenericConfig,
+{
+    // Build table_data: for each table AIR, choose preprocessed or prover data.
+    let table_data: Vec<&RowMajorMatrix<F>> = air_infos[1..]
+        .iter()
+        .map(|ai| {
+            if let Some(ref prep) = ai.preprocessed {
+                prep
+            } else {
+                let table_name = ai
+                    .air
+                    .table_name()
+                    .expect("Non-main AIR must be a table with a name");
+                prover_table_data
+                    .iter()
+                    .find(|(name, _)| *name == table_name)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "ProverTableAir '{}' requires an entry in prover_table_data",
+                            table_name
+                        )
+                    })
+                    .1
+            }
+        })
+        .collect();
+
+    let multiplicity_traces = generate_multiplicity_traces::<F, SC>(
+        air_infos,
+        &table_data,
+        main_trace,
+        &air_infos[0].lookups,
+        &air_infos[0].lookup_row_scopes,
+    );
+
+    // Post-process: for ProverTableAir tables, combine data + multiplicity.
+    multiplicity_traces
+        .into_iter()
+        .enumerate()
+        .map(|(i, mult)| {
+            if air_infos[i + 1].preprocessed.is_some() {
+                mult
+            } else {
+                let table_name = air_infos[i + 1]
+                    .air
+                    .table_name()
+                    .expect("Non-main AIR must be a table with a name");
+                let prover_data = prover_table_data
+                    .iter()
+                    .find(|(name, _)| *name == table_name)
+                    .unwrap()
+                    .1;
+                append_multiplicity_column(prover_data, &mult)
+            }
+        })
+        .collect()
+}
