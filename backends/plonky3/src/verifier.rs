@@ -26,7 +26,7 @@ where
     );
     assert!(
         air_infos[1..].iter().all(|ai| ai.air.table_name().is_some()),
-        "air_infos[1..] must all be preprocessed table AIRs. \
+        "air_infos[1..] must all be table AIRs. \
          Multiple main traces are not supported yet."
     );
 

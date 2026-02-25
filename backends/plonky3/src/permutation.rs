@@ -52,18 +52,22 @@ pub fn eval_symbolic_on_row<F: Field>(
 /// 1. Gets the main AIR's global lookups (element tuples with their direction)
 /// 2. For each non-main AIR, extracts its table name
 /// 3. Matches main AIR lookups to table AIRs by global interaction name
-/// 4. Uses preprocessed.height() for table size
+/// 4. Uses `table_data[i]` to build a row index and determine table size
 /// 5. Computes multiplicities by evaluating the signed multiplicity expressions on
 ///    each main trace row (Direction::Receive adds, Direction::Send subtracts)
 ///
 /// # Arguments
-/// * `table_air_infos` - The preprocessed-table AirInfo instances (excludes the main AIR)
+/// * `table_air_infos` - The table AirInfo instances (excludes the main AIR)
+/// * `table_data` - Reference data per table, parallel to `table_air_infos`.
+///   For PreprocessedTableAir: the preprocessed trace.
+///   For ProverTableAir: a data-only matrix (just the data columns, no multiplicity).
 /// * `main_trace` - The main execution trace
 /// * `selector_trace` - The preprocessed selector trace for lookup row scopes (if any)
 /// * `main_air_lookups` - The lookups registered by the main AIR
 /// * `lookup_row_scopes` - Row scope for each lookup, parallel to `main_air_lookups`
 pub fn generate_multiplicity_traces<F, SC>(
     table_air_infos: &[crate::key::AirInfo<F>],
+    table_data: &[&RowMajorMatrix<F>],
     main_trace: &RowMajorMatrix<F>,
     selector_trace: Option<&RowMajorMatrix<F>>,
     main_air_lookups: &[Lookup<F>],
@@ -73,6 +77,11 @@ where
     F: Field + PrimeField32 + From<crate::Val<SC>> + Into<crate::Val<SC>>,
     SC: StarkGenericConfig,
 {
+    assert_eq!(
+        table_air_infos.len(),
+        table_data.len(),
+        "table_air_infos and table_data must have the same length"
+    );
     assert_eq!(
         main_air_lookups.len(),
         lookup_row_scopes.len(),
@@ -90,19 +99,15 @@ where
 
     let mut lookup_traces = Vec::new();
 
-    // For each preprocessed table AIR, match lookups by table name
-    for air_info in table_air_infos {
+    // For each table AIR, match lookups by table name
+    for (i, air_info) in table_air_infos.iter().enumerate() {
         let table_name = air_info
             .air
             .table_name()
-            .expect("Non-main AIR must be a preprocessed table with a name");
+            .expect("Non-main AIR must be a table with a name");
 
-        let preprocessed = air_info
-            .preprocessed
-            .as_ref()
-            .expect("Preprocessed table AIR must have a preprocessed trace");
-
-        let table_size = preprocessed.height();
+        let data = table_data[i];
+        let table_size = data.height();
 
         // Find the main AIR lookups that target this table (by global interaction name),
         // keeping track of original index for scope lookup.
@@ -118,12 +123,12 @@ where
             })
             .collect();
 
-        // Build index: map from column-value tuple → row index in the preprocessed table.
+        // Build index: map from column-value tuple → row index in the table data.
         // This correctly handles tables whose column-0 values are not equal to the row index.
         let mut row_index: BTreeMap<Vec<u32>, usize> = BTreeMap::new();
         for row_idx in 0..table_size {
-            let prep_row: Vec<F> = preprocessed.row(row_idx).unwrap().into_iter().collect();
-            let key: Vec<u32> = prep_row.iter().map(|v| v.as_canonical_u32()).collect();
+            let data_row: Vec<F> = data.row(row_idx).unwrap().into_iter().collect();
+            let key: Vec<u32> = data_row.iter().map(|v| v.as_canonical_u32()).collect();
             row_index.insert(key, row_idx);
         }
 

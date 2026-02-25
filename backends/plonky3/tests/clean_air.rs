@@ -1,6 +1,6 @@
 use clean_backend::{
     byte_range_air, generate_multiplicity_traces, parse_init_trace, prove, verify, AirInfo,
-    CleanAirInstance, MainAir, PreprocessedTableAir, StarkConfig,
+    CleanAirInstance, MainAir, PreprocessedTableAir, ProverTableAir, StarkConfig,
 };
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
 use p3_challenger::DuplexChallenger;
@@ -149,7 +149,10 @@ fn test_clean_fib() {
     ];
 
     // Generate lookup traces using the AirInfo instances from the VK
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+    let table_data: Vec<&RowMajorMatrix<_>> = air_infos[1..].iter()
+        .map(|ai| ai.preprocessed.as_ref().unwrap())
+        .collect();
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &table_data, &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     // Collect all traces: main trace + lookup traces
     let mut traces = vec![main_trace.clone()];
     traces.extend(lookup_traces);
@@ -244,8 +247,11 @@ fn test_multi_column_lookup() {
         AirInfo::new(memory_instance),
     ];
 
+    let table_data: Vec<&RowMajorMatrix<_>> = air_infos[1..].iter()
+        .map(|ai| ai.preprocessed.as_ref().unwrap())
+        .collect();
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &table_data, &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -327,8 +333,11 @@ fn test_expression_lookup() {
         AirInfo::new(table_instance),
     ];
 
+    let table_data: Vec<&RowMajorMatrix<_>> = air_infos[1..].iter()
+        .map(|ai| ai.preprocessed.as_ref().unwrap())
+        .collect();
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &table_data, &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -410,8 +419,9 @@ fn test_main_air_send_direction() {
     // Only the main AIR — no preprocessed tables needed
     let air_infos: Vec<AirInfo<BabyBear>> = vec![AirInfo::new(air_instance)];
 
+    let table_data: Vec<&RowMajorMatrix<_>> = vec![];
     let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
-        &air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes,
+        &air_infos[1..], &table_data, &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes,
     );
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
@@ -499,8 +509,9 @@ fn test_send_receive_misbalance_fails() {
 
     let air_infos: Vec<AirInfo<BabyBear>> = vec![AirInfo::new(air_instance)];
 
+    let table_data: Vec<&RowMajorMatrix<_>> = vec![];
     let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
-        &air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes,
+        &air_infos[1..], &table_data, &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes,
     );
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
@@ -567,12 +578,14 @@ fn test_range_check_16() {
         AirInfo::new(range16_instance),
     ];
 
+    let table_data: Vec<&RowMajorMatrix<_>> = air_infos[1..].iter()
+        .map(|ai| ai.preprocessed.as_ref().unwrap())
+        .collect();
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &table_data, &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
-    // Public values: [0, 1, 1] (matching the default public_values in LookupBuilder)
     let pis = vec![];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis).expect("range-check-16 verification failed");
@@ -632,8 +645,12 @@ fn test_lean_circuit_end_to_end() {
     ];
 
     // --- Prove and verify ---
+    let table_data: Vec<&RowMajorMatrix<_>> = air_infos[1..].iter()
+        .map(|ai| ai.preprocessed.as_ref().unwrap())
+        .collect();
     let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
         &air_infos[1..],
+        &table_data,
         &main_trace,
         air_infos[0].preprocessed.as_ref(),
         &air_infos[0].lookups,
@@ -735,8 +752,11 @@ fn test_two_table_lookups() {
         AirInfo::new(squares_instance),
     ];
 
+    let table_data: Vec<&RowMajorMatrix<_>> = air_infos[1..].iter()
+        .map(|ai| ai.preprocessed.as_ref().unwrap())
+        .collect();
     let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos[1..], &table_data, &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
     let mut traces = vec![main_trace];
     traces.extend(lookup_traces);
 
@@ -804,8 +824,12 @@ fn test_lookup_skips_last_row() {
 
     // This will panic on buggy code that iterates all rows.
     // Once fixed, the lookup should skip the last row and succeed.
+    let table_data: Vec<&RowMajorMatrix<_>> = air_infos[1..].iter()
+        .map(|ai| ai.preprocessed.as_ref().unwrap())
+        .collect();
     let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
         &air_infos[1..],
+        &table_data,
         &main_trace,
         air_infos[0].preprocessed.as_ref(),
         &air_infos[0].lookups,
@@ -818,4 +842,115 @@ fn test_lookup_skips_last_row() {
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis)
         .expect("EveryRowExceptLast lookup should skip last row");
+}
+
+/// Test a prover-provided table lookup.
+///
+/// The main trace looks up (col0, col1) entries in a "MemTable" whose data
+/// is supplied by the prover (not preprocessed). The verifier never sees
+/// the table contents — only the lookup constraints are checked.
+#[test]
+fn test_prover_table_lookup() {
+    let _ = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    let config = setup::test_config(444);
+
+    // Circuit JSON: EveryRow lookup of (col0, col1) into "MemTable" with Receive direction.
+    let json_content = r#"[
+      {
+        "type": "EveryRow",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "MemTable",
+                "entry": [
+                  { "type": "var", "index": 0 },
+                  { "type": "var", "index": 1 }
+                ],
+                "direction": "receive"
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 },
+              { "row": 0, "column": 1 }
+            ],
+            "offset": 2,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    let num_rows = 16usize;
+
+    // Main trace: 16 rows × 2 columns. col0 = i, col1 = 10*i.
+    let main_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            vec![
+                BabyBear::from_u64(i as u64),
+                BabyBear::from_u64(10 * i as u64),
+            ]
+        })
+        .collect();
+    let main_trace = RowMajorMatrix::new(main_data, 2);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, 2, main_trace.height());
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    // ProverTableAir: "MemTable" with data_width=2
+    let mem_table_air = ProverTableAir::<BabyBear>::new("MemTable".into(), 2);
+    let mem_table_instance = CleanAirInstance::ProverTable(mem_table_air);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance),
+        AirInfo::new(mem_table_instance),
+    ];
+
+    // Prover table data: 16 rows of (i, 10*i) — same entries as the main trace.
+    // This is the data-only matrix (no multiplicity column yet).
+    let prover_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            vec![
+                BabyBear::from_u64(i as u64),
+                BabyBear::from_u64(10 * i as u64),
+            ]
+        })
+        .collect();
+    let prover_data_matrix = RowMajorMatrix::new(prover_data, 2);
+
+    // Pass the prover data (not preprocessed) as table_data
+    let table_data: Vec<&RowMajorMatrix<_>> = vec![&prover_data_matrix];
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
+        &air_infos[1..],
+        &table_data,
+        &main_trace,
+        air_infos[0].preprocessed.as_ref(),
+        &air_infos[0].lookups,
+        &air_infos[0].lookup_row_scopes,
+    );
+
+    // Append multiplicity column to prover data to form full trace (width = data_width + 1)
+    let mult_trace = &lookup_traces[0];
+    let mut full_table_data = Vec::with_capacity(num_rows * 3);
+    for row in 0..num_rows {
+        // data columns
+        for col in 0..2 {
+            full_table_data.push(prover_data_matrix.get(row, col).unwrap());
+        }
+        // multiplicity column
+        full_table_data.push(mult_trace.get(row, 0).unwrap());
+    }
+    let full_table_trace = RowMajorMatrix::new(full_table_data, 3);
+
+    let traces = vec![main_trace, full_table_trace];
+
+    let pis = vec![];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis)
+        .expect("prover table lookup verification failed");
 }
