@@ -10,6 +10,7 @@ use p3_matrix::{dense::RowMajorMatrix, Matrix};
 use p3_uni_stark::{Entry, SymbolicExpression};
 
 use crate::StarkGenericConfig;
+use crate::clean_ast::LookupRowScope;
 
 /// Evaluate a SymbolicExpression on concrete row data.
 ///
@@ -62,6 +63,7 @@ pub fn generate_multiplicity_traces<F, SC>(
     air_infos: &[crate::key::AirInfo<F>],
     main_trace: &RowMajorMatrix<F>,
     main_air_lookups: &[Lookup<F>],
+    lookup_row_scopes: &[LookupRowScope],
 ) -> Vec<RowMajorMatrix<F>>
 where
     F: Field + PrimeField32 + From<crate::Val<SC>> + Into<crate::Val<SC>>,
@@ -83,10 +85,12 @@ where
 
         let table_size = preprocessed.height();
 
-        // Find the main AIR lookup that targets this table (by global interaction name)
-        let matching_lookups: Vec<&Lookup<F>> = main_air_lookups
+        // Find the main AIR lookups that target this table (by global interaction name),
+        // keeping track of original index for scope lookup.
+        let matching_lookups: Vec<(usize, &Lookup<F>)> = main_air_lookups
             .iter()
-            .filter(|lookup| {
+            .enumerate()
+            .filter(|(_, lookup)| {
                 if let p3_air::lookup::Kind::Global(name) = &lookup.kind {
                     name == table_name
                 } else {
@@ -109,10 +113,17 @@ where
 
         // Calculate multiplicities by evaluating ALL columns of each lookup tuple
         // and looking up the resulting values in the preprocessed table index.
-        for row_idx in 0..main_trace.height() {
+        let height = main_trace.height();
+        for row_idx in 0..height {
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
 
-            for lookup in &matching_lookups {
+            for &(global_idx, ref lookup) in &matching_lookups {
+                let scope = lookup_row_scopes[global_idx];
+                match scope {
+                    LookupRowScope::FirstRow => { if row_idx != 0 { continue; } }
+                    LookupRowScope::LastRow => { if row_idx != height - 1 { continue; } }
+                    LookupRowScope::EveryRowExceptLast => { if row_idx == height - 1 { continue; } }
+                }
                 for tuple in &lookup.element_exprs {
                     // Evaluate ALL element expressions to get the full lookup key
                     let values: Vec<u32> = tuple

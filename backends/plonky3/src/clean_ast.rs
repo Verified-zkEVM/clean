@@ -131,6 +131,17 @@ pub struct VarLocation {
     pub column: usize,
 }
 
+/// Which rows a lookup applies to during trace generation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LookupRowScope {
+    /// Lookup applies only on row 0.
+    FirstRow,
+    /// Lookup applies only on the last row (height - 1).
+    LastRow,
+    /// Lookup applies on rows 0..height-1 (all except last).
+    EveryRowExceptLast,
+}
+
 /// Current or next row transition
 #[derive(Debug)]
 pub enum Transition {
@@ -314,19 +325,23 @@ impl CleanOps {
         AstUtils::find_lookup_ops(&ops.collect::<Vec<_>>())
     }
 
-    /// Get all lookup operations paired with their assignment context.
+    /// Get all lookup operations paired with their assignment context and row scope.
     /// This is needed for expression-based lookups where var indices must
     /// be resolved to trace columns via the assignment.
-    pub fn lookup_ops_with_assignments(&self) -> Vec<(LookupOp, Assignment)> {
+    pub fn lookup_ops_with_assignments(&self) -> Vec<(LookupOp, Assignment, LookupRowScope)> {
         let mut result = Vec::new();
         for op in &self.ops {
-            let context = match op {
-                CleanOp::Boundary { context, .. } => context,
-                CleanOp::EveryRowExceptLast { context } => context,
+            let (context, scope) = match op {
+                CleanOp::Boundary { row: BoundaryRow::FirstRow, context } =>
+                    (context, LookupRowScope::FirstRow),
+                CleanOp::Boundary { row: BoundaryRow::LastRow, context } =>
+                    (context, LookupRowScope::LastRow),
+                CleanOp::EveryRowExceptLast { context } =>
+                    (context, LookupRowScope::EveryRowExceptLast),
             };
             let lookups = AstUtils::find_lookup_ops(&context.circuit);
             for lookup in lookups {
-                result.push((lookup, context.assignment.clone()));
+                result.push((lookup, context.assignment.clone(), scope));
             }
         }
         result
