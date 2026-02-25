@@ -422,6 +422,93 @@ fn test_main_air_send_direction() {
         .expect("send direction permutation check verification failed");
 }
 
+/// Test that a misbalanced Send/Receive pair is rejected.
+/// Same setup as test_main_air_send_direction, but the Receive side has one
+/// entry replaced so the multisets don't match. Plonky3 detects the
+/// imbalance during proving and panics.
+#[test]
+#[should_panic(expected = "Lookup mismatch")]
+fn test_send_receive_misbalance_fails() {
+    let config = setup::test_config(55);
+
+    let json_content = r#"[
+      {
+        "type": "EveryRow",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "MemTable",
+                "entry": [
+                  { "type": "var", "index": 0 },
+                  { "type": "var", "index": 1 }
+                ],
+                "direction": "send"
+              }
+            },
+            {
+              "lookup": {
+                "table": "MemTable",
+                "entry": [
+                  { "type": "var", "index": 2 },
+                  { "type": "var", "index": 3 }
+                ],
+                "direction": "receive"
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 },
+              { "row": 0, "column": 1 },
+              { "row": 0, "column": 2 },
+              { "row": 0, "column": 3 }
+            ],
+            "offset": 4,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    // Main trace: 16 rows × 4 columns.
+    // Send side: (i, 10*i) as before.
+    // Receive side: (15-i, 10*(15-i)) EXCEPT row 0 which has (999, 9990)
+    // instead of (15, 150). This breaks the permutation.
+    let num_rows = 16usize;
+    let main_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            let (recv_a, recv_b) = if i == 0 {
+                (999, 9990) // misbalanced entry
+            } else {
+                let j = num_rows - 1 - i;
+                (j, 10 * j)
+            };
+            vec![
+                BabyBear::from_u64(i as u64),
+                BabyBear::from_u64(10 * i as u64),
+                BabyBear::from_u64(recv_a as u64),
+                BabyBear::from_u64(recv_b as u64),
+            ]
+        })
+        .collect();
+    let main_trace = RowMajorMatrix::new(main_data, 4);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, 4, main_trace.height());
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![AirInfo::new(air_instance)];
+
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
+        &air_infos[1..], &main_trace, air_infos[0].preprocessed.as_ref(), &air_infos[0].lookups, &air_infos[0].lookup_row_scopes,
+    );
+    let mut traces = vec![main_trace];
+    traces.extend(lookup_traces);
+
+    let pis = vec![];
+    let _proof = prove(&config, &air_infos, &traces, &pis);
+}
+
 /// Test a 16-entry range-check table to demonstrate the generic lookup framework
 /// works with arbitrary table names and sizes.
 #[test]
