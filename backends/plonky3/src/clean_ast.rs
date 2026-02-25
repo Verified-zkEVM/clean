@@ -142,22 +142,6 @@ pub enum LookupRowScope {
     EveryRowExceptLast,
 }
 
-/// Current or next row transition
-#[derive(Debug)]
-pub enum Transition {
-    Current,
-    Next,
-}
-
-#[derive(Debug)]
-pub enum LookupRow {
-    /// Specific boundary row
-    Boundary {
-        row: BoundaryRow,
-    },
-    Transition(Transition),
-}
-
 /// AST expression utilities
 pub struct AstUtils;
 
@@ -247,73 +231,6 @@ impl CleanOps {
     /// Get reference to the operations
     pub fn ops(&self) -> &[CleanOp] {
         &self.ops
-    }
-
-    /// Process lookups for all operations.
-    /// The callback receives (LookupRow, column, table_name).
-    pub fn process_lookups<C>(&self, mut callback: C)
-    where
-        C: FnMut(LookupRow, usize, &str),
-    {
-        for op in &self.ops {
-            // Extract context and check for boundary row match if needed
-            let (context, boundary_row) = match op {
-                CleanOp::Boundary { context, row } => (context, Some(row)),
-                CleanOp::EveryRowExceptLast { context } => (context, None),
-            };
-
-            // Process all lookups in the context
-            for lookup in op.lookups() {
-                let table_name = &lookup.table;
-                for entry in lookup.entry.iter() {
-                    match entry {
-                        ExprNode::Var { index } => {
-                            // todo: assume we would always lookup the current row
-                            let var = &context.assignment.vars[*index];
-                            if let Some(boundary_row) = boundary_row {
-                                // Convert usize row to boundary row for comparison
-                                let expected_row_value = match boundary_row {
-                                    BoundaryRow::FirstRow => 0,
-                                    BoundaryRow::LastRow => panic!(
-                                        "LastRow boundary not supported in cell lookups"
-                                    ),
-                                };
-
-                                if var.row != expected_row_value {
-                                    panic!(
-                                        "Boundary row {} does not match the lookup row {}",
-                                        expected_row_value, var.row
-                                    );
-                                }
-
-                                callback(
-                                    LookupRow::Boundary {
-                                        row: boundary_row.clone(),
-                                    },
-                                    var.column,
-                                    table_name,
-                                );
-                            } else if var.row == 0 {
-                                callback(
-                                    LookupRow::Transition(Transition::Current),
-                                    var.column,
-                                    table_name,
-                                );
-                            } else if var.row == 1 {
-                                callback(
-                                    LookupRow::Transition(Transition::Next),
-                                    var.column,
-                                    table_name,
-                                );
-                            } else {
-                                panic!("Invalid row index: {}", var.row);
-                            }
-                        }
-                        _ => panic!("Invalid lookup entry"),
-                    }
-                }
-            }
-        }
     }
 
     /// Get all lookup operations from the clean operations
