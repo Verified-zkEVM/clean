@@ -197,13 +197,13 @@ where
 }
 
 impl<F: Field> MainAir<F> {
-    /// Create a new CleanAir instance from JSON content and trace data
+    /// Create a new MainAir instance from JSON content and trace data
     pub fn new(json_content: &str, width: usize, trace_height: usize) -> Self {
         let clean_ops = CleanOps::from_json(json_content);
         Self::build(clean_ops, width, trace_height)
     }
 
-    /// Create a new CleanAir instance from CleanOps and trace data
+    /// Create a new MainAir instance from CleanOps and trace data
     pub fn from_ops(clean_ops: CleanOps, width: usize, trace_height: usize) -> Self {
         Self::build(clean_ops, width, trace_height)
     }

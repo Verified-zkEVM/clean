@@ -572,9 +572,7 @@ fn test_two_table_lookups() {
 ///
 /// The last row contains a value (999) absent from the byte-range table.
 /// Under correct `EveryRowExceptLast` semantics the lookup should not apply
-/// on the last row, so this should succeed. Currently `generate_multiplicity_traces`
-/// iterates all rows unconditionally, so this test is expected to **panic** with
-/// "Lookup values [999] not found in table 'Bytes'" until the bug is fixed.
+/// on the last row, so this should succeed.
 #[test]
 fn test_lookup_skips_last_row() {
     let _ = tracing_subscriber::FmtSubscriber::builder()
