@@ -2,7 +2,6 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::marker::PhantomData;
 
 use p3_air::lookup::{Direction, Kind, Lookup, LookupInput};
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};
@@ -33,7 +32,6 @@ where
     preprocessed: Option<RowMajorMatrix<F>>,
     /// Maps each LookupRowScope to its preprocessed column index
     scope_to_prep_col: BTreeMap<LookupRowScope, usize>,
-    _marker: PhantomData<F>,
 }
 
 impl<F: Field> BaseAir<F> for MainAir<F> {
@@ -247,7 +245,6 @@ impl<F: Field> MainAir<F> {
             lookup_row_scopes: Vec::new(),
             preprocessed,
             scope_to_prep_col,
-            _marker: PhantomData,
         }
     }
 
