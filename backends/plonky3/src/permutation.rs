@@ -49,11 +49,12 @@ pub fn eval_symbolic_on_row<F: Field>(
 /// based on the lookup operations from the main AIR's lookups.
 ///
 /// This function:
-/// 1. Gets the main AIR's global lookups (element tuples with Direction::Receive)
+/// 1. Gets the main AIR's global lookups (element tuples with their direction)
 /// 2. For each non-main AIR, extracts its table name
 /// 3. Matches main AIR lookups to table AIRs by global interaction name
 /// 4. Uses preprocessed.height() for table size
-/// 5. Computes multiplicities by evaluating symbolic expressions on each main trace row
+/// 5. Computes multiplicities by evaluating the signed multiplicity expressions on
+///    each main trace row (Direction::Receive adds, Direction::Send subtracts)
 ///
 /// # Arguments
 /// * `air_infos` - Vector of AirInfo instances (main + lookup airs)
@@ -113,19 +114,27 @@ where
 
         // Calculate multiplicities by evaluating ALL columns of each lookup tuple
         // and looking up the resulting values in the preprocessed table index.
+        //
+        // The signed multiplicity expression (from Lookup::multiplicities_exprs)
+        // is evaluated to determine the contribution: Direction::Receive yields +1,
+        // Direction::Send yields -1 (on active rows).
+        let main_prep = air_infos[0].preprocessed.as_ref();
         let height = main_trace.height();
         for row_idx in 0..height {
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
+            let prep_slice: Vec<F> = main_prep
+                .map(|p| p.row(row_idx).unwrap().into_iter().collect())
+                .unwrap_or_default();
 
             for &(global_idx, ref lookup) in &matching_lookups {
                 if !lookup_row_scopes[global_idx].is_active(row_idx, height) {
                     continue;
                 }
-                for tuple in &lookup.element_exprs {
+                for (tuple_idx, tuple) in lookup.element_exprs.iter().enumerate() {
                     // Evaluate ALL element expressions to get the full lookup key
                     let values: Vec<u32> = tuple
                         .iter()
-                        .map(|expr| eval_symbolic_on_row(expr, &row_slice, &[]).as_canonical_u32())
+                        .map(|expr| eval_symbolic_on_row(expr, &row_slice, &prep_slice).as_canonical_u32())
                         .collect();
 
                     let table_row = row_index.get(&values).unwrap_or_else(|| {
@@ -135,8 +144,15 @@ where
                         )
                     });
 
+                    // Evaluate the signed multiplicity: positive for Receive,
+                    // negative for Send (Direction::Send negates the mult).
+                    let mult_contribution = eval_symbolic_on_row(
+                        &lookup.multiplicities_exprs[tuple_idx],
+                        &row_slice,
+                        &prep_slice,
+                    );
                     let m = multiplicity_trace.row_mut(*table_row).get_mut(0).unwrap();
-                    *m += F::ONE;
+                    *m += mult_contribution;
                 }
             }
         }

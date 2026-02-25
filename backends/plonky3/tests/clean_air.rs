@@ -432,7 +432,7 @@ fn test_range_check_16() {
 
     let config = setup::test_config(42);
 
-    // Minimal JSON: an EveryRowExceptLast op with a lookup of column 0 into "Range16".
+    // Minimal JSON: an EveryRow op with a lookup of column 0 into "Range16".
     // No arithmetic constraints -- only the lookup.
     let json_content = r#"[
       {
@@ -578,7 +578,7 @@ fn test_two_table_lookups() {
 
     let config = setup::test_config(200);
 
-    // Circuit JSON: two lookups in one EveryRowExceptLast gate.
+    // Circuit JSON: two lookups in one EveryRow gate.
     // col 0 looked up in "Range8", col 1 looked up in "Squares".
     let json_content = r#"[
       {
