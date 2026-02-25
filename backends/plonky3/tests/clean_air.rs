@@ -103,10 +103,6 @@ fn read_test_json(filename: &str) -> String {
 /// test fibonacci8 exported from clean
 #[test]
 fn test_clean_fib() {
-    // Initialize tracing subscriber to see tracing output
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
 
     let config = setup::test_config(1);
 
@@ -167,9 +163,6 @@ fn test_clean_fib() {
 /// multi-column sends from the main trace.
 #[test]
 fn test_multi_column_lookup() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
 
     let config = setup::test_config(99);
 
@@ -261,9 +254,6 @@ fn test_multi_column_lookup() {
 /// Demonstrates lookup entries like (var0, var1 + const(1)).
 #[test]
 fn test_expression_lookup() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
 
     let config = setup::test_config(77);
 
@@ -344,9 +334,6 @@ fn test_expression_lookup() {
 /// works with arbitrary table names and sizes.
 #[test]
 fn test_range_check_16() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
 
     let config = setup::test_config(42);
 
@@ -416,9 +403,6 @@ fn test_range_check_16() {
 /// to a verified STARK proof in the Rust backend.
 #[test]
 fn test_lean_circuit_end_to_end() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
 
     let config = setup::test_config(1);
 
@@ -487,9 +471,6 @@ fn test_lean_circuit_end_to_end() {
 /// - Global cumulative sum check across 3 AIRs (1 main + 2 tables)
 #[test]
 fn test_two_table_lookups() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
 
     let config = setup::test_config(200);
 
@@ -578,9 +559,6 @@ fn test_two_table_lookups() {
 /// on the last row, so this should succeed.
 #[test]
 fn test_lookup_skips_last_row() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
 
     let config = setup::test_config(333);
 
@@ -651,9 +629,6 @@ fn test_lookup_skips_last_row() {
 /// row 15 duplicates row 0 (the scope skips it).
 #[test]
 fn test_prover_table_lookup() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
 
     let config = setup::test_config(444);
 
