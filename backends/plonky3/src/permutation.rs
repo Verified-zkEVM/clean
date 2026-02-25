@@ -160,3 +160,38 @@ where
 
     lookup_traces
 }
+
+/// Append a width-1 multiplicity column to a data matrix, producing a
+/// combined matrix of width `data.width() + 1`.
+///
+/// Used to build the full trace for a `ProverTableAir` from the
+/// prover-supplied data and the multiplicities computed by
+/// `generate_multiplicity_traces`.
+pub fn append_multiplicity_column<F: Field>(
+    data: &RowMajorMatrix<F>,
+    multiplicity: &RowMajorMatrix<F>,
+) -> RowMajorMatrix<F> {
+    assert_eq!(
+        data.height(),
+        multiplicity.height(),
+        "data and multiplicity must have the same number of rows"
+    );
+    assert_eq!(
+        multiplicity.width(),
+        1,
+        "multiplicity matrix must have exactly one column"
+    );
+
+    let new_width = data.width() + 1;
+    let num_rows = data.height();
+    let mut combined = Vec::with_capacity(num_rows * new_width);
+
+    for row in 0..num_rows {
+        for col in 0..data.width() {
+            combined.push(data.get(row, col).unwrap());
+        }
+        combined.push(multiplicity.get(row, 0).unwrap());
+    }
+
+    RowMajorMatrix::new(combined, new_width)
+}

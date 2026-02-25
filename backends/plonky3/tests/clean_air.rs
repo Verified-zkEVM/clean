@@ -1,5 +1,6 @@
 use clean_backend::{
-    byte_range_air, generate_multiplicity_traces, parse_init_trace, prove, verify, AirInfo,
+    append_multiplicity_column, byte_range_air, generate_multiplicity_traces, parse_init_trace,
+    prove, verify, AirInfo,
     CleanAirInstance, MainAir, PreprocessedTableAir, ProverTableAir, StarkConfig,
 };
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
@@ -757,18 +758,7 @@ fn test_prover_table_lookup() {
         &air_infos[0].lookup_row_scopes,
     );
 
-    // Append multiplicity column to prover data to form full trace (width = data_width + 1)
-    let mult_trace = &lookup_traces[0];
-    let mut full_table_data = Vec::with_capacity(num_rows * 3);
-    for row in 0..num_rows {
-        // data columns
-        for col in 0..2 {
-            full_table_data.push(prover_data_matrix.get(row, col).unwrap());
-        }
-        // multiplicity column
-        full_table_data.push(mult_trace.get(row, 0).unwrap());
-    }
-    let full_table_trace = RowMajorMatrix::new(full_table_data, 3);
+    let full_table_trace = append_multiplicity_column(&prover_data_matrix, &lookup_traces[0]);
 
     let traces = vec![main_trace, full_table_trace];
 
