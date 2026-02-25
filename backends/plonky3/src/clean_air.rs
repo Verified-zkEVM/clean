@@ -133,13 +133,8 @@ where
 
         let ops_with_assignments = self.clean_ops.lookup_ops_with_assignments();
 
-        if ops_with_assignments.is_empty() {
-            self.lookup_row_scopes = Vec::new();
-            return Vec::new();
-        }
-
-        let symbolic_prep = AirBuilder::preprocessed(&symbolic_builder).unwrap();
-        let symbolic_prep_local = symbolic_prep.row_slice(0).unwrap();
+        let symbolic_prep = AirBuilder::preprocessed(&symbolic_builder);
+        let symbolic_prep_local = symbolic_prep.as_ref().and_then(|m| m.row_slice(0));
 
         // Group by (table_name, scope)
         let mut lookups_by_key: BTreeMap<(String, LookupRowScope), Vec<LookupInput<AB::F>>> =
@@ -160,13 +155,17 @@ where
                 .map(|e| AstUtils::lower_expr::<SymbolicAirBuilder<AB::F>>(e, &load_var, &load_pi))
                 .collect();
 
-            // Use preprocessed 0/1 selector column as multiplicity filter.
-            // Lagrange selectors (is_first_row, is_last_row, is_transition) are NOT
-            // normalized and cannot be used as multiplicity filters for Kind::Global
-            // lookups — see p3_air::lookup comment.  Preprocessed columns are proper
-            // committed polynomials and work correctly at the OOD evaluation point.
-            let col_idx = self.scope_to_prep_col[scope];
-            let mult: SymbolicExpression<AB::F> = symbolic_prep_local[col_idx].into();
+            // Use preprocessed 0/1 selector column as multiplicity filter when
+            // the scope has one.  Scopes without a preprocessed column (e.g. a
+            // future EveryRow scope) use a constant ONE multiplicity.
+            let mult: SymbolicExpression<AB::F> = match self.scope_to_prep_col.get(scope) {
+                Some(&col_idx) => {
+                    let prep = symbolic_prep_local.as_ref()
+                        .expect("preprocessed trace required for scoped lookups");
+                    prep[col_idx].into()
+                }
+                None => SymbolicExpression::Constant(AB::F::ONE),
+            };
             let input: LookupInput<AB::F> = (values, mult, Direction::Receive);
 
             lookups_by_key
