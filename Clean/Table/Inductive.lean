@@ -96,6 +96,20 @@ def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint
   -- TODO make this more efficient by assigning variables as long as they don't come from the input
   output' === output
 
+/--
+  Like `inductiveConstraint`, but instead of asserting equality with `getNextRow`,
+  it assigns the step output directly to next-row columns. This creates witness
+  generators that `witnessesWithData` can evaluate to fill in the trace.
+-/
+def inductiveWitness (table : InductiveTable F State Input) : TableConstraint 2 (ProvablePair State Input) F Unit := do
+  let (acc, x) ← getCurrRow
+  let output ← table.step acc x
+  let elems := toVars output
+  for h : i in [:size State] do
+    have hi : i < size State := Membership.mem.upper h
+    have hi' : i < size State + size Input := by omega
+    assign (.next ⟨i, hi'⟩) elems[i]
+
 def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F) : SingleRowConstraint (ProvablePair State Input) F := do
   let (actual, _) ← getCurrRow
   actual === (const target)

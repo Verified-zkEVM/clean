@@ -9,7 +9,7 @@ use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
 use p3_field::{Field, PrimeCharacteristicRing};
-use p3_fri::{create_test_fri_params, TwoAdicFriPcs};
+use p3_fri::{FriParameters, TwoAdicFriPcs};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use p3_merkle_tree::MerkleTreeMmcs;
@@ -40,6 +40,10 @@ mod setup {
     pub type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
 
     pub fn test_config(seed: u64) -> MyConfig {
+        test_config_with_blowup(seed, 2)
+    }
+
+    pub fn test_config_with_blowup(seed: u64, log_blowup: usize) -> MyConfig {
         let mut rng = SmallRng::seed_from_u64(seed);
         let perm = Perm::new_from_rng_128(&mut rng);
         let hash = MyHash::new(perm.clone());
@@ -47,7 +51,18 @@ mod setup {
         let val_mmcs = ValMmcs::new(hash, compress);
         let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
         let dft = Dft::default();
-        let fri = create_test_fri_params(challenge_mmcs, 2);
+        // create_test_fri_params hardcodes log_blowup=2 and takes
+        // log_final_poly_len as the second arg.  Build FriParameters
+        // directly so we can actually control the blowup factor.
+        let fri = FriParameters {
+            log_blowup,
+            log_final_poly_len: 0,
+            max_log_arity: 1,
+            num_queries: 2,
+            commit_proof_of_work_bits: 1,
+            query_proof_of_work_bits: 1,
+            mmcs: challenge_mmcs,
+        };
         let pcs = Pcs::new(dft, val_mmcs, fri);
         let challenger = Challenger::new(perm);
         MyConfig::new(pcs, challenger)
@@ -702,4 +717,109 @@ fn test_prover_table_lookup() {
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis)
         .expect("prover table lookup verification failed");
+}
+
+/// End-to-end test for FemtoCairo: circuit and trace exported from Lean,
+/// with a preprocessed program table and a prover-supplied memory table.
+///
+/// Test program: 15 ADD instructions (all-immediate addressing mode), 64 program entries.
+/// State: 16 rows (15 steps), from (pc=0,ap=0,fp=0) to (pc=60,ap=0,fp=0).
+/// Tables: program (preprocessed, 64x2), memory (prover-supplied, 16x2).
+#[test]
+fn test_femtocairo_e2e() {
+    // FemtoCairo has many lookups per row (program + memory), so the LogUp
+    // constraint degree is high. We need a larger log_blowup than the default.
+    let config = setup::test_config_with_blowup(500, 3);
+
+    let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let tests_dir = backend_dir.join("tests").join("fixtures");
+    std::fs::create_dir_all(tests_dir.join("output")).unwrap();
+
+    // --- Generate circuit JSON from Lean ---
+    let circuit_output = Command::new("bash")
+        .arg(tests_dir.join("generate_femtocairo_circuit.sh"))
+        .arg("output/femtocairo_circuit.json")
+        .current_dir(&tests_dir)
+        .output()
+        .expect("Failed to run FemtoCairo circuit generation script");
+    assert!(
+        circuit_output.status.success(),
+        "FemtoCairo circuit generation failed: {}",
+        String::from_utf8_lossy(&circuit_output.stderr)
+    );
+    let circuit_json = std::fs::read_to_string(tests_dir.join("output/femtocairo_circuit.json"))
+        .expect("Failed to read generated FemtoCairo circuit JSON");
+
+    // --- Generate trace from Lean ---
+    let trace_output = Command::new("bash")
+        .arg(tests_dir.join("generate_femtocairo_trace.sh"))
+        .arg("output/femtocairo_trace.json")
+        .current_dir(&tests_dir)
+        .output()
+        .expect("Failed to run FemtoCairo trace generation script");
+    assert!(
+        trace_output.status.success(),
+        "FemtoCairo trace generation failed: {}",
+        String::from_utf8_lossy(&trace_output.stderr)
+    );
+    let trace_json = std::fs::read_to_string(tests_dir.join("output/femtocairo_trace.json"))
+        .expect("Failed to read generated FemtoCairo trace JSON");
+
+    let init_trace = parse_init_trace::<BabyBear>(&trace_json);
+    let width = init_trace[0].len();
+    let main_trace: RowMajorMatrix<BabyBear> =
+        RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
+
+    // --- Build program table (PreprocessedTableAir) ---
+    // 64 rows x 2 cols: (index, program[index])
+    let program_values: [u64; 64] = [
+        252, 3, 5, 8, 252, 10, 20, 30, 252, 1, 2, 3, 252, 7, 8, 15,
+        252, 4, 6, 10, 252, 11, 22, 33, 252, 2, 3, 5, 252, 9, 1, 10,
+        252, 13, 14, 27, 252, 5, 5, 10, 252, 6, 7, 13, 252, 8, 9, 17,
+        252, 15, 16, 31, 252, 20, 30, 50, 252, 100, 200, 300, 0, 0, 0, 0,
+    ];
+    let program_data: Vec<BabyBear> = (0u64..64)
+        .flat_map(|i| {
+            vec![
+                BabyBear::from_u64(i),
+                BabyBear::from_u64(program_values[i as usize]),
+            ]
+        })
+        .collect();
+    let program_matrix = RowMajorMatrix::new(program_data, 2);
+    let program_air = PreprocessedTableAir::new("program".into(), program_matrix);
+
+    // --- Build memory table (ProverTableAir) ---
+    // 16 rows x 2 cols: (address, value) — dummy entries for immediate mode
+    let mem_air = ProverTableAir::<BabyBear>::new("memory".into(), 2);
+    let mem_data: Vec<BabyBear> = (0u64..16)
+        .flat_map(|i| vec![BabyBear::from_u64(i), BabyBear::from_u64(0)])
+        .collect();
+    let mem_data_matrix = RowMajorMatrix::new(mem_data, 2);
+
+    // --- Build AIR instances ---
+    let main_air_instance = MainAir::<BabyBear>::new(
+        &circuit_json,
+        main_trace.width(),
+        main_trace.height(),
+    );
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(CleanAirInstance::Main(main_air_instance)),
+        AirInfo::new(CleanAirInstance::Preprocessed(program_air)),
+        AirInfo::new(CleanAirInstance::ProverTable(mem_air)),
+    ];
+
+    // --- Generate table traces, prove, verify ---
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos,
+        &main_trace,
+        &[("memory", &mem_data_matrix)],
+    );
+    let mut traces = vec![main_trace];
+    traces.extend(table_traces);
+
+    let pis = vec![];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis)
+        .expect("FemtoCairo end-to-end verification failed");
 }

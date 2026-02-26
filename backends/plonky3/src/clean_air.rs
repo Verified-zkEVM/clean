@@ -131,6 +131,7 @@ where
             SymbolicAirBuilder::<AB::F>::new(prep_width, self.width, 0, 0, 0);
         let symbolic_main = AirBuilder::main(&symbolic_builder);
         let symbolic_main_local = symbolic_main.row_slice(0).unwrap();
+        let symbolic_main_next = symbolic_main.row_slice(1).unwrap();
 
         let ops_with_assignments = self.clean_ops.lookup_ops_with_assignments();
 
@@ -144,7 +145,11 @@ where
         for (lookup_op, assignment, scope) in &ops_with_assignments {
             let load_var = |var_idx: usize| -> p3_uni_stark::SymbolicVariable<AB::F> {
                 let var = &assignment.vars[var_idx];
-                symbolic_main_local[var.column]
+                match var.row {
+                    0 => symbolic_main_local[var.column],
+                    1 => symbolic_main_next[var.column],
+                    _ => panic!("Invalid row index in lookup variable: {}", var.row),
+                }
             };
             let load_pi = |_pi_idx: usize| -> SymbolicExpression<AB::F> {
                 panic!("Pi not supported in lookups")

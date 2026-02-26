@@ -38,26 +38,22 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
   let assignment := ctx.assignment
   let generators := ctx.circuit.witnessGenerators
 
-    let aux_map := buildAuxMap assignment
+  let aux_map := buildAuxMap assignment
   let next_row := Array.replicate cur_row.size 0
-
-  -- rules for fetching the values for expression variables
-  let env i :=
-    if h : i < assignment.offset then
-      match assignment.vars[i] with
-      | .input ⟨r, c⟩ =>
-        -- fetch input values
-          if r = 0 then cur_row[c]! else next_row[c]!
-      | .aux _ =>
-        -- assumption:
-        -- if expression var<i> corresponds to a aux type,
-        -- then the value is already allocated in aux columns of the next_row.
-        next_row[aux_map[i]!]!
-    -- todo: maybe provide Inhabited instance for Cell to remove this?
-    else panic! s!"Invalid variable index {i} in environment"
 
   -- evaluate the witness generators
   let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
+      -- env is defined inside the fold so it sees the latest next_row,
+      -- allowing later witnesses to depend on earlier aux values.
+      let env i :=
+        if h : i < assignment.offset then
+          match assignment.vars[i] with
+          | .input ⟨r, c⟩ =>
+              if r = 0 then cur_row[c]! else next_row[c]!
+          | .aux _ =>
+            next_row[aux_map[i]!]!
+        else panic! s!"Invalid variable index {i} in environment"
+
       let wit := compute ⟨ env, fun _ _ => #[] ⟩
 
       -- insert the witness value to the next row
@@ -67,7 +63,6 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
         match var with
           | .input ⟨r, c⟩ => if r = 1 then next_row.set! c wit else next_row
           | .aux _ => next_row.set! aux_map[idx]! wit
-      -- todo: maybe provide Inhabited instance for Cell to remove this?
       else panic! s!"Invalid variable index {idx} in environment"
 
       (idx + 1, next_row)
@@ -94,6 +89,65 @@ def witnesses
 
   for _ in [: n-1] do
     let next := generateNextRow tc current
+    trace := trace.push next
+    current := next
+  trace
+
+/--
+  Like `generateNextRow` but accepts `ProverData F` to pass to witness generators
+  (instead of `fun _ _ => #[]`).
+-/
+def generateNextRowWithData (tc : TableConstraint W S F Unit) (cur_row : Array F)
+    (data : ProverData F) : Array F :=
+  let ctx := (tc .empty).2
+  let assignment := ctx.assignment
+  let generators := ctx.circuit.witnessGenerators
+  let aux_map := buildAuxMap assignment
+  let next_row := Array.replicate cur_row.size 0
+
+  let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
+      -- env is defined inside the fold so it sees the latest next_row,
+      -- allowing later witnesses to depend on earlier aux values.
+      let env i :=
+        if h : i < assignment.offset then
+          match assignment.vars[i] with
+          | .input ⟨r, c⟩ =>
+              if r = 0 then cur_row[c]! else next_row[c]!
+          | .aux _ =>
+            next_row[aux_map[i]!]!
+        else panic! s!"Invalid variable index {i} in environment"
+
+      let wit := compute ⟨ env, data ⟩
+
+      let next_row := if h : idx < assignment.offset then
+        let var := assignment.vars[idx]
+        match var with
+          | .input ⟨r, c⟩ => if r = 1 then next_row.set! c wit else next_row
+          | .aux _ => next_row.set! aux_map[idx]! wit
+      else panic! s!"Invalid variable index {idx} in environment"
+
+      (idx + 1, next_row)
+    )
+    (0, next_row)
+
+  next_row
+
+/--
+  Like `witnesses` but accepts `ProverData F` and threads it through witness generation.
+  Use this when witness generators need access to prover data (e.g., memory tables).
+-/
+def witnessesWithData
+    (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ)
+    (data : ProverData F) : Array (Array F) := Id.run do
+
+  let aux_cols := Array.replicate tc.finalAssignment.numAux 0
+  let cur_row := (toElements init_row).toArray ++ aux_cols
+
+  let mut trace := #[cur_row]
+  let mut current := cur_row
+
+  for _ in [: n-1] do
+    let next := generateNextRowWithData tc current data
     trace := trace.push next
     current := next
   trace
