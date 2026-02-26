@@ -56,7 +56,7 @@ mod setup {
         // directly so we can actually control the blowup factor.
         let fri = FriParameters {
             log_blowup,
-            log_final_poly_len: 0,
+            log_final_poly_len: 2,
             max_log_arity: 1,
             num_queries: 2,
             commit_proof_of_work_bits: 1,

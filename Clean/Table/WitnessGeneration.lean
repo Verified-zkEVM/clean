@@ -23,6 +23,8 @@ def buildAuxMap (as : CellAssignment W S) : Std.HashMap ℕ ℕ := Id.run do
   The computation logic is obtained from the `TableConstraint` witness generators, each of which
   represents a witness variable corresponding to the `vars` in the `CellAssignment`.
 
+  Accepts `ProverData F` to pass to witness generators.
+
   Mapping for auxiliary columns:
   - The auxiliary cells' mapping from the `CellAssignment` to the aux columns in the trace row
   is done using the `buildAuxMap` function.
@@ -31,71 +33,6 @@ def buildAuxMap (as : CellAssignment W S) : Std.HashMap ℕ ℕ := Id.run do
   Mapping for input columns:
   - According to `CellAssignment` for input cells, the input columns are assigned to
   the corresponding columns in the trace row.
--/
-def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Array F :=
-  let ctx := (tc .empty).2
-
-  let assignment := ctx.assignment
-  let generators := ctx.circuit.witnessGenerators
-
-  let aux_map := buildAuxMap assignment
-  let next_row := Array.replicate cur_row.size 0
-
-  -- evaluate the witness generators
-  let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
-      -- env is defined inside the fold so it sees the latest next_row,
-      -- allowing later witnesses to depend on earlier aux values.
-      let env i :=
-        if h : i < assignment.offset then
-          match assignment.vars[i] with
-          | .input ⟨r, c⟩ =>
-              if r = 0 then cur_row[c]! else next_row[c]!
-          | .aux _ =>
-            next_row[aux_map[i]!]!
-        else panic! s!"Invalid variable index {i} in environment"
-
-      let wit := compute ⟨ env, fun _ _ => #[] ⟩
-
-      -- insert the witness value to the next row
-      let next_row := if h : idx < assignment.offset then
-        let var := assignment.vars[idx]
-
-        match var with
-          | .input ⟨r, c⟩ => if r = 1 then next_row.set! c wit else next_row
-          | .aux _ => next_row.set! aux_map[idx]! wit
-      else panic! s!"Invalid variable index {idx} in environment"
-
-      (idx + 1, next_row)
-    )
-    (0, next_row)
-
-  next_row
-
-/--
-  Generates a trace of length n, starting from the given row.
-
-  Returns an array of rows where each subsequent row is generated using the
-  table constraint's witness generators.
--/
-def witnesses
-    (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ) : Array (Array F) := Id.run do
-
-  -- append auxiliary columns to the current row
-  let aux_cols := Array.replicate tc.finalAssignment.numAux 0
-  let cur_row := (toElements init_row).toArray ++ aux_cols
-
-  let mut trace := #[cur_row]
-  let mut current := cur_row
-
-  for _ in [: n-1] do
-    let next := generateNextRow tc current
-    trace := trace.push next
-    current := next
-  trace
-
-/--
-  Like `generateNextRow` but accepts `ProverData F` to pass to witness generators
-  (instead of `fun _ _ => #[]`).
 -/
 def generateNextRowWithData (tc : TableConstraint W S F Unit) (cur_row : Array F)
     (data : ProverData F) : Array F :=
@@ -132,9 +69,17 @@ def generateNextRowWithData (tc : TableConstraint W S F Unit) (cur_row : Array F
 
   next_row
 
+/-- Like `generateNextRowWithData` but without prover data (uses `fun _ _ => #[]`). -/
+def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Array F :=
+  generateNextRowWithData tc cur_row (fun _ _ => #[])
+
 /--
-  Like `witnesses` but accepts `ProverData F` and threads it through witness generation.
+  Generates a trace of length n, starting from the given row.
+  Accepts `ProverData F` and threads it through witness generation.
   Use this when witness generators need access to prover data (e.g., memory tables).
+
+  Returns an array of rows where each subsequent row is generated using the
+  table constraint's witness generators.
 -/
 def witnessesWithData
     (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ)
@@ -151,3 +96,8 @@ def witnessesWithData
     trace := trace.push next
     current := next
   trace
+
+/-- Like `witnessesWithData` but without prover data (uses `fun _ _ => #[]`). -/
+def witnesses
+    (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ) : Array (Array F) :=
+  witnessesWithData tc init_row n (fun _ _ => #[])

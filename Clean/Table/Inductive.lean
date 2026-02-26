@@ -121,6 +121,20 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
     .boundary (.fromEnd 0) (equalityConstraint Input output_state),
   ]
 
+/--
+  Like `tableConstraints`, but uses `inductiveWitness` (which assigns the step
+  output directly) instead of `inductiveConstraint` (which asserts equality with
+  `getNextRow`). This is the formulation needed by circuit-gen and trace-gen
+  scripts, where `assign` avoids allocating extra witness columns that would
+  widen the trace.
+-/
+def tableConstraintsWitness (table : InductiveTable F State Input) (input_state output_state : State F) :
+  List (TableOperation (ProvablePair State Input) F) := [
+    .everyRowExceptLast table.inductiveWitness,
+    .boundary (.fromStart 0) (equalityConstraint Input input_state),
+    .boundary (.fromEnd 0) (equalityConstraint Input output_state),
+  ]
+
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : Environment F} :
   Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
     (equalityConstraint Input input_state .empty).2.circuit
