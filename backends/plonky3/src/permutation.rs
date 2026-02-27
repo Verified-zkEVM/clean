@@ -19,14 +19,15 @@ use crate::clean_ast::LookupRowScope;
 fn eval_symbolic_on_row<F: Field>(
     expr: &SymbolicExpression<F>,
     main_row: &[F],
-    main_next_row: &[F],
+    main_next_row: Option<&[F]>,
     preprocessed_row: &[F],
 ) -> F {
     match expr {
         SymbolicExpression::Constant(c) => *c,
         SymbolicExpression::Variable(v) => match v.entry {
             Entry::Main { offset: 0 } => main_row[v.index],
-            Entry::Main { offset: 1 } => main_next_row[v.index],
+            Entry::Main { offset: 1 } => main_next_row
+                .expect("next-row variable accessed on the last row")[v.index],
             Entry::Preprocessed { offset: 0 } => preprocessed_row[v.index],
             _ => panic!("Unsupported variable entry: {:?}", v.entry),
         },
@@ -136,10 +137,10 @@ where
         let height = main_trace.height();
         for row_idx in 0..height {
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
-            let next_row_slice: Vec<F> = if row_idx + 1 < height {
-                main_trace.row(row_idx + 1).unwrap().into_iter().collect()
+            let next_row_slice: Option<Vec<F>> = if row_idx + 1 < height {
+                Some(main_trace.row(row_idx + 1).unwrap().into_iter().collect())
             } else {
-                alloc::vec![F::ZERO; main_trace.width()]
+                None
             };
 
             for &(global_idx, ref lookup) in &matching_lookups {
@@ -151,7 +152,7 @@ where
                     let values: Vec<u32> = tuple
                         .iter()
                         .map(|expr| {
-                            eval_symbolic_on_row(expr, &row_slice, &next_row_slice, &[])
+                            eval_symbolic_on_row(expr, &row_slice, next_row_slice.as_deref(), &[])
                                 .as_canonical_u32()
                         })
                         .collect();
