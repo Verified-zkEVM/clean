@@ -8,16 +8,6 @@ import Clean.Table.Json
 open Examples.FemtoCairo.Plonky3TestData
 open Examples.FemtoCairo.Types
 
--- InductiveTable wrapping the FemtoCairo step circuit (Input = unit).
--- Only `.step` is used (via `inductiveWitness`);
--- proof fields are stubbed since this is a test script.
-def femtoCairoTable : InductiveTable (F pBabybear) State unit where
-  step state _ := femtoCairoStepMain state
-  Spec := fun _ _ _ _ _ _ => True
-  soundness := by simp only [InductiveTable.Soundness]; intros; trivial
-  completeness := by simp only [InductiveTable.Completeness]; intros; sorry
-  subcircuitsConsistent := by intros; sorry
-
 -- N = 16 rows (15 steps)
 def numRows : ℕ := 16
 

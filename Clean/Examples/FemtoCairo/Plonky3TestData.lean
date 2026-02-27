@@ -3,6 +3,7 @@
   Used by both FemtoCairoCircuitGen.lean and FemtoCairoTraceGen.lean.
 -/
 import Clean.Examples.FemtoCairo.FemtoCairo
+import Clean.Table.Inductive
 import Clean.Utils.Primes
 
 open Examples.FemtoCairo
@@ -51,6 +52,16 @@ def finalState : State (F pBabybear) := { pc := 60, ap := 0, fp := 0 }
 -- Build the step circuit directly from the elaborated circuit's main function.
 def femtoCairoStepMain : Var State (F pBabybear) → Circuit (F pBabybear) (Var State (F pBabybear)) :=
   (femtoCairoStepElaboratedCircuit testProgram h_programSize).main
+
+-- InductiveTable wrapping the FemtoCairo step circuit (Input = unit).
+-- Only `.step` is used (via `tableConstraintsWitness` / `inductiveWitness`);
+-- proof fields are stubbed since this is for test generation scripts.
+def femtoCairoTable : InductiveTable (F pBabybear) State unit where
+  step state _ := femtoCairoStepMain state
+  Spec := fun _ _ _ _ _ _ => True
+  soundness := by simp only [InductiveTable.Soundness]; intros; trivial
+  completeness := by simp only [InductiveTable.Completeness]; intros; sorry
+  subcircuitsConsistent := by intros; sorry
 
 -- Memory table: 16 entries (padded for FRI minimum size)
 -- All dummy entries for immediate mode (no actual memory reads)
