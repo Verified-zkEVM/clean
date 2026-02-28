@@ -747,8 +747,14 @@ fn test_femtocairo_e2e() {
         "FemtoCairo circuit generation failed: {}",
         String::from_utf8_lossy(&circuit_output.stderr)
     );
-    let circuit_json = std::fs::read_to_string(tests_dir.join("output/femtocairo_circuit.json"))
+    let circuit_json_str = std::fs::read_to_string(tests_dir.join("output/femtocairo_circuit.json"))
         .expect("Failed to read generated FemtoCairo circuit JSON");
+
+    // Parse the circuit JSON wrapper
+    let circuit_value: serde_json::Value =
+        serde_json::from_str(&circuit_json_str).expect("Failed to parse circuit JSON");
+    let constraints = circuit_value["constraints"].clone();
+    let preprocessed_tables = &circuit_value["preprocessed_tables"];
 
     // --- Generate trace from Lean ---
     let trace_output = Command::new("bash")
@@ -770,23 +776,19 @@ fn test_femtocairo_e2e() {
     let main_trace: RowMajorMatrix<BabyBear> =
         RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
 
-    // --- Build program table (PreprocessedTableAir) ---
-    // 64 rows x 2 cols: (index, program[index])
-    let program_values: [u64; 64] = [
-        252, 3, 5, 8, 252, 10, 20, 30, 252, 1, 2, 3, 252, 7, 8, 15,
-        252, 4, 6, 10, 252, 11, 22, 33, 252, 2, 3, 5, 252, 9, 1, 10,
-        252, 13, 14, 27, 252, 5, 5, 10, 252, 6, 7, 13, 252, 8, 9, 17,
-        252, 15, 16, 31, 252, 20, 30, 50, 252, 100, 200, 300, 0, 0, 0, 0,
-    ];
-    let program_data: Vec<BabyBear> = (0u64..64)
-        .flat_map(|i| {
-            vec![
-                BabyBear::from_u64(i),
-                BabyBear::from_u64(program_values[i as usize]),
-            ]
+    // --- Build program table from JSON (PreprocessedTableAir) ---
+    let program_table = &preprocessed_tables["program"];
+    let program_width = program_table["width"].as_u64().unwrap() as usize;
+    let program_rows = program_table["rows"].as_array().unwrap();
+    let program_data: Vec<BabyBear> = program_rows
+        .iter()
+        .flat_map(|row| {
+            row.as_array().unwrap().iter().map(|v| {
+                BabyBear::from_u64(v.as_u64().unwrap())
+            })
         })
         .collect();
-    let program_matrix = RowMajorMatrix::new(program_data, 2);
+    let program_matrix = RowMajorMatrix::new(program_data, program_width);
     let program_air = PreprocessedTableAir::new("program".into(), program_matrix);
 
     // --- Build memory table (ProverTableAir) ---
@@ -798,8 +800,8 @@ fn test_femtocairo_e2e() {
     let mem_data_matrix = RowMajorMatrix::new(mem_data, 2);
 
     // --- Build AIR instances ---
-    let main_air_instance = MainAir::<BabyBear>::new(
-        &circuit_json,
+    let main_air_instance = MainAir::<BabyBear>::from_value(
+        constraints,
         main_trace.width(),
         main_trace.height(),
     );

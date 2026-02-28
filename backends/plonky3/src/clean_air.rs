@@ -206,6 +206,12 @@ impl<F: Field> MainAir<F> {
         Self::build(clean_ops, width, trace_height)
     }
 
+    /// Create a new MainAir instance from a `serde_json::Value` and trace data
+    pub fn from_value(value: serde_json::Value, width: usize, trace_height: usize) -> Self {
+        let clean_ops = CleanOps::from_value(value);
+        Self::build(clean_ops, width, trace_height)
+    }
+
     /// Create a new MainAir instance from CleanOps and trace data
     pub fn from_ops(clean_ops: CleanOps, width: usize, trace_height: usize) -> Self {
         Self::build(clean_ops, width, trace_height)
