@@ -37,7 +37,7 @@ def programData : Vector (F pBabybear) 64 :=
      252, 8, 9, 17,       -- pc=44: ADD 8 + 9 = 17
      252, 15, 16, 31,     -- pc=48: ADD 15 + 16 = 31
      252, 20, 30, 50,     -- pc=52: ADD 20 + 30 = 50
-     252, 100, 200, 300,  -- pc=56: ADD 100 + 200 = 300
+     252, 50, 100, 150,   -- pc=56: ADD 50 + 100 = 150
      0, 0, 0, 0]          -- pc=60: padding
 
 def testProgram : Fin programSize → F pBabybear :=
@@ -45,23 +45,27 @@ def testProgram : Fin programSize → F pBabybear :=
 
 theorem h_programSize : programSize < pBabybear := by native_decide
 
+theorem h_testValidProgram :
+    Spec.ValidProgramSize pBabybear programSize ∧ Spec.ValidProgram testProgram := by
+  constructor
+  · -- ValidProgramSize: programSize + 3 < pBabybear
+    show programSize + 3 < pBabybear
+    native_decide
+  · -- ValidProgram: all entries have .val < 256
+    intro i
+    fin_cases i <;> native_decide
+
 def initialState : State (F pBabybear) := { pc := 0, ap := 0, fp := 0 }
 -- After 15 steps: pc = 60, ap = 0, fp = 0
 def finalState : State (F pBabybear) := { pc := 60, ap := 0, fp := 0 }
 
--- Build the step circuit directly from the elaborated circuit's main function.
-def femtoCairoStepMain : Var State (F pBabybear) → Circuit (F pBabybear) (Var State (F pBabybear)) :=
-  (femtoCairoStepElaboratedCircuit testProgram h_programSize).main
+def numSteps : ℕ := 15
 
--- InductiveTable wrapping the FemtoCairo step circuit (Input = unit).
--- Only `.step` is used (via `tableConstraintsWitness` / `inductiveWitness`);
--- proof fields are stubbed since this is for test generation scripts.
-def femtoCairoTable : InductiveTable (F pBabybear) State unit where
-  step state _ := femtoCairoStepMain state
-  Spec := fun _ _ _ _ _ _ => True
-  soundness := by simp only [InductiveTable.Soundness]; intros; trivial
-  completeness := by simp only [InductiveTable.Completeness]; intros; sorry
-  subcircuitsConsistent := by intros; sorry
+-- Reuse the fully-proved femtoCairoTable from FemtoCairo.lean.
+-- Only `.step` is used at runtime (via `tableConstraintsWitness` / `inductiveWitness`);
+-- the proof fields ensure the kernel is sound (no sorry's).
+def femtoCairoTable : InductiveTable (F pBabybear) State unit :=
+  _root_.Examples.FemtoCairo.femtoCairoTable testProgram h_programSize h_testValidProgram numSteps
 
 -- Memory table: 16 entries (padded for FRI minimum size)
 -- All dummy entries for immediate mode (no actual memory reads)
