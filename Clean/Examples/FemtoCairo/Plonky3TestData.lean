@@ -65,7 +65,7 @@ def numSteps : ℕ := 15
 -- Only `.step` is used at runtime (via `tableConstraintsWitness` / `inductiveWitness`);
 -- the proof fields ensure the kernel is sound (no sorry's).
 def femtoCairoTable : InductiveTable (F pBabybear) State unit :=
-  _root_.Examples.FemtoCairo.femtoCairoTable testProgram h_programSize h_testValidProgram numSteps
+  Examples.FemtoCairo.femtoCairoTable testProgram h_programSize h_testValidProgram numSteps
 
 -- Memory table: 16 entries (padded for FRI minimum size)
 -- All dummy entries for immediate mode (no actual memory reads)
