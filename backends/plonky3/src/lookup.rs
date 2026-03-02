@@ -35,13 +35,21 @@ impl<F: Field> PreprocessedTableAir<F> {
         F: PrimeCharacteristicRing,
     {
         let width = value["width"].as_u64().expect("missing 'width'") as usize;
+        assert!(width > 0, "table width must be positive");
         let rows = value["rows"].as_array().expect("missing 'rows'");
+        assert!(!rows.is_empty(), "table must have at least one row");
         let data: Vec<F> = rows
             .iter()
-            .flat_map(|row| {
-                row.as_array()
-                    .expect("row is not an array")
-                    .iter()
+            .enumerate()
+            .flat_map(|(i, row)| {
+                let row = row.as_array().expect("row is not an array");
+                assert_eq!(
+                    row.len(),
+                    width,
+                    "row {i} has {} elements, expected {width}",
+                    row.len()
+                );
+                row.iter()
                     .map(|v| F::from_u64(v.as_u64().expect("value is not u64")))
             })
             .collect();
