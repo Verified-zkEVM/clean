@@ -405,6 +405,7 @@ fn test_lean_circuit_end_to_end() {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests").join("fixtures");
     std::fs::create_dir_all(tests_dir.join("output")).unwrap();
+    let _ = std::fs::remove_file(tests_dir.join("output/e2e_circuit.json"));
 
     let circuit_output = Command::new("bash")
         .arg(tests_dir.join("generate_fib_circuit.sh"))
@@ -717,6 +718,8 @@ fn test_femtocairo_e2e() {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests").join("fixtures");
     std::fs::create_dir_all(tests_dir.join("output")).unwrap();
+    let _ = std::fs::remove_file(tests_dir.join("output/femtocairo_circuit.json"));
+    let _ = std::fs::remove_file(tests_dir.join("output/femtocairo_trace.json"));
 
     // --- Generate circuit JSON from Lean ---
     let circuit_output = Command::new("bash")
