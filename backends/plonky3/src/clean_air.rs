@@ -32,6 +32,10 @@ where
     preprocessed: Option<RowMajorMatrix<F>>,
     /// Maps each LookupRowScope to its preprocessed column index
     scope_to_prep_col: BTreeMap<LookupRowScope, usize>,
+    /// Maximum number of lookup inputs per Lookup object.
+    /// Groups exceeding this are split into multiple chunks,
+    /// reducing LogUp constraint degree at the cost of more auxiliary columns.
+    max_chunk_size: usize,
 }
 
 impl<F: Field> BaseAir<F> for MainAir<F> {
@@ -180,12 +184,18 @@ where
                 .push(input);
         }
 
-        // Create one Lookup per (table, scope) group
+        // Create Lookup objects, chunking large groups to reduce constraint degree
         let mut lookups = Vec::new();
         let mut scopes = Vec::new();
         for ((table_name, scope), inputs) in lookups_by_key {
-            lookups.push(Air::<AB>::register_lookup(self, Kind::Global(table_name), &inputs));
-            scopes.push(scope);
+            for chunk in inputs.chunks(self.max_chunk_size) {
+                lookups.push(Air::<AB>::register_lookup(
+                    self,
+                    Kind::Global(table_name.clone()),
+                    chunk,
+                ));
+                scopes.push(scope);
+            }
         }
         self.lookup_row_scopes = scopes;
 
@@ -235,6 +245,7 @@ impl<F: Field> MainAir<F> {
             lookup_row_scopes: Vec::new(),
             preprocessed,
             scope_to_prep_col,
+            max_chunk_size: usize::MAX,
         }
     }
 
@@ -257,6 +268,15 @@ impl<F: Field> MainAir<F> {
             }
         }
         Some(RowMajorMatrix::new(data, num_cols))
+    }
+
+    /// Set the maximum number of lookup inputs per Lookup object.
+    /// Groups exceeding this are split into multiple chunks,
+    /// reducing LogUp constraint degree at the cost of more auxiliary columns.
+    pub fn with_max_chunk_size(mut self, max_chunk_size: usize) -> Self {
+        assert!(max_chunk_size >= 1, "max_chunk_size must be at least 1");
+        self.max_chunk_size = max_chunk_size;
+        self
     }
 
     /// Get reference to the clean operations

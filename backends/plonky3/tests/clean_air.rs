@@ -727,9 +727,9 @@ fn test_prover_table_lookup() {
 /// Tables: program (preprocessed, 64x2), memory (prover-supplied, 16x2).
 #[test]
 fn test_femtocairo_e2e() {
-    // FemtoCairo has many lookups per row (program + memory), so the LogUp
-    // constraint degree is high. We need a larger log_blowup than the default.
-    let config = setup::test_config_with_blowup(500, 3);
+    // With lookup chunking (max_chunk_size=3), the LogUp constraint degree
+    // drops from 7 to 4, so log_blowup=2 (4x domain) suffices.
+    let config = setup::test_config_with_blowup(500, 2);
 
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests").join("fixtures");
@@ -804,7 +804,8 @@ fn test_femtocairo_e2e() {
         constraints,
         main_trace.width(),
         main_trace.height(),
-    );
+    )
+    .with_max_chunk_size(3);
     let air_infos: Vec<AirInfo<BabyBear>> = vec![
         AirInfo::new(CleanAirInstance::Main(main_air_instance)),
         AirInfo::new(CleanAirInstance::Preprocessed(program_air)),
