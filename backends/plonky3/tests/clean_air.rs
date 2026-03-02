@@ -753,8 +753,8 @@ fn run_lean_scripts(
     (circuit_json, trace_json)
 }
 
-/// Common FemtoCairo pipeline: parse circuit JSON → build main trace → build AIR instances → prove → verify.
-fn run_femtocairo_pipeline(
+/// Parse circuit + trace JSON, build AIR instances, prove and verify.
+fn prove_and_verify_from_json(
     circuit_json_str: &str,
     trace_json_str: &str,
 ) {
@@ -817,7 +817,7 @@ fn test_femtocairo_e2e() {
         "output/femtocairo_trace.json",
     );
 
-    run_femtocairo_pipeline(&circuit_json, &trace_json);
+    prove_and_verify_from_json(&circuit_json, &trace_json);
 }
 
 /// End-to-end FemtoCairo test with memory-reading instructions.
@@ -835,5 +835,5 @@ fn test_femtocairo_memory_e2e() {
         "output/femtocairo_memory_trace.json",
     );
 
-    run_femtocairo_pipeline(&circuit_json, &trace_json);
+    prove_and_verify_from_json(&circuit_json, &trace_json);
 }
