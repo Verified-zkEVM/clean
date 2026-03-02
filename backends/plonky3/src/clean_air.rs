@@ -319,7 +319,7 @@ impl<F: Field> MainAir<F> {
 }
 
 /// Helper function to parse initial trace data from JSON
-pub fn parse_init_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) -> Vec<Vec<F>> {
+pub fn parse_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) -> Vec<Vec<F>> {
     // First parse the JSON as a Vec<Vec<u64>>
     let raw_data: Vec<Vec<u64>> = serde_json::from_str(json_content).expect("Failed to parse JSON");
 

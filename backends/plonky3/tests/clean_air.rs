@@ -1,5 +1,5 @@
 use clean_backend::{
-    byte_range_air, generate_table_traces, parse_init_trace,
+    byte_range_air, generate_table_traces, parse_trace,
     prove, verify, AirInfo,
     CleanAirInstance, MainAir, PreprocessedTableAir, ProverTableAir, StarkConfig,
 };
@@ -87,8 +87,8 @@ fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
     let json_path = tests_dir.join(&output_path);
     let json_content = std::fs::read_to_string(json_path)?;
 
-    // Parse the trace using the existing parse_init_trace function
-    let trace = parse_init_trace::<F>(&json_content);
+    // Parse the trace using the existing parse_trace function
+    let trace = parse_trace::<F>(&json_content);
     Ok(trace)
 }
 
@@ -106,7 +106,7 @@ fn test_clean_fib() {
     let config = setup::test_config(1);
 
     let steps = 512;
-    let init_trace = match generate_trace_from_lean::<BabyBear>(steps, "trace.json") {
+    let trace_rows = match generate_trace_from_lean::<BabyBear>(steps, "trace.json") {
         Ok(trace) => {
             println!(
                 "Successfully generated trace from Lean with {} rows",
@@ -119,10 +119,10 @@ fn test_clean_fib() {
         }
     };
 
-    let width = init_trace[0].len();
+    let width = trace_rows[0].len();
 
     let main_trace: RowMajorMatrix<BabyBear> =
-        RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
+        RowMajorMatrix::new(trace_rows.iter().flatten().cloned().collect(), width);
 
     // Get the result
     let x = main_trace.get(main_trace.height() - 1, 1).unwrap();
@@ -423,12 +423,12 @@ fn test_lean_circuit_end_to_end() {
 
     // --- Generate trace from Lean ---
     let steps = 512;
-    let init_trace = generate_trace_from_lean::<BabyBear>(steps, "e2e_trace.json")
+    let trace_rows = generate_trace_from_lean::<BabyBear>(steps, "e2e_trace.json")
         .expect("Failed to generate trace from Lean");
 
-    let width = init_trace[0].len();
+    let width = trace_rows[0].len();
     let main_trace: RowMajorMatrix<BabyBear> =
-        RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
+        RowMajorMatrix::new(trace_rows.iter().flatten().cloned().collect(), width);
 
     // --- Build AIR instances from Lean-generated circuit ---
     let main_air = MainAir::<BabyBear>::new(&circuit_json, main_trace.width(), main_trace.height());
@@ -757,10 +757,10 @@ fn test_femtocairo_e2e() {
     let trace_json = std::fs::read_to_string(tests_dir.join("output/femtocairo_trace.json"))
         .expect("Failed to read generated FemtoCairo trace JSON");
 
-    let init_trace = parse_init_trace::<BabyBear>(&trace_json);
-    let width = init_trace[0].len();
+    let trace_rows = parse_trace::<BabyBear>(&trace_json);
+    let width = trace_rows[0].len();
     let main_trace: RowMajorMatrix<BabyBear> =
-        RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
+        RowMajorMatrix::new(trace_rows.iter().flatten().cloned().collect(), width);
 
     // --- Build program table from JSON (PreprocessedTableAir) ---
     let program_table = &preprocessed_tables["program"];
