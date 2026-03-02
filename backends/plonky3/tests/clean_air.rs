@@ -757,7 +757,6 @@ fn run_lean_scripts(
 fn run_femtocairo_pipeline(
     circuit_json_str: &str,
     trace_json_str: &str,
-    mem_entries: &[(u64, u64)],
 ) {
     let config = setup::test_config(500);
 
@@ -766,13 +765,17 @@ fn run_femtocairo_pipeline(
     let constraints = circuit_value["constraints"].clone();
     let preprocessed_tables = &circuit_value["preprocessed_tables"];
 
-    let main_trace = parse_trace_matrix::<BabyBear>(trace_json_str);
+    let trace_value: serde_json::Value =
+        serde_json::from_str(trace_json_str).expect("Failed to parse trace JSON");
+    let main_trace_str = trace_value["main_trace"].to_string();
+    let main_trace = parse_trace_matrix::<BabyBear>(&main_trace_str);
+
+    let prover_tables = &trace_value["prover_tables"];
+    let (mem_air, mem_data_matrix) =
+        ProverTableAir::<BabyBear>::from_json("memory".into(), &prover_tables["memory"]);
 
     let program_air: PreprocessedTableAir<BabyBear> =
         PreprocessedTableAir::from_json("program".into(), &preprocessed_tables["program"]);
-
-    let (mem_air, mem_data_matrix) =
-        ProverTableAir::<BabyBear>::from_entries("memory".into(), mem_entries);
 
     let main_air_instance = MainAir::<BabyBear>::from_value(
         constraints,
@@ -814,10 +817,7 @@ fn test_femtocairo_e2e() {
         "output/femtocairo_trace.json",
     );
 
-    // 16 rows x 2 cols: (address, value) — dummy entries for immediate mode
-    let mem_entries: Vec<(u64, u64)> = (0u64..16).map(|i| (i, 0)).collect();
-
-    run_femtocairo_pipeline(&circuit_json, &trace_json, &mem_entries);
+    run_femtocairo_pipeline(&circuit_json, &trace_json);
 }
 
 /// End-to-end FemtoCairo test with memory-reading instructions.
@@ -835,10 +835,5 @@ fn test_femtocairo_memory_e2e() {
         "output/femtocairo_memory_trace.json",
     );
 
-    // 8 rows x 2 cols: (address, value) — non-trivial entries for memory-reading modes
-    let mem_entries: Vec<(u64, u64)> = vec![
-        (0, 0), (1, 5), (2, 3), (3, 7), (4, 2), (5, 10), (6, 0), (7, 0),
-    ];
-
-    run_femtocairo_pipeline(&circuit_json, &trace_json, &mem_entries);
+    run_femtocairo_pipeline(&circuit_json, &trace_json);
 }

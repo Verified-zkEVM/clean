@@ -152,6 +152,31 @@ impl<F: Field> ProverTableAir<F> {
         &self.name
     }
 
+    /// Build a `ProverTableAir` and its data matrix from the standard JSON format
+    /// produced by Lean trace export: `{"width": N, "rows": [[...]]}`.
+    ///
+    /// Returns `(air, data_matrix)` since callers always need both.
+    pub fn from_json(name: String, value: &serde_json::Value) -> (Self, RowMajorMatrix<F>)
+    where
+        F: PrimeCharacteristicRing,
+    {
+        let width = value["width"].as_u64().expect("missing 'width'") as usize;
+        assert!(width > 0, "table width must be positive");
+        let rows = value["rows"].as_array().expect("missing 'rows'");
+        assert!(!rows.is_empty(), "table must have at least one row");
+        let data: Vec<F> = rows
+            .iter()
+            .flat_map(|row| {
+                let row = row.as_array().expect("row is not an array");
+                assert_eq!(row.len(), width);
+                row.iter()
+                    .map(|v| F::from_u64(v.as_u64().expect("value is not u64")))
+            })
+            .collect();
+        let matrix = RowMajorMatrix::new(data, width);
+        (Self::new(name, width), matrix)
+    }
+
     /// Build a `ProverTableAir` and its data matrix from `(addr, val)` pairs.
     ///
     /// Returns `(air, data_matrix)` since callers always need both.
