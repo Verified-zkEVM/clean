@@ -53,38 +53,42 @@ pub mod setup {
     }
 }
 
+/// Run a single Lean script via `run_lean.sh` and return the content of its output file.
+///
+/// `extra_args` are passed between the script name and the output path (e.g. a step count).
+pub fn run_lean_script(script: &str, extra_args: &[&str], output_path: &str) -> String {
+    let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let tests_dir = backend_dir.join("tests").join("fixtures");
+    std::fs::create_dir_all(tests_dir.join("output")).unwrap();
+    let _ = std::fs::remove_file(tests_dir.join(output_path));
+
+    let mut cmd = Command::new("bash");
+    cmd.arg(tests_dir.join("run_lean.sh")).arg(script);
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+    cmd.arg(output_path).current_dir(&tests_dir);
+
+    let result = cmd.output().expect("Failed to run Lean script");
+    assert!(
+        result.status.success(),
+        "Lean script '{}' failed: {}",
+        script,
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    std::fs::read_to_string(tests_dir.join(output_path))
+        .unwrap_or_else(|e| panic!("Failed to read output '{}': {}", output_path, e))
+}
+
 /// Generate Fibonacci trace using the simplified Lean script
 pub fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
     steps: usize,
     output_filename: &str,
 ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
-    let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let tests_dir = backend_dir.join("tests").join("fixtures");
     let output_path = format!("output/{}", output_filename);
-
-    // Create the output directory if it doesn't exist
-    let output_dir = tests_dir.join("output");
-    std::fs::create_dir_all(&output_dir)?;
-
-    // Run the trace generation script
-    let output = Command::new("bash")
-        .arg(tests_dir.join("run_lean.sh"))
-        .arg("FibTraceGen.lean")
-        .arg(steps.to_string())
-        .arg(&output_path)
-        .current_dir(&tests_dir)
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to generate trace: {}", stderr).into());
-    }
-
-    // Read the generated JSON file
-    let json_path = tests_dir.join(&output_path);
-    let json_content = std::fs::read_to_string(json_path)?;
-
-    // Parse the trace using the existing parse_trace function
+    let steps_str = steps.to_string();
+    let json_content = run_lean_script("FibTraceGen.lean", &[&steps_str], &output_path);
     let trace = parse_trace::<F>(&json_content);
     Ok(trace)
 }
@@ -104,43 +108,8 @@ pub fn run_lean_scripts(
     trace_lean_file: &str,
     trace_output: &str,
 ) -> (String, String) {
-    let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let tests_dir = backend_dir.join("tests").join("fixtures");
-    std::fs::create_dir_all(tests_dir.join("output")).unwrap();
-    let _ = std::fs::remove_file(tests_dir.join(circuit_output));
-    let _ = std::fs::remove_file(tests_dir.join(trace_output));
-
-    let circuit_result = Command::new("bash")
-        .arg(tests_dir.join("run_lean.sh"))
-        .arg(circuit_lean_file)
-        .arg(circuit_output)
-        .current_dir(&tests_dir)
-        .output()
-        .expect("Failed to run circuit generation script");
-    assert!(
-        circuit_result.status.success(),
-        "Circuit generation failed: {}",
-        String::from_utf8_lossy(&circuit_result.stderr)
-    );
-
-    let trace_result = Command::new("bash")
-        .arg(tests_dir.join("run_lean.sh"))
-        .arg(trace_lean_file)
-        .arg(trace_output)
-        .current_dir(&tests_dir)
-        .output()
-        .expect("Failed to run trace generation script");
-    assert!(
-        trace_result.status.success(),
-        "Trace generation failed: {}",
-        String::from_utf8_lossy(&trace_result.stderr)
-    );
-
-    let circuit_json = std::fs::read_to_string(tests_dir.join(circuit_output))
-        .expect("Failed to read generated circuit JSON");
-    let trace_json = std::fs::read_to_string(tests_dir.join(trace_output))
-        .expect("Failed to read generated trace JSON");
-
+    let circuit_json = run_lean_script(circuit_lean_file, &[], circuit_output);
+    let trace_json = run_lean_script(trace_lean_file, &[], trace_output);
     (circuit_json, trace_json)
 }
 

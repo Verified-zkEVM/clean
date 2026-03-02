@@ -8,8 +8,6 @@ use p3_baby_bear::BabyBear;
 use p3_field::PrimeCharacteristicRing;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
-use std::process::Command;
-
 use common::setup;
 
 const JSON_PATH: &str = "clean_fib.json";
@@ -81,25 +79,11 @@ fn test_lean_circuit_end_to_end() {
     let config = setup::test_config(1);
 
     // --- Generate circuit JSON from Lean ---
-    let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let tests_dir = backend_dir.join("tests").join("fixtures");
-    std::fs::create_dir_all(tests_dir.join("output")).unwrap();
-    let _ = std::fs::remove_file(tests_dir.join("output/e2e_circuit.json"));
-
-    let circuit_output = Command::new("bash")
-        .arg(tests_dir.join("run_lean.sh"))
-        .arg("FibCircuitGen.lean")
-        .arg("output/e2e_circuit.json")
-        .current_dir(&tests_dir)
-        .output()
-        .expect("Failed to run circuit generation script");
-    assert!(
-        circuit_output.status.success(),
-        "Circuit generation failed: {}",
-        String::from_utf8_lossy(&circuit_output.stderr)
+    let circuit_json = common::run_lean_script(
+        "FibCircuitGen.lean",
+        &[],
+        "output/e2e_circuit.json",
     );
-    let circuit_json = std::fs::read_to_string(tests_dir.join("output/e2e_circuit.json"))
-        .expect("Failed to read generated circuit JSON");
 
     // --- Generate trace from Lean ---
     let steps = 512;
