@@ -168,22 +168,6 @@ impl<F: Field> ProverTableAir<F> {
         let width = matrix.width();
         (Self::new(name, width), matrix)
     }
-
-    /// Build a `ProverTableAir` and its data matrix from `(addr, val)` pairs.
-    ///
-    /// Returns `(air, data_matrix)` since callers always need both.
-    pub fn from_entries(name: String, entries: &[(u64, u64)]) -> (Self, RowMajorMatrix<F>)
-    where
-        F: PrimeCharacteristicRing,
-    {
-        let air = Self::new(name, 2);
-        let data: Vec<F> = entries
-            .iter()
-            .flat_map(|(addr, val)| vec![F::from_u64(*addr), F::from_u64(*val)])
-            .collect();
-        let matrix = RowMajorMatrix::new(data, 2);
-        (air, matrix)
-    }
 }
 
 impl<F: Field> BaseAir<F> for ProverTableAir<F> {
