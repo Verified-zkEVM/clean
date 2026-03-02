@@ -9,7 +9,7 @@ use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
 use p3_field::{Field, PrimeCharacteristicRing};
-use p3_fri::{FriParameters, TwoAdicFriPcs};
+use p3_fri::{create_test_fri_params, TwoAdicFriPcs};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use p3_merkle_tree::MerkleTreeMmcs;
@@ -40,10 +40,6 @@ mod setup {
     pub type MyConfig = StarkConfig<Pcs, Challenge, Challenger>;
 
     pub fn test_config(seed: u64) -> MyConfig {
-        test_config_with_blowup(seed, 2)
-    }
-
-    pub fn test_config_with_blowup(seed: u64, log_blowup: usize) -> MyConfig {
         let mut rng = SmallRng::seed_from_u64(seed);
         let perm = Perm::new_from_rng_128(&mut rng);
         let hash = MyHash::new(perm.clone());
@@ -51,18 +47,7 @@ mod setup {
         let val_mmcs = ValMmcs::new(hash, compress);
         let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
         let dft = Dft::default();
-        // create_test_fri_params hardcodes log_blowup=2 and takes
-        // log_final_poly_len as the second arg.  Build FriParameters
-        // directly so we can actually control the blowup factor.
-        let fri = FriParameters {
-            log_blowup,
-            log_final_poly_len: 2,
-            max_log_arity: 1,
-            num_queries: 2,
-            commit_proof_of_work_bits: 1,
-            query_proof_of_work_bits: 1,
-            mmcs: challenge_mmcs,
-        };
+        let fri = create_test_fri_params(challenge_mmcs, 2);
         let pcs = Pcs::new(dft, val_mmcs, fri);
         let challenger = Challenger::new(perm);
         MyConfig::new(pcs, challenger)
