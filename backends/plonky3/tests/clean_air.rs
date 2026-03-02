@@ -63,16 +63,16 @@ fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
 ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests").join("fixtures");
-    let script_path = tests_dir.join("generate_fib_trace.sh");
     let output_path = format!("output/{}", output_filename);
 
     // Create the output directory if it doesn't exist
     let output_dir = tests_dir.join("output");
     std::fs::create_dir_all(&output_dir)?;
 
-    // Run the simplified trace generation script
+    // Run the trace generation script
     let output = Command::new("bash")
-        .arg(&script_path)
+        .arg(tests_dir.join("run_lean.sh"))
+        .arg("FibTraceGen.lean")
         .arg(steps.to_string())
         .arg(&output_path)
         .current_dir(&tests_dir)
@@ -408,7 +408,8 @@ fn test_lean_circuit_end_to_end() {
     let _ = std::fs::remove_file(tests_dir.join("output/e2e_circuit.json"));
 
     let circuit_output = Command::new("bash")
-        .arg(tests_dir.join("generate_fib_circuit.sh"))
+        .arg(tests_dir.join("run_lean.sh"))
+        .arg("FibCircuitGen.lean")
         .arg("output/e2e_circuit.json")
         .current_dir(&tests_dir)
         .output()
@@ -705,11 +706,11 @@ fn test_prover_table_lookup() {
         .expect("prover table lookup verification failed");
 }
 
-/// Run a pair of Lean generation scripts (circuit + trace) and return their JSON content.
+/// Run a pair of Lean generators (circuit + trace) via run_lean.sh and return their JSON content.
 fn run_lean_scripts(
-    circuit_script: &str,
+    circuit_lean_file: &str,
     circuit_output: &str,
-    trace_script: &str,
+    trace_lean_file: &str,
     trace_output: &str,
 ) -> (String, String) {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -719,7 +720,8 @@ fn run_lean_scripts(
     let _ = std::fs::remove_file(tests_dir.join(trace_output));
 
     let circuit_result = Command::new("bash")
-        .arg(tests_dir.join(circuit_script))
+        .arg(tests_dir.join("run_lean.sh"))
+        .arg(circuit_lean_file)
         .arg(circuit_output)
         .current_dir(&tests_dir)
         .output()
@@ -731,7 +733,8 @@ fn run_lean_scripts(
     );
 
     let trace_result = Command::new("bash")
-        .arg(tests_dir.join(trace_script))
+        .arg(tests_dir.join("run_lean.sh"))
+        .arg(trace_lean_file)
         .arg(trace_output)
         .current_dir(&tests_dir)
         .output()
@@ -805,9 +808,9 @@ fn run_femtocairo_pipeline(
 #[test]
 fn test_femtocairo_e2e() {
     let (circuit_json, trace_json) = run_lean_scripts(
-        "generate_femtocairo_circuit.sh",
+        "FemtoCairoCircuitGen.lean",
         "output/femtocairo_circuit.json",
-        "generate_femtocairo_trace.sh",
+        "FemtoCairoTraceGen.lean",
         "output/femtocairo_trace.json",
     );
 
@@ -826,9 +829,9 @@ fn test_femtocairo_e2e() {
 #[test]
 fn test_femtocairo_memory_e2e() {
     let (circuit_json, trace_json) = run_lean_scripts(
-        "generate_femtocairo_memory_circuit.sh",
+        "FemtoCairoMemoryCircuitGen.lean",
         "output/femtocairo_memory_circuit.json",
-        "generate_femtocairo_memory_trace.sh",
+        "FemtoCairoMemoryTraceGen.lean",
         "output/femtocairo_memory_trace.json",
     );
 
