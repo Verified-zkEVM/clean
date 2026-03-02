@@ -13,7 +13,7 @@ use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 use crate::clean_ast::{
     AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupRowScope,
 };
-use crate::PreprocessedTableAir;
+use crate::{PreprocessedTableAir, ProverTableAir};
 
 #[derive(Clone)]
 pub struct MainAir<F>
@@ -306,14 +306,16 @@ pub fn parse_init_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) 
 pub enum CleanAirInstance<F: Field> {
     Main(MainAir<F>),
     Preprocessed(PreprocessedTableAir<F>),
+    ProverTable(ProverTableAir<F>),
 }
 
 impl<F: Field> CleanAirInstance<F> {
-    /// Returns the table name if this is a preprocessed table AIR.
+    /// Returns the table name if this is a table AIR.
     pub fn table_name(&self) -> Option<&str> {
         match self {
             CleanAirInstance::Main(_) => None,
             CleanAirInstance::Preprocessed(air) => Some(air.table_name()),
+            CleanAirInstance::ProverTable(air) => Some(air.table_name()),
         }
     }
 
@@ -322,6 +324,7 @@ impl<F: Field> CleanAirInstance<F> {
         match self {
             CleanAirInstance::Main(air) => air.lookup_row_scopes.clone(),
             CleanAirInstance::Preprocessed(_) => vec![],
+            CleanAirInstance::ProverTable(_) => vec![],
         }
     }
 }
@@ -331,6 +334,7 @@ impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
         match self {
             CleanAirInstance::Main(air) => air.width(),
             CleanAirInstance::Preprocessed(air) => air.width(),
+            CleanAirInstance::ProverTable(air) => air.width(),
         }
     }
 
@@ -338,6 +342,7 @@ impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
         match self {
             CleanAirInstance::Main(air) => air.preprocessed_trace(),
             CleanAirInstance::Preprocessed(air) => air.preprocessed_trace(),
+            CleanAirInstance::ProverTable(air) => air.preprocessed_trace(),
         }
     }
 }
@@ -351,6 +356,7 @@ where
         match self {
             CleanAirInstance::Main(air) => air.eval(builder),
             CleanAirInstance::Preprocessed(air) => air.eval(builder),
+            CleanAirInstance::ProverTable(air) => air.eval(builder),
         };
     }
 
@@ -361,6 +367,7 @@ where
         match self {
             CleanAirInstance::Main(air) => Air::<AB>::get_lookups(air),
             CleanAirInstance::Preprocessed(air) => Air::<AB>::get_lookups(air),
+            CleanAirInstance::ProverTable(air) => Air::<AB>::get_lookups(air),
         }
     }
 
@@ -368,6 +375,7 @@ where
         match self {
             CleanAirInstance::Main(air) => Air::<AB>::add_lookup_columns(air),
             CleanAirInstance::Preprocessed(air) => Air::<AB>::add_lookup_columns(air),
+            CleanAirInstance::ProverTable(air) => Air::<AB>::add_lookup_columns(air),
         }
     }
 }

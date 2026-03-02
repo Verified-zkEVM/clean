@@ -1,6 +1,7 @@
 use clean_backend::{
-    byte_range_air, generate_multiplicity_traces, parse_init_trace, prove, verify, AirInfo,
-    CleanAirInstance, MainAir, PreprocessedTableAir, StarkConfig,
+    byte_range_air, generate_table_traces, parse_init_trace,
+    prove, verify, AirInfo,
+    CleanAirInstance, MainAir, PreprocessedTableAir, ProverTableAir, StarkConfig,
 };
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
 use p3_challenger::DuplexChallenger;
@@ -102,11 +103,6 @@ fn read_test_json(filename: &str) -> String {
 /// test fibonacci8 exported from clean
 #[test]
 fn test_clean_fib() {
-    // Initialize tracing subscriber to see tracing output
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let config = setup::test_config(1);
 
     let steps = 512;
@@ -148,11 +144,13 @@ fn test_clean_fib() {
         AirInfo::new(byte_range_air_instance),
     ];
 
-    // Generate lookup traces using the AirInfo instances from the VK
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
-    // Collect all traces: main trace + lookup traces
+    // Generate table traces using the AirInfo instances from the VK
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &[],
+    );
+    // Collect all traces: main trace + table traces
     let mut traces = vec![main_trace.clone()];
-    traces.extend(lookup_traces);
+    traces.extend(table_traces);
 
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, x];
     let proof = prove(&config, &air_infos, &traces, &pis);
@@ -164,10 +162,6 @@ fn test_clean_fib() {
 /// multi-column sends from the main trace.
 #[test]
 fn test_multi_column_lookup() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let config = setup::test_config(99);
 
     // Circuit JSON: lookup of (var0, var1) into "Memory" table.
@@ -243,10 +237,11 @@ fn test_multi_column_lookup() {
         AirInfo::new(memory_instance),
     ];
 
-    let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &[],
+    );
     let mut traces = vec![main_trace];
-    traces.extend(lookup_traces);
+    traces.extend(table_traces);
 
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
     let proof = prove(&config, &air_infos, &traces, &pis);
@@ -257,10 +252,6 @@ fn test_multi_column_lookup() {
 /// Demonstrates lookup entries like (var0, var1 + const(1)).
 #[test]
 fn test_expression_lookup() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let config = setup::test_config(77);
 
     // Circuit JSON: lookup of (var0, var0 + const(1)) into "Table".
@@ -325,10 +316,11 @@ fn test_expression_lookup() {
         AirInfo::new(table_instance),
     ];
 
-    let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &[],
+    );
     let mut traces = vec![main_trace];
-    traces.extend(lookup_traces);
+    traces.extend(table_traces);
 
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
     let proof = prove(&config, &air_infos, &traces, &pis);
@@ -339,10 +331,6 @@ fn test_expression_lookup() {
 /// works with arbitrary table names and sizes.
 #[test]
 fn test_range_check_16() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let config = setup::test_config(42);
 
     // Minimal JSON: an EveryRowExceptLast op with a lookup of column 0 into "Range16".
@@ -392,10 +380,11 @@ fn test_range_check_16() {
         AirInfo::new(range16_instance),
     ];
 
-    let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &[],
+    );
     let mut traces = vec![main_trace];
-    traces.extend(lookup_traces);
+    traces.extend(table_traces);
 
     // Public values: [0, 1, 1] (matching the default public_values in LookupBuilder)
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
@@ -410,10 +399,6 @@ fn test_range_check_16() {
 /// to a verified STARK proof in the Rust backend.
 #[test]
 fn test_lean_circuit_end_to_end() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let config = setup::test_config(1);
 
     // --- Generate circuit JSON from Lean ---
@@ -457,14 +442,11 @@ fn test_lean_circuit_end_to_end() {
     ];
 
     // --- Prove and verify ---
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
-        &air_infos,
-        &main_trace,
-        &air_infos[0].lookups,
-        &air_infos[0].lookup_row_scopes,
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &[],
     );
     let mut traces = vec![main_trace];
-    traces.extend(lookup_traces);
+    traces.extend(table_traces);
 
     // The Lean circuit hardcodes initial Fibonacci values as constants (not public inputs),
     // so no public inputs are needed for constraint satisfaction.
@@ -484,10 +466,6 @@ fn test_lean_circuit_end_to_end() {
 /// - Global cumulative sum check across 3 AIRs (1 main + 2 tables)
 #[test]
 fn test_two_table_lookups() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let config = setup::test_config(200);
 
     // Circuit JSON: two lookups in one EveryRowExceptLast gate.
@@ -557,10 +535,11 @@ fn test_two_table_lookups() {
         AirInfo::new(squares_instance),
     ];
 
-    let lookup_traces =
-        generate_multiplicity_traces::<BabyBear, setup::MyConfig>(&air_infos, &main_trace, &air_infos[0].lookups, &air_infos[0].lookup_row_scopes);
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &[],
+    );
     let mut traces = vec![main_trace];
-    traces.extend(lookup_traces);
+    traces.extend(table_traces);
 
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
     let proof = prove(&config, &air_infos, &traces, &pis);
@@ -574,10 +553,6 @@ fn test_two_table_lookups() {
 /// on the last row, so this should succeed.
 #[test]
 fn test_lookup_skips_last_row() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let config = setup::test_config(333);
 
     // Circuit JSON: EveryRowExceptLast with a single lookup of column 0 into "Bytes".
@@ -625,17 +600,106 @@ fn test_lookup_skips_last_row() {
 
     // This will panic on buggy code that iterates all rows.
     // Once fixed, the lookup should skip the last row and succeed.
-    let lookup_traces = generate_multiplicity_traces::<BabyBear, setup::MyConfig>(
-        &air_infos,
-        &main_trace,
-        &air_infos[0].lookups,
-        &air_infos[0].lookup_row_scopes,
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &[],
     );
     let mut traces = vec![main_trace];
-    traces.extend(lookup_traces);
+    traces.extend(table_traces);
 
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, BabyBear::ONE];
     let proof = prove(&config, &air_infos, &traces, &pis);
     verify(&config, &air_infos, &proof, &pis)
         .expect("EveryRowExceptLast lookup should skip last row");
+}
+
+/// Test a prover-provided table lookup.
+///
+/// The main trace looks up (col0, col1) entries in a "MemTable" whose data
+/// is supplied by the prover (not preprocessed). The verifier never sees
+/// the table contents — only the lookup constraints are checked.
+///
+/// Uses `EveryRowExceptLast` scope: rows 0–14 contain distinct entries and
+/// row 15 duplicates row 0 (the scope skips it).
+#[test]
+fn test_prover_table_lookup() {
+    let config = setup::test_config(444);
+
+    // Circuit JSON: EveryRowExceptLast lookup of (col0, col1) into "MemTable".
+    let json_content = r#"[
+      {
+        "type": "EveryRowExceptLast",
+        "context": {
+          "circuit": [
+            {
+              "lookup": {
+                "table": "MemTable",
+                "entry": [
+                  { "type": "var", "index": 0 },
+                  { "type": "var", "index": 1 }
+                ]
+              }
+            }
+          ],
+          "assignment": {
+            "vars": [
+              { "row": 0, "column": 0 },
+              { "row": 0, "column": 1 }
+            ],
+            "offset": 2,
+            "aux_length": 0
+          }
+        }
+      }
+    ]"#;
+
+    let num_rows = 16usize;
+
+    // Main trace: 16 rows × 2 columns.
+    // Rows 0–14: col0 = i, col1 = 10*i (distinct entries).
+    // Row 15 (last, skipped by EveryRowExceptLast): duplicate of row 0.
+    let main_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            let val = if i < num_rows - 1 { i } else { 0 };
+            vec![
+                BabyBear::from_u64(val as u64),
+                BabyBear::from_u64(10 * val as u64),
+            ]
+        })
+        .collect();
+    let main_trace = RowMajorMatrix::new(main_data, 2);
+
+    let main_air = MainAir::<BabyBear>::new(json_content, 2, main_trace.height());
+    let air_instance = CleanAirInstance::Main(main_air);
+
+    // ProverTableAir: "MemTable" with data_width=2
+    let mem_table_air = ProverTableAir::<BabyBear>::new("MemTable".into(), 2);
+    let mem_table_instance = CleanAirInstance::ProverTable(mem_table_air);
+
+    let air_infos: Vec<AirInfo<BabyBear>> = vec![
+        AirInfo::new(air_instance),
+        AirInfo::new(mem_table_instance),
+    ];
+
+    // Prover table data: 16 rows of (i, 10*i) — covers all values looked up on rows 0–14.
+    // Row 15 of the table is (15, 150) which is never looked up, but that's fine.
+    let prover_data: Vec<BabyBear> = (0..num_rows)
+        .flat_map(|i| {
+            vec![
+                BabyBear::from_u64(i as u64),
+                BabyBear::from_u64(10 * i as u64),
+            ]
+        })
+        .collect();
+    let prover_data_matrix = RowMajorMatrix::new(prover_data, 2);
+
+    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
+        &air_infos, &main_trace, &[("MemTable", &prover_data_matrix)],
+    );
+    let mut traces = vec![main_trace];
+    traces.extend(table_traces);
+
+    let pis = vec![];
+    let proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis)
+        .expect("prover table lookup verification failed");
 }

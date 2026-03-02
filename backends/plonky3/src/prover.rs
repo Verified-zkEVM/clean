@@ -8,6 +8,8 @@ use p3_uni_stark::SymbolicExpression;
 use p3_util::log2_strict_usize;
 use tracing::instrument;
 
+use p3_air::BaseAir;
+
 use crate::{AirInfo, CleanAirInstance, StarkGenericConfig, Val};
 
 #[instrument(skip_all)]
@@ -27,6 +29,25 @@ where
         air_infos.len(),
         "Number of traces must match number of AirInfo instances"
     );
+
+    assert!(
+        !air_infos.is_empty() && air_infos[0].air.table_name().is_none(),
+        "air_infos[0] must be the main AIR (not a table AIR)"
+    );
+    assert!(
+        air_infos[1..].iter().all(|ai| ai.air.table_name().is_some()),
+        "air_infos[1..] must all be table AIRs. \
+         Multiple main traces are not supported yet."
+    );
+
+    for (i, (ai, trace)) in air_infos.iter().zip(traces.iter()).enumerate() {
+        assert_eq!(
+            trace.width(),
+            ai.air.width(),
+            "traces[{}] width ({}) does not match air_infos[{}] width ({})",
+            i, trace.width(), i, ai.air.width()
+        );
+    }
 
     let prover_data = build_prover_data(config, air_infos, traces);
 
