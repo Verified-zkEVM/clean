@@ -40,3 +40,13 @@ jobs:
         run: |
           cd backends/plonky3
           cargo test --release -- --nocapture test_clean_fib
+      - name: Run lookup negative tests (debug)
+        run: |
+          cd backends/plonky3
+          cargo test test_tampered_multiplicity
+      # In release mode debug_assertions are off, so prove() doesn't panic on
+      # tampered traces — instead it produces a proof that verify() must reject.
+      - name: Run lookup negative tests (release)
+        run: |
+          cd backends/plonky3
+          cargo test --release test_tampered_multiplicity
