@@ -245,7 +245,7 @@ impl<F: Field> MainAir<F> {
             lookup_row_scopes: Vec::new(),
             preprocessed,
             scope_to_prep_col,
-            max_chunk_size: usize::MAX,
+            max_chunk_size: 3, // keeps LogUp degree ≤ 4, matching default log_blowup=2
         }
     }
 
