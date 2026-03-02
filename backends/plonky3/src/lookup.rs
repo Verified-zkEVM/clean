@@ -8,6 +8,30 @@ use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
+/// Parse the standard `{"width": N, "rows": [[...]]}` table JSON into a matrix.
+fn parse_table_json<F: PrimeCharacteristicRing + Send + Sync>(value: &serde_json::Value) -> RowMajorMatrix<F> {
+    let width = value["width"].as_u64().expect("missing 'width'") as usize;
+    assert!(width > 0, "table width must be positive");
+    let rows = value["rows"].as_array().expect("missing 'rows'");
+    assert!(!rows.is_empty(), "table must have at least one row");
+    let data: Vec<F> = rows
+        .iter()
+        .enumerate()
+        .flat_map(|(i, row)| {
+            let row = row.as_array().expect("row is not an array");
+            assert_eq!(
+                row.len(),
+                width,
+                "row {i} has {} elements, expected {width}",
+                row.len()
+            );
+            row.iter()
+                .map(|v| F::from_u64(v.as_u64().expect("value is not u64")))
+        })
+        .collect();
+    RowMajorMatrix::new(data, width)
+}
+
 #[derive(Clone)]
 pub struct PreprocessedTableAir<F> {
     pub name: String,
@@ -34,27 +58,7 @@ impl<F: Field> PreprocessedTableAir<F> {
     where
         F: PrimeCharacteristicRing,
     {
-        let width = value["width"].as_u64().expect("missing 'width'") as usize;
-        assert!(width > 0, "table width must be positive");
-        let rows = value["rows"].as_array().expect("missing 'rows'");
-        assert!(!rows.is_empty(), "table must have at least one row");
-        let data: Vec<F> = rows
-            .iter()
-            .enumerate()
-            .flat_map(|(i, row)| {
-                let row = row.as_array().expect("row is not an array");
-                assert_eq!(
-                    row.len(),
-                    width,
-                    "row {i} has {} elements, expected {width}",
-                    row.len()
-                );
-                row.iter()
-                    .map(|v| F::from_u64(v.as_u64().expect("value is not u64")))
-            })
-            .collect();
-        let matrix = RowMajorMatrix::new(data, width);
-        Self::new(name, matrix)
+        Self::new(name, parse_table_json(value))
     }
 }
 
@@ -160,20 +164,8 @@ impl<F: Field> ProverTableAir<F> {
     where
         F: PrimeCharacteristicRing,
     {
-        let width = value["width"].as_u64().expect("missing 'width'") as usize;
-        assert!(width > 0, "table width must be positive");
-        let rows = value["rows"].as_array().expect("missing 'rows'");
-        assert!(!rows.is_empty(), "table must have at least one row");
-        let data: Vec<F> = rows
-            .iter()
-            .flat_map(|row| {
-                let row = row.as_array().expect("row is not an array");
-                assert_eq!(row.len(), width);
-                row.iter()
-                    .map(|v| F::from_u64(v.as_u64().expect("value is not u64")))
-            })
-            .collect();
-        let matrix = RowMajorMatrix::new(data, width);
+        let matrix = parse_table_json(value);
+        let width = matrix.width();
         (Self::new(name, width), matrix)
     }
 
