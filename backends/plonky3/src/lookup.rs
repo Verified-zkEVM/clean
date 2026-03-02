@@ -62,7 +62,7 @@ impl<F: Field> PreprocessedTableAir<F> {
     }
 }
 
-/// Convenience constructor for a byte-range (0..255) lookup table.
+/// Convenience constructor for a byte-range (0..=255) lookup table.
 pub fn byte_range_air<F: Field>() -> PreprocessedTableAir<F> {
     let preprocessed = RowMajorMatrix::new((0..256).map(|i| F::from_u8(i as u8)).collect(), 1);
     PreprocessedTableAir::new("Bytes".into(), preprocessed)
