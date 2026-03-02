@@ -332,6 +332,18 @@ pub fn parse_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) -> Ve
     raw_data
 }
 
+/// Parse trace JSON and return a flat `RowMajorMatrix`.
+///
+/// This is a convenience wrapper around [`parse_trace`] that flattens the
+/// row vectors into the `RowMajorMatrix` format expected by the prover.
+pub fn parse_trace_matrix<F: Field + PrimeCharacteristicRing>(
+    json_content: &str,
+) -> RowMajorMatrix<F> {
+    let trace_rows = parse_trace::<F>(json_content);
+    let width = trace_rows[0].len();
+    RowMajorMatrix::new(trace_rows.into_iter().flatten().collect(), width)
+}
+
 /// Enum wrapper to handle multiple AIR types in the same vector
 #[derive(Clone)]
 pub enum CleanAirInstance<F: Field> {

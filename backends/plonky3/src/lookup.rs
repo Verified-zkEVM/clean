@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use core::marker::PhantomData;
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};
 use p3_air::lookup::{Direction, Kind, Lookup};
-use p3_field::Field;
+use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
@@ -26,6 +26,27 @@ impl<F: Field> PreprocessedTableAir<F> {
 
     pub fn table_name(&self) -> &str {
         &self.name
+    }
+
+    /// Build a `PreprocessedTableAir` from the standard JSON format produced by
+    /// Lean circuit export: `{"width": N, "rows": [[...]]}`.
+    pub fn from_json(name: String, value: &serde_json::Value) -> Self
+    where
+        F: PrimeCharacteristicRing,
+    {
+        let width = value["width"].as_u64().expect("missing 'width'") as usize;
+        let rows = value["rows"].as_array().expect("missing 'rows'");
+        let data: Vec<F> = rows
+            .iter()
+            .flat_map(|row| {
+                row.as_array()
+                    .expect("row is not an array")
+                    .iter()
+                    .map(|v| F::from_u64(v.as_u64().expect("value is not u64")))
+            })
+            .collect();
+        let matrix = RowMajorMatrix::new(data, width);
+        Self::new(name, matrix)
     }
 }
 
@@ -121,6 +142,22 @@ impl<F: Field> ProverTableAir<F> {
 
     pub fn table_name(&self) -> &str {
         &self.name
+    }
+
+    /// Build a `ProverTableAir` and its data matrix from `(addr, val)` pairs.
+    ///
+    /// Returns `(air, data_matrix)` since callers always need both.
+    pub fn from_entries(name: String, entries: &[(u64, u64)]) -> (Self, RowMajorMatrix<F>)
+    where
+        F: PrimeCharacteristicRing,
+    {
+        let air = Self::new(name, 2);
+        let data: Vec<F> = entries
+            .iter()
+            .flat_map(|(addr, val)| vec![F::from_u64(*addr), F::from_u64(*val)])
+            .collect();
+        let matrix = RowMajorMatrix::new(data, 2);
+        (air, matrix)
     }
 }
 

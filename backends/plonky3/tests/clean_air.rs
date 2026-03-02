@@ -1,5 +1,5 @@
 use clean_backend::{
-    byte_range_air, generate_table_traces, parse_trace,
+    byte_range_air, generate_table_traces, parse_trace, parse_trace_matrix,
     prove, verify, AirInfo,
     CleanAirInstance, MainAir, PreprocessedTableAir, ProverTableAir, StarkConfig,
 };
@@ -705,87 +705,72 @@ fn test_prover_table_lookup() {
         .expect("prover table lookup verification failed");
 }
 
-/// End-to-end test for FemtoCairo: circuit and trace exported from Lean,
-/// with a preprocessed program table and a prover-supplied memory table.
-///
-/// Test program: 15 ADD instructions (all-immediate addressing mode), 64 program entries.
-/// State: 16 rows (15 steps), from (pc=0,ap=0,fp=0) to (pc=60,ap=0,fp=0).
-/// Tables: program (preprocessed, 64x2), memory (prover-supplied, 16x2).
-#[test]
-fn test_femtocairo_e2e() {
-    let config = setup::test_config(500);
-
+/// Run a pair of Lean generation scripts (circuit + trace) and return their JSON content.
+fn run_lean_scripts(
+    circuit_script: &str,
+    circuit_output: &str,
+    trace_script: &str,
+    trace_output: &str,
+) -> (String, String) {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests").join("fixtures");
     std::fs::create_dir_all(tests_dir.join("output")).unwrap();
-    let _ = std::fs::remove_file(tests_dir.join("output/femtocairo_circuit.json"));
-    let _ = std::fs::remove_file(tests_dir.join("output/femtocairo_trace.json"));
+    let _ = std::fs::remove_file(tests_dir.join(circuit_output));
+    let _ = std::fs::remove_file(tests_dir.join(trace_output));
 
-    // --- Generate circuit JSON from Lean ---
-    let circuit_output = Command::new("bash")
-        .arg(tests_dir.join("generate_femtocairo_circuit.sh"))
-        .arg("output/femtocairo_circuit.json")
+    let circuit_result = Command::new("bash")
+        .arg(tests_dir.join(circuit_script))
+        .arg(circuit_output)
         .current_dir(&tests_dir)
         .output()
-        .expect("Failed to run FemtoCairo circuit generation script");
+        .expect("Failed to run circuit generation script");
     assert!(
-        circuit_output.status.success(),
-        "FemtoCairo circuit generation failed: {}",
-        String::from_utf8_lossy(&circuit_output.stderr)
+        circuit_result.status.success(),
+        "Circuit generation failed: {}",
+        String::from_utf8_lossy(&circuit_result.stderr)
     );
-    let circuit_json_str = std::fs::read_to_string(tests_dir.join("output/femtocairo_circuit.json"))
-        .expect("Failed to read generated FemtoCairo circuit JSON");
 
-    // Parse the circuit JSON wrapper
+    let trace_result = Command::new("bash")
+        .arg(tests_dir.join(trace_script))
+        .arg(trace_output)
+        .current_dir(&tests_dir)
+        .output()
+        .expect("Failed to run trace generation script");
+    assert!(
+        trace_result.status.success(),
+        "Trace generation failed: {}",
+        String::from_utf8_lossy(&trace_result.stderr)
+    );
+
+    let circuit_json = std::fs::read_to_string(tests_dir.join(circuit_output))
+        .expect("Failed to read generated circuit JSON");
+    let trace_json = std::fs::read_to_string(tests_dir.join(trace_output))
+        .expect("Failed to read generated trace JSON");
+
+    (circuit_json, trace_json)
+}
+
+/// Common FemtoCairo pipeline: parse circuit JSON → build main trace → build AIR instances → prove → verify.
+fn run_femtocairo_pipeline(
+    circuit_json_str: &str,
+    trace_json_str: &str,
+    mem_entries: &[(u64, u64)],
+) {
+    let config = setup::test_config(500);
+
     let circuit_value: serde_json::Value =
-        serde_json::from_str(&circuit_json_str).expect("Failed to parse circuit JSON");
+        serde_json::from_str(circuit_json_str).expect("Failed to parse circuit JSON");
     let constraints = circuit_value["constraints"].clone();
     let preprocessed_tables = &circuit_value["preprocessed_tables"];
 
-    // --- Generate trace from Lean ---
-    let trace_output = Command::new("bash")
-        .arg(tests_dir.join("generate_femtocairo_trace.sh"))
-        .arg("output/femtocairo_trace.json")
-        .current_dir(&tests_dir)
-        .output()
-        .expect("Failed to run FemtoCairo trace generation script");
-    assert!(
-        trace_output.status.success(),
-        "FemtoCairo trace generation failed: {}",
-        String::from_utf8_lossy(&trace_output.stderr)
-    );
-    let trace_json = std::fs::read_to_string(tests_dir.join("output/femtocairo_trace.json"))
-        .expect("Failed to read generated FemtoCairo trace JSON");
+    let main_trace = parse_trace_matrix::<BabyBear>(trace_json_str);
 
-    let trace_rows = parse_trace::<BabyBear>(&trace_json);
-    let width = trace_rows[0].len();
-    let main_trace: RowMajorMatrix<BabyBear> =
-        RowMajorMatrix::new(trace_rows.iter().flatten().cloned().collect(), width);
+    let program_air: PreprocessedTableAir<BabyBear> =
+        PreprocessedTableAir::from_json("program".into(), &preprocessed_tables["program"]);
 
-    // --- Build program table from JSON (PreprocessedTableAir) ---
-    let program_table = &preprocessed_tables["program"];
-    let program_width = program_table["width"].as_u64().unwrap() as usize;
-    let program_rows = program_table["rows"].as_array().unwrap();
-    let program_data: Vec<BabyBear> = program_rows
-        .iter()
-        .flat_map(|row| {
-            row.as_array().unwrap().iter().map(|v| {
-                BabyBear::from_u64(v.as_u64().unwrap())
-            })
-        })
-        .collect();
-    let program_matrix = RowMajorMatrix::new(program_data, program_width);
-    let program_air = PreprocessedTableAir::new("program".into(), program_matrix);
+    let (mem_air, mem_data_matrix) =
+        ProverTableAir::<BabyBear>::from_entries("memory".into(), mem_entries);
 
-    // --- Build memory table (ProverTableAir) ---
-    // 16 rows x 2 cols: (address, value) — dummy entries for immediate mode
-    let mem_air = ProverTableAir::<BabyBear>::new("memory".into(), 2);
-    let mem_data: Vec<BabyBear> = (0u64..16)
-        .flat_map(|i| vec![BabyBear::from_u64(i), BabyBear::from_u64(0)])
-        .collect();
-    let mem_data_matrix = RowMajorMatrix::new(mem_data, 2);
-
-    // --- Build AIR instances ---
     let main_air_instance = MainAir::<BabyBear>::from_value(
         constraints,
         main_trace.width(),
@@ -797,7 +782,6 @@ fn test_femtocairo_e2e() {
         AirInfo::new(CleanAirInstance::ProverTable(mem_air)),
     ];
 
-    // --- Generate table traces, prove, verify ---
     let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
         &air_infos,
         &main_trace,
@@ -812,6 +796,27 @@ fn test_femtocairo_e2e() {
         .expect("FemtoCairo end-to-end verification failed");
 }
 
+/// End-to-end test for FemtoCairo: circuit and trace exported from Lean,
+/// with a preprocessed program table and a prover-supplied memory table.
+///
+/// Test program: 15 ADD instructions (all-immediate addressing mode), 64 program entries.
+/// State: 16 rows (15 steps), from (pc=0,ap=0,fp=0) to (pc=60,ap=0,fp=0).
+/// Tables: program (preprocessed, 64x2), memory (prover-supplied, 16x2).
+#[test]
+fn test_femtocairo_e2e() {
+    let (circuit_json, trace_json) = run_lean_scripts(
+        "generate_femtocairo_circuit.sh",
+        "output/femtocairo_circuit.json",
+        "generate_femtocairo_trace.sh",
+        "output/femtocairo_trace.json",
+    );
+
+    // 16 rows x 2 cols: (address, value) — dummy entries for immediate mode
+    let mem_entries: Vec<(u64, u64)> = (0u64..16).map(|i| (i, 0)).collect();
+
+    run_femtocairo_pipeline(&circuit_json, &trace_json, &mem_entries);
+}
+
 /// End-to-end FemtoCairo test with memory-reading instructions.
 ///
 /// Exercises AP-relative and FP-relative addressing modes with non-trivial memory values.
@@ -820,105 +825,17 @@ fn test_femtocairo_e2e() {
 /// Tables: program (preprocessed, 32x2), memory (prover-supplied, 8x2).
 #[test]
 fn test_femtocairo_memory_e2e() {
-    let config = setup::test_config(500);
-
-    let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let tests_dir = backend_dir.join("tests").join("fixtures");
-    std::fs::create_dir_all(tests_dir.join("output")).unwrap();
-    let _ = std::fs::remove_file(tests_dir.join("output/femtocairo_memory_circuit.json"));
-    let _ = std::fs::remove_file(tests_dir.join("output/femtocairo_memory_trace.json"));
-
-    // --- Generate circuit JSON from Lean ---
-    let circuit_output = Command::new("bash")
-        .arg(tests_dir.join("generate_femtocairo_memory_circuit.sh"))
-        .arg("output/femtocairo_memory_circuit.json")
-        .current_dir(&tests_dir)
-        .output()
-        .expect("Failed to run FemtoCairo memory circuit generation script");
-    assert!(
-        circuit_output.status.success(),
-        "FemtoCairo memory circuit generation failed: {}",
-        String::from_utf8_lossy(&circuit_output.stderr)
+    let (circuit_json, trace_json) = run_lean_scripts(
+        "generate_femtocairo_memory_circuit.sh",
+        "output/femtocairo_memory_circuit.json",
+        "generate_femtocairo_memory_trace.sh",
+        "output/femtocairo_memory_trace.json",
     );
-    let circuit_json_str = std::fs::read_to_string(tests_dir.join("output/femtocairo_memory_circuit.json"))
-        .expect("Failed to read generated FemtoCairo memory circuit JSON");
 
-    // Parse the circuit JSON wrapper
-    let circuit_value: serde_json::Value =
-        serde_json::from_str(&circuit_json_str).expect("Failed to parse circuit JSON");
-    let constraints = circuit_value["constraints"].clone();
-    let preprocessed_tables = &circuit_value["preprocessed_tables"];
-
-    // --- Generate trace from Lean ---
-    let trace_output = Command::new("bash")
-        .arg(tests_dir.join("generate_femtocairo_memory_trace.sh"))
-        .arg("output/femtocairo_memory_trace.json")
-        .current_dir(&tests_dir)
-        .output()
-        .expect("Failed to run FemtoCairo memory trace generation script");
-    assert!(
-        trace_output.status.success(),
-        "FemtoCairo memory trace generation failed: {}",
-        String::from_utf8_lossy(&trace_output.stderr)
-    );
-    let trace_json = std::fs::read_to_string(tests_dir.join("output/femtocairo_memory_trace.json"))
-        .expect("Failed to read generated FemtoCairo memory trace JSON");
-
-    let trace_rows = parse_trace::<BabyBear>(&trace_json);
-    let width = trace_rows[0].len();
-    let main_trace: RowMajorMatrix<BabyBear> =
-        RowMajorMatrix::new(trace_rows.iter().flatten().cloned().collect(), width);
-
-    // --- Build program table from JSON (PreprocessedTableAir) ---
-    let program_table = &preprocessed_tables["program"];
-    let program_width = program_table["width"].as_u64().unwrap() as usize;
-    let program_rows = program_table["rows"].as_array().unwrap();
-    let program_data: Vec<BabyBear> = program_rows
-        .iter()
-        .flat_map(|row| {
-            row.as_array().unwrap().iter().map(|v| {
-                BabyBear::from_u64(v.as_u64().unwrap())
-            })
-        })
-        .collect();
-    let program_matrix = RowMajorMatrix::new(program_data, program_width);
-    let program_air = PreprocessedTableAir::new("program".into(), program_matrix);
-
-    // --- Build memory table (ProverTableAir) ---
     // 8 rows x 2 cols: (address, value) — non-trivial entries for memory-reading modes
-    let mem_air = ProverTableAir::<BabyBear>::new("memory".into(), 2);
     let mem_entries: Vec<(u64, u64)> = vec![
         (0, 0), (1, 5), (2, 3), (3, 7), (4, 2), (5, 10), (6, 0), (7, 0),
     ];
-    let mem_data: Vec<BabyBear> = mem_entries
-        .iter()
-        .flat_map(|(addr, val)| vec![BabyBear::from_u64(*addr), BabyBear::from_u64(*val)])
-        .collect();
-    let mem_data_matrix = RowMajorMatrix::new(mem_data, 2);
 
-    // --- Build AIR instances ---
-    let main_air_instance = MainAir::<BabyBear>::from_value(
-        constraints,
-        main_trace.width(),
-        main_trace.height(),
-    );
-    let air_infos: Vec<AirInfo<BabyBear>> = vec![
-        AirInfo::new(CleanAirInstance::Main(main_air_instance)),
-        AirInfo::new(CleanAirInstance::Preprocessed(program_air)),
-        AirInfo::new(CleanAirInstance::ProverTable(mem_air)),
-    ];
-
-    // --- Generate table traces, prove, verify ---
-    let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
-        &air_infos,
-        &main_trace,
-        &[("memory", &mem_data_matrix)],
-    );
-    let mut traces = vec![main_trace];
-    traces.extend(table_traces);
-
-    let pis = vec![];
-    let proof = prove(&config, &air_infos, &traces, &pis);
-    verify(&config, &air_infos, &proof, &pis)
-        .expect("FemtoCairo memory end-to-end verification failed");
+    run_femtocairo_pipeline(&circuit_json, &trace_json, &mem_entries);
 }
