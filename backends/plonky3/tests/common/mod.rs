@@ -53,23 +53,29 @@ pub mod setup {
     }
 }
 
-/// Run a single Lean script via `run_lean.sh` and return the content of its output file.
+/// Run a single Lean script via `lake env lean --run` and return the content of its output file.
 ///
 /// `extra_args` are passed between the script name and the output path (e.g. a step count).
 pub fn run_lean_script(script: &str, extra_args: &[&str], output_path: &str) -> String {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests").join("fixtures");
+    let clean_root = backend_dir.parent().unwrap().parent().unwrap();
     std::fs::create_dir_all(tests_dir.join("output")).unwrap();
     let _ = std::fs::remove_file(tests_dir.join(output_path));
 
-    let mut cmd = Command::new("bash");
-    cmd.arg(tests_dir.join("run_lean.sh")).arg(script);
+    let lean_file = tests_dir.join(script);
+    let output_file = tests_dir.join(output_path);
+
+    let mut cmd = Command::new("lake");
+    cmd.args(["env", "lean", "--run"]);
+    cmd.arg(&lean_file);
     for arg in extra_args {
         cmd.arg(arg);
     }
-    cmd.arg(output_path).current_dir(&tests_dir);
+    cmd.arg(&output_file);
+    cmd.current_dir(clean_root);
 
-    let result = cmd.output().expect("Failed to run Lean script");
+    let result = cmd.output().expect("Failed to run lake");
     assert!(
         result.status.success(),
         "Lean script '{}' failed: {}",
@@ -77,7 +83,7 @@ pub fn run_lean_script(script: &str, extra_args: &[&str], output_path: &str) -> 
         String::from_utf8_lossy(&result.stderr)
     );
 
-    std::fs::read_to_string(tests_dir.join(output_path))
+    std::fs::read_to_string(&output_file)
         .unwrap_or_else(|e| panic!("Failed to read output '{}': {}", output_path, e))
 }
 
@@ -101,7 +107,7 @@ pub fn read_test_json(filename: &str) -> String {
         .unwrap_or_else(|e| panic!("Failed to read JSON file '{}': {}", filename, e))
 }
 
-/// Run a pair of Lean generators (circuit + trace) via run_lean.sh and return their JSON content.
+/// Run a pair of Lean generators (circuit + trace) and return their JSON content.
 pub fn run_lean_scripts(
     circuit_lean_file: &str,
     circuit_output: &str,
