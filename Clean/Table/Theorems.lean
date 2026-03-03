@@ -148,4 +148,20 @@ theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F
     simp_all +arith [assignmentFromCircuit, pushVarsAux, Operations.localLength,
       Vector.mapRange_add_eq_append, Vector.cast, Array.append_assoc]
 
+theorem setVarInput_offset (assignment : CellAssignment W S) (off : CellOffset W S) (var : ℕ) :
+    (assignment.setVarInput off var).offset = assignment.offset := by
+  simp [setVarInput]
+
+theorem setVarInput_vars_getElem_eq (assignment : CellAssignment W S) (off : CellOffset W S) (var : ℕ)
+    (h : var < assignment.offset) :
+    (assignment.setVarInput off var).vars[var]'(by rw [setVarInput_offset]; exact h) = .input off := by
+  simp only [setVarInput, Vector.set?]
+  simp
+
+theorem setVarInput_vars_getElem_ne (assignment : CellAssignment W S) (off : CellOffset W S) (var : ℕ)
+    (i : ℕ) (hi : i < assignment.offset) (hne : i ≠ var) :
+    (assignment.setVarInput off var).vars[i]'(by rw [setVarInput_offset]; exact hi) = assignment.vars[i] := by
+  simp only [setVarInput, Vector.set?]
+  simp [hne.symm]
+
 end CellAssignment

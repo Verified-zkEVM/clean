@@ -100,6 +100,13 @@ def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint
   Like `inductiveConstraint`, but instead of asserting equality with `getNextRow`,
   it assigns the step output directly to next-row columns. This creates witness
   generators that `witnessesWithData` can evaluate to fill in the trace.
+
+  **Fresh-variable invariant:** When using `inductiveWitness`, every field of the step
+  output must be either (a) a fresh witness variable (from `witness`, `<==`, or a
+  subcircuit), or (b) a composite expression (not a bare `.var`). Passing a bare `.var`
+  from `getCurrRow` will corrupt the variable-to-cell mapping in `setVarInput`, because
+  `assign` overwrites that variable's cell from the current-row cell to the next-row cell.
+  To pass through a state field unchanged, wrap it with `let fresh <== original`.
 -/
 def inductiveWitness (table : InductiveTable F State Input) : TableConstraint 2 (ProvablePair State Input) F Unit := do
   let (acc, x) ← getCurrRow
