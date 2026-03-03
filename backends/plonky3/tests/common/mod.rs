@@ -1,5 +1,5 @@
 use clean_backend::{
-    generate_table_traces, parse_trace, parse_trace_matrix,
+    generate_table_traces, parse_table_json, parse_trace, parse_trace_matrix,
     prove, verify, AirInfo,
     CleanAirInstance, MainAir, PreprocessedTableAir, ProverTableAir, StarkConfig,
 };
@@ -126,26 +126,41 @@ pub fn prove_and_verify_from_json(
 ) {
     let config = setup::test_config(500);
 
+    // --- Parse circuit JSON (verifier information) ---
     let circuit_value: serde_json::Value =
         serde_json::from_str(circuit_json_str).expect("Failed to parse circuit JSON");
     let constraints = circuit_value["constraints"].clone();
+    let num_columns = circuit_value["num_columns"].as_u64().unwrap() as usize;
     let preprocessed_tables = &circuit_value["preprocessed_tables"];
 
+    let program_air: PreprocessedTableAir<BabyBear> =
+        PreprocessedTableAir::from_json("program".into(), &preprocessed_tables["program"]);
+
+    let prover_tables_meta = &circuit_value["prover_tables"];
+    let mem_width = prover_tables_meta["memory"]["width"].as_u64().unwrap() as usize;
+    let mem_air = ProverTableAir::<BabyBear>::new("memory".into(), mem_width);
+
+    // --- Parse trace JSON (prover data) ---
     let trace_value: serde_json::Value =
         serde_json::from_str(trace_json_str).expect("Failed to parse trace JSON");
     let main_trace_str = trace_value["main_trace"].to_string();
     let main_trace = parse_trace_matrix::<BabyBear>(&main_trace_str);
 
+    assert_eq!(
+        main_trace.width(),
+        num_columns,
+        "Trace width {} doesn't match circuit num_columns {}",
+        main_trace.width(),
+        num_columns
+    );
+
     let prover_tables = &trace_value["prover_tables"];
-    let (mem_air, mem_data_matrix) =
-        ProverTableAir::<BabyBear>::from_json("memory".into(), &prover_tables["memory"]);
+    let mem_data_matrix = parse_table_json::<BabyBear>(&prover_tables["memory"]);
 
-    let program_air: PreprocessedTableAir<BabyBear> =
-        PreprocessedTableAir::from_json("program".into(), &preprocessed_tables["program"]);
-
+    // --- Build AIR instances (circuit info + trace_height) ---
     let main_air_instance = MainAir::<BabyBear>::from_value(
         constraints,
-        main_trace.width(),
+        num_columns,
         main_trace.height(),
     );
     let air_infos: Vec<AirInfo<BabyBear>> = vec![
@@ -154,6 +169,7 @@ pub fn prove_and_verify_from_json(
         AirInfo::new(CleanAirInstance::ProverTable(mem_air)),
     ];
 
+    // --- Prove and verify ---
     let table_traces = generate_table_traces::<BabyBear, setup::MyConfig>(
         &air_infos,
         &main_trace,

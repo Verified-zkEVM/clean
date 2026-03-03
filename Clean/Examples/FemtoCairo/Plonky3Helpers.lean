@@ -1,26 +1,44 @@
 import Lean
 import Clean.Circuit.Json
+import Clean.Table.Json
 import Clean.Utils.Primes
 
 namespace Examples.FemtoCairo.Plonky3Helpers
 
-/-- Write FemtoCairo circuit JSON (constraints + preprocessed program table) to a file. -/
-def generateCircuitJson
-    (constraints_json : Lean.Json)
+/-- Write FemtoCairo circuit JSON (constraints + preprocessed program table + prover table metadata)
+    to a file. Computes `num_columns` from the provable type size and maximum auxiliary columns. -/
+def generateCircuitJson {S : Type → Type} [ProvableType S]
+    (constraints : List (TableOperation S (F pBabybear)))
     (programSize : ℕ)
     (programData : Array (F pBabybear))
+    (proverTablesMeta : Array (String × ℕ))
     (output_path : String) : IO Unit := do
+  -- Compute num_columns = size S + max(numAux) across all constraint operations
+  let maxAux := constraints.foldl (fun acc op =>
+    let aux := match op with
+    | .boundary _ c => c.finalAssignment.numAux
+    | .everyRow c => c.finalAssignment.numAux
+    | .everyRowExceptLast c => c.finalAssignment.numAux
+    max acc aux) 0
+  let numColumns := ProvableType.size S + maxAux
+
+  -- Build prover_tables metadata JSON
+  let proverTablesJson := Lean.Json.mkObj (proverTablesMeta.toList.map fun (name, w) =>
+    (name, Lean.Json.mkObj [("width", w)]))
+
   let program_rows : Array Lean.Json := (Array.range programSize).map fun i =>
     let idx : F pBabybear := OfNat.ofNat i
     Lean.toJson #[idx, programData[i]!]
   let combined := Lean.Json.mkObj [
-    ("constraints", constraints_json),
+    ("num_columns", numColumns),
+    ("constraints", Lean.toJson constraints),
     ("preprocessed_tables", Lean.Json.mkObj [
       ("program", Lean.Json.mkObj [
         ("width", (2 : Nat)),
         ("rows", Lean.Json.arr program_rows)
       ])
-    ])
+    ]),
+    ("prover_tables", proverTablesJson)
   ]
   IO.FS.writeFile output_path combined.pretty
 

@@ -9,7 +9,7 @@ use p3_matrix::{dense::RowMajorMatrix, Matrix};
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};
 
 /// Parse the standard `{"width": N, "rows": [[...]]}` table JSON into a matrix.
-fn parse_table_json<F: PrimeCharacteristicRing + Send + Sync>(value: &serde_json::Value) -> RowMajorMatrix<F> {
+pub fn parse_table_json<F: PrimeCharacteristicRing + Send + Sync>(value: &serde_json::Value) -> RowMajorMatrix<F> {
     let width = value["width"].as_u64().expect("missing 'width'") as usize;
     assert!(width > 0, "table width must be positive");
     let rows = value["rows"].as_array().expect("missing 'rows'");
