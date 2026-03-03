@@ -11,7 +11,8 @@ def generateCircuitJson {S : Type → Type} [ProvableType S]
     (constraints : List (TableOperation S (F pBabybear)))
     (programSize : ℕ)
     (programData : Array (F pBabybear))
-    (proverTablesMeta : Array (String × ℕ))
+    (traceHeight : ℕ)
+    (proverTablesMeta : Array (String × ℕ × ℕ))
     (output_path : String) : IO Unit := do
   -- Compute num_columns = size S + max(numAux) across all constraint operations
   let maxAux := constraints.foldl (fun acc op =>
@@ -23,14 +24,15 @@ def generateCircuitJson {S : Type → Type} [ProvableType S]
   let numColumns := ProvableType.size S + maxAux
 
   -- Build prover_tables metadata JSON
-  let proverTablesJson := Lean.Json.mkObj (proverTablesMeta.toList.map fun (name, w) =>
-    (name, Lean.Json.mkObj [("width", w)]))
+  let proverTablesJson := Lean.Json.mkObj (proverTablesMeta.toList.map fun (name, w, h) =>
+    (name, Lean.Json.mkObj [("width", w), ("height", h)]))
 
   let program_rows : Array Lean.Json := (Array.range programSize).map fun i =>
     let idx : F pBabybear := OfNat.ofNat i
     Lean.toJson #[idx, programData[i]!]
   let combined := Lean.Json.mkObj [
     ("num_columns", numColumns),
+    ("trace_height", traceHeight),
     ("constraints", Lean.toJson constraints),
     ("preprocessed_tables", Lean.Json.mkObj [
       ("program", Lean.Json.mkObj [
