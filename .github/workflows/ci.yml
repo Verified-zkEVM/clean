@@ -50,3 +50,7 @@ jobs:
         run: |
           cd backends/plonky3
           cargo test --release test_tampered_multiplicity
+      - name: Run FemtoCairo end-to-end tests
+        run: |
+          cd backends/plonky3
+          cargo test --release -- --nocapture test_femtocairo
