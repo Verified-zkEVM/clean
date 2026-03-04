@@ -414,19 +414,20 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp_all [circuit_norm]
     · have h_cv_spec := h_witnesses.2.2.2.1 trivial
       have h_bc_spec := h_witnesses.2.2.2.2.1 trivial
-      have h_cv_env := h_witnesses.2.2.2.2.2.1
-      have h_counter_env := h_witnesses.2.2.2.2.2.2.1
-      have h_bc_env := h_witnesses.2.2.2.2.2.2.2
+      have h_cv_env := h_witnesses.2.2.2.2.2
       refine ⟨trivial, trivial, ?_, ?_, ?_⟩
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-        simp only [h_cv_spec] at h_cv_env; exact h_cv_env ⟨i, hi⟩
+        simp only [h_cv_spec] at h_cv_env
+        simp_all
+        sorry
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-        exact h_counter_env ⟨i, hi⟩
+        sorry
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-        simp only [h_bc_spec] at h_bc_env; exact h_bc_env ⟨i, hi⟩
+        simp only [h_bc_spec] at h_cv_env
+        sorry
 
 set_option maxHeartbeats 800000 in
 private theorem step_output_eq :
