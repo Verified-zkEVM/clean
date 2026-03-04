@@ -218,7 +218,6 @@ theorem inductiveWitness_env_get
   simp only [TraceOfLength.get, PNat.val_ofNat, Nat.reduceSub, Fin.val_zero,
     Trace.getLeFromBottom, Row.get, Vector.getElem_append]
 
-set_option maxHeartbeats 3200000 in
 /-- windowEnv for inductiveWitness maps output variables to next-row elements.
     For each output element `i < size State`, if `(toVars output)[i] = .var v`, then
     `env'.get v.index = (toElements next)[i]`. -/
