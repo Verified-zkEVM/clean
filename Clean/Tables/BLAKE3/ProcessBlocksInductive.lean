@@ -6,6 +6,7 @@ This table has exactly 17 rows:
 -/
 import Clean.Table.Inductive
 import Clean.Circuit.Loops
+import Clean.Circuit.FreshVars
 import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
@@ -42,6 +43,13 @@ structure ProcessBlocksState (F : Type) where
   chunk_counter : U32 F                 -- Which chunk number this is
   blocks_compressed : U32 F             -- Number of blocks compressed so far
 deriving ProvableStruct
+
+/-- Decompose `toElements` of `ProcessBlocksState` into per-field concatenation (by `rfl`). -/
+private lemma ProcessBlocksState.toElements_decompose {F : Type} (x : Var ProcessBlocksState F) :
+  @toElements ProcessBlocksState _ (Expression F) x =
+    Vector.append (@toElements (ProvableVector U32 8) _ (Expression F) x.chaining_value)
+      (Vector.append (@toElements U32 _ (Expression F) x.chunk_counter)
+        (Vector.append (@toElements U32 _ (Expression F) x.blocks_compressed) #v[])) := rfl
 
 /--
 Convert ProcessBlocksState to ChunkState for integration with the spec.
@@ -196,12 +204,12 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     ifFalse := state.blocks_compressed
   }
 
-  let fresh_counter <== state.chunk_counter
-  return {
+  let result <== ({
     chaining_value := muxedCV
-    chunk_counter := fresh_counter
+    chunk_counter := state.chunk_counter
     blocks_compressed := muxedBlocksCompressed
-  }
+  } : Var ProcessBlocksState (F p))
+  return result
 
 def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i
   (_ : inputs.length = i) (state : ProcessBlocksState (F p)) (_ : ProverData (F p)) :=
@@ -404,10 +412,21 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             norm_num
         · norm_num)
       simp_all [circuit_norm]
-    · refine ⟨trivial, trivial, ?_⟩
-      rw [ProvableType.ext_iff]; intro i hi
-      rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-      exact h_witnesses.2.2.2.2.2 ⟨i, hi⟩
+    · have h_cv_spec := h_witnesses.2.2.2.1 trivial
+      have h_bc_spec := h_witnesses.2.2.2.2.1 trivial
+      have h_cv_env := h_witnesses.2.2.2.2.2.1
+      have h_counter_env := h_witnesses.2.2.2.2.2.2.1
+      have h_bc_env := h_witnesses.2.2.2.2.2.2.2
+      refine ⟨trivial, trivial, ?_, ?_, ?_⟩
+      · rw [ProvableType.ext_iff]; intro i hi
+        rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+        simp only [h_cv_spec] at h_cv_env; exact h_cv_env ⟨i, hi⟩
+      · rw [ProvableType.ext_iff]; intro i hi
+        rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+        exact h_counter_env ⟨i, hi⟩
+      · rw [ProvableType.ext_iff]; intro i hi
+        rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+        simp only [h_bc_spec] at h_bc_env; exact h_bc_env ⟨i, hi⟩
 
 /--
 The InductiveTable for processBlocks.
@@ -423,7 +442,18 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     simp only [step, circuit_norm]
     omega
   outputFreshVars := by
-    simp only [circuit_norm, step, explicit_provable_type]
-    sorry
+    simp only [circuit_norm, step, HasAssignEq.assignEq,
+      BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3BlockInputNormalized.circuit,
+      IsZero.circuit, BLAKE3.Compress.circuit, Addition32.circuit, Conditional.circuit]
+    constructor
+    · intro i hi
+      simp only [ProcessBlocksState.toElements_decompose, varFromOffset,
+        ProvableType.toElements_fromElements,
+        show size (ProvableVector U32 8) = 32 from rfl,
+        show size U32 = 4 from rfl,
+        Var.getElem_append_vec, Vector.getElem_append, Vector.getElem_mapRange]
+      sorry
+    · intro i j hi hj hij v w hv hw
+      sorry
 end
 end Tables.BLAKE3.ProcessBlocksInductive
