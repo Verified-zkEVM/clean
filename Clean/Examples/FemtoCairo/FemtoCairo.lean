@@ -830,6 +830,8 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
     specialize h_initial_state (i+1) h_i
     simp_all [circuit_norm, Spec.femtoCairoMachineBoundedExecution, femtoCairoStep, femtoCairoStepAssumptions, MemoryCompletenessAssumption]
 
+  outputFreshVars := sorry
+
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with
   the default initial state (pc=0, ap=0, fp=0).

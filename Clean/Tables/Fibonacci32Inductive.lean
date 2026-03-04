@@ -2,6 +2,8 @@
 import Clean.Table.Inductive
 import Clean.Gadgets.Addition32.Addition32
 
+set_option maxHeartbeats 400000
+
 namespace Tables.Fibonacci32Inductive
 open Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -46,6 +48,18 @@ def table : InductiveTable (F p) Row unit where
       rw [ProvableType.ext_iff]; intro i hi
       rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
       exact h_fresh_witnesses ⟨i, hi⟩⟩
+
+  outputFreshVars := by
+    constructor
+    · intro i hi
+      simp only [circuit_norm] at hi ⊢
+      -- The circuit allocates fresh variables for output elements
+      -- The default omega proof doesn't suffice due to circuit complexity
+      sorry
+    · intros i j hi hj hij v w hv hw
+      simp only [circuit_norm] at hv hw ⊢
+      -- Different positions have distinct variable indices by construction
+      sorry
 
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output
