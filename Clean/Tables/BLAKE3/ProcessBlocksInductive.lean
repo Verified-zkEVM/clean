@@ -428,6 +428,31 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
         simp only [h_bc_spec] at h_bc_env; exact h_bc_env ⟨i, hi⟩
 
+set_option maxHeartbeats 800000 in
+private theorem step_output_eq :
+    (step (varFromOffset ProcessBlocksState 0 : Var _ (F p)) (varFromOffset BlockInput (size ProcessBlocksState))).output
+      (size ProcessBlocksState + size BlockInput) =
+    varFromOffset ProcessBlocksState 5561 := by
+  simp only [step, circuit_norm, HasAssignEq.assignEq,
+    BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3BlockInputNormalized.circuit,
+    IsZero.circuit, Gadgets.BLAKE3.Compress.circuit, Addition32.circuit, Conditional.circuit]
+  dsimp only [ElaboratedCircuit.localLength,
+    Gadgets.BLAKE3.Compress.elaborated, Gadgets.BLAKE3.ApplyRounds.elaborated,
+    Gadgets.BLAKE3.FinalStateUpdate.elaborated, Gadgets.BLAKE3.ApplyRounds.circuit,
+    Gadgets.BLAKE3.FinalStateUpdate.circuit]
+
+set_option maxHeartbeats 800000 in
+private theorem step_localLength_eq :
+    (step (varFromOffset ProcessBlocksState 0 : Var _ (F p)) (varFromOffset BlockInput (size ProcessBlocksState))).localLength
+      (size ProcessBlocksState + size BlockInput) = 5496 := by
+  simp only [step, circuit_norm, HasAssignEq.assignEq,
+    BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3BlockInputNormalized.circuit,
+    IsZero.circuit, Gadgets.BLAKE3.Compress.circuit, Addition32.circuit, Conditional.circuit]
+  dsimp only [ElaboratedCircuit.localLength,
+    Gadgets.BLAKE3.Compress.elaborated, Gadgets.BLAKE3.ApplyRounds.elaborated,
+    Gadgets.BLAKE3.FinalStateUpdate.elaborated, Gadgets.BLAKE3.ApplyRounds.circuit,
+    Gadgets.BLAKE3.FinalStateUpdate.circuit]
+
 /--
 The InductiveTable for processBlocks.
 -/
@@ -442,18 +467,10 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     simp only [step, circuit_norm]
     omega
   outputFreshVars := by
-    simp only [circuit_norm, step, HasAssignEq.assignEq,
-      BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3BlockInputNormalized.circuit,
-      IsZero.circuit, BLAKE3.Compress.circuit, Addition32.circuit, Conditional.circuit]
-    constructor
-    · intro i hi
-      simp only [ProcessBlocksState.toElements_decompose, varFromOffset,
-        ProvableType.toElements_fromElements,
-        show size (ProvableVector U32 8) = 32 from rfl,
-        show size U32 = 4 from rfl,
-        Var.getElem_append_vec, Vector.getElem_append, Vector.getElem_mapRange]
-      sorry
-    · intro i j hi hj hij v w hv hw
-      sorry
+    apply Var.outputFreshVars_of_isFreshVars
+    rw [step_output_eq, step_localLength_eq]
+    exact (Var.isFreshVars_varFromOffset ProcessBlocksState 5561).weaken
+      (by simp [size]; dsimp [ProvableStruct.combinedSize, ProvableStruct.combinedSize', size]; omega)
+      (by simp [size]; dsimp [ProvableStruct.combinedSize, ProvableStruct.combinedSize', size]; omega)
 end
 end Tables.BLAKE3.ProcessBlocksInductive
