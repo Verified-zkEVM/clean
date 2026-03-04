@@ -12,6 +12,7 @@ import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Conditional
 import Clean.Gadgets.IsZero
+import Mathlib.Tactic.IntervalCases
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
@@ -50,6 +51,7 @@ private lemma ProcessBlocksState.toElements_decompose {F : Type} (x : Var Proces
     Vector.append (@toElements (ProvableVector U32 8) _ (Expression F) x.chaining_value)
       (Vector.append (@toElements U32 _ (Expression F) x.chunk_counter)
         (Vector.append (@toElements U32 _ (Expression F) x.blocks_compressed) #v[])) := rfl
+
 
 /--
 Convert ProcessBlocksState to ChunkState for integration with the spec.
@@ -344,6 +346,29 @@ def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) (_ : Prove
 def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : ProverData (F p)) :=
   input.Normalized ∧ i < 2^32
 
+private lemma toElements_get_chaining_value (i : ℕ) (hi : i < 8 * 4)
+    (state : ProcessBlocksState (F p)) :
+    (toElements state)[i]'(show i < 40 from by omega) =
+    (toElements (M := ProvableVector U32 8) state.chaining_value)[i]'(show i < 32 from by omega) := by
+  simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
+  apply Vector.getElem_append_left
+
+private lemma toElements_get_chunk_counter (i : ℕ) (hi : i < 4)
+    (state : ProcessBlocksState (F p)) :
+    (toElements state)[8 * 4 + i]'(show 8 * 4 + i < 40 from by omega) =
+    (toElements (M := U32) state.chunk_counter)[i]'(show i < 4 from by omega) := by
+  simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
+  have h_flatten_size : (Vector.map (fun x ↦ #v[x.x0, x.x1, x.x2, x.x3]) state.chaining_value).flatten.size = 8 * 4 := by simp
+  interval_cases i <;> simp [Vector.getElem_append_right, h_flatten_size]
+
+private lemma toElements_get_blocks_compressed (i : ℕ) (hi : i < 4)
+    (state : ProcessBlocksState (F p)) :
+    (toElements state)[8 * 4 + 4 + i]'(show 8 * 4 + 4 + i < 40 from by omega) =
+    (toElements (M := U32) state.blocks_compressed)[i]'(show i < 4 from by omega) := by
+  simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
+  have h_flatten_size : (Vector.map (fun x ↦ #v[x.x0, x.x1, x.x2, x.x3]) state.chaining_value).flatten.size = 8 * 4 := by simp
+  interval_cases i <;> simp [Vector.getElem_append_right, h_flatten_size]
+
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
     intro _ _ _ _ _ _ _ _ _ h_eval h_witnesses h_assumptions
@@ -412,24 +437,24 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             norm_num
         · norm_num)
       simp_all [circuit_norm]
-    · have h_cv_spec := h_witnesses.2.2.2.1 trivial
-      have h_bc_spec := h_witnesses.2.2.2.2.1 trivial
-      have h_cv_env := h_witnesses.2.2.2.2.2
+    · have h_cv_env := h_witnesses.2.2.2.2.2
       refine ⟨trivial, trivial, ?_, ?_, ?_⟩
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-        simp only [h_cv_spec] at h_cv_env
-        simp_all
-        sorry
+        simp only [size] at hi
+        rw [← toElements_get_chaining_value i (by omega)]
+        exact h_cv_env ⟨i, by omega⟩
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-        sorry
+        simp only [size] at hi
+        rw [← toElements_get_chunk_counter i (by omega), Nat.add_assoc]
+        exact h_cv_env ⟨8 * 4 + i, by omega⟩
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-        simp only [h_bc_spec] at h_cv_env
-        sorry
+        simp only [size] at hi
+        rw [← toElements_get_blocks_compressed i (by omega), Nat.add_assoc]
+        exact h_cv_env ⟨8 * 4 + 4 + i, by omega⟩
 
-set_option maxHeartbeats 800000 in
 private theorem step_output_eq :
     (step (varFromOffset ProcessBlocksState 0 : Var _ (F p)) (varFromOffset BlockInput (size ProcessBlocksState))).output
       (size ProcessBlocksState + size BlockInput) =
@@ -442,7 +467,6 @@ private theorem step_output_eq :
     Gadgets.BLAKE3.FinalStateUpdate.elaborated, Gadgets.BLAKE3.ApplyRounds.circuit,
     Gadgets.BLAKE3.FinalStateUpdate.circuit]
 
-set_option maxHeartbeats 800000 in
 private theorem step_localLength_eq :
     (step (varFromOffset ProcessBlocksState 0 : Var _ (F p)) (varFromOffset BlockInput (size ProcessBlocksState))).localLength
       (size ProcessBlocksState + size BlockInput) = 5496 := by
