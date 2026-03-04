@@ -50,16 +50,26 @@ def table : InductiveTable (F p) Row unit where
       exact h_fresh_witnesses ⟨i, hi⟩⟩
 
   outputFreshVars := by
-    constructor
+    have hsum : ([4, 4] : List ℕ).sum = 8 := rfl
+    simp only [circuit_norm, Addition32.circuit, explicit_provable_type, hsum]
+    refine InductiveTable.outputFreshVars_of_indices _ _ _ (fun i => match i.val with
+      | 0 => 16 | 1 => 17 | 2 => 18 | 3 => 19 | 4 => 8 | 5 => 10 | 6 => 12 | _ => 14)
+      ?_ ?_ ?_ ?_
     · intro i hi
-      simp only [circuit_norm] at hi ⊢
-      -- The circuit allocates fresh variables for output elements
-      -- The default omega proof doesn't suffice due to circuit complexity
-      sorry
-    · intros i j hi hj hij v w hv hw
-      simp only [circuit_norm] at hv hw ⊢
-      -- Different positions have distinct variable indices by construction
-      sorry
+      have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 := by omega
+      rcases this with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
+    · intro ⟨i, hi⟩
+      have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 := by omega
+      rcases this with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> grind
+    · intro ⟨i, hi⟩
+      have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 := by omega
+      rcases this with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> grind
+    · intro ⟨a, ha⟩ ⟨b, hb⟩ h
+      have ha' : a = 0 ∨ a = 1 ∨ a = 2 ∨ a = 3 ∨ a = 4 ∨ a = 5 ∨ a = 6 ∨ a = 7 := by omega
+      have hb' : b = 0 ∨ b = 1 ∨ b = 2 ∨ b = 3 ∨ b = 4 ∨ b = 5 ∨ b = 6 ∨ b = 7 := by omega
+      rcases ha' with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+        <;> rcases hb' with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+        <;> first | rfl | grind
 
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output

@@ -98,6 +98,52 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
       · intro i hi; simp only [circuit_norm]; exact ⟨_, rfl, by omega, by omega⟩
       · intros; simp_all [circuit_norm]; omega
 
+/-- Derive `outputFreshVars` from explicit output variable indices.
+    Apply after `simp only [circuit_norm, ...]` has reduced the output vector and bounds.
+    The user supplies `indices` mapping each output position to its variable index,
+    proves they match the reduced output (`h_eq`), and the rest follows automatically. -/
+theorem InductiveTable.outputFreshVars_of_indices
+    {F : Type} [Field F] {s : ℕ}
+    (elems : Vector (Expression F) s)
+    (lower upper : ℕ)
+    (indices : Fin s → ℕ)
+    (h_eq : ∀ (i : ℕ) (hi : i < s), elems[i] = .var ⟨indices ⟨i, hi⟩⟩)
+    (h_fresh : ∀ i, indices i ≥ lower)
+    (h_bound : ∀ i, indices i < upper)
+    (h_injective : Function.Injective indices) :
+    (∀ (i : ℕ) (hi : i < s),
+      ∃ (v : Variable F), elems[i] = .var v ∧ v.index ≥ lower ∧ v.index < upper) ∧
+    (∀ (i j : ℕ) (hi : i < s) (hj : j < s), i ≠ j →
+      ∀ (v w : Variable F), elems[i] = .var v → elems[j] = .var w →
+        v.index ≠ w.index) :=
+  ⟨fun i hi => ⟨⟨indices ⟨i, hi⟩⟩, h_eq i hi, h_fresh ⟨i, hi⟩, h_bound ⟨i, hi⟩⟩,
+   fun i j hi hj hij v w hv hw heq => by
+    have h1 := (h_eq i hi).symm.trans hv
+    have h2 := (h_eq j hj).symm.trans hw
+    simp only [Expression.var.injEq] at h1 h2
+    subst h1; subst h2
+    exact hij (congrArg Fin.val (h_injective heq))⟩
+
+/-- Specialization when output variables are consecutive: base, base+1, ..., base+s-1. -/
+theorem InductiveTable.outputFreshVars_of_consecutive
+    {F : Type} [Field F] {s : ℕ}
+    (elems : Vector (Expression F) s)
+    (lower upper : ℕ)
+    (base : ℕ)
+    (h_eq : ∀ (i : ℕ) (hi : i < s), elems[i] = .var ⟨base + i⟩)
+    (h_ge : base ≥ lower)
+    (h_lt : base + s ≤ upper) :
+    (∀ (i : ℕ) (hi : i < s),
+      ∃ (v : Variable F), elems[i] = .var v ∧ v.index ≥ lower ∧ v.index < upper) ∧
+    (∀ (i j : ℕ) (hi : i < s) (hj : j < s), i ≠ j →
+      ∀ (v w : Variable F), elems[i] = .var v → elems[j] = .var w →
+        v.index ≠ w.index) :=
+  outputFreshVars_of_indices elems lower upper (fun i => base + i.val)
+    (fun i hi => by rw [h_eq i hi])
+    (fun i => by show base + i.val ≥ _; omega)
+    (fun i => by show base + i.val < _; have := i.isLt; omega)
+    (fun a b h => by dsimp at h; ext; omega)
+
 namespace InductiveTable
 variable {F : Type} [Field F] {State Input : TypeMap} [ProvableType State] [ProvableType Input]
 
