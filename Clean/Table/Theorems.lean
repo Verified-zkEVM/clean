@@ -148,4 +148,112 @@ theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F
     simp_all +arith [assignmentFromCircuit, pushVarsAux, Operations.localLength,
       Vector.mapRange_add_eq_append, Vector.cast, Array.append_assoc]
 
+theorem setVarInput_offset (assignment : CellAssignment W S) (off : CellOffset W S) (var : ℕ) :
+    (assignment.setVarInput off var).offset = assignment.offset := by
+  simp [setVarInput]
+
+theorem setVarInput_vars_getElem_eq (assignment : CellAssignment W S) (off : CellOffset W S) (var : ℕ)
+    (h : var < assignment.offset) :
+    (assignment.setVarInput off var).vars[var]'(by rw [setVarInput_offset]; exact h) = .input off := by
+  simp only [setVarInput, Vector.set?]
+  simp
+
+theorem setVarInput_vars_getElem_ne (assignment : CellAssignment W S) (off : CellOffset W S) (var : ℕ)
+    (i : ℕ) (hi : i < assignment.offset) (hne : i ≠ var) :
+    (assignment.setVarInput off var).vars[i]'(by rw [setVarInput_offset]; exact hi) = assignment.vars[i] := by
+  simp only [setVarInput, Vector.set?]
+  simp [hne.symm]
+
+/-- The offset is preserved by a foldl of setVarInput calls. -/
+theorem setVarInput_foldl_offset
+    (pairs : List (CellOffset W S × ℕ))
+    (assignment : CellAssignment W S) :
+    (pairs.foldl (fun a p => a.setVarInput p.1 p.2) assignment).offset = assignment.offset := by
+  induction pairs generalizing assignment with
+  | nil => rfl
+  | cons p ps ih =>
+    unfold List.foldl
+    rw [ih, setVarInput_offset]
+
+/-- Composing multiple `setVarInput` calls preserves entries whose index
+    is not among the targets. -/
+theorem setVarInput_foldl_preserves
+    (pairs : List (CellOffset W S × ℕ))
+    (assignment : CellAssignment W S)
+    (j : ℕ) (hj : j < assignment.offset)
+    (h_ne : ∀ pair ∈ pairs, pair.2 ≠ j) :
+    (pairs.foldl (fun a p => a.setVarInput p.1 p.2) assignment).vars[j]'(by
+      rw [setVarInput_foldl_offset]; exact hj) = assignment.vars[j] := by
+  induction pairs generalizing assignment with
+  | nil => rfl
+  | cons p ps ih =>
+    show (ps.foldl (fun a p => a.setVarInput p.1 p.2)
+      (assignment.setVarInput p.1 p.2)).vars[j]'_ = assignment.vars[j]
+    exact (ih (assignment.setVarInput p.1 p.2) (by rw [setVarInput_offset]; exact hj)
+      (fun pair hp => h_ne pair (List.mem_cons_of_mem _ hp))).trans
+      (setVarInput_vars_getElem_ne assignment p.1 p.2 j hj
+        (h_ne p (List.mem_cons.mpr (Or.inl rfl))).symm)
+
+/-- Composing multiple `setVarInput` calls: the last call for a given index wins,
+    provided no later call targets the same index. -/
+theorem setVarInput_foldl_last
+    (before : List (CellOffset W S × ℕ))
+    (off : CellOffset W S) (idx : ℕ)
+    (after : List (CellOffset W S × ℕ))
+    (assignment : CellAssignment W S)
+    (hidx : idx < assignment.offset)
+    (h_ne_after : ∀ pair ∈ after, pair.2 ≠ idx) :
+    ((before ++ [(off, idx)] ++ after).foldl (fun a p => a.setVarInput p.1 p.2) assignment).vars[idx]'(by
+      rw [setVarInput_foldl_offset]; exact hidx) = .input off := by
+  induction before generalizing assignment with
+  | nil =>
+    show (after.foldl (fun a p => a.setVarInput p.1 p.2) (assignment.setVarInput off idx)).vars[idx]'_ = .input off
+    rw [setVarInput_foldl_preserves after _ idx (by rw [setVarInput_offset]; exact hidx) h_ne_after]
+    exact setVarInput_vars_getElem_eq assignment off idx hidx
+  | cons p ps ih =>
+    show ((ps ++ [(off, idx)] ++ after).foldl (fun a p => a.setVarInput p.1 p.2)
+      (assignment.setVarInput p.1 p.2)).vars[idx]'_ = .input off
+    exact ih (assignment.setVarInput p.1 p.2) (by rw [setVarInput_offset]; exact hidx)
+
+/-- If all second components of `pairs` are pairwise distinct and all indices are within
+    `assignment.offset`, then the foldl of `setVarInput` maps `idx` to `.input off`,
+    where `pairs[k] = (off, idx)`.
+
+    This lemma avoids list decomposition (unlike `setVarInput_foldl_last`),
+    working by induction on the list instead, which sidesteps dependent-type issues
+    when rewriting inside `Vector.getElem`. -/
+theorem setVarInput_foldl_at
+    (pairs : List (CellOffset W S × ℕ))
+    (assignment : CellAssignment W S)
+    (off : CellOffset W S) (idx : ℕ)
+    (k : ℕ) (hk : k < pairs.length)
+    (h_at : pairs[k]'hk = (off, idx))
+    (h_nodup : ∀ (i j : ℕ) (hi : i < pairs.length) (hj : j < pairs.length),
+      i ≠ j → (pairs[i]'hi).2 ≠ (pairs[j]'hj).2)
+    (h_bound : idx < assignment.offset) :
+    (pairs.foldl (fun a p => a.setVarInput p.1 p.2) assignment).vars[idx]'(by
+      rw [setVarInput_foldl_offset]; exact h_bound) = .input off := by
+  induction pairs generalizing k assignment with
+  | nil => simp at hk
+  | cons p ps ih =>
+    simp only [List.foldl_cons]
+    cases k with
+    | zero =>
+      have hp_eq : p = (off, idx) := by simpa using h_at
+      subst hp_eq
+      rw [setVarInput_foldl_preserves ps _ idx
+        (by rw [setVarInput_offset]; exact h_bound)
+        (fun pair hp_mem => by
+          rw [List.mem_iff_getElem] at hp_mem
+          obtain ⟨j, hj_lt, hj_eq⟩ := hp_mem
+          have h_ne := h_nodup 0 (j + 1) (by simp) (by simp; omega) (by omega)
+          simp only [List.getElem_cons_zero, List.getElem_cons_succ] at h_ne
+          rw [← hj_eq]; exact h_ne.symm)]
+      exact setVarInput_vars_getElem_eq assignment off idx h_bound
+    | succ k' =>
+      exact ih (assignment.setVarInput p.1 p.2) k' (by simp [List.length] at hk; omega)
+        (by simpa using h_at)
+        (fun i j hi hj hij => h_nodup (i + 1) (j + 1) (by simp; omega) (by simp; omega) (by omega))
+        (by rw [setVarInput_offset]; exact h_bound)
+
 end CellAssignment

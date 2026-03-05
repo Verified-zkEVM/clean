@@ -19,18 +19,43 @@ deriving ProvableStruct
 def table : InductiveTable (F p) Row unit where
   step row _ := do
     let z ← Addition32.circuit { x := row.x, y := row.y }
-    return { x := row.y, y := z }
+    let fresh_y <== row.y
+    return { x := fresh_y, y := z }
 
   Spec _ _ i _ row _ : Prop :=
     row.x.value = fib32 i ∧
     row.y.value = fib32 (i + 1) ∧
     row.x.Normalized ∧ row.y.Normalized
 
-  soundness := by simp_all [InductiveTable.Soundness, fib32, circuit_norm,
-      Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
+  soundness := by
+    simp_all [InductiveTable.Soundness, fib32, circuit_norm,
+      Addition32.circuit, Addition32.Assumptions, Addition32.Spec, HasAssignEq.assignEq]
 
-  completeness := by simp_all [InductiveTable.Completeness, circuit_norm,
-    Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
+  completeness := by
+    intro _ _ env acc_var _ acc _ _ _ h_eval h_witnesses ⟨_, h_spec, _⟩
+    simp only [circuit_norm, Addition32.circuit, Addition32.Assumptions, Addition32.Spec,
+      HasAssignEq.assignEq] at h_witnesses ⊢
+    obtain ⟨h_add_witnesses, h_fresh_witnesses⟩ := h_witnesses
+    have h_norm : (eval env acc_var.x).Normalized ∧ (eval env acc_var.y).Normalized := by
+      have h1 : eval env acc_var.x = acc.x := by
+        have := congr_arg Row.x h_eval.1; simp [circuit_norm] at this; exact this
+      have h2 : eval env acc_var.y = acc.y := by
+        have := congr_arg Row.y h_eval.1; simp [circuit_norm] at this; exact this
+      exact ⟨h1 ▸ h_spec.2.2.1, h2 ▸ h_spec.2.2.2⟩
+    exact ⟨h_norm, by
+      rw [ProvableType.ext_iff]; intro i hi
+      rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+      exact h_fresh_witnesses ⟨i, hi⟩⟩
+
+  outputFreshVars := by
+    have hsum : ([4, 4] : List ℕ).sum = 8 := rfl
+    simp only [circuit_norm, Addition32.circuit, explicit_provable_type, hsum]
+    refine InductiveTable.outputFreshVars_of_indexVec _ _ _
+      #v[16, 17, 18, 19, 8, 10, 12, 14] ?_ ?_ ?_ ?_
+    · intro fi; fin_cases fi <;> rfl
+    · decide
+    · decide
+    · decide
 
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output

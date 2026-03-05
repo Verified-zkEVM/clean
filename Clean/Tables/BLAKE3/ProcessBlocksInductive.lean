@@ -6,11 +6,13 @@ This table has exactly 17 rows:
 -/
 import Clean.Table.Inductive
 import Clean.Circuit.Loops
+import Clean.Circuit.FreshVars
 import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Conditional
 import Clean.Gadgets.IsZero
+import Mathlib.Tactic.IntervalCases
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
@@ -42,6 +44,13 @@ structure ProcessBlocksState (F : Type) where
   chunk_counter : U32 F                 -- Which chunk number this is
   blocks_compressed : U32 F             -- Number of blocks compressed so far
 deriving ProvableStruct
+
+/-- Decompose `toElements` of `ProcessBlocksState` into per-field concatenation (by `rfl`). -/
+private lemma ProcessBlocksState.toElements_decompose {F : Type} (x : Var ProcessBlocksState F) :
+  @toElements ProcessBlocksState _ (Expression F) x =
+    Vector.append (@toElements (ProvableVector U32 8) _ (Expression F) x.chaining_value)
+      (Vector.append (@toElements U32 _ (Expression F) x.chunk_counter)
+        (Vector.append (@toElements U32 _ (Expression F) x.blocks_compressed) #v[])) := rfl
 
 /--
 Convert ProcessBlocksState to ChunkState for integration with the spec.
@@ -196,11 +205,12 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     ifFalse := state.blocks_compressed
   }
 
-  return {
+  let result <== ({
     chaining_value := muxedCV
-    chunk_counter := state.chunk_counter  -- Never changes
+    chunk_counter := state.chunk_counter
     blocks_compressed := muxedBlocksCompressed
-  }
+  } : Var ProcessBlocksState (F p))
+  return result
 
 def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i
   (_ : inputs.length = i) (state : ProcessBlocksState (F p)) (_ : ProverData (F p)) :=
@@ -234,7 +244,8 @@ private lemma step_process_block (env : Environment (F p))
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
-  simp only [step, circuit_norm, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
+  simp only [step, circuit_norm, HasAssignEq.assignEq,
+    BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
     Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at ⊢ h_holds
   simp only [ProcessBlocksState.Normalized] at acc_normalized
   simp only [BlockInput.Normalized] at x_normalized
@@ -262,10 +273,10 @@ private lemma step_process_block (env : Environment (F p))
     simp only [Addition32.Assumptions, circuit_norm, ZMod.val_one]
     simp [acc_normalized, circuit_norm])
   dsimp only [Addition32.Spec] at h_addition ⊢
-  rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
+  rcases h_holds with ⟨ h_vector_cond, h_u32_cond, h_counter_eq ⟩
   specialize h_vector_cond (by simp only [circuit_norm])
   specialize h_u32_cond (by simp only [circuit_norm])
-  simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
+  simp only [h_vector_cond, h_u32_cond, h_counter_eq] at h_addition ⊢
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
@@ -334,6 +345,30 @@ def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) (_ : Prove
 def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : ProverData (F p)) :=
   input.Normalized ∧ i < 2^32
 
+omit [Fact (Nat.Prime p)] p_large in
+private lemma toElements_get_chaining_value (i : ℕ) (hi : i < 8 * 4)
+    (state : ProcessBlocksState (F p)) :
+    (toElements state)[i]'(show i < 40 from by omega) =
+    (toElements (M := ProvableVector U32 8) state.chaining_value)[i]'(show i < 32 from by omega) := by
+  simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
+  apply Vector.getElem_append_left
+
+omit [Fact (Nat.Prime p)] p_large in
+private lemma toElements_get_chunk_counter (i : ℕ) (hi : i < 4)
+    (state : ProcessBlocksState (F p)) :
+    (toElements state)[8 * 4 + i]'(show 8 * 4 + i < 40 from by omega) =
+    (toElements (M := U32) state.chunk_counter)[i]'(show i < 4 from by omega) := by
+  simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
+  interval_cases i <;> erw [Vector.getElem_append_right (hi := by omega)] <;> rfl
+
+omit [Fact (Nat.Prime p)] p_large in
+private lemma toElements_get_blocks_compressed (i : ℕ) (hi : i < 4)
+    (state : ProcessBlocksState (F p)) :
+    (toElements state)[8 * 4 + 4 + i]'(show 8 * 4 + 4 + i < 40 from by omega) =
+    (toElements (M := U32) state.blocks_compressed)[i]'(show i < 4 from by omega) := by
+  simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
+  interval_cases i <;> erw [Vector.getElem_append_right (hi := by omega)] <;> rfl
+
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
     intro _ _ _ _ _ _ _ _ _ h_eval h_witnesses h_assumptions
@@ -341,7 +376,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_assumptions, h_input ⟩⟩
-    simp only [circuit_norm, step] at ⊢ h_witnesses
+    simp only [circuit_norm, step, HasAssignEq.assignEq] at ⊢ h_witnesses
     provable_struct_simp
     simp only [h_eval] at ⊢ h_witnesses
     dsimp only [ProcessBlocksState.Normalized] at h_assumptions
@@ -381,7 +416,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     simp_all only [Addition32.circuit, Addition32.Assumptions]
     constructor
     · dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
-      rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
+      rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, h_witnesses_rest ⟩ ⟩
       -- The following is a repetition of the above
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
@@ -402,7 +437,59 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             norm_num
         · norm_num)
       simp_all [circuit_norm]
-    trivial
+    · have h_cv_env := h_witnesses.2.2.2.2.2
+      refine ⟨trivial, trivial, ?_, ?_, ?_⟩
+      · rw [ProvableType.ext_iff]; intro i hi
+        rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+        simp only [size] at hi
+        obtain ⟨h_bool, _⟩ := h_input
+        have hh := h_cv_env ⟨i, by omega⟩
+        simp only [] at hh
+        erw [toElements_get_chaining_value (p := p) i (by omega)] at hh
+        rw [Conditional.outputValue_eq_of_isBool _ _ _ h_bool] at hh
+        exact hh
+      · rw [ProvableType.ext_iff]; intro i hi
+        rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+        simp only [size] at hi
+        have hh := h_cv_env ⟨8 * 4 + i, by omega⟩
+        simp only [] at hh
+        erw [toElements_get_chunk_counter (p := p) i (by omega)] at hh
+        simp only [Nat.add_assoc] at hh ⊢
+        exact hh
+      · rw [ProvableType.ext_iff]; intro i hi
+        rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+        simp only [size] at hi
+        obtain ⟨h_bool, _⟩ := h_input
+        have hh := h_cv_env ⟨8 * 4 + 4 + i, by omega⟩
+        simp only [] at hh
+        erw [toElements_get_blocks_compressed (p := p) i (by omega)] at hh
+        dsimp only at hh
+        rw [Conditional.outputValue_eq_of_isBool _ _ _ h_bool] at hh
+        simp only [Nat.add_assoc] at hh ⊢
+        exact hh
+
+private theorem step_output_eq :
+    (step (varFromOffset ProcessBlocksState 0 : Var _ (F p)) (varFromOffset BlockInput (size ProcessBlocksState))).output
+      (size ProcessBlocksState + size BlockInput) =
+    varFromOffset ProcessBlocksState 5561 := by
+  simp only [step, circuit_norm, HasAssignEq.assignEq,
+    BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3BlockInputNormalized.circuit,
+    IsZero.circuit, Gadgets.BLAKE3.Compress.circuit, Addition32.circuit, Conditional.circuit]
+  dsimp only [ElaboratedCircuit.localLength,
+    Gadgets.BLAKE3.Compress.elaborated, Gadgets.BLAKE3.ApplyRounds.elaborated,
+    Gadgets.BLAKE3.FinalStateUpdate.elaborated, Gadgets.BLAKE3.ApplyRounds.circuit,
+    Gadgets.BLAKE3.FinalStateUpdate.circuit]
+
+private theorem step_localLength_eq :
+    (step (varFromOffset ProcessBlocksState 0 : Var _ (F p)) (varFromOffset BlockInput (size ProcessBlocksState))).localLength
+      (size ProcessBlocksState + size BlockInput) = 5496 := by
+  simp only [step, circuit_norm, HasAssignEq.assignEq,
+    BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3BlockInputNormalized.circuit,
+    IsZero.circuit, Gadgets.BLAKE3.Compress.circuit, Addition32.circuit, Conditional.circuit]
+  dsimp only [ElaboratedCircuit.localLength,
+    Gadgets.BLAKE3.Compress.elaborated, Gadgets.BLAKE3.ApplyRounds.elaborated,
+    Gadgets.BLAKE3.FinalStateUpdate.elaborated, Gadgets.BLAKE3.ApplyRounds.circuit,
+    Gadgets.BLAKE3.FinalStateUpdate.circuit]
 
 /--
 The InductiveTable for processBlocks.
@@ -417,5 +504,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   subcircuitsConsistent := by
     simp only [step, circuit_norm]
     omega
+  outputFreshVars := by
+    apply Var.outputFreshVars_of_isFreshVars
+    rw [step_output_eq, step_localLength_eq]
+    exact (Var.isFreshVars_varFromOffset ProcessBlocksState 5561).weaken
+      (by simp [size]; dsimp [ProvableStruct.combinedSize, ProvableStruct.combinedSize', size]; omega)
+      (by simp [size]; dsimp [ProvableStruct.combinedSize, ProvableStruct.combinedSize', size]; omega)
 end
 end Tables.BLAKE3.ProcessBlocksInductive

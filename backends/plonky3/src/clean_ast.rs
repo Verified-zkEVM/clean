@@ -212,6 +212,13 @@ impl CleanOps {
         Self { ops }
     }
 
+    /// Create a new CleanOps instance from a `serde_json::Value`
+    pub fn from_value(value: serde_json::Value) -> Self {
+        let ops: Vec<CleanOp> =
+            serde_json::from_value(value).expect("Failed to parse CleanOps from Value");
+        Self { ops }
+    }
+
     /// Create a new CleanOps instance from a vector of operations
     pub fn new(ops: Vec<CleanOp>) -> Self {
         Self { ops }

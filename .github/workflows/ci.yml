@@ -36,7 +36,10 @@ jobs:
             ~/.cargo/git
             backends/plonky3/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('backends/plonky3/Cargo.lock') }}
-      - name: Run plonky3 integration test
+      - name: Run plonky3 tests
+        working-directory: backends/plonky3
         run: |
-          cd backends/plonky3
           cargo test --release -- --nocapture test_clean_fib
+          cargo test test_tampered_multiplicity
+          cargo test --release test_tampered_multiplicity
+          cargo test --release -- --nocapture test_femtocairo

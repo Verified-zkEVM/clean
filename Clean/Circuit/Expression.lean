@@ -35,6 +35,16 @@ structure Environment (F : Type) where
 namespace Expression
 variable [Field F]
 
+/-- Extract the variable from an expression. Returns `⟨0⟩` for non-variable expressions.
+    Used in `inductiveWitness` where `outputFreshVars` guarantees all elements are `.var v`. -/
+@[simp]
+def toVar : Expression F → Variable F
+  | .var v => v
+  | _ => ⟨0⟩
+
+@[simp]
+theorem toVar_var (v : Variable F) : (Expression.var v : Expression F).toVar = v := rfl
+
 /--
 Evaluate expression given an external `environment` that determines the assignment
 of all variables.
