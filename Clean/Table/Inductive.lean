@@ -144,6 +144,31 @@ theorem InductiveTable.outputFreshVars_of_consecutive
     (fun i => by show base + i.val < _; have := i.isLt; omega)
     (fun a b h => by dsimp at h; ext; omega)
 
+/-- Derive `outputFreshVars` from a concrete vector of variable indices.
+    The `Fin`-quantified hypotheses enable `decide` for bounds and distinctness,
+    while `h_eq` can be proved with `intro fi; fin_cases fi <;> rfl`. -/
+theorem InductiveTable.outputFreshVars_of_indexVec
+    {F : Type} [Field F] {s : ℕ}
+    (elems : Vector (Expression F) s)
+    (lower upper : ℕ)
+    (indices : Vector ℕ s)
+    (h_eq : ∀ i : Fin s, elems[i.val] = .var ⟨indices[i.val]⟩)
+    (h_fresh : ∀ i : Fin s, indices[i.val] ≥ lower)
+    (h_bound : ∀ i : Fin s, indices[i.val] < upper)
+    (h_distinct : ∀ i j : Fin s, i ≠ j → indices[i.val] ≠ indices[j.val]) :
+    (∀ (i : ℕ) (hi : i < s),
+      ∃ (v : Variable F), elems[i] = .var v ∧ v.index ≥ lower ∧ v.index < upper) ∧
+    (∀ (i j : ℕ) (hi : i < s) (hj : j < s), i ≠ j →
+      ∀ (v w : Variable F), elems[i] = .var v → elems[j] = .var w →
+        v.index ≠ w.index) :=
+  ⟨fun i hi => ⟨⟨indices[i]⟩, h_eq ⟨i, hi⟩, h_fresh ⟨i, hi⟩, h_bound ⟨i, hi⟩⟩,
+   fun i j hi hj hij v w hv hw heq => by
+    have h1 := (h_eq ⟨i, hi⟩).symm.trans hv
+    have h2 := (h_eq ⟨j, hj⟩).symm.trans hw
+    simp only [Expression.var.injEq] at h1 h2
+    subst h1; subst h2
+    exact h_distinct ⟨i, hi⟩ ⟨j, hj⟩ (fun h => hij (congrArg Fin.val h)) heq⟩
+
 namespace InductiveTable
 variable {F : Type} [Field F] {State Input : TypeMap} [ProvableType State] [ProvableType Input]
 
