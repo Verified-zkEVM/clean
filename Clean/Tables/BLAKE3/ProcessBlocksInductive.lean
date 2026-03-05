@@ -52,7 +52,6 @@ private lemma ProcessBlocksState.toElements_decompose {F : Type} (x : Var Proces
       (Vector.append (@toElements U32 _ (Expression F) x.chunk_counter)
         (Vector.append (@toElements U32 _ (Expression F) x.blocks_compressed) #v[])) := rfl
 
-
 /--
 Convert ProcessBlocksState to ChunkState for integration with the spec.
 -/
