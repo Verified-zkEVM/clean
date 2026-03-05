@@ -346,6 +346,7 @@ def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) (_ : Prove
 def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : ProverData (F p)) :=
   input.Normalized ∧ i < 2^32
 
+omit [Fact (Nat.Prime p)] p_large in
 private lemma toElements_get_chaining_value (i : ℕ) (hi : i < 8 * 4)
     (state : ProcessBlocksState (F p)) :
     (toElements state)[i]'(show i < 40 from by omega) =
@@ -353,21 +354,21 @@ private lemma toElements_get_chaining_value (i : ℕ) (hi : i < 8 * 4)
   simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
   apply Vector.getElem_append_left
 
+omit [Fact (Nat.Prime p)] p_large in
 private lemma toElements_get_chunk_counter (i : ℕ) (hi : i < 4)
     (state : ProcessBlocksState (F p)) :
     (toElements state)[8 * 4 + i]'(show 8 * 4 + i < 40 from by omega) =
     (toElements (M := U32) state.chunk_counter)[i]'(show i < 4 from by omega) := by
   simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
-  have h_flatten_size : (Vector.map (fun x ↦ #v[x.x0, x.x1, x.x2, x.x3]) state.chaining_value).flatten.size = 8 * 4 := by simp
-  interval_cases i <;> simp [Vector.getElem_append_right, h_flatten_size]
+  interval_cases i <;> erw [Vector.getElem_append_right (hi := by omega)] <;> rfl
 
+omit [Fact (Nat.Prime p)] p_large in
 private lemma toElements_get_blocks_compressed (i : ℕ) (hi : i < 4)
     (state : ProcessBlocksState (F p)) :
     (toElements state)[8 * 4 + 4 + i]'(show 8 * 4 + 4 + i < 40 from by omega) =
     (toElements (M := U32) state.blocks_compressed)[i]'(show i < 4 from by omega) := by
   simp only [circuit_norm, explicit_provable_type, Vector.cast_rfl]
-  have h_flatten_size : (Vector.map (fun x ↦ #v[x.x0, x.x1, x.x2, x.x3]) state.chaining_value).flatten.size = 8 * 4 := by simp
-  interval_cases i <;> simp [Vector.getElem_append_right, h_flatten_size]
+  interval_cases i <;> erw [Vector.getElem_append_right (hi := by omega)] <;> rfl
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
@@ -442,18 +443,31 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
         simp only [size] at hi
-        rw [← toElements_get_chaining_value i (by omega)]
-        exact h_cv_env ⟨i, by omega⟩
+        obtain ⟨h_bool, _⟩ := h_input
+        have hh := h_cv_env ⟨i, by omega⟩
+        simp only [] at hh
+        erw [toElements_get_chaining_value (p := p) i (by omega)] at hh
+        rw [Conditional.outputValue_eq_of_isBool _ _ _ h_bool] at hh
+        exact hh
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
         simp only [size] at hi
-        rw [← toElements_get_chunk_counter i (by omega), Nat.add_assoc]
-        exact h_cv_env ⟨8 * 4 + i, by omega⟩
+        have hh := h_cv_env ⟨8 * 4 + i, by omega⟩
+        simp only [] at hh
+        erw [toElements_get_chunk_counter (p := p) i (by omega)] at hh
+        simp only [Nat.add_assoc] at hh ⊢
+        exact hh
       · rw [ProvableType.ext_iff]; intro i hi
         rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
         simp only [size] at hi
-        rw [← toElements_get_blocks_compressed i (by omega), Nat.add_assoc]
-        exact h_cv_env ⟨8 * 4 + 4 + i, by omega⟩
+        obtain ⟨h_bool, _⟩ := h_input
+        have hh := h_cv_env ⟨8 * 4 + 4 + i, by omega⟩
+        simp only [] at hh
+        erw [toElements_get_blocks_compressed (p := p) i (by omega)] at hh
+        dsimp only at hh
+        rw [Conditional.outputValue_eq_of_isBool _ _ _ h_bool] at hh
+        simp only [Nat.add_assoc] at hh ⊢
+        exact hh
 
 private theorem step_output_eq :
     (step (varFromOffset ProcessBlocksState 0 : Var _ (F p)) (varFromOffset BlockInput (size ProcessBlocksState))).output
