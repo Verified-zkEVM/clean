@@ -2,8 +2,6 @@
 import Clean.Table.Inductive
 import Clean.Gadgets.Addition32.Addition32
 
-set_option maxHeartbeats 400000
-
 namespace Tables.Fibonacci32Inductive
 open Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -52,24 +50,13 @@ def table : InductiveTable (F p) Row unit where
   outputFreshVars := by
     have hsum : ([4, 4] : List ℕ).sum = 8 := rfl
     simp only [circuit_norm, Addition32.circuit, explicit_provable_type, hsum]
-    refine InductiveTable.outputFreshVars_of_indices _ _ _ (fun i => match i.val with
-      | 0 => 16 | 1 => 17 | 2 => 18 | 3 => 19 | 4 => 8 | 5 => 10 | 6 => 12 | _ => 14)
-      ?_ ?_ ?_ ?_
-    · intro i hi
-      have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 := by omega
-      rcases this with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
-    · intro ⟨i, hi⟩
-      have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 := by omega
-      rcases this with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> grind
-    · intro ⟨i, hi⟩
-      have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 := by omega
-      rcases this with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> grind
-    · intro ⟨a, ha⟩ ⟨b, hb⟩ h
-      have ha' : a = 0 ∨ a = 1 ∨ a = 2 ∨ a = 3 ∨ a = 4 ∨ a = 5 ∨ a = 6 ∨ a = 7 := by omega
-      have hb' : b = 0 ∨ b = 1 ∨ b = 2 ∨ b = 3 ∨ b = 4 ∨ b = 5 ∨ b = 6 ∨ b = 7 := by omega
-      rcases ha' with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-        <;> rcases hb' with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-        <;> first | rfl | grind
+    have h8 := fun k (hk : k < 8) =>
+      show k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4 ∨ k = 5 ∨ k = 6 ∨ k = 7 by omega
+    exact ⟨fun i hi => by rcases h8 i hi with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> exact ⟨_, rfl, by dsimp; omega, by dsimp; omega⟩,
+           fun i j hi hj hij v w hv hw => by
+             rcases h8 i hi with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+             rcases h8 j hj with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+             simp_all <;> (subst_vars; dsimp; omega)⟩
 
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output

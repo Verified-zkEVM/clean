@@ -10,7 +10,6 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 2 ^ 16 + 2 ^ 8)]
 namespace Tables.KeccakInductive
 open Gadgets.Keccak256
 
-set_option maxHeartbeats 400000 in
 def table : InductiveTable (F p) KeccakState KeccakBlock where
   step state block := do
     KeccakBlock.normalized block
@@ -36,27 +35,21 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
   outputFreshVars := by
     simp only [circuit_norm, KeccakBlock.normalized, AbsorbBlock.circuit,
       Permutation.stateVar, RATE]
-    have h8 : size U64 = 8 := rfl
     apply @Var.outputFreshVars_of_isFreshVars _ _ (ProvableVector U64 25)
     apply Var.isFreshVars_provableVector
       (bases := fun j => if (0 : ℕ) = j.val
         then 25 * 8 + 17 * 8 + 136 + 23 * 1288 + 1280
         else 25 * 8 + 17 * 8 + 136 + 23 * 1288 + j.val * 16 + 888)
-    · intro ⟨j, hj⟩
-      simp only [Vector.getElem_set, Vector.getElem_mapRange]
-      split <;> rfl
+    · intro ⟨j, hj⟩; simp only [Vector.getElem_set, Vector.getElem_mapRange]; split <;> rfl
     · intro ⟨j, hj⟩; split <;> omega
-    · intro ⟨j, hj⟩; simp only [h8]; split <;> omega
+    · intro ⟨j, hj⟩; simp only [size]; split <;> omega
     · intro a b hab
-      have hab_val : a.val ≠ b.val := fun h => hab (Fin.ext h)
-      simp only [h8]
-      split <;> rename_i h1 <;> split <;> rename_i h2
+      have : a.val ≠ b.val := fun h => hab (Fin.ext h)
+      simp only [size]; split <;> rename_i h1 <;> split <;> rename_i h2
       · omega
       · right; omega
       · left; omega
-      · rcases Nat.lt_or_gt_of_ne hab_val with h | h
-        · left; omega
-        · right; omega
+      · rcases Nat.lt_or_gt_of_ne ‹a.val ≠ b.val› with h | h <;> [left; right] <;> omega
 
 -- the input is hard-coded to the initial keccak state of all zeros
 def initialState : KeccakState (F p) := .fill 25 (U64.fromByte 0)
