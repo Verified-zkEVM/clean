@@ -26,10 +26,10 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
   To represent, e.g., a read-write memory we will need a more complex construction.
 -/
 def ReadOnlyTableFromFunction
-    {n : ℕ} (f : Fin n → (F p)) (h : n < p) [NeZero n] :
+    (tableName : String) {n : ℕ} (f : Fin n → (F p)) (h : n < p) [NeZero n] :
     Table (F p) fieldPair
   := .fromStatic {
-  name := "ReadOnlyMemory"
+  name := tableName
   length := n
   row i := (i, f i)
   index := fun (i, _) => i.val
@@ -158,7 +158,7 @@ def fetchInstruction
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
     GeneralFormalCircuit (F p) field RawInstruction where
   main := fun pc => do
-    let programTable := ReadOnlyTableFromFunction program h_programSize
+    let programTable := ReadOnlyTableFromFunction "program" program h_programSize
 
     let rawInstrType ← witness fun eval => program <| Fin.ofNat _ (eval pc).val
     let op1 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 1)).val
@@ -637,7 +637,11 @@ def femtoCairoStepElaboratedCircuit
 
       -- Compute next state
       nextState { state, decoded, v1, v2, v3 }
-    localLength := 30
+    localLength _ := 30
+    output _ i₀ := varFromOffset State (i₀ + 27)
+    output_eq := by
+      intro state i₀
+      simp only [circuit_norm, fetchInstruction, decodeInstruction, readFromMemory, nextState]
 
 def femtoCairoStepSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))

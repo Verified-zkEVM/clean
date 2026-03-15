@@ -129,6 +129,7 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 - Specs are pure Lean propositions relating inputs to outputs
 - Assumptions capture preconditions (e.g., value ranges)
 - Follow Mathlib naming conventions
+- Never modify maxHeartbeats
 
 ## Key Files to Understand
 
