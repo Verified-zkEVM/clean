@@ -47,7 +47,6 @@ def table : InductiveTable (F p) Row unit where
       rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
       exact h_fresh_witnesses ⟨i, hi⟩⟩
 
-
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output
 

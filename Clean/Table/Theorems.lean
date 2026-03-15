@@ -373,7 +373,6 @@ theorem TableConstraint.forM_list_preservesVarsBelow
     show (body x >>= fun _ => xs.forM body).PreservesVarsBelow b
     exact bind_preservesVarsBelow hx (fun _ => ih hxs)
 
-
 /-- The pattern `let v ← witnessVar compute; assertZero expr; assignVar off v` preserves
     vars below `b`, because `witnessVar` creates a variable at the current offset (which is ≥ b),
     so `assignVar` targets an index ≥ b. -/

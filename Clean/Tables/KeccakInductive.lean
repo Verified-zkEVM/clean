@@ -31,7 +31,6 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     simp_all only [InductiveTable.Completeness, circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized,
       AbsorbBlock.Assumptions, AbsorbBlock.Spec]
 
-
 -- the input is hard-coded to the initial keccak state of all zeros
 def initialState : KeccakState (F p) := .fill 25 (U64.fromByte 0)
 
