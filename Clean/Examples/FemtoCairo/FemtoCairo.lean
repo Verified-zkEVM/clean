@@ -834,17 +834,6 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
     specialize h_initial_state (i+1) h_i
     simp_all [circuit_norm, Spec.femtoCairoMachineBoundedExecution, femtoCairoStep, femtoCairoStepAssumptions, MemoryCompletenessAssumption]
 
-  outputFreshVars := by
-    simp only [circuit_norm, femtoCairoStep, femtoCairoStepElaboratedCircuit,
-      explicit_provable_type, varFromOffset]
-    refine ⟨fun i hi => ?_, fun i j hi hj hij v w hv hw => ?_⟩
-    · have : i = 0 ∨ i = 1 ∨ i = 2 := by omega
-      rcases this with rfl | rfl | rfl <;> exact ⟨_, rfl, by grind, by grind⟩
-    · have hi' : i = 0 ∨ i = 1 ∨ i = 2 := by omega
-      have hj' : j = 0 ∨ j = 1 ∨ j = 2 := by omega
-      rcases hi' with rfl | rfl | rfl <;> rcases hj' with rfl | rfl | rfl
-        <;> simp_all <;> grind
-
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with
   the default initial state (pc=0, ap=0, fp=0).

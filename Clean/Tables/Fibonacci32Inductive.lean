@@ -47,15 +47,6 @@ def table : InductiveTable (F p) Row unit where
       rw [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
       exact h_fresh_witnesses ⟨i, hi⟩⟩
 
-  outputFreshVars := by
-    have hsum : ([4, 4] : List ℕ).sum = 8 := rfl
-    simp only [circuit_norm, Addition32.circuit, explicit_provable_type, hsum]
-    refine InductiveTable.outputFreshVars_of_indexVec _ _ _
-      #v[16, 17, 18, 19, 8, 10, 12, 14] ?_ ?_ ?_ ?_
-    · intro fi; fin_cases fi <;> rfl
-    · decide
-    · decide
-    · decide
 
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output

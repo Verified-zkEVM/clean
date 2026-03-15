@@ -1,7 +1,6 @@
 /- Simple Keccak example using `InductiveTable` -/
 import Clean.Table.Inductive
 import Clean.Circuit.Extensions
-import Clean.Circuit.FreshVars
 import Clean.Gadgets.Keccak.AbsorbBlock
 import Clean.Specs.Keccak256
 open Specs.Keccak256
@@ -32,24 +31,6 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     simp_all only [InductiveTable.Completeness, circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized,
       AbsorbBlock.Assumptions, AbsorbBlock.Spec]
 
-  outputFreshVars := by
-    simp only [circuit_norm, KeccakBlock.normalized, AbsorbBlock.circuit,
-      Permutation.stateVar, RATE]
-    apply @Var.outputFreshVars_of_isFreshVars _ _ (ProvableVector U64 25)
-    apply Var.isFreshVars_provableVector
-      (bases := fun j => if (0 : ℕ) = j.val
-        then 25 * 8 + 17 * 8 + 136 + 23 * 1288 + 1280
-        else 25 * 8 + 17 * 8 + 136 + 23 * 1288 + j.val * 16 + 888)
-    · intro ⟨j, hj⟩; simp only [Vector.getElem_set, Vector.getElem_mapRange]; split <;> rfl
-    · intro ⟨j, hj⟩; split <;> omega
-    · intro ⟨j, hj⟩; simp only [size]; split <;> omega
-    · intro a b hab
-      have : a.val ≠ b.val := fun h => hab (Fin.ext h)
-      simp only [size]; split <;> rename_i h1 <;> split <;> rename_i h2
-      · omega
-      · right; omega
-      · left; omega
-      · rcases Nat.lt_or_gt_of_ne ‹a.val ≠ b.val› with h | h <;> [left; right] <;> omega
 
 -- the input is hard-coded to the initial keccak state of all zeros
 def initialState : KeccakState (F p) := .fill 25 (U64.fromByte 0)

@@ -6,7 +6,6 @@ This table has exactly 17 rows:
 -/
 import Clean.Table.Inductive
 import Clean.Circuit.Loops
-import Clean.Circuit.FreshVars
 import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
@@ -504,11 +503,5 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   subcircuitsConsistent := by
     simp only [step, circuit_norm]
     omega
-  outputFreshVars := by
-    apply Var.outputFreshVars_of_isFreshVars
-    rw [step_output_eq, step_localLength_eq]
-    exact (Var.isFreshVars_varFromOffset ProcessBlocksState 5561).weaken
-      (by simp [size]; dsimp [ProvableStruct.combinedSize, ProvableStruct.combinedSize', size]; omega)
-      (by simp [size]; dsimp [ProvableStruct.combinedSize, ProvableStruct.combinedSize', size]; omega)
 end
 end Tables.BLAKE3.ProcessBlocksInductive
