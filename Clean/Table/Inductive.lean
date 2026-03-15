@@ -234,7 +234,7 @@ private theorem inductiveWitness_ops_decomp
     ∃ loop_ops : Operations F,
       table.inductiveWitness.operations =
         [.witness (size State + size Input) fun env =>
-          .mapRange _ fun i => env.get i] ++
+          .mapRange _ fun i => env.get (0 + i)] ++
         (table.step (varFromOffset State 0) (varFromOffset Input (size State))).operations
           (size State + size Input) ++
         loop_ops := by
@@ -332,13 +332,6 @@ private theorem inductiveWitness_ops_decomp
       _ = [.witness (s + x) fun env => .mapRange _ fun i => env.get (0 + i)] ++
           (table.step (varFromOffset State 0) (varFromOffset Input s)).operations (s + x) ++ extra := by
             rw [h_ctx1_circuit]
-      _ = [.witness (s + x) fun env => .mapRange _ fun i => env.get i] ++
-          (table.step (varFromOffset State 0) (varFromOffset Input s)).operations (s + x) ++ extra := by
-            congr 2
-            simp only [List.cons.injEq, and_true]
-            congr 1
-            funext env; congr 1; funext i
-            simp [Nat.zero_add]
   -- Prove forM only appends, by induction on the list
   suffices h_general : ∀ (l : List (Fin s)) (c : TableContext 2 (ProvablePair State Input) F),
       ∃ extra, (l.forM loop_body c).2.circuit = c.circuit ++ extra by
@@ -579,15 +572,125 @@ theorem inductiveWitness_soundness
         intro h_loop_sound
         -- Use the same loop_ops from the outer decomposition
         have h_fa_circuit : fa_ctx.circuit = ctx2.circuit ++ loop_ops := by
-          sorry
+          have h_ctx1_circuit : ctx1.circuit =
+              [.witness (s + x) fun env => .mapRange _ fun i => env.get (0 + i)] := by
+            simp only [ctx1, step1, getCurrRow, TableConstraint.getRow, ctx0, TableContext.empty,
+              modifyGet, StateT.modifyGet, MonadStateOf.modifyGet, Id.run, pure, Pure.pure,
+              TableContext.offset, Operations.localLength, s, x, ProvablePair.instance, size,
+              List.nil_append]
+          show (table.inductiveWitness .empty).2.circuit = ctx2.circuit ++ loop_ops
+          rw [h_ops_eq]
+          show [.witness (s + x) fun env => .mapRange _ fun i => env.get (0 + i)] ++
+              (table.step (varFromOffset State 0) (varFromOffset Input s)).operations (s + x) ++
+              loop_ops =
+            (ctx1.circuit ++ (table.step pair.1 pair.2).operations ctx1.circuit.localLength) ++ loop_ops
+          rw [h_pair_fst, h_pair_snd, h_ctx1_ll, h_ctx1_circuit]
         have := h_assert_gen loop_ops h_fa_circuit h_loop_sound i
           (by rw [List.length_finRange]; exact hi)
         simp only [h_finRange_i] at this; exact this
-    -- The general statement is proved by induction on l.
-    -- Each iteration sets vars and adds [witness, assert] ops.
-    -- For vars (a): iteration p sets it, later iterations preserve via PreservesVarsBelow.
-    -- For assertions (b): decompose extra = body_adds ++ tail_adds, extract from ConstraintsHold.
-    sorry
+    -- Prove forM only appends to the circuit (needed for circuit decomposition in part b)
+    have h_forM_appends : ∀ (l' : List (Fin s)) (c' : TableContext 2 (ProvablePair State Input) F),
+        ∃ extra, (l'.forM loop_body c').2.circuit = c'.circuit ++ extra := by
+      intro l'; induction l' with
+      | nil => intro c'; exact ⟨[], by simp [List.forM_nil, pure, Pure.pure, StateT.pure]⟩
+      | cons hd' tl' ih' =>
+        intro c'
+        have ⟨iter_ops, h_iter⟩ : ∃ iter_ops, (loop_body hd' c').2.circuit = c'.circuit ++ iter_ops := by
+          simp only [loop_body, bind_def, table_norm, table_assignment_norm, circuit_norm,
+            TableConstraint.assignVar_circuit]; exact ⟨_, rfl⟩
+        obtain ⟨rest_ops, h_rest⟩ := ih' (loop_body hd' c').2
+        exact ⟨iter_ops ++ rest_ops, by
+          show (tl'.forM loop_body (loop_body hd' c').2).2.circuit = c'.circuit ++ (iter_ops ++ rest_ops)
+          rw [h_rest, h_iter, List.append_assoc]⟩
+    -- Main induction
+    intro l
+    induction l with
+    | nil =>
+      intro c hoc
+      exact ⟨fun _ hp => absurd hp (Nat.not_lt_zero _),
+             fun _ _ _ _ hp => absurd hp (Nat.not_lt_zero _)⟩
+    | cons hd tl ih =>
+      intro c hoc
+      set body_r := loop_body hd c
+      -- Facts about one iteration of the loop body
+      have h_body_off : body_r.2.assignment.offset = c.assignment.offset + 1 := by
+        simp only [body_r, loop_body, bind_def, table_norm, table_assignment_norm, circuit_norm,
+          pure, Pure.pure, StateT.pure, Id.run]
+      have h_body_ll : body_r.2.circuit.localLength = c.circuit.localLength + 1 := by
+        simp only [body_r, loop_body, bind_def, table_norm, table_assignment_norm, circuit_norm,
+          pure, Pure.pure, StateT.pure, Id.run, TableConstraint.assignVar_circuit,
+          Operations.append_localLength, Operations.localLength]
+      have h_body_oc : body_r.2.circuit.localLength = body_r.2.assignment.offset := by
+        rw [h_body_ll, h_body_off, hoc]
+      -- The body sets vars[c.ll] = .input (.next ⟨hd.val, _⟩)
+      have h_body_var : body_r.2.assignment.vars[c.circuit.localLength]'(by rw [h_body_off, hoc]; omega) =
+          .input ⟨1, ⟨hd.val,
+            by simp [ProvablePair.instance]; exact hd.isLt.trans_le (Nat.le_add_right _ _)⟩⟩ := by
+        simp only [body_r, loop_body, bind_def, table_norm, table_assignment_norm, circuit_norm,
+          pure, Pure.pure, StateT.pure, Id.run, hoc]
+        simp [CellAssignment.setVarInput_vars_getElem_eq, CellOffset.next]
+      -- Tail preserves vars below (c.ll + 1)
+      have h_tail_pvb := TableConstraint.forM_list_preservesVarsBelow
+        (l := tl) (body := loop_body) (b := c.circuit.localLength + 1)
+        (fun ⟨k, hk⟩ _ => TableConstraint.witnessAssertAssign_preservesVarsBelow _ _ _ _)
+        body_r.2 (by omega) h_body_oc
+      -- Bring tail preservation bounds into scope for omega
+      have h_pvb_bound := h_tail_pvb.1  -- c.ll + 1 ≤ (tl.forM ...).2.offset
+      -- Apply IH to the tail
+      obtain ⟨ih_vars, ih_assert⟩ := ih body_r.2 h_body_oc
+      constructor
+      · -- Part (a): vars mapping
+        intro p hp h_lt
+        cases p with
+        | zero =>
+          simp only [Nat.add_zero, List.getElem_cons_zero]
+          exact (h_tail_pvb.2.2 c.circuit.localLength
+            (by omega) (by omega) (by rw [h_body_off, hoc]; omega)).trans h_body_var
+        | succ p' =>
+          simp only [List.getElem_cons_succ]
+          have hp' : p' < tl.length := by simp only [List.length_cons] at hp; omega
+          -- Convert h_lt to use the definitionally equal (tl.forM body_r.2) form
+          have h_lt_conv : c.circuit.localLength + (p' + 1) <
+              (tl.forM loop_body body_r.2).2.assignment.offset := h_lt
+          have h_idx : c.circuit.localLength + (p' + 1) = body_r.2.circuit.localLength + p' := by
+            rw [h_body_ll]; omega
+          have h_lt' : body_r.2.circuit.localLength + p' <
+              (tl.forM loop_body body_r.2).2.assignment.offset := by omega
+          simp only [h_idx]
+          exact ih_vars p' hp' h_lt'
+      · -- Part (b): assertions from soundness
+        intro extra h_app h_sound p hp
+        -- Get body_adds concretely from simp, along with its soundness implication
+        obtain ⟨body_adds, h_body_eq, h_body_impl⟩ :
+            ∃ bo, body_r.2.circuit = c.circuit ++ bo ∧
+              (Circuit.ConstraintsHold.Soundness env' bo →
+                Expression.eval env' ((toVars step_output)[hd.val] -
+                  Expression.var ⟨c.circuit.localLength⟩) = 0) := by
+          simp only [body_r, loop_body, bind_def, table_norm, table_assignment_norm, circuit_norm,
+            TableConstraint.assignVar_circuit]
+          refine ⟨_, rfl, ?_⟩
+          simp only [Circuit.ConstraintsHold.Soundness, circuit_norm, Expression.eval]
+          exact id
+        -- Decompose extra = body_adds ++ tail_adds
+        obtain ⟨tail_adds, h_tail_eq⟩ := h_forM_appends tl body_r.2
+        have h_extra_eq : extra = body_adds ++ tail_adds := by
+          apply List.append_cancel_left (as := c.circuit)
+          rw [← h_app]
+          show (tl.forM loop_body body_r.2).2.circuit = c.circuit ++ (body_adds ++ tail_adds)
+          rw [h_tail_eq, h_body_eq, List.append_assoc]
+        rw [h_extra_eq, Circuit.ConstraintsHold.append_soundness] at h_sound
+        obtain ⟨h_body_sound, h_tail_sound⟩ := h_sound
+        cases p with
+        | zero =>
+          simp only [List.getElem_cons_zero, Nat.add_zero]
+          exact h_body_impl h_body_sound
+        | succ p' =>
+          simp only [List.getElem_cons_succ]
+          have hp' : p' < tl.length := by simp only [List.length_cons] at hp; omega
+          have h_idx : c.circuit.localLength + (p' + 1) = body_r.2.circuit.localLength + p' := by
+            rw [h_body_ll]; omega
+          simp only [h_idx]
+          exact ih_assert tail_adds h_tail_eq h_tail_sound p' hp'
   obtain ⟨h_fa_vars, h_assert_fn⟩ := h_fa_vars_and_assert
   have h_fa_vars : (TableConstraint.finalAssignment table.inductiveWitness).vars[base_offset + i]'h_base_offset_lt_fa =
       .input ⟨1, ⟨i, hi'⟩⟩ := h_fa_vars
