@@ -238,6 +238,39 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableT
       try first | ac_rfl | trivial
     )
 
+class ElaboratedCircuit' (F : Type) (Input Output ProverInput ProverOutput : TypeMap)
+    [Field F] [ProvableType Input] [ProvableType Output] [ProvableType ProverInput] [ProvableType ProverOutput] where
+  name : String := "anonymous"
+  main : ProverInput F → Var Input F → Circuit F (ProverOutput F × Var Output F)
+
+  /-- how many local witnesses this circuit introduces -/
+  localLength : Var Input F → ℕ
+
+  /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
+  localLength_eq : ∀ prover_input input offset, (main prover_input input).localLength offset = localLength input
+    := by intros; rfl
+
+  /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
+  output : ProverInput F → Var Input F → ℕ → Var Output F := fun prover_input input offset => ((main prover_input input).output offset).snd
+
+  /-- a direct way of computing the prover output of this circuit (i.e. without having to unfold `main`) -/
+  proverOutput : ProverInput F → Var Input F → ℕ → ProverOutput F := fun prover_input input offset => ((main prover_input input).output offset).fst
+
+  /-- correctness of `output` -/
+  output_eq : ∀ prover_input input offset, ((main prover_input input).output offset).snd = output prover_input input offset
+    := by intros; rfl
+
+    /-- correctness of `proverOutput` -/
+  prover_output_eq : ∀ prover_input input offset, ((main prover_input input).output offset).fst = proverOutput prover_input input offset
+    := by intros; rfl
+
+  /-- technical condition: all subcircuits must be consistent with the current offset -/
+  subcircuitsConsistent : ∀ prover_input input offset, ((main prover_input input).operations offset).SubcircuitsConsistent offset
+    := by intros; and_intros <;> (
+      try simp only [circuit_norm]
+      try first | ac_rfl | trivial
+    )
+
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 @[circuit_norm]
@@ -394,6 +427,55 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   Spec : Input F → Output F → ProverData F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
+
+@[circuit_norm]
+def GeneralFormalCircuit'.Soundness (F : Type) [Field F]
+    {Input Output ProverInput ProverOutput : TypeMap}
+    [ProvableType Input] [ProvableType Output] [ProvableType ProverInput] [ProvableType ProverOutput]
+    (circuit : ElaboratedCircuit' F Input Output ProverInput ProverOutput)
+    (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
+  -- for all environments that determine witness generation
+  ∀ offset : ℕ, ∀ env,
+  -- for all inputs
+  ∀ prover_input : ProverInput F, ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  -- if the assumptions on the input hold
+  Assumptions input →
+  -- if the constraints hold
+  ConstraintsHold.Soundness env (circuit.main prover_input input_var |>.operations offset) →
+  -- the spec holds on the input and output
+  let output := eval env (circuit.output prover_input input_var offset)
+  Spec input output
+
+@[circuit_norm]
+def GeneralFormalCircuit'.Completeness (F : Type) [Field F]
+    {Input Output ProverInput ProverOutput : TypeMap}
+    [ProvableType Input] [ProvableType Output] [ProvableType ProverInput] [ProvableType ProverOutput]
+    (circuit : ElaboratedCircuit' F Input Output ProverInput ProverOutput)
+    (ProverAssumptions : ProverInput F → Prop) (ProverSpec : ProverInput F → ProverOutput F → Input F → Output F → Prop) :=
+  -- for all environments which _use the default witness generators for local variables_
+  ∀ offset : ℕ, ∀ env, ∀ prover_input : ProverInput F, ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesCompleteness offset (circuit.main prover_input input_var |>.operations offset) →
+  -- for all inputs that satisfy the "honest prover" assumptions
+  ∀ input : Input F, eval env input_var = input →
+  ProverAssumptions prover_input →
+  let output := eval env (circuit.output prover_input input_var offset)
+  let prover_output := circuit.proverOutput prover_input input_var offset
+  -- the constraints hold
+  ConstraintsHold.Completeness env (circuit.main prover_input input_var |>.operations offset) ∧
+  ProverSpec prover_input prover_output input output
+
+
+structure GeneralFormalCircuit' (F : Type) [Field F]
+    (Input Output ProverInput ProverOutput : TypeMap)
+    [ProvableType Input] [ProvableType Output] [ProvableType ProverInput] [ProvableType ProverOutput]
+    extends elaborated : ElaboratedCircuit' F Input Output ProverInput ProverOutput where
+  Assumptions : Input F → Prop
+  Spec : Input F → Output F → Prop
+  ProverAssumptions : ProverInput F → Prop
+  ProverSpec : ProverInput F → ProverOutput F → Input F → Output F → Prop
+  soundness : GeneralFormalCircuit'.Soundness F elaborated Assumptions Spec
+  completeness : GeneralFormalCircuit'.Completeness F elaborated ProverAssumptions ProverSpec
+
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)

@@ -243,6 +243,20 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
   }
+
+
+/--
+Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
+-/
+def GeneralFormalCircuit'.toSubcircuit {αₚ βₚ: TypeMap} [ProvableType αₚ] [ProvableType βₚ]
+    (circuit : GeneralFormalCircuit' F β α βₚ αₚ)
+    (n : ℕ) (prover_input : βₚ F) (input_var : Var β F) : Subcircuit F n :=
+  let ops := circuit.main prover_input input_var |>.operations n
+  let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
+  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent prover_input input_var n
+
+  -- TODO: this should be similar to GeneralFormalCircuit
+  sorry
 end
 
 /-- Include a subcircuit. -/
@@ -267,6 +281,14 @@ def subcircuitWithAssertion (circuit : GeneralFormalCircuit F β α) (b : Var β
     let a := circuit.output b offset
     let subcircuit := circuit.toSubcircuit offset b
     (a, [.subcircuit subcircuit])
+
+@[circuit_norm]
+def subcircuitWithAssertion' {αₚ βₚ: TypeMap} [ProvableType αₚ] [ProvableType βₚ] (circuit : GeneralFormalCircuit' F β α βₚ αₚ) (bₚ : βₚ F) (b : Var β F) : Circuit F (αₚ F × Var α F) :=
+  fun offset =>
+    let a := circuit.output bₚ b offset
+    let aₚ := circuit.proverOutput bₚ b offset
+    let subcircuit := circuit.toSubcircuit offset bₚ b
+    (⟨aₚ, a⟩, [.subcircuit subcircuit])
 
 -- we'd like to use subcircuits like functions
 
