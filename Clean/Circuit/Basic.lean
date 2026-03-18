@@ -206,6 +206,18 @@ def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : Li
 section
 open Circuit (ConstraintsHold)
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+  {Hint : Type} [Inhabited Hint]
+
+def ProverHint (F : Type) (Hint : Type) := Environment F → Hint
+
+instance [Inhabited Hint] : Inhabited (ProverHint F Hint) where
+  default := fun _ => default
+
+abbrev CircuitWithHint (F : Type) [Field F] (Hint : Type) (Output : Type) :=
+  ProverHint F Hint → Circuit F Output
+
+instance coe (Output : Type) : Coe (Circuit F Output) (CircuitWithHint F Hint Output) where
+  coe circuit := fun _ => circuit
 
 /-
 Common base type for circuits that are to be used in formal proofs.
@@ -213,26 +225,27 @@ Common base type for circuits that are to be used in formal proofs.
 It contains the main circuit plus some of its properties in elaborated form, to make it
 faster to reason about them in proofs.
 -/
-class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output] where
+class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
+  (Hint : Type := Unit) [Inhabited Hint]
+where
   name : String := "anonymous"
-  main : Var Input F → Circuit F (Var Output F)
+  main : Var Input F → CircuitWithHint F Hint (Var Output F)
 
   /-- how many local witnesses this circuit introduces -/
   localLength : Var Input F → ℕ
 
   /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
-  localLength_eq : ∀ input offset, (main input).localLength offset = localLength input
+  localLength_eq : ∀ input hint offset, (main input hint).localLength offset = localLength input
     := by intros; rfl
 
   /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
-  output : Var Input F → ℕ → Var Output F := fun input offset => (main input).output offset
-
+  output : Var Input F → ℕ → Var Output F := fun input offset => (main input default).output offset
   /-- correctness of `output` -/
-  output_eq : ∀ input offset, (main input).output offset = output input offset
+  output_eq : ∀ input hint offset, (main input hint).output offset = output input offset
     := by intros; rfl
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
-  subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
+  subcircuitsConsistent : ∀ input hint offset, ((main input hint).operations offset).SubcircuitsConsistent offset
     := by intros; and_intros <;> (
       try simp only [circuit_norm]
       try first | ac_rfl | trivial
@@ -249,7 +262,7 @@ def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env (circuit.main input_var default |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
   Spec input output
@@ -259,12 +272,12 @@ def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Outpu
     (Assumptions : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var default |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env (circuit.main input_var default |>.operations offset)
 
 /--
 `FormalCircuit` is the main object that encapsulates correctness of a circuit.
@@ -306,7 +319,7 @@ def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit 
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env (circuit.main input_var default |>.operations offset) →
   -- the spec holds on the input
   Spec input
 
@@ -315,12 +328,12 @@ def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircu
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset, ∀ env, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var default |>.operations offset) →
   -- for all inputs that satisfy the assumptions AND the spec
   ∀ input : Input F, eval env input_var = input →
   Assumptions input → Spec input →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env (circuit.main input_var default |>.operations offset)
 
 /--
 `FormalAssertion` models a subcircuit that is "assertion-like":
@@ -356,7 +369,7 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCir
   -- for all inputs
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env (circuit.main input_var default |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
   Spec input output env.data
@@ -366,12 +379,12 @@ def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : Elaborated
     (Assumptions : Input F → ProverData F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var default |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
   Assumptions input env.data →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env (circuit.main input_var default |>.operations offset)
 
 /--
 `GeneralFormalCircuit` is the most general model of formal circuits, needed in cases where the circuit is a
