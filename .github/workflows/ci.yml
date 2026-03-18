@@ -15,6 +15,10 @@ jobs:
       - name: Check for consecutive empty lines
         run: python3 scripts/check-consecutive-empty-lines.py
       - uses: leanprover/lean-action@v1
+        with:
+          build-args: "--wfail"
+      - name: Build tests
+        run: lake build CleanTests
 
   plonky3-backend:
     runs-on: ubuntu-latest
