@@ -51,12 +51,10 @@ def witnessBool : GeneralFormalCircuit (F p) unit field Bool where
   `subcircuitWithAssertion`. This demonstrates how a regular circuit can
   compose a hint-aware subcircuit by constructing the hint at the call site.
 -/
-def «and» : FormalCircuit (F p) (ProvablePair field field) field where
+def booleanAnd : FormalCircuit (F p) (ProvablePair field field) field where
   main | (x, y) => do
-    -- Create the hint: true when both inputs are 1 (i.e. AND)
-    let hint : ProverHint (F p) Bool := fun env => x.eval env = 1 ∧ y.eval env = 1
-    -- Use witnessBool as a subcircuit with this hint
-    let result ← subcircuitWithAssertion witnessBool () hint
+    -- Use witnessBool as a subcircuit with a hint
+    let result ← subcircuitWithAssertion witnessBool () fun env => x.eval env = 1 ∧ y.eval env = 1
     -- Constrain result = x * y (multiplication is AND for booleans)
     result === x * y
     return result
