@@ -125,21 +125,21 @@ def main (input : Vector (Expression (F p)) 254) := do
 set_option linter.constructorNameAsVariable false
 
 def circuit : GeneralFormalCircuit (F p) (fields 254) field where
-  main
+  main input _ := main input
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions input _ := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
+  Assumptions input _ _ := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
 
   Spec input output _ :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) → output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    intro i0 env input_var input h_input assumptions output h_binary
-    simp only [ElaboratedCircuit.main, main] at assumptions output ⊢
+    intro i0 env input_var input h_input hint assumptions output h_binary
+    simp only [ElaboratedCircuitWithHint.main, circuit_norm, main] at assumptions output ⊢
     simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at h_input assumptions output ⊢
     have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = input[i]) := by
       intro i hi
@@ -168,9 +168,8 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     rw [h_eq]
 
   completeness := by
-    simp only [circuit_norm, main]
-    intro i0 env input_var h_env input h_input assumptions
-    simp only [circuit_norm, Bits2Num.main] at h_env h_input ⊢
+    intro i0 env input_var input h_input hint assumptions h_env
+    simp only [circuit_norm, main, Bits2Num.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     obtain ⟨assumption₁, assumption₂⟩ := assumptions
     simp only [circuit_norm, AliasCheck.circuit, assumption₁, assumption₂] at ⊢
@@ -221,19 +220,19 @@ def main (n : ℕ) (input : Expression (F p)) := do
   return out
 
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
-  main := main n
+  main input _ := main n input
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 
-  Assumptions input _ := input.val < 2^n
+  Assumptions input _ _ := input.val < 2^n
 
   Spec input output _ :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
   soundness := by
-    intro i0 env input_var input h_input h_holds
+    intro i0 env input_var input h_input hint h_holds
     simp only [circuit_norm, main, IsZero.circuit, IsZero.main] at h_holds ⊢
     obtain ⟨ h_bits, h_iszero, h_eq ⟩ := h_holds
 
@@ -301,9 +300,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         exact h_bits'
 
   completeness := by
-    simp only [circuit_norm, main]
-    intro i0 env input_var h_env input h_input assumption
-    simp only [circuit_norm, IsZero.circuit, IsZero.main] at h_env h_input ⊢
+    intro i0 env input_var input h_input hint assumption h_env
+    simp only [circuit_norm, main, IsZero.circuit, IsZero.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     by_cases h_n : n = 0
     · rw [h_n] at h_env ⊢

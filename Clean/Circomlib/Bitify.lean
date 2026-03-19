@@ -65,14 +65,14 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     rw [ZMod.cast_id]
 
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
-  main := main n
+  main input _ := main n input
   localLength _ := n
-  localLength_eq := by simp +arith [circuit_norm, main]
+  localLength_eq _ _ _ := by simp +arith [circuit_norm, main]
   output _ i := varFromOffset (fields n) i
 
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main]
 
-  Assumptions input _ := input.val < 2^n
+  Assumptions input _ _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
@@ -111,11 +111,11 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
-  main input := arbitraryBitLengthCircuit n input
+  main input _ := arbitraryBitLengthCircuit n input
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  Assumptions input _ := input.val < 2^n
+  Assumptions input _ _ := input.val < 2^n
 
   Spec input output _ :=
     input.val < 2^n ∧ output = fieldToBits n input

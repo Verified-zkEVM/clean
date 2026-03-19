@@ -21,15 +21,15 @@ def main (n : ℕ) (x : Expression (F p)) := do
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
 def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
-  main := main n
+  main input _ := main n input
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  localLength_eq _ _ := by simp only [main, circuit_norm]; ac_rfl
-  subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
+  localLength_eq _ _ _ := by simp only [main, circuit_norm]; ac_rfl
+  subcircuitsConsistent _ _ i0 := by simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
-  Assumptions (x : F p) _ := x.val < 2^n
+  Assumptions (x : F p) _ _ := x.val < 2^n
 
   Spec (x : F p) (bits : Vector (F p) n) _ :=
     x.val < 2^n ∧ bits = fieldToBits n x
