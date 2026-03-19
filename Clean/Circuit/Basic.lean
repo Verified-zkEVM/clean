@@ -430,6 +430,18 @@ def GeneralFormalCircuit.Completeness (F : Type) [Field F] {Hint : Type} [Inhabi
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var hint |>.operations offset) →
   ConstraintsHold.Completeness env (circuit.main input_var hint |>.operations offset)
 
+@[circuit_norm]
+def GeneralFormalCircuit.CompletenessSpecProof (F : Type) [Field F] {Hint : Type} [Inhabited Hint]
+    (circuit : ElaboratedCircuitWithHint F Input Output Hint)
+    (Assumptions : Input F → ProverData F → Hint → Prop)
+    (CompletenessSpec : Input F → Output F → ProverData F → Prop) :=
+  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
+  ∀ input : Input F, eval env input_var = input →
+  ∀ hint : ProverHint F Hint,
+  Assumptions input env.data (hint env) →
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var hint |>.operations offset) →
+  CompletenessSpec input (eval env (circuit.output input_var offset)) env.data
+
 /--
 `GeneralFormalCircuit` is the most general model of formal circuits, needed in cases where the circuit is a
 _mix_ of "assertion-like" and "function-like". It allows you flexibility in specifying separate statements
@@ -453,6 +465,9 @@ where
   Spec : Input F → Output F → ProverData F → Prop
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
+  CompletenessSpec : Input F → Output F → ProverData F → Prop := fun _ _ _ => True
+  completenessSpec : GeneralFormalCircuit.CompletenessSpecProof F elaborated Assumptions CompletenessSpec
+    := by unfold GeneralFormalCircuit.CompletenessSpecProof; intros; simp_all
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)

@@ -606,6 +606,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Fi
       simp only [GeneralFormalCircuit.Completeness, forall_eq']
       intros
       apply orig.completeness <;> trivial
+    completenessSpec := fun _ _ _ _ _ _ _ _ => trivial
   }
 
 /--
@@ -629,4 +630,5 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
       intro offset env input_var input h_input hint h_assumptions h_env
       subst h_input
       exact orig.completeness offset env input_var h_env _ rfl h_assumptions.1 h_assumptions.2
+    completenessSpec := fun _ _ _ _ _ _ _ _ => trivial
   }
