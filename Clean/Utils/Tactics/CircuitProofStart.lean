@@ -21,7 +21,8 @@ partial def circuitProofStartCore : TacticM Unit := do
                        headConst? == some ``GeneralFormalCircuit.Soundness
     let isCompleteness := headConst? == some ``Completeness ||
                           headConst? == some ``FormalAssertion.Completeness ||
-                          headConst? == some ``GeneralFormalCircuit.Completeness
+                          headConst? == some ``GeneralFormalCircuit.Completeness ||
+                          headConst? == some ``GeneralFormalCircuit.CompletenessSpecProof
 
     if isSoundness then
       match headConst? with
@@ -60,11 +61,16 @@ partial def circuitProofStartCore : TacticM Unit := do
         let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``GeneralFormalCircuit.CompletenessSpecProof =>
+        evalTactic (← `(tactic| unfold GeneralFormalCircuit.CompletenessSpecProof))
+        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()
       return
     else
       -- Goal is not a supported Soundness or Completeness type
-      throwError "circuitProofStartCore can only be used on Soundness, Completeness, FormalAssertion.Soundness, FormalAssertion.Completeness, GeneralFormalCircuit.Soundness, or GeneralFormalCircuit.Completeness goals"
+      throwError "circuitProofStartCore can only be used on Soundness, Completeness, FormalAssertion.Soundness, FormalAssertion.Completeness, GeneralFormalCircuit.Soundness, GeneralFormalCircuit.Completeness, or GeneralFormalCircuit.CompletenessSpecProof goals"
 
 /--
   Standard tactic for starting soundness and completeness proofs.
