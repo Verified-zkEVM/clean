@@ -271,10 +271,11 @@ def assertion (circuit : FormalAssertion F β) (b : Var β F) : Circuit F Unit :
 
 /-- Include a general subcircuit. -/
 @[circuit_norm]
-def subcircuitWithAssertion {Hint : Type} [Inhabited Hint] (circuit : GeneralFormalCircuit F β α Hint) (b : Var β F) : Circuit F (Var α F) :=
+def subcircuitWithAssertion {Hint : Type} [Inhabited Hint] (circuit : GeneralFormalCircuit F β α Hint)
+    (b : Var β F) (hint : ProverHint F Hint := default) : Circuit F (Var α F) :=
   fun offset =>
     let a := circuit.output b offset
-    let subcircuit := circuit.toSubcircuit offset b
+    let subcircuit := circuit.toSubcircuit offset b hint
     (a, [.subcircuit subcircuit])
 
 -- we'd like to use subcircuits like functions
