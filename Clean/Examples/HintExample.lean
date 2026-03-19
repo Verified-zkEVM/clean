@@ -67,9 +67,11 @@ def booleanAnd : FormalCircuit (F p) (ProvablePair field field) field where
   Spec (input : F p × F p) (output : F p) := output = input.1 * input.2
 
   soundness := by
+    circuit_proof_start [witnessBool]
     sorry
 
   completeness := by
+    circuit_proof_start [witnessBool]
     sorry
 
 end Examples.HintExample
