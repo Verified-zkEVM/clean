@@ -58,7 +58,7 @@ instance : ToJson (TableOperation S F) where
       ("type", Json.str "EveryRow"),
       ("context", toJson c)
     ]
-    | .everyRowExceptLast c => Json.mkObj [
+    | .everyRowExceptLast f => Json.mkObj [
       ("type", Json.str "EveryRowExceptLast"),
-      ("context", toJson c)
+      ("context", toJson (f (varFromOffset S 0)))
     ]

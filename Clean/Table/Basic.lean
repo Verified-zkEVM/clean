@@ -382,6 +382,27 @@ def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   let env := windowEnv table window aux_env
   Circuit.ConstraintsHold.Soundness env table.operations
 
+/--
+  Like `ConstraintsHoldOnWindow` but for chained constraints that receive the current row
+  variables as input. The current row is assigned (not witnessed) in the initial context.
+-/
+@[table_norm]
+def ConstraintsHoldOnWindowChained (f : Var S F → TableConstraint 2 S F (Var S F))
+    (window : TraceOfLength F S 2) (aux_env : Environment F) : Prop :=
+  let curr_vars := varFromOffset S 0
+  let init : TableContext 2 S F := ⟨[], (CellAssignment.empty 2).pushRow 0⟩
+  let (_, final) := (f curr_vars >>= fun _ => pure ()) init
+  let env : Environment F := {
+    get i :=
+      if hi : i < final.assignment.offset then
+        match final.assignment.vars[i] with
+        | .input ⟨r, c⟩ => window.get r c
+        | .aux k => aux_env.get k
+      else aux_env.get (i + final.assignment.aux_length)
+    data := aux_env.data
+  }
+  Circuit.ConstraintsHold.Soundness env final.circuit
+
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
@@ -439,7 +460,7 @@ def assignNextRow {W : ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
     assign (.next i) vars[i]
 end TableConstraint
 
-export TableConstraint (windowEnv getCurrRow getNextRow assignVar assign assignNextRow assignCurrRow)
+export TableConstraint (windowEnv ConstraintsHoldOnWindowChained getCurrRow getNextRow assignVar assign assignNextRow assignCurrRow)
 
 @[reducible]
 def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
@@ -470,7 +491,7 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
 
     Note that this will not apply any constraints to a trace of length one.
   -/
-  | everyRowExceptLast: TwoRowsConstraint S F → TableOperation S F
+  | everyRowExceptLast: (Var S F → TableConstraint 2 S F (Var S F)) → TableOperation S F
 
 instance : Repr RowIndex where
   reprPrec
@@ -481,7 +502,7 @@ instance [Repr F] : Repr (TableOperation S F) where
   reprPrec op _ := match op with
     | .boundary i c => "boundary " ++ reprStr i ++ " " ++ reprStr c
     | .everyRow c => "everyRow " ++ reprStr c
-    | .everyRowExceptLast c => "everyRowExceptLast " ++ reprStr c
+    | .everyRowExceptLast c => "everyRowExceptLast " ++ reprStr (c (varFromOffset S 0))
 
 export TableOperation (boundary everyRow everyRowExceptLast)
 
@@ -529,7 +550,7 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
     | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
-        constraint.ConstraintsHoldOnWindow window (env (trace.len + 1)) ∧ others
+        ConstraintsHoldOnWindowChained constraint window (env (trace.len + 1)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
@@ -583,7 +604,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
       match cs with
       | .boundary _ constraint => constraint.OffsetConsistent
       | .everyRow constraint => constraint.OffsetConsistent
-      | .everyRowExceptLast constraint => constraint.OffsetConsistent
+      | .everyRowExceptLast f => (f (varFromOffset S 0)).OffsetConsistent
     := by repeat constructor
 
 def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLength F S N) (env : ProverData F) : Prop :=

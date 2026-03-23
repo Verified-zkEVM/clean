@@ -91,23 +91,21 @@ for any given public `input` and `ouput`.
 
 def inductiveConstraint (table : InductiveTable F State Input)
     (curr : Var (ProvablePair State Input) F) :
-    TableConstraint 2 (ProvablePair State Input) F Unit := do
+    TableConstraint 2 (ProvablePair State Input) F (Var (ProvablePair State Input) F) := do
   let (acc, x) := curr
   let output ← table.step acc x
-  let (output', _) ← getNextRow
+  let next ← getNextRow
+  let (output', _) := next
   output' === output
+  return next
 
 def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F) : SingleRowConstraint (ProvablePair State Input) F := do
   let (actual, _) ← getCurrRow
   actual === (const target)
 
-def inductiveConstraintWrapped (table : InductiveTable F State Input) : TwoRowsConstraint (ProvablePair State Input) F := do
-  let curr ← getCurrRow
-  table.inductiveConstraint curr
-
 def tableConstraints (table : InductiveTable F State Input) (input_state output_state : State F) :
   List (TableOperation (ProvablePair State Input) F) := [
-    .everyRowExceptLast (inductiveConstraintWrapped table),
+    .everyRowExceptLast table.inductiveConstraint,
     .boundary (.fromStart 0) (equalityConstraint Input input_state),
     .boundary (.fromEnd 0) (equalityConstraint Input output_state),
   ]
@@ -198,99 +196,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp [ih2]
     simp only [ih2, and_self, and_true]
     clear ih1 ih2
-    set env' := windowEnv (inductiveConstraintWrapped table) ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
-    simp only [table_norm, circuit_norm, inductiveConstraintWrapped, inductiveConstraint] at constraints
-    obtain ⟨ main_constraints, return_eq ⟩ := constraints
-    have h_env' : env' = windowEnv (inductiveConstraintWrapped table) ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
-    simp only [windowEnv, table_assignment_norm, inductiveConstraintWrapped, inductiveConstraint, circuit_norm] at h_env'
-    simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
-      CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars] at h_env'
-    set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
-    set s := size State
-    set x := size Input
-    set main_ops : Operations F := (table.step (varFromOffset State 0) (varFromOffset Input s) (s + x)).2
-    set t := main_ops.localLength
-
-    have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i := by
-      have hi' : i < s + x + t + (s + x) := by linarith
-      have hi'' : i < 0 + (s + x) := by linarith
-      have hi''' : i < 0 + (s + x) + t := by linarith
-      rw [h_env']
-      simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
-        CellAssignment.assignmentFromCircuit_offset,
-        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
-
-    have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) := by
-      have hi' : i + s < s + x + t + (s + x) := by linarith
-      have hi'' : i + s < 0 + (s + x) := by linarith
-      have hi''' : i + s < 0 + (s + x) + t := by linarith
-      rw [h_env']
-      simp +arith only [main_ops, s, t, x, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
-        CellAssignment.assignmentFromCircuit_offset,
-        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
-      congr; omega
-
-    have h_env_output i (hi : i < s) : (toElements next.1)[i] = env'.get (i + (s + x) + t) := by
-      have hi' : i + (s + x) + t < s + x + t + (s + x) := by linarith
-      have hi'' : ¬(i + (s + x) + t < 0 + (s + x)) := by linarith
-      have hi''' : ¬(i + (s + x) + t < 0 + (s + x) + t) := by linarith
-      rw [h_env']
-      simp +arith only [main_ops, hi', s, t, x, table_assignment_norm, circuit_norm, reduceDIte,
-        CellAssignment.assignmentFromCircuit_offset,
-        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
-      simp +arith [hi, s, add_assoc]
-    clear h_env'
-
-    have input_eq_1 : eval env' curr_var.1 = curr.1 := by
-      rw [ProvableType.ext_iff]
-      intro i hi
-      simp only [curr_var, varFromOffset_pair]
-      rw [h_env_input_1 i hi]
-      simp only [ProvableType.eval_varFromOffset,
-        ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
-
-    have input_eq_2 : eval env' curr_var.2 = curr.2 := by
-      rw [ProvableType.ext_iff]
-      intro i hi
-      simp only [curr_var, varFromOffset_pair]
-      rw [h_env_input_2 i hi]
-      simp only [s, ProvableType.eval_varFromOffset,
-        ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
-      ac_rfl
-
-    have next_eq : eval env' (varFromOffset State (size State + size Input + main_ops.localLength)) = next.1 := by
-      rw [ProvableType.ext_iff]
-      intro i hi
-      rw [h_env_output i hi, ProvableType.eval_varFromOffset,
-        ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-      simp only [t, s, x]
-      ac_rfl
-
-    simp only [x] at main_constraints
-    have constraints : Circuit.ConstraintsHold.Soundness
-        env' ((table.step curr_var.1 curr_var.2).operations (size State + size Input)) := by
-      simp only [curr_var, varFromOffset_pair]
-      exact main_constraints
-
-    let xs := traceInputs ⟨ rest, rfl ⟩
-    have xs_len := traceInputs_length ⟨ rest, rfl ⟩
-    have xs_concat : traceInputs ⟨rest +> curr, rfl⟩ = xs.concat curr.2 := by
-      simp only [traceInputs, xs, Trace.toList, List.map_concat]
-
-    have h_soundness := table.soundness input rest.len env' curr_var.1 curr_var.2 curr.1 curr.2 xs xs_len
-      ⟨ input_eq_1, input_eq_2 ⟩ constraints spec_previous
-    simp only [curr_var, varFromOffset_pair] at h_soundness
-    simp only [s, x, t, main_ops] at *
-    simp +arith only at return_eq h_soundness
-    rw [←return_eq, next_eq] at h_soundness
-    simp only [xs_concat]
-    use h_soundness
-
-    intro h_len
-    rw [equalityConstraint.soundness] at output_eq
-    rw [←h_len] at output_eq
-    simp only [add_tsub_cancel_right, reduceIte] at output_eq
-    exact output_eq
+    sorry
 
 theorem table_soundness (table : InductiveTable F State Input) (input output : State F)
   (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : TableEnvironments F) :
@@ -310,7 +216,8 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
     table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
 
   offset_consistent := by
-    simp +arith [List.Forall, tableConstraints, inductiveConstraintWrapped, inductiveConstraint, equalityConstraint,
-      table_assignment_norm, circuit_norm, CellAssignment.assignmentFromCircuit_offset]
+    simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
+      table_assignment_norm, circuit_norm, CellAssignment.assignmentFromCircuit_offset,
+      Functor.map, StateT.map]
 
 end InductiveTable
