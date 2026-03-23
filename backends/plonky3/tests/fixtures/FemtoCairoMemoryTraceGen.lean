@@ -13,6 +13,6 @@ def main (args : List String) : IO Unit := do
   | [output_path] =>
     let numRows := numSteps + 1
     let initRow : Row (F pBabybear) (ProvablePair State unit) := (initialState, ())
-    let trace := witnessesWithData femtoCairoTable.inductiveWitness initRow numRows memData
+    let trace := witnessesWithData femtoCairoTable.inductiveConstraint initRow numRows memData
     generateTraceJson trace memData output_path
   | _ => IO.println "Usage: lake env lean --run FemtoCairoMemoryTraceGen.lean <output_path>"

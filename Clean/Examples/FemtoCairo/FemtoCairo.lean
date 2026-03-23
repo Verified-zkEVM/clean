@@ -637,11 +637,7 @@ def femtoCairoStepElaboratedCircuit
 
       -- Compute next state
       nextState { state, decoded, v1, v2, v3 }
-    localLength _ := 30
-    output _ i₀ := varFromOffset State (i₀ + 27)
-    output_eq := by
-      intro state i₀
-      simp only [circuit_norm, fetchInstruction, decodeInstruction, readFromMemory, nextState]
+    localLength := 30
 
 def femtoCairoStepSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))

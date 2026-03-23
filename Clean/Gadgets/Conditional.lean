@@ -46,21 +46,6 @@ def outputValue (selector: F) (ifTrue ifFalse : M F) : M F :=
   let resultElems := Vector.ofFn fun i => selector * (trueElems[i] - falseElems[i]) + falseElems[i]
   fromElements resultElems
 
-theorem outputValue_eq_of_isBool [DecidableEq F] (selector : F) (ifTrue ifFalse : M F)
-    (h : IsBool selector) :
-    outputValue selector ifTrue ifFalse = if selector = 1 then ifTrue else ifFalse := by
-  cases h with
-  | inl h0 =>
-    simp only [h0, zero_ne_one, if_false, outputValue]
-    have : Vector.ofFn (fun i => (0 : F) * ((toElements ifTrue)[i] - (toElements ifFalse)[i]) + (toElements ifFalse)[i]) = toElements ifFalse := by
-      ext i hi; simp [Vector.getElem_ofFn]
-    rw [this, fromElements_toElements]
-  | inr h1 =>
-    simp only [h1, ↓reduceIte, outputValue]
-    have : Vector.ofFn (fun i => (1 : F) * ((toElements ifTrue)[i] - (toElements ifFalse)[i]) + (toElements ifFalse)[i]) = toElements ifTrue := by
-      ext i hi; simp [Vector.getElem_ofFn]
-    rw [this, fromElements_toElements]
-
 @[circuit_norm]
 def Assumptions (input : Inputs M F) : Prop :=
   IsBool input.selector

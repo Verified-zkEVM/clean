@@ -62,7 +62,7 @@ def finalState : State (F pBabybear) := { pc := 60, ap := 0, fp := 0 }
 def numSteps : ℕ := 15
 
 -- Reuse the fully-proved femtoCairoTable from FemtoCairo.lean.
--- Only `.step` is used at runtime (via `tableConstraintsWitness` / `inductiveWitness`);
+-- Only `.step` is used at runtime (via `tableConstraints` / `inductiveConstraint`);
 -- the proof fields ensure the kernel is sound (no sorry's).
 def femtoCairoTable : InductiveTable (F pBabybear) State unit :=
   Examples.FemtoCairo.femtoCairoTable testProgram h_programSize h_testValidProgram numSteps
