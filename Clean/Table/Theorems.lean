@@ -345,20 +345,6 @@ theorem TableConstraint.assignVar_preservesVarsBelow (off : CellOffset W S) (v :
     change (ctx.assignment.setVarInput off v.index).vars[i] = ctx.assignment.vars[i]
     exact CellAssignment.setVarInput_vars_getElem_ne _ _ _ _ hi_in (by omega)
 
-/-- A `bind` where the first part is a `monadLift` preserves vars below `b`,
-    and the continuation preserves vars below `b` for any value (including the produced variable).
-    This handles the pattern `let v ← witnessVar ...; ... ; assignVar off v`. -/
-theorem TableConstraint.bind_monadLift_preservesVarsBelow
-    {circuit : Circuit F γ} {g : γ → TableConstraint W S F β} {b : ℕ}
-    (hg : ∀ (a : γ) (ctx : TableContext W S F),
-      b ≤ ctx.assignment.offset →
-      ctx.circuit.localLength = ctx.assignment.offset →
-      (g a).PreservesVarsBelow b) :
-    ((monadLift circuit >>= g : TableConstraint W S F β)).PreservesVarsBelow b := by
-  apply bind_preservesVarsBelow (monadLift_preservesVarsBelow circuit b) (fun a => ?_)
-  intro ctx hb hoc
-  exact hg a ctx hb hoc ctx hb hoc
-
 /-- `List.forM` preserves vars below a bound if the body does for all elements. -/
 theorem TableConstraint.forM_list_preservesVarsBelow
     {γ : Type} {l : List γ} {body : γ → TableConstraint W S F Unit} {b : ℕ}
