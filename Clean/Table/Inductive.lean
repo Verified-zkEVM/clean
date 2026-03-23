@@ -89,20 +89,25 @@ that encodes the following statement:
 for any given public `input` and `ouput`.
 -/
 
-def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint 2 (ProvablePair State Input) F Unit := do
-  let (acc, x) ← getCurrRow
+def inductiveConstraint (table : InductiveTable F State Input)
+    (curr : Var (ProvablePair State Input) F) :
+    TableConstraint 2 (ProvablePair State Input) F Unit := do
+  let (acc, x) := curr
   let output ← table.step acc x
   let (output', _) ← getNextRow
-  -- TODO make this more efficient by assigning variables as long as they don't come from the input
   output' === output
 
 def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F) : SingleRowConstraint (ProvablePair State Input) F := do
   let (actual, _) ← getCurrRow
   actual === (const target)
 
+def inductiveConstraintWrapped (table : InductiveTable F State Input) : TwoRowsConstraint (ProvablePair State Input) F := do
+  let curr ← getCurrRow
+  table.inductiveConstraint curr
+
 def tableConstraints (table : InductiveTable F State Input) (input_state output_state : State F) :
   List (TableOperation (ProvablePair State Input) F) := [
-    .everyRowExceptLast table.inductiveConstraint,
+    .everyRowExceptLast (inductiveConstraintWrapped table),
     .boundary (.fromStart 0) (equalityConstraint Input input_state),
     .boundary (.fromEnd 0) (equalityConstraint Input output_state),
   ]
@@ -193,11 +198,11 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp [ih2]
     simp only [ih2, and_self, and_true]
     clear ih1 ih2
-    set env' := windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
-    simp only [table_norm, circuit_norm, inductiveConstraint] at constraints
+    set env' := windowEnv (inductiveConstraintWrapped table) ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
+    simp only [table_norm, circuit_norm, inductiveConstraintWrapped, inductiveConstraint] at constraints
     obtain ⟨ main_constraints, return_eq ⟩ := constraints
-    have h_env' : env' = windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
-    simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm] at h_env'
+    have h_env' : env' = windowEnv (inductiveConstraintWrapped table) ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
+    simp only [windowEnv, table_assignment_norm, inductiveConstraintWrapped, inductiveConstraint, circuit_norm] at h_env'
     simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
       CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars] at h_env'
     set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
@@ -305,7 +310,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
     table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
 
   offset_consistent := by
-    simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
+    simp +arith [List.Forall, tableConstraints, inductiveConstraintWrapped, inductiveConstraint, equalityConstraint,
       table_assignment_norm, circuit_norm, CellAssignment.assignmentFromCircuit_offset]
 
 end InductiveTable
