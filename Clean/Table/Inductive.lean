@@ -196,6 +196,22 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp [ih2]
     simp only [ih2, and_self, and_true]
     clear ih1 ih2
+    set wrapped : TwoRowsConstraint (ProvablePair State Input) F :=
+      getCurrRow >>= fun curr => table.inductiveConstraint curr >>= fun _ => pure ()
+    -- convert constraints to clean form before simp
+    change wrapped.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, _⟩
+      (env.toEnvironment 0 (rest.len + 1)) at constraints
+    set env' := windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
+    dsimp only [TableConstraint.ConstraintsHoldOnWindow, TableConstraint.operations,
+      TableContext.empty, TableContext.offset] at constraints
+    change Circuit.ConstraintsHold.Soundness env' (wrapped .empty).2.circuit at constraints
+    -- TODO: adapt remaining proof to ConstraintsHoldOnWindowChained formulation
+    -- Key steps that work:
+    -- 1. change wrapped.ConstraintsHoldOnWindow ... at constraints
+    -- 2. dsimp [ConstraintsHoldOnWindow, operations, empty, offset] at constraints
+    -- 3. change ConstraintsHold.Soundness env' (wrapped .empty).2.circuit at constraints
+    -- 4. rcases append_soundness.mp constraints with ⟨ main_constraints, return_eq ⟩
+    -- Then adapt h_env', h_env_input_1/2, h_env_output for the new env' structure
     sorry
 
 theorem table_soundness (table : InductiveTable F State Input) (input output : State F)

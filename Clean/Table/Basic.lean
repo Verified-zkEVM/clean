@@ -382,27 +382,6 @@ def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   let env := windowEnv table window aux_env
   Circuit.ConstraintsHold.Soundness env table.operations
 
-/--
-  Like `ConstraintsHoldOnWindow` but for chained constraints that receive the current row
-  variables as input. The current row is assigned (not witnessed) in the initial context.
--/
-@[table_norm]
-def ConstraintsHoldOnWindowChained (f : Var S F → TableConstraint 2 S F (Var S F))
-    (window : TraceOfLength F S 2) (aux_env : Environment F) : Prop :=
-  let curr_vars := varFromOffset S 0
-  let init : TableContext 2 S F := ⟨[], (CellAssignment.empty 2).pushRow 0⟩
-  let (_, final) := (f curr_vars >>= fun _ => pure ()) init
-  let env : Environment F := {
-    get i :=
-      if hi : i < final.assignment.offset then
-        match final.assignment.vars[i] with
-        | .input ⟨r, c⟩ => window.get r c
-        | .aux k => aux_env.get k
-      else aux_env.get (i + final.assignment.aux_length)
-    data := aux_env.data
-  }
-  Circuit.ConstraintsHold.Soundness env final.circuit
-
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
@@ -460,13 +439,25 @@ def assignNextRow {W : ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
     assign (.next i) vars[i]
 end TableConstraint
 
-export TableConstraint (windowEnv ConstraintsHoldOnWindowChained getCurrRow getNextRow assignVar assign assignNextRow assignCurrRow)
+export TableConstraint (windowEnv getCurrRow getNextRow assignVar assign assignNextRow assignCurrRow)
 
 @[reducible]
 def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
 
 @[reducible]
 def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 2 S F Unit
+
+/--
+  Like `ConstraintsHoldOnWindow` but for chained constraints that receive the current row
+  variables as input. Internally, `getCurrRow` is used to set up the initial context
+  (reserving variable indices for row 0). The getCurrRow witness is trivially satisfied
+  and does not add meaningful constraints.
+-/
+@[table_norm]
+def ConstraintsHoldOnWindowChained [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
+    (window : TraceOfLength F S 2) (aux_env : Environment F) : Prop :=
+  let wrapped : TableConstraint 2 S F Unit := getCurrRow >>= fun curr => f curr >>= fun _ => pure ()
+  wrapped.ConstraintsHoldOnWindow window aux_env
 
 -- specify a row, either counting from the start or from the end of the trace.
 inductive RowIndex where
