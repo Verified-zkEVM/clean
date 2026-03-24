@@ -95,6 +95,34 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)
   rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
   trivial
 
+private def wrappedFibRelation : TwoRowsConstraint RowType (F p) :=
+  getCurrRow >>= fun curr => fibRelation curr >>= fun _ => pure ()
+
+local macro "fibRelation_env_simp_tac" : tactic =>
+  `(tactic| (
+    simp only [wrappedFibRelation, windowEnv, fibRelation, table_assignment_norm, table_norm,
+      circuit_norm, copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
+    unfold StateT.pure; dsimp only [Pure.pure]
+    simp only [Vector.toList_mk, List.getElem_set, Vector.toList_append,
+      Vector.mapFinRange_zero, Vector.mapFinRange_succ, Vector.mapRange_zero, Vector.mapRange_succ,
+      Vector.toList_push, List.nil_append, List.append_assoc]))
+
+private lemma fibRelation_env_get0 (curr next : RowType (F p)) (aux_env : Environment (F p)) :
+    (windowEnv (wrappedFibRelation (p:=p)) ⟨<+> +> curr +> next, rfl⟩ aux_env).get 0 = curr.x := by
+  fibRelation_env_simp_tac; simp only [dif_pos (by omega : 0 < 7)]; rfl
+
+private lemma fibRelation_env_get1 (curr next : RowType (F p)) (aux_env : Environment (F p)) :
+    (windowEnv (wrappedFibRelation (p:=p)) ⟨<+> +> curr +> next, rfl⟩ aux_env).get 1 = curr.y := by
+  fibRelation_env_simp_tac; simp only [dif_pos (by omega : 1 < 7)]; rfl
+
+private lemma fibRelation_env_get2 (curr next : RowType (F p)) (aux_env : Environment (F p)) :
+    (windowEnv (wrappedFibRelation (p:=p)) ⟨<+> +> curr +> next, rfl⟩ aux_env).get 2 = next.x := by
+  fibRelation_env_simp_tac; simp only [dif_pos (by omega : 2 < 7)]; rfl
+
+private lemma fibRelation_env_get3 (curr next : RowType (F p)) (aux_env : Environment (F p)) :
+    (windowEnv (wrappedFibRelation (p:=p)) ⟨<+> +> curr +> next, rfl⟩ aux_env).get (2 + 1) = next.y := by
+  fibRelation_env_simp_tac; simp only [dif_pos (by omega : 2 + 1 < 7)]; rfl
+
 def formalFibTable : FormalTable (F p) RowType := {
   constraints := fibTable
   Spec
@@ -110,8 +138,58 @@ def formalFibTable : FormalTable (F p) RowType := {
       simp [table_norm]
       exact boundary_step first_row (envs.toEnvironment 0 0)
     | more curr next rest ih1 ih2 =>
-      -- TODO: adapt env_simp proof for the chained constraint pattern (getCurrRow wrapper causes simp timeout)
-      sorry
+      unfold Trace.ForAllRowsOfTraceWithIndex.inner
+      intros ConstraintsHold
+
+      simp only [table_norm] at ConstraintsHold
+      simp at ConstraintsHold
+      unfold TableConstraintsHold.foldl at ConstraintsHold
+      unfold TableConstraintsHold.foldl at ConstraintsHold
+      unfold TableConstraintsHold.foldl at ConstraintsHold
+      simp [Trace.len] at ConstraintsHold
+      specialize ih2 ConstraintsHold.right
+      simp only [ih2, and_true, Trace.len]
+
+      let ⟨curr_fib0, curr_fib1⟩ := ih2.left
+
+      replace ConstraintsHold := ConstraintsHold.left
+      simp [table_norm] at ConstraintsHold
+      -- Use Inductive.lean pattern: change to wrapped form, separate env from ops
+      change wrappedFibRelation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, _⟩
+        (envs.toEnvironment 1 (rest.len + 1)) at ConstraintsHold
+      set env := windowEnv wrappedFibRelation ⟨<+> +> curr +> next, _⟩ (envs.toEnvironment 1 (rest.len + 1))
+      dsimp only [TableConstraint.ConstraintsHoldOnWindow, TableConstraint.operations,
+        TableContext.empty, TableContext.offset] at ConstraintsHold
+      change Circuit.ConstraintsHold.Soundness env (wrappedFibRelation .empty).2.circuit at ConstraintsHold
+      simp only [wrappedFibRelation, fibRelation, table_norm, circuit_norm, table_assignment_norm,
+          copyToVar, Gadgets.Addition8.circuit, Functor.map, StateT.map] at ConstraintsHold
+      -- reduce pure to get concrete ops
+      simp only [pure, StateT.pure, Id.run] at ConstraintsHold
+      simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
+      -- substitute env lookups using the standalone lemmas
+      simp only [show env.get 0 = curr.x from fibRelation_env_get0 curr next _,
+                 show env.get 1 = curr.y from fibRelation_env_get1 curr next _,
+                 show env.get 2 = next.x from fibRelation_env_get2 curr next _,
+                 show env.get (2 + 1) = next.y from fibRelation_env_get3 curr next _] at ConstraintsHold
+
+      have ⟨eq_holds, add_holds⟩ := ConstraintsHold
+      rw [add_neg_eq_zero] at eq_holds
+
+      have lookup_first_col : curr.x.val < 256 := by
+        rw [ih2.left.left]; apply fib8_less_than_256
+
+      have lookup_second_col : curr.y.val < 256 := by
+        rw [ih2.left.right]; apply fib8_less_than_256
+
+      specialize add_holds ⟨ lookup_first_col, lookup_second_col ⟩
+
+      have spec1 : next.x.val = fib8 (rest.len + 1) := by
+        rw [←curr_fib1]; congr; exact eq_holds.symm
+
+      have spec2 : (next.y).val = fib8 (rest.len + 2) := by
+        simp only [fib8]; rw [←curr_fib0, ←curr_fib1]; assumption
+
+      exact ⟨spec1, spec2⟩
 }
 
 end Tables.Fibonacci8Table
