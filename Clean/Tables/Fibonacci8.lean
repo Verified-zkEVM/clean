@@ -110,6 +110,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       simp [table_norm]
       exact boundary_step first_row (envs.toEnvironment 0 0)
     | more curr next rest ih1 ih2 =>
+      -- TODO: adapt env_simp proof for the chained constraint pattern (getCurrRow wrapper causes simp timeout)
       sorry
 }
 
