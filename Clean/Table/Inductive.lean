@@ -205,14 +205,103 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     dsimp only [TableConstraint.ConstraintsHoldOnWindow, TableConstraint.operations,
       TableContext.empty, TableContext.offset] at constraints
     change Circuit.ConstraintsHold.Soundness env' (wrapped .empty).2.circuit at constraints
-    -- TODO: adapt remaining proof to ConstraintsHoldOnWindowChained formulation
-    -- Key steps that work:
-    -- 1. change wrapped.ConstraintsHoldOnWindow ... at constraints
-    -- 2. dsimp [ConstraintsHoldOnWindow, operations, empty, offset] at constraints
-    -- 3. change ConstraintsHold.Soundness env' (wrapped .empty).2.circuit at constraints
-    -- 4. rcases append_soundness.mp constraints with ⟨ main_constraints, return_eq ⟩
-    -- Then adapt h_env', h_env_input_1/2, h_env_output for the new env' structure
-    sorry
+    -- Simplify the ops in constraints (env' stays opaque via set)
+    simp only [wrapped, table_norm, circuit_norm, inductiveConstraint, Functor.map, StateT.map] at constraints
+    -- Decompose constraints: step ops ∧ [witness (trivial), equality subcircuit]
+    rcases Circuit.ConstraintsHold.append_soundness.mp constraints with ⟨ main_constraints, return_eq ⟩
+    simp only [table_norm, circuit_norm] at return_eq
+    -- Compute h_env' (same structure as old proof since wrapped ≡ old inductiveConstraint)
+    have h_env' : env' = windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
+    simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm, wrapped,
+      Functor.map, StateT.map, pure, StateT.pure, Id.run] at h_env'
+    simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
+      CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars] at h_env'
+    set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
+    set s := size State
+    set x := size Input
+    set main_ops : Operations F := (table.step (varFromOffset State 0) (varFromOffset Input s) (s + x)).2
+    set t := main_ops.localLength
+
+    have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i := by
+      have hi' : i < s + x + t + (s + x) := by linarith
+      have hi'' : i < 0 + (s + x) := by linarith
+      have hi''' : i < 0 + (s + x) + t := by linarith
+      rw [h_env']
+      simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
+        CellAssignment.assignmentFromCircuit_offset,
+        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
+
+    have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) := by
+      have hi' : i + s < s + x + t + (s + x) := by linarith
+      have hi'' : i + s < 0 + (s + x) := by linarith
+      have hi''' : i + s < 0 + (s + x) + t := by linarith
+      rw [h_env']
+      simp +arith only [main_ops, s, t, x, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
+        CellAssignment.assignmentFromCircuit_offset,
+        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
+      congr; omega
+
+    have h_env_output i (hi : i < s) : (toElements next.1)[i] = env'.get (i + (s + x) + t) := by
+      have hi' : i + (s + x) + t < s + x + t + (s + x) := by linarith
+      have hi'' : ¬(i + (s + x) + t < 0 + (s + x)) := by linarith
+      have hi''' : ¬(i + (s + x) + t < 0 + (s + x) + t) := by linarith
+      rw [h_env']
+      simp +arith only [main_ops, hi', s, t, x, table_assignment_norm, circuit_norm, reduceDIte,
+        CellAssignment.assignmentFromCircuit_offset,
+        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
+      simp +arith [hi, s, add_assoc]
+    clear h_env'
+
+    have input_eq_1 : eval env' curr_var.1 = curr.1 := by
+      rw [ProvableType.ext_iff]
+      intro i hi
+      simp only [curr_var, varFromOffset_pair]
+      rw [h_env_input_1 i hi]
+      simp only [ProvableType.eval_varFromOffset,
+        ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
+
+    have input_eq_2 : eval env' curr_var.2 = curr.2 := by
+      rw [ProvableType.ext_iff]
+      intro i hi
+      simp only [curr_var, varFromOffset_pair]
+      rw [h_env_input_2 i hi]
+      simp only [s, ProvableType.eval_varFromOffset,
+        ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
+      ac_rfl
+
+    have next_eq : eval env' (varFromOffset State (size State + size Input + main_ops.localLength)) = next.1 := by
+      rw [ProvableType.ext_iff]
+      intro i hi
+      rw [h_env_output i hi, ProvableType.eval_varFromOffset,
+        ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+      simp only [t, s, x]
+      ac_rfl
+
+    simp only [x, s, Nat.zero_add] at main_constraints
+    have constraints : Circuit.ConstraintsHold.Soundness
+        env' ((table.step curr_var.1 curr_var.2).operations (size State + size Input)) := by
+      simp only [curr_var, varFromOffset_pair, Nat.zero_add]
+      exact main_constraints
+
+    let xs := traceInputs ⟨ rest, rfl ⟩
+    have xs_len := traceInputs_length ⟨ rest, rfl ⟩
+    have xs_concat : traceInputs ⟨rest +> curr, rfl⟩ = xs.concat curr.2 := by
+      simp only [traceInputs, xs, Trace.toList, List.map_concat]
+
+    have h_soundness := table.soundness input rest.len env' curr_var.1 curr_var.2 curr.1 curr.2 xs xs_len
+      ⟨ input_eq_1, input_eq_2 ⟩ constraints spec_previous
+    simp only [curr_var, varFromOffset_pair] at h_soundness
+    simp only [s, x, t, main_ops] at *
+    simp +arith only at return_eq h_soundness
+    rw [←return_eq, next_eq] at h_soundness
+    simp only [xs_concat]
+    use h_soundness
+
+    intro h_len
+    rw [equalityConstraint.soundness] at output_eq
+    rw [←h_len] at output_eq
+    simp only [add_tsub_cancel_right, reduceIte] at output_eq
+    exact output_eq
 
 theorem table_soundness (table : InductiveTable F State Input) (input output : State F)
   (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : TableEnvironments F) :
