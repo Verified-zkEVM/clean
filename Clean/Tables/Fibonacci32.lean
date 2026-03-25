@@ -97,12 +97,11 @@ lemma fib_assignment : (wrappedRecursiveRelation (p:=p)).finalAssignment.vars =
       .input ⟨1, 7⟩] := by
   dsimp only [wrappedRecursiveRelation, table_assignment_norm, circuit_norm, recursiveRelation,
     Gadgets.Addition32.circuit, assignU32]
-  simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
+  simp only [circuit_norm,
     Vector.mapRange_zero, Vector.mapRange_succ]
-  simp only [pure, StateT.pure, Id.run]
-  simp only [Vector.toList_mk, List.getElem_set, Vector.toList_append,
-    Vector.mapFinRange_zero, Vector.mapFinRange_succ, Vector.mapRange_zero, Vector.mapRange_succ,
-    Vector.toList_push, List.nil_append, List.append_assoc]
+  simp only [pure, StateT.pure]
+  simp only [Vector.toList_mk, Vector.toList_append,
+    List.nil_append, List.append_assoc]
   simp
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
@@ -115,7 +114,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   dsimp only [env, windowEnv]
   have h_offset : (wrappedRecursiveRelation (p:=p)).finalAssignment.offset = 24 := by
     simp only [wrappedRecursiveRelation, table_assignment_norm, circuit_norm, recursiveRelation,
-      Gadgets.Addition32.circuit, assignU32, pure, StateT.pure, Id.run]
+      Gadgets.Addition32.circuit, assignU32, pure, StateT.pure]
   simp only [h_offset]
   rw [fib_assignment]
   simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]
@@ -138,7 +137,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   obtain ⟨ hcurr_x, hcurr_y, hnext_x, hnext_y ⟩ := fib_vars curr next aux_env
   set env := windowEnv wrappedRecursiveRelation ⟨<+> +> curr +> next, rfl⟩ aux_env
   simp only [table_norm, circuit_norm, wrappedRecursiveRelation, recursiveRelation,
-    assignU32, Gadgets.Addition32.circuit, pure, StateT.pure, Id.run]
+    assignU32, Gadgets.Addition32.circuit, pure, StateT.pure]
   rintro ⟨ h_add, h_eq ⟩
   simp only [table_norm, circuit_norm, Nat.reduceAdd, zero_add] at h_add
   simp only [circuit_norm] at hnext_y

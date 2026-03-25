@@ -162,9 +162,9 @@ def formalFibTable : FormalTable (F p) RowType := {
         TableContext.empty, TableContext.offset] at ConstraintsHold
       change Circuit.ConstraintsHold.Soundness env (wrappedFibRelation .empty).2.circuit at ConstraintsHold
       simp only [wrappedFibRelation, fibRelation, table_norm, circuit_norm, table_assignment_norm,
-          copyToVar, Gadgets.Addition8.circuit, Functor.map, StateT.map] at ConstraintsHold
+          copyToVar, Gadgets.Addition8.circuit] at ConstraintsHold
       -- reduce pure to get concrete ops
-      simp only [pure, StateT.pure, Id.run] at ConstraintsHold
+      simp only [pure, StateT.pure] at ConstraintsHold
       simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
       -- substitute env lookups using the standalone lemmas
       simp only [show env.get 0 = curr.x from fibRelation_env_get0 curr next _,

@@ -206,14 +206,14 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       TableContext.empty, TableContext.offset] at constraints
     change Circuit.ConstraintsHold.Soundness env' (wrapped .empty).2.circuit at constraints
     -- Simplify the ops in constraints (env' stays opaque via set)
-    simp only [wrapped, table_norm, circuit_norm, inductiveConstraint, Functor.map, StateT.map] at constraints
+    simp only [wrapped, table_norm, circuit_norm, inductiveConstraint] at constraints
     -- Decompose constraints: step ops ∧ [witness (trivial), equality subcircuit]
     rcases Circuit.ConstraintsHold.append_soundness.mp constraints with ⟨ main_constraints, return_eq ⟩
     simp only [table_norm, circuit_norm] at return_eq
     -- Compute h_env' (same structure as old proof since wrapped ≡ old inductiveConstraint)
     have h_env' : env' = windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
     simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm, wrapped,
-      Functor.map, StateT.map, pure, StateT.pure, Id.run] at h_env'
+      pure, StateT.pure] at h_env'
     simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
       CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars] at h_env'
     set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
