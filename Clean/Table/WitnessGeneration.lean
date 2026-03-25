@@ -32,7 +32,7 @@ def buildAuxMap (as : CellAssignment W S) : Std.HashMap ℕ ℕ := Id.run do
   - According to `CellAssignment` for input cells, the input columns are assigned to
   the corresponding columns in the trace row.
 -/
-def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Array F :=
+def generateNextRow {α : Type} (tc : TableConstraint W S F α) (cur_row : Array F) : Array F :=
   let ctx := (tc .empty).2
 
   let assignment := ctx.assignment
@@ -82,8 +82,8 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
   Returns an array of rows where each subsequent row is generated using the
   table constraint's witness generators.
 -/
-def witnesses
-    (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ) : Array (Array F) := Id.run do
+def witnesses {α : Type}
+    (tc : TableConstraint W S F α) (init_row : Row F S) (n : ℕ) : Array (Array F) := Id.run do
 
   -- append auxiliary columns to the current row
   let aux_cols := Array.replicate tc.finalAssignment.numAux 0
