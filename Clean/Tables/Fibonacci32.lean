@@ -102,7 +102,7 @@ lemma fib_assignment : (wrappedRecursiveRelation (p:=p)).finalAssignment.vars =
   simp only [pure, StateT.pure]
   simp only [Vector.toList_mk, Vector.toList_append,
     List.nil_append, List.append_assoc]
-  simp
+  simp [Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := windowEnv wrappedRecursiveRelation ⟨<+> +> curr +> next, rfl⟩ aux_env;
