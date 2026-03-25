@@ -41,23 +41,18 @@ def generateNextRow {α : Type} (tc : TableConstraint W S F α) (cur_row : Array
     let aux_map := buildAuxMap assignment
   let next_row := Array.replicate cur_row.size 0
 
-  -- rules for fetching the values for expression variables
-  let env i :=
-    if h : i < assignment.offset then
-      match assignment.vars[i] with
-      | .input ⟨r, c⟩ =>
-        -- fetch input values
-          if r = 0 then cur_row[c]! else next_row[c]!
-      | .aux _ =>
-        -- assumption:
-        -- if expression var<i> corresponds to a aux type,
-        -- then the value is already allocated in aux columns of the next_row.
-        next_row[aux_map[i]!]!
-    -- todo: maybe provide Inhabited instance for Cell to remove this?
-    else panic! s!"Invalid variable index {i} in environment"
-
   -- evaluate the witness generators
   let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
+      -- env must be inside foldl to capture the updated next_row,
+      -- so that later generators see values computed by earlier ones
+      let env (i : ℕ) :=
+        if h : i < assignment.offset then
+          match assignment.vars[i] with
+          | .input ⟨r, c⟩ =>
+            if r = 0 then cur_row[c]! else next_row[c]!
+          | .aux _ =>
+            next_row[aux_map[i]!]!
+        else panic! s!"Invalid variable index {i} in environment"
       let wit := compute ⟨ env, fun _ _ => #[] ⟩
 
       -- insert the witness value to the next row

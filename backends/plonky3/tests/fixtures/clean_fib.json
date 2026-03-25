@@ -22,8 +22,8 @@
               }
             },
             "lhs": {
-              "value": 0,
-              "type": "const"
+              "index": 0,
+              "type": "pi"
             }
           }
         },
@@ -45,8 +45,8 @@
               }
             },
             "lhs": {
-              "value": 1,
-              "type": "const"
+              "index": 1,
+              "type": "pi"
             }
           }
         }
@@ -72,6 +72,9 @@
     "context": {
       "circuit": [
         {
+          "witness": 2
+        },
+        {
           "witness": 1
         },
         {
@@ -81,7 +84,7 @@
               "type": "mul",
               "rhs": {
                 "type": "var",
-                "index": 0
+                "index": 2
               },
               "lhs": {
                 "value": 2013265920,
@@ -105,7 +108,7 @@
                 "entry": [
                   {
                     "type": "var",
-                    "index": 1
+                    "index": 3
                   }
                 ]
               }
@@ -131,12 +134,12 @@
                   },
                   "lhs": {
                     "type": "var",
-                    "index": 2
+                    "index": 4
                   }
                 },
                 "lhs": {
                   "type": "var",
-                  "index": 2
+                  "index": 4
                 }
               }
             },
@@ -153,7 +156,7 @@
                     },
                     "lhs": {
                       "type": "var",
-                      "index": 2
+                      "index": 4
                     }
                   },
                   "lhs": {
@@ -167,7 +170,7 @@
                     "type": "mul",
                     "rhs": {
                       "type": "var",
-                      "index": 1
+                      "index": 3
                     },
                     "lhs": {
                       "value": 2013265920,
@@ -196,13 +199,18 @@
               }
             }
           ]
-        },
-        {
-          "witness": 2
         }
       ],
       "assignment": {
         "vars": [
+          {
+            "row": 0,
+            "column": 0
+          },
+          {
+            "row": 0,
+            "column": 1
+          },
           {
             "row": 1,
             "column": 0
@@ -214,14 +222,6 @@
           {
             "row": 1,
             "column": 2
-          },
-          {
-            "row": 1,
-            "column": 0
-          },
-          {
-            "row": 1,
-            "column": 1
           }
         ],
         "offset": 5,
