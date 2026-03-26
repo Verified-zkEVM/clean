@@ -113,7 +113,22 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
 theorem equalityConstraint.soundness_row {row : State F × Input F} {input_state : State F} {env : Environment F} :
   ConstraintHoldsOnRow (equalityConstraint Input input_state) row env
     ↔ row.1 = input_state := by
-  sorry
+  simp only [ConstraintHoldsOnRow]
+  set env' := TableConstraint.singleRowEnv (equalityConstraint Input input_state) row env
+  simp only [equalityConstraint, circuit_norm, table_norm]
+  -- goal: eval env' (varFromOffset State 0) = input_state ↔ row.1 = input_state
+  have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
+    have h_env' : env' = TableConstraint.singleRowEnv (equalityConstraint Input input_state) row env := rfl
+    simp only [TableConstraint.singleRowEnv, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
+    have hi' : i < size State + size Input := by omega
+    simp [h_env', hi, hi', Vector.getElem_mapFinRange, _root_.Row.get,
+      Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
+  have h_env : eval env' (varFromOffset State 0) = row.1 := by
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [h_env_in i hi, ProvableType.eval_varFromOffset,
+      ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
+  rw [h_env]
 
 def traceInputs {N : ℕ} (trace : TraceOfLength F (ProvablePair State Input) N) : List (Input F) :=
   trace.val.toList.map Prod.snd
