@@ -713,6 +713,16 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     TableConstraintsHold constraints trace.val env →
     Spec trace env.data
 
+  /-- the completeness states that if the assumptions hold, the spec holds, and honest-prover
+      witnesses are used, then the constraints hold. -/
+  completeness :
+    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
+    Assumption N env.data →
+    Spec trace env.data →
+    TableLocalWitnessUsed constraints trace.val env →
+    TableConstraintsHold constraints trace.val env
+    := by intros; trivial
+
   /-- this property tells us that that the number of variables contained in the `assignment` of each
       constraint is consistent with the number of variables introduced in the circuit. -/
   offset_consistent :
