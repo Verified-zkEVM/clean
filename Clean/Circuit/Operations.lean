@@ -422,6 +422,42 @@ def interactions : Operations F → List (AbstractInteraction F)
   | .subcircuit s :: ops => FlatOperation.interactions s.ops.toFlat ++ interactions ops
   | .witness _ _ :: ops | .assert _ :: ops | .lookup _ :: ops => interactions ops
 
+open Classical in
+/-- All interactions on a specific channel. -/
+noncomputable def interactionsWith (channel : RawChannel F) (ops : Operations F) :
+    List (AbstractInteraction F) :=
+  ops.interactions.filter (fun i => i.channel = channel)
+
+@[circuit_norm] lemma interactionsWith_nil (channel : RawChannel F) :
+  interactionsWith channel ([] : Operations F) = [] := rfl
+
+@[circuit_norm] lemma interactionsWith_witness (channel : RawChannel F)
+    (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  interactionsWith channel (.witness m c :: ops) = interactionsWith channel ops := rfl
+
+@[circuit_norm] lemma interactionsWith_assert (channel : RawChannel F)
+    (e : Expression F) (ops : Operations F) :
+  interactionsWith channel (.assert e :: ops) = interactionsWith channel ops := rfl
+
+@[circuit_norm] lemma interactionsWith_lookup (channel : RawChannel F)
+    (l : Lookup F) (ops : Operations F) :
+  interactionsWith channel (.lookup l :: ops) = interactionsWith channel ops := rfl
+
+open Classical in
+@[circuit_norm] lemma interactionsWith_interact (channel : RawChannel F)
+    (i : AbstractInteraction F) (ops : Operations F) :
+  interactionsWith channel (.interact i :: ops) =
+    if i.channel = channel then i :: interactionsWith channel ops else interactionsWith channel ops := by
+  by_cases h : i.channel = channel <;> simp [interactionsWith, interactions, h]
+
+open Classical in
+@[circuit_norm] lemma interactionsWith_subcircuit (channel : RawChannel F)
+    {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  interactionsWith channel (.subcircuit s :: ops) =
+    (FlatOperation.interactions s.ops.toFlat).filter (fun i => i.channel = channel) ++
+      interactionsWith channel ops := by
+  simp [interactionsWith, interactions]
+
 def shallowInteractions : Operations F → List (AbstractInteraction F)
   | [] => []
   | .interact i :: ops => i :: shallowInteractions ops
@@ -541,6 +577,11 @@ theorem interactions_append (ops1 ops2 : Operations F) :
   | nil => rfl
   | cons op ops1 ih =>
     cases op <;> simp_all only [List.cons_append, interactions, List.append_assoc]
+
+theorem interactionsWith_append {channel : RawChannel F} {ops1 ops2 : Operations F} :
+    interactionsWith channel (ops1 ++ ops2) =
+      interactionsWith channel ops1 ++ interactionsWith channel ops2 := by
+  simp [interactionsWith, interactions_append]
 
 -- Helper: a + foldl (+) 0 xs = foldl (+) a xs for InteractionDelta
 omit [Field F] in

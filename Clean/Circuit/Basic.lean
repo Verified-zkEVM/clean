@@ -454,6 +454,10 @@ def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] [DecidableEq
   Assumptions input env →
   ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
 
+structure ExposedChannel (F : Type) [Field F] where
+  channel : RawChannel F
+  interactions : List (AbstractInteraction F)
+
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
 structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
     [ProvableType Input] [ProvableType Output]
@@ -483,6 +487,13 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     := by
       simp only [circuit_norm, seval]
       try tauto -- for permuting conjunctions
+
+  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
+  exposedChannels_eq : ∀ input_var offset,
+    let ops := (elaborated.main input_var).operations offset
+    ∀ exposed ∈ exposedChannels input_var offset,
+      ops.interactionsWith exposed.channel = exposed.interactions := by
+      simp
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
@@ -679,3 +690,5 @@ lemma List.ofFn_singleton_flatten {α : Type} {m : ℕ} (f : Fin m → α) :
 lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
     (List.ofFn fun _ : Fin m => ([] : List α)).flatten = [] := by
   simp
+
+attribute [circuit_norm] forall_eq reduceIte String.reduceEq

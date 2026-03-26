@@ -54,22 +54,10 @@ def Operations.interactionValues (ops : Operations F)
 
 -- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
 open Classical in
-noncomputable def Operations.interactionsWith (channel : RawChannel F)
-    (ops : Operations F) : List (AbstractInteraction F) :=
-  ops.interactions.filter (fun i => i.channel = channel)
-
-open Classical in
 @[circuit_norm]
 noncomputable def Operations.interactionValuesWith (channel : RawChannel F)
     (ops : Operations F) (env : Environment F) : List (Interaction F) :=
   ops.interactionsWith channel |>.map (AbstractInteraction.eval env)
-
-omit [DecidableEq F] in
-@[circuit_norm]
-theorem Operations.interactionsWith_append {channel: RawChannel F} {ops1 ops2 : Operations F} :
-    interactionsWith channel (ops1 ++ ops2) =
-    interactionsWith channel ops1 ++ interactionsWith channel ops2 := by
-  simp [interactionsWith, interactions_append]
 
 omit [DecidableEq F] in open Classical in
 lemma Operations.interactionValuesWith_eq_filter {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
@@ -1277,6 +1265,17 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
 
   channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  exposedChannels
+  | (n, x, y), offset =>
+    let z : Expression (F p) := var { index := offset }
+    [ { channel := FibonacciChannel.toRaw
+      , interactions :=
+          [ (⟨ FibonacciChannel, -1, (n, x, y), true ⟩ : ChannelInteraction (F p) fieldTriple).toRaw
+          , (⟨ FibonacciChannel, 1, (n + 1, y, z), false ⟩ : ChannelInteraction (F p) fieldTriple).toRaw
+          ] } ]
+
+  exposedChannels_eq := by
+    simp only [circuit_norm, Add8Channel, FibonacciChannel]
 
   Assumptions
   | (n, x, y), _ =>
@@ -1359,7 +1358,7 @@ def fibonacciEnsemble : Ensemble (F p) fieldTriple where
 
   Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
 
-def fibonacciSoundEnsemble :=  SoundEnsemble.empty (F p) fieldTriple
+def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addTable ⟨pushBytes⟩ (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw bytesChannel_consistent
   |>.addTable ⟨add8⟩ (by simp [circuit_norm, add8]) (by simp [circuit_norm, add8])
