@@ -1267,12 +1267,8 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
   exposedChannels
   | (n, x, y), offset =>
-    let z : Expression (F p) := var { index := offset }
-    [ { channel := FibonacciChannel.toRaw
-      , interactions :=
-          [ (⟨ FibonacciChannel, -1, (n, x, y), true ⟩ : ChannelInteraction (F p) fieldTriple).toRaw
-          , (⟨ FibonacciChannel, 1, (n + 1, y, z), false ⟩ : ChannelInteraction (F p) fieldTriple).toRaw
-          ] } ]
+    let z := var ⟨ offset ⟩
+    expose FibonacciChannel [ FibonacciChannel.pulled' (n, x, y) , FibonacciChannel.pushed' (n + 1, y, z) ]
 
   exposedChannels_eq := by
     simp only [circuit_norm, Add8Channel, FibonacciChannel]

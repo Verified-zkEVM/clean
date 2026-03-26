@@ -458,6 +458,11 @@ structure ExposedChannel (F : Type) [Field F] where
   channel : RawChannel F
   interactions : List (AbstractInteraction F)
 
+@[circuit_norm]
+def expose {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (interactions : List (AbstractInteraction F)) : List (ExposedChannel F) :=
+  [{ channel, interactions }]
+
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
 structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
     [ProvableType Input] [ProvableType Output]

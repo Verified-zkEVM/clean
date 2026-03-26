@@ -111,6 +111,21 @@ lemma Channel.toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2] (channe
 def ChannelInteraction.toRaw : ChannelInteraction F Message → AbstractInteraction F
   | { channel, mult, msg, assumeGuarantees } => ⟨ channel.toRaw, mult, toElements msg, assumeGuarantees ⟩
 
+/-- Expression-level normal form for a channel interaction. -/
+def Channel.emitted' (channel : Channel F Message)
+    (mult : Expression F) (msg : Message (Expression F)) : AbstractInteraction F :=
+  ({ channel, mult, msg, assumeGuarantees := false } : ChannelInteraction F Message).toRaw
+
+/-- Convenient expression-level interaction with multiplicity `-1`. -/
+def Channel.pulled' (channel : Channel F Message)
+    (msg : Message (Expression F)) : AbstractInteraction F :=
+  ({ channel, mult := -1, msg, assumeGuarantees := true } : ChannelInteraction F Message).toRaw
+
+/-- Convenient expression-level interaction with multiplicity `1`. -/
+def Channel.pushed' (channel : Channel F Message)
+    (msg : Message (Expression F)) : AbstractInteraction F :=
+  channel.emitted' 1 msg
+
 omit [Field F] in
 @[circuit_norm]
 lemma ChannelInteraction.toRaw_channel (i : ChannelInteraction F Message) :
@@ -127,6 +142,26 @@ omit [Field F] in
 @[circuit_norm]
 lemma ChannelInteraction.toRaw_assumeGuarantees (i : ChannelInteraction F Message) :
     i.toRaw.assumeGuarantees = i.assumeGuarantees := rfl
+
+omit [Field F] in
+@[circuit_norm]
+lemma Channel.emitted'_def (channel : Channel F Message)
+    (mult : Expression F) (msg : Message (Expression F)) :
+    channel.emitted' mult msg =
+      ({ channel, mult, msg, assumeGuarantees := false } : ChannelInteraction F Message).toRaw := rfl
+
+@[circuit_norm]
+lemma Channel.pulled'_def (channel : Channel F Message)
+    (msg : Message (Expression F)) :
+    channel.pulled' msg =
+      ({ channel, mult := -1, msg, assumeGuarantees := true } : ChannelInteraction F Message).toRaw := rfl
+
+@[circuit_norm]
+lemma Channel.pushed'_def (channel : Channel F Message)
+    (msg : Message (Expression F)) :
+    channel.pushed' msg =
+      ({ channel, mult := 1, msg, assumeGuarantees := false } : ChannelInteraction F Message).toRaw := by
+  simp [Channel.pushed', Channel.emitted']
 
 def Channel.interactions (env : Environment F) (channel : Channel F Message) :
     List (F × Message F) :=
