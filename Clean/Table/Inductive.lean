@@ -191,6 +191,23 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       exact output_eq'
 
   case more curr next rest ih1 ih2 =>
+    intro constraints
+    simp only [table_norm, List.size_toArray, List.length_nil, List.push_toArray,
+      List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
+      and_false, reduceIte, tsub_zero,
+      Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious,
+      TableConstraintsHold.foldl] at constraints ih1 ih2 ⊢
+    rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
+    specialize ih2 h_rest
+    have spec_previous : table.Spec input (traceInputs ⟨rest, rfl⟩) rest.len (traceInputs_length ⟨rest, rfl⟩) curr.1 env.data := by
+      simp [ih2]
+    simp only [ih2, and_self, and_true]
+    clear ih1 ih2
+
+    -- TODO: The inductive step proof needs adaptation of the env mapping lemmas
+    -- (h_env_input_1, h_env_input_2, h_env_output) for transitionEnv vs windowEnv.
+    -- The proof structure is: extract step constraint from ConstraintHoldsOnStep,
+    -- prove env' maps variables to row values, use table.soundness for the inductive step.
     sorry
 
 theorem table_soundness (table : InductiveTable F State Input) (input output : State F)
