@@ -283,10 +283,14 @@ end CellAssignment
 /--
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
   offset, and the current assignment of the variables to the cells in the trace.
+
+  The `offset` field tracks the next free variable index. It normally equals `circuit.localLength`,
+  but can diverge when using `getRowAssignOnly` (which advances the offset without adding witness operations).
 -/
 structure TableContext (W : ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   circuit : Operations F
   assignment : CellAssignment W S
+  offset : ℕ := circuit.localLength
 deriving Repr
 
 variable [Field F] {α : Type}
@@ -296,9 +300,7 @@ namespace TableContext
 def empty : TableContext W S F where
   circuit := []
   assignment := .empty W
-
-@[reducible, table_norm, table_assignment_norm]
-def offset (table : TableContext W S F) : ℕ := table.circuit.localLength
+  offset := 0
 end TableContext
 
 @[reducible, table_norm, table_assignment_norm]
@@ -335,16 +337,17 @@ all circuit operations inside a table constraint.
 @[reducible, table_norm, table_assignment_norm]
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
-    let (a, ops) := circuit ctx.circuit.localLength
+    let (a, ops) := circuit ctx.offset
     (a, {
       circuit := ctx.circuit ++ ops,
-      assignment := assignmentFromCircuit ctx.assignment ops
+      assignment := assignmentFromCircuit ctx.assignment ops,
+      offset := ctx.offset + Operations.localLength ops
     })
 
 namespace TableConstraint
 @[reducible, table_norm, table_assignment_norm]
 def finalOffset (table : TableConstraint W S F α) : ℕ :=
-  table .empty |>.snd.circuit.localLength
+  table .empty |>.snd.offset
 
 @[table_norm]
 def operations (table : TableConstraint W S F α) : Operations F :=
@@ -382,6 +385,37 @@ def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   let env := windowEnv table window aux_env
   Circuit.ConstraintsHold.Soundness env table.operations
 
+/--
+  Like `windowEnv` but takes two separate rows instead of a `TraceOfLength F S 2` window.
+  Used for `everyRowExceptLast` constraints where the current row is known from the previous step.
+-/
+def transitionEnv (table : TableConstraint 2 S F Unit)
+    (curr next : Row F S) (aux_env : Environment F) : Environment F :=
+  let assignment := table.finalAssignment
+  { get i :=
+      if hi : i < assignment.offset then
+        match assignment.vars[i] with
+        | .input ⟨row, col⟩ =>
+          if row.val = 0 then curr.get col else next.get col
+        | .aux k => aux_env.get k
+      else aux_env.get (i + assignment.aux_length)
+    data := aux_env.data }
+
+/--
+  Like `windowEnv` but takes a single row instead of a `TraceOfLength F S 1` window.
+  Used for `everyRow` and `boundary` constraints.
+-/
+def singleRowEnv (table : TableConstraint 1 S F Unit)
+    (row : Row F S) (aux_env : Environment F) : Environment F :=
+  let assignment := table.finalAssignment
+  { get i :=
+      if hi : i < assignment.offset then
+        match assignment.vars[i] with
+        | .input ⟨_, col⟩ => row.get col
+        | .aux k => aux_env.get k
+      else aux_env.get (i + assignment.aux_length)
+    data := aux_env.data }
+
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
@@ -394,7 +428,8 @@ def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
       circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange _ fun i => env.get (ctx.offset + i)],
-      assignment := ctx.assignment.pushRow row
+      assignment := ctx.assignment.pushRow row,
+      offset := ctx.offset + size S
     }
     (varFromOffset S ctx.offset, ctx')
 
@@ -409,6 +444,22 @@ def getCurrRow : TableConstraint W S F (Var S F) := getRow 0
 -/
 @[table_norm, table_assignment_norm]
 def getNextRow : TableConstraint W S F (Var S F) := getRow 1
+
+/--
+  Like `getRow`, but only assigns variable indices and updates the `CellAssignment` without
+  adding witness operations to the circuit. Used in `everyRowExceptLast` constraints where
+  the current row variables are already known (from the previous step's output), so
+  re-witnessing them would be redundant.
+-/
+@[table_norm, table_assignment_norm]
+def getRowAssignOnly (row : Fin W) : TableConstraint W S F (Var S F) :=
+  modifyGet fun ctx =>
+    let ctx' : TableContext W S F := {
+      circuit := ctx.circuit,
+      assignment := ctx.assignment.pushRow row,
+      offset := ctx.offset + size S
+    }
+    (varFromOffset S ctx.offset, ctx')
 
 @[table_norm, table_assignment_norm]
 def assignVar (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
@@ -458,6 +509,31 @@ def ConstraintsHoldOnWindowChained [ProvableType S] (f : Var S F → TableConstr
     (window : TraceOfLength F S 2) (aux_env : Environment F) : Prop :=
   let wrapped : TableConstraint 2 S F Unit := getCurrRow >>= fun curr => f curr >>= fun _ => pure ()
   wrapped.ConstraintsHoldOnWindow window aux_env
+
+/--
+  Check that a transition constraint holds between two rows, without redundant witnessing of the
+  current row. The constraint `f` receives variables for the current row (assigned via `getRowAssignOnly`)
+  and may internally witness the next row and run step circuit operations.
+
+  Unlike `ConstraintsHoldOnWindowChained`, this does not use `getCurrRow` (which introduces
+  redundant witness operations). Instead, `getRowAssignOnly` assigns variable indices to the
+  current row cells without adding witnesses to the circuit.
+-/
+@[table_norm]
+def ConstraintHoldsOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
+    (curr next : Row F S) (aux_env : Environment F) : Prop :=
+  let wrapped : TableConstraint 2 S F Unit := TableConstraint.getRowAssignOnly 0 >>= fun vars => f vars >>= fun _ => pure ()
+  let env := wrapped.transitionEnv curr next aux_env
+  Circuit.ConstraintsHold.Soundness env wrapped.operations
+
+/--
+  Check that a single-row constraint holds on a given row.
+-/
+@[table_norm]
+def ConstraintHoldsOnRow (c : SingleRowConstraint S F)
+    (row : Row F S) (aux_env : Environment F) : Prop :=
+  let env := c.singleRowEnv row aux_env
+  Circuit.ConstraintsHold.Soundness env c.operations
 
 -- specify a row, either counting from the start or from the end of the trace.
 inductive RowIndex where
