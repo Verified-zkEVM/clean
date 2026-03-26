@@ -640,6 +640,61 @@ def TableConstraintsHold (constraints : List (TableOperation S F))
     -- if the trace is empty, we are done
     | <+>, _ => True
 
+/--
+  Check that honest-prover witnesses are used for a transition constraint step.
+  Parallel to `ConstraintHoldsOnStep` but checking `UsesLocalWitnessesCompleteness`.
+-/
+@[table_norm]
+def WitnessUsedOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
+    (curr next : Row F S) (aux_env : Environment F) : Prop :=
+  let wrapped : TableConstraint 2 S F Unit := TableConstraint.getRowAssignOnly 0 >>= fun vars => f vars >>= fun _ => pure ()
+  let env := wrapped.transitionEnv curr next aux_env
+  env.UsesLocalWitnessesCompleteness 0 wrapped.operations.toList
+
+/--
+  Check that honest-prover witnesses are used for a single-row constraint.
+  Parallel to `ConstraintHoldsOnRow` but checking `UsesLocalWitnessesCompleteness`.
+-/
+@[table_norm]
+def WitnessUsedOnRow (c : SingleRowConstraint S F)
+    (row : Row F S) (aux_env : Environment F) : Prop :=
+  let env := c.singleRowEnv row aux_env
+  env.UsesLocalWitnessesCompleteness 0 c.operations.toList
+
+/--
+  The table-level analog of `UsesLocalWitnessesCompleteness`: checks that the witness
+  generators in each constraint produce values consistent with the trace at every row.
+
+  This has the same foldl structure as `TableConstraintsHold`, ensuring the two definitions
+  can be used together in simultaneous induction proofs.
+-/
+@[table_norm]
+def TableLocalWitnessUsed (constraints : List (TableOperation S F))
+  (trace : Trace F S) (env : TableEnvironments F) : Prop :=
+  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env.toEnvironment i))
+  foldl trace.len constraints_and_envs trace constraints_and_envs
+  where
+  @[table_norm]
+  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
+    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
+    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> curr +> next) rest
+        WitnessUsedOnStep constraint curr next (env (trace.len + 1)) ∧ others
+    | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> row) rest
+        let targetIdx := match idx with
+          | .fromStart i => i
+          | .fromEnd i => N - 1 - i
+        (if trace.len = targetIdx then WitnessUsedOnRow constraint row (env trace.len) else True) ∧ others
+    | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> row) rest
+        WitnessUsedOnRow constraint row (env trace.len) ∧ others
+    | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
+        foldl N cs trace rest
+    | trace +> _, [] =>
+        foldl N cs trace cs
+    | <+>, _ => True
+
 structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] where
   /-- list of constraints that are applied over the table -/
   constraints : List (TableOperation S F)
