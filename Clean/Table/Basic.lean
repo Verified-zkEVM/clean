@@ -699,8 +699,12 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   /-- list of constraints that are applied over the table -/
   constraints : List (TableOperation S F)
 
-  /-- optional assumption on the table length and other tables in the environment -/
+  /-- assumption for soundness (verifier side): conditions on the trace length and public data -/
   Assumption : ℕ → ProverData F → Prop := fun _ _ => True
+
+  /-- assumption for completeness (prover side): conditions on the trace and prover data
+      that an honest prover satisfies (e.g., per-row input validity, initial state properties). -/
+  HonestProverAssumption : {N : ℕ} → TraceOfLength F S N → ProverData F → Prop := fun _ _ => True
 
   /-- specification for the table -/
   Spec {N : ℕ}  : TraceOfLength F S N → ProverData F → Prop
@@ -713,14 +717,13 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     TableConstraintsHold constraints trace.val env →
     Spec trace env.data
 
-  /-- the completeness states that if the assumptions hold and honest-prover
-      witnesses are used, then the constraints hold. The witness operations
-      define how to generate auxiliary values; honest execution of these
-      generators (captured by `TableLocalWitnessUsed`) is sufficient to
-      satisfy all constraints. -/
+  /-- the completeness states that if the honest-prover assumptions hold and honest-prover
+      witnesses are used, then the constraints hold. The witness operations define how to
+      generate auxiliary values; honest execution of these generators (captured by
+      `TableLocalWitnessUsed`) is sufficient to satisfy all constraints. -/
   completeness :
     ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
-    Assumption N env.data →
+    HonestProverAssumption trace env.data →
     TableLocalWitnessUsed constraints trace.val env →
     TableConstraintsHold constraints trace.val env
 

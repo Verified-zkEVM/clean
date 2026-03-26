@@ -222,6 +222,9 @@ theorem table_soundness (table : InductiveTable F State Input) (input output : S
 def toFormal (table : InductiveTable F State Input) (input output : State F) : FormalTable F (ProvablePair State Input) where
   constraints := table.tableConstraints input output
   Assumption N env := N > 0 ∧ table.Spec input [] 0 rfl input env
+  HonestProverAssumption trace env :=
+    table.InitialStateAssumptions input env ∧
+    trace.ForAllRowsOfTraceWithIndex (fun row i => table.InputAssumptions i row.2 env)
   Spec {N} trace env := table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output env
 
   soundness N trace env assumption constraints :=
