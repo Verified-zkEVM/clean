@@ -151,7 +151,7 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 
 ### Working on Lean Proofs
 
-When writing or debugging Lean proofs, the **lean-mcp skill** in `skills/lean-mcp/SKILL.md` is useful.
+When writing or debugging Lean proofs, the **lean-mcp skill** in `./skills/lean-mcp/SKILL.md` is useful.
 
 Practical recommendations:
 
@@ -160,7 +160,7 @@ Practical recommendations:
 - When iterating on a proof hole, inspect exact goal state with `lean_goal` (lean-mcp skill) at the relevant line number.
 - Prefer robust simplification, and use the library's custom `circuit_norm` simp set.
   - start with `simp_all only [circuit_norm]` (or `simp_all [circuit_norm]` when closing a goal),
-  - avoid brittle `exact h.1.2` style proofs unless the shape is stable. `simp_all` can do the same work of using the right assumptions, in a more robust way.
+  - avoid brittle `exact h.1.2` style proofs. `simp_all` can do the same work of using the right assumptions, in a more robust way.
   - do not use `simpa`, which is a closing tactic and will often fail. use `simp` and `simp_all`, which can advance the goal state without failing.
 - Definitional equality is a **superpower** to perform otherwise tricky unifications. The following tactics force Lean to look past definitions and elaborate as far as possible:
   - try `rfl` when the goal is an equality

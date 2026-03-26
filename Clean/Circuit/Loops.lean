@@ -703,6 +703,8 @@ lemma foldlRange.usesLocalWitnesses :
 
 end foldlRange
 
+-- TODO all of these localAdds theorems should be refactored to theorems about Operations.interactions
+
 @[circuit_norm]
 theorem localAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
