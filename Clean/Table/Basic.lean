@@ -583,59 +583,53 @@ def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (con
   { get := envs.witnessEnvs constraint row,
     data := envs.data }
 /--
-  The constraints hold over a trace if the hold individually in a suitable environment, where the
+  The constraints hold over a trace if they hold individually in a suitable environment, where the
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
-  is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
+  is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then `env x = y`.
+
+  The trace is processed row by row: for each row, all constraints are checked before moving to the next.
+  Transition constraints (`everyRowExceptLast`) use `ConstraintHoldsOnStep` which does not re-witness
+  the current row, ensuring each row is witnessed exactly once globally.
 -/
 @[table_norm]
-def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
-  (trace : TraceOfLength F S N) (env : TableEnvironments F) : Prop :=
+def TableConstraintsHold (constraints : List (TableOperation S F))
+  (trace : Trace F S) (env : TableEnvironments F) : Prop :=
   let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env.toEnvironment i))
-  foldl N constraints_and_envs trace.val constraints_and_envs
+  foldl trace.len constraints_and_envs trace constraints_and_envs
   where
   /--
-    The foldl function applies the constraints to the trace inductively on the trace
+    The foldl function applies the constraints to the trace inductively on the trace.
 
-    We want to write something like:
-    ```
-    for row in trace:
-      for constraint in constraints:
-        apply constraint to row
-    ```
-    in this exact order, so that the row-inductive structure is at the top-level.
-
-    We do double induction: first on the trace, then on the constraints: we apply every constraint to the current row, and
-    then recurse on the rest of the trace.
-    `cs` is the list of constraints that we have to apply and it is never changed during the induction
+    We do double induction: first on the trace, then on the constraints: we apply every constraint
+    to the current row, and then recurse on the rest of the trace.
+    `cs` is the full list of constraints (never changed during the induction).
     `cs_iterator` is walked inductively for every row.
-    Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
+    Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial `cs`.
   -/
   @[table_norm]
   foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
     Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
-    -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
+    -- if the trace has at least two rows and the constraint is a "every row except last" constraint,
+    -- apply the constraint using ConstraintHoldsOnStep (no redundant getCurrRow witness)
     | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> curr +> next) rest
-        let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
-        ConstraintsHoldOnWindowChained constraint window (env (trace.len + 1)) ∧ others
+        ConstraintHoldsOnStep constraint curr next (env (trace.len + 1)) ∧ others
 
-    -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
-    -- index is the same as the length of the remaining trace
+    -- if the trace has at least one row and the constraint is a boundary constraint, we apply
+    -- the constraint if the index matches the current row position
     | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
-        let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
-        (if trace.len = targetIdx then constraint.ConstraintsHoldOnWindow window (env trace.len) else True) ∧ others
+        (if trace.len = targetIdx then ConstraintHoldsOnRow constraint row (env trace.len) else True) ∧ others
 
-    -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
+    -- if the trace has at least one row and the constraint is a "every row" constraint
     | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
-        let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        constraint.ConstraintsHoldOnWindow window (env trace.len) ∧ others
+        ConstraintHoldsOnRow constraint row (env trace.len) ∧ others
 
-    -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
+    -- if the trace has not enough rows for the "every row except last" constraint, we skip it
     | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
         foldl N cs trace rest
 
@@ -661,7 +655,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   soundness :
     ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
     Assumption N env.data →
-    TableConstraintsHold constraints trace env →
+    TableConstraintsHold constraints trace.val env →
     Spec trace env.data
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
