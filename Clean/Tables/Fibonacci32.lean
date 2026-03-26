@@ -202,7 +202,7 @@ def formalFib32Table : FormalTable (F p) RowType := {
     sorry
 
   completeness := by
-    intro N trace env _ _ _
+    intro N trace env _ _
     sorry
 }
 

@@ -713,12 +713,14 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     TableConstraintsHold constraints trace.val env →
     Spec trace env.data
 
-  /-- the completeness states that if the assumptions hold, the spec holds, and honest-prover
-      witnesses are used, then the constraints hold. -/
+  /-- the completeness states that if the assumptions hold and honest-prover
+      witnesses are used, then the constraints hold. The witness operations
+      define how to generate auxiliary values; honest execution of these
+      generators (captured by `TableLocalWitnessUsed`) is sufficient to
+      satisfy all constraints. -/
   completeness :
     ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
     Assumption N env.data →
-    Spec trace env.data →
     TableLocalWitnessUsed constraints trace.val env →
     TableConstraintsHold constraints trace.val env
 

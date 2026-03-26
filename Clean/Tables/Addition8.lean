@@ -41,7 +41,7 @@ def formalAdd8Table : FormalTable (F p) RowType := {
     intro N trace envs _
     sorry,
   completeness := by
-    intro N trace env _ _ _
+    intro N trace env _ _
     sorry
 }
 

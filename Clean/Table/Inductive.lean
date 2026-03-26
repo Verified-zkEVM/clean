@@ -228,7 +228,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
     table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
 
   completeness := by
-    intro N trace env _ _ _
+    intro N trace env _ _
     sorry
 
   offset_consistent := by
