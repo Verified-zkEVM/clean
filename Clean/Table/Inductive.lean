@@ -144,7 +144,54 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
   TableConstraintsHold (table.tableConstraints input output) trace.val env →
     trace.ForAllRowsWithPrevious (fun row i rest => table.Spec input (traceInputs rest) i (traceInputs_length rest) row.1 env.data)
     ∧ trace.lastRow.1 = output := by
-  sorry
+  intro input_spec
+
+  -- Destructure TraceOfLength and generalize on the foldl's N parameter
+  rcases trace with ⟨ trace, h_trace ⟩
+  suffices goal : ∀ M, TableConstraintsHold.foldl M
+      (tableConstraints table input output |>.mapIdx fun i cs => (cs, env.toEnvironment i))
+      trace
+      (tableConstraints table input output |>.mapIdx fun i cs => (cs, env.toEnvironment i)) →
+    trace.ForAllRowsWithPrevious (fun row rest =>
+      table.Spec input (traceInputs ⟨ rest, rfl ⟩) rest.len (traceInputs_length ⟨ rest, rfl ⟩) row.1 env.data)
+    ∧ (∀ (_ : trace.len = M) (h_pos : trace.len > 0), (trace.lastRow h_pos).1 = output) by
+      intro constraints
+      simp only [TableConstraintsHold, table_norm, tableConstraints] at constraints
+      have goal' := goal trace.len constraints
+      exact ⟨ goal'.left, goal'.right rfl (h_trace ▸ N.pos) ⟩
+
+  intro M
+  clear h_trace
+  simp only [table_norm, tableConstraints]
+  induction trace using Trace.every_row_two_rows_induction
+
+  case zero =>
+    intro constraints
+    simp only [Trace.ForAllRowsWithPrevious, true_and]
+    intros _ h_pos; exact absurd h_pos (by simp [Trace.len])
+
+  case one first_row =>
+    intro constraints
+    simp only [table_norm,
+      List.size_toArray, List.length_nil, List.push_toArray, List.nil_append,
+      List.length_cons, zero_add, List.cons_append, reduceIte, and_true,
+      TableConstraintsHold.foldl] at constraints
+    obtain ⟨ input_eq, output_eq ⟩ := constraints
+    -- Convert the unfolded form back to ConstraintHoldsOnRow
+    have input_eq' : ConstraintHoldsOnRow (equalityConstraint Input input) first_row (env.toEnvironment 1 0) := input_eq
+    rw [equalityConstraint.soundness_row] at input_eq'
+    simp only [table_norm, and_true, Trace.ForAllRowsWithPrevious]
+    constructor
+    · rw [input_eq']; exact input_spec
+    · intro h_len _
+      have output_eq' : ConstraintHoldsOnRow (equalityConstraint Input output) first_row (env.toEnvironment 2 0) := by
+        simp only [Nat.sub_zero] at output_eq
+        rwa [if_pos (by omega : 0 = M - 1)] at output_eq
+      rw [equalityConstraint.soundness_row] at output_eq'
+      exact output_eq'
+
+  case more curr next rest ih1 ih2 =>
+    sorry
 
 theorem table_soundness (table : InductiveTable F State Input) (input output : State F)
   (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : TableEnvironments F) :
