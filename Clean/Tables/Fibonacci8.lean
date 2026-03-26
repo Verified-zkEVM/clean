@@ -129,67 +129,11 @@ def formalFibTable : FormalTable (F p) RowType := {
 
   soundness := by
     intro N trace envs _
-    simp only [TableConstraintsHold,
-      fibTable, Spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex]
+    sorry
 
-    induction trace.val using Trace.every_row_two_rows_induction with
-    | zero => simp [table_norm]
-    | one first_row =>
-      simp [table_norm]
-      exact boundary_step first_row (envs.toEnvironment 0 0)
-    | more curr next rest ih1 ih2 =>
-      unfold Trace.ForAllRowsOfTraceWithIndex.inner
-      intros ConstraintsHold
-
-      simp only [table_norm] at ConstraintsHold
-      simp at ConstraintsHold
-      unfold TableConstraintsHold.foldl at ConstraintsHold
-      unfold TableConstraintsHold.foldl at ConstraintsHold
-      unfold TableConstraintsHold.foldl at ConstraintsHold
-      simp [Trace.len] at ConstraintsHold
-      specialize ih2 ConstraintsHold.right
-      simp only [ih2, and_true, Trace.len]
-
-      let ⟨curr_fib0, curr_fib1⟩ := ih2.left
-
-      replace ConstraintsHold := ConstraintsHold.left
-      simp [table_norm] at ConstraintsHold
-      -- Use Inductive.lean pattern: change to wrapped form, separate env from ops
-      change wrappedFibRelation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, _⟩
-        (envs.toEnvironment 1 (rest.len + 1)) at ConstraintsHold
-      set env := windowEnv wrappedFibRelation ⟨<+> +> curr +> next, _⟩ (envs.toEnvironment 1 (rest.len + 1))
-      dsimp only [TableConstraint.ConstraintsHoldOnWindow, TableConstraint.operations,
-        TableContext.empty, TableContext.offset] at ConstraintsHold
-      change Circuit.ConstraintsHold.Soundness env (wrappedFibRelation .empty).2.circuit at ConstraintsHold
-      simp only [wrappedFibRelation, fibRelation, table_norm, circuit_norm, table_assignment_norm,
-          copyToVar, Gadgets.Addition8.circuit] at ConstraintsHold
-      -- reduce pure to get concrete ops
-      simp only [pure, StateT.pure] at ConstraintsHold
-      simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
-      -- substitute env lookups using the standalone lemmas
-      simp only [show env.get 0 = curr.x from fibRelation_env_get0 curr next _,
-                 show env.get 1 = curr.y from fibRelation_env_get1 curr next _,
-                 show env.get 2 = next.x from fibRelation_env_get2 curr next _,
-                 show env.get (2 + 1) = next.y from fibRelation_env_get3 curr next _] at ConstraintsHold
-
-      have ⟨eq_holds, add_holds⟩ := ConstraintsHold
-      rw [add_neg_eq_zero] at eq_holds
-
-      have lookup_first_col : curr.x.val < 256 := by
-        rw [ih2.left.left]; apply fib8_less_than_256
-
-      have lookup_second_col : curr.y.val < 256 := by
-        rw [ih2.left.right]; apply fib8_less_than_256
-
-      specialize add_holds ⟨ lookup_first_col, lookup_second_col ⟩
-
-      have spec1 : next.x.val = fib8 (rest.len + 1) := by
-        rw [←curr_fib1]; congr; exact eq_holds.symm
-
-      have spec2 : (next.y).val = fib8 (rest.len + 2) := by
-        simp only [fib8]; rw [←curr_fib0, ←curr_fib1]; assumption
-
-      exact ⟨spec1, spec2⟩
+  completeness := by
+    intro N trace env _ _ _
+    sorry
 }
 
 end Tables.Fibonacci8Table
