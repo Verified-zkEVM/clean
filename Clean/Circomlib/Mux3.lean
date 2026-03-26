@@ -103,8 +103,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> split <;> decide
       output[i] = (c[i])[idx]
 
-  localAdds_eq input env offset := by simp only [circuit_norm, main]
-
   soundness := by
     simp only [circuit_norm, main]
     intro offset env input_var input h_input h_assumptions h_output
@@ -211,9 +209,6 @@ def circuit : FormalCircuit (F p) Inputs field where
       simp only [idx, s0, s1, s2]
       split <;> split <;> split <;> decide
     output = c[idx]
-
-  localAdds_eq input env offset := by
-    simp only [main, MultiMux3.circuit, circuit_norm, Operations.localAdds]
 
   soundness := by
     simp only [circuit_norm, main]

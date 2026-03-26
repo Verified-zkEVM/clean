@@ -34,8 +34,6 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main
   localLength _ := 4
-  localAdds_eq _ _ _ := by
-    simp [main, circuit_norm, Operations.localAdds]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start

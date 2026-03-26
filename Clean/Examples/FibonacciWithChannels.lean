@@ -394,7 +394,6 @@ def FormalCircuitWithInteractions.empty (F : Type) [Field F] [DecidableEq F]
   main _ := return
   localLength _ := 0
   output _ _ := ()
-  localAdds | _, _, _ => []
   Assumptions | _, _ => True
   Spec _ _ _ := True
   soundness := by circuit_proof_start
@@ -1101,16 +1100,10 @@ def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
   localLength_eq := by simp +arith only [circuit_norm]
   output _ _ := ()
 
-  localAdds
-  | multiplicities, _, _ =>
-    (List.finRange 256).flatMap fun ⟨ i, _ ⟩ =>
-      BytesChannel.emitted multiplicities[i] i
-
   Assumptions | multiplicities, _ => True
   Spec _ _ _ := True
 
   -- TODO need better tools for finite range foreach, but probably this shouldn't be a circuit anyway
-  localAdds_eq := by sorry
   soundness := by sorry
   completeness := by sorry
 
@@ -1153,10 +1146,6 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
 
   localLength _ := 1
   output _ _ := ()
-
-  localAdds
-  | { x, y, z, m }, _, _ =>
-    BytesChannel.pulled z + Add8Channel.emitted m (x, y, z)
 
   -- TODO make coercion work without .toRaw
   channelsWithGuarantees := [ BytesChannel.toRaw ]
@@ -1256,13 +1245,6 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   localLength _ := 1
   output _ _ := ()
 
-  localAdds
-  | (n, x, y), i₀, env =>
-    let z := env.get i₀;
-    FibonacciChannel.pulled (n, x, y) +
-    Add8Channel.pulled (x, y, z) +
-    FibonacciChannel.pushed (n + 1, y, z)
-
   channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
   exposedChannels
@@ -1316,10 +1298,6 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
 
   localLength _ := 0
   output _ _ := ()
-  localAdds
-  | (n, x, y), _, _ =>
-    FibonacciChannel.pushed (0, 0, 1) +
-    FibonacciChannel.pulled (n, x, y)
 
   channelsWithGuarantees := [ FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]

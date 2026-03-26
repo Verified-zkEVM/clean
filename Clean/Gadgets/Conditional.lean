@@ -62,7 +62,6 @@ instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
   localLength _ := 0
   output
   | { selector, ifTrue, ifFalse }, _ => output selector ifTrue ifFalse
-  localAdds_eq _ _ _ := by simp [main, circuit_norm]
 
 omit [DecidableEq F] in
 theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by

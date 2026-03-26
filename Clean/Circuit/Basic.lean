@@ -260,15 +260,6 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
   output_eq : ∀ input offset, (main input).output offset = output input offset
     := by intros; rfl
 
-  /-- compute local interaction delta from operations (defaults to empty for circuits that don't change interactions) -/
-  localAdds : Input F → ℕ → Environment F → InteractionDelta F
-    := fun _ _ _ => 0
-
-  /-- correctness of `localAdds` (up to semantic equivalence via toFinsupp) -/
-  localAdds_eq : ∀ input offset env,
-    ((main input |>.operations offset).localAdds env).toFinsupp = (localAdds (eval env input) offset env).toFinsupp
-    := by intros; simp only [circuit_norm, ←add_assoc]
-
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
     := by intros; and_intros <;> (
@@ -276,7 +267,7 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
       try first | ac_rfl | trivial
     )
 
-attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output ElaboratedCircuit.localAdds
+attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 @[circuit_norm]
 def Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)

@@ -45,7 +45,6 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   output _ _ := ()
 
   localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
-  localAdds_eq := by intro _ _ _; simp only [main_localAdds, InteractionDelta.toFinsupp]
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
 @[simps! (attr := circuit_norm) (config := {isSimp := false})]
@@ -120,6 +119,14 @@ theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environme
 theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
+
+@[circuit_norm]
+theorem localAdds (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).localAdds env = 0 := by
+  rw [FormalAssertion.toSubcircuit]
+  dsimp
+  rw [Operations.toNested_toFlat, FlatOperation.localAdds_toFlat]
+  exact main_localAdds (input := (x, y)) env n
 
 end Equality
 end Gadgets

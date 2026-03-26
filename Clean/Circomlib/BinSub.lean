@@ -299,8 +299,6 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] =
           fieldFromBits output + aux * (2^n : F p)
 
-  localAdds_eq _ _ _ := by simp only [circuit_norm, main]
-
   soundness := by
     circuit_proof_start
 

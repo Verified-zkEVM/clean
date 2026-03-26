@@ -71,9 +71,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
-  localAdds_eq input env offset := by
-    simp only [circuit_norm, main]
-
   soundness := by
     simp only [circuit_norm, main]
     intro offset env input_var input h_input h_assumptions h_output
@@ -108,12 +105,12 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         -- When s = 0
         rw [h0]
         simp only [mul_zero, circuit_norm]
-        norm_num
+        try norm_num
       | inr h1 =>
         -- When s = 1
         rw [h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
-        norm_num
+        try norm_num
 
   completeness := by
     circuit_proof_start
@@ -183,9 +180,6 @@ def circuit : FormalCircuit (F p) Inputs field where
   Spec input output :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
-
-  localAdds_eq input env offset := by
-    simp only [circuit_norm, main]
 
   soundness := by
     simp only [circuit_norm, main]

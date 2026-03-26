@@ -72,7 +72,6 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
   main
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-  localAdds_eq _ _ _ := by simp only [main, circuit_norm]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
     omega
@@ -124,7 +123,6 @@ def circuit : FormalAssertion (F p) BlockInput where
   main
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-  localAdds_eq _ _ _ := by simp only [main, circuit_norm]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   Assumptions _ := True

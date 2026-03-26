@@ -47,8 +47,6 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength input := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).localLength input
   output := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).output
-  localAdds_eq _ _ _ := by simp only [circuit_norm, main]
-
   Assumptions input :=
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]
