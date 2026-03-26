@@ -721,7 +721,6 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     Spec trace env.data →
     TableLocalWitnessUsed constraints trace.val env →
     TableConstraintsHold constraints trace.val env
-    := by intros; trivial
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
       constraint is consistent with the number of variables introduced in the circuit. -/
