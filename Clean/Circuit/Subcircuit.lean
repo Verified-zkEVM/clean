@@ -181,7 +181,6 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
-    localAdds env := FlatOperation.localAdds env nestedOps.toFlat
 
     imply_soundness := by
       intro env h_constraints h_guarantees
@@ -198,9 +197,6 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       rw [ops.toNested_toFlat, ←circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
 
-    localAdds_eq := by
-      intro env
-      rfl
     guarantees_iff := sorry
     requirements_iff := sorry
   }
@@ -220,7 +216,6 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
     Completeness env := circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var),
     UsesLocalWitnesses _ := True,
     localLength := circuit.localLength input_var
-    localAdds env := FlatOperation.localAdds env nestedOps.toFlat
 
     imply_soundness := by
       -- we are given an environment where the constraints hold, and can assume the assumptions are true
@@ -272,9 +267,6 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
 
-    localAdds_eq := by
-      intro env
-      rfl
     guarantees_iff := sorry
     requirements_iff := sorry
   }
@@ -327,7 +319,6 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) env.data →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data,
     localLength := circuit.localLength input_var
-    localAdds env := FlatOperation.localAdds env nestedOps.toFlat
 
     imply_soundness := by
       intro env h_constraints h_guarantees
@@ -342,9 +333,6 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
 
-    localAdds_eq := by
-      intro env
-      rfl
     guarantees_iff := sorry
     requirements_iff := sorry
   }
@@ -394,7 +382,6 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) env →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env,
     localLength := circuit.localLength input_var
-    localAdds env := FlatOperation.localAdds env nestedOps.toFlat
 
     imply_soundness := by
       intro env h_constraints h_guarantees
@@ -408,10 +395,6 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
-    localAdds_eq := by
-      intro env
-      rfl
-
     channelsWithGuarantees := circuit.channelsWithGuarantees
     channelsWithRequirements := circuit.channelsWithRequirements
 

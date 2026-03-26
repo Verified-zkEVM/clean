@@ -233,6 +233,9 @@ def localAdds (env : Environment F) : List (FlatOperation F) → InteractionDelt
   | .interact i :: ops => i.eval' env :: localAdds env ops
 end FlatOperation
 
+def NestedOperations.localAdds (env : Environment F) (ops : NestedOperations F) : InteractionDelta F :=
+  FlatOperation.localAdds env ops.toFlat
+
 export FlatOperation (ConstraintsHoldFlat)
 
 -- TODO witness input here, and localWitnesses, should be arrays not vectors
@@ -263,8 +266,6 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- even though it could be derived from the operations
   localLength : ℕ
 
-  localAdds : Environment F → InteractionDelta F := fun _ => 0
-
   -- `Soundness` and local requirements need to follow from constraints and guarantees.
   imply_soundness : ∀ env,
     ConstraintsHoldFlat env ops.toFlat →
@@ -280,9 +281,6 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops.toFlat
-
-  -- `localAdds` must be consistent with the operations
-  localAdds_eq : ∀ env, localAdds env = FlatOperation.localAdds env ops.toFlat
 
     -- expose the channel guarantees and requirements, for end-to-end proofs
   channelsWithGuarantees : List (RawChannel F) := []
@@ -539,7 +537,7 @@ def localAdds (env : Environment F) : Operations F → InteractionDelta F
   | .assert _ :: ops => localAdds env ops
   | .lookup _ :: ops => localAdds env ops
   | .interact i :: ops => .single (i.eval' env) + localAdds env ops
-  | .subcircuit s :: ops => s.localAdds env + localAdds env ops
+  | .subcircuit s :: ops => s.ops.localAdds env + localAdds env ops
 
 -- TODO move all this to a theorems/lemmas file
 
@@ -560,7 +558,7 @@ theorem localAdds_interact (env : Environment F) (i : AbstractInteraction F) (op
     localAdds env (.interact i :: ops) = .single (i.eval' env) + localAdds env ops := rfl
 @[circuit_norm]
 theorem localAdds_subcircuit (env : Environment F) {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
-    localAdds env (.subcircuit s :: ops) = s.localAdds env + localAdds env ops := rfl
+    localAdds env (.subcircuit s :: ops) = s.ops.localAdds env + localAdds env ops := rfl
 
 @[circuit_norm]
 theorem localAdds_append (env : Environment F) (ops1 ops2 : Operations F) :

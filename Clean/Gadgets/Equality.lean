@@ -120,14 +120,6 @@ theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Env
     ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
 
-@[circuit_norm]
-theorem localAdds (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).localAdds env = 0 := by
-  rw [FormalAssertion.toSubcircuit]
-  dsimp
-  rw [Operations.toNested_toFlat, FlatOperation.localAdds_toFlat]
-  exact main_localAdds (input := (x, y)) env n
-
 end Equality
 end Gadgets
 
