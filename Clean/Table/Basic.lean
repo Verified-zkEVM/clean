@@ -438,6 +438,20 @@ theorem transitionEnv_eq_windowEnv (table : TableConstraint 2 S F Unit)
     · rfl
   · rfl
 
+/-- Resolve `windowEnv.get i` on a 2-row window when variable `i` maps to an input cell. -/
+@[table_norm]
+theorem windowEnv_get_input (table : TableConstraint 2 S F Unit) (curr next : Row F S) (aux_env : Environment F)
+    {i : ℕ} (hi : i < table.finalAssignment.offset)
+    {row : Fin 2} {col : Fin (size S)}
+    (h_var : table.finalAssignment.vars[i] = .input ⟨row, col⟩) :
+    (windowEnv table ⟨<+> +> curr +> next, rfl⟩ aux_env).get i =
+    (if row.val = 0 then curr.get col else next.get col) := by
+  simp only [windowEnv, hi, reduceDIte, h_var, TraceOfLength.get]
+  rcases row with ⟨r, hr⟩
+  match r, hr with
+  | 0, _ => simp only [ite_true, Nat.sub_zero, _root_.Row.get]; unfold Trace.getLeFromBottom; rfl
+  | 1, _ => simp only [_root_.Row.get]; unfold Trace.getLeFromBottom; rfl
+
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
