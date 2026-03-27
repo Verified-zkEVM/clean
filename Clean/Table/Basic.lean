@@ -545,8 +545,7 @@ def ConstraintsHoldOnWindowChained [ProvableType S] (f : Var S F → TableConstr
 def ConstraintHoldsOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
     (curr next : Row F S) (aux_env : Environment F) : Prop :=
   let wrapped : TableConstraint 2 S F Unit := TableConstraint.getRowAssignOnly 0 >>= fun vars => f vars >>= fun _ => pure ()
-  let env := wrapped.transitionEnv curr next aux_env
-  Circuit.ConstraintsHold.Soundness env wrapped.operations
+  wrapped.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env
 
 /--
   Check that a single-row constraint holds on a given row.
@@ -554,8 +553,7 @@ def ConstraintHoldsOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S 
 @[table_norm]
 def ConstraintHoldsOnRow (c : SingleRowConstraint S F)
     (row : Row F S) (aux_env : Environment F) : Prop :=
-  let env := c.singleRowEnv row aux_env
-  Circuit.ConstraintsHold.Soundness env c.operations
+  c.ConstraintsHoldOnWindow ⟨<+> +> row, rfl⟩ aux_env
 
 -- specify a row, either counting from the start or from the end of the trace.
 inductive RowIndex where
@@ -670,7 +668,7 @@ def TableConstraintsHold (constraints : List (TableOperation S F))
 def WitnessUsedOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
     (curr next : Row F S) (aux_env : Environment F) : Prop :=
   let wrapped : TableConstraint 2 S F Unit := TableConstraint.getRowAssignOnly 0 >>= fun vars => f vars >>= fun _ => pure ()
-  let env := wrapped.transitionEnv curr next aux_env
+  let env := wrapped.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env
   env.UsesLocalWitnessesCompleteness 0 wrapped.operations.toList
 
 /--
@@ -680,7 +678,7 @@ def WitnessUsedOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S F (V
 @[table_norm]
 def WitnessUsedOnRow (c : SingleRowConstraint S F)
     (row : Row F S) (aux_env : Environment F) : Prop :=
-  let env := c.singleRowEnv row aux_env
+  let env := c.windowEnv ⟨<+> +> row, rfl⟩ aux_env
   env.UsesLocalWitnessesCompleteness 0 c.operations.toList
 
 /--
