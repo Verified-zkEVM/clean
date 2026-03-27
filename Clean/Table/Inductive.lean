@@ -103,6 +103,12 @@ def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F)
   let (actual, _) ← getCurrRow
   actual === (const target)
 
+/-- The wrapped form of inductiveConstraint used in ConstraintHoldsOnStep:
+    getRowAssignOnly assigns current row vars without witnessing, then runs the constraint. -/
+def wrappedInductiveConstraint (table : InductiveTable F State Input) :
+    TwoRowsConstraint (ProvablePair State Input) F :=
+  TableConstraint.getRowAssignOnly 0 >>= fun curr => table.inductiveConstraint curr >>= fun _ => pure ()
+
 def tableConstraints (table : InductiveTable F State Input) (input_state output_state : State F) :
   List (TableOperation (ProvablePair State Input) F) := [
     .everyRowExceptLast table.inductiveConstraint,
@@ -191,10 +197,18 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       exact output_eq'
 
   case more curr next rest ih1 ih2 =>
-    -- The inductive step uses transitionEnv_get_eq_windowEnv_get to relate
-    -- transitionEnv to windowEnv, then follows the same proof structure as before.
-    -- The `set` tactic has trouble parsing the multiline wrapped constraint expression,
-    -- so this proof needs careful handling of the env abstraction.
+    intro constraints
+    simp only [table_norm, List.size_toArray, List.length_nil, List.push_toArray,
+      List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
+      and_false, reduceIte, tsub_zero,
+      Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious,
+      TableConstraintsHold.foldl] at constraints ih1 ih2 ⊢
+    rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
+    specialize ih2 h_rest
+    have spec_previous : table.Spec input (traceInputs ⟨rest, rfl⟩) rest.len (traceInputs_length ⟨rest, rfl⟩) curr.1 env.data := by
+      simp [ih2]
+    simp only [ih2, and_self, and_true]
+    clear ih1 ih2
     sorry
 
 theorem table_soundness (table : InductiveTable F State Input) (input output : State F)

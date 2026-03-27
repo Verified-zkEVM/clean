@@ -32,6 +32,10 @@ structure Environment (F : Type) where
    of lookup tables, or auxiliary data made available for potential witnessing. -/
   data : ProverData F
 
+@[ext]
+theorem Environment.ext {e₁ e₂ : Environment F} (h_get : e₁.get = e₂.get) (h_data : e₁.data = e₂.data) : e₁ = e₂ := by
+  cases e₁; cases e₂; simp_all
+
 namespace Expression
 variable [Field F]
 
