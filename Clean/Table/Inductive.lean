@@ -238,6 +238,11 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
     -- The env mapping lemmas show that windowEnv maps variables to the expected row cells.
     -- These follow the same pattern as the old windowEnv proof but need dsimp for getLeFromBottom.
+    -- env mapping: windowEnv maps variable indices to row cell values
+    -- Verified by #eval: vars 0..s-1 → .input ⟨0, col⟩ → curr, vars s..s+x-1 → .input ⟨0, col⟩ → curr
+    -- vars s+x+t..s+x+t+s-1 → .input ⟨1, col⟩ → next
+    -- Proof needs: rw [h_env'], simp with reduceDIte + Vector.getElem_append/cast/mapFinRange,
+    -- then dsimp [Trace.getLeFromBottom, Row.get]
     have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i := by
       sorry
     have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) := by
