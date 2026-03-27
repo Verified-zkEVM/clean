@@ -38,6 +38,13 @@ theorem main_localAdds {α : TypeMap} [ProvableType α] (input : Var (ProvablePa
   apply Circuit.localAdds_forEach
   intro x n; simp only [circuit_norm, Operations.localAdds]
 
+omit [DecidableEq F] in
+theorem main_interactions {α : TypeMap} [ProvableType α] (input : Var (ProvablePair α α) F) (offset : ℕ) :
+    (main input |>.operations offset).interactions = [] := by
+  simp only [main]
+  apply Circuit.interactions_forEach
+  intro x n; simp only [circuit_norm, Operations.interactions]
+
 @[reducible]
 instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
   main

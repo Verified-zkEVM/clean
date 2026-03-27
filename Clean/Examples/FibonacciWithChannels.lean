@@ -2067,9 +2067,14 @@ lemma add8_fib_interactions_empty
   have h_ops_empty :
       Operations.interactionsWith FibonacciChannel.toRaw
         ((add8 (p := p)).instantiate.operations 0) = [] := by
-    simp [circuit_norm, add8, witnessAny, getOffset,
+    simp only [Operations.interactionsWith, circuit_norm, add8, witnessAny, getOffset,
       FormalCircuitWithInteractions.toSubcircuit_interactions, BytesChannel, Add8Channel,
-      FibonacciChannel]
+      FibonacciChannel, BytesTable, List.filter_cons]
+    simp only [decide_false, Bool.false_eq_true, ↓reduceIte, if_true_right, List.sum_cons,
+      List.sum_nil, Nat.add_zero, Nat.reduceAdd, id_eq, add_zero, List.filter_append]
+    simp only [List.filter_cons, List.filter_nil, circuit_norm, decide_false,
+      Bool.false_eq_true, ↓reduceIte, FormalAssertion.toSubcircuit_interactions,
+      Gadgets.Equality.main_interactions]
   have h_row_empty :
       Operations.interactionValuesWith FibonacciChannel.toRaw
         ((add8 (p := p)).instantiate.operations 0) (table.environment row) = [] := by

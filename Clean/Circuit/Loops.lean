@@ -717,6 +717,17 @@ theorem localAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α
     rw [h_body, ih]
     rfl
 
+theorem interactions_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+    (constant : ConstantLength body) (offset : ℕ)
+    (h_body : ∀ x n, Operations.interactions ((body x) n).2 = []) :
+    Operations.interactions ((forEach xs body constant) offset).2 = [] := by
+  induction xs using Vector.induct generalizing offset
+  · rfl
+  case cons n a as ih =>
+    simp only [circuit_norm, Operations.interactions_append]
+    rw [h_body, ih]
+    rfl
+
 /-- General version of localAdds_forEach that relates forEach to Finset.sum via toFinsupp.
     Each step's localAdds equals the corresponding localAdds_fn applied to that element. -/
 theorem localAdds_forEach_sum [DecidableEq F] {m : ℕ} (xs : Vector α m) [Inhabited α]
