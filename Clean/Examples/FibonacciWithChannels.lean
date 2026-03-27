@@ -2031,15 +2031,19 @@ lemma pushBytes_fib_interactions_empty
   rw [List.flatMap_eq_nil_iff]
   intro row h_row_mem
   rw [h_is_pushBytes]
+
   have h_ops_empty :
       Operations.interactionsWith FibonacciChannel.toRaw
         ((pushBytes (p := p)).instantiate.operations 0) = [] := by
     simp only [circuit_norm, witnessAny]
-    simp only [Nat.add_zero, Nat.reduceAdd, List.filter_eq_nil_iff, decide_eq_true_eq]
     simp only [circuit_norm, FormalCircuitWithInteractions.toSubcircuit_interactions,
       Circuit.interactions_mapFinRange,
       pushBytes, BytesChannel, FibonacciChannel, BytesTable]
-    intro a a_mem
+    simp only [List.filter_eq_nil_iff, decide_eq_true_eq, List.mem_ofFn]
+    rintro a ⟨ i, a_mem ⟩
+    symm at a_mem
+    subst a_mem
+    simp only [circuit_norm, not_false_eq_true]
 
   have h_row_empty :
       Operations.interactionValuesWith FibonacciChannel.toRaw
