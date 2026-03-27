@@ -416,6 +416,26 @@ def singleRowEnv (table : TableConstraint 1 S F Unit)
       else aux_env.get (i + assignment.aux_length)
     data := aux_env.data }
 
+private theorem getLeFromBottom_curr (curr next : Row F S) (col : Fin (size S)) :
+    (<+> +> curr +> next).getLeFromBottom ⟨1, by simp [Trace.len]⟩ col = curr.get col := by
+  simp [Trace.getLeFromBottom]
+
+private theorem getLeFromBottom_next (curr next : Row F S) (col : Fin (size S)) :
+    (<+> +> curr +> next).getLeFromBottom ⟨0, by simp [Trace.len]⟩ col = next.get col := by
+  simp [Trace.getLeFromBottom]
+
+theorem transitionEnv_get_eq_windowEnv_get (table : TableConstraint 2 S F Unit)
+    (curr next : Row F S) (aux_env : Environment F) (i : ℕ) :
+    (transitionEnv table curr next aux_env).get i = (windowEnv table ⟨<+> +> curr +> next, rfl⟩ aux_env).get i := by
+  unfold transitionEnv windowEnv; simp only; split
+  · next hi =>
+    generalize table.finalAssignment.vars[i] = v
+    match v with
+    | .input ⟨⟨0, _⟩, col⟩ => dsimp [TraceOfLength.get]; rfl
+    | .input ⟨⟨1, _⟩, col⟩ => dsimp [TraceOfLength.get]; rfl
+    | .aux _ => rfl
+  · rfl
+
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
