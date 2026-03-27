@@ -818,6 +818,19 @@ theorem localAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     simp only [Operations.localAdds, h_body, ih]
     rfl
 
+theorem interactionsWith_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (constant : ConstantLength body) (channel : RawChannel F) (offset : ℕ)
+    (h_body : ∀ x n, ((body x).operations n).interactionsWith channel = []) :
+    ((map xs body constant).operations offset).interactionsWith channel = [] := by
+  unfold map
+  induction xs using Vector.induct generalizing offset
+  case nil =>
+    simp [Circuit.operations, Circuit.pure_operations_eq, Operations.interactionsWith_nil]
+  case cons x xs ih =>
+    simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
+    rw [Operations.interactionsWith_append, Operations.interactionsWith_append]
+    simp only [h_body, ih, List.nil_append, Operations.interactionsWith_nil]
+
 theorem localAdds_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
     (h_body : ∀ i n, ((body i).operations n).localAdds env = 0) :
@@ -825,12 +838,45 @@ theorem localAdds_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F �
   unfold mapFinRange Vector.mapFinRangeM
   exact localAdds_map (Vector.finRange m) body constant env offset h_body
 
+private theorem interactions_flatten_list (ops : List (Operations F)) :
+    Operations.interactions ops.flatten = (ops.map Operations.interactions).flatten := by
+  induction ops with
+  | nil => rfl
+  | cons op ops ih =>
+    simp [Operations.interactions_append, ih]
+
+/-- Interactions of `map` are the concatenation of the interactions of its body circuits. -/
+theorem interactions_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (constant : ConstantLength body) (offset : ℕ) :
+    ((map xs body constant).operations offset).interactions =
+      (List.ofFn fun (i : Fin m) =>
+        ((body xs[i]).operations (offset + i * constant.localLength)).interactions).flatten := by
+  rw [map, MapM.operations_eq, interactions_flatten_list, List.map_ofFn]
+  rfl
+
 /-- Version of localAdds_mapFinRange using `.2` syntax for easier matching in proofs. -/
 theorem localAdds_mapFinRange' (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
     (h_body : ∀ i n, Operations.localAdds env ((body i) n).2 = 0) :
     Operations.localAdds env ((mapFinRange m body constant) offset).2 = 0 :=
   localAdds_mapFinRange m body constant env offset h_body
+
+theorem interactionsWith_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (channel : RawChannel F) (offset : ℕ)
+    (h_body : ∀ i n, ((body i).operations n).interactionsWith channel = []) :
+    ((mapFinRange m body constant).operations offset).interactionsWith channel = [] := by
+  unfold mapFinRange Vector.mapFinRangeM
+  exact interactionsWith_map (Vector.finRange m) body constant channel offset h_body
+
+theorem interactions_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (offset : ℕ) :
+    ((mapFinRange m body constant).operations offset).interactions =
+      (List.ofFn fun (i : Fin m) =>
+        ((body i).operations (offset + i * constant.localLength)).interactions).flatten := by
+  rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq, interactions_flatten_list, List.map_ofFn]
+  congr
+  funext i
+  simp [Vector.getElem_finRange]
 
 theorem localAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector α m)
     (init : β) (body : β → α → Circuit F β)

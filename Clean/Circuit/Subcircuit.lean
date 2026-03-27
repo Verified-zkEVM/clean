@@ -673,4 +673,30 @@ theorem FormalCircuitWithInteractions.toSubcircuit_channelsWithRequirements
   (circuit : FormalCircuitWithInteractions F Input Output) :
   (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := rfl
 
+-- simplification lemmas for FlatOperations.interactions (toSubcircuit ..).ops.toFlat
+
+theorem FormalCircuit.toSubcircuit_interactions (circuit : FormalCircuit F Input Output) :
+  FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.interactions) := by
+  simp only [FormalCircuit.toSubcircuit]
+  rw [Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
+
+theorem GeneralFormalCircuit.toSubcircuit_interactions
+    (circuit : GeneralFormalCircuit F Input Output) :
+  FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.interactions) := by
+  simp only [GeneralFormalCircuit.toSubcircuit]
+  rw [Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
+
+theorem FormalAssertion.toSubcircuit_interactions (circuit : FormalAssertion F Input) :
+  FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.interactions) := by
+  simp only [FormalAssertion.toSubcircuit]
+  rw [Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
+
+theorem FormalCircuitWithInteractions.toSubcircuit_interactions (circuit : FormalCircuitWithInteractions F Input Output) :
+  FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.interactions) := by
+  simp only [FormalCircuitWithInteractions.toSubcircuit]
+  rw [Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
 end
