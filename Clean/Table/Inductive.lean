@@ -372,7 +372,10 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
   Assumption N env := N > 0 ∧ table.Spec input [] 0 rfl input env
   HonestProverAssumption trace env :=
     table.InitialStateAssumptions input env ∧
-    trace.ForAllRowsOfTraceWithIndex (fun row i => table.InputAssumptions i row.2 env)
+    trace.ForAllRowsOfTraceWithIndex (fun row i =>
+      table.InputAssumptions i row.2 env ∧
+      (i = 0 → row.1 = input) ∧
+      (i = trace.val.len - 1 → row.1 = output))
   Spec {N} trace env := table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output env
 
   soundness N trace env assumption constraints :=
