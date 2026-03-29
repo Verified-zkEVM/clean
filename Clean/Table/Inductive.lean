@@ -114,14 +114,37 @@ theorem wrappedEnv_maps_curr_state (table : InductiveTable F State Input)
     (i : ℕ) (hi : i < size State) :
     (windowEnv table.wrappedInductiveConstraint ⟨<+> +> curr +> next, rfl⟩ aux_env).get i =
     (toElements curr.1)[i] := by
-  sorry
+  simp only [windowEnv, wrappedInductiveConstraint, inductiveConstraint,
+    table_assignment_norm, circuit_norm, pure, StateT.pure,
+    CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars,
+    Vector.getElem_cast, Nat.zero_add, Nat.add_zero,
+    Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append,
+    Vector.getElem_mapFinRange, Vector.getElem_mapRange]
+  -- Resolve the nested dite conditions
+  set t' := Operations.localLength (table.step (varFromOffset State 0) (varFromOffset Input (size State)) (size State + size Input)).2
+  have h1 : i < size State + size Input + t' + (size State + size Input) := by omega
+  have h2 : i < size State + size Input + t' := by omega
+  have h3 : i < size State + size Input := by omega
+  rw [dif_pos h1, dif_pos h2, dif_pos h3]; dsimp [Trace.getLeFromBottom, _root_.Row.get]
+  simp [ProvablePair.instance, Vector.getElem_append, hi]
 
 theorem wrappedEnv_maps_curr_input (table : InductiveTable F State Input)
     (curr next : Row F (ProvablePair State Input)) (aux_env : Environment F)
     (i : ℕ) (hi : i < size Input) :
     (windowEnv table.wrappedInductiveConstraint ⟨<+> +> curr +> next, rfl⟩ aux_env).get (i + size State) =
     (toElements curr.2)[i] := by
-  sorry
+  simp only [windowEnv, wrappedInductiveConstraint, inductiveConstraint,
+    table_assignment_norm, circuit_norm, pure, StateT.pure,
+    CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars,
+    Vector.getElem_cast, Nat.zero_add, Nat.add_zero,
+    Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append,
+    Vector.getElem_mapFinRange, Vector.getElem_mapRange]
+  set t' := Operations.localLength (table.step (varFromOffset State 0) (varFromOffset Input (size State)) (size State + size Input)).2
+  rw [dif_pos (show i + size State < size State + size Input + t' + (size State + size Input) from by omega),
+      dif_pos (show i + size State < size State + size Input + t' from by omega),
+      dif_pos (show i + size State < size State + size Input from by omega)]
+  unfold Trace.getLeFromBottom; unfold Trace.getLeFromBottom
+  simp [_root_.Row.get, ProvablePair.instance, Vector.getElem_append, show ¬(i + size State < size State) from by omega, hi]
 
 theorem wrappedEnv_maps_next_state (table : InductiveTable F State Input)
     (curr next : Row F (ProvablePair State Input)) (aux_env : Environment F)
@@ -129,7 +152,19 @@ theorem wrappedEnv_maps_next_state (table : InductiveTable F State Input)
     let t := Operations.localLength (table.step (varFromOffset State 0) (varFromOffset Input (size State)) (size State + size Input)).2
     (windowEnv table.wrappedInductiveConstraint ⟨<+> +> curr +> next, rfl⟩ aux_env).get (i + (size State + size Input) + t) =
     (toElements next.1)[i] := by
-  sorry
+  simp only [windowEnv, wrappedInductiveConstraint, inductiveConstraint,
+    table_assignment_norm, circuit_norm, pure, StateT.pure,
+    CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars,
+    Vector.getElem_cast, Nat.zero_add, Nat.add_zero,
+    Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append,
+    Vector.getElem_mapFinRange, Vector.getElem_mapRange]
+  set t' := Operations.localLength (table.step (varFromOffset State 0) (varFromOffset Input (size State)) (size State + size Input)).2
+  rw [dif_pos (show i + (size State + size Input) + t' < size State + size Input + t' + (size State + size Input) from by omega),
+      dif_neg (show ¬(i + (size State + size Input) + t' < size State + size Input + t') from by omega)]
+  simp only [t'] at *
+  dsimp [Trace.getLeFromBottom, _root_.Row.get, ProvablePair.instance]
+  simp_rw [show ∀ k, i + (size State + size Input) + k - (size State + size Input + k) = i from by omega]
+  simp [hi]
 
 def tableConstraints (table : InductiveTable F State Input) (input_state output_state : State F) :
   List (TableOperation (ProvablePair State Input) F) := [
