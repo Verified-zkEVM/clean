@@ -380,10 +380,16 @@ def windowEnv (table : TableConstraint W S F Unit)
   so that every variable evaluate to the trace cell value which is assigned to
 -/
 @[table_norm]
-def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
+def ConstraintsHoldOnWindow.Soundness (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
   let env := windowEnv table window aux_env
   Circuit.ConstraintsHold.Soundness env table.operations
+
+@[table_norm]
+def ConstraintsHoldOnWindow.Completeness (table : TableConstraint W S F Unit)
+  (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
+  let env := windowEnv table window aux_env
+  Circuit.ConstraintsHold.Completeness env table.operations
 
 /--
   Like `windowEnv` but takes two separate rows instead of a `TraceOfLength F S 2` window.
@@ -544,7 +550,7 @@ def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] 
 def ConstraintsHoldOnWindowChained [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
     (window : TraceOfLength F S 2) (aux_env : Environment F) : Prop :=
   let wrapped : TableConstraint 2 S F Unit := getCurrRow >>= fun curr => f curr >>= fun _ => pure ()
-  wrapped.ConstraintsHoldOnWindow window aux_env
+  TableConstraint.ConstraintsHoldOnWindow.Soundness wrapped window aux_env
 
 /--
   Check that a transition constraint holds between two rows, without redundant witnessing of the
@@ -559,7 +565,7 @@ def ConstraintsHoldOnWindowChained [ProvableType S] (f : Var S F → TableConstr
 def ConstraintHoldsOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
     (curr next : Row F S) (aux_env : Environment F) : Prop :=
   let wrapped : TableConstraint 2 S F Unit := TableConstraint.getRowAssignOnly 0 >>= fun vars => f vars >>= fun _ => pure ()
-  wrapped.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env
+  TableConstraint.ConstraintsHoldOnWindow.Soundness wrapped ⟨<+> +> curr +> next, rfl⟩ aux_env
 
 /--
   Check that a single-row constraint holds on a given row.
@@ -567,7 +573,18 @@ def ConstraintHoldsOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S 
 @[table_norm]
 def ConstraintHoldsOnRow (c : SingleRowConstraint S F)
     (row : Row F S) (aux_env : Environment F) : Prop :=
-  c.ConstraintsHoldOnWindow ⟨<+> +> row, rfl⟩ aux_env
+  TableConstraint.ConstraintsHoldOnWindow.Soundness c ⟨<+> +> row, rfl⟩ aux_env
+
+@[table_norm]
+def ConstraintHoldsOnStep.Completeness [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
+    (curr next : Row F S) (aux_env : Environment F) : Prop :=
+  let wrapped : TableConstraint 2 S F Unit := TableConstraint.getRowAssignOnly 0 >>= fun vars => f vars >>= fun _ => pure ()
+  TableConstraint.ConstraintsHoldOnWindow.Completeness wrapped ⟨<+> +> curr +> next, rfl⟩ aux_env
+
+@[table_norm]
+def ConstraintHoldsOnRow.Completeness (c : SingleRowConstraint S F)
+    (row : Row F S) (aux_env : Environment F) : Prop :=
+  TableConstraint.ConstraintsHoldOnWindow.Completeness c ⟨<+> +> row, rfl⟩ aux_env
 
 -- specify a row, either counting from the start or from the end of the trace.
 inductive RowIndex where
@@ -675,6 +692,37 @@ def TableConstraintsHold (constraints : List (TableOperation S F))
     | <+>, _ => True
 
 /--
+  Like `TableConstraintsHold` but using `Circuit.ConstraintsHold.Completeness` for subcircuits
+  and lookups. Used in table-level completeness proofs.
+-/
+@[table_norm]
+def TableConstraintsHold.Completeness (constraints : List (TableOperation S F))
+  (trace : Trace F S) (env : TableEnvironments F) : Prop :=
+  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env.toEnvironment i))
+  foldl trace.len constraints_and_envs trace constraints_and_envs
+  where
+  @[table_norm]
+  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
+    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
+    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> curr +> next) rest
+        ConstraintHoldsOnStep.Completeness constraint curr next (env (trace.len + 1)) ∧ others
+    | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> row) rest
+        let targetIdx := match idx with
+          | .fromStart i => i
+          | .fromEnd i => N - 1 - i
+        (if trace.len = targetIdx then ConstraintHoldsOnRow.Completeness constraint row (env trace.len) else True) ∧ others
+    | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> row) rest
+        ConstraintHoldsOnRow.Completeness constraint row (env trace.len) ∧ others
+    | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
+        foldl N cs trace rest
+    | trace +> _, [] =>
+        foldl N cs trace cs
+    | <+>, _ => True
+
+/--
   Check that honest-prover witnesses are used for a transition constraint step.
   Parallel to `ConstraintHoldsOnStep` but checking `UsesLocalWitnessesCompleteness`.
 -/
@@ -759,7 +807,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
     HonestProverAssumption trace env.data →
     TableLocalWitnessUsed constraints trace.val env →
-    TableConstraintsHold constraints trace.val env
+    TableConstraintsHold.Completeness constraints trace.val env
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
       constraint is consistent with the number of variables introduced in the circuit. -/

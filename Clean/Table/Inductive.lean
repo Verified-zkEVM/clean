@@ -176,7 +176,7 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
 theorem equalityConstraint.soundness_row {row : State F × Input F} {input_state : State F} {env : Environment F} :
   ConstraintHoldsOnRow (equalityConstraint Input input_state) row env
     ↔ row.1 = input_state := by
-  simp only [ConstraintHoldsOnRow, TableConstraint.ConstraintsHoldOnWindow]
+  simp only [ConstraintHoldsOnRow, TableConstraint.ConstraintsHoldOnWindow.Soundness]
   set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
   simp only [equalityConstraint, circuit_norm, table_norm]
   have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
@@ -255,7 +255,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
   case more curr next rest ih1 ih2 =>
     intro constraints
     -- Unfold foldl but NOT ConstraintHoldsOnStep (we'll unfold that manually)
-    simp only [ConstraintHoldsOnRow, TableConstraint.ConstraintsHoldOnWindow,
+    simp only [ConstraintHoldsOnRow, TableConstraint.ConstraintsHoldOnWindow.Soundness,
       List.size_toArray, List.length_nil, List.push_toArray,
       List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
       and_false, reduceIte, tsub_zero,
@@ -269,11 +269,11 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     clear ih1 ih2
 
     -- constraints is ConstraintHoldsOnStep (folded); unfold step by step
-    simp only [ConstraintHoldsOnStep, TableConstraint.ConstraintsHoldOnWindow] at constraints
+    simp only [ConstraintHoldsOnStep, TableConstraint.ConstraintsHoldOnWindow.Soundness] at constraints
     set wrapped : TwoRowsConstraint (ProvablePair State Input) F :=
       TableConstraint.getRowAssignOnly 0 >>= fun curr => table.inductiveConstraint curr >>= fun _ => pure ()
     set env' := windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
-    dsimp only [TableConstraint.ConstraintsHoldOnWindow, TableConstraint.operations,
+    dsimp only [TableConstraint.ConstraintsHoldOnWindow.Soundness, TableConstraint.operations,
       TableContext.empty] at constraints
     change Circuit.ConstraintsHold.Soundness env' (wrapped .empty).2.circuit at constraints
     -- Simplify the ops in constraints (env' stays opaque via set)
@@ -352,7 +352,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
     intro h_len _
     have output_eq' : ConstraintHoldsOnRow (equalityConstraint Input output) next (env.toEnvironment 2 (rest.len + 1)) := by
-      simp only [ConstraintHoldsOnRow, TableConstraint.ConstraintsHoldOnWindow]
+      simp only [ConstraintHoldsOnRow, TableConstraint.ConstraintsHoldOnWindow.Soundness]
       have h : (rest +> curr).len = M - 1 := by simp [Trace.len] at h_len ⊢; omega
       rwa [if_pos h] at output_boundary
     rw [equalityConstraint.soundness_row] at output_eq'

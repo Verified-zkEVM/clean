@@ -132,7 +132,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   (curr.x.Normalized → curr.y.Normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.Normalized)
    := by
   -- Unfold ConstraintsHoldOnWindowChained to wrapped form
-  change wrappedRecursiveRelation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, _⟩ aux_env → _
+  change TableConstraint.ConstraintsHoldOnWindow.Soundness wrappedRecursiveRelation ⟨<+> +> curr +> next, _⟩ aux_env → _
   simp only [table_norm]
   obtain ⟨ hcurr_x, hcurr_y, hnext_x, hnext_y ⟩ := fib_vars curr next aux_env
   set env := windowEnv wrappedRecursiveRelation ⟨<+> +> curr +> next, rfl⟩ aux_env
