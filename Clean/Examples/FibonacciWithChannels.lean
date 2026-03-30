@@ -2064,17 +2064,14 @@ lemma add8_fib_interactions_empty
   rw [List.flatMap_eq_nil_iff]
   intro row h_row_mem
   rw [h_is_add8]
-  have h_ops_empty :
-      Operations.interactionsWith FibonacciChannel.toRaw
-        ((add8 (p := p)).instantiate.operations 0) = [] := by
+  have h_ops_empty : Operations.interactionsWith FibonacciChannel.toRaw
+      ((add8 (p := p)).instantiate.operations 0) = [] := by
     simp only [Operations.interactionsWith, circuit_norm, add8, witnessAny, getOffset,
       FormalCircuitWithInteractions.toSubcircuit_interactions, BytesChannel, Add8Channel,
       FibonacciChannel, BytesTable, List.filter_cons]
-    simp only [decide_false, Bool.false_eq_true, ↓reduceIte, if_true_right, List.sum_cons,
-      List.sum_nil, Nat.add_zero, Nat.reduceAdd, id_eq, add_zero, List.filter_append]
-    simp only [List.filter_cons, List.filter_nil, circuit_norm, decide_false,
-      Bool.false_eq_true, ↓reduceIte, FormalAssertion.toSubcircuit_interactions,
-      Gadgets.Equality.main_interactions]
+    simp only [circuit_norm,
+      List.filter_cons, List.filter_nil, List.sum_cons, List.sum_nil,
+      FormalAssertion.toSubcircuit_interactions, Gadgets.Equality.main_interactions]
   have h_row_empty :
       Operations.interactionValuesWith FibonacciChannel.toRaw
         ((add8 (p := p)).instantiate.operations 0) (table.environment row) = [] := by

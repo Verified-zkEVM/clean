@@ -687,4 +687,4 @@ lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
     (List.ofFn fun _ : Fin m => ([] : List α)).flatten = [] := by
   simp
 
-attribute [circuit_norm] forall_eq reduceIte String.reduceEq
+attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false
