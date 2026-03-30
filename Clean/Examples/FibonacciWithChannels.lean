@@ -1216,6 +1216,51 @@ theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : Bal
   simp only [List.length_eq_zero_iff, List.filter_eq_nil_iff, decide_eq_true_eq, length, msg] at balance
   specialize balance a h_mem_a
   contradiction
+
+/--
+A "normal" channel is one where the requirements for a "push" interaction
+imply the guarantees of the corresponding pull interaction. -/
+class NormalChannel (channel : RawChannel F) : Prop where
+  isNormal : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
+    channel.Requirements mult msg data →
+    channel.Guarantees (-1) msg data
+
+/--
+Assume you have a list of channel interactions that is made up of pairs (-1, a_i), (1, b_i),
+where for each i, Guarantees (-1, a_i) → Requirements (1, b_i).
+(This is exactly what you get from a VM circuit.)
+
+Furthermore, assume the list is balanced and the channel is normal.
+
+Then, for any i, the **converse** implication is true: Requirements (1, b_i) → Guarantees (-1, a_i).
+-/
+theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel F) [NormalChannel channel]
+    (as bs : List (Interaction F)) (balance : BalancedInteractions (as ++ bs)) (data : ProverData F)
+  -- same length
+  (n : ℕ) (h_len_a : as.length = n) (h_len_b : bs.length = n)
+  -- all interactions are on the input channel
+  (as_channel : ∀ a ∈ as, a.channel = channel) (bs_channel : ∀ b ∈ bs, b.channel = channel)
+  -- the multiplicities are -1 for as and 1 for bs
+  (as_mult : ∀ a ∈ as, a.mult = -1) (bs_mult : ∀ b ∈ bs, b.mult = 1) :
+    -- `as[i].Guarantees → bs[i].Requirements` (the "constraints") for all i implies
+    (∀ i : ℕ, (hi : i < n) → as[i].Guarantees data → bs[i].Requirements data) →
+    -- `bs[i].Requirements → as[i].Guarantees` for any i
+    ∀ i : ℕ, (hi: i < n) → bs[i].Requirements data → as[i].Guarantees data := by
+  -- first, a little inline lemma: for every a, there is a b with the same message
+  -- this follows from `exists_push_of_pull`
+  have exists_b_of_a : ∀ a ∈ as, ∃ b ∈ bs, b.msg = a.msg := by
+    intro a a_mem
+    have a_mem_append : a ∈ as ++ bs := by simp [a_mem]
+    have ⟨ b, b_mem, b_msg_eq, b_mult_ne_neg_one ⟩ := exists_push_of_pull (as ++ bs) balance a a_mem_append (as_mult a a_mem)
+    have b_mem : b ∈ bs := by simp only [List.mem_append] at b_mem; tauto
+    exists b
+
+  intro constraints i hi bs_req
+  induction n with
+  | zero => nomatch hi
+  | succ n ih =>
+    sorry
+
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
