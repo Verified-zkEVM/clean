@@ -1863,7 +1863,26 @@ lemma pushBytes_add8_interactions_empty
     table.interactionPairsWith (Add8Channel.toRaw) = [] := by
   simp only [TableWitness.interactionPairsWith]
   have h_empty : table.interactionsWith (Add8Channel.toRaw) = [] := by
-    sorry
+    simp only [TableWitness.interactionsWith, AbstractTable.operations]
+    rw [List.flatMap_eq_nil_iff]
+    intro row h_row_mem
+    rw [h_is_pushBytes]
+    have h_ops_empty :
+        Operations.interactionsWith Add8Channel.toRaw
+          ((pushBytes (p := p)).instantiate.operations 0) = [] := by
+      simp only [circuit_norm, witnessAny]
+      simp only [circuit_norm, FormalCircuitWithInteractions.toSubcircuit_interactions,
+        Circuit.interactions_mapFinRange, pushBytes, BytesChannel, Add8Channel, BytesTable]
+      simp only [List.filter_eq_nil_iff, decide_eq_true_eq, List.mem_ofFn]
+      rintro a ⟨ i, a_mem ⟩
+      symm at a_mem
+      subst a_mem
+      simp only [circuit_norm, not_false_eq_true]
+    have h_row_empty :
+        Operations.interactionValuesWith Add8Channel.toRaw
+          ((pushBytes (p := p)).instantiate.operations 0) (table.environment row) = [] := by
+      simp [Operations.interactionValuesWith, h_ops_empty]
+    rw [h_row_empty]
   simp [h_empty]
 
 /-- fib8's Add8Channel interactions all have mult = -1 (fib8 only pulls from Add8Channel) -/
