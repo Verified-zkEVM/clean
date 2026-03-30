@@ -1965,25 +1965,26 @@ lemma fib8_add8_interactions_mult_neg
     (entry : F p × Vector (F p) 3)
     (h_mem : entry ∈ table.interactionPairsWith (Add8Channel.toRaw)) :
     entry.1 = -1 := by
-  -- fib8 emits to Add8Channel only with pulled (mult = -1)
   simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
     AbstractTable.operations, List.filterMap_flatMap] at h_mem
   rcases List.mem_flatMap.1 h_mem with ⟨row, h_row_mem, h_in_filter⟩
+  set env := table.environment row
   rw [h_is_fib8] at h_in_filter
-  simp only [RawChannel.filter, fib8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
-    circuit_norm, FibonacciChannel, Add8Channel, Channel.emitted, Channel.pulled,
-    InteractionDelta.single, Channel.toRaw] at h_in_filter
-  rw [InteractionDelta.add_eq_append, InteractionDelta.add_eq_append] at h_in_filter
-  simp only [List.filterMap_append, List.filterMap_cons,
-    show ("fibonacci" : String) = "add8" ↔ False by decide, false_and, dite_false,
-    true_and, toElements] at h_in_filter
-  simp only [show ([_,_,_] : List (F p)).toArray.size = 3 by rfl, dite_true] at h_in_filter
-  -- `0` in List context represents InteractionDelta.zero = []
-  -- Simplify using the fact that InteractionDelta.zero = []
-  simp only [show (0 : InteractionDelta (F p)) = [] by rfl,
-    List.filterMap_nil, List.nil_append, List.append_nil,
-    List.mem_cons, List.not_mem_nil, or_false] at h_in_filter
-  -- Now h_in_filter says entry = (-1, ...)
+  let z : Expression (F p) := var ⟨3⟩
+  have h_exact :
+      Operations.interactionValuesWith Add8Channel.toRaw
+          ((fib8 (p := p)).instantiate.operations 0) env =
+        [AbstractInteraction.eval env
+          (Add8Channel.pulled' ((varFromOffset fieldTriple 0).2.1, (varFromOffset fieldTriple 0).2.2, z))] := by
+    have h_interactions :
+        ((fib8 (p := p)).main (varFromOffset fieldTriple 0) |>.operations 3).interactionsWith
+          Add8Channel.toRaw =
+        [Add8Channel.pulled' ((varFromOffset fieldTriple 0).2.1, (varFromOffset fieldTriple 0).2.2, z)] := by
+      simp only [circuit_norm, fib8, z, FibonacciChannel, Add8Channel]
+    simp only [circuit_norm, witnessAny, FormalCircuitWithInteractions.toSubcircuit_interactions, fib8, z]
+    exact congrArg (List.map (AbstractInteraction.eval env)) h_interactions
+  rw [h_exact] at h_in_filter
+  simp [Interaction.pairFor, circuit_norm, z, AbstractInteraction.eval] at h_in_filter
   rw [h_in_filter]
 
 /-- add8's Add8Channel interactions satisfy Requirements when BytesChannel guarantees hold -/
