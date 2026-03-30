@@ -42,20 +42,68 @@ noncomputable def pairFor (channel : RawChannel F) (i : Interaction F) :
   else
     none
 
+omit [Field F] [DecidableEq F] in
 @[simp]
 lemma pairFor_eq_some {channel : RawChannel F} {i : Interaction F} (h : i.channel = channel) :
     i.pairFor channel = some (h ▸ (i.mult, i.msgVector)) := by
   simp [Interaction.pairFor, h]
 
+omit [Field F] [DecidableEq F] in
 @[simp]
 lemma pairFor_eq_none {channel : RawChannel F} {i : Interaction F} (h : i.channel ≠ channel) :
     i.pairFor channel = none := by
   simp [Interaction.pairFor, h]
 
+omit [Field F] [DecidableEq F] in
 open Classical in
 lemma mem_pairFor_iff {channel : RawChannel F} {i : Interaction F} {entry : F × Vector F channel.arity} :
     entry ∈ [i.pairFor channel].filterMap id ↔ i.pairFor channel = some entry := by
   simp [pairFor]
+
+omit [Field F] [DecidableEq F] in
+lemma msgVector_eq_iff_msg_eq_toArray
+    {channel : RawChannel F} {i : Interaction F} {msg : Vector F channel.arity}
+    (h : i.channel = channel) :
+    h ▸ i.msgVector = msg ↔ i.msg = msg.toArray := by
+  cases h
+  cases msg
+  simp [Interaction.msgVector]
+
+omit [Field F] [DecidableEq F] in
+lemma length_filterMap_pairFor_eq {channel : RawChannel F} {is : List (Interaction F)}
+    (h_channel : ∀ i ∈ is, i.channel = channel) :
+    (is.filterMap (Interaction.pairFor channel)).length = is.length := by
+  induction is with
+  | nil =>
+      simp
+  | cons i is ih =>
+      have hi : i.channel = channel := h_channel i (by simp)
+      have his : ∀ j ∈ is, j.channel = channel := by
+        intro j hj
+        exact h_channel j (by simp [hj])
+      cases hi
+      simp [Interaction.pairFor, ih his]
+
+omit [Field F] in
+lemma filterMap_pairFor_filter_msg_eq {channel : RawChannel F} {is : List (Interaction F)}
+    (h_channel : ∀ i ∈ is, i.channel = channel) (msg : Vector F channel.arity) :
+    ((is.filterMap (Interaction.pairFor channel)).filter (fun x => x.2 = msg)).map Prod.fst =
+      (is.filter (fun i => i.msg = msg.toArray)).map (·.mult) := by
+  induction is with
+  | nil =>
+      simp
+  | cons i is ih =>
+      have hi : i.channel = channel := h_channel i (by simp)
+      have his : ∀ j ∈ is, j.channel = channel := by
+        intro j hj
+        exact h_channel j (by simp [hj])
+      cases hi
+      have h_head :
+          (Vector.mk i.msg i.same_size = msg) ↔ i.msg = msg.toArray := by
+        exact Interaction.msgVector_eq_iff_msg_eq_toArray (i := i) (msg := msg) rfl
+      by_cases hmsg : i.msg = msg.toArray
+      · simp [Interaction.pairFor, Interaction.msgVector, hmsg, ih his]
+      · simp [Interaction.pairFor, Interaction.msgVector, h_head, hmsg, ih his]
 
 def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees i.mult i.msgVector data
@@ -2343,24 +2391,48 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   -- ── Step 2: Extract length bound and per-message balance for fibonacci channel ──
   have h_bal : Ensemble.BalancedChannels fibonacciEnsemble (n, x, y) witness := h_balanced
   unfold Ensemble.BalancedChannels at h_bal
-  simp only [fibonacciEnsemble, List.Forall] at h_bal
-  -- h_bal now contains BalancedChannel for all 3 channels
-  -- h_bal.1 : BalancedChannel for BytesChannel
-  -- h_bal.2.1 : BalancedChannel for Add8Channel
-  -- h_bal.2.2 : BalancedChannel for FibonacciChannel
-
-  have h_fib_bal := h_bal.2.2
+  have h_bytes_bal := h_bal BytesChannel.toRaw (by simp [fibonacciEnsemble])
+  have h_add8_bal := h_bal Add8Channel.toRaw (by simp [fibonacciEnsemble])
+  have h_fib_bal := h_bal FibonacciChannel.toRaw (by simp [fibonacciEnsemble])
   simp only [BalancedInteractions] at h_fib_bal
+  have h_fib_pairs_eq :
+      fibInteractions =
+        (fibonacciEnsemble.interactionsWith (n, x, y) witness FibonacciChannel.toRaw).filterMap
+          (Interaction.pairFor FibonacciChannel.toRaw) := by
+    simp [fibInteractions, Ensemble.interactionPairsWith, Ensemble.interactionsWith,
+      Ensemble.verifierInteractionPairsWith, TableWitness.interactionPairsWith,
+      List.filterMap_flatMap]
+  have h_fib_channel :
+      ∀ i ∈ fibonacciEnsemble.interactionsWith (n, x, y) witness FibonacciChannel.toRaw,
+        i.channel = FibonacciChannel.toRaw :=
+    by
+      intro i hi
+      exact Ensemble.channel_eq_of_mem_interactionsWith hi
 
   have h_fib_bound : fibInteractions.length < p := by
     have : ringChar (F p) = p := ZMod.ringChar_zmod_n p
-    calc fibInteractions.length < ringChar (F p) := h_fib_bal.1
+    rw [h_fib_pairs_eq]
+    calc
+      ((fibonacciEnsemble.interactionsWith (n, x, y) witness FibonacciChannel.toRaw).filterMap
+          (Interaction.pairFor FibonacciChannel.toRaw)).length
+          = (fibonacciEnsemble.interactionsWith (n, x, y) witness FibonacciChannel.toRaw).length :=
+            Interaction.length_filterMap_pairFor_eq h_fib_channel
+      _ < ringChar (F p) := h_fib_bal.1
       _ = p := this
 
   have h_fib_balanced : ∀ msg : Vector (F p) 3,
       ((fibInteractions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0 := by
     intro msg
-    exact (h_fib_bal.2 msg)
+    rw [h_fib_pairs_eq]
+    have h_msg_eq :
+        ((List.filterMap (Interaction.pairFor FibonacciChannel.toRaw)
+            (fibonacciEnsemble.interactionsWith (n, x, y) witness FibonacciChannel.toRaw)).filter
+            (fun x : F p × Vector (F p) 3 => x.2 = msg)).map Prod.fst =
+          ((fibonacciEnsemble.interactionsWith (n, x, y) witness FibonacciChannel.toRaw).filter
+            (fun i : Interaction (F p) => i.msg = msg.toArray)).map (·.mult) :=
+      Interaction.filterMap_pairFor_filter_msg_eq h_fib_channel msg
+    rw [h_msg_eq]
+    exact h_fib_bal.2 msg.toArray
 
   -- ── Step 3: All multiplicities are ±1 ──
   -- All fibonacci interactions come from:
@@ -2398,10 +2470,29 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       (-1, #v[z]) ∈ fibonacciEnsemble.interactionPairsWith (n, x, y) witness (BytesChannel.toRaw) →
       z.val < 256 := by
     intro z h_pull
-    -- Extract balance for BytesChannel (first channel)
-    have h_bytes_bal := h_bal.1
-    simp only [BalancedInteractions] at h_bytes_bal
-    set bytesInteractions := fibonacciEnsemble.interactions (n, x, y) witness (BytesChannel.toRaw)
+    set bytesInteractions := fibonacciEnsemble.interactionPairsWith (n, x, y) witness (BytesChannel.toRaw)
+    have h_bytes_pairs_eq :
+        bytesInteractions =
+          (fibonacciEnsemble.interactionsWith (n, x, y) witness BytesChannel.toRaw).filterMap
+            (Interaction.pairFor BytesChannel.toRaw) := by
+      simp [bytesInteractions, Ensemble.interactionPairsWith, Ensemble.interactionsWith,
+        Ensemble.verifierInteractionPairsWith, TableWitness.interactionPairsWith,
+        List.filterMap_flatMap]
+    have h_bytes_channel :
+        ∀ i ∈ fibonacciEnsemble.interactionsWith (n, x, y) witness BytesChannel.toRaw,
+          i.channel = BytesChannel.toRaw := by
+      intro i hi
+      exact Ensemble.channel_eq_of_mem_interactionsWith hi
+    have h_bytes_bound : bytesInteractions.length < p := by
+      have : ringChar (F p) = p := ZMod.ringChar_zmod_n p
+      rw [h_bytes_pairs_eq]
+      calc
+        ((fibonacciEnsemble.interactionsWith (n, x, y) witness BytesChannel.toRaw).filterMap
+            (Interaction.pairFor BytesChannel.toRaw)).length
+            = (fibonacciEnsemble.interactionsWith (n, x, y) witness BytesChannel.toRaw).length :=
+              Interaction.length_filterMap_pairFor_eq h_bytes_channel
+        _ < ringChar (F p) := h_bytes_bal.1
+        _ = p := this
 
     by_contra h_ge
     push_neg at h_ge  -- z.val ≥ 256
@@ -2434,15 +2525,27 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
 
     -- But balance says sum = 0
     have h_sum_zero : ((bytesInteractions.filter (·.2 = #v[z])).map Prod.fst).sum = 0 :=
-      (h_bytes_bal.2 #v[z])
+      by
+        have h_sum_zero_arr :
+            ((bytesInteractions.filter
+                (fun x : F p × Vector (F p) 1 => x.2.toArray = (#v[z]).toArray)).map Prod.fst).sum = 0 := by
+          rw [h_bytes_pairs_eq]
+          have h_msg_eq :
+              ((List.filterMap (Interaction.pairFor BytesChannel.toRaw)
+                  (fibonacciEnsemble.interactionsWith (n, x, y) witness BytesChannel.toRaw)).filter
+                  (fun x : F p × Vector (F p) 1 => x.2.toArray = (#v[z]).toArray)).map Prod.fst =
+                ((fibonacciEnsemble.interactionsWith (n, x, y) witness BytesChannel.toRaw).filter
+                  (fun i : Interaction (F p) => i.msg = (#v[z]).toArray)).map (·.mult) := by
+            simpa using Interaction.filterMap_pairFor_filter_msg_eq h_bytes_channel (#v[z])
+          simpa [h_msg_eq] using h_bytes_bal.2 (#v[z]).toArray
+        simpa using h_sum_zero_arr
 
     -- So -(length) = 0 in F_p, meaning p | length
     rw [h_sum_neg, neg_eq_zero] at h_sum_zero
 
     -- But 0 < length < p, contradiction
     have h_len_bound : (bytesInteractions.filter (·.2 = #v[z])).length < p := by
-      calc _ < ringChar (F p) := msgInteractions_lt_ringChar h_bytes_bal
-        _ = p := ZMod.ringChar_zmod_n p
+      exact lt_of_le_of_lt (List.length_filter_le _ _) h_bytes_bound
     have h_len_zero : (bytesInteractions.filter (·.2 = #v[z])).length = 0 := by
       have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero
       simp only [List.length_map] at hdvd
@@ -2455,10 +2558,47 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   have h_add8_guarantees : ∀ entry ∈ fibonacciEnsemble.interactionPairsWith (n, x, y) witness (Add8Channel.toRaw),
       (Add8Channel (p := p)).toRaw.Guarantees entry.1 entry.2 (fun _ _ => #[]) := by
     intro entry h_entry_mem
-    -- Extract balance for Add8Channel (second channel)
-    have h_add8_bal := h_bal.2.1
-    simp only [BalancedInteractions] at h_add8_bal
     set add8Interactions := fibonacciEnsemble.interactionPairsWith (n, x, y) witness (Add8Channel.toRaw)
+    have h_add8_pairs_eq :
+        add8Interactions =
+          (fibonacciEnsemble.interactionsWith (n, x, y) witness Add8Channel.toRaw).filterMap
+            (Interaction.pairFor Add8Channel.toRaw) := by
+      simp [add8Interactions, Ensemble.interactionPairsWith, Ensemble.interactionsWith,
+        Ensemble.verifierInteractionPairsWith, TableWitness.interactionPairsWith,
+        List.filterMap_flatMap]
+    have h_add8_channel :
+        ∀ i ∈ fibonacciEnsemble.interactionsWith (n, x, y) witness Add8Channel.toRaw,
+          i.channel = Add8Channel.toRaw := by
+      intro i hi
+      exact Ensemble.channel_eq_of_mem_interactionsWith hi
+    have h_add8_bound : add8Interactions.length < p := by
+      have : ringChar (F p) = p := ZMod.ringChar_zmod_n p
+      rw [h_add8_pairs_eq]
+      calc
+        ((fibonacciEnsemble.interactionsWith (n, x, y) witness Add8Channel.toRaw).filterMap
+            (Interaction.pairFor Add8Channel.toRaw)).length
+            = (fibonacciEnsemble.interactionsWith (n, x, y) witness Add8Channel.toRaw).length :=
+              Interaction.length_filterMap_pairFor_eq h_add8_channel
+        _ < ringChar (F p) := h_add8_bal.1
+        _ = p := this
+    have h_add8_balanced :
+        ((add8Interactions.filter (fun x => x.2 = entry.2)).map Prod.fst).sum = 0 := by
+      rw [h_add8_pairs_eq]
+      have h_msg_eq :
+          ((List.filterMap (Interaction.pairFor Add8Channel.toRaw)
+              (fibonacciEnsemble.interactionsWith (n, x, y) witness Add8Channel.toRaw)).filter
+              (fun x : F p × Vector (F p) 3 => x.2.toArray = entry.2.toArray)).map Prod.fst =
+            ((fibonacciEnsemble.interactionsWith (n, x, y) witness Add8Channel.toRaw).filter
+              (fun i : Interaction (F p) => i.msg = entry.2.toArray)).map (·.mult) := by
+        simpa using Interaction.filterMap_pairFor_filter_msg_eq h_add8_channel entry.2
+      let add8MsgMults :=
+        ((List.filterMap (Interaction.pairFor Add8Channel.toRaw)
+            (fibonacciEnsemble.interactionsWith (n, x, y) witness Add8Channel.toRaw)).filter
+            (fun x : F p × Vector (F p) 3 => x.2.toArray = entry.2.toArray)).map Prod.fst
+      have h_sum_zero_arr :
+          add8MsgMults.sum = 0 := by
+        simpa [add8MsgMults, h_msg_eq] using h_add8_bal.2 entry.2.toArray
+      simpa [add8MsgMults] using h_sum_zero_arr
 
     -- Key fact: any Add8Channel entry with mult ≠ -1 satisfies the Requirements.
     -- This follows from add8.soundness applied to each add8 row.
@@ -2481,8 +2621,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         -- From verifier: but verifier's Add8Channel interactions are empty
         have h_empty := verifier_add8_interactions_empty (p := p) (n, x, y)
         simp only [fibonacciEnsemble] at h_empty
-        rw [h_empty] at h_from_verifier
-        cases h_from_verifier
+        simp [Ensemble.verifierInteractionPairsWith, h_empty witness.data] at h_from_verifier
 
       case inr =>
         -- From tables: entry ∈ tables.flatMap table.interactions
@@ -2527,9 +2666,6 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
             exact h_table_abstract.symm.trans h_same.symm
           -- Get constraints for this table
           have h_table_constraints : table.Constraints := by
-            -- h_constraints : List.Forall (fun table => table.Constraints) witness.tables
-            -- h_table_mem : table ∈ witness.tables
-            rw [List.forall_iff_forall_mem] at h_constraints
             exact h_constraints table h_table_mem
           -- BytesChannel guarantees for entries in this table's interactions
           -- follow from h_bytes_guarantees since table interactions ⊆ ensemble interactions
@@ -2569,7 +2705,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
       intro hy
 
       -- By balance, sum of mults for this message is 0
-      have h_sum_zero := h_add8_bal.2 entry.2
+      have h_sum_zero := h_add8_balanced
 
       -- We have a pull, so filtered list is nonempty
       have h_nonempty : (add8Interactions.filter (·.2 = entry.2)).length > 0 :=
@@ -2589,8 +2725,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         have h_sum_zero' : ((add8Interactions.filter (·.2 = entry.2)).map Prod.fst).sum = 0 := h_sum_zero
         rw [h_sum_neg, neg_eq_zero] at h_sum_zero'
         have h_len_bound : (add8Interactions.filter (·.2 = entry.2)).length < p := by
-          calc _ < ringChar (F p) := msgInteractions_lt_ringChar h_add8_bal
-            _ = p := ZMod.ringChar_zmod_n p
+          exact lt_of_le_of_lt (List.length_filter_le _ _) h_add8_bound
         have h_len_zero : (add8Interactions.filter (·.2 = entry.2)).length = 0 := by
           have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h_sum_zero'
           simp only [List.length_map] at hdvd
