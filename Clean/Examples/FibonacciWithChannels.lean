@@ -505,7 +505,7 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
 def emptyEnvironment (F : Type) [Field F] [DecidableEq F] (data : ProverData F) : Environment F := { get _ := 0, data, interactions := [] }
 
 /-- Interaction balance: for any message, the sum of multiplicities is 0.
-    Also requires that the total interaction count is bounded. -/
+  Also requires that the total interaction count is bounded. -/
 def BalancedInteractions (interactions : List (Interaction F)) : Prop :=
   interactions.length < ringChar F ∧
   ∀ msg : Array F, (interactions |>.filter (·.msg = msg) |>.map (·.mult)).sum = 0
@@ -1184,8 +1184,38 @@ then all of them do.
 This holds in a very general sense and is applied to the "cycle" which contains the input + output interactions.
 Thus, assuming the input satisfies the requirements, we can conclude that the output satisfies the guarantees. This
 can usually be engineered to be just the statement we actually care about.
-This idea is captured by the following theorem.
+
+These ideas are captured by the following definitions and theorems.
 -/
+
+/--
+If an interaction list is balanced, then for every pull there must be a corresponding "push",
+where "push" just means an interaction with multiplicity ≠ -1.
+-/
+theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : BalancedInteractions interactions) :
+    ∀ a ∈ interactions, a.mult = -1 → ∃ b ∈ interactions, b.msg = a.msg ∧ b.mult ≠ -1 := by
+  intro a h_mem_a h_pull
+  set msg := a.msg
+  set length : ℕ := (interactions.filter (·.msg = msg)).length
+  have length_lt_ringChar : length < ringChar F := msgInteractions_lt_ringChar balance
+  replace balance := balance.2 msg
+  -- assuming no such push exists => all interactions with the same message have multiplicity -1
+  -- this leads to a contradiction with the 0 balance + no overflow
+  by_contra! h_no_push
+  have all_minus_one : (interactions.filter (·.msg = msg)).map (·.mult) = List.replicate length (-1) := by
+    apply List.ext_getElem
+    · simp [length]
+    intro i hi hi'
+    simp only [List.getElem_map, List.getElem_replicate]
+    rw [List.length_map] at hi
+    set b := (interactions.filter (·.msg = msg))[i]
+    have b_mem_filter : b ∈ interactions.filter (·.msg = msg) := by simp [b]
+    apply h_no_push b <;> simp_all
+  rw [all_minus_one, List.sum_replicate, smul_neg, nsmul_eq_mul, mul_one, neg_eq_zero] at balance
+  rw [Lean.Grind.IsCharP.natCast_eq_zero_iff_of_lt _ length_lt_ringChar] at balance
+  simp only [List.length_eq_zero_iff, List.filter_eq_nil_iff, decide_eq_true_eq, length, msg] at balance
+  specialize balance a h_mem_a
+  contradiction
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
@@ -1479,7 +1509,7 @@ omit [Fact (p > 512)] in
 /-- In a list of interactions where all multiplicities are 1 or -1,
     if the per-message sum is 0 and (-1, msg) appears, then (1, msg) also appears.
     Requires that the characteristic is larger than the list length. -/
-lemma exists_push_of_pull {n : ℕ}
+lemma exists_push_of_pull' {n : ℕ}
     (interactions : List (F p × Vector (F p) n)) (msg : Vector (F p) n)
     (h_mults : ∀ entry ∈ interactions, entry.2 = msg → entry.1 = 1 ∨ entry.1 = -1)
     (h_balance : ((interactions.filter (fun x => x.2 = msg)).map Prod.fst).sum = 0)
@@ -1628,7 +1658,7 @@ lemma all_fib_pushes_valid
       exact verifier_push_valid
     · -- Fib8 push: valid if input is valid
       -- By per-message balance, the pull (-1, (n_i, x_i, y_i)) has a matching push
-      have h_matching := exists_push_of_pull fibInteractions (#v[n_i, x_i, y_i])
+      have h_matching := exists_push_of_pull' fibInteractions (#v[n_i, x_i, y_i])
         (fun e h_mem _ => h_mults e h_mem) (h_balance _) h_pull_mem h_bound
       -- Apply IH: the matching push (1, (n_i, x_i, y_i)) is valid
       have h_input_valid : IsValidFibState n_i x_i y_i := by
@@ -1836,7 +1866,7 @@ lemma fib_step_counter_bounded
       exact Nat.succ_ne_zero _ this
     · -- predecessor pull gives predecessor push
       have h_push_prev : (1, (#v[n_prev, x, y] : Vector (F p) 3)) ∈ fibInteractions :=
-        exists_push_of_pull fibInteractions (#v[n_prev, x, y])
+        exists_push_of_pull' fibInteractions (#v[n_prev, x, y])
           (fun e h _ => h_mults e h) (h_balanced _) h_pull h_bound
       have h_eq : n_prev = (n : F p) := by
         have h' : n_prev + 1 = (n + 1 : F p) := by simpa [h_step_prev] using h_step
@@ -2837,11 +2867,11 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
         -- Use predecessor push at counter n_i
         have h_push_at_n : (1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ fibInteractions := by
           have h_pull_in_fib : (-1, (#v[n_i, x_i, y_i] : Vector (F p) 3)) ∈ fibInteractions := by
-            simp only [fibInteractions, Ensemble.interactions]
+            simp only [fibInteractions]
             apply List.mem_append_right
             rw [List.mem_flatMap]
             exact ⟨table, h_table_mem, h_fib_pull_in_table⟩
-          exact exists_push_of_pull fibInteractions (#v[n_i, x_i, y_i])
+          exact exists_push_of_pull' fibInteractions (#v[n_i, x_i, y_i])
             (fun e h _ => h_fib_mults e h) (h_fib_balanced _) h_pull_in_fib h_fib_bound
         have h_bound_n : n_i.val + 1 < p :=
           fib_step_counter_bounded fibInteractions h_fib_bound h_fib_mults h_fib_balanced
@@ -2877,7 +2907,7 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
     h_fib_bound h_fib_balanced h_fib_mults h_fib8_soundness
 
   -- ── Step 7: The verifier's pull has a matching valid push ──
-  have h_matching := exists_push_of_pull fibInteractions (#v[n, x, y])
+  have h_matching := exists_push_of_pull' fibInteractions (#v[n, x, y])
     (fun e h _ => h_fib_mults e h) (h_fib_balanced _) h_verifier_pull h_fib_bound
 
   have h_valid := h_all_valid (1, #v[n, x, y]) h_matching rfl
