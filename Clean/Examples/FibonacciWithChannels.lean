@@ -1225,6 +1225,12 @@ class NormalChannel (channel : RawChannel F) : Prop where
     channel.Requirements mult msg data →
     channel.Guarantees (-1) msg data
 
+variable [Fact (ringChar F ≠ 2)]
+
+omit [DecidableEq F] in
+lemma one_ne_neg_one : (1 : F) ≠ -1 :=
+  Ne.symm (Ring.neg_one_ne_one_of_char_ne_two ‹Fact (ringChar F ≠ 2)›.out)
+
 /--
 Assume you have a list of channel interactions that is made up of pairs (-1, a_i), (1, b_i),
 where for each i, Guarantees (-1, a_i) → Requirements (1, b_i).
@@ -1259,6 +1265,25 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
   induction n with
   | zero => nomatch hi
   | succ n ih =>
+    -- we identify the "previous" pair (a[j], b[j]) in the chain, i.e. where b[j] = a[i]
+    have ⟨ b', b'_mem, b'_eq_a ⟩ := exists_b_of_a as[i] (List.getElem_mem ..)
+    have ⟨ j, hj, hb' ⟩ := List.getElem_of_mem b'_mem
+    -- thanks to the channel being normal, it suffices to show the requirements of b[j]
+    have as_i_channel := as_channel as[i] (List.getElem_mem ..)
+    have as_i_mult := as_mult as[i] (List.getElem_mem ..)
+    have as_i_size : as[i].msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
+    suffices a_grt' : channel.Guarantees (-1) ⟨ as[i].msg, as_i_size ⟩ data by
+      intro _
+      convert a_grt'
+    suffices b_req : bs[j].Requirements data by
+      apply NormalChannel.isNormal (channel := channel) ⟨ as[i].msg, as_i_size ⟩ 1 data one_ne_neg_one
+      simp only [Interaction.Requirements, Interaction.msgVector] at b_req
+      have bs_j_channel := bs_channel bs[j] (hb' ▸ b'_mem) |>.symm
+      have bs_j_mult := bs_mult bs[j] (hb' ▸ b'_mem) |>.symm
+      simp only [←b'_eq_a, ←hb']
+      convert b_req using 1
+      sorry
+
     sorry
 
 end
