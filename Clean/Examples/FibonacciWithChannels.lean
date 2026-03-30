@@ -873,30 +873,23 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   -- we need to make use of soundness of the original ensemble; that'll give us most of the guarantees we need
   whnf at h_sound
   -- witness is just our witness but without the new table
-  -- TODO maybe we could add separate lemmas about how an addTable witness is always split into an old witness + new table witness
   have h_len : (ens.addTable table).tables.length = ens.tables.length + 1 := by
     simp [addTable]
   obtain ⟨ witness', tableWitness, h_split, h_data_eq, h_table, h_data_eq' ⟩ := addTable_witness ens table witness
-  have h_witlen : witness.tables.length = ens.tables.length + 1 := by
-    simp [←witness.same_length, addTable]
-  let h_sound' := h_sound witness' publicInput
-  have h_wit_len_pos : 0 < witness.tables.length := by simp [h_witlen]
-  have h_wit_ne_nil : witness.tables ≠ [] := List.ne_nil_of_length_pos h_wit_len_pos
   have h_wit_tail : witness'.tables = witness.tables.tail := by simp [h_split]
-  let tableInteractions := tableWitness.interactions
+  let h_sound' := h_sound witness' publicInput
   rw [h_table] at grts_subset_finished reqs_disjoint_finished
   -- we instantiate partial balance by moving the new table's interactions to `extraInteractions`
   rcases partial_balance with ⟨ extraInteractions, balance, reqs_extra ⟩
   have partial_balance' : ens.PartialBalancedChannels finished h_finished publicInput witness' := by
-    refine ⟨tableInteractions ++ extraInteractions, ?_⟩
+    refine ⟨tableWitness.interactions ++ extraInteractions, ?_⟩
     constructor
     · intro channel h_mem_channel
       -- balance holds because we're balancing the same list (just need to show that)
       specialize balance channel h_mem_channel
       apply balancedInteractions_of_perm ?_ balance
       simp only [interactionsWith, verifierInteractionsWith, addTable, h_data_eq, h_split,
-        List.flatMap_cons, RawChannel.filter', List.append_assoc, List.filter_append,
-        tableInteractions]
+        List.flatMap_cons, RawChannel.filter', List.append_assoc, List.filter_append]
       rw [List.perm_append_left_iff, ←List.append_assoc,
         ←List.append_assoc, List.perm_append_right_iff, TableWitness.interactionsWith_eq_filter]
       apply List.perm_append_comm
@@ -906,7 +899,6 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
       -- and on new table bc channelsWithReqs are disjoint from finished
       refine ⟨ ?_, reqs_extra i ⟩
       revert i
-      simp only [tableInteractions]
       intro i hi h_mem_finished
       have h_channel_not_mem : i.channel ∉ tableWitness.channelsWithRequirements := by
         intro h_mem
@@ -943,7 +935,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   intro channel h_mem_finished
   show tableWitness.ChannelGuarantees channel
   replace h_mem_finished : channel ∈ finished := grts_subset_finished h_mem_finished
-  -- this easily follows from a much stronger statement: guarantees for hold on ALL channel interactions
+  -- this easily follows from a much stronger statement: guarantees for a finished channel hold on ALL channel interactions
   let channelInteractions := (ens.addTable table).interactionsWith publicInput witness channel
     ++ channel.filter' extraInteractions;
   replace balance : BalancedInteractions channelInteractions := balance channel (h_finished h_mem_finished)
@@ -1194,6 +1186,7 @@ def BytesTable : StaticLookupChannel (F p) field where
 def BytesChannel := Channel.fromStatic (F p) field BytesTable
 
 theorem bytesChannel_consistent : (BytesChannel (p:=p)).toRaw.Consistent := by
+  whnf
   sorry
 
 -- bytes "circuit" that just pushes all bytes
