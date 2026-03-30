@@ -1261,31 +1261,38 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
     have b_mem : b ∈ bs := by simp only [List.mem_append] at b_mem; tauto
     exists b
 
-  intro constraints i hi bs_req
+  intro constraints i hi bi_req
   induction n with
   | zero => nomatch hi
   | succ n ih =>
     -- we identify the "previous" pair (a[j], b[j]) in the chain, i.e. where b[j] = a[i]
     have ⟨ b', b'_mem, b'_eq_a ⟩ := exists_b_of_a as[i] (List.getElem_mem ..)
     have ⟨ j, hj, hb' ⟩ := List.getElem_of_mem b'_mem
+    rw [h_len_b] at hj
     -- thanks to the channel being normal, it suffices to show the requirements of b[j]
-    have as_i_channel := as_channel as[i] (List.getElem_mem ..)
-    have as_i_mult := as_mult as[i] (List.getElem_mem ..)
-    have as_i_size : as[i].msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
-    suffices a_grt' : channel.Guarantees (-1) ⟨ as[i].msg, as_i_size ⟩ data by
-      intro _
-      convert a_grt'
-    suffices b_req : bs[j].Requirements data by
+    have bj_implies_ai : bs[j].Requirements data → as[i].Guarantees data := by
+      intro bj_req
+      have as_i_channel := as_channel as[i] (List.getElem_mem ..)
+      have as_i_mult := as_mult as[i] (List.getElem_mem ..)
+      have as_i_size : as[i].msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
+      suffices a_grt' : channel.Guarantees (-1) ⟨ as[i].msg, as_i_size ⟩ data by
+        intro _
+        convert a_grt'
       apply NormalChannel.isNormal (channel := channel) ⟨ as[i].msg, as_i_size ⟩ 1 data one_ne_neg_one
-      simp only [Interaction.Requirements, Interaction.msgVector] at b_req
+      simp only [Interaction.Requirements, Interaction.msgVector] at bj_req
       have bs_j_channel := bs_channel bs[j] (hb' ▸ b'_mem) |>.symm
-      have bs_j_mult := bs_mult bs[j] (hb' ▸ b'_mem) |>.symm
-      simp only [←b'_eq_a, ←hb']
-      convert b_req using 1
-      sorry
-
+      have b'_mult := bs_mult b' b'_mem |>.symm
+      simp only [hb', b'_eq_a] at bj_req
+      convert bj_req
+    -- if i = j, we're done
+    by_cases h_ij : j = i
+    · subst h_ij; exact bj_implies_ai bi_req
+    -- if i ≠ j, we can reduce our goal to a smaller list: the one where
+    -- (a[j], b[j]) and (a[i], b[i]) are replaced with the single pair (a[j], b[i]).
+    -- for this, we need to show that the forward implication is true on the pair:
+    have aj_implies_bi : as[j].Guarantees data → bs[i].Requirements data := fun aj_grt =>
+      aj_grt |> constraints j hj |> bj_implies_ai |> constraints i hi
     sorry
-
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
