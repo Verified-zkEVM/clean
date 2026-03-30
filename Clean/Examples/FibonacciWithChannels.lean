@@ -1163,6 +1163,29 @@ def addFinishedChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChann
 @[circuit_norm] lemma addFinishedChannel_finished {channel : RawChannel F} {h_consistent : channel.Consistent} :
   (soundEns.addFinishedChannel channel h_consistent).finished = channel :: soundEns.finished := rfl
 end SoundEnsemble
+
+/-
+VM-like ensembles have a "main channel" that stores the VM state, which we'll call a _VM channel_.
+One or more tables pull from, then push to, this channel in their row circuit;
+thereby performing one VM transition.
+
+The public input/output of such an ensemble is the initial push (initial state) and the final pull (final state).
+The statement being proven is that there exists a sequence of valid VM transitions from the initial state to the final state.
+Note that this does not, in general, requires that every row in the trace participates in the valid VM transition!
+In addition to the valid main transition path, there can be additional cycles of VM steps.
+
+In fact, from the assumptions (constraints + balance), we _cannot_ prove `SoundChannels` for a VM channel in the sense that
+all guarantees for that channel must hold. For the case of unused cycles, we have a circular implication
+sequence of the form guarantees → requirements → guarantees → ... which allows that none of the guarantees are actually satisified.
+
+This is why we need a weaker statement about VM channels which still allows us to prove soundness of the overall ensemble.
+Essentially, it amounts to the simple idea that for any cycle, if just _one_ of the guarantees or requirements hold,
+then all of them do.
+This holds in a very general sense and is applied to the "cycle" which contains the input + output interactions.
+Thus, assuming the input satisfies the requirements, we can conclude that the output satisfies the guarantees. This
+can usually be engineered to be just the statement we actually care about.
+This idea is captured by the following theorem.
+-/
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
