@@ -1796,60 +1796,6 @@ lemma fib_step_counter_bounded
             (1, (#v[n_prev, x, y] : Vector (F p) 3)) h_push_prev rfl h_step_prev' k hk_le
           exact this
 
-/-- For any FibonacciChannel interaction from the tables (not verifier),
-    the multiplicity is 1 or -1.
-
-    This follows from:
-    - pushBytes doesn't emit to FibonacciChannel
-    - add8 doesn't emit to FibonacciChannel
-    - fib8 only pulls (mult=-1) and pushes (mult=1) to FibonacciChannel -/
-lemma fib_table_interaction_mult_pm_one
-    (witness : EnsembleWitness (fibonacciEnsemble (p := p)))
-    (entry : F p × Vector (F p) 3)
-    (h_mem : entry ∈ witness.tables.flatMap
-              (fun table => table.interactionPairsWith ((FibonacciChannel (p := p)).toRaw))) :
-    entry.1 = 1 ∨ entry.1 = -1 := by
-  -- Entry is from some table's FibonacciChannel interactions
-  rcases List.mem_flatMap.1 h_mem with ⟨table, h_table_mem, h_entry_in_table⟩
-  rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
-  have h_len : witness.tables.length = 3 := by
-    simpa [fibonacciEnsemble] using witness.same_length.symm
-  have hi' : i < 3 := by simpa [h_len] using hi
-  have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
-    simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
-  have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := h_same.symm
-  match i with
-  | 0 => -- pushBytes: no FibonacciChannel interactions
-    simp only [fibonacciEnsemble] at h_table_abs
-    simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
-      AbstractTable.operations, List.filterMap_flatMap] at h_entry_in_table
-    rcases List.mem_flatMap.1 h_entry_in_table with ⟨row, h_row_mem, h_raw_mem⟩
-    rw [h_table_abs] at h_raw_mem
-    simp [circuit_norm, pushBytes, FibonacciChannel, BytesChannel, Channel.emitted,
-      RawChannel.filter] at h_raw_mem
-  | 1 => -- add8: no FibonacciChannel interactions
-    simp only [fibonacciEnsemble] at h_table_abs
-    simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
-      AbstractTable.operations, List.filterMap_flatMap] at h_entry_in_table
-    rcases List.mem_flatMap.1 h_entry_in_table with ⟨row, h_row_mem, h_raw_mem⟩
-    rw [h_table_abs] at h_raw_mem
-    simp only [add8, circuit_norm, FibonacciChannel, BytesChannel, Add8Channel, Channel.emitted,
-      RawChannel.filter, InteractionDelta.single] at h_raw_mem
-    simp [InteractionDelta.zero_eq_nil, InteractionDelta.add_eq_append] at h_raw_mem
-  | 2 => -- fib8: pulls and pushes to FibonacciChannel with mult = ±1
-    simp only [fibonacciEnsemble] at h_table_abs
-    simp only [List.filterMap_flatMap] at h_entry_in_table
-    rcases (by
-      simpa [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
-        AbstractTable.operations, RawChannel.filter, h_table_abs] using h_entry_in_table
-    ) with ⟨row, h_row_mem, h_raw_mem⟩
-    set env := table.environment row
-    rw [h_table_abs] at h_raw_mem
-    simp only [fib8, circuit_norm, FibonacciChannel, Add8Channel, Channel.emitted,
-      InteractionDelta.single, RawChannel.filter] at h_raw_mem
-    simp [InteractionDelta.zero_eq_nil, InteractionDelta.add_eq_append] at h_raw_mem
-    rcases h_raw_mem with rfl | rfl <;> simp
-
 /-- Verifier's Add8Channel interactions are empty (verifier only uses FibonacciChannel) -/
 lemma verifier_add8_interactions_empty (publicInput : fieldTriple (F p)) (data : ProverData (F p)) :
     (fibonacciEnsemble (p := p)).verifierInteractionsWith (Add8Channel.toRaw) publicInput data = [] := by
@@ -1884,6 +1830,133 @@ lemma pushBytes_add8_interactions_empty
       simp [Operations.interactionValuesWith, h_ops_empty]
     rw [h_row_empty]
   simp [h_empty]
+
+/-- pushBytes's FibonacciChannel interactions are empty -/
+lemma pushBytes_fib_interactions_empty
+    (table : TableWitness (F p))
+    (h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩) :
+    table.interactionPairsWith (FibonacciChannel.toRaw) = [] := by
+  simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
+    AbstractTable.operations]
+  simp only [List.filterMap_flatMap]
+  rw [List.flatMap_eq_nil_iff]
+  intro row h_row_mem
+  rw [h_is_pushBytes]
+  have h_ops_empty :
+      Operations.interactionsWith FibonacciChannel.toRaw
+        ((pushBytes (p := p)).instantiate.operations 0) = [] := by
+    simp only [circuit_norm, witnessAny]
+    simp only [circuit_norm, FormalCircuitWithInteractions.toSubcircuit_interactions,
+      Circuit.interactions_mapFinRange,
+      pushBytes, BytesChannel, FibonacciChannel, BytesTable]
+    simp only [List.filter_eq_nil_iff, decide_eq_true_eq, List.mem_ofFn]
+    rintro a ⟨ i, a_mem ⟩
+    symm at a_mem
+    subst a_mem
+    simp only [circuit_norm, not_false_eq_true]
+  have h_row_empty :
+      Operations.interactionValuesWith FibonacciChannel.toRaw
+        ((pushBytes (p := p)).instantiate.operations 0) (table.environment row) = [] := by
+    simp [Operations.interactionValuesWith, h_ops_empty]
+  rw [h_row_empty]
+  simp
+
+/-- add8's FibonacciChannel interactions are empty -/
+lemma add8_fib_interactions_empty
+    (table : TableWitness (F p))
+    (h_is_add8 : table.abstract = ⟨add8 (p := p)⟩) :
+    table.interactionPairsWith (FibonacciChannel.toRaw) = [] := by
+  simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
+    AbstractTable.operations]
+  simp only [List.filterMap_flatMap]
+  rw [List.flatMap_eq_nil_iff]
+  intro row h_row_mem
+  rw [h_is_add8]
+  have h_ops_empty : Operations.interactionsWith FibonacciChannel.toRaw
+      ((add8 (p := p)).instantiate.operations 0) = [] := by
+    simp only [Operations.interactionsWith, circuit_norm, add8, witnessAny, getOffset,
+      FormalCircuitWithInteractions.toSubcircuit_interactions, BytesChannel, Add8Channel,
+      FibonacciChannel, BytesTable, List.filter_cons]
+    simp only [circuit_norm,
+      List.filter_cons, List.filter_nil, List.sum_cons, List.sum_nil,
+      FormalAssertion.toSubcircuit_interactions, Gadgets.Equality.main_interactions]
+  have h_row_empty :
+      Operations.interactionValuesWith FibonacciChannel.toRaw
+        ((add8 (p := p)).instantiate.operations 0) (table.environment row) = [] := by
+    simp [Operations.interactionValuesWith, h_ops_empty]
+  rw [h_row_empty]
+  simp
+
+/-- For any FibonacciChannel interaction from the tables (not verifier),
+    the multiplicity is 1 or -1.
+
+    This follows from:
+    - pushBytes doesn't emit to FibonacciChannel
+    - add8 doesn't emit to FibonacciChannel
+    - fib8 only pulls (mult=-1) and pushes (mult=1) to FibonacciChannel -/
+lemma fib_table_interaction_mult_pm_one
+    (witness : EnsembleWitness (fibonacciEnsemble (p := p)))
+    (entry : F p × Vector (F p) 3)
+    (h_mem : entry ∈ witness.tables.flatMap
+              (fun table => table.interactionPairsWith ((FibonacciChannel (p := p)).toRaw))) :
+    entry.1 = 1 ∨ entry.1 = -1 := by
+  rcases List.mem_flatMap.1 h_mem with ⟨table, h_table_mem, h_entry_in_table⟩
+  rcases List.mem_iff_getElem.1 h_table_mem with ⟨i, hi, htable⟩
+  have h_len : witness.tables.length = 3 := by
+    simpa [fibonacciEnsemble] using witness.same_length.symm
+  have hi' : i < 3 := by simpa [h_len] using hi
+  have h_same : fibonacciEnsemble.tables[i] = table.abstract := by
+    simpa [htable] using witness.same_circuits i (by simpa [fibonacciEnsemble, h_len] using hi)
+  have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := h_same.symm
+  match i with
+  | 0 =>
+    simp only [fibonacciEnsemble] at h_table_abs
+    have h_empty := pushBytes_fib_interactions_empty table h_table_abs
+    rw [h_empty] at h_entry_in_table
+    simp at h_entry_in_table
+  | 1 =>
+    simp only [fibonacciEnsemble] at h_table_abs
+    have h_empty := add8_fib_interactions_empty table h_table_abs
+    rw [h_empty] at h_entry_in_table
+    simp at h_entry_in_table
+  | 2 =>
+    simp only [fibonacciEnsemble] at h_table_abs
+    have h_is_fib8 : table.abstract = ⟨fib8 (p := p)⟩ := by
+      simpa using h_table_abs
+    simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
+      AbstractTable.operations, List.filterMap_flatMap] at h_entry_in_table
+    rcases List.mem_flatMap.1 h_entry_in_table with ⟨row, h_row_mem, h_raw_mem⟩
+    set env := table.environment row
+    rw [h_is_fib8] at h_raw_mem
+    let z : Expression (F p) := var ⟨3⟩
+    have h_exact :
+        Operations.interactionValuesWith FibonacciChannel.toRaw
+            ((fib8 (p := p)).instantiate.operations 0) env =
+          [AbstractInteraction.eval env (FibonacciChannel.pulled' (varFromOffset fieldTriple 0)),
+            AbstractInteraction.eval env
+              (FibonacciChannel.pushed' ((varFromOffset fieldTriple 0).1 + 1, (varFromOffset fieldTriple 0).2.2, z))] := by
+      have h_exposed := (fib8 (p := p)).exposedChannels_eq (varFromOffset fieldTriple 0) 3
+      have h_mem_exposed :
+          ⟨FibonacciChannel.toRaw,
+            [FibonacciChannel.pulled' (varFromOffset fieldTriple 0),
+              FibonacciChannel.pushed' ((varFromOffset fieldTriple 0).1 + 1, (varFromOffset fieldTriple 0).2.2, z)]⟩ ∈
+            (fib8 (p := p)).exposedChannels (varFromOffset fieldTriple 0) 3 := by
+        simp [fib8, expose, z]
+      have h_interactions :
+          ((fib8 (p := p)).main (varFromOffset fieldTriple 0) |>.operations 3).interactionsWith
+            FibonacciChannel.toRaw =
+          [FibonacciChannel.pulled' (varFromOffset fieldTriple 0),
+            FibonacciChannel.pushed' ((varFromOffset fieldTriple 0).1 + 1, (varFromOffset fieldTriple 0).2.2, z)] :=
+        h_exposed _ h_mem_exposed
+      simp only [circuit_norm, witnessAny, FormalCircuitWithInteractions.toSubcircuit_interactions, fib8]
+      exact congrArg (List.map (AbstractInteraction.eval env)) h_interactions
+    rw [h_exact] at h_raw_mem
+    simp [Interaction.pairFor, circuit_norm, z, AbstractInteraction.eval] at h_raw_mem
+    rcases h_raw_mem with ⟨_, rfl⟩ | ⟨_, rfl⟩
+    · right
+      rfl
+    · left
+      rfl
 
 /-- fib8's Add8Channel interactions all have mult = -1 (fib8 only pulls from Add8Channel) -/
 lemma fib8_add8_interactions_mult_neg
@@ -2033,70 +2106,6 @@ lemma add8_interactions_satisfy_requirements
 
   -- Apply the requirement
   exact h_requirements h_x_range h_y_range
-
--- ══════════════════════════════════════════════════════════════════════════════
--- FibonacciChannel structural lemmas
--- ══════════════════════════════════════════════════════════════════════════════
-
-/-- pushBytes's FibonacciChannel interactions are empty -/
-lemma pushBytes_fib_interactions_empty
-    (table : TableWitness (F p))
-    (h_is_pushBytes : table.abstract = ⟨pushBytes (p := p)⟩) :
-    table.interactionPairsWith (FibonacciChannel.toRaw) = [] := by
-  -- pushBytes only emits to BytesChannel (name = "bytes"), not FibonacciChannel (name = "fibonacci")
-  simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
-    AbstractTable.operations]
-  simp only [List.filterMap_flatMap]
-  rw [List.flatMap_eq_nil_iff]
-  intro row h_row_mem
-  rw [h_is_pushBytes]
-
-  have h_ops_empty :
-      Operations.interactionsWith FibonacciChannel.toRaw
-        ((pushBytes (p := p)).instantiate.operations 0) = [] := by
-    simp only [circuit_norm, witnessAny]
-    simp only [circuit_norm, FormalCircuitWithInteractions.toSubcircuit_interactions,
-      Circuit.interactions_mapFinRange,
-      pushBytes, BytesChannel, FibonacciChannel, BytesTable]
-    simp only [List.filter_eq_nil_iff, decide_eq_true_eq, List.mem_ofFn]
-    rintro a ⟨ i, a_mem ⟩
-    symm at a_mem
-    subst a_mem
-    simp only [circuit_norm, not_false_eq_true]
-
-  have h_row_empty :
-      Operations.interactionValuesWith FibonacciChannel.toRaw
-        ((pushBytes (p := p)).instantiate.operations 0) (table.environment row) = [] := by
-    simp [Operations.interactionValuesWith, h_ops_empty]
-  rw [h_row_empty]
-  simp
-
-/-- add8's FibonacciChannel interactions are empty -/
-lemma add8_fib_interactions_empty
-    (table : TableWitness (F p))
-    (h_is_add8 : table.abstract = ⟨add8 (p := p)⟩) :
-    table.interactionPairsWith (FibonacciChannel.toRaw) = [] := by
-  -- add8 only emits to BytesChannel and Add8Channel, not FibonacciChannel
-  simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
-    AbstractTable.operations]
-  simp only [List.filterMap_flatMap]
-  rw [List.flatMap_eq_nil_iff]
-  intro row h_row_mem
-  rw [h_is_add8]
-  have h_ops_empty : Operations.interactionsWith FibonacciChannel.toRaw
-      ((add8 (p := p)).instantiate.operations 0) = [] := by
-    simp only [Operations.interactionsWith, circuit_norm, add8, witnessAny, getOffset,
-      FormalCircuitWithInteractions.toSubcircuit_interactions, BytesChannel, Add8Channel,
-      FibonacciChannel, BytesTable, List.filter_cons]
-    simp only [circuit_norm,
-      List.filter_cons, List.filter_nil, List.sum_cons, List.sum_nil,
-      FormalAssertion.toSubcircuit_interactions, Gadgets.Equality.main_interactions]
-  have h_row_empty :
-      Operations.interactionValuesWith FibonacciChannel.toRaw
-        ((add8 (p := p)).instantiate.operations 0) (table.environment row) = [] := by
-    simp [Operations.interactionValuesWith, h_ops_empty]
-  rw [h_row_empty]
-  simp
 
 /-- fib8 rows emit matching pull and push to FibonacciChannel:
     For each push (1, (n+1, y, z)), the same row has:
