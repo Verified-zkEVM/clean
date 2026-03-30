@@ -1626,24 +1626,19 @@ lemma bytes_push_val_lt_256
     have h_table_abs : table.abstract = fibonacciEnsemble.tables[i] := h_same.symm
     match i with
     | 0 => -- pushBytes: emits byte values 0..255
-      simp only [fibonacciEnsemble] at h_table_abs
-      simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
-        AbstractTable.operations] at h_mem_table
-      simp only [List.filterMap_flatMap] at h_mem_table
-      rcases List.mem_flatMap.1 h_mem_table with ⟨row, h_row_mem, h_in_filter⟩
+      simp [fibonacciEnsemble] at h_table_abs
+      simp only [circuit_norm, TableWitness.interactionPairsWith, TableWitness.interactionsWith_eq_filter] at h_mem_table
+      simp [TableWitness.interactions] at h_mem_table
+      rcases h_mem_table with ⟨i, ⟨⟨row, ⟨h_row_mem, h_in_filter⟩⟩, h_row_channel⟩, h_extra⟩
       rw [h_table_abs] at h_in_filter
-      simp only [RawChannel.filter, pushBytes, witnessAny, getOffset,
-        FormalCircuitWithInteractions.instantiate, circuit_norm, BytesChannel, BytesTable,
-        Channel.emitted, InteractionDelta.single, Channel.toRaw,
-        List.filterMap_flatMap] at h_in_filter
-      rcases List.mem_flatMap.1 h_in_filter with ⟨idx, h_idx_mem, h_entry_mem⟩
-      -- h_entry_mem says entry is in filterMap applied to singleton list, giving entry = (_, #v[idx])
-      simp only [List.filterMap_cons, true_and,
-        show (#[(_ : F p)] : Array (F p)).size = 1 by rfl, dite_true,
-        show (0 : InteractionDelta (F p)) = [] by rfl, List.filterMap_nil,
-        List.mem_cons, List.not_mem_nil, or_false] at h_entry_mem
-      -- h_entry_mem : entry = (_, #v[↑↑idx]) where idx : Fin 256
-      -- idx.val < 256 by definition
+      simp only [circuit_norm, AbstractTable.operations, witnessAny,
+        FormalCircuitWithInteractions.toSubcircuit_interactions] at h_in_filter
+      simp [Interaction.pairFor] at h_extra
+      rcases h_extra with ⟨h_channel_eq, h_interaction_eq⟩
+      rw [←h_interaction_eq]
+      simp [circuit_norm]
+      -- TODO
+      stop
       have h_idx_lt : idx.val < 256 := idx.isLt
       have h_idx_lt_p : idx.val < p := by
         have hp : p > 512 := Fact.elim (by infer_instance : Fact (p > 512))
@@ -1660,6 +1655,8 @@ lemma bytes_push_val_lt_256
         _ = idx.val := h_val
         _ < 256 := h_idx_lt
     | 1 => -- add8: only pulls (mult = -1), contradicts h_push
+      -- TODO
+      stop
       simp only [fibonacciEnsemble] at h_table_abs
       simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
         AbstractTable.operations] at h_mem_table
@@ -1681,6 +1678,8 @@ lemma bytes_push_val_lt_256
       rw [h_in_filter] at h_push
       simp only [ne_eq, not_true_eq_false] at h_push
     | 2 => -- fib8: no BytesChannel interactions
+      -- TODO
+      stop
       simp only [fibonacciEnsemble] at h_table_abs
       simp only [TableWitness.interactionPairsWith, TableWitness.interactionsWith,
         AbstractTable.operations] at h_mem_table
@@ -2002,6 +2001,7 @@ lemma add8_interactions_satisfy_requirements
     AbstractTable.operations, List.filterMap_flatMap] at h_mem
   rw [h_is_add8] at h_mem
   rcases List.mem_flatMap.1 h_mem with ⟨row, h_row_mem, h_in_filter⟩
+  stop
 
   -- Simplify h_in_filter to extract entry structure
   simp only [RawChannel.filter, add8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
@@ -2131,6 +2131,8 @@ lemma fib8_fib_push_has_matching_pull
   rw [h_is_fib8] at h_mem
   rcases List.mem_flatMap.1 h_mem with ⟨row, h_row_mem, h_in_filter⟩
   -- Simplify h_in_filter to extract the structure
+  -- TODO
+  stop
   simp only [RawChannel.filter, fib8, witnessAny, getOffset, FormalCircuitWithInteractions.instantiate,
     circuit_norm, FibonacciChannel, Add8Channel, Channel.emitted, Channel.pulled,
     InteractionDelta.single, Channel.toRaw] at h_in_filter
