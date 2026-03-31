@@ -1301,22 +1301,23 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
       exists b
     -- we identify the "previous" transition (a[j], b[j]) in the chain, where b[j] = a[i]
     intro i hi bi_req
-    have ⟨ b', b'_mem, b'_eq_a ⟩ := exists_b_of_a as[i] (List.getElem_mem ..)
+    have ⟨ b', b'_mem, bj_msg ⟩ := exists_b_of_a as[i] (List.getElem_mem ..)
     set msg := as[i].msg with ai_msg
     have ⟨ j, hj, hb' ⟩ := List.getElem_of_mem b'_mem
+    subst hb'
     rw [h_len_b] at hj
     -- thanks to the channel being normal, it suffices to show the requirements of b[j]
     have bj_implies_ai : bs[j].Requirements data → as[i].Guarantees data := by
       intro bj_req
       have as_i_channel := as_channel as[i] (List.getElem_mem ..)
+      have bs_j_channel := bs_channel bs[j] (List.getElem_mem ..) |>.symm
       have as_i_mult := as_mult as[i] (List.getElem_mem ..)
+      have bs_j_mult := bs_mult bs[j] (List.getElem_mem ..) |>.symm
       have msg_size : msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
       suffices a_grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         convert fun _ => a_grt'
       apply NormalChannel.isNormal ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
-      simp only [Interaction.Requirements, Interaction.msgVector] at bj_req
-      simp only [hb', b'_eq_a, bs_mult b' b'_mem] at bj_req
-      have bs_j_channel : channel = bs[j].channel := bs_channel bs[j] (hb' ▸ b'_mem) |>.symm
+      simp only [Interaction.Requirements, Interaction.msgVector, bj_msg] at bj_req
       convert bj_req
     -- if i = j, we're done
     by_cases h_ij : j = i
@@ -1388,7 +1389,7 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
     simp only [as', bs_eq]
     rw [List.countP_eraseIdx (by linarith), ←ai_msg]
     rw [List.countP_eraseIdx (by simp_all), List.countP_set (by rw [h_len_b]; exact hj),
-      hb', b'_eq_a, List.getElem_set]
+      bj_msg, List.getElem_set]
     simp only [decide_eq_true_eq, h_ij, ↓reduceIte, add_tsub_cancel_right]
     rw [balance]
 end
