@@ -382,7 +382,22 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
     table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
 
   completeness := by
-    intro N trace env _ _
+    intro N trace env ⟨h_init, h_rows⟩ h_witness
+    -- Proof outline (parallel to table_soundness_aux):
+    -- By induction on trace, simultaneously prove:
+    -- 1. TableConstraintsHold.Completeness (constraints hold in completeness sense)
+    -- 2. Per-row Spec propagation (derived via soundness at each step)
+    --
+    -- Base: First row has state = input (from h_rows, i=0 condition).
+    --   Boundary constraint completeness follows from row.1 = input.
+    --   Spec at row 0 from InitialStateAssumptions.
+    --
+    -- Step: Given Spec at row i + InputAssumptions at row i + honest witnesses:
+    --   By InductiveTable.completeness → Circuit.ConstraintsHold.Completeness at step
+    --   By InductiveTable.soundness → Spec at row i+1
+    --
+    -- Final: Last row has state = output (from h_rows, i=N-1 condition).
+    --   Boundary constraint completeness follows.
     sorry
 
   offset_consistent := by
