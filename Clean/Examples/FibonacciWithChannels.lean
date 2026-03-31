@@ -1191,7 +1191,7 @@ These ideas are captured by the following definitions and theorems.
 
 /--
 Useful mechanical lemma: if all multiplicities for a given message are the same,
-the balance sum can be written as multiplicity times length.
+the balance sum can be written as multiplicity times message count.
 -/
 lemma balanceOf_eq_of_const_mult {interactions : List (Interaction F)} {msg : Array F} {mult : F} :
     (∀ i ∈ interactions, i.msg = msg → i.mult = mult) →
@@ -1212,7 +1212,7 @@ lemma balanceOf_eq_of_const_mult {interactions : List (Interaction F)} {msg : Ar
   apply constant_mult a <;> simp_all
 
 /--
-Special case of `balanceOf_eq_of_const_mult` for when the message doesn't matter.
+Special case of `balanceOf_eq_of_const_mult` for when the exact message doesn't matter.
 -/
 lemma balanceOf_eq_of_const_mult' {interactions : List (Interaction F)} {msg : Array F} {mult : F} :
     (∀ i ∈ interactions, i.mult = mult) →
@@ -1221,7 +1221,7 @@ lemma balanceOf_eq_of_const_mult' {interactions : List (Interaction F)} {msg : A
 
 /--
 If an interaction list is balanced, then for every pull there must be a corresponding "push",
-where "push" just means an interaction with multiplicity ≠ -1.
+where "push" means an interaction with multiplicity ≠ -1.
 -/
 theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : BalancedInteractions interactions) :
     ∀ a ∈ interactions, a.mult = -1 → ∃ b ∈ interactions, b.msg = a.msg ∧ b.mult ≠ -1 := by
@@ -1273,7 +1273,7 @@ We want to think of (a_i → b_i) as the state transition of a VM circuit.
 
 Furthermore, assume the list is balanced and the channel is normal.
 
-Then, for any i, the **converse** implication is true: Requirements (1, b_i) → Guarantees (-1, a_i).
+Then, for any i, the **converse** is true: Requirements (1, b_i) → Guarantees (-1, a_i).
 -/
 theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel F) [NormalChannel channel]
     (as bs : List (Interaction F)) (balance : BalancedInteractions (as ++ bs)) (data : ProverData F)
@@ -1283,10 +1283,11 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
   (as_channel : ∀ a ∈ as, a.channel = channel) (bs_channel : ∀ b ∈ bs, b.channel = channel)
   -- the multiplicities are -1 for as and 1 for bs
   (as_mult : ∀ a ∈ as, a.mult = -1) (bs_mult : ∀ b ∈ bs, b.mult = 1) :
-    -- `as[i].Guarantees → bs[i].Requirements` (the "constraints") for all i implies
     (∀ i : ℕ, (hi : i < n) → as[i].Guarantees data → bs[i].Requirements data) →
-    -- `bs[i].Requirements → as[i].Guarantees` for any i
     ∀ i : ℕ, (hi: i < n) → bs[i].Requirements data → as[i].Guarantees data := by
+  -- the intuition for this proof is that when the requirements for b hold unconditionally, then
+  -- the transition cycle that contains both a and b is valid, so in fact all the guarantees/requirements in this cycle must hold.
+  -- but we avoid explicitly reasoning about cycles by using a clever inductive argument.
   intro constraints
   induction n generalizing as bs with
   | zero => intro i hi; nomatch hi
@@ -1363,8 +1364,9 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
         exact aj_implies_bi
       simp only [as', bs', h_ij', List.getElem_eraseIdx, ne_eq, not_false_eq_true, List.getElem_set_ne]
       split_ifs <;> exact constraints _ (by linarith)
-    -- it only remains to prove the balance condition for as' ++ bs'
-    -- at a high level, it is obviously true because we removed two elements with the same message: b[j] and a[i]
+    -- it only remains to prove the balance condition for as' ++ bs'.
+    -- at a high level, this is obviously true because we removed two opposing elements with the same message
+    -- (b[j] and a[i]), so balance for any message is unaffected.
     rcases balance with ⟨ lt_ringChar, balance ⟩
     simp only [h_len_a, h_len_b, List.length_append] at lt_ringChar
     constructor
@@ -1388,10 +1390,8 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
       split_ifs <;> (simp_all; try omega)
     simp only [as', bs_eq]
     rw [List.countP_eraseIdx (by linarith), ←ai_msg]
-    rw [List.countP_eraseIdx (by simp_all), List.countP_set (by rw [h_len_b]; exact hj),
-      bj_msg, List.getElem_set]
-    simp only [decide_eq_true_eq, h_ij, ↓reduceIte, add_tsub_cancel_right]
-    rw [balance]
+    rw [List.countP_eraseIdx (by simp_all), List.countP_set (h_len_b ▸ hj), bj_msg]
+    simp [h_ij, balance]
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
@@ -1576,10 +1576,11 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
 
   channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
+
   exposedChannels
   | (n, x, y), offset =>
     let z := var ⟨ offset ⟩
-    expose FibonacciChannel [ FibonacciChannel.pulled' (n, x, y) , FibonacciChannel.pushed' (n + 1, y, z) ]
+    expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
 
   exposedChannels_eq := by
     simp only [circuit_norm, Add8Channel, FibonacciChannel]
@@ -1593,9 +1594,6 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     circuit_proof_start [reduceIte, seval]
     rcases input with ⟨ n, x, y ⟩ -- TODO circuit_proof_start should have done this
     simp only [Prod.mk.injEq] at h_input
-    -- why are these not simped?? maybe because fieldPair is not well-recognized
-    -- rw [RawChannel.filter_eq] at h_holds ⊢
-    -- rw [Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq, Channel.interactionFromRaw_eq]
     simp_all only [circuit_norm]
     set z := env.get i₀
     simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte] at h_holds ⊢
@@ -2201,24 +2199,18 @@ lemma fib_table_interaction_mult_pm_one
     have h_exact :
         Operations.interactionValuesWith FibonacciChannel.toRaw
             ((fib8 (p := p)).instantiate.operations 0) env =
-          [AbstractInteraction.eval env (FibonacciChannel.pulled' (varFromOffset fieldTriple 0)),
+          [AbstractInteraction.eval env (FibonacciChannel.pulled (varFromOffset fieldTriple 0)).toRaw,
             AbstractInteraction.eval env
-              (FibonacciChannel.pushed' ((varFromOffset fieldTriple 0).1 + 1, (varFromOffset fieldTriple 0).2.2, z))] := by
+              (FibonacciChannel.pushed ((varFromOffset fieldTriple 0).1 + 1, (varFromOffset fieldTriple 0).2.2, z)).toRaw] := by
       have h_exposed := (fib8 (p := p)).exposedChannels_eq (varFromOffset fieldTriple 0) 3
       have h_mem_exposed :
           ⟨FibonacciChannel.toRaw,
-            [FibonacciChannel.pulled' (varFromOffset fieldTriple 0),
-              FibonacciChannel.pushed' ((varFromOffset fieldTriple 0).1 + 1, (varFromOffset fieldTriple 0).2.2, z)]⟩ ∈
+            [(FibonacciChannel.pulled (varFromOffset fieldTriple 0)).toRaw,
+              (FibonacciChannel.pushed ((varFromOffset fieldTriple 0).1 + 1, (varFromOffset fieldTriple 0).2.2, z)).toRaw]⟩ ∈
             (fib8 (p := p)).exposedChannels (varFromOffset fieldTriple 0) 3 := by
-        simp [fib8, expose, z]
-      have h_interactions :
-          ((fib8 (p := p)).main (varFromOffset fieldTriple 0) |>.operations 3).interactionsWith
-            FibonacciChannel.toRaw =
-          [FibonacciChannel.pulled' (varFromOffset fieldTriple 0),
-            FibonacciChannel.pushed' ((varFromOffset fieldTriple 0).1 + 1, (varFromOffset fieldTriple 0).2.2, z)] :=
-        h_exposed _ h_mem_exposed
+        simp [fib8, expose, z, circuit_norm]
       simp only [circuit_norm, witnessAny, FormalCircuitWithInteractions.toSubcircuit_interactions, fib8]
-      exact congrArg (List.map (AbstractInteraction.eval env)) h_interactions
+      exact congrArg (List.map (AbstractInteraction.eval env)) (h_exposed _ h_mem_exposed)
     rw [h_exact] at h_raw_mem
     simp [Interaction.pairFor, circuit_norm, z, AbstractInteraction.eval] at h_raw_mem
     rcases h_raw_mem with ⟨_, rfl⟩ | ⟨_, rfl⟩
@@ -2244,11 +2236,11 @@ lemma fib8_add8_interactions_mult_neg
       Operations.interactionValuesWith Add8Channel.toRaw
           ((fib8 (p := p)).instantiate.operations 0) env =
         [AbstractInteraction.eval env
-          (Add8Channel.pulled' ((varFromOffset fieldTriple 0).2.1, (varFromOffset fieldTriple 0).2.2, z))] := by
+          (Add8Channel.pulled ((varFromOffset fieldTriple 0).2.1, (varFromOffset fieldTriple 0).2.2, z)).toRaw] := by
     have h_interactions :
         ((fib8 (p := p)).main (varFromOffset fieldTriple 0) |>.operations 3).interactionsWith
           Add8Channel.toRaw =
-        [Add8Channel.pulled' ((varFromOffset fieldTriple 0).2.1, (varFromOffset fieldTriple 0).2.2, z)] := by
+        [(Add8Channel.pulled ((varFromOffset fieldTriple 0).2.1, (varFromOffset fieldTriple 0).2.2, z)).toRaw] := by
       simp only [circuit_norm, fib8, z, FibonacciChannel, Add8Channel]
     simp only [circuit_norm, witnessAny, FormalCircuitWithInteractions.toSubcircuit_interactions, fib8, z]
     exact congrArg (List.map (AbstractInteraction.eval env)) h_interactions

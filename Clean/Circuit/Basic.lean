@@ -129,19 +129,19 @@ end Circuit
 @[circuit_norm]
 def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction F Message := ⟨ channel, mult, msg, false ⟩
+  let interaction : InteractionWithChannel channel := ⟨ mult, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
 def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction F Message := ⟨ channel, -1, msg, true ⟩
+  let interaction : InteractionWithChannel channel := ⟨ -1, msg, true ⟩
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction F Message := ⟨ channel, 1, msg, false ⟩
+  let interaction : InteractionWithChannel channel := ⟨ 1, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 /-- Create a new variable of an arbitrary "provable type". -/
@@ -445,15 +445,6 @@ def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] [DecidableEq
   Assumptions input env →
   ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
 
-structure ExposedChannel (F : Type) [Field F] where
-  channel : RawChannel F
-  interactions : List (AbstractInteraction F)
-
-@[circuit_norm]
-def expose {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (interactions : List (AbstractInteraction F)) : List (ExposedChannel F) :=
-  [{ channel, interactions }]
-
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
 structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
     [ProvableType Input] [ProvableType Output]
@@ -468,28 +459,28 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   guarantees_iff : ∀ input_var offset env,
     let ops := (elaborated.main input_var).operations offset
     ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
-    ops.InChannelsOrGuarantees channelsWithGuarantees env
+      ops.InChannelsOrGuarantees channelsWithGuarantees env := by
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
-    := by
-      simp only [circuit_norm, seval]
-      try tauto -- for permuting conjunctions
+    simp only [circuit_norm, seval]
+    try tauto -- for permuting conjunctions
 
   channelsWithRequirements : List (RawChannel F) := []
   requirements_iff : ∀ input_var offset env,
     let ops := (elaborated.main input_var).operations offset
     ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-    ops.InChannelsOrRequirements channelsWithRequirements env
+      ops.InChannelsOrRequirements channelsWithRequirements env := by
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
-    := by
-      simp only [circuit_norm, seval]
-      try tauto -- for permuting conjunctions
+    simp only [circuit_norm, seval]
+    try tauto -- for permuting conjunctions
 
   exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
   exposedChannels_eq : ∀ input_var offset,
     let ops := (elaborated.main input_var).operations offset
     ∀ exposed ∈ exposedChannels input_var offset,
       ops.interactionsWith exposed.channel = exposed.interactions := by
-      simp
+    -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
+    simp only [circuit_norm, seval]
+    try tauto
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
