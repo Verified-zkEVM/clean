@@ -522,9 +522,7 @@ def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F 
   | .interact _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
-  ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
-    acc ++ op.dynamicWitness acc
-  ) init
+  ops.foldl (fun acc op => acc ++ op.dynamicWitness acc) init
 
 def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (init : List F) : Environment F :=
   .fromList (FlatOperation.dynamicWitnesses ops init)
