@@ -1241,8 +1241,13 @@ theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : Bal
 /--
 A "normal" channel is one where the requirements for a "push" interaction
 imply the guarantees of the corresponding pull interaction. -/
-class NormalChannel (channel : RawChannel F) : Prop where
+class NormalChannel.Raw (channel : RawChannel F) : Prop where
   isNormal : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
+    channel.Requirements mult msg data →
+    channel.Guarantees (-1) msg data
+
+class NormalChannel (channel : Channel F Message) : Prop where
+  isNormal : ∀ (msg : Message F) (mult : F) data, mult ≠ -1 →
     channel.Requirements mult msg data →
     channel.Guarantees (-1) msg data
 
@@ -1275,7 +1280,7 @@ Furthermore, assume the list is balanced and the channel is normal.
 
 Then, for any i, the **converse** is true: Requirements (1, b_i) → Guarantees (-1, a_i).
 -/
-theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel F) [NormalChannel channel]
+theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel F) [NormalChannel.Raw channel]
     (as bs : List (Interaction F)) (balance : BalancedInteractions (as ++ bs)) (data : ProverData F)
   -- same length
   (n : ℕ) (h_len_a : as.length = n) (h_len_b : bs.length = n)
@@ -1317,7 +1322,7 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
       have msg_size : msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
       suffices a_grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         convert fun _ => a_grt'
-      apply NormalChannel.isNormal ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
+      apply NormalChannel.Raw.isNormal ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
       simp only [Interaction.Requirements, Interaction.msgVector, bj_msg] at bj_req
       convert bj_req
     -- if i = j, we're done
@@ -1403,14 +1408,15 @@ def VmSoundness (ens : Ensemble F PublicIO) : Prop :=
 structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
     (Message : TypeMap) [ProvableType Message] where
   channel : Channel F Message
-  [normal_channel : NormalChannel (F:=F) channel]
+  normal_channel : NormalChannel (F:=F) channel
 
   tables : List (AbstractTable F)
+  verifier : FormalCircuitWithInteractions F PublicIO unit
+
   -- each table pulls and pushes to the channel on each row
   tables_channel : ∀ table ∈ tables, ∀ input offset,
     ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈ table.circuit.exposedChannels input offset
 
-  verifier : FormalCircuitWithInteractions F PublicIO unit
   verifier_length_zero : ∀ pi, (verifier (const pi)).localLength 0 = 0 := by
     simp only [circuit_norm]
   -- the verifier pulls and pushes to the channel
@@ -1577,7 +1583,7 @@ instance FibonacciChannel : Channel (F p) fieldTriple where
 
   Requirements
   | m, (n, x, y), _ =>
-    if (m = 1)
+    if (m ≠ -1)
     then
       -- (x, y) is a valid Fibonacci state
       ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
@@ -1688,8 +1694,19 @@ def fibonacciEnsemble : Ensemble (F p) fieldTriple where
   channels := [ BytesChannel.toRaw, Add8Channel.toRaw, FibonacciChannel.toRaw ]
   verifier := fibonacciVerifier
   verifier_length_zero := by simp only [fibonacciVerifier, circuit_norm]
-
   Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+
+def fibonacciVm : VmTables (F p) fieldTriple fieldTriple where
+  channel := FibonacciChannel
+  tables := [ ⟨fib8⟩ ]
+  verifier := fibonacciVerifier
+  -- TODO maybe it shouldn't be a type class?
+  -- or we will automatically create this instance by using a simpler channel structure
+  normal_channel := by
+    constructor; simp_all [FibonacciChannel, circuit_norm]
+  verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
+  tables_channel := by simp [circuit_norm, fib8]
+  verifier_channel := by simp [circuit_norm, fibonacciVerifier]; sorry
 
 def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addTable ⟨pushBytes⟩ (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
