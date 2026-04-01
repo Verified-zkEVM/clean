@@ -1392,6 +1392,32 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
     rw [List.countP_eraseIdx (by linarith), ←ai_msg]
     rw [List.countP_eraseIdx (by simp_all), List.countP_set (h_len_b ▸ hj), bj_msg]
     simp [h_ij, balance]
+
+def VmSoundness (ens : Ensemble F PublicIO) : Prop :=
+  ∀ witness publicInput,
+    ens.BalancedChannels publicInput witness →
+    ens.Constraints witness →
+    ens.VerifierAccepts publicInput witness.data →
+      ens.VerifierGuarantees publicInput witness.data
+
+structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
+    (Message : TypeMap) [ProvableType Message] where
+  channel : Channel F Message
+  [normal_channel : NormalChannel (F:=F) channel]
+
+  tables : List (AbstractTable F)
+  -- each table pulls and pushes to the channel on each row
+  tables_channel : ∀ table ∈ tables, ∀ input offset,
+    ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈ table.circuit.exposedChannels input offset
+
+  verifier : FormalCircuitWithInteractions F PublicIO unit
+  verifier_length_zero : ∀ pi, (verifier (const pi)).localLength 0 = 0 := by
+    simp only [circuit_norm]
+  -- the verifier pulls and pushes to the channel
+  verifier_channel : ∀ input offset,
+    ∃ m, ⟨ channel, [(channel.pulled m).toRaw, (channel.pushed m).toRaw] ⟩ ∈ verifier.exposedChannels input offset
+  -- verifier requirements are unconditionally true
+  verifier_requirements : verifier.channelsWithRequirements = [] := by rfl
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
@@ -1627,7 +1653,13 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
   output _ _ := ()
 
   channelsWithGuarantees := [ FibonacciChannel.toRaw ]
-  channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  channelsWithRequirements := [ ]
+
+  requirements_iff := by
+    simp only [circuit_norm, FibonacciChannel]
+    intros
+    exists 0
+    simp [fibonacci, ZMod.val_one]
 
   Assumptions
   | (n, x, y), _ =>
