@@ -1407,19 +1407,11 @@ structure SoundVmEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeM
     extends ensemble : Ensemble F PublicIO where
   Spec publicInput := ∃ data, ensemble.VerifierSpec publicInput data
   spec_eq publicInput : ensemble.Spec publicInput = ∃ data, ensemble.VerifierSpec publicInput data := by rfl
-
   soundVmChannel : ∀ witness publicInput,
     ensemble.BalancedChannels publicInput witness →
     ensemble.Constraints witness →
     ensemble.VerifierAccepts publicInput witness.data →
       ensemble.VerifierGuarantees publicInput witness.data
-
-def VmSoundness (ens : Ensemble F PublicIO) : Prop :=
-  ∀ witness publicInput,
-    ens.BalancedChannels publicInput witness →
-    ens.Constraints witness →
-    ens.VerifierAccepts publicInput witness.data →
-      ens.VerifierGuarantees publicInput witness.data
 
 structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
     (Message : TypeMap) [ProvableType Message] where
@@ -1437,7 +1429,7 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
     simp only [circuit_norm]
   -- the verifier pulls and pushes to the channel
   verifier_channel : ∀ input offset,
-    ∃ m, ⟨ channel, [(channel.pulled m).toRaw, (channel.pushed m).toRaw] ⟩ ∈ verifier.exposedChannels input offset
+    ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈ verifier.exposedChannels input offset
   -- verifier requirements are unconditionally true
   verifier_requirements : verifier.channelsWithRequirements = [] := by rfl
 end
@@ -1728,7 +1720,7 @@ def fibonacciVm : VmTables (F p) fieldTriple fieldTriple where
     constructor; simp_all [FibonacciChannel, circuit_norm]
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by simp [circuit_norm, fib8]
-  verifier_channel := by simp [circuit_norm, fibonacciVerifier]; sorry
+  verifier_channel := by simp [circuit_norm, fibonacciVerifier]
 
 def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addTable ⟨pushBytes⟩ (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
