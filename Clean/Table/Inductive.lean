@@ -192,6 +192,28 @@ theorem equalityConstraint.soundness_row {row : State F × Input F} {input_state
       ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
   rw [h_env]
 
+theorem equalityConstraint.completeness_row {row : State F × Input F} {input_state : State F} {env : Environment F} :
+  row.1 = input_state →
+  ConstraintHoldsOnRow.Completeness (equalityConstraint Input input_state) row env := by
+  intro h
+  simp only [ConstraintHoldsOnRow.Completeness, TableConstraint.ConstraintsHoldOnWindow.Completeness]
+  set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
+  simp only [equalityConstraint, circuit_norm, table_norm]
+  -- The completeness goal for equality is: eval env' (varFromOffset State 0) = input_state
+  -- which follows from: eval env' (varFromOffset State 0) = row.1 = input_state
+  have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
+    have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
+    simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
+    have hi' : i < size State + size Input := by omega
+    simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get,
+      Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
+  have h_env : eval env' (varFromOffset State 0) = row.1 := by
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [h_env_in i hi, ProvableType.eval_varFromOffset,
+      ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
+  rw [h_env, h]
+
 def traceInputs {N : ℕ} (trace : TraceOfLength F (ProvablePair State Input) N) : List (Input F) :=
   trace.val.toList.map Prod.snd
 
