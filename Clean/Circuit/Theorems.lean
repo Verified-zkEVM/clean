@@ -262,7 +262,7 @@ lemma localAdds_toFlat {ops : Operations F} {env} :
     rfl
   | subcircuit s ops ih =>
     simp_all only [circuit_norm, Operations.toFlat, localAdds_append, Operations.localAdds,
-      NestedOperations.localAdds, List.flatMap]
+      NestedOperations.localAdds]
 end FlatOperation
 
 namespace Environment
