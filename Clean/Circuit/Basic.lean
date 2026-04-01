@@ -456,22 +456,30 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
 
   -- expose the channel guarantees and requirements, for end-to-end proofs
   channelsWithGuarantees : List (RawChannel F) := []
-  guarantees_iff : ∀ input_var offset env,
+  guarantees_iff : ∀ input_var offset,
     let ops := (elaborated.main input_var).operations offset
     ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
-      ops.InChannelsOrGuarantees channelsWithGuarantees env := by
+    ∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env := by
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
     simp only [circuit_norm, seval]
     try tauto -- for permuting conjunctions
 
   channelsWithRequirements : List (RawChannel F) := []
-  requirements_iff : ∀ input_var offset env,
+  requirements_iff : ∀ input_var offset,
     let ops := (elaborated.main input_var).operations offset
     ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-      ops.InChannelsOrRequirements channelsWithRequirements env := by
+      ∀ env, ops.InChannelsOrRequirements channelsWithRequirements env := by
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
     simp only [circuit_norm, seval]
     try tauto -- for permuting conjunctions
+
+  -- even if the conditions so far theoretically allow it,
+  -- we must not leave out any channels we interacted with from the combination of both lists
+  allChannels : ∀ input_var offset,
+    let ops := (elaborated.main input_var).operations offset
+    ops.shallowChannels ⊆ channelsWithGuarantees ++ channelsWithRequirements := by
+    -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
+    simp only [circuit_norm, seval]
 
   exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
   exposedChannels_eq : ∀ input_var offset,

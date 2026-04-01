@@ -757,7 +757,7 @@ theorem in_channels_or_guarantees_full
   (input_var : Var Input F) (n : ℕ) (env : Environment F) :
     circuit.main input_var |>.operations n
     |>.InChannelsOrGuaranteesFull circuit.channelsWithGuarantees env := by
-  have h_goal := circuit.guarantees_iff input_var n env
+  have h_goal := circuit.guarantees_iff input_var n
   simp only at h_goal ⊢
   generalize circuit.channelsWithGuarantees = channels at *
   generalize (circuit.main input_var).operations n = ops at *
@@ -776,7 +776,7 @@ theorem in_channels_or_requirements_full
   (input_var : Var Input F) (n : ℕ) (env : Environment F) :
     circuit.main input_var |>.operations n
     |>.InChannelsOrRequirementsFull circuit.channelsWithRequirements env := by
-  have h_goal := circuit.requirements_iff input_var n env
+  have h_goal := circuit.requirements_iff input_var n
   simp only at h_goal ⊢
   generalize circuit.channelsWithRequirements = channels at *
   generalize (circuit.main input_var).operations n = ops at *
@@ -855,4 +855,27 @@ theorem FormalCircuitWithInteractions.requirements_iff'
       ∀ channel ∈ circuit.channelsWithRequirements, ops.ChannelRequirements channel env := by
   apply Operations.requirements_iff
   apply circuit.in_channels_or_requirements_full
+
+omit [DecidableEq F] in
+theorem Operations.allChannels_subset {ops : Operations F} :
+    ops.allChannels ⊆ ops.shallowChannels ++
+      ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements := by
+  simp only [List.subset_def, allChannels, List.mem_map,
+    forall_exists_index, and_imp, forall_apply_eq_imp_iff₂]
+  rw [forall_interactions_iff, shallowChannels_eq_interactions_map]
+  constructor
+  · intro i i_mem; simp; left; use i
+  intro ⟨ n, s ⟩ s_mem
+  have h_all := s.allChannels
+  simp only [FlatOperation.allChannels, List.subset_def, List.mem_map, List.mem_append,
+    forall_exists_index, and_imp, forall_apply_eq_imp_iff₂] at h_all
+  simp only [subcircuitChannelsWithGuarantees_eq_subcircuits_map,
+    subcircuitChannelsWithRequirements_eq_subcircuits_map, List.append_assoc, List.mem_append,
+    List.mem_map, List.mem_flatten, PSigma.exists, ↓existsAndEq, and_true]
+  intro i i_mem
+  right
+  specialize h_all i i_mem
+  rcases h_all
+  · left; use n, s
+  · right; use n, s
 end

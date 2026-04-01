@@ -224,6 +224,9 @@ lemma inChannelsOrRequirements_iff_forall_mem {channels : List (RawChannel F)} {
     (∀ i ∈ interactions ops, i.channel ∈ channels ∨ i.Requirements env) := by
   simp [InChannelsOrRequirements, forAllNoOffset_iff_forall_mem]
 
+def allChannels (ops : List (FlatOperation F)) : List (RawChannel F) :=
+  FlatOperation.interactions ops |>.map (·.channel)
+
 @[circuit_norm]
 def localAdds (env : Environment F) : List (FlatOperation F) → InteractionDelta F
   | [] => 0
@@ -291,6 +294,7 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
     InChannelsOrGuarantees channelsWithGuarantees env ops.toFlat
   requirements_iff : ∀ env,
     InChannelsOrRequirements channelsWithRequirements env ops.toFlat
+  allChannels : allChannels ops.toFlat ⊆ channelsWithGuarantees ++ channelsWithRequirements
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
@@ -849,7 +853,6 @@ theorem subcircuitChannelsWithRequirements_subcircuit {n : ℕ} (s : Subcircuit 
     subcircuitChannelsWithRequirements (.subcircuit s :: ops) =
     s.channelsWithRequirements ++ subcircuitChannelsWithRequirements ops := rfl
 
-
 lemma subcircuitChannelsWithRequirements_eq_subcircuits_map {ops : Operations F} :
     subcircuitChannelsWithRequirements ops = (ops.subcircuits
     |>.map (fun s => s.2.channelsWithRequirements) |>.flatten) := by
@@ -863,10 +866,30 @@ lemma subcircuitChannelsWithRequirements_subset_iff_forall {ops : Operations F} 
   simp
   tauto
 
--- TODO rename to ShallowGuarantees
-@[circuit_norm]
-def Guarantees (env : Environment F) (ops : Operations F) : Prop :=
-  ops.forAllNoOffset { interact i := i.assumeGuarantees → i.Guarantees env }
+def shallowChannels (ops : Operations F) : List (RawChannel F) :=
+  ops.map (fun
+    | .interact i => [i.channel]
+    | .subcircuit _ | .witness _ _ | .assert _ | .lookup _ => [])
+  |>.flatten
+
+-- simp lemmas; TODO put elsewhere
+@[circuit_norm] theorem shallowChannels_nil : shallowChannels ([] : Operations F) = [] := rfl
+@[circuit_norm] theorem shallowChannels_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  shallowChannels (.witness m c :: ops) = shallowChannels ops := rfl
+@[circuit_norm] theorem shallowChannels_assert (e : Expression F) (ops : Operations F) :
+  shallowChannels (.assert e :: ops) = shallowChannels ops := rfl
+@[circuit_norm] theorem shallowChannels_lookup (l : Lookup F) (ops : Operations F) :
+  shallowChannels (.lookup l :: ops) = shallowChannels ops := rfl
+@[circuit_norm] theorem shallowChannels_interact (i : AbstractInteraction F) (ops : Operations F) :
+  shallowChannels (.interact i :: ops) = i.channel :: shallowChannels ops := rfl
+@[circuit_norm] theorem shallowChannels_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  shallowChannels (.subcircuit s :: ops) = shallowChannels ops := rfl
+
+lemma shallowChannels_eq_interactions_map {ops : Operations F} :
+    shallowChannels ops = ops.shallowInteractions.map (·.channel) := by
+  induction ops using induct <;> simp_all [shallowInteractions, shallowChannels]
+
+def allChannels (ops : Operations F) : List (RawChannel F) := ops.interactions.map (·.channel)
 
 lemma interactions_toFlat {ops : Operations F} :
     FlatOperation.interactions ops.toFlat = ops.interactions := by
@@ -875,6 +898,15 @@ lemma interactions_toFlat {ops : Operations F} :
     simp_all [interactions, FlatOperation.interactions, Operations.toFlat]
   | subcircuit s ops ih =>
     simp_all [interactions, FlatOperation.interactions_append, Operations.toFlat]
+
+lemma allChannels_toFlat {ops : Operations F} :
+    FlatOperation.allChannels ops.toFlat = ops.allChannels := by
+  simp [allChannels, FlatOperation.allChannels, interactions_toFlat]
+
+-- TODO rename to ShallowGuarantees
+@[circuit_norm]
+def Guarantees (env : Environment F) (ops : Operations F) : Prop :=
+  ops.forAllNoOffset { interact i := i.assumeGuarantees → i.Guarantees env }
 
 lemma guarantees_iff_forall_mem {env : Environment F} {ops : Operations F} :
     Guarantees env ops ↔
