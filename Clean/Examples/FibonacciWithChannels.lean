@@ -1392,6 +1392,22 @@ theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel
     rw [List.countP_eraseIdx (by linarith), ←ai_msg]
     rw [List.countP_eraseIdx (by simp_all), List.countP_set (h_len_b ▸ hj), bj_msg]
     simp [h_ij, balance]
+
+/--
+Soundness for a VM ensemble is simple:
+- the ensemble spec is just the verifier spec
+- the verifier spec can be proven from constraints + balance for all tables/channels
+ -/
+structure SoundVmEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
+    extends ensemble : Ensemble F PublicIO where
+  Spec publicInput := ∃ data, ensemble.VerifierSpec publicInput data
+  spec_eq publicInput : ensemble.Spec publicInput = ∃ data, ensemble.VerifierSpec publicInput data := by rfl
+
+  soundVmChannel : ∀ witness publicInput,
+    ensemble.BalancedChannels publicInput witness →
+    ensemble.Constraints witness →
+    ensemble.VerifierAccepts publicInput witness.data →
+      ensemble.VerifierGuarantees publicInput witness.data
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
@@ -1591,7 +1607,7 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   Spec _ _ _ := True
 
   soundness := by
-    circuit_proof_start [reduceIte, seval]
+    circuit_proof_start [seval]
     rcases input with ⟨ n, x, y ⟩ -- TODO circuit_proof_start should have done this
     simp only [Prod.mk.injEq] at h_input
     simp_all only [circuit_norm]
@@ -1605,7 +1621,7 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     simp_all
 
   completeness := by
-    circuit_proof_start [reduceIte]
+    circuit_proof_start
     rcases input with ⟨ n, x, y ⟩
     simp only [Prod.mk.injEq] at h_input
     simp_all only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte]
@@ -1620,14 +1636,20 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
 def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit where
   main | (n, x, y) => do
     -- push initial state, pull the final state
-    FibonacciChannel.push (0, 0, 1)
     FibonacciChannel.pull (n, x, y)
+    FibonacciChannel.push (0, 0, 1)
 
   localLength _ := 0
   output _ _ := ()
 
   channelsWithGuarantees := [ FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
+
+  exposedChannels
+  | (n, x, y), offset =>
+    expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
+
+  exposedChannels_eq := by simp only [circuit_norm, FibonacciChannel]
 
   Assumptions
   | (n, x, y), _ =>
@@ -1637,15 +1659,15 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
     ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
 
   soundness := by
-    circuit_proof_start [reduceIte]
+    circuit_proof_start
     rcases input with ⟨ n, x, y ⟩
     simp only [Prod.mk.injEq] at h_input
     simp_all only [circuit_norm, FibonacciChannel, reduceIte,
-      and_true, ZMod.val_zero, ZMod.val_one]
+      ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
 
   completeness := by
-    circuit_proof_start [reduceIte]
+    circuit_proof_start
     rcases input with ⟨ n, x, y ⟩
     simp only [Prod.mk.injEq] at h_input
     simpa [circuit_norm, FibonacciChannel, reduceIte] using h_assumptions
