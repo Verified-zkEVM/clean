@@ -1251,10 +1251,8 @@ class NormalChannel (channel : Channel F Message) : Prop where
     channel.Requirements mult msg data →
     channel.Guarantees (-1) msg data
 
-variable [Fact (ringChar F ≠ 2)]
-
 omit [DecidableEq F] in
-lemma one_ne_neg_one : (1 : F) ≠ -1 :=
+lemma one_ne_neg_one [Fact (ringChar F ≠ 2)] : (1 : F) ≠ -1 :=
   Ne.symm (Ring.neg_one_ne_one_of_char_ne_two ‹Fact (ringChar F ≠ 2)›.out)
 
 -- Missing stlib lemma needed below
@@ -1280,7 +1278,8 @@ Furthermore, assume the list is balanced and the channel is normal.
 
 Then, for any i, the **converse** is true: Requirements (1, b_i) → Guarantees (-1, a_i).
 -/
-theorem pairwise_guarantees_of_requirements_of_constraints (channel : RawChannel F) [NormalChannel.Raw channel]
+theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠ 2)]
+    (channel : RawChannel F) [NormalChannel.Raw channel]
     (as bs : List (Interaction F)) (balance : BalancedInteractions (as ++ bs)) (data : ProverData F)
   -- same length
   (n : ℕ) (h_len_a : as.length = n) (h_len_b : bs.length = n)
@@ -1415,24 +1414,36 @@ structure SoundVmEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeM
   spec_eq publicInput : ensemble.Spec publicInput = ∃ data, ensemble.VerifierSpec publicInput data := by intros; rfl
   soundVmChannel : ensemble.SoundVmChannel
 
-structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
-    where
+theorem SoundVmEnsemble.soundness (ens : SoundVmEnsemble F PublicIO) : ens.Soundness := by
+  intro witness publicInput balance constraints verifier_accepts
+  rw [ens.spec_eq]
+  use witness.data
+  have soundVm := ens.soundVmChannel
+  simp only [Ensemble.SoundVmChannel, Ensemble.VerifierGuarantees,
+    Ensemble.VerifierSpec, Ensemble.VerifierAccepts] at *
+  specialize soundVm witness publicInput constraints balance verifier_accepts
+  convert (ens.verifier.original_full_soundness _ _ _ verifier_accepts soundVm).1
+  rw [ProvableType.eval_const]
+
+structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
   channel : Channel F Message
   normal_channel : NormalChannel (F:=F) channel
 
   tables : List (AbstractTable F)
   verifier : FormalCircuitWithInteractions F PublicIO unit
+  verifier_length_zero : ∀ pi, (verifier (const pi)).localLength 0 = 0 := by
+    simp only [circuit_norm]
 
   -- each table pulls and pushes to the channel on each row
   tables_channel : ∀ table ∈ tables, ∀ input offset,
-    ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈ table.circuit.exposedChannels input offset
-
-  verifier_length_zero : ∀ pi, (verifier (const pi)).localLength 0 = 0 := by
-    simp only [circuit_norm]
+    ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
+      table.circuit.exposedChannels input offset
   -- the verifier pulls and pushes to the channel
   verifier_channel : ∀ input offset,
-    ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈ verifier.exposedChannels input offset
+    ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
+      verifier.exposedChannels input offset
+
   -- verifier requirements are unconditionally true
   -- TODO: this works if the initial state is fixed and statically guaranteed to fulfill the reqs
   -- but what if the state is an input and we want to add this as an assumption?
@@ -1479,11 +1490,11 @@ end
 
 -- CONCRETE EXAMPLE STARTS HERE
 
-variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
-
-instance : Fact (ringChar (F p) ≠ 2) := .mk <| by
-  simp only [F, ZMod.ringChar_zmod_n]
+instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <| by
+  simp [F, ZMod.ringChar_zmod_n]
   linarith [pGt.out]
+
+variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
 
 def BytesTable : StaticLookupChannel (F p) field where
   name := "bytes"
@@ -1761,9 +1772,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
   tables := [ ⟨fib8⟩ ]
   verifier := fibonacciVerifier
-  -- TODO maybe it shouldn't be a type class?
-  -- or we will automatically create this instance by using a simpler channel structure
-  normal_channel := .mk <| by simp_all [FibonacciChannel, circuit_norm]
+  normal_channel := .mk <| by simp_all [circuit_norm, FibonacciChannel]
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by simp [circuit_norm, fib8]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
@@ -1776,6 +1785,9 @@ def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addVm fibonacciVm
     (by simp [circuit_norm, fibonacciVm, fib8])
     (by simp [circuit_norm, fibonacciVm, fib8, Add8Channel, FibonacciChannel])
+
+theorem fibonacci_soundness : (fibonacciSoundEnsemble (p:=p)).Soundness :=
+  fibonacciSoundEnsemble.soundness
 
 /-!
 ## Helper lemmas for per-message channel balance
