@@ -1475,6 +1475,7 @@ theorem Ensemble.addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicI
       channel ∉ table.circuit.channelsWithRequirements) →
     -- the ensemble with the VM tables satisfies SoundVmChannel
     (ens.addVm vm).SoundVmChannel := by
+  intro grts_subset_finished reqs_disjoint_finished witness publicInput constraints balance verifier_accepts
   sorry
 
 def SoundEnsemble.addVm (ens : SoundEnsemble F PublicIO) (vm : VmTables F PublicIO)
@@ -1486,6 +1487,16 @@ def SoundEnsemble.addVm (ens : SoundEnsemble F PublicIO) (vm : VmTables F Public
   __ := ens.ensemble.addVm vm
   soundVmChannel := ens.ensemble.addVm_soundVmChannel_of_soundChannels ens.finished_subset
     ens.soundChannels ens.finished_consistent vm grts_subset_finished reqs_disjoint_finished
+
+namespace SoundVmEnsemble
+variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
+    {gsf : ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: soundEns.finished}
+    {rdf : ∀ table ∈ vm.tables, ∀ channel ∈ soundEns.finished, channel ∉ table.circuit.channelsWithRequirements}
+
+@[circuit_norm] lemma addVm_spec (publicInput : PublicIO F) :
+  (soundEns.addVm vm gsf rdf).Spec publicInput =
+    ∃ data, vm.verifier.Spec publicInput () (emptyEnvironment F data) := rfl
+end SoundVmEnsemble
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
@@ -1786,8 +1797,25 @@ def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, fibonacciVm, fib8])
     (by simp [circuit_norm, fibonacciVm, fib8, Add8Channel, FibonacciChannel])
 
-theorem fibonacci_soundness : (fibonacciSoundEnsemble (p:=p)).Soundness :=
-  fibonacciSoundEnsemble.soundness
+/--
+Fibonacci soundness, concretely: if someone proves to you that constraints on this ensemble are satisfied
+and that the channels are balanced, then you know that the public input is a Fibonacci number.
+
+TODO: find a generic strategy to show that k < p, so the statement simplifies to
+`(x.val, y.val) = fibonacci n.val (0, 1)`
+
+TODO: create a nicer packaging of the hypotheses here,
+e.g. VerifierAccepts could already include the constraints and balance and quantify witness existence
+-/
+theorem fibonacci_soundness : ∀ n x y witness,
+    (fibonacciSoundEnsemble (p:=p)).BalancedChannels (n, x, y) witness →
+    (fibonacciSoundEnsemble (p:=p)).Constraints witness →
+    (fibonacciSoundEnsemble (p:=p)).VerifierAccepts (n, x, y) witness.data →
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val := by
+  intro n x y witness balance constraints verifier_accepts
+  have soundness := (fibonacciSoundEnsemble (p:=p)).soundness witness (n, x, y) balance constraints verifier_accepts
+  simp only [circuit_norm, fibonacciSoundEnsemble, fibonacciVm, fibonacciVerifier] at soundness
+  tauto
 
 /-!
 ## Helper lemmas for per-message channel balance
@@ -2086,7 +2114,6 @@ lemma bytes_push_val_lt_256
         show ("add8" : String) = "bytes" ↔ False by decide,
         show (0 : InteractionDelta (F p)) = [] by rfl,
         List.filterMap_nil, List.append_nil, List.not_mem_nil] at h_in_filter
-
 
 omit [Fact (p > 512)] in
 /-- The step counter of any valid fibonacci state is bounded by the number of interactions.
