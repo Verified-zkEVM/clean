@@ -1403,18 +1403,21 @@ Soundness for a VM ensemble is simple:
 - the ensemble spec is just the verifier spec
 - the verifier spec can be proven from constraints + balance for all tables/channels
  -/
+def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) : Prop :=
+  ∀ witness publicInput,
+    ens.Constraints witness →
+    ens.BalancedChannels publicInput witness →
+    ens.VerifierAccepts publicInput witness.data →
+      ens.VerifierGuarantees publicInput witness.data
+
 structure SoundVmEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
     extends ensemble : Ensemble F PublicIO where
-  Spec publicInput := ∃ data, ensemble.VerifierSpec publicInput data
-  spec_eq publicInput : ensemble.Spec publicInput = ∃ data, ensemble.VerifierSpec publicInput data := by rfl
-  soundVmChannel : ∀ witness publicInput,
-    ensemble.BalancedChannels publicInput witness →
-    ensemble.Constraints witness →
-    ensemble.VerifierAccepts publicInput witness.data →
-      ensemble.VerifierGuarantees publicInput witness.data
+  spec_eq publicInput : ensemble.Spec publicInput = ∃ data, ensemble.VerifierSpec publicInput data := by intros; rfl
+  soundVmChannel : ensemble.SoundVmChannel
 
 structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
-    (Message : TypeMap) [ProvableType Message] where
+    where
+  {Message : TypeMap} [provableMessage : ProvableType Message]
   channel : Channel F Message
   normal_channel : NormalChannel (F:=F) channel
 
@@ -1431,12 +1434,56 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
   verifier_channel : ∀ input offset,
     ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈ verifier.exposedChannels input offset
   -- verifier requirements are unconditionally true
+  -- TODO: this works if the initial state is fixed and statically guaranteed to fulfill the reqs
+  -- but what if the state is an input and we want to add this as an assumption?
+  -- => then the verifier circuit should add constraints to enforce the requirements!
+  -- => this should work if the condition is formulated correctly, but the one below is too restrictive
   verifier_requirements : verifier.channelsWithRequirements = [] := by rfl
+
+instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
+
+def Ensemble.addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) : Ensemble F PublicIO where
+  channels := vm.channel :: ens.channels
+  tables := ens.tables ++ vm.tables
+  verifier := vm.verifier
+  verifier_length_zero := vm.verifier_length_zero
+  Spec publicInput := ∃ data, vm.verifier.Spec publicInput () (emptyEnvironment F data)
+
+theorem Ensemble.addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO)
+      -- given a sound channels ensemble with a list of finished, consistent channels
+    {finished : List (RawChannel F)} (h_finished : finished ⊆ ens.channels)
+    (h_sound : ens.SoundChannels finished h_finished)
+    (h_consistent : ∀ channel ∈ finished, channel.Consistent)
+    -- and given a VM channel + tables + verifier
+    (vm : VmTables F PublicIO) :
+    -- assuming that the VM tables' channelsWithGuarantees are either finished or the VM channel
+    (∀ table ∈ vm.tables,
+      table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished) →
+    -- and assuming the VM tables' channelsWithRequirements contain none of the finished ones
+    (∀ table ∈ vm.tables, ∀ channel ∈ finished,
+      channel ∉ table.circuit.channelsWithRequirements) →
+    -- the ensemble with the VM tables satisfies SoundVmChannel
+    (ens.addVm vm).SoundVmChannel := by
+  sorry
+
+def SoundEnsemble.addVm (ens : SoundEnsemble F PublicIO) (vm : VmTables F PublicIO)
+    (grts_subset_finished : ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: ens.finished
+      := by simp [circuit_norm])
+    (reqs_disjoint_finished : ∀ table ∈ vm.tables, ∀ channel ∈ ens.finished, channel ∉ table.circuit.channelsWithRequirements
+      := by simp [circuit_norm]) :
+    SoundVmEnsemble F PublicIO where
+  __ := ens.ensemble.addVm vm
+  soundVmChannel := ens.ensemble.addVm_soundVmChannel_of_soundChannels ens.finished_subset
+    ens.soundChannels ens.finished_consistent vm grts_subset_finished reqs_disjoint_finished
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
 
 variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
+
+instance : Fact (ringChar (F p) ≠ 2) := .mk <| by
+  simp only [F, ZMod.ringChar_zmod_n]
+  linarith [pGt.out]
 
 def BytesTable : StaticLookupChannel (F p) field where
   name := "bytes"
@@ -1710,14 +1757,13 @@ def fibonacciEnsemble : Ensemble (F p) fieldTriple where
   verifier_length_zero := by simp only [fibonacciVerifier, circuit_norm]
   Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
 
-def fibonacciVm : VmTables (F p) fieldTriple fieldTriple where
+def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
   tables := [ ⟨fib8⟩ ]
   verifier := fibonacciVerifier
   -- TODO maybe it shouldn't be a type class?
   -- or we will automatically create this instance by using a simpler channel structure
-  normal_channel := by
-    constructor; simp_all [FibonacciChannel, circuit_norm]
+  normal_channel := .mk <| by simp_all [FibonacciChannel, circuit_norm]
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by simp [circuit_norm, fib8]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
@@ -1727,7 +1773,9 @@ def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addFinishedChannel BytesChannel.toRaw bytesChannel_consistent
   |>.addTable ⟨add8⟩ (by simp [circuit_norm, add8]) (by simp [circuit_norm, add8])
   |>.addFinishedChannel Add8Channel.toRaw add8Channel_consistent
-  -- TODO fibonacci table/channel
+  |>.addVm fibonacciVm
+    (by simp [circuit_norm, fibonacciVm, fib8])
+    (by simp [circuit_norm, fibonacciVm, fib8, Add8Channel, FibonacciChannel])
 
 /-!
 ## Helper lemmas for per-message channel balance
