@@ -1467,6 +1467,8 @@ theorem Ensemble.addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicI
     (h_consistent : ∀ channel ∈ finished, channel.Consistent)
     -- and given a VM channel + tables + verifier
     (vm : VmTables F PublicIO) :
+    -- assuming that none of the existing tables interacted with the VM channel
+    -- TODO!!! we have no good way of proving this statement yet :/
     -- assuming that the VM tables' channelsWithGuarantees are either finished or the VM channel
     (∀ table ∈ vm.tables,
       table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished) →
@@ -1476,6 +1478,18 @@ theorem Ensemble.addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicI
     -- the ensemble with the VM tables satisfies SoundVmChannel
     (ens.addVm vm).SoundVmChannel := by
   intro grts_subset_finished reqs_disjoint_finished witness publicInput constraints balance verifier_accepts
+  /-
+  the high level idea is to show we are in the situation of `pairwise_guarantees_of_requirements_of_constraints`,
+  where the targeted interactions are those with the VM channel: vm tables + verifier.
+
+  the combination of constraints + guarantees for existing channels gives us the main condition that
+  "vm guarantees → vm requirements".
+  finally, `VmTables.verifier_requirements` gives us the requirements for the verifier, from which the conclusion follows.
+  -/
+  simp only [circuit_norm, addVm] at *
+  -- instantiate `pairwise_guarantees_of_requirements_of_constraints`
+
+  -- to get guarantees, first of all we need to instantiate partial balance for the existing ensemble.
   sorry
 
 def SoundEnsemble.addVm (ens : SoundEnsemble F PublicIO) (vm : VmTables F PublicIO)
