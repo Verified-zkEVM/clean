@@ -473,9 +473,12 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     simp only [circuit_norm, seval]
     try tauto -- for permuting conjunctions
 
-  -- even if the conditions so far theoretically allow it,
-  -- we must not leave out any channels we interacted with from the combination of both lists
-  allChannels : ∀ input_var offset,
+  -- even if the conditions so far theoretically allow it, we must not leave out any channels
+  -- we interacted with from the combination of both lists. this is because "did not interact with a given channel"
+  -- is important knowledge during end to end proofs, when we need to prove that _all_ interactions
+  -- with a given channel have some property.
+  -- (if this ever becomes too restrictive for real circuits, we can relax by introducing a third list of "other channels")
+  shallowChannels_subset : ∀ input_var offset,
     let ops := (elaborated.main input_var).operations offset
     ops.shallowChannels ⊆ channelsWithGuarantees ++ channelsWithRequirements := by
     -- TODO this tactic would be more effective if it would unfold all channels used in the circuit

@@ -224,7 +224,7 @@ lemma inChannelsOrRequirements_iff_forall_mem {channels : List (RawChannel F)} {
     (∀ i ∈ interactions ops, i.channel ∈ channels ∨ i.Requirements env) := by
   simp [InChannelsOrRequirements, forAllNoOffset_iff_forall_mem]
 
-def allChannels (ops : List (FlatOperation F)) : List (RawChannel F) :=
+def channels (ops : List (FlatOperation F)) : List (RawChannel F) :=
   FlatOperation.interactions ops |>.map (·.channel)
 
 @[circuit_norm]
@@ -294,7 +294,7 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
     InChannelsOrGuarantees channelsWithGuarantees env ops.toFlat
   requirements_iff : ∀ env,
     InChannelsOrRequirements channelsWithRequirements env ops.toFlat
-  allChannels : allChannels ops.toFlat ⊆ channelsWithGuarantees ++ channelsWithRequirements
+  channels_subset : channels ops.toFlat ⊆ channelsWithGuarantees ++ channelsWithRequirements
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
@@ -889,7 +889,7 @@ lemma shallowChannels_eq_interactions_map {ops : Operations F} :
     shallowChannels ops = ops.shallowInteractions.map (·.channel) := by
   induction ops using induct <;> simp_all [shallowInteractions, shallowChannels]
 
-def allChannels (ops : Operations F) : List (RawChannel F) := ops.interactions.map (·.channel)
+def channels (ops : Operations F) : List (RawChannel F) := ops.interactions.map (·.channel)
 
 lemma interactions_toFlat {ops : Operations F} :
     FlatOperation.interactions ops.toFlat = ops.interactions := by
@@ -899,9 +899,9 @@ lemma interactions_toFlat {ops : Operations F} :
   | subcircuit s ops ih =>
     simp_all [interactions, FlatOperation.interactions_append, Operations.toFlat]
 
-lemma allChannels_toFlat {ops : Operations F} :
-    FlatOperation.allChannels ops.toFlat = ops.allChannels := by
-  simp [allChannels, FlatOperation.allChannels, interactions_toFlat]
+lemma channels_toFlat {ops : Operations F} :
+    FlatOperation.channels ops.toFlat = ops.channels := by
+  simp [channels, FlatOperation.channels, interactions_toFlat]
 
 -- TODO rename to ShallowGuarantees
 @[circuit_norm]

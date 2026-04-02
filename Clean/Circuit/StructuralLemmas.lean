@@ -101,10 +101,7 @@ lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [Decidable
   simp only [FormalCircuit.weakenSpec]
 
 /--
-Weaken the specification of a GeneralFormalCircuitChangingMultiset.
-
-This is the clean version that doesn't require a sorry because
-`GeneralFormalCircuit.Completeness` doesn't depend on Spec.
+Weaken the specification of a FormalCircuitWithInteractions.
 -/
 def FormalCircuitWithInteractions.weakenSpec
     {F : Type} [Field F] [DecidableEq F]
@@ -112,10 +109,9 @@ def FormalCircuitWithInteractions.weakenSpec
     (circuit : FormalCircuitWithInteractions F Input Output)
     (WeakerSpec : Input F → Output F → Environment F → Prop)
     (h_spec_implication : ∀ input output data,
-      circuit.Spec input output data →
-      WeakerSpec input output data) :
-    FormalCircuitWithInteractions F Input Output := {
-  elaborated := circuit.elaborated
+      circuit.Spec input output data → WeakerSpec input output data) :
+    FormalCircuitWithInteractions F Input Output where
+  __ := circuit.elaborated
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   soundness := by
@@ -127,7 +123,7 @@ def FormalCircuitWithInteractions.weakenSpec
   guarantees_iff := circuit.guarantees_iff
   channelsWithRequirements := circuit.channelsWithRequirements
   requirements_iff := circuit.requirements_iff
-}
+  shallowChannels_subset := circuit.shallowChannels_subset
 
 @[circuit_norm]
 lemma FormalCircuitWithInteractions.weakenSpec_assumptions

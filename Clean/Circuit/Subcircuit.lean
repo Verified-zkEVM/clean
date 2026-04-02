@@ -199,7 +199,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
     guarantees_iff := sorry
     requirements_iff := sorry
-    allChannels := sorry
+    channels_subset := sorry
   }
 
 /--
@@ -270,7 +270,7 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
 
     guarantees_iff := sorry
     requirements_iff := sorry
-    allChannels := sorry
+    channels_subset := sorry
   }
 
 /--
@@ -337,7 +337,7 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
 
     guarantees_iff := sorry
     requirements_iff := sorry
-    allChannels := sorry
+    channels_subset := sorry
   }
 
 -- TODO this is not done, if we really decide to have a variant of constraints-hold with interactions,
@@ -404,24 +404,14 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
     guarantees_iff := by
       intro env
       rw [ops.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
-      apply in_channels_or_guarantees_full
+      apply circuit.in_channels_or_guarantees_full
     requirements_iff := by
       intro env
       rw [ops.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-      apply in_channels_or_requirements_full
-    allChannels := by
-      simp only [nestedOps, ops.toNested_toFlat, Operations.allChannels_toFlat]
-      suffices ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
-        ⊆ circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements by
-        trans ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
-        apply Operations.allChannels_subset
-        exact this
-      have shallowChannels_subset : ops.shallowChannels ⊆ _ := circuit.allChannels input_var n
-      have channelsWithGuarantees_subset : ops.subcircuitChannelsWithGuarantees ⊆ _ :=
-        (circuit.guarantees_iff input_var n).1
-      have channelsWithRequirements_subset : ops.subcircuitChannelsWithRequirements ⊆ _ :=
-        (circuit.requirements_iff input_var n).1
-      simp_all
+      apply circuit.in_channels_or_requirements_full
+    channels_subset := by
+      rw [ops.toNested_toFlat, Operations.channels_toFlat]
+      apply circuit.channels_subset
   }
 end
 

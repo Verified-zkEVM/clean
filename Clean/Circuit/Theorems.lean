@@ -857,17 +857,17 @@ theorem FormalCircuitWithInteractions.requirements_iff'
   apply circuit.in_channels_or_requirements_full
 
 omit [DecidableEq F] in
-theorem Operations.allChannels_subset {ops : Operations F} :
-    ops.allChannels ⊆ ops.shallowChannels ++
+theorem Operations.channels_subset {ops : Operations F} :
+    ops.channels ⊆ ops.shallowChannels ++
       ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements := by
-  simp only [List.subset_def, allChannels, List.mem_map,
+  simp only [List.subset_def, channels, List.mem_map,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂]
   rw [forall_interactions_iff, shallowChannels_eq_interactions_map]
   constructor
   · intro i i_mem; simp; left; use i
   intro ⟨ n, s ⟩ s_mem
-  have h_all := s.allChannels
-  simp only [FlatOperation.allChannels, List.subset_def, List.mem_map, List.mem_append,
+  have h_all := s.channels_subset
+  simp only [FlatOperation.channels, List.subset_def, List.mem_map, List.mem_append,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂] at h_all
   simp only [subcircuitChannelsWithGuarantees_eq_subcircuits_map,
     subcircuitChannelsWithRequirements_eq_subcircuits_map, List.append_assoc, List.mem_append,
@@ -878,4 +878,17 @@ theorem Operations.allChannels_subset {ops : Operations F} :
   rcases h_all
   · left; use n, s
   · right; use n, s
+
+theorem FormalCircuitWithInteractions.channels_subset
+  (circuit : FormalCircuitWithInteractions F Input Output) (input_var : Var Input F) (n : ℕ) :
+    let ops := (circuit.main input_var).operations n;
+    ops.channels ⊆ circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements := by
+  have shallowChannels_subset := circuit.shallowChannels_subset input_var n
+  have channelsWithGuarantees_subset := (circuit.guarantees_iff input_var n).1
+  have channelsWithRequirements_subset := (circuit.requirements_iff input_var n).1
+  simp only at *
+  set ops := (circuit.main input_var).operations n
+  trans ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
+  apply Operations.channels_subset
+  simp_all
 end
