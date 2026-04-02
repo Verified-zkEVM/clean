@@ -1357,6 +1357,21 @@ theorem normalChannel_consistent (channel : RawChannel F) [NormalChannel.Raw cha
   simp only [b_msg_eq] at b_reqs
   convert b_reqs
 
+/-- Conversely, consistent channels enjoy a property reminiscent of normal channels -/
+theorem consistentChannel_grts_of_reqs (channel : RawChannel F) [channel.Consistent] :
+    ∀ (msg : Vector F channel.arity) (mult : F) data,
+    channel.Requirements 1 msg data → channel.Guarantees (-1) msg data := by
+  intro msg mult data reqs
+  -- we construct an interaction list with just the one pull and one push interaction, which is balanced
+  let interactions : List (Interaction F) :=
+    { channel, mult := -1, msg := msg.toArray, same_size := by simp, assumeGuarantees := true } ::
+    { channel, mult := 1, msg := msg.toArray, same_size := by simp, assumeGuarantees := false } :: []
+  have balance : BalancedInteractions interactions := by
+    constructor
+    · sorry -- todo need ringChar assumption
+    intro msg'
+  sorry
+
 instance (channel : RawChannel F) [NormalChannel.Raw channel] : channel.Consistent :=
   normalChannel_consistent channel
 
@@ -1388,7 +1403,7 @@ Furthermore, assume the list is balanced and the channel is normal.
 Then, for any i, the **converse** is true: Requirements (1, b_i) → Guarantees (-1, a_i).
 -/
 theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠ 2)]
-    (channel : RawChannel F) [NormalChannel.Raw channel]
+    (channel : RawChannel F) [channel.Consistent]
     (as bs : List (Interaction F)) (balance : BalancedInteractions (as ++ bs)) (data : ProverData F)
   -- same length
   (n : ℕ) (h_len_a : as.length = n) (h_len_b : bs.length = n)
@@ -1420,7 +1435,7 @@ theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠
     have ⟨ j, hj, hb' ⟩ := List.getElem_of_mem b'_mem
     subst hb'
     rw [h_len_b] at hj
-    -- thanks to the channel being normal, it suffices to show the requirements of b[j]
+    -- thanks to the channel being consistent, it suffices to show the requirements of b[j]
     have bj_implies_ai : bs[j].Requirements data → as[i].Guarantees data := by
       intro bj_req
       have as_i_channel := as_channel as[i] (List.getElem_mem ..)
@@ -1430,6 +1445,7 @@ theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠
       have msg_size : msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
       suffices a_grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         convert fun _ => a_grt'
+
       apply NormalChannel.Raw.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
       simp only [Interaction.Requirements, Interaction.msgVector, bj_msg] at bj_req
       convert bj_req
@@ -1687,8 +1703,10 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   set pushes := vm.channel.pushedValue push0 :: List.map vm.channel.pushedValue pushes'
   have pairwise_guarantees := pairwise_guarantees_of_requirements_of_constraints vmChannel pulls pushes
   -- we fill in the conditions on pulls and pushes in `pairwise_guarantees`
+  have vmChannel_mem : vmChannel ∈ (ens.addVm vm).channels := by simp [Ensemble.addVm, vmChannel]
   have vmBalance : BalancedInteractions (pulls ++ pushes) := by
     have originalBalance : BalancedInteractions vmInteractions := by
+      whnf at balance
       -- use global channel balance
       sorry
     rw [vmInteractions_eq] at originalBalance
