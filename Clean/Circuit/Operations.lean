@@ -572,19 +572,6 @@ theorem localAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
   | cons op ops1 ih =>
     cases op <;> simp only [List.cons_append, localAdds, ih, add_assoc]
 
-@[circuit_norm]
-theorem interactions_append (ops1 ops2 : Operations F) :
-    interactions (ops1 ++ ops2) = interactions ops1 ++ interactions ops2 := by
-  induction ops1 with
-  | nil => rfl
-  | cons op ops1 ih =>
-    cases op <;> simp_all only [List.cons_append, interactions, List.append_assoc]
-
-theorem interactionsWith_append {channel : RawChannel F} {ops1 ops2 : Operations F} :
-    interactionsWith channel (ops1 ++ ops2) =
-      interactionsWith channel ops1 ++ interactionsWith channel ops2 := by
-  simp [interactionsWith, interactions_append]
-
 -- Helper: a + foldl (+) 0 xs = foldl (+) a xs for InteractionDelta
 omit [Field F] in
 private theorem foldl_add_start {xs : List (RawInteractions F)} {a : RawInteractions F} :
@@ -794,100 +781,17 @@ def subcircuitChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) 
     | .witness _ _ | .assert _ | .lookup _ | .interact _ => [])
   |> List.flatten
 
--- simp lemmas; TODO put elsewhere
-@[circuit_norm]
-theorem subcircuitChannelsWithGuarantees_nil : subcircuitChannelsWithGuarantees ([] : Operations F) = [] := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithGuarantees_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
-    subcircuitChannelsWithGuarantees (.witness m c :: ops) = subcircuitChannelsWithGuarantees ops := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithGuarantees_assert (e : Expression F) (ops : Operations F) :
-    subcircuitChannelsWithGuarantees (.assert e :: ops) = subcircuitChannelsWithGuarantees ops := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithGuarantees_lookup (l : Lookup F) (ops : Operations F) :
-    subcircuitChannelsWithGuarantees (.lookup l :: ops) = subcircuitChannelsWithGuarantees ops := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithGuarantees_interact (i : AbstractInteraction F) (ops : Operations F) :
-    subcircuitChannelsWithGuarantees (.interact i :: ops) = subcircuitChannelsWithGuarantees ops := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithGuarantees_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
-    subcircuitChannelsWithGuarantees (.subcircuit s :: ops) =
-    s.channelsWithGuarantees ++ subcircuitChannelsWithGuarantees ops := rfl
-
-lemma subcircuitChannelsWithGuarantees_eq_subcircuits_map {ops : Operations F} :
-    subcircuitChannelsWithGuarantees ops = (ops.subcircuits
-    |>.map (fun s => s.2.channelsWithGuarantees) |>.flatten) := by
-  induction ops using induct <;>
-  simp_all [subcircuitChannelsWithGuarantees, Operations.subcircuits]
-
-lemma subcircuitChannelsWithGuarantees_subset_iff_forall {ops : Operations F} {channels : List (RawChannel F)} :
-  subcircuitChannelsWithGuarantees ops ⊆ channels ↔
-    ∀ s ∈ ops.subcircuits, ∀ c ∈ s.2.channelsWithGuarantees, c ∈ channels := by
-  rw [subcircuitChannelsWithGuarantees_eq_subcircuits_map, List.subset_def]
-  simp
-  tauto
-
 def subcircuitChannelsWithRequirements (ops : Operations F) : List (RawChannel F) :=
   ops.map (fun
     | .subcircuit s => s.channelsWithRequirements
     | .witness _ _ | .assert _ | .lookup _ | .interact _ => [])
   |> List.flatten
 
--- simp lemmas; TODO put elsewhere
-@[circuit_norm]
-theorem subcircuitChannelsWithRequirements_nil : subcircuitChannelsWithRequirements ([] : Operations F) = [] := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithRequirements_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
-    subcircuitChannelsWithRequirements (.witness m c :: ops) = subcircuitChannelsWithRequirements ops := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithRequirements_assert (e : Expression F) (ops : Operations F) :
-    subcircuitChannelsWithRequirements (.assert e :: ops) = subcircuitChannelsWithRequirements ops := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithRequirements_lookup (l : Lookup F) (ops : Operations F) :
-    subcircuitChannelsWithRequirements (.lookup l :: ops) = subcircuitChannelsWithRequirements ops := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithRequirements_interact (i : AbstractInteraction F) (ops : Operations F) :
-    subcircuitChannelsWithRequirements (.interact i :: ops) = subcircuitChannelsWithRequirements ops := rfl
-@[circuit_norm]
-theorem subcircuitChannelsWithRequirements_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
-    subcircuitChannelsWithRequirements (.subcircuit s :: ops) =
-    s.channelsWithRequirements ++ subcircuitChannelsWithRequirements ops := rfl
-
-lemma subcircuitChannelsWithRequirements_eq_subcircuits_map {ops : Operations F} :
-    subcircuitChannelsWithRequirements ops = (ops.subcircuits
-    |>.map (fun s => s.2.channelsWithRequirements) |>.flatten) := by
-  induction ops using induct <;>
-  simp_all [subcircuitChannelsWithRequirements, Operations.subcircuits]
-
-lemma subcircuitChannelsWithRequirements_subset_iff_forall {ops : Operations F} {channels : List (RawChannel F)} :
-  subcircuitChannelsWithRequirements ops ⊆ channels ↔
-    ∀ s ∈ ops.subcircuits, ∀ c ∈ s.2.channelsWithRequirements, c ∈ channels := by
-  rw [subcircuitChannelsWithRequirements_eq_subcircuits_map, List.subset_def]
-  simp
-  tauto
-
 def shallowChannels (ops : Operations F) : List (RawChannel F) :=
   ops.map (fun
     | .interact i => [i.channel]
     | .subcircuit _ | .witness _ _ | .assert _ | .lookup _ => [])
   |>.flatten
-
--- simp lemmas; TODO put elsewhere
-@[circuit_norm] theorem shallowChannels_nil : shallowChannels ([] : Operations F) = [] := rfl
-@[circuit_norm] theorem shallowChannels_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
-  shallowChannels (.witness m c :: ops) = shallowChannels ops := rfl
-@[circuit_norm] theorem shallowChannels_assert (e : Expression F) (ops : Operations F) :
-  shallowChannels (.assert e :: ops) = shallowChannels ops := rfl
-@[circuit_norm] theorem shallowChannels_lookup (l : Lookup F) (ops : Operations F) :
-  shallowChannels (.lookup l :: ops) = shallowChannels ops := rfl
-@[circuit_norm] theorem shallowChannels_interact (i : AbstractInteraction F) (ops : Operations F) :
-  shallowChannels (.interact i :: ops) = i.channel :: shallowChannels ops := rfl
-@[circuit_norm] theorem shallowChannels_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
-  shallowChannels (.subcircuit s :: ops) = shallowChannels ops := rfl
-
-lemma shallowChannels_eq_interactions_map {ops : Operations F} :
-    shallowChannels ops = ops.shallowInteractions.map (·.channel) := by
-  induction ops using induct <;> simp_all [shallowInteractions, shallowChannels]
 
 def channels (ops : Operations F) : List (RawChannel F) := ops.interactions.map (·.channel)
 
@@ -1019,6 +923,10 @@ namespace Operations
 @[circuit_norm] lemma constraints_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
   constraints (.subcircuit s :: ops) = FlatOperation.constraints s.ops.toFlat ++ constraints ops := rfl
 
+@[circuit_norm] lemma constraints_append (ops1 ops2 : Operations F) :
+    constraints (ops1 ++ ops2) = constraints ops1 ++ constraints ops2 := by
+  induction ops1 using induct <;> simp_all [constraints]
+
 @[circuit_norm] lemma lookups_nil : lookups ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma lookups_assert (e : Expression F) (ops : Operations F) :
   lookups (.assert e :: ops) = lookups ops := rfl
@@ -1030,6 +938,10 @@ namespace Operations
   lookups (.interact i :: ops) = lookups ops := rfl
 @[circuit_norm] lemma lookups_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
   lookups (.subcircuit s :: ops) = FlatOperation.lookups s.ops.toFlat ++ lookups ops := rfl
+
+@[circuit_norm] lemma lookups_append (ops1 ops2 : Operations F) :
+    lookups (ops1 ++ ops2) = lookups ops1 ++ lookups ops2 := by
+  induction ops1 using induct <;> simp_all [lookups]
 
 @[circuit_norm] lemma interactions_nil : interactions ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma interactions_assert (e : Expression F) (ops : Operations F) :
@@ -1043,6 +955,26 @@ namespace Operations
 @[circuit_norm] lemma interactions_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
   interactions (.subcircuit s :: ops) = FlatOperation.interactions s.ops.toFlat ++ interactions ops := rfl
 
+@[circuit_norm] lemma interactions_append (ops1 ops2 : Operations F) :
+    interactions (ops1 ++ ops2) = interactions ops1 ++ interactions ops2 := by
+  induction ops1 using induct <;> simp_all [interactions]
+
+@[circuit_norm] lemma shallowInteractions_nil : shallowInteractions ([] : Operations F) = [] := rfl
+@[circuit_norm] lemma shallowInteractions_assert (e : Expression F) (ops : Operations F) :
+  shallowInteractions (.assert e :: ops) = shallowInteractions ops := rfl
+@[circuit_norm] lemma shallowInteractions_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  shallowInteractions (.witness m c :: ops) = shallowInteractions ops := rfl
+@[circuit_norm] lemma shallowInteractions_lookup (l : Lookup F) (ops : Operations F) :
+  shallowInteractions (.lookup l :: ops) = shallowInteractions ops := rfl
+@[circuit_norm] lemma shallowInteractions_interact (i : AbstractInteraction F) (ops : Operations F) :
+  shallowInteractions (.interact i :: ops) = i :: shallowInteractions ops := rfl
+@[circuit_norm] lemma shallowInteractions_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  shallowInteractions (.subcircuit s :: ops) = shallowInteractions ops := rfl
+
+@[circuit_norm] lemma shallowInteractions_append (ops1 ops2 : Operations F) :
+    shallowInteractions (ops1 ++ ops2) = shallowInteractions ops1 ++ shallowInteractions ops2 := by
+  induction ops1 using induct <;> simp_all [shallowInteractions]
+
 @[circuit_norm] lemma witnessOperations_nil : witnessOperations ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma witnessOperations_assert (e : Expression F) (ops : Operations F) :
   witnessOperations (.assert e :: ops) = witnessOperations ops := rfl
@@ -1055,6 +987,10 @@ namespace Operations
 @[circuit_norm] lemma witnessOperations_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
   witnessOperations (.subcircuit s :: ops) = FlatOperation.witnessOperations s.ops.toFlat ++ witnessOperations ops := rfl
 
+@[circuit_norm] lemma witnessOperations_append (ops1 ops2 : Operations F) :
+    witnessOperations (ops1 ++ ops2) = witnessOperations ops1 ++ witnessOperations ops2 := by
+  induction ops1 using induct <;> simp_all [witnessOperations]
+
 @[circuit_norm] lemma subcircuits_nil : subcircuits ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma subcircuits_assert (e : Expression F) (ops : Operations F) :
   subcircuits (.assert e :: ops) = subcircuits ops := rfl
@@ -1066,4 +1002,108 @@ namespace Operations
   subcircuits (.interact i :: ops) = subcircuits ops := rfl
 @[circuit_norm] lemma subcircuits_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
   subcircuits (.subcircuit s :: ops) = ⟨n, s⟩ :: subcircuits ops := rfl
+
+@[circuit_norm] lemma subcircuits_append (ops1 ops2 : Operations F) :
+    subcircuits (ops1 ++ ops2) = subcircuits ops1 ++ subcircuits ops2 := by
+  induction ops1 using induct <;> simp_all [subcircuits]
+
+theorem interactionsWith_append {channel : RawChannel F} {ops1 ops2 : Operations F} :
+    interactionsWith channel (ops1 ++ ops2) =
+      interactionsWith channel ops1 ++ interactionsWith channel ops2 := by
+  simp [interactionsWith, interactions_append]
+
+@[circuit_norm]
+theorem subcircuitChannelsWithGuarantees_nil : subcircuitChannelsWithGuarantees ([] : Operations F) = [] := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithGuarantees_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+    subcircuitChannelsWithGuarantees (.witness m c :: ops) = subcircuitChannelsWithGuarantees ops := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithGuarantees_assert (e : Expression F) (ops : Operations F) :
+    subcircuitChannelsWithGuarantees (.assert e :: ops) = subcircuitChannelsWithGuarantees ops := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithGuarantees_lookup (l : Lookup F) (ops : Operations F) :
+    subcircuitChannelsWithGuarantees (.lookup l :: ops) = subcircuitChannelsWithGuarantees ops := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithGuarantees_interact (i : AbstractInteraction F) (ops : Operations F) :
+    subcircuitChannelsWithGuarantees (.interact i :: ops) = subcircuitChannelsWithGuarantees ops := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithGuarantees_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+    subcircuitChannelsWithGuarantees (.subcircuit s :: ops) =
+    s.channelsWithGuarantees ++ subcircuitChannelsWithGuarantees ops := rfl
+
+lemma subcircuitChannelsWithGuarantees_eq_subcircuits_map {ops : Operations F} :
+    subcircuitChannelsWithGuarantees ops = (ops.subcircuits.map (·.2.channelsWithGuarantees)).flatten := by
+  induction ops using induct <;>
+  simp_all [subcircuitChannelsWithGuarantees, Operations.subcircuits]
+
+@[circuit_norm]
+theorem subcircuitChannelsWithGuarantees_append (ops1 ops2 : Operations F) :
+    subcircuitChannelsWithGuarantees (ops1 ++ ops2) =
+      subcircuitChannelsWithGuarantees ops1 ++ subcircuitChannelsWithGuarantees ops2 := by
+  simp [subcircuitChannelsWithGuarantees_eq_subcircuits_map, subcircuits_append]
+
+lemma subcircuitChannelsWithGuarantees_subset_iff_forall {ops : Operations F} {channels : List (RawChannel F)} :
+  subcircuitChannelsWithGuarantees ops ⊆ channels ↔
+    ∀ s ∈ ops.subcircuits, ∀ c ∈ s.2.channelsWithGuarantees, c ∈ channels := by
+  rw [subcircuitChannelsWithGuarantees_eq_subcircuits_map, List.subset_def]
+  simp
+  tauto
+
+@[circuit_norm]
+theorem subcircuitChannelsWithRequirements_nil : subcircuitChannelsWithRequirements ([] : Operations F) = [] := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithRequirements_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+    subcircuitChannelsWithRequirements (.witness m c :: ops) = subcircuitChannelsWithRequirements ops := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithRequirements_assert (e : Expression F) (ops : Operations F) :
+    subcircuitChannelsWithRequirements (.assert e :: ops) = subcircuitChannelsWithRequirements ops := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithRequirements_lookup (l : Lookup F) (ops : Operations F) :
+    subcircuitChannelsWithRequirements (.lookup l :: ops) = subcircuitChannelsWithRequirements ops := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithRequirements_interact (i : AbstractInteraction F) (ops : Operations F) :
+    subcircuitChannelsWithRequirements (.interact i :: ops) = subcircuitChannelsWithRequirements ops := rfl
+@[circuit_norm]
+theorem subcircuitChannelsWithRequirements_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+    subcircuitChannelsWithRequirements (.subcircuit s :: ops) =
+    s.channelsWithRequirements ++ subcircuitChannelsWithRequirements ops := rfl
+
+lemma subcircuitChannelsWithRequirements_eq_subcircuits_map {ops : Operations F} :
+    subcircuitChannelsWithRequirements ops = (ops.subcircuits
+    |>.map (fun s => s.2.channelsWithRequirements) |>.flatten) := by
+  induction ops using induct <;>
+  simp_all [subcircuitChannelsWithRequirements, Operations.subcircuits]
+
+@[circuit_norm]
+theorem subcircuitChannelsWithRequirements_append (ops1 ops2 : Operations F) :
+    subcircuitChannelsWithRequirements (ops1 ++ ops2) =
+      subcircuitChannelsWithRequirements ops1 ++ subcircuitChannelsWithRequirements ops2 := by
+  simp [subcircuitChannelsWithRequirements_eq_subcircuits_map, subcircuits_append]
+
+lemma subcircuitChannelsWithRequirements_subset_iff_forall {ops : Operations F} {channels : List (RawChannel F)} :
+  subcircuitChannelsWithRequirements ops ⊆ channels ↔
+    ∀ s ∈ ops.subcircuits, ∀ c ∈ s.2.channelsWithRequirements, c ∈ channels := by
+  rw [subcircuitChannelsWithRequirements_eq_subcircuits_map, List.subset_def]
+  simp
+  tauto
+
+@[circuit_norm] theorem shallowChannels_nil : shallowChannels ([] : Operations F) = [] := rfl
+@[circuit_norm] theorem shallowChannels_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  shallowChannels (.witness m c :: ops) = shallowChannels ops := rfl
+@[circuit_norm] theorem shallowChannels_assert (e : Expression F) (ops : Operations F) :
+  shallowChannels (.assert e :: ops) = shallowChannels ops := rfl
+@[circuit_norm] theorem shallowChannels_lookup (l : Lookup F) (ops : Operations F) :
+  shallowChannels (.lookup l :: ops) = shallowChannels ops := rfl
+@[circuit_norm] theorem shallowChannels_interact (i : AbstractInteraction F) (ops : Operations F) :
+  shallowChannels (.interact i :: ops) = i.channel :: shallowChannels ops := rfl
+@[circuit_norm] theorem shallowChannels_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  shallowChannels (.subcircuit s :: ops) = shallowChannels ops := rfl
+
+lemma shallowChannels_eq_interactions_map {ops : Operations F} :
+    shallowChannels ops = ops.shallowInteractions.map (·.channel) := by
+  induction ops using induct <;> simp_all [shallowInteractions, shallowChannels]
+
+@[circuit_norm] theorem shallowChannels_append (ops1 ops2 : Operations F) :
+    shallowChannels (ops1 ++ ops2) = shallowChannels ops1 ++ shallowChannels ops2 := by
+  simp [shallowChannels_eq_interactions_map, shallowInteractions_append]
 end Operations

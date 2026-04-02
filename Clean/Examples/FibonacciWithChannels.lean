@@ -2249,8 +2249,8 @@ lemma pushBytes_add8_interactions_empty
           ((pushBytes (p := p)).instantiate.operations 0) = [] := by
       simp only [circuit_norm, witnessAny]
       simp only [circuit_norm, FormalCircuitWithInteractions.toSubcircuit_interactions,
-        Circuit.interactions_mapFinRange, pushBytes, BytesChannel, Add8Channel, BytesTable]
-      simp only [List.filter_eq_nil_iff, decide_eq_true_eq, List.mem_ofFn]
+        Circuit.interactions_mapFinRange, pushBytes, BytesChannel, Add8Channel, BytesTable,
+        List.filter_eq_nil_iff, decide_eq_true_eq]
       rintro a ⟨ i, a_mem ⟩
       symm at a_mem
       subst a_mem

@@ -480,9 +480,11 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   -- (if this ever becomes too restrictive for real circuits, we can relax by introducing a third list of "other channels")
   shallowChannels_subset : ∀ input_var offset,
     let ops := (elaborated.main input_var).operations offset
-    ops.shallowChannels ⊆ channelsWithGuarantees ++ channelsWithRequirements := by
-    -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
+    ∀ channel ∈ ops.shallowChannels,
+      channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements := by
+    -- TODO this tactic would bee more effective if it would unfold all channels used in the circuit
     simp only [circuit_norm, seval]
+    try tauto
 
   exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
   exposedChannels_eq : ∀ input_var offset,
@@ -675,7 +677,7 @@ attribute [circuit_norm] List.append_nil
 
 attribute [circuit_norm] List.nil_subset List.subset_cons_of_subset List.Subset.refl
 attribute [circuit_norm] List.Forall List.flatten_cons List.flatten_nil List.Sublist.refl
-attribute [circuit_norm] List.mem_cons List.mem_nil_iff
+attribute [circuit_norm] List.mem_cons List.mem_nil_iff List.mem_append List.mem_ofFn
 
 @[circuit_norm]
 lemma List.ofFn_singleton_flatten {α : Type} {m : ℕ} (f : Fin m → α) :

@@ -533,11 +533,29 @@ lemma mapFinRange.subcircuitChannelsWithRequirements :
     (List.ofFn fun (i : Fin m) =>
       (body i).operations (n + i * constant.localLength) |>.subcircuitChannelsWithRequirements).flatten := by
   rw [mapFinRange.operations_eq]
-  simp only [Operations.subcircuitChannelsWithRequirements, List.flatMap]
+  simp only [Operations.subcircuitChannelsWithRequirements]
   rw [List.map_flatten, List.flatten_flatten]
   apply congrArg List.flatten
   rw [List.map_ofFn, List.map_ofFn]
   rfl
+
+@[circuit_norm ↓]
+lemma mapFinRange.shallowChannels :
+  ((mapFinRange m body constant).operations n).shallowChannels =
+    (List.ofFn fun (i : Fin m) =>
+      (body i).operations (n + i * constant.localLength) |>.shallowChannels).flatten := by
+  rw [mapFinRange.operations_eq]
+  simp only [Operations.shallowChannels]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
+lemma mapFinRange.shallowChannels_subset_iff {cs : List (RawChannel F)} :
+  ((mapFinRange m body constant).operations n).shallowChannels ⊆ cs ↔
+    ∀ i : Fin m, ((body i).operations (n + i * constant.localLength)).shallowChannels ⊆ cs := by
+  simp [mapFinRange.shallowChannels, List.subset_def]
+  tauto
 
 @[circuit_norm ↓]
 lemma mapFinRange.forAll :

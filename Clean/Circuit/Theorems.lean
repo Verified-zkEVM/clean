@@ -45,6 +45,18 @@ theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operation
   | empty => simp [forAll_empty, localLength]
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
     simp +arith only [List.cons_append, forAll, localLength, ih, and_assoc]
+
+@[circuit_norm]
+theorem forAllNoOffset_empty {condition : ConditionNoOffset F} : forAllNoOffset condition [] = True := rfl
+
+@[circuit_norm]
+theorem forAllNoOffset_append {condition : ConditionNoOffset F} {as bs: Operations F} :
+  forAllNoOffset condition (as ++ bs) ↔
+    forAllNoOffset condition as ∧ forAllNoOffset condition bs := by
+  induction as using induct with
+  | empty => simp [forAllNoOffset]
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
+    simp only [List.cons_append, forAllNoOffset, ih, and_assoc]
 end Operations
 
 namespace Circuit
@@ -890,5 +902,8 @@ theorem FormalCircuitWithInteractions.channels_subset
   set ops := (circuit.main input_var).operations n
   trans ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
   apply Operations.channels_subset
-  simp_all
+  simp_all only [List.append_assoc, List.append_subset, List.subset_append_of_subset_left,
+    List.subset_append_of_subset_right, and_self, and_true]
+  simp [List.subset_def]
+  tauto
 end
