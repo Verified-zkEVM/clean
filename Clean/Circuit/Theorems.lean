@@ -893,8 +893,7 @@ theorem Operations.channels_subset {ops : Operations F} :
 
 theorem FormalCircuitWithInteractions.channels_subset
   (circuit : FormalCircuitWithInteractions F Input Output) (input_var : Var Input F) (n : ℕ) :
-    let ops := (circuit.main input_var).operations n;
-    ops.channels ⊆ circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements := by
+    ((circuit.main input_var).operations n).channels ⊆ circuit.channels := by
   have shallowChannels_subset := circuit.shallowChannels_subset input_var n
   have channelsWithGuarantees_subset := (circuit.guarantees_iff input_var n).1
   have channelsWithRequirements_subset := (circuit.requirements_iff input_var n).1
@@ -902,8 +901,8 @@ theorem FormalCircuitWithInteractions.channels_subset
   set ops := (circuit.main input_var).operations n
   trans ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
   apply Operations.channels_subset
-  simp_all only [List.append_assoc, List.append_subset, List.subset_append_of_subset_left,
+  simp_all only [channels, List.append_assoc, List.append_subset, List.subset_append_of_subset_left,
     List.subset_append_of_subset_right, and_self, and_true]
-  simp [List.subset_def]
+  simp only [List.subset_def, List.mem_append]
   tauto
 end

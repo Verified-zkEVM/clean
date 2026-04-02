@@ -494,6 +494,10 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
     simp only [circuit_norm, seval]
     try tauto
+
+@[circuit_norm]
+def FormalCircuitWithInteractions.channels [DecidableEq F] (circuit : FormalCircuitWithInteractions F Input Output) :=
+  circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
