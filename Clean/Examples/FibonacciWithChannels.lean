@@ -173,7 +173,7 @@ def Channel.fromStatic (F : Type) [Field F] [DecidableEq F]
   Guarantees mult msg _ := mult = -1 → slc.Guarantees msg
   Requirements mult msg _ := mult ≠ -1 → slc.Guarantees msg
 
-def StaticLookupChannel.channel (slc : StaticLookupChannel F Message) :=
+abbrev StaticLookupChannel.toChannel (slc : StaticLookupChannel F Message) :=
   Channel.fromStatic F Message slc
 
 -- define what global soundness means for an ensemble of circuits/tables and channels
@@ -808,10 +808,10 @@ imply guarantees on all interactions.
 this can be proved for individual channels without reference to any constraints,
 essentially just means that reqs and grts are reasonably related.
 -/
-def RawChannel.Consistent (channel : RawChannel F) : Prop :=
-  ∀ (interactions : List (Interaction F)) (data : ProverData F), BalancedInteractions interactions →
-    (∀ i ∈ interactions, i.channel = channel → i.Requirements data) →
-    (∀ i ∈ interactions, i.channel = channel → i.Guarantees data)
+class RawChannel.Consistent (channel : RawChannel F) : Prop where
+  consistent : ∀ (interactions : List (Interaction F)) (data : ProverData F), BalancedInteractions interactions →
+    (∀ i ∈ interactions, i.channel = channel ∧ i.Requirements data) →
+    (∀ i ∈ interactions, i.Guarantees data)
 
 -- adding one table to a SoundChannels ensemble preserves SoundChannels under some
 -- easy-to-prove assumptions on what channels the new table uses
@@ -958,7 +958,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     · apply Interaction.channel_eq_of_mem_filter' h_mem_extra
   suffices ∀ i ∈ channelInteractions, i.Requirements witness.data by
     intro i h_mem
-    apply h_consistent channel h_mem_finished _ witness.data balance ?_ _ h_mem (h_channel_eq i h_mem)
+    apply (h_consistent channel h_mem_finished).consistent _ witness.data balance ?_ _ h_mem
     tauto
   intro i h_mem
   show i.Requirements witness.data
@@ -1120,8 +1120,7 @@ def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) : 
 @[circuit_norm] lemma addChannel_finished {channel : RawChannel F} :
   (soundEns.addChannel channel).finished = soundEns.finished := rfl
 
-def markFinished (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F)
-  (h_consistent : channel.Consistent)
+def markFinished (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) [RawChannel.Consistent channel]
   (h_mem : channel ∈ soundEns.channels := by simp [circuit_norm]) :
     SoundEnsemble F PublicIO where
   ensemble := soundEns.ensemble
@@ -1131,38 +1130,38 @@ def markFinished (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F)
     intro channel' h_mem_channel
     rw [List.mem_cons] at h_mem_channel
     rcases h_mem_channel with h_mem_head | h_mem_tail
-    · exact h_mem_head ▸ h_consistent
+    · exact h_mem_head ▸ ‹RawChannel.Consistent channel›
     · exact soundEns.finished_consistent channel' h_mem_tail
   soundChannels := soundEns.ensemble.soundChannels_markFinished soundEns.finished_subset soundEns.soundChannels channel h_mem
   specConsistency := by
     intro publicInput witness spec table_verifier_spec
     apply soundEns.specConsistency publicInput witness spec table_verifier_spec
 
-variable {channel : RawChannel F} {h_consistent : channel.Consistent} {h_mem : channel ∈ soundEns.channels}
+variable {channel : RawChannel F} [RawChannel.Consistent channel] {h_mem : channel ∈ soundEns.channels}
 
 @[circuit_norm] lemma markFinished_channels :
-  (soundEns.markFinished channel h_consistent h_mem).channels = soundEns.channels := rfl
+  (soundEns.markFinished channel h_mem).channels = soundEns.channels := rfl
 
 @[circuit_norm] lemma markFinished_tables :
-  (soundEns.markFinished channel h_consistent h_mem).tables = soundEns.tables := rfl
+  (soundEns.markFinished channel h_mem).tables = soundEns.tables := rfl
 
 @[circuit_norm] lemma markFinished_finished :
-  (soundEns.markFinished channel h_consistent h_mem).finished = channel :: soundEns.finished := rfl
+  (soundEns.markFinished channel h_mem).finished = channel :: soundEns.finished := rfl
 
 def addFinishedChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F)
-  (h_consistent : channel.Consistent) : SoundEnsemble F PublicIO :=
+  [RawChannel.Consistent channel] : SoundEnsemble F PublicIO :=
   soundEns
     |>.addChannel channel
-    |>.markFinished channel h_consistent
+    |>.markFinished channel
 
-@[circuit_norm] lemma addFinishedChannel_channels {channel : RawChannel F} {h_consistent : channel.Consistent} :
-  (soundEns.addFinishedChannel channel h_consistent).channels = channel :: soundEns.channels := rfl
+@[circuit_norm] lemma addFinishedChannel_channels {channel : RawChannel F} [RawChannel.Consistent channel] :
+  (soundEns.addFinishedChannel channel).channels = channel :: soundEns.channels := rfl
 
-@[circuit_norm] lemma addFinishedChannel_tables {channel : RawChannel F} {h_consistent : channel.Consistent} :
-  (soundEns.addFinishedChannel channel h_consistent).tables = soundEns.tables := rfl
+@[circuit_norm] lemma addFinishedChannel_tables {channel : RawChannel F} [RawChannel.Consistent channel] :
+  (soundEns.addFinishedChannel channel).tables = soundEns.tables := rfl
 
-@[circuit_norm] lemma addFinishedChannel_finished {channel : RawChannel F} {h_consistent : channel.Consistent} :
-  (soundEns.addFinishedChannel channel h_consistent).finished = channel :: soundEns.finished := rfl
+@[circuit_norm] lemma addFinishedChannel_finished {channel : RawChannel F} [RawChannel.Consistent channel] :
+  (soundEns.addFinishedChannel channel).finished = channel :: soundEns.finished := rfl
 end SoundEnsemble
 
 /-
@@ -1240,16 +1239,52 @@ theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : Bal
 
 /--
 A "normal" channel is one where the requirements for a "push" interaction
-imply the guarantees of the corresponding pull interaction. -/
+imply the guarantees of the corresponding pull interaction,
+and where only pull interactions cause guarantees to be added. -/
 class NormalChannel.Raw (channel : RawChannel F) : Prop where
-  isNormal : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
-    channel.Requirements mult msg data →
-    channel.Guarantees (-1) msg data
+  grts_of_reqs : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
+    channel.Requirements mult msg data → channel.Guarantees (-1) msg data
+  grts_of_ne_neg_one : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
+    channel.Guarantees mult msg data
 
 class NormalChannel (channel : Channel F Message) : Prop where
-  isNormal : ∀ (msg : Message F) (mult : F) data, mult ≠ -1 →
-    channel.Requirements mult msg data →
-    channel.Guarantees (-1) msg data
+  grts_of_reqs : ∀ (msg : Message F) (mult : F) data, mult ≠ -1 →
+    channel.Requirements mult msg data → channel.Guarantees (-1) msg data
+  grts_of_ne_neg_one : ∀ (msg : Message F) (mult : F) data, mult ≠ -1 →
+    channel.Guarantees mult msg data
+
+instance (channel : Channel F Message) [NormalChannel channel] : NormalChannel.Raw channel.toRaw where
+  grts_of_reqs := by
+    intro msg mult data mult_ne_neg_one reqs
+    apply NormalChannel.grts_of_reqs (fromElements msg) _ _ mult_ne_neg_one reqs
+  grts_of_ne_neg_one := by
+    intro msg mult data mult_ne_neg_one
+    apply NormalChannel.grts_of_ne_neg_one (fromElements msg) _ _ mult_ne_neg_one
+
+/-- Normal channels are consistent, thanks to `exists_push_of_pull` -/
+theorem normalChannel_consistent (channel : RawChannel F) [NormalChannel.Raw channel] : channel.Consistent := by
+  constructor
+  intro interactions data balance reqs a a_mem
+  simp only [Interaction.Guarantees, Interaction.Requirements, Interaction.msgVector] at reqs ⊢
+  intro _
+  have a_channel_eq := reqs a a_mem |>.left
+  have a_msg_size : a.msg.size = channel.arity := by rw [a.same_size, a_channel_eq]
+  -- we need to prove the guarantees for a given interaction from the requirements of _all_ interactions
+  suffices channel.Guarantees a.mult ⟨ a.msg, a_msg_size ⟩ data by convert this
+  by_cases a_mult : a.mult = -1
+  -- if the multiplitity is not -1, this is trivial by `grts_of_ne_neg_one`
+  case neg => exact NormalChannel.Raw.grts_of_ne_neg_one ⟨ a.msg, a_msg_size ⟩ a.mult data a_mult
+  -- if the multiplicity is -1, we get the corresponding push interaction and apply `grts_of_reqs`
+  rw [a_mult]
+  have ⟨ b, b_mem, b_msg_eq, b_mult_ne_neg_one ⟩ := exists_push_of_pull interactions balance a a_mem a_mult
+  apply NormalChannel.Raw.grts_of_reqs ⟨ a.msg, a_msg_size ⟩ b.mult data b_mult_ne_neg_one
+  have ⟨ b_channel_eq, b_reqs ⟩ := reqs _ b_mem
+  symm at b_channel_eq
+  simp only [b_msg_eq] at b_reqs
+  convert b_reqs
+
+instance (channel : RawChannel F) [NormalChannel.Raw channel] : channel.Consistent :=
+  normalChannel_consistent channel
 
 omit [DecidableEq F] in
 lemma one_ne_neg_one [Fact (ringChar F ≠ 2)] : (1 : F) ≠ -1 :=
@@ -1321,7 +1356,7 @@ theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠
       have msg_size : msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
       suffices a_grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         convert fun _ => a_grt'
-      apply NormalChannel.Raw.isNormal ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
+      apply NormalChannel.Raw.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
       simp only [Interaction.Requirements, Interaction.msgVector, bj_msg] at bj_req
       convert bj_req
     -- if i = j, we're done
@@ -1428,7 +1463,7 @@ theorem SoundVmEnsemble.soundness (ens : SoundVmEnsemble F PublicIO) : ens.Sound
 structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
   channel : Channel F Message
-  normal_channel : NormalChannel (F:=F) channel
+  [normal_channel : NormalChannel (F:=F) channel]
 
   tables : List (AbstractTable F)
   verifier : FormalCircuitWithInteractions F PublicIO unit
@@ -1521,6 +1556,10 @@ instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <
 
 variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
 
+instance (channel : StaticLookupChannel (F p) field) : NormalChannel (Channel.fromStatic _ _ channel) := by
+  constructor; all_goals
+  tauto
+
 def BytesTable : StaticLookupChannel (F p) field where
   name := "bytes"
   table := List.finRange 256 |>.map ByteUtils.fromByte
@@ -1535,11 +1574,7 @@ def BytesTable : StaticLookupChannel (F p) field where
       rw [← h_eq]
       apply ByteUtils.fromByte_lt
 
-def BytesChannel := Channel.fromStatic (F p) field BytesTable
-
-theorem bytesChannel_consistent : (BytesChannel (p:=p)).toRaw.Consistent := by
-  whnf
-  sorry
+abbrev BytesChannel := Channel.fromStatic (F p) field BytesTable
 
 -- bytes "circuit" that just pushes all bytes
 -- probably shouldn't be a "circuit" at all
@@ -1570,8 +1605,7 @@ instance Add8Channel : Channel (F p) fieldTriple where
   | mult, (x, y, z), _ =>
     mult ≠ -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
 
-theorem add8Channel_consistent : (Add8Channel (p:=p)).toRaw.Consistent := by
-  sorry
+instance : NormalChannel (Add8Channel (p:=p)) := by constructor <;> tauto
 
 structure Add8Inputs F where
   x : F
@@ -1612,7 +1646,7 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   Spec _ _ _ := True
 
   soundness := by
-    circuit_proof_start [BytesChannel, Add8Channel]
+    circuit_proof_start [BytesTable, Add8Channel]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
     intro hm hx hy
@@ -1623,9 +1657,8 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
   -- for completeness, it would make sense to require proving the Guarantees as well
   -- what about the Requirements?
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [BytesTable]
     set carry := env.get i₀
-    simp_all only
     rcases h_assumptions with ⟨ hx, hy, hz, heq ⟩
     have add_completeness_bool := Theorems.completeness_bool input_x input_y 0 hx hy (by simp)
     have add_completeness_add := Theorems.completeness_add input_x input_y 0 hx hy (by simp)
@@ -1634,12 +1667,10 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
       apply FieldUtils.ext
       rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
       linarith [hx, hy, ‹Fact (p > 512)›.elim]
-    have h_bytes_guarantee : BytesChannel.Guarantees (-1) input_z env.data := by
-      simpa [BytesChannel, Channel.fromStatic, BytesTable] using hz
-    refine ⟨h_bytes_guarantee, ?_⟩
+    refine ⟨ hz, ?_⟩
     refine ⟨ ?_, ?_ ⟩
-    · simpa [floorDiv256] using add_completeness_bool
-    · simpa [h_input_z, floorDiv256] using add_completeness_add
+    · simpa [floorDiv256, h_env] using add_completeness_bool
+    · simpa [h_input_z, floorDiv256, h_env] using add_completeness_add
 
 -- define valid Fibonacci state transitions
 
@@ -1679,6 +1710,8 @@ instance FibonacciChannel : Channel (F p) fieldTriple where
       -- (x, y) is a valid Fibonacci state
       ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
     else True
+
+instance : NormalChannel (FibonacciChannel (p:=p)) := by constructor <;> simp_all [FibonacciChannel]
 
 def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   main | (n, x, y) => do
@@ -1797,16 +1830,15 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
   tables := [ ⟨fib8⟩ ]
   verifier := fibonacciVerifier
-  normal_channel := .mk <| by simp_all [circuit_norm, FibonacciChannel]
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by simp [circuit_norm, fib8]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
 
 def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addTable ⟨pushBytes⟩ (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
-  |>.addFinishedChannel BytesChannel.toRaw bytesChannel_consistent
+  |>.addFinishedChannel BytesChannel.toRaw
   |>.addTable ⟨add8⟩ (by simp [circuit_norm, add8]) (by simp [circuit_norm, add8])
-  |>.addFinishedChannel Add8Channel.toRaw add8Channel_consistent
+  |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
     (by simp [circuit_norm, fibonacciVm, fib8])
     (by simp [circuit_norm, fibonacciVm, fib8, Add8Channel, FibonacciChannel])
