@@ -1589,23 +1589,42 @@ theorem TableWitness.interactionsWith_of_exposedChannels {table : AbstractTable 
     interactions.map (·.eval (witness.environment row)) := by
   sorry
 
+def transpose2 {α : Type} (as bs : List α) : List (List α) :=
+  as.zip bs |>.map fun (a, b) => [a, b]
+
 theorem VmTables.interactions_eq_pulls_pushes {vm : VmTables F PublicIO} (witness : EnsembleWitness vm.toEnsemble) :
   ∃ (pulls pushes : List (vm.Message F)),
     pulls.length = pushes.length ∧
     witness.tables.flatMap (fun table => table.interactionsWith vm.channel.toRaw) =
-      [pulls.map vm.channel.pulledValue, pushes.map vm.channel.pushedValue].transpose.flatten
-     := by
+      (transpose2 (pulls.map vm.channel.pulledValue) (pushes.map vm.channel.pushedValue)).flatten := by
   sorry
 
--- TODO maybe also prove generic version
-lemma List.pair_cons_transpose {α : Type} (a b : α) (as bs : List α) :
-    [a, b] :: [as, bs].transpose = [a :: as, b :: bs].transpose := by
-  simp [List.transpose, List.transpose.go]
-  sorry
+lemma List.pair_cons_transpose2 {α : Type} (a b : α) (as bs : List α) :
+    [a, b] :: transpose2 as bs = transpose2 (a :: as) (b :: bs) := by
+  simp [transpose2]
 
-lemma List.transpose_flatten_perm {α : Type} (as : List (List α)) :
-    List.Perm as.transpose.flatten as.flatten := by
-  sorry
+lemma List.transpose2_flatten_perm {α : Type} (as bs : List α) :
+    bs.length = as.length →
+      List.Perm (transpose2 as bs).flatten (as ++ bs) := by
+  suffices ∀ n, as.length = n → bs.length = n →
+      List.Perm (transpose2 as bs).flatten (as ++ bs) from
+    fun h => this as.length rfl h
+  simp only [transpose2]
+  intro n as_len bs_len
+  induction n generalizing as bs with
+  | zero => simp_all
+  | succ n ih =>
+    rcases as with as | ⟨ a, as ⟩
+    · simp_all
+    rcases bs with bs | ⟨ b, bs ⟩
+    · simp_all
+    simp at as_len bs_len
+    specialize ih as bs as_len bs_len
+    rw [zip_cons_cons, map_cons, flatten_cons]
+    simp only
+    grw [ih, cons_append, cons_append, nil_append, cons_append, perm_cons,
+      perm_append_comm (l₁ := as) (l₂ := b :: bs), cons_append, perm_cons,
+      perm_append_comm]
 
 namespace Ensemble
 def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) : Ensemble F PublicIO where
@@ -1694,7 +1713,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   rw [vmVerifierInteractions_eq] at vmInteractions_eq; clear vmVerifierInteractions_eq
   obtain ⟨ pulls', pushes', len_eq, vmInteractions_eq' ⟩ := vm.interactions_eq_pulls_pushes vmWitness
   rw [vmInteractions_eq'] at vmInteractions_eq; clear vmInteractions_eq'
-  rw [←List.flatten_cons, List.pair_cons_transpose] at vmInteractions_eq
+  rw [←List.flatten_cons, List.pair_cons_transpose2] at vmInteractions_eq
   set pulls := vm.channel.pulledValue pull0 :: List.map vm.channel.pulledValue pulls'
   set pushes := vm.channel.pushedValue push0 :: List.map vm.channel.pushedValue pushes'
   have pairwise_guarantees := pairwise_guarantees_of_requirements_of_constraints vmChannel pulls pushes
@@ -1707,9 +1726,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       sorry
     rw [vmInteractions_eq] at originalBalance
     apply balancedInteractions_of_perm ?perm originalBalance
-    have flatten_pair : pulls ++ pushes = [pulls, pushes].flatten := by simp
-    rw [flatten_pair]
-    apply List.transpose_flatten_perm
+    apply List.transpose2_flatten_perm
   let n := pulls.length
   have h_len_pulls : pulls.length = n := rfl
   have h_len_pushes : pushes.length = n := by simp [n, pulls, pushes, len_eq]
