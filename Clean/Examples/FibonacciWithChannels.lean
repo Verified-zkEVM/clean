@@ -776,8 +776,8 @@ def PartialBalancedChannels (ens : Ensemble F PublicIO) (finished : List (RawCha
     (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
   ∃ extraInteractions : List (Interaction F),
-    -- the total of known + unknown interactions is balanced for each channel
-    (∀ channel ∈ ens.channels,
+    -- the total of known + unknown interactions is balanced for each "finished" channel
+    (∀ channel ∈ finished,
       BalancedInteractions (ens.interactionsWith publicInput witness channel ++ channel.filter' extraInteractions)) ∧
     -- for "finished" channels, we already _assume_ that requirements on future interactions hold unconditionally
     -- (this restricts the order in which tables can be added;
@@ -795,7 +795,9 @@ lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
   simp only [PartialBalancedChannels, BalancedChannels] at *
   use []
   have (c : RawChannel F) : c.filter' [] = [] := rfl
-  simpa [this] using balanced
+  simp_all only [List.append_nil, List.not_mem_nil, IsEmpty.forall_iff, implies_true, and_true]
+  intro channel channel_mem
+  exact balanced channel (h_finished channel_mem)
 
 /--
   "Sound channels" means that we can eliminate the Guarantees from each table, assuming constraints
@@ -1016,7 +1018,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   -- this easily follows from a much stronger statement: guarantees for a finished channel hold on ALL channel interactions
   let channelInteractions := (ens.addTable table).interactionsWith publicInput witness channel
     ++ channel.filter' extraInteractions;
-  replace balance : BalancedInteractions channelInteractions := balance channel (h_finished h_mem_finished)
+  replace balance : BalancedInteractions channelInteractions := balance channel h_mem_finished
   suffices goal : ∀ i ∈ channelInteractions, i.Guarantees witness.data by
     rw [TableWitness.channelGuarantees_iff_forall, ← h_data_eq']
     intro i h_mem
@@ -1095,7 +1097,7 @@ theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
   -- trivial, because partial balance for more channels is stronger
   have partial_balance' : ens.PartialBalancedChannels finished h_finished publicInput witness := by
     rcases partial_balance with ⟨ extraInteractions, balance, h_reqs ⟩
-    use extraInteractions, balance
+    use extraInteractions
     simp_all
   exact h_sound witness publicInput partial_balance' constraints verifier_accepts
 end Ensemble
@@ -1165,18 +1167,9 @@ def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) : 
   soundChannels := by
     intro witness publicInput partial_balance constraints verifier_accepts
     let witness' : EnsembleWitness soundEns.ensemble := { witness with }
+    -- partial balance is unchanged since it doesn't depend on "unfinished" channels
     have partial_balance' : soundEns.ensemble.PartialBalancedChannels soundEns.finished
-      soundEns.finished_subset publicInput witness' := by
-      simp only [Ensemble.PartialBalancedChannels, List.mem_cons, Ensemble.interactionsWith,
-        Ensemble.verifierInteractionsWith, Lean.Elab.WF.paramLet, List.append_assoc,
-        forall_eq_or_imp] at partial_balance
-      rcases partial_balance with ⟨extraInteractions, ⟨ balance_ver, balance ⟩, reqs_extra⟩
-      refine ⟨ extraInteractions, ?_, reqs_extra ⟩
-      intro channel' h_mem_channel
-      specialize balance channel' h_mem_channel
-      convert balance using 1
-      rw [← List.append_assoc]
-      rfl
+      soundEns.finished_subset publicInput witness' := partial_balance
     apply soundEns.soundChannels witness' publicInput partial_balance'
     · simp only [Ensemble.Constraints] at constraints ⊢
       intro table h_mem
@@ -1748,21 +1741,25 @@ def SoundEnsemble.addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicI
       := by simp [circuit_norm])
     (grts_subset_finished : ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: ens.finished
       := by simp [circuit_norm])
+    (vgrts_subset_finished : vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: ens.finished
+      := by simp [circuit_norm])
     (reqs_disjoint_finished : ∀ table ∈ vm.tables, ∀ channel ∈ ens.finished, channel ∉ table.circuit.channelsWithRequirements
       := by simp [circuit_norm]) :
     SoundVmEnsemble F PublicIO where
   __ := ens.ensemble.addVm vm
   soundVmChannel := ens.ensemble.addVm_soundVmChannel_of_soundChannels ens.finished_subset
-    ens.soundChannels ens.finished_consistent vm ne_mem_vm_channel grts_subset_finished reqs_disjoint_finished
+    ens.soundChannels ens.finished_consistent vm ne_mem_vm_channel
+    grts_subset_finished vgrts_subset_finished reqs_disjoint_finished
 
 namespace SoundVmEnsemble
 variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
   {nmv : ∀ table ∈ soundEns.ensemble.tables, vm.channel.toRaw ∉ table.circuit.channels}
   {gsf : ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: soundEns.finished}
+  {vgsf : vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: soundEns.finished}
   {rdf : ∀ table ∈ vm.tables, ∀ channel ∈ soundEns.finished, channel ∉ table.circuit.channelsWithRequirements}
 
 @[circuit_norm] lemma addVm_spec [Fact (ringChar F ≠ 2)] (publicInput : PublicIO F) :
-  (soundEns.addVm vm nmv gsf rdf).Spec publicInput =
+  (soundEns.addVm vm nmv gsf vgsf rdf).Spec publicInput =
     ∃ data, vm.verifier.Spec publicInput () (emptyEnvironment F data) := rfl
 end SoundVmEnsemble
 end
@@ -2061,6 +2058,7 @@ def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addVm fibonacciVm
     (by simp [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8])
+    (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8, Add8Channel, FibonacciChannel])
 
 /--
