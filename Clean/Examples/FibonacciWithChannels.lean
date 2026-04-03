@@ -866,17 +866,21 @@ lemma mem_abstract_of_mem_witness {ens : Ensemble F PublicIO}
   rw [←witness.same_length] at hi
   simp [←witness.same_circuits i hi]
 
+def tableChannelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
+  ens.tables.flatMap (·.circuit.channelsWithGuarantees)
+
 /-- `SoundChannels` follows from `SoundChannel` on all channels, plus conditions on the `channelsWithGuarantees` -/
 lemma soundChannels_of_soundChannel {ens : Ensemble F PublicIO} (finished : List (RawChannel F)) :
   (∀ channel ∈ finished, ens.SoundChannel channel) ∧
-  (∀ table ∈ ens.tables, table.circuit.channelsWithGuarantees ⊆ finished) ∧
-  (ens.verifier.channelsWithGuarantees ⊆ finished) →
+  ens.tableChannelsWithGuarantees ⊆ finished ∧
+  ens.verifier.channelsWithGuarantees ⊆ finished →
     ens.SoundChannels finished := by
   simp only [SoundChannels, SoundChannel]
   simp only [TableWitness.guarantees_iff_channelGuarantees, verifierGuarantees_iff]
   rintro ⟨ sound_channels, tables_subset, verifier_subset ⟩ witness publicInput constraints verifier_accepts partial_balance
   constructor
   · intro table h_table channel h_channel
+    simp [tableChannelsWithGuarantees, List.subset_def] at tables_subset
     have mem_abstract := mem_abstract_of_mem_witness witness table h_table
     have mem_finished := tables_subset table.abstract mem_abstract h_channel
     specialize sound_channels channel mem_finished witness publicInput
@@ -887,6 +891,16 @@ lemma soundChannels_of_soundChannel {ens : Ensemble F PublicIO} (finished : List
     specialize sound_channels channel mem_finished witness publicInput
       constraints verifier_accepts (partial_balance channel mem_finished)
     exact sound_channels.2
+
+abbrev channelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
+  ens.verifier.channelsWithGuarantees ++ ens.tableChannelsWithGuarantees
+
+lemma soundChannels_of_soundChannel' {ens : Ensemble F PublicIO} :
+  (∀ channel ∈ ens.channelsWithGuarantees, ens.SoundChannel channel) →
+    ens.SoundChannels ens.channelsWithGuarantees := by
+  intro sound_channel
+  apply soundChannels_of_soundChannel
+  simp_all [channelsWithGuarantees]
 
 /--
 partial balance + sound channels gives you the full soundness statement on each table,
@@ -1009,6 +1023,11 @@ lemma addTable_witness (ens : Ensemble F PublicIO) (table : AbstractTable F)
   simp only [tableWitness, List.head_eq_getElem]
   rw [← witness.same_circuits _ h_lt, witness.same_prover_data _ h_lt]
   simp [addTable, witness']
+
+lemma addTable_channelsWithGuarantees (ens : Ensemble F PublicIO) (table : AbstractTable F) :
+  (ens.addTable table).channelsWithGuarantees = ens.verifier.channelsWithGuarantees
+    ++ table.circuit.channelsWithGuarantees ++ ens.tableChannelsWithGuarantees := by
+  simp [addTable, channelsWithGuarantees, tableChannelsWithGuarantees]
 
 theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     -- given a sound channels ensemble with a list of finished, consistent channels
