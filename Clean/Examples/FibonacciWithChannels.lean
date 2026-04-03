@@ -775,15 +775,15 @@ designed to be used for proving soundness by adding one table after another.
 def PartialBalancedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) (_ : finished ⊆ ens.channels)
     (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
-  ∃ extraInteractions : List (Interaction F),
+  ∀ channel ∈ finished, ∃ extraInteractions : List (Interaction F),
     -- the total of known + unknown interactions is balanced for each "finished" channel
-    ∀ channel ∈ finished,
-      BalancedInteractions (ens.interactionsWith publicInput witness channel ++ channel.filter' extraInteractions) ∧
-      -- additionally, we already _assume_ that requirements on future interactions hold unconditionally
-      -- (this restricts the order in which tables can be added;
-      --  and it's what gives us the final piece in the "all interactions satisfy requirements" statement we need to prove
-      --  the guarantees for the next added table)
-      ∀ i ∈ extraInteractions, i.channel = channel → i.Requirements witness.data
+    BalancedInteractions (ens.interactionsWith publicInput witness channel ++ extraInteractions) ∧
+    -- the extra interactions are with the same channel.
+    -- additionally, we _assume_ that requirements on future interactions hold unconditionally.
+    -- (this restricts the order in which tables can be added;
+    --  and it's what gives us the final piece in the "all interactions satisfy requirements" statement we need to prove
+    --  the guarantees for the next added table)
+    ∀ i ∈ extraInteractions, i.channel = channel ∧ i.Requirements witness.data
 
 /-- Partial balanced channels is weaker than balanced channels -/
 lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
@@ -793,10 +793,9 @@ lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
     ens.PartialBalancedChannels finished h_finished publicInput witness := by
   intro balanced
   simp only [PartialBalancedChannels, BalancedChannels] at *
-  use []
-  have (c : RawChannel F) : c.filter' [] = [] := rfl
-  simp_all only [List.append_nil, List.not_mem_nil, IsEmpty.forall_iff, implies_true, and_true]
   intro channel channel_mem
+  use []
+  simp_all only [List.append_nil, List.not_mem_nil, IsEmpty.forall_iff, implies_true, and_true]
   exact balanced channel (h_finished channel_mem)
 
 /--
@@ -960,17 +959,16 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   let h_sound' := h_sound witness' publicInput
   rw [h_table] at grts_subset_finished reqs_disjoint_finished
   -- we instantiate partial balance by moving the new table's interactions to `extraInteractions`
-  rcases partial_balance with ⟨ extraInteractions, balance_and_reqs_extra ⟩
   have partial_balance' : ens.PartialBalancedChannels finished h_finished publicInput witness' := by
-    refine ⟨tableWitness.interactions ++ extraInteractions, ?_⟩
     intro channel h_mem_channel
-    specialize balance_and_reqs_extra channel h_mem_channel
+    rcases partial_balance channel h_mem_channel with ⟨ extraInteractions, balance_and_reqs_extra ⟩
+    refine ⟨tableWitness.interactionsWith channel ++ extraInteractions, ?_⟩
     rcases balance_and_reqs_extra with ⟨ balance, reqs_extra ⟩
     constructor
     · -- balance holds because we're balancing the same list (just need to show that)
       apply balancedInteractions_of_perm ?_ balance
       simp only [interactionsWith, verifierInteractionsWith, addTable, h_data_eq, h_split,
-        List.flatMap_cons, RawChannel.filter', List.append_assoc, List.filter_append]
+        List.flatMap_cons, List.append_assoc]
       rw [List.perm_append_left_iff, ←List.append_assoc,
         ←List.append_assoc, List.perm_append_right_iff, TableWitness.interactionsWith_eq_filter]
       apply List.perm_append_comm
@@ -980,16 +978,15 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
       -- and on new table bc channelsWithReqs are disjoint from finished
       refine ⟨ ?_, reqs_extra i ⟩
       revert i
-      intro i hi hi_channel
+      intro i hi
+      have hi_channel : i.channel = channel := TableWitness.channel_eq_of_mem_interactionsWith hi
+      use hi_channel
       have h_channel_not_mem : channel ∉ tableWitness.channelsWithRequirements := by
         intro h_mem
         apply reqs_disjoint_finished channel h_mem_channel h_mem
       have h_req := tableWitness.requirements_of_not_mem h_channel_not_mem
-      rw [← hi_channel, TableWitness.channelRequirements_iff_forall] at h_req
-      show i.Requirements witness.data
-      rw [h_data_eq']
-      apply h_req i
-      simp [TableWitness.interactionsWith_eq_filter, hi]
+      rw [TableWitness.channelRequirements_iff_forall] at h_req
+      convert h_req i hi
   -- constraints for the smaller ensemble follow easily from the larger one
   have constraints' : ens.Constraints witness' := by
     simp only [Ensemble.Constraints] at constraints ⊢
@@ -1015,9 +1012,9 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   show tableWitness.ChannelGuarantees channel
   replace h_mem_finished : channel ∈ finished := grts_subset_finished h_mem_finished
   -- this easily follows from a much stronger statement: guarantees for a finished channel hold on ALL channel interactions
-  let channelInteractions := (ens.addTable table).interactionsWith publicInput witness channel
-    ++ channel.filter' extraInteractions;
-  obtain ⟨ balance, reqs_extra ⟩ := balance_and_reqs_extra channel h_mem_finished
+  rcases partial_balance channel h_mem_finished with ⟨ extraInteractions, balance_and_reqs_extra ⟩
+  let channelInteractions := (ens.addTable table).interactionsWith publicInput witness channel ++ extraInteractions;
+  obtain ⟨ balance, reqs_extra ⟩ := balance_and_reqs_extra
   change BalancedInteractions channelInteractions at balance
   suffices goal : ∀ i ∈ channelInteractions, i.Guarantees witness.data by
     rw [TableWitness.channelGuarantees_iff_forall, ← h_data_eq']
@@ -1034,7 +1031,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     simp only [channelInteractions, List.mem_append] at h_mem
     rcases h_mem with h_mem_ens | h_mem_extra
     · apply channel_eq_of_mem_interactionsWith h_mem_ens
-    · apply Interaction.channel_eq_of_mem_filter' h_mem_extra
+    · exact reqs_extra i h_mem_extra |>.left
   suffices ∀ i ∈ channelInteractions, i.Requirements witness.data by
     intro i h_mem
     apply (h_consistent channel h_mem_finished).consistent _ witness.data balance ?_ _ h_mem
@@ -1046,7 +1043,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   replace h_mem :
       i ∈ ens.interactionsWith publicInput witness' channel ∨
       i ∈ tableWitness.interactionsWith channel ∨
-      i ∈ channel.filter' extraInteractions := by
+      i ∈ extraInteractions := by
     simp only [channelInteractions, List.mem_append, interactionsWith, h_split,
       List.mem_append, List.flatMap_cons] at h_mem ⊢
     simp only [← h_data_eq]
@@ -1079,10 +1076,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     rw [TableWitness.channelRequirements_iff_forall] at h_req_table
     convert h_req_table i h_mem_table
   -- requirements for the extra interactions was part of the partial balance assumption
-  · have h_mem_extra' : i ∈ extraInteractions := by
-      simp only [RawChannel.filter', List.mem_filter, decide_eq_true_eq] at h_mem_extra
-      exact h_mem_extra.1
-    apply reqs_extra i h_mem_extra' h_channel_eq
+  · exact reqs_extra i h_mem_extra |>.right
 
 theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
     -- given a sound channels ensemble with a list of finished channels
@@ -1095,11 +1089,10 @@ theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
   intro witness publicInput partial_balance constraints verifier_accepts
   -- trivial, because partial balance for more channels is stronger
   have partial_balance' : ens.PartialBalancedChannels finished h_finished publicInput witness := by
-    rcases partial_balance with ⟨ extraInteractions, balance_and_reqs_extra ⟩
-    use extraInteractions
     intro channel' h_mem_channel'
-    simp_all only [List.mem_cons, forall_eq_or_imp, true_and]
-    exact balance_and_reqs_extra.right channel' h_mem_channel' |>.right
+    have h_mem_channel : channel' ∈ channel :: finished := by simp [h_mem_channel']
+    rcases partial_balance channel' h_mem_channel with ⟨ extraInteractions, balance_and_reqs_extra ⟩
+    use extraInteractions
   exact h_sound witness publicInput partial_balance' constraints verifier_accepts
 end Ensemble
 
