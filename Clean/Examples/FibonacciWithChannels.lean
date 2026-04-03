@@ -772,10 +772,10 @@ where we assume our interactions are a subset of some larger list which is balan
 
 designed to be used for proving soundness by adding one table after another.
 -/
-def PartialBalancedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) (_ : finished.Subset ens.channels)
+def PartialBalancedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) (_ : finished ⊆ ens.channels)
     (publicInput : PublicIO F) (witness : EnsembleWitness ens) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
-  ∃ (extraInteractions : List (Interaction F)),
+  ∃ extraInteractions : List (Interaction F),
     -- the total of known + unknown interactions is balanced for each channel
     (∀ channel ∈ ens.channels,
       BalancedInteractions (ens.interactionsWith publicInput witness channel ++ channel.filter' extraInteractions)) ∧
@@ -785,6 +785,7 @@ def PartialBalancedChannels (ens : Ensemble F PublicIO) (finished : List (RawCha
     --  the guarantees for the next added table)
     ∀ i ∈ extraInteractions, i.channel ∈ finished → i.Requirements witness.data
 
+/-- Partial balanced channels is weaker than balanced channels -/
 lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
     {publicInput : PublicIO F} {witness : EnsembleWitness ens}
     {finished : List (RawChannel F)} {h_finished : finished ⊆ ens.channels} :
@@ -796,9 +797,11 @@ lemma partialBalancedChannels_of_balancedChannels {ens : Ensemble F PublicIO}
   have (c : RawChannel F) : c.filter' [] = [] := rfl
   simpa [this] using balanced
 
--- sound channels means that we can eliminate the Guarantees from each table, assuming constraints and a partial balance
--- assumption
--- this is basically what's needed for Soundness, together with per-table soundness implying global soundness
+/--
+  "Sound channels" means that we can eliminate the Guarantees from each table, assuming constraints
+  and a partial balance assumption.
+  this is basically what's needed for Soundness, together with per-table soundness implying global soundness
+-/
 def SoundChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F))
     (h_finished : finished ⊆ ens.channels) : Prop :=
   ∀ witness publicInput,
@@ -1599,32 +1602,25 @@ theorem VmTables.interactions_eq_pulls_pushes {vm : VmTables F PublicIO} (witnes
       (transpose2 (pulls.map vm.channel.pulledValue) (pushes.map vm.channel.pushedValue)).flatten := by
   sorry
 
-lemma List.pair_cons_transpose2 {α : Type} (a b : α) (as bs : List α) :
-    [a, b] :: transpose2 as bs = transpose2 (a :: as) (b :: bs) := by
+lemma transpose2_cons_cons {α : Type} (a b : α) (as bs : List α) :
+    transpose2 (a :: as) (b :: bs) = [a, b] :: transpose2 as bs := by
   simp [transpose2]
 
-lemma List.transpose2_flatten_perm {α : Type} (as bs : List α) :
-    bs.length = as.length →
-      List.Perm (transpose2 as bs).flatten (as ++ bs) := by
+lemma transpose2_flatten_perm {α : Type} {as bs : List α} :
+    bs.length = as.length → List.Perm (transpose2 as bs).flatten (as ++ bs) := by
+  open List in
   suffices ∀ n, as.length = n → bs.length = n →
-      List.Perm (transpose2 as bs).flatten (as ++ bs) from
-    fun h => this as.length rfl h
-  simp only [transpose2]
+    List.Perm (transpose2 as bs).flatten (as ++ bs) from this as.length rfl
   intro n as_len bs_len
   induction n generalizing as bs with
-  | zero => simp_all
+  | zero => simp_all [transpose2]
   | succ n ih =>
-    rcases as with as | ⟨ a, as ⟩
-    · simp_all
-    rcases bs with bs | ⟨ b, bs ⟩
-    · simp_all
-    simp at as_len bs_len
-    specialize ih as bs as_len bs_len
-    rw [zip_cons_cons, map_cons, flatten_cons]
-    simp only
-    grw [ih, cons_append, cons_append, nil_append, cons_append, perm_cons,
-      perm_append_comm (l₁ := as) (l₂ := b :: bs), cons_append, perm_cons,
-      perm_append_comm]
+    rcases as with rfl | ⟨ a, as ⟩; nomatch as_len
+    rcases bs with rfl | ⟨ b, bs ⟩; nomatch bs_len
+    simp only [length_cons, Nat.add_right_cancel_iff] at as_len bs_len
+    specialize ih as_len bs_len
+    simp only [transpose2_cons_cons, flatten_cons, cons_append, nil_append]
+    grw [perm_cons, ← perm_cons_append_cons _ perm_rfl, perm_cons, ih]
 
 namespace Ensemble
 def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) : Ensemble F PublicIO where
@@ -1666,13 +1662,15 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     -- TODO! we should only allow adding tables to an ensemble if the channels they interact with were already added
     -- this would simplify this proof, and provide more meaning to the .channels property
     (∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels) →
-    -- assuming that the VM tables' channelsWithGuarantees are either finished or the VM channel
+    -- assuming that the VM tables' and verifier's channelsWithGuarantees are either finished or the VM channel
     (∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished) →
+    vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished →
     -- and assuming the VM tables' channelsWithRequirements contain none of the finished ones
     (∀ table ∈ vm.tables, ∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
     -- the ensemble with the VM tables satisfies SoundVmChannel
     (ens.addVm vm).SoundVmChannel := by
-  intro ne_mem_vm_channel grts_subset_finished reqs_disjoint_finished witness publicInput constraints balance verifier_accepts
+  intro ne_mem_vm_channel grts_subset vgrts_subset reqs_disjoint
+    witness publicInput constraints balance verifier_accepts
   /-
   the high level idea is to show we are in the situation of `pairwise_guarantees_of_requirements_of_constraints`,
   where the targeted interactions are those with the VM channel: vm tables + verifier.
@@ -1704,35 +1702,44 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   let pull0 := eval emptyEnv pull0Var
   let push0 := eval emptyEnv push0Var
   replace vmVerifierInteractions_eq : vmVerifierInteractions =
-    [vm.channel.pulledValue pull0, vm.channel.pushedValue push0] := by
+      [vm.channel.pulledValue pull0, vm.channel.pushedValue push0] := by
     replace vmVerifierInteractions_eq := vm.verifier.exposedChannels_eq (const publicInput) 0 _ vmVerifierInteractions_eq
     simp only [vmVerifierInteractions] at vmVerifierInteractions_eq ⊢
     rw [←Channel.eval_pulled, ←Channel.eval_pushed]
     show _ = [(vm.channel.pulled pull0Var).toRaw, (vm.channel.pushed push0Var).toRaw].map (·.eval emptyEnv)
     congr
-  rw [vmVerifierInteractions_eq] at vmInteractions_eq; clear vmVerifierInteractions_eq
+  rw [vmVerifierInteractions_eq] at vmInteractions_eq
   obtain ⟨ pulls', pushes', len_eq, vmInteractions_eq' ⟩ := vm.interactions_eq_pulls_pushes vmWitness
   rw [vmInteractions_eq'] at vmInteractions_eq; clear vmInteractions_eq'
-  rw [←List.flatten_cons, List.pair_cons_transpose2] at vmInteractions_eq
+  rw [← List.flatten_cons, ← transpose2_cons_cons] at vmInteractions_eq
   set pulls := vm.channel.pulledValue pull0 :: List.map vm.channel.pulledValue pulls'
   set pushes := vm.channel.pushedValue push0 :: List.map vm.channel.pushedValue pushes'
   have pairwise_guarantees := pairwise_guarantees_of_requirements_of_constraints vmChannel pulls pushes
   -- we fill in the conditions on pulls and pushes in `pairwise_guarantees`
+  let n := pulls.length
+  have pulls_len : pulls.length = n := rfl
+  have pushes_len : pushes.length = n := by simp [n, pulls, pushes, len_eq]
+  have pulls_channel : ∀ pull ∈ pulls, pull.channel = vmChannel := by simp [pulls, vmChannel, Channel.pulledValue]
+  have pushes_channel : ∀ push ∈ pushes, push.channel = vmChannel := by simp [pushes, vmChannel, Channel.pushedValue]
+  have pulls_mult : ∀ pull ∈ pulls, pull.mult = -1 := by simp [pulls, Channel.pulledValue]
+  have pushes_mult : ∀ push ∈ pushes, push.mult = 1 := by simp [pushes, Channel.pushedValue]
   have vmChannel_mem : vmChannel ∈ (ens.addVm vm).channels := by simp [Ensemble.addVm, vmChannel]
   have vmBalance : BalancedInteractions (pulls ++ pushes) := by
-    have originalBalance : BalancedInteractions vmInteractions := by
-      whnf at balance
-      -- use global channel balance
-      sorry
+    have originalBalance : BalancedInteractions vmInteractions := balance vmChannel vmChannel_mem
     rw [vmInteractions_eq] at originalBalance
     apply balancedInteractions_of_perm ?perm originalBalance
-    apply List.transpose2_flatten_perm
-  let n := pulls.length
-  have h_len_pulls : pulls.length = n := rfl
-  have h_len_pushes : pushes.length = n := by simp [n, pulls, pushes, len_eq]
-  have pairwise_guarantees := pairwise_guarantees_of_requirements_of_constraints vmChannel pulls pushes vmBalance witness.data
-    n h_len_pulls h_len_pushes
-  -- to get guarantees, first of all we need to instantiate partial balance for the existing ensemble.
+    apply transpose2_flatten_perm <| pushes_len ▸ pulls_len
+  specialize pairwise_guarantees vmBalance witness.data n pulls_len pushes_len pulls_channel pushes_channel pulls_mult pushes_mult
+  -- to use this theorem, we need guarantees for all non-vm channels to hold unconditionally, on both the new tables and the verifier!
+  -- this is what `SoundChannels` for the existing ensemble gives us when we instantiate partial balance
+
+  -- the conclusion is indeed what we need
+  have : n > 0 := by simp [n, pulls]
+  suffices pulls[0].Guarantees witness.data by
+    simp [pulls, VerifierGuarantees, Operations.FullGuarantees]
+    simp [pulls, VerifierGuarantees, Operations.FullGuarantees, vmVerifierInteractions,
+      Operations.interactionsWith, Interaction.Guarantees] at this ⊢ vmVerifierInteractions_eq
+    sorry
   sorry
 end Ensemble
 
