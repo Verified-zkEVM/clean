@@ -586,9 +586,9 @@ lemma balanceOf_append {as bs : List (Interaction F)} {msg : Array F} :
   simp [balanceOf, List.filter_append, List.map_append, List.sum_append]
 
 /-- Interaction balance: for any message, the sum of multiplicities is 0.
-  Also requires that the total interaction count is bounded. -/
+  Also requires that the total interaction count does not overflow. -/
 def BalancedInteractions (interactions : List (Interaction F)) : Prop :=
-  interactions.length < ringChar F ∧
+  (interactions.length < ringChar F ∨ ringChar F = 0) ∧
   ∀ msg : Array F, balanceOf interactions msg = 0
 
 lemma balanceOf_perm {as bs : List (Interaction F)} {msg : Array F} :
@@ -606,7 +606,7 @@ lemma balancedInteractions_of_perm {as bs : List (Interaction F)} :
   rw [← balanceOf_perm perm, balance]
 
 lemma msgInteractions_lt_ringChar {ins : List (Interaction F)} {msg : Array F} :
-    BalancedInteractions ins → ins.countP (·.msg = msg) < ringChar F := by
+    BalancedInteractions ins → ins.countP (·.msg = msg) < ringChar F ∨ ringChar F = 0 := by
   intro ⟨ lt_ringChar, _ ⟩
   grw [List.countP_le_length]
   exact lt_ringChar
@@ -1301,15 +1301,19 @@ theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : Bal
   intro a h_mem_a h_pull
   set msg := a.msg
   set count : ℕ := (interactions.countP (·.msg = msg))
-  have count_lt_ringChar : count < ringChar F := msgInteractions_lt_ringChar balance
+  have count_lt_ringChar : count < ringChar F ∨ ringChar F = 0 := msgInteractions_lt_ringChar balance
   replace balance := balance.2 msg
   -- assuming no such push exists => all interactions with the same message have multiplicity -1
   -- this leads to a contradiction with the 0 balance + no overflow
   by_contra! const_minus_one
+  suffices count = 0 by
+    simp only [count, msg, List.countP_eq_zero, decide_eq_true_eq] at this
+    nomatch this a h_mem_a
   rw [balanceOf_eq_of_const_mult const_minus_one, neg_mul, one_mul, neg_eq_zero] at balance
-  rw [Lean.Grind.IsCharP.natCast_eq_zero_iff_of_lt _ count_lt_ringChar] at balance
-  simp only [count, msg, List.countP_eq_zero, decide_eq_true_eq] at balance
-  nomatch balance a h_mem_a
+  change (count : F) = 0 at balance
+  rcases count_lt_ringChar with count_lt_ringChar | ringChar_zero
+  · simp_all [Lean.Grind.IsCharP.natCast_eq_zero_iff_of_lt _ count_lt_ringChar]
+  · simp_all [CharP.ringChar_zero_iff_CharZero]
 
 /--
 A "normal" channel is one where the requirements for a "push" interaction
@@ -1357,21 +1361,6 @@ theorem normalChannel_consistent (channel : RawChannel F) [NormalChannel.Raw cha
   simp only [b_msg_eq] at b_reqs
   convert b_reqs
 
-/-- Conversely, consistent channels enjoy a property reminiscent of normal channels -/
-theorem consistentChannel_grts_of_reqs (channel : RawChannel F) [channel.Consistent] :
-    ∀ (msg : Vector F channel.arity) (mult : F) data,
-    channel.Requirements 1 msg data → channel.Guarantees (-1) msg data := by
-  intro msg mult data reqs
-  -- we construct an interaction list with just the one pull and one push interaction, which is balanced
-  let interactions : List (Interaction F) :=
-    { channel, mult := -1, msg := msg.toArray, same_size := by simp, assumeGuarantees := true } ::
-    { channel, mult := 1, msg := msg.toArray, same_size := by simp, assumeGuarantees := false } :: []
-  have balance : BalancedInteractions interactions := by
-    constructor
-    · sorry -- todo need ringChar assumption
-    intro msg'
-  sorry
-
 instance (channel : RawChannel F) [NormalChannel.Raw channel] : channel.Consistent :=
   normalChannel_consistent channel
 
@@ -1403,7 +1392,7 @@ Furthermore, assume the list is balanced and the channel is normal.
 Then, for any i, the **converse** is true: Requirements (1, b_i) → Guarantees (-1, a_i).
 -/
 theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠ 2)]
-    (channel : RawChannel F) [channel.Consistent]
+    (channel : RawChannel F) [NormalChannel.Raw channel]
     (as bs : List (Interaction F)) (balance : BalancedInteractions (as ++ bs)) (data : ProverData F)
   -- same length
   (n : ℕ) (h_len_a : as.length = n) (h_len_b : bs.length = n)
@@ -1445,7 +1434,6 @@ theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠
       have msg_size : msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
       suffices a_grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         convert fun _ => a_grt'
-
       apply NormalChannel.Raw.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
       simp only [Interaction.Requirements, Interaction.msgVector, bj_msg] at bj_req
       convert bj_req
@@ -1500,27 +1488,35 @@ theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠
     simp only [h_len_a, h_len_b, List.length_append] at lt_ringChar
     constructor
     · simp only [h_len_as', h_len_bs', List.length_append]
-      linarith
+      rcases lt_ringChar with lt_ringChar | ringChar_zero
+      · left; linarith
+      · right; assumption
     intro msg'
     specialize balance msg'
     simp only [balanceOf_append] at balance ⊢
     rw [balanceOf_eq_of_const_mult' as_mult, balanceOf_eq_of_const_mult' bs_mult] at balance
     rw [balanceOf_eq_of_const_mult' as'_mult, balanceOf_eq_of_const_mult' bs'_mult]
     simp only [neg_mul, one_mul, neg_add_eq_zero] at balance ⊢
-    have a_lt_ringChar : as.countP (·.msg = msg') < ringChar F := by
-      grw [List.countP_le_length, h_len_a, Nat.le_add_right (n + 1) (n + 1)]
-      exact lt_ringChar
-    have b_lt_ringChar : bs.countP (·.msg = msg') < ringChar F := by
-      grw [List.countP_le_length, h_len_b, Nat.le_add_right (n + 1) (n + 1)]
-      exact lt_ringChar
-    rw [Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ a_lt_ringChar b_lt_ringChar] at balance
+    have count_eq : as.countP (·.msg = msg') = bs.countP (·.msg = msg') := by
+      rcases lt_ringChar with lt_ringChar | ringChar_zero
+      · have a_lt_ringChar : as.countP (·.msg = msg') < ringChar F := by
+          grw [List.countP_le_length, h_len_a, Nat.le_add_right (n + 1) (n + 1)]
+          exact lt_ringChar
+        have b_lt_ringChar : bs.countP (·.msg = msg') < ringChar F := by
+          grw [List.countP_le_length, h_len_b, Nat.le_add_right (n + 1) (n + 1)]
+          exact lt_ringChar
+        rw [Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ a_lt_ringChar b_lt_ringChar] at balance
+        exact balance
+      · rw [CharP.ringChar_zero_iff_CharZero] at ringChar_zero
+        rw [Nat.cast_inj] at balance
+        exact balance
     have bs_eq : bs' = (bs.set j bs[i]).eraseIdx i := by
       simp [bs', List.eraseIdx_set, j']
       split_ifs <;> (simp_all; try omega)
     simp only [as', bs_eq]
     rw [List.countP_eraseIdx (by linarith), ←ai_msg]
     rw [List.countP_eraseIdx (by simp_all), List.countP_set (h_len_b ▸ hj), bj_msg]
-    simp [h_ij, balance]
+    simp [h_ij, count_eq]
 
 /--
 Soundness for a VM ensemble is simple:
@@ -3004,7 +3000,10 @@ theorem fibonacciEnsemble_soundness : Ensemble.Soundness (F p) fibonacciEnsemble
   have h_bytes_bal := h_bal BytesChannel.toRaw (by simp [fibonacciEnsemble])
   have h_add8_bal := h_bal Add8Channel.toRaw (by simp [fibonacciEnsemble])
   have h_fib_bal := h_bal FibonacciChannel.toRaw (by simp [fibonacciEnsemble])
-  simp only [BalancedInteractions] at h_fib_bal
+  have ringChar_ne_zero : ringChar (F p) ≠ 0 := by
+    rw [show ringChar (F p) = p from ZMod.ringChar_zmod_n _]
+    exact ‹Fact p.Prime›.1.ne_zero
+  simp only [BalancedInteractions, ringChar_ne_zero, or_false] at h_fib_bal h_bytes_bal h_add8_bal
   have h_fib_pairs_eq :
       fibInteractions =
         (fibonacciEnsemble.interactionsWith (n, x, y) witness FibonacciChannel.toRaw).filterMap
