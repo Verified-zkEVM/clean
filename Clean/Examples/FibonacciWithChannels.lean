@@ -648,6 +648,15 @@ def VerifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (d
   let circuit := ens.verifier.main (const publicInput)
   (circuit.operations 0).FullGuarantees (emptyEnvironment F data)
 
+def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
+  let circuit := ens.verifier.main (const publicInput)
+  (circuit.operations 0).ChannelGuarantees channel (emptyEnvironment F data)
+
+lemma verifierGuarantees_iff (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) :
+    ens.VerifierGuarantees publicInput data ↔
+    ∀ channel ∈ ens.verifier.channelsWithGuarantees, ens.VerifierChannelGuarantees channel publicInput data := by
+  simp only [VerifierGuarantees, VerifierChannelGuarantees, FormalCircuitWithInteractions.guarantees_iff']
+
 def VerifierRequirements (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
   let circuit := ens.verifier.main (const publicInput)
   (circuit.operations 0).FullRequirements (emptyEnvironment F data)
@@ -798,17 +807,86 @@ lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
   simp_all [BalancedChannel]
 
 /--
-  "Sound channels" means that we can eliminate the Guarantees from each table, assuming constraints
-  and a partial balance assumption on a subset of channels.
-  This is basically what's needed for Soundness, together with per-table soundness implying global soundness.
+"Sound channel" means that we can eliminate the channel guarantees from each table, assuming constraints
+and the partial balance assumption.
+-/
+def SoundChannel (ens : Ensemble F PublicIO) (channel : RawChannel F) : Prop :=
+  ∀ witness publicInput,
+    ens.Constraints witness →
+    ens.VerifierAccepts publicInput witness.data →
+    ens.PartialBalancedChannel publicInput witness channel →
+      (∀ table ∈ witness.tables, table.ChannelGuarantees channel) ∧
+      ens.VerifierChannelGuarantees channel publicInput witness.data
+
+/--
+Plural, stronger version of sound channels which assumes we can eliminate _all_ guarantees.
+This is basically what's needed for Soundness, together with per-table soundness implying global soundness.
 -/
 def SoundChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
   ∀ witness publicInput,
-    (∀ channel ∈ finished, ens.PartialBalancedChannel publicInput witness channel) →
     ens.Constraints witness →
     ens.VerifierAccepts publicInput witness.data →
+    (∀ channel ∈ finished, ens.PartialBalancedChannel publicInput witness channel) →
       (∀ table ∈ witness.tables, table.Guarantees) ∧
       ens.VerifierGuarantees publicInput witness.data
+
+/--
+Given `SoundChannel` on a list of channels, we can prove the full guarantees for those tables
+for which the channelsWithGuarantees are a subset of that list, and same for the verifier guarantees.
+-/
+lemma guarantees_of_soundChannel {ens : Ensemble F PublicIO} (finished : List (RawChannel F)) :
+  (∀ channel ∈ finished, ens.SoundChannel channel) →
+  ∀ witness publicInput,
+  ens.Constraints witness →
+  ens.VerifierAccepts publicInput witness.data →
+  (∀ channel ∈ finished, ens.PartialBalancedChannel publicInput witness channel) →
+  (∀ table ∈ witness.tables, table.channelsWithGuarantees ⊆ finished → table.Guarantees) ∧
+  (ens.verifier.channelsWithGuarantees ⊆ finished → ens.VerifierGuarantees publicInput witness.data)
+   := by
+  intro sound_channels witness input constraints verifier_accepts partial_balance
+  simp only [TableWitness.guarantees_iff_channelGuarantees, verifierGuarantees_iff]
+  constructor
+  · intro table h_table channels_subset channel h_channel
+    have ⟨ table_channel_grts, _ ⟩  := sound_channels channel (channels_subset h_channel) witness input
+      constraints verifier_accepts (partial_balance channel (channels_subset h_channel))
+    exact table_channel_grts table h_table
+  · intro channels_subset channel h_channel
+    have ⟨ _, verifier_channel_grts ⟩ := sound_channels channel (channels_subset h_channel) witness input
+      constraints verifier_accepts (partial_balance channel (channels_subset h_channel))
+    exact verifier_channel_grts
+
+lemma mem_abstract_of_mem_witness {ens : Ensemble F PublicIO}
+  (witness : EnsembleWitness ens) (table : TableWitness F) :
+    table ∈ witness.tables → table.abstract ∈ ens.tables := by
+  intro h_mem
+  let ⟨ i, hi, table_eq ⟩ := List.getElem_of_mem h_mem
+  symm at table_eq
+  subst table_eq
+  -- TODO the fact that we always use these theorems in reverse suggests that they are badly formulated
+  rw [←witness.same_length] at hi
+  simp [←witness.same_circuits i hi]
+
+/-- `SoundChannels` follows from `SoundChannel` on all channels, plus conditions on the `channelsWithGuarantees` -/
+lemma soundChannels_of_soundChannel {ens : Ensemble F PublicIO} (finished : List (RawChannel F)) :
+  (∀ channel ∈ finished, ens.SoundChannel channel) ∧
+  (∀ table ∈ ens.tables, table.circuit.channelsWithGuarantees ⊆ finished) ∧
+  (ens.verifier.channelsWithGuarantees ⊆ finished) →
+    ens.SoundChannels finished := by
+  simp only [SoundChannels, SoundChannel]
+  simp only [TableWitness.guarantees_iff_channelGuarantees, verifierGuarantees_iff]
+  rintro ⟨ sound_channels, tables_subset, verifier_subset ⟩ witness publicInput constraints verifier_accepts partial_balance
+  constructor
+  · intro table h_table channel h_channel
+    have mem_abstract := mem_abstract_of_mem_witness witness table h_table
+    have mem_finished := tables_subset table.abstract mem_abstract h_channel
+    specialize sound_channels channel mem_finished witness publicInput
+      constraints verifier_accepts (partial_balance channel mem_finished)
+    exact sound_channels.1 table h_table
+  · intro channel h_channel
+    have mem_finished := verifier_subset h_channel
+    specialize sound_channels channel mem_finished witness publicInput
+      constraints verifier_accepts (partial_balance channel mem_finished)
+    exact sound_channels.2
 
 /--
 partial balance + sound channels gives you the full soundness statement on each table,
@@ -827,7 +905,7 @@ lemma table_soundness_of_soundChannels {ens : Ensemble F PublicIO} (finished : L
   intro sound_channels witness publicInput partial_balance constraints verifier_accepts
   constructor
   · intro table h_mem_table
-    have guarantees := (sound_channels witness publicInput partial_balance constraints verifier_accepts).1 table h_mem_table
+    have guarantees := (sound_channels witness publicInput constraints verifier_accepts partial_balance).1 table h_mem_table
     clear sound_channels
     replace constraints := constraints table h_mem_table
     simp only [TableWitness.Guarantees, TableWitness.Requirements, TableWitness.Spec, TableWitness.Constraints] at *
@@ -841,7 +919,7 @@ lemma table_soundness_of_soundChannels {ens : Ensemble F PublicIO} (finished : L
   · simp only [Ensemble.VerifierGuarantees, Ensemble.VerifierRequirements, Ensemble.VerifierSpec, Ensemble.VerifierAccepts] at *
     convert ens.verifier.original_full_soundness _ _ _ verifier_accepts _
     rw [ProvableType.eval_const]
-    exact (sound_channels witness publicInput partial_balance constraints verifier_accepts).2
+    exact (sound_channels witness publicInput constraints verifier_accepts partial_balance).2
 
 /-- specs on all tables + verifier spec imply ensemble spec -/
 def SpecConsistency (ens : Ensemble F PublicIO) : Prop :=
@@ -945,7 +1023,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
     (∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
     -- the ensemble with the new table also satisfies SoundChannels!
     (ens.addTable table).SoundChannels finished := by
-  intro grts_subset_finished reqs_disjoint_finished witness publicInput partial_balance constraints verifier_accepts
+  intro grts_subset_finished reqs_disjoint_finished witness publicInput constraints verifier_accepts partial_balance
   -- we need to make use of soundness of the original ensemble; that'll give us most of the guarantees we need
   whnf at h_sound
   -- witness is just our witness but without the new table
@@ -994,7 +1072,7 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO)
   have verifier_accepts' : ens.VerifierAccepts publicInput witness'.data := by
     rw [← h_data_eq]
     exact verifier_accepts
-  specialize h_sound' partial_balance' constraints' verifier_accepts'
+  specialize h_sound' constraints' verifier_accepts' partial_balance'
   -- now we only need to prove guarantees for the last table!
   suffices tableWitness.Guarantees by
     rcases h_sound' with ⟨ h_old, h_verifier_grts ⟩
@@ -1082,14 +1160,14 @@ theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
     (channel : RawChannel F) :
     -- the ensemble also satisfies SoundChannels including the new channel in the finished list
     ens.SoundChannels (channel :: finished) := by
-  intro witness publicInput partial_balance constraints verifier_accepts
+  intro witness publicInput constraints verifier_accepts partial_balance
   -- trivial, because partial balance for more channels is stronger
   have partial_balance' : ens.PartialBalancedChannels finished publicInput witness := by
     intro channel' h_mem_channel'
     have h_mem_channel : channel' ∈ channel :: finished := by simp [h_mem_channel']
     rcases partial_balance channel' h_mem_channel with ⟨ extraInteractions, balance_and_reqs_extra ⟩
     use extraInteractions
-  exact h_sound witness publicInput partial_balance' constraints verifier_accepts
+  exact h_sound witness publicInput constraints verifier_accepts partial_balance'
 end Ensemble
 
 structure SoundEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
@@ -1155,10 +1233,10 @@ def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) : 
   finished_subset := by simp [soundEns.finished_subset]
   finished_consistent := soundEns.finished_consistent
   soundChannels := by
-    intro witness publicInput partial_balance constraints verifier_accepts
+    intro witness publicInput constraints verifier_accepts partial_balance
     let witness' : EnsembleWitness soundEns.ensemble := { witness with }
     -- partial balance is unchanged since it doesn't depend on "unfinished" channels
-    apply soundEns.soundChannels witness' publicInput partial_balance
+    apply soundEns.soundChannels witness' publicInput ?_ ?_ partial_balance
     · simp only [Ensemble.Constraints] at constraints ⊢
       intro table h_mem
       exact constraints table h_mem
@@ -1620,17 +1698,6 @@ lemma addVm_witness (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
         (∃ (hi': i < vm.tables.length), vmWitness.tables[i].abstract = vm.tables[i]) ∧
         vmWitness.tables[i].data = witness.data := by
   sorry
-
-lemma mem_abstract_of_mem_witness {ens : Ensemble F PublicIO}
-  (witness : EnsembleWitness ens) (table : TableWitness F) :
-    table ∈ witness.tables → table.abstract ∈ ens.tables := by
-  intro h_mem
-  let ⟨ i, hi, table_eq ⟩ := List.getElem_of_mem h_mem
-  symm at table_eq
-  subst table_eq
-  -- TODO the fact that we always use these theorems in reverse suggests that they are badly formulated
-  rw [←witness.same_length] at hi
-  simp [←witness.same_circuits i hi]
 
 theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : Ensemble F PublicIO)
       -- given a sound channels ensemble with a list of finished, consistent channels
