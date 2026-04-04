@@ -29,7 +29,7 @@ def diffs (x y : Var α F) : Vector (Expression F) (size α) :=
 /--
 Circuit that checks if two values of a ProvableType are equal.
 Returns 1 if the inputs are equal, otherwise returns 0.
-Uses two constraints per field element (via IsZeroField on each component difference).
+Uses three constraints per field element (IsZeroField on each component difference + one multiplication).
 -/
 def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
   let (x, y) := input
