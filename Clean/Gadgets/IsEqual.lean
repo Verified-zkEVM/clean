@@ -29,21 +29,18 @@ def diffs (x y : Var α F) : Vector (Expression F) (size α) :=
 /--
 Circuit that checks if two values of a ProvableType are equal.
 Returns 1 if the inputs are equal, otherwise returns 0.
-Uses two constraints per field element (via IsZeroField on each component difference).
+Uses three constraints per field element (IsZeroField on each component difference + one multiplication).
 -/
 def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
   let (x, y) := input
   let d := diffs x y
-  let result ← Circuit.foldlRange (size α) (1 : Expression F) fun acc i => do
-    let isZeroDiff ← IsZeroField.circuit d[i]
-    return acc * isZeroDiff
-  return result
+  IsZero.main (fromVars d)
 
 instance elaborated : ElaboratedCircuit F (ProvablePair α α) field where
   main
   localLength _ := 2 * size α
-  localLength_eq := by simp +arith [circuit_norm, main, diffs, IsZeroField.circuit]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main, diffs, IsZeroField.circuit]
+  localLength_eq := by simp +arith [circuit_norm, main, diffs, IsZero.main, IsZeroField.circuit]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main, diffs, IsZero.main, IsZeroField.circuit]
 
 def Assumptions (_ : α F × α F) : Prop := True
 
@@ -51,7 +48,7 @@ def Spec [DecidableEq (α F)] (input : α F × α F) (output : F) : Prop :=
   output = if input.1 = input.2 then 1 else 0
 
 theorem soundness [DecidableEq (α F)] : Soundness F (elaborated (α := α)) Assumptions Spec := by
-  circuit_proof_start
+  circuit_proof_start [IsZero.main, ProvableType.toElements_fromElements]
   have h_pair := h_input; rw [eval_pair] at h_pair
   have h_x : eval env input_var.1 = input.1 := congrArg Prod.fst h_pair
   have h_y : eval env input_var.2 = input.2 := congrArg Prod.snd h_pair
@@ -80,7 +77,7 @@ theorem soundness [DecidableEq (α F)] : Soundness F (elaborated (α := α)) Ass
   · exact h_holds
 
 theorem completeness : Completeness F (elaborated (α := α)) Assumptions := by
-  circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions, diffs]
+  circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions, IsZero.main, diffs]
 
 def circuit [DecidableEq (α F)] : FormalCircuit F (ProvablePair α α) field := {
   elaborated with Assumptions, Spec, soundness, completeness
