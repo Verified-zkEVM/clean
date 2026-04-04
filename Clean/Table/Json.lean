@@ -49,16 +49,19 @@ instance : ToJson (TableConstraint W S F α) where
 
 instance : ToJson (TableOperation S F) where
   toJson
-    | .boundary i c => Json.mkObj [
+    | .boundary i stride c => Json.mkObj [
       ("type", Json.str "Boundary"),
       ("row", toJson i),
+      ("stride", toJson stride),
       ("context", toJson c)
     ]
-    | .everyRow c => Json.mkObj [
+    | .everyRow stride c => Json.mkObj [
       ("type", Json.str "EveryRow"),
+      ("stride", toJson stride),
       ("context", toJson c)
     ]
-    | .everyRowExceptLast f => Json.mkObj [
+    | .everyRowExceptLast stride f => Json.mkObj [
       ("type", Json.str "EveryRowExceptLast"),
+      ("stride", toJson stride),
       ("context", toJson (getCurrRow >>= f))
     ]

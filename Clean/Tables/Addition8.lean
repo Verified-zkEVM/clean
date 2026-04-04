@@ -28,7 +28,7 @@ def add8Inline : SingleRowConstraint RowType (F p) := do
   assign (.curr 2) z
 
 def add8Table : List (TableOperation RowType (F p)) := [
-  .everyRow add8Inline
+  .everyRow 0 add8Inline  -- TODO: compute stride
 ]
 
 def Spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_env : ProverData (F p)) : Prop :=

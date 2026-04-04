@@ -47,8 +47,8 @@ def boundaryFib : SingleRowConstraint RowType (F p) :=
   assignCurrRow { x := 0, y := 1 }
 
 def fibTable : List (TableOperation RowType (F p)) := [
-  boundary (.fromStart 0) boundaryFib,
-  everyRowExceptLast fibRelation,
+  boundary (.fromStart 0) 0 boundaryFib,  -- TODO: compute stride
+  everyRowExceptLast 0 fibRelation,  -- TODO: compute stride
 ]
 
 def fib8 : ℕ -> ℕ

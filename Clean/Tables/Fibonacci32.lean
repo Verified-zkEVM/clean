@@ -62,8 +62,8 @@ def boundary : SingleRowConstraint RowType (F p) := do
   The fib32 table is composed of the boundary and recursive relation constraints.
 -/
 def fib32Table : List (TableOperation RowType (F p)) := [
-  .boundary (.fromStart 0) boundary,
-  .everyRowExceptLast recursiveRelation,
+  .boundary (.fromStart 0) 0 boundary,  -- TODO: compute stride
+  .everyRowExceptLast 0 recursiveRelation,  -- TODO: compute stride
 ]
 
 /--

@@ -168,9 +168,9 @@ theorem wrappedEnv_maps_next_state (table : InductiveTable F State Input)
 
 def tableConstraints (table : InductiveTable F State Input) (input_state output_state : State F) :
   List (TableOperation (ProvablePair State Input) F) := [
-    .everyRowExceptLast table.inductiveConstraint,
-    .boundary (.fromStart 0) (equalityConstraint Input input_state),
-    .boundary (.fromEnd 0) (equalityConstraint Input output_state),
+    .everyRowExceptLast table.wrappedInductiveConstraint.finalOffset table.inductiveConstraint,
+    .boundary (.fromStart 0) table.wrappedInductiveConstraint.finalOffset (equalityConstraint Input input_state),
+    .boundary (.fromEnd 0) table.wrappedInductiveConstraint.finalOffset (equalityConstraint Input output_state),
   ]
 
 theorem equalityConstraint.soundness_row {row : State F × Input F} {input_state : State F} {env : Environment F} :
@@ -405,7 +405,8 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
 
   completeness := by
     intro N trace env ⟨h_init, h_rows⟩ h_witness
-    -- Proof outline (parallel to table_soundness_aux):
+    -- The completeness proof mirrors table_soundness_aux but uses Completeness variants.
+    -- It simultaneously derives per-row Spec (via soundness) while proving completeness.
     -- By induction on trace, simultaneously prove:
     -- 1. TableConstraintsHold.Completeness (constraints hold in completeness sense)
     -- 2. Per-row Spec propagation (derived via soundness at each step)

@@ -593,23 +593,26 @@ inductive RowIndex where
 
 inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   /--
-    A `Boundary` constraint is a constraint that is applied only to a specific row
+    A `Boundary` constraint is a constraint that is applied only to a specific row.
+    `stride` is the total number of variables per row (row cells + auxiliary witness variables).
   -/
-  | boundary: RowIndex → SingleRowConstraint S F → TableOperation S F
+  | boundary: RowIndex → (stride : ℕ) → SingleRowConstraint S F → TableOperation S F
 
   /--
     An `EveryRow` constraint is a constraint that is applied to every row.
-    It can only reference cells on the same row
+    It can only reference cells on the same row.
+    `stride` is the total number of variables per row.
   -/
-  | everyRow: SingleRowConstraint S F → TableOperation S F
+  | everyRow: (stride : ℕ) → SingleRowConstraint S F → TableOperation S F
 
   /--
     An `EveryRowExceptLast` constraint is a constraint that is applied to every row except the last.
     It can reference cells from the current row, or the next row.
+    `stride` is the total number of variables per row.
 
     Note that this will not apply any constraints to a trace of length one.
   -/
-  | everyRowExceptLast: (Var S F → TableConstraint 2 S F (Var S F)) → TableOperation S F
+  | everyRowExceptLast: (stride : ℕ) → (Var S F → TableConstraint 2 S F (Var S F)) → TableOperation S F
 
 instance : Repr RowIndex where
   reprPrec
@@ -618,9 +621,9 @@ instance : Repr RowIndex where
 
 instance [Repr F] : Repr (TableOperation S F) where
   reprPrec op _ := match op with
-    | .boundary i c => "boundary " ++ reprStr i ++ " " ++ reprStr c
-    | .everyRow c => "everyRow " ++ reprStr c
-    | .everyRowExceptLast c => "everyRowExceptLast " ++ reprStr (c (varFromOffset S 0))
+    | .boundary i _ c => "boundary " ++ reprStr i ++ " " ++ reprStr c
+    | .everyRow _ c => "everyRow " ++ reprStr c
+    | .everyRowExceptLast _ c => "everyRowExceptLast " ++ reprStr (c (varFromOffset S 0))
 
 export TableOperation (boundary everyRow everyRowExceptLast)
 
@@ -662,13 +665,13 @@ def TableConstraintsHold (constraints : List (TableOperation S F))
     Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint,
     -- apply the constraint using ConstraintHoldsOnStep (no redundant getCurrRow witness)
-    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
+    | trace +> curr +> next, (⟨.everyRowExceptLast _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> curr +> next) rest
         ConstraintHoldsOnStep constraint curr next (env (trace.len + 1)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply
     -- the constraint if the index matches the current row position
-    | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
+    | trace +> row, (⟨.boundary idx _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
         let targetIdx := match idx with
           | .fromStart i => i
@@ -676,12 +679,12 @@ def TableConstraintsHold (constraints : List (TableOperation S F))
         (if trace.len = targetIdx then ConstraintHoldsOnRow constraint row (env trace.len) else True) ∧ others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint
-    | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
+    | trace +> row, (⟨.everyRow _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
         ConstraintHoldsOnRow constraint row (env trace.len) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip it
-    | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
+    | trace, (⟨.everyRowExceptLast _ _, _⟩) :: rest =>
         foldl N cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
@@ -704,19 +707,19 @@ def TableConstraintsHold.Completeness (constraints : List (TableOperation S F))
   @[table_norm]
   foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
     Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
-    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
+    | trace +> curr +> next, (⟨.everyRowExceptLast _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> curr +> next) rest
         ConstraintHoldsOnStep.Completeness constraint curr next (env (trace.len + 1)) ∧ others
-    | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
+    | trace +> row, (⟨.boundary idx _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
         (if trace.len = targetIdx then ConstraintHoldsOnRow.Completeness constraint row (env trace.len) else True) ∧ others
-    | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
+    | trace +> row, (⟨.everyRow _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
         ConstraintHoldsOnRow.Completeness constraint row (env trace.len) ∧ others
-    | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
+    | trace, (⟨.everyRowExceptLast _ _, _⟩) :: rest =>
         foldl N cs trace rest
     | trace +> _, [] =>
         foldl N cs trace cs
@@ -759,19 +762,19 @@ def TableLocalWitnessUsed (constraints : List (TableOperation S F))
   @[table_norm]
   foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
     Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
-    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
+    | trace +> curr +> next, (⟨.everyRowExceptLast _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> curr +> next) rest
         WitnessUsedOnStep constraint curr next (env (trace.len + 1)) ∧ others
-    | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
+    | trace +> row, (⟨.boundary idx _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
         (if trace.len = targetIdx then WitnessUsedOnRow constraint row (env trace.len) else True) ∧ others
-    | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
+    | trace +> row, (⟨.everyRow _ constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
         WitnessUsedOnRow constraint row (env trace.len) ∧ others
-    | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
+    | trace, (⟨.everyRowExceptLast _ _, _⟩) :: rest =>
         foldl N cs trace rest
     | trace +> _, [] =>
         foldl N cs trace cs
@@ -814,9 +817,9 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   offset_consistent :
     constraints.Forall fun cs =>
       match cs with
-      | .boundary _ constraint => constraint.OffsetConsistent
-      | .everyRow constraint => constraint.OffsetConsistent
-      | .everyRowExceptLast f => (f (varFromOffset S 0)).OffsetConsistent
+      | .boundary _ _ constraint => constraint.OffsetConsistent
+      | .everyRow _ constraint => constraint.OffsetConsistent
+      | .everyRowExceptLast _ f => (f (varFromOffset S 0)).OffsetConsistent
     := by repeat constructor
 
 def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLength F S N) (env : ProverData F) : Prop :=
