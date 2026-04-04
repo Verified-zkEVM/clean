@@ -20,18 +20,11 @@ This captures the shared structure of prime fields and binary fields that circui
 gadgets rely on: the ability to decompose field elements into bits and reason
 about their numeric value.
 -/
-class FiniteField (F : Type) : Type where
-  [toField : Field F]
-  [toFintype : Fintype F]
-  [toDecidableEq : DecidableEq F]
+class FiniteField (F : Type) extends Field F, Fintype F where
   /-- Canonical embedding of field elements into natural numbers. -/
   val : F → ℕ
-  /-- The number of elements in the field. -/
-  fieldSize : ℕ
-  /-- The field has at least two elements. -/
-  fieldSize_pos : fieldSize > 1
   /-- Every element's value is less than the field size. -/
-  val_lt : ∀ x : F, val x < fieldSize
+  val_lt : ∀ x : F, val x < Fintype.card F
   /-- The embedding is injective (distinct elements have distinct values). -/
   val_injective : Function.Injective val
   /-- Zero maps to zero. -/
@@ -39,11 +32,13 @@ class FiniteField (F : Type) : Type where
   /-- One maps to one. -/
   val_one : val 1 = 1
 
-attribute [instance] FiniteField.toField FiniteField.toFintype FiniteField.toDecidableEq
-
 namespace FiniteField
 
 variable {F : Type} [FiniteField F]
+
+/-- The field has at least two elements (derived from `val_lt` and `val_one`). -/
+theorem fieldSize_pos : Fintype.card F > 1 := by
+  have := val_lt (1 : F); rwa [val_one] at this
 
 /-- Two field elements are equal iff their values are equal. -/
 theorem ext {x y : F} (h : val x = val y) : x = y :=
@@ -59,9 +54,10 @@ end FiniteField
 
 instance {p : ℕ} [Fact p.Prime] : FiniteField (F p) where
   val := ZMod.val
-  fieldSize := p
-  fieldSize_pos := Nat.Prime.one_lt (Fact.elim inferInstance)
-  val_lt := ZMod.val_lt
+  val_lt := by
+    intro x
+    rw [ZMod.card]
+    exact ZMod.val_lt x
   val_injective := by
     intro x y h
     exact FieldUtils.ext h
