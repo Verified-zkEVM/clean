@@ -476,10 +476,11 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
         set env' := windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.shift (rest.len * stride))
         -- Simplify the ops (env' stays opaque)
         show Circuit.ConstraintsHold.Completeness env' (wrapped .empty).2.circuit
-        -- Expand the completeness into individual conditions
-        simp only [wrapped, table_norm, circuit_norm, inductiveConstraint]
-        -- After simp, the goal becomes a conjunction of step conditions + equality conditions.
-        -- This mirrors the soundness proof but constructs rather than destructs.
+        -- Normalize to: step completeness ∧ equality (next_state = step_output)
+        simp only [wrapped, table_norm, circuit_norm, inductiveConstraint, pure, StateT.pure]
+        -- The proof needs env mapping (wrappedEnv_maps_*) + InductiveTable.completeness
+        -- for the step part, and equality from per-row Spec for the return part.
+        -- This mirrors the soundness proof env mapping (lines 316-371 of table_soundness_aux).
         sorry
       constructor
       · -- Boundary from end
