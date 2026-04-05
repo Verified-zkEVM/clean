@@ -412,8 +412,10 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   Spec
   InitialStateAssumptions initialState _ := initialState.Normalized
   InputAssumptions i input _ := input.Normalized ∧ i < 2^32
+  computeOutput state _input _ := state -- placeholder
   soundness
   completeness
+  completenessOutput := by sorry
   subcircuitsConsistent := by
     simp only [step, circuit_norm]
     omega

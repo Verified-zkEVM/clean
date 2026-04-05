@@ -819,6 +819,8 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
     ∃ hm : NeZero (memorySize env),
     ∀ i ≤ n, (Spec.femtoCairoMachineBoundedExecution program (memory env) (some initialState) i).isSome
 
+  computeOutput state _ _ := state -- placeholder
+
   soundness := by
     intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold
     simp_all only [circuit_norm, Spec.femtoCairoMachineBoundedExecution, femtoCairoStep, femtoCairoStepSpec]
@@ -829,6 +831,8 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
     rintro ⟨ ⟨ h_mem_completeness, hm, h_initial_state ⟩, ⟨ _, h_spec ⟩, h_i⟩
     specialize h_initial_state (i+1) h_i
     simp_all [circuit_norm, Spec.femtoCairoMachineBoundedExecution, femtoCairoStep, femtoCairoStepAssumptions, MemoryCompletenessAssumption]
+
+  completenessOutput := by sorry
 
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with

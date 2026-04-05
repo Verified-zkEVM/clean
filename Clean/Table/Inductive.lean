@@ -67,9 +67,21 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
   InputAssumptions : ℕ → Input F → ProverData F → Prop := fun _ _ _ => True
   InitialStateAssumptions : State F  → ProverData F → Prop := fun _ _ => True
 
+  /-- The deterministic output computed by the step circuit under honest witnesses.
+      This pure function defines what the step circuit produces given state, input, and prover data. -/
+  computeOutput : State F → Input F → ProverData F → State F
+
   soundness : InductiveTable.Soundness F State Input Spec step
 
   completeness : InductiveTable.Completeness F State Input InputAssumptions InitialStateAssumptions Spec step
+
+  /-- Under honest witnesses, the step circuit output equals `computeOutput`.
+      This connects the circuit-level witness computation to the pure `computeOutput` function. -/
+  completenessOutput : ∀ (env : Environment F) (acc_var : Var State F) (x_var : Var Input F)
+      (acc : State F) (x : Input F),
+      (eval env acc_var = acc) ∧ (eval env x_var = x) →
+      env.UsesLocalWitnesses ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
+      eval env (step acc_var x_var |>.output ((size State) + (size Input))) = computeOutput acc x env.data
 
   subcircuitsConsistent : ∀ acc x, ((step acc x).operations ((size State) + (size Input))).SubcircuitsConsistent ((size State) + (size Input))
     := by intros; and_intros <;> (
@@ -405,14 +417,19 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
     -- The honest prover generates the trace by running the step function,
     -- so the per-row Spec holds at every row.
     trace.ForAllRowsWithPrevious (fun row i rest =>
-      table.Spec input (traceInputs rest) i (traceInputs_length rest) row.1 env)
+      table.Spec input (traceInputs rest) i (traceInputs_length rest) row.1 env) ∧
+    -- The honest prover builds each row's state using computeOutput from the previous row.
+    trace.val.ForAllRowsWithPrevious (fun row rest =>
+      match rest with
+      | _ +> prev => row.1 = table.computeOutput prev.1 prev.2 env
+      | <+> => True)
   Spec {N} trace env := table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output env
 
   soundness N trace env assumption constraints :=
     table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.2 constraints
 
   completeness := by
-    intro N trace env ⟨h_init, h_rows, h_spec_rows⟩ h_witness
+    intro N trace env ⟨h_init, h_rows, h_spec_rows, h_output_rows⟩ h_witness
     rcases trace with ⟨ trace, h_trace ⟩
     -- Generalize M and include all needed hypotheses
     suffices goal : ∀ M,
@@ -422,15 +439,19 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
         (i = M - 1 → row.1 = output)) →
       trace.ForAllRowsWithPrevious (fun row rest =>
         table.Spec input (traceInputs ⟨rest, rfl⟩) rest.len (traceInputs_length ⟨rest, rfl⟩) row.1 env.data) →
+      trace.ForAllRowsWithPrevious (fun row rest =>
+        match rest with
+        | _ +> prev => row.1 = table.computeOutput prev.1 prev.2 env.data
+        | <+> => True) →
       TableLocalWitnessUsed.foldl env M
         (tableConstraints table input output) trace (tableConstraints table input output) →
       TableConstraintsHold.Completeness.foldl env M
         (tableConstraints table input output) trace (tableConstraints table input output) by
       simp only [TableConstraintsHold.Completeness, TableLocalWitnessUsed, table_norm, tableConstraints] at h_witness ⊢
-      exact goal trace.len (h_trace ▸ h_rows) h_spec_rows h_witness
+      exact goal trace.len (h_trace ▸ h_rows) h_spec_rows h_output_rows h_witness
 
     intro M
-    clear h_trace h_rows h_spec_rows h_witness
+    clear h_trace h_rows h_spec_rows h_output_rows h_witness
     simp only [table_norm, tableConstraints]
     induction trace using Trace.every_row_two_rows_induction
 
@@ -439,7 +460,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
       simp only [table_norm, TableConstraintsHold.Completeness.foldl]
 
     case one first_row =>
-      intro h_rows_one h_spec_one h_w
+      intro h_rows_one h_spec_one _ h_w
       simp only [Nat.zero_mul, table_norm,
         List.size_toArray, List.length_nil, List.push_toArray, List.nil_append,
         List.length_cons, zero_add, List.cons_append, reduceIte, and_true,
@@ -453,7 +474,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
         · trivial
 
     case more curr next rest ih1 ih2 =>
-      intro h_rows_more h_spec_more h_w
+      intro h_rows_more h_spec_more h_output_more h_w
       -- Unfold foldl structures in hypotheses and goal
       simp only [ConstraintHoldsOnStep.Completeness,
         ConstraintHoldsOnRow.Completeness, TableConstraint.ConstraintsHoldOnWindow.Completeness,
@@ -462,11 +483,12 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
         and_false, reduceIte, tsub_zero,
         Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious,
         Trace.ForAllRowsOfTraceWithIndex.inner, Trace.len,
-        TableConstraintsHold.Completeness.foldl, TableLocalWitnessUsed.foldl] at h_w ih2 h_spec_more h_rows_more ⊢
+        TableConstraintsHold.Completeness.foldl, TableLocalWitnessUsed.foldl] at h_w ih2 h_spec_more h_rows_more h_output_more ⊢
       obtain ⟨ h_w_step, h_w_boundary, h_w_rest ⟩ := h_w
       obtain ⟨ h_spec_next, h_spec_curr, h_spec_prev ⟩ := h_spec_more
+      obtain ⟨ h_output_next, h_output_rest ⟩ := h_output_more
       -- Apply ih2 to get Completeness.foldl on rest +> curr
-      have ih2' := ih2 h_rows_more.right ⟨h_spec_curr, h_spec_prev⟩ h_w_rest
+      have ih2' := ih2 h_rows_more.right ⟨h_spec_curr, h_spec_prev⟩ h_output_rest h_w_rest
       constructor
       · -- Core: ConstraintHoldsOnStep.Completeness via InductiveTable.completeness
         -- Mirror of the soundness proof's case more env mapping.
@@ -479,21 +501,59 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
         -- Normalize to: step completeness ∧ equality (next_state = step_output)
         simp only [wrapped, table_norm, circuit_norm, inductiveConstraint, pure, StateT.pure]
 
-        -- After simp, the goal decomposes into:
+        -- Goal decomposes into:
         -- (1) Circuit.ConstraintsHold.Completeness env' step_ops
         -- (2) eval env' (varFromOffset State (s+x+t)) = eval env' step_output
-        --
-        -- Part (1) follows from table.completeness + env mapping + UsesLocalWitnessesCompleteness.
-        -- Part (2) says the equality assertion holds, i.e., the next row's state equals the
-        -- step circuit's output. This requires knowing that the honest prover built the trace
-        -- by running the step circuit. The current HonestProverAssumption provides per-row Spec
-        -- but does NOT connect the step circuit's output to the trace's next row.
-        --
-        -- To fix: either (a) add a `computeOutput` function to InductiveTable and include
-        -- `next.1 = computeOutput curr.1 curr.2 env.data` in HonestProverAssumption, or
-        -- (b) restructure inductiveConstraint to assign step output directly to next row cells
-        -- instead of witnessing + asserting equality.
-        sorry
+
+        -- Set up env mappings (same as soundness proof)
+        set s := size State
+        set x := size Input
+        set main_ops : Operations F := (table.step (varFromOffset State 0) (varFromOffset Input s) (s + x)).2
+        set t := main_ops.localLength
+
+        have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i :=
+          (wrappedEnv_maps_curr_state table curr next (env.shift (rest.len * stride)) i hi).symm
+        have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) :=
+          (wrappedEnv_maps_curr_input table curr next (env.shift (rest.len * stride)) i hi).symm
+        have h_env_output i (hi : i < s) : (toElements next.1)[i] = env'.get (i + (s + x) + t) :=
+          (wrappedEnv_maps_next_state table curr next (env.shift (rest.len * stride)) i hi).symm
+
+        have input_eq_1 : eval env' (varFromOffset State 0) = curr.1 := by
+          rw [ProvableType.ext_iff]; intro i hi
+          rw [h_env_input_1 i hi, ProvableType.eval_varFromOffset,
+            ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
+        have input_eq_2 : eval env' (varFromOffset Input s) = curr.2 := by
+          rw [ProvableType.ext_iff]; intro i hi
+          simp only [ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements,
+            Vector.getElem_mapRange, zero_add]
+          rw [show s + i = i + s from by omega, ← h_env_input_2 i hi]
+        have next_eq : eval env' (varFromOffset State (s + x + t)) = next.1 := by
+          rw [ProvableType.ext_iff]; intro i hi
+          rw [h_env_output i hi, ProvableType.eval_varFromOffset,
+            ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+          simp only [t, s, x]; ac_rfl
+
+        constructor
+        · -- Part (1): Step completeness
+          -- Needs UsesLocalWitnessesCompleteness extraction from h_w_step — infrastructure gap
+          sorry
+        · -- Part (2): Equality assertion — eval env' nextRowVars = eval env' stepOutput
+          -- We show both sides equal `computeOutput curr.1 curr.2 env.data`.
+          -- LHS = next.1 (via next_eq) = computeOutput curr.1 curr.2 env.data (via h_output_next)
+          -- RHS = computeOutput curr.1 curr.2 env'.data (via completenessOutput) = ... env.data
+          simp only [s, x, t, main_ops] at *
+          -- Normalize 0 + size State etc.
+          simp +arith only at next_eq ⊢
+          -- Use completenessOutput: eval env' step_output = computeOutput curr.1 curr.2 env'.data
+          -- Note: env'.data = (env.shift ...).data = env.data (from windowEnv definition)
+          have h_env_data : env'.data = env.data := rfl
+          -- Need: UsesLocalWitnesses (s+x) step_ops from h_w_step (decomposition)
+          -- For now, extract via sorry
+          have h_w_step_local : env'.UsesLocalWitnesses (size State + size Input)
+              ((table.step (varFromOffset State 0) (varFromOffset Input (size State))).operations (size State + size Input)) := sorry
+          have h_step_output := table.completenessOutput env' (varFromOffset State 0) (varFromOffset Input (size State))
+            curr.1 curr.2 ⟨input_eq_1, input_eq_2⟩ h_w_step_local
+          rw [h_step_output, h_env_data, ← h_output_next, next_eq]
       constructor
       · -- Boundary from end
         split
