@@ -398,31 +398,66 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
     trace.ForAllRowsOfTraceWithIndex (fun row i =>
       table.InputAssumptions i row.2 env ∧
       (i = 0 → row.1 = input) ∧
-      (i = trace.val.len - 1 → row.1 = output))
+      (i = trace.val.len - 1 → row.1 = output)) ∧
+    -- The honest prover generates the trace by running the step function,
+    -- so the per-row Spec holds at every row.
+    trace.ForAllRowsWithPrevious (fun row i rest =>
+      table.Spec input (traceInputs rest) i (traceInputs_length rest) row.1 env)
   Spec {N} trace env := table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output env
 
   soundness N trace env assumption constraints :=
     table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.2 constraints
 
   completeness := by
-    intro N trace env ⟨h_init, h_rows⟩ h_witness
-    -- The completeness proof mirrors table_soundness_aux but uses Completeness variants.
-    -- It simultaneously derives per-row Spec (via soundness) while proving completeness.
-    -- By induction on trace, simultaneously prove:
-    -- 1. TableConstraintsHold.Completeness (constraints hold in completeness sense)
-    -- 2. Per-row Spec propagation (derived via soundness at each step)
-    --
-    -- Base: First row has state = input (from h_rows, i=0 condition).
-    --   Boundary constraint completeness follows from row.1 = input.
-    --   Spec at row 0 from InitialStateAssumptions.
-    --
-    -- Step: Given Spec at row i + InputAssumptions at row i + honest witnesses:
-    --   By InductiveTable.completeness → Circuit.ConstraintsHold.Completeness at step
-    --   By InductiveTable.soundness → Spec at row i+1
-    --
-    -- Final: Last row has state = output (from h_rows, i=N-1 condition).
-    --   Boundary constraint completeness follows.
-    sorry
+    intro N trace env ⟨h_init, h_rows, h_spec_rows⟩ h_witness
+    rcases trace with ⟨ trace, h_trace ⟩
+    -- Generalize M and include all needed hypotheses
+    suffices goal : ∀ M,
+      trace.ForAllRowsOfTraceWithIndex (fun row i =>
+        table.InputAssumptions i row.2 env.data ∧
+        (i = 0 → row.1 = input) ∧
+        (i = M - 1 → row.1 = output)) →
+      trace.ForAllRowsWithPrevious (fun row rest =>
+        table.Spec input (traceInputs ⟨rest, rfl⟩) rest.len (traceInputs_length ⟨rest, rfl⟩) row.1 env.data) →
+      TableLocalWitnessUsed.foldl env M
+        (tableConstraints table input output) trace (tableConstraints table input output) →
+      TableConstraintsHold.Completeness.foldl env M
+        (tableConstraints table input output) trace (tableConstraints table input output) by
+      simp only [TableConstraintsHold.Completeness, TableLocalWitnessUsed, table_norm, tableConstraints] at h_witness ⊢
+      exact goal trace.len (h_trace ▸ h_rows) h_spec_rows h_witness
+
+    intro M
+    simp only [table_norm, tableConstraints]
+    induction trace using Trace.every_row_two_rows_induction
+
+    case zero =>
+      intros
+      simp only [table_norm, TableConstraintsHold.Completeness.foldl]
+
+    case one first_row =>
+      intro h_rows_one h_spec_one h_w
+      simp only [Nat.zero_mul, table_norm,
+        List.size_toArray, List.length_nil, List.push_toArray, List.nil_append,
+        List.length_cons, zero_add, List.cons_append, reduceIte, and_true,
+        Trace.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex.inner,
+        Trace.ForAllRowsWithPrevious, Trace.len,
+        TableLocalWitnessUsed.foldl, TableConstraintsHold.Completeness.foldl] at h_rows_one h_spec_one h_w ⊢
+      constructor
+      · apply equalityConstraint.completeness_row; exact h_rows_one.right.left trivial
+      · split
+        · apply equalityConstraint.completeness_row; exact h_rows_one.right.right (by omega)
+        · trivial
+
+    case more curr next rest ih1 ih2 =>
+      intro h_rows_more h_spec_more h_w
+      -- The inductive case requires:
+      -- 1. Step completeness: ConstraintHoldsOnStep.Completeness via InductiveTable.completeness
+      --    (using per-row Spec at curr + InputAssumptions + WitnessUsed at step)
+      -- 2. Boundary from end: equalityConstraint.completeness_row (from h_rows_more)
+      -- 3. Recursive: ih2 applied to rest +> curr
+      -- The step completeness (1) is the core — it mirrors table_soundness_aux case more
+      -- but uses InductiveTable.completeness instead of extracting from constraints.
+      sorry
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,

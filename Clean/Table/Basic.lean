@@ -719,27 +719,30 @@ def TableConstraintsHold.Completeness (constraints : List (TableOperation S F))
 
 /--
   Check that honest-prover witnesses are used for a transition constraint step.
-  Parallel to `ConstraintHoldsOnStep` but checking `UsesLocalWitnessesCompleteness`.
+  Parallel to `ConstraintHoldsOnStep` but checking `UsesLocalWitnesses`.
+  Uses the flat version (`UsesLocalWitnesses`) rather than the nested version
+  (`UsesLocalWitnessesCompleteness`) to enable the conversion
+  `Completeness → ConstraintsHold → Soundness` via `can_replace_completeness`.
 -/
 @[table_norm]
 def WitnessUsedOnStep [ProvableType S] (f : Var S F → TableConstraint 2 S F (Var S F))
     (curr next : Row F S) (aux_env : Environment F) : Prop :=
   let wrapped : TableConstraint 2 S F Unit := TableConstraint.getRowAssignOnly 0 >>= fun vars => f vars >>= fun _ => pure ()
   let env := wrapped.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env
-  env.UsesLocalWitnessesCompleteness 0 wrapped.operations.toList
+  env.UsesLocalWitnesses 0 wrapped.operations
 
 /--
   Check that honest-prover witnesses are used for a single-row constraint.
-  Parallel to `ConstraintHoldsOnRow` but checking `UsesLocalWitnessesCompleteness`.
+  Parallel to `ConstraintHoldsOnRow` but checking `UsesLocalWitnesses`.
 -/
 @[table_norm]
 def WitnessUsedOnRow (c : SingleRowConstraint S F)
     (row : Row F S) (aux_env : Environment F) : Prop :=
   let env := c.windowEnv ⟨<+> +> row, rfl⟩ aux_env
-  env.UsesLocalWitnessesCompleteness 0 c.operations.toList
+  env.UsesLocalWitnesses 0 c.operations
 
 /--
-  The table-level analog of `UsesLocalWitnessesCompleteness`: checks that the witness
+  The table-level analog of `UsesLocalWitnesses`: checks that the witness
   generators in each constraint produce values consistent with the trace at every row.
 
   This has the same foldl structure as `TableConstraintsHold`, ensuring the two definitions
