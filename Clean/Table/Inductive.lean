@@ -430,6 +430,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
       exact goal trace.len (h_trace ▸ h_rows) h_spec_rows h_witness
 
     intro M
+    clear h_trace h_rows h_spec_rows h_witness
     simp only [table_norm, tableConstraints]
     induction trace using Trace.every_row_two_rows_induction
 
@@ -453,14 +454,31 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
 
     case more curr next rest ih1 ih2 =>
       intro h_rows_more h_spec_more h_w
-      -- The inductive case requires:
-      -- 1. Step completeness: ConstraintHoldsOnStep.Completeness via InductiveTable.completeness
-      --    (using per-row Spec at curr + InputAssumptions + WitnessUsed at step)
-      -- 2. Boundary from end: equalityConstraint.completeness_row (from h_rows_more)
-      -- 3. Recursive: ih2 applied to rest +> curr
-      -- The step completeness (1) is the core — it mirrors table_soundness_aux case more
-      -- but uses InductiveTable.completeness instead of extracting from constraints.
-      sorry
+      -- Unfold foldl structures in hypotheses and goal
+      simp only [ConstraintHoldsOnStep.Completeness,
+        ConstraintHoldsOnRow.Completeness, TableConstraint.ConstraintsHoldOnWindow.Completeness,
+        List.size_toArray, List.length_nil, List.push_toArray,
+        List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
+        and_false, reduceIte, tsub_zero,
+        Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious,
+        Trace.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex.inner, Trace.len,
+        TableConstraintsHold.Completeness.foldl, TableLocalWitnessUsed.foldl] at h_w ih2 h_spec_more h_rows_more ⊢
+      obtain ⟨ h_w_step, h_w_boundary, h_w_rest ⟩ := h_w
+      obtain ⟨ h_spec_next, h_spec_curr, h_spec_prev ⟩ := h_spec_more
+      -- Apply ih2 to get Completeness.foldl on rest +> curr
+      have ih2' := ih2 h_rows_more.right ⟨h_spec_curr, h_spec_prev⟩ h_w_rest
+      constructor
+      · -- Core: ConstraintHoldsOnStep.Completeness via InductiveTable.completeness
+        -- This requires connecting the table-level windowEnv to InductiveTable.completeness
+        -- (same env mapping as table_soundness_aux case more but for completeness).
+        sorry
+      constructor
+      · -- Boundary from end
+        split
+        · apply equalityConstraint.completeness_row
+          exact h_rows_more.left.2.2 (by omega)
+        · trivial
+      · exact ih2'
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
