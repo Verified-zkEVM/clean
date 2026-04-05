@@ -89,6 +89,9 @@ that encodes the following statement:
 for any given public `input` and `ouput`.
 -/
 
+-- TODO: getNextRow witnesses the next row here, and the same row reappears as the current
+-- row in the next iteration. wrappedInductiveConstraint uses getRowAssignOnly to avoid
+-- re-witnessing, but ideally the witnessing pattern should be unified.
 def inductiveConstraint (table : InductiveTable F State Input)
     (curr : Var (ProvablePair State Input) F) :
     TableConstraint 2 (ProvablePair State Input) F (Var (ProvablePair State Input) F) := do
