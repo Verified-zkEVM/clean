@@ -469,8 +469,17 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
       have ih2' := ih2 h_rows_more.right ⟨h_spec_curr, h_spec_prev⟩ h_w_rest
       constructor
       · -- Core: ConstraintHoldsOnStep.Completeness via InductiveTable.completeness
-        -- This requires connecting the table-level windowEnv to InductiveTable.completeness
-        -- (same env mapping as table_soundness_aux case more but for completeness).
+        -- Mirror of the soundness proof's case more env mapping.
+        set wrapped : TwoRowsConstraint (ProvablePair State Input) F :=
+          TableConstraint.getRowAssignOnly 0 >>= fun curr => table.inductiveConstraint curr >>= fun _ => pure ()
+        set stride := table.wrappedInductiveConstraint.finalOffset
+        set env' := windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.shift (rest.len * stride))
+        -- Simplify the ops (env' stays opaque)
+        show Circuit.ConstraintsHold.Completeness env' (wrapped .empty).2.circuit
+        -- Expand the completeness into individual conditions
+        simp only [wrapped, table_norm, circuit_norm, inductiveConstraint]
+        -- After simp, the goal becomes a conjunction of step conditions + equality conditions.
+        -- This mirrors the soundness proof but constructs rather than destructs.
         sorry
       constructor
       · -- Boundary from end
