@@ -198,7 +198,7 @@ def formalFib32Table : FormalTable (F p) RowType := {
   Spec := Spec,
 
   soundness := by
-    intro N trace envs _
+    intro N trace env _
     sorry
 
   completeness := by

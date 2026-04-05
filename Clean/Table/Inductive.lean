@@ -223,7 +223,7 @@ lemma traceInputs_length {N : ℕ} (trace : TraceOfLength F (ProvablePair State 
   rw [traceInputs, List.length_map, trace.val.toList_length, trace.prop]
 
 lemma table_soundness_aux (table : InductiveTable F State Input) (input output : State F)
-  (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : TableEnvironments F) :
+  (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : Environment F) :
   table.Spec input [] 0 rfl input env.data →
   TableConstraintsHold (table.tableConstraints input output) trace.val env →
     trace.ForAllRowsWithPrevious (fun row i rest => table.Spec input (traceInputs rest) i (traceInputs_length rest) row.1 env.data)
@@ -232,10 +232,10 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
   -- Destructure TraceOfLength and generalize on the foldl's N parameter
   rcases trace with ⟨ trace, h_trace ⟩
-  suffices goal : ∀ M, TableConstraintsHold.foldl M
-      (tableConstraints table input output |>.mapIdx fun i cs => (cs, env.toEnvironment i))
+  suffices goal : ∀ M, TableConstraintsHold.foldl env M
+      (tableConstraints table input output)
       trace
-      (tableConstraints table input output |>.mapIdx fun i cs => (cs, env.toEnvironment i)) →
+      (tableConstraints table input output) →
     trace.ForAllRowsWithPrevious (fun row rest =>
       table.Spec input (traceInputs ⟨ rest, rfl ⟩) rest.len (traceInputs_length ⟨ rest, rfl ⟩) row.1 env.data)
     ∧ (∀ (_ : trace.len = M) (h_pos : trace.len > 0), (trace.lastRow h_pos).1 = output) by
@@ -256,20 +256,20 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
   case one first_row =>
     intro constraints
-    simp only [table_norm,
+    simp only [Nat.zero_mul, table_norm,
       List.size_toArray, List.length_nil, List.push_toArray, List.nil_append,
       List.length_cons, zero_add, List.cons_append, reduceIte, and_true,
       TableConstraintsHold.foldl] at constraints
     obtain ⟨ input_eq, output_eq ⟩ := constraints
     -- Convert the unfolded form back to ConstraintHoldsOnRow
-    have input_eq' : ConstraintHoldsOnRow (equalityConstraint Input input) first_row (env.toEnvironment 1 0) := input_eq
+    have input_eq' : ConstraintHoldsOnRow (equalityConstraint Input input) first_row (env.shift 0) := input_eq
     rw [equalityConstraint.soundness_row] at input_eq'
     simp only [table_norm, and_true, Trace.ForAllRowsWithPrevious]
     constructor
     · rw [input_eq']; exact input_spec
     · intro h_len _
-      have output_eq' : ConstraintHoldsOnRow (equalityConstraint Input output) first_row (env.toEnvironment 2 0) := by
-        simp only [Nat.sub_zero] at output_eq
+      have output_eq' : ConstraintHoldsOnRow (equalityConstraint Input output) first_row (env.shift 0) := by
+        simp only [Nat.zero_mul, Nat.sub_zero] at output_eq
         rwa [if_pos (by omega : 0 = M - 1)] at output_eq
       rw [equalityConstraint.soundness_row] at output_eq'
       exact output_eq'
@@ -294,7 +294,8 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     simp only [ConstraintHoldsOnStep, TableConstraint.ConstraintsHoldOnWindow.Soundness] at constraints
     set wrapped : TwoRowsConstraint (ProvablePair State Input) F :=
       TableConstraint.getRowAssignOnly 0 >>= fun curr => table.inductiveConstraint curr >>= fun _ => pure ()
-    set env' := windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
+    set stride := table.wrappedInductiveConstraint.finalOffset
+    set env' := windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.shift (rest.len * stride))
     dsimp only [TableConstraint.ConstraintsHoldOnWindow.Soundness, TableConstraint.operations,
       TableContext.empty] at constraints
     change Circuit.ConstraintsHold.Soundness env' (wrapped .empty).2.circuit at constraints
@@ -304,7 +305,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     rcases Circuit.ConstraintsHold.append_soundness.mp constraints with ⟨ main_constraints, return_eq ⟩
     simp only [table_norm, circuit_norm] at return_eq
     -- Compute h_env' (same structure as old proof)
-    have h_env' : env' = windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
+    have h_env' : env' = windowEnv wrapped ⟨<+> +> curr +> next, _⟩ (env.shift (rest.len * stride)) := rfl
     simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm, wrapped,
       pure, StateT.pure] at h_env'
     simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
@@ -318,13 +319,13 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     -- The env mapping lemmas show that windowEnv maps variables to the expected row cells.
     -- These follow the same pattern as the old windowEnv proof but need dsimp for getLeFromBottom.
     have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i :=
-      (wrappedEnv_maps_curr_state table curr next (env.toEnvironment 0 (rest.len + 1)) i hi).symm
+      (wrappedEnv_maps_curr_state table curr next (env.shift (rest.len * stride)) i hi).symm
 
     have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) :=
-      (wrappedEnv_maps_curr_input table curr next (env.toEnvironment 0 (rest.len + 1)) i hi).symm
+      (wrappedEnv_maps_curr_input table curr next (env.shift (rest.len * stride)) i hi).symm
 
     have h_env_output i (hi : i < s) : (toElements next.1)[i] = env'.get (i + (s + x) + t) :=
-      (wrappedEnv_maps_next_state table curr next (env.toEnvironment 0 (rest.len + 1)) i hi).symm
+      (wrappedEnv_maps_next_state table curr next (env.shift (rest.len * stride)) i hi).symm
     clear h_env'
 
     have input_eq_1 : eval env' curr_var.1 = curr.1 := by
@@ -373,7 +374,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     use h_soundness
 
     intro h_len _
-    have output_eq' : ConstraintHoldsOnRow (equalityConstraint Input output) next (env.toEnvironment 2 (rest.len + 1)) := by
+    have output_eq' : ConstraintHoldsOnRow (equalityConstraint Input output) next (env.shift ((rest.len + 1) * stride)) := by
       simp only [ConstraintHoldsOnRow, TableConstraint.ConstraintsHoldOnWindow.Soundness]
       have h : (rest +> curr).len = M - 1 := by simp [Trace.len] at h_len ⊢; omega
       rwa [if_pos h] at output_boundary
@@ -381,7 +382,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     exact output_eq'
 
 theorem table_soundness (table : InductiveTable F State Input) (input output : State F)
-  (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : TableEnvironments F) :
+  (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : Environment F) :
   table.Spec input [] 0 rfl input env.data → TableConstraintsHold (table.tableConstraints input output) trace.val env →
     table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output env.data := by
   intro h_input h_constraints
@@ -401,7 +402,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
   Spec {N} trace env := table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output env
 
   soundness N trace env assumption constraints :=
-    table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
+    table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.2 constraints
 
   completeness := by
     intro N trace env ⟨h_init, h_rows⟩ h_witness

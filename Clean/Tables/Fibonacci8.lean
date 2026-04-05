@@ -128,7 +128,7 @@ def formalFibTable : FormalTable (F p) RowType := {
   Spec
 
   soundness := by
-    intro N trace envs _
+    intro N trace env _
     sorry
 
   completeness := by

@@ -36,6 +36,12 @@ structure Environment (F : Type) where
 theorem Environment.ext {e₁ e₂ : Environment F} (h_get : e₁.get = e₂.get) (h_data : e₁.data = e₂.data) : e₁ = e₂ := by
   cases e₁; cases e₂; simp_all
 
+/-- Shift an environment by an offset: `(env.shift n).get i = env.get (n + i)`. -/
+@[reducible]
+def Environment.shift (env : Environment F) (offset : ℕ) : Environment F where
+  get i := env.get (offset + i)
+  data := env.data
+
 namespace Expression
 variable [Field F]
 

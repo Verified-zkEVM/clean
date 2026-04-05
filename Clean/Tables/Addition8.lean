@@ -38,7 +38,7 @@ def formalAdd8Table : FormalTable (F p) RowType := {
   constraints := add8Table,
   Spec := Spec_add8,
   soundness := by
-    intro N trace envs _
+    intro N trace env _
     sorry,
   completeness := by
     intro N trace env _ _

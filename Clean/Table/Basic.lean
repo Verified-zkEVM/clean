@@ -627,15 +627,6 @@ instance [Repr F] : Repr (TableOperation S F) where
 
 export TableOperation (boundary everyRow everyRowExceptLast)
 
-structure TableEnvironments (F : Type) where
-  /-- environment for each constraint, for each row -/
-  witnessEnvs : (constraint : ℕ) → (row : ℕ) → (varIndex : ℕ) → F
-  /-- auxiliary data available to all rows -/
-  data : ProverData F
-
-def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=
-  { get := envs.witnessEnvs constraint row,
-    data := envs.data }
 /--
   The constraints hold over a trace if they hold individually in a suitable environment, where the
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
@@ -647,9 +638,8 @@ def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (con
 -/
 @[table_norm]
 def TableConstraintsHold (constraints : List (TableOperation S F))
-  (trace : Trace F S) (env : TableEnvironments F) : Prop :=
-  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env.toEnvironment i))
-  foldl trace.len constraints_and_envs trace constraints_and_envs
+  (trace : Trace F S) (env : Environment F) : Prop :=
+  foldl env trace.len constraints trace constraints
   where
   /--
     The foldl function applies the constraints to the trace inductively on the trace.
@@ -659,37 +649,40 @@ def TableConstraintsHold (constraints : List (TableOperation S F))
     `cs` is the full list of constraints (never changed during the induction).
     `cs_iterator` is walked inductively for every row.
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial `cs`.
+
+    Each constraint accesses the single table-wide environment via `env.shift (row * stride)`,
+    where `stride` comes from the `TableOperation` and `row` is the current row index.
   -/
   @[table_norm]
-  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
-    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
+  foldl (env : Environment F) (N : ℕ) (cs : List (TableOperation S F)) :
+    Trace F S → (cs_iterator : List (TableOperation S F)) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint,
     -- apply the constraint using ConstraintHoldsOnStep (no redundant getCurrRow witness)
-    | trace +> curr +> next, (⟨.everyRowExceptLast _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> curr +> next) rest
-        ConstraintHoldsOnStep constraint curr next (env (trace.len + 1)) ∧ others
+    | trace +> curr +> next, (.everyRowExceptLast stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> curr +> next) rest
+        ConstraintHoldsOnStep constraint curr next (env.shift (trace.len * stride)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply
     -- the constraint if the index matches the current row position
-    | trace +> row, (⟨.boundary idx _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> row) rest
+    | trace +> row, (.boundary idx stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> row) rest
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
-        (if trace.len = targetIdx then ConstraintHoldsOnRow constraint row (env trace.len) else True) ∧ others
+        (if trace.len = targetIdx then ConstraintHoldsOnRow constraint row (env.shift (trace.len * stride)) else True) ∧ others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint
-    | trace +> row, (⟨.everyRow _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> row) rest
-        ConstraintHoldsOnRow constraint row (env trace.len) ∧ others
+    | trace +> row, (.everyRow stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> row) rest
+        ConstraintHoldsOnRow constraint row (env.shift (trace.len * stride)) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip it
-    | trace, (⟨.everyRowExceptLast _ _, _⟩) :: rest =>
-        foldl N cs trace rest
+    | trace, (.everyRowExceptLast _ _) :: rest =>
+        foldl env N cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
     | trace +> _, [] =>
-        foldl N cs trace cs
+        foldl env N cs trace cs
 
     -- if the trace is empty, we are done
     | <+>, _ => True
@@ -700,29 +693,28 @@ def TableConstraintsHold (constraints : List (TableOperation S F))
 -/
 @[table_norm]
 def TableConstraintsHold.Completeness (constraints : List (TableOperation S F))
-  (trace : Trace F S) (env : TableEnvironments F) : Prop :=
-  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env.toEnvironment i))
-  foldl trace.len constraints_and_envs trace constraints_and_envs
+  (trace : Trace F S) (env : Environment F) : Prop :=
+  foldl env trace.len constraints trace constraints
   where
   @[table_norm]
-  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
-    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
-    | trace +> curr +> next, (⟨.everyRowExceptLast _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> curr +> next) rest
-        ConstraintHoldsOnStep.Completeness constraint curr next (env (trace.len + 1)) ∧ others
-    | trace +> row, (⟨.boundary idx _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> row) rest
+  foldl (env : Environment F) (N : ℕ) (cs : List (TableOperation S F)) :
+    Trace F S → (cs_iterator : List (TableOperation S F)) → Prop
+    | trace +> curr +> next, (.everyRowExceptLast stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> curr +> next) rest
+        ConstraintHoldsOnStep.Completeness constraint curr next (env.shift (trace.len * stride)) ∧ others
+    | trace +> row, (.boundary idx stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> row) rest
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
-        (if trace.len = targetIdx then ConstraintHoldsOnRow.Completeness constraint row (env trace.len) else True) ∧ others
-    | trace +> row, (⟨.everyRow _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> row) rest
-        ConstraintHoldsOnRow.Completeness constraint row (env trace.len) ∧ others
-    | trace, (⟨.everyRowExceptLast _ _, _⟩) :: rest =>
-        foldl N cs trace rest
+        (if trace.len = targetIdx then ConstraintHoldsOnRow.Completeness constraint row (env.shift (trace.len * stride)) else True) ∧ others
+    | trace +> row, (.everyRow stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> row) rest
+        ConstraintHoldsOnRow.Completeness constraint row (env.shift (trace.len * stride)) ∧ others
+    | trace, (.everyRowExceptLast _ _) :: rest =>
+        foldl env N cs trace rest
     | trace +> _, [] =>
-        foldl N cs trace cs
+        foldl env N cs trace cs
     | <+>, _ => True
 
 /--
@@ -755,29 +747,28 @@ def WitnessUsedOnRow (c : SingleRowConstraint S F)
 -/
 @[table_norm]
 def TableLocalWitnessUsed (constraints : List (TableOperation S F))
-  (trace : Trace F S) (env : TableEnvironments F) : Prop :=
-  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env.toEnvironment i))
-  foldl trace.len constraints_and_envs trace constraints_and_envs
+  (trace : Trace F S) (env : Environment F) : Prop :=
+  foldl env trace.len constraints trace constraints
   where
   @[table_norm]
-  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
-    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
-    | trace +> curr +> next, (⟨.everyRowExceptLast _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> curr +> next) rest
-        WitnessUsedOnStep constraint curr next (env (trace.len + 1)) ∧ others
-    | trace +> row, (⟨.boundary idx _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> row) rest
+  foldl (env : Environment F) (N : ℕ) (cs : List (TableOperation S F)) :
+    Trace F S → (cs_iterator : List (TableOperation S F)) → Prop
+    | trace +> curr +> next, (.everyRowExceptLast stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> curr +> next) rest
+        WitnessUsedOnStep constraint curr next (env.shift (trace.len * stride)) ∧ others
+    | trace +> row, (.boundary idx stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> row) rest
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
-        (if trace.len = targetIdx then WitnessUsedOnRow constraint row (env trace.len) else True) ∧ others
-    | trace +> row, (⟨.everyRow _ constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> row) rest
-        WitnessUsedOnRow constraint row (env trace.len) ∧ others
-    | trace, (⟨.everyRowExceptLast _ _, _⟩) :: rest =>
-        foldl N cs trace rest
+        (if trace.len = targetIdx then WitnessUsedOnRow constraint row (env.shift (trace.len * stride)) else True) ∧ others
+    | trace +> row, (.everyRow stride constraint) :: rest =>
+        let others := foldl env N cs (trace +> row) rest
+        WitnessUsedOnRow constraint row (env.shift (trace.len * stride)) ∧ others
+    | trace, (.everyRowExceptLast _ _) :: rest =>
+        foldl env N cs trace rest
     | trace +> _, [] =>
-        foldl N cs trace cs
+        foldl env N cs trace cs
     | <+>, _ => True
 
 structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] where
@@ -797,7 +788,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   /-- the soundness states that if the assumptions hold, then
       the constraints hold implies that the spec holds. -/
   soundness :
-    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
+    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : Environment F),
     Assumption N env.data →
     TableConstraintsHold constraints trace.val env →
     Spec trace env.data
@@ -807,7 +798,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
       generate auxiliary values; honest execution of these generators (captured by
       `TableLocalWitnessUsed`) is sufficient to satisfy all constraints. -/
   completeness :
-    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
+    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : Environment F),
     HonestProverAssumption trace env.data →
     TableLocalWitnessUsed constraints trace.val env →
     TableConstraintsHold.Completeness constraints trace.val env
