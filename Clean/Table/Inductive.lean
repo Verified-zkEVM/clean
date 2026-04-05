@@ -461,7 +461,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
         List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
         and_false, reduceIte, tsub_zero,
         Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious,
-        Trace.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex.inner, Trace.len,
+        Trace.ForAllRowsOfTraceWithIndex.inner, Trace.len,
         TableConstraintsHold.Completeness.foldl, TableLocalWitnessUsed.foldl] at h_w ih2 h_spec_more h_rows_more ⊢
       obtain ⟨ h_w_step, h_w_boundary, h_w_rest ⟩ := h_w
       obtain ⟨ h_spec_next, h_spec_curr, h_spec_prev ⟩ := h_spec_more
@@ -478,9 +478,21 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
         show Circuit.ConstraintsHold.Completeness env' (wrapped .empty).2.circuit
         -- Normalize to: step completeness ∧ equality (next_state = step_output)
         simp only [wrapped, table_norm, circuit_norm, inductiveConstraint, pure, StateT.pure]
-        -- The proof needs env mapping (wrappedEnv_maps_*) + InductiveTable.completeness
-        -- for the step part, and equality from per-row Spec for the return part.
-        -- This mirrors the soundness proof env mapping (lines 316-371 of table_soundness_aux).
+
+        -- After simp, the goal decomposes into:
+        -- (1) Circuit.ConstraintsHold.Completeness env' step_ops
+        -- (2) eval env' (varFromOffset State (s+x+t)) = eval env' step_output
+        --
+        -- Part (1) follows from table.completeness + env mapping + UsesLocalWitnessesCompleteness.
+        -- Part (2) says the equality assertion holds, i.e., the next row's state equals the
+        -- step circuit's output. This requires knowing that the honest prover built the trace
+        -- by running the step circuit. The current HonestProverAssumption provides per-row Spec
+        -- but does NOT connect the step circuit's output to the trace's next row.
+        --
+        -- To fix: either (a) add a `computeOutput` function to InductiveTable and include
+        -- `next.1 = computeOutput curr.1 curr.2 env.data` in HonestProverAssumption, or
+        -- (b) restructure inductiveConstraint to assign step output directly to next row cells
+        -- instead of witnessing + asserting equality.
         sorry
       constructor
       · -- Boundary from end

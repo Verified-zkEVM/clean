@@ -198,11 +198,18 @@ def formalFib32Table : FormalTable (F p) RowType := {
   Spec := Spec,
 
   soundness := by
-    intro N trace env _
+    intro N trace env _ h
+    rcases trace with ⟨trace, rfl⟩
+    -- The soundness proof requires induction on the trace:
+    -- Base case: boundary_constraints gives first row = (fib32 0, fib32 1)
+    -- Inductive step: fib_constraints + env mapping gives next row spec from current
+    -- Helper lemmas fib_constraints, boundary_constraints, fib_vars are already proved above.
     sorry
 
   completeness := by
     intro N trace env _ _
+    -- Not provable with HonestProverAssumption = True.
+    -- Same gap as Fibonacci8: boundary and step completeness need honest prover conditions.
     sorry
 }
 

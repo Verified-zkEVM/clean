@@ -128,11 +128,20 @@ def formalFibTable : FormalTable (F p) RowType := {
   Spec
 
   soundness := by
-    intro N trace env _
+    intro N trace env _ h
+    rcases trace with ⟨trace, rfl⟩
+    -- The soundness proof requires induction on the trace (similar to table_soundness_aux):
+    -- Base case: boundary_step gives first_row.x.val = fib8 0, first_row.y.val = fib8 1
+    -- Inductive step: fib_constraints + env mapping gives next row spec from current row spec
+    -- The proof structure matches InductiveTable.table_soundness_aux but specialized for this table.
     sorry
 
   completeness := by
     intro N trace env _ _
+    -- Not provable with HonestProverAssumption = True.
+    -- The boundary constraint completeness requires first_row = (0, 1),
+    -- and the recursive constraint completeness requires eval env' step_output = next.1,
+    -- which must come from a non-trivial HonestProverAssumption.
     sorry
 }
 
