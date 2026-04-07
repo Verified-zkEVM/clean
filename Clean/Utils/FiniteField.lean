@@ -56,6 +56,7 @@ instance {p : ℕ} [Fact p.Prime] : FiniteField (F p) where
   val := ZMod.val
   val_lt := by
     intro x
+    unfold F
     rw [ZMod.card]
     exact ZMod.val_lt x
   val_injective := by
