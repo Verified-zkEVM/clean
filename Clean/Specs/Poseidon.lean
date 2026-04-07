@@ -1,0 +1,692 @@
+/-
+Poseidon Hash Function Specification
+
+This file contains the mathematical specification of the Poseidon hash function,
+matching the circomlib implementation:
+https://github.com/iden3/circomlib/blob/master/circuits/poseidon.circom
+
+The constants are from:
+https://github.com/iden3/circomlib/blob/master/circuits/poseidon_constants.circom
+-/
+import Mathlib.Data.ZMod.Basic
+import Clean.Utils.Vector
+
+namespace Specs.Poseidon
+
+-- BN254 scalar field prime (same as used in circomlib/snarkjs)
+def BN254_PRIME : ℕ := 21888242871839275222246405745257275088548364400416034343698204186575808495617
+
+abbrev F := ZMod BN254_PRIME
+
+-- Number of full rounds (split into 4 at start, 4 at end)
+def nRoundsF : ℕ := 8
+
+-- Number of partial rounds for each t value (t = nInputs + 1)
+-- Index by (t - 2), so t=2 -> index 0, t=3 -> index 1, etc.
+def N_ROUNDS_P : Vector ℕ 16 := #v[56, 57, 56, 60, 60, 63, 64, 63, 60, 66, 60, 65, 70, 60, 64, 68]
+
+def nRoundsP (t : ℕ) : ℕ :=
+  if h : t ≥ 2 ∧ t ≤ 17 then N_ROUNDS_P[t - 2]'(by omega) else 0
+
+/-
+============================================================================
+ROUND CONSTANTS (C)
+These are added to the state at each round.
+Length = t * nRoundsF + nRoundsP
+============================================================================
+-/
+
+-- Round constants for t=2 (1 input), length = 2*8 + 56 = 72
+def C_t2 : Vector ℕ 72 := #v[
+  0x9c46e9ec68e9bd4fe1faaba294cba38a71aa177534cdd1b6c7dc0dbd0abd7a7,
+  0xc0356530896eec42a97ed937f3135cfc5142b3ae405b8343c1d83ffa604cb81,
+  0x250f5116a417d76aaa422952fcc5b33329f7714fc26d56c0432507fc740a87c4,
+  0x264065ad87572e016659626c33c8213f7a373b9b8225a384f458d850bb4a949f,
+  0x2bb8e94ad8d8adca6ce909ff94b8750729b294e4400376da39e33fda24bd42af,
+  0x19051065d05d861ec813c15291d46a328f6201b21ad5d239d4f85fbb09a5dbae,
+  0x245bd0617aa449618f5bd4550aac7b8e08d4d1c017165943cdf4776cdff3434a,
+  0x9fb1a1118074ff79d8acbf5b02131e048a1570155e0f2b1c36ad091d491a88f,
+  0x234ab504bbae8198972741952f78b7eb018ea192f05e54c1484ab8973ff66d88,
+  0x1f66e509b84c355ae3d4c3513a282fd48f9c8c6439f42a7835fbcfe0f2a324c,
+  0x1b22f5d69d725e6002cf00dd9ee62d1a5af0efdc4910f54127a920ccc43f91fa,
+  0x252b55edead135f852968b7f1c4f490fa659ecd5b47a78a7db91f65a6dfc23f,
+  0x1773ae2e1637c92ad0677c2a047fea8eca4b53303f21871f6892a2c0487d7ff1,
+  0x2d57b02906cd0ab82a79e76faeef6f87666eac093cf7715645d5ec9f7ac732f5,
+  0xa16f3a62824b281e8b2ddb8fc391a498fb061317faffa03696f834596313d93,
+  0x1666f525f7f4b6988d2a37834ab747eae0587757b788eb7f1e26b08e36a08591,
+  0x5da44f8e0a3b8bb13231f0ca25b50b57f5c82128e1dfec3e541d912ebe17b76,
+  0x9a39ba9993303ba191bac8bdb3e0144dbfb5f39624cdd9524dc7861633bc95a,
+  0x6c0fb824a19202d30ee6b418c0029e100e85a6d158f9f2a828dfd2ed0920a68,
+  0x387d8e056b2b176a9776b4492cb3b418adc660627e52bb3324283bf9522395d,
+  0x147a1af82036ef5b28a7a37bea40d6ac3013cf1b62358396bf7156f5c2dc9684,
+  0x3038d92060daeaaf1bd0482bd3f0613d88e8dff90a7a0525f9227e4cb7c6f81b,
+  0x72940aa1d538a5a39a323f9e5d65616cf6c223339006f9789a97245532908f5,
+  0x2d3d604949f4e14c70b8a879aedec49b3a367ba216af048f464ed6f15e2b9023,
+  0x225b9e4f35c7549f80774c2b4d18309b2dcf7c7287b982e49746a176641e73c5,
+  0x1ea781288fdf13b2190095a2344828e37dfe81c75a09709f0d139bbbf6c70414,
+  0x8e96c3e7e8de4432b202405458468b90dc6890d4cee128b3502e5b6cb4aeeeb,
+  0x5b43da7c8aa29af6dcaae57d070b49d29ce889a64a4ac183e85d55b366c805f,
+  0xbec98a034e3b8af7ba4861f1ad5a48dcef7c996e7a51c7cdde724d8f610e52,
+  0x2eb67ccfa29e2b422b9f84a5d0575fc435b30fcae303039480be384ee4ebe72a,
+  0x102bbdc21a3f147bf04eedee5d70bd084a7105c631c86ecd2c4e8749a13915ca,
+  0x274bc16c88721babfd5bbe8d8562c1bf127ae38915280fbb8e3115cad3582f79,
+  0x185cece417549b25283de04511f769101c8850b409d4928ab831611351bd9938,
+  0x13c73fb043f7e978bc9cfb55c7faacb4f4c823674abe17737059ac0a32c36007,
+  0x24b3a1d83308742b360c9c60595673e201cdd4cef5a4145c933c4e5969481d70,
+  0x18b5ae94df9ec97aaa2a8f0f42425bcccdc8266a070f866ef0f48d7a3744398b,
+  0x20eb398cb958cc2ccc7cb1fac38501abbe38169b2d8522d9e5f099f2d5905cb4,
+  0x1e588dd3ec8b0d252c2c7c0c78a02b22bbbad1f4dcaa2e78a8b8eef2f4e29344,
+  0xf8bf3bd6c22ba3b1bf3ab2e3fb40818cd4217ffbaf294ca42331d4e3043a0a6,
+  0x388c9fcf30fc2841d648f46bad01dd10bee9dc184d25eabc9f617021109cec3,
+  0x2bb7f397c5941ac67befa8b232f15c8853dac263da793555441a90cec83b6454,
+  0x17f389b52f9ea7a98874a4a31ef6a7beb43fb17db0e499250bb3f0181c59fb21,
+  0x3a2090eacb897a31fb10561d560a9aeec24b7ad14d17b145f20c875a0b28c7c,
+  0xc398534f0eb580f1fe4bf64553389e67cca4714399430e09619dcbee17ba099,
+  0x7095ac9fda46afa7f181259e3635feffa7f11ee63f3ee777a5cebf4822328c4,
+  0x2046f7cf1c8f13ef2b69cbc8bc0d5d809f82568abe2b33d1cd060958b1ced683,
+  0x2c274136a5de2849de6e7f92f9097296501acb68d56138fbcb660c4cb0f69107,
+  0x1c4d5178acb5c6b6eceef23afc6f16ec7b0383094cb6467e8d0f4507b3cf74c3,
+  0x65b1447d0d64ceced116785b92c63a6a7dd9701507dcbe8b909325e28f7b8d3,
+  0x2265d7e244881220c81a193d979330409c9bfa333438951340e023e7b72a1961,
+  0x15b12b355af7e05637a1c76e67f9cec6fca8a6449b37669f6850502256b30aba,
+  0x1a1522fecc6ae028e4d3e3029497b88f35c2b48c687af168ec2582d9075b4387,
+  0x22f56e79e81b7496e472a641a053c414bcc53b0a9350e2589240803076f58f26,
+  0x202ddb66d0988994e7aabad692ceac4e2324672a17ab8417d1ee278afd17fd0c,
+  0x12b0701e8813c5b21a8e30208f8f1158b96cd428ae77bdea72f84510f73edfce,
+  0x1e63fd20e706e1407c8838ceb26b84c9fe693fdde0eb1e1a9df7e84e53eeee7e,
+  0x20a16c5a86256deffd15af174c39f9d9aa11500676ac7e570088280dd1896259,
+  0x1c8f8bf8e153da55ad5aca2eaaee38da563e0435c0f2f37c27558fb9bae0a3eb,
+  0xd7732687bb7bf5f3aabcfdcc4fbb67e159c1983213e416c3880124fddf187c9,
+  0xcdd04475a86999a2edcbbbf8264b195e108b3b60b6475d835f6ccef9e2f6865,
+  0x2fe65586cd4e754b4c63a88c2ed3f9ba0e3bfa43f547b41153560c214fe3cbcd,
+  0x503cf963c8273604e659128ec29261f62399815d98c56dbf4f2837c727ad4d9,
+  0x1ee48ea27839061b78379936f6d97ca9400b393ef5fdf38ef1475c8742cb334c,
+  0x1a423f8d8fc892b22d7cd5bf0197c575c579e83563d04859d73b2c1c5c0413f9,
+  0x69a0da50133e9952f00e61778972a7be0e8d8ab76c95616ae465636abb97ec7,
+  0x1bf7879dd42f2cbb91c65a0976356f67964c2f94dfbf0e44cf2b9909165d8614,
+  0x1b23dccf485822065c8fc0afe610be7164e25056267f6c4a805fffd4547a0b98,
+  0x2ebe90d6f6fdca420e0c2e004ce5c5a4409e564c9c4f3671e3011f627bec7c2e,
+  0x167cd6930535a816dfebe81d20c376e77687760f3a2fa0da290b2f4d6c6863f7,
+  0x8865c10f4a633c54ccc8b68b79df285f19f1210374cc64e3c8a966d4f90264b,
+  0x1de902fbc0bf01951ca25abb39d78894721b37e071851b03a72cc6b833b7893b,
+  0xe3eca007699dd0f852eb22da642e495f67c988dd5bf0137676b16a31eab4667
+]
+
+-- Round constants for t=3 (2 inputs), length = 3*8 + 57 = 81
+def C_t3 : Vector ℕ 81 := #v[
+  0xee9a592ba9a9518d05986d656f40c2114c4993c11bb29938d21d47304cd8e6e,
+  0xf1445235f2148c5986587169fc1bcd887b08d4d00868df5696fff40956e864,
+  0x8dff3487e8ac99e1f29a058d0fa80b930c728730b7ab36ce879f3890ecf73f5,
+  0x84d520e4e5bb469e1f9075cb7c490efa59565eedae2d00ca8ef88ceea2b0197,
+  0x2d15d982d99577fa33da56722416fd734b3e667a2f9f15d8eb3e767ae0fd811e,
+  0xed2538844aba161cf1578a43cf0364e91601f6536a5996d0efbe65632c41b6d,
+  0x2600c27d879fbca186e739e6363c71cf804c877d829b735dcc3e3af02955e60a,
+  0x28f8bd44a583cbaa475bd15396430e7ccb99a5517440dfd970058558282bf2c5,
+  0x9cd7d4c380dc5488781aad012e7eaef1ed314d7f697a5572d030c55df153221,
+  0x11bb6ee1291aabb206120ecaace460d24b6713febe82234951e2bee7d0f855f5,
+  0x2d74e8fa0637d9853310f3c0e3fae1d06f171580f5b8fd05349cadeecfceb230,
+  0x2735e4ec9d39bdffac9bef31bacba338b1a09559a511a18be4b4d316ed889033,
+  0xf03c1e9e0895db1a5da6312faa78e971106c33f826e08dcf617e24213132dfd,
+  0x17094cd297bf827caf92920205b719c18741090b8f777811848a7e9ead6778c4,
+  0xdb8f419c21f92461fc2b3219465798348df90d4178042c81ba7d4b4d559e2b8,
+  0x243443613f64ffa417427ed5933fcfbc66809db60b9ca1724a22709ceceeece2,
+  0x22af49fbfd5d7e9fcd256c25c07d3dd8ecbbae6deecd03aa04bb191fada75411,
+  0x14fbd37fa8ad6e4e0c78a20d93c7230c4677f797b4327323f7f7c097c19420e0,
+  0x15a9298bbb882534d4b2c9fbc6e4ef4189420c4eb3f3e1ea22faa7e18b5ae625,
+  0x2f7de75f23ddaaa5221323ebceb2f2ac83eef92e854e75434c2f1d90562232bc,
+  0x36a4432a868283b78a315e84c4ae5aeca216f2ff9e9b2e623584f7479cd5c27,
+  0x2180d7786a8cf810e277218ab14a11e5e39f3c962f11e860ae1c5682c797de5c,
+  0xa268ef870736eebd0cb55be640d73ee3778990484cc03ce53572377eefff8e4,
+  0x1eefefe11c0be4664f2999031f15994829e982e8c90e09069df9bae16809a5b2,
+  0x27e87f033bd1e0a89ca596e8cb77fe3a4b8fb93d9a1129946571a3c3cf244c52,
+  0x1498a3e6599fe243321f57d6c5435889979c4f9d2a3e184d21451809178ee39,
+  0x27c0a41f4cb9fe67e9dd4d7ce33707f74d5d6bcc235bef108dea1bbebde507aa,
+  0x1f75230908b141b46637238b120fc770f4f4ae825d5004c16a7c91fe1dae280f,
+  0x25f99a9198e923167bba831b15fffd2d7b97b3a089808d4eb1f0a085bee21656,
+  0x101bc318e9ea5920d0f6acdc2bb526593d3d56ec8ed14c67622974228ba900c6,
+  0x1a175607067d517397c1334ecb019754ebc0c852a3cf091ec1ccc43207a83c76,
+  0xf02f0e6d25f9ea3deb245f3e8c381ee6b2eb380ba4af5c1c4d89770155df37b,
+  0x151d757acc8237af08d8a6677203ec9692565de456ae789ff358b3163b393bc9,
+  0x256cd9577cea143049e0a1fe0068dd20084980ee5b757890a79d13a3a624fad4,
+  0x513abaff6195ea48833b13da50e0884476682c3fbdd195497b8ae86e1937c61,
+  0x1d9570dc70a205f36f610251ee6e2e8039246e84e4ac448386d19dbac4e4a655,
+  0x18f1a5194755b8c5d5d7f1bf8aaa6f56effb012dd784cf5e044eec50b29fc9d4,
+  0x266b53b615ef73ac866512c091e4a4f2fa4bb0af966ef420d88163238eebbca8,
+  0x2d63234c9207438aa42b8de27644c02268304dfeb8c89a1a3f4fd6e8344ae0f7,
+  0x2ab30fbe51ee49bc7b3adde219a6f0b5fbb976205ef8df7e0021daee6f55c693,
+  0x1aee6d4b3ebe9366dcb9cce48969d4df1dc42abcd528b270068d9207fa6a45c9,
+  0x1891aeab71e34b895a79452e5864ae1d11f57646c60bb34aa211d123f6095219,
+  0x24492b5f95c0b0876437e94b4101c69118e16b2657771bd3a7caab01c818aa4b,
+  0x1752161b3350f7e1b3b2c8663a0d642964628213d66c10ab2fddf71bcfde68f,
+  0xab676935722e2f67cfb84938e614c6c2f445b8d148de54368cfb8f90a00f3a7,
+  0xb0f72472b9a2f5f45bc730117ed9ae5683fc2e6e227e3d4fe0da1f7aa348189,
+  0x16aa6f9273acd5631c201d1a52fc4f8acaf2b2152c3ae6df13a78a513edcd369,
+  0x2f60b987e63614eb13c324c1d8716eb0bf62d9b155d23281a45c08d52435cd60,
+  0x18d24ae01dde92fd7606bb7884554e9df1cb89b042f508fd9db76b7cc1b21212,
+  0x4fc3bf76fe31e2f8d776373130df79d18c3185fdf1593960715d4724cffa586,
+  0xd18f6b53fc69546cfdd670b41732bdf6dee9e06b21260c6b5d26270468dbf82,
+  0xba4231a918f13acec11fbafa17c5223f1f70b4cdb045036fa5d7045bd10e24,
+  0x7b458b2e00cd7c6100985301663e7ec33c826da0635ff1ebedd0dd86120b4c8,
+  0x1c35c2d96db90f4f6058e76f15a0c8286bba24e2ed40b16cec39e9fd7baa5799,
+  0x1d12bea3d8c32a5d766568f03dd1ecdb0a4f589abbef96945e0dde688e292050,
+  0xd953e20022003270525f9a73526e9889c995bb62fdea94313db405a61300286,
+  0x29f053ec388795d786a40bec4c875047f06ff0b610b4040a760e33506d2671e1,
+  0x4188e33735f46b14a4952a98463bc12e264d5f446e0c3f64b9679caaae44fc2,
+  0x149ec28846d4f438a84f1d0529431bb9e996a408b7e97eb3bf1735cdbe96f68f,
+  0xde20fae0af5188bca24b5f63630bad47aeafd98e651922d148cce1c5fdddee8,
+  0x12d650e8f790b1253ea94350e722ad2f7d836c234b8660edf449fba6984c6709,
+  0x22ab53aa39f34ad30ea96717ba7446aafdadbc1a8abe28d78340dfc4babb8f6c,
+  0x26503e8d4849bdf5450dabea7907bc3de0de109871dd776904a129db9149166c,
+  0x1d5e7a0e2965dffa00f5454f5003c5c8ec34b23d897e7fc4c8064035b0d33850,
+  0xee3d8daa098bee012d96b7ec48448c6bc9a6aefa544615b9cb3c7bbd07104cb,
+  0x1bf282082a04979955d30754cd4d9056fa9ef7a7175703d91dc232b5f98ead00,
+  0x7ae1344abfc6c2ce3e951bc316bee49971645f16b693733a0272173ee9ad461,
+  0x217e3a247827c376ec21b131d511d7dbdc98a36b7a47d97a5c8e89762ee80488,
+  0x215ffe584b0eb067a003d438e2fbe28babe1e50efc2894117509b616addc30ee,
+  0x1e770fc8ecbfdc8692dcedc597c4ca0fbec19b84e33da57412a92d1d3ce3ec20,
+  0x2f6243cda919bf4c9f1e3a8a6d66a05742914fc19338b3c0e50e828f69ff6d1f,
+  0x246efddc3117ecd39595d0046f44ab303a195d0e9cc89345d3c03ff87a11b693,
+  0x53e8d9b3ea5b8ed4fe006f139cbc4e0168b1c89a918dfbe602bc62cec6adf1,
+  0x1b894a2f45cb96647d910f6a710d38b7eb4f261beefff135aec04c1abe59427b,
+  0xaeb1554e266693d8212652479107d5fdc077abf88651f5a42553d54ec242cc0,
+  0x16a735f6f7209d24e6888680d1781c7f04ba7d71bd4b7d0e11faf9da8d9ca28e,
+  0x487b8b7fab5fc8fd7c13b4df0543cd260e4bcbb615b19374ff549dcf073d41b,
+  0x1e75b9d2c2006307124bea26b0772493cfb5d512068c3ad677fdf51c92388793,
+  0x5120e3d0e28003c253b46d5ff77d272ae46fa1e239d1c6c961dcb02da3b388f,
+  0xda5feb534576492b822e8763240119ac0900a053b171823f890f5fd55d78372,
+  0x2e211b39a023031a22acc1a1f5f3bb6d8c2666a6379d9d2c40cc8f78b7bd9abe
+]
+
+-- Round constants for t=4 (3 inputs), length = 4*8 + 56 = 88
+def C_t4 : Vector ℕ 88 := #v[
+  0x19b849f69450b06848da1d39bd5e4a4302bb86744edc26238b0878e269ed23e5,
+  0x265ddfe127dd51bd7239347b758f0a1320eb2cc7450acc1dad47f80c8dcf34d6,
+  0x199750ec472f1809e0f66a545e1e51624108ac845015c2aa3dfc36bab497d8aa,
+  0x157ff3fe65ac7208110f06a5f74302b14d743ea25067f0ffd032f787c7f1cdf8,
+  0x1b0f68f0726a0514a4d05b377b58aabc45945842e70183784a4ab5a32337b8f8,
+  0x1228d2565787140430569d69342d374d85509dea4245db479fdef1a425e27526,
+  0x17a8784ecdcdd6e550875c36a89610f7b8c1d245d52f53ff96eeb91283585e0b,
+  0x9870a8b450722a2b2d5ee7ae865aaf0aa00adcfc31520a32e0ceaa250aaebaf,
+  0x1e1d6aaa902574e3e4055c6b6f03a49b2bbdb7847f940ebc78c0a6d3f9372a64,
+  0x2816c4fa6b085487e1eec1eefd92ee9fef40f30190ac61009103d03266550db2,
+  0x17359fd88be36ba867000e83f76ffb46660634efbad15dcf4d4d502d427ff51c,
+  0xe3004cb44ba455a3f16fefbd0c026404cbac203c0f236baad879610b8661022,
+  0xa55f276af1ceb6ebc6c6820f334b26f11ca4af98c833bc1b496193d6b04a7ca,
+  0x1ee4b0458adcd4c4861a27adc1404a5981d320b6b8e20e51d31b9b877e8346d,
+  0x14315e2753e7fb94f70199f8645d78f87c194a4054e69872b3841da1b4f482f1,
+  0x2b7b63ecffd55d95c660f435ad9e2e25f266cb57e17ebd1b6b0d75e88a6a56d6,
+  0xbb56fa3e9fd48ab46d4e7295bbe1204b652ebe958221860f56e38db80d83c0,
+  0x50653bf5dd59edd6d15fa6071f5005057218b33a8f92a58b9c2656081249f82,
+  0x2c575423e24b522655c5a976c65d069287900c8d5825514098c5b13c86f1fcdc,
+  0x2ff3a2ccdee91e09a32f74232b704cdd99f72c1f78557a2ce568b07e218071d7,
+  0x1144734901a81c1543b8bc6fc9d365f50469eb89949491d3693dbe9c6238d90c,
+  0x1eff9a954e24bcd4af20b6ab74d89e1cd38bc694a9e75ea6da217a98db80cd22,
+  0x14707de7496c5638f97fe9bd7d485c20ead6bfdbfc0599791e49fad0301cd6df,
+  0x13d0de341ba819f90fe3ef1f7ce0a54d8538acdd9b3ef840a91d48ee536042b8,
+  0x26520ab1d20055daded712d59b07088458c18afbd0da58aee9f151a903372ba1,
+  0x68cb4827ac485fc6e7537a3c0a06d08a4c2790f5c65d9866d75296999f7495f,
+  0x7d6baaa2e587c21b03dfa0eb71136e2982cb389b438c8bc282748d0e674e89e,
+  0x15b92d36db02cb16b831eeab2e6ed75d126ffbc274cc3362370851526de13d27,
+  0x277b9ce89133de7b7918ad5fcfab7323ef5b9c1916b588cd7e5a0d814cbc3395,
+  0x2ae847b66b3c5d73b70b733040aa86c51f737092d65c3492d529000fa1802b24,
+  0x2fa3e8ae1fef974cded6aba6dc25cf567e16e0af29e675706643f21bf8efd651,
+  0xb1d4b9508cec4d19aa53f4efe46c57952dbd368fcbcd454a8b1087bc18a2088,
+  0x2d381014d01578b888b3273270babdc393ac392e7958be0478947fafa569bb0,
+  0x2e79a827c85406242523a94431007021bc865a45cabcba4368c41d4486fefec8,
+  0x207c99b7d594a5c61d7e60cc2365c4c0c804cd434098af6244f0a00c259b347,
+  0x119c124086ea58ebb83f14f262c693424360e97e6fb42ae8596badbe9edb2dca,
+  0x104ff38cca0f00173ccd0b68bddba09fc543f074f753bd8e413f8334f887a251,
+  0x2f5b5377bd156f89845811eb262436638dc038b8cb10e147a87df4c0e2384253,
+  0xf70e8e02d1d23968930a8e0db69b1c20204f3e3b4cecd101f81476d0b5ea996,
+  0x1ac4653a51071ae722f90a03f006d8575814db782b7f19f607dae4d56ad586b3,
+  0x12b12600e3bfd8e7bdfae5ef9c4f3805fa41e74acabf7de817823017a8b23db9,
+  0x11b9d19908919dacb7e0f8d0ba77286d417529a18a1d89c405ed1c30289fdd28,
+  0x2c350d245f4f75864744f88dbff8fe335b00f4fb688895c1363a7484ace820d3,
+  0x16a7f76fd2b2147db6ef94c22c78bff782de17ef73e52da7df82603f422b461f,
+  0x1d18d8024be1e96ec25626af06a139f6093545aa504033dac7e285d1cc3db3de,
+  0xc8cab1ad5998072945b9b88228f53c295466819fb94d8f6a9ed449be8f7c18c,
+  0x1a68d133d703cd406ca30041913ce3423c73b13384187ab1530109b756ad4f7a,
+  0x24a58b9e86ce823ff4c45342941417ff23d03c80fcdef9498ca0d860855e01a9,
+  0xe6315c93fbb89d38021148b6c35320fb793c41c6a4386d6aed6acfe2f952c57,
+  0x2c3806d99a69ce63299e876f5f218c7295d87224795d7568d558696e34c692f8,
+  0x59c893a771e94774d49a356494568dd376856ab89705dff25db8273860fa04e,
+  0x1166d9819c4faae8982243d0deb1f8977027d5cc56bf52ce260bec5e27e8b0f5,
+  0x12806fab3fcb09fc2b79406c3c203c4965fc7259112af2104312e1537327e0a3,
+  0x172015e0e33736058f60aa33e82d3dd73dc3ead89f98ded0dba35dcc1d8bda2c,
+  0x77ba18800d852d0a34f70ae8cfd68a080296bf9d47a1b40de7e6fd6392a0d30,
+  0x2094ecd768bfa8f0df0d78d0d946e1aff4a2d38e029e41479d6e3c0fe79fa8b9,
+  0xccebd302afe84c20ff774d3c1f650ca7cd0bca08baa1e261da9c7441a823f89,
+  0x5b9303053bb40c73671f5d55b4052e0d5549871f1b5283f01485a6b568cd05,
+  0x2527289084ab492275b4cd67d38311a2b816eaa68ee6bdb2389eeefd6ba4c721,
+  0x2222f9738290d8d5f2a3eacdad95f12cd4e7417ed2661b012f6448c7503877f2,
+  0x226c8208f26d69e6b7e02fe26557e6bd160fcbe27ee741fd1e581161c1789354,
+  0x216b208c0261f3c91faf609e15f7a9d4853e40d9204496b2441115d73c2941c5,
+  0xe0d660e046a259f3bad6829729b6ae3151fbcd75de33b122fe134ca3d5a4dd6,
+  0x240f039d2026b3266f39ba5c4ec48ac6ace88aadaef991498cd52daaa0ffbba8,
+  0x28c8cccf7b40a2c3cfd2eee0ec4d160a876a4dfeb408ffe333e92fa5e1ee4d79,
+  0xd7f81b4b46d4f247c4243f045a852cc957d2b2923d28eb2fa77b5a9844efd69,
+  0x2be432f87b2c5094a82c788457651dd8cdb0200ac3b42860cbf54475996b772f,
+  0x13ea39f2d63d9adae187af14dd07b533d45a63435e0ea4e5e555d35e70d4016b,
+  0x29e3b1afe1973be9cd1cf4b047325abfaa65cf2b98ff3aed47870461977ec921,
+  0x8db7d684e6b841b5e9692498f95a1f950a1cf1eb638bb4e48f3bc1a3c571197,
+  0xf4f1041a976aa05196da1c042124e3277ea1a28fb6eeeab4bec1243bd31618b,
+  0x5a9d0526d6f18c86b255f00e86ec34e7f8a26c251b51c21fe4c12bdc4c0ff1d,
+  0x284b0304dd6ce669bcf650c5ab85c89d4410d472aa6eb00df1b8d17e52f2f3ff,
+  0x2363e9b01a0163598962ff86907002f95902e725049294ca7ab10cc7aa3f06ba,
+  0x2c2db12647c4c0461dd3290a75c5f2fd8d7f115b3e040cb05dd7e3ad260d842,
+  0x2e3c42f671431f9560f3d0863ac445052422d5b993e9fda6b81486b14ffe3a74,
+  0x1d38441f228c0ce22ff2882560f5d7ee3b4c0caa101371cb7782ffd97af5fff1,
+  0x268141b0e49c59eab1d573ead4e2e1f379364dd133f2cec574c25ade2c794287,
+  0x2209cb2e187df1522810d3f28868da6cf52af9a65dbd7b806049f472d966374a,
+  0xa5eb2510e6f804d1830d7974ac1677d082034e5388bfaee91a319eca7c1ffab,
+  0x1cb2864c38800736f8f3ad98669d3ad7a9d5ee52138e96b8a7015e1089e36ae0,
+  0x2af8ed05bfc8f8ada547ee9bc6c7c6c5e8c15c6c0d380a3f9aa277273321b54e,
+  0xf85d1593b35be03f79b222885555a252bf1f0a3911d784132c49b1a96ac0f3c,
+  0x29095192ec53e0b859eba456295d95bc4567d351a6dad391b8b89707855008c5,
+  0x1a92efde1f5fa56aeb02b4c4b8f51ac80831f898c7843407113fbb6011177854,
+  0x2a05e8deeea15e4377c080aa70fd6a86dc73f3fdfa6b55f5610614c184b0b02e,
+  0x12119f3b019cc3fc46ecc80893e86f510b1dd4030b2ce28c9dadcd1e71ad4891,
+  0x42b6ffe687bc23a2bf6b73317286a543c60ed122fc225aae742c3a1c2dd3a1d
+]
+
+-- Round constants for t=5 (4 inputs), length = 5*8 + 60 = 100
+def C_t5 : Vector ℕ 100 := #v[
+  0xeb544fee2815dda7f53e29ccac98ed7d889bb4ebd47c3864f3c2bd81a6da891,
+  0x554d736315b8662f02fdba7dd737fbca197aeb12ea64713ba733f28475128cb,
+  0x2f83b9df259b2b68bcd748056307c37754907df0c0fb0035f5087c58d5e8c2d4,
+  0x2ca70e2e8d7f39a12447ac83052451b461f15f8b41a75ef31915208f5aba9683,
+  0x1cb5f9319be6a45e91b04d7222271c94994196f12ed22c5d4ec719cb83ecfea9,
+  0xa9c0b1916a8e41d360d02e6e2e5d1b98c34dfcec769429c851867e46e126fa3,
+  0x1dd6ba3731e49d21e8d36e9d4d1edad245ebf9bdd9ebb60a252e4804a6390f6a,
+  0x24ae2a67c3d521c11a11b7112abbdee30647107b808866a980837d0d7da4e3e0,
+  0xd20c9310b5c14d9ef12866af5a45eae3ca9be16d200497066c8b2ee96781d70,
+  0xe047c9821fe94d55d400d763a66c4c6169993abed543c7284b4a35430019445,
+  0x29474ab799b1e13948eff41d2ce79bfad335d09110157076988ac207e10c81dd,
+  0x3899f139d0dc4b281be3b74ab4c70789b7f41e7aca47ea2722a20d79afbca93,
+  0x1866624f761ab8dd7a91c5f37af5e47639951d5acb6b1bbf3b96ca273f71029d,
+  0x13c119f36718f7d5f09ad8541325a13acf6b34db6d9ee2af7ea06061240f3009,
+  0xe4a1008158077402b11f13c08890b739643cc8e93fa44487b5a1575dd867fd7,
+  0xef505fd44ac10a251b670dafe14cabd9ada9e3002210ac9c3876f37de4e7ad8,
+  0x1d31e4e2a5978b7491c43d367470a5a5d1445b6b8129a5b9a6fd238405720de5,
+  0xa979ad5428d481cb624d9d504524a9694ca5cb4421b5d1dc6af2c030fbeac39,
+  0xf7fccd2ec8bc6ed9ce3682f38aa291deea9373f4995778bf762ade36d6ab2a0,
+  0x2691b924dfa123005f7c078d9bf8706defe99c2ba99bd6ee53b153e9fec7bb80,
+  0x2077df6510b4860e56b913bef3a80dbc464b0e4678add60dea7a9517463220b,
+  0x29ee09d8af9d24ca49350ce2e0aa47d00a3dc21bafbfac1c9ba61c58e2993e8c,
+  0x8b292c661d427506b9a01916624f3cde332aaced9f1a494a733cea6f25bfaad,
+  0x2583699ce536a757b22e4713edfbb050092c84abc72c90ad87393a1da9a4cf90,
+  0x1e3f1b660223d65ad88999475374f6e25fd4148eb8110a0b12cffa19657b0b66,
+  0x20f3ecbb37c34aec79131455461259e59b222f0ee8e02f3194cf62a9ad4c3448,
+  0xdf4f5088e4444fbf87d553ba62dbda95696d8b9cf6210b1c85513b1776fbc64,
+  0x2b348effd4c9cef00a1cf4dd67dd664b2ffe361a807c589a252c63bcbfc6833,
+  0x1ba1e522fcb153676cd8f20e82256f0327c000fa96b1b462fc84b556f26a86c7,
+  0x294c44df8e68c96144e964c37bbc5766764ed3550aff80dbe9d3fa74419fe50,
+  0x313716eec6dcd8a602ca040700498dc04c77dfe2194753c59bc818c1d2636a1,
+  0x287dec74696d663e2359f68225de955384d960bbafb90967429a442e19e3ec61,
+  0x25e42f72c6be0942311ba097cf365683db4962c8204fec9213f0f8f72c1946be,
+  0x12b6881b96654fe1768c242acd5399b08639f081a94896f5ea6da70b6b475c91,
+  0xdfc2b54546fd3267d7be55c716cb243ef18118ed9498c8270449bd9418afdb5,
+  0x27dd55fe0d5c0ff56ad4890fa029c27c5f36d04cdc73899ab99b2872b28eedf0,
+  0xc60962711aef16e7a2ce59f587443ec8b41ef8dcfccb38188adcbddd32f173f,
+  0x2edc09feb267c6b586e62fffe32bf5f16c28b585986b81116684b7e8b40d42d2,
+  0xaf8386859db252ff295a19466d8d100622c90502137aa1cd4c4bcc9656d11e2,
+  0x121f218392f73d4c16abe382102a459e6c080b3ca4eda51a23e651a13a680550,
+  0x1ea38273f5d59e65061f8c775c571ffc75ef67d29405b5e02913cb3019d56f8e,
+  0x9bd2349005699bcc0ac35b627e2f8f08bfc3b0bf30b146f37742ac1556187fe,
+  0x91c505b1e92448c11aea22aaac4d44f6a7f2132f89e91b7f55f9404696c1433,
+  0xb316f1c29689d4f490f7fcdd5e9f2d256d443ba14cda4bb799b0573a931a99f,
+  0x2049251919a8f3f4398188b81f99d2e2d0e3f5359cfa55bdf3aa75fdadf367e7,
+  0x1fe7f9eb6788101908814168e3e4cf7a899a105bf9e584af0064188a4aac55bd,
+  0x158e6579b0388153b0acd630ea94de8f6d966d529c2d01b9e9b1c67c1ec1d570,
+  0x1994f82f27153afb9de2aa3f4be05c4b2c487e393dcedca2566aa6b7fbc3696b,
+  0x1b6250553e8629a5a8a40b568432ce7dbd83c87603eeccc8dad572ccebef6e1d,
+  0x20296940a7d1eded2ae79fd78fa2ac11abb2210bf24542feabee71f0d0d7c9e,
+  0x2553943f9e0ffce9c297cd31c29f1fa5f01883cc9e504fded7a905032c170c89,
+  0x1c56eb362896c2f00ad18faeaf04d577f5feb4db4e077965c38f2eaf5f7be08c,
+  0xed8857205e0680055de7e822b6f7d62ac0f75fef67da1ff7b7735208885cf90,
+  0x118f91185a09355f9d8c3f556367a2bebe79e7d9528a8d72a592681671aac75,
+  0x2a71e6a67abdb25a78010fe6fe0a20d1d84e21cba75ad55937dc1834c13af0c5,
+  0x2327dbc05997ce8575680e4b8929d4e9ed25fb9204277d603061986dbee57e0,
+  0xe05235e01f21cc3f2971c382d18c14e41785a5ec8d447cd93d13281792e6d6e,
+  0x98afa2ea7ff065b2adfc4ab00f3b04496c1e490eab264d2370b107e5a49204e,
+  0x27bddb7bf06eaa63419adae44209dd25a4e35edcb863b009bd34ccc4905d204b,
+  0x2704406bc806f4ccb19085cb9d3771b12ab5ce7aabf0601e9e06a2bc98837ade,
+  0x21c75c54664b9fec86756aa9027261975244f42cf91c9cc0b33c2a62b756a3ef,
+  0x2be84c1d84c16038ea5f933290699daaaa8164c5ea39a02bcbddc66cf69fe8ec,
+  0x2c970e41d48649cf013c676c8c688ac165563720d1d5f32628ac5b239488a96e,
+  0xe1ad2660a2e958daa1f2654b3a37fee60546ca0327150733070742edc806435,
+  0x2060ee7fdf775fc7e389a55376374c9e35d5c8763d597f426304e236f577b829,
+  0x1e0116818c843ed86f09daee0a581af10d52deeadad77656e736eac08e6f0f17,
+  0xa89c1498ef25a383d886bb58424e6940ac399e3e557e9de951a697c54a7576c,
+  0x303743d6f36d925e1097483350f5bd2cb297d4ec9239209f63c516b849a67e6,
+  0x8cf44446d968430232df175d462b9c9b0e2e2c37e8406764cb96c7c3446018d,
+  0x2419811cbaeb3f551b0a9232eee5d53e3769fbcf5239533074375f1b00777f16,
+  0x4237c622626db376b774849dbbe876809082f1b13f5824f4c58369f27fe7b6,
+  0x1e5b490c72eeb607e114a5cb87a8494b178937cdee34b9e8e947342c14454558,
+  0x4265333e59e1a5ff749203cb4a5d1415a72862c61380b1c242d0f32ca15b97a,
+  0x189deaf74258451ac4da682532be43d24a5c683293c1ff7486de26d35d982e86,
+  0x4ec516b0fd42fa53a34905cfdedaad021b36399d03d8263ae08c46af3eca76f,
+  0x2ce1c8a00845a82b3aa1b6642fc988578576cef86196525e6d595c7701ad700d,
+  0x247816fd0d34f9d3b396917478605c94a1c052a6ed663bdc344e7aee9686b6b4,
+  0xc676dbe6c494d5609c444de622bcf60cf555091a507fce86477019daea987d,
+  0x1cb395ade530fc2407aa7b2148d2dfaee30f4ddf258fc149cce3c5cde80a85d5,
+  0x190e1494e3cfdada3b9e65d8fe3c1ec769540da023f9ec2e56259f6a56890b0e,
+  0x18f2941b2335138336c351a792343222a845ee0a2ea5a3b9160c1d6d9b229fe2,
+  0x14ea23ce8b2312e07df57e0aece1da5d2c0e01f757e6a5c86ab5e403688544dc,
+  0x2818ad1005f4efb5d554361a29f85ea10940d6e71f38e8369beff3563a660bbe,
+  0x23ce3a9a522915a281793977b49054c37d65f90b841e0ca90817bab49d79db4a,
+  0x6c2ed2be876309a9b3b44ece37b1c42382927dd04249658a3d41e3f38d5e022,
+  0x18b6740f72d77ebcf642b945ca2ed6c8a9853a3749d7fab6051e4ca36f44fc42,
+  0x1feacb9eb2a6878061374d069a9dae328369ee63e75a1b99cdb06a48b0d9976a,
+  0x1a44ee4565a967647300c75ed2b2543d8d45d5477fd606a356d1073bd13831d2,
+  0x41f3b3b5b1050c16bf3d62d87d5d273b067da484679103231ed65a18da9fe48,
+  0x1fd958cc4fe0a290bd0fbfb8b8a513acb5898d63bc0d7e585b7d081c49eb5659,
+  0x175daba07c5edbf84f09c87a8c34dd73325943a48fc12cb839dca47512561d2e,
+  0x9cf0a4e6e31dc24dfd5a5a27a77833e477d5b2d92cff5fc5ccad9528c43ba78,
+  0x12d49465bd4120cbf78e5a3414d44c6530bc963bd701c54d4c6418a6cebe80b1,
+  0x101b2f2b675804d3b26b2bd1e07c7365af0bfc2edf010916eefb39e28215d44a,
+  0x114fc65faba09a59749e0b5f111930783529a0638456216232cb7e5a339736aa,
+  0x1dff99b52799afc802c2bbf9b67dd044d3cb51017dc4f88358ddd67366d3a9f5,
+  0x290f4496a52dd4dda59edccd7325038bbdc0554ad3a9a0be7931c91062a67027,
+  0x91e8704663c516c3b96721d2033d985089fb992dca48c8ddcb97d7d15c7e188,
+  0x2dce22599de04196a0169fc211d0f9c8692643aa09728eadf6d50bb534c0e323,
+  0x29a7ff0720e170c0e67efde72795328fecef66daada5f0e2ca858a8c6135fd48
+]
+
+/-
+============================================================================
+MDS MATRICES (M)
+These are used in the Mix layer to provide diffusion.
+============================================================================
+-/
+
+-- MDS Matrix for t=2
+def M_t2 : Vector (Vector ℕ 2) 2 := #v[
+  #v[0x66f6f85d6f68a85ec10345351a23a3aaf07f38af8c952a7bceca70bd2af7ad5,
+     0xcc57cdbb08507d62bf67a4493cc262fb6c09d557013fff1f573f431221f8ff9],
+  #v[0x2b9d4b4110c9ae997782e1509b1d0fdb20a7c02bbd8bea7305462b9f8125b1e8,
+     0x1274e649a32ed355a31a6ed69724e1adade857e86eb5c3a121bcd147943203c8]
+]
+
+-- MDS Matrix for t=3
+def M_t3 : Vector (Vector ℕ 3) 3 := #v[
+  #v[0x109b7f411ba0e4c9b2b70caf5c36a7b194be7c11ad24378bfedb68592ba8118b,
+     0x2969f27eed31a480b9c36c764379dbca2cc8fdd1415c3dded62940bcde0bd771,
+     0x143021ec686a3f330d5f9e654638065ce6cd79e28c5b3753326244ee65a1b1a7],
+  #v[0x16ed41e13bb9c0c66ae119424fddbcbc9314dc9fdbdeea55d6c64543dc4903e0,
+     0x2e2419f9ec02ec394c9871c832963dc1b89d743c8c7b964029b2311687b1fe23,
+     0x176cc029695ad02582a70eff08a6fd99d057e12e58e7d7b6b16cdfabc8ee2911],
+  #v[0x2b90bba00fca0589f617e7dcbfe82e0df706ab640ceb247b791a93b74e36736d,
+     0x101071f0032379b697315876690f053d148d4e109f5fb065c8aacc55a0f89bfa,
+     0x19a3fc0a56702bf417ba7fee3802593fa644470307043f7773279cd71d25d5e0]
+]
+
+-- MDS Matrix for t=4
+def M_t4 : Vector (Vector ℕ 4) 4 := #v[
+  #v[0x236d13393ef85cc48a351dd786dd7a1de5e39942296127fd87947223ae5108ad,
+     0x2a75a171563b807db525be259699ab28fe9bc7fb1f70943ff049bc970e841a0c,
+     0x2070679e798782ef592a52ca9cef820d497ad2eecbaa7e42f366b3e521c4ed42,
+     0x2f545e578202c9732488540e41f783b68ff0613fd79375f8ba8b3d30958e7677],
+  #v[0x277686494f7644bbc4a9b194e10724eb967f1dc58718e59e3cedc821b2a7ae19,
+     0x83abff5e10051f078e2827d092e1ae808b4dd3e15ccc3706f38ce4157b6770e,
+     0x2e18c8570d20bf5df800739a53da75d906ece318cd224ab6b3a2be979e2d7eab,
+     0x23810bf82877fc19bff7eefeae3faf4bb8104c32ba4cd701596a15623d01476e],
+  #v[0x23db68784e3f0cc0b85618826a9b3505129c16479973b0a84a4529e66b09c62,
+     0x1a5ad71bbbecd8a97dc49cfdbae303ad24d5c4741eab8b7568a9ff8253a1eb6f,
+     0xfa86f0f27e4d3dd7f3367ce86f684f1f2e4386d3e5b9f38fa283c6aa723b608,
+     0x14fcd5eb0be6d5beeafc4944034cf321c068ef930f10be2207ed58d2a34cdd6],
+  #v[0x1d359d245f286c12d50d663bae733f978af08cdbd63017c57b3a75646ff382c1,
+     0xd745fd00dd167fb86772133640f02ce945004a7bc2c59e8790f725c5d84f0af,
+     0x3f3e6fab791f16628168e4b14dbaeb657035ee3da6b2ca83f0c2491e0b403eb,
+     0xc15fc3a1d5733dd835eae0823e377f8ba4a8b627627cc2bb661c25d20fb52a]
+]
+
+-- MDS Matrix for t=5
+def M_t5 : Vector (Vector ℕ 5) 5 := #v[
+  #v[0x251e7fdf99591080080b0af133b9e4369f22e57ace3cd7f64fc6fdbcf38d7da1,
+     0x2a70b9f1d4bbccdbc03e17c1d1dcdb02052903dc6609ea6969f661b2eb74c839,
+     0x2f69a7198e1fbcc7dea43265306a37ed55b91bff652ad69aa4fa8478970d401d,
+     0xc3f050a6bf5af151981e55e3e1a29a13c3ffa4550bd2514f1afd6c5f721f830,
+     0x2a20e3a4a0e57d92f97c9d6186c6c3ea7c5e55c20146259be2f78c2ccc2e3595],
+  #v[0x25fb50b65acf4fb047cbd3b1c17d97c7fe26ea9ca238d6e348550486e91c7765,
+     0x281154651c921e746315a9934f1b8a1bba9f92ad8ef4b979115b8e2e991ccd7a,
+     0x1c1edd62645b73ad931ab80e37bbb267ba312b34140e716d6a3747594d3052,
+     0xdec54e6dbf75205fa75ba7992bd34f08b2efe2ecd424a73eda7784320a1a36e,
+     0x1049f8210566b51faafb1e9a5d63c0ee701673aed820d9c4403b01feb727a549],
+  #v[0x293d617d7da72102355f39ebf62f91b06deb5325f367a4556ea1e31ed5767833,
+     0x28c2be2f8264f95f0b53c732134efa338ccd8fdb9ee2b45fb86a894f7db36c37,
+     0x15b98ce93e47bc64ce2f2c96c69663c439c40c603049466fa7f9a4b228bfc32b,
+     0x1c482a25a729f5df20225815034b196098364a11f4d988fb7cc75cf32d8136fa,
+     0x2ecac687ef5b4b568002bd9d1b96b4bef357a69e3e86b5561b9299b82d69c8e],
+  #v[0x104d0295ab00c85e960111ac25da474366599e575a9b7edf6145f14ba6d3c1c4,
+     0x21888041e6febd546d427c890b1883bb9b626d8cb4dc18dcc4ec8fa75e530a13,
+     0x12c7e2adfa524e5958f65be2fbac809fcba8458b28e44d9265051de33163cf9c,
+     0x2625ce48a7b39a4252732624e4ab94360812ac2fc9a14a5fb8b607ae9fd8514a,
+     0x2d3a1aea2e6d44466808f88c9ba903d3bdcb6b58ba40441ed4ebcf11bbe1e37b],
+  #v[0xaaa35e2c84baf117dea3e336cd96a39792b3813954fe9bf3ed5b90f2f69c977,
+     0x14ddb5fada0171db80195b9592d8cf2be810930e3ea4574a350d65e2cbff4941,
+     0x2efc2b90d688134849018222e7b8922eaf67ce79816ef468531ec2de53bbd167,
+     0x7f017a7ebd56dd086f7cd4fd710c509ed7ef8e300b9a8bb9fb9f28af710251f,
+     0x14074bb14c982c81c9ad171e4f35fe49b39c4a7a72dbb6d9c98d803bfed65e64]
+]
+
+/-
+============================================================================
+CORE FUNCTIONS
+============================================================================
+-/
+
+-- S-box: x^5 (the Poseidon S-box for BN254)
+def sigma (x : F) : F := x ^ 5
+
+-- Add round constants to state
+def ark {n t : ℕ} (C : Vector ℕ n) (offset : ℕ) (state : Vector F t) : Vector F t :=
+  Vector.ofFn fun i =>
+    if h : offset + i < n then
+      state[i] + (C[offset + i]'h : F)
+    else
+      state[i]
+
+-- Matrix-vector multiplication (Mix layer)
+def mix {t : ℕ} (M : Vector (Vector ℕ t) t) (state : Vector F t) : Vector F t :=
+  Vector.ofFn fun i =>
+    (List.range t).foldl (fun acc j =>
+      if hj : j < t then
+        acc + (M[j]'hj)[i]'(by omega) * state[j]'hj
+      else acc
+    ) 0
+
+-- Apply S-box to all elements (full round)
+def sboxFull {t : ℕ} (state : Vector F t) : Vector F t :=
+  state.map sigma
+
+-- Apply S-box to first element only (partial round)
+def sboxPartial {t : ℕ} (state : Vector F t) (h : 0 < t) : Vector F t :=
+  Vector.ofFn fun i =>
+    if i.val = 0 then sigma (state[0]'h)
+    else state[i]
+
+/-
+============================================================================
+POSEIDON PERMUTATION (Circomlib round structure)
+Round structure: ARK_initial → (SBOX → ARK → MIX)^(Rf/2) → (SBOX_partial → ARK_partial → MIX)^Rp → (SBOX → ARK → MIX)^(Rf/2-1) → SBOX → MIX
+============================================================================
+-/
+
+-- One full round (circomlib style): sbox_full -> ark -> mix
+def fullRoundCircom {n t : ℕ} (C : Vector ℕ n) (M : Vector (Vector ℕ t) t) (offset : ℕ)
+    (state : Vector F t) : Vector F t :=
+  state |> sboxFull |> ark C offset |> mix M
+
+-- One partial round (circomlib style): sbox on first element, ark on first element, mix
+-- Note: In circomlib partial rounds, only first element gets sbox and ark
+def partialRoundCircom {n t : ℕ} (C : Vector ℕ n) (M : Vector (Vector ℕ t) t) (offset : ℕ)
+    (state : Vector F t) (h : 0 < t) : Vector F t :=
+  -- Apply sbox to first element, then add round constant to first element
+  let state' : Vector F t := Vector.ofFn fun i =>
+    if i.val = 0 then
+      let sboxed := sigma (state[0]'h)
+      if hoff : offset < n then
+        sboxed + (C[offset]'hoff : F)
+      else sboxed
+    else state[i]
+  mix M state'
+
+-- Apply n full rounds (circomlib style) starting from given offset
+def fullRoundsCircom {cLen t : ℕ} (C : Vector ℕ cLen) (M : Vector (Vector ℕ t) t)
+    (nRounds : ℕ) (offset : ℕ) (state : Vector F t) : Vector F t :=
+  match nRounds with
+  | 0 => state
+  | r + 1 =>
+    let state' := fullRoundCircom C M offset state
+    fullRoundsCircom C M r (offset + t) state'
+
+-- Apply n partial rounds (circomlib style) starting from given offset
+-- Each partial round uses only 1 constant (for the first element)
+def partialRoundsCircom {cLen t : ℕ} (C : Vector ℕ cLen) (M : Vector (Vector ℕ t) t)
+    (nRounds : ℕ) (offset : ℕ) (state : Vector F t) (h : 0 < t) : Vector F t :=
+  match nRounds with
+  | 0 => state
+  | r + 1 =>
+    let state' := partialRoundCircom C M offset state h
+    partialRoundsCircom C M r (offset + 1) state' h  -- +1 not +t for partial rounds
+
+/-
+============================================================================
+POSEIDON HASH FUNCTIONS (Circomlib compatible)
+
+Round structure for t=2, nRoundsF=8, nRoundsP=56:
+1. Initial ARK: C[0..1]
+2. First half full rounds (4): (SBOX → ARK → MIX), using C[2..9] (4 rounds × 2)
+3. Partial rounds (56): (SBOX_first → ARK_first → MIX), using C[10..65] (56 × 1)
+4. Second half full rounds (3): (SBOX → ARK → MIX), using C[66..71] (3 rounds × 2)
+5. Final: SBOX → MIX (no ARK)
+============================================================================
+-/
+
+-- Poseidon hash for 1 input (t=2)
+def poseidon1 (input : F) : F :=
+  let t := 2
+  let nP := 56  -- N_ROUNDS_P[0]
+  -- Initial state: [initialState, input]
+  let state : Vector F 2 := #v[(0 : F), input]
+  -- Initial ARK with C[0..1]
+  let state := ark C_t2 0 state
+  -- First half full rounds (4): SBOX → ARK → MIX
+  -- Uses C[2..9] (4 rounds × 2 constants)
+  let state := fullRoundsCircom C_t2 M_t2 4 t state
+  -- Partial rounds (56): SBOX_first → ARK_first → MIX
+  -- Uses C[10..65] (56 × 1 constant each)
+  let state := partialRoundsCircom C_t2 M_t2 nP (t + 4*t) state (by omega)
+  -- Second half full rounds (3): SBOX → ARK → MIX
+  -- Uses C[66..71] (3 rounds × 2 constants)
+  let state := fullRoundsCircom C_t2 M_t2 3 (t + 4*t + nP) state
+  -- Final round: just SBOX → MIX (no ARK)
+  let state := state |> sboxFull |> mix M_t2
+  -- Output is first element
+  state[0]
+
+-- Poseidon hash for 2 inputs (t=3)
+def poseidon2 (inputs : Vector F 2) : F :=
+  let t := 3
+  let nRoundsF := 8
+  let nP := 57  -- N_ROUNDS_P[1]
+  -- Initial state: [initialState, input0, input1]
+  let state : Vector F 3 := #v[(0 : F), inputs[0], inputs[1]]
+  -- Initial ARK with C[0..2]
+  let state := ark C_t3 0 state
+  -- First half full rounds (nRoundsF/2 = 4): SBOX → ARK → MIX
+  -- Uses C[3..14] (4 rounds × 3 constants)
+  let state := fullRoundsCircom C_t3 M_t3 4 t state
+  -- Partial rounds (57): SBOX_first → ARK_first → MIX
+  -- Uses C[15..71] (57 × 1 constant each)
+  let state := partialRoundsCircom C_t3 M_t3 nP (t + 4*t) state (by omega)
+  -- Second half full rounds (nRoundsF/2 - 1 = 3): SBOX → ARK → MIX
+  -- Uses C[72..80] (3 rounds × 3 constants)
+  let state := fullRoundsCircom C_t3 M_t3 3 (t + 4*t + nP) state
+  -- Final round: just SBOX → MIX (no ARK)
+  let state := state |> sboxFull |> mix M_t3
+  -- Output is first element
+  state[0]
+
+-- Poseidon hash for 3 inputs (t=4)
+def poseidon3 (inputs : Vector F 3) : F :=
+  let t := 4
+  let nP := 56  -- N_ROUNDS_P[2]
+  -- Initial state: [initialState, input0, input1, input2]
+  let state : Vector F 4 := #v[(0 : F), inputs[0], inputs[1], inputs[2]]
+  -- Initial ARK
+  let state := ark C_t4 0 state
+  -- First half full rounds (4)
+  let state := fullRoundsCircom C_t4 M_t4 4 t state
+  -- Partial rounds (56)
+  let state := partialRoundsCircom C_t4 M_t4 nP (t + 4*t) state (by omega)
+  -- Second half full rounds (3)
+  let state := fullRoundsCircom C_t4 M_t4 3 (t + 4*t + nP) state
+  -- Final round: SBOX → MIX
+  let state := state |> sboxFull |> mix M_t4
+  state[0]
+
+-- Poseidon hash for 4 inputs (t=5)
+def poseidon4 (inputs : Vector F 4) : F :=
+  let t := 5
+  let nP := 60  -- N_ROUNDS_P[3]
+  -- Initial state: [initialState, input0, input1, input2, input3]
+  let state : Vector F 5 := #v[(0 : F), inputs[0], inputs[1], inputs[2], inputs[3]]
+  -- Initial ARK
+  let state := ark C_t5 0 state
+  -- First half full rounds (4)
+  let state := fullRoundsCircom C_t5 M_t5 4 t state
+  -- Partial rounds (60)
+  let state := partialRoundsCircom C_t5 M_t5 nP (t + 4*t) state (by omega)
+  -- Second half full rounds (3)
+  let state := fullRoundsCircom C_t5 M_t5 3 (t + 4*t + nP) state
+  -- Final round: SBOX → MIX
+  let state := state |> sboxFull |> mix M_t5
+  state[0]
+
+/-
+============================================================================
+TEST VECTORS
+These test vectors are from circomlibjs and validate our implementation.
+============================================================================
+-/
+
+-- Test poseidon1 (1 input)
+-- poseidon([1]) = 18586133768512220936620570745912940619677854269274689475585506675881198879027
+example : poseidon1 (1 : F) =
+    (18586133768512220936620570745912940619677854269274689475585506675881198879027 : F) := by
+  native_decide
+
+example : poseidon1 (0 : F) =
+    (19014214495641488759237505126948346942972912379615652741039992445865937985820 : F) := by
+  native_decide
+
+example : poseidon1 (123 : F) =
+    (9904028930859697121695025471312564917337032846528014134060777877259199866166 : F) := by
+  native_decide
+
+
+-- Test vector 1: poseidon([1, 2]) = 0x115cc0f5e7d690413df64c6b9662e9cf2a3617f2743245519e19607a4417189a
+-- In decimal: 7853200120776062878684798364095072458815029376092732009249414926327459813530
+example : poseidon2 #v[(1 : F), 2] =
+    (0x115cc0f5e7d690413df64c6b9662e9cf2a3617f2743245519e19607a4417189a : F) := by
+  native_decide
+
+-- Test vector 2: poseidon([1, 0, 0]) = 16319005924338521988144249782199320915969277491928916027259324394544057385749
+example : poseidon3 #v[(1 : F), 0, 0] =
+    (16319005924338521988144249782199320915969277491928916027259324394544057385749 : F) := by
+  native_decide
+
+-- Test vector 3: poseidon([0, 0, 0]) = 5317387130258456662214331362918410991734007599705406860481038345552731150762
+example : poseidon3 #v[(0 : F), 0, 0] =
+    (5317387130258456662214331362918410991734007599705406860481038345552731150762 : F) := by
+  native_decide
+
+-- Test vector 4: poseidon([1, 2, 3, 4]) = 0x299c867db6c1fdd79dcefa40e4510b9837e60ebb1ce0663dbaa525df65250465
+-- In decimal: 18821383157269793795438455681495246036402687001665670618754263018637548127845
+example : poseidon4 #v[(1 : F), 2, 3, 4] =
+    (0x299c867db6c1fdd79dcefa40e4510b9837e60ebb1ce0663dbaa525df65250465 : F) := by
+  native_decide
+
+end Specs.Poseidon
