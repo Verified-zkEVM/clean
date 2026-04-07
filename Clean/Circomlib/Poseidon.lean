@@ -385,7 +385,7 @@ open Circuit
 
 -- BN254 prime facts (BN254_PRIME is a well-known prime, proofs omitted for performance)
 instance : Fact (Nat.Prime BN254_PRIME) := ⟨by sorry⟩
-instance : Fact (BN254_PRIME > 2) := ⟨by sorry⟩
+instance : Fact (BN254_PRIME > 2) := ⟨by decide⟩
 
 -- Helper to get matrix elements as field elements
 def getM (i j : ℕ) (hi : i < 2) (hj : j < 2) : F BN254_PRIME := (M_t2[i]'hi)[j]'hj
@@ -609,20 +609,20 @@ private lemma applyFullRounds1_output (state : Vector (Expression (F BN254_PRIME
     (applyFullRounds1 state).output n =
       (FullRound_t2.main fullRoundConstants1[2].1 fullRoundConstants1[2].2 m00 m01 m10 m11
         default (n + 20)).1 := by
-  simp only [applyFullRounds1, circuit_norm, fullRound_body_localLength, FullRound_t2.circuit]
+  simp only [applyFullRounds1, circuit_norm, FullRound_t2.circuit]
 
 private lemma applyFullRounds2_output (state : Vector (Expression (F BN254_PRIME)) 2) (n : ℕ) :
     (applyFullRounds2 state).output n =
       (FullRound_t2.main fullRoundConstants2[2].1 fullRoundConstants2[2].2 m00 m01 m10 m11
         default (n + 20)).1 := by
-  simp only [applyFullRounds2, circuit_norm, fullRound_body_localLength, FullRound_t2.circuit]
+  simp only [applyFullRounds2, circuit_norm, FullRound_t2.circuit]
 
 private lemma applyPartialRoundsOpt_output (state : Vector (Expression (F BN254_PRIME)) 2) (n : ℕ) :
     (applyPartialRoundsOpt state).output n =
       (PartialRoundOpt_t2.main partialRoundConstants[55].1 partialRoundConstants[55].2.1
         partialRoundConstants[55].2.2.1 partialRoundConstants[55].2.2.2
         default (n + 330)).1 := by
-  simp only [applyPartialRoundsOpt, circuit_norm, partialRound_body_localLength,
+  simp only [applyPartialRoundsOpt, circuit_norm,
              PartialRoundOpt_t2.circuit]
 
 -- Round body output normalization: reduce (main ... default n).1 to concrete var indices.
@@ -671,7 +671,7 @@ private lemma ark_t2_eq (offset : ℕ) (ho : offset + 1 < 72) (state : Vector (F
   have : i = 0 ∨ i = 1 := by omega
   rcases this with rfl | rfl
   · simp [Specs.Poseidon.ark, Vector.getElem_ofFn,
-      dif_pos (show offset + 0 < 72 by omega), dif_pos (show offset < 72 by omega)]
+      dif_pos (show offset < 72 by omega)]
     rfl
   · simp [Specs.Poseidon.ark, Vector.getElem_ofFn, dif_pos ho]
     rfl
@@ -709,7 +709,7 @@ private lemma vec2_map {α β : Type*} (f : α → β) (a b : α) :
   apply Vector.ext
   intro i hi
   have : i = 0 ∨ i = 1 := by omega
-  rcases this with rfl | rfl <;> simp [Vector.getElem_map]
+  rcases this with rfl | rfl <;> simp
 
 -- Symbolic unfolding of mixS_t2
 private lemma mixS_t2_eq (sRound : ℕ) (hr : sRound < 56) (state : Vector (F BN254_PRIME) 2) :
@@ -783,7 +783,7 @@ private lemma applyFullRounds1_spec
   obtain ⟨h1a, h1b⟩ := h_step 0 (by omega)
   obtain ⟨h2a, h2b⟩ := h_step 1 (by omega)
   -- Normalize all the offset arithmetic and close
-  simp +arith only [vec2_get0, vec2_get1] at h0a h0b h1a h1b h2a h2b ⊢
+  simp +arith only [] at h0a h0b h1a h1b h2a h2b ⊢
   -- Rewrite env.get values using the round specs (circuit → spec substitution)
   rw [h2a, h2b, h1a, h1b, h0a, h0b]
   -- Clean up remaining list/pair access
@@ -924,12 +924,12 @@ private lemma applyPartialRoundsOpt_spec
     simp only [rs, partialRoundState]
     rcases i with _ | k
     · -- i = 0
-      simp only [partialRoundState, show (0 + 1 : ℕ) ≠ 0 from by omega, ↓reduceIte,
+      simp only [show (0 + 1 : ℕ) ≠ 0 from by omega, ↓reduceIte,
                   show (0 + 1 - 1 : ℕ) = 0 from by omega, Nat.zero_mul, Nat.zero_add,
                   Vector.getElem_map, vec2_get0, vec2_get1]
       exact ⟨h0a, h0b⟩
     · -- i = k+1
-      simp only [partialRoundState, show k + 1 ≠ 0 from by omega, show k + 1 + 1 ≠ 0 from by omega,
+      simp only [show k + 1 ≠ 0 from by omega, show k + 1 + 1 ≠ 0 from by omega,
                   ↓reduceIte, vec2_get0, vec2_get1]
       obtain ⟨ha, hb⟩ := h_step k (by omega)
       simp +arith only [] at ha hb ⊢
@@ -983,13 +983,13 @@ private lemma ark_bridge
         #v[Expression.const 0, input_var]).operations i0)) :
     Specs.Poseidon.ark C_t2 0 #v[(0 : F BN254_PRIME), input] =
       #v[env.get i0, env.get (i0 + 1)] := by
-  simp only [Ark_t2.main, circuit_norm, vec2_get0, vec2_get1] at h
+  simp only [Ark_t2.main, circuit_norm] at h
   obtain ⟨ha0, ha1⟩ := h
   rw [h_input] at ha1
   rw [Vector.ext_iff]; intro j hj; have : j = 0 ∨ j = 1 := by omega
   rcases this with rfl | rfl
-  · simp [Specs.Poseidon.ark, dif_pos (by omega : (0 : ℕ) + 0 < 72)]; exact ha0.symm
-  · simp [Specs.Poseidon.ark, dif_pos (by omega : (0 : ℕ) + 1 < 72)]; exact ha1.symm
+  · simp [Specs.Poseidon.ark]; exact ha0.symm
+  · simp [Specs.Poseidon.ark]; exact ha1.symm
 
 set_option maxHeartbeats 800000 in
 private lemma transition_bridge
@@ -999,19 +999,18 @@ private lemma transition_bridge
     #v[env.get (n + 10), env.get (n + 11)] =
       Specs.Poseidon.mix P_t2 (Specs.Poseidon.ark C_t2 8 (Specs.Poseidon.sboxFull
         #v[env.get n, env.get (n + 1)])) := by
-  simp only [transitionRound, Sigma.main, circuit_norm,
-             vec2_get0, vec2_get1, Vector.getElem_map] at h
+  simp only [transitionRound, Sigma.main, circuit_norm] at h
   simp +arith only [] at h
   rw [Vector.ext_iff]; intro j hj; have : j = 0 ∨ j = 1 := by omega
   rcases this with rfl | rfl
-  · simp only [Specs.Poseidon.sboxFull, Specs.Poseidon.sigma,
+  · simp only [Specs.Poseidon.sboxFull,
                ark_t2_eq 8 (by omega), mix_P_t2_eq, vec2_get0, vec2_get1]
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8,h9,h10⟩ := h
-    simp only [h9, h10, h7, h8, h3, h6, h2, h5, h1, h4]; ring_nf; ac_rfl
-  · simp only [Specs.Poseidon.sboxFull, Specs.Poseidon.sigma,
+    simp only [h9, h7, h8, h3, h6, h2, h5, h1, h4]; ring_nf; ac_rfl
+  · simp only [Specs.Poseidon.sboxFull,
                ark_t2_eq 8 (by omega), mix_P_t2_eq, vec2_get0, vec2_get1]
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8,h9,h10⟩ := h
-    simp only [h9, h10, h7, h8, h3, h6, h2, h5, h1, h4]; ring_nf; ac_rfl
+    simp only [h10, h7, h8, h3, h6, h2, h5, h1, h4]; ring_nf; ac_rfl
 
 set_option maxHeartbeats 800000 in
 private lemma final_round_bridge
@@ -1021,19 +1020,18 @@ private lemma final_round_bridge
     #v[env.get (n + 8), env.get (n + 9)] =
       Specs.Poseidon.mix M_t2 (Specs.Poseidon.sboxFull
         #v[env.get n, env.get (n + 1)]) := by
-  simp only [finalRound, Sigma.main, circuit_norm,
-             vec2_get0, vec2_get1, Vector.getElem_map] at h
+  simp only [finalRound, Sigma.main, circuit_norm] at h
   simp +arith only [] at h
   rw [Vector.ext_iff]; intro j hj; have : j = 0 ∨ j = 1 := by omega
   rcases this with rfl | rfl
-  · simp only [Specs.Poseidon.sboxFull, Specs.Poseidon.sigma,
-               mix_t2_eq, vec2_get0, vec2_get1]
+  · simp only [Specs.Poseidon.sboxFull,
+               mix_t2_eq, vec2_get0]
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8⟩ := h
-    simp only [h7, h8, h5, h6, h3, h4, h2, h1]; ring_nf; ac_rfl
-  · simp only [Specs.Poseidon.sboxFull, Specs.Poseidon.sigma,
-               mix_t2_eq, vec2_get0, vec2_get1]
+    simp only [h7, h5, h6, h3, h4, h2, h1]; ring_nf; ac_rfl
+  · simp only [Specs.Poseidon.sboxFull,
+               mix_t2_eq, vec2_get1]
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8⟩ := h
-    simp only [h7, h8, h5, h6, h3, h4, h2, h1]; ring_nf; ac_rfl
+    simp only [h8, h5, h6, h3, h4, h2, h1]; ring_nf; ac_rfl
 
 -- Specialized wrappers for poseidon1_soundness:
 -- These take the full `(main input_var).operations i0` hypothesis and absorb
@@ -1094,7 +1092,7 @@ private lemma final_round_bridge_p1
 set_option maxHeartbeats 4000000 in
 private lemma main_output_eq (input_var : Expression (F BN254_PRIME)) (i0 : ℕ) :
     (main input_var).output i0 = var ⟨i0 + 414⟩ := by
-  simp only [main, bind_output_eq, bind_localLength_eq, pure_output_eq,
+  simp only [main, bind_output_eq, pure_output_eq,
              Ark_t2_main_output_eq, Ark_t2_main_localLength_eq,
              applyFullRounds1_output, applyFullRounds1_localLength,
              transitionRound_output_eq, transitionRound_localLength_eq,
@@ -1102,7 +1100,7 @@ private lemma main_output_eq (input_var : Expression (F BN254_PRIME)) (i0 : ℕ)
              applyFullRounds2_output, applyFullRounds2_localLength,
              finalRound_output_eq,
              fullRound_main_output, partialRound_main_output,
-             vec2_get0, vec2_get1]
+             vec2_get0]
 
 -- Standalone soundness theorem with its own heartbeat budget
 set_option linter.constructorNameAsVariable false in
@@ -1138,11 +1136,11 @@ private theorem poseidon1_soundness :
   -- elaboration of vector-typed terms in this theorem.
   simp only [Ark_t2_main_output_eq, Ark_t2_main_localLength_eq,
              applyFullRounds1_output, applyFullRounds1_localLength,
-             applyFullRounds2_output, applyFullRounds2_localLength,
+             applyFullRounds2_output,
              applyPartialRoundsOpt_output, applyPartialRoundsOpt_localLength,
              transitionRound_output_eq, transitionRound_localLength_eq,
              fullRound_main_output, partialRound_main_output,
-             vec2_map, Expression.eval, vec2_get0, vec2_get1] at hs1 hs3 hs4
+             vec2_map, Expression.eval] at hs1 hs3 hs4
   simp +arith only [] at hs1 hs3 hs4
   -- Reduce the goal LHS to env.get (i0 + 414) via the pre-packaged lemma.
   rw [main_output_eq]
