@@ -93,6 +93,7 @@ def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint
   let (acc, x) ← readCurrRow
   let output ← table.step acc x
   let (output', _) ← getNextRow
+  -- TODO make this more efficient by assigning variables as long as they don't come from the input
   output' === output
 
 def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F) : SingleRowConstraint (ProvablePair State Input) F := do
