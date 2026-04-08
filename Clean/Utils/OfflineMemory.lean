@@ -43,7 +43,7 @@ abbrev timestamp_ordering (x y : MemoryAccess) := match x, y with
   A memory access list is timestamp sorted if the timestamps are strictly decreasing.
 -/
 def MemoryAccessList.isTimestampSorted (accesses : MemoryAccessList) : Prop :=
-  accesses.Sorted timestamp_ordering
+  accesses.Pairwise timestamp_ordering
 
 def TimestampSortedMemoryAccessList := {accesses : MemoryAccessList // accesses.isTimestampSorted}
 
@@ -170,7 +170,7 @@ instance {x y : MemoryAccess} : Decidable (address_strict_timestamp_ordering x y
 -/
 @[reducible]
 def MemoryAccessList.isAddressTimestampSorted (accesses : MemoryAccessList) : Prop :=
-  accesses.Sorted address_timestamp_ordering
+  accesses.Pairwise address_timestamp_ordering
 
 /--
   A memory access list is strictly address-timestamp sorted if the addresses are sorted, and for
@@ -178,7 +178,7 @@ def MemoryAccessList.isAddressTimestampSorted (accesses : MemoryAccessList) : Pr
 -/
 @[reducible]
 def MemoryAccessList.isAddressStrictTimestampSorted (accesses : MemoryAccessList) : Prop :=
-  accesses.Sorted address_strict_timestamp_ordering
+  accesses.Pairwise address_strict_timestamp_ordering
 
 def AddressSortedMemoryAccessList := {accesses : MemoryAccessList // accesses.isAddressTimestampSorted}
 
@@ -189,8 +189,8 @@ def MemoryAccessList.addressTimestampSort (accesses : MemoryAccessList) : Memory
   List.insertionSort address_timestamp_ordering accesses
 
 theorem MemoryAccessList.addressTimestampSort_sorted (accesses : MemoryAccessList) :
-    (MemoryAccessList.addressTimestampSort accesses).Sorted address_timestamp_ordering := by
-  apply List.sorted_insertionSort
+    (MemoryAccessList.addressTimestampSort accesses).Pairwise address_timestamp_ordering := by
+  apply List.pairwise_insertionSort
 
 theorem MemoryAccessList.addressTimestampSort_perm (accesses : MemoryAccessList) :
     (MemoryAccessList.addressTimestampSort accesses).Perm accesses := by
@@ -234,12 +234,12 @@ theorem MemoryAccessList.isAddressTimestampSorted_of_cons (head : MemoryAccess) 
     (h : isAddressTimestampSorted (head :: tail)) :
     isAddressTimestampSorted tail := by
   simp only [isAddressTimestampSorted] at *
-  exact List.Sorted.of_cons h
+  exact List.Pairwise.of_cons h
 
 theorem MemoryAccessList.noTimestampDup_of_TimestampSorted
     (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
     accesses.Notimestampdup := by
-  simp only [Notimestampdup, isTimestampSorted, List.Sorted] at *
+  simp only [Notimestampdup, isTimestampSorted, List.Pairwise] at *
   have sort_imp_nodup : ∀ {x y : MemoryAccess}, timestamp_ordering x y → timestamps_neq x y := by
     intros x y hxy
     obtain ⟨t_x, a_x, _r_x, _w_x⟩ := x
@@ -257,15 +257,15 @@ def MemoryAccessList.lastWriteValue (accesses : MemoryAccessList) (h : accesses.
       -- since the list is timestamp sorted, the first operation we find for this address is the most recent one
       writeValue
     else
-      MemoryAccessList.lastWriteValue rest (List.Sorted.of_cons h) addr
+      MemoryAccessList.lastWriteValue rest (List.Pairwise.of_cons h) addr
 
 -- now, we need a way to express that the memory access list is consistent
 def MemoryAccessList.isConsistentOnline (accesses : MemoryAccessList) (h : accesses.isTimestampSorted) : Prop := match accesses with
   | [] => True -- no memory access is trivially consistent
   | (_timestamp, addr, readValue, _writeValue) :: rest =>
     -- here we need to check that the readValue is consistent with the previous writes to the same address
-    readValue = MemoryAccessList.lastWriteValue rest (List.Sorted.of_cons h) addr
-    ∧ MemoryAccessList.isConsistentOnline rest (List.Sorted.of_cons h)
+    readValue = MemoryAccessList.lastWriteValue rest (List.Pairwise.of_cons h) addr
+    ∧ MemoryAccessList.isConsistentOnline rest (List.Pairwise.of_cons h)
 
 example : MemoryAccessList.isConsistentOnline [] (by simp [MemoryAccessList.isTimestampSorted]) := by trivial
 
@@ -300,7 +300,7 @@ theorem MemoryAccessList.filterAddress_sorted (accesses : MemoryAccessList)
     (h : accesses.isTimestampSorted) (addr : ℕ) :
     (MemoryAccessList.filterAddress accesses addr).isTimestampSorted := by
   simp only [isTimestampSorted]
-  apply List.Sorted.filter
+  apply List.Pairwise.filter
   exact h
 
 theorem MemoryAccessList.filterAddress_cons (head : MemoryAccess) (tail : MemoryAccessList) (addr : ℕ) :
@@ -327,7 +327,7 @@ def MemoryAccessList.isConsistentSingleAddress (accesses : MemoryAccessList) (h_
   -- if there are multiple accesses, the read of the most recent access must equal the write of the previous access
   | (_t2, _addr2, readValue2, _writeValue2) :: (t1, addr1, readValue1, writeValue1) :: rest =>
     readValue2 = writeValue1 ∧
-    MemoryAccessList.isConsistentSingleAddress ((t1, addr1, readValue1, writeValue1) :: rest) (List.Sorted.of_cons h_sorted)
+    MemoryAccessList.isConsistentSingleAddress ((t1, addr1, readValue1, writeValue1) :: rest) (List.Pairwise.of_cons h_sorted)
 
 /--
   If a memory access list contains only accesses to a single address, then the following two consistency are equivalent:
@@ -354,7 +354,7 @@ theorem MemoryAccessList.isConsistentSingleAddress_iff (accesses : MemoryAccessL
         simp [isConsistentOnline, isConsistentSingleAddress, lastWriteValue] at ⊢ h h_eq ih
         have h_sorted' : isTimestampSorted ((t1, a1, r1, w1) :: tail2) := by
           unfold isTimestampSorted at h_sorted
-          exact List.Sorted.of_cons h_sorted
+          exact List.Pairwise.of_cons h_sorted
         obtain ⟨h_eq1, h_eq2, h_eq3⟩ := h_eq
         specialize ih h_sorted' h_eq2 h_eq3
         rw [←ih]
@@ -371,7 +371,7 @@ theorem MemoryAccessList.isConsistentSingleAddress_iff (accesses : MemoryAccessL
         simp [isConsistentOnline, isConsistentSingleAddress, lastWriteValue] at ⊢ h h_eq ih
         have h_sorted' : isTimestampSorted ((t1, a1, r1, w1) :: tail2) := by
           unfold isTimestampSorted at h_sorted
-          exact List.Sorted.of_cons h_sorted
+          exact List.Pairwise.of_cons h_sorted
         obtain ⟨h_eq1, h_eq2, h_eq3⟩ := h_eq
         specialize ih h_sorted' h_eq2 h_eq3
         rw [ih]
@@ -396,10 +396,10 @@ theorem MemoryAccessList.lastWriteValue_filter (accesses : MemoryAccessList)
     · simp_all only [↓reduceIte, lastWriteValue]
     · have h_sorted_tail : isTimestampSorted tail := by
         unfold isTimestampSorted at h_sorted
-        exact List.Sorted.of_cons h_sorted
+        exact List.Pairwise.of_cons h_sorted
       have h_sorted_tail' : (MemoryAccessList.filterAddress tail addr).isTimestampSorted := by
         simp only [filterAddress]
-        apply List.Sorted.filter
+        apply List.Pairwise.filter
         exact h_sorted_tail
       specialize ih h_sorted_tail h_sorted_tail'
       simp only [h_addr, ↓reduceIte, ih]
@@ -419,7 +419,7 @@ theorem MemoryAccessList.isConsistentOnline_filter_of_consistentOnline (accesses
     simp [filterAddress, List.filter_cons, isConsistentOnline] at ⊢ h_consistent ih
     have h_sorted' : isTimestampSorted tail := by
       unfold isTimestampSorted at h_sorted
-      exact List.Sorted.of_cons h_sorted
+      exact List.Pairwise.of_cons h_sorted
     -- is the current address the one we are filtering for?
     by_cases h_addr : a = addr
     ·
@@ -431,7 +431,7 @@ theorem MemoryAccessList.isConsistentOnline_filter_of_consistentOnline (accesses
       · simp [filterAddress, h_addr]
       · have h_sorted_tail' : (MemoryAccessList.filterAddress tail addr).isTimestampSorted := by
           simp only [filterAddress]
-          apply List.Sorted.filter
+          apply List.Pairwise.filter
           exact h_sorted'
         rw [h_addr]
         exact h_sorted_tail'
@@ -439,7 +439,7 @@ theorem MemoryAccessList.isConsistentOnline_filter_of_consistentOnline (accesses
 
 theorem MemoryAccessList.isTimestampSorted_cons (head : MemoryAccess) (tail : MemoryAccessList) :
     isTimestampSorted (head :: tail) → isTimestampSorted tail := by
-  simp_all only [isTimestampSorted, List.sorted_cons, implies_true]
+  simp_all only [isTimestampSorted, List.pairwise_cons, implies_true]
 
 theorem MemoryAccessList.isConsistentSingleAddress_cons (head : MemoryAccess) (tail : MemoryAccessList)
     (h_sorted : isTimestampSorted (head :: tail)) (h_sorted' : tail.isTimestampSorted)
@@ -472,7 +472,7 @@ theorem MemoryAccessList.isConsistentSingleAddress_cons_forall (head : MemoryAcc
     (h_sorted : isTimestampSorted (head :: tail))
     : (∀ addr : ℕ, (filterAddress (head :: tail) addr).isConsistentSingleAddress (MemoryAccessList.filterAddress_sorted (head :: tail) h_sorted addr)) →
     (∀ addr : ℕ, isConsistentSingleAddress (filterAddress tail addr) (MemoryAccessList.filterAddress_sorted tail (by simp_all only [isTimestampSorted,
-      List.sorted_cons]) addr)) := by
+      List.pairwise_cons]) addr)) := by
   intro h addr'
   obtain ⟨t_head, a_head, r_head, w_head⟩ := head
   simp_all [MemoryAccessList.filterAddress_cons]
@@ -482,10 +482,10 @@ theorem MemoryAccessList.isConsistentSingleAddress_cons_forall (head : MemoryAcc
     rw [h_addr] at h_sorted
     have tail_sorted : tail.isTimestampSorted := by
       unfold isTimestampSorted at h_sorted
-      exact List.Sorted.of_cons h_sorted
+      exact List.Pairwise.of_cons h_sorted
     have filtered_tail_sorted : (MemoryAccessList.filterAddress tail addr').isTimestampSorted := by
       simp only [filterAddress]
-      apply List.Sorted.filter
+      apply List.Pairwise.filter
       exact tail_sorted
 
     have filter_eq_head : MemoryAccessList.filterAddress (⟨t_head, addr', r_head, w_head⟩ :: tail) addr' =
@@ -524,7 +524,7 @@ theorem MemoryAccessList.isConsistent_iff_all_single_address (accesses : MemoryA
       obtain ⟨t, a, r, w⟩ := head
       have h_sorted' : isTimestampSorted tail := by
         unfold isTimestampSorted at h_sorted
-        exact List.Sorted.of_cons h_sorted
+        exact List.Pairwise.of_cons h_sorted
       specialize ih h_sorted'
       have h_tail := MemoryAccessList.isConsistentSingleAddress_cons_forall (t, a, r, w) tail h_sorted h
       specialize ih h_tail
@@ -532,14 +532,14 @@ theorem MemoryAccessList.isConsistent_iff_all_single_address (accesses : MemoryA
 
       have h_tail_filter_sorted : (MemoryAccessList.filterAddress tail a).isTimestampSorted := by
         simp only [filterAddress]
-        apply List.Sorted.filter
+        apply List.Pairwise.filter
         exact h_sorted'
 
       have h_filtered_sorted : MemoryAccessList.isTimestampSorted ((t, a, r, w) :: (MemoryAccessList.filterAddress tail a)) := by
-        simp only [isTimestampSorted, List.sorted_cons, filterAddress, List.mem_filter,
+        simp only [isTimestampSorted, List.pairwise_cons, filterAddress, List.mem_filter,
           and_imp] at ⊢ h_sorted
         simp_all only [implies_true, true_and]
-        apply List.Sorted.filter
+        apply List.Pairwise.filter
         assumption
 
       have h' := MemoryAccessList.lastWriteValue_filter tail h_sorted' a h_tail_filter_sorted
@@ -565,7 +565,7 @@ def MemoryAccessList.isConsistentOffline (accesses : MemoryAccessList) (h_sorted
   | (_timestamp, _addr, readValue, _writeValue) :: [] => readValue = 0
   | (_t2, addr2, readValue2, _writeValue2) :: (t1, addr1, readValue1, writeValue1) :: rest =>
     (if addr1 = addr2 then readValue2 = writeValue1 else readValue2 = 0) ∧
-    MemoryAccessList.isConsistentOffline ((t1, addr1, readValue1, writeValue1) :: rest) (List.Sorted.of_cons h_sorted)
+    MemoryAccessList.isConsistentOffline ((t1, addr1, readValue1, writeValue1) :: rest) (List.Pairwise.of_cons h_sorted)
 
 theorem MemoryAccessList.filterAddress_sorted_from_addressTimestampSorted
     (accesses : MemoryAccessList)
@@ -581,14 +581,14 @@ theorem MemoryAccessList.filterAddress_sorted_from_addressTimestampSorted
     obtain ⟨t, a, r, w⟩ := head
     simp only [List.filter_cons]
     split_ifs with h_addr
-    · simp only [List.sorted_cons]
+    · simp only [List.pairwise_cons]
       constructor
       · intro z hz
         simp only [List.mem_filter] at hz
         obtain ⟨hz_mem, hz_addr⟩ := hz
         obtain ⟨t_z, a_z, r_z, w_z⟩ := z
         simp only [decide_eq_true_eq] at hz_addr
-        simp only [List.sorted_cons] at h_strict
+        simp only [List.pairwise_cons] at h_strict
         have h_ord := h_strict.1 (t_z, a_z, r_z, w_z) hz_mem
         simp only [address_strict_timestamp_ordering] at h_ord
         simp only [decide_eq_true_eq] at h_addr
@@ -598,16 +598,16 @@ theorem MemoryAccessList.filterAddress_sorted_from_addressTimestampSorted
         exact h_ord
       · apply ih
         · simp only [isAddressTimestampSorted] at h_sorted ⊢
-          exact List.Sorted.of_cons h_sorted
+          exact List.Pairwise.of_cons h_sorted
         · simp only [Notimestampdup] at h_nodup ⊢
           exact List.Pairwise.of_cons h_nodup
-        · exact List.Sorted.of_cons h_strict
+        · exact List.Pairwise.of_cons h_strict
     · apply ih
       · simp only [isAddressTimestampSorted] at h_sorted ⊢
-        exact List.Sorted.of_cons h_sorted
+        exact List.Pairwise.of_cons h_sorted
       · simp only [Notimestampdup] at h_nodup ⊢
         exact List.Pairwise.of_cons h_nodup
-      · exact List.Sorted.of_cons h_strict
+      · exact List.Pairwise.of_cons h_strict
 
 theorem MemoryAccessList.isConsistentSingleAddress_filterAddress_forall_of_cons
     (head : MemoryAccess) (tail : MemoryAccessList)
@@ -649,7 +649,7 @@ theorem MemoryAccessList.filterAddress_empty_when_address_changes
   subst h_eq
   -- Now we have ax = a1 and x ∈ (second :: tail)
   -- Get the ordering between (t1, ax, r1, w1) and (t2, a2, r2, w2)
-  simp only [isAddressTimestampSorted, List.sorted_cons] at h_sorted
+  simp only [isAddressTimestampSorted, List.pairwise_cons] at h_sorted
   have h_ord_first := h_sorted.1 (t2, a2, r2, w2) List.mem_cons_self
   simp only [address_timestamp_ordering] at h_ord_first
   split_ifs at h_ord_first with h_eq_addr
@@ -837,7 +837,7 @@ theorem MemoryAccessList.filterAddress_addressTimestampSort_eq
   -- Two permutations that are sorted with strict ordering must be equal
   have h_eq : accesses.filterAddress addr = accesses.addressTimestampSort.filterAddress addr := by
     simp only [isTimestampSorted] at h_sorted1 h_sorted2
-    exact List.eq_of_perm_of_sorted h_filter_perm h_sorted1 h_sorted2
+    exact h_filter_perm.eq_of_pairwise' h_sorted1 h_sorted2
   -- Since the lists are equal, the iff is trivial
   simp only [h_eq]
 
@@ -877,9 +877,8 @@ lemma MemoryAccessList.eq_of_perm_of_sorted {l1 l2 l3 : MemoryAccessList} (h_l1_
     (h_perm1 : l1.Perm l2) (h_perm2 : l1.Perm l3) : l2 = l3 := by
   simp [isAddressTimestampSorted] at *
   rw [List.perm_comm] at h_perm1
-  have l1_nodup := List.Sorted.nodup h_l1_sorted
+  have l1_nodup := List.Pairwise.nodup h_l1_sorted
 
-  have thm1 := List.Sorted.insertionSort_eq h_l2_sorted
   have h_l2_nodup := (List.Perm.nodup_iff h_perm1).mpr l1_nodup
   have h_l3_nodup := (List.Perm.nodup_iff h_perm2).mp l1_nodup
 
@@ -891,7 +890,7 @@ lemma MemoryAccessList.eq_of_perm_of_sorted {l1 l2 l3 : MemoryAccessList} (h_l1_
 
   have l2_strict_sorted := MemoryAccessList.addressStrictTimestampSorted_of_AddressTimestampSorted_noTimestampDup l2 h_l2_sorted l2_notimestampdup
   have l3_strict_sorted := MemoryAccessList.addressStrictTimestampSorted_of_AddressTimestampSorted_noTimestampDup l3 h_l3_sorted l3_notimestampdup
-  exact List.eq_of_perm_of_sorted l2_perm_l3 l2_strict_sorted l3_strict_sorted
+  exact l2_perm_l3.eq_of_pairwise' l2_strict_sorted l3_strict_sorted
 /--
   This is the main theorem of this file.
 

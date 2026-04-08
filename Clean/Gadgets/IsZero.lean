@@ -97,7 +97,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       apply False.elim
       apply h_last
       aesop
-    · aesop
+    · next h_ex h_all => exfalso; exact h_ex (fun i hi => h_all i (by omega))
 
 theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
   circuit_proof_start

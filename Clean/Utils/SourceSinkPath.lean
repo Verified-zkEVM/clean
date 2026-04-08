@@ -799,7 +799,7 @@ lemma getLast_mem {α : Type*} (l : List α) (x : α) (h_last : l.getLast? = som
   have h_ne : l ≠ [] := by
     intro h_eq
     simp [h_eq] at h_last
-  rw [List.getLast?_eq_getLast h_ne] at h_last
+  rw [List.getLast?_eq_some_getLast h_ne] at h_last
   cases h_last
   exact List.getLast_mem h_ne
 
