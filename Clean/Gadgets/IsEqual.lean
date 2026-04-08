@@ -34,7 +34,7 @@ Uses three constraints per field element (IsZeroField on each component differen
 def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
   let (x, y) := input
   let d := diffs x y
-  IsZero.main (fromVars d)
+  IsZero.circuit (fromVars d)
 
 instance elaborated : ElaboratedCircuit F (ProvablePair α α) field where
   main
