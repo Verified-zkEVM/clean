@@ -100,7 +100,22 @@ def induct {motive : List (FlatOperation F) → Sort*}
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup interact ops)
   | .interact i :: ops => interact i ops (induct empty witness assert lookup interact ops)
 
-omit [Field F] in
+omit [Field F] in @[circuit_norm]
+lemma witnessOperations_append {ops1 ops2 : List (FlatOperation F)} :
+    witnessOperations (ops1 ++ ops2) = witnessOperations ops1 ++ witnessOperations ops2 := by
+  induction ops1 using FlatOperation.induct <;> simp_all [witnessOperations]
+
+omit [Field F] in @[circuit_norm]
+lemma constraints_append {ops1 ops2 : List (FlatOperation F)} :
+    constraints (ops1 ++ ops2) = constraints ops1 ++ constraints ops2 := by
+  induction ops1 using FlatOperation.induct <;> simp_all [constraints]
+
+omit [Field F] in @[circuit_norm]
+lemma lookups_append {ops1 ops2 : List (FlatOperation F)} :
+    lookups (ops1 ++ ops2) = lookups ops1 ++ lookups ops2 := by
+  induction ops1 using FlatOperation.induct <;> simp_all [lookups]
+
+omit [Field F] in @[circuit_norm]
 lemma interactions_append {ops1 ops2 : List (FlatOperation F)} :
     interactions (ops1 ++ ops2) = interactions ops1 ++ interactions ops2 := by
   induction ops1 using FlatOperation.induct <;> simp_all [interactions]
@@ -795,18 +810,6 @@ def shallowChannels (ops : Operations F) : List (RawChannel F) :=
 
 def channels (ops : Operations F) : List (RawChannel F) := ops.interactions.map (·.channel)
 
-lemma interactions_toFlat {ops : Operations F} :
-    FlatOperation.interactions ops.toFlat = ops.interactions := by
-  induction ops using Operations.induct with
-  | empty | witness | assert | lookup | interact =>
-    simp_all [interactions, FlatOperation.interactions, Operations.toFlat]
-  | subcircuit s ops ih =>
-    simp_all [interactions, FlatOperation.interactions_append, Operations.toFlat]
-
-lemma channels_toFlat {ops : Operations F} :
-    FlatOperation.channels ops.toFlat = ops.channels := by
-  simp [channels, FlatOperation.channels, interactions_toFlat]
-
 -- TODO rename to ShallowGuarantees
 @[circuit_norm]
 def Guarantees (env : Environment F) (ops : Operations F) : Prop :=
@@ -1106,4 +1109,40 @@ lemma shallowChannels_eq_interactions_map {ops : Operations F} :
 @[circuit_norm] theorem shallowChannels_append (ops1 ops2 : Operations F) :
     shallowChannels (ops1 ++ ops2) = shallowChannels ops1 ++ shallowChannels ops2 := by
   simp [shallowChannels_eq_interactions_map, shallowInteractions_append]
+
+@[circuit_norm] lemma toFlat_nil : toFlat ([] : Operations F) = [] := rfl
+@[circuit_norm] lemma toFlat_witness (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+  toFlat (.witness m c :: ops) = .witness m c :: toFlat ops := rfl
+@[circuit_norm] lemma toFlat_assert (e : Expression F) (ops : Operations F) :
+  toFlat (.assert e :: ops) = .assert e :: toFlat ops := rfl
+@[circuit_norm] lemma toFlat_lookup (l : Lookup F) (ops : Operations F) :
+  toFlat (.lookup l :: ops) = .lookup l :: toFlat ops := rfl
+@[circuit_norm] lemma toFlat_interact (i : AbstractInteraction F) (ops : Operations F) :
+  toFlat (.interact i :: ops) = .interact i :: toFlat ops := rfl
+@[circuit_norm] lemma toFlat_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  toFlat (.subcircuit s :: ops) = s.ops.toFlat ++ toFlat ops := rfl
+
+@[circuit_norm] lemma witnessOperations_toFlat {ops : Operations F} :
+    FlatOperation.witnessOperations ops.toFlat = ops.witnessOperations := by
+  induction ops using Operations.induct <;>
+  simp_all [circuit_norm, FlatOperation.witnessOperations]
+
+@[circuit_norm] lemma constraints_toFlat {ops : Operations F} :
+    FlatOperation.constraints ops.toFlat = ops.constraints := by
+  induction ops using Operations.induct <;>
+  simp_all [circuit_norm, FlatOperation.constraints]
+
+@[circuit_norm] lemma lookups_toFlat {ops : Operations F} :
+    FlatOperation.lookups ops.toFlat = ops.lookups := by
+  induction ops using Operations.induct <;>
+  simp_all [circuit_norm, FlatOperation.lookups]
+
+@[circuit_norm] lemma interactions_toFlat {ops : Operations F} :
+    FlatOperation.interactions ops.toFlat = ops.interactions := by
+  induction ops using Operations.induct <;>
+  simp_all [circuit_norm, FlatOperation.interactions]
+
+@[circuit_norm] lemma channels_toFlat {ops : Operations F} :
+    FlatOperation.channels ops.toFlat = ops.channels := by
+  simp [channels, FlatOperation.channels, interactions_toFlat]
 end Operations

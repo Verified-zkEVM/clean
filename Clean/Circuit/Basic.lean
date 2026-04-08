@@ -486,7 +486,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     simp only [circuit_norm, seval]
     try tauto
 
-  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
+  exposedChannels (_ : Var Input F) (n : ℕ) : List (ExposedChannel F) := []
   exposedChannels_eq : ∀ input_var offset,
     let ops := (elaborated.main input_var).operations offset
     ∀ exposed ∈ exposedChannels input_var offset,

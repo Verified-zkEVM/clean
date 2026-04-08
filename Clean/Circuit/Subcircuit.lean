@@ -6,31 +6,6 @@ variable {F : Type} [Field F]
 namespace FlatOperation
 open Circuit (ConstraintsHold.Completeness ConstraintsHold)
 
-omit [Field F] in
-lemma constraints_append {ops1 ops2 : List (FlatOperation F)} :
-    constraints (ops1 ++ ops2) = constraints ops1 ++ constraints ops2 := by
-  induction ops1 using FlatOperation.induct <;> simp_all [constraints]
-
-omit [Field F] in
-lemma lookups_append {ops1 ops2 : List (FlatOperation F)} :
-    lookups (ops1 ++ ops2) = lookups ops1 ++ lookups ops2 := by
-  induction ops1 using FlatOperation.induct <;> simp_all [lookups]
-
-lemma constraints_toFlat {ops : Operations F} :
-    constraints ops.toFlat = ops.constraints := by
-  induction ops using Operations.induct <;>
-    simp_all [Operations.toFlat, Operations.constraints, constraints, constraints_append]
-
-lemma lookups_toFlat {ops : Operations F} :
-    lookups ops.toFlat = ops.lookups := by
-  induction ops using Operations.induct <;>
-    simp_all [Operations.toFlat, Operations.lookups, lookups, lookups_append]
-
-lemma interactions_toFlat {ops : Operations F} :
-    interactions ops.toFlat = ops.interactions := by
-  induction ops using Operations.induct <;>
-    simp_all [Operations.toFlat, Operations.interactions, interactions, interactions_append]
-
 lemma constraintsHold_cons : ∀ {op : FlatOperation F}, ∀ {ops : List (FlatOperation F)}, ∀ {env : Environment F},
     ConstraintsHoldFlat env (op :: ops) ↔ ConstraintsHoldFlat env [op] ∧ ConstraintsHoldFlat env ops := by
   intro op ops env
@@ -66,29 +41,29 @@ lemma channelGuarantees_toFlat
   {env : Environment F} {ops : Operations F} {channel : RawChannel F} :
     FlatOperation.ChannelGuarantees channel env ops.toFlat ↔
     ops.ChannelGuarantees channel env := by
-  simp_all [circuit_norm, interactions_toFlat]
+  simp_all [circuit_norm]
 
 lemma guarantees_toFlat {env : Environment F} {ops : Operations F} :
     FlatOperation.Guarantees env ops.toFlat ↔ ops.FullGuarantees env := by
-  simp_all [guarantees_iff_forall_mem, Operations.FullGuarantees, interactions_toFlat]
+  simp_all [guarantees_iff_forall_mem, Operations.FullGuarantees, circuit_norm]
 
 lemma requirements_toFlat {env : Environment F} {ops : Operations F} :
     FlatOperation.Requirements env ops.toFlat ↔ ops.FullRequirements env := by
-  simp_all [requirements_iff_forall_mem, Operations.FullRequirements, interactions_toFlat]
+  simp_all [requirements_iff_forall_mem, Operations.FullRequirements, circuit_norm]
 
 lemma inChannelsOrGuarantees_toFlat {env : Environment F} {ops : Operations F}
   {channels : List (RawChannel F)} :
     FlatOperation.InChannelsOrGuarantees channels env ops.toFlat ↔
     ops.InChannelsOrGuaranteesFull channels env := by
   simp_all [inChannelsOrGuarantees_iff_forall_mem, Operations.InChannelsOrGuaranteesFull,
-    interactions_toFlat]
+    circuit_norm]
 
 lemma inChannelsOrRequirements_toFlat {env : Environment F} {ops : Operations F}
   {channels : List (RawChannel F)} :
     FlatOperation.InChannelsOrRequirements channels env ops.toFlat ↔
     ops.InChannelsOrRequirementsFull channels env := by
   simp_all [inChannelsOrRequirements_iff_forall_mem, Operations.InChannelsOrRequirementsFull,
-    interactions_toFlat]
+    circuit_norm]
 end FlatOperation
 
 @[circuit_norm]
@@ -104,7 +79,7 @@ constraints created from the inductive `Operations` type, using flat constraints
 theorem Circuit.constraintsHold_toFlat_iff {ops : Operations F} {env : Environment F} :
     ConstraintsHoldFlat env ops.toFlat ↔ ops.ConstraintsHold env := by
   simp only [FlatOperation.constraintsHoldFlat_iff_forall_mem, Operations.ConstraintsHold,
-    FlatOperation.constraints_toFlat, FlatOperation.lookups_toFlat]
+    circuit_norm]
 
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 variable [DecidableEq F]
@@ -685,24 +660,24 @@ theorem FormalCircuit.toSubcircuit_interactions (circuit : FormalCircuit F Input
   FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
     (circuit.main input_var |>.operations n |>.interactions) := by
   simp only [FormalCircuit.toSubcircuit]
-  rw [Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
+  rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 
 theorem GeneralFormalCircuit.toSubcircuit_interactions
     (circuit : GeneralFormalCircuit F Input Output) :
   FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
     (circuit.main input_var |>.operations n |>.interactions) := by
   simp only [GeneralFormalCircuit.toSubcircuit]
-  rw [Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
+  rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 
 theorem FormalAssertion.toSubcircuit_interactions (circuit : FormalAssertion F Input) :
   FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
     (circuit.main input_var |>.operations n |>.interactions) := by
   simp only [FormalAssertion.toSubcircuit]
-  rw [Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
+  rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 
 theorem FormalCircuitWithInteractions.toSubcircuit_interactions (circuit : FormalCircuitWithInteractions F Input Output) :
   FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
     (circuit.main input_var |>.operations n |>.interactions) := by
   simp only [FormalCircuitWithInteractions.toSubcircuit]
-  rw [Operations.toNested_toFlat, FlatOperation.interactions_toFlat]
+  rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 end
