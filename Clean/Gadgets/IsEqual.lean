@@ -17,7 +17,7 @@ import Clean.Utils.Tactics
 namespace Gadgets.IsEqual
 
 variable {F : Type} [Field F] [DecidableEq F]
-variable {α : TypeMap} [ProvableType α]
+variable {α : TypeMap} [ProvableType α] [DecidableEq (α F)]
 
 /--
 Compute element-wise differences between two values of a ProvableType.
@@ -39,47 +39,58 @@ def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
 instance elaborated : ElaboratedCircuit F (ProvablePair α α) field where
   main
   localLength _ := 2 * size α
-  localLength_eq := by simp +arith [circuit_norm, main, diffs, IsZero.main, IsZeroField.circuit]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main, diffs, IsZero.main, IsZeroField.circuit]
+  localLength_eq := by
+    simp +arith [circuit_norm, main]
+    intro a b; rfl
+  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
 def Assumptions (_ : α F × α F) : Prop := True
 
-def Spec [DecidableEq (α F)] (input : α F × α F) (output : F) : Prop :=
+def Spec (input : α F × α F) (output : F) : Prop :=
   output = if input.1 = input.2 then 1 else 0
 
-theorem soundness [DecidableEq (α F)] : Soundness F (elaborated (α := α)) Assumptions Spec := by
-  circuit_proof_start [IsZero.main, ProvableType.toElements_fromElements]
+theorem soundness : Soundness F (elaborated (α := α)) Assumptions Spec := by
+  circuit_proof_start [IsZero.circuit, IsZero.elaborated, IsZero.Assumptions, IsZero.Spec]
+  rw [h_holds]
   have h_pair := h_input; rw [eval_pair] at h_pair
   have h_x : eval env input_var.1 = input.1 := congrArg Prod.fst h_pair
   have h_y : eval env input_var.2 = input.2 := congrArg Prod.snd h_pair
-  simp only [explicit_provable_type] at h_input
-  -- Use convert to apply foldl_isZero_eq_one_iff despite Fin/ℕ GetElem mismatch
-  set d := diffs input_var.1 input_var.2
-  conv_rhs => arg 1; rw [ProvableType.ext_iff]
-  -- Provide vals explicitly to help unification
-  set vals : Vector F (size α) := Vector.map (Expression.eval env) d
-  convert @IsZero.foldl_isZero_eq_one_iff F _ _ (size α) d vals env i₀ rfl ?_ using 1
-  · -- (if ∀ i hi, x[i] = y[i] then 1 else 0) = (if ∀ i hi, vals[i] = 0 then 1 else 0)
-    -- vals[i] evaluates to (toElements input.1)[i] - (toElements input.2)[i]
-    -- so vals[i] = 0 iff input.1[i] = input.2[i]
-    have h_vals : ∀ (i : ℕ) (hi : i < size α),
-        vals[i] = (toElements input.1)[i] - (toElements input.2)[i] := by
-      intro i hi
-      show (Vector.map (Expression.eval env) (diffs input_var.1 input_var.2))[i] = _
-      simp only [Vector.getElem_map, diffs, Vector.getElem_mapFinRange, Expression.eval, neg_one_mul]
-      -- Goal: eval (toVars input_var.1)[⟨i,⋯⟩] + -(eval (toVars input_var.2)[⟨i,⋯⟩]) = input.1[i] - input.2[i]
-      erw [ProvableType.getElem_eval_toVars input_var.1 i, ProvableType.getElem_eval_toVars input_var.2 i, h_x, h_y]
-      ring
-    exact if_congr
-      ⟨fun h i hi => by rw [h_vals i hi, h i hi, sub_self],
-       fun h i hi => by have := h i hi; rw [h_vals i hi] at this; exact sub_eq_zero.mp this⟩
-      rfl rfl
-  · exact h_holds
+  apply if_congr _ rfl rfl
+  -- Helper: relate evaluated diffs to element-wise subtraction
+  have h_diff : ∀ (i : ℕ) (_ : i < size α),
+      Expression.eval env (diffs input_var.1 input_var.2)[i] =
+      (toElements input.1)[i] - (toElements input.2)[i] := by
+    intro i hi
+    simp only [diffs, Vector.getElem_mapFinRange, Expression.eval, neg_one_mul]
+    erw [ProvableType.getElem_eval_toVars input_var.1 i, ProvableType.getElem_eval_toVars input_var.2 i,
+      h_x, h_y]
+    ring
+  -- Helper: (toElements 0)[i] = 0
+  have h_zero_elem : ∀ (i : ℕ) (_ : i < size α), (toElements (0 : α F))[i] = (0 : F) := by
+    intro i _
+    change (toElements (fromElements (Vector.replicate _ (0 : F))))[i] = 0
+    rw [ProvableType.toElements_fromElements, Vector.getElem_replicate]
+  constructor
+  · -- forward: diffs evaluated to zero → inputs equal
+    intro h_zero
+    rw [ProvableType.ext_iff]; intro i hi
+    have h_elem := congrArg (fun (x : α F) => (toElements x)[i]) h_zero
+    simp only [ProvableType.eval_fromElements, ProvableType.toElements_fromElements,
+      Vector.getElem_map] at h_elem
+    rw [h_diff i hi, h_zero_elem i hi] at h_elem
+    exact sub_eq_zero.mp h_elem
+  · -- backward: inputs equal → diffs evaluated to zero
+    intro h_eq
+    rw [ProvableType.ext_iff]; intro i hi
+    simp only [ProvableType.eval_fromElements, ProvableType.toElements_fromElements,
+      Vector.getElem_map]
+    rw [h_diff i hi, h_zero_elem i hi]
+    rw [ProvableType.ext_iff] at h_eq; rw [h_eq i hi]; ring
 
 theorem completeness : Completeness F (elaborated (α := α)) Assumptions := by
-  circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions, IsZero.main, diffs]
+  circuit_proof_start [IsZero.circuit, IsZero.elaborated, IsZero.Assumptions]
 
-def circuit [DecidableEq (α F)] : FormalCircuit F (ProvablePair α α) field := {
+def circuit : FormalCircuit F (ProvablePair α α) field := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 
