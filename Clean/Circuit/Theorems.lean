@@ -804,6 +804,17 @@ theorem in_channels_or_requirements_full
 end FormalCircuitWithInteractions
 
 omit [DecidableEq F] in
+theorem Operations.guarantees_of_not_mem (ops : Operations F)
+  (channels : List (RawChannel F)) (env : Environment F) :
+    ops.InChannelsOrGuaranteesFull channels env →
+    ∀ channel, channel ∉ channels → ops.ChannelGuarantees channel env := by
+  simp only [circuit_norm]
+  intro h_in_or_guars channel h_not_mem i i_mem h_eq
+  specialize h_in_or_guars i i_mem
+  rw [h_eq] at h_in_or_guars
+  tauto
+
+omit [DecidableEq F] in
 theorem Operations.requirements_of_not_mem (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :
     ops.InChannelsOrRequirementsFull channels env →
