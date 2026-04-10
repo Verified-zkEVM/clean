@@ -704,7 +704,7 @@ def induct {motive : TablesWitness F → Sort*}
     apply cons table witness same_data_table
     exact ih same_data'
 
-abbrev circuits (witness : TablesWitness F) : List (AbstractTable F) :=
+abbrev abstracts (witness : TablesWitness F) : List (AbstractTable F) :=
   witness.tables.map (·.abstract)
 
 instance : Coe (TablesWitness F) (List (TableWitness F)) where
@@ -1083,32 +1083,71 @@ theorem partialBalancedChannel_cons_of_not_requirements
   · simp_all
 
 /--
-A channel is "ordered" in a list of tables if all the tables that prove requirements
-come before all the tables that assume guarantees for the channel.
+A channel is "ordered" in a list of tables if all the tables that add requirements
+come before all the tables that add guarantees for the channel.
 
 Note that the order is reversed compared to the intended hierarchy, this is just because it's the
-more natural direction for doing List.cons induction.
+more natural direction for doing List.cons induction, so we think of a cons'd element as coming
+after the rest of the list.
 -/
-def OrderedChannel (tables : List (AbstractTable F)) (channel : RawChannel F) : Prop :=
+def OrderedChannel (channel : RawChannel F) (tables : List (AbstractTable F)) : Prop :=
   ∀ i (hi : i < tables.length) j (hj : j < tables.length),
     channel ∈ tables[i].circuit.channelsWithGuarantees →
     channel ∈ tables[j].circuit.channelsWithRequirements →
       i < j
 
-lemma orderedChannel_nil (channel : RawChannel F) : OrderedChannel [] channel := by
+@[circuit_norm]
+lemma orderedChannel_nil (channel : RawChannel F) : OrderedChannel channel [] := by
   simp [OrderedChannel]
 
+@[circuit_norm]
+abbrev SelfOrderedChannel (channel : RawChannel F) (table : AbstractTable F) : Prop :=
+  channel ∉ table.circuit.channelsWithGuarantees ∨ channel ∉ table.circuit.channelsWithRequirements
+
+@[circuit_norm]
 lemma orderedChannel_cons (table : AbstractTable F) (tables : List (AbstractTable F)) (channel : RawChannel F) :
-  OrderedChannel (table :: tables) channel ↔
-  OrderedChannel tables channel ∧
-  (channel ∈ table.circuit.channelsWithGuarantees ∨ channel ∈ tables.flatMap (·.circuit.channelsWithGuarantees) →
-    channel ∉ table.circuit.channelsWithRequirements) := by
-  simp only [OrderedChannel, List.length_cons, or_imp]
+  OrderedChannel channel (table :: tables) ↔
+  SelfOrderedChannel channel table ∧ OrderedChannel channel tables ∧
+  (channel ∉ tables.flatMap (·.circuit.channelsWithGuarantees) ∨ channel ∉ table.circuit.channelsWithRequirements) := by
+  simp only [OrderedChannel, SelfOrderedChannel, List.length_cons]
   -- Intuition: The `i < j` conclusion of `OrderedChannel` falsifies the hypotheses if `j = 0`,
   -- so apart from the "induction hypothesis" where `i, j > 0`, we get two distinct statements by specializing to `i = 0` and `i > 0` respectively
   simp [Nat.forall_lt_succ_left', List.getElem_cons_zero, List.getElem_cons_succ]
-  rw [forall₂_and, List.forall_mem_iff_getElem]
+  rw [forall₂_and, List.forall_mem_iff_getElem, or_iff_not_imp_left, or_iff_not_imp_left]
+  push_neg
+  simp only [exists_imp]
   tauto
+
+lemma orderedChannel_singleton_iff_selfOrdered (table : AbstractTable F) (channel : RawChannel F) :
+    SelfOrderedChannel channel table ↔ OrderedChannel channel [table] := by
+  simp [circuit_norm]
+
+@[circuit_norm]
+abbrev LtChannel (channel : RawChannel F) (tables₁ tables₂ : List (AbstractTable F)) : Prop :=
+  channel ∉ tables₁.flatMap (·.circuit.channelsWithGuarantees) ∨ channel ∉ tables₂.flatMap (·.circuit.channelsWithRequirements)
+
+lemma orderedChannel_iff (tables : List (AbstractTable F)) (channel : RawChannel F) :
+  OrderedChannel channel tables ↔
+   ∀ i (hi : i < tables.length) j (hj : j < tables.length), i ≥ j →
+    (channel ∉ tables[i].circuit.channelsWithGuarantees ∨ channel ∉ tables[j].circuit.channelsWithRequirements) := by
+  simp only [OrderedChannel]
+  constructor <;> (intro h i hi j hj; specialize h i hi j hj; simp only [← not_lt] at *; tauto)
+
+lemma orderedChannel_iff_append (tables : List (AbstractTable F)) (channel : RawChannel F) :
+  OrderedChannel channel tables ↔
+    ∀ tables₁ tables₂, tables = tables₁ ++ tables₂ → LtChannel channel tables₁ tables₂ := by
+  simp only [OrderedChannel, LtChannel]
+  sorry
+
+@[circuit_norm]
+lemma orderedChannel_append (tables₁ tables₂ : List (AbstractTable F)) (channel : RawChannel F) :
+  OrderedChannel channel (tables₁ ++ tables₂) ↔
+    OrderedChannel channel tables₁ ∧ OrderedChannel channel tables₂ ∧ LtChannel channel tables₁ tables₂ := by
+  simp only [orderedChannel_iff_append]
+  constructor
+  · grind
+  · simp only [List.append_eq_append_iff, ←exists_or]
+    grind
 
 /--
 For ordered channels, we can always instantiate partial balance at an initial sublist.
@@ -1116,14 +1155,74 @@ For ordered channels, we can always instantiate partial balance at an initial su
 lemma partialBalancedChannel_cons_of_orderedChannel
   {table : TableWitness F} {tables : TablesWitness F} (same_data : table.data = tables.data)
   {channel : RawChannel F} :
-  OrderedChannel (table.abstract :: tables.circuits) channel →
+  OrderedChannel channel (table.abstract :: tables.abstracts) →
   PartialBalancedChannel (tables.cons table same_data) channel →
     PartialBalancedChannel tables channel := by
   intro ordered_channel partial_balance
   apply partialBalancedChannel_cons_of_not_requirements same_data ?_ partial_balance
   simp only [circuit_norm]
-  simp only [orderedChannel_cons, TablesWitness.circuits, List.flatMap_map] at ordered_channel
+  simp only [orderedChannel_cons, TablesWitness.abstracts, List.flatMap_map] at ordered_channel
   tauto
+
+/--
+The significance of `OrderedChannel` is that it lets us prove soundness
+on a list of tables by induction. This lemma captures the main step.
+-/
+lemma guarantees_of_requirements_of_orderedChannel_cons
+  -- given a list of tables, and one additional table
+  {table : TableWitness F} {tables : TablesWitness F} (same_data : table.data = tables.data)
+  -- and a channel that is consistent, ordered on the new table, and partially balanced on the combined tables
+  {channel : RawChannel F} [channel.Consistent] :
+  SelfOrderedChannel channel table.abstract →
+  PartialBalancedChannel (tables.cons table same_data) channel →
+  -- the channel requirements on the old tables imply guarantees on the new table
+  (∀ table ∈ tables.tables, table.ChannelRequirements channel) →
+    table.ChannelGuarantees channel := by
+  rintro ordered_channel partial_balance ih
+  /-
+  thanks to ordered channel, we know that channel cannot add _both_ grts and reqs for the new table.
+  1) if the channel does not add grts, we're done as the grts are trivially satisifed.
+  2) if the channel does not add reqs, we can prove that _all_ reqs of that channel are satisfied.
+      using consistent channels, we conclude the channel's guarantees.
+  -/
+  simp only [circuit_norm] at ordered_channel
+  rcases ordered_channel with grts | reqs
+  · exact table.guarantees_of_not_mem grts
+  replace reqs := table.requirements_of_not_mem reqs
+  -- there's a special case to discard where the guarantees are trivially satisfied
+  rcases partial_balance with ⟨ extraInteractions, balanced, same_channel, extra_reqs | grts ⟩
+  swap -- easy case first
+  · simp only [circuit_norm, List.flatMap_cons, List.mem_append, List.mem_flatMap,
+      not_or, not_exists, not_and] at grts
+    exact table.guarantees_of_not_mem grts.left
+  -- now, to prove this table's channel guarantees, we show guarantees on _all_ channel interactions (that we know are balanced)
+  set channelInteractions := (tables.cons table same_data).interactionsWith channel ++ extraInteractions
+  have subset_channelInteractions : table.interactionsWith channel ⊆ channelInteractions := by
+    simp [channelInteractions, circuit_norm]
+  suffices all_grts : ∀ i ∈ channelInteractions, i.Guarantees tables.data by
+    rw [TableWitness.channelGuarantees_iff_forall, same_data]
+    intro i hi
+    exact all_grts i (subset_channelInteractions hi)
+  -- this works since we can prove all channel _requirements_
+  -- relies on `ordered_channels` and `partial_balance` (the extra interactions assumption)
+  have all_reqs : ∀ i ∈ channelInteractions, i.channel = channel ∧ i.Requirements tables.data := by
+    simp [channelInteractions, circuit_norm]
+    intro i h_mem
+    rcases h_mem with h_mem_table | h_mem_old | h_mem_extra
+    -- for the new table, we can just use the requirements assumption
+    · rw [TableWitness.channelRequirements_iff_forall, same_data] at reqs
+      use table.channel_eq_of_mem_interactionsWith h_mem_table
+      exact reqs _ h_mem_table
+    · obtain ⟨ table', h_table', i_mem_table ⟩ := h_mem_old
+      simp only [TableWitness.channelRequirements_iff_forall] at ih
+      specialize ih table' h_table'
+      simp only [tables.same_data _ h_table'] at ih
+      use table'.channel_eq_of_mem_interactionsWith i_mem_table
+      exact ih i i_mem_table
+    · exact ⟨ same_channel i h_mem_extra, extra_reqs i h_mem_extra ⟩
+  -- consistent channels goes from requirements to guarantees
+  -- uses `consistent_channels` and `partial_balance`
+  apply ‹channel.Consistent›.consistent channelInteractions tables.data balanced all_reqs
 
 /--
 `OrderedChannels` imposes a hierarchy of "finished" channels on a list of tables, that
@@ -1138,8 +1237,8 @@ but is still useful to establish first on the non-vm tables.
 TODO rename because this has more in it than just ordering
 -/
 def OrderedChannels (tables : List (AbstractTable F)) (finished : List (RawChannel F)) : Prop :=
-  tables.flatMap (·.circuit.channelsWithGuarantees) ⊆ finished ∧
-  (∀ channel ∈ finished, OrderedChannel tables channel) ∧
+  (∀ table ∈ tables, table.circuit.channelsWithGuarantees ⊆ finished) ∧
+  (∀ channel ∈ finished, OrderedChannel channel tables) ∧
   ∀ channel ∈ finished, channel.Consistent
 
 /- TODO split out two parts:
@@ -1149,8 +1248,26 @@ def OrderedChannels (tables : List (AbstractTable F)) (finished : List (RawChann
    small lemma, follows from `constraints` and `subset_finished`
 -/
 
-/-- The significance of `OrderedChannels` is that it lets us prove a soundness theorem: that all
-the channel requirements and guarantees are satisifed. -/
+/-- Helper lemma that uses circuit soundness, to strengthen guarantees to include requirements -/
+lemma guarantees_and_requirements_iff_of_constraints {table : TableWitness F} {finished : List (RawChannel F)} :
+  table.Constraints →
+  table.abstract.circuit.channelsWithGuarantees ⊆ finished →
+  ((∀ channel ∈ finished, table.ChannelGuarantees channel ∧ table.ChannelRequirements channel) ↔
+    ∀ channel ∈ finished, table.ChannelGuarantees channel) := by
+  intro constraints subset_finished
+  constructor; simp_all
+  intro grts
+  have all_grts : table.Guarantees := by
+    rw [TableWitness.guarantees_iff_channelGuarantees]
+    intro channel h_channel
+    exact grts _ (subset_finished h_channel)
+  -- constraints ∧ guarantees → requirements → channelRequirements
+  have ⟨ _, all_reqs ⟩ := table.weakSoundness constraints all_grts
+  intro channel h_channel
+  exact ⟨ grts _ h_channel, table.channelRequirements_of_requirements all_reqs ⟩
+
+/-- `OrderedChannels` lets us prove a soundness theorem:
+ all channel requirements and guarantees are satisifed. -/
 theorem requirements_of_orderedChannels {witness : TablesWitness F} {finished : List (RawChannel F)} :
   OrderedChannels (witness.tables.map (·.abstract)) finished →
   -- constraints + partial balance
@@ -1158,81 +1275,28 @@ theorem requirements_of_orderedChannels {witness : TablesWitness F} {finished : 
   (∀ channel ∈ finished, PartialBalancedChannel witness channel) →
   -- implies guarantees and requirements on all finished channels
     ∀ table ∈ witness.tables, ∀ channel ∈ finished, table.ChannelGuarantees channel ∧ table.ChannelRequirements channel := by
+  -- we use induction
   rintro ⟨ subset_finished, ordered_channels, consistent_channels ⟩ constraints partial_balance
-  simp only [TablesWitness.Constraints] at *
   induction witness using TablesWitness.induct
   · intro _ h_table; nomatch h_table
   -- induction step
   rename_i table tables same_data ih
-  -- first, we use the IH to show that reqs for all old tables are satisfied
-  simp only [circuit_norm] at ordered_channels
-  have partial_balance' channel hc := partialBalancedChannel_cons_of_orderedChannel
-    same_data (channel := channel) (ordered_channels _ hc) (partial_balance _ hc)
-  simp [circuit_norm, orderedChannel_cons] at *
-  specialize ih subset_finished.right (fun c hc => (ordered_channels c hc).left)
+  -- first, we use the IH
+  have partial_balance' c hc := partialBalancedChannel_cons_of_orderedChannel
+    same_data (ordered_channels c hc) (partial_balance c hc)
+  simp [TablesWitness.Constraints, circuit_norm] at *
+  specialize ih subset_finished.right (fun c hc => (ordered_channels c hc).right.left)
     constraints.right partial_balance'
   constructor; swap
   · exact ih
-  show ∀ channel ∈ finished, table.ChannelGuarantees channel ∧ table.ChannelRequirements channel
-  -- it's enough to prove guarantees (of all channels), since they + constraints imply requirements
-  -- uses `constraints` and `subset_finished : channelsWithGuarantees ⊆ finished`
-  suffices grts : ∀ channel ∈ finished, table.ChannelGuarantees channel by
-    have all_grts : table.Guarantees := by
-      rw [TableWitness.guarantees_iff_channelGuarantees]
-      intro channel h_channel
-      have h_channel' : channel ∈ finished := subset_finished.left h_channel
-      exact grts _ h_channel'
-    -- constraints ∧ guarantees → requirements → channelRequirements
-    have ⟨ _, all_reqs ⟩ := table.weakSoundness constraints.left all_grts
-    intro channel h_channel
-    exact ⟨ grts _ h_channel, table.channelRequirements_of_requirements all_reqs ⟩
+  -- it's enough to prove guarantees of all channels, since they + constraints imply requirements
+  rw [guarantees_and_requirements_iff_of_constraints constraints.left subset_finished.left]
+  -- the rest is just applying `partialBalancedChannel_cons_of_orderedChannel`
   intro channel h_channel
-  /-
-  thanks to ordered channels, we know that channel cannot add _both_ grts and reqs for the new table.
-  1) if the channel does not add grts, we're done as the grts are trivially satisifed.
-  2) if the channel does not add reqs, we can prove that _all_ reqs of that channel are satisfied.
-      using consistent channels, we conclude the channel's guarantees.
-  the remaining proof only needs `ordered_channels`, `consistent_channels` and `partial_balance`.
-  -/
-  have either_reqs_or_grts : channel ∉ table.channelsWithGuarantees ∨ channel ∉ table.channelsWithRequirements := by
-    specialize ordered_channels channel h_channel; tauto
-  rcases either_reqs_or_grts with grts | reqs
-  · exact table.guarantees_of_not_mem grts
-  replace reqs := table.requirements_of_not_mem reqs
-  -- there's another special case to discard where the guarantees are trivially satisfied
-  rcases partial_balance channel h_channel with ⟨ extraInteractions, balanced, same_channel, extra_reqs | grts ⟩
-  swap -- easy case first
-  · simp only [circuit_norm, List.flatMap_cons, List.mem_append, List.mem_flatMap,
-      not_or, not_exists, not_and] at grts
-    exact table.guarantees_of_not_mem grts.left
-  -- now, to prove this table's channel guarantees, we show guarantees on _all_ channel interactions (that we know are balanced)
-  set channelInteractions := (TablesWitness.cons table tables same_data).interactionsWith channel ++ extraInteractions
-  have subset_channelInteractions : table.interactionsWith channel ⊆ channelInteractions := by
-    simp [channelInteractions, circuit_norm]
-  suffices all_grts : ∀ i ∈ channelInteractions, i.Guarantees tables.data by
-    rw [TableWitness.channelGuarantees_iff_forall, same_data]
-    intro i hi
-    exact all_grts i (subset_channelInteractions hi)
-  -- this works since we can prove all channel _requirements_
-  -- relies on `ordered_channels` and `partial_balance` (the extra interactions assumption)
-  have all_reqs : ∀ i ∈ channelInteractions, i.channel = channel ∧ i.Requirements tables.data := by
-    simp [channelInteractions, circuit_norm]
-    intro i h_mem
-    rcases h_mem with h_mem_table | h_mem_old | h_mem_extra
-    · rw [TableWitness.channelRequirements_iff_forall, same_data] at reqs
-      use table.channel_eq_of_mem_interactionsWith h_mem_table
-      exact reqs _ h_mem_table
-    · obtain ⟨ table', h_table', i_mem_table ⟩ := h_mem_old
-      simp only [TableWitness.channelRequirements_iff_forall] at ih
-      specialize ih table' h_table' channel h_channel
-      simp only [tables.same_data _ h_table'] at ih
-      use table'.channel_eq_of_mem_interactionsWith i_mem_table
-      exact ih.right i i_mem_table
-    · exact ⟨ same_channel i h_mem_extra, extra_reqs i h_mem_extra ⟩
-  -- consistent channels goes from requirements to guarantees
-  -- uses `consistent_channels` and `partial_balance`
-  apply consistent_channels channel h_channel
-    |>.consistent channelInteractions tables.data balanced all_reqs
+  have : channel.Consistent := consistent_channels _ h_channel
+  apply guarantees_of_requirements_of_orderedChannel_cons same_data
+    (channel := channel) ?_ (partial_balance channel h_channel) (fun t ht => ih t ht _ h_channel |>.right)
+  simp [circuit_norm, ordered_channels channel h_channel]
 
 namespace Ensemble
 def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] :
