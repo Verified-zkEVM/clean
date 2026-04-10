@@ -1101,15 +1101,15 @@ lemma orderedChannel_nil (channel : RawChannel F) : OrderedChannel channel [] :=
   simp [OrderedChannel]
 
 @[circuit_norm]
-abbrev SelfOrderedChannel (channel : RawChannel F) (table : AbstractTable F) : Prop :=
+abbrev OrderedChannelRefl (channel : RawChannel F) (table : AbstractTable F) : Prop :=
   channel ∉ table.circuit.channelsWithGuarantees ∨ channel ∉ table.circuit.channelsWithRequirements
 
 @[circuit_norm]
 lemma orderedChannel_cons (table : AbstractTable F) (tables : List (AbstractTable F)) (channel : RawChannel F) :
   OrderedChannel channel (table :: tables) ↔
-  SelfOrderedChannel channel table ∧ OrderedChannel channel tables ∧
+  OrderedChannelRefl channel table ∧ OrderedChannel channel tables ∧
   (channel ∉ tables.flatMap (·.circuit.channelsWithGuarantees) ∨ channel ∉ table.circuit.channelsWithRequirements) := by
-  simp only [OrderedChannel, SelfOrderedChannel, List.length_cons]
+  simp only [OrderedChannel, OrderedChannelRefl, List.length_cons]
   -- Intuition: The `i < j` conclusion of `OrderedChannel` falsifies the hypotheses if `j = 0`,
   -- so apart from the "induction hypothesis" where `i, j > 0`, we get two distinct statements by specializing to `i = 0` and `i > 0` respectively
   simp [Nat.forall_lt_succ_left', List.getElem_cons_zero, List.getElem_cons_succ]
@@ -1118,32 +1118,69 @@ lemma orderedChannel_cons (table : AbstractTable F) (tables : List (AbstractTabl
   simp only [exists_imp]
   tauto
 
-lemma orderedChannel_singleton_iff_selfOrdered (table : AbstractTable F) (channel : RawChannel F) :
-    SelfOrderedChannel channel table ↔ OrderedChannel channel [table] := by
+lemma orderedChannel_singleton_iff (table : AbstractTable F) (channel : RawChannel F) :
+    OrderedChannel channel [table] ↔ OrderedChannelRefl channel table := by
   simp [circuit_norm]
 
 @[circuit_norm]
-abbrev LtChannel (channel : RawChannel F) (tables₁ tables₂ : List (AbstractTable F)) : Prop :=
+abbrev OrderedChannelLt (channel : RawChannel F) (tables₁ tables₂ : List (AbstractTable F)) : Prop :=
   channel ∉ tables₁.flatMap (·.circuit.channelsWithGuarantees) ∨ channel ∉ tables₂.flatMap (·.circuit.channelsWithRequirements)
 
+/-- Alternative, and sometimes more convenient, formulation of `OrderedChannel` -/
 lemma orderedChannel_iff (tables : List (AbstractTable F)) (channel : RawChannel F) :
   OrderedChannel channel tables ↔
-   ∀ i (hi : i < tables.length) j (hj : j < tables.length), i ≥ j →
-    (channel ∉ tables[i].circuit.channelsWithGuarantees ∨ channel ∉ tables[j].circuit.channelsWithRequirements) := by
-  simp only [OrderedChannel]
-  constructor <;> (intro h i hi j hj; specialize h i hi j hj; simp only [← not_lt] at *; tauto)
+    (∀ t ∈ tables, OrderedChannelRefl channel t) ∧
+    ∀ ts ss, tables = ts ++ ss → OrderedChannelLt channel ss ts := by
+  simp [OrderedChannel, OrderedChannelLt, OrderedChannelRefl]
+  constructor
+  · intro ordered_channel
+    constructor
+    · simp only [List.forall_mem_iff_getElem]
+      intro i hi
+      specialize ordered_channel i hi i hi
+      simp at ordered_channel
+      tauto
+    intro ts ss h_append
+    subst h_append
+    simp only [List.length_append] at ordered_channel
+    simp only [List.forall_mem_iff_getElem, or_iff_not_imp_left]
+    push_neg
+    rintro ⟨ i, hi, grts ⟩ j hj reqs
+    specialize ordered_channel (ts.length + i) (by linarith) j (by linarith)
+    rw [List.getElem_append_right (by omega), List.getElem_append_left (by omega)] at ordered_channel
+    have : ¬(ts.length + i < j) := by omega
+    apply this
+    apply ordered_channel ?_ reqs
+    have : ts.length + i - ts.length = i := by simp
+    convert grts
+  intro ordered_channel' i hi j hj
+  simp only [List.forall_mem_iff_getElem] at ordered_channel'
+  suffices j = i ∨ j < i →
+    channel ∉ tables[i].circuit.channelsWithGuarantees ∨
+    channel ∉ tables[j].circuit.channelsWithRequirements by grind
+  rintro h
+  rcases h with rfl | j_lt_i
+  · exact ordered_channel'.left j hi
+  have j_succ_lt : j + 1 < tables.length := by linarith
+  replace ordered_channel' := ordered_channel'.right (tables.take (j + 1)) (tables.drop (j + 1)) (by simp)
+  simp at ordered_channel'
+  rcases ordered_channel' with no_grts | no_reqs
+  · left
+    specialize no_grts (i - (j + 1)) (by omega)
+    rw [List.getElem_drop] at no_grts
+    have : i = j + 1 + (i - (j + 1)) := by omega
+    convert no_grts
+  · right
+    specialize no_reqs j (by omega) hj
+    rw [List.getElem_take] at no_reqs
+    exact no_reqs
 
-lemma orderedChannel_iff_append (tables : List (AbstractTable F)) (channel : RawChannel F) :
-  OrderedChannel channel tables ↔
-    ∀ tables₁ tables₂, tables = tables₁ ++ tables₂ → LtChannel channel tables₁ tables₂ := by
-  simp only [OrderedChannel, LtChannel]
-  sorry
-
+/-- "Merge sort" for ordered channels -/
 @[circuit_norm]
-lemma orderedChannel_append (tables₁ tables₂ : List (AbstractTable F)) (channel : RawChannel F) :
-  OrderedChannel channel (tables₁ ++ tables₂) ↔
-    OrderedChannel channel tables₁ ∧ OrderedChannel channel tables₂ ∧ LtChannel channel tables₁ tables₂ := by
-  simp only [orderedChannel_iff_append]
+lemma orderedChannel_append (ts ss : List (AbstractTable F)) (channel : RawChannel F) :
+  OrderedChannel channel (ts ++ ss) ↔
+    OrderedChannel channel ts ∧ OrderedChannel channel ss ∧ OrderedChannelLt channel ss ts := by
+  simp only [orderedChannel_iff]
   constructor
   · grind
   · simp only [List.append_eq_append_iff, ←exists_or]
@@ -1173,7 +1210,7 @@ lemma guarantees_of_requirements_of_orderedChannel_cons
   {table : TableWitness F} {tables : TablesWitness F} (same_data : table.data = tables.data)
   -- and a channel that is consistent, ordered on the new table, and partially balanced on the combined tables
   {channel : RawChannel F} [channel.Consistent] :
-  SelfOrderedChannel channel table.abstract →
+  OrderedChannelRefl channel table.abstract →
   PartialBalancedChannel (tables.cons table same_data) channel →
   -- the channel requirements on the old tables imply guarantees on the new table
   (∀ table ∈ tables.tables, table.ChannelRequirements channel) →
