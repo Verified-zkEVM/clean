@@ -1178,10 +1178,16 @@ theorem partialBalancedChannel_cons_of_orderedChannelLt
     rw [TableWitness.channelRequirements_iff_forall, same_data] at channel_reqs
     exact ⟨ channel_reqs, extra_reqs ⟩
 
+@[circuit_norm]
+lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
+    l₁.flatMap f ⊆ l₂ ↔ ∀ a ∈ l₁, f a ⊆ l₂ := by
+  grind
+
 -- TODO deduplicate and add to Basic
 attribute [circuit_norm] forall_eq_or_imp List.mem_flatMap List.mem_map exists_exists_and_eq_and
   not_exists not_and List.Subset.refl List.subset_append_of_subset_left List.subset_append_of_subset_right
   List.flatMap_append List.mem_append not_or not_exists not_and not_false_eq_true
+  List.flatMap_cons List.append_subset
 
 /--
 A channel is "ordered" in a list of tables if all the tables that add requirements
@@ -1638,6 +1644,13 @@ def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableTyp
     channels := []
     Spec _ := True
 
+@[circuit_norm] lemma empty_tables :
+  (empty F PublicIO).tables = [] := rfl
+@[circuit_norm] lemma empty_channels :
+  (empty F PublicIO).channels = [] := rfl
+@[circuit_norm] lemma empty_verifier :
+  (empty F PublicIO).verifier = .empty F PublicIO := rfl
+
 /-- Partial balanced channel is trivially weaker than balanced channel -/
 lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} (channel : RawChannel F) :
@@ -1667,8 +1680,7 @@ abbrev SoundChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)
 
 @[circuit_norm]
 abbrev OrderedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
-  ∀ publicInput, ∀ channel ∈ finished, _root_.OrderedChannel channel (ens.allTables publicInput) ∧
-  ∀ channel ∈ finished, channel.Consistent
+  ∀ channel ∈ finished, (∀ publicInput, OrderedChannel channel (ens.allTables publicInput))
 
 /--
 Main result of this section:
@@ -1699,6 +1711,13 @@ lemma channelsWithRequirements_eq (ens : Ensemble F PublicIO) :
   simp [channelsWithRequirements, allTables,  verifierTable,
     FormalCircuitWithInteractions.instantiateConst_toFormal]
 
+@[circuit_norm]
+lemma channelsWithGuarantees_subset_iff {ens : Ensemble F PublicIO} {finished : List (RawChannel F)}
+   (publicInput : PublicIO F) :
+  ens.channelsWithGuarantees ⊆ finished ↔
+    ∀ tables ∈ ens.allTables publicInput, tables.circuit.channelsWithGuarantees ⊆ finished := by
+  simp [circuit_norm, channelsWithGuarantees, allTables]
+
 /-- specs on all tables + verifier spec imply ensemble spec -/
 def SpecConsistency (ens : Ensemble F PublicIO) : Prop :=
   ∀ (witness : EnsembleWitness ens),
@@ -1725,8 +1744,8 @@ theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F Public
 
 /-- Empty ensemble satisfies SoundChannels -/
 theorem empty_soundChannels : (empty F PublicIO).SoundChannels [] := by
-  simp_all [circuit_norm, SoundChannels, _root_.SoundChannels, allTables, verifierTable,
-    empty, FormalCircuitWithInteractions.instantiateConst_toFormal]
+  simp only [circuit_norm, allTables, verifierTable,
+    FormalCircuitWithInteractions.instantiateConst_toFormal]
 
 /-- Empty ensemble satisfies TableSoundness -/
 theorem empty_tableSoundness : (empty F PublicIO).TableSoundness [] :=
@@ -1800,9 +1819,10 @@ def addTable (ens : Ensemble F PublicIO) (table : AbstractTable F) : Ensemble F 
 
 @[circuit_norm] lemma addTable_tables (ens : Ensemble F PublicIO) (table : AbstractTable F) :
   (ens.addTable table).tables = table :: ens.tables := rfl
-
 @[circuit_norm] lemma addTable_verifierTable (ens : Ensemble F PublicIO) (table : AbstractTable F) :
   (ens.addTable table).verifierTable = ens.verifierTable := rfl
+@[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : AbstractTable F) :
+  (ens.addTable table).verifier = ens.verifier := rfl
 
 lemma addTable_witness (ens : Ensemble F PublicIO) (table : AbstractTable F)
   (witness : EnsembleWitness (ens.addTable table)) :
@@ -1842,7 +1862,7 @@ lemma addTable_witness (ens : Ensemble F PublicIO) (table : AbstractTable F)
   have : witness.tables[0] ∈ witness.tables := by simp
   simp [addTable, witness', witness.same_data _ this]
 
-theorem soundChannels_addTable (ens : Ensemble F PublicIO) (table : AbstractTable F) {finished : List (RawChannel F)} :
+theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO) (table : AbstractTable F) {finished : List (RawChannel F)} :
     -- given a sound channels ensemble with empty verifier,
     ens.SoundChannels finished →
     ens.verifier = .empty F PublicIO →
@@ -1852,8 +1872,8 @@ theorem soundChannels_addTable (ens : Ensemble F PublicIO) (table : AbstractTabl
     -- (so that we don't get new requirements to prove)
     (∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
     -- the ensemble with the new table also satisfies SoundChannels!
-    (ens.addTable table).SoundChannels finished := by
-  intro h_sound verifier_empty grts_subset_finished reqs_disjoint_finished publicInput
+    (ens.addTable table).OrderedChannels finished := by
+  intro h_sound verifier_empty grts_subset_finished reqs_disjoint_finished channel h_channel publicInput
   -- we need to make use of soundness of the original ensemble; that'll give us most of what we need
   specialize h_sound publicInput
   simp only [circuit_norm, allTables, verifier_empty] at h_sound ⊢
@@ -1868,11 +1888,10 @@ theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
     (∀ channel ∈ finished, channel ∉ ens2.channelsWithRequirements) →
     -- the merged ensemble with the new table satisfies OrderedChannels!
     (ens1.merge ens2).OrderedChannels finished := by
-  intro h_sound verifier_empty reqs_disjoint_finished publicInput
+  intro h_sound verifier_empty reqs_disjoint_finished channel h_channel publicInput
   simp only [circuit_norm, allTables, verifier_empty] at h_sound ⊢
-  simp [channelsWithRequirements, circuit_norm] at reqs_disjoint_finished
-  simp_all only [implies_true, not_false_eq_true, or_true, true_and, and_true]
-  intro channel h_channel
+  simp only [channelsWithRequirements, circuit_norm] at reqs_disjoint_finished
+  simp_all only [not_false_eq_true, or_true, true_and, and_true]
   constructor
   · apply orderedChannel_of_no_requirements
     simp_all
@@ -1894,19 +1913,32 @@ end Ensemble
 structure SoundEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
     extends ensemble : Ensemble F PublicIO where
   finished : List (RawChannel F)
-  finished_subset : finished ⊆ channels
   finished_consistent : ∀ channel ∈ finished, channel.Consistent
-  soundChannels : ensemble.SoundChannels finished
+  finished_subset : finished ⊆ channels
+  subset_finished : ensemble.channelsWithGuarantees ⊆ finished
+  ordered_channels : ensemble.OrderedChannels finished
+  verifier_empty : ensemble.verifier = .empty F PublicIO
   specConsistency : ensemble.SpecConsistency
 
+attribute [circuit_norm] SoundEnsemble.finished_consistent SoundEnsemble.finished_subset SoundEnsemble.subset_finished
+  SoundEnsemble.ordered_channels SoundEnsemble.verifier_empty SoundEnsemble.specConsistency
+
 namespace SoundEnsemble
+lemma soundChannels (ens : SoundEnsemble F PublicIO) : ens.SoundChannels ens.finished := by
+  intro publicInput
+  rcases ens with ⟨ ens, finished, finished_consistent, finished_subset, subset_finished, ordered_channels, verifier_empty, specConsistency ⟩
+  rw [ens.channelsWithGuarantees_subset_iff publicInput] at subset_finished
+  simp_all only [circuit_norm]
+
 def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] :
   SoundEnsemble F PublicIO where
     ensemble := .empty F PublicIO
     finished := []
-    finished_subset := List.Subset.refl _
     finished_consistent := by simp
-    soundChannels := Ensemble.empty_soundChannels
+    finished_subset := List.Subset.refl _
+    subset_finished := by simp [circuit_norm, Ensemble.channelsWithGuarantees]
+    ordered_channels := by simp [circuit_norm]
+    verifier_empty := by simp [circuit_norm]
     specConsistency := by
       simp only [circuit_norm, Ensemble.SpecConsistency, Ensemble.empty, FormalCircuitWithInteractions.empty]
 
@@ -1922,10 +1954,14 @@ def addTable (soundEns : SoundEnsemble F PublicIO) (table : AbstractTable F)
     : SoundEnsemble F PublicIO where
   ensemble := soundEns.ensemble.addTable table
   finished := soundEns.finished
-  finished_subset := soundEns.finished_subset
   finished_consistent := soundEns.finished_consistent
-  soundChannels := soundEns.ensemble.soundChannels_addTable soundEns.soundChannels
-      soundEns.finished_consistent table grts_subset_finished reqs_disjoint_finished
+  finished_subset := soundEns.finished_subset
+  subset_finished := by
+    have h := soundEns.subset_finished
+    simp_all [circuit_norm, Ensemble.channelsWithGuarantees]
+  ordered_channels := soundEns.orderedChannels_of_soundChannels_addTable table soundEns.soundChannels
+    soundEns.verifier_empty grts_subset_finished reqs_disjoint_finished
+  verifier_empty := soundEns.verifier_empty
   specConsistency := by
     simp only [circuit_norm, Ensemble.SpecConsistency]
     intro witness spec
@@ -1953,16 +1989,11 @@ variable {soundEns : SoundEnsemble F PublicIO} {table : AbstractTable F}
 def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) : SoundEnsemble F PublicIO where
   ensemble := { soundEns.ensemble with channels := channel :: soundEns.channels }
   finished := soundEns.finished
-  finished_subset := by simp [soundEns.finished_subset]
   finished_consistent := soundEns.finished_consistent
-  soundChannels := by
-    intro witness constraints partial_balance
-    let witness' : EnsembleWitness soundEns.ensemble := { witness with }
-    -- partial balance is unchanged since it doesn't depend on "unfinished" channels
-    apply soundEns.soundChannels witness' ?_ partial_balance
-    simp only [Ensemble.Constraints] at constraints ⊢
-    intro table h_mem
-    exact constraints table h_mem
+  finished_subset := by simp [soundEns.finished_subset]
+  subset_finished := soundEns.subset_finished
+  ordered_channels := soundEns.ordered_channels
+  verifier_empty := soundEns.verifier_empty
   specConsistency := by
     intro witness spec
     let witness' : EnsembleWitness soundEns.ensemble := { witness with }
@@ -1977,19 +2008,29 @@ def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) : 
 @[circuit_norm] lemma addChannel_finished {channel : RawChannel F} :
   (soundEns.addChannel channel).finished = soundEns.finished := rfl
 
-def markFinished (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) [RawChannel.Consistent channel]
+def markFinished (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) [channel.Consistent]
   (h_mem : channel ∈ soundEns.channels := by simp [circuit_norm]) :
     SoundEnsemble F PublicIO where
   ensemble := soundEns.ensemble
   finished := channel :: soundEns.finished
-  finished_subset := by simp [h_mem, soundEns.finished_subset]
   finished_consistent := by
     intro channel' h_mem_channel
     rw [List.mem_cons] at h_mem_channel
-    rcases h_mem_channel with h_mem_head | h_mem_tail
-    · exact h_mem_head ▸ ‹RawChannel.Consistent channel›
+    rcases h_mem_channel with rfl | h_mem_tail
+    · assumption
     · exact soundEns.finished_consistent channel' h_mem_tail
-  soundChannels := soundEns.ensemble.soundChannels_markFinished soundEns.soundChannels channel
+  finished_subset := by simp [h_mem, soundEns.finished_subset]
+  subset_finished := by simp [soundEns.subset_finished]
+  ordered_channels := by
+    intro channel' hc pi
+    have : channel'.Consistent := by
+      simp at hc
+      rcases hc with rfl | hc_tail
+      · assumption
+      · exact soundEns.finished_consistent channel' hc_tail
+    have := soundEns.ensemble.soundChannels_markFinished soundEns.soundChannels channel' pi
+    exact this.right.left channel' (by simp)
+  verifier_empty := soundEns.verifier_empty
   specConsistency := by apply soundEns.specConsistency
 
 variable {channel : RawChannel F} [RawChannel.Consistent channel] {h_mem : channel ∈ soundEns.channels}
@@ -2305,9 +2346,9 @@ Soundness for a VM ensemble is simple:
 - the verifier spec can be proven from constraints + balance for all tables/channels
 -/
 def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) : Prop :=
-  ∀ witness,
-    ens.Constraints witness →
-    ens.BalancedChannels witness →
+  ∀ (witness : EnsembleWitness ens),
+    witness.Constraints →
+    witness.BalancedChannels →
       ens.VerifierGuarantees witness.publicInput witness.data
 
 structure SoundVmEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
