@@ -33,33 +33,6 @@ namespace Interaction
 def msgVector (i : Interaction F) : Vector F i.channel.arity :=
   ⟨ i.msg, i.same_size ⟩
 
-open Classical in
-/-- TODO remove this definition -/
-noncomputable def pairFor (channel : RawChannel F) (i : Interaction F) :
-    Option (F × Vector F channel.arity) :=
-  if h : i.channel = channel then
-    some (h ▸ (i.mult, i.msgVector))
-  else
-    none
-
-omit [Field F] [DecidableEq F] in
-@[simp]
-lemma pairFor_eq_some {channel : RawChannel F} {i : Interaction F} (h : i.channel = channel) :
-    i.pairFor channel = some (h ▸ (i.mult, i.msgVector)) := by
-  simp [Interaction.pairFor, h]
-
-omit [Field F] [DecidableEq F] in
-@[simp]
-lemma pairFor_eq_none {channel : RawChannel F} {i : Interaction F} (h : i.channel ≠ channel) :
-    i.pairFor channel = none := by
-  simp [Interaction.pairFor, h]
-
-omit [Field F] [DecidableEq F] in
-open Classical in
-lemma mem_pairFor_iff {channel : RawChannel F} {i : Interaction F} {entry : F × Vector F channel.arity} :
-    entry ∈ [i.pairFor channel].filterMap id ↔ i.pairFor channel = some entry := by
-  simp [pairFor]
-
 omit [Field F] [DecidableEq F] in
 lemma msgVector_eq_iff_msg_eq_toArray
     {channel : RawChannel F} {i : Interaction F} {msg : Vector F channel.arity}
@@ -68,42 +41,6 @@ lemma msgVector_eq_iff_msg_eq_toArray
   cases h
   cases msg
   simp [Interaction.msgVector]
-
-omit [Field F] [DecidableEq F] in
-lemma length_filterMap_pairFor_eq {channel : RawChannel F} {is : List (Interaction F)}
-    (h_channel : ∀ i ∈ is, i.channel = channel) :
-    (is.filterMap (Interaction.pairFor channel)).length = is.length := by
-  induction is with
-  | nil =>
-      simp
-  | cons i is ih =>
-      have hi : i.channel = channel := h_channel i (by simp)
-      have his : ∀ j ∈ is, j.channel = channel := by
-        intro j hj
-        exact h_channel j (by simp [hj])
-      cases hi
-      simp [Interaction.pairFor, ih his]
-
-omit [Field F] in
-lemma filterMap_pairFor_filter_msg_eq {channel : RawChannel F} {is : List (Interaction F)}
-    (h_channel : ∀ i ∈ is, i.channel = channel) (msg : Vector F channel.arity) :
-    ((is.filterMap (Interaction.pairFor channel)).filter (fun x => x.2 = msg)).map Prod.fst =
-      (is.filter (fun i => i.msg = msg.toArray)).map (·.mult) := by
-  induction is with
-  | nil =>
-      simp
-  | cons i is ih =>
-      have hi : i.channel = channel := h_channel i (by simp)
-      have his : ∀ j ∈ is, j.channel = channel := by
-        intro j hj
-        exact h_channel j (by simp [hj])
-      cases hi
-      have h_head :
-          (Vector.mk i.msg i.same_size = msg) ↔ i.msg = msg.toArray := by
-        exact Interaction.msgVector_eq_iff_msg_eq_toArray (i := i) (msg := msg) rfl
-      by_cases hmsg : i.msg = msg.toArray
-      · simp [Interaction.pairFor, Interaction.msgVector, hmsg, ih his]
-      · simp [Interaction.pairFor, Interaction.msgVector, h_head, hmsg, ih his]
 
 def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees i.mult i.msgVector data
@@ -482,19 +419,6 @@ def interactions (witness : TableWitness F) : List (Interaction F) :=
 noncomputable def interactionsWith (witness : TableWitness F) (channel : RawChannel F) : List (Interaction F) :=
   witness.table.flatMap fun row =>
     witness.abstract.operations.interactionValuesWith channel (witness.environment row)
-
-open Classical in
-/-- TODO remove this definition -/
-noncomputable def interactionPairsWith (witness : TableWitness F) (channel : RawChannel F) :
-    List (F × Vector F channel.arity) :=
-  (witness.interactionsWith channel).filterMap (Interaction.pairFor channel)
-
-lemma mem_interactionPairsWith {entry : F × Vector F channel.arity} :
-    entry ∈ witness.interactionPairsWith channel ↔
-      ∃ row ∈ witness.table, entry ∈
-        (witness.abstract.operations.interactionValuesWith channel (witness.environment row)).filterMap
-          (Interaction.pairFor channel) := by
-  simp [interactionPairsWith, interactionsWith, Operations.interactionValuesWith]
 
 open Classical in
 lemma interactionsWith_eq_filter :
@@ -934,12 +858,6 @@ def verifierInteractionsWith (ens : Ensemble F PublicIO) (channel : RawChannel F
   (circuit.operations 0).interactionsWith channel
   |>.map (AbstractInteraction.eval (emptyEnvironment F data))
 
-open Classical in
-noncomputable
-def verifierInteractionPairsWith (ens : Ensemble F PublicIO) (channel : RawChannel F)
-    (publicInput : PublicIO F) (data : ProverData F) : List (F × Vector F channel.arity) :=
-  (ens.verifierInteractionsWith channel publicInput data).filterMap (Interaction.pairFor channel)
-
 def VerifierAccepts (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
   let circuit := ens.verifier.main (const publicInput)
   (circuit.operations 0).ConstraintsHold (emptyEnvironment F data)
@@ -963,20 +881,6 @@ def VerifierRequirements (ens : Ensemble F PublicIO) (publicInput : PublicIO F) 
 
 def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
   ens.verifier.Spec publicInput () (emptyEnvironment F data)
-
-open Classical in
-noncomputable
-def interactionPairsWith (ens : Ensemble F PublicIO) (witness : EnsembleWitness ens) (channel : RawChannel F) : List (F × Vector F channel.arity) :=
-  ens.verifierInteractionPairsWith channel witness.publicInput witness.data
-  ++ witness.tables.flatMap (·.interactionPairsWith channel)
-
-lemma mem_interactionPairsWith {ens : Ensemble F PublicIO}
-    {witness : EnsembleWitness ens} {channel : RawChannel F}
-    {entry : F × Vector F channel.arity} :
-    entry ∈ ens.interactionPairsWith witness channel ↔
-      entry ∈ ens.verifierInteractionPairsWith channel witness.publicInput witness.data ∨
-      ∃ table ∈ witness.tables, entry ∈ table.interactionPairsWith channel := by
-  simp [interactionPairsWith]
 end Ensemble
 
 namespace EnsembleWitness
@@ -2362,11 +2266,11 @@ theorem SoundVmEnsemble.soundness (ens : SoundVmEnsemble F PublicIO) : ens.Sound
   use witness.data
   have soundVm := ens.soundVmChannel
   simp only [Ensemble.SoundVmChannel, Ensemble.VerifierGuarantees,
-    Ensemble.VerifierSpec, Ensemble.Constraints] at *
+    Ensemble.VerifierSpec, EnsembleWitness.Constraints] at *
   specialize soundVm witness constraints balance
   convert (ens.verifier.original_full_soundness _ _ _ ?_ soundVm).1
   rw [ProvableType.eval_const]
-  exact Ensemble.verifierAccepts_of_constraints constraints
+  exact EnsembleWitness.verifierAccepts_of_constraints constraints
 
 structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
@@ -2496,18 +2400,18 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   set vmChannel := vm.channel.toRaw
   -- instantiate `pairwise_guarantees_of_requirements_of_constraints`.
   -- first, we show that the vm channel interactions are made up of pull/push pairs
-  let vmInteractions := (ens.addVm vm).interactionsWith witness vmChannel
+  let vmInteractions := witness.interactionsWith vmChannel
   let vmVerifier := vm.verifier.main (const witness.publicInput)
   let vmVerifierInteractions := (vmVerifier.operations 0).interactionsWith vmChannel
     |>.map (AbstractInteraction.eval (emptyEnvironment F witness.data))
   have vmVerifierInteractions_eq : vmWitness.verifierTable.interactionsWith vmChannel
       = vmVerifierInteractions := by
     simp only [circuit_norm, TableWitness.interactionsWith, vmVerifierInteractions,
-      verifierTable_abstract_interactionsWith, h_vm_data, h_vm_pi]
+      EnsembleWitness.verifierTable_abstract_interactionsWith, h_vm_data, h_vm_pi]
     rfl
   have vmInteractions_eq : vmInteractions =
       vmVerifierInteractions ++ vmTables.flatMap (·.interactionsWith vmChannel) := by
-    simp only [vmInteractions, interactionsWith, h_allTables, List.flatMap_append]
+    simp only [vmInteractions, EnsembleWitness.interactionsWith, h_allTables, List.flatMap_append]
     suffices witness'.tables.flatMap (·.interactionsWith vmChannel) = [] by
       rw [this, List.append_nil]
       simp [EnsembleWitness.allTables, vmVerifierInteractions_eq, vmTables]
@@ -2515,7 +2419,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     intro table mem_table
     apply TableWitness.interactionsWith_nil_of_channel_not_mem
     apply ne_mem_vm_channel table.abstract
-    exact mem_abstract_of_mem_witness' mem_table
+    exact EnsembleWitness.mem_abstract_of_mem_witness' mem_table
   obtain ⟨ pull0Var, push0Var, vmVerifierInteractions_eq ⟩ := vm.verifier_channel witness.publicInput
   set emptyEnv := emptyEnvironment F witness.data
   let pull0 := eval emptyEnv pull0Var
@@ -2897,10 +2801,10 @@ TODO: find a generic strategy to show that k < p, so the statement simplifies to
 TODO: create a nicer packaging of the hypotheses here,
 e.g. VerifierAccepts could already include the constraints and balance and quantify witness existence
 -/
-theorem fibonacci_soundness : ∀ n x y witness,
+theorem fibonacci_soundness : ∀ n x y (witness : EnsembleWitness (fibonacciSoundEnsemble (p:=p).ensemble)),
   witness.publicInput = (n, x, y) →
-    (fibonacciSoundEnsemble (p:=p)).BalancedChannels witness →
-    (fibonacciSoundEnsemble (p:=p)).Constraints witness →
+    witness.BalancedChannels →
+    witness.Constraints →
     ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val := by
   intro n x y witness pi_eq balance constraints
   have soundness := (fibonacciSoundEnsemble (p:=p)).soundness witness balance constraints
