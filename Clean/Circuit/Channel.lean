@@ -263,14 +263,14 @@ lemma Channel.filter_other (channel : Channel F Message) (channel' : Channel F M
 
 @[circuit_norm]
 def ChannelInteraction.Guarantees (i : ChannelInteraction F Message) (env : Environment F) : Prop :=
-  i.channel.Guarantees (env i.mult) (eval env i.msg) env.data
+  i.assumeGuarantees → i.channel.Guarantees (env i.mult) (eval env i.msg) env.data
 
 @[circuit_norm]
 def InteractionWithChannel.Guarantees (i : InteractionWithChannel channel) (env : Environment F) : Prop :=
-  channel.Guarantees (env i.mult) (eval env i.msg) env.data
+  i.assumeGuarantees → channel.Guarantees (env i.mult) (eval env i.msg) env.data
 
 def AbstractInteraction.Guarantees (i : AbstractInteraction F) (env : Environment F) : Prop :=
-  i.channel.Guarantees (env i.mult) (i.msg.map env) env.data
+  i.assumeGuarantees → i.channel.Guarantees (env i.mult) (i.msg.map env) env.data
 
 @[circuit_norm]
 lemma AbstractInteraction.guarantees_def' (env : Environment F) (int : ChannelInteraction F Message) :

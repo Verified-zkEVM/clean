@@ -169,7 +169,7 @@ def ConstraintsHoldWithInteractions (eval : Environment F) :=
   forAllNoOffset {
     assert e := eval e = 0
     lookup l := l.Contains eval
-    interact i := i.assumeGuarantees → i.Guarantees eval
+    interact i := i.Guarantees eval
   }
 
 @[circuit_norm]
@@ -178,15 +178,15 @@ lemma constraintsHoldWithInteractions_iff_forall_mem {eval : Environment F}
   ConstraintsHoldWithInteractions eval ops ↔
     (∀ e ∈ constraints ops, eval e = 0) ∧
     (∀ l ∈ lookups ops, l.Contains eval) ∧
-    (∀ i ∈ interactions ops, i.assumeGuarantees → i.Guarantees eval) := by
+    (∀ i ∈ interactions ops, i.Guarantees eval) := by
   simp [ConstraintsHoldWithInteractions, forAllNoOffset_iff_forall_mem]
 
 def Guarantees (env : Environment F) : List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := i.assumeGuarantees → i.Guarantees env }
+  forAllNoOffset { interact i := i.Guarantees env }
 
  @[circuit_norm]
 lemma guarantees_iff_forall_mem {env : Environment F} {ops : List (FlatOperation F)} :
-  Guarantees env ops ↔ (∀ i ∈ interactions ops, i.assumeGuarantees → i.Guarantees env) := by
+  Guarantees env ops ↔ (∀ i ∈ interactions ops, i.Guarantees env) := by
   simp [Guarantees, forAllNoOffset_iff_forall_mem]
 
 def Requirements (env : Environment F) : List (FlatOperation F) → Prop :=
@@ -198,13 +198,13 @@ lemma requirements_iff_forall_mem {env : Environment F} {ops : List (FlatOperati
   simp [Requirements, forAllNoOffset_iff_forall_mem]
 
 def ChannelGuarantees (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := i.channel = channel → i.assumeGuarantees → i.Guarantees env }
+  forAllNoOffset { interact i := i.channel = channel → i.Guarantees env }
 
  @[circuit_norm]
 lemma channelGuarantees_iff_forall_mem {channel : RawChannel F} {env : Environment F}
     {ops : List (FlatOperation F)} :
   ChannelGuarantees channel env ops ↔
-    (∀ i ∈ interactions ops, i.channel = channel → i.assumeGuarantees → i.Guarantees env) := by
+    (∀ i ∈ interactions ops, i.channel = channel → i.Guarantees env) := by
   simp [ChannelGuarantees, forAllNoOffset_iff_forall_mem]
 
 def ChannelRequirements (channel : RawChannel F) (env : Environment F) : List (FlatOperation F) → Prop :=
@@ -219,13 +219,13 @@ lemma channelRequirements_iff_forall_mem {channel : RawChannel F} {env : Environ
 
 def InChannelsOrGuarantees (channels : List (RawChannel F)) (env : Environment F) :
     List (FlatOperation F) → Prop :=
-  forAllNoOffset { interact i := i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env) }
+  forAllNoOffset { interact i := i.channel ∈ channels ∨ i.Guarantees env }
 
 @[circuit_norm]
 lemma inChannelsOrGuarantees_iff_forall_mem {channels : List (RawChannel F)} {env : Environment F}
     {ops : List (FlatOperation F)} :
   InChannelsOrGuarantees channels env ops ↔
-    (∀ i ∈ interactions ops, i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env)) := by
+    (∀ i ∈ interactions ops, i.channel ∈ channels ∨ i.Guarantees env) := by
   simp [InChannelsOrGuarantees, forAllNoOffset_iff_forall_mem]
 
 def InChannelsOrRequirements (channels : List (RawChannel F)) (env : Environment F) :
@@ -813,16 +813,16 @@ def channels (ops : Operations F) : List (RawChannel F) := ops.interactions.map 
 -- TODO rename to ShallowGuarantees
 @[circuit_norm]
 def Guarantees (env : Environment F) (ops : Operations F) : Prop :=
-  ops.forAllNoOffset { interact i := i.assumeGuarantees → i.Guarantees env }
+  ops.forAllNoOffset { interact i := i.Guarantees env }
 
 lemma guarantees_iff_forall_mem {env : Environment F} {ops : Operations F} :
     Guarantees env ops ↔
-    ∀ i ∈ ops.shallowInteractions, i.assumeGuarantees → i.Guarantees env := by
+    ∀ i ∈ ops.shallowInteractions, i.Guarantees env := by
   simp [Guarantees, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
 def FullGuarantees (env : Environment F) (ops : Operations F) : Prop :=
-  ∀ i ∈ ops.interactions, i.assumeGuarantees → i.Guarantees env
+  ∀ i ∈ ops.interactions, i.Guarantees env
 
 -- TODO rename to ShallowRequirements
 @[circuit_norm]
@@ -840,7 +840,7 @@ def FullRequirements (env : Environment F) (ops : Operations F) : Prop :=
 
 @[circuit_norm]
 def ChannelGuarantees (channel : RawChannel F) (env : Environment F) (ops : Operations F) :=
-  ∀ i ∈ ops.interactions, i.channel = channel → i.assumeGuarantees → i.Guarantees env
+  ∀ i ∈ ops.interactions, i.channel = channel → i.Guarantees env
 
 @[circuit_norm]
 def ChannelRequirements (channel : RawChannel F) (env : Environment F) (ops : Operations F) :=
@@ -849,16 +849,16 @@ def ChannelRequirements (channel : RawChannel F) (env : Environment F) (ops : Op
 @[circuit_norm]
 def InChannelsOrGuarantees (channels : List (RawChannel F)) (env : Environment F)
     (ops : Operations F) : Prop :=
-  ops.forAllNoOffset { interact i := i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env) }
+  ops.forAllNoOffset { interact i := i.channel ∈ channels ∨ i.Guarantees env }
 
 lemma inChannelsOrGuarantees_iff_forall_mem {channels : List (RawChannel F)} {env : Environment F} {ops : Operations F} :
     InChannelsOrGuarantees channels env ops ↔
-    ∀ i ∈ ops.shallowInteractions, i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env) := by
+    ∀ i ∈ ops.shallowInteractions, i.channel ∈ channels ∨ i.Guarantees env := by
   simp [InChannelsOrGuarantees, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
 def InChannelsOrGuaranteesFull (channels : List (RawChannel F)) (env : Environment F) (ops : Operations F) : Prop :=
-  ∀ i ∈ ops.interactions, i.channel ∈ channels ∨ (i.assumeGuarantees → i.Guarantees env)
+  ∀ i ∈ ops.interactions, i.channel ∈ channels ∨ i.Guarantees env
 
 @[circuit_norm]
 def InChannelsOrRequirements (channels : List (RawChannel F)) (env : Environment F)
@@ -881,7 +881,7 @@ def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
   ops.forAllNoOffset {
     assert e := env e = 0
     lookup l := l.Soundness env
-    interact i := i.assumeGuarantees → i.Guarantees env
+    interact i := i.Guarantees env
     subcircuit s := s.Soundness env
   }
 
@@ -889,7 +889,7 @@ lemma constraintsHoldWithInteractions_soundness_iff_forall_mem {env : Environmen
     ConstraintsHoldWithInteractions.Soundness env ops ↔
     (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
     (∀ l ∈ ops.shallowLookups, l.Soundness env) ∧
-    (∀ i ∈ ops.shallowInteractions, i.assumeGuarantees → i.Guarantees env) ∧
+    (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
     (∀ s ∈ ops.subcircuits, s.2.Soundness env) := by
   simp [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_iff_forall_mem]
 
@@ -899,7 +899,7 @@ def ConstraintsHoldWithInteractions.Completeness (env : Environment F)
   ops.forAllNoOffset {
     assert e := env e = 0
     lookup l := l.Completeness env
-    interact i := i.assumeGuarantees → i.Guarantees env
+    interact i := i.Guarantees env
     subcircuit s := s.Completeness env
   }
 
@@ -907,7 +907,7 @@ lemma constraintsHoldWithInteractions_completeness_iff_forall_mem {env : Environ
     ConstraintsHoldWithInteractions.Completeness env ops ↔
     (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
     (∀ l ∈ ops.shallowLookups, l.Completeness env) ∧
-    (∀ i ∈ ops.shallowInteractions, i.assumeGuarantees → i.Guarantees env) ∧
+    (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
     (∀ s ∈ ops.subcircuits, s.2.Completeness env) := by
   simp [ConstraintsHoldWithInteractions.Completeness, Operations.forAllNoOffset_iff_forall_mem]
 
