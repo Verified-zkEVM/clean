@@ -476,6 +476,11 @@ theorem eval_fromElements {F : Type} [Field F] {α : TypeMap} [ProvableType α] 
     eval env (fromElements (F:=Expression F) xs) = fromElements (xs.map env) := by
   simp only [eval, toVars, toElements_fromElements]
 
+theorem toElements_eval {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env : Environment F)
+  (x : α (Expression F)) :
+    toElements (eval env x) = (toElements x).map (·.eval env) := by
+  simp only [eval, toVars, toElements_fromElements, toVars]
+
 theorem eval_fromVars {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env : Environment F)
   (xs : Vector (Expression F) (size α)) :
     eval env (fromVars xs) = fromElements (xs.map env) := eval_fromElements ..

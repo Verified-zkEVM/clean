@@ -457,7 +457,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   -- expose the channel guarantees and requirements, for end-to-end proofs
   channelsWithGuarantees : List (RawChannel F) := []
   guarantees_iff : ∀ input_var offset,
-    let ops := (elaborated.main input_var).operations offset
+    let ops := (main input_var).operations offset
     ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
     ∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env := by
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
@@ -466,7 +466,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
 
   channelsWithRequirements : List (RawChannel F) := []
   requirements_iff : ∀ input_var offset,
-    let ops := (elaborated.main input_var).operations offset
+    let ops := (main input_var).operations offset
     ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
       ∀ env, ops.InChannelsOrRequirements channelsWithRequirements env := by
     -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
@@ -479,7 +479,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
   -- with a given channel have some property.
   -- (if this ever becomes too restrictive for real circuits, we can relax by introducing a third list of "other channels")
   shallowChannels_subset : ∀ input_var offset,
-    let ops := (elaborated.main input_var).operations offset
+    let ops := (main input_var).operations offset
     ∀ channel ∈ ops.shallowChannels,
       channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements := by
     -- TODO this tactic would bee more effective if it would unfold all channels used in the circuit
@@ -488,7 +488,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
 
   exposedChannels (_ : Var Input F) (n : ℕ) : List (ExposedChannel F) := []
   exposedChannels_eq : ∀ input_var offset,
-    let ops := (elaborated.main input_var).operations offset
+    let ops := (main input_var).operations offset
     ∀ exposed ∈ exposedChannels input_var offset,
       ops.interactionsWith exposed.channel = exposed.interactions := by
     -- TODO this tactic would be more effective if it would unfold all channels used in the circuit

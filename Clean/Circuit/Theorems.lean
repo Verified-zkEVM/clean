@@ -851,9 +851,8 @@ theorem Operations.guarantees_iff (ops : Operations F)
 
 theorem FormalCircuitWithInteractions.guarantees_iff'
   (circuit : FormalCircuitWithInteractions F Input Output) (input_var : Var Input F) (n : ℕ) (env : Environment F) :
-    let ops := circuit.main input_var |>.operations n;
-    ops.FullGuarantees env ↔
-      ∀ channel ∈ circuit.channelsWithGuarantees, ops.ChannelGuarantees channel env := by
+    (circuit.main input_var |>.operations n).FullGuarantees env ↔
+      ∀ channel ∈ circuit.channelsWithGuarantees, (circuit.main input_var |>.operations n).ChannelGuarantees channel env := by
   apply Operations.guarantees_iff
   apply circuit.in_channels_or_guarantees_full
 
@@ -873,9 +872,8 @@ theorem Operations.requirements_iff (ops : Operations F)
 
 theorem FormalCircuitWithInteractions.requirements_iff'
   (circuit : FormalCircuitWithInteractions F Input Output) (input_var : Var Input F) (n : ℕ) (env : Environment F) :
-    let ops := circuit.main input_var |>.operations n;
-    ops.FullRequirements env ↔
-      ∀ channel ∈ circuit.channelsWithRequirements, ops.ChannelRequirements channel env := by
+    (circuit.main input_var |>.operations n).FullRequirements env ↔
+      ∀ channel ∈ circuit.channelsWithRequirements, (circuit.main input_var |>.operations n).ChannelRequirements channel env := by
   apply Operations.requirements_iff
   apply circuit.in_channels_or_requirements_full
 
