@@ -2354,6 +2354,41 @@ lemma zip_flattenPairs_perm {α : Type} {as bs : List α} :
     simp only [zip_cons_cons, flattenPairs_cons, cons_append, nil_append]
     grw [perm_cons, ← perm_cons_append_cons _ perm_rfl, perm_cons, ih]
 
+lemma flatMap_flatMap {α β γ : Type*} (l : List γ) (g : γ → List α) (f : γ → α → List β) :
+  l.flatMap (fun x => (g x).flatMap (f x)) = (l.map (fun x => (g x).map (f x))).flatten.flatten := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    simp [ih]
+    rfl
+
+lemma zip_flatten_flatten {α : Type} (as bs : List (List (α)))
+  (same_lengths : as.length = bs.length ∧ (∀ i (hi : i < as.length) (hi' : i < bs.length), as[i].length = bs[i].length)) :
+    List.zip as.flatten bs.flatten = ((as.zip bs).map (fun (t, s) => t.zip s)).flatten := by
+  revert same_lengths
+  suffices ∀ n, (_ : as.length = n) → (_ : bs.length = n) →
+    (∀ i (hi : i < n), as[i].length = bs[i].length) →
+      List.zip as.flatten bs.flatten = ((as.zip bs).map (fun t => t.1.zip t.2)).flatten by
+    rintro ⟨ same_length, same_lengths ⟩
+    apply this as.length rfl same_length.symm
+    intro i hi
+    exact same_lengths i hi (by linarith)
+  intro n alen blen same_lengths
+  induction n generalizing as bs with
+  | zero =>
+    simp at alen blen
+    simp [alen, blen]
+  | succ n ih =>
+    rcases as with rfl | ⟨ a, as ⟩; simp
+    rcases bs with rfl | ⟨ b, bs ⟩; simp
+    simp at alen blen
+    have same_length_zero : a.length = b.length := same_lengths 0 (by linarith)
+    have same_length_succ i (hi : i < n) : as[i].length = bs[i].length := same_lengths (i + 1) (by linarith)
+    simp only [List.flatten_cons, List.zip_cons_cons, List.map_cons]
+    rw [List.zip_append same_length_zero]
+    specialize ih as bs alen blen same_length_succ
+    rw [ih]
+
 abbrev VmWitness (vm : VmTables F PublicIO) := EnsembleWitness vm.toEnsemble
 
 namespace VmTables
@@ -2440,34 +2475,14 @@ lemma pushes_eq_interactions (witness : VmWitness vm) : witness.pushes =
   congr! with ⟨ table, table_mem ⟩ row
   simp [witness.interactionValuesWith_eq ‹_› row]
 
-private lemma flatMap_flatMap {α β γ : Type*} (l : List γ) (g : γ → List α) (f : γ → α → List β) :
-  l.flatMap (fun x => (g x).flatMap (f x)) = (l.map (fun x => (g x).map (f x))).flatten.flatten := by
-  induction l with
-  | nil => simp
-  | cons a l ih =>
-    simp [ih]
-    rfl
-
-private lemma zip_flatten_flatten {α : Type} (l1 l2 : List (List (α))) :
-    (List.zip l1.flatten l2.flatten) = ((l1.zip l2).map (fun (t, s) => t.zip s)).flatten := by
-  sorry
-
 theorem interactions_eq_pulls_pushes (witness : VmWitness vm) :
   witness.tables.flatMap (·.interactionsWith vm.channel.toRaw) =
     (List.zip witness.pulls witness.pushes).flattenPairs := by
-  simp [pulls, pushes, TableWitness.interactionsWith, List.flattenPairs]
-  show (witness.tables.flatMap (fun t => (TableWitness.table t).flatMap fun row => _)) = _
-  simp only [flatMap_flatMap]
-  simp only [List.flatMap_def, zip_flatten_flatten, List.map_flatten]
-  rw [List.zip_map', List.map_map, List.map_map]
-  rw [List.map_attach_eq_pmap]
-  simp only [Function.comp_apply]
-  rw [List.pmap_eq_map_attach]
-  simp only [List.zip_map', List.map_map]
-  have map2 {α β} (f : α → β) (g : α → β) : ((fun t => [t.1, t.2]) ∘ fun a => (f a, g a)) = (fun a => [f a, g a]) := by
-    ext; simp
-  conv => rhs; rhs; rhs; lhs; intro row; lhs; rw [map2]
-  congr 2
+  simp only [TableWitness.interactionsWith, List.flattenPairs, pulls, pushes]
+  rw [flatMap_flatMap, List.flatMap_def, List.flatMap_def]
+  rw [zip_flatten_flatten _ _ (by simp), List.zip_map']
+  rw [List.map_flatten, List.map_map, List.map_map, List.map_attach_eq_pmap]
+  simp only [Function.comp_apply, List.pmap_eq_map_attach, List.zip_map', List.map_map]
   rw [← List.pmap_eq_map (fun _ _ => trivial), List.pmap_eq_map_attach]
   congr
   funext ⟨ table, table_mem ⟩
