@@ -2659,10 +2659,22 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   let n := vmWitness.steps + 1
   have pulls_len : pulls.length = n := by simp [n, pulls, vmWitness.length_pulls]
   have pushes_len : pushes.length = n := by simp [n, pushes, vmWitness.length_pushes]
-  have pulls_channel : ∀ pull ∈ pulls, pull.channel = vmChannel := by simp [pulls, vmChannel, Channel.pulledValue]
-  have pushes_channel : ∀ push ∈ pushes, push.channel = vmChannel := by simp [pushes, vmChannel, Channel.pushedValue]
-  have pulls_mult : ∀ pull ∈ pulls, pull.mult = -1 := by simp [pulls, Channel.pulledValue]
-  have pushes_mult : ∀ push ∈ pushes, push.mult = 1 := by simp [pushes, Channel.pushedValue]
+  have pulls_channel : ∀ pull ∈ pulls, pull.channel = vmChannel := by
+    simp [pulls, vmChannel, Channel.pulledValue]
+    intro pull pull_mem
+    simp [vmWitness.pull_properties pull pull_mem]
+  have pushes_channel : ∀ push ∈ pushes, push.channel = vmChannel := by
+    simp [pushes, vmChannel, Channel.pushedValue]
+    intro push push_mem
+    simp [vmWitness.push_properties push push_mem]
+  have pulls_mult : ∀ pull ∈ pulls, pull.mult = -1 := by
+    simp [pulls, Channel.pulledValue]
+    intro pull pull_mem
+    simp [vmWitness.pull_properties pull pull_mem]
+  have pushes_mult : ∀ push ∈ pushes, push.mult = 1 := by
+    simp [pushes, Channel.pushedValue]
+    intro push push_mem
+    simp [vmWitness.push_properties push push_mem]
   have vmChannel_mem : vmChannel ∈ (ens.addVm vm).channels := by simp [Ensemble.addVm, vmChannel]
   have vmBalance : BalancedInteractions (pulls ++ pushes) := by
     have originalBalance : BalancedInteractions vmInteractions := balance vmChannel vmChannel_mem
@@ -2762,7 +2774,7 @@ def SoundEnsemble.addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicI
     SoundVmEnsemble F PublicIO where
   __ := ens.ensemble.addVm vm
   soundVmChannel := ens.ensemble.addVm_soundVmChannel_of_soundChannels
-    ens.soundChannels ens.finished_consistent _ vm ne_mem_vm_channel
+    ens.soundChannels ens.finished_consistent ens.finished_subset ens.verifier_empty vm ne_mem_vm_channel
     grts_subset_finished vgrts_subset_finished reqs_disjoint_finished
 
 namespace SoundVmEnsemble
