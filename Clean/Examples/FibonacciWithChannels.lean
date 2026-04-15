@@ -860,11 +860,8 @@ variable {ens : Ensemble F PublicIO}
 @[circuit_norm] lemma verifierTable_circuit : ens.verifierTable.circuit = ens.verifier := rfl
 @[circuit_norm] lemma verifierTable_input : ens.verifierTable.Input = PublicIO := rfl
 
-lemma mem_same_prover_data (witness : EnsembleWitness ens) :
-    ∀ table ∈ witness.allTables, table.data = witness.data := by
-  rw [witness.forall_mem_allTables_iff]
-  simp only [EnsembleWitness.verifierTable, true_and]
-  exact witness.same_data
+@[circuit_norm] lemma mem_allTables_verifierTable:
+  ens.verifierTable ∈ ens.allTables := by simp [allTables]
 
 lemma verifierTable_ext {ens1 ens2 : Ensemble F PublicIO} {witness1 : EnsembleWitness ens1} {witness2 : EnsembleWitness ens2} :
     ens1.verifier = ens2.verifier →
@@ -889,6 +886,9 @@ def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (channel : RawChannel 
 
 def VerifierRequirements (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
   ens.verifierOperations.FullRequirements (.fromInput publicInput data)
+
+def VerifierChannelRequirements (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
+  ens.verifierOperations.ChannelRequirements channel (.fromInput publicInput data)
 
 def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
   ens.verifier.Spec publicInput () (.fromInput publicInput data)
@@ -955,6 +955,18 @@ lemma verifierConstraints_iff_verifierTable_constraints {witness : EnsembleWitne
   simp only [Ensemble.VerifierConstraints, TableWitness.Constraints]
   simp only [circuit_norm, Ensemble.verifierTable_constraints, Ensemble.verifierTable_lookups]
 
+lemma verifierGuarantees_iff_verifierTable_guarantees {witness : EnsembleWitness ens} :
+  ens.VerifierGuarantees witness.publicInput witness.data ↔
+    witness.verifierTable.Guarantees := by
+  simp only [Ensemble.VerifierGuarantees, TableWitness.Guarantees]
+  simp only [circuit_norm, Ensemble.verifierTable_interactions]
+
+lemma verifierChannelGuarantees_iff {witness : EnsembleWitness ens} {channel : RawChannel F} :
+  ens.VerifierChannelGuarantees channel witness.publicInput witness.data ↔
+    witness.verifierTable.ChannelGuarantees channel := by
+  simp only [Ensemble.VerifierChannelGuarantees, TableWitness.ChannelGuarantees]
+  simp only [circuit_norm, Ensemble.verifierTable_interactions]
+
 lemma verifierConstraints_of_constraints {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
   witness.Constraints →
     ens.VerifierConstraints witness.publicInput witness.data := by
@@ -974,11 +986,13 @@ lemma verifierTable_constraints_of_verifier_empty {ens : Ensemble F PublicIO} {w
   simp only [Ensemble.VerifierConstraints, circuit_norm, h_verifier_empty]
 
 /-- The ensemble interactions with a particular channel are balanced. -/
+@[circuit_norm]
 abbrev BalancedChannel {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
     (channel : RawChannel F) : Prop :=
   BalancedInteractions (witness.allTablesWitness.interactionsWith channel)
 
 /-- All ensemble interactions with all ensemble channels are balanced. -/
+@[circuit_norm]
 def BalancedChannels {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
   ∀ channel ∈ ens.channels, BalancedChannel witness channel
 end EnsembleWitness
@@ -2118,7 +2132,7 @@ Furthermore, assume the list is balanced and the channel is normal.
 
 Then, for any i, the **converse** is true: Requirements (1, push_i) → Guarantees (-1, pull_i).
 -/
-theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠ 2)]
+theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar F ≠ 2)]
     (channel : RawChannel F) [NormalChannel.Raw channel]
     (pulls pushes : List (Interaction F)) (balance : BalancedInteractions (pulls ++ pushes)) (data : ProverData F)
   -- same length
@@ -2288,16 +2302,18 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
     ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
       table.circuit.exposedChannels table.rowInputVar table.rowOffset
 
-  -- the verifier pulls and pushes to the channel
+  -- the verifier pulls and pushes to the channel, and doesn't push anything else
   verifier_channel : ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
-      verifier.exposedChannels (varFromOffset PublicIO 0) (size PublicIO)
+    verifier.exposedChannels (varFromOffset PublicIO 0) (size PublicIO)
 
-  -- verifier requirements are unconditionally true
-  -- TODO: this works if the initial state is fixed and statically guaranteed to fulfill the reqs
-  -- but what if the state is an input and we want to add this as an assumption?
-  -- => then the verifier circuit should add constraints to enforce the requirements!
-  -- => this should work if the condition is formulated correctly, but the one below is too restrictive
-  verifier_requirements : verifier.channelsWithRequirements = [] := by rfl
+  -- verifier requirements follow _unconditionally_ from constraints (without relying on guarantees)
+  -- essentially a modified soundness theorem for the verifier
+  verifier_requirements :
+    let offset := size PublicIO;
+    let input_var := varFromOffset PublicIO 0;
+    ∀ env,
+      Operations.ConstraintsHold env (verifier.main input_var |>.operations offset) →
+      Operations.Requirements env (verifier.main input_var |>.operations offset)
 
 instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
 instance (vm : VmTables F PublicIO) : NormalChannel vm.channel := vm.normalChannel
@@ -2436,6 +2452,12 @@ lemma interactionsWith_eq {vm : VmTables F PublicIO} {table} (_ : table ∈ vm.a
     vm.channel.pushed (vm.push ‹_›) |>.toRaw ] := by
   apply AbstractTable.interactionsWith_of_exposedChannels
   apply vm.allTables_channel'
+
+lemma verifierInteractionsWith_eq {vm : VmTables F PublicIO} :
+  vm.toEnsemble.verifierTable.operations.interactionsWith vm.channel.toRaw = [
+    vm.channel.pulled (vm.pull Ensemble.mem_allTables_verifierTable) |>.toRaw,
+    vm.channel.pushed (vm.push Ensemble.mem_allTables_verifierTable) |>.toRaw ] := by
+  apply interactionsWith_eq
 end VmTables
 
 namespace VmWitness
@@ -2447,6 +2469,12 @@ noncomputable def rowPull (witness : VmWitness vm) {table} (_ : table ∈ witnes
 
 noncomputable def rowPush (witness : VmWitness vm) {table} (_ : table ∈ witness.allTables) (row : Array F) : vm.Message F :=
   eval (table.environment row) (vm.push (witness.mem_allTables_abstract_of_mem_allTables ‹_›))
+
+noncomputable def verifierPull (witness : VmWitness vm) : vm.Message F :=
+  eval (.fromInput witness.publicInput witness.data) (vm.pull Ensemble.mem_allTables_verifierTable)
+
+noncomputable def verifierPush (witness : VmWitness vm) : vm.Message F :=
+  eval (.fromInput witness.publicInput witness.data) (vm.push Ensemble.mem_allTables_verifierTable)
 
 lemma interactionValuesWith_eq (witness : VmWitness vm)
     {table} (_ : table ∈ witness.allTables) (row : Array F) :
@@ -2545,6 +2573,78 @@ lemma push_guarantees (witness : VmWitness vm) : ∀ push ∈ witness.pushes, pu
     forall_exists_index, and_imp]
   rintro push _ _ _ _ rfl
   simp only [circuit_norm, Interaction.Guarantees]
+
+lemma pulls_length_pos {witness : VmWitness vm} : witness.pulls.length > 0 := by
+  simp [pulls_length]
+lemma pushes_length_pos {witness : VmWitness vm} : witness.pushes.length > 0 := by
+  simp [pushes_length]
+
+lemma pulls_getElem_zero_eq (witness : VmWitness vm) :
+    witness.pulls[0]'pulls_length_pos = vm.channel.pulledValue witness.verifierPull := by
+  simp [pulls, allTables, circuit_norm, rowPull, verifierPull]
+
+lemma pushes_getElem_zero_eq (witness : VmWitness vm) :
+    witness.pushes[0]'pushes_length_pos = vm.channel.pushedValue witness.verifierPush := by
+  simp [pushes, allTables, circuit_norm, rowPush, verifierPush]
+
+/-- Translation of the VM soundness theorem to VmTables -/
+theorem verifier_guarantees_of_requirements_of_forall_requirements_of_guarantees
+  [Fact (ringChar F ≠ 2)] (witness : VmWitness vm) :
+  -- if the vm interactions with the vm channel are balanced
+  BalancedInteractions (witness.interactionsWith vm.channel.toRaw) →
+  -- and for every row, vm channel guarantees imply vm channel requirements
+  -- (this will come from constraints + soundness of the existing ensemble)
+  (∀ table ∈ witness.allTables, ∀ row ∈ table.table,
+    table.abstract.operations.ChannelGuarantees vm.channel.toRaw (table.environment row) →
+    table.abstract.operations.ChannelRequirements vm.channel.toRaw (table.environment row)) →
+  -- vm channel verifier requirements imply vm channel verifier guarantees
+  witness.verifierTable.ChannelRequirements vm.channel.toRaw →
+    witness.verifierTable.ChannelGuarantees vm.channel.toRaw := by
+  intro balance constraints
+  -- prove balance of pulls + pushes
+  replace balance : BalancedInteractions (witness.pulls ++ witness.pushes) := by
+    rw [witness.interactions_eq_pulls_pushes] at balance
+    apply balancedInteractions_of_perm balance
+    apply zip_flattenPairs_perm <| witness.pushes_length ▸ witness.pulls_length.symm
+  -- we fill in the conditions on pulls and pushes in `guarantees_of_requirements_of_requirements_of_guarantees`
+  let n := witness.steps + 1
+  have : witness.pulls.length = n := by simp [witness.pulls_length, n]
+  have : witness.pushes.length = n := by simp [witness.pushes_length, n]
+  have grts_of_reqs := guarantees_of_requirements_of_requirements_of_guarantees
+    vm.channel.toRaw witness.pulls witness.pushes balance witness.data n
+    witness.pulls_length witness.pushes_length witness.pulls_channel witness.pushes_channel
+    witness.pulls_mult witness.pushes_mult
+  -- it remains to prove the (grts → reqs) assumption. this is a reformulation of our `constraints`
+  have reqs_of_grts : (∀ i (hi : i < n),
+      witness.pulls[i].Guarantees witness.data → witness.pushes[i].Requirements witness.data) := by
+    suffices ∀ pair ∈ (witness.pulls.zip witness.pushes), pair.1.Guarantees witness.data → pair.2.Requirements witness.data by
+      simp only [List.forall_mem_iff_getElem, List.getElem_zip] at this
+      intro i hi
+      exact this i (by simp [*])
+    intro (pull, push) pair_mem
+    simp only
+    have ⟨ mem_pull, mem_push ⟩ := List.of_mem_zip pair_mem
+    have push_grts := witness.push_guarantees push mem_push
+    have pull_reqs := witness.pull_requirements pull mem_pull
+    rw [witness.mem_zip_pulls_pushes_iff] at pair_mem
+    obtain ⟨ table, table_mem, row, row_mem, interactions_eq ⟩ := pair_mem
+    suffices (∀ i ∈ [pull, push], i.Guarantees witness.data) → (∀ i ∈ [pull, push], i.Requirements witness.data) by
+      simp_all
+    rw [← interactions_eq, Operations.interactionValuesWith_eq_map, List.forall_mem_map, List.forall_mem_map]
+    have env_data_eq : (table.environment row).data = witness.data := witness.data_eq_of_mem_allTables _ table_mem
+    simp only [← env_data_eq, AbstractInteraction.eval_guarantees, AbstractInteraction.eval_requirements,
+      Operations.forall_interactionsWith_iff]
+    convert constraints table table_mem row row_mem
+  -- to get the conclusion about the verifier, we specialize to index 0
+  specialize grts_of_reqs reqs_of_grts 0 (by simp [n])
+  rw [witness.pulls_getElem_zero_eq, witness.pushes_getElem_zero_eq] at grts_of_reqs
+  simp only [VmWitness.verifierPush, VmWitness.verifierPull] at grts_of_reqs
+  rw [← Channel.eval_pushed, AbstractInteraction.eval_requirements] at grts_of_reqs
+  rw [← Channel.eval_pulled, AbstractInteraction.eval_guarantees] at grts_of_reqs
+  simp only [TableWitness.ChannelGuarantees, TableWitness.ChannelRequirements, circuit_norm]
+  simp only [← Operations.forall_interactionsWith_iff, vm.verifierInteractionsWith_eq]
+  simp_all only [List.mem_cons, List.not_mem_nil, forall_eq_or_imp]
+  tauto
 end VmWitness
 
 namespace Ensemble
@@ -2585,31 +2685,32 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     -- this would simplify this proof, and provide more meaning to the .channels property
     (∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels) →
     -- assuming that the VM tables' and verifier's channelsWithGuarantees are either finished or the VM channel
-    (∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished) →
-    vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished →
+    (vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished ∧
+      ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished) →
     -- and assuming the VM tables' channelsWithRequirements contain none of the finished ones
-    (∀ table ∈ vm.tables, ∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
+    (∀ channel ∈ finished, channel ∉ vm.verifier.channelsWithRequirements ∧
+      ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements) →
     -- the ensemble with the VM tables satisfies SoundVmChannel
     (ens.addVm vm).SoundVmChannel := by
-  intro ne_mem_vm_channel grts_subset vgrts_subset reqs_disjoint witness constraints balance
+  intro ne_mem_vm_channel grts_subset reqs_disjoint witness constraints balance
   /-
-  the high level idea is to show we are in the situation of `pairwise_guarantees_of_requirements_of_constraints`,
-  where the targeted interactions are those with the VM channel: vm tables + verifier.
+  the high level plan is to apply
+  `verifier_guarantees_of_requirements_of_forall_requirements_of_guarantees`.
 
-  the combination of constraints + guarantees for existing channels gives us the main condition:
-  "vm guarantees → vm requirements".
-  finally, `VmTables.verifier_requirements` gives us the requirements for the verifier, from which the conclusion follows.
+  1) we need to reduce vm channel balance to just the vm tables
+  2) the combination of constraints + guarantees for existing channels gives us the main condition:
+     "vm guarantees → vm requirements".
+  3) finally, `VmTables.verifier_requirements` gives us the requirements for the verifier,
+     from which the conclusion follows.
   -/
   obtain ⟨ vmWitness, witness', h_tables, h_allTables, h_vm_pi, h_pi, h_vm_data, h_data, h_vmTables ⟩ :=
     addVm_witness ens vm witness
   have h_data' : vmWitness.data = witness'.data := by rw [h_data, h_vm_data]
   set vmTables := vmWitness.tables
   set vmChannel := vm.channel.toRaw
-  -- instantiate `pairwise_guarantees_of_requirements_of_constraints`.
   -- first, we show that the vm channel interactions are made up of pull/push pairs
-  let vmInteractions := witness.interactionsWith vmChannel
-  have vmInteractions_eq : vmInteractions = vmWitness.interactionsWith vmChannel := by
-    simp only [vmInteractions, EnsembleWitness.interactionsWith, h_allTables, List.flatMap_append]
+  have vmInteractions_eq : witness.interactionsWith vmChannel = vmWitness.interactionsWith vmChannel := by
+    simp only [EnsembleWitness.interactionsWith, h_allTables, List.flatMap_append]
     suffices witness'.tables.flatMap (·.interactionsWith vmChannel) = [] by
       rw [this, List.append_nil]
     simp only [List.flatMap_eq_nil_iff]
@@ -2617,31 +2718,20 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     apply TableWitness.interactionsWith_nil_of_channel_not_mem
     apply ne_mem_vm_channel table.abstract
     exact EnsembleWitness.mem_tables_abstract_of_mem_tables mem_table
-  rw [vmWitness.interactions_eq_pulls_pushes] at vmInteractions_eq
-  have pairwise_guarantees := pairwise_guarantees_of_requirements_of_constraints
-    vm.channel.toRaw vmWitness.pulls vmWitness.pushes
-  -- we fill in the conditions on pulls and pushes in `pairwise_guarantees`
-  let n := vmWitness.steps + 1
-  have vmChannel_mem : vmChannel ∈ (ens.addVm vm).channels := by simp [Ensemble.addVm, vmChannel]
-  have vmBalance : BalancedInteractions (vmWitness.pulls ++ vmWitness.pushes) := by
-    have originalBalance : BalancedInteractions vmInteractions := balance vmChannel vmChannel_mem
-    rw [vmInteractions_eq] at originalBalance
-    apply balancedInteractions_of_perm originalBalance
-    apply zip_flattenPairs_perm <| vmWitness.pushes_length ▸ vmWitness.pulls_length.symm
-  specialize pairwise_guarantees vmBalance vmWitness.data n
-    vmWitness.pulls_length vmWitness.pushes_length vmWitness.pulls_channel vmWitness.pushes_channel
-    vmWitness.pulls_mult vmWitness.pushes_mult
-  -- to use this theorem, we need guarantees for all non-vm channels to hold unconditionally, on both the new tables and the verifier!
-  -- this is what `SoundChannels` for the existing ensemble gives us when we add all the new tables!
+  -- this already lets us supply the balance condition
+  have vmBalance := balance vmChannel (by simp [vmChannel, Ensemble.addVm])
+  simp only [circuit_norm, vmInteractions_eq] at vmBalance
+  have verifier_guarantees := vmWitness.verifier_guarantees_of_requirements_of_forall_requirements_of_guarantees
+    vmBalance
+  -- next, we work on instantiating `requirements_of_partial_guarantees_of_constraints`
+  -- which will give us exactly the second hypothesis of `verifier_guarantees`
   have finished_reqs : ∀ channel ∈ finished, ∀ table ∈ witness'.allTables,
       table.ChannelRequirements channel := by
     -- this comes from soundness + constraints
     sorry
-  have reqs_disjoint' : ∀ table ∈ vm.toEnsemble.allTables,
-      ∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements := by
+  replace reqs_disjoint : ∀ channel ∈ finished, ∀ table ∈ vm.toEnsemble.allTables,
+      channel ∉ table.circuit.channelsWithRequirements := by
     simp only [circuit_norm, VmTables.toEnsemble, allTables]
-    rw [vm.verifier_requirements]
-    simp
     exact reqs_disjoint
   have finished_grts : ∀ table ∈ vmWitness.allTables, ∀ channel ∈ finished,
       table.ChannelGuarantees channel := by
@@ -2650,7 +2740,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     apply guarantees_of_requirements_append (ts := vmWitness.allTablesWitness)
       (ss := witness'.allTablesWitness) (same_data := h_data')
     · intro table' table'_mem
-      apply reqs_disjoint' table'.abstract ?_ channel channel_mem
+      apply reqs_disjoint channel channel_mem table'.abstract
       apply vmWitness.mem_allTables_abstract_of_mem_allTables table'_mem
     · apply partialBalancedChannel_of_balancedInteractions
       convert balance channel ?_ using 1
@@ -2665,43 +2755,27 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   have vm_constraints : vmWitness.Constraints := by
     sorry
   -- unify channel subset assumption to all tables
-  have subset (table : TableWitness F) (h_table : table ∈ vmWitness.allTables) :
+  replace grts_subset (table : TableWitness F) (h_table : table ∈ vmWitness.allTables) :
       table.channelsWithGuarantees ⊆ vmChannel :: finished := by
     intro channel channel_mem
     replace h_table : table.abstract ∈ _ := vmWitness.mem_allTables_abstract_of_mem_allTables h_table
     simp [Ensemble.allTables, circuit_norm] at h_table channel_mem
     rcases h_table with h_ver | h_table
-    · apply vgrts_subset
+    · apply grts_subset.1
       rw [h_ver] at channel_mem
       convert channel_mem using 1
-    · apply grts_subset table.abstract h_table channel_mem
-  have vm_soundness (table : TableWitness F) (h_table : table ∈ vmWitness.allTables) :=
+    · apply grts_subset.2 table.abstract h_table channel_mem
+  have reqs_of_grts (table : TableWitness F) (h_table : table ∈ vmWitness.allTables) :=
     table.requirements_of_partial_guarantees_of_constraints (finished := finished) (unfinished := vmChannel)
-    (vm_constraints table h_table) (subset table h_table) (finished_grts table h_table)
-  have : vmWitness.pulls.length = n := by simp [vmWitness.pulls_length, n]
-  have : vmWitness.pushes.length = n := by simp [vmWitness.pushes_length, n]
-  have vm_reqs_of_grts : (∀ i (hi : i < n),
-      vmWitness.pulls[i].Guarantees vmWitness.data → vmWitness.pushes[i].Requirements vmWitness.data) := by
-    suffices ∀ pair ∈ (vmWitness.pulls.zip vmWitness.pushes), pair.1.Guarantees vmWitness.data → pair.2.Requirements vmWitness.data by
-      simp only [List.forall_mem_iff_getElem, List.getElem_zip] at this
-      intro i hi
-      exact this i (by simp [*])
-    intro (pull, push) pair_mem
-    simp only
-    have ⟨ mem_pull, mem_push ⟩ := List.of_mem_zip pair_mem
-    have push_grts := vmWitness.push_guarantees push mem_push
-    have pull_reqs := vmWitness.pull_requirements pull mem_pull
-    rw [vmWitness.mem_zip_pulls_pushes_iff] at pair_mem
-    obtain ⟨ table, table_mem, row, row_mem, interactions_eq ⟩ := pair_mem
-    suffices (∀ i ∈ [pull, push], i.Guarantees vmWitness.data) → (∀ i ∈ [pull, push], i.Requirements vmWitness.data) by
-      simp_all
-    simp only [← interactions_eq, Operations.interactionValuesWith_eq_map, List.forall_mem_map]
-    have env_data_eq : (table.environment row).data = vmWitness.data := vmWitness.data_eq_of_mem_allTables _ table_mem
-    simp only [← env_data_eq, AbstractInteraction.eval_guarantees, AbstractInteraction.eval_requirements,
-      Operations.forall_interactionsWith_iff]
-    specialize vm_soundness table table_mem row row_mem
-    convert vm_soundness
-  specialize pairwise_guarantees vm_reqs_of_grts 0 (by simp [n])
+    (vm_constraints table h_table) (grts_subset table h_table) (finished_grts table h_table)
+  specialize verifier_guarantees reqs_of_grts
+  rw [EnsembleWitness.verifierGuarantees_iff_verifierTable_guarantees]
+  have : witness.verifierTable = vmWitness.verifierTable := by
+    simp only [EnsembleWitness.verifierTable, circuit_norm]
+    sorry
+  rw [this]
+  show vmWitness.verifierTable.Guarantees
+
   have := vm.verifier_requirements
   -- we are basically there, just need to insert this at pairwise_guarantees and shows that this is exactly the goal
   sorry
@@ -2714,7 +2788,8 @@ def SoundEnsemble.addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicI
       := by simp [circuit_norm])
     (vgrts_subset_finished : vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: ens.finished
       := by simp [circuit_norm])
-    (reqs_disjoint_finished : ∀ table ∈ vm.tables, ∀ channel ∈ ens.finished, channel ∉ table.circuit.channelsWithRequirements
+    (reqs_disjoint_finished : ∀ channel ∈ ens.finished, channel ∉ vm.verifier.channelsWithRequirements ∧
+      ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements
       := by simp [circuit_norm]) :
     SoundVmEnsemble F PublicIO where
   __ := ens.ensemble.addVm vm
@@ -2727,7 +2802,8 @@ variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
   {nmv : ∀ table ∈ soundEns.ensemble.tables, vm.channel.toRaw ∉ table.circuit.channels}
   {gsf : ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: soundEns.finished}
   {vgsf : vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: soundEns.finished}
-  {rdf : ∀ table ∈ vm.tables, ∀ channel ∈ soundEns.finished, channel ∉ table.circuit.channelsWithRequirements}
+  {rdf : ∀ channel ∈ soundEns.finished, channel ∉ vm.verifier.channelsWithRequirements ∧
+    ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements}
 
 @[circuit_norm] lemma addVm_spec [Fact (ringChar F ≠ 2)] (publicInput : PublicIO F) :
   (soundEns.addVm vm nmv gsf vgsf rdf).Spec publicInput =
@@ -3020,6 +3096,9 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by simp [circuit_norm, fib8]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
+  verifier_requirements env := by
+    simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
+    exact ⟨ 0, rfl, rfl ⟩
 
 def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addTable ⟨pushBytes⟩ (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
@@ -3030,7 +3109,7 @@ def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8])
     (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
-    (by simp [circuit_norm, fibonacciVm, fib8, Add8Channel, FibonacciChannel])
+    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
 
 /--
 Fibonacci soundness, concretely: if someone proves to you that constraints on this ensemble are satisfied
