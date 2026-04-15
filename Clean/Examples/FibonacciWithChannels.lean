@@ -345,15 +345,31 @@ structure TableWitness (F : Type) [Field F] [DecidableEq F] where
   data : ProverData F
   uniform_width : ∀ row ∈ table, row.size = width
 
+@[circuit_norm] abbrev Environment.fromArray (row : Array F) (data : ProverData F) : Environment F where
+  get j := row[j]?.getD 0
+  data
+  interactions := [] -- I think we can remove this field??
+
+abbrev Environment.fromInput (row : Message F) (data : ProverData F) : Environment F :=
+  Environment.fromArray (toElements row).toArray data
+
+omit [DecidableEq F] in @[circuit_norm]
+lemma ProvableType.eval_fromInput_varFromOffset_zero
+  (input : Message F) (data : ProverData F) :
+    eval (.fromInput input data) (varFromOffset Message 0) = input := by
+  simp only [Environment.fromInput, eval_varFromOffset]
+  rw [ProvableType.fromElements_eq_iff, Vector.ext_iff]
+  intro i hi
+  rw [Vector.getElem_mapRange, zero_add, Vector.getElem?_toArray,
+    Vector.getElem?_eq_getElem hi, Option.getD_some]
+
 namespace TableWitness
 variable {witness :TableWitness F} {channel : RawChannel F}
 
 abbrev length (t : TableWitness F) : ℕ := t.table.length
 
-def environment (witness : TableWitness F) (row : Array F) : Environment F where
-  get j := row[j]?.getD 0
-  data := witness.data
-  interactions := [] -- I think we can remove this field??
+def environment (witness : TableWitness F) (row : Array F) :=
+  Environment.fromArray row witness.data
 
 theorem ext_iff {witness1 witness2 : TableWitness F} :
     witness1 = witness2 ↔
@@ -698,8 +714,8 @@ lemma balanceOf_perm {as bs : List (Interaction F)} {msg : Array F} :
   exact perm.filter (·.msg = msg) |>.map (·.mult)
 
 lemma balancedInteractions_of_perm {as bs : List (Interaction F)} :
-   List.Perm as bs → BalancedInteractions as → BalancedInteractions bs := by
-  rintro perm ⟨ lt_ringChar, balance ⟩
+   BalancedInteractions as → List.Perm as bs → BalancedInteractions bs := by
+  rintro ⟨ lt_ringChar, balance ⟩ perm
   constructor
   · simp_all [perm.length_eq]
   intro msg
@@ -733,58 +749,65 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
 
 /-- it's convenient to define a `TableWitness` for the verifier, to treat them in a unified way -/
 def EnsembleWitness.verifierTable {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : TableWitness F where
-  abstract := ⟨ ens.verifier.instantiateConst_toFormal witness.publicInput ⟩
-  width := 0
-  -- it's important that this has one empty row, since we want to "run" the verifier once on an empty environment
-  -- to produce interactions and so that constraints etc are actually enforced
-  table := [#[]]
+  abstract := ⟨ ens.verifier ⟩
+  width := size PublicIO
+  -- it's important that this has one row, which contains the input,
+  -- since we want to "run" the verifier once to produce interactions,
+  -- and so that constraints etc are actually enforced
+  table := [witness.publicInput |> toElements |>.toArray]
   data := witness.data
   uniform_width := by simp
 
-def Ensemble.verifierTable (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : AbstractTable F :=
-  ⟨ ens.verifier.instantiateConst_toFormal publicInput ⟩
+def Ensemble.verifierTable (ens : Ensemble F PublicIO) : AbstractTable F :=
+  ⟨ ens.verifier ⟩
 
-def Ensemble.allTables (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : List (AbstractTable F) :=
-  ens.verifierTable publicInput :: ens.tables
+def Ensemble.allTables (ens : Ensemble F PublicIO) : List (AbstractTable F) :=
+  ens.verifierTable :: ens.tables
 
-def emptyEnvironment (F : Type) [Field F] [DecidableEq F] (data : ProverData F) : Environment F :=
-  { get _ := 0, data, interactions := [] }
+-- def emptyEnvironment (F : Type) [Field F] [DecidableEq F] (data : ProverData F) : Environment F :=
+--   { get _ := 0, data, interactions := [] }
 
 namespace EnsembleWitness
-def allTables {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List (TableWitness F) :=
+variable {ens : Ensemble F PublicIO}
+
+def allTables (witness : EnsembleWitness ens) : List (TableWitness F) :=
   witness.verifierTable :: witness.tables
 
-abbrev allTablesWitness {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : TablesWitness F where
+abbrev allTablesWitness (witness : EnsembleWitness ens) : TablesWitness F where
   tables := witness.allTables
   data := witness.data
   same_data := by
     simp [allTables, verifierTable]
     apply witness.same_data
 
-@[circuit_norm] lemma allTablesWitness_tables {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
+@[circuit_norm] lemma allTablesWitness_tables (witness : EnsembleWitness ens) :
   witness.allTablesWitness.tables = witness.allTables := rfl
-@[circuit_norm] lemma allTablesWitness_data {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
+@[circuit_norm] lemma allTablesWitness_data (witness : EnsembleWitness ens) :
   witness.allTablesWitness.data = witness.data := rfl
 
-instance {ens : Ensemble F PublicIO} : CoeOut (EnsembleWitness ens) (TablesWitness F) where
+instance : CoeOut (EnsembleWitness ens) (TablesWitness F) where
   coe witness := witness.allTablesWitness
 
-lemma mem_allTables_of_mem_tables {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) {table : TableWitness F} :
+lemma mem_allTables_of_mem_tables (witness : EnsembleWitness ens) {table : TableWitness F} :
     table ∈ witness.tables → table ∈ witness.allTables := by
   simp_all [allTables]
 
-lemma mem_allTables_verifierTable {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
+lemma mem_allTables_verifierTable (witness : EnsembleWitness ens) :
     witness.verifierTable ∈ witness.allTables := by
   simp [allTables]
 
-lemma forall_mem_allTables_iff {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
+lemma forall_mem_allTables_iff (witness : EnsembleWitness ens)
   (motive : TableWitness F → Prop) :
     (∀ table ∈ witness.allTables, motive table) ↔
     motive witness.verifierTable ∧ (∀ table ∈ witness.tables, motive table) := by
   simp [allTables]
 
 @[circuit_norm]
-lemma tables_map_abstract_eq {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
+lemma verifierTable_abstract_eq (witness : EnsembleWitness ens) :
+  witness.verifierTable.abstract = ens.verifierTable := rfl
+
+@[circuit_norm]
+lemma tables_map_abstract_eq (witness : EnsembleWitness ens) :
     witness.tables.map (·.abstract) = ens.tables := by
   apply List.ext_getElem
   · simp [witness.same_length]
@@ -792,31 +815,19 @@ lemma tables_map_abstract_eq {ens : Ensemble F PublicIO} (witness : EnsembleWitn
   simp [witness.same_circuits i hi']
 
 @[circuit_norm]
-lemma allTables_map_abstract_eq {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
-    witness.allTables.map (·.abstract) = ens.allTables witness.publicInput := by
-  simp only [circuit_norm, allTables, Ensemble.allTables, verifierTable, Ensemble.verifierTable]
+lemma allTables_map_abstract_eq (witness : EnsembleWitness ens) :
+    witness.allTables.map (·.abstract) = ens.allTables := by
+  simp only [circuit_norm, allTables, Ensemble.allTables]
 
-lemma mem_abstract_of_mem_witness' {ens : Ensemble F PublicIO}
-  {witness : EnsembleWitness ens} {table : TableWitness F} :
+lemma mem_tables_abstract_of_mem_tables {witness : EnsembleWitness ens} {table : TableWitness F} :
     table ∈ witness.tables → table.abstract ∈ ens.tables := by
-  intro h_mem
-  let ⟨ i, hi, table_eq ⟩ := List.getElem_of_mem h_mem
-  symm at table_eq
-  subst table_eq
-  -- TODO the fact that we always use these theorems in reverse suggests that they are badly formulated
-  rw [←witness.same_length] at hi
-  simp [←witness.same_circuits i hi]
+  rw [← witness.tables_map_abstract_eq]
+  grind
 
-lemma mem_abstract_of_mem_witness {ens : Ensemble F PublicIO}
-  (witness : EnsembleWitness ens) (table : TableWitness F) :
-    table ∈ witness.allTables → table.abstract ∈ ens.allTables witness.publicInput := by
-  simp only [allTables, List.mem_cons, or_imp]
-  constructor
-  · rintro rfl
-    left
-  · intro h_mem
-    right
-    exact mem_abstract_of_mem_witness' h_mem
+lemma mem_allTables_abstract_of_mem_allTables {witness : EnsembleWitness ens} {table : TableWitness F} :
+    table ∈ witness.allTables → table.abstract ∈ ens.allTables := by
+  rw [← witness.allTables_map_abstract_eq]
+  grind
 
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
   ∀ table ∈ witness.allTables, table.Constraints
@@ -824,8 +835,8 @@ def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Pr
 def interactions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List (Interaction F) :=
   (witness.allTables).flatMap (fun table => table.interactions)
 
-noncomputable
-def interactionsWith {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) (channel : RawChannel F) : List (Interaction F) :=
+noncomputable def interactionsWith {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
+    (channel : RawChannel F) : List (Interaction F) :=
   witness.allTables.flatMap (·.interactionsWith channel)
 
 @[circuit_norm] lemma allTablesWitness_constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
@@ -839,6 +850,9 @@ end EnsembleWitness
 
 namespace Ensemble
 variable {ens : Ensemble F PublicIO}
+
+@[circuit_norm] lemma verifierTable_circuit : ens.verifierTable.circuit = ens.verifier := rfl
+@[circuit_norm] lemma verifierTable_input : ens.verifierTable.Input = PublicIO := rfl
 
 lemma mem_same_prover_data (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.allTables, table.data = witness.data := by
@@ -855,61 +869,56 @@ lemma verifierTable_ext {ens1 ens2 : Ensemble F PublicIO} {witness1 : EnsembleWi
   simp [EnsembleWitness.verifierTable, h_circuit, h_input, h_data]
 
 @[circuit_norm]
-lemma verifierTable_channelsWithGuarantees {ens : Ensemble F PublicIO} {publicInput : PublicIO F} :
-    (ens.verifierTable publicInput).circuit.channelsWithGuarantees = ens.verifier.channelsWithGuarantees := by
-  simp only [circuit_norm, verifierTable, FormalCircuitWithInteractions.instantiateConst_toFormal]
+abbrev verifierOperations (ens : Ensemble F PublicIO) : Operations F :=
+  (ens.verifier.main (varFromOffset PublicIO 0)).operations (size PublicIO)
 
-@[circuit_norm]
-lemma verifierTable_channelsWithRequirements {ens : Ensemble F PublicIO} {publicInput : PublicIO F} :
-    (ens.verifierTable publicInput).circuit.channelsWithRequirements = ens.verifier.channelsWithRequirements := by
-  simp only [circuit_norm, verifierTable, FormalCircuitWithInteractions.instantiateConst_toFormal]
-
-def verifierInteractions (ens : Ensemble F PublicIO)
-    (publicInput : PublicIO F) (data : ProverData F) : List (Interaction F) :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).interactions
-  |>.map (AbstractInteraction.eval (emptyEnvironment F data))
-
-noncomputable
-def verifierInteractionsWith (ens : Ensemble F PublicIO) (channel : RawChannel F)
-    (publicInput : PublicIO F) (data : ProverData F) : List (Interaction F) :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).interactionsWith channel
-  |>.map (AbstractInteraction.eval (emptyEnvironment F data))
-
-def VerifierAccepts (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).ConstraintsHold (emptyEnvironment F data)
+def VerifierConstraints (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
+  ens.verifierOperations.ConstraintsHold (.fromInput publicInput data)
 
 def VerifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).FullGuarantees (emptyEnvironment F data)
+  ens.verifierOperations.FullGuarantees (.fromInput publicInput data)
 
 def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (channel : RawChannel F) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).ChannelGuarantees channel (emptyEnvironment F data)
-
-lemma verifierGuarantees_iff (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) :
-    ens.VerifierGuarantees publicInput data ↔
-    ∀ channel ∈ ens.verifier.channelsWithGuarantees, ens.VerifierChannelGuarantees channel publicInput data := by
-  simp only [VerifierGuarantees, VerifierChannelGuarantees, FormalCircuitWithInteractions.guarantees_iff']
+  ens.verifierOperations.ChannelGuarantees channel (.fromInput publicInput data)
 
 def VerifierRequirements (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
-  let circuit := ens.verifier.main (const publicInput)
-  (circuit.operations 0).FullRequirements (emptyEnvironment F data)
+  ens.verifierOperations.FullRequirements (.fromInput publicInput data)
 
 def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
-  ens.verifier.Spec publicInput () (emptyEnvironment F data)
+  ens.verifier.Spec publicInput () (.fromInput publicInput data)
+
+lemma verifierTable_constraints :
+  ens.verifierTable.operations.constraints = ens.verifierOperations.constraints := by
+  rw [AbstractTable.constraints_eq]
+  simp only [circuit_norm]
+
+lemma verifierTable_lookups :
+  ens.verifierTable.operations.lookups = ens.verifierOperations.lookups := by
+  rw [AbstractTable.lookups_eq]
+  simp only [circuit_norm]
+
+lemma verifierTable_interactions :
+  ens.verifierTable.operations.interactions = ens.verifierOperations.interactions := by
+  rw [AbstractTable.interactions_eq]
+  simp only [circuit_norm]
+
+lemma verifierTable_interactionsWith {channel : RawChannel F} :
+  ens.verifierTable.operations.interactionsWith channel =
+    ens.verifierOperations.interactionsWith channel := by
+  rw [AbstractTable.interactionsWith_eq]
+  simp only [circuit_norm]
 end Ensemble
 
 namespace EnsembleWitness
-lemma mem_interactionsWith {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
+variable {ens : Ensemble F PublicIO}
+
+lemma mem_interactionsWith {witness : EnsembleWitness ens}
   {channel : RawChannel F} {i : Interaction F} :
     i ∈ witness.interactionsWith channel ↔
     ∃ table ∈ witness.allTables, i ∈ table.interactionsWith channel := by
   simp only [interactionsWith, List.mem_flatMap]
 
-lemma channel_eq_of_mem_interactionsWith {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
+lemma channel_eq_of_mem_interactionsWith {witness : EnsembleWitness ens}
   {channel : RawChannel F} {i : Interaction F} :
     i ∈ witness.interactionsWith channel → i.channel = channel := by
   rw [mem_interactionsWith]
@@ -917,73 +926,46 @@ lemma channel_eq_of_mem_interactionsWith {ens : Ensemble F PublicIO} {witness : 
   rcases h_mem with ⟨ table, h_table, h_mem_table ⟩
   apply table.channel_eq_of_mem_interactionsWith h_mem_table
 
-lemma verifierTable_constraints {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
-  witness.verifierTable.abstract.operations.constraints =
-    ((ens.verifier.main (const witness.publicInput)).operations 0).constraints := by
-  simp only [EnsembleWitness.verifierTable, circuit_norm, AbstractTable.constraints_eq,
-    FormalCircuitWithInteractions.instantiateConst_toFormal,
-    FormalCircuitWithInteractions.toSubcircuit]
-
-lemma verifierTable_lookups {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
-  witness.verifierTable.abstract.operations.lookups =
-    ((ens.verifier.main (const witness.publicInput)).operations 0).lookups := by
-  simp only [EnsembleWitness.verifierTable, circuit_norm, AbstractTable.lookups_eq,
-    FormalCircuitWithInteractions.instantiateConst_toFormal,
-    FormalCircuitWithInteractions.toSubcircuit]
-
-lemma verifierTable_abstract_interactions {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
-  witness.verifierTable.abstract.operations.interactions =
-    ((ens.verifier.main (const witness.publicInput)).operations 0).interactions := by
-  simp only [EnsembleWitness.verifierTable, circuit_norm, AbstractTable.interactions_eq,
-    FormalCircuitWithInteractions.instantiateConst_toFormal,
-    FormalCircuitWithInteractions.toSubcircuit]
-
-lemma verifierTable_abstract_interactionsWith {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} {channel : RawChannel F} :
-  witness.verifierTable.abstract.operations.interactionsWith channel =
-    ((ens.verifier.main (const witness.publicInput)).operations 0).interactionsWith channel := by
-  simp only [EnsembleWitness.verifierTable, circuit_norm,
-    Operations.interactionsWith, AbstractTable.interactions_eq,
-    FormalCircuitWithInteractions.instantiateConst_toFormal,
-    FormalCircuitWithInteractions.toSubcircuit]
-
 @[circuit_norm]
-lemma verifierTable_forall {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
+lemma verifierTable_forall {witness : EnsembleWitness ens}
       {motive : Array F → Prop} :
-    (∀ row ∈ witness.verifierTable.table, motive row) ↔ motive #[] := by
+    (∀ row ∈ witness.verifierTable.table, motive row) ↔ motive (toElements witness.publicInput).toArray := by
   simp [EnsembleWitness.verifierTable]
 
 @[circuit_norm]
-lemma verifierTable_flatMap {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
-      {α : Type*} {motive : Array F → List α} :
-    witness.verifierTable.table.flatMap motive = motive #[] := by
+lemma verifierTable_flatMap {witness : EnsembleWitness ens}
+      {α : Type*} {f : Array F → List α} :
+    witness.verifierTable.table.flatMap f = f (toElements witness.publicInput).toArray := by
   simp [EnsembleWitness.verifierTable]
 
 @[circuit_norm]
-lemma verifierTable_environment {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
-    witness.verifierTable.environment #[] = emptyEnvironment F witness.data := rfl
+lemma verifierTable_environment {witness : EnsembleWitness ens} {publicInput : PublicIO F} :
+    witness.verifierTable.environment (toElements publicInput).toArray =
+      Environment.fromInput publicInput witness.data := rfl
 
-lemma verifierAccepts_iff_verifierTable_constraints {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
-  ens.VerifierAccepts witness.publicInput witness.data ↔
+lemma verifierConstraints_iff_verifierTable_constraints {witness : EnsembleWitness ens} :
+  ens.VerifierConstraints witness.publicInput witness.data ↔
     witness.verifierTable.Constraints := by
-  simp only [TableWitness.Constraints, Ensemble.VerifierAccepts, circuit_norm, verifierTable_constraints, EnsembleWitness.verifierTable_lookups]
+  simp only [Ensemble.VerifierConstraints, TableWitness.Constraints]
+  simp only [circuit_norm, Ensemble.verifierTable_constraints, Ensemble.verifierTable_lookups]
 
-lemma verifierAccepts_of_constraints {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
+lemma verifierConstraints_of_constraints {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
   witness.Constraints →
-    ens.VerifierAccepts witness.publicInput witness.data := by
-  rw [verifierAccepts_iff_verifierTable_constraints, Constraints, EnsembleWitness.forall_mem_allTables_iff]
+    ens.VerifierConstraints witness.publicInput witness.data := by
+  rw [verifierConstraints_iff_verifierTable_constraints, Constraints, EnsembleWitness.forall_mem_allTables_iff]
   simp_all
 
 lemma interactionsWith_of_verifier_empty {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} {channel : RawChannel F}
   (h_verifier_empty : ens.verifier = .empty F PublicIO) :
     witness.interactionsWith channel = witness.tables.flatMap (·.interactionsWith channel) := by
   simp [EnsembleWitness.interactionsWith, EnsembleWitness.allTables, TableWitness.interactionsWith,
-    EnsembleWitness.verifierTable_abstract_interactionsWith, circuit_norm, h_verifier_empty]
+    Ensemble.verifierTable_interactionsWith, circuit_norm, h_verifier_empty]
 
 lemma verifierTable_constraints_of_verifier_empty {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
   (h_verifier_empty : ens.verifier = .empty F PublicIO) :
     witness.verifierTable.Constraints := by
-  simp only [TableWitness.Constraints, circuit_norm,
-    EnsembleWitness.verifierTable_constraints, EnsembleWitness.verifierTable_lookups, h_verifier_empty]
+  rw [← verifierConstraints_iff_verifierTable_constraints]
+  simp only [Ensemble.VerifierConstraints, circuit_norm, h_verifier_empty]
 
 /-- The ensemble interactions with a particular channel are balanced. -/
 abbrev BalancedChannel {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
@@ -1014,9 +996,10 @@ Completeness for an ensemble states that for any public input satisfying the spe
 the verifier accepts and there exists a witness such that constraints hold and the channels are balanced
 -/
 def Completeness (ens : Ensemble F PublicIO) : Prop :=
+  -- TODO data should not be here!!
   ∀ publicInput data,
     ens.Spec publicInput →
-    ens.VerifierAccepts publicInput data ∧
+    ens.VerifierConstraints publicInput data ∧
     ∃ (witness : EnsembleWitness ens),
       witness.data = data ∧ witness.publicInput = publicInput ∧
       witness.Constraints ∧ witness.BalancedChannels
@@ -1024,23 +1007,6 @@ end Ensemble
 
 -- infrastructure for iteratively adding tables to an ensemble such that we can always fill in
 -- the next table's guarantees
-
-open Classical in noncomputable
-def RawChannel.filter' (channel : RawChannel F) (interactions : List (Interaction F)) :=
-  interactions.filter (fun i => i.channel = channel)
-
-omit [Field F] [DecidableEq F] in
-lemma Interaction.channel_eq_of_mem_filter' {i : Interaction F} {channel : RawChannel F}
-  {interactions : List (Interaction F)} :
-    i ∈ channel.filter' interactions → i.channel = channel := by
-  simp_all [RawChannel.filter']
-
-omit [Field F] [DecidableEq F] in
-lemma RawChannel.mem_filter_iff {channel : RawChannel F} {interactions : List (Interaction F)}
-  {motive : Interaction F → Prop} :
-    (∀ i ∈ channel.filter' interactions, motive i) ↔
-    (∀ i ∈ interactions, i.channel = channel → motive i) := by
-  simp [RawChannel.filter']
 
 /--
 we call a channel "consistent" if balancedness + requirements on all interacions
@@ -1050,7 +1016,8 @@ this can be proved for individual channels without reference to any constraints,
 essentially just means that reqs and grts are reasonably related.
 -/
 class RawChannel.Consistent (channel : RawChannel F) : Prop where
-  consistent : ∀ (interactions : List (Interaction F)) (data : ProverData F), BalancedInteractions interactions →
+  consistent : ∀ (interactions : List (Interaction F)) (data : ProverData F),
+    BalancedInteractions interactions →
     (∀ i ∈ interactions, i.channel = channel ∧ i.Requirements data) →
     (∀ i ∈ interactions, i.Guarantees data)
 
@@ -1074,34 +1041,7 @@ def PartialBalancedChannel (tables : TablesWitness F) (channel : RawChannel F) :
     -- and it's the missing piece when reasoning about requirements and guarantees on the full list of balanced interactions.
     (channel ∉ tables.tables.flatMap (·.channelsWithGuarantees) ∨ ∀ i ∈ extraInteractions, i.Requirements tables.data)
 
-theorem partialBalancedChannel_cons_of_orderedChannelLt
-  {table : TableWitness F} {tables : TablesWitness F} (same_data : table.data = tables.data)
-  {channel : RawChannel F} :
-  (channel ∉ tables.tables.flatMap (·.channelsWithGuarantees) ∨ channel ∉ table.channelsWithRequirements) →
-  PartialBalancedChannel (.cons table tables same_data) channel →
-    PartialBalancedChannel tables channel := by
-  rintro not_in_reqs_or ⟨ extraInteractions, balanced, same_channel, extra_reqs_or_no_grts ⟩
-  use table.interactionsWith channel ++ extraInteractions
-  simp only [circuit_norm] at *
-  simp [or_imp] at ⊢ not_in_reqs_or extra_reqs_or_no_grts
-  constructor
-  · apply balancedInteractions_of_perm ?_ balanced
-    grw [List.perm_append_comm_assoc]
-  constructor
-  · intro a
-    use TableWitness.channel_eq_of_mem_interactionsWith
-    exact same_channel a
-  rw [forall_and]
-  rcases not_in_reqs_or with channel_not_in_grts | channel_not_in_reqs
-  · simp_all
-  rcases extra_reqs_or_no_grts with no_grts | extra_reqs
-  · simp_all
-  · right
-    have channel_reqs := table.requirements_of_not_mem channel_not_in_reqs
-    rw [TableWitness.channelRequirements_iff_forall, same_data] at channel_reqs
-    exact ⟨ channel_reqs, extra_reqs ⟩
-
-/-- Partial balance is trivially weaker than balanced channel -/
+/-- Partial balance is trivially weaker than balance -/
 lemma partialBalancedChannel_of_balancedInteractions {tables : TablesWitness F} {channel : RawChannel F} :
     BalancedInteractions (tables.interactionsWith channel) → PartialBalancedChannel tables channel := by
   intro balanced
@@ -1284,21 +1224,51 @@ lemma orderedChannelLt_of_no_guarantees {channel : RawChannel F} {ts ss : List (
 /--
 For ordered channels, we can always instantiate partial balance at an initial sublist.
 -/
-lemma partialBalancedChannel_cons_of_orderedChannel
+theorem partialBalancedChannel_of_cons_of_orderedChannelLt
+  {table : TableWitness F} {tables : TablesWitness F} (same_data : table.data = tables.data)
+  {channel : RawChannel F} :
+  PartialBalancedChannel (.cons table tables same_data) channel →
+  OrderedChannelLt channel tables.abstracts [table.abstract] →
+    PartialBalancedChannel tables channel := by
+  rintro ⟨ extraInteractions, balanced, same_channel, extra_reqs_or_no_grts ⟩ not_in_reqs_or
+  use table.interactionsWith channel ++ extraInteractions
+  simp only [circuit_norm] at *
+  simp [or_imp] at ⊢ not_in_reqs_or extra_reqs_or_no_grts
+  constructor
+  · apply balancedInteractions_of_perm balanced
+    grw [List.perm_append_comm_assoc]
+  constructor
+  · intro a
+    use TableWitness.channel_eq_of_mem_interactionsWith
+    exact same_channel a
+  rw [forall_and]
+  rcases not_in_reqs_or with channel_not_in_grts | channel_not_in_reqs
+  · simp_all
+  rcases extra_reqs_or_no_grts with no_grts | extra_reqs
+  · simp_all
+  · right
+    have channel_reqs := table.requirements_of_not_mem channel_not_in_reqs
+    rw [TableWitness.channelRequirements_iff_forall, same_data] at channel_reqs
+    exact ⟨ channel_reqs, extra_reqs ⟩
+
+/--
+For ordered channels, we can always instantiate partial balance at an initial sublist.
+-/
+lemma partialBalancedChannel_of_cons_of_orderedChannel
   {table : TableWitness F} {tables : TablesWitness F} (same_data : table.data = tables.data)
   {channel : RawChannel F} :
   OrderedChannel channel (table.abstract :: tables.abstracts) →
   PartialBalancedChannel (tables.cons table same_data) channel →
     PartialBalancedChannel tables channel := by
   intro ordered_channel partial_balance
-  apply partialBalancedChannel_cons_of_orderedChannelLt same_data ?_ partial_balance
+  apply partialBalancedChannel_of_cons_of_orderedChannelLt same_data partial_balance
   simp_all [circuit_norm]
 
 /--
 The significance of `OrderedChannel` is that it lets us prove soundness
 on a list of tables by induction. This lemma captures the main step.
 -/
-lemma guarantees_of_requirements_of_orderedChannel_cons
+lemma guarantees_of_requirements_cons
   -- given a list of tables, and one additional table
   {table : TableWitness F} {tables : TablesWitness F} (same_data : table.data = tables.data)
   -- and a channel that is consistent, ordered on the new table, and partially balanced on the combined tables
@@ -1404,20 +1374,20 @@ lemma partialBalancedChannel_of_sublist {subtables tables : TablesWitness F} {ch
     apply TableWitness.requirements_of_not_mem
     exact otherReqs _ ht
   -- balance
-  apply balancedInteractions_of_perm ?_ balanced
+  apply balancedInteractions_of_perm balanced
   simp only [TablesWitness.interactionsWith]
   grw [← List.append_assoc, List.perm_append_right_iff, ← List.flatMap_append, perm.flatMap]
   exact fun _ _ => List.Perm.refl _
 
 /--
-The argument of `guarantees_of_requirements_of_orderedChannel_cons`
+The argument of `guarantees_of_requirements_cons`
 also works for adding multiple new tables, if we make the assumption a bit stronger:
 We can no longer continue to introduce guarantees for the channel.
 
 This is relevant later when we add VM channels on top of an already finished, sound ensemble.
 -/
-lemma guarantees_of_requirements_of_orderedChannel_append
-  -- given two list of tables
+lemma guarantees_of_requirements_append
+  -- given two lists of tables
   {ts ss : TablesWitness F} (same_data : ts.data = ss.data)
   -- and a channel that is consistent, _doesn't add requirements_ on the new tables,
   -- and is partially balanced on the combined tables
@@ -1431,7 +1401,7 @@ lemma guarantees_of_requirements_of_orderedChannel_append
   rintro reqs partial_balance ih table h_table
   have same_data' : table.data = ss.data := by
     rw [ts.same_data _ h_table, same_data]
-  apply guarantees_of_requirements_of_orderedChannel_cons (tables := ss) same_data' ?_ ?_ ih
+  apply guarantees_of_requirements_cons (tables := ss) same_data' ?_ ?_ ih
   · right; exact reqs _ h_table
   -- get partial balance by sublist/permutation argument
   apply partialBalancedChannel_of_sublist partial_balance
@@ -1447,7 +1417,7 @@ lemma guarantees_of_requirements_of_orderedChannel_append
   apply List.getElem_cons_eraseIdx_perm
 
 /-- Helper lemma that uses circuit soundness, to strengthen guarantees to include requirements -/
-lemma guarantees_and_requirements_iff_of_constraints {table : TableWitness F} {finished : List (RawChannel F)} :
+lemma iff_guarantees_of_constraints {table : TableWitness F} {finished : List (RawChannel F)} :
   table.Constraints →
   table.abstract.circuit.channelsWithGuarantees ⊆ finished →
   ((table.Spec ∧ ∀ channel ∈ finished, table.ChannelGuarantees channel ∧ table.ChannelRequirements channel) ↔
@@ -1506,7 +1476,7 @@ theorem spec_and_guarantees_of_soundChannels {witness : TablesWitness F} {finish
   -- induction step
   rename_i table tables same_data ih
   -- first, we use the IH
-  have partial_balance' c hc := partialBalancedChannel_cons_of_orderedChannel
+  have partial_balance' c hc := partialBalancedChannel_of_cons_of_orderedChannel
     same_data (ordered_channels c hc) (partial_balance c hc)
   simp only [TablesWitness.Constraints, circuit_norm] at *
   simp only [forall_exists_index, and_imp, forall_apply_eq_imp_iff₂] at *
@@ -1515,13 +1485,13 @@ theorem spec_and_guarantees_of_soundChannels {witness : TablesWitness F} {finish
   constructor; swap
   · exact ih
   -- it's enough to prove guarantees of all channels, since they + constraints imply requirements
-  rw [guarantees_and_requirements_iff_of_constraints constraints.left subset_finished.left]
-  -- the rest is just applying `guarantees_of_requirements_of_orderedChannel_cons`
+  rw [iff_guarantees_of_constraints constraints.left subset_finished.left]
+  -- the rest is just applying `guarantees_of_requirements_cons`
   intro channel h_channel
   have : channel.Consistent := consistent_channels _ h_channel
   have orderedChannelRefl : OrderedChannelRefl channel table.abstract := by
     simp only [circuit_norm, ordered_channels channel h_channel]
-  apply guarantees_of_requirements_of_orderedChannel_cons same_data
+  apply guarantees_of_requirements_cons same_data
     orderedChannelRefl (partial_balance channel h_channel)
   intro t ht
   exact (ih t ht).right _ h_channel |>.right
@@ -1549,11 +1519,10 @@ lemma soundChannels_of_soundChannels_subset {tables : List (AbstractTable F)} {f
 
 /-- You can add one channel to the finished list and preserve `SoundChannels` -/
 lemma soundChannels_cons_of_soundChannels {tables : List (AbstractTable F)}
-  {finished : List (RawChannel F)} {channel : RawChannel F} :
+  {finished : List (RawChannel F)} {channel : RawChannel F} [channel.Consistent] :
   SoundChannels tables finished →
-  channel.Consistent →
     SoundChannels tables (channel :: finished) := by
-  intro sound_channels consistent_channel
+  intro sound_channels
   apply soundChannels_of_soundChannels_subset sound_channels
   · simp
   simp_all [SoundChannels]
@@ -1580,6 +1549,8 @@ def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableTyp
   (empty F PublicIO).channels = [] := rfl
 @[circuit_norm] lemma empty_verifier :
   (empty F PublicIO).verifier = .empty F PublicIO := rfl
+@[circuit_norm] lemma empty_allTables :
+  (empty F PublicIO).allTables = [⟨ .empty F PublicIO ⟩] := rfl
 
 /-- Partial balanced channel is trivially weaker than balanced channel -/
 lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
@@ -1606,11 +1577,11 @@ def TableSoundness (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) 
 abbrev SoundChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
   -- TODO: make the verifier table use witness instead of public input, so that
   -- we can state properties about it at the static level
-  ∀ publicInput, _root_.SoundChannels (ens.allTables publicInput) finished
+  _root_.SoundChannels ens.allTables finished
 
 @[circuit_norm]
 abbrev OrderedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
-  ∀ channel ∈ finished, (∀ publicInput, OrderedChannel channel (ens.allTables publicInput))
+  ∀ channel ∈ finished, OrderedChannel channel ens.allTables
 
 /--
 Main result of this section:
@@ -1619,34 +1590,30 @@ Main result of this section:
 -/
 theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} {finished : List (RawChannel F)} :
     ens.SoundChannels finished → ens.TableSoundness finished := by
-  intro ordered_channels witness constraints partial_balance table h_table
-  specialize ordered_channels witness.publicInput
-  apply spec_and_guarantees_of_soundChannels ?ordered_channels ?constraints
+  intro soundChannels witness constraints partial_balance table h_table
+  apply spec_and_guarantees_of_soundChannels ?soundChannels ?constraints
     partial_balance table h_table |>.left
-  <;> simpa only [circuit_norm]
+  <;> (simp only [circuit_norm]; assumption)
 
 def channelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
-  ens.verifier.channelsWithGuarantees ++ ens.tables.flatMap (·.circuit.channelsWithGuarantees)
+  ens.allTables.flatMap (·.circuit.channelsWithGuarantees)
 
 def channelsWithRequirements (ens : Ensemble F PublicIO) : List (RawChannel F) :=
-  ens.verifier.channelsWithRequirements ++ ens.tables.flatMap (·.circuit.channelsWithRequirements)
+  ens.allTables.flatMap (·.circuit.channelsWithRequirements)
 
-lemma channelsWithGuarantees_eq (ens : Ensemble F PublicIO) :
-  ∀ publicInput, ens.channelsWithGuarantees = (ens.allTables publicInput).flatMap (·.circuit.channelsWithGuarantees) := by
-  simp [channelsWithGuarantees, allTables, verifierTable,
-    FormalCircuitWithInteractions.instantiateConst_toFormal]
+lemma channelsWithGuarantees_eq_verifier_append (ens : Ensemble F PublicIO) :
+  ens.channelsWithGuarantees = ens.verifier.channelsWithGuarantees ++ ens.tables.flatMap (·.circuit.channelsWithGuarantees) := by
+  simp [channelsWithGuarantees, allTables, verifierTable]
 
-lemma channelsWithRequirements_eq (ens : Ensemble F PublicIO) :
-  ∀ publicInput, ens.channelsWithRequirements = (ens.allTables publicInput).flatMap (·.circuit.channelsWithRequirements) := by
-  simp [channelsWithRequirements, allTables,  verifierTable,
-    FormalCircuitWithInteractions.instantiateConst_toFormal]
+lemma channelsWithRequirements_eq_verifier_append (ens : Ensemble F PublicIO) :
+  ens.channelsWithRequirements = ens.verifier.channelsWithRequirements ++ ens.tables.flatMap (·.circuit.channelsWithRequirements) := by
+  simp [channelsWithRequirements, allTables, verifierTable]
 
 @[circuit_norm]
-lemma channelsWithGuarantees_subset_iff {ens : Ensemble F PublicIO} {finished : List (RawChannel F)}
-   (publicInput : PublicIO F) :
+lemma channelsWithGuarantees_subset_iff {ens : Ensemble F PublicIO} {finished : List (RawChannel F)} :
   ens.channelsWithGuarantees ⊆ finished ↔
-    ∀ tables ∈ ens.allTables publicInput, tables.circuit.channelsWithGuarantees ⊆ finished := by
-  simp [circuit_norm, channelsWithGuarantees, allTables]
+    ∀ tables ∈ ens.allTables, tables.circuit.channelsWithGuarantees ⊆ finished := by
+  simp [circuit_norm, channelsWithGuarantees]
 
 /-- specs on all tables + verifier spec imply ensemble spec -/
 def SpecConsistency (ens : Ensemble F PublicIO) : Prop :=
@@ -1674,8 +1641,7 @@ theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F Public
 
 /-- Empty ensemble satisfies SoundChannels -/
 theorem empty_soundChannels : (empty F PublicIO).SoundChannels [] := by
-  simp only [circuit_norm, allTables, verifierTable,
-    FormalCircuitWithInteractions.instantiateConst_toFormal]
+  simp only [circuit_norm]
 
 /-- Empty ensemble satisfies TableSoundness -/
 theorem empty_tableSoundness : (empty F PublicIO).TableSoundness [] :=
@@ -1803,9 +1769,8 @@ theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO) (t
     (∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
     -- the ensemble with the new table also satisfies SoundChannels!
     (ens.addTable table).OrderedChannels finished := by
-  intro h_sound verifier_empty grts_subset_finished reqs_disjoint_finished channel h_channel publicInput
+  intro h_sound verifier_empty grts_subset_finished reqs_disjoint_finished channel h_channel
   -- we need to make use of soundness of the original ensemble; that'll give us most of what we need
-  specialize h_sound publicInput
   simp only [circuit_norm, allTables, verifier_empty] at h_sound ⊢
   -- proof is a trivial combination of the hypotheses
   simp_all
@@ -1818,9 +1783,9 @@ theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
     (∀ channel ∈ finished, channel ∉ ens2.channelsWithRequirements) →
     -- the merged ensemble with the new table satisfies OrderedChannels!
     (ens1.merge ens2).OrderedChannels finished := by
-  intro h_sound verifier_empty reqs_disjoint_finished channel h_channel publicInput
+  intro h_sound verifier_empty reqs_disjoint_finished channel h_channel
   simp only [circuit_norm, allTables, verifier_empty] at h_sound ⊢
-  simp only [channelsWithRequirements, circuit_norm] at reqs_disjoint_finished
+  simp only [channelsWithRequirements_eq_verifier_append, circuit_norm] at reqs_disjoint_finished
   simp_all only [not_false_eq_true, or_true, true_and, and_true]
   constructor
   · apply orderedChannel_of_no_requirements
@@ -1835,9 +1800,7 @@ theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
     (channel : RawChannel F) [channel.Consistent] :
     -- the ensemble also satisfies SoundChannels including the new channel in the finished list
     ens.SoundChannels (channel :: finished) := by
-  intro publicInput
-  apply soundChannels_cons_of_soundChannels (h_sound publicInput)
-  assumption
+  exact soundChannels_cons_of_soundChannels h_sound
 end Ensemble
 
 structure SoundEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
@@ -1855,9 +1818,8 @@ attribute [circuit_norm] SoundEnsemble.finished_consistent SoundEnsemble.finishe
 
 namespace SoundEnsemble
 lemma soundChannels (ens : SoundEnsemble F PublicIO) : ens.SoundChannels ens.finished := by
-  intro publicInput
   rcases ens with ⟨ ens, finished, finished_consistent, finished_subset, subset_finished, ordered_channels, verifier_empty, specConsistency ⟩
-  rw [ens.channelsWithGuarantees_subset_iff publicInput] at subset_finished
+  rw [ens.channelsWithGuarantees_subset_iff] at subset_finished
   simp_all only [circuit_norm]
 
 def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] :
@@ -1888,7 +1850,7 @@ def addTable (soundEns : SoundEnsemble F PublicIO) (table : AbstractTable F)
   finished_subset := soundEns.finished_subset
   subset_finished := by
     have h := soundEns.subset_finished
-    simp_all [circuit_norm, Ensemble.channelsWithGuarantees]
+    simp_all [circuit_norm, Ensemble.channelsWithGuarantees_eq_verifier_append]
   ordered_channels := soundEns.orderedChannels_of_soundChannels_addTable table soundEns.soundChannels
     soundEns.verifier_empty grts_subset_finished reqs_disjoint_finished
   verifier_empty := soundEns.verifier_empty
@@ -1952,13 +1914,13 @@ def markFinished (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) 
   finished_subset := by simp [h_mem, soundEns.finished_subset]
   subset_finished := by simp [soundEns.subset_finished]
   ordered_channels := by
-    intro channel' hc pi
+    intro channel' hc
     have : channel'.Consistent := by
       simp at hc
       rcases hc with rfl | hc_tail
       · assumption
       · exact soundEns.finished_consistent channel' hc_tail
-    have := soundEns.ensemble.soundChannels_markFinished soundEns.soundChannels channel' pi
+    have := soundEns.ensemble.soundChannels_markFinished soundEns.soundChannels channel'
     exact this.right.left channel' (by simp)
   verifier_empty := soundEns.verifier_empty
   specConsistency := by apply soundEns.specConsistency
@@ -2068,9 +2030,11 @@ theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : Bal
   · simp_all [CharP.ringChar_zero_iff_CharZero]
 
 /--
-A "normal" channel is one where the requirements for a "push" interaction
-imply the guarantees of the corresponding pull interaction,
-and where only pull interactions cause guarantees to be added. -/
+A "normal" channel is one where
+- the requirements for a push interaction imply the guarantees of the corresponding pull interaction
+- only pull interactions cause guarantees to be added
+- only push interactions cause requirements to be added
+-/
 class NormalChannel.Raw (channel : RawChannel F) : Prop where
   grts_of_reqs : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
     channel.Requirements mult msg data → channel.Guarantees (-1) msg data
@@ -2140,140 +2104,140 @@ lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ}
       ring
 
 /--
-Assume you have a list of channel interactions that is made up of pairs (-1, a_i), (1, b_i),
-where for each i, Guarantees (-1, a_i) → Requirements (1, b_i).
-We want to think of (a_i → b_i) as the state transition of a VM circuit.
+Assume you have a list of channel interactions that is made up of pairs (-1, pull_i), (1, push_i),
+where for each i, Guarantees (-1, pull_i) → Requirements (1, push_i).
+We want to think of (pull_i → push_i) as the state transition of a VM circuit.
 
 Furthermore, assume the list is balanced and the channel is normal.
 
-Then, for any i, the **converse** is true: Requirements (1, b_i) → Guarantees (-1, a_i).
+Then, for any i, the **converse** is true: Requirements (1, push_i) → Guarantees (-1, pull_i).
 -/
 theorem pairwise_guarantees_of_requirements_of_constraints [Fact (ringChar F ≠ 2)]
     (channel : RawChannel F) [NormalChannel.Raw channel]
-    (as bs : List (Interaction F)) (balance : BalancedInteractions (as ++ bs)) (data : ProverData F)
+    (pulls pushes : List (Interaction F)) (balance : BalancedInteractions (pulls ++ pushes)) (data : ProverData F)
   -- same length
-  (n : ℕ) (h_len_a : as.length = n) (h_len_b : bs.length = n)
+  (n : ℕ) (len_pulls : pulls.length = n) (len_pushes : pushes.length = n)
   -- all interactions are on the input channel
-  (as_channel : ∀ a ∈ as, a.channel = channel) (bs_channel : ∀ b ∈ bs, b.channel = channel)
-  -- the multiplicities are -1 for as and 1 for bs
-  (as_mult : ∀ a ∈ as, a.mult = -1) (bs_mult : ∀ b ∈ bs, b.mult = 1) :
-    (∀ (i : ℕ) (hi : i < n), as[i].Guarantees data → bs[i].Requirements data) →
-    ∀ (i : ℕ) (hi: i < n), bs[i].Requirements data → as[i].Guarantees data := by
+  (pulls_channel : ∀ a ∈ pulls, a.channel = channel) (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
+  -- the multiplicities are -1 for pulls and 1 for pushes
+  (pulls_mult : ∀ a ∈ pulls, a.mult = -1) (pushes_mult : ∀ b ∈ pushes, b.mult = 1) :
+    (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →
+    ∀ (i : ℕ) (hi: i < n), pushes[i].Requirements data → pulls[i].Guarantees data := by
   -- the intuition for this proof is that when the requirements for b hold unconditionally, then
   -- the transition cycle that contains both a and b is valid, so in fact all the guarantees/requirements in this cycle must hold.
   -- but we avoid explicitly reasoning about cycles by using a clever inductive argument.
   intro constraints
-  induction n generalizing as bs with
+  induction n generalizing pulls pushes with
   | zero => intro i hi; nomatch hi
   | succ n ih =>
-    -- first, a little inline lemma: for every a, there is a b with the same message
-    -- (follows from `exists_push_of_pull`)
-    have exists_b_of_a : ∀ a ∈ as, ∃ b ∈ bs, b.msg = a.msg := by
-      intro a a_mem
-      have a_mem_append : a ∈ as ++ bs := by simp [a_mem]
-      have ⟨ b, b_mem, b_msg_eq, b_mult_ne_neg_one ⟩ := exists_push_of_pull (as ++ bs) balance a a_mem_append (as_mult a a_mem)
-      have b_mem : b ∈ bs := by simp only [List.mem_append] at b_mem; tauto
-      exists b
-    -- we identify the "previous" transition (a[j], b[j]) in the chain, where b[j] = a[i]
-    intro i hi bi_req
-    have ⟨ b', b'_mem, bj_msg ⟩ := exists_b_of_a as[i] (List.getElem_mem ..)
-    set msg := as[i].msg with ai_msg
-    have ⟨ j, hj, hb' ⟩ := List.getElem_of_mem b'_mem
-    subst hb'
-    rw [h_len_b] at hj
-    -- thanks to the channel being consistent, it suffices to show the requirements of b[j]
-    have bj_implies_ai : bs[j].Requirements data → as[i].Guarantees data := by
-      intro bj_req
-      have as_i_channel := as_channel as[i] (List.getElem_mem ..)
-      have bs_j_channel := bs_channel bs[j] (List.getElem_mem ..) |>.symm
-      have as_i_mult := as_mult as[i] (List.getElem_mem ..)
-      have bs_j_mult := bs_mult bs[j] (List.getElem_mem ..) |>.symm
-      have msg_size : msg.size = channel.arity := by rw [as[i].same_size, as_i_channel]
-      suffices a_grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
+    -- first, a little inline version of `exists_push_of_pull`
+    have exists_push_of_pull : ∀ pull ∈ pulls, ∃ push ∈ pushes, push.msg = pull.msg := by
+      intro pull pull_mem
+      have pull_mem_append : pull ∈ pulls ++ pushes := by simp [pull_mem]
+      have ⟨ push, push_mem, push_msg_eq, push_mult_ne_neg_one ⟩ := exists_push_of_pull (pulls ++ pushes)
+        balance pull pull_mem_append (pulls_mult pull pull_mem)
+      have push_mem : push ∈ pushes := by simp only [List.mem_append] at push_mem; tauto
+      exists push
+    -- we identify the "previous" transition (pulls[j], pushes[j]) in the chain, where pushes[j] = pulls[i]
+    intro i hi push_i_req
+    have ⟨ push', push'_mem, push_j_msg ⟩ := exists_push_of_pull pulls[i] (List.getElem_mem ..)
+    set msg := pulls[i].msg with pull_i_msg
+    have ⟨ j, hj, hpush' ⟩ := List.getElem_of_mem push'_mem
+    subst hpush'
+    rw [len_pushes] at hj
+    -- thanks to the channel being consistent, it suffices to show the requirements of pushes[j]
+    have push_j_imp_pull_i : pushes[j].Requirements data → pulls[i].Guarantees data := by
+      intro push_j_req
+      have pulls_i_channel := pulls_channel pulls[i] (List.getElem_mem ..)
+      have pushes_j_channel := pushes_channel pushes[j] (List.getElem_mem ..) |>.symm
+      have pulls_i_mult := pulls_mult pulls[i] (List.getElem_mem ..)
+      have pushes_j_mult := pushes_mult pushes[j] (List.getElem_mem ..) |>.symm
+      have msg_size : msg.size = channel.arity := by rw [pulls[i].same_size, pulls_i_channel]
+      suffices grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         simp only [Interaction.Guarantees]
-        convert fun _ => a_grt'
+        convert fun _ => grt'
       apply NormalChannel.Raw.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
-      simp only [Interaction.Requirements, Interaction.msgVector, bj_msg] at bj_req
-      convert bj_req
+      simp only [Interaction.Requirements, Interaction.msgVector, push_j_msg] at push_j_req
+      convert push_j_req
     -- if i = j, we're done
     by_cases h_ij : j = i
-    · subst h_ij; exact bj_implies_ai bi_req
+    · subst h_ij; exact push_j_imp_pull_i push_i_req
     -- if i ≠ j, we can reduce our goal to a smaller list: the one where
-    -- (a[j], b[j]) and (a[i], b[i]) are replaced with the single pair (a[j], b[i]).
-    have aj_implies_bi : as[j].Guarantees data → bs[i].Requirements data := fun aj_grt =>
-      aj_grt |> constraints j hj |> bj_implies_ai |> constraints i hi
-    -- we remove (a[i], b[i]) and change b[j] to b[i]
+    -- (pulls[j], pushes[j]) and (pulls[i], pushes[i]) are replaced with the single pair (pulls[j], pushes[i]).
+    have pulls_j_imp_push_i : pulls[j].Guarantees data → pushes[i].Requirements data := fun j_grt =>
+      j_grt |> constraints j hj |> push_j_imp_pull_i |> constraints i hi
+    -- we remove (pulls[i], pushes[i]) and change pushes[j] to pushes[i]
     let j' := if j < i then j else j - 1
-    let as' := as.eraseIdx i
-    let bs' := bs.eraseIdx i |>.set j' bs[i]
+    let pulls' := pulls.eraseIdx i
+    let pushes' := pushes.eraseIdx i |>.set j' pushes[i]
     have hj' : j' < n := by simp only [j']; split_ifs <;> omega
-    have h_len_as' : as'.length = n := by simp [as', List.length_eraseIdx, h_len_a, hi]
-    have h_len_bs' : bs'.length = n := by simp [bs', List.length_eraseIdx, h_len_b, hi]
-    have as'_getElem : as'[j'] = as[j] := by
-      simp only [as', j', List.getElem_eraseIdx]
+    have pulls'_len : pulls'.length = n := by simp [pulls', List.length_eraseIdx, len_pulls, hi]
+    have pushes'_len : pushes'.length = n := by simp [pushes', List.length_eraseIdx, len_pushes, hi]
+    have pulls'_getElem : pulls'[j'] = pulls[j] := by
+      simp only [pulls', j', List.getElem_eraseIdx]
       split_ifs
       · simp
       · omega
       · simp [show j - 1 + 1 = j by omega]
-    have bs'_getElem : bs'[j'] = bs[i] := by simp [bs', j']
-    suffices bi_implies_aj : bs'[j'].Requirements data → as'[j'].Guarantees data by
-      simp only [as'_getElem, bs'_getElem] at bi_implies_aj
-      exact bi_req |> bi_implies_aj |> constraints j hj |> bj_implies_ai
+    have pushes'_getElem : pushes'[j'] = pushes[i] := by simp [pushes', j']
+    suffices push_i_imp_pull_j : pushes'[j'].Requirements data → pulls'[j'].Guarantees data by
+      simp only [pulls'_getElem, pushes'_getElem] at push_i_imp_pull_j
+      exact push_i_req |> push_i_imp_pull_j |> constraints j hj |> push_j_imp_pull_i
     -- we need to re-check all assumptions about as', bs' for the induction hypothesis
     -- most of these are straightforward
-    have as'_mult : ∀ a ∈ as', a.mult = -1 := by
-      simp only [as', List.forall_mem_iff_getElem, List.getElem_eraseIdx]
+    have pulls'_mult : ∀ a ∈ pulls', a.mult = -1 := by
+      simp only [pulls', List.forall_mem_iff_getElem, List.getElem_eraseIdx]
       intros; split_ifs <;> simp [*]
-    have bs'_mult : ∀ b ∈ bs', b.mult = 1 := by
-      simp only [bs', List.forall_mem_iff_getElem, List.getElem_eraseIdx, List.getElem_set]
+    have pushes'_mult : ∀ b ∈ pushes', b.mult = 1 := by
+      simp only [pushes', List.forall_mem_iff_getElem, List.getElem_eraseIdx, List.getElem_set]
       intros; split_ifs <;> simp [*]
-    apply ih as' bs' ?balance' h_len_as' h_len_bs' ?as'_channel ?bs'_channel as'_mult bs'_mult ?constraints' j' hj'
+    apply ih pulls' pushes' ?balance' pulls'_len pushes'_len ?pulls'_channel ?pushes'_channel pulls'_mult pushes'_mult ?constraints' j' hj'
     <;> clear ih
-    case as'_channel | bs'_channel =>
-      simp only [as', bs', List.forall_mem_iff_getElem, List.getElem_set, List.getElem_eraseIdx]
+    case pulls'_channel | pushes'_channel =>
+      simp only [pulls', pushes', List.forall_mem_iff_getElem, List.getElem_set, List.getElem_eraseIdx]
       intros; split_ifs <;> simp [*]
-    case constraints' : ∀ i' (hi' : i' < n), as'[i'].Guarantees data → bs'[i'].Requirements data := by
+    case constraints' : ∀ i' (hi' : i' < n), pulls'[i'].Guarantees data → pushes'[i'].Requirements data := by
       intro i' hi'
       by_cases h_ij' : j' = i'
-      · simp only [←h_ij', as'_getElem, bs'_getElem]
-        exact aj_implies_bi
-      simp only [as', bs', h_ij', List.getElem_eraseIdx, ne_eq, not_false_eq_true, List.getElem_set_ne]
+      · simp only [←h_ij', pulls'_getElem, pushes'_getElem]
+        exact pulls_j_imp_push_i
+      simp only [pulls', pushes', h_ij', List.getElem_eraseIdx, ne_eq, not_false_eq_true, List.getElem_set_ne]
       split_ifs <;> exact constraints _ (by linarith)
-    -- it only remains to prove the balance condition for as' ++ bs'.
-    -- at a high level, this is obviously true because we removed two opposing elements with the same message
-    -- (b[j] and a[i]), so balance for any message is unaffected.
+    -- it only remains to prove the balance condition for pulls' ++ pushes'.
+    -- at a high level, this is obvious because we removed two opposing elements with the same message
+    -- (pushes[j] and pulls[i]), so balance for any message is unaffected.
     rcases balance with ⟨ lt_ringChar, balance ⟩
-    simp only [h_len_a, h_len_b, List.length_append] at lt_ringChar
+    simp only [len_pulls, len_pushes, List.length_append] at lt_ringChar
     constructor
-    · simp only [h_len_as', h_len_bs', List.length_append]
+    · simp only [pulls'_len, pushes'_len, List.length_append]
       rcases lt_ringChar with lt_ringChar | ringChar_zero
       · left; linarith
       · right; assumption
     intro msg'
     specialize balance msg'
     simp only [balanceOf_append] at balance ⊢
-    rw [balanceOf_eq_of_const_mult' as_mult, balanceOf_eq_of_const_mult' bs_mult] at balance
-    rw [balanceOf_eq_of_const_mult' as'_mult, balanceOf_eq_of_const_mult' bs'_mult]
+    rw [balanceOf_eq_of_const_mult' pulls_mult, balanceOf_eq_of_const_mult' pushes_mult] at balance
+    rw [balanceOf_eq_of_const_mult' pulls'_mult, balanceOf_eq_of_const_mult' pushes'_mult]
     simp only [neg_mul, one_mul, neg_add_eq_zero] at balance ⊢
-    have count_eq : as.countP (·.msg = msg') = bs.countP (·.msg = msg') := by
+    have count_eq : pulls.countP (·.msg = msg') = pushes.countP (·.msg = msg') := by
       rcases lt_ringChar with lt_ringChar | ringChar_zero
-      · have a_lt_ringChar : as.countP (·.msg = msg') < ringChar F := by
-          grw [List.countP_le_length, h_len_a, Nat.le_add_right (n + 1) (n + 1)]
+      · have a_lt_ringChar : pulls.countP (·.msg = msg') < ringChar F := by
+          grw [List.countP_le_length, len_pulls, Nat.le_add_right (n + 1) (n + 1)]
           exact lt_ringChar
-        have b_lt_ringChar : bs.countP (·.msg = msg') < ringChar F := by
-          grw [List.countP_le_length, h_len_b, Nat.le_add_right (n + 1) (n + 1)]
+        have b_lt_ringChar : pushes.countP (·.msg = msg') < ringChar F := by
+          grw [List.countP_le_length, len_pushes, Nat.le_add_right (n + 1) (n + 1)]
           exact lt_ringChar
         rw [Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ a_lt_ringChar b_lt_ringChar] at balance
         exact balance
       · rw [CharP.ringChar_zero_iff_CharZero] at ringChar_zero
         rw [Nat.cast_inj] at balance
         exact balance
-    have bs_eq : bs' = (bs.set j bs[i]).eraseIdx i := by
-      simp [bs', List.eraseIdx_set, j']
+    have pushes_eq : pushes' = (pushes.set j pushes[i]).eraseIdx i := by
+      simp [pushes', List.eraseIdx_set, j']
       split_ifs <;> (simp_all; try omega)
-    simp only [as', bs_eq]
-    rw [List.countP_eraseIdx (by linarith), ←ai_msg]
-    rw [List.countP_eraseIdx (by simp_all), List.countP_set (h_len_b ▸ hj), bj_msg]
+    simp only [pulls', pushes_eq]
+    rw [List.countP_eraseIdx (by linarith), ←pull_i_msg]
+    rw [List.countP_eraseIdx (by simp_all), List.countP_set (len_pushes ▸ hj), push_j_msg]
     simp [h_ij, count_eq]
 
 /--
@@ -2301,8 +2265,8 @@ theorem SoundVmEnsemble.soundness (ens : SoundVmEnsemble F PublicIO) : ens.Sound
     Ensemble.VerifierSpec, EnsembleWitness.Constraints] at *
   specialize soundVm witness constraints balance
   convert (ens.verifier.original_full_soundness _ _ _ ?_ soundVm).1
-  rw [ProvableType.eval_const]
-  exact EnsembleWitness.verifierAccepts_of_constraints constraints
+  · rw [ProvableType.eval_fromInput_varFromOffset_zero]
+  exact EnsembleWitness.verifierConstraints_of_constraints constraints
 
 structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
@@ -2314,14 +2278,13 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
   verifier_length_zero : ∀ pi, (verifier pi).localLength 0 = 0 := by
     simp only [circuit_norm]
 
-  tables_channel : ∀ table ∈ tables, ∀ input offset,
+  tables_channel : ∀ table ∈ tables,
     ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
-      table.circuit.exposedChannels input offset
+      table.circuit.exposedChannels table.rowInputVar table.rowOffset
 
   -- the verifier pulls and pushes to the channel
-  verifier_channel : ∀ input,
-    ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
-      verifier.exposedChannels (const input) 0
+  verifier_channel : ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
+      verifier.exposedChannels (varFromOffset PublicIO 0) (size PublicIO)
 
   -- verifier requirements are unconditionally true
   -- TODO: this works if the initial state is fixed and statically guaranteed to fulfill the reqs
@@ -2338,7 +2301,7 @@ def VmTables.toEnsemble (vm : VmTables F PublicIO) : Ensemble F PublicIO where
   tables := vm.tables
   verifier := vm.verifier
   verifier_length_zero := vm.verifier_length_zero
-  Spec publicInput := ∃ data, vm.verifier.Spec publicInput () (emptyEnvironment F data)
+  Spec publicInput := ∃ data, vm.verifier.Spec publicInput () (.fromInput publicInput data)
 
 lemma AbstractTable.interactionsWith_of_exposedChannels {table : AbstractTable F} {channel : RawChannel F}
   {interactions : List (AbstractInteraction F)}
@@ -2427,7 +2390,7 @@ abbrev VmWitness (vm : VmTables F PublicIO) := EnsembleWitness vm.toEnsemble
 namespace VmTables
 noncomputable def tablePair (vm : VmTables F PublicIO) (table : AbstractTable F) (table_mem : table ∈ vm.tables) :
     Var vm.Message F × Var vm.Message F :=
-  let h := vm.tables_channel table table_mem table.rowInputVar table.rowOffset
+  let h := vm.tables_channel table table_mem
   ⟨ h.choose, h.choose_spec.choose ⟩
 
 noncomputable def tablePull (vm : VmTables F PublicIO)
@@ -2441,7 +2404,7 @@ lemma tables_channel' (vm : VmTables F PublicIO) {table} (_ : table ∈ vm.table
   ⟨ vm.channel.toRaw,
     [(vm.channel.pulled (vm.tablePull ‹_›)).toRaw, (vm.channel.pushed (vm.tablePush ‹_›)).toRaw]
   ⟩ ∈ table.exposedChannels :=
-  vm.tables_channel table ‹_› table.rowInputVar table.rowOffset
+  vm.tables_channel table ‹_›
   |>.choose_spec.choose_spec
 
 lemma interactionsWith_eq {vm : VmTables F PublicIO} {table} (_ : table ∈ vm.tables) :
@@ -2456,17 +2419,17 @@ namespace VmWitness
 variable {vm : VmTables F PublicIO}
 
 noncomputable def tablePull (witness : VmWitness vm) {table} (_ : table ∈ witness.tables) (row : Array F) : vm.Message F :=
-  eval (table.environment row) (vm.tablePull (witness.mem_abstract_of_mem_witness' ‹_›))
+  eval (table.environment row) (vm.tablePull (witness.mem_tables_abstract_of_mem_tables ‹_›))
 
 noncomputable def tablePush (witness : VmWitness vm) {table} (_ : table ∈ witness.tables) (row : Array F) : vm.Message F :=
-  eval (table.environment row) (vm.tablePush (witness.mem_abstract_of_mem_witness' ‹_›))
+  eval (table.environment row) (vm.tablePush (witness.mem_tables_abstract_of_mem_tables ‹_›))
 
 lemma interactionValuesWith_eq (witness : VmWitness vm)
     {table} (_ : table ∈ witness.tables) (row : Array F) :
   table.abstract.operations.interactionValuesWith vm.channel.toRaw (table.environment row) = [
     vm.channel.pulledValue (witness.tablePull ‹_› row),
     vm.channel.pushedValue (witness.tablePush ‹_› row) ] := by
-  simp only [circuit_norm, vm.interactionsWith_eq (witness.mem_abstract_of_mem_witness' ‹_›),
+  simp only [circuit_norm, vm.interactionsWith_eq (witness.mem_tables_abstract_of_mem_tables ‹_›),
     tablePull, tablePush, AbstractInteraction.eval, ProvableType.toElements_eval]
 
 lemma interactionValuesWith_length (witness : VmWitness vm)
@@ -2560,7 +2523,7 @@ def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) : Ensemble F Pu
   tables := vm.tables ++ ens.tables
   verifier := vm.verifier
   verifier_length_zero := vm.verifier_length_zero
-  Spec publicInput := ∃ data, vm.verifier.Spec publicInput () (emptyEnvironment F data)
+  Spec publicInput := ∃ data, vm.verifier.Spec publicInput () (.fromInput publicInput data)
 
 @[circuit_norm] lemma addVm_channels (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) :
   (ens.addVm vm).channels = vm.channel.toRaw :: ens.channels := rfl
@@ -2615,14 +2578,13 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   -- instantiate `pairwise_guarantees_of_requirements_of_constraints`.
   -- first, we show that the vm channel interactions are made up of pull/push pairs
   let vmInteractions := witness.interactionsWith vmChannel
-  let vmVerifier := vm.verifier.main (const witness.publicInput)
-  let vmVerifierInteractions := (vmVerifier.operations 0).interactionsWith vmChannel
-    |>.map (AbstractInteraction.eval (emptyEnvironment F witness.data))
+  let vmVerifier := vm.verifier.instantiate
+  let vmVerifierInteractions := vm.toEnsemble.verifierOperations.interactionsWith vmChannel
+    |>.map (AbstractInteraction.eval (.fromInput witness.publicInput witness.data))
   have vmVerifierInteractions_eq : vmWitness.verifierTable.interactionsWith vmChannel
       = vmVerifierInteractions := by
     simp only [circuit_norm, TableWitness.interactionsWith, vmVerifierInteractions,
-      EnsembleWitness.verifierTable_abstract_interactionsWith, h_vm_data, h_vm_pi]
-    rfl
+      Ensemble.verifierTable_interactionsWith, h_vm_data, h_vm_pi]
   have vmInteractions_eq_vmTableInteractions :
       vmInteractions = vmWitness.allTables.flatMap (·.interactionsWith vmChannel) := by
     sorry
@@ -2636,17 +2598,17 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     intro table mem_table
     apply TableWitness.interactionsWith_nil_of_channel_not_mem
     apply ne_mem_vm_channel table.abstract
-    exact EnsembleWitness.mem_abstract_of_mem_witness' mem_table
-  obtain ⟨ pull0Var, push0Var, vmVerifierInteractions_eq ⟩ := vm.verifier_channel witness.publicInput
-  set emptyEnv := emptyEnvironment F witness.data
-  let pull0 := eval emptyEnv pull0Var
-  let push0 := eval emptyEnv push0Var
+    exact EnsembleWitness.mem_tables_abstract_of_mem_tables mem_table
+  obtain ⟨ pull0Var, push0Var, vmVerifierInteractions_eq ⟩ := vm.verifier_channel
+  set verifierEnv := Environment.fromInput witness.publicInput witness.data
+  let pull0 := eval verifierEnv pull0Var
+  let push0 := eval verifierEnv push0Var
   replace vmVerifierInteractions_eq : vmVerifierInteractions =
       [vm.channel.pulledValue pull0, vm.channel.pushedValue push0] := by
-    replace vmVerifierInteractions_eq := vm.verifier.exposedChannels_eq (const witness.publicInput) 0 _ vmVerifierInteractions_eq
+    replace vmVerifierInteractions_eq := vm.verifier.exposedChannels_eq (varFromOffset PublicIO 0) (size PublicIO) _ vmVerifierInteractions_eq
     simp only [vmVerifierInteractions] at vmVerifierInteractions_eq ⊢
     rw [←Channel.eval_pulled, ←Channel.eval_pushed]
-    show _ = [(vm.channel.pulled pull0Var).toRaw, (vm.channel.pushed push0Var).toRaw].map (·.eval emptyEnv)
+    show _ = [(vm.channel.pulled pull0Var).toRaw, (vm.channel.pushed push0Var).toRaw].map (·.eval verifierEnv)
     congr
   rw [vmVerifierInteractions_eq] at vmInteractions_eq
   have vmInteractions_eq' := vmWitness.interactions_eq_pulls_pushes
@@ -2679,7 +2641,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   have vmBalance : BalancedInteractions (pulls ++ pushes) := by
     have originalBalance : BalancedInteractions vmInteractions := balance vmChannel vmChannel_mem
     rw [vmInteractions_eq] at originalBalance
-    apply balancedInteractions_of_perm ?perm originalBalance
+    apply balancedInteractions_of_perm originalBalance
     apply zip_flattenPairs_perm <| pushes_len ▸ pulls_len.symm
   specialize pairwise_guarantees vmBalance witness.data n pulls_len pushes_len pulls_channel pushes_channel pulls_mult pushes_mult
   -- to use this theorem, we need guarantees for all non-vm channels to hold unconditionally, on both the new tables and the verifier!
@@ -2688,7 +2650,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       table.ChannelRequirements channel := by
     -- this comes from soundness + constraints
     sorry
-  have reqs_disjoint' : ∀ table ∈ vm.toEnsemble.allTables vmWitness.publicInput,
+  have reqs_disjoint' : ∀ table ∈ vm.toEnsemble.allTables,
       ∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements := by
     simp only [circuit_norm, VmTables.toEnsemble, allTables]
     rw [vm.verifier_requirements]
@@ -2698,11 +2660,11 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       table.ChannelGuarantees channel := by
     intro table table_mem channel channel_mem
     have : channel.Consistent := consistent channel channel_mem
-    apply guarantees_of_requirements_of_orderedChannel_append (ts := vmWitness.allTablesWitness)
+    apply guarantees_of_requirements_append (ts := vmWitness.allTablesWitness)
       (ss := witness'.allTablesWitness) (same_data := h_data')
     · intro table' table'_mem
       apply reqs_disjoint' table'.abstract ?_ channel channel_mem
-      apply vmWitness.mem_abstract_of_mem_witness _ table'_mem
+      apply vmWitness.mem_allTables_abstract_of_mem_allTables table'_mem
     · apply partialBalancedChannel_of_balancedInteractions
       convert balance channel ?_ using 1
       · simp only [circuit_norm]
@@ -2719,7 +2681,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   have subset (table : TableWitness F) (h_table : table ∈ vmWitness.allTables) :
       table.channelsWithGuarantees ⊆ vmChannel :: finished := by
     intro channel channel_mem
-    replace h_table : table.abstract ∈ _ := vmWitness.mem_abstract_of_mem_witness _ h_table
+    replace h_table : table.abstract ∈ _ := vmWitness.mem_allTables_abstract_of_mem_allTables h_table
     simp [Ensemble.allTables, circuit_norm] at h_table channel_mem
     rcases h_table with h_ver | h_table
     · apply vgrts_subset
@@ -2786,7 +2748,7 @@ variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
 
 @[circuit_norm] lemma addVm_spec [Fact (ringChar F ≠ 2)] (publicInput : PublicIO F) :
   (soundEns.addVm vm nmv gsf vgsf rdf).Spec publicInput =
-    ∃ data, vm.verifier.Spec publicInput () (emptyEnvironment F data) := rfl
+    ∃ data, vm.verifier.Spec publicInput () (.fromInput publicInput data) := rfl
 end SoundVmEnsemble
 end
 
