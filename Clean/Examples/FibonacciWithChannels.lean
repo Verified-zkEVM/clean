@@ -84,6 +84,10 @@ noncomputable def Operations.interactionValuesWith (channel : RawChannel F)
     (ops : Operations F) (env : Environment F) : List (Interaction F) :=
   ops.interactionsWith channel |>.map (·.eval env)
 
+omit [DecidableEq F] in
+lemma Operations.interactionValuesWith_eq_map {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
+    ops.interactionValuesWith channel env = (ops.interactionsWith channel).map (·.eval env) := rfl
+
 omit [DecidableEq F] in open Classical in
 lemma Operations.interactionValuesWith_eq_filter {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
     ops.interactionValuesWith channel env = (ops.interactionValues env).filter (·.channel = channel) := by
@@ -764,6 +768,14 @@ abbrev allTablesWitness {ens : Ensemble F PublicIO} (witness : EnsembleWitness e
 
 instance {ens : Ensemble F PublicIO} : CoeOut (EnsembleWitness ens) (TablesWitness F) where
   coe witness := witness.allTablesWitness
+
+lemma mem_allTables_of_mem_tables {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) {table : TableWitness F} :
+    table ∈ witness.tables → table ∈ witness.allTables := by
+  simp_all [allTables]
+
+lemma mem_allTables_verifierTable {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
+    witness.verifierTable ∈ witness.allTables := by
+  simp [allTables]
 
 lemma forall_mem_allTables_iff {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
   (motive : TableWitness F → Prop) :
@@ -2064,12 +2076,14 @@ class NormalChannel.Raw (channel : RawChannel F) : Prop where
     channel.Requirements mult msg data → channel.Guarantees (-1) msg data
   grts_of_ne_neg_one : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
     channel.Guarantees mult msg data
+  reqs_neg_one : ∀ (msg : Vector F channel.arity) (data), channel.Requirements (-1) msg data
 
 class NormalChannel (channel : Channel F Message) : Prop where
   grts_of_reqs : ∀ (msg : Message F) (mult : F) data, mult ≠ -1 →
     channel.Requirements mult msg data → channel.Guarantees (-1) msg data
   grts_of_ne_neg_one : ∀ (msg : Message F) (mult : F) data, mult ≠ -1 →
     channel.Guarantees mult msg data
+  reqs_neg_one : ∀ (msg : Message F) (data), channel.Requirements (-1) msg data
 
 instance (channel : Channel F Message) [NormalChannel channel] : NormalChannel.Raw channel.toRaw where
   grts_of_reqs := by
@@ -2078,6 +2092,9 @@ instance (channel : Channel F Message) [NormalChannel channel] : NormalChannel.R
   grts_of_ne_neg_one := by
     intro msg mult data mult_ne_neg_one
     apply NormalChannel.grts_of_ne_neg_one (fromElements msg) _ _ mult_ne_neg_one
+  reqs_neg_one := by
+    intro msg
+    apply NormalChannel.reqs_neg_one (fromElements msg)
 
 /-- Normal channels are consistent, thanks to `exists_push_of_pull` -/
 theorem normalChannel_consistent (channel : RawChannel F) [NormalChannel.Raw channel] : channel.Consistent := by
@@ -2354,6 +2371,9 @@ lemma zip_flattenPairs_perm {α : Type} {as bs : List α} :
     simp only [zip_cons_cons, flattenPairs_cons, cons_append, nil_append]
     grw [perm_cons, ← perm_cons_append_cons _ perm_rfl, perm_cons, ih]
 
+/-- Instead of first map-flattening on the inside, then on the outside,
+we can map to a 3D array, then flatten the outside, and only then the inside.
+Good if you want to preserve the inner structure. -/
 lemma flatMap_flatMap {α β γ : Type*} (l : List γ) (g : γ → List α) (f : γ → α → List β) :
   l.flatMap (fun x => (g x).flatMap (f x)) = (l.map (fun x => (g x).map (f x))).flatten.flatten := by
   induction l with
@@ -2361,6 +2381,19 @@ lemma flatMap_flatMap {α β γ : Type*} (l : List γ) (g : γ → List α) (f :
   | cons a l ih =>
     simp [ih]
     rfl
+
+noncomputable def TableWitness.interactionssWith (table : TableWitness F)
+    (channel : RawChannel F) : List (List (Interaction F)) :=
+  table.table.map fun row =>
+    table.abstract.operations.interactionValuesWith channel (table.environment row)
+
+/-- Ensemble interactions preserving the per-row structure until the final flatten. -/
+lemma EnsembleWitness.flatMap_interactionsWith_eq_flatten {ens : Ensemble F PublicIO}
+  (witness : EnsembleWitness ens) {channel : RawChannel F} :
+  witness.tables.flatMap (·.interactionsWith channel) =
+    (witness.tables.flatMap (·.interactionssWith channel)).flatten := by
+  simp only [TableWitness.interactionsWith, TableWitness.interactionssWith]
+  rw [flatMap_flatMap, List.flatMap_def]
 
 lemma zip_flatten_flatten {α : Type} (as bs : List (List (α)))
   (same_lengths : as.length = bs.length ∧ (∀ i (hi : i < as.length) (hi' : i < bs.length), as[i].length = bs[i].length)) :
@@ -2457,6 +2490,7 @@ lemma length_pulls (witness : VmWitness vm) : witness.pulls.length = witness.ste
 lemma length_pushes (witness : VmWitness vm) : witness.pushes.length = witness.steps := by
   simp [steps, pushes]
 
+-- TODO might not need
 lemma pulls_eq_interactions (witness : VmWitness vm) : witness.pulls =
   witness.tables.attach.flatMap fun ⟨ table, _ ⟩ =>
     table.table.map fun row =>
@@ -2466,6 +2500,7 @@ lemma pulls_eq_interactions (witness : VmWitness vm) : witness.pulls =
   congr! with ⟨ table, table_mem ⟩ row
   simp [witness.interactionValuesWith_eq ‹_› row]
 
+-- TODO might not need
 lemma pushes_eq_interactions (witness : VmWitness vm) : witness.pushes =
   witness.tables.attach.flatMap fun ⟨ table, _ ⟩ =>
     table.table.map fun row =>
@@ -2475,18 +2510,48 @@ lemma pushes_eq_interactions (witness : VmWitness vm) : witness.pushes =
   congr! with ⟨ table, table_mem ⟩ row
   simp [witness.interactionValuesWith_eq ‹_› row]
 
-theorem interactions_eq_pulls_pushes (witness : VmWitness vm) :
-  witness.tables.flatMap (·.interactionsWith vm.channel.toRaw) =
-    (List.zip witness.pulls witness.pushes).flattenPairs := by
-  simp only [TableWitness.interactionsWith, List.flattenPairs, pulls, pushes]
-  rw [flatMap_flatMap, List.flatMap_def, List.flatMap_def]
-  rw [zip_flatten_flatten _ _ (by simp), List.zip_map']
-  rw [List.map_flatten, List.map_map, List.map_map, List.map_attach_eq_pmap]
-  simp only [Function.comp_apply, List.pmap_eq_map_attach, List.zip_map', List.map_map]
+lemma interactionss_eq_pulls_pushes (witness : VmWitness vm) :
+  witness.tables.flatMap (·.interactionssWith vm.channel.toRaw) =
+    (List.zip witness.pulls witness.pushes).map (fun ⟨pull, push⟩ => [pull, push]) := by
+  simp only [pulls, pushes, List.flatMap_def]
+  rw [zip_flatten_flatten _ _ (by simp), List.map_flatten]
+  simp only [List.zip_map', List.map_map]
   rw [← List.pmap_eq_map (fun _ _ => trivial), List.pmap_eq_map_attach]
   congr
   funext ⟨ table, table_mem ⟩
-  simp [witness.interactionValuesWith_eq table_mem]
+  simp [TableWitness.interactionssWith, List.zip_map',
+    witness.interactionValuesWith_eq table_mem]
+
+lemma interactions_eq_pulls_pushes (witness : VmWitness vm) :
+  witness.tables.flatMap (·.interactionsWith vm.channel.toRaw) =
+    (List.zip witness.pulls witness.pushes).flattenPairs := by
+  rw [witness.flatMap_interactionsWith_eq_flatten,
+    interactionss_eq_pulls_pushes, List.flattenPairs]
+
+lemma mem_zip_pulls_pushes_iff (witness : VmWitness vm) (pull push : Interaction F) :
+  (pull, push) ∈ List.zip witness.pulls witness.pushes ↔
+    ∃ table ∈ witness.tables, ∃ row ∈ table.table,
+      table.abstract.operations.interactionValuesWith vm.channel.toRaw (table.environment row) = [pull, push] := by
+  trans [pull, push] ∈ (List.zip witness.pulls witness.pushes).map (fun ⟨pull, push⟩ => [pull, push])
+  · simp
+  simp [← interactionss_eq_pulls_pushes, TableWitness.interactionssWith]
+
+lemma pull_properties (witness : VmWitness vm) : ∀ pull ∈ witness.pulls,
+    pull.channel = vm.channel.toRaw ∧ pull.mult = -1 ∧ pull.Requirements witness.data := by
+  intro pull pull_mem
+  simp [pulls] at pull_mem
+  obtain ⟨ table, table_mem, row, row_mem, pull_eq ⟩ := pull_mem
+  symm at pull_eq; subst pull_eq
+  simp only [circuit_norm, Interaction.Requirements]
+  exact vm.normalChannel.reqs_neg_one _ witness.data
+
+lemma push_properties (witness : VmWitness vm) : ∀ push ∈ witness.pushes,
+    push.channel = vm.channel.toRaw ∧ push.mult = 1 ∧ push.Guarantees witness.data := by
+  intro push push_mem
+  simp [pushes] at push_mem
+  obtain ⟨ table, table_mem, row, row_mem, push_eq ⟩ := push_mem
+  symm at push_eq; subst push_eq
+  simp only [circuit_norm, Interaction.Guarantees]
 end VmWitness
 
 namespace Ensemble
@@ -2652,30 +2717,36 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   have vm_soundness (table : TableWitness F) (h_table : table ∈ vmWitness.allTables) :=
     table.requirements_of_partial_guarantees_of_constraints (finished := finished) (unfinished := vmChannel)
     (vm_constraints table h_table) (subset table h_table) (finished_grts table h_table)
-  simp only [Operations.ChannelGuarantees, Operations.ChannelRequirements,
-    ← Operations.forall_interactionsWith_iff] at vm_soundness
   have vm_reqs_of_grts : (∀ i (hi : i < n),
       pulls[i].Guarantees witness.data → pushes[i].Requirements witness.data) := by
     suffices ∀ pair ∈ (pulls.zip pushes), pair.1.Guarantees witness.data → pair.2.Requirements witness.data by
       simp only [List.forall_mem_iff_getElem, List.getElem_zip] at this
       intro i hi
       exact this i (by simp [pulls_len, pushes_len, hi])
+    rw [← ‹vmWitness.data = witness.data›]
     intro (pull, push) pair_mem
     simp only
-    simp only [List.flattenPairs] at vmInteractions_eq
-    simp only [vmInteractions_eq_vmTableInteractions, TableWitness.interactionsWith,
-      Operations.interactionValuesWith] at vmInteractions_eq
     simp [pulls, pushes] at pair_mem
-    -- TODO `vm_soundness` is quite close to what we need
-
-    sorry
-  -- the conclusion is indeed what we need
-  have : n > 0 := by simp [n, pulls]
-  suffices pulls[0].Guarantees witness.data by
-    simp [pulls, VerifierGuarantees, Operations.FullGuarantees]
-    simp [pulls, VerifierGuarantees, Operations.FullGuarantees, vmVerifierInteractions,
-      Operations.interactionsWith, Interaction.Guarantees] at this ⊢ vmVerifierInteractions_eq
-    sorry
+    rcases pair_mem with pair_mem|pair_mem
+    · sorry -- verifier case
+    have ⟨ mem_pull, mem_push ⟩ := List.of_mem_zip pair_mem
+    have ⟨ _, _, push_grts ⟩ := vmWitness.push_properties push mem_push
+    have ⟨ _, _, pull_reqs ⟩ := vmWitness.pull_properties pull mem_pull
+    -- simp only [VmWitness.pulls, VmWitness.tablePull, ← Channel.eval_pulled] at mem_pull
+    rw [vmWitness.mem_zip_pulls_pushes_iff] at pair_mem
+    obtain ⟨ table, table_mem, row, row_mem, interactions_eq ⟩ := pair_mem
+    suffices (∀ i ∈ [pull, push], i.Guarantees vmWitness.data) → (∀ i ∈ [pull, push], i.Requirements vmWitness.data) by
+      simp_all
+    simp only [← interactions_eq, Operations.interactionValuesWith_eq_map, List.forall_mem_map]
+    have env_data_eq : (table.environment row).data = vmWitness.data := vmWitness.same_data _ table_mem
+    simp only [← env_data_eq, AbstractInteraction.eval_guarantees, AbstractInteraction.eval_requirements,
+      Operations.forall_interactionsWith_iff]
+    specialize vm_soundness table (vmWitness.mem_allTables_of_mem_tables table_mem) row row_mem
+    convert vm_soundness
+  specialize pairwise_guarantees vm_reqs_of_grts 0 (by simp [n])
+  simp [pulls, pushes] at pairwise_guarantees
+  have := vm.verifier_requirements
+  -- we are basically there, just need to insert this at pairwise_guarantees and shows that this is exactly the goal
   sorry
 end Ensemble
 
