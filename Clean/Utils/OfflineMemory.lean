@@ -99,7 +99,7 @@ instance : IsTrans MemoryAccess address_timestamp_ordering := by
         simp only [h, ↓reduceIte] at hbc
         linarith
 
-instance : IsTotal MemoryAccess address_timestamp_ordering := by
+instance : Std.Total address_timestamp_ordering := by
   constructor
   intros a b
   obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
@@ -113,7 +113,7 @@ instance : IsTotal MemoryAccess address_timestamp_ordering := by
     simp only [h, ↓reduceIte]
     apply Nat.lt_or_lt_of_ne (by simp only [ne_eq, h, not_false_eq_true])
 
-instance : IsAntisymm MemoryAccess timestamp_ordering := by
+instance : Std.Antisymm timestamp_ordering := by
   constructor
   intros a b hab hba
   obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
@@ -121,14 +121,14 @@ instance : IsAntisymm MemoryAccess timestamp_ordering := by
   simp only [timestamp_ordering] at hab hba
   linarith
 
-instance : IsIrrefl MemoryAccess timestamp_ordering := by
+instance : Std.Irrefl timestamp_ordering := by
   constructor
   intros a ha
   obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
   simp only [timestamp_ordering] at ha
   linarith
 
-instance : IsIrrefl MemoryAccess address_strict_timestamp_ordering := by
+instance : Std.Irrefl address_strict_timestamp_ordering := by
   constructor
   intros a ha
   obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
@@ -137,7 +137,7 @@ instance : IsIrrefl MemoryAccess address_strict_timestamp_ordering := by
   · linarith
   · linarith
 
-instance : IsAntisymm MemoryAccess address_strict_timestamp_ordering := by
+instance : Std.Antisymm address_strict_timestamp_ordering := by
   constructor
   intros a b hab hba
   obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
@@ -239,7 +239,7 @@ theorem MemoryAccessList.isAddressTimestampSorted_of_cons (head : MemoryAccess) 
 theorem MemoryAccessList.noTimestampDup_of_TimestampSorted
     (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
     accesses.Notimestampdup := by
-  simp only [Notimestampdup, isTimestampSorted, List.Pairwise] at *
+  simp only [Notimestampdup, isTimestampSorted] at *
   have sort_imp_nodup : ∀ {x y : MemoryAccess}, timestamp_ordering x y → timestamps_neq x y := by
     intros x y hxy
     obtain ⟨t_x, a_x, _r_x, _w_x⟩ := x

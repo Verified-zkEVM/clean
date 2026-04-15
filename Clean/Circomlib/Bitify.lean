@@ -58,7 +58,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
   induction n with
   | zero => simp [circuit_norm]
   | succ n ih =>
-    simp_all only [circuit_norm, Prod.mk.injEq, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last,
+    simp_all only [circuit_norm, Prod.mk.injEq, Fin.foldl_succ_last, Fin.val_castSucc, Fin.val_last,
       Expression.eval, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow, Nat.cast_ofNat,
       pow_succ', two_mul, add_right_inj, mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq, and_true]
     left
@@ -174,7 +174,7 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
     specialize ih (v := v.pop)
     simp only [Fin.getElem_fin, Vector.getElem_pop', Fin.eta] at ih
     simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, pow_succ', two_mul,
-      Fin.coe_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
+      Fin.val_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 

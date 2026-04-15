@@ -1308,7 +1308,6 @@ theorem exists_path_from_source_to_sink
     exact acyclic_run_has_path_from_source_to_sink R s d h_cyclic h_source h_others
 termination_by R.size
 decreasing_by
-  simp_wf
   exact h_size_lt
 
 end Utils.StateTransition
