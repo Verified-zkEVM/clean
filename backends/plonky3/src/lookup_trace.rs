@@ -14,33 +14,38 @@ use crate::clean_ast::LookupRowScope;
 
 /// Evaluate a SymbolicExpression on concrete row data.
 ///
-/// Only supports expressions over current-row main and preprocessed variables
-/// (offset 0), constants, and arithmetic operations.
+/// Supports expressions over current-row (offset 0) and next-row (offset 1)
+/// main variables, preprocessed variables, constants, and arithmetic operations.
 fn eval_symbolic_on_row<F: Field>(
     expr: &SymbolicExpression<F>,
     main_row: &[F],
+    main_next_row: Option<&[F]>,
     preprocessed_row: &[F],
 ) -> F {
     match expr {
         SymbolicExpression::Constant(c) => *c,
         SymbolicExpression::Variable(v) => match v.entry {
             Entry::Main { offset: 0 } => main_row[v.index],
+            Entry::Main { offset: 1 } => main_next_row
+                .expect("next-row variable accessed on the last row")[v.index],
             Entry::Preprocessed { offset: 0 } => preprocessed_row[v.index],
-            _ => panic!("Only current row expressions supported for row evaluation"),
+            _ => panic!("Unsupported variable entry: {:?}", v.entry),
         },
         SymbolicExpression::Add { x, y, .. } => {
-            eval_symbolic_on_row(x, main_row, preprocessed_row)
-                + eval_symbolic_on_row(y, main_row, preprocessed_row)
+            eval_symbolic_on_row(x, main_row, main_next_row, preprocessed_row)
+                + eval_symbolic_on_row(y, main_row, main_next_row, preprocessed_row)
         }
         SymbolicExpression::Sub { x, y, .. } => {
-            eval_symbolic_on_row(x, main_row, preprocessed_row)
-                - eval_symbolic_on_row(y, main_row, preprocessed_row)
+            eval_symbolic_on_row(x, main_row, main_next_row, preprocessed_row)
+                - eval_symbolic_on_row(y, main_row, main_next_row, preprocessed_row)
         }
         SymbolicExpression::Mul { x, y, .. } => {
-            eval_symbolic_on_row(x, main_row, preprocessed_row)
-                * eval_symbolic_on_row(y, main_row, preprocessed_row)
+            eval_symbolic_on_row(x, main_row, main_next_row, preprocessed_row)
+                * eval_symbolic_on_row(y, main_row, main_next_row, preprocessed_row)
         }
-        SymbolicExpression::Neg { x, .. } => -eval_symbolic_on_row(x, main_row, preprocessed_row),
+        SymbolicExpression::Neg { x, .. } => {
+            -eval_symbolic_on_row(x, main_row, main_next_row, preprocessed_row)
+        }
         _ => panic!("Unsupported expression type for concrete row evaluation"),
     }
 }
@@ -127,9 +132,16 @@ where
 
         // Calculate multiplicities by evaluating ALL columns of each lookup tuple
         // and looking up the resulting values in the table data index.
+        // Lookup expressions may reference both current (offset 0) and next (offset 1)
+        // row variables, so we pass both rows to the evaluator.
         let height = main_trace.height();
         for row_idx in 0..height {
             let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
+            let next_row_slice: Option<Vec<F>> = if row_idx + 1 < height {
+                Some(main_trace.row(row_idx + 1).unwrap().into_iter().collect())
+            } else {
+                None
+            };
 
             for &(global_idx, ref lookup) in &matching_lookups {
                 if !lookup_row_scopes[global_idx].is_active(row_idx, height) {
@@ -139,7 +151,10 @@ where
                     // Evaluate ALL element expressions to get the full lookup key
                     let values: Vec<u32> = tuple
                         .iter()
-                        .map(|expr| eval_symbolic_on_row(expr, &row_slice, &[]).as_canonical_u32())
+                        .map(|expr| {
+                            eval_symbolic_on_row(expr, &row_slice, next_row_slice.as_deref(), &[])
+                                .as_canonical_u32()
+                        })
                         .collect();
 
                     let table_row = row_index.get(&values).unwrap_or_else(|| {
