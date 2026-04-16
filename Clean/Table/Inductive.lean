@@ -136,7 +136,6 @@ lemma traceInputs_length {N : ℕ} (trace : TraceOfLength F (ProvablePair State 
     (traceInputs trace).length = N := by
   rw [traceInputs, List.length_map, trace.val.toList_length, trace.prop]
 
-set_option maxRecDepth 1000 in
 lemma table_soundness_aux (table : InductiveTable F State Input) (input output : State F)
   (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : TableEnvironments F) :
   table.Spec input [] 0 rfl input env.data →
