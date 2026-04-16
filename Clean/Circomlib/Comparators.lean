@@ -223,6 +223,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
   output _ i := var ⟨ i + n + 1 ⟩
   output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
+
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val ≤ 2^n
 
   Spec := fun (x, y) output =>

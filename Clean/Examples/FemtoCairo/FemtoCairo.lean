@@ -98,6 +98,7 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
 def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := decodeInstructionMain
   localLength _ := 8
+
   Assumptions
   | instruction, _ => instruction.val < 256
 
@@ -173,6 +174,7 @@ def fetchInstruction
 
   localLength _ := 4
   output _ i₀ := varFromOffset RawInstruction i₀
+
   Assumptions
   | pc, _ => pc.val + 3 < programSize
 
@@ -319,6 +321,7 @@ def readFromMemory :
 
   localLength _ := 5
   output _ i₀ := var ⟨i₀ + 4⟩
+
   Assumptions
   | { state, offset, mode }, env =>
     mode.isEncodedCorrectly ∧
@@ -487,6 +490,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 
   localLength _ := 3
   output _ i₀ := varFromOffset State i₀
+
   Assumptions
   | {state, decoded, v1, v2, v3}, _ =>
     DecodedInstructionType.isEncodedCorrectly decoded.instrType ∧

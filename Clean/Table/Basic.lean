@@ -489,7 +489,6 @@ structure TableEnvironments (F : Type) where
   /-- environment for each constraint, for each row -/
   witnessEnvs : (constraint : ℕ) → (row : ℕ) → (varIndex : ℕ) → F
   /-- auxiliary data available to all rows -/
-  interactions : RawInteractions F
   data : ProverData F
 
 def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=

@@ -11,7 +11,6 @@ structure State (F : Type) where
   pc : F
   ap : F
   fp : F
-deriving DecidableEq
 
 instance {α : Type} [Fintype α] : Fintype (State α) :=
   Fintype.ofEquiv (α × α × α) {

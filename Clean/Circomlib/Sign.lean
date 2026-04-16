@@ -19,7 +19,7 @@ lemma hppre_half_254 : ((p - 1) / 2 < 2^254) := by
   calc
     _ ≤ p - 1 := by grind
     p - 1 ≤ p := by grind
-    _ < _ := by linarith [‹Fact (p < 2^254)›.elim]
+    _ < _ := ‹Fact (p < 2^254)›.elim
 
 namespace Sign
 /-
@@ -47,6 +47,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength input := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).localLength input
   output := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).output
+
   Assumptions input :=
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]

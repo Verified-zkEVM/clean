@@ -7,7 +7,7 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 namespace Gadgets.Conditional
 
 section
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F : Type} [Field F]
 variable {M : TypeMap} [ProvableType M]
 
 open ProvableType
@@ -63,7 +63,6 @@ instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
   output
   | { selector, ifTrue, ifFalse }, _ => output selector ifTrue ifFalse
 
-omit [DecidableEq F] in
 theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
   circuit_proof_start [output]
   rcases input
@@ -91,7 +90,6 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
     simp only [if_true]
     ring_nf
 
-omit [DecidableEq F] in
 theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by
   circuit_proof_start
 
@@ -114,12 +112,11 @@ def ifElse [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M]
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F (M (Expression F)) :=
   circuit { selector, ifTrue, ifFalse }
 
-omit [Field F] [DecidableEq F] in
 /--
   Lemma to simplify the evaluated output
 -/
 @[circuit_norm]
-theorem eval_ifElse_output [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M] {env}
+theorem eval_ifElse_output {M : TypeMap} [ProvableType M] {env}
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) :
   eval env (output selector ifTrue ifFalse) =
     outputValue (selector.eval env) (eval env ifTrue) (eval env ifFalse) := by

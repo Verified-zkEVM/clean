@@ -220,7 +220,7 @@ variable [gt2 : Fact (p > 2)]
 -- which split on the multiplicity (which is often 1 or -1)
 
 @[circuit_norm]
-lemma neg_one_neq_one :
+lemma neg_one_ne_one :
     ¬(-1 : F p) = 1 := by
   intro h_eq
   suffices h : (1 : F p) + 1 = 0 by
@@ -231,8 +231,8 @@ lemma neg_one_neq_one :
   ring
 
 @[circuit_norm]
-lemma one_neq_neg_one : ¬(1 : F p) = -1 :=
-  fun h => neg_one_neq_one h.symm
+lemma one_ne_neg_one : ¬(1 : F p) = -1 :=
+  fun h => neg_one_ne_one h.symm
 end
 
 end FieldUtils
