@@ -2683,10 +2683,7 @@ lemma addVm_witness (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
       vmWitness.publicInput = witness.publicInput ∧
       witness'.publicInput = witness.publicInput ∧
       vmWitness.data = witness.data ∧
-      witness'.data = witness.data ∧
-      ∀ i (hi : i < vmWitness.tables.length),
-        (∃ (hi': i < vm.tables.length), vmWitness.tables[i].abstract = vm.tables[i]) ∧
-        vmWitness.tables[i].data = witness.data := by
+      witness'.data = witness.data := by
   have h_len : (ens.addVm vm).tables.length = vm.tables.length + ens.tables.length := by
     simp [addVm]
   have h_witlen : witness.tables.length = vm.tables.length + ens.tables.length := by
@@ -2727,19 +2724,10 @@ lemma addVm_witness (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
       apply witness.same_data
       exact List.mem_of_mem_drop h_table
   }
-  refine ⟨vmWitness, witness', ?_, ?_, rfl, rfl, rfl, rfl, ?_⟩
+  refine ⟨vmWitness, witness', ?_, ?_, rfl, rfl, rfl, rfl ⟩
   · simp [vmWitness, witness', List.take_append_drop]
   · simp [EnsembleWitness.allTables, EnsembleWitness.verifierTable,
       Ensemble.addVm, VmTables.toEnsemble, vmWitness, witness', List.take_append_drop]
-  · intro i hi
-    have hi' : i < vm.tables.length := by
-      simpa [vmWitness, VmTables.toEnsemble, List.length_take, h_witlen] using hi
-    constructor
-    · refine ⟨hi', ?_⟩
-      simpa [VmTables.toEnsemble] using (vmWitness.same_circuits i hi').symm
-    · have h_mem : vmWitness.tables[i] ∈ vmWitness.tables := by
-        simp
-      simpa [vmWitness] using vmWitness.same_data _ h_mem
 
 theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : Ensemble F PublicIO)
       -- given a sound channels ensemble with a list of finished, consistent channels
@@ -2773,7 +2761,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   4) finally, `VmTables.verifier_requirements` gives us the requirements for the verifier,
      from which the conclusion follows.
   -/
-  obtain ⟨ vmWitness, witness', _, allTables_split, publicInput_eq_vm, _, data_eq_vm, data_eq_old, h_vmTables ⟩ :=
+  obtain ⟨ vmWitness, witness', _, allTables_split, publicInput_eq_vm, _, data_eq_vm, data_eq_old ⟩ :=
     addVm_witness ens vm witness
   have data_eq : vmWitness.data = witness'.data := by rw [data_eq_vm, data_eq_old]
   have verifierTable_eq : vmWitness.verifierTable = witness.verifierTable := by
