@@ -24,7 +24,7 @@ def getOffset : Circuit F ℕ := fun n => (n, [])
 def valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
   fromElements <| .mapRange _ fun i => env.get (offset + i)
 
-theorem eval_varFromOffset_valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) :
+theorem ProvableType.eval_varFromOffset_valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) :
     eval env (varFromOffset α offset) = valueFromOffset α offset env := by
   simp only [varFromOffset, valueFromOffset, fromVars, ProvableType.eval_fromElements, Vector.map_mapRange]
   rfl

@@ -257,24 +257,6 @@ lemma localWitnesses_toFlat {ops : Operations F} {env} :
     rw [←ih]
     try rw [localWitnesses_append]
     try simp only [localLength, localWitnesses, Vector.toArray_append, Subcircuit.witnesses, Vector.toArray_cast]
-
-lemma localAdds_append {a b: List (FlatOperation F)} {env} :
-    localAdds env (a ++ b) = localAdds env a ++ localAdds env b := by
-  induction a using FlatOperation.localLength.induct <;>
-    simp_all only [circuit_norm]
-
-lemma localAdds_toFlat {ops : Operations F} {env} :
-  localAdds env ops.toFlat = ops.localAdds env := by
-  induction ops using Operations.induct with
-  | empty => trivial
-  | witness | assert | lookup =>
-    simp_all only [circuit_norm, Operations.toFlat]
-  | interact =>
-    simp_all only [circuit_norm, Operations.toFlat]
-    rfl
-  | subcircuit s ops ih =>
-    simp_all only [circuit_norm, Operations.toFlat, localAdds_append, Operations.localAdds,
-      NestedOperations.localAdds]
 end FlatOperation
 
 namespace Environment
@@ -711,7 +693,7 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
 end FlatOperation
 
 section
-variable {F : Type} {Input Output : TypeMap} [Field F] [DecidableEq F] [ProvableType Output] [ProvableType Input]
+variable {F : Type} {Input Output : TypeMap} [Field F] [ProvableType Output] [ProvableType Input]
 
 -- theorem about relationship between FormalCircuit and GeneralFormalCircuit
 
@@ -803,7 +785,6 @@ theorem in_channels_or_requirements_full
   tauto
 end FormalCircuitWithInteractions
 
-omit [DecidableEq F] in
 theorem Operations.guarantees_of_not_mem (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :
     ops.InChannelsOrGuaranteesFull channels env →
@@ -814,7 +795,6 @@ theorem Operations.guarantees_of_not_mem (ops : Operations F)
   rw [h_eq] at h_in_or_guars
   tauto
 
-omit [DecidableEq F] in
 theorem Operations.requirements_of_not_mem (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :
     ops.InChannelsOrRequirementsFull channels env →
@@ -835,7 +815,6 @@ theorem FormalCircuitWithInteractions.requirements_of_not_mem
   apply circuit.in_channels_or_requirements_full
   assumption
 
-omit [DecidableEq F] in
 theorem Operations.guarantees_iff (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :
     ops.InChannelsOrGuaranteesFull channels env →
@@ -856,7 +835,6 @@ theorem FormalCircuitWithInteractions.guarantees_iff'
   apply Operations.guarantees_iff
   apply circuit.in_channels_or_guarantees_full
 
-omit [DecidableEq F] in
 theorem Operations.requirements_iff (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :
     ops.InChannelsOrRequirementsFull channels env →
@@ -877,7 +855,6 @@ theorem FormalCircuitWithInteractions.requirements_iff'
   apply Operations.requirements_iff
   apply circuit.in_channels_or_requirements_full
 
-omit [DecidableEq F] in
 theorem Operations.channels_subset {ops : Operations F} :
     ops.channels ⊆ ops.shallowChannels ++
       ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements := by

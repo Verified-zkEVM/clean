@@ -360,12 +360,11 @@ theorem forAll_iff_const [NeZero m] (constant : ConstantLength (prod circuit))
 
 end FoldlM
 
-def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+def forEach {m : ℕ} (xs : Vector α m) (body : α → Circuit F Unit)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F Unit :=
   xs.forM body
 
-@[circuit_norm]
-theorem forEach_cons {m : ℕ} (x : α) (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+theorem forEach_cons {m : ℕ} (x : α) (xs : Vector α m) (body : α → Circuit F Unit)
     (constant : ConstantLength body) :
     forEach (Vector.cons x xs) body constant = body x *> forEach xs body constant := by
   unfold forEach
@@ -721,133 +720,36 @@ lemma foldlRange.usesLocalWitnesses :
 
 end foldlRange
 
--- TODO all of these localAdds theorems should be refactored to theorems about Operations.interactions
-
-@[circuit_norm]
-theorem localAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
-    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (h_body : ∀ x n, Operations.localAdds env ((body x) n).2 = []) :
-    Operations.localAdds env ((forEach xs body constant) offset).2 = [] := by
-  induction xs using Vector.induct generalizing offset
-  · rfl
-  case cons n a as ih =>
-    simp only [circuit_norm, Operations.localAdds_append]
-    rw [h_body, ih]
-    rfl
-
-theorem interactions_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+theorem interactions_forEach_nil {m : ℕ} (xs : Vector α m) (body : α → Circuit F Unit)
     (constant : ConstantLength body) (offset : ℕ)
     (h_body : ∀ x n, Operations.interactions ((body x) n).2 = []) :
     Operations.interactions ((forEach xs body constant) offset).2 = [] := by
   induction xs using Vector.induct generalizing offset
   · rfl
   case cons n a as ih =>
-    simp only [circuit_norm, Operations.interactions_append]
+    simp only [circuit_norm, forEach_cons]
     rw [h_body, ih]
     rfl
 
-/-- General version of localAdds_forEach that relates forEach to Finset.sum via toFinsupp.
-    Each step's localAdds equals the corresponding localAdds_fn applied to that element. -/
-theorem localAdds_forEach_sum [DecidableEq F] {m : ℕ} (xs : Vector α m) [Inhabited α]
-    (body : α → Circuit F Unit)
-    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (localAdds_fn : α → InteractionDelta F)
-    (h_body : ∀ x n, Operations.localAdds env ((body x) n).2 = localAdds_fn x) :
-    (Operations.localAdds env ((forEach xs body constant) offset).2).toFinsupp =
-    ∑ i : Fin m, (localAdds_fn xs[i]).toFinsupp := by
-  induction xs using Vector.induct generalizing offset
-  case nil =>
-    simp only [Finset.univ_eq_empty, Finset.sum_empty]
-    rfl
-  case cons n a as ih =>
-    simp only [circuit_norm, Operations.localAdds_append] at ih ⊢
-    rw [InteractionDelta.toFinsupp_add, h_body, ih, Fin.sum_univ_succ]
-    rfl
-
-/-- Version of localAdds_forEach_sum using toFinsupp equality for h_body.
-    This is useful when the body's localAdds_eq gives toFinsupp equality. -/
-theorem localAdds_forEach_sum' [DecidableEq F] {m : ℕ} (xs : Vector α m) [Inhabited α]
-    (body : α → Circuit F Unit)
-    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (localAdds_fn : α → InteractionDelta F)
-    (h_body : ∀ x n, (Operations.localAdds env ((body x) n).2).toFinsupp = (localAdds_fn x).toFinsupp) :
-    (Operations.localAdds env ((forEach xs body constant) offset).2).toFinsupp =
-    ∑ i : Fin m, (localAdds_fn xs[i]).toFinsupp := by
-  induction xs using Vector.induct generalizing offset
-  case nil =>
-    simp only [Finset.univ_eq_empty, Finset.sum_empty]
-    rfl
-  case cons n a as ih =>
-    simp only [circuit_norm, Operations.localAdds_append] at *
-    rw [InteractionDelta.toFinsupp_add, h_body, ih, Fin.sum_univ_succ]
-    rfl
-
-omit [Field F] in
-/-- For InteractionDelta accumulator functions, foldl starting from `init` equals
-    prepending `init` to foldl starting from 0. -/
-private theorem InteractionDelta.foldl_init_eq_append {β : Type*} (f : InteractionDelta F → β → InteractionDelta F)
-    (hf : ∀ acc x, f acc x = acc + f 0 x)
-    (init : InteractionDelta F) (xs : List β) :
-    init ++ xs.foldl f 0 = xs.foldl f init := by
-  induction xs generalizing init with
-  | nil => simp [InteractionDelta.nil_eq_zero]
-  | cons y ys ih =>
-    simp only [List.foldl_cons]
-    rw [← ih (f 0 y), ← ih (f init y)]
-    show init ++ ((f 0 y) ++ _) = (f init y) ++ _
-    rw [hf init y, InteractionDelta.add_eq_append, List.append_assoc]
-
-/-- Helper: In forEach cons case, the tail's foldl matches the shifted indexing pattern. -/
-private theorem forEach_cons_foldl_eq {n : ℕ} (a : α) (as : Vector α n) (body : α → Circuit F Unit)
-    (env : Environment F) (offset k : ℕ) :
-    (List.finRange n).foldl (fun acc (i : Fin n) =>
-      acc + Operations.localAdds env ((body as[i]) (offset + k + i * k)).2) 0 =
-    (List.finRange n).foldl (fun acc (i : Fin n) =>
-      acc + Operations.localAdds env ((body (a :: as.toList)[↑(Fin.succ i)]) (offset + ↑(Fin.succ i) * k)).2) 0 := by
-  congr 1; funext acc i
-  have h1 : (a :: as.toList)[(Fin.succ i : Fin (n+1))] = as[i] := by
-    show (a :: as.toList)[i.val + 1] = as[i.val]
-    simp only [List.getElem_cons_succ, Vector.getElem_toList]
-  have h2 : offset + k + i * k = offset + (↑i + 1) * k := by ring
-  simp only [h1, h2, Fin.val_succ]
-
-/-- Relates localAdds of forEach to a foldl over finRange.
-    This is useful for proving Bundle.localAdds_eq where localAdds is defined via foldl. -/
-theorem localAdds_forEach_foldl {m : ℕ} (xs : Vector α m) [Inhabited α]
-    (body : α → Circuit F Unit) (constant : ConstantLength body)
-    (env : Environment F) (offset : ℕ) :
-    Operations.localAdds env ((forEach xs body constant) offset).2 =
-    (List.finRange m).foldl (fun acc (i : Fin m) =>
-      acc + Operations.localAdds env ((body xs[i]) (offset + i * constant.localLength)).2) 0 := by
-  induction xs using Vector.induct generalizing offset
-  case nil => rfl
-  case cons n a as ih =>
-    simp only [circuit_norm, Operations.localAdds_append]
-    have h_len : (body a).localLength offset = constant.localLength := constant.localLength_eq a offset
-    simp only [Circuit.localLength] at h_len
-    rw [h_len, ih]
-    simp only [List.finRange_succ, List.foldl_cons, List.foldl_map,
-      Fin.val_zero, zero_mul, add_zero, Vector.cons, Vector.getElem_mk,
-      List.getElem_toArray, List.getElem_cons_zero]
-    rw [forEach_cons_foldl_eq a as body env offset constant.localLength]
-    exact InteractionDelta.foldl_init_eq_append _ (fun _ _ => rfl) _ _
+-- TODO are these nil versions needed?
 
 @[circuit_norm]
-theorem localAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
-    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (h_body : ∀ x n, ((body x).operations n).localAdds env = 0) :
-    ((map xs body constant).operations offset).localAdds env = 0 := by
+theorem interactions_map_nil {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (constant : ConstantLength body) (offset : ℕ)
+    (h_body : ∀ x n, ((body x).operations n).interactions = []) :
+    ((map xs body constant).operations offset).interactions = [] := by
   unfold map
   induction xs using Vector.induct generalizing offset
   case nil =>
-    simp [Circuit.operations, Circuit.pure_operations_eq, Operations.localAdds]
+    simp [Circuit.operations, Circuit.pure_operations_eq, Operations.interactions]
   case cons x xs ih =>
     simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
-    rw [Operations.localAdds_append, Operations.localAdds_append]
-    simp only [Operations.localAdds, h_body, ih]
+    rw [Operations.interactions_append, Operations.interactions_append]
+    simp only [Operations.interactions, h_body, ih]
     rfl
 
-theorem interactionsWith_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+@[circuit_norm]
+theorem interactionsWith_map_nil {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (constant : ConstantLength body) (channel : RawChannel F) (offset : ℕ)
     (h_body : ∀ x n, ((body x).operations n).interactionsWith channel = []) :
     ((map xs body constant).operations offset).interactionsWith channel = [] := by
@@ -860,14 +762,15 @@ theorem interactionsWith_map {m : ℕ} (xs : Vector α m) (body : α → Circuit
     rw [Operations.interactionsWith_append, Operations.interactionsWith_append]
     simp only [h_body, ih, List.nil_append, Operations.interactionsWith_nil]
 
-theorem localAdds_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
-    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (h_body : ∀ i n, ((body i).operations n).localAdds env = 0) :
-    ((mapFinRange m body constant).operations offset).localAdds env = 0 := by
+@[circuit_norm]
+theorem interactions_mapFinRange_nil (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (offset : ℕ)
+    (h_body : ∀ i n, ((body i).operations n).interactions = []) :
+    ((mapFinRange m body constant).operations offset).interactions = [] := by
   unfold mapFinRange Vector.mapFinRangeM
-  exact localAdds_map (Vector.finRange m) body constant env offset h_body
+  exact interactions_map_nil (Vector.finRange m) body constant offset h_body
 
-private theorem interactions_flatten_list (ops : List (Operations F)) :
+private theorem interactions_flatten_eq_map (ops : List (Operations F)) :
     Operations.interactions ops.flatten = (ops.map Operations.interactions).flatten := by
   induction ops with
   | nil => rfl
@@ -875,81 +778,74 @@ private theorem interactions_flatten_list (ops : List (Operations F)) :
     simp [Operations.interactions_append, ih]
 
 /-- Interactions of `map` are the concatenation of the interactions of its body circuits. -/
+@[circuit_norm ↓]
 theorem interactions_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (constant : ConstantLength body) (offset : ℕ) :
     ((map xs body constant).operations offset).interactions =
       (List.ofFn fun (i : Fin m) =>
         ((body xs[i]).operations (offset + i * constant.localLength)).interactions).flatten := by
-  rw [map, MapM.operations_eq, interactions_flatten_list, List.map_ofFn]
+  rw [map, MapM.operations_eq, interactions_flatten_eq_map, List.map_ofFn]
   rfl
 
-/-- Version of localAdds_mapFinRange using `.2` syntax for easier matching in proofs. -/
-theorem localAdds_mapFinRange' (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
-    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (h_body : ∀ i n, Operations.localAdds env ((body i) n).2 = 0) :
-    Operations.localAdds env ((mapFinRange m body constant) offset).2 = 0 :=
-  localAdds_mapFinRange m body constant env offset h_body
+@[circuit_norm ↓]
+theorem interactions_forEach {m : ℕ} (xs : Vector α m) (body : α → Circuit F Unit)
+    (constant : ConstantLength body) (offset : ℕ) :
+    ((forEach xs body constant).operations offset).interactions =
+      (List.ofFn fun (i : Fin m) =>
+        ((body xs[i]).operations (offset + i * constant.localLength)).interactions).flatten := by
+  rw [forEach, ForM.operations_eq, interactions_flatten_eq_map, List.map_ofFn]
+  rfl
 
-theorem interactionsWith_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+-- TODO needed?
+theorem interactionsWith_mapFinRange_nil (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
     (constant : ConstantLength body) (channel : RawChannel F) (offset : ℕ)
     (h_body : ∀ i n, ((body i).operations n).interactionsWith channel = []) :
     ((mapFinRange m body constant).operations offset).interactionsWith channel = [] := by
   unfold mapFinRange Vector.mapFinRangeM
-  exact interactionsWith_map (Vector.finRange m) body constant channel offset h_body
+  exact interactionsWith_map_nil (Vector.finRange m) body constant channel offset h_body
 
+@[circuit_norm ↓]
 theorem interactions_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
     (constant : ConstantLength body) (offset : ℕ) :
     ((mapFinRange m body constant).operations offset).interactions =
       (List.ofFn fun (i : Fin m) =>
         ((body i).operations (offset + i * constant.localLength)).interactions).flatten := by
-  rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq, interactions_flatten_list, List.map_ofFn]
+  rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq, interactions_flatten_eq_map, List.map_ofFn]
   congr
   funext i
   simp [Vector.getElem_finRange]
 
-theorem localAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector α m)
+theorem interactions_foldl_nil [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector α m)
     (init : β) (body : β → α → Circuit F β)
     (const_out : ConstantOutput (fun (s, a) => body s a))
     (constant : ConstantLength (fun (s, a) => body s a))
-    (env : Environment F) (offset : ℕ)
-    (h_body : ∀ s x n, ((body s x).operations n).localAdds env = 0) :
-    ((foldl xs init body const_out constant).operations offset).localAdds env = 0 := by
+    (offset : ℕ)
+    (h_body : ∀ s x n, ((body s x).operations n).interactions = []) :
+    ((foldl xs init body const_out constant).operations offset).interactions = [] := by
   induction xs using Vector.induct generalizing offset init
   case nil =>
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.toList_mk, List.foldlM_nil]
-    simp only [Operations.localAdds]
+    simp only [Operations.interactions]
   case cons x xs ih =>
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]
-    simp only [Circuit.bind_operations_eq, Operations.localAdds_append]
+    simp only [Circuit.bind_operations_eq, Operations.interactions_append]
     rw [h_body, ←Vector.foldlM_toList]
     exact ih _ _
 
-theorem localAdds_foldlRange [Inhabited β] {m : ℕ} [inst : Inhabited (Fin m)]
-    (init : β) (body : β → Fin m → Circuit F β)
-    (const_out : ConstantOutput (fun (s, a) => body s a))
-    (constant : ConstantLength (fun (s, a) => body s a))
-    (env : Environment F) (offset : ℕ)
-    (h_body : ∀ s i n, ((body s i).operations n).localAdds env = 0) :
-    ((foldlRange m init body constant).operations offset).localAdds env = 0 := by
-  unfold foldlRange
-  exact localAdds_foldl (Vector.finRange m) init body const_out constant env offset h_body
-
-/-- Version of localAdds_foldlRange that works for all m including 0. -/
 @[circuit_norm]
-theorem localAdds_foldlRange' [Inhabited β] {m : ℕ}
+theorem interactions_foldlRange_nil [Inhabited β] {m : ℕ}
     (init : β) (body : β → Fin m → Circuit F β)
-    (constant : ConstantLength (fun (s, a) => body s a))
-    (env : Environment F) (offset : ℕ)
-    (h_body : ∀ s i n, ((body s i).operations n).localAdds env = 0) :
-    ((foldlRange m init body constant).operations offset).localAdds env = 0 := by
+    (constant : ConstantLength (fun (s, a) => body s a)) (offset : ℕ)
+    (h_body : ∀ s i n, ((body s i).operations n).interactions = []) :
+    ((foldlRange m init body constant).operations offset).interactions = [] := by
   simp only [foldlRange]
   rw [Vector.foldlM_toList]
   induction (Vector.finRange m).toList generalizing offset init with
-  | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.localAdds]
+  | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.interactions]
   | cons x xs ih =>
-    simp only [List.foldlM_cons, Circuit.bind_operations_eq, Operations.localAdds_append]
+    simp only [List.foldlM_cons, Circuit.bind_operations_eq, Operations.interactions_append]
     rw [h_body]
     exact ih ((body init x).output offset) (offset + (body init x).localLength offset)
 

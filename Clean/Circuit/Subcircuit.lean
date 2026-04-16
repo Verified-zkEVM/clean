@@ -82,7 +82,6 @@ theorem Circuit.constraintsHold_toFlat_iff {ops : Operations F} {env : Environme
     circuit_norm]
 
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
-variable [DecidableEq F]
 
 section
 open Circuit
@@ -413,7 +412,7 @@ def subcircuitWithAssertion (circuit : GeneralFormalCircuit F β α) (b : Var β
     let subcircuit := circuit.toSubcircuit offset b
     (a, [.subcircuit subcircuit])
 
-/-- Include an assertion changing multiset subcircuit. -/
+/-- Include a general subcircuit. -/
 @[circuit_norm]
 def subcircuitWithInteractions (circuit : FormalCircuitWithInteractions F β α) (b : Var β F) : Circuit F (Var α F) :=
   fun offset =>
@@ -525,7 +524,7 @@ theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
 -- simplification of subcircuits in `circuit_norm`
 
 section
-variable {F : Type} [Field F] [DecidableEq F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+variable {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 variable {env : Environment F} {input_var : Var Input F} {n : ℕ}
 
 -- Simplification lemmas for toSubcircuit.localLength

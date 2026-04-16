@@ -60,15 +60,16 @@ theorem pure_def {α} (a : α) : (pure a : Circuit F α) = fun _ => (a, []) := r
 theorem map_def {α β} (f : α → β) (circuit : Circuit F α) :
   f <$> circuit = fun n => let (a, ops) := circuit n; (f a, ops) := rfl
 
+@[circuit_norm]
+theorem seqRight_def {α β} (f : Circuit F α) (g : Circuit F β) :
+  f *> g = fun n =>
+    let (_, ops) := f n
+    let (b, ops') := g (n + Operations.localLength ops)
+    (b, ops ++ ops') := rfl
+
 -- normalize `bind` to `>>=`
 @[circuit_norm]
 theorem bind_normalize {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
-
-@[circuit_norm]
-theorem seqRight_operations {α β} (c1 : Circuit F α) (c2 : Circuit F β) (n : ℕ) :
-    ((c1 *> c2) n).2 = (c1 n).2 ++ (c2 (n + Operations.localLength (c1 n).2)).2 := by
-  simp [SeqRight.seqRight]
-  rfl
 
 -- the results of a circuit: operations, output value and local length (which determines the next offset)
 
@@ -242,7 +243,7 @@ Common base type for circuits that are to be used in formal proofs.
 It contains the main circuit plus some of its properties in elaborated form, to make it
 faster to reason about them in proofs.
 -/
-class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F] [ProvableType Input] [ProvableType Output] where
+class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output] where
   name : String := "anonymous"
   main : Var Input F → Circuit F (Var Output F)
 
@@ -270,7 +271,7 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [Decidable
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 @[circuit_norm]
-def Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
+def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
@@ -284,7 +285,7 @@ def Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit 
   Spec input output
 
 @[circuit_norm]
-def Completeness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
+def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
@@ -308,7 +309,7 @@ Note that soundness and completeness, taken together, show that the spec will ho
 This means that, when viewed as a black box, the circuit acts similar to a function. The assumptions act as
 preconditions, and the spec acts as the postcondition.
 -/
-structure FormalCircuit (F : Type) [Field F] [DecidableEq F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions (_ : Input F) : Prop := True
   Spec : Input F → Output F → Prop
@@ -321,13 +322,13 @@ This ensures that for any input satisfying the assumptions, the specification un
 Use this class when you want to formally guarantee that constraints uniquely determine the output,
 preventing ambiguity in deterministic circuits.
 -/
-structure DeterministicFormalCircuit (F : Type) [Field F] [DecidableEq F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends circuit : FormalCircuit F Input Output where
   uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
     circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
 
 @[circuit_norm]
-def FormalAssertion.Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input unit)
+def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
@@ -340,7 +341,7 @@ def FormalAssertion.Soundness (F : Type) [Field F] [DecidableEq F] (circuit : El
   Spec input
 
 @[circuit_norm]
-def FormalAssertion.Completeness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input unit)
+def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset, ∀ env, ∀ input_var : Var Input F,
@@ -365,7 +366,7 @@ of the constraints.
 (In the case of `FormalCircuit`, given assumptions, the constraints are always satisfiable and the spec can be
 strictly weaker than the constraints.)
 -/
-structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [DecidableEq F] [ProvableType Input]
+structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
     extends elaborated : ElaboratedCircuit F Input unit where
   Assumptions : Input F → Prop
   Spec : Input F → Prop
@@ -378,7 +379,7 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [DecidableEq F]
   output _ _ := ()
 
 @[circuit_norm]
-def GeneralFormalCircuit.Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
+def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
     (Spec : Input F → Output F → ProverData F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
@@ -391,7 +392,7 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] [DecidableEq F] (circuit
   Spec input output env.data
 
 @[circuit_norm]
-def GeneralFormalCircuit.Completeness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
+def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → ProverData F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
@@ -417,7 +418,7 @@ this assumption is not needed as the circuit adds that constraint itself. Using 
 add the range assumption to the soundness statement, thus making the circuit hard to use
 (in particular, not usable as a bit range check, because it already _requires_ the bit range assumption).
 -/
-structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F] [ProvableType Input] [ProvableType Output]
+structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions : Input F → ProverData F → Prop -- the statement to be assumed for completeness
   Spec : Input F → Output F → ProverData F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
@@ -426,7 +427,7 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [De
 
 /-- Soundness for general circuits that change interactions -/
 @[circuit_norm]
-def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] [DecidableEq F] (circuit : ElaboratedCircuit F Input Output)
+def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
     (Spec : Input F → Output F → Environment F → Prop) :=
   ∀ offset : ℕ, ∀ env,
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
@@ -436,8 +437,7 @@ def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] [DecidableEq F]
   Operations.Requirements env (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
-def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] [DecidableEq F]
-    (circuit : ElaboratedCircuit F Input Output)
+def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Environment F → Prop) :=
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
@@ -446,7 +446,7 @@ def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] [DecidableEq
   ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
 
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
-structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F] [DecidableEq F]
+structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F]
     [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions : Input F → Environment F → Prop
@@ -496,7 +496,7 @@ structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Fie
     try tauto
 
 @[circuit_norm]
-def FormalCircuitWithInteractions.channels [DecidableEq F] (circuit : FormalCircuitWithInteractions F Input Output) :=
+def FormalCircuitWithInteractions.channels (circuit : FormalCircuitWithInteractions F Input Output) :=
   circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
 end
 
@@ -529,7 +529,6 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 
 def Environment.fromList (witnesses : List F) : Environment F where
   get i := witnesses[i]?.getD 0
-  interactions := []
   data _ _ := #[]
 
 def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with
