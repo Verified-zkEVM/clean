@@ -72,7 +72,7 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
 
       (idx + 1, next_row)
     )
-    (0, next_row)
+    (ctx.inputSize, next_row)
 
   next_row
 

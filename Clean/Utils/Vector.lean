@@ -47,11 +47,11 @@ theorem toList_length_two {α : Type} (v : Vector α 2) :
         | [x, y] => rfl
         | _ :: _ :: _ :: _ => simp [List.length] at h
 
-def cons (a : α) (v : Vector α n) : Vector α (n + 1) :=
+def listCons (a : α) (v : Vector α n) : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
-theorem toList_cons {a : α} {v : Vector α n} : (cons a v).toList = a :: v.toList := by
-  simp [cons]
+theorem toList_listCons {a : α} {v : Vector α n} : (listCons a v).toList = a :: v.toList := by
+  simp [listCons]
 
 def set? (v : Vector α n) (i : ℕ) (a : α) : Vector α n :=
   ⟨ .mk <| v.toList.set i a, by rw [Array.size_eq_length_toList, List.length_set, length_toList] ⟩
@@ -81,7 +81,7 @@ universe u
 
 def induct {motive : {n : ℕ} → Vector α n → Sort u}
     (nil : motive #v[])
-    (cons: ∀ {n : ℕ} (a : α) (as : Vector α n), motive as → motive (cons a as))
+    (cons: ∀ {n : ℕ} (a : α) (as : Vector α n), motive as → motive (listCons a as))
     {n : ℕ} (v : Vector α n) : motive v :=
   match v with
   | ⟨ .mk [], h ⟩ => by
@@ -114,24 +114,28 @@ def inductPush {motive : {n : ℕ} → Vector α n → Sort u}
 
 theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
 
-theorem cons_push (x y : α) (xs : Vector α n) : (cons x xs).push y = cons x (xs.push y) := by rfl
+theorem listCons_push (x y : α) (xs : Vector α n) :
+    (listCons x xs).push y = listCons x (xs.push y) := by rfl
 
 theorem inductPush_nil {motive : {n : ℕ} → Vector α n → Sort u}
   {nil : motive #v[]}
   {push : ∀ {n : ℕ} (as : Vector α n) (a : α), motive as → motive (as.push a)} :
     inductPush nil push #v[] = nil := by simp only [inductPush]; rfl
 
-lemma inductPush_cons_push {motive : {n : ℕ} → Vector α n → Sort u}
+lemma inductPush_listCons_push {motive : {n : ℕ} → Vector α n → Sort u}
   {nil : motive #v[]}
   {push' : ∀ {n : ℕ} (as : Vector α n) (a : α), motive as → motive (as.push a)}
   {n : ℕ} (xs : Vector α n) (x a : α) :
-    inductPush nil push' (cons x (xs.push a)) = push' (cons x xs) a (inductPush nil push' (cons x xs)) := by
-  conv => lhs; simp only [cons, inductPush]
+    inductPush nil push' (listCons x (xs.push a)) =
+      push' (listCons x xs) a (inductPush nil push' (listCons x xs)) := by
+  conv => lhs; simp only [listCons, inductPush]
   rw [cast_eq_iff_heq]
   have h_push_len : (xs.push a).toList.length = n + 1 := by simp
-  have h_to_push_cons : HEq (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).1 (cons x xs) := by
-    have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).1 = (cons x xs).cast h_push_len.symm := by
-      simp [cons, toPush, toList_push, List.dropLast]
+  have h_to_push_cons :
+      HEq (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).1 (listCons x xs) := by
+    have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).1 =
+        (listCons x xs).cast h_push_len.symm := by
+      simp [listCons, toPush, toList_push, List.dropLast]
     rw [this]; apply cast_heq
   congr
   · have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).2.1 = a := by
@@ -150,7 +154,7 @@ theorem inductPush_push {motive : {n : ℕ} → Vector α n → Sort u}
     congr
     exact inductPush_nil
   case cons x xs ih =>
-    simp only [← inductPush_cons_push]
+    simp only [← inductPush_listCons_push]
     congr
 
 theorem getElemFin_finRange {n} (i : Fin n) : (finRange n)[i] = i := by
@@ -354,7 +358,7 @@ theorem flatten_toChunks {α : Type} (m : ℕ+) (v : Vector (Vector α m) n) :
     clear *-
     induction v using Vector.induct
     case nil => rfl
-    case cons xs x hi => rw [List.replicate_succ, Vector.toList_cons, List.map_cons, hi,
+    case cons xs x hi => rw [List.replicate_succ, Vector.toList_listCons, List.map_cons, hi,
       Function.comp_apply, Function.comp_apply, Array.length_toList, size_toArray]
   simp_all only [List.length_flatten, List.map_map, List.map_attachWith, v_list_list]
   rw [List.map_attach_eq_pmap, List.pmap_map]

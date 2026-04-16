@@ -74,7 +74,7 @@ instance : ToJson (Operation F) where
     | .witness m _ => Json.mkObj [("witness", toJson m)]
     | .assert e => Json.mkObj [("assert", toJson e)]
     | .lookup l => Json.mkObj [("lookup", toJson l)]
-    | .subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
+    | .subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops.toFlat)]
     | .interact i => Json.mkObj [("interact", toJson i)]
 
 instance : ToJson (Operations F) where

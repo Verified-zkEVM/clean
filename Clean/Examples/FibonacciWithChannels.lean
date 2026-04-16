@@ -1131,7 +1131,9 @@ lemma orderedChannel_cons (table : AbstractTable F) (tables : List (AbstractTabl
   simp only [circuit_norm, OrderedChannel, OrderedChannelRefl, List.length_cons]
   -- Intuition: The `i < j` conclusion of `OrderedChannel` falsifies the hypotheses if `j = 0`,
   -- so apart from the "induction hypothesis" where `i, j > 0`, we get two distinct statements by specializing to `i = 0` and `i > 0` respectively
-  simp [Nat.forall_lt_succ_left', List.getElem_cons_zero, List.getElem_cons_succ]
+  simp only [Nat.forall_lt_succ_left', List.getElem_cons_zero, List.getElem_cons_succ]
+  simp only [lt_self_iff_false, imp_false, lt_add_iff_pos_left, Order.lt_add_one_iff, zero_le,
+    implies_true, and_true, not_lt_zero, Order.add_one_le_iff]
   rw [forall₂_and, List.forall_mem_iff_getElem, or_iff_not_imp_left, or_iff_not_imp_left]
   push_neg
   simp only [exists_imp]

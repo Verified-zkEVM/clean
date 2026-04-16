@@ -285,6 +285,7 @@ end CellAssignment
   offset, and the current assignment of the variables to the cells in the trace.
 -/
 structure TableContext (W : ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
+  inputSize : ℕ := 0
   circuit : Operations F
   assignment : CellAssignment W S
 deriving Repr
@@ -294,11 +295,12 @@ variable [Field F] {α : Type}
 namespace TableContext
 @[reducible, table_norm, table_assignment_norm]
 def empty : TableContext W S F where
+  inputSize := 0
   circuit := []
   assignment := .empty W
 
 @[reducible, table_norm, table_assignment_norm]
-def offset (table : TableContext W S F) : ℕ := table.circuit.localLength
+def offset (table : TableContext W S F) : ℕ := table.inputSize + table.circuit.localLength
 end TableContext
 
 @[reducible, table_norm, table_assignment_norm]
@@ -336,8 +338,9 @@ all circuit operations inside a table constraint.
 @[reducible, table_norm, table_assignment_norm]
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
-    let (a, ops) := circuit ctx.circuit.localLength
+    let (a, ops) := circuit ctx.offset
     (a, {
+      inputSize := ctx.inputSize,
       circuit := ctx.circuit ++ ops,
       assignment := assignmentFromCircuit ctx.assignment ops
     })
@@ -345,7 +348,7 @@ instance : MonadLift (Circuit F) (TableConstraint W S F) where
 namespace TableConstraint
 @[reducible, table_norm, table_assignment_norm]
 def finalOffset (table : TableConstraint W S F α) : ℕ :=
-  table .empty |>.snd.circuit.localLength
+  (table .empty).snd.offset
 
 @[table_norm]
 def operations (table : TableConstraint W S F α) : Operations F :=
@@ -393,6 +396,7 @@ def output {α : Type} (table : TableConstraint W S F α) : α :=
 def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
+      inputSize := ctx.inputSize,
       circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange _ fun i => env.get (ctx.offset + i)],
       assignment := ctx.assignment.pushRow row
     }
@@ -409,6 +413,33 @@ def getCurrRow : TableConstraint W S F (Var S F) := getRow 0
 -/
 @[table_norm, table_assignment_norm]
 def getNextRow : TableConstraint W S F (Var S F) := getRow 1
+
+/--
+  Read a variable for each cell in a given row, without creating witness operations.
+  This is like `getRow` but does not add witness operations to the circuit.
+  Instead, it advances the `inputSize` offset, assuming these variables are pre-existing.
+-/
+@[table_norm, table_assignment_norm]
+def readRow (row : Fin W) : TableConstraint W S F (Var S F) :=
+  modifyGet fun ctx =>
+    let ctx' : TableContext W S F := {
+      inputSize := ctx.inputSize + size S,
+      circuit := ctx.circuit,
+      assignment := ctx.assignment.pushRow row
+    }
+    (varFromOffset S ctx.offset, ctx')
+
+/--
+  Read a variable for each cell in the current row, without creating witness operations.
+-/
+@[table_norm, table_assignment_norm]
+def readCurrRow : TableConstraint W S F (Var S F) := readRow 0
+
+/--
+  Read a variable for each cell in the next row, without creating witness operations.
+-/
+@[table_norm, table_assignment_norm]
+def readNextRow : TableConstraint W S F (Var S F) := readRow 1
 
 @[table_norm, table_assignment_norm]
 def assignVar (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
@@ -439,7 +470,7 @@ def assignNextRow {W : ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
     assign (.next i) vars[i]
 end TableConstraint
 
-export TableConstraint (windowEnv getCurrRow getNextRow assignVar assign assignNextRow assignCurrRow)
+export TableConstraint (windowEnv getCurrRow getNextRow readCurrRow readNextRow assignVar assign assignNextRow assignCurrRow)
 
 @[reducible]
 def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit

@@ -293,17 +293,22 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     Soundness env := circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data,
     Completeness env := circuit.Assumptions (eval env input_var) env.data,
     UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) env.data →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data,
+      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data
+      ∧ circuit.CompletenessSpec (eval env input_var) (eval env (circuit.output input_var n)) env.data,
     localLength := circuit.localLength input_var
 
     imply_soundness := by
       intro env h_constraints h_guarantees
       exact imply_soundness env h_constraints h_guarantees
     implied_by_completeness
-    imply_usesLocalWitnesses env h_env assumptions :=
+    imply_usesLocalWitnesses env h_env assumptions := by
       -- constraints hold by completeness, which implies the spec by soundness
-      (implied_by_completeness env h_env assumptions |>
+      use (implied_by_completeness env h_env assumptions |>
         fun h => imply_soundness env h.1 h.2).1
+      apply circuit.completenessSpec n env input_var ?_ _ rfl assumptions
+      rw [ops.toNested_toFlat] at h_env
+      rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env
+      exact env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
@@ -602,7 +607,8 @@ theorem FormalCircuit.toSubcircuit_usesLocalWitnesses (circuit : FormalCircuit F
 theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses (circuit : GeneralFormalCircuit F Input Output) :
   (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
   (circuit.Assumptions (eval env input_var) env.data →
-    circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data) := rfl
+    circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data
+    ∧ circuit.CompletenessSpec (eval env input_var) (eval env (circuit.output input_var n)) env.data) := rfl
 
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_usesLocalWitnesses (circuit : FormalAssertion F Input) :

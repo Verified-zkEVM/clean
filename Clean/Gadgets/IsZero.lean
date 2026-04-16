@@ -70,7 +70,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     simp only [vars_pre, vals_pre] at *
     simp only [Fin.getElem_fin,
       Vector.getElem_cast, forall_const, id_eq] at h_ih
-    simp only [id_eq, Fin.getElem_fin, Fin.coe_castSucc, Fin.val_last]
+    simp only [id_eq, Fin.getElem_fin, Fin.val_castSucc, Fin.val_last]
     specialize h_ih (by
       intro i
       specialize h_isZero i.castSucc
@@ -97,7 +97,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       apply False.elim
       apply h_last
       aesop
-    · aesop
+    · next h_ex h_all => exfalso; exact h_ex (fun i hi => h_all i (by omega))
 
 theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
   circuit_proof_start

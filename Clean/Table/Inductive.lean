@@ -90,7 +90,7 @@ for any given public `input` and `ouput`.
 -/
 
 def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint 2 (ProvablePair State Input) F Unit := do
-  let (acc, x) ← getCurrRow
+  let (acc, x) ← readCurrRow
   let output ← table.step acc x
   let (output', _) ← getNextRow
   -- TODO make this more efficient by assigning variables as long as they don't come from the input
@@ -184,7 +184,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
   case more curr next rest ih1 ih2 =>
     intro constraints
     simp only [table_norm, List.size_toArray, List.length_nil, List.push_toArray,
-      List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
+      List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero_iff, one_ne_zero,
       and_false, reduceIte, tsub_zero,
       Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious] at constraints ih1 ih2 ⊢
     rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
@@ -194,11 +194,11 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     simp only [ih2, and_self, and_true]
     clear ih1 ih2
     set env' := windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
-    simp only [table_norm, circuit_norm, inductiveConstraint] at constraints
+    simp only [table_norm, circuit_norm, inductiveConstraint, zero_add, Nat.add_zero] at constraints
     obtain ⟨ main_constraints, return_eq ⟩ := constraints
     have h_env' : env' = windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
-    simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm] at h_env'
-    simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
+    simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm, zero_add, Nat.add_zero] at h_env'
+    simp only [zero_add, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
       CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars] at h_env'
     set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
     set s := size State
@@ -213,7 +213,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       rw [h_env']
       simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
-        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
+        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append, Vector.getElem_cast]
 
     have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) := by
       have hi' : i + s < s + x + t + (s + x) := by linarith
@@ -222,18 +222,20 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       rw [h_env']
       simp +arith only [main_ops, s, t, x, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
-        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
+        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append, Vector.getElem_cast]
       congr; omega
 
     have h_env_output i (hi : i < s) : (toElements next.1)[i] = env'.get (i + (s + x) + t) := by
       have hi' : i + (s + x) + t < s + x + t + (s + x) := by linarith
-      have hi'' : ¬(i + (s + x) + t < 0 + (s + x)) := by linarith
-      have hi''' : ¬(i + (s + x) + t < 0 + (s + x) + t) := by linarith
+      have hi'' : ¬(i + (s + x) + t < s + x) := by linarith
+      have hi''' : ¬(i + (s + x) + t < s + x + t) := by linarith
       rw [h_env']
       simp +arith only [main_ops, hi', s, t, x, table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
-        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
-      simp +arith [hi, s, add_assoc]
+        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append, Vector.getElem_cast]
+      split
+      · congr 1; omega
+      · omega
     clear h_env'
 
     have input_eq_1 : eval env' curr_var.1 = curr.1 := by

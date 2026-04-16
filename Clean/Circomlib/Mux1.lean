@@ -73,9 +73,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   soundness := by
     simp only [circuit_norm, main]
-    intro offset env input_var input h_input h_assumptions h_output
-    -- We need to show the spec holds for all i < n
-    intro i hi
+    intro offset env input_var input h_input h_assumptions h_output i hi
     -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
     -- We need to show this equals if s = 0 then c[i][0] else c[i][1]
 
