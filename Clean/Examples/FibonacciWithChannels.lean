@@ -1828,6 +1828,8 @@ structure SoundEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap
   finished_subset : finished ⊆ channels
   subset_finished : ensemble.channelsWithGuarantees ⊆ finished
   ordered_channels : ensemble.OrderedChannels finished
+  -- TODO get rid of this assumption, by being more flexible about table order
+  -- => use "∃ permutation, s.t. ordered" instead of "ordered" in Ensemble.OrderedChannels
   verifier_empty : ensemble.verifier = .empty F PublicIO
   specConsistency : ensemble.SpecConsistency
 
@@ -1972,26 +1974,34 @@ end SoundEnsemble
 
 /-
 VM-like ensembles have a "main channel" that stores the VM state, which we'll call a _VM channel_.
-One or more tables pull from, then push to, this channel in their row circuit;
-thereby performing one VM transition.
+One or more tables pull from, then push to, this channel in their row circuit; thereby performing one VM transition.
 
 The public input/output of such an ensemble is the initial push (initial state) and the final pull (final state).
-The statement being proven is that there exists a sequence of valid VM transitions from the initial state to the final state.
-Note that this does not, in general, requires that every row in the trace participates in the valid VM transition!
-In addition to the valid main transition path, there can be additional cycles of VM steps.
+The statement to prove is that there exists a sequence of valid VM transitions from the initial state to the final state.
+Note that this does not, in general, require that every row in the trace participates in a single transition path!
+In addition to the main (valid) transition path, there can be additional closed cycles of VM steps.
 
-In fact, from the assumptions (constraints + balance), we _cannot_ prove `SoundChannels` for a VM channel in the sense that
-all guarantees for that channel must hold. For the case of unused cycles, we have a circular implication
-sequence of the form guarantees → requirements → guarantees → ... which allows that none of the guarantees are actually satisified.
+What is more, the unused cycles can be "invalid" in the sense that we generally cannot prove that their guarantees are satisfied,
+because we get a circular implication sequence of the form ... → guarantees → requirements → guarantees → ...
+
+Consequently, from the assumptions (constraints + balance), we _cannot_ prove global soundness for a VM channel in the sense that
+all guarantees for that channel must hold (like we did above for the `SoundChannels` case).
 
 This is why we need a weaker statement about VM channels which still allows us to prove soundness of the overall ensemble.
 Essentially, it amounts to the simple idea that for any cycle, if just _one_ of the guarantees or requirements hold,
 then all of them do.
-This holds in a very general sense and is applied to the "cycle" which contains the input + output interactions.
-Thus, assuming the input satisfies the requirements, we can conclude that the output satisfies the guarantees. This
-can usually be engineered to be just the statement we actually care about.
+This holds in a very general sense and is applied to the "cycle" which contains the input + output interactions as
+start and end points.
+Thus, assuming the _input satisfies the requirements_ (a very sensible assumption), we can conclude that
+the _output satisfies the guarantees_. The latter can usually be engineered to be exactly the statement we actually care about.
 
-These ideas are captured by the following definitions and theorems.
+The main proof idea is captured by the following definitions, culminating in
+`guarantees_of_requirements_of_requirements_of_guarantees`,
+a theorem which states the VM interaction situation in a rather abstract setting.
+
+Below that, we introduce the `VmTables` structure (capturing basic assumptions we put on a VM definition) as well as the
+`SoundVmChannel` class (capturing what we mean with soundness for a VM), and then go on to prove our main theorem,
+`addVm_soundVmChannel_of_soundChannels`, which shows soundness for a VM added on top of a `SoundChannels` ensemble.
 -/
 
 /--
@@ -2123,12 +2133,19 @@ lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ}
 
 /--
 Assume you have a list of channel interactions that is made up of pairs (-1, pull_i), (1, push_i),
-where for each i, Guarantees (-1, pull_i) → Requirements (1, push_i).
+where for each i, `Guarantees (-1, pull_i) → Requirements (1, push_i)`.
 We want to think of (pull_i → push_i) as the state transition of a VM circuit.
 
 Furthermore, assume the list is balanced and the channel is normal.
 
-Then, for any i, the **converse** is true: Requirements (1, push_i) → Guarantees (-1, pull_i).
+Then, for any i, the **converse** is true: `Requirements (1, push_i) → Guarantees (-1, pull_i)`.
+
+The intuition is that when the requirements for a push hold unconditionally, we
+can "follow implications around the cycle" to show that _all_ the guarantees/requirements must hold
+(within that cycle, which contains both the push and its corresponding pull).
+
+By narrowing the conclusion to only the guarantees of the push, the formulation cleverly
+avoids talking about cycles at all, and achieves a comparatively simple proof by induction.
 -/
 theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar F ≠ 2)]
     (channel : RawChannel F) [NormalChannel.Raw channel]
@@ -2141,8 +2158,9 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
   (pulls_mult : ∀ a ∈ pulls, a.mult = -1) (pushes_mult : ∀ b ∈ pushes, b.mult = 1) :
     (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →
     ∀ (i : ℕ) (hi: i < n), pushes[i].Requirements data → pulls[i].Guarantees data := by
-  -- the intuition for this proof is that when the requirements for b hold unconditionally, then
-  -- the transition cycle that contains both a and b is valid, so in fact all the guarantees/requirements in this cycle must hold.
+  -- the intuition for this proof is that when the requirements for a push hold unconditionally, we
+  -- can "follow implications around the cycle" to show that _all_ the guarantees/requirements must hold
+  -- (within that cycle, which contains both the push and its corresponding pull).
   -- but we avoid explicitly reasoning about cycles by using a clever inductive argument.
   intro constraints
   induction n generalizing pulls pushes with
@@ -2813,8 +2831,9 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   exact vm_constraints _ vmWitness.mem_allTables_verifierTable
 end Ensemble
 
-def SoundEnsemble.addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicIO) (vm : VmTables F PublicIO)
-    (ne_mem_vm_channel : ∀ table ∈ ens.ensemble.tables, vm.channel.toRaw ∉ table.circuit.channels
+namespace SoundEnsemble
+def addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicIO) (vm : VmTables F PublicIO)
+    (ne_mem_vm_channel : ∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels
       := by simp [circuit_norm])
     (grts_subset_finished : vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: ens.finished ∧
       ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: ens.finished
@@ -2828,7 +2847,6 @@ def SoundEnsemble.addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicI
     ens.soundChannels ens.finished_consistent ens.finished_subset ens.verifier_empty vm ne_mem_vm_channel
     grts_subset_finished reqs_disjoint_finished
 
-namespace SoundVmEnsemble
 variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
   {nmv : ∀ table ∈ soundEns.ensemble.tables, vm.channel.toRaw ∉ table.circuit.channels}
   {gsf : vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: soundEns.finished ∧
@@ -2839,7 +2857,7 @@ variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
 @[circuit_norm] lemma addVm_spec [Fact (ringChar F ≠ 2)] (publicInput : PublicIO F) :
   (soundEns.addVm vm nmv gsf rdf).Spec publicInput =
     ∃ data, vm.verifier.Spec publicInput () (.fromInput publicInput data) := rfl
-end SoundVmEnsemble
+end SoundEnsemble
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
