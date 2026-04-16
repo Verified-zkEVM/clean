@@ -2674,6 +2674,7 @@ def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) : Ensemble F Pu
 @[circuit_norm] lemma addVm_channels (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) :
   (ens.addVm vm).channels = vm.channel.toRaw :: ens.channels := rfl
 
+/-- split up the witness of `Ensemble.addVm _ _` -/
 lemma addVm_witness (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
   (witness : EnsembleWitness (ens.addVm vm)) :
     ∃ (vmWitness : VmWitness vm) (witness' : EnsembleWitness ens),
@@ -2686,7 +2687,59 @@ lemma addVm_witness (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
       ∀ i (hi : i < vmWitness.tables.length),
         (∃ (hi': i < vm.tables.length), vmWitness.tables[i].abstract = vm.tables[i]) ∧
         vmWitness.tables[i].data = witness.data := by
-  sorry
+  have h_len : (ens.addVm vm).tables.length = vm.tables.length + ens.tables.length := by
+    simp [addVm]
+  have h_witlen : witness.tables.length = vm.tables.length + ens.tables.length := by
+    simp [← witness.same_length, addVm]
+  let vmWitness : VmWitness vm := {
+    tables := witness.tables.take vm.tables.length
+    publicInput := witness.publicInput
+    data := witness.data
+    same_length := by
+      simp [VmTables.toEnsemble, List.length_take, h_witlen]
+    same_circuits := by
+      intro i hi
+      have hi' : i < vm.tables.length := by
+        simpa [VmTables.toEnsemble] using hi
+      have : i < (ens.addVm vm).tables.length := by
+        omega
+      rw [List.getElem_take, ← witness.same_circuits _ this]
+      simp [VmTables.toEnsemble, addVm, hi']
+    same_data := by
+      intro table h_table
+      apply witness.same_data
+      exact List.mem_of_mem_take h_table
+  }
+  let witness' : EnsembleWitness ens := {
+    tables := witness.tables.drop vm.tables.length
+    publicInput := witness.publicInput
+    data := witness.data
+    same_length := by
+      simp [List.length_drop, h_witlen]
+    same_circuits := by
+      intro i hi
+      have : vm.tables.length + i < (ens.addVm vm).tables.length := by
+        omega
+      rw [List.getElem_drop, ← witness.same_circuits _ this]
+      simp [addVm]
+    same_data := by
+      intro table h_table
+      apply witness.same_data
+      exact List.mem_of_mem_drop h_table
+  }
+  refine ⟨vmWitness, witness', ?_, ?_, rfl, rfl, rfl, rfl, ?_⟩
+  · simp [vmWitness, witness', List.take_append_drop]
+  · simp [EnsembleWitness.allTables, EnsembleWitness.verifierTable,
+      Ensemble.addVm, VmTables.toEnsemble, vmWitness, witness', List.take_append_drop]
+  · intro i hi
+    have hi' : i < vm.tables.length := by
+      simpa [vmWitness, VmTables.toEnsemble, List.length_take, h_witlen] using hi
+    constructor
+    · refine ⟨hi', ?_⟩
+      simpa [VmTables.toEnsemble] using (vmWitness.same_circuits i hi').symm
+    · have h_mem : vmWitness.tables[i] ∈ vmWitness.tables := by
+        simp
+      simpa [vmWitness] using vmWitness.same_data _ h_mem
 
 theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : Ensemble F PublicIO)
       -- given a sound channels ensemble with a list of finished, consistent channels
