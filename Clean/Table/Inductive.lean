@@ -184,7 +184,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
   case more curr next rest ih1 ih2 =>
     intro constraints
     simp only [table_norm, List.size_toArray, List.length_nil, List.push_toArray,
-      List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
+      List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero_iff, one_ne_zero,
       and_false, reduceIte, tsub_zero,
       Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious] at constraints ih1 ih2 ⊢
     rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
@@ -233,7 +233,9 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp +arith only [main_ops, hi', s, t, x, table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append, Vector.getElem_cast]
-      simp +arith [hi, s, add_assoc]
+      split
+      · congr 1; omega
+      · omega
     clear h_env'
 
     have input_eq_1 : eval env' curr_var.1 = curr.1 := by

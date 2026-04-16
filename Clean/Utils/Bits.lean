@@ -32,7 +32,7 @@ lemma toBits_fromBits_aux {n : ℕ} (bits : Vector ℕ n)
   induction n with
   | zero => simp_all
   | succ n ih =>
-    simp only [Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last]
+    simp only [Fin.foldl_succ_last, Fin.val_castSucc, Fin.val_last]
     let bits' : Vector ℕ n := bits.pop
     have h_bits' : ∀ j (hj : j < n), bits'[j] = 0 ∨ bits'[j] = 1
       | j, hj => by
@@ -270,7 +270,7 @@ theorem fieldFromBits_fieldToBits_mod {n : ℕ} (x : F p) :
 /-- fieldFromBits decomposes as sum of first n bits + bit_n * 2^n -/
 lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
     fieldFromBits bits = fieldFromBits bits.pop + bits[n] * (2^n : F p) := by
-  simp only [fieldFromBits, fromBits, Vector.getElem_map, Fin.foldl_succ_last, Fin.coe_castSucc,
+  simp only [fieldFromBits, fromBits, Vector.getElem_map, Fin.foldl_succ_last, Fin.val_castSucc,
     Fin.val_last, Nat.add_one_sub_one, Vector.map_pop, Vector.getElem_pop']
   rw [Nat.cast_add, Nat.cast_mul, ZMod.natCast_zmod_val, Nat.cast_pow]
   rfl
