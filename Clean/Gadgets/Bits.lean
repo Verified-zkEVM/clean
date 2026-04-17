@@ -6,10 +6,11 @@ import Clean.Utils.Tactics
 namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
+variable {ProverHint : Type}
 
-def main (n : ℕ) (x : Expression (F p)) := do
+def main (n : ℕ) (x : Expression (F p)) : Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
   -- witness the bits of `x`
-  let bits ← witnessVector n fun env => fieldToBits n (x.eval env)
+  let bits ← witnessVector n fun env _ => fieldToBits n (x.eval env)
 
   -- add boolean constraints on all bits
   Circuit.forEach bits assertBool
@@ -20,7 +21,7 @@ def main (n : ℕ) (x : Expression (F p)) := do
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
-def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
+def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) ProverHint field (fields n) where
   main := main n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
@@ -29,7 +30,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
-  Assumptions (x : F p) _ := x.val < 2^n
+  Assumptions (x : F p) _ _ := x.val < 2^n
 
   Spec (x : F p) (bits : Vector (F p) n) _ :=
     x.val < 2^n ∧ bits = fieldToBits n x
@@ -70,7 +71,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
-def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
+def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) ProverHint field where
   main x := do
     -- we wrap the toBits circuit but ignore the output
     let _ ← toBits n hn x

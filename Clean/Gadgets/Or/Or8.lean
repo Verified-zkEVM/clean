@@ -2,6 +2,7 @@ import Clean.Circuit
 import Clean.Gadgets.Xor.ByteXorTable
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+variable {ProverHint : Type}
 
 namespace Gadgets.Or.Or8
 open Xor (ByteXorTable)
@@ -20,9 +21,9 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val ||| y.val ∧ z.val < 256
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (fieldVar (F p)) := do
   let ⟨x, y⟩ := input
-  let or ← witness fun eval => (eval x).val ||| (eval y).val
+  let or ← witness fun eval _ => (eval x).val ||| (eval y).val
   -- we prove OR correct using an XOR lookup
   let xor := 2*or - x - y
   lookup ByteXorTable (x, y, xor)
@@ -82,11 +83,11 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-instance elaborated : ElaboratedCircuit (F p) Inputs field where
+instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs field where
   main
   localLength _ := 1
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -126,7 +127,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   show Nat.bitwise _ _ _ < 2 ^ 8
   exact Nat.bitwise_lt_two_pow hx_byte hy_byte
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -179,7 +180,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · omega
   · omega
 
-def circuit : FormalCircuit (F p) Inputs field :=
+def circuit : FormalCircuit (F p) ProverHint Inputs field :=
   { Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Or.Or8

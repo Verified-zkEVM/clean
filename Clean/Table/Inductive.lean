@@ -11,7 +11,7 @@ import Clean.Gadgets.Equality
 
 def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop)
-    (step : Var State F → Var Input F → Circuit F (Var State F)) :=
+    (step : Var State F → Var Input F → Circuit F ProverHint (Var State F)) :=
   ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
@@ -29,7 +29,7 @@ def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Typ
     (InputAssumptions : ℕ → Input F → ProverData F → Prop)
     (InitialStateAssumptions : State F → ProverData F → Prop)
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop)
-    (step : Var State F → Var Input F → Circuit F (Var State F)) :=
+    (step : Var State F → Var Input F → Circuit F ProverHint (Var State F)) :=
   ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
@@ -52,7 +52,7 @@ In the case of two-row windows, an `InductiveTable` is basically a `FormalCircui
 -/
 structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input] where
   /-- the `step` circuit encodes the transition logic from one state to the next -/
-  step : Var State F → Var Input F → Circuit F (Var State F)
+  step : Var State F → Var Input F → Circuit F ProverHint (Var State F)
 
   /-- the `Spec` characterizes the `i`th state, possibly in relation to the initial state and the full list of inputs up to that point -/
   Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop
@@ -78,7 +78,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     )
 
 namespace InductiveTable
-variable {F : Type} [Field F] {State Input : TypeMap} [ProvableType State] [ProvableType Input]
+variable {F : Type} [Field F] {ProverHint : Type} {State Input : TypeMap} [ProvableType State] [ProvableType Input]
 
 /-
 we show that every `InductiveTable` can be used to define a `FormalTable`,

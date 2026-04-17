@@ -143,6 +143,7 @@ theorem val_of_IsBool {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : IsBool
 
 section BinaryOps
 variable {p : ℕ} [Fact p.Prime]
+variable {ProverHint : Type}
 
 /-- For boolean field elements, XOR operation matches bitwise XOR of values -/
 theorem xor_eq_val_xor {a b : F p} (ha : IsBool a) (hb : IsBool b) :

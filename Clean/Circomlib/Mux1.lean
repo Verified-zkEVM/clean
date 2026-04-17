@@ -7,6 +7,7 @@ import Clean.Gadgets.Boolean
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+variable {ProverHint : Type}
 
 /-
 Original source code:
@@ -57,7 +58,7 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
 
 -- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
 
-def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
+def circuit (n : ℕ) : FormalCircuit (F p) ProverHint (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n
@@ -157,7 +158,7 @@ def main (input : Var Inputs (F p)) := do
   let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
   return mux_out[0]
 
-def circuit : FormalCircuit (F p) Inputs field where
+def circuit : FormalCircuit (F p) ProverHint Inputs field where
   main := main
 
   localLength _ := 1

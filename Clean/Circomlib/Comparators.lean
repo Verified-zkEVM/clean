@@ -10,6 +10,7 @@ https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+variable {ProverHint : Type}
 
 namespace IsZero
 /-
@@ -26,7 +27,7 @@ template IsZero() {
 }
 -/
 def main (input : Expression (F p)) := do
-  let inv ← witness fun env =>
+  let inv ← witness fun env _ =>
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
 
@@ -34,7 +35,7 @@ def main (input : Expression (F p)) := do
   input * out === 0
   return out
 
-def circuit : FormalCircuit (F p) field field where
+def circuit : FormalCircuit (F p) ProverHint field field where
   main
   localLength _ := 2
 
@@ -85,7 +86,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out ← IsZero.circuit diff
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) ProverHint fieldPair field where
   main
   localLength _ := 2
 
@@ -146,7 +147,7 @@ def main (inputs : Var Inputs (F p)) := do
   let isz ← IsZero.circuit (inp.2 - inp.1)
   enabled * (1 - isz) === 0
 
-def circuit : FormalAssertion (F p) Inputs where
+def circuit : FormalAssertion (F p) ProverHint Inputs where
   main
   localLength _ := 2
 
@@ -217,7 +218,7 @@ def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F
   let out <== 1 - bits[n]
   return out
 
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) ProverHint fieldPair field where
   main := main n hn
   localLength _ := n + 2
   localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
@@ -415,7 +416,7 @@ template LessEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) ProverHint fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (x, y + 1)
 
@@ -450,7 +451,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simpa [hy_val, Nat.lt_add_one_iff] using h_lt
 
   completeness := by
-    intro i env input h_env (x, y) h_input h_assumptions
+    intro i env input _hint h_env (x, y) h_input h_assumptions
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by
@@ -486,7 +487,7 @@ template GreaterThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) ProverHint fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x)
 
@@ -506,7 +507,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simpa using h_lt
 
   completeness := by
-    intro i env input h_env (x, y) h_input h_assumptions
+    intro i env input _hint h_env (x, y) h_input h_assumptions
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have hx_le : x.val ≤ 2^n := Nat.le_of_lt h_assumptions.left
@@ -526,7 +527,7 @@ template GreaterEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) ProverHint fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x + 1)
 
@@ -561,7 +562,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simpa [hx_val, Nat.lt_add_one_iff] using h_lt
 
   completeness := by
-    intro i env input h_env (x, y) h_input h_assumptions
+    intro i env input _hint h_env (x, y) h_input h_assumptions
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by

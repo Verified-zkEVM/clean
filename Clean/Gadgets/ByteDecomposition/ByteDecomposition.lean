@@ -4,6 +4,7 @@ import Clean.Utils.Field
 import Clean.Gadgets.ByteDecomposition.Theorems
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
+variable {ProverHint : Type}
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 namespace Gadgets.ByteDecomposition
@@ -19,9 +20,9 @@ deriving ProvableStruct
   The low part is the least significant `offset` bits,
   and the high part is the most significant `8 - offset` bits.
 -/
-def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
-  let high ← witness fun env => floorDiv (env x) (2^offset.val)
+def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) ProverHint (Var Outputs (F p)) := do
+  let low ← witness fun env _ => mod (env x) (2^offset.val) (by simp [two_pow_lt])
+  let high ← witness fun env _ => floorDiv (env x) (2^offset.val)
 
   lookup ByteTable ((2^(8-offset.val) : F p) * low)
   lookup ByteTable high
@@ -37,12 +38,13 @@ def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
   ∧ (low.val < 2^offset.val ∧ high.val < 2^(8-offset.val))
 
-def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
+def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) ProverHint field Outputs where
   main := main offset
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 8) :
+    Soundness (F p) ProverHint (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp only [circuit_norm, elaborated, main, Spec, ByteTable, h_input] at h_holds ⊢
@@ -94,8 +96,9 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   use ⟨ low_eq, high_eq ⟩, h_lt_low
   rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
+theorem completeness (offset : Fin 8) :
+    Completeness (F p) ProverHint (elaborated offset) Assumptions := by
+  rintro i0 env x_var _hint henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [ProvableType.eval_field] at h_input
   simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
   simp only [henv]
@@ -119,7 +122,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   · have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
     rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
+def circuit (offset : Fin 8) : FormalCircuit (F p) ProverHint field Outputs := {
   elaborated offset with
   main := main offset
   Assumptions

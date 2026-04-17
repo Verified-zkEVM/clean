@@ -4,12 +4,13 @@ import Clean.Utils.Primes
 
 namespace Gadgets.Rotation32Bytes
 variable {p : ℕ} [Fact p.Prime]
+variable {ProverHint : Type}
 
 /--
   Rotate the 32-bit integer by increments of 8 positions
   This gadget does not introduce constraints
 -/
-def main (offset : Fin 4) (input : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
+def main (offset : Fin 4) (input : Var U32 (F p)) : Circuit (F p) ProverHint (Var U32 (F p)) := do
   let ⟨x0, x1, x2, x3⟩ := input
 
   if offset = 0 then
@@ -26,7 +27,7 @@ def Assumptions (input : U32 (F p)) := input.Normalized
 def Spec (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value (offset.val * 8) ∧ y.Normalized
 
-instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
+instance elaborated (off : Fin 4): ElaboratedCircuit (F p) ProverHint U32 U32 where
   main := main off
   localLength _ := 0
   output input i0 :=
@@ -73,7 +74,7 @@ theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumpt
     intro Assumptions
     simp [main, circuit_norm]
 
-def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 := {
+def circuit (off : Fin 4) : FormalCircuit (F p) ProverHint U32 U32 := {
   elaborated off with
   main := main off
   Assumptions

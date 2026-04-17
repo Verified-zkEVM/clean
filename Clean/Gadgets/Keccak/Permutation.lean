@@ -3,9 +3,10 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Permutation
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
+variable {ProverHint : Type}
 open Specs.Keccak256
 
-def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+def main (state : Var KeccakState (F p)) : Circuit (F p) ProverHint (Var KeccakState (F p)) :=
   .foldl roundConstants state
     fun state rc => KeccakRound.circuit rc state
 
@@ -23,7 +24,7 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
 -- NOTE: this linter times out and blows up memory usage
 set_option linter.constructorNameAsVariable false
 
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
+instance elaborated : ElaboratedCircuit (F p) ProverHint KeccakState KeccakState where
   main
   localLength _ := 30912
   output _ i0 := stateVar i0 23
@@ -40,7 +41,7 @@ lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
   rw [← Array.foldl_toList, ← List.foldl_map]
   simp [List.finRange]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
@@ -79,8 +80,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [keccakPermutation, ← fin_foldl_eq_vector_foldl] at h ⊢
   exact h
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro n env initial_state_var h_env initial_state h_input h_assumptions
+theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+  intro n env initial_state_var _hint h_env initial_state h_input h_assumptions
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions
@@ -115,7 +116,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       exact h_succ i hi ih
   exact h_norm i (Nat.lt_of_succ_lt hi)
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState := {
+def circuit : FormalCircuit (F p) ProverHint KeccakState KeccakState := {
   elaborated with
   Assumptions, Spec, soundness
   -- TODO why does this time out??

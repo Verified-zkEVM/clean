@@ -16,6 +16,7 @@ https://github.com/iden3/circomlib/blob/master/circuits/gates.circom
 
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime]
+variable {ProverHint : Type}
 
 open Circuit (bind_output_eq bind_localLength_eq bind_forAll)
 open Operations (append_localLength)
@@ -37,7 +38,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a + b - 2*a*b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) ProverHint fieldPair field where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -79,7 +80,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a*b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) ProverHint fieldPair field where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -119,7 +120,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a + b - a*b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) ProverHint fieldPair field where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -159,7 +160,7 @@ def main (input : Expression (F p)) := do
   let out <== 1 + inp - 2*inp
   return out
 
-def circuit : FormalCircuit (F p) field field where
+def circuit : FormalCircuit (F p) ProverHint field field where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -201,7 +202,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== 1 - a*b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) ProverHint fieldPair field where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -243,7 +244,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a*b + 1 - a - b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) ProverHint fieldPair field where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -300,7 +301,7 @@ template MultiAND(n) {
 }
 -/
 
-def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expression (F p))
+def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) ProverHint (Expression (F p))
   | 0, _ =>
     return (1 : F p)
   | 1, input =>
@@ -1021,7 +1022,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_rest.1
               · exact h_comp2
 
-def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
+def circuit (n : ℕ) : FormalCircuit (F p) ProverHint (fields n) field where
   main
   localLength _ := n - 1
   localLength_eq := localLength_eq n

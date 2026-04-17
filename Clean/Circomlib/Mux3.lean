@@ -7,6 +7,7 @@ import Clean.Gadgets.Boolean
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+variable {ProverHint : Type}
 
 /-
 Original source code:
@@ -78,7 +79,7 @@ def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
 
   return out
 
-def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
+def circuit (n : ℕ) : FormalCircuit (F p) ProverHint (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n + 1
@@ -186,7 +187,7 @@ def main (input : Var Inputs (F p)) := do
   let mux_out ← MultiMux3.circuit 1 { c := #v[c], s }
   return mux_out[0]
 
-def circuit : FormalCircuit (F p) Inputs field where
+def circuit : FormalCircuit (F p) ProverHint Inputs field where
   main := main
 
   localLength _ := 2

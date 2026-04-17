@@ -10,6 +10,7 @@ https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
+variable {ProverHint : Type}
 instance hp135 : Fact (p > 2^135) := .mk (by linarith [‹Fact (p > 2^253)›.elim])
 instance hppre254 : Fact (p - 1 < 2^254) := .mk (by
   calc
@@ -34,7 +35,7 @@ def main (input : Vector (Expression (F p)) 254) := do
   let comp_out ← CompConstant.circuit (p - 1) hppre254.elim input
   comp_out === 0
 
-def circuit : FormalAssertion (F p) (fields 254) where
+def circuit : FormalAssertion (F p) ProverHint (fields 254) where
   main
   localLength _ := 127 + 1 + 135 + 1
 

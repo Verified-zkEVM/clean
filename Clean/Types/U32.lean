@@ -8,6 +8,7 @@ import Clean.Gadgets.Equality
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+variable {ProverHint : Type}
 
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
@@ -267,14 +268,14 @@ open Gadgets (ByteTable)
   Assert that a 32-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-def main (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
+def main (inputs : Var U32 (F p)) : Circuit (F p) ProverHint Unit  := do
   let ⟨ x0, x1, x2, x3 ⟩ := inputs
   lookup ByteTable x0
   lookup ByteTable x1
   lookup ByteTable x2
   lookup ByteTable x3
 
-def circuit : FormalAssertion (F p) U32 where
+def circuit : FormalAssertion (F p) ProverHint U32 where
   main
   Assumptions _ := True
   Spec inputs := inputs.Normalized
@@ -284,7 +285,7 @@ def circuit : FormalAssertion (F p) U32 where
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
-    rintro i0 env x_var _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    rintro i0 env x_var _hint _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
 end U32.AssertNormalized
@@ -292,7 +293,8 @@ end U32.AssertNormalized
 /--
   Witness a 32-bit unsigned integer.
 -/
-def U32.witness (compute : Environment (F p) → U32 (F p)) := do
+def U32.witness {ProverHint : Type} (compute : Environment (F p) → ProverHint → U32 (F p)) :
+    Circuit (F p) ProverHint (Var U32 (F p)) := do
   let x ← ProvableType.witness compute
   U32.AssertNormalized.circuit x
   return x

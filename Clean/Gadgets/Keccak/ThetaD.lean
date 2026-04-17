@@ -5,10 +5,11 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.ThetaD
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
+variable {ProverHint : Type}
 
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
-def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
+def main (row : Var KeccakRow (F p)) : Circuit (F p) ProverHint (Var KeccakRow (F p)) := do
   let c0 ← Rotation64.circuit (64 - 1) row[1]
   let c0 ← Xor64.circuit ⟨row[4], c0⟩
 
@@ -26,7 +27,7 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
 
   return #v[c0, c1, c2, c3, c4]
 
-instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
+instance elaborated : ElaboratedCircuit (F p) ProverHint KeccakRow KeccakRow where
   main
   localLength _ := 120
 
@@ -36,7 +37,7 @@ def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaD row.value
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   intro i0 env row_var row h_input row_norm h_holds
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [Assumptions] at row_norm
@@ -73,15 +74,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rotLeft64]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env row_var h_env row h_input h_assumptions
+theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+  intro i0 env row_var _hint h_env row h_input h_assumptions
   simp only [Assumptions, KeccakRow.normalized_iff] at h_assumptions
   dsimp only [circuit_norm, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
   simp_all only [circuit_norm, getElem_eval_vector,
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
     add_assoc, seval, true_and, true_implies]
 
-def circuit : FormalCircuit (F p) KeccakRow KeccakRow :=
+def circuit : FormalCircuit (F p) ProverHint KeccakRow KeccakRow :=
   { elaborated with Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Keccak256.ThetaD

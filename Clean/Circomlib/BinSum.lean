@@ -10,6 +10,7 @@ import Clean.Circomlib.Bitify
 namespace Circomlib
 open Utils.Bits Expression
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+variable {ProverHint : Type}
 
 -- Define a 2D vector type for BinSum inputs
 -- Represents ops operands, each with n bits
@@ -142,7 +143,7 @@ template BinSum(n, ops) {
 -- n: number of bits per operand
 -- ops: number of operands to sum
 def main (n ops : ℕ)
-    (inp : BinSumInput n ops (Expression (F p))) : Circuit (F p) (Vector (Expression (F p)) (nbits ((2^n - 1) * ops))) := do
+    (inp : BinSumInput n ops (Expression (F p))) : Circuit (F p) ProverHint (Vector (Expression (F p)) (nbits ((2^n - 1) * ops))) := do
   let nout := nbits ((2^n - 1) * ops)
 
   -- Use InputLinearSum subcircuit to calculate the sum
@@ -156,7 +157,7 @@ def main (n ops : ℕ)
 -- n: number of bits per operand
 -- ops: number of operands to sum
 def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) < p) :
-    FormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
+    FormalCircuit (F p) ProverHint (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
   main input := main n ops input
 
   localLength _ := nbits ((2^n - 1) * ops)

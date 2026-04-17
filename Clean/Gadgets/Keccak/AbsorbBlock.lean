@@ -4,6 +4,7 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.AbsorbBlock
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
+variable {ProverHint : Type}
 open Specs.Keccak256
 
 structure Input (F : Type) where
@@ -11,7 +12,7 @@ structure Input (F : Type) where
   block : KeccakBlock F
 deriving ProvableStruct
 
-def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
+def main (input : Var Input (F p)) : Circuit (F p) ProverHint (Var KeccakState (F p)) := do
   let { state, block } := input
   -- absorb the block into the state by XORing with the first RATE elements
   let state_rate ← Circuit.mapFinRange RATE fun i => Xor64.circuit ⟨state[i.val], block[i.val]⟩
@@ -23,7 +24,7 @@ def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   -- apply the permutation
   Permutation.circuit state'
 
-instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
+instance elaborated : ElaboratedCircuit (F p) ProverHint Input KeccakState where
   main
   localLength _ := 31048
   output _ i0 := Permutation.stateVar (i0 + 136) 23
@@ -39,7 +40,7 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   out_state.Normalized ∧
   out_state.value = absorbBlock input.state.value input.block.value
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
   -- simplify goal and constraints
@@ -74,7 +75,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
   intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
@@ -109,6 +110,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-def circuit : FormalCircuit (F p) Input KeccakState :=
+def circuit : FormalCircuit (F p) ProverHint Input KeccakState :=
   { elaborated with Assumptions, Spec, soundness, completeness }
 end Gadgets.Keccak256.AbsorbBlock

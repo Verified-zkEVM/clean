@@ -6,9 +6,10 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
+variable {ProverHint : Type}
 open Specs.Keccak256
 
-def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
+def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) ProverHint (Var KeccakState (F p)) := do
   let state ← Theta.circuit state
   let state ← RhoPi.circuit state
   let state ← Chi.circuit state
@@ -23,7 +24,7 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
-instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
+instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) ProverHint KeccakState KeccakState where
   main := main rc
   localLength _ := 1288
   output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888) ).set 0 (varFromOffset U64 (i0 + 1280))
@@ -92,7 +93,7 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumpti
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
-def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
+def circuit (rc : UInt64) : FormalCircuit (F p) ProverHint KeccakState KeccakState := {
   elaborated rc with
   Spec := Spec rc
   Assumptions

@@ -11,6 +11,7 @@ https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
+variable {ProverHint : Type}
 
 namespace CompConstant
 /-
@@ -96,7 +97,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   return out
 
 set_option maxRecDepth 2000 in
-def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field where
+def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) ProverHint (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
   localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]

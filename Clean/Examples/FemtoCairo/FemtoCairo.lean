@@ -14,6 +14,7 @@ open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.Spec
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+variable {ProverHint : Type}
 
 /--
   Construct a table that represents a read-only memory containing all pairs (i, f(i)) for i in [0, length).
@@ -61,7 +62,7 @@ def ReadOnlyTableFromFunction
       · apply ZMod.val_injective
 }
 
-def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
+def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) ProverHint (Var DecodedInstruction (F p)) := do
   let bits ← Gadgets.toBits 8 (by linarith [p_large_enough.elim]) instruction
   return {
     instrType := {
@@ -95,7 +96,7 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
   It returns a `DecodedInstruction` struct containing the decoded fields.
   This circuit is not satisfiable if the input instruction is not correctly encoded.
 -/
-def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
+def decodeInstruction : GeneralFormalCircuit (F p) ProverHint field DecodedInstruction where
   main := decodeInstructionMain
   localLength _ := 8
 
@@ -156,14 +157,14 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
 -/
 def fetchInstruction
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
-    GeneralFormalCircuit (F p) field RawInstruction where
+    GeneralFormalCircuit (F p) ProverHint field RawInstruction where
   main := fun pc => do
     let programTable := ReadOnlyTableFromFunction program h_programSize
 
-    let rawInstrType ← witness fun eval => program <| Fin.ofNat _ (eval pc).val
-    let op1 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 1)).val
-    let op2 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 2)).val
-    let op3 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 3)).val
+    let rawInstrType ← witness fun eval _ => program <| Fin.ofNat _ (eval pc).val
+    let op1 ← witness fun eval _ => program <| Fin.ofNat _ (eval (pc + 1)).val
+    let op2 ← witness fun eval _ => program <| Fin.ofNat _ (eval (pc + 2)).val
+    let op3 ← witness fun eval _ => program <| Fin.ofNat _ (eval (pc + 3)).val
 
     lookup programTable ⟨pc, rawInstrType⟩
     lookup programTable ⟨pc + 1, op1⟩
@@ -285,7 +286,7 @@ def MemoryCompletenessAssumption (env : ProverData (F p)) : Prop :=
   This circuit is not satisfiable if the memory access is out of bounds.
 -/
 def readFromMemory :
-    GeneralFormalCircuit (F p) MemoryReadInput field where
+    GeneralFormalCircuit (F p) ProverHint MemoryReadInput field where
   main := fun { state, offset, mode } => do
     /-
       read into memory for all cases of addressing mode.
@@ -302,11 +303,11 @@ def readFromMemory :
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
-    let value1 ← witness fun env => memoryValue env addr1
+    let value1 ← witness fun env _ => memoryValue env addr1
 
     let addr2 <== mode.isDoubleAddressing * value1
 
-    let value2 ← witness fun env => memoryValue env addr2
+    let value2 ← witness fun env _ => memoryValue env addr2
     lookup MemoryTable ⟨addr1, value1⟩
     lookup MemoryTable ⟨addr2, value2⟩
 
@@ -463,12 +464,12 @@ def readFromMemory :
   if the claimed state transition is invalid.
   Returns the next state.
 -/
-def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
+def nextState : GeneralFormalCircuit (F p) ProverHint StateTransitionInput State where
   main := fun { state, decoded, v1, v2, v3 } => do
     let { instrType := { isAdd, isMul, isStoreState, isLoadState }, .. } := decoded
 
     -- Witness the claimed next state
-    let nextState ← witness fun eval => {
+    let nextState ← witness fun eval _ => {
       pc := if eval isLoadState = 1 then eval v1 else eval state.pc + 4
       ap := if eval isLoadState = 1 then eval v2 else eval state.ap
       fp := if eval isLoadState = 1 then eval v3 else eval state.fp
@@ -622,7 +623,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 -/
 def femtoCairoStepElaboratedCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
-    ElaboratedCircuit (F p) State State where
+    ElaboratedCircuit (F p) ProverHint State State where
     main := fun state => do
       -- Fetch instruction
       let { rawInstrType, op1, op2, op3 } ← fetchInstruction program h_programSize state.pc
@@ -788,7 +789,7 @@ def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program
 variable {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
 variable (h_program : ValidProgramSize p programSize ∧ ValidProgram program)
 
-def femtoCairoStep : GeneralFormalCircuit (F p) State State where
+def femtoCairoStep : GeneralFormalCircuit (F p) ProverHint State State where
   __ := femtoCairoStepElaboratedCircuit program h_programSize
   Assumptions := femtoCairoStepAssumptions program
   Spec := femtoCairoStepSpec program

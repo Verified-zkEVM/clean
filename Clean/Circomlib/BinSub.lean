@@ -6,6 +6,7 @@ import Clean.Gadgets.Boolean
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime]
+variable {ProverHint : Type}
 
 -- Define a 2D vector type for BinSub inputs
 -- Represents 2 operands, each with n bits
@@ -247,7 +248,7 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
     fieldToBits n (lin.eval env)
 
   -- Witness aux bit
-  let aux ← witness fun env =>
+  let aux ← witness fun env _ =>
     let lin_val := lin.eval env
     -- Extract the nth bit (borrow bit)
     if (lin_val.val / (2^n)) % 2 = 1 then (1 : F p) else (0 : F p)
@@ -272,7 +273,7 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
 
 -- n: number of bits per operand
 def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
-  FormalCircuit (F p) (BinSubInput n) (fields n) where
+  FormalCircuit (F p) ProverHint (BinSubInput n) (fields n) where
   main input := main n input
 
   localLength _ := n+1

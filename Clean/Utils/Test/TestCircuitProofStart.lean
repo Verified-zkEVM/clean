@@ -15,7 +15,7 @@ section BasicTests
 
 -- Test that the tactic works for simple soundness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop)
+    (circuit : ElaboratedCircuit F ProverHint Input Output) (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
   circuit_proof_start
@@ -27,7 +27,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test that the tactic works for simple completeness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :
+    (circuit : ElaboratedCircuit F ProverHint Input Output) (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point:
@@ -38,7 +38,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test parametrized soundness
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
+    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → Prop) (Spec : Fin 8 → Input F → Output F → Prop) :
     Soundness F (circuit offset) Assumptions (Spec offset) := by
   circuit_proof_start
@@ -47,7 +47,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test parametrized completeness
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
+    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → Prop) :
     Completeness F (circuit offset) Assumptions := by
   circuit_proof_start
@@ -56,7 +56,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test multiple parameters
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F Input Output)
+    (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) :
     Soundness F (circuit n k) Assumptions (Spec n k) := by
   circuit_proof_start
@@ -69,7 +69,7 @@ section NamePreservationTests
 -- Test that parameter names are preserved correctly
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output)
+    (circuit : ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
@@ -86,7 +86,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output)
+    (circuit : ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
@@ -107,6 +107,7 @@ section LocalDefinitionUnfoldingTests
 -- Using unit TypeMap for simplicity
 
 variable {p : ℕ} [Fact p.Prime]
+variable {ProverHint : Type}
 
 namespace UnfoldTest1
 -- Simple local definitions
@@ -119,7 +120,7 @@ def Assumptions (input : unit (F p)) : Prop :=
 def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
 
-def testCircuit : ElaboratedCircuit (F p) unit unit :=
+def testCircuit : ElaboratedCircuit (F p) ProverHint unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
@@ -143,7 +144,7 @@ def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output ∧
   TestSpec input output
 
-def testCircuit : ElaboratedCircuit (F p) unit unit :=
+def testCircuit : ElaboratedCircuit (F p) ProverHint unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
@@ -156,16 +157,16 @@ end UnfoldTest2
 
 namespace UnfoldTest3
 -- Test that elaborated definition is unfolded
-def testCircuit : ElaboratedCircuit (F p) unit unit :=
+def testCircuit : ElaboratedCircuit (F p) ProverHint unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
-def elaborated : ElaboratedCircuit (F p) unit unit :=
+def elaborated : ElaboratedCircuit (F p) ProverHint unit unit :=
   testCircuit
 
 def TestAssumptions (_ : unit (F p)) : Prop := True
 def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
 
-example : Soundness (F p) elaborated TestAssumptions TestSpec := by
+example : Soundness (F p) ProverHint elaborated TestAssumptions TestSpec := by
   circuit_proof_start
   -- elaborated should be unfolded to testCircuit
   -- Check that h_holds now refers to testCircuit.main, not elaborated.main

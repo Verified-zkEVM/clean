@@ -8,23 +8,23 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.IsZero
 
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F : Type} [Field F] {ProverHint : Type} [DecidableEq F]
 variable {M : TypeMap} [ProvableType M]
 
 /--
 Main circuit that checks if all elements of a ProvableType are zero.
 Returns 1 if all elementts are 0, otherwise returns 0.
 -/
-def main (input : Var M F) : Circuit F (Var field F) := do
+def main (input : Var M F) : Circuit F ProverHint (Var field F) := do
   let elemVars := toVars input
   -- Use foldlRange to multiply all IsZero results together
   -- Start with 1, and for each element, multiply by its IsZero result
   let result ← Circuit.foldlRange (size M) (1 : Expression F) fun acc i => do
-    let isZeroElem ← IsZeroField.circuit elemVars[i]
+    let isZeroElem ← IsZeroField.circuit (ProverHint := ProverHint) elemVars[i]
     return acc * isZeroElem
   return result
 
-instance elaborated : ElaboratedCircuit F M field where
+instance elaborated : ElaboratedCircuit F ProverHint M field where
   main
   localLength _ := 2 * size M
   localLength_eq := by
@@ -44,14 +44,14 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     {env : Environment F} {i₀ : ℕ}
     (h_eval : Vector.map (Expression.eval env) vars = vals)
     (h_isZero : ∀ (i : Fin n),
-      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) →
-        IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
+      IsZeroField.circuit (ProverHint := ProverHint).Assumptions (Expression.eval (F:=F) env vars[i]) →
+        IsZeroField.circuit (ProverHint := ProverHint).Spec (Expression.eval (F:=F) env vars[i])
           (Expression.eval (F:=F) env
-            (IsZeroField.circuit.output vars[i]
-              (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
+            (IsZeroField.circuit (ProverHint := ProverHint).output vars[i]
+              (i₀ + i * IsZeroField.circuit (ProverHint := ProverHint).localLength vars[i])))) :
     Expression.eval env
       (Fin.foldl n
-        (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))
+        (fun acc i => acc * (IsZeroField.circuit (ProverHint := ProverHint).output vars[i] (i₀ + i * IsZeroField.circuit (ProverHint := ProverHint).localLength vars[i]) : Var field F))
         1) =
     if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
   simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
@@ -99,7 +99,8 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       aesop
     · next h_ex h_all => exfalso; exact h_ex (fun i hi => h_all i (by omega))
 
-theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
+theorem soundness [DecidableEq (M F)] :
+    Soundness F ProverHint (elaborated (M := M) (ProverHint := ProverHint)) Assumptions Spec := by
   circuit_proof_start
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
@@ -111,10 +112,11 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assump
     simp only [Vector.getElem_replicate]
   apply foldl_isZero_eq_one_iff <;> assumption
 
-theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
+theorem completeness :
+    Completeness F ProverHint (elaborated (M := M) (ProverHint := ProverHint)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
-def circuit [DecidableEq (M F)] : FormalCircuit F M field := {
+def circuit [DecidableEq (M F)] : FormalCircuit F ProverHint M field := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 

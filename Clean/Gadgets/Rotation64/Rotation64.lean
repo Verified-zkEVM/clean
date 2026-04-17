@@ -9,6 +9,7 @@ import Clean.Circuit.Provable
 namespace Gadgets.Rotation64
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+variable {ProverHint : Type}
 
 instance : Fact (p > 512) := by
   constructor
@@ -19,7 +20,7 @@ open Utils.Rotation (rotRight64_composition)
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
+def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) ProverHint (Var U64 (F p)) := do
   let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
 
@@ -38,7 +39,7 @@ def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
 
 -- #eval! (main (p:=p_babybear) 0) default |>.localLength
 -- #eval! (main (p:=p_babybear) 0) default |>.output
-def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
+def elaborated (off : Fin 64) : ElaboratedCircuit (F p) ProverHint U64 U64 where
   main := main off
   localLength _ := 16
   output _ i0 := output off i0
@@ -75,7 +76,7 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   rw [hy, Nat.div_add_mod']
 
 theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var h_env x h_eval x_normalized
+  intro i0 env x_var _hint h_env x h_eval x_normalized
 
   simp only [circuit_norm, main, elaborated,
     Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Assumptions,
@@ -90,7 +91,7 @@ theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) 
   rw [h_eval]
   simp only [x_normalized, true_and, h_norm]
 
-def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 := {
+def circuit (offset : Fin 64) : FormalCircuit (F p) ProverHint U64 U64 := {
   elaborated offset with
   Assumptions
   Spec := Spec offset

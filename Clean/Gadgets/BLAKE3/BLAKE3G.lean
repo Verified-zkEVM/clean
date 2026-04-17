@@ -7,6 +7,7 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.G
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
+variable {ProverHint : Type}
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Specs.BLAKE3 (g)
@@ -17,7 +18,7 @@ structure Inputs (F : Type) where
   y : U32 F
 deriving ProvableStruct
 
-def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
+def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var BLAKE3State (F p)) := do
   let { state, x, y } := input
 
   let state_a ← Addition32.circuit ⟨state[a], ← Addition32.circuit ⟨state[b], x⟩⟩
@@ -46,7 +47,7 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
     |>.set c state_c
     |>.set d state_d
 
-instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
+instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) ProverHint Inputs BLAKE3State where
   main := main a b c d
   localLength _ := 96
   output inputs i0 := (inputs.state : Vector (U32 (Expression (F p))) 16)
@@ -128,7 +129,7 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d
   -- resolve all chains of assumptions
   simp_all only [forall_const, and_true]
 
-def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
+def circuit (a b c d : Fin 16) : FormalCircuit (F p) ProverHint Inputs BLAKE3State := {
   elaborated a b c d with
   Assumptions
   Spec := Spec a b c d

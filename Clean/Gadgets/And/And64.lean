@@ -4,6 +4,7 @@ import Clean.Gadgets.And.And8
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
+variable {ProverHint : Type}
 
 namespace Gadgets.And.And64
 structure Inputs (F : Type) where
@@ -11,7 +12,7 @@ structure Inputs (F : Type) where
   y: U64 F
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
+def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
   let z0 ← And8.circuit ⟨ x.x0, y.x0 ⟩
   let z1 ← And8.circuit ⟨ x.x1, y.x1 ⟩
@@ -31,7 +32,7 @@ def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
+instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs U64 where
   main
   localLength _ := 8
   output _ i := varFromOffset U64 i
@@ -64,7 +65,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   repeat rw [and_xor_sum]
   repeat assumption
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
   cases x; cases y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
@@ -73,15 +74,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     U64.Normalized] at h_assumptions h_holds h_input ⊢
   simp_all
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
+theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+  intro i env input_var _hint h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
   simp only [circuit_norm, explicit_provable_type,
     main, Assumptions, And8.circuit, And8.Assumptions,
     U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
-def circuit : FormalCircuit (F p) Inputs U64 where
+def circuit : FormalCircuit (F p) ProverHint Inputs U64 where
   Assumptions
   Spec
   soundness

@@ -7,6 +7,7 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+variable {ProverHint : Type}
 
 open ByteUtils (mod256 floorDiv256)
 
@@ -21,7 +22,7 @@ structure Outputs (F : Type) where
   carryOut: F
 deriving Repr, ProvableStruct
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
   let { z := z0, carryOut := c0 } ← Addition8FullCarry.main ⟨ x.x0, y.x0, carryIn ⟩
   let { z := z1, carryOut := c1 } ← Addition8FullCarry.main ⟨ x.x1, y.x1, c0 ⟩
@@ -47,14 +48,14 @@ Elaborated circuit data can be found as follows:
 #eval (main (p:=p_babybear) default).output
 ```
 -/
-instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
+instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs Outputs where
   main
   localLength _ := 8
   -- unfortunately, `rfl` in default tactic times out here
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
 
   -- simplify circuit further
@@ -94,7 +95,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
 
   -- simplify circuit further TODO
@@ -142,7 +143,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
-def circuit : FormalCircuit (F p) Inputs Outputs where
+def circuit : FormalCircuit (F p) ProverHint Inputs Outputs where
   Assumptions
   Spec
   soundness

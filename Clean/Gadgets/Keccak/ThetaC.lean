@@ -8,8 +8,9 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.ThetaC
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+variable {ProverHint : Type}
 
-def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
+def main (state : Var KeccakState (F p)) : Circuit (F p) ProverHint (Var KeccakRow (F p)) :=
   .mapFinRange 5 fun i => do
     let c ← Xor64.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
     let c ← Xor64.circuit ⟨c, state[5*i.val + 2]⟩
@@ -24,7 +25,7 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
 -- #eval! theta_c (p:=p_babybear) default |>.localLength
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
+instance elaborated : ElaboratedCircuit (F p) ProverHint KeccakState KeccakRow where
   main
   localLength _ := 160
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
@@ -37,7 +38,7 @@ lemma thetaC_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- rewrite goal
@@ -57,15 +58,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_holds i
   aesop
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+  intro i0 env state_var _hint h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm,
     main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
-def circuit : FormalCircuit (F p) KeccakState KeccakRow :=
+def circuit : FormalCircuit (F p) ProverHint KeccakState KeccakRow :=
  { elaborated with Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Keccak256.ThetaC

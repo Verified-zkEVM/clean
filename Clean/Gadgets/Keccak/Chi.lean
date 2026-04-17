@@ -8,9 +8,10 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+variable {ProverHint : Type}
 open Not (not64_bytewise not64_bytewise_value)
 
-def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+def main (state : Var KeccakState (F p)) : Circuit (F p) ProverHint (Var KeccakState (F p)) :=
   .mapFinRange 25 fun i => do
     let state_not ← Not.circuit (state[i + 5])
     let state_and ← And.And64.circuit ⟨state_not, state[i + 10]⟩
@@ -24,7 +25,7 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 
 -- #eval! main (p:=p_babybear) default |>.localLength
 -- #eval! main (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
+instance elaborated : ElaboratedCircuit (F p) ProverHint KeccakState KeccakState where
   main
   localLength _ := 400
   output _ i0 := Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 8)
@@ -43,7 +44,7 @@ lemma chi_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- simplify goal
@@ -58,8 +59,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   simp_all
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+  intro i0 env state_var _hint h_env state h_input state_norm
 
   -- simplify Assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
@@ -69,6 +70,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp_all [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd]
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState :=
+def circuit : FormalCircuit (F p) ProverHint KeccakState KeccakState :=
   { elaborated with Assumptions, Spec, soundness, completeness }
 end Gadgets.Keccak256.Chi

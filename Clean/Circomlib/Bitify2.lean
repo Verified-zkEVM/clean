@@ -16,6 +16,7 @@ due to cyclic import dependencies with AliasCheck.
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
+variable {ProverHint : Type}
 
 namespace Num2Bits_strict
 /-
@@ -44,7 +45,7 @@ def main (input : Expression (F p)) := do
 
 set_option linter.constructorNameAsVariable false
 
-def circuit : FormalCircuit (F p) field (fields 254) where
+def circuit : FormalCircuit (F p) ProverHint field (fields 254) where
   main
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
   localLength_eq := by simp +arith [circuit_norm, main,
@@ -76,7 +77,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
       <;> simp [h_bits, ZMod.val_one]
 
   completeness := by
-    intro i0 env input_var h_env input h_input assumptions
+    intro i0 env input_var _hint h_env input h_input assumptions
     simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
     dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
@@ -124,7 +125,7 @@ def main (input : Vector (Expression (F p)) 254) := do
 
 set_option linter.constructorNameAsVariable false
 
-def circuit : GeneralFormalCircuit (F p) (fields 254) field where
+def circuit : GeneralFormalCircuit (F p) ProverHint (fields 254) field where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq := by simp +arith [circuit_norm, main,
@@ -169,7 +170,7 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
 
   completeness := by
     simp only [circuit_norm, main]
-    intro i0 env input_var h_env input h_input assumptions
+    intro i0 env input_var _hint h_env input h_input assumptions
     simp only [circuit_norm, Bits2Num.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     obtain ⟨assumption₁, assumption₂⟩ := assumptions
@@ -220,7 +221,7 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
   return out
 
-def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
+def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) ProverHint field (fields n) where
   main := main n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
@@ -302,7 +303,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   completeness := by
     simp only [circuit_norm, main]
-    intro i0 env input_var h_env input h_input assumption
+    intro i0 env input_var _hint h_env input h_input assumption
     simp only [circuit_norm, IsZero.circuit, IsZero.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     by_cases h_n : n = 0
