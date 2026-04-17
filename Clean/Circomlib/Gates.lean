@@ -683,39 +683,46 @@ lemma soundness_two {p : ℕ} [Fact p.Prime] {ProverHint : Type}
   · convert h_binary using 1; simp only [circuit_norm, ElaboratedCircuit.output_eq]
 
 /-- Completeness for n = 0 case -/
-lemma completeness_zero {p : ℕ} [Fact p.Prime]
+lemma completeness_zero {p : ℕ} [Fact p.Prime] {ProverHint : Type} (hint : ProverHint)
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p))
-    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness hint offset
+      ((main (ProverHint := ProverHint) input_var).operations offset))
     (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 0 input) :
-    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+    Circuit.ConstraintsHold.Completeness env hint
+      ((main (ProverHint := ProverHint) input_var).operations offset) := by
   simp [main, Circuit.ConstraintsHold.Completeness]
 
 /-- Completeness for n = 1 case -/
-lemma completeness_one {p : ℕ} [Fact p.Prime]
+lemma completeness_one {p : ℕ} [Fact p.Prime] {ProverHint : Type} (hint : ProverHint)
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p))
-    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness hint offset
+      ((main (ProverHint := ProverHint) input_var).operations offset))
     (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 1 input) :
-    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+    Circuit.ConstraintsHold.Completeness env hint
+      ((main (ProverHint := ProverHint) input_var).operations offset) := by
   simp [main, Circuit.ConstraintsHold.Completeness]
 
 /-- Completeness for n = 2 case -/
-lemma completeness_two {p : ℕ} [Fact p.Prime]
+lemma completeness_two {p : ℕ} [Fact p.Prime] {ProverHint : Type} (hint : ProverHint)
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p))
-    (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (h_local_witnesses : env.UsesLocalWitnessesCompleteness hint offset
+      ((main (ProverHint := ProverHint) input_var).operations offset))
     (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 2 input) :
-    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+    Circuit.ConstraintsHold.Completeness env hint
+      ((main (ProverHint := ProverHint) input_var).operations offset) := by
   simp only [main, circuit_norm] at h_local_witnesses ⊢
 
   have h_binary0 : IsBool input[0] := h_assumptions 0 (by norm_num)
   have h_binary1 : IsBool input[1] := h_assumptions 1 (by norm_num)
 
-  apply AND.circuit.completeness
+  apply (AND.circuit (ProverHint := ProverHint)).completeness
+  · exact hint
   · exact h_local_witnesses
   · subst h_env
     rfl
@@ -730,13 +737,14 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
       simp only [ProvableType.eval_fieldPair, h_eval1]
       exact h_binary1
 
-theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
+theorem soundness {p : ℕ} [Fact p.Prime] {ProverHint : Type} (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
     input = eval env input_var →
     Assumptions n input →
-    Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset) →
-    Spec n input (env ((main input_var).output offset)) := by
+    Circuit.ConstraintsHold.Soundness env
+      ((main (ProverHint := ProverHint) input_var).operations offset) →
+    Spec n input (env ((main (ProverHint := ProverHint) input_var).output offset)) := by
   induction n using Nat.strong_induction_on with
   | _ n IH =>
     intro offset env input_var input h_env h_assumptions h_hold
