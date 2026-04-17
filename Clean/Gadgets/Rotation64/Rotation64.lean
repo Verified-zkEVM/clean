@@ -53,7 +53,7 @@ theorem soundness (offset : Fin 64) : Soundness (F p) ProverHint (circuit := ela
   -- abstract away intermediate U64
   let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
-  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
+  set byte_rotated := eval env ((Rotation64Bytes.elaborated (ProverHint := ProverHint) byte_offset).output (x_var : Var U64 _) i0)
 
   simp only [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions,
     Rotation64Bytes.Spec, Rotation64Bits.Assumptions, Rotation64Bits.Spec, add_zero] at h_holds

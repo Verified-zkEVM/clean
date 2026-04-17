@@ -26,7 +26,7 @@ template IsZero() {
     in*out === 0;
 }
 -/
-def main (input : Expression (F p)) := do
+def main (input : Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
   let inv ← witness fun env _ =>
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
