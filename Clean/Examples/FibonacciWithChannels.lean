@@ -988,31 +988,35 @@ def BalancedChannels [DecidableEq F] {ens : Ensemble F PublicIO} (witness : Ense
 end EnsembleWitness
 
 namespace Ensemble
-/--
-Soundness for an ensemble states that if
-- constraints hold on all tables and
-- and interactions sum to zero
-- and constraints hold on the verifier circuit, when given the public inputs (as constants)
-then the spec holds
--/
-def Soundness [DecidableEq F] (ens : Ensemble F PublicIO) : Prop :=
-  ∀ (witness : EnsembleWitness ens),
-    witness.BalancedChannels →
-    witness.Constraints →
-    ens.Spec witness.publicInput
+variable [DecidableEq F]
 
 /--
-Completeness for an ensemble states that for any public input satisfying the spec,
-the verifier accepts and there exists a witness such that constraints hold and the channels are balanced
+The raw "statement" that a proof about an ensemble makes. Could also be called "relation".
+
+TODO: we currently assume a proof system that already provides us with the fact that the
+total interaction length doesn't overflow (as part of `BalancedChannels`).
+
+In practice, however, it's not the total interaction length that is part of a proof,
+but rather the length of each individual table. It should be our verifier's job to
+verify a bound on the interaction length from the given table lengths.
 -/
-def Completeness [DecidableEq F] (ens : Ensemble F PublicIO) : Prop :=
-  -- TODO data should not be here!!
-  ∀ publicInput data,
-    ens.Spec publicInput →
-    ens.VerifierConstraints publicInput data ∧
-    ∃ (witness : EnsembleWitness ens),
-      witness.data = data ∧ witness.publicInput = publicInput ∧
-      witness.Constraints ∧ witness.BalancedChannels
+def Statement (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
+  ∃ witness : EnsembleWitness ens,
+    witness.publicInput = publicInput ∧
+    witness.Constraints ∧
+    witness.BalancedChannels
+
+/--
+Soundness: the raw statement implies the spec.
+-/
+def Soundness (ens : Ensemble F PublicIO) : Prop :=
+  ∀ publicInput, ens.Statement publicInput → ens.Spec publicInput
+
+/--
+Completeness: the spec implies the raw statement.
+-/
+def Completeness (ens : Ensemble F PublicIO) : Prop :=
+  ∀ publicInput, ens.Spec publicInput → ens.Statement publicInput
 end Ensemble
 
 -- infrastructure for iteratively adding tables to an ensemble such that we can always fill in
@@ -1640,11 +1644,12 @@ theorem soundness_of_tableSoundness_and_specConsistency [DecidableEq F] (ens : E
   (∃ finished : List (RawChannel F), finished ⊆ ens.channels ∧ ens.TableSoundness finished) →
     ens.SpecConsistency →
     ens.Soundness := by
-  simp only [Soundness, TableSoundness, SpecConsistency]
-  rintro ⟨finished, finished_subset, table_soundness⟩ spec_consistency witness balance constraints
+  simp only [Soundness, TableSoundness, SpecConsistency, Statement, forall_exists_index, and_imp]
+  intro finished finished_subset table_soundness spec_consistency
+    publicInput witness publicInput_eq constraints balance
+  rw [← publicInput_eq]
   have table_soundness := table_soundness witness constraints ?partialBalance
-  apply spec_consistency witness
-  · simp_all
+  apply spec_consistency witness table_soundness
   intro channel h_channel
   apply partialBalancedChannel_of_balancedChannel
   exact (balance channel (finished_subset h_channel))
@@ -2289,8 +2294,9 @@ structure SoundVmEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeM
   soundVmChannel : ensemble.SoundVmChannel
 
 theorem SoundVmEnsemble.soundness [DecidableEq F] (ens : SoundVmEnsemble F PublicIO) : ens.Soundness := by
-  intro witness balance constraints
-  rw [ens.spec_eq]
+  simp only [Ensemble.Soundness, Ensemble.Statement, forall_exists_index, and_imp]
+  intro input witness input_eq constraints balance
+  rw [ens.spec_eq, ← input_eq]
   use witness.data
   have soundVm := ens.soundVmChannel
   simp only [Ensemble.SoundVmChannel, Ensemble.VerifierGuarantees,
@@ -2973,26 +2979,19 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
     -- range-check z using the bytes channel
     -- (x and y are guaranteed to be range-checked from earlier interactions)
     BytesChannel.pull z
-
     -- witness the output carry
     let carry ← witness fun eval => floorDiv256 (eval (x + y))
     assertBool carry
-
     -- assert correctness
     x + y - z - carry * 256 === 0
-
     -- emit to the add8 channel with multiplicity `m`
     Add8Channel.emit m (x, y, z)
 
   localLength _ := 1
   output _ _ := ()
-
   -- TODO make coercion work without .toRaw
   channelsWithGuarantees := [ BytesChannel.toRaw ]
   channelsWithRequirements := [ Add8Channel.toRaw ]
-  requirements_iff := by
-    simp only [circuit_norm, seval, BytesChannel, Add8Channel]
-
   -- TODO feels weird to put the entire spec in the completeness assumptions
   -- can we get something from the channel interactions??
   Assumptions
@@ -3006,10 +3005,6 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
     intro hm hx hy
     have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
-
-  -- TODO: we didn't need to prove z < 256, but we could have
-  -- for completeness, it would make sense to require proving the Guarantees as well
-  -- what about the Requirements?
   completeness := by
     circuit_proof_start [BytesTable]
     set carry := env.get i₀
@@ -3028,42 +3023,30 @@ def add8 : FormalCircuitWithInteractions (F p) Add8Inputs unit where
 
 -- define valid Fibonacci state transitions
 
-def fibonacciStep : ℕ × ℕ → ℕ × ℕ
-  | (x, y) => (y, (x + y) % 256)
-
-def fibonacci : ℕ → (ℕ × ℕ) → (ℕ × ℕ)
-  | 0, state => state
-  | n + 1, state => fibonacciStep (fibonacci n state)
+def fibonacci : ℕ → (ℕ × ℕ)
+  | 0 => (0, 1)
+  | n + 1 =>
+    let (x, y) := fibonacci n
+    (y, (x + y) % 256)
 
 /-- helper lemma: fibonacci states are bytes -/
-lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n (0, 1) → x < 256 ∧ y < 256 := by
+lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n → x < 256 ∧ y < 256 := by
   induction n generalizing x y with
   | zero => simp_all [fibonacci]
   | succ n ih =>
     specialize ih rfl
     have : 0 < 256 := by norm_num
-    simp_all [fibonacci, fibonacciStep, Nat.mod_lt]
+    simp_all [fibonacci, Nat.mod_lt]
 
 instance FibonacciChannel : Channel (F p) fieldTriple where
   name := "fibonacci"
-
-  -- when pulling, we want the guarantee that the previous interactions pushed
-  -- some tuple equal to ours which represents a valid Fibonacci step
+  -- when pulling, we want the guarantee that the input is a valid Fibonacci step
   Guarantees
-  | m, (n, x, y), _ =>
-    if (m = -1)
-    then
-      -- (x, y) is a valid Fibonacci state
-      ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-    else True
-
+  | m, (n, x, y), _ => m = -1 →
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   Requirements
-  | m, (n, x, y), _ =>
-    if (m ≠ -1)
-    then
-      -- (x, y) is a valid Fibonacci state
-      ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-    else True
+  | m, (n, x, y), _ => m ≠ -1 →
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
 
 instance : NormalChannel (FibonacciChannel (p:=p)) := by constructor <;> simp_all [FibonacciChannel]
 
@@ -3071,33 +3054,27 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
   main | (n, x, y) => do
     -- pull the current Fibonacci state
     FibonacciChannel.pull (n, x, y)
-
     -- witness the next Fibonacci value
     let z ← witness fun eval => mod256 (eval (x + y))
-
     -- pull from the Add8 channel to check addition
     Add8Channel.pull (x, y, z)
-
     -- push the next Fibonacci state
     FibonacciChannel.push (n + 1, y, z)
 
   localLength _ := 1
   output _ _ := ()
-
   channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
-
   exposedChannels
-  | (n, x, y), offset =>
-    let z := var ⟨ offset ⟩
+  | (n, x, y), i₀ =>
+    let z := var ⟨ i₀ ⟩
     expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
-
   exposedChannels_eq := by
     simp only [circuit_norm, Add8Channel, FibonacciChannel]
 
   Assumptions
   | (n, x, y), _ =>
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   Spec _ _ _ := True
 
   soundness := by
@@ -3106,11 +3083,11 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     simp only [Prod.mk.injEq] at h_input
     simp_all only [circuit_norm]
     set z := env.get i₀
-    simp only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte] at h_holds ⊢
+    simp only [circuit_norm, FibonacciChannel, Add8Channel] at h_holds ⊢
     obtain ⟨ ⟨k, fiby, hk⟩, hadd ⟩ := h_holds
     have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
     use k + 1
-    simp only [fibonacci, fibonacciStep, ← fiby]
+    simp only [fibonacci, ← fiby]
     rw [ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
     simp_all
 
@@ -3118,7 +3095,7 @@ def fib8 : FormalCircuitWithInteractions (F p) fieldTriple unit where
     circuit_proof_start
     rcases input with ⟨ n, x, y ⟩
     simp only [Prod.mk.injEq] at h_input
-    simp_all only [circuit_norm, FibonacciChannel, Add8Channel, reduceIte]
+    simp_all only [circuit_norm, FibonacciChannel, Add8Channel]
     intro hx hy
     rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
     linarith [hx, hy, ‹Fact (p > 512)›.elim]
@@ -3135,50 +3112,28 @@ def fibonacciVerifier : FormalCircuitWithInteractions (F p) fieldTriple unit whe
 
   localLength _ := 0
   output _ _ := ()
-
   channelsWithGuarantees := [ FibonacciChannel.toRaw ]
-  channelsWithRequirements := [ ]
-
-  requirements_iff := by
-    simp only [circuit_norm, FibonacciChannel]
-    intros
-    exists 0
-    simp [fibonacci, ZMod.val_one]
-
+  channelsWithRequirements := [ FibonacciChannel.toRaw ]
   exposedChannels
-  | (n, x, y), offset =>
-    expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
-
-  exposedChannels_eq := by simp only [circuit_norm, FibonacciChannel]
-
-  Assumptions
   | (n, x, y), _ =>
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
+    expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
+  exposedChannels_eq := by simp only [circuit_norm, FibonacciChannel]
+  Assumptions
+  | (n, x, y), _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   Spec
-  | (n, x, y), _, _ =>
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
-
+  | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   soundness := by
     circuit_proof_start
     rcases input with ⟨ n, x, y ⟩
     simp only [Prod.mk.injEq] at h_input
-    simp_all only [circuit_norm, FibonacciChannel, reduceIte,
+    simp_all only [circuit_norm, FibonacciChannel,
       ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
-
   completeness := by
     circuit_proof_start
     rcases input with ⟨ n, x, y ⟩
     simp only [Prod.mk.injEq] at h_input
     simpa [circuit_norm, FibonacciChannel, reduceIte] using h_assumptions
-
--- let's try to prove soundness and completeness of the Fibonacci with channels example
-def fibonacciEnsemble : Ensemble (F p) fieldTriple where
-  tables := [ ⟨pushBytes⟩, ⟨add8⟩, ⟨fib8⟩ ]
-  channels := [ BytesChannel.toRaw, Add8Channel.toRaw, FibonacciChannel.toRaw ]
-  verifier := fibonacciVerifier
-  verifier_length_zero := by simp only [fibonacciVerifier, circuit_norm]
-  Spec | (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val
 
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
@@ -3191,7 +3146,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
 
-def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
+def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addTable ⟨pushBytes⟩ (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
   |>.addTable ⟨add8⟩ (by simp [circuit_norm, add8]) (by simp [circuit_norm, add8])
@@ -3202,23 +3157,29 @@ def fibonacciSoundEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
 
 /--
-Fibonacci soundness, concretely: if someone proves to you that constraints on this ensemble are satisfied
-and that the channels are balanced, then you know that the public input is a Fibonacci number.
+Fibonacci soundness, concretely: if someone gives you a proof of the ensemble statement,
+then you know that the public input is a Fibonacci number.
 
 TODO: find a generic strategy to show that k < p, so the statement simplifies to
-`(x.val, y.val) = fibonacci n.val (0, 1)`
+`(x.val, y.val) = fibonacci n.val`
+The problem is that the row-transition circuit currently can't prove this: it receives any field elements n and
+pushes n+1, so a priori it can overflow.
 
-TODO: create a nicer packaging of the hypotheses here,
-e.g. VerifierAccepts could already include the constraints and balance and quantify witness existence
+It would make sense to provide a guarantee that mentions the total interaction length "before" running the row circuit,
+and prove a requirement about the total interaction length after:
+pre: 2*n ≤ total_length_before
+post: 2*(n + 1) ≤ total_length_after = total_length_before + 2 :check_mark:
+But that massively complicates the guarantees/requirements system, since they now need access to global information.
+
+And idea could be to define a "global state" per channel, and define how every interaction transforms that state.
+Then let the guarantees/requirements access that state (the guarantees _before_ and the requiremtns _after_ the interaction).
 -/
-theorem fibonacci_soundness : ∀ n x y (witness : EnsembleWitness (fibonacciSoundEnsemble (p:=p).ensemble)),
-  witness.publicInput = (n, x, y) →
-    witness.BalancedChannels →
-    witness.Constraints →
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k (0, 1) ∧ k % p = n.val := by
-  intro n x y witness pi_eq balance constraints
-  have soundness := (fibonacciSoundEnsemble (p:=p)).soundness witness balance constraints
-  simp only [circuit_norm, pi_eq, fibonacciSoundEnsemble, fibonacciVm, fibonacciVerifier] at soundness
+theorem fibonacci_soundness : ∀ (n x y : F p),
+  fibonacciEnsemble.Statement (n, x, y) →
+    ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
+  intro n x y statement
+  convert fibonacciEnsemble.soundness (n, x, y) statement
+  simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
   tauto
 
 -- everything below is a remainder of the original AI slop proof of fibonacci soundness
