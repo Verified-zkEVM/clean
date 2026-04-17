@@ -406,12 +406,12 @@ def GeneralFormalCircuit.Completeness (F : Type) (ProverHint : Type) [Field F]
 def GeneralFormalCircuit.CompletenessSpecProof (F : Type) (ProverHint : Type) [Field F]
     (circuit : ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → ProverData F → ProverHint → Prop)
-    (CompletenessSpec : Input F → Output F → Prop) :=
+    (CompletenessSpec : Input F → Output F → ProverHint → Prop) :=
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F, ∀ hint : ProverHint,
   env.UsesLocalWitnessesCompleteness hint offset (circuit.main input_var |>.operations offset) →
   ∀ input : Input F, eval env input_var = input →
   Assumptions input env.data hint →
-  CompletenessSpec input (eval env (circuit.output input_var offset))
+  CompletenessSpec input (eval env (circuit.output input_var offset)) hint
 
 /--
 `GeneralFormalCircuit` is the most general model of formal circuits, needed in cases where the circuit is a
@@ -434,7 +434,7 @@ structure GeneralFormalCircuit (F : Type) (ProverHint : Type) (Input Output : Ty
   Spec : Input F → Output F → ProverData F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness : GeneralFormalCircuit.Soundness F ProverHint elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F ProverHint elaborated Assumptions
-  CompletenessSpec : Input F → Output F → Prop := fun _ _ => True
+  CompletenessSpec : Input F → Output F → ProverHint → Prop := fun _ _ _ => True
   completenessSpec : GeneralFormalCircuit.CompletenessSpecProof F ProverHint elaborated Assumptions CompletenessSpec
     := by unfold GeneralFormalCircuit.CompletenessSpecProof; intros; trivial
 end

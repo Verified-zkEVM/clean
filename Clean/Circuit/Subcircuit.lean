@@ -233,7 +233,7 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F ProverHi
     UsesLocalWitnesses env hint :=
       circuit.Assumptions (eval env input_var) env.data hint →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data
-      ∧ circuit.CompletenessSpec (eval env input_var) (eval env (circuit.output input_var n)),
+      ∧ circuit.CompletenessSpec (eval env input_var) (eval env (circuit.output input_var n)) hint,
     localLength := circuit.localLength input_var
 
     imply_soundness
@@ -407,7 +407,7 @@ theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses
     (circuit.toSubcircuit n input_var).UsesLocalWitnesses env hint =
     (circuit.Assumptions (eval env input_var) env.data hint →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data
-      ∧ circuit.CompletenessSpec (eval env input_var) (eval env (circuit.output input_var n))) := by
+      ∧ circuit.CompletenessSpec (eval env input_var) (eval env (circuit.output input_var n)) hint) := by
   rfl
 
 /--
