@@ -128,7 +128,7 @@ theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   exact Nat.bitwise_lt_two_pow hx_byte hy_byte
 
 theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
-  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
+  intro i env ⟨ x_var, y_var ⟩ _hint h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x ||| ZMod.val y

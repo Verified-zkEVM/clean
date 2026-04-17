@@ -31,7 +31,8 @@ template MultiMux1(n) {
     }
 }
 -/
-def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
+def main (n : ℕ) (input : Var (Inputs n) (F p)) :
+    Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
   let { c, s } := input
 
   -- Witness and constrain output vector
@@ -151,7 +152,7 @@ template Mux1() {
     mux.out[0] ==> out;
 }
 -/
-def main (input : Var Inputs (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
   let { c, s } := input
 
   -- Call MultiMux1 with n=1
@@ -195,7 +196,7 @@ def circuit : FormalCircuit (F p) ProverHint Inputs field where
 
   completeness := by
     simp only [circuit_norm, main]
-    intros offset env input_var h_env input h_input h_s
+    intros offset env input_var _hint h_env input h_input h_s
     simp only [MultiMux1.circuit, circuit_norm]
     rw [← h_input] at h_s
     simp_all
