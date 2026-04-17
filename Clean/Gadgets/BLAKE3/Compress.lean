@@ -22,12 +22,13 @@ def main (input : Var ApplyRounds.Inputs (F p)) : Circuit (F p) ProverHint (Var 
 
 instance elaborated : ElaboratedCircuit (F p) ProverHint ApplyRounds.Inputs BLAKE3State where
   main
-  localLength input := ApplyRounds.circuit.localLength input + FinalStateUpdate.circuit.localLength ⟨default, input.chaining_value⟩
+  localLength input := (ApplyRounds.circuit (ProverHint := ProverHint)).localLength input
+    + (FinalStateUpdate.circuit (ProverHint := ProverHint)).localLength ⟨default, input.chaining_value⟩
   output := fun input offset =>
-    let applyRounds_out := ApplyRounds.circuit.output input offset
-    FinalStateUpdate.circuit.output
+    let applyRounds_out := (ApplyRounds.circuit (ProverHint := ProverHint)).output input offset
+    (FinalStateUpdate.circuit (ProverHint := ProverHint)).output
       ⟨applyRounds_out, input.chaining_value⟩
-      (offset + ApplyRounds.circuit.localLength input)
+      (offset + (ApplyRounds.circuit (ProverHint := ProverHint)).localLength input)
   output_eq := by
     intro input offset
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
@@ -52,14 +53,14 @@ theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
 lemma ApplyRounds.circuit_assumptions_is :
-  ApplyRounds.circuit.Assumptions (F := F p) = ApplyRounds.Assumptions := rfl
+  (ApplyRounds.circuit (p := p) (ProverHint := ProverHint)).Assumptions = ApplyRounds.Assumptions := rfl
 
-lemma ApplyRouunds.circuit_spec_is :
-  ApplyRounds.circuit.Spec (F := F p) = ApplyRounds.Spec := rfl
+lemma ApplyRounds.circuit_spec_is :
+  (ApplyRounds.circuit (p := p) (ProverHint := ProverHint)).Spec = ApplyRounds.Spec := rfl
 
 theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
   circuit_proof_start
-  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRouunds.circuit_spec_is,
+  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRounds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 

@@ -30,17 +30,17 @@ The spec follows the pattern from the applyRounds function:
 -/
 def roundWithPermute : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs where
   main := fun input => do
-    let state ← subcircuit Round.circuit input
-    let permuted_message ← subcircuit Permute.circuit input.message
+    let state ← subcircuit (ProverHint := ProverHint) Round.circuit input
+    let permuted_message ← subcircuit (ProverHint := ProverHint) Permute.circuit input.message
     return ⟨state, permuted_message⟩
-  localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
+  localLength := fun _ => Round.circuit (ProverHint := ProverHint).localLength _ + Permute.circuit (ProverHint := ProverHint).localLength _
   localLength_eq := by
     intro input offset
     simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
     rfl
   output := fun input offset =>
-    let state_out := Round.circuit.output input offset
-    let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
+    let state_out : BLAKE3State (Expression (F p)) := Round.circuit (ProverHint := ProverHint).output input offset
+    let msg_out := Permute.circuit (ProverHint := ProverHint).output input.message (offset + Round.circuit (ProverHint := ProverHint).localLength input)
     ⟨state_out, msg_out⟩
   output_eq := by
     intro input offset
