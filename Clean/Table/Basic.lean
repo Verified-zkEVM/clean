@@ -349,6 +349,10 @@ namespace TableConstraint
 def finalOffset (table : TableConstraint W S F α) : ℕ :=
   (table .empty).snd.offset
 
+@[reducible, table_norm, table_assignment_norm]
+def finalInputSize (table : TableConstraint W S F α) : ℕ :=
+  (table .empty).snd.inputSize
+
 @[table_norm]
 def operations (table : TableConstraint W S F α) : Operations F :=
   table .empty |>.snd.circuit
@@ -379,6 +383,12 @@ def windowEnv (table : TableConstraint W S F Unit)
   In particular, we construct the environment by taking directly the result of the assignment function
   so that every variable evaluate to the trace cell value which is assigned to
 -/
+@[table_norm]
+def UsesLocalWitnessesOnWindow (table : TableConstraint W S F Unit)
+  (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
+  let env := windowEnv table window aux_env
+  env.UsesLocalWitnesses table.finalInputSize table.operations
+
 @[table_norm]
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
@@ -589,12 +599,50 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
     -- if the trace is empty, we are done
     | <+>, _ => True
 
+@[table_norm]
+def TableUsesLocalWitnesses {N : ℕ} (constraints : List (TableOperation S F))
+  (trace : TraceOfLength F S N) (env : TableEnvironments F) : Prop :=
+  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env.toEnvironment i))
+  foldl N constraints_and_envs trace.val constraints_and_envs
+  where
+  @[table_norm]
+  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
+    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
+    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> curr +> next) rest
+        let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
+        constraint.UsesLocalWitnessesOnWindow window (env (trace.len + 1)) ∧ others
+
+    | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> row) rest
+        let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
+        let targetIdx := match idx with
+          | .fromStart i => i
+          | .fromEnd i => N - 1 - i
+        (if trace.len = targetIdx then constraint.UsesLocalWitnessesOnWindow window (env trace.len) else True) ∧ others
+
+    | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
+        let others := foldl N cs (trace +> row) rest
+        let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
+        constraint.UsesLocalWitnessesOnWindow window (env trace.len) ∧ others
+
+    | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
+        foldl N cs trace rest
+
+    | trace +> _, [] =>
+        foldl N cs trace cs
+
+    | <+>, _ => True
+
 structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] where
   /-- list of constraints that are applied over the table -/
   constraints : List (TableOperation S F)
 
   /-- optional assumption on the table length and other tables in the environment -/
   Assumption : ℕ → ProverData F → Prop := fun _ _ => True
+
+  /-- assumptions on the trace and environments needed for completeness -/
+  CompletenessAssumption {N : ℕ} : TraceOfLength F S N → TableEnvironments F → Prop := fun _ _ => True
 
   /-- specification for the table -/
   Spec {N : ℕ}  : TraceOfLength F S N → ProverData F → Prop
@@ -606,6 +654,14 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     Assumption N env.data →
     TableConstraintsHold constraints trace env →
     Spec trace env.data
+
+  /-- the completeness states that if the environments use local witnesses
+      and the completeness assumptions hold, then the constraints hold. -/
+  completeness :
+    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : TableEnvironments F),
+    TableUsesLocalWitnesses constraints trace env →
+    CompletenessAssumption trace env →
+    TableConstraintsHold constraints trace env
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
       constraint is consistent with the number of variables introduced in the circuit. -/

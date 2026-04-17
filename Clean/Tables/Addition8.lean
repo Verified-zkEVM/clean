@@ -37,6 +37,7 @@ def Spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 def formalAdd8Table : FormalTable (F p) RowType := {
   constraints := add8Table,
   Spec := Spec_add8,
+
   soundness := by
     intro N trace envs _
     simp [table_norm, add8Table, Spec_add8]
@@ -71,6 +72,8 @@ def formalAdd8Table : FormalTable (F p) RowType := {
         -- now we prove a local property about the current row, from the constraints
         obtain ⟨ lookup_x, lookup_y, h_add⟩ := h_holds
         exact h_add lookup_x lookup_y
+
+  completeness := by sorry
 }
 
 end Tables.Addition8

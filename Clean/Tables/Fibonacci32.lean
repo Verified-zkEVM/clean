@@ -225,6 +225,8 @@ def formalFib32Table : FormalTable (F p) RowType := {
       simp only [fib32]
       rw [←curr_fib0, ←curr_fib1, ←eq_spec]
       simp only [curr_fib1, add_spec, Nat.reducePow, and_self, curr_normalized_y]
+
+  completeness := by sorry
 }
 
 end Tables.Fibonacci32
