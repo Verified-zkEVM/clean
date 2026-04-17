@@ -1,6 +1,6 @@
 import Clean.Table.Basic
 
-variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [Field F]
+variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [Field F] {ProverHint : Type}
 
 /--
   Build an index map for auxiliary cells from vars of `CellAssignment` to the cells in a trace row.
@@ -32,11 +32,12 @@ def buildAuxMap (as : CellAssignment W S) : Std.HashMap ℕ ℕ := Id.run do
   - According to `CellAssignment` for input cells, the input columns are assigned to
   the corresponding columns in the trace row.
 -/
-def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Array F :=
+def generateNextRow (hint : ProverHint) (tc : TableConstraint W S F ProverHint Unit)
+    (cur_row : Array F) : Array F :=
   let ctx := (tc .empty).2
 
   let assignment := ctx.assignment
-  let generators := ctx.circuit.witnessGenerators
+  let generators := ctx.circuit.witnessGenerators hint
 
     let aux_map := buildAuxMap assignment
   let next_row := Array.replicate cur_row.size 0
@@ -82,8 +83,8 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
   Returns an array of rows where each subsequent row is generated using the
   table constraint's witness generators.
 -/
-def witnesses
-    (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ) : Array (Array F) := Id.run do
+def witnesses (hint : ProverHint)
+    (tc : TableConstraint W S F ProverHint Unit) (init_row : Row F S) (n : ℕ) : Array (Array F) := Id.run do
 
   -- append auxiliary columns to the current row
   let aux_cols := Array.replicate tc.finalAssignment.numAux 0
@@ -93,7 +94,7 @@ def witnesses
   let mut current := cur_row
 
   for _ in [: n-1] do
-    let next := generateNextRow tc current
+    let next := generateNextRow hint tc current
     trace := trace.push next
     current := next
   trace

@@ -1,7 +1,7 @@
 import Clean.Table.Basic
 
 namespace Trace
-variable {F : Type} {S : Type → Type} [ProvableType S]
+variable {F : Type} {S : Type → Type} [ProvableType S] {ProverHint : Type}
 
 /--
   Induction principle that applies for every row in the trace, where the inductive step takes into
@@ -42,7 +42,7 @@ def everyRowTwoRowsInduction' {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
 end Trace
 
 namespace TraceOfLength
-variable {F : Type} {S : Type → Type} [ProvableType S] (N : ℕ)
+variable {F : Type} {S : Type → Type} [ProvableType S] {ProverHint : Type} (N : ℕ)
 /--
   Induction principle that applies for every row in the trace, where the inductive step takes into
   account the previous two rows.
@@ -121,7 +121,7 @@ theorem lastRow_of_forAllWithPrevious {N : ℕ+} {prop : Row F S → (i : ℕ) �
 
 end TraceOfLength
 
-variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
+variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+} {ProverHint : Type}
 
 namespace CellAssignment
 
@@ -132,14 +132,14 @@ def pushVarInput_offset (assignment : CellAssignment W S) (off : CellOffset W S)
 lemma pushRow_offset (assignment : CellAssignment W S) (row : Fin W) :
   (assignment.pushRow row).offset = assignment.offset + size S := rfl
 
-theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Operations F) :
+theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Operations F ProverHint) :
     (assignmentFromCircuit as ops).offset = as.offset + ops.localLength := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
   | witness | assert | lookup | subcircuit =>
     simp_all +arith [assignmentFromCircuit, CellAssignment.pushVarsAux, Operations.localLength]
 
-theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F) :
+theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F ProverHint) :
     (assignmentFromCircuit as ops).vars = (as.vars ++ (.mapRange ops.localLength fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
       ).cast (assignmentFromCircuit_offset ..).symm := by
   induction ops using Operations.induct generalizing as with
