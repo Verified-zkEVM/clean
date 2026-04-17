@@ -40,7 +40,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → Prop) (Spec : Fin 8 → Input F → Output F → Prop) :
-    Soundness F (circuit offset) Assumptions (Spec offset) := by
+    Soundness F ProverHint (circuit offset) Assumptions (Spec offset) := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
   sorry
@@ -49,7 +49,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → Prop) :
-    Completeness F (circuit offset) Assumptions := by
+    Completeness F ProverHint (circuit offset) Assumptions := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
   sorry
@@ -58,7 +58,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F ProverHint Input Output)
     (Assumptions : Input F → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) :
-    Soundness F (circuit n k) Assumptions (Spec n k) := by
+    Soundness F ProverHint (circuit n k) Assumptions (Spec n k) := by
   circuit_proof_start
   -- n and k are introduced first, then standard parameters
   sorry

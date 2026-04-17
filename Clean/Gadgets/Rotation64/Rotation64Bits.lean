@@ -53,7 +53,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) ProverHint U64 U64 where
     simp +arith only [circuit_norm, main,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) ProverHint (elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
   -- simplify statements
@@ -107,7 +107,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   rw [←U64.vals_valueNat, ←U64.vals_valueNat, h_rot_vector']
   exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) ProverHint (elaborated offset) Assumptions := by
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal

@@ -51,7 +51,7 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) ProverHint U32 U32 wh
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
+theorem soundness (off : Fin 4) : Soundness (F p) ProverHint (elaborated off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs as h
 
   simp only [explicit_provable_type, toVars, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
@@ -67,8 +67,8 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
 
-theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumptions := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
+theorem completeness (off : Fin 4) : Completeness (F p) ProverHint (elaborated off) Assumptions := by
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ _hint henv ⟨ x0, x1, x2, x3 ⟩ _
   fin_cases off
   repeat
     intro Assumptions

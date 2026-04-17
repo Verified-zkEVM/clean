@@ -34,8 +34,9 @@ template Num2Bits(n) {
     lc1 === in;
 }
 -/
-def main (n : ℕ) (inp : Expression (F p)) := do
-  let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
+def main (n : ℕ) (inp : Expression (F p)) :
+    Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
+  let out ← witnessVector n fun env _ => fieldToBits n (inp.eval env)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0
@@ -73,7 +74,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) ProverHint 
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input _ := input.val < 2^n
+  Assumptions input _ _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
@@ -116,7 +117,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) ProverHint fie
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  Assumptions input _ := input.val < 2^n
+  Assumptions input _ _ := input.val < 2^n
 
   Spec input output _ :=
     input.val < 2^n ∧ output = fieldToBits n input
@@ -149,7 +150,8 @@ template Bits2Num(n) {
     lc1 ==> out;
 }
 -/
-def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
+def main (n : ℕ) (input : Vector (Expression (F p)) n) :
+    Circuit (F p) ProverHint (Expression (F p)) := do
   let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
     let lc1 := lc1 + input[i] * e2
     let e2 := e2 + e2

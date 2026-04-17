@@ -664,7 +664,7 @@ def femtoCairoStepAssumptions
 
 def femtoCairoStepSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize) (femtoCairoStepSpec program) := by
+    : GeneralFormalCircuit.Soundness (F p) ProverHint (femtoCairoStepElaboratedCircuit program h_programSize) (femtoCairoStepSpec program) := by
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepElaboratedCircuit,
     Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory, nextState, decodeInstruction]
 
@@ -752,7 +752,7 @@ def femtoCairoStepSoundness
 
 def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
   (h_programSize : programSize < p) :
-    GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize)
+    GeneralFormalCircuit.Completeness (F p) ProverHint (femtoCairoStepElaboratedCircuit program h_programSize)
       (femtoCairoStepAssumptions program) := by
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepElaboratedCircuit,
     fetchInstruction, decodeInstruction, readFromMemory, nextState]

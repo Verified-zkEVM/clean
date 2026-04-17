@@ -43,7 +43,7 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) ProverHint U32 U32 where
   localLength _ := 8
   output _inputs i0 := output off i0
 
-theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 32) : Soundness (F p) ProverHint (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
   simp [circuit_norm, main, elaborated,
@@ -75,7 +75,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   rw [rotRight32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
   rw [hy, Nat.div_add_mod']
 
-theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 32) : Completeness (F p) ProverHint (elaborated offset) Assumptions := by
   intro i0 env x_var _hint h_env x h_eval x_normalized
 
   simp only [circuit_norm, main, elaborated,

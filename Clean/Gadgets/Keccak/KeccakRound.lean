@@ -33,7 +33,7 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) ProverHint KeccakSta
   output_eq state i0 := by
     simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
 
-theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (Spec rc) := by
+theorem soundness (rc : UInt64) : Soundness (F p) ProverHint (elaborated rc) Assumptions (Spec rc) := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- simplify goal
@@ -79,7 +79,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
   ring_nf at chi_eq chi_norm ⊢
   exact ⟨ chi_norm, chi_eq ⟩
 
-theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumptions := by
+theorem completeness (rc : UInt64) : Completeness (F p) ProverHint (elaborated rc) Assumptions := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]

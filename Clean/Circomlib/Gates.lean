@@ -32,7 +32,7 @@ template XOR() {
     out <== a + b - 2*a*b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== a + b - 2*a*b
@@ -74,7 +74,7 @@ template AND() {
     out <== a*b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== a*b
@@ -114,7 +114,7 @@ template OR() {
     out <== a + b - a*b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== a + b - a*b
@@ -155,7 +155,7 @@ template NOT() {
     out <== 1 + in - 2*in;
 }
 -/
-def main (input : Expression (F p)) := do
+def main (input : Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
   let inp := input
   let out <== 1 + inp - 2*inp
   return out
@@ -196,7 +196,7 @@ template NAND() {
     out <== 1 - a*b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== 1 - a*b
@@ -238,7 +238,7 @@ template NOR() {
     out <== a*b + 1 - a - b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== a*b + 1 - a - b
