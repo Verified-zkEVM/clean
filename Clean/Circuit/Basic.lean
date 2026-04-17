@@ -179,17 +179,19 @@ def ConstraintsHold.Soundness {ProverHint : Type} (eval : Environment F) :
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
+The prover's specific hint is threaded through so each subcircuit's `Completeness` uses the same
+hint that drives witness generation.
 -/
 @[circuit_norm]
-def ConstraintsHold.Completeness {ProverHint : Type} (eval : Environment F) :
+def ConstraintsHold.Completeness {ProverHint : Type} (eval : Environment F) (hint : ProverHint) :
     List (Operation F ProverHint) → Prop
   | [] => True
-  | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
+  | .witness _ _ :: ops => ConstraintsHold.Completeness eval hint ops
+  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval hint ops
   | .lookup l :: ops =>
-    l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
+    l.Completeness eval ∧ ConstraintsHold.Completeness eval hint ops
   | .subcircuit s :: ops =>
-    s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
+    s.Completeness eval hint ∧ ConstraintsHold.Completeness eval hint ops
 end Circuit
 
 /--
@@ -284,8 +286,8 @@ def Completeness (F : Type) (ProverHint : Type) [Field F] (circuit : ElaboratedC
   -- for all inputs that satisfy the assumptions
   ∀ input : Input F, eval env input_var = input →
   Assumptions input →
-  -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  -- the constraints hold at that same hint
+  ConstraintsHold.Completeness env hint (circuit.main input_var |>.operations offset)
 
 /--
 `FormalCircuit` is the main object that encapsulates correctness of a circuit.
@@ -344,8 +346,8 @@ def FormalAssertion.Completeness (F : Type) (ProverHint : Type) [Field F]
   -- for all inputs that satisfy the assumptions AND the spec
   ∀ input : Input F, eval env input_var = input →
   Assumptions input → Spec input →
-  -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  -- the constraints hold at that same hint
+  ConstraintsHold.Completeness env hint (circuit.main input_var |>.operations offset)
 
 /--
 `FormalAssertion` models a subcircuit that is "assertion-like":
@@ -397,8 +399,8 @@ def GeneralFormalCircuit.Completeness (F : Type) (ProverHint : Type) [Field F]
   -- for all inputs that satisfy the "honest prover" assumptions under that hint
   ∀ input : Input F, eval env input_var = input →
   Assumptions input env.data hint →
-  -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  -- the constraints hold at that same hint
+  ConstraintsHold.Completeness env hint (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
 def GeneralFormalCircuit.CompletenessSpecProof (F : Type) (ProverHint : Type) [Field F]

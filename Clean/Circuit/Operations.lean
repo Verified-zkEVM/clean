@@ -95,8 +95,8 @@ structure Subcircuit (F : Type) [Field F] (ProverHint : Type) (offset : ℕ) whe
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   Soundness : Environment F → Prop
-  Completeness : Environment F → Prop
-  -- `UsesLocalWitnesses` additionally takes a prover-supplied hint that only enters completeness-side obligations.
+  -- `Completeness` and `UsesLocalWitnesses` take the same prover-supplied hint that drives witness generation.
+  Completeness : Environment F → ProverHint → Prop
   UsesLocalWitnesses : Environment F → ProverHint → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
@@ -107,10 +107,10 @@ structure Subcircuit (F : Type) [Field F] (ProverHint : Type) (offset : ℕ) whe
   imply_soundness : ∀ env,
     ConstraintsHoldFlat env ops.toFlat → Soundness env
 
-  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit (at any hint)
+  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators at the matching prover hint
   implied_by_completeness : ∀ env hint,
     env.ExtendsVector (localWitnesses env hint ops.toFlat) offset →
-    Completeness env → ConstraintsHoldFlat env ops.toFlat
+    Completeness env hint → ConstraintsHoldFlat env ops.toFlat
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition, for the matching prover hint
   imply_usesLocalWitnesses : ∀ env hint,
     env.ExtendsVector (localWitnesses env hint ops.toFlat) offset →
