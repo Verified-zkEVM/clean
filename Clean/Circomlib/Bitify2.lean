@@ -34,7 +34,7 @@ template Num2Bits_strict() {
     }
 }
 -/
-def main (input : Expression (F p)) := do
+def main (input : Expression (F p)) : Circuit (F p) ProverHint (Vector (Expression (F p)) 254) := do
   -- Convert input to 254 bits
   let bits ← Num2Bits.main 254 input
 
@@ -116,7 +116,7 @@ template Bits2Num_strict() {
     b2n.out ==> out;
 }
 -/
-def main (input : Vector (Expression (F p)) 254) := do
+def main (input : Vector (Expression (F p)) 254) : Circuit (F p) ProverHint (Expression (F p)) := do
   -- Check that the bits represent a value less than p
   AliasCheck.circuit input
 
@@ -133,7 +133,7 @@ def circuit : GeneralFormalCircuit (F p) ProverHint (fields 254) field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions input _ := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
+  Assumptions input _ _ := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
 
   Spec input output _ :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) → output.val = fromBits (input.map ZMod.val)
@@ -203,9 +203,9 @@ template Num2BitsNeg(n) {
     lc1 + isZero.out * 2**n === 2**n - in;
 }
 -/
-def main (n : ℕ) (input : Expression (F p)) := do
+def main (n : ℕ) (input : Expression (F p)) : Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
   -- Witness the bits of 2^n - input (when n > 0)
-  let out ← witnessVector n fun env =>
+  let out ← witnessVector n fun env _ =>
     fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
@@ -228,7 +228,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) ProverHint fie
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 
-  Assumptions input _ := input.val < 2^n
+  Assumptions input _ _ := input.val < 2^n
 
   Spec input output _ :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
