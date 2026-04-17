@@ -39,13 +39,13 @@ instance : ToJson (Lookup F) where
     ("entry", toJson l.entry.toArray),
   ]
 
-instance : ToJson (FlatOperation F) where
+instance : ToJson (FlatOperation F ProverHint) where
   toJson
     | FlatOperation.witness m _ => Json.mkObj [("witness", toJson m)]
     | FlatOperation.assert e => Json.mkObj [("assert", toJson e)]
     | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
 
-def NestedOperations.listToJson : List (NestedOperations F) → Array Json
+def NestedOperations.listToJson : List (NestedOperations F ProverHint) → Array Json
   | [] => #[]
   | .single op :: ops => #[toJson op] ++ listToJson ops
   | .nested (name, ops') :: ops =>
@@ -54,19 +54,19 @@ def NestedOperations.listToJson : List (NestedOperations F) → Array Json
       ("operations", Json.arr (listToJson ops'))]
     #[obj] ++ listToJson ops
 
-instance : ToJson (NestedOperations F) where
+instance : ToJson (NestedOperations F ProverHint) where
   toJson
     | .single op => toJson op
     | .nested ⟨ name, ops ⟩ => Json.mkObj [
       ("name", Json.str name),
       ("operations", Json.arr (NestedOperations.listToJson ops))]
 
-instance : ToJson (Operation F) where
+instance : ToJson (Operation F ProverHint) where
   toJson
     | Operation.witness m _ => Json.mkObj [("witness", toJson m)]
     | Operation.assert e => Json.mkObj [("assert", toJson e)]
     | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
     | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops.toFlat)]
 
-instance : ToJson (Operations F) where
+instance : ToJson (Operations F ProverHint) where
   toJson ops := toJson ops.toList

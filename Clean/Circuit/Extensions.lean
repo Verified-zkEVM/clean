@@ -3,15 +3,15 @@ import Clean.Circuit.Subcircuit
 
 variable {F : Type} [Field F] {α : TypeMap} [ProvableType α]
 
-instance {α : TypeMap} [ProvableType α] : Inhabited (Circuit F (Var α F)) where
+instance {α : TypeMap} [ProvableType α] : Inhabited (Circuit F ProverHint (Var α F)) where
   default := witness default
 
-def copyToVar (x : Expression F) : Circuit F (Variable F) := do
+def copyToVar (x : Expression F) : Circuit F ProverHint (Variable F) := do
   let x' ← witnessVar x.eval
   assertZero (x - (var x'))
   return x'
 
-def toVar : Expression F → Circuit F (Variable F)
+def toVar : Expression F → Circuit F ProverHint (Variable F)
   | var v => pure v
   | x => copyToVar x
 
@@ -23,7 +23,7 @@ def getOffset : Circuit F ℕ := fun n => (n, [])
 def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
   fromElements <| .mapRange _ fun i => env.get (offset + i)
 
-def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
+def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F ProverHint (Var α F) := do
   let offset ← getOffset
   witness (computeValueFromOffset α offset)
 
