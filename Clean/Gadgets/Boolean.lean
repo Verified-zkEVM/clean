@@ -185,7 +185,8 @@ inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
-def witness (compute : Environment (F p) → F p) := do
+def witness {ProverHint : Type} (compute : Environment (F p) → ProverHint → F p) :
+    Circuit (F p) ProverHint (Boolean (F p)) := do
   let x ← witnessVar compute
   assertZero (var x * (var x - 1))
   return Boolean.mk x
@@ -199,7 +200,7 @@ instance : Coe (Boolean (F p)) (Expression (F p)) where
 Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 -/
 @[circuit_norm]
-def assertBool : FormalAssertion (F p) field where
+def assertBool {ProverHint : Type} : FormalAssertion (F p) ProverHint field where
   main (x : Expression (F p)) := assertZero (x * (x - 1))
   Assumptions _ := True
   Spec (x : F p) := IsBool x
