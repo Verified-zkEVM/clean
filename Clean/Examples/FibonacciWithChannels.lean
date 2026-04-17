@@ -2903,6 +2903,11 @@ end
 
 -- CONCRETE EXAMPLE STARTS HERE
 
+@[circuit_norm]
+lemma FieldUtils.fin_val_natCast_val_lt {p : ℕ} {n : ℕ} (x : Fin n) : (x.val : F p).val < n := by
+  grw [ZMod.val_natCast, Nat.mod_le]
+  exact x.isLt
+
 instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <| by
   simp [F, ZMod.ringChar_zmod_n]
   linarith [pGt.out]
@@ -2939,14 +2944,10 @@ def pushBytes : FormalCircuitWithInteractions (F p) (fields 256) unit where
   localLength _ := 0
   localLength_eq := by simp +arith only [circuit_norm]
   output _ _ := ()
-
-  Assumptions | multiplicities, _ => True
+  Assumptions _ _ := True
   Spec _ _ _ := True
-
-  -- TODO need better tools for finite range foreach, but probably this shouldn't be a circuit anyway
-  soundness := by sorry
-  completeness := by sorry
-
+  soundness := by circuit_proof_start [BytesTable]
+  completeness := by circuit_proof_start
   channelsWithRequirements := [ BytesChannel.toRaw ]
 
 instance Add8Channel : Channel (F p) fieldTriple where
