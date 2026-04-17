@@ -81,7 +81,7 @@ def roundWithPermute : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs 
     · exact h_holds2
 
   completeness := by
-    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
+    intro offset env input_var _hint h_env_uses_witnesses input h_eval h_assumptions
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval

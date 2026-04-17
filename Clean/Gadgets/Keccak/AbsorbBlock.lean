@@ -76,7 +76,7 @@ theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
 theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
-  intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
+  intro i0 env ⟨ state_var, block_var ⟩ _hint h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
   simp only [circuit_norm, RATE, main, Assumptions, Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
