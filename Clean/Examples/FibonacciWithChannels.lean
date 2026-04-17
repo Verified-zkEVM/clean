@@ -3035,7 +3035,6 @@ lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n → x < 256 ∧ y < 2
   | zero => simp_all [fibonacci]
   | succ n ih =>
     specialize ih rfl
-    have : 0 < 256 := by norm_num
     simp_all [fibonacci, Nat.mod_lt]
 
 instance FibonacciChannel : Channel (F p) fieldTriple where
