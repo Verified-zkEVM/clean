@@ -6,7 +6,6 @@ namespace TestCircuitProofStart
 
 open Circuit
 
-
 section BasicTests
 -- Simple example to test the circuit_proof_start tactic
 -- This section verifies that the tactic correctly:
