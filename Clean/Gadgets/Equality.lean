@@ -4,7 +4,7 @@ and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
 import Clean.Circuit.Loops
 
-variable {F : Type} [Field F] 
+variable {F : Type} [Field F]
 open Circuit (ConstraintsHold)
 
 namespace Gadgets
@@ -130,7 +130,7 @@ def assertEquals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
   Gadgets.Equality.circuit α (x, y)
 
 @[circuit_norm, reducible]
-def Expression.assertEquals {F : Type} [Field F] 
+def Expression.assertEquals {F : Type} [Field F]
     (x y : Expression F) : Circuit F Unit :=
   Gadgets.Equality.circuit id (x, y)
 

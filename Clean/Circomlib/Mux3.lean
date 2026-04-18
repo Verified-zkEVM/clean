@@ -57,8 +57,7 @@ template MultiMux3(n) {
     }
 }
 -/
-def main (n : ℕ) (input : Var (Inputs n) (F p)) :
-    Circuit (F p) (Vector (Expression (F p)) n) := do
+def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
   let { c, s } := input
 
   let s10 <== s[1] * s[0]
@@ -180,7 +179,7 @@ template Mux3() {
     mux.out[0] ==> out;
 }
 -/
-def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Var Inputs (F p)) := do
   let { c, s } := input
 
   -- Call MultiMux3 with n=1

@@ -1,7 +1,7 @@
 import Clean.Circuit.Basic
 import Clean.Circuit.Theorems
 
-variable {F : Type} [Field F] 
+variable {F : Type} [Field F]
 
 namespace FlatOperation
 open Circuit (ConstraintsHold.Completeness ConstraintsHold)

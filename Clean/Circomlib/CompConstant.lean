@@ -65,8 +65,7 @@ template CompConstant(ct) {
     out <== num2bits.out[127];
 }
 -/
-def main (ct : ℕ) (input : Vector (Expression (F p)) 254) :
-    Circuit (F p) (Expression (F p)) := do
+def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   let parts : fields 127 (Expression (F p)) <== Vector.ofFn fun i =>
     let clsb := (ct >>> (i.val * 2)) &&& 1
     let cmsb := (ct >>> (i.val * 2 + 1)) &&& 1

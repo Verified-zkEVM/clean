@@ -235,8 +235,7 @@ template BinSub(n) {
 }
 -/
 -- n: number of bits per operand
-def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) :
-    Circuit (F p) (Vector (Expression (F p)) n) := do
+def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
   -- Calculate input linear sum: lin = 2^n + in[0] - in[1]
   let lin := Fin.foldl n (fun lin i =>
       let e2 : Expression (F p) := (2^i.val : F p)

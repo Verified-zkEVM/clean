@@ -95,12 +95,11 @@ def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint
   let output ← table.step acc x
   let (output', _) ← getNextRow
   -- TODO make this more efficient by assigning variables as long as they don't come from the input
-  ((output' === output) : Circuit F Unit)
+  output' === output
 
-def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F) :
-    SingleRowConstraint (ProvablePair State Input) F := do
+def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F) : SingleRowConstraint (ProvablePair State Input) F := do
   let (actual, _) ← getCurrRow
-  ((actual === (const target)) : Circuit F Unit)
+  actual === (const target)
 
 def tableConstraints (table : InductiveTable F State Input) (input_state output_state : State F) :
   List (TableOperation (ProvablePair State Input) F) := [
@@ -110,10 +109,10 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
   ]
 
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : Environment F} :
-  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint  Input input_state) ⟨<+> +> row, rfl⟩ env)
-    (equalityConstraint  Input input_state .empty).2.circuit
+  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
+    (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by
-  set env' := windowEnv (equalityConstraint  Input input_state) ⟨<+> +> row, rfl⟩ env
+  set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
   simp only [equalityConstraint, circuit_norm, table_norm]
 
   have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by

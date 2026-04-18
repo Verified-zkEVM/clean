@@ -7,7 +7,7 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 namespace Gadgets.Conditional
 
 section
-variable {F : Type} [Field F] 
+variable {F : Type} [Field F]
 variable {M : TypeMap} [ProvableType M]
 
 open ProvableType

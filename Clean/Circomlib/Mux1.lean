@@ -30,8 +30,7 @@ template MultiMux1(n) {
     }
 }
 -/
-def main (n : ℕ) (input : Var (Inputs n) (F p)) :
-    Circuit (F p) (Vector (Expression (F p)) n) := do
+def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
   let { c, s } := input
 
   -- Witness and constrain output vector
@@ -151,7 +150,7 @@ template Mux1() {
     mux.out[0] ==> out;
 }
 -/
-def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Var Inputs (F p)) := do
   let { c, s } := input
 
   -- Call MultiMux1 with n=1

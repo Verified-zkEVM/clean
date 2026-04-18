@@ -1,7 +1,7 @@
 import Clean.Table.Basic
 
 namespace Trace
-variable {F : Type} {S : Type → Type} [ProvableType S] 
+variable {F : Type} {S : Type → Type} [ProvableType S]
 
 /--
   Induction principle that applies for every row in the trace, where the inductive step takes into
@@ -121,7 +121,7 @@ theorem lastRow_of_forAllWithPrevious {N : ℕ+} {prop : Row F S → (i : ℕ) �
 
 end TraceOfLength
 
-variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+} 
+variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
 
 namespace CellAssignment
 

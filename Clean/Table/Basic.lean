@@ -15,7 +15,7 @@ import Clean.Table.SimpTable
 @[reducible]
 def Row (F : Type) (S : Type → Type) [ProvableType S] := S F
 
-variable {F : Type} {S : Type → Type} [ProvableType S] 
+variable {F : Type} {S : Type → Type} [ProvableType S]
 
 @[table_norm, table_assignment_norm]
 def Row.get (row : Row F S) (i : Fin (size S)) : F :=
@@ -313,9 +313,8 @@ theorem bind_def {β : Type} (f : TableConstraint W S F α) (g : α → TableCon
     let (a, ctx') := f ctx
     g a ctx' := rfl
 
--- Repr instance removed: `deriving Repr` on TableContext interacts poorly with
--- the new `ProverHint` parameter. Reinstate once a manual `Repr (Operation F)`
--- derivation path is stable.
+instance [Repr F] : Repr (TableConstraint W S F α) where
+  reprPrec table _ := reprStr (table .empty).2
 
 @[table_assignment_norm]
 def assignmentFromCircuit (as : CellAssignment W S) : Operations F → CellAssignment W S
@@ -454,8 +453,8 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   | .var v => assignVar off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
-    let new_var ← (witnessVar (fun env _ => x.eval env) : Circuit F _)
-    (assertZero (x - var new_var) : Circuit F _)
+    let new_var ← witnessVar fun env _ => x.eval env
+    assertZero (x - var new_var)
     assignVar off new_var
 
 @[table_norm, table_assignment_norm]

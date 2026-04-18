@@ -18,7 +18,7 @@ open Utils.Rotation (rotRight32_composition)
 /--
   Rotate the 32-bit integer by `offset` bits
 -/
-def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
+def main (offset : Fin 32) (x : Var U32 (F p)) := do
   let byte_offset : Fin 4 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
 

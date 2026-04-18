@@ -7,7 +7,7 @@ namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
-def main (n : ℕ) (x : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) n) := do
+def main (n : ℕ) (x : Expression (F p)) := do
   -- witness the bits of `x`
   let bits ← witnessVector n fun env _ => fieldToBits n (x.eval env)
 

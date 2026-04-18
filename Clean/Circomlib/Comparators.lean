@@ -25,7 +25,7 @@ template IsZero() {
     in*out === 0;
 }
 -/
-def main (input : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F p)) := do
   let inv ← witness fun env _ =>
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
@@ -80,7 +80,7 @@ template IsEqual() {
     isz.out ==> out;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 - input.2
   let out ← IsZero.circuit diff
   return out
@@ -141,7 +141,7 @@ structure Inputs (F : Type) where
   inp : fieldPair F
 deriving ProvableStruct
 
-def main (inputs : Var Inputs (F p)) : Circuit (F p) Unit := do
+def main (inputs : Var Inputs (F p)) := do
   let { enabled, inp } := inputs
   let isz ← IsZero.circuit (inp.2 - inp.1)
   enabled * (1 - isz) === 0
@@ -211,8 +211,7 @@ template LessThan(n) {
     out <== 1-n2b.out[n];
 }
 -/
-def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) :
-    Circuit (F p) (Expression (F p)) := do
+def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
   let bits ← Num2Bits.circuit (n + 1) hn diff
   let out <== 1 - bits[n]

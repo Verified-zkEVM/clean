@@ -31,7 +31,7 @@ template XOR() {
     out <== a + b - 2*a*b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== a + b - 2*a*b
@@ -73,7 +73,7 @@ template AND() {
     out <== a*b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== a*b
@@ -113,7 +113,7 @@ template OR() {
     out <== a + b - a*b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== a + b - a*b
@@ -154,7 +154,7 @@ template NOT() {
     out <== 1 + in - 2*in;
 }
 -/
-def main (input : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F p)) := do
   let inp := input
   let out <== 1 + inp - 2*inp
   return out
@@ -195,7 +195,7 @@ template NAND() {
     out <== 1 - a*b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== 1 - a*b
@@ -237,7 +237,7 @@ template NOR() {
     out <== a*b + 1 - a - b;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
   let out <== a*b + 1 - a - b
@@ -601,7 +601,7 @@ lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
   rw [land_one_of_IsBool a h_a_bool]
 
 /-- Soundness for n = 0 case -/
-lemma soundness_zero {p : ℕ} [Fact p.Prime] 
+lemma soundness_zero {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p)) (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 0 input)
@@ -616,7 +616,7 @@ lemma soundness_zero {p : ℕ} [Fact p.Prime]
     rfl
 
 /-- Soundness for n = 1 case -/
-lemma soundness_one {p : ℕ} [Fact p.Prime] 
+lemma soundness_one {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p)) (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 1 input)
@@ -647,7 +647,7 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
     exact h_input0
 
 /-- Soundness for n = 2 case -/
-lemma soundness_two {p : ℕ} [Fact p.Prime] 
+lemma soundness_two {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p)) (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 2 input)

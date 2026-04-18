@@ -177,7 +177,7 @@ lemma forAll_append {condition : Condition F} {ops ops' : List (FlatOperation F)
     specialize ih (n + op.singleLocalLength)
     simp_all +arith [forAll_cons, localLength_cons, and_assoc]
 
-lemma localWitnesses_append {F} [Field F] 
+lemma localWitnesses_append {F} [Field F]
     {a b: List (FlatOperation F)} {env} {hint : ProverHint F} :
     (localWitnesses env hint (a ++ b)).toArray =
       (localWitnesses env hint a).toArray ++ (localWitnesses env hint b).toArray := by
@@ -230,7 +230,7 @@ open FlatOperation (localLength localWitnesses)
 what follows are relationships between different versions of `Environment.UsesLocalWitnesses`
 -/
 
-lemma env_extends_witness {F} [Field F] 
+lemma env_extends_witness {F} [Field F]
     {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F} {hint : ProverHint F}
     {m c} :
     env.ExtendsVector (localWitnesses env hint (.witness m c :: ops)) n ↔

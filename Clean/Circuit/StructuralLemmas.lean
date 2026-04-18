@@ -14,7 +14,7 @@ The composite circuit:
 - Has a spec stating that there exists an intermediate value such that both component specs hold
 -/
 def FormalCircuit.concat
-    {F : Type} [Field F] 
+    {F : Type} [Field F]
     {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
     (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)
@@ -71,7 +71,7 @@ The requirements are:
 - The stronger spec and the assumption imply the weaker spec
 -/
 def FormalCircuit.weakenSpec
-    {F : Type} [Field F] 
+    {F : Type} [Field F]
     {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output)
     (WeakerSpec : Input F → Output F → Prop)

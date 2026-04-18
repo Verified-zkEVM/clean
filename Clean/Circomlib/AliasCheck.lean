@@ -29,7 +29,7 @@ template AliasCheck() {
     compConstant.out === 0;
 }
 -/
-def main (input : Vector (Expression (F p)) 254) : Circuit (F p) Unit := do
+def main (input : Vector (Expression (F p)) 254) := do
   -- CompConstant(-1) means we're comparing against p-1 (since -1 ≡ p-1 mod p)
   let comp_out ← CompConstant.circuit (p - 1) hppre254.elim input
   comp_out === 0

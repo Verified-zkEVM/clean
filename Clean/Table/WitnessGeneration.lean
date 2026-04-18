@@ -1,6 +1,6 @@
 import Clean.Table.Basic
 
-variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [Field F] 
+variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [Field F]
 
 /--
   Build an index map for auxiliary cells from vars of `CellAssignment` to the cells in a trace row.

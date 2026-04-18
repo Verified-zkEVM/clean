@@ -68,10 +68,10 @@ def splitProvableStructEq : TacticM Unit := do
         try
           -- Generate field-based names for the struct variable
           let altVarNames ← generateStructFieldNames fvarId
-          
+
           -- Use cases tactic on the variable with custom names
           let casesResult ← currentGoal.cases fvarId #[altVarNames]
-          
+
           match casesResult.toList with
           | [subgoal] =>
             currentGoal := subgoal.mvarId

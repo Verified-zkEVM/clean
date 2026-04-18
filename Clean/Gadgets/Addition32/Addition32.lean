@@ -13,7 +13,7 @@ structure Inputs (F : Type) where
   y: U32 F
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
+def main (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
   let ⟨z, _⟩ ← Addition32Full.circuit {x, y, carryIn := 0}
   return z

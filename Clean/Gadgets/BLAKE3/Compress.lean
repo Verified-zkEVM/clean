@@ -13,7 +13,7 @@ open Specs.BLAKE3 (compress)
 /--
 Main circuit that chains ApplyRounds and FinalStateUpdate.
 -/
-def main (input : Var ApplyRounds.Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
+def main (input : Var ApplyRounds.Inputs (F p)) := do
   -- First apply the 7 rounds
   let state ← ApplyRounds.circuit input
   -- Then apply final state update

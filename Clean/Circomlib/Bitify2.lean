@@ -33,7 +33,7 @@ template Num2Bits_strict() {
     }
 }
 -/
-def main (input : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) 254) := do
+def main (input : Expression (F p)) := do
   -- Convert input to 254 bits
   let bits ← Num2Bits.main 254 input
 
@@ -115,7 +115,7 @@ template Bits2Num_strict() {
     b2n.out ==> out;
 }
 -/
-def main (input : Vector (Expression (F p)) 254) : Circuit (F p) (Expression (F p)) := do
+def main (input : Vector (Expression (F p)) 254) := do
   -- Check that the bits represent a value less than p
   AliasCheck.circuit input
 
@@ -202,7 +202,7 @@ template Num2BitsNeg(n) {
     lc1 + isZero.out * 2**n === 2**n - in;
 }
 -/
-def main (n : ℕ) (input : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) n) := do
+def main (n : ℕ) (input : Expression (F p)) := do
   -- Witness the bits of 2^n - input (when n > 0)
   let out ← witnessVector n fun env _ =>
     fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)

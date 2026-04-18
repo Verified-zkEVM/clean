@@ -8,7 +8,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
-def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
+def main (row : Var KeccakRow (F p)) := do
   let c0 ← Rotation64.circuit (64 - 1) row[1]
   let c0 ← Xor64.circuit ⟨row[4], c0⟩
 

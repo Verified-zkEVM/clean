@@ -63,7 +63,7 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
 
 namespace BLAKE3ProcessBlocksStateNormalized
 
-def main (x : Var ProcessBlocksState (F p)) : Circuit (F p) Unit := do
+def main (x : Var ProcessBlocksState (F p)) := do
   Circuit.forEach x.chaining_value U32.AssertNormalized.circuit
   U32.AssertNormalized.circuit x.chunk_counter
   U32.AssertNormalized.circuit x.blocks_compressed
@@ -115,7 +115,7 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
 -- A circuit that asserts `BlockInput.Normalized`
 namespace BLAKE3BlockInputNormalized
 
-def main (x : Var BlockInput (F p)) : Circuit (F p) Unit := do
+def main (x : Var BlockInput (F p)) := do
   assertBool x.block_exists
   Circuit.forEach x.block_data U32.AssertNormalized.circuit
 
@@ -226,13 +226,13 @@ private lemma step_process_block (env : Environment (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
     (h_x : x.block_exists = 1)
-    (h_holds : Circuit.ConstraintsHold.Soundness env ((step  acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
+    (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
     (acc_normalized : acc.Normalized)
     (x_normalized : x.Normalized)
     (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :
-    (eval env ((step  acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
+    (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
-    (eval env ((step  acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
+    (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
   simp only [step, circuit_norm, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
     Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at ⊢ h_holds
