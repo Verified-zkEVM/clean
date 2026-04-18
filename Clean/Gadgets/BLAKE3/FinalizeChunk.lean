@@ -10,7 +10,6 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.FinalizeChunk
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 2^16 + 2^8)]
-variable {ProverHint : Type}
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Specs.BLAKE3
@@ -69,7 +68,7 @@ attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart add_zero st
 /--
 Main circuit that processes the final block of a chunk with CHUNK_END flag.
 -/
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var (ProvableVector U32 8) (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
 
   -- Convert bytes to words (just reorganization, no circuit needed)
   let block_words := bytesToWords input.buffer_data
@@ -95,7 +94,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var (ProvableVec
   let final_state ← Compress.circuit compress_input
   return final_state.take 8
 
-instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs (ProvableVector U32 8) where
+instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
   main
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
 
@@ -138,7 +137,7 @@ private lemma eval_bytesToWords (env : Environment (F p))
   have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4 + 3) (by omega)
   simp_all
 
-theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
     IsZero.Spec, IsZero.Assumptions,
     Or32.Spec, Or32.Assumptions,
@@ -209,7 +208,7 @@ theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
     specialize h_Compress_Normalized ⟨ i, by omega ⟩
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
-theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
   apply And.intro
   · trivial
@@ -269,7 +268,7 @@ theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := b
     aesop
   omega
 
-def circuit : FormalCircuit (F p) ProverHint Inputs (ProvableVector U32 8) := {
+def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 

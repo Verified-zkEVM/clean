@@ -14,13 +14,13 @@ The composite circuit:
 - Has a spec stating that there exists an intermediate value such that both component specs hold
 -/
 def FormalCircuit.concat
-    {F : Type} [Field F] {ProverHint : Type}
+    {F : Type} [Field F] 
     {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
-    (circuit1 : FormalCircuit F ProverHint Input Mid)
-    (circuit2 : FormalCircuit F ProverHint Mid Output)
+    (circuit1 : FormalCircuit F Input Mid)
+    (circuit2 : FormalCircuit F Mid Output)
     (h_compat : ∀ input mid, circuit1.Assumptions input → circuit1.Spec input mid → circuit2.Assumptions mid)
     (h_localLength_stable : ∀ mid mid', circuit2.localLength mid = circuit2.localLength mid') :
-    FormalCircuit F ProverHint Input Output := {
+    FormalCircuit F Input Output := {
   elaborated := {
     main := (circuit1 · >>= circuit2)
     localLength input := circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
@@ -51,9 +51,9 @@ def FormalCircuit.concat
 }
 
 @[circuit_norm]
-lemma FormalCircuit.concat_assumptions {F ProverHint Input Mid Output} [Field F]
+lemma FormalCircuit.concat_assumptions {F Input Mid Output} [Field F]
     [ProvableType Input] [ProvableType Mid] [ProvableType Output]
-    (c1 : FormalCircuit F ProverHint Input Mid) (c2 : FormalCircuit F ProverHint Mid Output) p0 p1 :
+    (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
   simp only [FormalCircuit.concat]
 
@@ -71,15 +71,15 @@ The requirements are:
 - The stronger spec and the assumption imply the weaker spec
 -/
 def FormalCircuit.weakenSpec
-    {F : Type} [Field F] {ProverHint : Type}
+    {F : Type} [Field F] 
     {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuit F ProverHint Input Output)
+    (circuit : FormalCircuit F Input Output)
     (WeakerSpec : Input F → Output F → Prop)
     (h_spec_implication : ∀ input output,
       circuit.Assumptions input →
       circuit.Spec input output →
       WeakerSpec input output) :
-    FormalCircuit F ProverHint Input Output := {
+    FormalCircuit F Input Output := {
   elaborated := circuit.elaborated
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
@@ -96,8 +96,8 @@ def FormalCircuit.weakenSpec
 }
 
 @[circuit_norm]
-lemma FormalCircuit.weakenSpec_assumptions {F ProverHint Input Output} [Field F]
+lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F]
     [ProvableType Input] [ProvableType Output]
-    (c : FormalCircuit F ProverHint Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]

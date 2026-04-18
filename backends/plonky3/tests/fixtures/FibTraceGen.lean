@@ -12,7 +12,7 @@ def generateTrace (steps : ℕ) (output_path : String) : IO Unit := do
   let fib_relation_babybear := fibRelation (p:=pBabybear)
   let init_row : RowType (F pBabybear) := { x := 0, y := 1 }
 
-  let trace_data := witnesses () fib_relation_babybear init_row steps
+  let trace_data := witnesses (fun _ _ => #[]) fib_relation_babybear init_row steps
   let json_data := Lean.toJson trace_data
 
   IO.FS.writeFile output_path json_data.pretty

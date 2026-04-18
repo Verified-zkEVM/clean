@@ -7,7 +7,6 @@ import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 namespace Gadgets.Rotation64Bits
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
-variable {ProverHint : Type}
 
 instance : Fact (p > 512) := by
   constructor
@@ -19,7 +18,7 @@ open ByteDecomposition.Theorems (byteDecomposition_lt)
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) ProverHint (Var U64 (F p)) := do
+def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit offset)
   let lows := parts.map Outputs.low
   let highs := parts.map Outputs.high
@@ -39,7 +38,7 @@ def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
   U64.fromLimbs (.ofFn fun ⟨i,_⟩ =>
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
-def elaborated (off : Fin 8) : ElaboratedCircuit (F p) ProverHint U64 U64 where
+def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := main off
   localLength _ := 16
   output _ i0 := output off i0
@@ -53,7 +52,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) ProverHint U64 U64 where
     simp +arith only [circuit_norm, main,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) ProverHint (elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
   -- simplify statements
@@ -107,7 +106,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) ProverHint (elaborated offs
   rw [←U64.vals_valueNat, ←U64.vals_valueNat, h_rot_vector']
   exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness (offset : Fin 8) : Completeness (F p) ProverHint (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var _hint _ x h_input x_normalized
 
   -- simplify goal
@@ -118,7 +117,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) ProverHint (elaborate
   rw [Assumptions, U64.ByteVector.normalized_iff] at x_normalized
   simp_all only [U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) ProverHint U64 U64 := {
+def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
   elaborated offset with
   Assumptions
   Spec := Spec offset

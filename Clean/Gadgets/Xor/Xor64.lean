@@ -6,7 +6,6 @@ import Clean.Gadgets.Xor.ByteXorTable
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
-variable {ProverHint : Type}
 
 namespace Gadgets.Xor64
 open Gadgets.Xor
@@ -16,7 +15,7 @@ structure Inputs (F : Type) where
   y: U64 F
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var U64 (F p))  := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
   let z ← witness fun env _ =>
     let z0 := (env x.x0).val ^^^ (env y.x0).val
@@ -47,7 +46,7 @@ def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs U64 where
+instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main := main
   localLength _ := 8
   output _ i0 := varFromOffset U64 i0
@@ -79,7 +78,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, xor_mul_two_pow]
   ac_rfl
 
-theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env input_var input h_input h_as h_holds
 
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
@@ -103,7 +102,7 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
-theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env input_var _hint h_env input h_input as
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
@@ -113,7 +112,7 @@ theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := b
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
   simp_all [xor_val]
 
-def circuit : FormalCircuit (F p) ProverHint Inputs U64 where
+def circuit : FormalCircuit (F p) Inputs U64 where
   Assumptions
   Spec
   soundness

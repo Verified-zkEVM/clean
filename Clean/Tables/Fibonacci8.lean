@@ -31,10 +31,10 @@ instance : ProvableType RowType where
 /--
   inductive contraints that are applied every two rows of the trace.
 -/
-def fibRelation : TwoRowsConstraint RowType (F p) Unit := do
+def fibRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
-  let next_x ← (copyToVar curr.y : Circuit (F p) Unit _)
-  let next_y ← (Gadgets.Addition8.circuit { x := curr.x, y := curr.y } : Circuit (F p) Unit _)
+  let next_x ← copyToVar curr.y
+  let next_y ← Gadgets.Addition8.circuit { x := curr.x, y := curr.y }
   assignVar (.next 0) next_x
   assign (.next 1) next_y
 
@@ -42,10 +42,10 @@ def fibRelation : TwoRowsConstraint RowType (F p) Unit := do
   boundary constraints that are applied at the beginning of the trace.
   This is our "base case" for the Fibonacci sequence.
 -/
-def boundaryFib : SingleRowConstraint RowType (F p) Unit :=
+def boundaryFib : SingleRowConstraint RowType (F p) :=
   assignCurrRow { x := 0, y := 1 }
 
-def fibTable : List (TableOperation RowType (F p) Unit) := [
+def fibTable : List (TableOperation RowType (F p)) := [
   boundary (.fromStart 0) boundaryFib,
   everyRowExceptLast fibRelation,
 ]
@@ -94,7 +94,7 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)
   rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
   trivial
 
-def formalFibTable : FormalTable (F p) Unit RowType := {
+def formalFibTable : FormalTable (F p) RowType := {
   constraints := fibTable
   Spec
 

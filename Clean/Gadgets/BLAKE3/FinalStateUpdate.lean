@@ -6,7 +6,6 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.FinalStateUpdate
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
-variable {ProverHint : Type}
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Specs.BLAKE3 (finalStateUpdate)
@@ -16,7 +15,7 @@ structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var BLAKE3State (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, chaining_value } := input
 
   -- XOR first 8 words with last 8 words
@@ -43,7 +42,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var BLAKE3State 
 
 -- #eval main (p:=p_babybear) default |>.local_length
 -- #eval main (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs BLAKE3State where
+instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 64
   output inputs i0 := #v[
@@ -76,7 +75,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, chaining_value } := input
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
@@ -119,7 +118,7 @@ theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
     Fin.val_succ, List.getElem_cons_succ, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13,
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
-theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]
 
   obtain ⟨h_input_state, h_input_cv⟩ := h_input
@@ -139,7 +138,7 @@ theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := b
     ⟨chaining_value_norm 4, state_norm 12⟩, ⟨chaining_value_norm 5, state_norm 13⟩,
     ⟨chaining_value_norm 6, state_norm 14⟩, chaining_value_norm 7, state_norm 15⟩
 
-def circuit : FormalCircuit (F p) ProverHint Inputs BLAKE3State := {
+def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 

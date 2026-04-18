@@ -16,7 +16,7 @@ structure Row (F : Type) where
   y: U32 F
 deriving ProvableStruct
 
-def table : InductiveTable (F p) Unit Row unit where
+def table : InductiveTable (F p) Row unit where
   step row _ := do
     let z ← Addition32.circuit { x := row.x, y := row.y }
     return { x := row.y, y := z }

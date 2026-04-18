@@ -38,17 +38,17 @@ instance : ToJson (CellAssignment W S) where
       ("vars", Json.arr vars),
     ]
 
-instance {ProverHint : Type} : ToJson (TableContext W S F ProverHint) where
+instance : ToJson (TableContext W S F) where
   toJson ctx := Json.mkObj [
     ("inputSize", toJson ctx.inputSize),
     ("circuit", toJson ctx.circuit),
     ("assignment", toJson ctx.assignment)
   ]
 
-instance {ProverHint : Type} : ToJson (TableConstraint W S F ProverHint α) where
+instance : ToJson (TableConstraint W S F α) where
   toJson table := toJson (table .empty).2
 
-instance {ProverHint : Type} : ToJson (TableOperation S F ProverHint) where
+instance : ToJson (TableOperation S F) where
   toJson
     | .boundary i c => Json.mkObj [
       ("type", Json.str "Boundary"),

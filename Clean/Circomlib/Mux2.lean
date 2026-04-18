@@ -7,7 +7,6 @@ import Clean.Gadgets.Boolean
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
-variable {ProverHint : Type}
 
 /-
 Original source code:
@@ -45,7 +44,7 @@ template MultiMux2(n) {
 }
 -/
 def main (n : ℕ) (input : Var (Inputs n) (F p)) :
-    Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
+    Circuit (F p) (Vector (Expression (F p)) n) := do
   let { c, s } := input
 
   let s10 <== s[1] * s[0]
@@ -60,7 +59,7 @@ def main (n : ℕ) (input : Var (Inputs n) (F p)) :
 
   return out
 
-def circuit (n : ℕ) : FormalCircuit (F p) ProverHint (Inputs n) (fields n) where
+def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n + 1
@@ -160,14 +159,14 @@ template Mux2() {
     mux.out[0] ==> out;
 }
 -/
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let { c, s } := input
 
   -- Call MultiMux2 with n=1
   let mux_out ← MultiMux2.circuit 1 { c := #v[c], s }
   return mux_out[0]
 
-def circuit : FormalCircuit (F p) ProverHint Inputs field where
+def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
   localLength _ := 2

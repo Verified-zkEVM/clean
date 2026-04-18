@@ -21,6 +21,12 @@ export Expression (var)
 def ProverData (F : Type) :=
   String → (n : ℕ) → Array (Vector F n)
 
+/-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
+distinct to emphasize that hints are *not* committed: they feed only the
+witness-generation step and never appear in the proof. -/
+def ProverHint (F : Type) :=
+  String → (n : ℕ) → Array (Vector F n)
+
 /--
   `Environment` represents the data that is provided at proving time to concretely
   instantiate a circuit.

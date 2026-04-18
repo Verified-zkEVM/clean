@@ -143,7 +143,6 @@ theorem val_of_IsBool {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : IsBool
 
 section BinaryOps
 variable {p : ℕ} [Fact p.Prime]
-variable {ProverHint : Type}
 
 /-- For boolean field elements, XOR operation matches bitwise XOR of values -/
 theorem xor_eq_val_xor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
@@ -186,8 +185,8 @@ inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
-def witness {ProverHint : Type} (compute : Environment (F p) → ProverHint → F p) :
-    Circuit (F p) ProverHint (Boolean (F p)) := do
+def witness (compute : Environment (F p) → ProverHint (F p) → F p) :
+    Circuit (F p) (Boolean (F p)) := do
   let x ← witnessVar compute
   assertZero (var x * (var x - 1))
   return Boolean.mk x
@@ -201,7 +200,7 @@ instance : Coe (Boolean (F p)) (Expression (F p)) where
 Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 -/
 @[circuit_norm]
-def assertBool {ProverHint : Type} : FormalAssertion (F p) ProverHint field where
+def assertBool : FormalAssertion (F p) field where
   main (x : Expression (F p)) := assertZero (x * (x - 1))
   Assumptions _ := True
   Spec (x : F p) := IsBool x

@@ -5,7 +5,6 @@ import Clean.Gadgets.Addition8.Theorems
 
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-variable {ProverHint : Type}
 
 open ByteUtils (mod256 floorDiv256)
 
@@ -20,7 +19,7 @@ structure Outputs (F : Type) where
   carryOut: F
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var Outputs (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
 
   -- witness the result
@@ -48,7 +47,7 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
-def circuit : FormalCircuit (F p) ProverHint Inputs Outputs where
+def circuit : FormalCircuit (F p) Inputs Outputs where
   main
   Assumptions
   Spec
@@ -122,11 +121,11 @@ def circuit : FormalCircuit (F p) ProverHint Inputs Outputs where
 
     exact ⟨completeness1, completeness2, completeness3⟩
 
-def lookupCircuit : LookupCircuit (F p) ProverHint Inputs Outputs := {
+def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   circuit with
   name := "Addition8FullCarry"
 
-  computableWitnesses n input := by
+  computableWitnesses hint n input := by
     simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
       Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }

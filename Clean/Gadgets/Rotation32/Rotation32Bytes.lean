@@ -4,13 +4,12 @@ import Clean.Utils.Primes
 
 namespace Gadgets.Rotation32Bytes
 variable {p : ℕ} [Fact p.Prime]
-variable {ProverHint : Type}
 
 /--
   Rotate the 32-bit integer by increments of 8 positions
   This gadget does not introduce constraints
 -/
-def main (offset : Fin 4) (input : Var U32 (F p)) : Circuit (F p) ProverHint (Var U32 (F p)) := do
+def main (offset : Fin 4) (input : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let ⟨x0, x1, x2, x3⟩ := input
 
   if offset = 0 then
@@ -27,7 +26,7 @@ def Assumptions (input : U32 (F p)) := input.Normalized
 def Spec (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value (offset.val * 8) ∧ y.Normalized
 
-instance elaborated (off : Fin 4): ElaboratedCircuit (F p) ProverHint U32 U32 where
+instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   main := main off
   localLength _ := 0
   output input i0 :=
@@ -51,7 +50,7 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) ProverHint U32 U32 wh
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 4) : Soundness (F p) ProverHint (elaborated off) Assumptions (Spec off) := by
+theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs as h
 
   simp only [explicit_provable_type, toVars, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
@@ -67,14 +66,14 @@ theorem soundness (off : Fin 4) : Soundness (F p) ProverHint (elaborated off) As
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
 
-theorem completeness (off : Fin 4) : Completeness (F p) ProverHint (elaborated off) Assumptions := by
+theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ _hint henv ⟨ x0, x1, x2, x3 ⟩ _
   fin_cases off
   repeat
     intro Assumptions
     simp [main, circuit_norm]
 
-def circuit (off : Fin 4) : FormalCircuit (F p) ProverHint U32 U32 := {
+def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 := {
   elaborated off with
   main := main off
   Assumptions

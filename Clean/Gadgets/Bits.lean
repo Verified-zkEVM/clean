@@ -6,9 +6,8 @@ import Clean.Utils.Tactics
 namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
-variable {ProverHint : Type}
 
-def main (n : ℕ) (x : Expression (F p)) : Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
+def main (n : ℕ) (x : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) n) := do
   -- witness the bits of `x`
   let bits ← witnessVector n fun env _ => fieldToBits n (x.eval env)
 
@@ -21,7 +20,7 @@ def main (n : ℕ) (x : Expression (F p)) : Circuit (F p) ProverHint (Vector (Ex
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
-def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) ProverHint field (fields n) where
+def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
@@ -71,7 +70,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) ProverHint fiel
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
-def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) ProverHint field where
+def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   main x := do
     -- we wrap the toBits circuit but ignore the output
     let _ ← toBits n hn x

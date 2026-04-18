@@ -10,7 +10,6 @@ https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
-variable {ProverHint : Type}
 
 namespace IsZero
 /-
@@ -26,7 +25,7 @@ template IsZero() {
     in*out === 0;
 }
 -/
-def main (input : Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
+def main (input : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
   let inv ← witness fun env _ =>
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
@@ -35,7 +34,7 @@ def main (input : Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)
   input * out === 0
   return out
 
-def circuit : FormalCircuit (F p) ProverHint field field where
+def circuit : FormalCircuit (F p) field field where
   main
   localLength _ := 2
 
@@ -81,12 +80,12 @@ template IsEqual() {
     isz.out ==> out;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
+def main (input : Expression (F p) × Expression (F p)) : Circuit (F p) (Expression (F p)) := do
   let diff := input.1 - input.2
   let out ← IsZero.circuit diff
   return out
 
-def circuit : FormalCircuit (F p) ProverHint fieldPair field where
+def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 2
 
@@ -142,12 +141,12 @@ structure Inputs (F : Type) where
   inp : fieldPair F
 deriving ProvableStruct
 
-def main (inputs : Var Inputs (F p)) : Circuit (F p) ProverHint Unit := do
+def main (inputs : Var Inputs (F p)) : Circuit (F p) Unit := do
   let { enabled, inp } := inputs
   let isz ← IsZero.circuit (inp.2 - inp.1)
   enabled * (1 - isz) === 0
 
-def circuit : FormalAssertion (F p) ProverHint Inputs where
+def circuit : FormalAssertion (F p) Inputs where
   main
   localLength _ := 2
 
@@ -213,13 +212,13 @@ template LessThan(n) {
 }
 -/
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) :
-    Circuit (F p) ProverHint (Expression (F p)) := do
+    Circuit (F p) (Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
   let bits ← Num2Bits.circuit (n + 1) hn diff
   let out <== 1 - bits[n]
   return out
 
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) ProverHint fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
   localLength _ := n + 2
   localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
@@ -417,7 +416,7 @@ template LessEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) ProverHint fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (x, y + 1)
 
@@ -488,7 +487,7 @@ template GreaterThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) ProverHint fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x)
 
@@ -528,7 +527,7 @@ template GreaterEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) ProverHint fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x + 1)
 

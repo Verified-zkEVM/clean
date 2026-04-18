@@ -18,7 +18,6 @@ open Specs.BLAKE3
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large: Fact (p > 2^32)]
-variable {ProverHint : Type}
 -- Add the additional constraint needed by Compress
 instance : Fact (p > 2^16 + 2^8) := .mk (by
   cases p_large
@@ -64,12 +63,12 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
 
 namespace BLAKE3ProcessBlocksStateNormalized
 
-def main (x : Var ProcessBlocksState (F p)) : Circuit (F p) ProverHint Unit := do
+def main (x : Var ProcessBlocksState (F p)) : Circuit (F p) Unit := do
   Circuit.forEach x.chaining_value U32.AssertNormalized.circuit
   U32.AssertNormalized.circuit x.chunk_counter
   U32.AssertNormalized.circuit x.blocks_compressed
 
-def circuit : FormalAssertion (F p) ProverHint ProcessBlocksState where
+def circuit : FormalAssertion (F p) ProcessBlocksState where
   main
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
@@ -116,11 +115,11 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
 -- A circuit that asserts `BlockInput.Normalized`
 namespace BLAKE3BlockInputNormalized
 
-def main (x : Var BlockInput (F p)) : Circuit (F p) ProverHint Unit := do
+def main (x : Var BlockInput (F p)) : Circuit (F p) Unit := do
   assertBool x.block_exists
   Circuit.forEach x.block_data U32.AssertNormalized.circuit
 
-def circuit : FormalAssertion (F p) ProverHint BlockInput where
+def circuit : FormalAssertion (F p) BlockInput where
   main
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
@@ -152,7 +151,7 @@ attribute [local circuit_norm] eval_vector_takeShort Vector.map_takeShort
 The step function that processes one block or passes through the state.
 -/
 def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
-    Circuit (F p) ProverHint (Var ProcessBlocksState (F p)) := do
+    Circuit (F p) (Var ProcessBlocksState (F p)) := do
 
   BLAKE3ProcessBlocksStateNormalized.circuit state -- redundant except in the first step
   BLAKE3BlockInputNormalized.circuit input
@@ -227,13 +226,13 @@ private lemma step_process_block (env : Environment (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
     (h_x : x.block_exists = 1)
-    (h_holds : Circuit.ConstraintsHold.Soundness env ((step (ProverHint := ProverHint) acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
+    (h_holds : Circuit.ConstraintsHold.Soundness env ((step  acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
     (acc_normalized : acc.Normalized)
     (x_normalized : x.Normalized)
     (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :
-    (eval env ((step (ProverHint := ProverHint) acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
+    (eval env ((step  acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
-    (eval env ((step (ProverHint := ProverHint) acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
+    (eval env ((step  acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
   simp only [step, circuit_norm, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
     Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at ⊢ h_holds
@@ -290,7 +289,7 @@ private lemma step_process_block (env : Environment (F p))
       convert h_compress_normalized ⟨ i, by omega ⟩
     · simp_all
 
-lemma soundness : InductiveTable.Soundness (F p) ProverHint ProcessBlocksState BlockInput Spec step := by
+lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro _ _ env acc_var x_var acc x _ _ h_eval h_holds spec_previous inputs_short
   simp only [circuit_norm] at inputs_short
   specialize spec_previous (by omega)
@@ -335,7 +334,7 @@ def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) (_ : Prove
 def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : ProverData (F p)) :=
   input.Normalized ∧ i < 2^32
 
-lemma completeness : InductiveTable.Completeness (F p) ProverHint ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
+lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
     intro _ _ _ _ _ _ _ _ _ h_eval h_witnesses h_assumptions hint
     specialize h_witnesses hint
@@ -409,7 +408,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProverHint ProcessBlocksS
 /--
 The InductiveTable for processBlocks.
 -/
-def table : InductiveTable (F p) ProverHint ProcessBlocksState BlockInput where
+def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   step
   Spec
   InitialStateAssumptions initialState _ := initialState.Normalized

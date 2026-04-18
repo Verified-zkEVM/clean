@@ -7,7 +7,7 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 namespace Gadgets.Conditional
 
 section
-variable {F : Type} [Field F] {ProverHint : Type}
+variable {F : Type} [Field F] 
 variable {M : TypeMap} [ProvableType M]
 
 open ProvableType
@@ -22,7 +22,7 @@ structure Inputs (M : TypeMap) (F : Type) where
   ifFalse : M F
 deriving ProvableStruct
 
-def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F ProverHint (Var M F) := do
+def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { selector, ifTrue, ifFalse } := input
 
   -- Inline element-wise scalar multiplication / addition
@@ -57,14 +57,14 @@ Specification: Output is selected based on selector value using if-then-else.
 def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
   output = if input.selector = 1 then input.ifTrue else input.ifFalse
 
-instance elaborated [DecidableEq F] : ElaboratedCircuit F ProverHint (Inputs M) M where
+instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
   main
   localLength _ := 0
   output
   | { selector, ifTrue, ifFalse }, _ => output selector ifTrue ifFalse
 
 theorem soundness [DecidableEq F] :
-    Soundness F ProverHint (elaborated (F:=F) (M:=M) (ProverHint:=ProverHint)) Assumptions Spec := by
+    Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
   circuit_proof_start [output]
   rcases input
   simp only [Inputs.mk.injEq] at h_input
@@ -92,14 +92,14 @@ theorem soundness [DecidableEq F] :
     ring_nf
 
 theorem completeness [DecidableEq F] :
-    Completeness F ProverHint (elaborated (F:=F) (M:=M) (ProverHint:=ProverHint)) Assumptions := by
+    Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by
   circuit_proof_start
 
 /--
 Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
 -/
 @[circuit_norm]
-def circuit [DecidableEq F] : FormalCircuit F ProverHint (Inputs M) M where
+def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
   elaborated := elaborated
   Assumptions
   Spec
@@ -111,7 +111,7 @@ Conditional selection.
 -/
 @[circuit_norm]
 def ifElse [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M]
-  (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F ProverHint (M (Expression F)) :=
+  (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F (M (Expression F)) :=
   circuit { selector, ifTrue, ifFalse }
 
 omit [Field F] in

@@ -6,7 +6,6 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.Compress
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
-variable {ProverHint : Type}
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Specs.BLAKE3 (compress)
@@ -14,21 +13,21 @@ open Specs.BLAKE3 (compress)
 /--
 Main circuit that chains ApplyRounds and FinalStateUpdate.
 -/
-def main (input : Var ApplyRounds.Inputs (F p)) : Circuit (F p) ProverHint (Var BLAKE3State (F p)) := do
+def main (input : Var ApplyRounds.Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   -- First apply the 7 rounds
   let state ← ApplyRounds.circuit input
   -- Then apply final state update
   FinalStateUpdate.circuit ⟨state, input.chaining_value⟩
 
-instance elaborated : ElaboratedCircuit (F p) ProverHint ApplyRounds.Inputs BLAKE3State where
+instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State where
   main
-  localLength input := (ApplyRounds.circuit (ProverHint := ProverHint)).localLength input
-    + (FinalStateUpdate.circuit (ProverHint := ProverHint)).localLength ⟨default, input.chaining_value⟩
+  localLength input := (ApplyRounds.circuit ).localLength input
+    + (FinalStateUpdate.circuit ).localLength ⟨default, input.chaining_value⟩
   output := fun input offset =>
-    let applyRounds_out := (ApplyRounds.circuit (ProverHint := ProverHint)).output input offset
-    (FinalStateUpdate.circuit (ProverHint := ProverHint)).output
+    let applyRounds_out := (ApplyRounds.circuit ).output input offset
+    (FinalStateUpdate.circuit ).output
       ⟨applyRounds_out, input.chaining_value⟩
-      (offset + (ApplyRounds.circuit (ProverHint := ProverHint)).localLength input)
+      (offset + (ApplyRounds.circuit ).localLength input)
   output_eq := by
     intro input offset
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
@@ -46,25 +45,25 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
     flags.value ∧
   output.Normalized
 
-theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   simp_all only [circuit_norm, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
 lemma ApplyRounds.circuit_assumptions_is :
-  (ApplyRounds.circuit (p := p) (ProverHint := ProverHint)).Assumptions = ApplyRounds.Assumptions := rfl
+  (ApplyRounds.circuit (p := p) ).Assumptions = ApplyRounds.Assumptions := rfl
 
 lemma ApplyRounds.circuit_spec_is :
-  (ApplyRounds.circuit (p := p) (ProverHint := ProverHint)).Spec = ApplyRounds.Spec := rfl
+  (ApplyRounds.circuit (p := p) ).Spec = ApplyRounds.Spec := rfl
 
-theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
   simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRounds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
-def circuit : FormalCircuit (F p) ProverHint ApplyRounds.Inputs BLAKE3State := {
+def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 

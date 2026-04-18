@@ -6,7 +6,6 @@ import Clean.Gadgets.Boolean
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime]
-variable {ProverHint : Type}
 
 -- Define a 2D vector type for BinSub inputs
 -- Represents 2 operands, each with n bits
@@ -237,7 +236,7 @@ template BinSub(n) {
 -/
 -- n: number of bits per operand
 def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) :
-    Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
+    Circuit (F p) (Vector (Expression (F p)) n) := do
   -- Calculate input linear sum: lin = 2^n + in[0] - in[1]
   let lin := Fin.foldl n (fun lin i =>
       let e2 : Expression (F p) := (2^i.val : F p)
@@ -274,7 +273,7 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) :
 
 -- n: number of bits per operand
 def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
-  FormalCircuit (F p) ProverHint (BinSubInput n) (fields n) where
+  FormalCircuit (F p) (BinSubInput n) (fields n) where
   main input := main n input
 
   localLength _ := n+1

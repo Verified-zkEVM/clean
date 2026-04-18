@@ -7,7 +7,6 @@ import Clean.Gadgets.Equality
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
-variable {ProverHint : Type}
 
 /--
   A 64-bit unsigned integer is represented using eight limbs of 8 bits each.
@@ -188,7 +187,7 @@ open Gadgets (ByteTable)
   Assert that a 64-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-def main (inputs : Var U64 (F p)) : Circuit (F p) ProverHint Unit  := do
+def main (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
   lookup ByteTable x0
   lookup ByteTable x1
@@ -199,7 +198,7 @@ def main (inputs : Var U64 (F p)) : Circuit (F p) ProverHint Unit  := do
   lookup ByteTable x6
   lookup ByteTable x7
 
-def circuit : FormalAssertion (F p) ProverHint U64 where
+def circuit : FormalAssertion (F p) U64 where
   main
 
   Assumptions _ := True
@@ -220,8 +219,8 @@ end U64.AssertNormalized
 /--
   Witness a 64-bit unsigned integer.
 -/
-def U64.witness {ProverHint : Type} (compute : Environment (F p) → ProverHint → U64 (F p)) :
-    Circuit (F p) ProverHint (Var U64 (F p)) := do
+def U64.witness (compute : Environment (F p) → ProverHint (F p) → U64 (F p)) :
+    Circuit (F p) (Var U64 (F p)) := do
   let x ← ProvableType.witness compute
   U64.AssertNormalized.circuit x
   return x

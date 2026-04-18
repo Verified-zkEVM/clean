@@ -7,7 +7,6 @@ import Clean.Gadgets.Boolean
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
-variable {ProverHint : Type}
 
 /-
 Original source code:
@@ -32,7 +31,7 @@ template MultiMux1(n) {
 }
 -/
 def main (n : ℕ) (input : Var (Inputs n) (F p)) :
-    Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
+    Circuit (F p) (Vector (Expression (F p)) n) := do
   let { c, s } := input
 
   -- Witness and constrain output vector
@@ -59,7 +58,7 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
 
 -- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
 
-def circuit (n : ℕ) : FormalCircuit (F p) ProverHint (Inputs n) (fields n) where
+def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n
@@ -152,14 +151,14 @@ template Mux1() {
     mux.out[0] ==> out;
 }
 -/
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Expression (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let { c, s } := input
 
   -- Call MultiMux1 with n=1
   let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
   return mux_out[0]
 
-def circuit : FormalCircuit (F p) ProverHint Inputs field where
+def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
   localLength _ := 1

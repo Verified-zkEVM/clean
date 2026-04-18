@@ -3,7 +3,7 @@ import Clean.Gadgets.Addition8.Addition8
 import Clean.Gadgets.Addition32.Addition32Full
 
 section
-def circuit : Circuit (F pBabybear) Unit (Expression (F pBabybear)) := do
+def circuit : Circuit (F pBabybear) (Expression (F pBabybear)) := do
   let x ← witnessField (F := F pBabybear) fun _ _ => 246
   let y ← witnessField fun _ _ => 20
   let z ← Gadgets.Addition8.circuit.main { x, y }

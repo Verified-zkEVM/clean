@@ -8,7 +8,6 @@ open Specs.Keccak256
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
-variable {ProverHint : Type}
 
 -- definitions
 
@@ -71,7 +70,7 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 
 -- circuits
 
-def KeccakBlock.normalized : FormalAssertion (F p) ProverHint KeccakBlock where
+def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
   main block := .forEach block (assertion U64.AssertNormalized.circuit)
   Assumptions _ := True
   Spec block := block.Normalized

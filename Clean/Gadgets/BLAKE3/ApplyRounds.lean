@@ -9,7 +9,6 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
-variable {ProverHint : Type}
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Specs.BLAKE3 (applyRounds iv round permute)
@@ -28,19 +27,19 @@ The spec follows the pattern from the applyRounds function:
 - Apply round to get new state
 - Permute the message
 -/
-def roundWithPermute : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs where
+def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   main := fun input => do
-    let state ← subcircuit (ProverHint := ProverHint) Round.circuit input
-    let permuted_message ← subcircuit (ProverHint := ProverHint) Permute.circuit input.message
+    let state ← subcircuit  Round.circuit input
+    let permuted_message ← subcircuit  Permute.circuit input.message
     return ⟨state, permuted_message⟩
-  localLength := fun _ => Round.circuit (ProverHint := ProverHint).localLength _ + Permute.circuit (ProverHint := ProverHint).localLength _
+  localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
   localLength_eq := by
     intro input offset
     simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
     rfl
   output := fun input offset =>
-    let state_out : BLAKE3State (Expression (F p)) := Round.circuit (ProverHint := ProverHint).output input offset
-    let msg_out := Permute.circuit (ProverHint := ProverHint).output input.message (offset + Round.circuit (ProverHint := ProverHint).localLength input)
+    let state_out : BLAKE3State (Expression (F p)) := Round.circuit.output input offset
+    let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
     ⟨state_out, msg_out⟩
   output_eq := by
     intro input offset
@@ -104,7 +103,7 @@ def roundWithPermute : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs 
 Combines two roundWithPermute operations using the concat combinator.
 This performs two rounds with message permutation between them.
 -/
-def twoRoundsWithPermute : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs :=
+def twoRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   roundWithPermute.concat roundWithPermute (by
     -- Prove compatibility: for all inputs, if circuit1 assumptions and spec hold,
     -- then circuit2 assumptions hold
@@ -140,7 +139,7 @@ def TwoRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : P
 /--
 Two rounds with permute, but with a spec matching the applyRounds pattern.
 -/
-def twoRoundsApplyStyle : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs :=
+def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   twoRoundsWithPermute.weakenSpec TwoRoundsSpec (by
     -- Prove that twoRoundsWithPermute's spec implies our TwoRoundsSpec
     intro input output h_assumptions h_spec
@@ -158,7 +157,7 @@ def twoRoundsApplyStyle : FormalCircuit (F p) ProverHint Round.Inputs Round.Inpu
 Combines four rounds with permutation using two twoRoundsWithPermute operations.
 This performs four rounds with message permutation between them.
 -/
-def fourRoundsWithPermute : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs :=
+def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   twoRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if first twoRoundsWithPermute assumptions and spec hold,
     -- then second twoRoundsWithPermute assumptions hold
@@ -204,7 +203,7 @@ def FourRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : 
 /--
 Four rounds with permute, but with a spec matching the applyRounds pattern.
 -/
-def fourRoundsApplyStyle : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs :=
+def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   fourRoundsWithPermute.weakenSpec FourRoundsSpec (by
     -- Prove that fourRoundsWithPermute's spec implies our FourRoundsSpec
     intro input output h_assumptions h_spec
@@ -227,7 +226,7 @@ def fourRoundsApplyStyle : FormalCircuit (F p) ProverHint Round.Inputs Round.Inp
 Combines six rounds with permutation using fourRoundsWithPermute and twoRoundsWithPermute.
 This performs six rounds with message permutation between them.
 -/
-def sixRoundsWithPermute : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs :=
+def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   fourRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if fourRoundsWithPermute assumptions and spec hold,
     -- then twoRoundsWithPermute assumptions hold
@@ -276,7 +275,7 @@ def SixRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : P
 /--
 Six rounds with permute, but with a spec matching the applyRounds pattern.
 -/
-def sixRoundsApplyStyle : FormalCircuit (F p) ProverHint Round.Inputs Round.Inputs :=
+def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   sixRoundsWithPermute.weakenSpec SixRoundsSpec (by
     -- Prove that sixRoundsWithPermute's spec implies our SixRoundsSpec
     intro input output h_assumptions h_spec
@@ -303,7 +302,7 @@ def sixRoundsApplyStyle : FormalCircuit (F p) ProverHint Round.Inputs Round.Inpu
 Seven rounds with permutation: combines sixRoundsApplyStyle with a final round.
 This represents the complete 7-round BLAKE3 compression function.
 -/
-def sevenRoundsFinal : FormalCircuit (F p) ProverHint Round.Inputs BLAKE3State :=
+def sevenRoundsFinal : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sixRoundsApplyStyle.concat Round.circuit (by
     -- Prove compatibility: sixRoundsApplyStyle output satisfies Round.circuit assumptions
     intro input mid h_assumptions h_spec
@@ -345,7 +344,7 @@ def SevenRoundsSpec (input : Round.Inputs (F p)) (output : BLAKE3State (F p)) : 
 /--
 Seven rounds with spec matching the applyRounds pattern.
 -/
-def sevenRoundsApplyStyle : FormalCircuit (F p) ProverHint Round.Inputs BLAKE3State :=
+def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sevenRoundsFinal.weakenSpec SevenRoundsSpec (by
     -- Prove that sevenRoundsFinal's spec implies our SevenRoundsSpec
     rintro input output h_assumptions ⟨mid, h_spec1, h_spec2⟩
@@ -422,14 +421,14 @@ def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p)
     counter_low, counter_high, block_len, flags
   ]
 
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var BLAKE3State (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let state := initializeStateVector input
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
 
 -- #eval! main (p:=pBabybear) default |>.localLength
 -- #eval! main (p:=pBabybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs BLAKE3State where
+instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 5376
   localLength_eq input i0 := by
@@ -495,7 +494,7 @@ lemma initial_state_and_messages_are_normalized
     intro i
     exact h_normalized.2.1 i
 
-theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
 
   -- Equations for counter values
@@ -553,7 +552,7 @@ theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   · -- Show out.Normalized
     exact h_normalized
 
-theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
 
   -- Use the helper lemma to prove normalization
@@ -565,7 +564,7 @@ theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := b
 
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
-def circuit : FormalCircuit (F p) ProverHint Inputs BLAKE3State := {
+def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 

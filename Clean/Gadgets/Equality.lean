@@ -4,37 +4,37 @@ and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
 import Clean.Circuit.Loops
 
-variable {F : Type} [Field F] {ProverHint : Type}
+variable {F : Type} [Field F] 
 open Circuit (ConstraintsHold)
 
 namespace Gadgets
-def allZero {n} (xs : Vector (Expression F) n) : Circuit F ProverHint Unit := .forEach xs assertZero
+def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
 theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    ConstraintsHold.Soundness env ((allZero (ProverHint := ProverHint) xs).operations offset) →
+    ConstraintsHold.Soundness env ((allZero  xs).operations offset) →
     ∀ x ∈ xs, x.eval env = 0 := by
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
-theorem allZero.completeness {offset : ℕ} {env : Environment F} {hint : ProverHint}
+theorem allZero.completeness {offset : ℕ} {env : Environment F} {hint : ProverHint F}
     {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) →
-    ConstraintsHold.Completeness env hint ((allZero (ProverHint := ProverHint) xs).operations offset) := by
+    ConstraintsHold.Completeness env hint ((allZero  xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality
-def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circuit F ProverHint Unit := do
+def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circuit F Unit := do
   let (x, y) := input
   let diffs := (toVars x).zip (toVars y) |>.map (fun (xi, yi) => xi - yi)
   .forEach diffs assertZero
 
 @[reducible]
 instance elaborated (α : TypeMap) [ProvableType α] :
-    ElaboratedCircuit F ProverHint (ProvablePair α α) unit where
+    ElaboratedCircuit F (ProvablePair α α) unit where
   main
   localLength _ := 0
   output _ _ := ()
@@ -43,7 +43,7 @@ instance elaborated (α : TypeMap) [ProvableType α] :
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
 @[simps! (attr := circuit_norm) (config := {isSimp := false})]
-def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F ProverHint (ProvablePair α α) where
+def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
   Assumptions _ := True
 
   Spec : α F × α F → Prop
@@ -97,26 +97,26 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F ProverHint (Pro
 -- allow `circuit_norm` to elaborate properties of the `circuit` while keeping main/spec/assumptions opaque
 @[circuit_norm ↓]
 lemma elaborated_eq (α : TypeMap) [ProvableType α] :
-    (circuit α (F:=F) (ProverHint := ProverHint)).elaborated = elaborated α := rfl
+    (circuit α (F:=F) ).elaborated = elaborated α := rfl
 
 -- rewrite soundness/completeness directly
 
 @[circuit_norm]
 theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit (ProverHint := ProverHint) α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
+    ((circuit  α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F)
-    (x y : Var α F) (hint : ProverHint) :
-    ((circuit (ProverHint := ProverHint) α).toSubcircuit n (x, y)).Completeness env hint =
+    (x y : Var α F) (hint : ProverHint F) :
+    ((circuit  α).toSubcircuit n (x, y)).Completeness env hint =
       (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F)
-    (x y : Var α F) (hint : ProverHint) :
-    ((circuit (ProverHint := ProverHint) α).toSubcircuit n (x, y)).UsesLocalWitnesses env hint = True := by
+    (x y : Var α F) (hint : ProverHint F) :
+    ((circuit  α).toSubcircuit n (x, y)).UsesLocalWitnesses env hint = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
 
 end Equality
@@ -125,49 +125,49 @@ end Gadgets
 -- Defines a unified `===` notation for asserting equality in circuits.
 
 @[circuit_norm]
-def assertEquals {F : Type} [Field F] {ProverHint : Type} {α : TypeMap} [ProvableType α]
-    (x y : α (Expression F)) : Circuit F ProverHint Unit :=
+def assertEquals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+    (x y : α (Expression F)) : Circuit F Unit :=
   Gadgets.Equality.circuit α (x, y)
 
 @[circuit_norm, reducible]
-def Expression.assertEquals {F : Type} [Field F] {ProverHint : Type}
-    (x y : Expression F) : Circuit F ProverHint Unit :=
+def Expression.assertEquals {F : Type} [Field F] 
+    (x y : Expression F) : Circuit F Unit :=
   Gadgets.Equality.circuit id (x, y)
 
-class HasAssertEq (β : Type) (F : outParam Type) (ProverHint : Type) [Field F] where
-  assert_eq : β → β → Circuit F ProverHint Unit
+class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
+  assert_eq : β → β → Circuit F Unit
 
-instance {F : Type} [Field F] {ProverHint : Type} : HasAssertEq (Expression F) F ProverHint where
+instance {F : Type} [Field F] : HasAssertEq (Expression F) F where
   assert_eq := Expression.assertEquals
 
-instance {F : Type} [Field F] {ProverHint : Type} {α : TypeMap} [ProvableType α] :
-  HasAssertEq (α (Expression F)) F ProverHint where
-  assert_eq := @assertEquals F _ ProverHint α _
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
+  HasAssertEq (α (Expression F)) F where
+  assert_eq := @assertEquals F _ α _
 
 attribute [circuit_norm] HasAssertEq.assert_eq
 infix:50 " === " => HasAssertEq.assert_eq
 
 -- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
 
-class HasAssignEq (β : Type) (F : outParam Type) (ProverHint : Type) [Field F] where
-  assignEq : β → Circuit F ProverHint β
+class HasAssignEq (β : Type) (F : outParam Type) [Field F] where
+  assignEq : β → Circuit F β
 
-instance {F : Type} [Field F] {ProverHint : Type} : HasAssignEq (Expression F) F ProverHint where
+instance {F : Type} [Field F] : HasAssignEq (Expression F) F where
   assignEq := fun rhs => do
     let witness ← witnessField (fun env _ => rhs.eval env)
     witness === rhs
     return witness
 
-instance {F : Type} [Field F] {ProverHint : Type} {α : TypeMap} [ProvableType α] :
-  HasAssignEq (α (Expression F)) F ProverHint where
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
+  HasAssignEq (α (Expression F)) F where
   assignEq := fun rhs => do
     let witness ← ProvableType.witness (fun env _ => eval env rhs)
     witness === rhs
     return witness
 
-instance {F : Type} [Field F] {ProverHint : Type} {n : ℕ} :
-    HasAssignEq (Vector (Expression F) n) F ProverHint :=
-  inferInstanceAs (HasAssignEq (fields n (Expression F)) F ProverHint)
+instance {F : Type} [Field F] {n : ℕ} :
+    HasAssignEq (Vector (Expression F) n) F :=
+  inferInstanceAs (HasAssignEq (fields n (Expression F)) F)
 
 attribute [circuit_norm] HasAssignEq.assignEq
 

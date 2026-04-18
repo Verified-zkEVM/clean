@@ -3,7 +3,6 @@ import Clean.Gadgets.Xor.ByteXorTable
 import Clean.Utils.Primes
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
-variable {ProverHint : Type}
 
 namespace Gadgets.And.And8
 open Xor (ByteXorTable)
@@ -22,7 +21,7 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val &&& y.val
 
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (fieldVar (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
   let ⟨x, y⟩ := input
   let and ← witness fun eval _ => (eval x).val &&& (eval y).val
   -- we prove AND correct using an XOR lookup and the following identity:
@@ -72,12 +71,12 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs field where
+instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
   localLength _ := 1
   output _ i := var ⟨i⟩
 
-theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -107,7 +106,7 @@ theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
   exact two_and
 
-theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ _hint h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -135,7 +134,7 @@ theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := b
   rw [←sub_eq_add_neg, ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
-def circuit : FormalCircuit (F p) ProverHint Inputs field :=
+def circuit : FormalCircuit (F p) Inputs field :=
   { Assumptions, Spec, soundness, completeness }
 
 end Gadgets.And.And8

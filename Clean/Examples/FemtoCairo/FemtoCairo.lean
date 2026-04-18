@@ -14,7 +14,6 @@ open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.Spec
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
-variable {ProverHint : Type}
 
 /--
   Construct a table that represents a read-only memory containing all pairs (i, f(i)) for i in [0, length).
@@ -62,7 +61,7 @@ def ReadOnlyTableFromFunction
       · apply ZMod.val_injective
 }
 
-def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) ProverHint (Var DecodedInstruction (F p)) := do
+def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
   let bits ← Gadgets.toBits 8 (by linarith [p_large_enough.elim]) instruction
   return {
     instrType := {
@@ -96,7 +95,7 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) Prove
   It returns a `DecodedInstruction` struct containing the decoded fields.
   This circuit is not satisfiable if the input instruction is not correctly encoded.
 -/
-def decodeInstruction : GeneralFormalCircuit (F p) ProverHint field DecodedInstruction where
+def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := decodeInstructionMain
   localLength _ := 8
 
@@ -157,7 +156,7 @@ def decodeInstruction : GeneralFormalCircuit (F p) ProverHint field DecodedInstr
 -/
 def fetchInstruction
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
-    GeneralFormalCircuit (F p) ProverHint field RawInstruction where
+    GeneralFormalCircuit (F p) field RawInstruction where
   main := fun pc => do
     let programTable := ReadOnlyTableFromFunction program h_programSize
 
@@ -286,7 +285,7 @@ def MemoryCompletenessAssumption (env : ProverData (F p)) : Prop :=
   This circuit is not satisfiable if the memory access is out of bounds.
 -/
 def readFromMemory :
-    GeneralFormalCircuit (F p) ProverHint MemoryReadInput field where
+    GeneralFormalCircuit (F p) MemoryReadInput field where
   main := fun { state, offset, mode } => do
     /-
       read into memory for all cases of addressing mode.
@@ -464,7 +463,7 @@ def readFromMemory :
   if the claimed state transition is invalid.
   Returns the next state.
 -/
-def nextState : GeneralFormalCircuit (F p) ProverHint StateTransitionInput State where
+def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
   main := fun { state, decoded, v1, v2, v3 } => do
     let { instrType := { isAdd, isMul, isStoreState, isLoadState }, .. } := decoded
 
@@ -623,7 +622,7 @@ def nextState : GeneralFormalCircuit (F p) ProverHint StateTransitionInput State
 -/
 def femtoCairoStepElaboratedCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
-    ElaboratedCircuit (F p) ProverHint State State where
+    ElaboratedCircuit (F p) State State where
     main := fun state => do
       -- Fetch instruction
       let { rawInstrType, op1, op2, op3 } ← fetchInstruction program h_programSize state.pc
@@ -655,7 +654,7 @@ def femtoCairoStepSpec
 -/
 def femtoCairoStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (state : State (F p)) (data : ProverData (F p)) (_hint : Unit) : Prop :=
+    (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHint (F p)) : Prop :=
   ValidProgramSize p programSize ∧
   ValidProgram program ∧
   MemoryCompletenessAssumption data ∧
@@ -664,7 +663,7 @@ def femtoCairoStepAssumptions
 
 def femtoCairoStepSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    : GeneralFormalCircuit.Soundness (F p) ProverHint (femtoCairoStepElaboratedCircuit program h_programSize) (femtoCairoStepSpec program) := by
+    : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize) (femtoCairoStepSpec program) := by
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepElaboratedCircuit,
     Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory, nextState, decodeInstruction]
 
@@ -752,7 +751,7 @@ def femtoCairoStepSoundness
 
 def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
   (h_programSize : programSize < p) :
-    GeneralFormalCircuit.Completeness (F p) Unit (femtoCairoStepElaboratedCircuit program h_programSize)
+    GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize)
       (femtoCairoStepAssumptions program) := by
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepElaboratedCircuit,
     fetchInstruction, decodeInstruction, readFromMemory, nextState]
@@ -789,7 +788,7 @@ def femtoCairoStepCompleteness {programSize : ℕ} [NeZero programSize] (program
 variable {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
 variable (h_program : ValidProgramSize p programSize ∧ ValidProgram program)
 
-def femtoCairoStep : GeneralFormalCircuit (F p) Unit State State where
+def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   __ := femtoCairoStepElaboratedCircuit program h_programSize
   Assumptions := femtoCairoStepAssumptions program
   Spec := femtoCairoStepSpec program
@@ -805,7 +804,7 @@ def femtoCairoStep : GeneralFormalCircuit (F p) Unit State State where
   for `n` steps from the given initial state, using the given program memory, does not
   return `none`.
 -/
-def femtoCairoTable (n : ℕ) : InductiveTable (F p) Unit State unit where
+def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
   step state _ :=
     femtoCairoStep program h_programSize state
 

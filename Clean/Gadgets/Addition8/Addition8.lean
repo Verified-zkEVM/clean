@@ -3,13 +3,12 @@ import Clean.Gadgets.Boolean
 
 namespace Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-variable {ProverHint : Type}
 
 /--
 Compute the 8-bit addition of two numbers with a carry-in bit.
 Returns the sum.
 -/
-def Addition8Full.circuit : FormalCircuit (F p) ProverHint Addition8FullCarry.Inputs field where
+def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
   main := fun inputs => do
     let { z, .. } ← Addition8FullCarry.circuit inputs
     return z
@@ -40,7 +39,7 @@ deriving ProvableStruct
 Compute the 8-bit addition of two numbers.
 Returns the sum.
 -/
-def circuit : FormalCircuit (F p) ProverHint Inputs field where
+def circuit : FormalCircuit (F p) Inputs field where
   main := fun { x, y } =>
     Addition8Full.circuit { x, y, carryIn := 0 }
 

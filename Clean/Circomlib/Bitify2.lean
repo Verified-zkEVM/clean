@@ -16,7 +16,6 @@ due to cyclic import dependencies with AliasCheck.
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
-variable {ProverHint : Type}
 
 namespace Num2Bits_strict
 /-
@@ -34,7 +33,7 @@ template Num2Bits_strict() {
     }
 }
 -/
-def main (input : Expression (F p)) : Circuit (F p) ProverHint (Vector (Expression (F p)) 254) := do
+def main (input : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) 254) := do
   -- Convert input to 254 bits
   let bits ← Num2Bits.main 254 input
 
@@ -45,7 +44,7 @@ def main (input : Expression (F p)) : Circuit (F p) ProverHint (Vector (Expressi
 
 set_option linter.constructorNameAsVariable false
 
-def circuit : FormalCircuit (F p) ProverHint field (fields 254) where
+def circuit : FormalCircuit (F p) field (fields 254) where
   main
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
   localLength_eq := by simp +arith [circuit_norm, main,
@@ -116,7 +115,7 @@ template Bits2Num_strict() {
     b2n.out ==> out;
 }
 -/
-def main (input : Vector (Expression (F p)) 254) : Circuit (F p) ProverHint (Expression (F p)) := do
+def main (input : Vector (Expression (F p)) 254) : Circuit (F p) (Expression (F p)) := do
   -- Check that the bits represent a value less than p
   AliasCheck.circuit input
 
@@ -125,7 +124,7 @@ def main (input : Vector (Expression (F p)) 254) : Circuit (F p) ProverHint (Exp
 
 set_option linter.constructorNameAsVariable false
 
-def circuit : GeneralFormalCircuit (F p) ProverHint (fields 254) field where
+def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq := by simp +arith [circuit_norm, main,
@@ -203,7 +202,7 @@ template Num2BitsNeg(n) {
     lc1 + isZero.out * 2**n === 2**n - in;
 }
 -/
-def main (n : ℕ) (input : Expression (F p)) : Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
+def main (n : ℕ) (input : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) n) := do
   -- Witness the bits of 2^n - input (when n > 0)
   let out ← witnessVector n fun env _ =>
     fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)
@@ -221,7 +220,7 @@ def main (n : ℕ) (input : Expression (F p)) : Circuit (F p) ProverHint (Vector
 
   return out
 
-def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) ProverHint field (fields n) where
+def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]

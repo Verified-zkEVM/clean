@@ -4,7 +4,6 @@ import Clean.Utils.Tactics
 
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
-variable {ProverHint : Type}
 
 /-
 Original source code:
@@ -24,11 +23,11 @@ template RotR(n, r) {
 }
 -/
 def main (n r : ℕ) [NeZero n] (inp : Vector (Expression (F p)) n) :
-    Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
+    Circuit (F p) (Vector (Expression (F p)) n) := do
   let out <== Vector.mapFinRange n fun i => inp.get (i + Fin.ofNat n r)
   return out
 
-def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) ProverHint (fields n) (fields n) where
+def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) where
   main := main n r
 
   localLength _ := n

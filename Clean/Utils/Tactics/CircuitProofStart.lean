@@ -92,15 +92,15 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   Example usage:
   ```lean
-  theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+  theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     circuit_proof_start
     -- The assumptions in Soundness are introduced. All provable structs are decomposed when their components are mentioned
 
-  theorem soundness_with_lemmas : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+  theorem soundness_with_lemmas : Soundness (F p) elaborated Assumptions Spec := by
     circuit_proof_start [my_custom_lemma, another_lemma]
     -- Same as above but also uses my_custom_lemma and another_lemma in simplifications
 
-  theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+  theorem completeness : Completeness (F p) elaborated Assumptions := by
     circuit_proof_start
     -- The assumptions in Completeness are introduced. All provable structs are decomposed when their components are mentioned
   ```

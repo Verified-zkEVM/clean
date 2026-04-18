@@ -5,7 +5,6 @@ import Clean.Gadgets.Bits
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
-variable {ProverHint : Type}
 
 /-
 Original source code:
@@ -35,7 +34,7 @@ template Num2Bits(n) {
 }
 -/
 def main (n : ℕ) (inp : Expression (F p)) :
-    Circuit (F p) ProverHint (Vector (Expression (F p)) n) := do
+    Circuit (F p) (Vector (Expression (F p)) n) := do
   let out ← witnessVector n fun env _ => fieldToBits n (inp.eval env)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
@@ -66,7 +65,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     left
     rw [ZMod.cast_id]
 
-def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) ProverHint field (fields n) where
+def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
@@ -112,7 +111,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) ProverHint 
     rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
-def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) ProverHint field (fields n) where
+def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main input := arbitraryBitLengthCircuit n input
   localLength _ := n
   output _ i := varFromOffset (fields n) i
@@ -151,7 +150,7 @@ template Bits2Num(n) {
 }
 -/
 def main (n : ℕ) (input : Vector (Expression (F p)) n) :
-    Circuit (F p) ProverHint (Expression (F p)) := do
+    Circuit (F p) (Expression (F p)) := do
   let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
     let lc1 := lc1 + input[i] * e2
     let e2 := e2 + e2
@@ -181,7 +180,7 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 
-def circuit (n : ℕ) : FormalCircuit (F p) ProverHint (fields n) field where
+def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
   localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]

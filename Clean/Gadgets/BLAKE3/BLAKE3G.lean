@@ -7,7 +7,6 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.G
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
-variable {ProverHint : Type}
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Specs.BLAKE3 (g)
@@ -18,7 +17,7 @@ structure Inputs (F : Type) where
   y : U32 F
 deriving ProvableStruct
 
-def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var BLAKE3State (F p)) := do
+def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, x, y } := input
 
   let state_a ← Addition32.circuit ⟨state[a], ← Addition32.circuit ⟨state[b], x⟩⟩
@@ -47,7 +46,7 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) ProverHin
     |>.set c state_c
     |>.set d state_d
 
-instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) ProverHint Inputs BLAKE3State where
+instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
   localLength _ := 96
   output inputs i0 := (inputs.state : Vector (U32 (Expression (F p))) 16)
@@ -72,7 +71,7 @@ def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, x, y } := input
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
-theorem soundness (a b c d : Fin 16) : Soundness (F p) ProverHint (elaborated a b c d) Assumptions (Spec a b c d) := by
+theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
   circuit_proof_start [BLAKE3State.Normalized, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
@@ -118,7 +117,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) ProverHint (elaborated a 
       exact c9.right
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
-theorem completeness (a b c d : Fin 16) : Completeness (F p) ProverHint (elaborated a b c d) Assumptions := by
+theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_env ⊢
@@ -129,7 +128,7 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) ProverHint (elabora
   -- resolve all chains of assumptions
   simp_all only [forall_const, and_true]
 
-def circuit (a b c d : Fin 16) : FormalCircuit (F p) ProverHint Inputs BLAKE3State := {
+def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated a b c d with
   Assumptions
   Spec := Spec a b c d

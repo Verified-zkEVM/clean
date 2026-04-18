@@ -9,7 +9,7 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 2 ^ 16 + 2 ^ 8)]
 namespace Tables.KeccakInductive
 open Gadgets.Keccak256
 
-def table : InductiveTable (F p) Unit KeccakState KeccakBlock where
+def table : InductiveTable (F p) KeccakState KeccakBlock where
   step state block := do
     KeccakBlock.normalized block
     AbsorbBlock.circuit { state, block }

@@ -6,7 +6,6 @@ namespace TestCircuitProofStart
 
 open Circuit
 
-variable {ProverHint : Type}
 
 section BasicTests
 -- Simple example to test the circuit_proof_start tactic
@@ -17,9 +16,9 @@ section BasicTests
 
 -- Test that the tactic works for simple soundness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F ProverHint Input Output) (Assumptions : Input F → Prop)
+    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
-    Soundness F ProverHint circuit Assumptions Spec := by
+    Soundness F circuit Assumptions Spec := by
   circuit_proof_start
   -- At this point:
   -- - All standard soundness parameters have been introduced
@@ -29,8 +28,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test that the tactic works for simple completeness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F ProverHint Input Output) (Assumptions : Input F → Prop) :
-    Completeness F ProverHint circuit Assumptions := by
+    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :
+    Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point:
   -- - All standard completeness parameters have been introduced
@@ -40,27 +39,27 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test parametrized soundness
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F ProverHint Input Output)
+    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) (Spec : Fin 8 → Input F → Output F → Prop) :
-    Soundness F ProverHint (circuit offset) Assumptions (Spec offset) := by
+    Soundness F (circuit offset) Assumptions (Spec offset) := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
   sorry
 
 -- Test parametrized completeness
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F ProverHint Input Output)
+    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) :
-    Completeness F ProverHint (circuit offset) Assumptions := by
+    Completeness F (circuit offset) Assumptions := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
   sorry
 
 -- Test multiple parameters
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F ProverHint Input Output)
+    (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) :
-    Soundness F ProverHint (circuit n k) Assumptions (Spec n k) := by
+    Soundness F (circuit n k) Assumptions (Spec n k) := by
   circuit_proof_start
   -- n and k are introduced first, then standard parameters
   sorry
@@ -71,10 +70,10 @@ section NamePreservationTests
 -- Test that parameter names are preserved correctly
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F ProverHint Input Output)
+    (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
-    Soundness F ProverHint circuit Assumptions Spec := by
+    Soundness F circuit Assumptions Spec := by
   circuit_proof_start
   -- At this point we should have: offset, env, input_var, input, h_input, h_normalized, h_holds
   -- Check that these names exist by using them
@@ -88,9 +87,9 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F ProverHint Input Output)
-    (Assumptions : Input F → Prop) (hint : ProverHint) :
-    Completeness F ProverHint circuit Assumptions := by
+    (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Prop) (hint : ProverHint F) :
+    Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point we should have: i₀, env, input_var, h_env
   -- Note: provable_struct_simp eliminates input and h_input by substituting eval env input_var
@@ -109,7 +108,6 @@ section LocalDefinitionUnfoldingTests
 -- Using unit TypeMap for simplicity
 
 variable {p : ℕ} [Fact p.Prime]
-variable {ProverHint : Type}
 
 namespace UnfoldTest1
 -- Simple local definitions
@@ -122,10 +120,10 @@ def Assumptions (input : unit (F p)) : Prop :=
 def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
 
-def testCircuit : ElaboratedCircuit (F p) ProverHint unit unit :=
+def testCircuit : ElaboratedCircuit (F p) unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
-example : Soundness (F p) ProverHint testCircuit Assumptions Spec := by
+example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Assumptions and Spec should be unfolded to TestAssumptions and TestSpec
   -- Check that Assumptions was unfolded by pattern matching on h_assumptions
@@ -146,10 +144,10 @@ def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output ∧
   TestSpec input output
 
-def testCircuit : ElaboratedCircuit (F p) ProverHint unit unit :=
+def testCircuit : ElaboratedCircuit (F p) unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
-example : Soundness (F p) ProverHint testCircuit Assumptions Spec := by
+example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Should unfold nested references
   -- Check that Assumptions was unfolded to reveal TestAssumptions
@@ -159,16 +157,16 @@ end UnfoldTest2
 
 namespace UnfoldTest3
 -- Test that elaborated definition is unfolded
-def testCircuit : ElaboratedCircuit (F p) ProverHint unit unit :=
+def testCircuit : ElaboratedCircuit (F p) unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
-def elaborated : ElaboratedCircuit (F p) ProverHint unit unit :=
+def elaborated : ElaboratedCircuit (F p) unit unit :=
   testCircuit
 
 def TestAssumptions (_ : unit (F p)) : Prop := True
 def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
 
-example : Soundness (F p) ProverHint elaborated TestAssumptions TestSpec := by
+example : Soundness (F p) elaborated TestAssumptions TestSpec := by
   circuit_proof_start
   -- elaborated should be unfolded to testCircuit
   -- Check that h_holds now refers to testCircuit.main, not elaborated.main

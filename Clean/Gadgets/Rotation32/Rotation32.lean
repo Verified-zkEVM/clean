@@ -8,7 +8,6 @@ import Clean.Circuit.Provable
 namespace Gadgets.Rotation32
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
-variable {ProverHint : Type}
 
 instance : Fact (p > 512) := by
   constructor
@@ -19,7 +18,7 @@ open Utils.Rotation (rotRight32_composition)
 /--
   Rotate the 32-bit integer by `offset` bits
 -/
-def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) ProverHint (Var U32 (F p)) := do
+def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let byte_offset : Fin 4 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
 
@@ -38,12 +37,12 @@ def output (offset : Fin 32) (i0 : ℕ) : U32 (Expression (F p)) :=
 
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.localLength
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.output
-def elaborated (off : Fin 32) : ElaboratedCircuit (F p) ProverHint U32 U32 where
+def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   main := main off
   localLength _ := 8
   output _inputs i0 := output off i0
 
-theorem soundness (offset : Fin 32) : Soundness (F p) ProverHint (circuit := elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
   simp [circuit_norm, main, elaborated,
@@ -52,7 +51,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) ProverHint (circuit := ela
   -- abstract away intermediate U32
   let byte_offset : Fin 4 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
-  set byte_rotated := eval env ((Rotation32Bytes.elaborated (ProverHint := ProverHint) byte_offset).output (x_var : Var U32 _) i0)
+  set byte_rotated := eval env ((Rotation32Bytes.elaborated  byte_offset).output (x_var : Var U32 _) i0)
 
   simp only [Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Assumptions,
     Rotation32Bytes.Spec, Rotation32Bits.Assumptions, Rotation32Bits.Spec, add_zero] at h_holds
@@ -75,7 +74,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) ProverHint (circuit := ela
   rw [rotRight32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
   rw [hy, Nat.div_add_mod']
 
-theorem completeness (offset : Fin 32) : Completeness (F p) ProverHint (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var _hint h_env x h_eval x_normalized
 
   simp only [circuit_norm, main, elaborated,
@@ -91,7 +90,7 @@ theorem completeness (offset : Fin 32) : Completeness (F p) ProverHint (elaborat
   rw [h_eval]
   simp only [x_normalized, true_and, h_norm]
 
-def circuit (offset : Fin 32) : FormalCircuit (F p) ProverHint U32 U32 := {
+def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 := {
   elaborated offset with
   Assumptions
   Spec := Spec offset

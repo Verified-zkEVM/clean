@@ -32,7 +32,7 @@ def nextRowOff : RowType (CellOffset 2 RowType) := {
   y := ⟨.next 4, .next 5, .next 6, .next 7⟩
 }
 
-def assignU32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRowsConstraint RowType (F p) Unit := do
+def assignU32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRowsConstraint RowType (F p) := do
   assign offs.x0 x.x0
   assign offs.x1 x.x1
   assign offs.x2 x.x2
@@ -41,27 +41,27 @@ def assignU32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRowsC
 /--
   inductive contraints that are applied every two rows of the trace.
 -/
-def recursiveRelation : TwoRowsConstraint RowType (F p) Unit := do
+def recursiveRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
   let next ← TableConstraint.getNextRow
 
-  let z ← (Gadgets.Addition32.circuit { x := curr.x, y := curr.y } : Circuit (F p) Unit _)
+  let z ← (Gadgets.Addition32.circuit { x := curr.x, y := curr.y })
 
   assignU32 nextRowOff.y z
-  ((curr.y === next.x) : Circuit (F p) Unit _)
+  ((curr.y === next.x))
 
 /--
   Boundary constraints that are applied at the beginning of the trace.
 -/
-def boundary : SingleRowConstraint RowType (F p) Unit := do
+def boundary : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.getCurrRow
-  ((row.x === (const (U32.fromByte 0))) : Circuit (F p) Unit _)
-  ((row.y === (const (U32.fromByte 1))) : Circuit (F p) Unit _)
+  ((row.x === (const (U32.fromByte 0))))
+  ((row.y === (const (U32.fromByte 1))))
 
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.
 -/
-def fib32Table : List (TableOperation RowType (F p) Unit) := [
+def fib32Table : List (TableOperation RowType (F p)) := [
   .boundary (.fromStart 0) boundary,
   .everyRowExceptLast recursiveRelation,
 ]
@@ -185,7 +185,7 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
 /--
   Definition of the formal table for fibonacci32
 -/
-def formalFib32Table : FormalTable (F p) Unit RowType := {
+def formalFib32Table : FormalTable (F p) RowType := {
   constraints := fib32Table,
   Spec := Spec,
 

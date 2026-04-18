@@ -9,31 +9,31 @@ instantiate an environment which uses the circuit's witness generators.
 
 Besides that, a `name` is required, to identify the table created from this circuit.
 -/
-structure LookupCircuit (F : Type) (ProverHint : Type) [Field F] (α β : TypeMap)
+structure LookupCircuit (F : Type) [Field F] (α β : TypeMap)
     [ProvableType α] [ProvableType β]
-    extends circuit : FormalCircuit F ProverHint α β where
+    extends circuit : FormalCircuit F α β where
   computableWitnesses : circuit.ComputableWitnesses
 
 namespace LookupCircuit
-variable {F : Type} [Field F] {ProverHint : Type} {α β : TypeMap} [ProvableType α] [ProvableType β]
+variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
 
-def proverEnvironment (circuit : LookupCircuit F ProverHint α β) (hint : ProverHint)
+def proverEnvironment (circuit : LookupCircuit F α β) (hint : ProverHint F)
     (input : α F) : Environment F :=
   circuit.main (const input) |>.proverEnvironment hint
 
-theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F ProverHint α β)
-    (hint : ProverHint) (input : α F) :
+theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β)
+    (hint : ProverHint F) (input : α F) :
     (circuit.proverEnvironment hint input).UsesLocalWitnesses hint 0
       ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_usesLocalWitnesses
   apply circuit.compose_computableWitnesses
   simp [Environment.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
 
-def constantOutput (circuit : LookupCircuit F ProverHint α β) (hint : ProverHint)
+def constantOutput (circuit : LookupCircuit F α β) (hint : ProverHint F)
     (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment hint input)
 
-def toTable (circuit : LookupCircuit F ProverHint α β) (hint : ProverHint) :
+def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     Table F (ProvablePair α β) where
   name := circuit.name
 
@@ -67,8 +67,8 @@ def toTable (circuit : LookupCircuit F ProverHint α β) (hint : ProverHint) :
 -- this gives `circuit.lookup input` _exactly_ the same interface as `circuit input`.
 
 @[circuit_norm]
-def lookupCircuit (circuit : LookupCircuit F ProverHint α β) (hint : ProverHint) :
-    FormalCircuit F ProverHint α β where
+def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
+    FormalCircuit F α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
     let output ← witness fun env _ => circuit.constantOutput hint (eval env input)
@@ -94,7 +94,7 @@ def lookupCircuit (circuit : LookupCircuit F ProverHint α β) (hint : ProverHin
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
 
 @[circuit_norm]
-def lookup (circuit : LookupCircuit F ProverHint α β) (hint : ProverHint) (input : Var α F) :
-    Circuit F ProverHint (Var β F) :=
+def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) :
+    Circuit F (Var β F) :=
   lookupCircuit circuit hint input
 end LookupCircuit

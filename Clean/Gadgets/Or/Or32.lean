@@ -4,7 +4,6 @@ import Clean.Gadgets.Or.Or8
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 512)]
-variable {ProverHint : Type}
 
 namespace Gadgets.Or32
 open Gadgets.Or
@@ -14,7 +13,7 @@ structure Inputs (F : Type) where
   y : U32 F
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) : Circuit (F p) ProverHint (Var U32 (F p))  := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
 
   let z0 ← Or8.circuit ⟨x.x0, y.x0⟩
@@ -32,11 +31,11 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ||| y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) ProverHint Inputs U32 where
+instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main
   localLength _ := 4
 
-theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
   rcases input_x
@@ -60,7 +59,7 @@ theorem soundness : Soundness (F p) ProverHint elaborated Assumptions Spec := by
   ring_nf
   simp
 
-theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
   rcases input_x
   rcases input_y
@@ -70,7 +69,7 @@ theorem completeness : Completeness (F p) ProverHint elaborated Assumptions := b
   simp only [U32.Normalized] at h_assumptions
   omega
 
-def circuit : FormalCircuit (F p) ProverHint Inputs U32 :=
+def circuit : FormalCircuit (F p) Inputs U32 :=
   { Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Or32

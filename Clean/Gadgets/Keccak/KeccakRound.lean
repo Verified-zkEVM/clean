@@ -6,10 +6,9 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
-variable {ProverHint : Type}
 open Specs.Keccak256
 
-def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) ProverHint (Var KeccakState (F p)) := do
+def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let state ← Theta.circuit state
   let state ← RhoPi.circuit state
   let state ← Chi.circuit state
@@ -24,7 +23,7 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
-instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) ProverHint KeccakState KeccakState where
+instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := main rc
   localLength _ := 1288
   output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888) ).set 0 (varFromOffset U64 (i0 + 1280))
@@ -33,7 +32,7 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) ProverHint KeccakSta
   output_eq state i0 := by
     simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
 
-theorem soundness (rc : UInt64) : Soundness (F p) ProverHint (elaborated rc) Assumptions (Spec rc) := by
+theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (Spec rc) := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- simplify goal
@@ -79,7 +78,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) ProverHint (elaborated rc) Ass
   ring_nf at chi_eq chi_norm ⊢
   exact ⟨ chi_norm, chi_eq ⟩
 
-theorem completeness (rc : UInt64) : Completeness (F p) ProverHint (elaborated rc) Assumptions := by
+theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumptions := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
@@ -93,7 +92,7 @@ theorem completeness (rc : UInt64) : Completeness (F p) ProverHint (elaborated r
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
-def circuit (rc : UInt64) : FormalCircuit (F p) ProverHint KeccakState KeccakState := {
+def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated rc with
   Spec := Spec rc
   Assumptions
