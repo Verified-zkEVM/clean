@@ -25,10 +25,9 @@ def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env 
 
 def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
   let offset ← getOffset
-  witness (fun env => computeValueFromOffset α offset env)
+  witness (computeValueFromOffset α offset)
 
 theorem ProvableType.witnessAny.localWitnesses (n : ℕ) (env : Environment F) :
-    env.UsesLocalWitnessesCompleteness n
-      (ProvableType.witnessAny α |>.operations n) ↔ True := by
+    env.UsesLocalWitnessesCompleteness n (ProvableType.witnessAny α |>.operations n) ↔ True := by
   simp only [circuit_norm, getOffset, ProvableType.witnessAny, computeValueFromOffset,
     ProvableType.toElements_fromElements]

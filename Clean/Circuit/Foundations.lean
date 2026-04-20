@@ -19,8 +19,7 @@ open Circuit (ConstraintsHold)
   in the `FormalCircuit` definition.
 -/
 theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
-    ∀ (offset : ℕ) (env : VerifierEnvironment F) (b_var : Var β F) (b : β F),
-      eval env b_var = b → circuit.Assumptions b →
+    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
     ConstraintsHold env (circuit.main b_var |>.operations offset) →
     -- the spec holds
@@ -35,10 +34,8 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
   Justification for using modified statements for `UsesLocalWitnesses`
   and `ConstraintsHold` in the `FormalCircuit` definition.
 -/
-theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α)
-    :
-    ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F) (b : β F),
-      eval env b_var = b → circuit.Assumptions b →
+theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
+    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the constraints hold (original definition)
@@ -54,8 +51,7 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α)
   in the `FormalAssertion` definition.
 -/
 theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
-    ∀ (offset : ℕ) (env : VerifierEnvironment F) (b_var : Var β F) (b : β F),
-      eval env b_var = b → circuit.Assumptions b →
+    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
     ConstraintsHold env (circuit.main b_var |>.operations offset) →
     -- the spec holds
@@ -69,10 +65,8 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
   Justification for using modified statements for `UsesLocalWitnesses`
   and `ConstraintsHold` in the `FormalAssertion` definition.
 -/
-theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β)
-    :
-    ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F) (b : β F),
-      eval env b_var = b → circuit.Assumptions b →
+theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
+    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the spec implies that the constraints hold (original definition)
