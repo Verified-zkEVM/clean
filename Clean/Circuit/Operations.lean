@@ -149,15 +149,13 @@ instance {F : Type} [Field F] [Repr F] : Repr (Operation F) where
 The number of witness variables introduced by this operation.
 -/
 @[circuit_norm]
-def localLength {F : Type} [Field F] : Operation F → ℕ
+def localLength : Operation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
   | .subcircuit s => s.localLength
 
-def localWitnesses {F : Type} [Field F]
-    (env : Environment F) :
-    (op : Operation F) → Vector F op.localLength
+def localWitnesses (env : Environment F) : (op : Operation F) → Vector F op.localLength
   | .witness _ c => c env
   | .assert _ => #v[]
   | .lookup _ => #v[]
@@ -172,20 +170,17 @@ methods on operations that take a self argument.
 def Operations (F : Type) [Field F] := List (Operation F)
 
 namespace Operations
-def toList {F : Type} [Field F] :
-    Operations F → List (Operation F) := id
+def toList : Operations F → List (Operation F) := id
 
 /-- move from nested operations back to flat operations -/
-def toFlat {F : Type} [Field F] :
-    Operations F → List (FlatOperation F)
+def toFlat : Operations F → List (FlatOperation F)
   | [] => []
   | .witness m c :: ops => .witness m c :: toFlat ops
   | .assert e :: ops => .assert e :: toFlat ops
   | .lookup l :: ops => .lookup l :: toFlat ops
   | .subcircuit s :: ops => s.ops.toFlat ++ toFlat ops
 
-def toNested {F : Type} [Field F] :
-    Operations F → List (NestedOperations F)
+def toNested : Operations F → List (NestedOperations F)
   | [] => []
   | .witness m c :: ops => .single (.witness m c) :: toNested ops
   | .assert e :: ops => .single (.assert e) :: toNested ops
@@ -196,7 +191,7 @@ def toNested {F : Type} [Field F] :
 The number of witness variables introduced by these operations.
 -/
 @[circuit_norm]
-def localLength {F : Type} [Field F] : Operations F → ℕ
+def localLength : Operations F → ℕ
   | [] => 0
   | .witness m _ :: ops => m + localLength ops
   | .assert _ :: ops => localLength ops
@@ -217,7 +212,7 @@ def localWitnesses {F : Type} [Field F]
   | .subcircuit s :: ops => s.witnesses env ++ localWitnesses env ops
 
 /-- Induction principle for `Operations`. -/
-def induct {F : Type} [Field F] {motive : Operations F → Sort*}
+def induct {motive : Operations F → Sort*}
   (empty : motive [])
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
@@ -245,15 +240,13 @@ structure Condition (F : Type) [Field F] where
   subcircuit (offset : ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True
 
 @[circuit_norm]
-def Condition.apply {F : Type} [Field F]
-    (condition : Condition F) (offset : ℕ) : Operation F → Prop
+def Condition.apply (condition : Condition F) (offset : ℕ) : Operation F → Prop
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
   | .subcircuit s => condition.subcircuit offset s
 
-def Condition.implies {F : Type} [Field F]
-    (c c' : Condition F) : Condition F where
+def Condition.implies (c c' : Condition F) : Condition F where
   witness n m compute := c.witness n m compute → c'.witness n m compute
   assert offset e := c.assert offset e → c'.assert offset e
   lookup offset l := c.lookup offset l → c'.lookup offset l
@@ -265,7 +258,7 @@ Given a `Condition`, `forAll` is true iff all operations in the list satisfy the
 The function expects the initial offset as an argument.
 -/
  @[circuit_norm]
-def forAll {F : Type} [Field F] (offset : ℕ) (condition : Condition F) :
+def forAll (offset : ℕ) (condition : Condition F) :
     Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
@@ -278,8 +271,7 @@ Subcircuits start at the same variable offset that the circuit currently is.
 In practice, this is always true since subcircuits are instantiated using `subcircuit` or `assertion`.
  -/
 @[circuit_norm]
-def SubcircuitsConsistent {F : Type} [Field F]
-    (offset : ℕ) (ops : Operations F) := ops.forAll offset {
+def SubcircuitsConsistent (offset : ℕ) (ops : Operations F) := ops.forAll offset {
   subcircuit offset {n} _ := n = offset
 }
 
@@ -290,7 +282,7 @@ The differences to `induct` are:
 - in addition to the operations, we also pass along the initial offset `n`
 - in the subcircuit case, the subcircuit offset is the same as the initial offset
 -/
-def inductConsistent {F : Type} [Field F]
+def inductConsistent
     {motive : (ops : Operations F) → (n : ℕ) → ops.SubcircuitsConsistent n → Sort*}
   (empty : ∀ n, motive [] n trivial)
   (witness : ∀ n m c ops {h}, motive ops (m + n) h →
@@ -319,8 +311,7 @@ where motive' : (ops : Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsi
     exact subcircuit n s ops (motive' ops _ h.right)
 end Operations
 
-def Condition.ignoreSubcircuit {F : Type} [Field F]
-    (condition : Condition F) : Condition F :=
+def Condition.ignoreSubcircuit (condition : Condition F) : Condition F :=
   { condition with subcircuit _ _ _ := True }
 
 def Condition.applyFlat {F : Type} [Field F]
@@ -329,18 +320,16 @@ def Condition.applyFlat {F : Type} [Field F]
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
 
-def FlatOperation.singleLocalLength {F : Type} : FlatOperation F → ℕ
+def FlatOperation.singleLocalLength : FlatOperation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
 
-def FlatOperation.forAll {F : Type} [Field F]
-    (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
+def FlatOperation.forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
 
-def Operations.forAllFlat {F : Type} [Field F]
-    (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
+def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops.toFlat } ops

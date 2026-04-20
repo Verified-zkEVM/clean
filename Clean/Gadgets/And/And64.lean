@@ -11,7 +11,7 @@ structure Inputs (F : Type) where
   y: U64 F
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
   let z0 ← And8.circuit ⟨ x.x0, y.x0 ⟩
   let z1 ← And8.circuit ⟨ x.x1, y.x1 ⟩
