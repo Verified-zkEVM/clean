@@ -2,7 +2,6 @@ import Clean.Gadgets.BLAKE3.BLAKE3State
 import Clean.Gadgets.BLAKE3.Round
 import Clean.Gadgets.BLAKE3.Permute
 import Clean.Types.U32
-import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Specs.BLAKE3
 import Clean.Circuit.StructuralLemmas
