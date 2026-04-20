@@ -390,8 +390,7 @@ def foldlRange (m : ℕ) [Inhabited β] (init : β) (body : β → Fin m → Cir
   (Vector.finRange m).foldlM body init
 
 section forEach
-variable {env : Environment F} {env_v : VerifierEnvironment F}
-  {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -429,23 +428,20 @@ lemma forEach.soundness' :
 @[circuit_norm ↓]
 lemma forEach.completeness :
   ConstraintsHold.Completeness env ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env
-      (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+    ∀ i : Fin m, ConstraintsHold.Completeness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [forEach, ConstraintsHold.completeness_iff_forAll']
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma forEach.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness n ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body default).localLength)
-      (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [forEach, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
 end forEach
 
 section map
-variable {env : Environment F} {env_v : VerifierEnvironment F}
-  {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F β} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -476,23 +472,20 @@ lemma map.soundness :
 @[circuit_norm ↓]
 lemma map.completeness :
   ConstraintsHold.Completeness env (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env
-      (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+    ∀ i : Fin m, ConstraintsHold.Completeness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [map, ConstraintsHold.completeness_iff_forAll']
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma map.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness n (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body default).localLength)
-      (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [map, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
 end map
 
 section mapFinRange
-variable {env : Environment F} {env_v : VerifierEnvironment F}
-  {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
+variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
   {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -525,23 +518,20 @@ lemma mapFinRange.soundness :
 @[circuit_norm ↓]
 lemma mapFinRange.completeness :
   ConstraintsHold.Completeness env (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env
-      (body i |>.operations (n + i*(body 0).localLength)) := by
+    ∀ i : Fin m, ConstraintsHold.Completeness env (body i |>.operations (n + i*(body 0).localLength)) := by
   simp only [mapFinRange, ConstraintsHold.completeness_iff_forAll']
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma mapFinRange.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness n (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body 0).localLength)
-      (body i |>.operations (n + i*(body 0).localLength)) := by
+    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body 0).localLength) (body i |>.operations (n + i*(body 0).localLength)) := by
   simp only [mapFinRange, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
 end mapFinRange
 
 section foldl
-variable {env : Environment F} {env_v : VerifierEnvironment F}
-  {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
   {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)}
 
@@ -611,8 +601,7 @@ lemma foldl.usesLocalWitnesses [NeZero m] :
 end foldl
 
 section foldlRange
-variable {env : Environment F} {env_v : VerifierEnvironment F}
-  {m n : ℕ} [Inhabited β]
+variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [Inhabited β]
   {body : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
 
 @[circuit_norm ↓]

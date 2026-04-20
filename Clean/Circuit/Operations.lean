@@ -21,13 +21,12 @@ inductive NestedOperations (F : Type) where
   | single : FlatOperation F → NestedOperations F
   | nested : String × List (NestedOperations F) → NestedOperations F
 
-def NestedOperations.toFlat {F : Type} :
-    NestedOperations F → List (FlatOperation F)
+def NestedOperations.toFlat {F : Type} : NestedOperations F → List (FlatOperation F)
   | .single op => [op]
   | .nested (_, lst) => List.flatMap toFlat lst
 
 namespace FlatOperation
-instance {F : Type} [Repr F] : Repr (FlatOperation F) where
+instance [Repr F] : Repr (FlatOperation F) where
   reprPrec
   | witness m _, _ => "(Witness " ++ reprStr m ++ ")"
   | assert e, _ => "(Assert " ++ reprStr e ++ " == 0)"
@@ -38,8 +37,7 @@ What it means that "constraints hold" on a list of flat operations:
 - For assertions, the expression must evaluate to 0
 - For lookups, the evaluated entry must be in the table
 -/
-def ConstraintsHoldFlat {F : Type} [Field F] (eval : VerifierEnvironment F) :
-    List (FlatOperation F) → Prop
+def ConstraintsHoldFlat (eval : VerifierEnvironment F) : List (FlatOperation F) → Prop
   | [] => True
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval ops
@@ -47,21 +45,19 @@ def ConstraintsHoldFlat {F : Type} [Field F] (eval : VerifierEnvironment F) :
     | _ => ConstraintsHoldFlat eval ops
 
 @[circuit_norm]
-def localLength {F : Type} : List (FlatOperation F) → ℕ
+def localLength : List (FlatOperation F) → ℕ
   | [] => 0
   | witness m _ :: ops => m + localLength ops
   | assert _ :: ops | lookup _ :: ops => localLength ops
 
 @[circuit_norm]
-def localWitnesses {F : Type} [Field F]
-    (env : Environment F) :
-    (l : List (FlatOperation F)) → Vector F (localLength l)
+def localWitnesses (env : Environment F) : (l : List (FlatOperation F)) → Vector F (localLength l)
   | [] => #v[]
   | witness _ compute :: ops => compute env ++ localWitnesses env ops
   | assert _ :: ops | lookup _ :: ops => localWitnesses env ops
 
 /-- Induction principle for `FlatOperation`s. -/
-def induct {F : Type} {motive : List (FlatOperation F) → Sort*}
+def induct {motive : List (FlatOperation F) → Sort*}
   (empty : motive [])
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))

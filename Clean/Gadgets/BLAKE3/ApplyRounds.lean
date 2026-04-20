@@ -2,6 +2,7 @@ import Clean.Gadgets.BLAKE3.BLAKE3State
 import Clean.Gadgets.BLAKE3.Round
 import Clean.Gadgets.BLAKE3.Permute
 import Clean.Types.U32
+import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Specs.BLAKE3
 import Clean.Circuit.StructuralLemmas
@@ -29,8 +30,8 @@ The spec follows the pattern from the applyRounds function:
 -/
 def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   main := fun input => do
-    let state ← subcircuit  Round.circuit input
-    let permuted_message ← subcircuit  Permute.circuit input.message
+    let state ← subcircuit Round.circuit input
+    let permuted_message ← subcircuit Permute.circuit input.message
     return ⟨state, permuted_message⟩
   localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
   localLength_eq := by
