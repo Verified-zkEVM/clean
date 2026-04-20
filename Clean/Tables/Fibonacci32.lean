@@ -48,15 +48,15 @@ def recursiveRelation : TwoRowsConstraint RowType (F p) := do
   let z ← Gadgets.Addition32.circuit { x := curr.x, y := curr.y }
 
   assignU32 nextRowOff.y z
-  (curr.y === next.x)
+  curr.y === next.x
 
 /--
   Boundary constraints that are applied at the beginning of the trace.
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.getCurrRow
-  (row.x === (const (U32.fromByte 0)))
-  (row.y === (const (U32.fromByte 1)))
+  row.x === (const (U32.fromByte 0))
+  row.y === (const (U32.fromByte 1))
 
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.

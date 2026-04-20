@@ -63,7 +63,7 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
 
 namespace BLAKE3ProcessBlocksStateNormalized
 
-def main (x : Var ProcessBlocksState (F p)) := do
+def main (x : Var ProcessBlocksState (F p)) : Circuit (F p) Unit  := do
   Circuit.forEach x.chaining_value U32.AssertNormalized.circuit
   U32.AssertNormalized.circuit x.chunk_counter
   U32.AssertNormalized.circuit x.blocks_compressed
@@ -115,7 +115,7 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
 -- A circuit that asserts `BlockInput.Normalized`
 namespace BLAKE3BlockInputNormalized
 
-def main (x : Var BlockInput (F p)) := do
+def main (x : Var BlockInput (F p)) : Circuit (F p) Unit := do
   assertBool x.block_exists
   Circuit.forEach x.block_data U32.AssertNormalized.circuit
 
