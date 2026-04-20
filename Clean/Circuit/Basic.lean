@@ -420,8 +420,7 @@ export Circuit (witnessVar witnessField witnessVars witnessVector assertZero loo
 
 -- general `witness` method
 
-class Witnessable (F : Type) [Field F] (value : outParam TypeMap) (var : TypeMap)
-    [ProvableType value] where
+class Witnessable (F : Type) [Field F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
   witness : (Environment F → value F) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
   witness_eq (compute : Environment F → value F) :
@@ -432,12 +431,10 @@ export Witnessable (witness)
 instance : Witnessable F field Expression where
   witness := witnessField
 
-instance {m : ℕ} :
-    Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
+instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
   witness := witnessVector m
 
-instance (α : TypeMap) [ProvableType α] :
-    Witnessable F α (Var α) where
+instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
   witness := ProvableType.witness
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
@@ -487,8 +484,7 @@ A circuit has _computable witnesses_ when witness generators only depend on the 
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
-  ops.forAllFlat n
-    ({ witness m _ compute := env.AgreesBelow m env' → compute env = compute env' } : Condition F)
+  ops.forAllFlat n ({ witness m _ compute := env.AgreesBelow m env' → compute env = compute env' } : Condition F)
 
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
   ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
