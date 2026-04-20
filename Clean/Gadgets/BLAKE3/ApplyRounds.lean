@@ -556,7 +556,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
 
   -- Use the helper lemma to prove normalization
-  apply initial_state_and_messages_are_normalized env.toVerifierEnvironment
+  apply initial_state_and_messages_are_normalized (p := p) env
   · simp only [h_input, circuit_norm]
     rfl
   · simp only [Assumptions]
