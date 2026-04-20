@@ -207,7 +207,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   completeness := by
     simp only [circuit_norm, main]
-    intro offset env input_var _hint h_env input h_input h_s
+    intro offset env input_var h_env input h_input h_s
     simp only [MultiMux2.circuit, circuit_norm]
     rw [← h_input] at h_s
     simp_all

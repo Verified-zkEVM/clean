@@ -108,9 +108,9 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
 instance : ExplicitCircuits (F:=F) witnessVar where
   output _ n := ⟨ n ⟩
   localLength _ _ := 1
-  operations c n := [.witness 1 fun env hint => #v[c env hint]]
+  operations c n := [.witness 1 fun env => #v[c env]]
 
-instance {k : ℕ} {c : Environment F → ProverHint F → Vector F k} : ExplicitCircuit (witnessVars k c) where
+instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
   localLength _ := k
   operations n := [.witness k c]
@@ -119,7 +119,7 @@ instance {α : TypeMap} [ProvableType α] :
     ExplicitCircuits  (ProvableType.witness (α:=α) (F:=F)) where
   output _ n := varFromOffset α n
   localLength _ _ := size α
-  operations c n := [.witness (size α) (fun env hint => toElements (c env hint))]
+  operations c n := [.witness (size α) (fun env => toElements (c env))]
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
@@ -136,7 +136,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
-  operations c n := [.witness (size value) (fun env hint => toElements (c env hint))]
+  operations c n := [.witness (size value) (fun env => toElements (c env))]
   operations_eq c n := by
     rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
@@ -196,13 +196,13 @@ macro_rules
 section
 
 -- single
-example : ExplicitCircuit (witness fun _ _ => (0 : F) : Circuit F (Expression F)) := by infer_explicit_circuit
+example : ExplicitCircuit (witness fun _ => (0 : F) : Circuit F (Expression F)) := by infer_explicit_circuit
 
 example :
   let add : Circuit F (Expression F) := do
-    let x : Expression F ← witness fun _ _ => 0
-    let y ← witness fun _ _ => 1
-    let z ← witness fun eval _ => eval (x + y)
+    let x : Expression F ← witness fun _ => 0
+    let y ← witness fun _ => 1
+    let z ← witness fun eval => eval (x + y)
     assertZero (x + y - z)
     return z
 
@@ -213,8 +213,8 @@ example : ExplicitCircuits (witnessField (F:=F)) := by infer_explicit_circuits
 
 example :
   let add (x : Expression F) : Circuit F (Expression F) := do
-    let y : Expression F ← witness fun _ _ => 1
-    let z ← witness fun eval _ => eval (x + y)
+    let y : Expression F ← witness fun _ => 1
+    let z ← witness fun eval => eval (x + y)
     assertZero (x + y - z)
     return z
 

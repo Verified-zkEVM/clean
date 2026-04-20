@@ -372,7 +372,8 @@ def windowEnv (table : TableConstraint W S F Unit)
         | .input ⟨i, j⟩ => window.get i j
         | .aux k => aux_env.get k
       else aux_env.get (i + assignment.aux_length)
-    data := aux_env.data }
+    data := aux_env.data
+    hint := aux_env.hint }
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -382,8 +383,7 @@ def windowEnv (table : TableConstraint W S F Unit)
 @[table_norm]
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
-  let env := windowEnv table window aux_env
-  Circuit.ConstraintsHold.Soundness env table.operations
+  Circuit.ConstraintsHold.Soundness (windowEnv table window aux_env) table.operations
 
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
@@ -397,7 +397,7 @@ def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
       inputSize := ctx.inputSize,
-      circuit := ctx.circuit ++ [.witness (size S) fun env _ => .mapRange _ fun i => env.get (ctx.offset + i)],
+      circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange _ fun i => env.get (ctx.offset + i)],
       assignment := ctx.assignment.pushRow row
     }
     (varFromOffset S ctx.offset, ctx')
@@ -453,7 +453,7 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   | .var v => assignVar off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
-    let new_var ← witnessVar fun env _ => x.eval env
+    let new_var ← witnessVar fun env => x.eval env
     assertZero (x - var new_var)
     assignVar off new_var
 
@@ -522,7 +522,8 @@ structure TableEnvironments (F : Type) where
 
 def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=
   { get := envs.witnessEnvs constraint row,
-    data := envs.data }
+    data := envs.data,
+    hint := fun _ _ => #[] }
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`

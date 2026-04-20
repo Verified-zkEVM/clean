@@ -9,7 +9,7 @@ variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
 def main (n : ℕ) (x : Expression (F p)) := do
   -- witness the bits of `x`
-  let bits ← witnessVector n fun env _ => fieldToBits n (x.eval env)
+  let bits ← witnessVector n fun env => fieldToBits n (x.eval env)
 
   -- add boolean constraints on all bits
   Circuit.forEach bits assertBool
@@ -37,17 +37,22 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   soundness := by
     circuit_proof_start
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
-
-    let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨i₀ + ·⟩)
-    let bits : Vector (F p) n := bit_vars.map env
-
-    replace h_bits (i : ℕ) (hi : i < n) : IsBool bits[i] := by
-      simp only [circuit_norm, bits, bit_vars]
-      exact h_bits ⟨ i, hi ⟩
-
-    change input = env (fieldFromBitsExpr bit_vars) at h_eq
-    rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
-    use fieldFromBits_lt _ h_bits
+    have h_bits_vec : ∀ (i : ℕ) (hi : i < n),
+        (Vector.map (Expression.eval env) (Vector.mapRange n fun i => var (F:=F p) ⟨i₀ + i⟩))[i]'(by simpa) = 0
+        ∨ (Vector.map (Expression.eval env) (Vector.mapRange n fun i => var (F:=F p) ⟨i₀ + i⟩))[i]'(by simpa) = 1 := by
+      intro i hi
+      simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+      exact h_bits ⟨i, hi⟩
+    have h_eq' := h_eq
+    rw [show Expression.eval env (fieldFromBitsExpr (Vector.mapRange n fun i => var (F:=F p) ⟨i₀ + i⟩))
+          = fieldFromBits (Vector.map (Expression.eval env) (Vector.mapRange n fun i => var (F:=F p) ⟨i₀ + i⟩))
+        from fieldFromBits_eval _] at h_eq
+    have h_val : input.val < 2^n := by
+      rw [h_eq]
+      exact fieldFromBits_lt _ h_bits_vec
+    refine ⟨ h_val, ?_ ⟩
+    rw [h_eq]
+    exact (fieldToBits_fieldFromBits hn _ h_bits_vec).symm
 
   completeness := by
     circuit_proof_start

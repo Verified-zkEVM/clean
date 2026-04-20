@@ -80,7 +80,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     · exact h_holds2
 
   completeness := by
-    intro offset env input_var _hint h_env_uses_witnesses input h_eval h_assumptions
+    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
@@ -375,7 +375,7 @@ lemma applyRounds_eq_applySevenRounds
   -- applyRounds constructs the same initial state and then applies 7 rounds
   simp only [applyRounds, applySevenRounds]
 
-lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
+lemma eval_decomposeNatExpr_small (env : VerifierEnvironment (F p)) (x : ℕ) :
     x < 256^4 ->
     (eval env (U32.decomposeNatExpr x)).value = x := by
   intro h
@@ -459,7 +459,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
 
 -- Helper lemma that proves the initial state and messages are normalized
 lemma initial_state_and_messages_are_normalized
-    (env : Environment (F p))
+    (env : VerifierEnvironment (F p))
     (input_var : Var Inputs (F p))
     (block_words : BLAKE3State (F p))
     (chaining_value counter_high counter_low block_len flags)
@@ -515,7 +515,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
-    apply initial_state_and_messages_are_normalized
+    apply initial_state_and_messages_are_normalized env
     · simp only [circuit_norm, h_input]
       rfl
     · simp only [Assumptions]
@@ -556,7 +556,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
 
   -- Use the helper lemma to prove normalization
-  apply initial_state_and_messages_are_normalized env
+  apply initial_state_and_messages_are_normalized env.toVerifierEnvironment
   · simp only [h_input, circuit_norm]
     rfl
   · simp only [Assumptions]

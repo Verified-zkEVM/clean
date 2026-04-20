@@ -74,7 +74,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rotLeft64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env row_var _hint h_env row h_input h_assumptions
+  intro i0 env row_var h_env row h_input h_assumptions
   simp only [Assumptions, KeccakRow.normalized_iff] at h_assumptions
   dsimp only [circuit_norm, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
   simp_all only [circuit_norm, getElem_eval_vector,

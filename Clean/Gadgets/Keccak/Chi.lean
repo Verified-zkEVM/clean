@@ -59,7 +59,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp_all
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var _hint h_env state h_input state_norm
+  intro i0 env state_var h_env state h_input state_norm
 
   -- simplify Assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

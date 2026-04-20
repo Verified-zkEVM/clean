@@ -77,7 +77,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   -- At this point we should have: offset, env, input_var, input, h_input, h_normalized, h_holds
   -- Check that these names exist by using them
   have : ℕ := i₀
-  have : Environment F := env
+  have : VerifierEnvironment F := env
   have : Input (Expression F) := input_var
   have : Input F := input
   have : eval env input_var = input := h_input
@@ -87,7 +87,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) (hint : ProverHint F) :
+    (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point we should have: i₀, env, input_var, h_env
@@ -96,7 +96,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : ℕ := i₀
   have : Environment F := env
   have : Input (Expression F) := input_var
-  have : env.UsesLocalWitnessesCompleteness hint i₀ (circuit.main input_var i₀).2 := h_env
+  have : env.UsesLocalWitnessesCompleteness i₀ (circuit.main input_var i₀).2 := h_env
   -- After provable_struct_simp, we work with eval env input_var instead of input
   sorry
 

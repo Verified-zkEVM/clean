@@ -12,7 +12,7 @@ import Clean.Gadgets.Equality
 def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop)
     (step : Var State F → Var Input F → Circuit F (Var State F)) :=
-  ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
+  ∀ (initialState : State F) (row_index : ℕ) (env : VerifierEnvironment F),
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
@@ -36,13 +36,12 @@ def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Typ
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
     (eval env acc_var = acc) ∧ (eval env x_var = x) →
   -- when using honest-prover witnesses
-  (∀ (hint : ProverHint F), env.UsesLocalWitnessesCompleteness hint ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input)))) →
+  env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
   -- assuming the spec on the current row, the input_spec on the input, and initial state assumptions
   InitialStateAssumptions initialState env.data ∧
   Spec initialState xs row_index xs_len acc env.data ∧ InputAssumptions row_index x env.data →
-  -- the constraints hold for every hint
-  ∀ (hint : ProverHint F),
-  Circuit.ConstraintsHold.Completeness env hint (step acc_var x_var |>.operations ((size State) + (size Input)))
+  -- the constraints hold
+  Circuit.ConstraintsHold.Completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
 
 /--
 In the case of two-row windows, an `InductiveTable` is basically a `FormalCircuit` but
@@ -109,7 +108,7 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
   ]
 
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : Environment F} :
-  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
+  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env).toVerifierEnvironment
     (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by
   set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env

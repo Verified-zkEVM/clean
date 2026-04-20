@@ -80,7 +80,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   exact h
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro n env initial_state_var _hint h_env initial_state h_input h_assumptions
+  intro n env initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions

@@ -76,7 +76,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
       <;> simp [h_bits, ZMod.val_one]
 
   completeness := by
-    intro i0 env input_var _hint h_env input h_input assumptions
+    intro i0 env input_var h_env input h_input assumptions
     simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
     dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
@@ -169,7 +169,7 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
 
   completeness := by
     simp only [circuit_norm, main]
-    intro i0 env input_var _hint h_env input h_input assumptions
+    intro i0 env input_var h_env input h_input assumptions
     simp only [circuit_norm, Bits2Num.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     obtain ⟨assumption₁, assumption₂⟩ := assumptions
@@ -204,7 +204,7 @@ template Num2BitsNeg(n) {
 -/
 def main (n : ℕ) (input : Expression (F p)) := do
   -- Witness the bits of 2^n - input (when n > 0)
-  let out ← witnessVector n fun env _ =>
+  let out ← witnessVector n fun env =>
     fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
@@ -302,7 +302,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   completeness := by
     simp only [circuit_norm, main]
-    intro i0 env input_var _hint h_env input h_input assumption
+    intro i0 env input_var h_env input h_input assumption
     simp only [circuit_norm, IsZero.circuit, IsZero.main] at h_env h_input ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     by_cases h_n : n = 0

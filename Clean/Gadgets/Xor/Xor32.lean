@@ -17,7 +17,7 @@ deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
-  let z ← witness fun env _ =>
+  let z ← witness fun env =>
     let z0 := (env x.x0).val ^^^ (env y.x0).val
     let z1 := (env x.x1).val ^^^ (env y.x1).val
     let z2 := (env x.x2).val ^^^ (env y.x2).val
@@ -89,7 +89,7 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   linarith [p_large_enough.elim]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env input_var _hint h_env input h_input as
+  intro i0 env input_var h_env input h_input as
   let ⟨⟨ x0, x1, x2, x3 ⟩,
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input

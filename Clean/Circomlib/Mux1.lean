@@ -188,13 +188,11 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
     rw [h_subcircuit_sound]
-    -- Now we need to show the RHS equals our spec
-    -- First, simplify the evaluation of the vector
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main]
-    intros offset env input_var _hint h_env input h_input h_s
+    intros offset env input_var h_env input h_input h_s
     simp only [MultiMux1.circuit, circuit_norm]
     rw [← h_input] at h_s
     simp_all

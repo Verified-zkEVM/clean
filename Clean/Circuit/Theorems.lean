@@ -23,9 +23,9 @@ theorem localLength_cons {a : Operation F} {as : Operations F} :
   cases a <;> simp_all [localLength, Operation.localLength]
 
 theorem localWitnesses_cons (op : Operation F) (ops : Operations F)
-    (env : Environment F) (hint : ProverHint F) :
-  localWitnesses env hint (op :: ops) =
-    (op.localWitnesses env hint ++ ops.localWitnesses env hint).cast (localLength_cons.symm) := by
+    (env : Environment F) :
+  localWitnesses env (op :: ops) =
+    (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
   cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
   rw [Vector.empty_append]; simp
   rw [Vector.empty_append]; simp
@@ -178,9 +178,9 @@ lemma forAll_append {condition : Condition F} {ops ops' : List (FlatOperation F)
     simp_all +arith [forAll_cons, localLength_cons, and_assoc]
 
 lemma localWitnesses_append {F} [Field F]
-    {a b: List (FlatOperation F)} {env} {hint : ProverHint F} :
-    (localWitnesses env hint (a ++ b)).toArray =
-      (localWitnesses env hint a).toArray ++ (localWitnesses env hint b).toArray := by
+    {a b: List (FlatOperation F)} {env} :
+    (localWitnesses env (a ++ b)).toArray =
+      (localWitnesses env a).toArray ++ (localWitnesses env b).toArray := by
   induction a using FlatOperation.localLength.induct with
   | case1 => simp only [List.nil_append, localLength, localWitnesses, Vector.toArray_empty,
     Array.empty_append]
@@ -213,8 +213,8 @@ lemma localLength_toFlat {ops : Operations F} :
 /--
 The witnesses created from flat and nested operations are the same
 -/
-lemma localWitnesses_toFlat {ops : Operations F} {env} {hint : ProverHint F} :
-  (localWitnesses env hint ops.toFlat).toArray = (ops.localWitnesses env hint).toArray := by
+lemma localWitnesses_toFlat {ops : Operations F} {env} :
+  (localWitnesses env ops.toFlat).toArray = (ops.localWitnesses env).toArray := by
   induction ops using Operations.induct with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
@@ -231,11 +231,12 @@ what follows are relationships between different versions of `Environment.UsesLo
 -/
 
 lemma env_extends_witness {F} [Field F]
-    {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F} {hint : ProverHint F}
+    {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F}
     {m c} :
-    env.ExtendsVector (localWitnesses env hint (.witness m c :: ops)) n ↔
-      (env.ExtendsVector (c env hint) n ∧ env.ExtendsVector (localWitnesses env hint ops) (m + n)) := by
-  simp_all only [ExtendsVector, localLength, localWitnesses, Vector.getElem_append]
+    env.ExtendsVector (localWitnesses env (.witness m c :: ops)) n ↔
+      (env.ExtendsVector (c env) n ∧ env.ExtendsVector (localWitnesses env ops) (m + n)) := by
+  simp_all only [Environment.ExtendsVector, VerifierEnvironment.ExtendsVector,
+    localLength, localWitnesses, Vector.getElem_append]
   constructor
   · intro h
     constructor
@@ -254,11 +255,12 @@ lemma env_extends_witness {F} [Field F]
       congr 1
       omega
 
-theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (hint : ProverHint F) (n : ℕ)
+theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ)
     {ops : List (FlatOperation F)}  :
-    env.UsesLocalWitnessesFlat hint n ops ↔ env.ExtendsVector (localWitnesses env hint ops) n := by
+    env.UsesLocalWitnessesFlat n ops ↔ env.ExtendsVector (localWitnesses env ops) n := by
   induction ops using FlatOperation.induct generalizing n with
-  | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, ExtendsVector, localLength]
+  | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty,
+                    Environment.ExtendsVector, VerifierEnvironment.ExtendsVector, localLength]
   | witness m _ _ ih =>
     rw [UsesLocalWitnessesFlat, FlatOperation.forAll, env_extends_witness,←ih (m + n)]
     trivial
@@ -267,8 +269,8 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (hint : ProverH
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength]
 
 theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : Operations F}
-    {n : ℕ} (hint : ProverHint F) (h : ops.SubcircuitsConsistent n) :
-  env.UsesLocalWitnesses hint n ops → env.UsesLocalWitnessesCompleteness hint n ops := by
+    {n : ℕ} (h : ops.SubcircuitsConsistent n) :
+  env.UsesLocalWitnesses n ops → env.UsesLocalWitnessesCompleteness n ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; trivial
   | witness | assert | lookup =>
@@ -282,30 +284,30 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : 
     rw [← usesLocalWitnessesFlat_iff_extends]
     exact h.left
 
-theorem usesLocalWitnessesCompleteness_iff_forAll (hint : ProverHint F) (n : ℕ)
+theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ)
     {env : Environment F} {ops : Operations F} :
-  env.UsesLocalWitnessesCompleteness hint n ops ↔ ops.forAll n {
-    witness m _ c := env.ExtendsVector (c env hint) m,
-    subcircuit _ _ s := s.UsesLocalWitnesses env hint
+  env.UsesLocalWitnessesCompleteness n ops ↔ ops.forAll n {
+    witness m _ c := env.ExtendsVector (c env) m,
+    subcircuit _ _ s := s.UsesLocalWitnesses env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | assert | lookup | witness | subcircuit =>
     simp_all +arith [UsesLocalWitnessesCompleteness, Operations.forAll]
 
-theorem usesLocalWitnesses_iff_forAll (hint : ProverHint F) (n : ℕ) {env : Environment F}
+theorem usesLocalWitnesses_iff_forAll (n : ℕ) {env : Environment F}
     {ops : Operations F} :
-  env.UsesLocalWitnesses hint n ops ↔ ops.forAll n {
-    witness n _ c := env.ExtendsVector (c env hint) n,
+  env.UsesLocalWitnesses n ops ↔ ops.forAll n {
+    witness n _ c := env.ExtendsVector (c env) n,
     subcircuit n _ s :=
-      FlatOperation.forAll n { witness n _ c := env.ExtendsVector (c env hint) n} s.ops.toFlat
+      FlatOperation.forAll n { witness n _ c := env.ExtendsVector (c env) n} s.ops.toFlat
   } := by
   simp only [UsesLocalWitnesses, Operations.forAllFlat]
 end Environment
 
 namespace Circuit
 
-theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
+theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : VerifierEnvironment F) (ops : Operations F) :
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
@@ -318,12 +320,12 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
     try intros
     apply ih
 
-theorem ConstraintsHold.completeness_iff_forAll (hint : ProverHint F) (n : ℕ)
+theorem ConstraintsHold.completeness_iff_forAll (n : ℕ)
     (env : Environment F) (ops : Operations F) :
-  ConstraintsHold.Completeness env hint ops ↔ ops.forAll n {
+  ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
-    subcircuit _ _ s := s.Completeness env hint
+    subcircuit _ _ s := s.Completeness env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -341,9 +343,9 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies only pr
 because it already implies the flat version.
 -/
 theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ}
-    (hint : ProverHint F) (h : ops.SubcircuitsConsistent n) :
-    env.UsesLocalWitnesses hint n ops →
-    ConstraintsHold.Completeness env hint ops → ConstraintsHold env ops := by
+    (h : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ConstraintsHold.Completeness env ops → ConstraintsHold env ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
@@ -352,7 +354,7 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ}
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
-    apply circuit.implied_by_completeness env hint ?_ h_compl.left
+    apply circuit.implied_by_completeness env ?_ h_compl.left
     rw [←Environment.usesLocalWitnessesFlat_iff_extends]
     exact h_env.left
 end Circuit
@@ -385,7 +387,7 @@ theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
   simp only [forAll]
   rw [bind_forAll]
 
-theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
+theorem ConstraintsHold.soundness_iff_forAll' {env : VerifierEnvironment F} {circuit : Circuit F α} {n : ℕ} :
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
@@ -394,15 +396,18 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
 theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F}
-    {circuit : Circuit F α} (hint : ProverHint F) {n : ℕ} :
-  ConstraintsHold.Completeness env hint (circuit.operations n) ↔ circuit.forAll n {
+    {circuit : Circuit F α} {n : ℕ} :
+  ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
-    subcircuit _ _ s := s.Completeness env hint
+    subcircuit _ _ s := s.Completeness env
   } := by
-  rw [forAll_def, ConstraintsHold.completeness_iff_forAll hint n]
+  rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]
 
 -- specializations
+
+section SoundnessEnv
+variable {env : VerifierEnvironment F}
 
 @[circuit_norm] theorem ConstraintsHold.append_soundness {as bs : Operations F} :
   ConstraintsHold.Soundness env (as ++ bs)
@@ -417,36 +422,38 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F}
   rw [ConstraintsHold.soundness_iff_forAll n, ConstraintsHold.soundness_iff_forAll n,
     ConstraintsHold.soundness_iff_forAll (n + f.localLength n), bind_forAll]
 
+end SoundnessEnv
+
 @[circuit_norm] theorem ConstraintsHold.append_completeness {as bs : Operations F}
-    (hint : ProverHint F) :
-  ConstraintsHold.Completeness env hint (as ++ bs)
-  ↔ ConstraintsHold.Completeness env hint as ∧ ConstraintsHold.Completeness env hint bs := by
-  rw [ConstraintsHold.completeness_iff_forAll hint 0, Operations.forAll_append,
-    ←ConstraintsHold.completeness_iff_forAll hint 0,
-    ←ConstraintsHold.completeness_iff_forAll hint (as.localLength + 0)]
+    :
+  ConstraintsHold.Completeness env (as ++ bs)
+  ↔ ConstraintsHold.Completeness env as ∧ ConstraintsHold.Completeness env bs := by
+  rw [ConstraintsHold.completeness_iff_forAll 0, Operations.forAll_append,
+    ←ConstraintsHold.completeness_iff_forAll 0,
+    ←ConstraintsHold.completeness_iff_forAll (as.localLength + 0)]
 
 @[circuit_norm] theorem ConstraintsHold.bind_completeness {f : Circuit F α}
-    {g : α → Circuit F β} (hint : ProverHint F) (n : ℕ) :
-  ConstraintsHold.Completeness env hint ((f >>= g).operations n)
-  ↔ ConstraintsHold.Completeness env hint (f.operations n) ∧
-    ConstraintsHold.Completeness env hint ((g (f.output n)).operations (n + f.localLength n)) := by
-  rw [ConstraintsHold.completeness_iff_forAll hint n, ConstraintsHold.completeness_iff_forAll hint n,
-    ConstraintsHold.completeness_iff_forAll hint (n + f.localLength n), bind_forAll]
+    {g : α → Circuit F β} (n : ℕ) :
+  ConstraintsHold.Completeness env ((f >>= g).operations n)
+  ↔ ConstraintsHold.Completeness env (f.operations n) ∧
+    ConstraintsHold.Completeness env ((g (f.output n)).operations (n + f.localLength n)) := by
+  rw [ConstraintsHold.completeness_iff_forAll n, ConstraintsHold.completeness_iff_forAll n,
+    ConstraintsHold.completeness_iff_forAll (n + f.localLength n), bind_forAll]
 
 @[circuit_norm] theorem ConstraintsHold.append_localWitnesses {as bs : Operations F}
-    (hint : ProverHint F) (n : ℕ) :
-  env.UsesLocalWitnessesCompleteness hint n (as ++ bs)
-  ↔ env.UsesLocalWitnessesCompleteness hint n as ∧
-    env.UsesLocalWitnessesCompleteness hint (as.localLength + n) bs := by
+    (n : ℕ) :
+  env.UsesLocalWitnessesCompleteness n (as ++ bs)
+  ↔ env.UsesLocalWitnessesCompleteness n as ∧
+    env.UsesLocalWitnessesCompleteness (as.localLength + n) bs := by
   rw [env.usesLocalWitnessesCompleteness_iff_forAll, Operations.forAll_append,
-    ←env.usesLocalWitnessesCompleteness_iff_forAll hint n,
-    ←env.usesLocalWitnessesCompleteness_iff_forAll hint (as.localLength + n)]
+    ←env.usesLocalWitnessesCompleteness_iff_forAll n,
+    ←env.usesLocalWitnessesCompleteness_iff_forAll (as.localLength + n)]
 
 @[circuit_norm] theorem ConstraintsHold.bind_usesLocalWitnesses
-    {f : Circuit F α} {g : α → Circuit F β} (hint : ProverHint F) (n : ℕ) :
-  env.UsesLocalWitnessesCompleteness hint n ((f >>= g).operations n)
-  ↔ env.UsesLocalWitnessesCompleteness hint n (f.operations n) ∧
-    env.UsesLocalWitnessesCompleteness hint (n + f.localLength n)
+    {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+  env.UsesLocalWitnessesCompleteness n ((f >>= g).operations n)
+  ↔ env.UsesLocalWitnessesCompleteness n (f.operations n) ∧
+    env.UsesLocalWitnessesCompleteness (n + f.localLength n)
       ((g (f.output n)).operations (n + f.localLength n)) := by
   rw [env.usesLocalWitnessesCompleteness_iff_forAll, env.usesLocalWitnessesCompleteness_iff_forAll,
     env.usesLocalWitnessesCompleteness_iff_forAll, bind_forAll]
@@ -481,20 +488,22 @@ end Operations
 
 /-- An environment respects local witnesses iff it does so in the flattened variant. -/
 lemma Environment.usesLocalWitnesses_iff_flat {n : ℕ} {ops : Operations F}
-    {env : Environment F} {hint : ProverHint F} :
-    env.UsesLocalWitnesses hint n ops ↔
-    env.UsesLocalWitnessesFlat hint n ops.toFlat := by
+    {env : Environment F} :
+    env.UsesLocalWitnesses n ops ↔
+    env.UsesLocalWitnessesFlat n ops.toFlat := by
   simp only [UsesLocalWitnessesFlat, UsesLocalWitnesses]
   rw [Operations.forAll_toFlat_iff]
 
 -- theorems about witness generation
 
 namespace FlatOperation
-lemma dynamicWitness_length {op : FlatOperation F} {hint : ProverHint F} {init : List F} :
+variable {hint : ProverHint F}
+
+lemma dynamicWitness_length {op : FlatOperation F} {init : List F} :
     (op.dynamicWitness hint init).length = op.singleLocalLength := by
   rcases op <;> simp [dynamicWitness, singleLocalLength]
 
-lemma dynamicWitnesses_length {ops : List (FlatOperation F)} (hint : ProverHint F)
+lemma dynamicWitnesses_length {ops : List (FlatOperation F)}
     (init : List F) :
     (dynamicWitnesses hint ops init).length = init.length + localLength ops := by
   induction ops generalizing init with
@@ -503,12 +512,12 @@ lemma dynamicWitnesses_length {ops : List (FlatOperation F)} (hint : ProverHint 
     simp_all +arith [dynamicWitnesses, localLength_cons, dynamicWitness_length]
 
 lemma dynamicWitnesses_cons {op : FlatOperation F}
-    {ops : List (FlatOperation F)} {hint : ProverHint F} {acc : List F} :
+    {ops : List (FlatOperation F)} {acc : List F} :
     dynamicWitnesses hint (op :: ops) acc = dynamicWitnesses hint ops (acc ++ op.dynamicWitness hint acc) := by
   simp only [dynamicWitnesses, List.foldl_cons]
 
 lemma getElem?_dynamicWitnesses_of_lt {ops : List (FlatOperation F)}
-    {hint : ProverHint F} {acc : List F} {i : ℕ} (hi : i < acc.length) :
+    {acc : List F} {i : ℕ} (hi : i < acc.length) :
     (dynamicWitnesses hint ops acc)[i]?.getD 0 = acc[i] := by
   simp only [dynamicWitnesses]
   induction ops generalizing acc with
@@ -518,7 +527,7 @@ lemma getElem?_dynamicWitnesses_of_lt {ops : List (FlatOperation F)}
     rw [List.foldl_cons, ih this, List.getElem_append_left]
 
 lemma getElem?_dynamicWitnesses_cons_right {op : FlatOperation F}
-    {ops : List (FlatOperation F)} {hint : ProverHint F} {init : List F} {i : ℕ}
+    {ops : List (FlatOperation F)} {init : List F} {i : ℕ}
     (hi : i < op.singleLocalLength) :
     (dynamicWitnesses hint (op :: ops) init)[init.length + i]?.getD 0 =
       (op.dynamicWitness hint init)[i]'(dynamicWitness_length (F:=F) ▸ hi) := by
@@ -530,12 +539,13 @@ lemma getElem?_dynamicWitnesses_cons_right {op : FlatOperation F}
 Flat version of the final theorem in this section, `Circuit.proverEnvironment_usesLocalWitnesses`.
 -/
 theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)}
-    (hint : ProverHint F) (init : List F) :
+    (init : List F) :
   (∀ (env env' : Environment F),
     forAll init.length
-      { witness n _ c := env.AgreesBelow n env' → c env hint = c env' hint } ops) →
-    (proverEnvironment hint ops init).UsesLocalWitnessesFlat hint init.length ops := by
-  simp only [proverEnvironment, Environment.UsesLocalWitnessesFlat, Environment.ExtendsVector]
+      { witness n _ c := env.AgreesBelow n env' → c env = c env' } ops) →
+    (proverEnvironment hint ops init).UsesLocalWitnessesFlat init.length ops := by
+  simp only [proverEnvironment, Environment.UsesLocalWitnessesFlat, Environment.ExtendsVector,
+    VerifierEnvironment.ExtendsVector]
   intro h_computable
   induction ops generalizing init with
   | nil => trivial
@@ -548,35 +558,36 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)}
       simp_all only [Condition.applyFlat, singleLocalLength, Environment.AgreesBelow]
       -- get rid of ih first
       constructor; case right =>
-        specialize ih (init ++ (compute (.fromList init) hint).toList)
+        specialize ih (init ++ (compute (.fromListAt init hint)).toList)
         simp only [List.length_append, Vector.length_toList] at ih
         ring_nf at *
         exact ih fun _ _ => (h_computable ..).right
       clear ih
       replace h_computable := fun env env' => (h_computable env env').left
       intro i
-      simp only [Environment.fromList]
+      simp only [Environment.fromListAt, VerifierEnvironment.fromList, Environment.fromList]
       rw [getElem?_dynamicWitnesses_cons_right i.is_lt]
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
       intro j hj
-      simp [Environment.fromList, hj, getElem?_dynamicWitnesses_of_lt]
+      simp [Environment.fromListAt, VerifierEnvironment.fromList, Environment.fromList, hj,
+        getElem?_dynamicWitnesses_of_lt]
 end FlatOperation
 
 /--
 If a circuit satisfies `computableWitnesses`, then the `proverEnvironment` agrees with the
 circuit's witness generators.
 -/
-theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α)
-    (hint : ProverHint F) (init : List F) :
-  circuit.ComputableWitnesses hint init.length →
-    (circuit.proverEnvironment hint init).UsesLocalWitnesses hint init.length
+theorem Circuit.proverEnvironment_usesLocalWitnesses (hint : ProverHint F) (circuit : Circuit F α)
+    (init : List F) :
+  circuit.ComputableWitnesses init.length →
+    (circuit.proverEnvironment hint init).UsesLocalWitnesses init.length
       (circuit.operations init.length) := by
   intro h_computable
   simp_all only [proverEnvironment, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
     ←Operations.forAll_toFlat_iff, Environment.UsesLocalWitnesses]
-  exact FlatOperation.proverEnvironment_usesLocalWitnesses hint init h_computable
+  exact FlatOperation.proverEnvironment_usesLocalWitnesses init h_computable
 
 lemma Environment.agreesBelow_of_le {F} {n m : ℕ} {env env' : Environment F} :
     env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
@@ -590,10 +601,10 @@ the entire circuit only accesses the environment below `n + localLength`.
 This is not currently used, but seemed like a nice result to have.
 -/
 theorem onlyAccessedBelow_all {ops : List (FlatOperation F)}
-    (hint : ProverHint F) (n : ℕ) :
-  forAll n { witness n _ c := Environment.OnlyAccessedBelow n (fun env => c env hint) } ops →
+    (n : ℕ) :
+  forAll n { witness n _ c := Environment.OnlyAccessedBelow n (fun env => c env) } ops →
     Environment.OnlyAccessedBelow (n + localLength ops)
-      (fun env => localWitnesses env hint ops) := by
+      (fun env => localWitnesses env ops) := by
   intro h_comp env env' h_env
   simp only
   induction ops generalizing n with
@@ -643,7 +654,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap)
       simp only [GeneralFormalCircuit.Completeness, forall_eq']
       intros
       apply orig.completeness <;> trivial
-    completenessSpec := fun _ _ _ _ _ _ _ _ => trivial
+    completenessSpec := fun _ _ _ _ _ _ _ => trivial
   }
 
 /--
@@ -667,7 +678,7 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap)
     ,
     completeness := by
       simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      rintro _ _ _ _ _ ⟨ _, _ ⟩
+      rintro _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
-    completenessSpec := fun _ _ _ _ _ _ _ _ => trivial
+    completenessSpec := fun _ _ _ _ _ _ _ => trivial
   }

@@ -10,7 +10,7 @@ open Circuit (ConstraintsHold)
 namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
-theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
+theorem allZero.soundness {offset : ℕ} {env : VerifierEnvironment F} {n} {xs : Vector (Expression F) n} :
     ConstraintsHold.Soundness env ((allZero  xs).operations offset) →
     ∀ x ∈ xs, x.eval env = 0 := by
   simp only [allZero, circuit_norm]
@@ -18,10 +18,10 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
-theorem allZero.completeness {offset : ℕ} {env : Environment F} {hint : ProverHint F}
+theorem allZero.completeness {offset : ℕ} {env : Environment F}
     {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) →
-    ConstraintsHold.Completeness env hint ((allZero  xs).operations offset) := by
+    ConstraintsHold.Completeness env ((allZero  xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
@@ -72,7 +72,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     exact eq_of_add_neg_eq_zero h_holds
 
   completeness := by
-    intro offset env input_var hint h_env input h_input _ h_spec
+    intro offset env input_var h_env input h_input _ h_spec
     apply allZero.completeness
     simp only
 
@@ -102,21 +102,21 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] :
 -- rewrite soundness/completeness directly
 
 @[circuit_norm]
-theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : VerifierEnvironment F) (x y : Var α F) :
     ((circuit  α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
-  simp only [circuit_norm, circuit]
+  simp only [circuit_norm, circuit, FormalAssertion.toSubcircuit, true_implies]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F)
-    (x y : Var α F) (hint : ProverHint F) :
-    ((circuit  α).toSubcircuit n (x, y)).Completeness env hint =
+    (x y : Var α F) :
+    ((circuit  α).toSubcircuit n (x, y)).Completeness env =
       (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F)
-    (x y : Var α F) (hint : ProverHint F) :
-    ((circuit  α).toSubcircuit n (x, y)).UsesLocalWitnesses env hint = True := by
+    (x y : Var α F) :
+    ((circuit  α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
 
 end Equality
@@ -154,14 +154,14 @@ class HasAssignEq (β : Type) (F : outParam Type) [Field F] where
 
 instance {F : Type} [Field F] : HasAssignEq (Expression F) F where
   assignEq := fun rhs => do
-    let witness ← witnessField (fun env _ => rhs.eval env)
+    let witness ← witnessField (fun env => rhs.eval env)
     witness === rhs
     return witness
 
 instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
   HasAssignEq (α (Expression F)) F where
   assignEq := fun rhs => do
-    let witness ← ProvableType.witness (fun env _ => eval env rhs)
+    let witness ← ProvableType.witness (fun env => eval env rhs)
     witness === rhs
     return witness
 

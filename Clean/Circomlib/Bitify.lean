@@ -34,7 +34,7 @@ template Num2Bits(n) {
 }
 -/
 def main (n : ℕ) (inp : Expression (F p)) := do
-  let out ← witnessVector n fun env _ => fieldToBits n (inp.eval env)
+  let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0

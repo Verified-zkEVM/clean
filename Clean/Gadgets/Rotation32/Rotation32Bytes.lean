@@ -67,7 +67,7 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (
   · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
 
 theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumptions := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ _hint henv ⟨ x0, x1, x2, x3 ⟩ _
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
   fin_cases off
   repeat
     intro Assumptions

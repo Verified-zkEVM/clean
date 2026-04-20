@@ -146,7 +146,7 @@ def fieldFromBitsExpr {n : ℕ} (bits : Vector (Expression (F p)) n) : Expressio
   Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * (2^i : F p)) 0
 
 /-- Evaluation commutes with bits accumulation -/
-theorem fieldFromBits_eval {n : ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n) :
+theorem fieldFromBits_eval {n : ℕ} {eval : VerifierEnvironment (F p)} (bits : Vector (Expression (F p)) n) :
     eval (fieldFromBitsExpr bits) = fieldFromBits (bits.map eval) := by
   simp only [fieldFromBitsExpr, fieldFromBits, fromBits]
   induction n with

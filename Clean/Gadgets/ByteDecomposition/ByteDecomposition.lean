@@ -20,8 +20,8 @@ deriving ProvableStruct
   and the high part is the most significant `8 - offset` bits.
 -/
 def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let low ← witness fun env _ => mod (env x) (2^offset.val) (by simp [two_pow_lt])
-  let high ← witness fun env _ => floorDiv (env x) (2^offset.val)
+  let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
+  let high ← witness fun env => floorDiv (env x) (2^offset.val)
 
   lookup ByteTable ((2^(8-offset.val) : F p) * low)
   lookup ByteTable high
@@ -97,7 +97,7 @@ theorem soundness (offset : Fin 8) :
 
 theorem completeness (offset : Fin 8) :
     Completeness (F p) (elaborated offset) Assumptions := by
-  rintro i0 env x_var _hint henv (x : F p) h_input (x_byte : x.val < 256)
+  rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [ProvableType.eval_field] at h_input
   simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
   simp only [henv]

@@ -28,15 +28,30 @@ def ProverHint (F : Type) :=
   String → (n : ℕ) → Array (Vector F n)
 
 /--
-  `Environment` represents the data that is provided at proving time to concretely
-  instantiate a circuit.
+  `VerifierEnvironment` represents the data that is visible to the verifier: the
+  concrete witness assignment and the committed `ProverData`. All soundness
+  statements are formulated against this struct since the verifier cannot
+  observe the prover's hint.
  -/
-structure Environment (F : Type) where
+structure VerifierEnvironment (F : Type) where
   /-- Assignment of a circuit's variables to field elements -/
   get : ℕ → F
   /-- Additional prover data not part of the current circuit's witness, such as the content
    of lookup tables, or auxiliary data made available for potential witnessing. -/
   data : ProverData F
+
+/--
+  `Environment` is `VerifierEnvironment` plus the prover's runtime `ProverHint`.
+  Used by the completeness / witness-generation side of the framework, which
+  reads the hint via `env.hint`.
+ -/
+structure Environment (F : Type) extends VerifierEnvironment F where
+  /-- Runtime-only hashmap of prover hints, never committed into the proof. -/
+  hint : ProverHint F
+
+/-- Lift an `Environment` to its underlying `VerifierEnvironment` — every function
+    that takes a verifier env automatically accepts a prover env this way. -/
+instance : Coe (Environment F) (VerifierEnvironment F) := ⟨Environment.toVerifierEnvironment⟩
 
 namespace Expression
 variable [Field F]
@@ -49,7 +64,7 @@ This is needed when we want to make statements about a circuit in the adversaria
 situation where the prover can assign anything to variables.
 -/
 @[circuit_norm]
-def eval (env : Environment F) : Expression F → F
+def eval (env : VerifierEnvironment F) : Expression F → F
   | var v => env.get v.index
   | const c => c
   | add x y => eval env x + eval env y
@@ -103,8 +118,11 @@ instance {n : ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
 end Expression
 
-instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
+instance [Field F] : CoeFun (VerifierEnvironment F) (fun _ => (Expression F) → F) where
   coe env x := x.eval env
+
+instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
+  coe env x := x.eval env.toVerifierEnvironment
 
 instance [Field F] : Inhabited F where
   default := 0
@@ -119,18 +137,18 @@ variable [Field F]
 
 /-- Expression.eval distributes over multiplication -/
 @[circuit_norm]
-lemma eval_mul (env : Environment F) (a b : Expression F) :
+lemma eval_mul (env : VerifierEnvironment F) (a b : Expression F) :
     Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
   simp only [Expression.eval]
 
 /-- Expression.eval distributes over addition -/
 @[circuit_norm]
-lemma eval_add (env : Environment F) (a b : Expression F) :
+lemma eval_add (env : VerifierEnvironment F) (a b : Expression F) :
     Expression.eval env (Expression.add a b) = (Expression.eval env a) + (Expression.eval env b) := by
   simp only [Expression.eval]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/
-lemma eval_foldl (env : Environment F) (n : ℕ)
+lemma eval_foldl (env : VerifierEnvironment F) (n : ℕ)
     (f : Expression F → Fin n → Expression F) (init : Expression F)
     (hf : ∀ (e : Expression F) (i : Fin n),
       Expression.eval env (f e i) = Expression.eval env (f (Expression.const (Expression.eval env e)) i)) :

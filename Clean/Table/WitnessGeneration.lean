@@ -37,9 +37,9 @@ def generateNextRow (hint : ProverHint F) (tc : TableConstraint W S F Unit)
   let ctx := (tc .empty).2
 
   let assignment := ctx.assignment
-  let generators := ctx.circuit.witnessGenerators hint
+  let generators := ctx.circuit.witnessGenerators
 
-    let aux_map := buildAuxMap assignment
+  let aux_map := buildAuxMap assignment
   let next_row := Array.replicate cur_row.size 0
 
   -- rules for fetching the values for expression variables
@@ -58,8 +58,9 @@ def generateNextRow (hint : ProverHint F) (tc : TableConstraint W S F Unit)
     else panic! s!"Invalid variable index {i} in environment"
 
   -- evaluate the witness generators
+  let provEnv : Environment F := { get := env, data := fun _ _ => #[], hint := hint }
   let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
-      let wit := compute ⟨ env, fun _ _ => #[] ⟩
+      let wit := compute provEnv
 
       -- insert the witness value to the next row
       let next_row := if h : idx < assignment.offset then

@@ -82,7 +82,7 @@ def inputLinearSum (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : 
 -- Lemma showing that evaluating the main circuit computes the correct sum
 omit [Fact (p > 2)] in
 lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
-  (env : Environment (F p))
+  (env : VerifierEnvironment (F p))
   (input : Var (BinSumInput n ops) (F p))
   (input_val : BinSumInput n ops (F p))
   (h_eval : eval env input = input_val) :
@@ -204,7 +204,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
     rw [inputLinearSum_eval_eq_sum _ _ _ h_input_eval]
 
   completeness := by
-    intros witness_offset env inputs_var _hint h_witness_extends inputs h_inputs_eval h_inputs_binary
+    intros witness_offset env inputs_var h_witness_extends inputs h_inputs_eval h_inputs_binary
     simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit]
     convert sum_bound_of_binary_inputs hnout inputs h_inputs_binary
     exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval

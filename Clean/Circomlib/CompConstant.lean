@@ -225,7 +225,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [circuit_norm, Vector.getElem_ofFn] at h_parts_i
       show (Vector.mapRange 127 fun j => env.get (i₀ + j))[i.val] = _
       simp only [Vector.getElem_mapRange, h_parts_i]
-      simp only [apply_ite (Expression.eval env)]
+      simp only [apply_ite (Expression.eval env.toVerifierEnvironment)]
       simp only [circuit_norm]
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega

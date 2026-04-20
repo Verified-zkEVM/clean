@@ -107,7 +107,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var _hint _ x h_input x_normalized
+  intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
   simp only [main, elaborated, circuit_norm,

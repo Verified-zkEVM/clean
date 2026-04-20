@@ -54,7 +54,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   exact ⟨ h_holds.right, h_holds.left ⟩
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env ⟨state_var, d_var⟩ _hint h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
+  intro i0 env ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
   simp only [h_input, main, circuit_norm, Xor64.circuit, Xor64.Assumptions]
   intro i

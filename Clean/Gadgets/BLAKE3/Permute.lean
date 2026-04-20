@@ -35,7 +35,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     fin_cases i <;> simp only [msgPermutation, h_normalized]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  rintro i0 env state_var _hint henv state h_inputs h_normalized
+  rintro i0 env state_var henv state h_inputs h_normalized
   simp_all only [Circuit.operations, ElaboratedCircuit.main, main, pure, ↓Fin.getElem_fin,
     Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
 

@@ -160,10 +160,10 @@ def fetchInstruction
   main := fun pc => do
     let programTable := ReadOnlyTableFromFunction program h_programSize
 
-    let rawInstrType ← witness fun eval _ => program <| Fin.ofNat _ (eval pc).val
-    let op1 ← witness fun eval _ => program <| Fin.ofNat _ (eval (pc + 1)).val
-    let op2 ← witness fun eval _ => program <| Fin.ofNat _ (eval (pc + 2)).val
-    let op3 ← witness fun eval _ => program <| Fin.ofNat _ (eval (pc + 3)).val
+    let rawInstrType ← witness fun eval => program <| Fin.ofNat _ (eval pc).val
+    let op1 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 1)).val
+    let op2 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 2)).val
+    let op3 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 3)).val
 
     lookup programTable ⟨pc, rawInstrType⟩
     lookup programTable ⟨pc + 1, op1⟩
@@ -302,11 +302,11 @@ def readFromMemory :
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
-    let value1 ← witness fun env _ => memoryValue env addr1
+    let value1 ← witness fun env => memoryValue env addr1
 
     let addr2 <== mode.isDoubleAddressing * value1
 
-    let value2 ← witness fun env _ => memoryValue env addr2
+    let value2 ← witness fun env => memoryValue env addr2
     lookup MemoryTable ⟨addr1, value1⟩
     lookup MemoryTable ⟨addr2, value2⟩
 
@@ -468,7 +468,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     let { instrType := { isAdd, isMul, isStoreState, isLoadState }, .. } := decoded
 
     -- Witness the claimed next state
-    let nextState ← witness fun eval _ => {
+    let nextState ← witness fun eval => {
       pc := if eval isLoadState = 1 then eval v1 else eval state.pc + 4
       ap := if eval isLoadState = 1 then eval v2 else eval state.ap
       fp := if eval isLoadState = 1 then eval v3 else eval state.fp

@@ -26,7 +26,7 @@ template IsZero() {
 }
 -/
 def main (input : Expression (F p)) := do
-  let inv ← witness fun env _ =>
+  let inv ← witness fun env =>
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
 
@@ -450,7 +450,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simpa [hy_val, Nat.lt_add_one_iff] using h_lt
 
   completeness := by
-    intro i env input _hint h_env (x, y) h_input h_assumptions
+    intro i env input h_env (x, y) h_input h_assumptions
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by
@@ -506,7 +506,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simpa using h_lt
 
   completeness := by
-    intro i env input _hint h_env (x, y) h_input h_assumptions
+    intro i env input h_env (x, y) h_input h_assumptions
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have hx_le : x.val ≤ 2^n := Nat.le_of_lt h_assumptions.left
@@ -561,7 +561,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simpa [hx_val, Nat.lt_add_one_iff] using h_lt
 
   completeness := by
-    intro i env input _hint h_env (x, y) h_input h_assumptions
+    intro i env input h_env (x, y) h_input h_assumptions
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by

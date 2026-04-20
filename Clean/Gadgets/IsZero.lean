@@ -41,7 +41,7 @@ def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
 lemma for soundness. Separate because the statement is optimized for induction.
 -/
 lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals : Vector F n}
-    {env : Environment F} {i₀ : ℕ}
+    {env : VerifierEnvironment F} {i₀ : ℕ}
     (h_eval : Vector.map (Expression.eval env) vars = vals)
     (h_isZero : ∀ (i : Fin n),
       IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) →

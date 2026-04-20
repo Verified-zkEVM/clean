@@ -22,7 +22,7 @@ def Spec (input : Inputs (F p)) (z : F p) :=
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
   let ⟨x, y⟩ := input
-  let or ← witness fun eval _ => (eval x).val ||| (eval y).val
+  let or ← witness fun eval => (eval x).val ||| (eval y).val
   -- we prove OR correct using an XOR lookup
   let xor := 2*or - x - y
   lookup ByteXorTable (x, y, xor)
@@ -127,7 +127,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   exact Nat.bitwise_lt_two_pow hx_byte hy_byte
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env ⟨ x_var, y_var ⟩ _hint h_env ⟨ x, y ⟩ h_input h_assumptions
+  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x ||| ZMod.val y

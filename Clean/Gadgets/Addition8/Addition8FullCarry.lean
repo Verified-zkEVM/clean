@@ -23,11 +23,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
 
   -- witness the result
-  let z ← witness fun eval _ => mod256 (eval (x + y + carryIn))
+  let z ← witness fun eval => mod256 (eval (x + y + carryIn))
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witness fun eval _ => floorDiv256 (eval (x + y + carryIn))
+  let carryOut ← witness fun eval => floorDiv256 (eval (x + y + carryIn))
   assertBool carryOut
 
   assertZero (x + y + carryIn - z - carryOut * 256)
@@ -81,7 +81,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
   completeness := by
    -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ _hint h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
+    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
 
     -- characterize inputs
     replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by

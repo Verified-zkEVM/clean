@@ -13,7 +13,7 @@ It is needed because we already need to talk about operations in the `Subcircuit
 which in turn is needed to define `Operation`.
 -/
 inductive FlatOperation (F : Type) where
-  | witness : (m : ℕ) → (Environment F → ProverHint F → Vector F m) → FlatOperation F
+  | witness : (m : ℕ) → (Environment F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
 
@@ -38,7 +38,7 @@ What it means that "constraints hold" on a list of flat operations:
 - For assertions, the expression must evaluate to 0
 - For lookups, the evaluated entry must be in the table
 -/
-def ConstraintsHoldFlat {F : Type} [Field F] (eval : Environment F) :
+def ConstraintsHoldFlat {F : Type} [Field F] (eval : VerifierEnvironment F) :
     List (FlatOperation F) → Prop
   | [] => True
   | op :: ops => match op with
@@ -54,11 +54,11 @@ def localLength {F : Type} : List (FlatOperation F) → ℕ
 
 @[circuit_norm]
 def localWitnesses {F : Type} [Field F]
-    (env : Environment F) (hint : ProverHint F) :
+    (env : Environment F) :
     (l : List (FlatOperation F)) → Vector F (localLength l)
   | [] => #v[]
-  | witness _ compute :: ops => compute env hint ++ localWitnesses env hint ops
-  | assert _ :: ops | lookup _ :: ops => localWitnesses env hint ops
+  | witness _ compute :: ops => compute env ++ localWitnesses env ops
+  | assert _ :: ops | lookup _ :: ops => localWitnesses env ops
 
 /-- Induction principle for `FlatOperation`s. -/
 def induct {F : Type} {motive : List (FlatOperation F) → Sort*}
@@ -77,8 +77,12 @@ end FlatOperation
 export FlatOperation (ConstraintsHoldFlat)
 
 @[circuit_norm]
-def Environment.ExtendsVector (env : Environment F) (wit : Vector F n) (offset : ℕ) : Prop :=
+def VerifierEnvironment.ExtendsVector (env : VerifierEnvironment F) (wit : Vector F n) (offset : ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
+
+@[circuit_norm, reducible]
+def Environment.ExtendsVector (env : Environment F) (wit : Vector F n) (offset : ℕ) : Prop :=
+  env.toVerifierEnvironment.ExtendsVector wit offset
 
 open FlatOperation in
 /--
@@ -94,10 +98,11 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  Soundness : Environment F → Prop
-  -- `Completeness` and `UsesLocalWitnesses` take the same prover-supplied hint that drives witness generation.
-  Completeness : Environment F → ProverHint F → Prop
-  UsesLocalWitnesses : Environment F → ProverHint F → Prop
+  Soundness : VerifierEnvironment F → Prop
+  -- `Completeness` and `UsesLocalWitnesses` see the full prover `Environment`, which carries
+  -- the hint that drives witness generation.
+  Completeness : Environment F → Prop
+  UsesLocalWitnesses : Environment F → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
@@ -107,22 +112,22 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   imply_soundness : ∀ env,
     ConstraintsHoldFlat env ops.toFlat → Soundness env
 
-  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators at the matching prover hint
-  implied_by_completeness : ∀ env hint,
-    env.ExtendsVector (localWitnesses env hint ops.toFlat) offset →
-    Completeness env hint → ConstraintsHoldFlat env ops.toFlat
-  -- `UsesLocalWitnesses` needs to follow from the local witness generator condition, for the matching prover hint
-  imply_usesLocalWitnesses : ∀ env hint,
-    env.ExtendsVector (localWitnesses env hint ops.toFlat) offset →
-    UsesLocalWitnesses env hint
+  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators
+  implied_by_completeness : ∀ env,
+    env.ExtendsVector (localWitnesses env ops.toFlat) offset →
+    Completeness env → ConstraintsHoldFlat env.toVerifierEnvironment ops.toFlat
+  -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
+  imply_usesLocalWitnesses : ∀ env,
+    env.ExtendsVector (localWitnesses env ops.toFlat) offset →
+    UsesLocalWitnesses env
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops.toFlat
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n)
-    (env : Environment F) (hint : ProverHint F) :=
-  (FlatOperation.localWitnesses env hint sc.ops.toFlat).cast sc.localLength_eq.symm
+    (env : Environment F) :=
+  (FlatOperation.localWitnesses env sc.ops.toFlat).cast sc.localLength_eq.symm
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -131,7 +136,7 @@ In addition to `witness`, `assert` and `lookup`,
 `Operation` can also be a `subcircuit`, which itself is essentially a list of operations.
 -/
 inductive Operation (F : Type) [Field F] where
-  | witness : (m : ℕ) → (compute : Environment F → ProverHint F → Vector F m) → Operation F
+  | witness : (m : ℕ) → (compute : Environment F → Vector F m) → Operation F
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
   | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
@@ -155,12 +160,12 @@ def localLength {F : Type} [Field F] : Operation F → ℕ
   | .subcircuit s => s.localLength
 
 def localWitnesses {F : Type} [Field F]
-    (env : Environment F) (hint : ProverHint F) :
+    (env : Environment F) :
     (op : Operation F) → Vector F op.localLength
-  | .witness _ c => c env hint
+  | .witness _ c => c env
   | .assert _ => #v[]
   | .lookup _ => #v[]
-  | .subcircuit s => s.witnesses env hint
+  | .subcircuit s => s.witnesses env
 end Operation
 
 /--
@@ -207,13 +212,13 @@ The actual vector of witnesses created by these operations in the given environm
 -/
 @[circuit_norm]
 def localWitnesses {F : Type} [Field F]
-    (env : Environment F) (hint : ProverHint F) :
+    (env : Environment F) :
     (ops : Operations F) → Vector F ops.localLength
   | [] => #v[]
-  | .witness _ c :: ops => c env hint ++ localWitnesses env hint ops
-  | .assert _ :: ops => localWitnesses env hint ops
-  | .lookup _ :: ops => localWitnesses env hint ops
-  | .subcircuit s :: ops => s.witnesses env hint ++ localWitnesses env hint ops
+  | .witness _ c :: ops => c env ++ localWitnesses env ops
+  | .assert _ :: ops => localWitnesses env ops
+  | .lookup _ :: ops => localWitnesses env ops
+  | .subcircuit s :: ops => s.witnesses env ++ localWitnesses env ops
 
 /-- Induction principle for `Operations`. -/
 def induct {F : Type} [Field F] {motive : Operations F → Sort*}
@@ -238,7 +243,7 @@ A `Condition` lets you define a predicate on operations, given the type and cont
 current operation as well as the current offset.
 -/
 structure Condition (F : Type) [Field F] where
-  witness (offset : ℕ) : (m : ℕ) → (Environment F → ProverHint F → Vector F m) → Prop := fun _ _ => True
+  witness (offset : ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
   assert (offset : ℕ) (_ : Expression F) : Prop := True
   lookup (offset : ℕ) (_ : Lookup F) : Prop := True
   subcircuit (offset : ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True

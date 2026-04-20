@@ -74,7 +74,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp_all
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env input_var _hint h_env ⟨ x, y ⟩ h_input h_assumptions
+  intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
   simp only [circuit_norm, explicit_provable_type,
     main, Assumptions, And8.circuit, And8.Assumptions,

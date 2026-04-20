@@ -221,7 +221,7 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
 Lemma that handles the case when block_exists = 1 in the step function.
 Shows that the step correctly processes a block using processBlockWords.
 -/
-private lemma step_process_block (env : Environment (F p))
+private lemma step_process_block (env : VerifierEnvironment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
@@ -336,8 +336,7 @@ def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : ProverData (F p))
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
-    intro _ _ _ _ _ _ _ _ _ h_eval h_witnesses h_assumptions hint
-    specialize h_witnesses hint
+    intro _ _ _ _ _ _ _ _ _ h_eval h_witnesses h_assumptions
     dsimp only [InitialStateAssumptions, InputAssumptions, Addition32.Assumptions] at *
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by omega)
