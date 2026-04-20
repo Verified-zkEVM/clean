@@ -580,10 +580,9 @@ lemma foldl.soundness [NeZero m] :
 lemma foldl.completeness [NeZero m] :
   ConstraintsHold.Completeness env (foldl xs init body const_out constant |>.operations n) ↔
     ConstraintsHold.Completeness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
-    ∀ (i : ℕ) (_hi : i + 1 < m),
+    ∀ (i : ℕ) (hi : i + 1 < m),
       let acc := (body default xs[i]).output (n + i*(body default default).localLength);
-      ConstraintsHold.Completeness env
-        (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
+      ConstraintsHold.Completeness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
   simp only [foldl, ConstraintsHold.completeness_iff_forAll']
   rw [FoldlM.forAll_iff_const constant const_out]
 
@@ -591,11 +590,10 @@ lemma foldl.completeness [NeZero m] :
 lemma foldl.usesLocalWitnesses [NeZero m] :
   env.UsesLocalWitnessesCompleteness n (foldl xs init body const_out constant |>.operations n) ↔
     env.UsesLocalWitnessesCompleteness n (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
-    ∀ (i : ℕ) (_hi : i + 1 < m),
+    ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default default).localLength;
       let acc := (body default xs[i]).output (n + i*k);
-      env.UsesLocalWitnessesCompleteness (n + (i + 1)*k)
-        (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
+      env.UsesLocalWitnessesCompleteness (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
   simp only [foldl, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
 end foldl
@@ -646,8 +644,7 @@ lemma foldlRange.soundness :
 lemma foldlRange.completeness :
   ConstraintsHold.Completeness env (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-    ConstraintsHold.Completeness env
-      (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+    ConstraintsHold.Completeness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
       |>.operations (n + i * (body default i).localLength)) := by
   simp only [ConstraintsHold.completeness_iff_forAll', foldlRange.forAll]
 
@@ -655,8 +652,7 @@ lemma foldlRange.completeness :
 lemma foldlRange.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness n (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-      env.UsesLocalWitnessesCompleteness (n + i * (body default i).localLength)
-        (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+      env.UsesLocalWitnessesCompleteness (n + i * (body default i).localLength) (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
         |>.operations (n + i * (body default i).localLength)) := by
   simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
 

@@ -39,14 +39,13 @@ template Sign() {
 }
 -/
 
-def main (input : Vector (Expression (F p)) 254) : Circuit (F p) (Expression (F p)) :=
+def main (input : Vector (Expression (F p)) 254) :=
   -- Use (p-1)/2 as the constant for comparison
   CompConstant.circuit ((p - 1) / 2) hppre_half_254 input
 
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
-  localLength input :=
-    (CompConstant.circuit  ((p - 1) / 2) hppre_half_254).localLength input
+  localLength input := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).localLength input
 
   Assumptions input :=
     -- Input should be binary representation of a field element
