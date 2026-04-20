@@ -13,7 +13,7 @@ structure Inputs (F : Type) where
   y: U32 F
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let ⟨x, y⟩ := input
   let ⟨z, _⟩ ← Addition32Full.circuit {x, y, carryIn := 0}
   return z
@@ -41,7 +41,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv ⟨ x, y, carry_in ⟩ h_inputs as
+  rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
 
