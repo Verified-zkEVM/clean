@@ -99,7 +99,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       aesop
     · next h_ex h_all => exfalso; exact h_ex (fun i hi => h_all i (by omega))
 
-theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M) ) Assumptions Spec := by
+theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
   circuit_proof_start
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
@@ -111,7 +111,7 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M) ) Assum
     simp only [Vector.getElem_replicate]
   apply foldl_isZero_eq_one_iff <;> assumption
 
-theorem completeness : Completeness F (elaborated (M := M) ) Assumptions := by
+theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
 def circuit [DecidableEq (M F)] : FormalCircuit F M field := {
