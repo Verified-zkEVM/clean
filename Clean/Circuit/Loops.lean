@@ -645,7 +645,7 @@ lemma foldlRange.completeness :
   ConstraintsHold.Completeness env (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
     ConstraintsHold.Completeness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
-      |>.operations (n + i * (body default i).localLength)) := by
+    |>.operations (n + i * (body default i).localLength)) := by
   simp only [ConstraintsHold.completeness_iff_forAll', foldlRange.forAll]
 
 @[circuit_norm ↓]
@@ -653,7 +653,7 @@ lemma foldlRange.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness n (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
       env.UsesLocalWitnessesCompleteness (n + i * (body default i).localLength) (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
-        |>.operations (n + i * (body default i).localLength)) := by
+      |>.operations (n + i * (body default i).localLength)) := by
   simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
 
 end foldlRange
