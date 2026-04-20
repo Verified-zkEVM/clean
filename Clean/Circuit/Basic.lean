@@ -60,6 +60,13 @@ theorem pure_def {α} (a : α) : (pure a : Circuit F α) = fun _ => (a, []) := r
 theorem map_def {α β} (f : α → β) (circuit : Circuit F α) :
   f <$> circuit = fun n => let (a, ops) := circuit n; (f a, ops) := rfl
 
+@[circuit_norm]
+theorem seqRight_def {α β} (f : Circuit F α) (g : Circuit F β) :
+  f *> g = fun n =>
+    let (_, ops) := f n
+    let (b, ops') := g (n + Operations.localLength ops)
+    (b, ops ++ ops') := rfl
+
 -- normalize `bind` to `>>=`
 @[circuit_norm]
 theorem bind_normalize {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
@@ -119,6 +126,25 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 
 end Circuit
 
+/-- Emit an interaction to the channel -/
+@[circuit_norm]
+def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : InteractionWithChannel channel := ⟨ mult, msg, false ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
+def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : InteractionWithChannel channel := ⟨ -1, msg, true ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
+def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : InteractionWithChannel channel := ⟨ 1, msg, false ⟩
+  ((), [.interact interaction.toRaw])
+
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
 def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
@@ -148,6 +174,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
   | .lookup l :: ops =>
     l.Contains eval ∧ ConstraintsHold eval ops
+  | .interact _ :: ops => ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
 
@@ -161,6 +188,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
   | .lookup l :: ops =>
     l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+  | .interact _ :: ops => ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
 
@@ -174,6 +202,7 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
   | .lookup l :: ops =>
     l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
+  | .interact _ :: ops => ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
@@ -197,6 +226,7 @@ def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : �
   | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
+  | .interact _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
@@ -408,6 +438,80 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   CompletenessSpec : Input F → Output F → ProverData F → Prop := fun _ _ _ => True
   completenessSpec : GeneralFormalCircuit.CompletenessSpecProof F elaborated Assumptions CompletenessSpec
     := by unfold GeneralFormalCircuit.CompletenessSpecProof; intros; trivial
+
+/-- Soundness for general circuits that change interactions -/
+@[circuit_norm]
+def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+    (Spec : Input F → Output F → Environment F → Prop) :=
+  ∀ offset : ℕ, ∀ env,
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
+  let output := eval env (circuit.output input_var offset)
+  Spec input output env ∧
+  Operations.Requirements env (circuit.main input_var |>.operations offset)
+
+@[circuit_norm]
+def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Environment F → Prop) :=
+  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  ∀ input : Input F, eval env input_var = input →
+  Assumptions input env →
+  ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
+
+/-- GeneralFormalCircuit variant for circuits that change interactions -/
+structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F]
+    [ProvableType Input] [ProvableType Output]
+    extends elaborated : ElaboratedCircuit F Input Output where
+  Assumptions : Input F → Environment F → Prop
+  Spec : Input F → Output F → Environment F → Prop
+  soundness : FormalCircuitWithInteractions.Soundness F elaborated Spec
+  completeness : FormalCircuitWithInteractions.Completeness F elaborated Assumptions
+
+  -- expose the channel guarantees and requirements, for end-to-end proofs
+  channelsWithGuarantees : List (RawChannel F) := []
+  guarantees_iff : ∀ input_var offset,
+    let ops := (main input_var).operations offset
+    ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
+    ∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env := by
+    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
+    simp only [circuit_norm, seval]
+    try tauto -- for permuting conjunctions
+
+  channelsWithRequirements : List (RawChannel F) := []
+  requirements_iff : ∀ input_var offset,
+    let ops := (main input_var).operations offset
+    ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
+      ∀ env, ops.InChannelsOrRequirements channelsWithRequirements env := by
+    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
+    simp only [circuit_norm, seval]
+    try tauto -- for permuting conjunctions
+
+  -- even if the conditions so far theoretically allow it, we must not leave out any channels
+  -- we interacted with from the combination of both lists. this is because "did not interact with a given channel"
+  -- is important knowledge during end to end proofs, when we need to prove that _all_ interactions
+  -- with a given channel have some property.
+  -- (if this ever becomes too restrictive for real circuits, we can relax by introducing a third list of "other channels")
+  shallowChannels_subset : ∀ input_var offset,
+    let ops := (main input_var).operations offset
+    ∀ channel ∈ ops.shallowChannels,
+      channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements := by
+    -- TODO this tactic would bee more effective if it would unfold all channels used in the circuit
+    simp only [circuit_norm, seval]
+    try tauto
+
+  exposedChannels (_ : Var Input F) (n : ℕ) : List (ExposedChannel F) := []
+  exposedChannels_eq : ∀ input_var offset,
+    let ops := (main input_var).operations offset
+    ∀ exposed ∈ exposedChannels input_var offset,
+      ops.interactionsWith exposed.channel = exposed.interactions := by
+    -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
+    simp only [circuit_norm, seval]
+    try tauto
+
+@[circuit_norm]
+def FormalCircuitWithInteractions.channels (circuit : FormalCircuitWithInteractions F Input Output) :=
+  circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
@@ -445,11 +549,10 @@ def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F 
   | .witness _ compute => (compute (.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
+  | .interact _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
-  ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
-    acc ++ op.dynamicWitness acc
-  ) init
+  ops.foldl (fun acc op => acc ++ op.dynamicWitness acc) init
 
 def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (init : List F) : Environment F :=
   .fromList (FlatOperation.dynamicWitnesses ops init)
@@ -485,12 +588,14 @@ def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (E
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .interact _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .interact _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops.toFlat) ++ witnessGenerators ops
 
 -- statements about constant length or output
@@ -538,6 +643,9 @@ end Circuit
 
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies implies_true forall_const gt_iff_lt
+  not_true_eq_false ne_eq false_implies and_false false_and
+  and_self or_self or_true or_false true_or false_or
+  Bool.false_eq_true Bool.true_eq_false
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form
@@ -578,4 +686,24 @@ attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
-attribute [circuit_norm] neg_mul one_mul add_zero
+attribute [circuit_norm] neg_mul one_mul add_zero zero_add
+
+attribute [circuit_norm] List.append_nil
+
+-- simp lemmas useful to unfold subcircuit channels
+
+attribute [circuit_norm] List.nil_subset List.subset_cons_of_subset List.Subset.refl
+attribute [circuit_norm] List.Forall List.flatten_cons List.flatten_nil List.Sublist.refl
+attribute [circuit_norm] List.mem_cons List.mem_nil_iff List.mem_append List.mem_ofFn
+
+@[circuit_norm]
+lemma List.ofFn_singleton_flatten {α : Type} {m : ℕ} (f : Fin m → α) :
+    (List.ofFn fun i : Fin m => [f i]).flatten = List.ofFn f := by
+  induction m <;> simp_all
+
+@[circuit_norm]
+lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
+    (List.ofFn fun _ : Fin m => ([] : List α)).flatten = [] := by
+  simp
+
+attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false

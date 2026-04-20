@@ -78,6 +78,39 @@ lemma forAll_flatten (xs : Vector α m) {circuit : α → Circuit F β} (constan
     localLength := constant.localLength
     localLength_eq _ _ := constant.localLength_eq .. }
 
+lemma forAllNoOffset_flatten_abstract {prop' : ConditionNoOffset F}
+    (circuit : Fin m → Circuit F β) (constant : ConstantLength circuit) :
+  Operations.forAllNoOffset prop'
+      (List.ofFn fun i => (circuit i).operations (n + i * constant.localLength)).flatten ↔
+    ∀ (i : Fin m),
+      Operations.forAllNoOffset prop' ((circuit i).operations (n + i * constant.localLength)) := by
+  induction m generalizing n with
+  | zero => simp [Operations.forAllNoOffset]
+  | succ m ih =>
+    rw [List.ofFn_succ, List.flatten_cons, Operations.forAllNoOffset_append, Fin.forall_fin_succ]
+    simp only [Fin.val_zero, zero_mul, add_zero, Fin.val_succ]
+    let circuit' := fun i : Fin m => circuit i.succ
+    let constant' : ConstantLength circuit' := {
+      localLength := constant.localLength
+      localLength_eq a n := constant.localLength_eq a.succ n }
+    set k := constant.localLength
+    specialize ih (n := n + k) circuit' constant'
+    set k' := constant'.localLength
+    have : k' = k := rfl
+    rw [this] at ih
+    ring_nf at ih ⊢
+    rw [ih]
+
+lemma forAllNoOffset_flatten {prop' : ConditionNoOffset F}
+    (xs : Vector α m) {circuit : α → Circuit F β} (constant : ConstantLength circuit) :
+  Operations.forAllNoOffset prop'
+      (List.ofFn fun (i : Fin m) => (circuit xs[i.val]).operations (n + i * constant.localLength)).flatten ↔
+    ∀ (i : Fin m),
+      Operations.forAllNoOffset prop' ((circuit xs[i.val]).operations (n + i * constant.localLength)) :=
+  forAllNoOffset_flatten_abstract (fun i : Fin m => circuit xs[i.val]) {
+    localLength := constant.localLength
+    localLength_eq _ _ := constant.localLength_eq .. }
+
 -- helper lemma to do induction on (List.ofFn ...).flatten terms
 private lemma ofFn_flatten_cons {circuit : α → Circuit F β} (constant : ConstantLength circuit) (x : α) (xs : Vector α m) (n : ℕ) :
   (List.ofFn fun i => (circuit (Vector.listCons x xs)[i.val]).operations (n + i * constant.localLength)).flatten
@@ -115,7 +148,7 @@ end ForM
 
 namespace MapM
 variable {circuit : α → Circuit F β} {xs : Vector α m} [constant: ConstantLength circuit]
-  {prop : Condition F}
+  {prop : Condition F} {prop' : ConditionNoOffset F}
 
 theorem localLength_eq : (xs.mapM circuit).localLength n = m * constant.localLength := by
   induction xs using Vector.inductPush
@@ -168,11 +201,23 @@ theorem forAll_iff :
     ∀ (i : Fin m), (circuit xs[i.val]).forAll (n + i * constant.localLength) prop := by
   rw [forAll_def, operations_eq, forAll_flatten]
 
+theorem forAllNoOffset_iff :
+  Operations.forAllNoOffset prop' ((xs.mapM circuit).operations n) ↔
+    ∀ (i : Fin m), Operations.forAllNoOffset prop' ((circuit xs[i.val]).operations (n + i * constant.localLength)) := by
+  rw [operations_eq, forAllNoOffset_flatten]
+
 -- specialization to mapFinRangeM
 theorem mapFinRangeM_forAll_iff {circuit : Fin m → Circuit F β} [constant : ConstantLength circuit] :
   (Vector.mapFinRangeM m circuit).forAll n prop ↔
     ∀ i : Fin m, (circuit i).forAll (n + i*constant.localLength) prop := by
   rw [Vector.mapFinRangeM, forAll_iff]
+  simp only [Vector.getElem_finRange]
+
+theorem mapFinRangeM_forAllNoOffset_iff {circuit : Fin m → Circuit F β}
+    [constant : ConstantLength circuit] :
+  Operations.forAllNoOffset prop' ((Vector.mapFinRangeM m circuit).operations n) ↔
+    ∀ i : Fin m, Operations.forAllNoOffset prop' ((circuit i).operations (n + i * constant.localLength)) := by
+  rw [Vector.mapFinRangeM, forAllNoOffset_iff]
   simp only [Vector.getElem_finRange]
 end MapM
 
@@ -360,9 +405,17 @@ theorem forAll_iff_const [NeZero m] (constant : ConstantLength (prod circuit))
 
 end FoldlM
 
-def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+def forEach {m : ℕ} [Inhabited α] (xs : Vector α m) (body : α → Circuit F Unit)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F Unit :=
   xs.forM body
+
+theorem forEach_cons {m : ℕ} [Inhabited α] (x : α) (xs : Vector α m) (body : α → Circuit F Unit)
+    (constant : ConstantLength body) :
+    forEach (Vector.listCons x xs) body constant = body x *> forEach xs body constant := by
+  unfold forEach
+  rw [Vector.forM_toList, Vector.listCons, Vector.toList_mk, List.forM_cons]
+  rw [←Vector.forM_toList]
+  rfl
 
 def map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F (Vector β m) :=
@@ -486,7 +539,7 @@ end map
 
 section mapFinRange
 variable {env : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
-  {constant : ConstantLength body} {prop : Condition F}
+  {constant : ConstantLength body} {prop : Condition F} {prop' : ConditionNoOffset F}
 
 @[circuit_norm ↓]
 lemma mapFinRange.localLength_eq :
@@ -501,12 +554,66 @@ lemma mapFinRange.output_eq :
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange]
 
+lemma mapFinRange.operations_eq : (mapFinRange m body constant).operations n =
+    (List.ofFn fun (i : Fin m) => (body i).operations (n + i * constant.localLength)).flatten := by
+  rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq]
+  simp
+
+@[circuit_norm ↓]
+lemma mapFinRange.subcircuitChannelsWithGuarantees :
+  ((mapFinRange m body constant).operations n).subcircuitChannelsWithGuarantees =
+    (List.ofFn fun (i : Fin m) =>
+      (body i).operations (n + i * constant.localLength) |>.subcircuitChannelsWithGuarantees).flatten := by
+  rw [mapFinRange.operations_eq]
+  simp only [Operations.subcircuitChannelsWithGuarantees]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
+@[circuit_norm ↓]
+lemma mapFinRange.subcircuitChannelsWithRequirements :
+  ((mapFinRange m body constant).operations n).subcircuitChannelsWithRequirements =
+    (List.ofFn fun (i : Fin m) =>
+      (body i).operations (n + i * constant.localLength) |>.subcircuitChannelsWithRequirements).flatten := by
+  rw [mapFinRange.operations_eq]
+  simp only [Operations.subcircuitChannelsWithRequirements]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
+@[circuit_norm ↓]
+lemma mapFinRange.shallowChannels :
+  ((mapFinRange m body constant).operations n).shallowChannels =
+    (List.ofFn fun (i : Fin m) =>
+      (body i).operations (n + i * constant.localLength) |>.shallowChannels).flatten := by
+  rw [mapFinRange.operations_eq]
+  simp only [Operations.shallowChannels]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
+lemma mapFinRange.shallowChannels_subset_iff {cs : List (RawChannel F)} :
+  ((mapFinRange m body constant).operations n).shallowChannels ⊆ cs ↔
+    ∀ i : Fin m, ((body i).operations (n + i * constant.localLength)).shallowChannels ⊆ cs := by
+  simp [mapFinRange.shallowChannels, List.subset_def]
+  tauto
+
 @[circuit_norm ↓]
 lemma mapFinRange.forAll :
   Operations.forAll n prop (mapFinRange m body constant |>.operations n) ↔
     ∀ i : Fin m, (body i |>.forAll (n + i*(body 0).localLength) prop) := by
   simp only [mapFinRange, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
+
+@[circuit_norm ↓]
+lemma mapFinRange.forAll' :
+  Operations.forAllNoOffset prop' (mapFinRange m body constant n |>.2) ↔
+    ∀ i : Fin m, ((body i (n + i*(body 0).localLength)).2 |> Operations.forAllNoOffset prop') := by
+  simp only [mapFinRange]
+  rw [MapM.mapFinRangeM_forAllNoOffset_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma mapFinRange.soundness :
@@ -657,5 +764,134 @@ lemma foldlRange.usesLocalWitnesses :
   simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
 
 end foldlRange
+
+theorem interactions_forEach_nil {m : ℕ} [Inhabited α] (xs : Vector α m) (body : α → Circuit F Unit)
+    (constant : ConstantLength body) (offset : ℕ)
+    (h_body : ∀ x n, Operations.interactions ((body x) n).2 = []) :
+    Operations.interactions ((forEach xs body constant) offset).2 = [] := by
+  induction xs using Vector.induct generalizing offset
+  · rfl
+  case cons n a as ih =>
+    simp only [circuit_norm, forEach_cons]
+    rw [h_body, ih]
+    rfl
+
+-- TODO are these nil versions needed?
+
+@[circuit_norm]
+theorem interactions_map_nil {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (constant : ConstantLength body) (offset : ℕ)
+    (h_body : ∀ x n, ((body x).operations n).interactions = []) :
+    ((map xs body constant).operations offset).interactions = [] := by
+  unfold map
+  induction xs using Vector.induct generalizing offset
+  case nil =>
+    simp [Circuit.operations, Circuit.pure_operations_eq, Operations.interactions]
+  case cons x xs ih =>
+    simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
+    rw [Operations.interactions_append, Operations.interactions_append]
+    simp only [Operations.interactions, h_body, ih]
+    rfl
+
+@[circuit_norm]
+theorem interactionsWith_map_nil {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (constant : ConstantLength body) (channel : RawChannel F) (offset : ℕ)
+    (h_body : ∀ x n, ((body x).operations n).interactionsWith channel = []) :
+    ((map xs body constant).operations offset).interactionsWith channel = [] := by
+  unfold map
+  induction xs using Vector.induct generalizing offset
+  case nil =>
+    simp [Circuit.operations, Circuit.pure_operations_eq, Operations.interactionsWith_nil]
+  case cons x xs ih =>
+    simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
+    rw [Operations.interactionsWith_append, Operations.interactionsWith_append]
+    simp only [h_body, ih, List.nil_append, Operations.interactionsWith_nil]
+
+@[circuit_norm]
+theorem interactions_mapFinRange_nil (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (offset : ℕ)
+    (h_body : ∀ i n, ((body i).operations n).interactions = []) :
+    ((mapFinRange m body constant).operations offset).interactions = [] := by
+  unfold mapFinRange Vector.mapFinRangeM
+  exact interactions_map_nil (Vector.finRange m) body constant offset h_body
+
+private theorem interactions_flatten_eq_map (ops : List (Operations F)) :
+    Operations.interactions ops.flatten = (ops.map Operations.interactions).flatten := by
+  induction ops with
+  | nil => rfl
+  | cons op ops ih =>
+    simp [Operations.interactions_append, ih]
+
+/-- Interactions of `map` are the concatenation of the interactions of its body circuits. -/
+@[circuit_norm ↓]
+theorem interactions_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (constant : ConstantLength body) (offset : ℕ) :
+    ((map xs body constant).operations offset).interactions =
+      (List.ofFn fun (i : Fin m) =>
+        ((body xs[i]).operations (offset + i * constant.localLength)).interactions).flatten := by
+  rw [map, MapM.operations_eq, interactions_flatten_eq_map, List.map_ofFn]
+  rfl
+
+@[circuit_norm ↓]
+theorem interactions_forEach {m : ℕ} [Inhabited α] (xs : Vector α m) (body : α → Circuit F Unit)
+    (constant : ConstantLength body) (offset : ℕ) :
+    ((forEach xs body constant).operations offset).interactions =
+      (List.ofFn fun (i : Fin m) =>
+        ((body xs[i]).operations (offset + i * constant.localLength)).interactions).flatten := by
+  rw [forEach, ForM.operations_eq, interactions_flatten_eq_map, List.map_ofFn]
+  rfl
+
+-- TODO needed?
+theorem interactionsWith_mapFinRange_nil (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (channel : RawChannel F) (offset : ℕ)
+    (h_body : ∀ i n, ((body i).operations n).interactionsWith channel = []) :
+    ((mapFinRange m body constant).operations offset).interactionsWith channel = [] := by
+  unfold mapFinRange Vector.mapFinRangeM
+  exact interactionsWith_map_nil (Vector.finRange m) body constant channel offset h_body
+
+@[circuit_norm ↓]
+theorem interactions_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (offset : ℕ) :
+    ((mapFinRange m body constant).operations offset).interactions =
+      (List.ofFn fun (i : Fin m) =>
+        ((body i).operations (offset + i * constant.localLength)).interactions).flatten := by
+  rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq, interactions_flatten_eq_map, List.map_ofFn]
+  congr
+  funext i
+  simp [Vector.getElem_finRange]
+
+theorem interactions_foldl_nil [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector α m)
+    (init : β) (body : β → α → Circuit F β)
+    (const_out : ConstantOutput (fun (s, a) => body s a))
+    (constant : ConstantLength (fun (s, a) => body s a))
+    (offset : ℕ)
+    (h_body : ∀ s x n, ((body s x).operations n).interactions = []) :
+    ((foldl xs init body const_out constant).operations offset).interactions = [] := by
+  induction xs using Vector.induct generalizing offset init
+  case nil =>
+    simp only [foldl]
+    rw [Vector.foldlM_toList, Vector.toList_mk, List.foldlM_nil]
+    simp only [Operations.interactions]
+  case cons x xs ih =>
+    simp only [foldl]
+    rw [Vector.foldlM_toList, Vector.listCons, Vector.toList_mk, List.foldlM_cons]
+    simp only [Circuit.bind_operations_eq, Operations.interactions_append]
+    rw [h_body, ←Vector.foldlM_toList]
+    exact ih _ _
+
+@[circuit_norm]
+theorem interactions_foldlRange_nil [Inhabited β] {m : ℕ}
+    (init : β) (body : β → Fin m → Circuit F β)
+    (constant : ConstantLength (fun (s, a) => body s a)) (offset : ℕ)
+    (h_body : ∀ s i n, ((body s i).operations n).interactions = []) :
+    ((foldlRange m init body constant).operations offset).interactions = [] := by
+  simp only [foldlRange]
+  rw [Vector.foldlM_toList]
+  induction (Vector.finRange m).toList generalizing offset init with
+  | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.interactions]
+  | cons x xs ih =>
+    simp only [List.foldlM_cons, Circuit.bind_operations_eq, Operations.interactions_append]
+    rw [h_body]
+    exact ih ((body init x).output offset) (offset + (body init x).localLength offset)
 
 end Circuit

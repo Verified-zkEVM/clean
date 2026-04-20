@@ -12,6 +12,14 @@ structure State (F : Type) where
   ap : F
   fp : F
 
+instance {α : Type} [Fintype α] : Fintype (State α) :=
+  Fintype.ofEquiv (α × α × α) {
+    toFun := fun (pc, ap, fp) => ⟨pc, ap, fp⟩
+    invFun := fun s => (s.pc, s.ap, s.fp)
+    left_inv := fun _ => rfl
+    right_inv := fun _ => rfl
+  }
+
 instance : ProvableType State where
   size := 3
   toElements := fun { pc, ap, fp } => #v[pc, ap, fp]

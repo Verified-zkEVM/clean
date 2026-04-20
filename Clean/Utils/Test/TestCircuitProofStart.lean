@@ -150,7 +150,7 @@ example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Should unfold nested references
   -- Check that Assumptions was unfolded to reveal TestAssumptions
-  guard_hyp h_assumptions : TestAssumptions input ∧ TestAssumptions input
+  guard_hyp h_assumptions : TestAssumptions input
   sorry
 end UnfoldTest2
 

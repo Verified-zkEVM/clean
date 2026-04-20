@@ -71,7 +71,7 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 -- circuits
 
 def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
-  main block := .forEach block (assertion U64.AssertNormalized.circuit)
+  main block := .forEach block U64.AssertNormalized.circuit
   Assumptions _ := True
   Spec block := block.Normalized
   localLength_eq _ _ := by simp +arith only [circuit_norm, U64.AssertNormalized.circuit]

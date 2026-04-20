@@ -99,3 +99,37 @@ lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableT
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]
+
+/--
+Weaken the specification of a FormalCircuitWithInteractions.
+-/
+def FormalCircuitWithInteractions.weakenSpec
+    {F : Type} [Field F]
+    {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : FormalCircuitWithInteractions F Input Output)
+    (WeakerSpec : Input F → Output F → Environment F → Prop)
+    (h_spec_implication : ∀ input output data,
+      circuit.Spec input output data → WeakerSpec input output data) :
+    FormalCircuitWithInteractions F Input Output where
+  __ := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := WeakerSpec
+  soundness := by
+    intro offset env input_var input h_eval h_holds
+    have h_strong_spec := circuit.soundness offset env input_var input h_eval h_holds
+    exact ⟨ h_spec_implication input _ _ h_strong_spec.1, h_strong_spec.2 ⟩
+  completeness := circuit.completeness
+  channelsWithGuarantees := circuit.channelsWithGuarantees
+  guarantees_iff := circuit.guarantees_iff
+  channelsWithRequirements := circuit.channelsWithRequirements
+  requirements_iff := circuit.requirements_iff
+  shallowChannels_subset := circuit.shallowChannels_subset
+
+@[circuit_norm]
+lemma FormalCircuitWithInteractions.weakenSpec_assumptions
+    {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuitWithInteractions F Input Output)
+    (WeakerSpec : Input F → Output F → Environment F → Prop)
+    h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
+  simp only [FormalCircuitWithInteractions.weakenSpec]

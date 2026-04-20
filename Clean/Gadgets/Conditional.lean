@@ -112,12 +112,11 @@ def ifElse [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M]
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F (M (Expression F)) :=
   circuit { selector, ifTrue, ifFalse }
 
-omit [Field F] in
 /--
   Lemma to simplify the evaluated output
 -/
 @[circuit_norm]
-theorem eval_ifElse_output [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M] {env}
+theorem eval_ifElse_output {M : TypeMap} [ProvableType M] {env}
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) :
   eval env (output selector ifTrue ifFalse) =
     outputValue (selector.eval env) (eval env ifTrue) (eval env ifFalse) := by

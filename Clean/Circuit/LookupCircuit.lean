@@ -36,7 +36,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     -- there exists an environment, such that
     ∃ n env,
     -- the circuit constraints hold
-    Circuit.ConstraintsHold env (circuit.main (const input) |>.operations n)
+    Operations.ConstraintsHold env (circuit.main (const input) |>.operations n)
     -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 

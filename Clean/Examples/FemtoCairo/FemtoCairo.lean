@@ -686,7 +686,7 @@ def femtoCairoStepSoundness
 
     split at c_decode
     case h_2 =>
-      -- impossible, decodeInstructionCircuit ensures that
+      -- impossible, decodeInstruction.circuit ensures that
       -- instruction decode is always successful
       contradiction
     case h_1 instr_type mode1 mode2 mode3 h_eq_decode =>

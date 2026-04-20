@@ -33,7 +33,7 @@ template MultiMux2(n) {
     signal  s10;
     s10 <== s[1] * s[0];
 
-    for (var i=0; i<n; i++) {
+    for (var i=0; i < n; i++) {
           a10[i] <==  ( c[i][ 3]-c[i][ 2]-c[i][ 1]+c[i][ 0] ) * s10;
            a1[i] <==  ( c[i][ 2]-c[i][ 0] ) * s[1];
            a0[i] <==  ( c[i][ 1]-c[i][ 0] ) * s[0];
@@ -173,10 +173,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     intro input offset
     simp only [main, circuit_norm]
     rfl
-
-  subcircuitsConsistent := by
-    intro input offset
-    simp only [main, circuit_norm]
 
   Assumptions input :=
     let ⟨_, s⟩ := input
