@@ -383,7 +383,8 @@ def windowEnv (table : TableConstraint W S F Unit)
 @[table_norm]
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
-  Circuit.ConstraintsHold.Soundness (windowEnv table window aux_env) table.operations
+  let env := windowEnv table window aux_env
+  Circuit.ConstraintsHold.Soundness env table.operations
 
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
@@ -473,12 +474,10 @@ end TableConstraint
 export TableConstraint (windowEnv getCurrRow getNextRow readCurrRow readNextRow assignVar assign assignNextRow assignCurrRow)
 
 @[reducible]
-def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
-  TableConstraint 1 S F Unit
+def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
 
 @[reducible]
-def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
-  TableConstraint 2 S F Unit
+def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 2 S F Unit
 
 -- specify a row, either counting from the start or from the end of the trace.
 inductive RowIndex where
@@ -510,7 +509,11 @@ instance : Repr RowIndex where
     | .fromStart i, _ => reprStr (i : ℤ)
     | .fromEnd i, _ => reprStr (-i-1 : ℤ)
 
--- Repr for TableOperation also removed (see TableConstraint above).
+instance [Repr F] : Repr (TableOperation S F) where
+  reprPrec op _ := match op with
+    | .boundary i c => "boundary " ++ reprStr i ++ " " ++ reprStr c
+    | .everyRow c => "everyRow " ++ reprStr c
+    | .everyRowExceptLast c => "everyRowExceptLast " ++ reprStr c
 
 export TableOperation (boundary everyRow everyRowExceptLast)
 
