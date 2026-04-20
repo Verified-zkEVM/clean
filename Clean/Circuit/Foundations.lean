@@ -35,8 +35,7 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
   Justification for using modified statements for `UsesLocalWitnesses`
   and `ConstraintsHold` in the `FormalCircuit` definition.
 -/
-theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α)
-    :
+theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
     ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F) (b : β F),
       eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
@@ -69,8 +68,7 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
   Justification for using modified statements for `UsesLocalWitnesses`
   and `ConstraintsHold` in the `FormalAssertion` definition.
 -/
-theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β)
-    :
+theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
     ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F) (b : β F),
       eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)

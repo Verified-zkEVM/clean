@@ -633,8 +633,7 @@ attribute [table_norm, table_assignment_norm] modify modifyGet MonadStateOf.modi
 
 -- simp lemma to simplify updated circuit after an assignment
 @[table_norm, table_assignment_norm]
-theorem TableConstraint.assignVar_circuit :
-    ∀ (ctx : TableContext W S F) (off : CellOffset W S) (v : Variable F),
+theorem TableConstraint.assignVar_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
   (assignVar off v ctx).snd.circuit = ctx.circuit := by intros; rfl
 
 /--

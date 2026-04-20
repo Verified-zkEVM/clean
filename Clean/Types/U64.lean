@@ -187,7 +187,7 @@ open Gadgets (ByteTable)
   Assert that a 64-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-def main (inputs : Var U64 (F p)) := do
+def main (inputs : Var U64 (F p)) : Circuit (F p) Unit := do
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
   lookup ByteTable x0
   lookup ByteTable x1
