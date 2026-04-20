@@ -9,8 +9,7 @@ instantiate an environment which uses the circuit's witness generators.
 
 Besides that, a `name` is required, to identify the table created from this circuit.
 -/
-structure LookupCircuit (F : Type) [Field F] (α β : TypeMap)
-    [ProvableType α] [ProvableType β]
+structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α] [ProvableType β]
     extends circuit : FormalCircuit F α β where
   computableWitnesses : circuit.ComputableWitnesses
 
@@ -47,8 +46,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     ∧ output = eval env (circuit.output (const input) n)
 
   Soundness := fun _ (input, output) => circuit.Assumptions input → circuit.Spec input output
-  Completeness := fun _ (input, output) =>
-    circuit.Assumptions input ∧ output = circuit.constantOutput hint input
+  Completeness := fun _ (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput hint input
 
   imply_soundness := by
     intro _ (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions

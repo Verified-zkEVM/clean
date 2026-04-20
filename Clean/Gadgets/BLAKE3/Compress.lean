@@ -13,7 +13,7 @@ open Specs.BLAKE3 (compress)
 /--
 Main circuit that chains ApplyRounds and FinalStateUpdate.
 -/
-def main (input : Var ApplyRounds.Inputs (F p)) := do
+def main (input : Var ApplyRounds.Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   -- First apply the 7 rounds
   let state ← ApplyRounds.circuit input
   -- Then apply final state update
@@ -21,13 +21,12 @@ def main (input : Var ApplyRounds.Inputs (F p)) := do
 
 instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State where
   main
-  localLength input := (ApplyRounds.circuit ).localLength input
-    + (FinalStateUpdate.circuit ).localLength ⟨default, input.chaining_value⟩
+  localLength input := ApplyRounds.circuit.localLength input + FinalStateUpdate.circuit.localLength ⟨default, input.chaining_value⟩
   output := fun input offset =>
-    let applyRounds_out := (ApplyRounds.circuit ).output input offset
-    (FinalStateUpdate.circuit ).output
+    let applyRounds_out := ApplyRounds.circuit.output input offset
+    FinalStateUpdate.circuit.output
       ⟨applyRounds_out, input.chaining_value⟩
-      (offset + (ApplyRounds.circuit ).localLength input)
+      (offset + ApplyRounds.circuit.localLength input)
   output_eq := by
     intro input offset
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
@@ -52,14 +51,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
 lemma ApplyRounds.circuit_assumptions_is :
-  (ApplyRounds.circuit (p := p) ).Assumptions = ApplyRounds.Assumptions := rfl
+  ApplyRounds.circuit.Assumptions (F := F p) = ApplyRounds.Assumptions := rfl
 
-lemma ApplyRounds.circuit_spec_is :
-  (ApplyRounds.circuit (p := p) ).Spec = ApplyRounds.Spec := rfl
+lemma ApplyRouunds.circuit_spec_is :
+  ApplyRounds.circuit.Spec (F := F p) = ApplyRounds.Spec := rfl
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
-  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRounds.circuit_spec_is,
+  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRouunds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 

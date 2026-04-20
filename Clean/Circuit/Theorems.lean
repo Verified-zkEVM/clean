@@ -176,7 +176,7 @@ lemma forAll_append {condition : Condition F} {ops ops' : List (FlatOperation F)
     specialize ih (n + op.singleLocalLength)
     simp_all +arith [forAll_cons, localLength_cons, and_assoc]
 
-lemma localWitnesses_append {F} [Field F] {a b: List (FlatOperation F)} {env} :
+lemma localWitnesses_append {F} {a b: List (FlatOperation F)} {env} :
     (localWitnesses env (a ++ b)).toArray = (localWitnesses env a).toArray ++ (localWitnesses env b).toArray := by
   induction a using FlatOperation.localLength.induct with
   | case1 => simp only [List.nil_append, localLength, localWitnesses, Vector.toArray_empty,
@@ -227,7 +227,7 @@ open FlatOperation (localLength localWitnesses)
 what follows are relationships between different versions of `Environment.UsesLocalWitnesses`
 -/
 
-lemma env_extends_witness {F} [Field F] {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F} {m c} :
+lemma env_extends_witness {F} {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F} {m c} :
     env.ExtendsVector (localWitnesses env (.witness m c :: ops)) n ↔
       (env.ExtendsVector (c env) n ∧ env.ExtendsVector (localWitnesses env ops) (m + n)) := by
   simp_all only [Environment.ExtendsVector, VerifierEnvironment.ExtendsVector, localLength, localWitnesses, Vector.getElem_append]

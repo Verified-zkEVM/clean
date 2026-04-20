@@ -38,7 +38,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
     rfl
   output := fun input offset =>
-    let state_out : BLAKE3State (Expression (F p)) := Round.circuit.output input offset
+    let state_out := Round.circuit.output input offset
     let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
     ⟨state_out, msg_out⟩
   output_eq := by
@@ -421,7 +421,7 @@ def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p)
     counter_low, counter_high, block_len, flags
   ]
 
-def main (input : Var Inputs (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p))  := do
   let state := initializeStateVector input
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
