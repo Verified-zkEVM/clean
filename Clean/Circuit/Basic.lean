@@ -30,8 +30,7 @@ def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × List (Operation F)
 namespace Circuit
 -- definition of the circuit monad
 
-def bind {α β} (f : Circuit F α) (g : α → Circuit F β) :
-    Circuit F β := fun (n : ℕ) =>
+def bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
   -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
   let (b, ops') := g (f n).1 (n + Operations.localLength (f n).2)
   (b, (f n).2 ++ ops')
@@ -48,16 +47,14 @@ In proofs, we rewrite `bind` into a definition that is more efficient to
 reason about (because it avoids the duplicated `f n` term).
  -/
 @[circuit_norm]
-theorem bind_def {α β} (f : Circuit F α)
-    (g : α → Circuit F β) :
+theorem bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
   f >>= g = fun n =>
     let (a, ops) := f n
     let (b, ops') := g a (n + Operations.localLength ops)
     (b, ops ++ ops') := rfl
 
 @[circuit_norm]
-theorem pure_def {α} (a : α) :
-    (pure a : Circuit F α) = fun _ => (a, []) := rfl
+theorem pure_def {α} (a : α) : (pure a : Circuit F α) = fun _ => (a, []) := rfl
 
 @[circuit_norm]
 theorem map_def {α β} (f : α → β) (circuit : Circuit F α) :
@@ -65,14 +62,12 @@ theorem map_def {α β} (f : α → β) (circuit : Circuit F α) :
 
 -- normalize `bind` to `>>=`
 @[circuit_norm]
-theorem bind_normalize {α β} (f : Circuit F α)
-    (g : α → Circuit F β) : f.bind g = f >>= g := rfl
+theorem bind_normalize {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
 
 -- the results of a circuit: operations, output value and local length (which determines the next offset)
 
 @[reducible, circuit_norm]
-def operations (circuit : Circuit F α) (offset : ℕ) :
-    Operations F :=
+def operations (circuit : Circuit F α) (offset : ℕ) : Operations F :=
   (circuit offset).2
 
 @[reducible, circuit_norm]
@@ -87,31 +82,27 @@ def localLength (circuit : Circuit F α) (offset := 0) : ℕ :=
 
 /-- Create a new variable. -/
 @[circuit_norm]
-def witnessVar (compute : Environment F → F) :
-    Circuit F (Variable F) :=
+def witnessVar (compute : Environment F → F) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
     (var, [.witness 1 fun env => #v[compute env]])
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witnessField (compute : Environment F → F) :
-    Circuit F (Expression F) := do
+def witnessField (compute : Environment F → F) := do
   let v ← witnessVar compute
   return var v
 
 /-- Create a vector of variables. -/
 @[circuit_norm]
-def witnessVars (m : ℕ) (compute : Environment F → Vector F m) :
-    Circuit F (Vector (Variable F) m) :=
+def witnessVars (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
     (vars, [.witness m compute])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
-def witnessVector (m : ℕ) (compute : Environment F → Vector F m) :
-    Circuit F (Vector (Expression F) m) :=
+def witnessVector (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     let vars := varFromOffset (fields m) offset
     (vars, [.witness m compute])
@@ -123,24 +114,21 @@ def assertZero (e : Expression F) : Circuit F Unit := fun _ =>
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)
-    (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
+def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
   ((), [.lookup { table := table.toRaw, entry := toElements entry }])
 
 end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
-def ProvableType.witness {α : TypeMap} [ProvableType α]
-    (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
+def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
     let var := varFromOffset α offset
     (var, [.witness (size α) (fun env => compute env |> toElements)])
 
 @[circuit_norm]
 def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
-    (compute : Environment F → Vector (α F) m) :
-    Circuit F (Vector (α (Expression F)) m) :=
+    (compute : Environment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
   ProvableType.witness (α:=ProvableVector α m) compute
 
 namespace Circuit
@@ -167,8 +155,7 @@ def ConstraintsHold (eval : VerifierEnvironment F) : List (Operation F) → Prop
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
 -/
 @[circuit_norm]
-def ConstraintsHold.Soundness (eval : VerifierEnvironment F) :
-    List (Operation F) → Prop
+def ConstraintsHold.Soundness (eval : VerifierEnvironment F) : List (Operation F) → Prop
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
@@ -179,12 +166,9 @@ def ConstraintsHold.Soundness (eval : VerifierEnvironment F) :
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
-The prover-side `Environment` carries the hint that drives witness generation; each subcircuit's
-`Completeness` receives that same env.
 -/
 @[circuit_norm]
-def ConstraintsHold.Completeness (eval : Environment F) :
-    List (Operation F) → Prop
+def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) → Prop
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
@@ -199,30 +183,24 @@ If an environment "uses local witnesses", it means that the environment's evalua
 matches the output of the witness generator passed along with a `witness` declaration,
 for all variables declared locally within the circuit.
 
-The `Environment` carries the prover's hint, so witness generators — whose types are
-`Environment F → value F` — can read it directly.
+This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.UsesLocalWitnesses (env : Environment F)
-    (offset : ℕ) (ops : Operations F) : Prop :=
+def Environment.UsesLocalWitnesses (env : Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
   ops.forAllFlat offset { witness n _ compute := env.ExtendsVector (compute env) n }
 
 /--
 Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
 -/
 @[circuit_norm]
-def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : ℕ) :
-    List (Operation F) → Prop
+def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
-  | .witness m c :: ops =>
-    env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
+  | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
-  | .subcircuit s :: ops =>
-    s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
+  | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
-def Environment.UsesLocalWitnessesFlat (env : Environment F)
-    (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
+def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
   FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute env) n } ops
 
 section
@@ -485,20 +463,17 @@ def Environment.fromListAt (witnesses : List F) (hint : ProverHint F) : Environm
   toVerifierEnvironment := .fromList witnesses
   hint := hint
 
-def FlatOperation.dynamicWitness (hint : ProverHint F)
-    (op : FlatOperation F) (acc : List F) : List F := match op with
+def FlatOperation.dynamicWitness (hint : ProverHint F) (op : FlatOperation F) (acc : List F) : List F := match op with
   | .witness _ compute => (compute (.fromListAt acc hint)).toList
   | .assert _ => []
   | .lookup _ => []
 
-def FlatOperation.dynamicWitnesses (hint : ProverHint F)
-    (ops : List (FlatOperation F)) (init : List F) : List F :=
+def FlatOperation.dynamicWitnesses (hint : ProverHint F) (ops : List (FlatOperation F)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
     acc ++ op.dynamicWitness hint acc
   ) init
 
-def FlatOperation.proverEnvironment (hint : ProverHint F)
-    (ops : List (FlatOperation F)) (init : List F) : Environment F :=
+def FlatOperation.proverEnvironment (hint : ProverHint F) (ops : List (FlatOperation F)) (init : List F) : Environment F :=
   .fromListAt (FlatOperation.dynamicWitnesses hint ops init) hint
 
 def Environment.AgreesBelow (n : ℕ) (env env' : Environment F) :=
@@ -511,44 +486,35 @@ def Environment.OnlyAccessedBelow (n : ℕ) (f : Environment F → α) :=
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-def Operations.ComputableWitnesses
-    (ops : Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
+def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
   ops.forAllFlat n
-    ({ witness m _ compute :=
-        env.AgreesBelow m env' → compute env = compute env' } : Condition F)
+    ({ witness m _ compute := env.AgreesBelow m env' → compute env = compute env' } : Condition F)
 
-def Circuit.ComputableWitnesses
-    (circuit : Circuit F α) (n : ℕ) :=
+def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
   ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
 
 /--
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
 that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
 -/
-def Circuit.proverEnvironment (hint : ProverHint F)
-    (circuit : Circuit F α) (init : List F := []) : Environment F :=
+def Circuit.proverEnvironment (hint : ProverHint F) (circuit : Circuit F α) (init : List F := []) : Environment F :=
   .fromListAt (FlatOperation.dynamicWitnesses hint (circuit.operations init.length).toFlat init) hint
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
 
-def FlatOperation.witnessGenerators :
-    (l : List (FlatOperation F)) → Vector (Environment F → F) (localLength l)
+def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (Environment F → F) (localLength l)
   | [] => #v[]
-  | .witness m c :: ops =>
-    Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
 
-def Operations.witnessGenerators :
-    (ops : Operations F) → Vector (Environment F → F) ops.localLength
+def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
-  | .witness m c :: ops =>
-    Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
-  | .subcircuit s :: ops =>
-    (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops.toFlat) ++ witnessGenerators ops
+  | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops.toFlat) ++ witnessGenerators ops
 
 -- statements about constant length or output
 
@@ -563,10 +529,8 @@ class ConstantLength (circuit : α → Circuit F β) where
   localLength : ℕ
   localLength_eq : ∀ (a : α) (n : ℕ), (circuit a).localLength n = localLength
 
-def ConstantLength.fromConstantLength
-    {circuit : α → Circuit F β} [Inhabited α]
-    (h : ∀ (a : α) n, (circuit a).localLength n = (circuit default).localLength 0) :
-    ConstantLength circuit where
+def ConstantLength.fromConstantLength {circuit : α → Circuit F β} [Inhabited α]
+    (h : ∀ (a : α) n, (circuit a).localLength n = (circuit default).localLength 0) : ConstantLength circuit where
   localLength := (circuit default).localLength 0
   localLength_eq a n := h a n
 
@@ -585,7 +549,7 @@ macro_rules
     try ac_rfl))
 
 example :
-  let add (x : Expression F) : Circuit F (Expression F) := do
+  let add (x : Expression F) := do
     let y : Expression F ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
     assertZero (x + y - z)

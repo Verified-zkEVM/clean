@@ -27,6 +27,12 @@ witness-generation step and never appear in the proof. -/
 def ProverHint (F : Type) :=
   String → (n : ℕ) → Array (Vector F n)
 
+/-- Placeholder `ProverHint` that returns an empty array for every key.
+Use this when driving witness generation for circuits that don't read
+any hint. -/
+def dummyProverHint (F : Type) : ProverHint F :=
+  fun _ _ => #[]
+
 /--
   `VerifierEnvironment` represents the data that is visible to the verifier: the
   concrete witness assignment and the committed `ProverData`. All soundness
