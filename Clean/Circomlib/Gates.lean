@@ -438,10 +438,10 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         unfold Operations.forAll
 
         constructor
-        · simp only [Environment.ExtendsVector, Vector.getElem_mk]
+        · simp only [Environment.ExtendsVector]
           intro i
           fin_cases i
-          simp only [add_zero, List.getElem_toArray]
+          simp only [add_zero]
           exact h_completeness
         · simp only [Operations.forAll]
           simp only [circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main]

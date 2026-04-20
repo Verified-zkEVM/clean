@@ -59,8 +59,7 @@ theorem Circuit.constraintsHold_toFlat_iff : ∀ {ops : Operations F}, ∀ {env 
     dsimp only [Operations.toFlat]
     try rw [constraintsHold_cons]
     try rw [constraintsHold_append]
-    simp_all only [ConstraintsHold, ConstraintsHoldFlat, and_true, true_and, iff_and_self,
-      FlatOperation.constraintsHold_append]
+    simp_all only [ConstraintsHold, ConstraintsHoldFlat, and_true, true_and]
 
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.

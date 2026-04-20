@@ -534,13 +534,13 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       clear ih
       replace h_computable := fun env env' => (h_computable env env').left
       intro i
-      simp only [Environment.fromListAt, VerifierEnvironment.fromList, Environment.fromList]
+      simp only [Environment.fromListAt, VerifierEnvironment.fromList]
       rw [getElem?_dynamicWitnesses_cons_right i.is_lt]
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
       intro j hj
-      simp [Environment.fromListAt, VerifierEnvironment.fromList, Environment.fromList, hj,
+      simp [Environment.fromListAt, VerifierEnvironment.fromList, hj,
         getElem?_dynamicWitnesses_of_lt]
 end FlatOperation
 
