@@ -18,7 +18,7 @@ open Utils.Rotation (rotRight32_composition)
 /--
   Rotate the 32-bit integer by `offset` bits
 -/
-def main (offset : Fin 32) (x : Var U32 (F p)) := do
+def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let byte_offset : Fin 4 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
 
@@ -51,7 +51,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   -- abstract away intermediate U32
   let byte_offset : Fin 4 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
-  set byte_rotated := eval env ((Rotation32Bytes.elaborated  byte_offset).output (x_var : Var U32 _) i0)
+  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation32Bytes.elaborated byte_offset) (x_var : Var U32 _) i0)
 
   simp only [Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Assumptions,
     Rotation32Bytes.Spec, Rotation32Bits.Assumptions, Rotation32Bits.Spec, add_zero] at h_holds
