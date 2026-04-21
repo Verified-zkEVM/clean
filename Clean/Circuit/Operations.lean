@@ -73,12 +73,8 @@ end FlatOperation
 export FlatOperation (ConstraintsHoldFlat)
 
 @[circuit_norm]
-def Environment.ExtendsVector (env : Environment F) (wit : Vector F n) (offset : ℕ) : Prop :=
-  ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
-
-@[circuit_norm, reducible]
 def ProverEnvironment.ExtendsVector (env : ProverEnvironment F) (wit : Vector F n) (offset : ℕ) : Prop :=
-  env.toEnvironment.ExtendsVector wit offset
+  ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
 open FlatOperation in
 /--
@@ -108,21 +104,18 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   imply_soundness : ∀ env,
     ConstraintsHoldFlat env ops.toFlat → Soundness env
 
-  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators
-  implied_by_completeness : ∀ env,
-    env.ExtendsVector (localWitnesses env ops.toFlat) offset →
-    Completeness env → ConstraintsHoldFlat env.toEnvironment ops.toFlat
+  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
+  implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
+    Completeness env → ConstraintsHoldFlat env ops.toFlat
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  imply_usesLocalWitnesses : ∀ env,
-    env.ExtendsVector (localWitnesses env ops.toFlat) offset →
+  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
     UsesLocalWitnesses env
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops.toFlat
 
 @[reducible, circuit_norm]
-def Subcircuit.witnesses (sc : Subcircuit F n)
-    (env : ProverEnvironment F) :=
+def Subcircuit.witnesses (sc : Subcircuit F n) env :=
   (FlatOperation.localWitnesses env sc.ops.toFlat).cast sc.localLength_eq.symm
 
 /--
@@ -138,7 +131,7 @@ inductive Operation (F : Type) [Field F] where
   | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
 
 namespace Operation
-instance {F : Type} [Field F] [Repr F] : Repr (Operation F) where
+instance [Repr F] : Repr (Operation F) where
   reprPrec op _ := match op with
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
@@ -202,8 +195,7 @@ def localLength : Operations F → ℕ
 The actual vector of witnesses created by these operations in the given environment.
 -/
 @[circuit_norm]
-def localWitnesses {F : Type} [Field F]
-    (env : ProverEnvironment F) :
+def localWitnesses (env : ProverEnvironment F) :
     (ops : Operations F) → Vector F ops.localLength
   | [] => #v[]
   | .witness _ c :: ops => c env ++ localWitnesses env ops
@@ -258,8 +250,7 @@ Given a `Condition`, `forAll` is true iff all operations in the list satisfy the
 The function expects the initial offset as an argument.
 -/
  @[circuit_norm]
-def forAll (offset : ℕ) (condition : Condition F) :
-    Operations F → Prop
+def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
@@ -282,8 +273,7 @@ The differences to `induct` are:
 - in addition to the operations, we also pass along the initial offset `n`
 - in the subcircuit case, the subcircuit offset is the same as the initial offset
 -/
-def inductConsistent
-    {motive : (ops : Operations F) → (n : ℕ) → ops.SubcircuitsConsistent n → Sort*}
+def inductConsistent {motive : (ops : Operations F) → (n : ℕ) → ops.SubcircuitsConsistent n → Sort*}
   (empty : ∀ n, motive [] n trivial)
   (witness : ∀ n m c ops {h}, motive ops (m + n) h →
     motive (.witness m c :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
@@ -314,8 +304,7 @@ end Operations
 def Condition.ignoreSubcircuit (condition : Condition F) : Condition F :=
   { condition with subcircuit _ _ _ := True }
 
-def Condition.applyFlat {F : Type} [Field F]
-    (condition : Condition F) (offset : ℕ) : FlatOperation F → Prop
+def Condition.applyFlat (condition : Condition F) (offset : ℕ) : FlatOperation F → Prop
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l

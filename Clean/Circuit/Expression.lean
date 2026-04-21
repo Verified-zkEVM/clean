@@ -60,6 +60,10 @@ structure ProverEnvironment (F : Type) extends Environment F where
 
 /-- Project a `ProverEnvironment` to its `Environment`. -/
 instance : Coe (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.toEnvironment⟩
+instance : CoeOut (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.toEnvironment⟩
+
+instance {α} : Coe (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
+instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 
 namespace Expression
 variable [Field F]

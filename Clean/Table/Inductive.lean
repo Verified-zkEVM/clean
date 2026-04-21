@@ -108,7 +108,7 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
   ]
 
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : ProverEnvironment F} :
-  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env).toEnvironment
+  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
     (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by
   set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env

@@ -421,7 +421,7 @@ def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p)
     counter_low, counter_high, block_len, flags
   ]
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p))  := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let state := initializeStateVector input
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩

@@ -115,10 +115,10 @@ instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (w
   localLength _ := k
   operations n := [.witness k c]
 
-instance {α : TypeMap} [ProvableType α] : ExplicitCircuits  (ProvableType.witness (α:=α) (F:=F)) where
+instance {α : TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
   output _ n := varFromOffset α n
   localLength _ _ := size α
-  operations c n := [.witness (size α) (fun env => toElements (c env))]
+  operations c n := [.witness (size α) (toElements ∘ c)]
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
@@ -135,7 +135,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
-  operations c n := [.witness (size value) (fun env => toElements (c env))]
+  operations c n := [.witness (size value) (toElements ∘ c)]
   operations_eq c n := by
     rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]

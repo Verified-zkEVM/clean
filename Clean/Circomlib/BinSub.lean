@@ -115,7 +115,7 @@ lemma aux_bit_boolean {n : ℕ} (lin_val : F p) :
 -- Completeness helper lemmas
 
 -- Lemma: Sum of output bits modulo 2^n
-lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : ProverEnvironment (F p)) (i₀ : ℕ)
+lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
     (input_var : Var (BinSubInput n) (F p)) (h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)))
     (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i]) :
     (Fin.foldl n (fun acc k ↦ acc + env.get (i₀ + ↑k) * 2 ^ k.val) 0).val = (Expression.eval env (inputLinearSub n input_var)).val % 2^n := by
@@ -133,7 +133,7 @@ lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Pro
   exact lt_of_le_of_lt (Nat.mod_le _ _) (Nat.lt_of_lt_of_le (ZMod.val_lt _) (by linarith [pow_succ' 2 n]))
 
 -- Lemma: Aux bit equals lin divided by 2^n
-lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : ProverEnvironment (F p)) (i₀ : ℕ)
+lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
     (input : BinSubInput n (F p)) (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
     (input_var : Var (BinSubInput n) (F p)) (h_input : ProvableType.eval env input_var = input)
     (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
@@ -168,7 +168,7 @@ lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Pro
     · exact Nat.div_lt_of_lt_mul h_div_lt
 
 -- Lemma: Main reconstruction equation for completeness
-lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : ProverEnvironment (F p)) (i₀ : ℕ)
+lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
     (input : BinSubInput n (F p)) (input_var : Var (BinSubInput n) (F p))
     (h_input : ProvableType.eval env input_var = input)
     (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
@@ -179,7 +179,7 @@ lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (en
     Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 +
     env.get (i₀ + n) * 2 ^ n := by
   -- 1. Convert Circuit Fold to Summation
-  rw [←foldl_explicit (le_refl n) env.toEnvironment i₀ h_out_binary]
+  rw [←foldl_explicit (le_refl n) env i₀ h_out_binary]
   -- We verify the equation by lifting to Natural numbers (ZMod.val)
   -- This avoids modular arithmetic issues since we know 2^(n+1) < p
   apply ZMod.val_injective

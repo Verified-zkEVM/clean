@@ -258,7 +258,7 @@ def memorySize (data : ProverData (F p)) : ℕ :=
   let mem := data.getTable MemoryTable
   mem.size
 
-def memoryValue (env : ProverEnvironment (F p)) (address : Expression (F p)) : F p :=
+def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
   let mem := env.data.getTable MemoryTable
   if he : (env address).val < mem.size then
     mem[(env address).val].value

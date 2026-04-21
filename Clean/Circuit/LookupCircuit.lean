@@ -16,24 +16,21 @@ structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α]
 namespace LookupCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
 
-def proverEnvironment (circuit : LookupCircuit F α β) (hint : ProverHint F)
-    (input : α F) : ProverEnvironment F :=
+def proverEnvironment (circuit : LookupCircuit F α β)
+    (input : α F) (hint : ProverHint F) : ProverEnvironment F :=
   circuit.main (const input) |>.proverEnvironment hint
 
 theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β)
-    (hint : ProverHint F) (input : α F) :
-    (circuit.proverEnvironment hint input).UsesLocalWitnesses 0
-      ((circuit.main (const input)).operations 0) := by
+    (input : α F) (hint : ProverHint F) :
+    (circuit.proverEnvironment input hint).UsesLocalWitnesses 0 ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_usesLocalWitnesses
   apply circuit.compose_computableWitnesses
   simp [ProverEnvironment.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
 
-def constantOutput (circuit : LookupCircuit F α β) (hint : ProverHint F)
-    (input : α F) : β F :=
-  circuit.output (const input) 0 |> eval (circuit.proverEnvironment hint input)
+def constantOutput (circuit : LookupCircuit F α β) (input : α F) (hint : ProverHint F) : β F :=
+  circuit.output (const input) 0 |> eval (circuit.proverEnvironment input hint)
 
-def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) :
-    Table F (ProvablePair α β) where
+def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (ProvablePair α β) where
   name := circuit.name
 
   -- for `(input, output)` to be contained in the lookup table defined by a circuit, means that:
@@ -46,7 +43,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     ∧ output = eval env (circuit.output (const input) n)
 
   Soundness := fun _ (input, output) => circuit.Assumptions input → circuit.Spec input output
-  Completeness := fun _ (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput hint input
+  Completeness := fun _ (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput input hint
 
   imply_soundness := by
     intro _ (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions
@@ -55,11 +52,11 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) :
 
   implied_by_completeness := by
     intro _ (input, output) ⟨h_assumptions, h_output⟩
-    use 0, circuit.proverEnvironment hint input
+    use 0, circuit.proverEnvironment input hint
     simp only [h_output, LookupCircuit.constantOutput, and_true]
-    set env := circuit.proverEnvironment hint input
+    set env := circuit.proverEnvironment input hint
     apply circuit.original_completeness 0 env (const input) input ProvableType.eval_const h_assumptions
-    exact circuit.proverEnvironment_usesLocalWitnesses hint input
+    exact circuit.proverEnvironment_usesLocalWitnesses input hint
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
 -- this gives `circuit.lookup input` _exactly_ the same interface as `circuit input`.
@@ -69,7 +66,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     FormalCircuit F α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
-    let output ← witness fun env => circuit.constantOutput hint (eval env input)
+    let output ← witness fun env => circuit.constantOutput (eval env input) hint
 
     lookup (circuit.toTable hint) (input, output)
     return output
@@ -92,7 +89,6 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
 
 @[circuit_norm]
-def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) :
-    Circuit F (Var β F) :=
+def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) : Circuit F (Var β F) :=
   lookupCircuit circuit hint input
 end LookupCircuit
