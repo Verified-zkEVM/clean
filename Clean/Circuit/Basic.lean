@@ -403,7 +403,7 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   Spec : Input F → Output F → ProverData F → Prop
 
   /-- the statement to be assumed for completeness -/
-  ProverAssumptions : Input F → ProverData F → ProverHint F → Prop
+  ProverAssumptions : Input F → ProverData F → ProverHint F → Prop  := fun _ _ _ => True
   /-- auxiliary statement to be proved for completeness, alongside the constraints -/
   ProverSpec : Input F → Output F → ProverHint F → Prop := fun _ _ _ => True
 
