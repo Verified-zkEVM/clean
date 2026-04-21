@@ -526,7 +526,7 @@ structure TableEnvironments (F : Type) where
 def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : ProverEnvironment F :=
   { get := envs.witnessEnvs constraint row,
     data := envs.data,
-    hint := dummyProverHint F }
+    hint := .empty F }
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
