@@ -140,7 +140,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
     dsimp only [ConstraintsHold] at h
-    exact ⟨ circuit.imply_soundness env h.left, ih h.right ⟩
+    exact ⟨ circuit.soundness env h.left, ih h.right ⟩
 
 end Circuit
 
@@ -271,14 +271,14 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : ProverEnvironment F} {
     intro h
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
-    apply circuit.imply_usesLocalWitnesses
+    apply (circuit.completeness _ _).2
     rw [← usesLocalWitnessesFlat_iff_extends]
     exact h.left
 
 theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : ProverEnvironment F} {ops : Operations F} :
   env.UsesLocalWitnessesCompleteness n ops ↔ ops.forAll n {
     witness m _ c := env.ExtendsVector (c env) m,
-    subcircuit _ _ s := s.UsesLocalWitnesses env
+    subcircuit _ _ s := s.ProverSpec env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -299,7 +299,7 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
-    subcircuit _ _ s := s.Soundness env
+    subcircuit _ _ s := s.Spec env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -312,7 +312,7 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : ProverEnvironme
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
-    subcircuit _ _ s := s.Completeness env
+    subcircuit _ _ s := s.ProverAssumptions env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -340,7 +340,7 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.S
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, ProverEnvironment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
-    apply circuit.implied_by_completeness env ?_ h_compl.left
+    apply (circuit.completeness env ?_).left h_compl.left
     rw [←ProverEnvironment.usesLocalWitnessesFlat_iff_extends]
     exact h_env.left
 end Circuit
@@ -377,7 +377,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
-    subcircuit _ _ s := s.Soundness env
+    subcircuit _ _ s := s.Spec env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
@@ -385,7 +385,7 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : ProverEnvironment F} {ci
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
-    subcircuit _ _ s := s.Completeness env
+    subcircuit _ _ s := s.ProverAssumptions env
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]
 

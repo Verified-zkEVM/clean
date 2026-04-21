@@ -88,28 +88,25 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   ops : NestedOperations F
 
   -- we have a low-level notion of "the constraints hold on these operations".
-  -- for convenience, we allow the framework to transform that into custom `Soundness`,
-  -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  Soundness : Environment F → Prop
-  -- `Completeness` and `UsesLocalWitnesses` see the full prover `ProverEnvironment`, which carries
-  -- the hint that drives witness generation.
-  Completeness : ProverEnvironment F → Prop
-  UsesLocalWitnesses : ProverEnvironment F → Prop
+  -- for convenience, we allow the framework to transform that into custom `Spec`,
+  -- `ProverAssumptions` and `ProverSpec` statements (which may involve inputs/outputs, assumptions on inputs, etc)
+  Spec : Environment F → Prop
+  ProverAssumptions : ProverEnvironment F → Prop
+  ProverSpec : ProverEnvironment F → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
   localLength : ℕ
 
-  -- `Soundness` needs to follow from the constraints for any witness
-  imply_soundness : ∀ env,
-    ConstraintsHoldFlat env ops.toFlat → Soundness env
+  -- soundness: `Spec` needs to follow from the constraints for any witness
+  soundness : ∀ env,
+    ConstraintsHoldFlat env ops.toFlat → Spec env
 
-  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
-    Completeness env → ConstraintsHoldFlat env ops.toFlat
-  -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
-    UsesLocalWitnesses env
+  -- completeness: `ProverAssumptions` needs to imply the constraints,
+  -- when using the locally declared witness generators of this circuit.
+  -- `ProverSpec` also needs to follow from the local witness generator condition.
+  completeness : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
+    (ProverAssumptions env → ConstraintsHoldFlat env ops.toFlat) ∧ ProverSpec env
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops.toFlat

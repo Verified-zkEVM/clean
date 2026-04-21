@@ -163,7 +163,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .lookup l :: ops =>
     l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
-    s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+    s.Spec eval ∧ ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -176,7 +176,7 @@ def ConstraintsHold.Completeness (eval : ProverEnvironment F) : List (Operation 
   | .lookup l :: ops =>
     l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
-    s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
+    s.ProverAssumptions eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
 
 /--
@@ -198,7 +198,7 @@ def ProverEnvironment.UsesLocalWitnessesCompleteness (env : ProverEnvironment F)
   | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
-  | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
+  | .subcircuit s :: ops => s.ProverSpec env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def ProverEnvironment.UsesLocalWitnessesFlat (env : ProverEnvironment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
