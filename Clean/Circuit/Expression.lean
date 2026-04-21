@@ -31,29 +31,34 @@ def ProverHint (F : Type) :=
 def ProverHint.empty (F : Type) : ProverHint F := fun _ _ => #[]
 
 /--
-  `Environment` represents the data that is visible to the verifier: the
-  concrete witness assignment and the committed `ProverData`. All soundness
-  statements are formulated against this struct since the verifier cannot
-  observe the prover's hint.
+  `Environment` represents the data that is provided at runtime to concretely
+  specify the witness assignment of a circuit (`get`) and any additional witness data
+  external to the current circuit (`data`).
+
+  In the abstract plaintext-witness version of the protocol, the full
+  `Environment` is passed from the prover to the verifier.
+  All constraints can be checked against the `Environment`.
+  Soundness theorems have the form `∀ env : Environment F, ...`.
  -/
 structure Environment (F : Type) where
   /-- Assignment of a circuit's variables to field elements -/
   get : ℕ → F
-  /-- Additional prover data not part of the current circuit's witness, such as the content
-   of lookup tables, or auxiliary data made available for potential witnessing. -/
+  /-- Additional witness data not part of the current circuit's witness, such as the content
+   of lookup tables, made available for potential re-witnessing and for statements concerning
+   the verifier, such as a circuit's spec. -/
   data : ProverData F
 
 /--
   `ProverEnvironment` is `Environment` plus the prover's runtime `ProverHint`.
-  Used by the completeness / witness-generation side of the framework, which
-  reads the hint via `env.hint`.
- -/
+  In some circuits, the additional `hint` is necessary to give an honest prover
+  sufficient information to generate a witness.
+  Completeness theorems are formulated against the `ProverEnvironment`.
+-/
 structure ProverEnvironment (F : Type) extends Environment F where
   /-- Runtime-only hashmap of prover hints, never committed into the proof. -/
   hint : ProverHint F
 
-/-- Lift an `ProverEnvironment` to its underlying `Environment` — every function
-    that takes a verifier env automatically accepts a prover env this way. -/
+/-- Project a `ProverEnvironment` to its `Environment`. -/
 instance : Coe (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.toEnvironment⟩
 
 namespace Expression
@@ -125,7 +130,7 @@ instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) wher
   coe env x := x.eval env
 
 instance [Field F] : CoeFun (ProverEnvironment F) (fun _ => (Expression F) → F) where
-  coe env x := x.eval env.toEnvironment
+  coe env x := x.eval env
 
 instance [Field F] : Inhabited F where
   default := 0
