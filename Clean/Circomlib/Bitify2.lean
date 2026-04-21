@@ -132,40 +132,23 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions input _ _ := (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
-
+  ProverAssumptions input _ _ :=
+    (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
+  Assumptions input _ :=
+    (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
   Spec input output _ :=
-    (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) → output.val = fromBits (input.map ZMod.val)
+    output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    intro i0 env input_var input h_input assumptions output h_binary
-    simp only [ElaboratedCircuit.main, main] at assumptions output ⊢
-    simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at h_input assumptions output ⊢
-    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = input[i]) := by
-      intro i hi
-      rw [← h_input]
-      simp only [Vector.getElem_map]
-    have : (∀ (i : ℕ) (x : i < 254), Expression.eval env input_var[i] = 0 ∨ Expression.eval env input_var[i] = 1) := by
-      intro i hi
-      rw [this]
-      apply h_binary
-    simp_all only [implies_true, forall_const]
-    obtain ⟨ h_bits, h_eq ⟩ := assumptions
-    rw [← ZMod.val_natCast_of_lt h_bits]
-    rw [← Vector.mapFinRange_eq_map]
-    rw [← fieldFromBits_eq_mapFinRange_cast]
-    conv =>
-          rhs
-          congr
-          congr
-          congr
-          ext i
-          rw [← h_input]
-          simp only [Fin.getElem_fin, Vector.getElem_map]
-          rw [← Fin.getElem_fin]
-    rw [← Bits2Num.lc_eq]
-    simp only [output, circuit_norm, main, AliasCheck.circuit, Bits2Num.main]
-    rw [h_eq]
+    circuit_proof_start
+    simp only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at h_input h_assumptions h_holds ⊢
+    set output := (env.get (i₀ + (127 + 1 + 135 + 1)))
+    simp_all only [implies_true, forall_const, fields]
+    obtain ⟨ h_bits, h_eq ⟩ := h_holds
+    rw [← ZMod.val_natCast_of_lt h_bits, ← Vector.mapFinRange_eq_map,
+      ← fieldFromBits_eq_mapFinRange_cast]
+    simp only [← h_input, circuit_norm]
+    simp only [← Fin.getElem_fin, Bits2Num.lc_eq]
 
   completeness := by
     simp only [circuit_norm, main]
@@ -227,13 +210,13 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 
-  Assumptions input _ _ := input.val < 2^n
+  ProverAssumptions input _ _ := input.val < 2^n
 
   Spec input output _ :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
   soundness := by
-    intro i0 env input_var input h_input h_holds
+    intro i0 env input_var input h_input _ h_holds
     simp only [circuit_norm, main, IsZero.circuit, IsZero.main] at h_holds ⊢
     obtain ⟨ h_bits, h_iszero, h_eq ⟩ := h_holds
 
