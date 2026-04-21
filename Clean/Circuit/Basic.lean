@@ -163,7 +163,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .lookup l :: ops =>
     l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
-    s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+    s.Spec eval ∧ ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -176,7 +176,7 @@ def ConstraintsHold.Completeness (eval : ProverEnvironment F) : List (Operation 
   | .lookup l :: ops =>
     l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
-    s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
+    s.ProverAssumptions eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
 
 /--
@@ -198,7 +198,7 @@ def ProverEnvironment.UsesLocalWitnessesCompleteness (env : ProverEnvironment F)
   | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
-  | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
+  | .subcircuit s :: ops => s.ProverSpec env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def ProverEnvironment.UsesLocalWitnessesFlat (env : ProverEnvironment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
@@ -351,11 +351,13 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
 
 @[circuit_norm]
 def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → ProverData F → Prop)
     (Spec : Input F → Output F → ProverData F → Prop) :=
   -- for all environments that determine witness assignments
   ∀ offset : ℕ, ∀ env : Environment F,
-  -- for all inputs
+  -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  Assumptions input env.data →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
@@ -365,33 +367,25 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCir
 @[circuit_norm]
 def GeneralFormalCircuit.Completeness (F : Type) [Field F]
     (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → ProverData F → ProverHint F → Prop) :=
+    (ProverAssumptions : Input F → ProverData F → ProverHint F → Prop)
+    (ProverSpec : Input F → Output F → ProverHint F → Prop) :=
   -- for all prover environments which use the default witness generators for local variables
   ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input env.data env.hint →
+  ProverAssumptions input env.data env.hint →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
-
-@[circuit_norm]
-def GeneralFormalCircuit.CompletenessSpecProof (F : Type) [Field F]
-    (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → ProverData F → ProverHint F → Prop)
-    (CompletenessSpec : Input F → Output F → ProverHint F → Prop) :=
-  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
-  ∀ input : Input F, eval env input_var = input →
-  Assumptions input env.data env.hint →
-  CompletenessSpec input (eval env (circuit.output input_var offset)) env.hint
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
+  -- and, if given, the prover spec holds
+  ProverSpec input (eval env (circuit.output input_var offset)) env.hint
 
 /--
 `GeneralFormalCircuit` is the most general model of formal circuits, needed in cases where the circuit is a
 _mix_ of "assertion-like" and "function-like". It allows you flexibility in specifying separate statements
 to be proved in the soundness and completeness proofs, by
-- only using the `Spec` in the soundness statement
-- only using the `Assumptions` in the completeness statement
+- only using the `Assumptions` and `Spec` in the soundness statement
+- having separate `ProverAssumptions` and `ProverSpec` for the completeness statement
 i.e. the two statements are not "coupled".
 
 For example, take the `toBits n` circuit, which outputs the `n`-bit decomposition of the input.
@@ -403,13 +397,18 @@ add the range assumption to the soundness statement, thus making the circuit har
 -/
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → ProverData F → ProverHint F → Prop -- the statement to be assumed for completeness
-  Spec : Input F → Output F → ProverData F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
-  soundness : GeneralFormalCircuit.Soundness F elaborated Spec
-  completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
-  CompletenessSpec : Input F → Output F → ProverHint F → Prop := fun _ _ _ => True
-  completenessSpec : GeneralFormalCircuit.CompletenessSpecProof F elaborated Assumptions CompletenessSpec
-    := by unfold GeneralFormalCircuit.CompletenessSpecProof; intros; trivial
+  /-- the statement to be assumed for soundness -/
+  Assumptions : Input F → ProverData F → Prop := fun _ _ => True
+  /-- the statement to be proved for soundness. -/
+  Spec : Input F → Output F → ProverData F → Prop
+
+  /-- the statement to be assumed for completeness -/
+  ProverAssumptions : Input F → ProverData F → ProverHint F → Prop  := fun _ _ _ => True
+  /-- auxiliary statement to be proved for completeness, alongside the constraints -/
+  ProverSpec : Input F → Output F → ProverHint F → Prop := fun _ _ _ => True
+
+  soundness : GeneralFormalCircuit.Soundness F elaborated Assumptions Spec
+  completeness : GeneralFormalCircuit.Completeness F elaborated ProverAssumptions ProverSpec
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)

@@ -140,7 +140,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
     dsimp only [ConstraintsHold] at h
-    exact ⟨ circuit.imply_soundness env h.left, ih h.right ⟩
+    exact ⟨ circuit.soundness env h.left, ih h.right ⟩
 
 end Circuit
 
@@ -271,14 +271,14 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : ProverEnvironment F} {
     intro h
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
-    apply circuit.imply_usesLocalWitnesses
+    apply (circuit.completeness _ _).2
     rw [← usesLocalWitnessesFlat_iff_extends]
     exact h.left
 
 theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : ProverEnvironment F} {ops : Operations F} :
   env.UsesLocalWitnessesCompleteness n ops ↔ ops.forAll n {
     witness m _ c := env.ExtendsVector (c env) m,
-    subcircuit _ _ s := s.UsesLocalWitnesses env
+    subcircuit _ _ s := s.ProverSpec env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -299,7 +299,7 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
-    subcircuit _ _ s := s.Soundness env
+    subcircuit _ _ s := s.Spec env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -312,7 +312,7 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : ProverEnvironme
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
-    subcircuit _ _ s := s.Completeness env
+    subcircuit _ _ s := s.ProverAssumptions env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -340,7 +340,7 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.S
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, ProverEnvironment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
-    apply circuit.implied_by_completeness env ?_ h_compl.left
+    apply (circuit.completeness env ?_).left h_compl.left
     rw [←ProverEnvironment.usesLocalWitnessesFlat_iff_extends]
     exact h_env.left
 end Circuit
@@ -377,7 +377,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
-    subcircuit _ _ s := s.Soundness env
+    subcircuit _ _ s := s.Spec env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
@@ -385,7 +385,7 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : ProverEnvironment F} {ci
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
-    subcircuit _ _ s := s.Completeness env
+    subcircuit _ _ s := s.ProverAssumptions env
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]
 
@@ -595,47 +595,41 @@ end FlatOperation
 `FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
-def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap)
-    [Field F] [ProvableType Output] [ProvableType Input]
-    (orig : FormalCircuit F Input Output) : GeneralFormalCircuit F Input Output := by
-  let Spec input output := orig.Assumptions input → orig.Spec input output
-  exact {
-    elaborated := orig.elaborated,
-    Assumptions i _ _ := orig.Assumptions i,
-    Spec i o _ := Spec i o,
-    soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
+@[circuit_norm]
+def FormalCircuit.isGeneralFormalCircuit {F : Type} {Input Output : TypeMap}
+  [Field F] [ProvableType Output] [ProvableType Input]
+    (orig : FormalCircuit F Input Output) : GeneralFormalCircuit F Input Output where
+  elaborated := orig.elaborated
+  Assumptions i _ := orig.Assumptions i
+  Spec i o _ := orig.Spec i o
+  ProverAssumptions i _ _ := orig.Assumptions i
+  soundness := by
+      simp only [circuit_norm, forall_eq']
       intros
       apply orig.soundness <;> trivial
-    ,
-    completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      intros
-      apply orig.completeness <;> trivial
-    completenessSpec := fun _ _ _ _ _ _ _ => trivial
-  }
+  completeness := by
+    simp only [circuit_norm, forall_eq']
+    intros
+    apply orig.completeness <;> trivial
 
 /--
 `FormalAssertion.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` is a generalization of
 `FormalAssertion`.  The idea is to make `FormalAssertion.Spec` available in the completeness
 by putting it within `GeneralFormalCircuit.Assumption`.
 -/
-def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap)
-    [Field F] [ProvableType Input] (orig : FormalAssertion F Input) :
-    GeneralFormalCircuit F Input unit := by
-  let Spec input (_ : Unit) := orig.Assumptions input → orig.Spec input
-  exact {
-    elaborated := orig.elaborated,
-    Assumptions input _ _ := orig.Assumptions input ∧ orig.Spec input,
-    Spec i o _ := Spec i o,
-    soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
-      intros
-      apply orig.soundness <;> trivial
-    ,
-    completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      rintro _ _ _ _ ⟨ _, _ ⟩
-      apply orig.completeness <;> trivial
-    completenessSpec := fun _ _ _ _ _ _ _ => trivial
-  }
+@[circuit_norm]
+def FormalAssertion.isGeneralFormalCircuit {F : Type} {Input : TypeMap}
+  [Field F] [ProvableType Input]
+    (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit where
+  elaborated := orig.elaborated
+  Assumptions i _ := orig.Assumptions i
+  Spec i _ _ := orig.Spec i
+  ProverAssumptions i _ _ := orig.Assumptions i ∧ orig.Spec i
+  soundness := by
+    simp only [circuit_norm, forall_eq']
+    intros
+    apply orig.soundness <;> trivial
+  completeness := by
+    simp only [circuit_norm, forall_eq']
+    rintro _ _ _ _ ⟨ _, _ ⟩
+    apply orig.completeness <;> trivial

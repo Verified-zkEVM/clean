@@ -94,21 +94,21 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
 @[circuit_norm ↓]
 lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elaborated = elaborated α := rfl
 
--- rewrite soundness/completeness directly
+-- rewrite spec/proverAssumptions/proverSpec directly
 
 @[circuit_norm]
-theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
+theorem spec (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).Spec env = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
+theorem proverAssumptions (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).ProverAssumptions env = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
+theorem proverSpec (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).ProverSpec env = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
 
 end Equality

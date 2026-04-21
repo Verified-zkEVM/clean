@@ -21,8 +21,7 @@ partial def circuitProofStartCore : TacticM Unit := do
                        headConst? == some ``GeneralFormalCircuit.Soundness
     let isCompleteness := headConst? == some ``Completeness ||
                           headConst? == some ``FormalAssertion.Completeness ||
-                          headConst? == some ``GeneralFormalCircuit.Completeness ||
-                          headConst? == some ``GeneralFormalCircuit.CompletenessSpecProof
+                          headConst? == some ``GeneralFormalCircuit.Completeness
 
     if isSoundness then
       match headConst? with
@@ -38,7 +37,7 @@ partial def circuitProofStartCore : TacticM Unit := do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``GeneralFormalCircuit.Soundness =>
         evalTactic (← `(tactic| unfold GeneralFormalCircuit.Soundness))
-        let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
+        let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()
@@ -61,16 +60,11 @@ partial def circuitProofStartCore : TacticM Unit := do
         let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
-      | some ``GeneralFormalCircuit.CompletenessSpecProof =>
-        evalTactic (← `(tactic| unfold GeneralFormalCircuit.CompletenessSpecProof))
-        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
-        for name in names do
-          evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()
       return
     else
       -- Goal is not a supported Soundness or Completeness type
-      throwError "circuitProofStartCore can only be used on Soundness, Completeness, FormalAssertion.Soundness, FormalAssertion.Completeness, GeneralFormalCircuit.Soundness, GeneralFormalCircuit.Completeness, or GeneralFormalCircuit.CompletenessSpecProof goals"
+      throwError "circuit_proof_start can only be used on Soundness, Completeness and variants"
 
 /--
   Standard tactic for starting soundness and completeness proofs.
@@ -146,5 +140,5 @@ elab_rules : tactic
   | `(tactic| circuit_proof_all $[[$terms:term,*]]?) => do
   let lemmas := terms.getD (.mk #[])
   evalTactic (← `(tactic| circuit_proof_start [$lemmas,*]))
-  evalTactic (← `(tactic| simp_all))
+  evalTactic (← `(tactic| try simp_all))
   evalTactic (← `(tactic| done))

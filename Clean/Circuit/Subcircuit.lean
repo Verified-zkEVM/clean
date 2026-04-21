@@ -70,7 +70,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
   let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
-  have imply_soundness : ∀ env : Environment F,
+  have soundness : ∀ env : Environment F,
     let input := eval env input_var
     let output := eval env (circuit.output input_var n)
     ConstraintsHoldFlat env nestedOps.toFlat → circuit.Assumptions input → circuit.Spec input output := by
@@ -88,7 +88,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     apply can_replace_soundness
     exact constraintsHold_toFlat_iff.mp h_holds
 
-  have implied_by_completeness : ∀ env : ProverEnvironment F,
+  have completeness : ∀ env : ProverEnvironment F,
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
       circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env nestedOps.toFlat := by
     -- we are given that the assumptions are true
@@ -112,21 +112,22 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
   {
     ops := nestedOps,
-    Soundness env := circuit.Assumptions (eval env input_var) →
+    Spec env := circuit.Assumptions (eval env input_var) →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
-    Completeness env := circuit.Assumptions (eval env input_var),
-    UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) →
+    ProverAssumptions env := circuit.Assumptions (eval env input_var),
+    ProverSpec env := circuit.Assumptions (eval env input_var) →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
 
-    imply_soundness
-    implied_by_completeness
-    imply_usesLocalWitnesses := by
-      intro env h_env as
+    soundness
+    completeness := by
+      intro env h_env
+      use completeness env h_env
+      intro as
       -- by completeness, the constraints hold
-      have h_holds := implied_by_completeness env h_env as
+      have h_holds := completeness env h_env as
       -- by soundness, this implies the spec
-      exact imply_soundness env h_holds as
+      exact soundness env h_holds as
 
     localLength_eq := by
       rw [ops.toNested_toFlat, ←circuit.localLength_eq input_var n,
@@ -144,12 +145,12 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
 
   {
     ops := nestedOps,
-    Soundness env := circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var),
-    Completeness env := circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var),
-    UsesLocalWitnesses _ := True,
+    Spec env := circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var),
+    ProverAssumptions env := circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var),
+    ProverSpec _ := True,
     localLength := circuit.localLength input_var
 
-    imply_soundness := by
+    soundness := by
       -- we are given an environment where the constraints hold, and can assume the assumptions are true
       intro env h_holds
       let input : β F := eval env input_var
@@ -166,12 +167,14 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       apply can_replace_soundness
       exact constraintsHold_toFlat_iff.mp h_holds
 
-    implied_by_completeness := by
+    completeness := by
       -- we are given that the assumptions and the spec are true
-      intro env h_env h_completeness
+      intro env h_env
+      simp only [and_true]
+      intro assumptions
 
       let input := eval env input_var
-      have as : circuit.Assumptions input ∧ circuit.Spec input := h_completeness
+      have as : circuit.Assumptions input ∧ circuit.Spec input := assumptions
       rw [ops.toNested_toFlat] at h_env ⊢
 
       have h_env : env.UsesLocalWitnesses n ops := by
@@ -187,15 +190,13 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       apply constraintsHold_toFlat_iff.mpr
       exact can_replace_completeness h_consistent h_env h_holds
 
-    imply_usesLocalWitnesses := by intros; exact trivial
-
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
   }
 
 /--
-Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
+Theorem and implementation that allows us to take a general formal circuit and use it as a subcircuit.
 -/
 def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
@@ -203,19 +204,22 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
   let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
-  have imply_soundness : ∀ env : Environment F,
+  have soundness : ∀ env : Environment F,
       let input := eval env input_var
       let output := eval env (circuit.output input_var n)
-      ConstraintsHoldFlat env nestedOps.toFlat → circuit.Spec input output env.data := by
-    intro env input output h_holds
-    rw [ops.toNested_toFlat] at h_holds
-    apply circuit.soundness n env input_var input rfl
+      ConstraintsHoldFlat env nestedOps.toFlat →
+      circuit.Assumptions input env.data →
+      circuit.Spec input output env.data := by
+    intro env input output constraints assumptions
+    rw [ops.toNested_toFlat] at constraints
+    apply circuit.soundness n env input_var input rfl assumptions
     apply can_replace_soundness
-    exact constraintsHold_toFlat_iff.mp h_holds
+    exact constraintsHold_toFlat_iff.mp constraints
 
-  have implied_by_completeness : ∀ env : ProverEnvironment F,
+  have implied_by_assumptions : ∀ env : ProverEnvironment F,
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
-      circuit.Assumptions (eval env input_var) env.data env.hint → ConstraintsHoldFlat env nestedOps.toFlat := by
+      circuit.ProverAssumptions (eval env input_var) env.data env.hint →
+      ConstraintsHoldFlat env nestedOps.toFlat := by
     intro env h_env assumptions
     set input := eval env input_var
     rw [ops.toNested_toFlat] at h_env ⊢
@@ -223,28 +227,36 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     rw [constraintsHold_toFlat_iff]
     apply can_replace_completeness h_consistent h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
-    apply circuit.completeness n env input_var h_env_completeness input rfl assumptions
+    apply (circuit.completeness n env input_var h_env_completeness input rfl assumptions).1
 
   {
     ops := nestedOps,
-    Soundness env := circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data,
-    Completeness env := circuit.Assumptions (eval env input_var) env.data env.hint,
-    UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) env.data env.hint →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data
-      ∧ circuit.CompletenessSpec (eval env input_var) (eval env (circuit.output input_var n)) env.hint,
+
+    Spec env := circuit.Assumptions (eval env input_var) env.data →
+      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data,
+
+    ProverAssumptions env := circuit.ProverAssumptions (eval env input_var) env.data env.hint,
+
+    ProverSpec env :=
+      circuit.ProverAssumptions (eval env input_var) env.data env.hint →
+      (circuit.Assumptions (eval env input_var) env.data →
+        circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data)
+      ∧ circuit.ProverSpec (eval env input_var) (eval env (circuit.output input_var n)) env.hint,
+
     localLength := circuit.localLength input_var
 
-    imply_soundness
-    implied_by_completeness
-    imply_usesLocalWitnesses := by
-      intro env h_env assumptions
+    soundness
+    completeness := by
+      intro env h_env
+      use implied_by_assumptions env h_env
+      intro assumptions
       constructor
-      · exact implied_by_completeness env h_env assumptions |> imply_soundness env
+      · exact implied_by_assumptions env h_env assumptions |> soundness env
       · have h_env' := h_env
         rw [ops.toNested_toFlat] at h_env'
         rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env'
         have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env'
-        exact circuit.completenessSpec n env input_var h_env_completeness _ rfl assumptions
+        exact (circuit.completeness n env input_var h_env_completeness _ rfl assumptions).2
 
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
@@ -383,7 +395,7 @@ Simplifies UsesLocalWitnesses for FormalCircuit.toSubcircuit to avoid unfolding 
 theorem FormalCircuit.toSubcircuit_usesLocalWitnesses
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
-    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
+    (circuit.toSubcircuit n input_var).ProverSpec env =
     (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
 
@@ -394,10 +406,11 @@ Simplifies UsesLocalWitnesses for GeneralFormalCircuit.toSubcircuit to avoid unf
 theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
-    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
-    (circuit.Assumptions (eval env input_var) env.data env.hint →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data
-      ∧ circuit.CompletenessSpec (eval env input_var) (eval env (circuit.output input_var n)) env.hint) := by
+    (circuit.toSubcircuit n input_var).ProverSpec env =
+    (circuit.ProverAssumptions (eval env input_var) env.data env.hint →
+      (circuit.Assumptions (eval env input_var) env.data →
+        circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data)
+      ∧ circuit.ProverSpec (eval env input_var) (eval env (circuit.output input_var n)) env.hint) := by
   rfl
 
 /--
@@ -407,7 +420,7 @@ Simplifies UsesLocalWitnesses for FormalAssertion.toSubcircuit to avoid unfoldin
 theorem FormalAssertion.toSubcircuit_usesLocalWitnesses
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
-    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env = True := by
+    (circuit.toSubcircuit n input_var).ProverSpec env = True := by
   rfl
 
 -- Simplification lemmas for toSubcircuit.localLength
@@ -451,7 +464,7 @@ Simplifies Soundness for FormalCircuit.toSubcircuit to avoid unfolding the entir
 theorem FormalCircuit.toSubcircuit_soundness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Soundness env =
+    (circuit.toSubcircuit n input_var).Spec env =
     (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
 
@@ -462,8 +475,9 @@ Simplifies Soundness for GeneralFormalCircuit.toSubcircuit to avoid unfolding th
 theorem GeneralFormalCircuit.toSubcircuit_soundness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Soundness env =
-    circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data := by
+    (circuit.toSubcircuit n input_var).Spec env =
+    (circuit.Assumptions (eval env input_var) env.data →
+      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data) := by
   rfl
 
 /--
@@ -473,7 +487,7 @@ Simplifies Soundness for FormalAssertion.toSubcircuit to avoid unfolding the ent
 theorem FormalAssertion.toSubcircuit_soundness
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).Soundness env =
+    (circuit.toSubcircuit n input_var).Spec env =
     (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var)) := by
   rfl
 
@@ -486,7 +500,7 @@ Simplifies Completeness for FormalCircuit.toSubcircuit to avoid unfolding the en
 theorem FormalCircuit.toSubcircuit_completeness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
-    (circuit.toSubcircuit n input_var).Completeness env =
+    (circuit.toSubcircuit n input_var).ProverAssumptions env =
     circuit.Assumptions (eval env input_var) := by
   rfl
 
@@ -497,8 +511,8 @@ Simplifies Completeness for GeneralFormalCircuit.toSubcircuit to avoid unfolding
 theorem GeneralFormalCircuit.toSubcircuit_completeness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
-    (circuit.toSubcircuit n input_var).Completeness env =
-    circuit.Assumptions (eval env input_var) env.data env.hint := by
+    (circuit.toSubcircuit n input_var).ProverAssumptions env =
+    circuit.ProverAssumptions (eval env input_var) env.data env.hint := by
   rfl
 
 /--
@@ -508,6 +522,6 @@ Simplifies Completeness for FormalAssertion.toSubcircuit to avoid unfolding the 
 theorem FormalAssertion.toSubcircuit_completeness
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
-    (circuit.toSubcircuit n input_var).Completeness env =
+    (circuit.toSubcircuit n input_var).ProverAssumptions env =
     (circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var)) := by
   rfl
