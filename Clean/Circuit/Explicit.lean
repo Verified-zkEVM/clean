@@ -110,7 +110,7 @@ instance : ExplicitCircuits (F:=F) witnessVar where
   localLength _ _ := 1
   operations c n := [.witness 1 fun env => #v[c env]]
 
-instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
+instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
   localLength _ := k
   operations n := [.witness k c]

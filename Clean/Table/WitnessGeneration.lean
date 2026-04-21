@@ -58,7 +58,7 @@ def generateNextRow (hint : ProverHint F) (tc : TableConstraint W S F Unit)
     else panic! s!"Invalid variable index {i} in environment"
 
   -- evaluate the witness generators
-  let provEnv : Environment F := { get := env, data := fun _ _ => #[], hint := hint }
+  let provEnv : ProverEnvironment F := { get := env, data := fun _ _ => #[], hint := hint }
   let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
       let wit := compute provEnv
 

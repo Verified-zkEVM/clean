@@ -77,7 +77,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   -- At this point we should have: offset, env, input_var, input, h_input, h_normalized, h_holds
   -- Check that these names exist by using them
   have : ℕ := i₀
-  have : VerifierEnvironment F := env
+  have : Environment F := env
   have : Input (Expression F) := input_var
   have : Input F := input
   have : eval env input_var = input := h_input
@@ -94,7 +94,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   -- Note: provable_struct_simp eliminates input and h_input by substituting eval env input_var
   -- Check that these names exist by using them
   have : ℕ := i₀
-  have : Environment F := env
+  have : ProverEnvironment F := env
   have : Input (Expression F) := input_var
   have : env.UsesLocalWitnessesCompleteness i₀ (circuit.main input_var i₀).2 := h_env
   -- After provable_struct_simp, we work with eval env input_var instead of input

@@ -375,7 +375,7 @@ lemma applyRounds_eq_applySevenRounds
   -- applyRounds constructs the same initial state and then applies 7 rounds
   simp only [applyRounds, applySevenRounds]
 
-lemma eval_decomposeNatExpr_small (env : VerifierEnvironment (F p)) (x : ℕ) :
+lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
     x < 256^4 ->
     (eval env (U32.decomposeNatExpr x)).value = x := by
   intro h
@@ -459,7 +459,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
 
 -- Helper lemma that proves the initial state and messages are normalized
 lemma initial_state_and_messages_are_normalized
-    (env : VerifierEnvironment (F p))
+    (env : Environment (F p))
     (input_var : Var Inputs (F p))
     (block_words : BLAKE3State (F p))
     (chaining_value counter_high counter_low block_len flags)

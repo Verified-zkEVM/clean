@@ -10,14 +10,14 @@ open Circuit (ConstraintsHold)
 namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
-theorem allZero.soundness {offset : ℕ} {env : VerifierEnvironment F} {n} {xs : Vector (Expression F) n} :
+theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     ConstraintsHold.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
-theorem allZero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
+theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
@@ -97,17 +97,17 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elabo
 -- rewrite soundness/completeness directly
 
 @[circuit_norm]
-theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : VerifierEnvironment F) (x y : Var α F) :
+theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
 

@@ -219,7 +219,7 @@ end U64.AssertNormalized
 /--
   Witness a 64-bit unsigned integer.
 -/
-def U64.witness (compute : Environment (F p) → U64 (F p)) := do
+def U64.witness (compute : ProverEnvironment (F p) → U64 (F p)) := do
   let x ← ProvableType.witness compute
   U64.AssertNormalized.circuit x
   return x
@@ -275,11 +275,11 @@ lemma toLimbs_map {α β : Type} (x : U64 α) (f : α → β) :
     toLimbs (map x f) = (toLimbs x).map f := by
   simp [toLimbs, toElements, map]
 
-lemma getElem_eval_toLimbs {F} [Field F] {env : VerifierEnvironment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
+lemma getElem_eval_toLimbs {F} [Field F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
   simp only [toLimbs, eval, size, toVars, ProvableType.toElements_fromElements, Vector.getElem_map]
 
-lemma eval_fromLimbs {F} [Field F] {env : VerifierEnvironment F} {v : Vector (Expression F) 8} :
+lemma eval_fromLimbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 8} :
     eval env (U64.fromLimbs v) = .fromLimbs (v.map env) := by
   simp only [U64.fromLimbs, ProvableType.eval_fromElements]
 end ByteVector

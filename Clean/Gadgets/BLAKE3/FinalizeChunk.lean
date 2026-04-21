@@ -43,7 +43,7 @@ def bytesToWords {F} (bytes : Vector F 64) : Vector (U32 F) 16 :=
       bytes[base + 3]
 
 omit p_large_enough in
-lemma bytesToWords_normalized (env : VerifierEnvironment (F p)) (bytes_var : Var (ProvableVector field 64) (F p))
+lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (ProvableVector field 64) (F p))
     (h_bytes : ∀ i : Fin 64, (eval env bytes_var)[i].val < 256) :
     ∀ i : Fin 16, (eval env (α := ProvableVector U32 16) (bytesToWords bytes_var))[i].Normalized := by
   rintro ⟨i, h_i⟩
@@ -122,7 +122,7 @@ private lemma ZMod_val_chunkEnd :
   rw [Nat.mod_eq_of_lt]; omega
 
 omit p_large_enough in
-private lemma eval_bytesToWords (env : VerifierEnvironment (F p))
+private lemma eval_bytesToWords (env : Environment (F p))
     (input_var_buffer_data : Vector (Expression (F p)) 64) :
     eval env (α := ProvableVector U32 16) (bytesToWords input_var_buffer_data) =
       bytesToWords (eval (α:=ProvableVector field 64) env input_var_buffer_data) := by

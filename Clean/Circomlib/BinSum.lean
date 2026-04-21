@@ -82,7 +82,7 @@ def inputLinearSum (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : 
 -- Lemma showing that evaluating the main circuit computes the correct sum
 omit [Fact (p > 2)] in
 lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
-  (env : VerifierEnvironment (F p))
+  (env : Environment (F p))
   (input : Var (BinSumInput n ops) (F p))
   (input_val : BinSumInput n ops (F p))
   (h_eval : eval env input = input_val) :

@@ -221,7 +221,7 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
 Lemma that handles the case when block_exists = 1 in the step function.
 Shows that the step correctly processes a block using processBlockWords.
 -/
-private lemma step_process_block (env : VerifierEnvironment (F p))
+private lemma step_process_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)

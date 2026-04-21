@@ -73,28 +73,28 @@ def ProverData.getTable (data : ProverData F) {Row : TypeMap} [ProvableType Row]
 namespace Lookup
 variable {F : Type} [Field F]
 
-def Contains (lookup : Lookup F) (env : VerifierEnvironment F) : Prop :=
+def Contains (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Contains (env.data lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
-def Soundness (lookup : Lookup F) (env : VerifierEnvironment F) : Prop :=
+def Soundness (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Soundness (env.data lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
-def Completeness (lookup : Lookup F) (env : VerifierEnvironment F) : Prop :=
+def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Completeness (env.data lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 @[circuit_norm]
 lemma soundess_def {Row : TypeMap} [ProvableType Row]
-  (table : Table F Row) (env : VerifierEnvironment F) (entry : Row (Expression F)) :
+  (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
     let lookup : Lookup F := { table := table.toRaw, entry := toElements entry };
     lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (eval env entry) := by
   rfl
 
 @[circuit_norm]
 lemma soundess_def_field {F : Type} [Field F]
-  (table : Table F field) (env : VerifierEnvironment F) (entry : Expression F) :
+  (table : Table F field) (env : Environment F) (entry : Expression F) :
     let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
     lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (entry.eval (F:=F) env) := by
   simp only [Soundness, Table.toRaw, id_eq, Vector.map_mk, List.map_toArray, List.map_cons,
@@ -103,14 +103,14 @@ lemma soundess_def_field {F : Type} [Field F]
 
 @[circuit_norm]
 lemma completeness_def {Row : TypeMap} [ProvableType Row]
-  (table : Table F Row) (env : VerifierEnvironment F) (entry : Row (Expression F)) :
+  (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
     let lookup : Lookup F := { table := table.toRaw, entry := toElements entry };
     lookup.Completeness env ↔ table.Completeness (env.data.getTable table) (eval env entry) := by
   rfl
 
 @[circuit_norm]
 lemma completeness_def_field {F : Type} [Field F]
-  (table : Table F field) (env : VerifierEnvironment F) (entry : Expression F) :
+  (table : Table F field) (env : Environment F) (entry : Expression F) :
     let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
     lookup.Completeness env ↔ table.Completeness (env.data.getTable table) (entry.eval (F:=F) env) := by
   simp only [Completeness, Table.toRaw, id_eq, Vector.map_mk, List.map_toArray, List.map_cons,

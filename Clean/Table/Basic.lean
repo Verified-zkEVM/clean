@@ -364,7 +364,7 @@ def OffsetConsistent (table : TableConstraint W S F α) : Prop :=
 -- construct an env by taking the result of the assignment function for input/output cells,
 -- and allowing arbitrary values for aux cells and invalid variables
 def windowEnv (table : TableConstraint W S F Unit)
-  (window : TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
+  (window : TraceOfLength F S W) (aux_env : ProverEnvironment F) : ProverEnvironment F :=
   let assignment := table.finalAssignment
   { get i :=
       if hi : i < assignment.offset then
@@ -382,7 +382,7 @@ def windowEnv (table : TableConstraint W S F Unit)
 -/
 @[table_norm]
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
-  (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
+  (window : TraceOfLength F S W) (aux_env : ProverEnvironment F) : Prop :=
   let env := windowEnv table window aux_env
   Circuit.ConstraintsHold.Soundness env table.operations
 
@@ -523,7 +523,7 @@ structure TableEnvironments (F : Type) where
   /-- auxiliary data available to all rows -/
   data : ProverData F
 
-def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=
+def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : ProverEnvironment F :=
   { get := envs.witnessEnvs constraint row,
     data := envs.data,
     hint := dummyProverHint F }
@@ -556,8 +556,8 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
   -/
   @[table_norm]
-  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
-    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
+  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (ProverEnvironment F)))) :
+    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (ProverEnvironment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
     | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> curr +> next) rest

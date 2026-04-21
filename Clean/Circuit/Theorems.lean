@@ -22,7 +22,7 @@ theorem localLength_cons {a : Operation F} {as : Operations F} :
     localLength (a :: as) = a.localLength + as.localLength := by
   cases a <;> simp_all [localLength, Operation.localLength]
 
-theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : Environment F) :
+theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : ProverEnvironment F) :
   localWitnesses env (op :: ops) =
     (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
   cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
@@ -221,16 +221,16 @@ lemma localWitnesses_toFlat {ops : Operations F} {env} :
     try simp only [localLength, localWitnesses, Vector.toArray_append, Subcircuit.witnesses, Vector.toArray_cast]
 end FlatOperation
 
-namespace Environment
+namespace ProverEnvironment
 open FlatOperation (localLength localWitnesses)
 /-
-what follows are relationships between different versions of `Environment.UsesLocalWitnesses`
+what follows are relationships between different versions of `ProverEnvironment.UsesLocalWitnesses`
 -/
 
-lemma env_extends_witness {F} {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F} {m c} :
+lemma env_extends_witness {F} {n : ℕ} {ops : List (FlatOperation F)} {env : ProverEnvironment F} {m c} :
     env.ExtendsVector (localWitnesses env (.witness m c :: ops)) n ↔
       (env.ExtendsVector (c env) n ∧ env.ExtendsVector (localWitnesses env ops) (m + n)) := by
-  simp_all only [Environment.ExtendsVector, VerifierEnvironment.ExtendsVector, localLength, localWitnesses, Vector.getElem_append]
+  simp_all only [ProverEnvironment.ExtendsVector, Environment.ExtendsVector, localLength, localWitnesses, Vector.getElem_append]
   constructor
   · intro h
     constructor
@@ -249,10 +249,10 @@ lemma env_extends_witness {F} {n : ℕ} {ops : List (FlatOperation F)} {env : En
       congr 1
       omega
 
-theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops : List (FlatOperation F)}  :
+theorem usesLocalWitnessesFlat_iff_extends {env : ProverEnvironment F} (n : ℕ) {ops : List (FlatOperation F)}  :
     env.UsesLocalWitnessesFlat n ops ↔ env.ExtendsVector (localWitnesses env ops) n := by
   induction ops using FlatOperation.induct generalizing n with
-  | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, Environment.ExtendsVector, VerifierEnvironment.ExtendsVector, localLength]
+  | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, ProverEnvironment.ExtendsVector, Environment.ExtendsVector, localLength]
   | witness m _ _ ih =>
     rw [UsesLocalWitnessesFlat, FlatOperation.forAll, env_extends_witness,←ih (m + n)]
     trivial
@@ -260,7 +260,7 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops 
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength]
 
-theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
+theorem can_replace_usesLocalWitnessesCompleteness {env : ProverEnvironment F} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
   env.UsesLocalWitnesses n ops → env.UsesLocalWitnessesCompleteness n ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; trivial
@@ -275,7 +275,7 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : 
     rw [← usesLocalWitnessesFlat_iff_extends]
     exact h.left
 
-theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
+theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : ProverEnvironment F} {ops : Operations F} :
   env.UsesLocalWitnessesCompleteness n ops ↔ ops.forAll n {
     witness m _ c := env.ExtendsVector (c env) m,
     subcircuit _ _ s := s.UsesLocalWitnesses env
@@ -285,17 +285,17 @@ theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F
   | assert | lookup | witness | subcircuit =>
     simp_all +arith [UsesLocalWitnessesCompleteness, Operations.forAll]
 
-theorem usesLocalWitnesses_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
+theorem usesLocalWitnesses_iff_forAll (n : ℕ) {env : ProverEnvironment F} {ops : Operations F} :
   env.UsesLocalWitnesses n ops ↔ ops.forAll n {
     witness n _ c := env.ExtendsVector (c env) n,
     subcircuit n _ s := FlatOperation.forAll n { witness n _ c := env.ExtendsVector (c env) n} s.ops.toFlat
   } := by
   simp only [UsesLocalWitnesses, Operations.forAllFlat]
-end Environment
+end ProverEnvironment
 
 namespace Circuit
 
-theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : VerifierEnvironment F) (ops : Operations F) :
+theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
@@ -308,7 +308,7 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : VerifierEnvironmen
     try intros
     apply ih
 
-theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
+theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : ProverEnvironment F) (ops : Operations F) :
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
@@ -335,20 +335,20 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.S
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
-    simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
+    simp_all [circuit_norm, ProverEnvironment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll,
       Lookup.Contains, Lookup.Completeness, RawTable.implied_by_completeness]
   | subcircuit n circuit ops ih =>
-    simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
+    simp_all only [ConstraintsHold, ConstraintsHold.Completeness, ProverEnvironment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
     apply circuit.implied_by_completeness env ?_ h_compl.left
-    rw [←Environment.usesLocalWitnessesFlat_iff_extends]
+    rw [←ProverEnvironment.usesLocalWitnessesFlat_iff_extends]
     exact h_env.left
 end Circuit
 
 namespace Circuit
 -- more theorems about forAll
 
-variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F}
+variable {α β : Type} {n : ℕ} {prop : Condition F} {env : ProverEnvironment F}
 
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
@@ -373,7 +373,7 @@ theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
   simp only [forAll]
   rw [bind_forAll]
 
-theorem ConstraintsHold.soundness_iff_forAll' {env : VerifierEnvironment F} {circuit : Circuit F α} {n : ℕ} :
+theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
@@ -381,7 +381,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : VerifierEnvironment F} {cir
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
-theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
+theorem ConstraintsHold.completeness_iff_forAll' {env : ProverEnvironment F} {circuit : Circuit F α} {n : ℕ} :
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Completeness env,
@@ -392,7 +392,7 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
 -- specializations
 
 section SoundnessEnv
-variable {env : VerifierEnvironment F}
+variable {env : Environment F}
 
 @[circuit_norm] theorem ConstraintsHold.append_soundness {as bs : Operations F} :
   ConstraintsHold.Soundness env (as ++ bs)
@@ -464,7 +464,7 @@ lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F)
 end Operations
 
 /-- An environment respects local witnesses iff it does so in the flattened variant. -/
-lemma Environment.usesLocalWitnesses_iff_flat {n : ℕ} {ops : Operations F} {env : Environment F} :
+lemma ProverEnvironment.usesLocalWitnesses_iff_flat {n : ℕ} {ops : Operations F} {env : ProverEnvironment F} :
     env.UsesLocalWitnesses n ops ↔
     env.UsesLocalWitnessesFlat n ops.toFlat := by
   simp only [UsesLocalWitnessesFlat, UsesLocalWitnesses]
@@ -509,12 +509,12 @@ lemma getElem?_dynamicWitnesses_cons_right {op : FlatOperation F} {ops : List (F
 Flat version of the final theorem in this section, `Circuit.proverEnvironment_usesLocalWitnesses`.
 -/
 theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (init : List F) :
-  (∀ (env env' : Environment F),
+  (∀ (env env' : ProverEnvironment F),
     forAll init.length
       { witness n _ c := env.AgreesBelow n env' → c env = c env' } ops) →
     (proverEnvironment hint ops init).UsesLocalWitnessesFlat init.length ops := by
-  simp only [proverEnvironment, Environment.UsesLocalWitnessesFlat, Environment.ExtendsVector,
-    VerifierEnvironment.ExtendsVector]
+  simp only [proverEnvironment, ProverEnvironment.UsesLocalWitnessesFlat, ProverEnvironment.ExtendsVector,
+    Environment.ExtendsVector]
   intro h_computable
   induction ops generalizing init with
   | nil => trivial
@@ -524,7 +524,7 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
     | assert | lookup  =>
       simp_all [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness]
     | witness m compute =>
-      simp_all only [Condition.applyFlat, singleLocalLength, Environment.AgreesBelow]
+      simp_all only [Condition.applyFlat, singleLocalLength, ProverEnvironment.AgreesBelow]
       -- get rid of ih first
       constructor; case right =>
         specialize ih (init ++ (compute (.fromListAt init hint)).toList)
@@ -534,13 +534,13 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       clear ih
       replace h_computable := fun env env' => (h_computable env env').left
       intro i
-      simp only [Environment.fromListAt, VerifierEnvironment.fromList]
+      simp only [ProverEnvironment.fromListAt, Environment.fromList]
       rw [getElem?_dynamicWitnesses_cons_right i.is_lt]
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
       intro j hj
-      simp [Environment.fromListAt, VerifierEnvironment.fromList, hj,
+      simp [ProverEnvironment.fromListAt, Environment.fromList, hj,
         getElem?_dynamicWitnesses_of_lt]
 end FlatOperation
 
@@ -553,10 +553,10 @@ theorem Circuit.proverEnvironment_usesLocalWitnesses (hint : ProverHint F) (circ
     (circuit.proverEnvironment hint init).UsesLocalWitnesses init.length (circuit.operations init.length) := by
   intro h_computable
   simp_all only [proverEnvironment, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
-    ←Operations.forAll_toFlat_iff, Environment.UsesLocalWitnesses]
+    ←Operations.forAll_toFlat_iff, ProverEnvironment.UsesLocalWitnesses]
   exact FlatOperation.proverEnvironment_usesLocalWitnesses init h_computable
 
-lemma Environment.agreesBelow_of_le {F} {n m : ℕ} {env env' : Environment F} :
+lemma ProverEnvironment.agreesBelow_of_le {F} {n m : ℕ} {env env' : ProverEnvironment F} :
     env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
   fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
 
@@ -569,8 +569,8 @@ This is not currently used, but seemed like a nice result to have.
 -/
 theorem onlyAccessedBelow_all {ops : List (FlatOperation F)}
     (n : ℕ) :
-  forAll n { witness n _ c := Environment.OnlyAccessedBelow n (fun env => c env) } ops →
-    Environment.OnlyAccessedBelow (n + localLength ops)
+  forAll n { witness n _ c := ProverEnvironment.OnlyAccessedBelow n (fun env => c env) } ops →
+    ProverEnvironment.OnlyAccessedBelow (n + localLength ops)
       (fun env => localWitnesses env ops) := by
   intro h_comp env env' h_env
   simp only
@@ -589,7 +589,7 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)}
       simp_all only [Condition.applyFlat, localWitnesses]
     | witness m c =>
       simp_all only [Condition.applyFlat, localWitnesses,
-        Environment.OnlyAccessedBelow, Environment.AgreesBelow]
+        ProverEnvironment.OnlyAccessedBelow, ProverEnvironment.AgreesBelow]
       congr 1
       apply h_comp env env'
       intro i hi

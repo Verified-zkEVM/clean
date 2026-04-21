@@ -215,7 +215,7 @@ lemma value_of_literal' (a b c d : field (F p)) :
 
 omit p_large_enough in
 @[circuit_norm]
-lemma eval_of_literal (env : VerifierEnvironment (F p)) (a b c d : Var field (F p)) :
+lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
     eval env (U32.mk a b c d) =
     U32.mk (eval env a) (eval env b) (eval env c) (eval env d) := by
   simp only [explicit_provable_type, circuit_norm]
@@ -292,7 +292,7 @@ end U32.AssertNormalized
 /--
   Witness a 32-bit unsigned integer.
 -/
-def U32.witness (compute : Environment (F p) → U32 (F p)) := do
+def U32.witness (compute : ProverEnvironment (F p) → U32 (F p)) := do
   let x ← ProvableType.witness compute
   U32.AssertNormalized.circuit x
   return x
@@ -330,11 +330,11 @@ lemma toLimbs_map {α β : Type} (x : U32 α) (f : α → β) :
     toLimbs (map x f) = (toLimbs x).map f := by
   simp [toLimbs, toElements, map]
 
-lemma getElem_eval_toLimbs {F} [Field F] {env : VerifierEnvironment F} {x : U32 (Expression F)} {i : ℕ} (hi : i < 4) :
+lemma getElem_eval_toLimbs {F} [Field F] {env : Environment F} {x : U32 (Expression F)} {i : ℕ} (hi : i < 4) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
   simp only [toLimbs, eval, size, toVars, ProvableType.toElements_fromElements, Vector.getElem_map]
 
-lemma eval_fromLimbs {F} [Field F] {env : VerifierEnvironment F} {v : Vector (Expression F) 4} :
+lemma eval_fromLimbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 4} :
     eval env (U32.fromLimbs v) = .fromLimbs (v.map env) := by
   simp only [U32.fromLimbs, ProvableType.eval_fromElements]
 end ByteVector

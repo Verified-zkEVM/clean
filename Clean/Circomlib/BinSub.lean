@@ -35,7 +35,7 @@ def inputLinearSub (n : ℕ) (inp : BinSubInput n (Expression (F p))) : Expressi
   Fin.foldl n (fun lin k => lin + inp[0][k] * (2^k.val : F p) - (inp[1][k] * (2^k.val : F p))) (2^n : F p)
 
 -- Lemma: evaluating `inputLinearSub` corresponds to the circuit's desired output
-lemma inputLinearSub_eval_eq_sub {n : ℕ} [hn : NeZero n] (env : VerifierEnvironment (F p)) (input : Var (BinSubInput n) (F p)) (input_val : BinSubInput n (F p)) (h_eval : ProvableType.eval env input = input_val) :
+lemma inputLinearSub_eval_eq_sub {n : ℕ} [hn : NeZero n] (env : Environment (F p)) (input : Var (BinSubInput n) (F p)) (input_val : BinSubInput n (F p)) (h_eval : ProvableType.eval env input = input_val) :
     Expression.eval env (inputLinearSub n input) =
       fieldFromBits input_val[0] + 2^n - fieldFromBits input_val[1] := by
   simp only [inputLinearSub, circuit_norm, eval_foldl]
@@ -45,14 +45,14 @@ lemma inputLinearSub_eval_eq_sub {n : ℕ} [hn : NeZero n] (env : VerifierEnviro
   simp [fieldFromBits_as_sum]
 
 -- Lemma: (Left) folding `n` times over an accumulator that starts as `(0, 1)`, and doubling each time the right element of the accumulator, results in having `2^n` as the right element of the pair
-lemma foldl_acc1_powerof2 {n : ℕ} (env : VerifierEnvironment (F p)) (f : Expression (F p) × Expression (F p) → ℕ → Expression (F p)) :
+lemma foldl_acc1_powerof2 {n : ℕ} (env : Environment (F p)) (f : Expression (F p) × Expression (F p) → ℕ → Expression (F p)) :
   Expression.eval env (Fin.foldl n (fun acc i ↦ (f acc i, acc.2 + acc.2)) (0, 1)).2 = (2^n : F p) := by
   induction n with
   | zero => simp_all only [Fin.foldl_zero, pow_zero, circuit_norm]
   | succ n' ihn' => simp_all +arith [Fin.foldl_succ_last, circuit_norm, two_mul, pow_succ, mul_comm]
 
 -- Lemma: Conversion to bitstring equals the evaluation of the conversion with explicit accumulator and variables
-lemma foldl_explicit {n : ℕ} {m : ℕ} (h_le : m <= n) (env : VerifierEnvironment (F p)) (offset : ℕ) (h_bool : ∀ i : Fin n, IsBool (env.get (offset + i))) :
+lemma foldl_explicit {n : ℕ} {m : ℕ} (h_le : m <= n) (env : Environment (F p)) (offset : ℕ) (h_bool : ∀ i : Fin n, IsBool (env.get (offset + i))) :
   Fin.foldl m (fun acc k ↦ acc + env.get (offset + k) * 2^k.val) 0 =
     Expression.eval env (Fin.foldl m (fun acc i ↦ (acc.1 + var { index := offset + i } * acc.2, acc.2 + acc.2)) (0, 1)).1 := by
   induction m with
@@ -82,7 +82,7 @@ lemma lin_bound {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)  (h0 : in0.va
   rw [lin_val_eq in0 in1 h0 h1 h_p]; omega
 
 -- Lemma: Simplified LHS evaluation for soundness proof
-lemma soundness_lhs_eval {n : ℕ} [NeZero n] (env : VerifierEnvironment (F p)) (input_var : Var (BinSubInput n) (F p)) (input : BinSubInput n (F p))
+lemma soundness_lhs_eval {n : ℕ} [NeZero n] (env : Environment (F p)) (input_var : Var (BinSubInput n) (F p)) (input : BinSubInput n (F p))
     (h_input : ProvableType.eval env input_var = input) :
     Expression.eval env (inputLinearSub n input_var) = fieldFromBits input[0] + 2^n - fieldFromBits input[1] := by
   apply inputLinearSub_eval_eq_sub; assumption
@@ -115,7 +115,7 @@ lemma aux_bit_boolean {n : ℕ} (lin_val : F p) :
 -- Completeness helper lemmas
 
 -- Lemma: Sum of output bits modulo 2^n
-lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : ProverEnvironment (F p)) (i₀ : ℕ)
     (input_var : Var (BinSubInput n) (F p)) (h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)))
     (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i]) :
     (Fin.foldl n (fun acc k ↦ acc + env.get (i₀ + ↑k) * 2 ^ k.val) 0).val = (Expression.eval env (inputLinearSub n input_var)).val % 2^n := by
@@ -133,7 +133,7 @@ lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Env
   exact lt_of_le_of_lt (Nat.mod_le _ _) (Nat.lt_of_lt_of_le (ZMod.val_lt _) (by linarith [pow_succ' 2 n]))
 
 -- Lemma: Aux bit equals lin divided by 2^n
-lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : ProverEnvironment (F p)) (i₀ : ℕ)
     (input : BinSubInput n (F p)) (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
     (input_var : Var (BinSubInput n) (F p)) (h_input : ProvableType.eval env input_var = input)
     (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
@@ -168,7 +168,7 @@ lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Env
     · exact Nat.div_lt_of_lt_mul h_div_lt
 
 -- Lemma: Main reconstruction equation for completeness
-lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
+lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : ProverEnvironment (F p)) (i₀ : ℕ)
     (input : BinSubInput n (F p)) (input_var : Var (BinSubInput n) (F p))
     (h_input : ProvableType.eval env input_var = input)
     (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
@@ -179,7 +179,7 @@ lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (en
     Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 +
     env.get (i₀ + n) * 2 ^ n := by
   -- 1. Convert Circuit Fold to Summation
-  rw [←foldl_explicit (le_refl n) env.toVerifierEnvironment i₀ h_out_binary]
+  rw [←foldl_explicit (le_refl n) env.toEnvironment i₀ h_out_binary]
   -- We verify the equation by lifting to Natural numbers (ZMod.val)
   -- This avoids modular arithmetic issues since we know 2^(n+1) < p
   apply ZMod.val_injective

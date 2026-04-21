@@ -180,7 +180,7 @@ namespace FoldlM
 @[reducible]
 def prod (circuit : β → α → Circuit F β) : β × α → Circuit F β := fun t => circuit t.1 t.2
 
-variable {env : Environment F} {prop : Condition F} {xs : Vector α m}
+variable {env : ProverEnvironment F} {prop : Condition F} {xs : Vector α m}
   {circuit : β → α → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
 lemma foldlM_cons (x : α) :
@@ -264,7 +264,7 @@ theorem forAll_iff {constant : ConstantLength (prod circuit)} :
 
 -- specialization to xs := Vector.finRange m
 section
-variable {env : Environment F} {prop : Condition F} {m : ℕ}
+variable {env : ProverEnvironment F} {prop : Condition F} {m : ℕ}
   {Acc : ℕ → Type}
   {circuit : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
@@ -390,7 +390,7 @@ def foldlRange (m : ℕ) [Inhabited β] (init : β) (body : β → Fin m → Cir
   (Vector.finRange m).foldlM body init
 
 section forEach
-variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -441,7 +441,7 @@ lemma forEach.usesLocalWitnesses :
 end forEach
 
 section map
-variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F β} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -485,7 +485,7 @@ lemma map.usesLocalWitnesses :
 end map
 
 section mapFinRange
-variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
   {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -531,7 +531,7 @@ lemma mapFinRange.usesLocalWitnesses :
 end mapFinRange
 
 section foldl
-variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
   {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)}
 
@@ -599,7 +599,7 @@ lemma foldl.usesLocalWitnesses [NeZero m] :
 end foldl
 
 section foldlRange
-variable {env : Environment F} {env_v : VerifierEnvironment F} {m n : ℕ} [Inhabited β]
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited β]
   {body : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
 
 @[circuit_norm ↓]

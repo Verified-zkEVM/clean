@@ -17,7 +17,7 @@ namespace LookupCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
 
 def proverEnvironment (circuit : LookupCircuit F α β) (hint : ProverHint F)
-    (input : α F) : Environment F :=
+    (input : α F) : ProverEnvironment F :=
   circuit.main (const input) |>.proverEnvironment hint
 
 theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β)
@@ -26,7 +26,7 @@ theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β)
       ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_usesLocalWitnesses
   apply circuit.compose_computableWitnesses
-  simp [Environment.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
+  simp [ProverEnvironment.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
 
 def constantOutput (circuit : LookupCircuit F α β) (hint : ProverHint F)
     (input : α F) : β F :=

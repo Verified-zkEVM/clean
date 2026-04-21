@@ -406,7 +406,7 @@ theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset :
         · apply AND.circuit.subcircuitsConsistent
 
 -- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
-lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : Environment (F p)) :
+lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : ProverEnvironment (F p)) :
     offset1 = offset2 ->
     (env.UsesLocalWitnesses offset1 ((main input).operations offset2) ↔
      env.UsesLocalWitnessesCompleteness offset1 ((main input).operations offset2)) := by
@@ -428,17 +428,17 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
       constructor
       ·
         intro h_witnesses
-        apply Environment.can_replace_usesLocalWitnessesCompleteness
+        apply ProverEnvironment.can_replace_usesLocalWitnessesCompleteness
         · apply AND.circuit.subcircuitsConsistent
         · exact h_witnesses
       · intro h_completeness
         simp only [AND.circuit, AND.main, circuit_norm] at h_completeness ⊢
         simp only [Nat.add_zero]
-        unfold Environment.UsesLocalWitnesses Operations.forAllFlat
+        unfold ProverEnvironment.UsesLocalWitnesses Operations.forAllFlat
         unfold Operations.forAll
 
         constructor
-        · simp only [Environment.ExtendsVector]
+        · simp only [ProverEnvironment.ExtendsVector]
           intro i
           fin_cases i
           simp only [add_zero]
@@ -455,7 +455,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
       · intro h_witnesses
         let n1 := (m + 3) / 2
         let n2 := (m + 3) - n1
-        apply Environment.can_replace_usesLocalWitnessesCompleteness
+        apply ProverEnvironment.can_replace_usesLocalWitnessesCompleteness
         · rw [← main]
           apply subcircuitsConsistent
         · exact h_witnesses
@@ -463,18 +463,18 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         simp only [circuit_norm] at h_completeness ⊢
         rcases h_completeness with ⟨ h_c1, h_c2, h_c3 ⟩
 
-        rw[Environment.UsesLocalWitnesses, Operations.forAllFlat]
+        rw[ProverEnvironment.UsesLocalWitnesses, Operations.forAllFlat]
 
         rw [Operations.forAll_append]
         constructor
-        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnesses]
+        · rw[← Operations.forAllFlat, ← ProverEnvironment.UsesLocalWitnesses]
           rw[IH]
           · aesop
           · omega
           · trivial
         rw [Operations.forAll_append]
         constructor
-        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnesses]
+        · rw[← Operations.forAllFlat, ← ProverEnvironment.UsesLocalWitnesses]
           rw[IH]
           · aesop
           · omega
@@ -495,7 +495,7 @@ def Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
   output.val = (input.map (·.val)).foldl (· &&& ·) 1 ∧ IsBool output
 
 /-- If eval env v = w for vectors v and w, then evaluating extracted subvectors preserves equality -/
-lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment (F p)}
+lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : ProverEnvironment (F p)}
     {v : Var (fields n) (F p)} {w : fields n (F p)}
     (h_eval : w = eval env v)
     (h_bounds : finish ≤ n) (h_start : start ≤ finish) :
@@ -599,7 +599,7 @@ lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
 
 /-- Soundness for n = 0 case -/
 lemma soundness_zero {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : VerifierEnvironment (F p)) (input_var : Var (fields 0) (F p))
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p)) (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 0 input)
     (_h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
@@ -613,7 +613,7 @@ lemma soundness_zero {p : ℕ} [Fact p.Prime]
 
 /-- Soundness for n = 1 case -/
 lemma soundness_one {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : VerifierEnvironment (F p)) (input_var : Var (fields 1) (F p))
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p)) (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 1 input)
     (_h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
@@ -643,7 +643,7 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
 
 /-- Soundness for n = 2 case -/
 lemma soundness_two {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : VerifierEnvironment (F p)) (input_var : Var (fields 2) (F p))
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p)) (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 2 input)
     (h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
@@ -677,7 +677,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
 
 /-- Completeness for n = 0 case -/
 lemma completeness_zero {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
+    (offset : ℕ) (env : ProverEnvironment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p))
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (_h_env : input = eval env input_var)
@@ -687,7 +687,7 @@ lemma completeness_zero {p : ℕ} [Fact p.Prime]
 
 /-- Completeness for n = 1 case -/
 lemma completeness_one {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
+    (offset : ℕ) (env : ProverEnvironment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p))
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (_h_env : input = eval env input_var)
@@ -697,7 +697,7 @@ lemma completeness_one {p : ℕ} [Fact p.Prime]
 
 /-- Completeness for n = 2 case -/
 lemma completeness_two {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
+    (offset : ℕ) (env : ProverEnvironment (F p)) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p))
     (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (h_env : input = eval env input_var)
@@ -724,7 +724,7 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
       exact h_binary1
 
 theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
-    ∀ (offset : ℕ) (env : VerifierEnvironment (F p)) (input_var : Var (fields n) (F p))
+    ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
     input = eval env input_var →
     Assumptions n input →
@@ -854,7 +854,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 
       · convert h_and_binary using 1; simp only [circuit_norm, ElaboratedCircuit.output_eq]; rfl
 
-lemma main_output_binary (n : ℕ) (offset : ℕ) (env : VerifierEnvironment (F p))
+lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : input = eval env input_var)
     (h_assumptions : Assumptions n input)
@@ -864,7 +864,7 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : VerifierEnvironment (F 
   exact (soundness n offset env input_var input h_eval h_assumptions
     (Circuit.can_replace_soundness h_constraints)).2
 
-lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p))
+lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : ProverEnvironment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : input = eval env input_var)
     (h_assumptions : Assumptions n input)
@@ -883,7 +883,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
   · exact h_completeness
 
 theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
-    ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
+    ∀ (offset : ℕ) (env : ProverEnvironment (F p)) (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
     env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset) →
     input = eval env input_var →
