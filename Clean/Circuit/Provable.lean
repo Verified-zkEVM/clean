@@ -121,7 +121,8 @@ def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
 attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
 end ProvableType
 
-export ProvableType (eval const varFromOffset)
+export ProvableType (const varFromOffset)
+open ProvableType (eval)
 
 @[reducible]
 def unit (_ : Type) := Unit

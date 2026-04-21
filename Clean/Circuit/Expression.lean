@@ -24,11 +24,11 @@ def ProverData (F : Type) :=
 /-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
 distinct to emphasize that hints are *not* committed: they feed only the
 witness-generation step and never appear in the proof. -/
-def ProverHint (F : Type) :=
+def ProverHints (F : Type) :=
   String → (n : ℕ) → Array (Vector F n)
 
-/-- Placeholder `ProverHint` that returns an empty array for every key. -/
-def ProverHint.empty (F : Type) : ProverHint F := fun _ _ => #[]
+/-- Placeholder `ProverHints` that returns an empty array for every key. -/
+def ProverHints.empty (F : Type) : ProverHints F := fun _ _ => #[]
 
 /--
   `Environment` represents the data that is provided at runtime to concretely
@@ -56,7 +56,7 @@ structure Environment (F : Type) where
 -/
 structure ProverEnvironment (F : Type) extends Environment F where
   /-- Runtime-only hashmap of prover hints, never committed into the proof. -/
-  hint : ProverHint F
+  hint : ProverHints F
 
 /-- Project a `ProverEnvironment` to its `Environment`. -/
 instance : Coe (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.toEnvironment⟩
