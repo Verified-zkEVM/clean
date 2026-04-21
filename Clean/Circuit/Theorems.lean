@@ -595,47 +595,41 @@ end FlatOperation
 `FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
-def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap)
-    [Field F] [ProvableType Output] [ProvableType Input]
-    (orig : FormalCircuit F Input Output) : GeneralFormalCircuit F Input Output := by
-  let Spec input output := orig.Assumptions input → orig.Spec input output
-  exact {
-    elaborated := orig.elaborated,
-    Assumptions i _ _ := orig.Assumptions i,
-    Spec i o _ := Spec i o,
-    soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
+@[circuit_norm]
+def FormalCircuit.isGeneralFormalCircuit {F : Type} {Input Output : TypeMap}
+  [Field F] [ProvableType Output] [ProvableType Input]
+    (orig : FormalCircuit F Input Output) : GeneralFormalCircuit F Input Output where
+  elaborated := orig.elaborated
+  Assumptions i _ := orig.Assumptions i
+  Spec i o _ := orig.Spec i o
+  ProverAssumptions i _ _ := orig.Assumptions i
+  soundness := by
+      simp only [circuit_norm, forall_eq']
       intros
       apply orig.soundness <;> trivial
-    ,
-    completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      intros
-      apply orig.completeness <;> trivial
-    completenessSpec := fun _ _ _ _ _ _ _ => trivial
-  }
+  completeness := by
+    simp only [circuit_norm, forall_eq']
+    intros
+    apply orig.completeness <;> trivial
 
 /--
 `FormalAssertion.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` is a generalization of
 `FormalAssertion`.  The idea is to make `FormalAssertion.Spec` available in the completeness
 by putting it within `GeneralFormalCircuit.Assumption`.
 -/
-def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap)
-    [Field F] [ProvableType Input] (orig : FormalAssertion F Input) :
-    GeneralFormalCircuit F Input unit := by
-  let Spec input (_ : Unit) := orig.Assumptions input → orig.Spec input
-  exact {
-    elaborated := orig.elaborated,
-    Assumptions input _ _ := orig.Assumptions input ∧ orig.Spec input,
-    Spec i o _ := Spec i o,
-    soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
-      intros
-      apply orig.soundness <;> trivial
-    ,
-    completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      rintro _ _ _ _ ⟨ _, _ ⟩
-      apply orig.completeness <;> trivial
-    completenessSpec := fun _ _ _ _ _ _ _ => trivial
-  }
+@[circuit_norm]
+def FormalAssertion.isGeneralFormalCircuit {F : Type} {Input : TypeMap}
+  [Field F] [ProvableType Input]
+    (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit where
+  elaborated := orig.elaborated
+  Assumptions i _ := orig.Assumptions i
+  Spec i _ _ := orig.Spec i
+  ProverAssumptions i _ _ := orig.Assumptions i ∧ orig.Spec i
+  soundness := by
+    simp only [circuit_norm, forall_eq']
+    intros
+    apply orig.soundness <;> trivial
+  completeness := by
+    simp only [circuit_norm, forall_eq']
+    rintro _ _ _ _ ⟨ _, _ ⟩
+    apply orig.completeness <;> trivial
