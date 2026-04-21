@@ -72,7 +72,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input _ := input.val < 2^n
+  Assumptions input _ _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
@@ -115,7 +115,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  Assumptions input _ := input.val < 2^n
+  Assumptions input _ _ := input.val < 2^n
 
   Spec input output _ :=
     input.val < 2^n ∧ output = fieldToBits n input

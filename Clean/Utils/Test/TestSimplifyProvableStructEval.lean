@@ -17,7 +17,7 @@ structure SimpleStruct (F : Type) where
 deriving ProvableStruct
 
 -- Test eval with struct literal on RHS
-lemma test_eval_eq_struct_literal {F : Type} [Field F] (env : Environment F)
+lemma test_eval_eq_struct_literal {F : Type} [Field F] (env : ProverEnvironment F)
     (x_var y_var z_var : Var field F)
     (h : eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3) :
     Expression.eval env x_var = 1 ∧ Expression.eval env y_var = 2 ∧ Expression.eval env z_var = 3 := by
@@ -27,7 +27,7 @@ lemma test_eval_eq_struct_literal {F : Type} [Field F] (env : Environment F)
   exact h
 
 -- Test eval with struct literal on LHS
-theorem test_struct_literal_eq_eval {F : Type} [Field F] (env : Environment F)
+theorem test_struct_literal_eq_eval {F : Type} [Field F] (env : ProverEnvironment F)
     (x_var y_var z_var : Var field F)
     (h : TestInputs.mk 1 2 3 = eval env (TestInputs.mk x_var y_var z_var)) :
     1 = Expression.eval env x_var ∧ 2 = Expression.eval env y_var ∧ 3 = Expression.eval env z_var := by
@@ -37,7 +37,7 @@ theorem test_struct_literal_eq_eval {F : Type} [Field F] (env : Environment F)
   exact h
 
 -- Test eval with struct variable
-theorem test_eval_eq_struct_variable {F : Type} [Field F] (env : Environment F) (input : TestInputs F)
+theorem test_eval_eq_struct_variable {F : Type} [Field F] (env : ProverEnvironment F) (input : TestInputs F)
     (x_var y_var z_var : Var field F)
     (h : eval env (TestInputs.mk x_var y_var z_var) = input) :
     TestInputs.mk (Expression.eval env x_var) (Expression.eval env y_var) (Expression.eval env z_var) = input := by
@@ -47,7 +47,7 @@ theorem test_eval_eq_struct_variable {F : Type} [Field F] (env : Environment F) 
   exact h
 
 -- Test eval inside conjunctions
-theorem test_eval_in_conjunction {F : Type} [Field F] (env : Environment F) (x : F)
+theorem test_eval_in_conjunction {F : Type} [Field F] (env : ProverEnvironment F) (x : F)
     (x_var y_var z_var : Var field F)
     (h : eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) :
     Expression.eval env x_var = 1 ∧ Expression.eval env y_var = 2 ∧ Expression.eval env z_var = 3 ∧ x = 7 := by
@@ -63,7 +63,7 @@ theorem test_eval_in_conjunction {F : Type} [Field F] (env : Environment F) (x :
       · exact h.2
 
 -- Test nested conjunctions with eval
-theorem test_nested_conjunctions_with_eval {F : Type} [Field F] (env : Environment F) (x : F)
+theorem test_nested_conjunctions_with_eval {F : Type} [Field F] (env : ProverEnvironment F) (x : F)
     (x_var y_var z_var a_var b_var : Var field F)
     (h : (eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) ∧
          eval env (SimpleStruct.mk a_var b_var) = SimpleStruct.mk 8 9) :
@@ -77,7 +77,7 @@ theorem test_nested_conjunctions_with_eval {F : Type} [Field F] (env : Environme
   · exact h.2.1
 
 -- Test multiple eval expressions
-theorem test_multiple_eval_expressions {F : Type} [Field F] (env1 env2 : Environment F)
+theorem test_multiple_eval_expressions {F : Type} [Field F] (env1 env2 : ProverEnvironment F)
     (x1_var y1_var z1_var : Var field F) (a2_var b2_var : Var field F)
     (h1 : eval env1 (TestInputs.mk x1_var y1_var z1_var) = TestInputs.mk 1 2 3)
     (h2 : eval env2 (SimpleStruct.mk a2_var b2_var) = SimpleStruct.mk 4 5) :
@@ -91,7 +91,7 @@ theorem test_multiple_eval_expressions {F : Type} [Field F] (env1 env2 : Environ
   · exact h2.2
 
 -- Test with complex eval expressions
-theorem test_complex_eval {F : Type} [Field F] (env : Environment F)
+theorem test_complex_eval {F : Type} [Field F] (env : ProverEnvironment F)
     (a_var b_var c_var d_var e_var : Var field F)
     (h : eval env (TestInputs.mk (a_var + b_var) (c_var * d_var) e_var) = TestInputs.mk 5 6 7) :
     Expression.eval env (a_var + b_var) = 5 ∧
@@ -104,7 +104,7 @@ theorem test_complex_eval {F : Type} [Field F] (env : Environment F)
   exact h
 
 -- Test conjunction with an eval to be decomposed and another eval not to be decomposed
-theorem test_conjunction_with_base_and_non_base {F : Type} [Field F] (env : Environment F) (x : F)
+theorem test_conjunction_with_base_and_non_base {F : Type} [Field F] (env : ProverEnvironment F) (x : F)
     (x_var y_var z_var : Var field F) (s1 s2 : Var SimpleStruct F)
     (h : (eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) ∧
          eval env s1 = eval env s2) :

@@ -32,13 +32,13 @@ def buildAuxMap (as : CellAssignment W S) : Std.HashMap ℕ ℕ := Id.run do
   - According to `CellAssignment` for input cells, the input columns are assigned to
   the corresponding columns in the trace row.
 -/
-def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Array F :=
+def generateNextRow (tc : TableConstraint W S F Unit) (hint : ProverHint F) (cur_row : Array F) : Array F :=
   let ctx := (tc .empty).2
 
   let assignment := ctx.assignment
   let generators := ctx.circuit.witnessGenerators
 
-    let aux_map := buildAuxMap assignment
+  let aux_map := buildAuxMap assignment
   let next_row := Array.replicate cur_row.size 0
 
   -- rules for fetching the values for expression variables
@@ -57,8 +57,9 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
     else panic! s!"Invalid variable index {i} in environment"
 
   -- evaluate the witness generators
+  let provEnv : ProverEnvironment F := { get := env, data := fun _ _ => #[], hint := hint }
   let (_, next_row) := generators.foldl (fun (idx, next_row) compute =>
-      let wit := compute ⟨ env, fun _ _ => #[] ⟩
+      let wit := compute provEnv
 
       -- insert the witness value to the next row
       let next_row := if h : idx < assignment.offset then
@@ -82,8 +83,8 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Arra
   Returns an array of rows where each subsequent row is generated using the
   table constraint's witness generators.
 -/
-def witnesses
-    (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ) : Array (Array F) := Id.run do
+def witnesses (tc : TableConstraint W S F Unit)
+    (hint : ProverHint F) (init_row : Row F S) (n : ℕ) : Array (Array F) := Id.run do
 
   -- append auxiliary columns to the current row
   let aux_cols := Array.replicate tc.finalAssignment.numAux 0
@@ -93,7 +94,7 @@ def witnesses
   let mut current := cur_row
 
   for _ in [: n-1] do
-    let next := generateNextRow tc current
+    let next := generateNextRow tc hint current
     trace := trace.push next
     current := next
   trace

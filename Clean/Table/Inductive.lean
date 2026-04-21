@@ -30,7 +30,7 @@ def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Typ
     (InitialStateAssumptions : State F → ProverData F → Prop)
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop)
     (step : Var State F → Var Input F → Circuit F (Var State F)) :=
-  ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
+  ∀ (initialState : State F) (row_index : ℕ) (env : ProverEnvironment F),
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
@@ -107,7 +107,7 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
     .boundary (.fromEnd 0) (equalityConstraint Input output_state),
   ]
 
-theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : Environment F} :
+theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : ProverEnvironment F} :
   Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
     (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by

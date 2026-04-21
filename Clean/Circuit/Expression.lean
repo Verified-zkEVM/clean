@@ -21,16 +21,49 @@ export Expression (var)
 def ProverData (F : Type) :=
   String → (n : ℕ) → Array (Vector F n)
 
+/-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
+distinct to emphasize that hints are *not* committed: they feed only the
+witness-generation step and never appear in the proof. -/
+def ProverHint (F : Type) :=
+  String → (n : ℕ) → Array (Vector F n)
+
+/-- Placeholder `ProverHint` that returns an empty array for every key. -/
+def ProverHint.empty (F : Type) : ProverHint F := fun _ _ => #[]
+
 /--
-  `Environment` represents the data that is provided at proving time to concretely
-  instantiate a circuit.
+  `Environment` represents the data that is provided at runtime to concretely
+  specify the witness assignment of a circuit (`get`) and any additional witness data
+  external to the current circuit (`data`).
+
+  In the abstract plaintext-witness version of the protocol, the full
+  `Environment` is passed from the prover to the verifier.
+  All constraints can be checked against the `Environment`.
+  Soundness theorems have the form `∀ env : Environment F, ...`.
  -/
 structure Environment (F : Type) where
   /-- Assignment of a circuit's variables to field elements -/
   get : ℕ → F
-  /-- Additional prover data not part of the current circuit's witness, such as the content
-   of lookup tables, or auxiliary data made available for potential witnessing. -/
+  /-- Additional witness data not part of the current circuit's witness, such as the content
+   of lookup tables, made available for potential re-witnessing and for statements concerning
+   the verifier, such as a circuit's spec. -/
   data : ProverData F
+
+/--
+  `ProverEnvironment` is `Environment` plus the prover's runtime `ProverHint`.
+  In some circuits, the additional `hint` is necessary to give an honest prover
+  sufficient information to generate a witness.
+  Completeness theorems are formulated against the `ProverEnvironment`.
+-/
+structure ProverEnvironment (F : Type) extends Environment F where
+  /-- Runtime-only hashmap of prover hints, never committed into the proof. -/
+  hint : ProverHint F
+
+/-- Project a `ProverEnvironment` to its `Environment`. -/
+instance : Coe (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.toEnvironment⟩
+instance : CoeOut (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.toEnvironment⟩
+
+instance {α} : Coe (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
+instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 
 namespace Expression
 variable [Field F]
@@ -98,6 +131,9 @@ instance {n : ℕ} : OfNat (Variable F) n where
 end Expression
 
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
+  coe env x := x.eval env
+
+instance [Field F] : CoeFun (ProverEnvironment F) (fun _ => (Expression F) → F) where
   coe env x := x.eval env
 
 instance [Field F] : Inhabited F where

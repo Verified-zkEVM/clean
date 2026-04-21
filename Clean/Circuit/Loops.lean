@@ -180,7 +180,7 @@ namespace FoldlM
 @[reducible]
 def prod (circuit : β → α → Circuit F β) : β × α → Circuit F β := fun t => circuit t.1 t.2
 
-variable {env : Environment F} {prop : Condition F} {xs : Vector α m}
+variable {env : ProverEnvironment F} {prop : Condition F} {xs : Vector α m}
   {circuit : β → α → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
 lemma foldlM_cons (x : α) :
@@ -264,7 +264,7 @@ theorem forAll_iff {constant : ConstantLength (prod circuit)} :
 
 -- specialization to xs := Vector.finRange m
 section
-variable {env : Environment F} {prop : Condition F} {m : ℕ}
+variable {env : ProverEnvironment F} {prop : Condition F} {m : ℕ}
   {Acc : ℕ → Type}
   {circuit : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
@@ -390,7 +390,7 @@ def foldlRange (m : ℕ) [Inhabited β] (init : β) (body : β → Fin m → Cir
   (Vector.finRange m).foldlM body init
 
 section forEach
-variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -411,15 +411,15 @@ lemma forEach.forAll :
 
 @[circuit_norm ↓]
 lemma forEach.soundness :
-  ConstraintsHold.Soundness env ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  ConstraintsHold.Soundness env_v ((forEach xs body constant).operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [forEach, ConstraintsHold.soundness_iff_forAll']
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
 
 /-- variant of `forEach.soundness`, for when the constraints don't depend on the input offset -/
 lemma forEach.soundness' :
-  ConstraintsHold.Soundness env (forEach xs body constant |>.operations n) →
-    ∀ x ∈ xs, ∃ k : ℕ, ConstraintsHold.Soundness env (body x |>.operations k) := by
+  ConstraintsHold.Soundness env_v (forEach xs body constant |>.operations n) →
+    ∀ x ∈ xs, ∃ k : ℕ, ConstraintsHold.Soundness env_v (body x |>.operations k) := by
   simp only [forEach, ConstraintsHold.soundness_iff_forAll', ForM.forAll_iff]
   intro h x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
@@ -441,7 +441,7 @@ lemma forEach.usesLocalWitnesses :
 end forEach
 
 section map
-variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F β} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -464,8 +464,8 @@ lemma map.forAll :
 
 @[circuit_norm ↓]
 lemma map.soundness :
-  ConstraintsHold.Soundness env (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  ConstraintsHold.Soundness env_v (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [map, ConstraintsHold.soundness_iff_forAll']
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
 
@@ -485,7 +485,7 @@ lemma map.usesLocalWitnesses :
 end map
 
 section mapFinRange
-variable {env : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
   {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -510,8 +510,8 @@ lemma mapFinRange.forAll :
 
 @[circuit_norm ↓]
 lemma mapFinRange.soundness :
-  ConstraintsHold.Soundness env (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body i |>.operations (n + i*(body 0).localLength)) := by
+  ConstraintsHold.Soundness env_v (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body i |>.operations (n + i*(body 0).localLength)) := by
   simp only [mapFinRange, ConstraintsHold.soundness_iff_forAll']
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
 
@@ -531,7 +531,7 @@ lemma mapFinRange.usesLocalWitnesses :
 end mapFinRange
 
 section foldl
-variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
   {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)}
 
@@ -568,11 +568,11 @@ lemma foldl.forAll [NeZero m] :
 
 @[circuit_norm ↓]
 lemma foldl.soundness [NeZero m] :
-  ConstraintsHold.Soundness env (foldl xs init body const_out constant |>.operations n) ↔
-    ConstraintsHold.Soundness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+  ConstraintsHold.Soundness env_v (foldl xs init body const_out constant |>.operations n) ↔
+    ConstraintsHold.Soundness env_v (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let acc := (body default xs[i]).output (n + i*(body default default).localLength);
-      ConstraintsHold.Soundness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
+      ConstraintsHold.Soundness env_v (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
   simp only [foldl, ConstraintsHold.soundness_iff_forAll']
   rw [FoldlM.forAll_iff_const constant const_out]
 
@@ -599,7 +599,7 @@ lemma foldl.usesLocalWitnesses [NeZero m] :
 end foldl
 
 section foldlRange
-variable {env : Environment F} {m n : ℕ} [Inhabited β]
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited β]
   {body : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
 
 @[circuit_norm ↓]
@@ -634,9 +634,9 @@ lemma foldlRange.forAll :
 
 @[circuit_norm ↓]
 lemma foldlRange.soundness :
-  ConstraintsHold.Soundness env (foldlRange m init body constant |>.operations n) ↔
+  ConstraintsHold.Soundness env_v (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-    ConstraintsHold.Soundness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+    ConstraintsHold.Soundness env_v (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
     |>.operations (n + i * (body default i).localLength)) := by
   simp only [ConstraintsHold.soundness_iff_forAll', foldlRange.forAll]
 

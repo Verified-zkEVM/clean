@@ -13,7 +13,7 @@ It is needed because we already need to talk about operations in the `Subcircuit
 which in turn is needed to define `Operation`.
 -/
 inductive FlatOperation (F : Type) where
-  | witness : (m : ℕ) → (Environment F → Vector F m) → FlatOperation F
+  | witness : (m : ℕ) → (ProverEnvironment F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
 
@@ -51,7 +51,7 @@ def localLength : List (FlatOperation F) → ℕ
   | assert _ :: ops | lookup _ :: ops => localLength ops
 
 @[circuit_norm]
-def localWitnesses (env : Environment F) : (l : List (FlatOperation F)) → Vector F (localLength l)
+def localWitnesses (env : ProverEnvironment F) : (l : List (FlatOperation F)) → Vector F (localLength l)
   | [] => #v[]
   | witness _ compute :: ops => compute env ++ localWitnesses env ops
   | assert _ :: ops | lookup _ :: ops => localWitnesses env ops
@@ -73,7 +73,7 @@ end FlatOperation
 export FlatOperation (ConstraintsHoldFlat)
 
 @[circuit_norm]
-def Environment.ExtendsVector (env : Environment F) (wit : Vector F n) (offset : ℕ) : Prop :=
+def ProverEnvironment.ExtendsVector (env : ProverEnvironment F) (wit : Vector F n) (offset : ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
 open FlatOperation in
@@ -91,8 +91,10 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   Soundness : Environment F → Prop
-  Completeness : Environment F → Prop
-  UsesLocalWitnesses : Environment F → Prop
+  -- `Completeness` and `UsesLocalWitnesses` see the full prover `ProverEnvironment`, which carries
+  -- the hint that drives witness generation.
+  Completeness : ProverEnvironment F → Prop
+  UsesLocalWitnesses : ProverEnvironment F → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
@@ -123,7 +125,7 @@ In addition to `witness`, `assert` and `lookup`,
 `Operation` can also be a `subcircuit`, which itself is essentially a list of operations.
 -/
 inductive Operation (F : Type) [Field F] where
-  | witness : (m : ℕ) → (compute : Environment F → Vector F m) → Operation F
+  | witness : (m : ℕ) → (compute : ProverEnvironment F → Vector F m) → Operation F
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
   | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
@@ -146,7 +148,7 @@ def localLength : Operation F → ℕ
   | .lookup _ => 0
   | .subcircuit s => s.localLength
 
-def localWitnesses (env : Environment F) : (op : Operation F) → Vector F op.localLength
+def localWitnesses (env : ProverEnvironment F) : (op : Operation F) → Vector F op.localLength
   | .witness _ c => c env
   | .assert _ => #v[]
   | .lookup _ => #v[]
@@ -193,7 +195,8 @@ def localLength : Operations F → ℕ
 The actual vector of witnesses created by these operations in the given environment.
 -/
 @[circuit_norm]
-def localWitnesses (env : Environment F) : (ops : Operations F) → Vector F ops.localLength
+def localWitnesses (env : ProverEnvironment F) :
+    (ops : Operations F) → Vector F ops.localLength
   | [] => #v[]
   | .witness _ c :: ops => c env ++ localWitnesses env ops
   | .assert _ :: ops => localWitnesses env ops
@@ -223,7 +226,7 @@ A `Condition` lets you define a predicate on operations, given the type and cont
 current operation as well as the current offset.
 -/
 structure Condition (F : Type) [Field F] where
-  witness (offset : ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
+  witness (offset : ℕ) : (m : ℕ) → (ProverEnvironment F → Vector F m) → Prop := fun _ _ => True
   assert (offset : ℕ) (_ : Expression F) : Prop := True
   lookup (offset : ℕ) (_ : Lookup F) : Prop := True
   subcircuit (offset : ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True
@@ -235,7 +238,7 @@ def Condition.apply (condition : Condition F) (offset : ℕ) : Operation F → P
   | .lookup l => condition.lookup offset l
   | .subcircuit s => condition.subcircuit offset s
 
-def Condition.implies (c c': Condition F) : Condition F where
+def Condition.implies (c c' : Condition F) : Condition F where
   witness n m compute := c.witness n m compute → c'.witness n m compute
   assert offset e := c.assert offset e → c'.assert offset e
   lookup offset l := c.lookup offset l → c'.lookup offset l

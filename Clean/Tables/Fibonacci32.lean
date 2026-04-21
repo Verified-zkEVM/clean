@@ -98,7 +98,7 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
     Vector.mapRange_zero, Vector.mapRange_succ]
   simp
 
-lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
+lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
     eval env (varFromOffset U32 0) = curr.x ∧
     eval env (varFromOffset U32 4) = curr.y ∧
@@ -120,7 +120,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   Main lemma that shows that if the constraints hold over the two-row window,
   then the Spec of add32 and equality are satisfied
 -/
-lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
+lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p))
   : recursiveRelation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env →
   curr.y = next.x ∧
   (curr.x.Normalized → curr.y.Normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.Normalized)
@@ -154,7 +154,7 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
   simp
 
 omit p_large_enough in
-lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
+lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env;
     eval env (varFromOffset U32 0) = first_row.x ∧
     eval env (varFromOffset U32 4) = first_row.y := by
@@ -168,8 +168,8 @@ lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : Environment (F p)
     Fin.isValue, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
   and_intros <;> rfl
 
-lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
+lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
+  Circuit.ConstraintsHold.Soundness (F := F p) (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env

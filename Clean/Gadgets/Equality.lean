@@ -17,7 +17,7 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
-theorem allZero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
+theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
@@ -102,12 +102,12 @@ theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment 
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
 

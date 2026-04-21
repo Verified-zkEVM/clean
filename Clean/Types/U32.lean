@@ -267,7 +267,7 @@ open Gadgets (ByteTable)
   Assert that a 32-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-def main (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
+def main (inputs : Var U32 (F p)) : Circuit (F p) Unit := do
   let ⟨ x0, x1, x2, x3 ⟩ := inputs
   lookup ByteTable x0
   lookup ByteTable x1
@@ -292,7 +292,7 @@ end U32.AssertNormalized
 /--
   Witness a 32-bit unsigned integer.
 -/
-def U32.witness (compute : Environment (F p) → U32 (F p)) := do
+def U32.witness (compute : ProverEnvironment (F p) → U32 (F p)) := do
   let x ← ProvableType.witness compute
   U32.AssertNormalized.circuit x
   return x
