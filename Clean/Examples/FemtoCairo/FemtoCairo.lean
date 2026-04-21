@@ -657,7 +657,7 @@ def femtoCairoStepSpec
 -/
 def femtoCairoStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHint (F p)) : Prop :=
+    (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHints (F p)) : Prop :=
   ValidProgramSize p programSize ∧
   ValidProgram program ∧
   MemoryCompletenessAssumption data ∧

@@ -367,8 +367,8 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCir
 @[circuit_norm]
 def GeneralFormalCircuit.Completeness (F : Type) [Field F]
     (circuit : ElaboratedCircuit F Input Output)
-    (ProverAssumptions : Input F → ProverData F → ProverHint F → Prop)
-    (ProverSpec : Input F → Output F → ProverHint F → Prop) :=
+    (ProverAssumptions : Input F → ProverData F → ProverHints F → Prop)
+    (ProverSpec : Input F → Output F → ProverHints F → Prop) :=
   -- for all prover environments which use the default witness generators for local variables
   ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
@@ -403,9 +403,9 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   Spec : Input F → Output F → ProverData F → Prop
 
   /-- the statement to be assumed for completeness -/
-  ProverAssumptions : Input F → ProverData F → ProverHint F → Prop  := fun _ _ _ => True
+  ProverAssumptions : Input F → ProverData F → ProverHints F → Prop  := fun _ _ _ => True
   /-- auxiliary statement to be proved for completeness, alongside the constraints -/
-  ProverSpec : Input F → Output F → ProverHint F → Prop := fun _ _ _ => True
+  ProverSpec : Input F → Output F → ProverHints F → Prop := fun _ _ _ => True
 
   soundness : GeneralFormalCircuit.Soundness F elaborated Assumptions Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated ProverAssumptions ProverSpec
@@ -439,22 +439,22 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 -- witness generation
 
 /-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/
-def ProverEnvironment.fromList (witnesses : List F) (hint : ProverHint F) : ProverEnvironment F where
+def ProverEnvironment.fromList (witnesses : List F) (hint : ProverHints F) : ProverEnvironment F where
   get i := witnesses[i]?.getD 0
   data _ _ := #[]
   hint
 
-def FlatOperation.dynamicWitness (hint : ProverHint F) (op : FlatOperation F) (acc : List F) : List F := match op with
+def FlatOperation.dynamicWitness (hint : ProverHints F) (op : FlatOperation F) (acc : List F) : List F := match op with
   | .witness _ compute => (compute (.fromList acc hint)).toList
   | .assert _ => []
   | .lookup _ => []
 
-def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) : List F :=
+def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : ProverHints F) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
     acc ++ op.dynamicWitness hint acc
   ) init
 
-def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) :=
+def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHints F) (init : List F) :=
   ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
 
 def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
@@ -477,7 +477,7 @@ def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
 that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
 -/
-def Circuit.proverEnvironment (circuit : Circuit F α) (hint : ProverHint F) (init : List F := []) : ProverEnvironment F :=
+def Circuit.proverEnvironment (circuit : Circuit F α) (hint : ProverHints F) (init : List F := []) : ProverEnvironment F :=
   .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat hint init) hint
 
 -- witness generators used for AIR trace export
