@@ -100,7 +100,7 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
   localLength _ := 8
 
   Assumptions
-  | instruction, _, _ => instruction.val < 256
+  | instruction, _ => instruction.val < 256
 
   Spec
   | instruction, output, _ =>
@@ -176,7 +176,7 @@ def fetchInstruction
   output _ i₀ := varFromOffset RawInstruction i₀
 
   Assumptions
-  | pc, _, _ => pc.val + 3 < programSize
+  | pc, _ => pc.val + 3 < programSize
 
   Spec
   | pc, output, _ =>
@@ -284,8 +284,7 @@ def MemoryCompletenessAssumption (env : ProverData (F p)) : Prop :=
   The circuit uses lookups into a read-only table representing the memory.
   This circuit is not satisfiable if the memory access is out of bounds.
 -/
-def readFromMemory :
-    GeneralFormalCircuit (F p) MemoryReadInput field where
+def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   main := fun { state, offset, mode } => do
     /-
       read into memory for all cases of addressing mode.
@@ -323,18 +322,18 @@ def readFromMemory :
   output _ i₀ := var ⟨i₀ + 4⟩
 
   Assumptions
-  | { state, offset, mode }, env, _ =>
+  | { state, offset, mode }, env =>
     mode.isEncodedCorrectly ∧
-    MemoryCompletenessAssumption env ∧
+    MemoryCompletenessAssumption env.data ∧
     -- for completeness, we assume that the memory access succeeds
-    ∃ hm : NeZero (memorySize env),
-    (Spec.dataMemoryAccess (memory env) offset mode.val state.ap state.fp).isSome
+    ∃ hm : NeZero (memorySize env.data),
+    (Spec.dataMemoryAccess (memory env.data) offset mode.val state.ap state.fp).isSome
 
   Spec
-  | {state, offset, mode}, output, env =>
+  | {state, offset, mode}, output, data =>
     mode.isEncodedCorrectly →
-    ∃ hm : NeZero (memorySize env),
-    match Spec.dataMemoryAccess (memory env) offset mode.val state.ap state.fp with
+    ∃ hm : NeZero (memorySize data),
+    match Spec.dataMemoryAccess (memory data) offset mode.val state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
 
@@ -492,7 +491,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
   output _ i₀ := varFromOffset State i₀
 
   Assumptions
-  | {state, decoded, v1, v2, v3}, _, _ =>
+  | {state, decoded, v1, v2, v3}, _ =>
     DecodedInstructionType.isEncodedCorrectly decoded.instrType ∧
     (Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state).isSome
 
@@ -654,12 +653,12 @@ def femtoCairoStepSpec
 -/
 def femtoCairoStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHint (F p)) : Prop :=
+    (state : State (F p)) (env : ProverEnvironment (F p)) : Prop :=
   ValidProgramSize p programSize ∧
   ValidProgram program ∧
-  MemoryCompletenessAssumption data ∧
-  ∃ _hm : NeZero (memorySize data),
-  (Spec.femtoCairoMachineTransition program (memory data) state).isSome
+  MemoryCompletenessAssumption env.data ∧
+  ∃ _hm : NeZero (memorySize env.data),
+  (Spec.femtoCairoMachineTransition program (memory env.data) state).isSome
 
 def femtoCairoStepSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)

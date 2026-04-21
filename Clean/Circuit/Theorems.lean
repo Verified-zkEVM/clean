@@ -601,7 +601,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap)
   let Spec input output := orig.Assumptions input → orig.Spec input output
   exact {
     elaborated := orig.elaborated,
-    Assumptions i _ _ := orig.Assumptions i,
+    Assumptions i _ := orig.Assumptions i,
     Spec i o _ := Spec i o,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
@@ -626,7 +626,7 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap)
   let Spec input (_ : Unit) := orig.Assumptions input → orig.Spec input
   exact {
     elaborated := orig.elaborated,
-    Assumptions input _ _ := orig.Assumptions input ∧ orig.Spec input,
+    Assumptions input _ := orig.Assumptions input ∧ orig.Spec input,
     Spec i o _ := Spec i o,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
