@@ -197,30 +197,35 @@ instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained 
   evalVerifier _ _ := ()
   evalProver env v := v env
 
-@[circuit_norm]
-theorem CircuitType.var_of_provableType (α : TypeMap) [ProvableType α] (F : Type) :
-    CircuitType.Var α F = _root_.Var α F := rfl
+namespace CircuitType
 
-@[circuit_norm]
-theorem CircuitType.value_of_provableType (α : TypeMap) [ProvableType α] (F : Type) :
-    CircuitType.Value α F = α F := rfl
+@[circuit_norm] lemma var_of_provableType (F) :
+  CircuitType.Var M F = _root_.Var M F := rfl
+@[circuit_norm] lemma value_of_provableType (F) :
+  CircuitType.Value M F = M F := rfl
+@[circuit_norm] lemma verifierValue_of_provableType (F) :
+  CircuitType.VerifierValue M F = M F := rfl
 
-@[circuit_norm]
-theorem CircuitType.verifierValue_of_provableType (α : TypeMap) [ProvableType α] (F : Type) :
-    CircuitType.VerifierValue α F = α F := rfl
+@[circuit_norm] lemma var_of_unconstrained (Hint F) :
+  CircuitType.Var (Unconstrained Hint) F = ProverHint Hint F := rfl
+@[circuit_norm] lemma value_of_unconstrained (Hint F) :
+  CircuitType.Value (Unconstrained Hint) F = Hint := rfl
+@[circuit_norm] lemma verifierValue_of_unconstrained (Hint F) :
+  CircuitType.VerifierValue (Unconstrained Hint) F = Unit := rfl
 
 /--
 A `CircuitType Input` instance induces a verifier-side `Eval` on `CircuitType.Var Input F`.
 This lets `eval env var` work uniformly whether the Var came from a `ProvableType`-derived
 instance or a hand-written one.
 -/
-instance CircuitType.evalVerifierInstance {Input : TypeMap} [c : CircuitType Input]
+instance evalVerifierInstance {Input : TypeMap} [c : CircuitType Input]
     {F : Type} [Field F] :
     Eval (Environment F) (CircuitType.Var Input F) (CircuitType.VerifierValue Input F) where
   eval := c.evalVerifier
 
 /-- `CircuitType` induces a prover-side `Eval` on `CircuitType.Var Input F`. -/
-instance CircuitType.evalProverInstance {Input : TypeMap} [c : CircuitType Input]
+instance evalProverInstance {Input : TypeMap} [c : CircuitType Input]
     {F : Type} [Field F] :
     Eval (ProverEnvironment F) (CircuitType.Var Input F) (CircuitType.Value Input F) where
   eval := c.evalProver
+end CircuitType
