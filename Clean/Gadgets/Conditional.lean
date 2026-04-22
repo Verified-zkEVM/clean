@@ -10,8 +10,6 @@ section
 variable {F : Type} [Field F]
 variable {M : TypeMap} [ProvableType M]
 
-open ProvableType
-
 /--
 Inputs for conditional selection between two ProvableTypes.
 Contains a selector bit and two data values.
@@ -121,14 +119,13 @@ theorem eval_ifElse_output [Field F] [DecidableEq F] {M : TypeMap} [ProvableType
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) :
   eval env (output selector ifTrue ifFalse) =
     outputValue (selector.eval env) (eval env ifTrue) (eval env ifFalse) := by
-  simp only [output, outputValue]
+  simp only [output, outputValue, circuit_norm]
 
   -- Show that the result equals the conditional expression
-  rw [ProvableType.ext_iff, fromVars, toVars]
+  rw [ProvableType.ext_iff]
   intro i hi
   rw [ProvableType.eval_fromElements]
-  simp only [circuit_norm, ProvableType.toElements_fromElements,
-    Vector.getElem_map, Vector.getElem_ofFn, ProvableType.getElem_eval_toElements]
+  simp only [circuit_norm, Vector.getElem_map, Vector.getElem_ofFn, ProvableType.getElem_eval_toElements]
   ring
 end
 

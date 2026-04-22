@@ -59,7 +59,7 @@ class NonEmptyProvableType (M : TypeMap) extends ProvableType M where
 
 export ProvableType (size toElements fromElements)
 
-attribute [circuit_norm] size
+attribute [circuit_norm] size ProvableType.toElements_fromElements ProvableType.fromElements_toElements
 -- tagged with low priority to prefer higher-level `ProvableStruct` decompositions
 -- note that this is not added to `circuit_norm`, since in general we won't need or want
 -- to explicitly unfold provable type definitions
