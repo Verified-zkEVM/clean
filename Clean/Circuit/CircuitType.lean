@@ -132,6 +132,28 @@ omit [Field F] in
   rw [eval_var_prover (M := (ProvablePair M N))]
   simp only [circuit_norm]
 
+@[circuit_norm] theorem eval_field_pair (F : Type) [Field F]
+  (env : Environment F) (p1 : Var field F) (p2 : Var field F) :
+    eval (Var := Var (ProvablePair field field) F) env (p1, p2) = (eval env p1, eval env p2) := by
+  rw [eval_var (M := (ProvablePair field field))]
+  simp only [circuit_norm]
+
+@[circuit_norm] theorem eval_field_pair_prover (F : Type) [Field F]
+  (env : ProverEnvironment F) (p1 : Var field F) (p2 : Var field F) :
+    eval (Var := Var (ProvablePair field field) F) env (p1, p2) = (eval env p1, eval env p2) := by
+  rw [eval_var_prover (M := (ProvablePair field field))]
+  simp only [circuit_norm]
+
+@[circuit_norm] theorem eval_fields (F : Type) [Field F] {n : ℕ}
+  (env : Environment F) (xs : Var (fields n) F) :
+    eval (Var := Var (fields n) F) env xs = ProvableType.eval env xs := by
+  rw [eval_var (M := (fields n))]
+
+@[circuit_norm] theorem eval_fields_prover (F : Type) [Field F] {n : ℕ}
+  (env : ProverEnvironment F) (xs : Var (fields n) F) :
+    eval (Var := Var (fields n) F) env xs = ProvableType.eval env xs := by
+  rw [eval_var_prover (M := (fields n))]
+
 /-!
 ## `CircuitType`: the schema-level class for circuit I/O
 
@@ -158,8 +180,8 @@ class CircuitType (Input : TypeMap) where
   evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → Value F
 
 /--
-Default `CircuitType` for any `ProvableType`: verifier- and prover-value coincide,
-and `Var` is the usual `α ∘ Expression`.
+Default `CircuitType` for any `ProvableType`: verifier- and prover-value coincide
+with the input type, and `Var` is the usual `α ∘ Expression`.
 -/
 instance ProvableType.toCircuitType {α : TypeMap} [ProvableType α] : CircuitType α where
   Var := Var α
