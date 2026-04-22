@@ -197,6 +197,18 @@ instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained 
   evalVerifier _ _ := ()
   evalProver env v := v env
 
+@[circuit_norm]
+theorem CircuitType.var_of_provableType (α : TypeMap) [ProvableType α] (F : Type) :
+    CircuitType.Var α F = _root_.Var α F := rfl
+
+@[circuit_norm]
+theorem CircuitType.value_of_provableType (α : TypeMap) [ProvableType α] (F : Type) :
+    CircuitType.Value α F = α F := rfl
+
+@[circuit_norm]
+theorem CircuitType.verifierValue_of_provableType (α : TypeMap) [ProvableType α] (F : Type) :
+    CircuitType.VerifierValue α F = α F := rfl
+
 /--
 A `CircuitType Input` instance induces a verifier-side `Eval` on `CircuitType.Var Input F`.
 This lets `eval env var` work uniformly whether the Var came from a `ProvableType`-derived
