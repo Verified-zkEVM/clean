@@ -1,10 +1,13 @@
 import Clean.Circuit.Provable
 
+structure Unconstrained (Hint : Type) where
+  value : Hint
+
 /-
   Prover hints: additional data that can be passed to a circuit's witness generation
   but does not affect the circuit's constraints or spec.
 -/
-def ProverHint (Hint : Type) (F : Type) := Environment F → Hint
+def ProverHint (Hint : Type) (F : Type) := ProverEnvironment F → Hint
 
 /--
 `CircuitType` is a joint generalization of `ProvableType` and `ProverHint`.
@@ -18,23 +21,35 @@ class CircuitType (F : Type) (Var : Type) (Value : outParam Type) where
 class ProverType (F : Type) (Var : Type) (Value : outParam Type) where
   evalProver [Field F] : ProverEnvironment F → Var → Value
 
-class Eval (Env : Type) (Var : Type) (Value : outParam Type) where
+class Eval (Env : Type) where
+  Var : Type
+  Value : Type
   eval : Env → Var → Value
 
 export CircuitType (evalVerifier)
 export ProverType (evalProver)
 export Eval (eval)
 
+variable {F : Type} [Field F] {M : TypeMap} [ProvableType M] {Hint : Type}
 variable {Variable : Type} {Value : Type}
-variable {F : Type} {M : TypeMap} [ProvableType M] {Hint : Type}
 
-instance Eval.verifier [Field F] [CircuitType F Variable Value] :
-    Eval (Environment F) Variable Value where
-  eval env v := evalVerifier env v
+instance Eval.verifier [CircuitType F Variable Value] : Eval (Environment F) where
+  Var := Variable
+  Value := Value
+  eval := evalVerifier
 
-instance Eval.prover [Field F] [ProverType F Variable Value] :
-    Eval (ProverEnvironment F) Variable Value where
-  eval env v := evalProver env v
+instance Eval.prover [ProverType F Variable Value] : Eval (ProverEnvironment F) where
+  Var := Variable
+  Value := Value
+  eval := evalProver
+
+@[circuit_norm] lemma eval_eq_evalVerifier [CircuitType F Variable Value]
+ {env : Environment F} (var : Variable) :
+  eval env var = evalVerifier env var := rfl
+
+@[circuit_norm] lemma eval_eq_evalProver [ProverType F Variable Value]
+ {env : ProverEnvironment F} (var : Variable) :
+  eval env var = evalProver env var := rfl
 
 instance {F : Type} : CircuitType F (ProverHint Hint F) Unit where
   evalVerifier _ _ := ()
