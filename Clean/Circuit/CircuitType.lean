@@ -1,5 +1,7 @@
 import Clean.Circuit.Provable
 
+variable {F : Type} [Field F] {M N : TypeMap} [ProvableType M] [ProvableType N] {Hint : Type}
+
 structure Unconstrained (Hint : Type) (F : Type) where
   value : Hint
 
@@ -68,6 +70,8 @@ class CircuitType (Input : TypeMap) where
   evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → VerifierValue F
   evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → Value F
 
+variable {Input : TypeMap} [CircuitType Input]
+
 /--
 Default `CircuitType` for any `ProvableType`: verifier- and prover-value coincide
 with the input type, and `Var` is the usual `α ∘ Expression`.
@@ -85,9 +89,6 @@ instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained 
   VerifierValue _ := Unit
   evalVerifier _ _ := ()
   evalProver env v := v env
-
-variable {F : Type} [Field F] {M N : TypeMap} [ProvableType M] [ProvableType N] {Hint : Type}
-variable {Input : TypeMap} [CircuitType Input]
 
 namespace CircuitType
 @[circuit_norm] lemma var_of_provableType (F) :
@@ -109,10 +110,12 @@ A `CircuitType Input` instance induces a verifier-side `Eval` on `CircuitType.Va
 This lets `eval env var` work uniformly whether the Var came from a `ProvableType`-derived
 instance or a hand-written one.
 -/
+@[circuit_norm]
 instance verifierEval (M : TypeMap) [CircuitType M] :
   VerifierEval F (Var M F) (VerifierValue M F) := ⟨ evalVerifier ⟩
 
 /- `CircuitType` induces a prover-side `Eval` on `CircuitType.Var Input F`. -/
+@[circuit_norm]
 instance proverEval (M : TypeMap) [CircuitType M] :
   ProverEval F (Var M F) (Value M F) := ⟨ evalProver ⟩
 
@@ -123,30 +126,18 @@ instance proverEval (M : TypeMap) [CircuitType M] :
 
 /- forwarding instances to help instance search get through defeq -/
 
--- @[circuit_norm]
-instance : VerifierEval F (ProverHint Hint F) Unit := verifierEval (Unconstrained Hint)
--- @[circuit_norm]
-instance : ProverEval F (ProverHint Hint F) Hint := proverEval (Unconstrained Hint)
--- @[circuit_norm]
-instance : VerifierEval F (_root_.Var M F) (VerifierValue M F) := verifierEval M
--- @[circuit_norm]
-instance : ProverEval F (_root_.Var M F) (Value M F) := proverEval M
--- @[circuit_norm]
-instance : VerifierEval F (Expression F) F := verifierEval field
--- @[circuit_norm]
-instance : ProverEval F (Expression F) F := proverEval field
--- @[circuit_norm]
-instance : VerifierEval F (_root_.Var M F × _root_.Var N F) (M F × N F) := verifierEval (ProvablePair M N)
--- @[circuit_norm]
-instance : ProverEval F (_root_.Var M F × _root_.Var N F) (M F × N F) := proverEval (ProvablePair M N)
--- @[circuit_norm]
-instance : VerifierEval F (_root_.Var field F × _root_.Var field F) (F × F) := verifierEval (ProvablePair field field)
--- @[circuit_norm]
-instance : ProverEval F (_root_.Var field F × _root_.Var field F) (F × F) := proverEval (ProvablePair field field)
--- @[circuit_norm]
-instance {n : ℕ} : VerifierEval F (_root_.Var (fields n) F) (fields n F) := verifierEval (fields n)
--- @[circuit_norm]
-instance {n : ℕ} : ProverEval F (_root_.Var (fields n) F) (fields n F) := proverEval (fields n)
+@[circuit_norm] instance : VerifierEval F (ProverHint Hint F) Unit := verifierEval (Unconstrained Hint)
+@[circuit_norm] instance : ProverEval F (ProverHint Hint F) Hint := proverEval (Unconstrained Hint)
+@[circuit_norm] instance : VerifierEval F (_root_.Var M F) (M F) := verifierEval M
+@[circuit_norm] instance : ProverEval F (_root_.Var M F) (M F) := proverEval M
+@[circuit_norm] instance : VerifierEval F (Expression F) F := verifierEval field
+@[circuit_norm] instance : ProverEval F (Expression F) F := proverEval field
+@[circuit_norm] instance : VerifierEval F (_root_.Var M F × _root_.Var N F) (M F × N F) := verifierEval (ProvablePair M N)
+@[circuit_norm] instance : ProverEval F (_root_.Var M F × _root_.Var N F) (M F × N F) := proverEval (ProvablePair M N)
+@[circuit_norm] instance : VerifierEval F (_root_.Var field F × _root_.Var field F) (F × F) := verifierEval (ProvablePair field field)
+@[circuit_norm] instance : ProverEval F (_root_.Var field F × _root_.Var field F) (F × F) := proverEval (ProvablePair field field)
+@[circuit_norm] instance {n : ℕ} : VerifierEval F (_root_.Var (fields n) F) (fields n F) := verifierEval (fields n)
+@[circuit_norm] instance {n : ℕ} : ProverEval F (_root_.Var (fields n) F) (fields n F) := proverEval (fields n)
 
 /-!
 ## Simp bridges
