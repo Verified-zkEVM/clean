@@ -71,8 +71,8 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   have soundness : ∀ env : Environment F,
-    let input := eval env input_var
-    let output := eval env (circuit.output input_var n)
+    let input := eval' env input_var
+    let output := eval' env (circuit.output input_var n)
     ConstraintsHoldFlat env nestedOps.toFlat → circuit.Assumptions input → circuit.Spec input output := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
     intro env input output h_holds (as : circuit.Assumptions input)
@@ -90,10 +90,10 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
   have completeness : ∀ env : ProverEnvironment F,
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
-      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env nestedOps.toFlat := by
+      circuit.Assumptions (eval' env input_var) → ConstraintsHoldFlat env nestedOps.toFlat := by
     -- we are given that the assumptions are true
     intro env h_env
-    let input := eval env input_var
+    let input := eval' env input_var
     intro (as : circuit.Assumptions input)
     rw [ops.toNested_toFlat] at h_env ⊢
 
@@ -112,11 +112,11 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
   {
     ops := nestedOps,
-    Spec env := circuit.Assumptions (eval env input_var) →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
-    ProverAssumptions env := circuit.Assumptions (eval env input_var),
-    ProverSpec env := circuit.Assumptions (eval env input_var) →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
+    Spec env := circuit.Assumptions (eval' env input_var) →
+      circuit.Spec (eval' env input_var) (eval' env (circuit.output input_var n)),
+    ProverAssumptions env := circuit.Assumptions (eval' env input_var),
+    ProverSpec env := circuit.Assumptions (eval' env input_var) →
+      circuit.Spec (eval' env input_var) (eval' env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
 
     soundness
@@ -145,15 +145,15 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
 
   {
     ops := nestedOps,
-    Spec env := circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var),
-    ProverAssumptions env := circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var),
+    Spec env := circuit.Assumptions (eval' env input_var) → circuit.Spec (eval' env input_var),
+    ProverAssumptions env := circuit.Assumptions (eval' env input_var) ∧ circuit.Spec (eval' env input_var),
     ProverSpec _ := True,
     localLength := circuit.localLength input_var
 
     soundness := by
       -- we are given an environment where the constraints hold, and can assume the assumptions are true
       intro env h_holds
-      let input : β F := eval env input_var
+      let input : β F := eval' env input_var
       rintro (as : circuit.Assumptions input)
       show circuit.Spec input
       rw [ops.toNested_toFlat] at h_holds
@@ -173,7 +173,7 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       simp only [and_true]
       intro assumptions
 
-      let input := eval env input_var
+      let input := eval' env input_var
       have as : circuit.Assumptions input ∧ circuit.Spec input := assumptions
       rw [ops.toNested_toFlat] at h_env ⊢
 
@@ -206,8 +206,8 @@ def GeneralFormalCircuit.toSubcircuit [CircuitType α] [CircuitType β]
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   have soundness : ∀ env : Environment F,
-      let input := eval env input_var
-      let output := eval env (circuit.output input_var n)
+      let input := eval' env input_var
+      let output := eval' env (circuit.output input_var n)
       ConstraintsHoldFlat env nestedOps.toFlat →
       circuit.Assumptions input env.data →
       circuit.Spec input output env.data := by
@@ -219,10 +219,10 @@ def GeneralFormalCircuit.toSubcircuit [CircuitType α] [CircuitType β]
 
   have implied_by_assumptions : ∀ env : ProverEnvironment F,
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
-      circuit.ProverAssumptions (eval env input_var) env.data env.hint →
+      circuit.ProverAssumptions (eval' env input_var) env.data env.hint →
       ConstraintsHoldFlat env nestedOps.toFlat := by
     intro env h_env assumptions
-    set input := eval env input_var
+    set input := eval' env input_var
     rw [ops.toNested_toFlat] at h_env ⊢
     rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env
     rw [constraintsHold_toFlat_iff]
@@ -233,17 +233,17 @@ def GeneralFormalCircuit.toSubcircuit [CircuitType α] [CircuitType β]
   {
     ops := nestedOps,
 
-    Spec env := circuit.Assumptions (eval env input_var) env.data →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data,
+    Spec env := circuit.Assumptions (eval' env input_var) env.data →
+      circuit.Spec (eval' env input_var) (eval' env (circuit.output input_var n)) env.data,
 
-    ProverAssumptions env := circuit.ProverAssumptions (eval env input_var) env.data env.hint,
+    ProverAssumptions env := circuit.ProverAssumptions (eval' env input_var) env.data env.hint,
 
     ProverSpec env :=
-      circuit.ProverAssumptions (eval env input_var) env.data env.hint →
-      (circuit.Assumptions (eval env.toEnvironment input_var) env.data →
-        circuit.Spec (eval env.toEnvironment input_var)
-          (eval env.toEnvironment (circuit.output input_var n)) env.data)
-      ∧ circuit.ProverSpec (eval env input_var) (eval env (circuit.output input_var n)) env.hint,
+      circuit.ProverAssumptions (eval' env input_var) env.data env.hint →
+      (circuit.Assumptions (eval' env.toEnvironment input_var) env.data →
+        circuit.Spec (eval' env.toEnvironment input_var)
+          (eval' env.toEnvironment (circuit.output input_var n)) env.data)
+      ∧ circuit.ProverSpec (eval' env input_var) (eval' env (circuit.output input_var n)) env.hint,
 
     localLength := circuit.localLength input_var
 
@@ -328,7 +328,7 @@ only contains variables below the current offset `n`.
  -/
 def ComputableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F),
-    ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) →
+    ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval' · input) →
       (circuit.main input).ComputableWitnesses n
 
 /--
@@ -339,7 +339,7 @@ def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F) (env env' : ProverEnvironment F),
   circuit.main input |>.operations n |>.forAllFlat n {
     witness n _ compute :=
-      env.AgreesBelow n env' → eval env input = eval env' input → compute env = compute env' }
+      env.AgreesBelow n env' → eval' env input = eval' env' input → compute env = compute env' }
 
 /--
 `ComputableWitnesses` is stronger than `ComputableWitnesses'` (so it's fine to only prove the former).
@@ -373,7 +373,7 @@ then we can conclude that the subcircuit, evaluated at this particular input,
 satisfies `ComputableWitnesses` in the original sense.
 -/
 theorem compose_computableWitnesses (circuit : ElaboratedCircuit F β α) (input : Var β F) (n : ℕ) :
-  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) ∧ circuit.ComputableWitnesses →
+  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval' · input) ∧ circuit.ComputableWitnesses →
     (circuit.main input).ComputableWitnesses n := by
   intro ⟨ h_input, h_computable ⟩
   apply ElaboratedCircuit.computableWitnesses_implies h_computable
@@ -382,7 +382,7 @@ end ElaboratedCircuit
 
 theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
     (input : Var β F) (n : ℕ) :
-  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) ∧ circuit.ComputableWitnesses →
+  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval' · input) ∧ circuit.ComputableWitnesses →
     (subcircuit circuit input).ComputableWitnesses n := by
   intro h env env'
   simp only [circuit_norm, FormalCircuit.toSubcircuit, Operations.ComputableWitnesses,
@@ -403,7 +403,7 @@ theorem FormalCircuit.toSubcircuit_usesLocalWitnesses
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
     (circuit.toSubcircuit n input_var).ProverSpec env =
-    (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
+    (circuit.Assumptions (eval' env input_var) → circuit.Spec (eval' env input_var) (eval' env (circuit.output input_var n))) := by
   rfl
 
 /--
@@ -415,11 +415,11 @@ theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ)
     (input_var : CircuitType.Var Input F) (env : ProverEnvironment F) :
     (circuit.toSubcircuit n input_var).ProverSpec env =
-    (circuit.ProverAssumptions (eval env input_var) env.data env.hint →
-      (circuit.Assumptions (eval env.toEnvironment input_var) env.data →
-        circuit.Spec (eval env.toEnvironment input_var)
-          (eval env.toEnvironment (circuit.output input_var n)) env.data)
-      ∧ circuit.ProverSpec (eval env input_var) (eval env (circuit.output input_var n)) env.hint) := by
+    (circuit.ProverAssumptions (eval' env input_var) env.data env.hint →
+      (circuit.Assumptions (eval' env.toEnvironment input_var) env.data →
+        circuit.Spec (eval' env.toEnvironment input_var)
+          (eval' env.toEnvironment (circuit.output input_var n)) env.data)
+      ∧ circuit.ProverSpec (eval' env input_var) (eval' env (circuit.output input_var n)) env.hint) := by
   rfl
 
 /--
@@ -475,7 +475,7 @@ theorem FormalCircuit.toSubcircuit_soundness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
     (circuit.toSubcircuit n input_var).Spec env =
-    (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
+    (circuit.Assumptions (eval' env input_var) → circuit.Spec (eval' env input_var) (eval' env (circuit.output input_var n))) := by
   rfl
 
 /--
@@ -487,8 +487,8 @@ theorem GeneralFormalCircuit.toSubcircuit_soundness
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ)
     (input_var : CircuitType.Var Input F) (env : Environment F) :
     (circuit.toSubcircuit n input_var).Spec env =
-    (circuit.Assumptions (eval env input_var) env.data →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env.data) := by
+    (circuit.Assumptions (eval' env input_var) env.data →
+      circuit.Spec (eval' env input_var) (eval' env (circuit.output input_var n)) env.data) := by
   rfl
 
 /--
@@ -499,7 +499,7 @@ theorem FormalAssertion.toSubcircuit_soundness
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
     (circuit.toSubcircuit n input_var).Spec env =
-    (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var)) := by
+    (circuit.Assumptions (eval' env input_var) → circuit.Spec (eval' env input_var)) := by
   rfl
 
 -- Simplification lemmas for toSubcircuit.Completeness
@@ -512,7 +512,7 @@ theorem FormalCircuit.toSubcircuit_completeness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
     (circuit.toSubcircuit n input_var).ProverAssumptions env =
-    circuit.Assumptions (eval env input_var) := by
+    circuit.Assumptions (eval' env input_var) := by
   rfl
 
 /--
@@ -524,7 +524,7 @@ theorem GeneralFormalCircuit.toSubcircuit_completeness
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ)
     (input_var : CircuitType.Var Input F) (env : ProverEnvironment F) :
     (circuit.toSubcircuit n input_var).ProverAssumptions env =
-    circuit.ProverAssumptions (eval env input_var) env.data env.hint := by
+    circuit.ProverAssumptions (eval' env input_var) env.data env.hint := by
   rfl
 
 /--
@@ -535,5 +535,5 @@ theorem FormalAssertion.toSubcircuit_completeness
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : ProverEnvironment F) :
     (circuit.toSubcircuit n input_var).ProverAssumptions env =
-    (circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var)) := by
+    (circuit.Assumptions (eval' env input_var) ∧ circuit.Spec (eval' env input_var)) := by
   rfl

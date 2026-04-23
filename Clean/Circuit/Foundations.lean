@@ -20,11 +20,11 @@ open Circuit (ConstraintsHold)
 -/
 theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
     ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F) (b : β F),
-    eval env b_var = b → circuit.Assumptions b →
+    eval' env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
     ConstraintsHold env (circuit.main b_var |>.operations offset) →
     -- the spec holds
-    let a := eval env (circuit.output b_var offset)
+    let a := eval' env (circuit.output b_var offset)
     circuit.Spec b a := by
 
   intro offset env b_var b h_input h_assumptions h_holds
@@ -37,7 +37,7 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
 -/
 theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
     ∀ (offset : ℕ) (env : ProverEnvironment F) (b_var : Var β F) (b : β F),
-    eval env b_var = b → circuit.Assumptions b →
+    eval' env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the constraints hold (original definition)
@@ -54,7 +54,7 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
 -/
 theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
     ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F) (b : β F),
-    eval env b_var = b → circuit.Assumptions b →
+    eval' env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
     ConstraintsHold env (circuit.main b_var |>.operations offset) →
     -- the spec holds
@@ -70,7 +70,7 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
 -/
 theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
     ∀ (offset : ℕ) (env : ProverEnvironment F) (b_var : Var β F) (b : β F),
-    eval env b_var = b → circuit.Assumptions b →
+    eval' env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the spec implies that the constraints hold (original definition)

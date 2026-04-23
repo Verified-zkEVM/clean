@@ -28,7 +28,7 @@ theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β)
   simp [ProverEnvironment.OnlyAccessedBelow, circuit_norm, circuit.computableWitnesses]
 
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) (hint : ProverHints F) : β F :=
-  circuit.output (const input) 0 |> eval (circuit.proverEnvironment input hint)
+  circuit.output (const input) 0 |> eval' (circuit.proverEnvironment input hint)
 
 def toTable (circuit : LookupCircuit F α β) (hint : ProverHints F) : Table F (ProvablePair α β) where
   name := circuit.name
@@ -40,7 +40,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHints F) : Table F (
     -- the circuit constraints hold
     Circuit.ConstraintsHold env (circuit.main (const input) |>.operations n)
     -- and the output matches
-    ∧ output = eval env (circuit.output (const input) n)
+    ∧ output = eval' env (circuit.output (const input) n)
 
   Soundness := fun _ (input, output) => circuit.Assumptions input → circuit.Spec input output
   Completeness := fun _ (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput input hint
@@ -66,7 +66,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHints F) :
     FormalCircuit F α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
-    let output ← witness fun env => circuit.constantOutput (eval env input) hint
+    let output ← witness fun env => circuit.constantOutput (eval' env input) hint
 
     lookup (circuit.toTable hint) (input, output)
     return output
