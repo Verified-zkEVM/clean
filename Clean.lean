@@ -26,6 +26,7 @@ import Clean.Tables.KeccakInductive
 import Clean.Tables.BLAKE3.ProcessBlocksInductive
 import Clean.Gadgets.Bits
 import Clean.Gadgets.Conditional
+import Clean.Gadgets.IsEqual
 import Clean.Gadgets.IsZeroField
 import Clean.Gadgets.IsZero
 import Clean.Gadgets.BLAKE3.ApplyRounds
