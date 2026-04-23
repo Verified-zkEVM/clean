@@ -19,7 +19,7 @@ deriving ProvableStruct
 -- Test eval with struct literal on RHS
 lemma test_eval_eq_struct_literal {F : Type} [Field F] (env : ProverEnvironment F)
     (x_var y_var z_var : Var field F)
-    (h : eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3) :
+    (h : ProvableType.eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3) :
     Expression.eval env x_var = 1 ∧ Expression.eval env y_var = 2 ∧ Expression.eval env z_var = 3 := by
   fail_if_no_progress simplify_provable_struct_eval
   -- Now h should be literal = literal
@@ -29,7 +29,7 @@ lemma test_eval_eq_struct_literal {F : Type} [Field F] (env : ProverEnvironment 
 -- Test eval with struct literal on LHS
 theorem test_struct_literal_eq_eval {F : Type} [Field F] (env : ProverEnvironment F)
     (x_var y_var z_var : Var field F)
-    (h : TestInputs.mk 1 2 3 = eval env (TestInputs.mk x_var y_var z_var)) :
+    (h : TestInputs.mk 1 2 3 = ProvableType.eval env (TestInputs.mk x_var y_var z_var)) :
     1 = Expression.eval env x_var ∧ 2 = Expression.eval env y_var ∧ 3 = Expression.eval env z_var := by
   fail_if_no_progress simplify_provable_struct_eval
   -- Now h should be literal = literal
@@ -39,7 +39,7 @@ theorem test_struct_literal_eq_eval {F : Type} [Field F] (env : ProverEnvironmen
 -- Test eval with struct variable
 theorem test_eval_eq_struct_variable {F : Type} [Field F] (env : ProverEnvironment F) (input : TestInputs F)
     (x_var y_var z_var : Var field F)
-    (h : eval env (TestInputs.mk x_var y_var z_var) = input) :
+    (h : ProvableType.eval env (TestInputs.mk x_var y_var z_var) = input) :
     TestInputs.mk (Expression.eval env x_var) (Expression.eval env y_var) (Expression.eval env z_var) = input := by
   -- determine if should succeed or fail
   simplify_provable_struct_eval
@@ -49,7 +49,7 @@ theorem test_eval_eq_struct_variable {F : Type} [Field F] (env : ProverEnvironme
 -- Test eval inside conjunctions
 theorem test_eval_in_conjunction {F : Type} [Field F] (env : ProverEnvironment F) (x : F)
     (x_var y_var z_var : Var field F)
-    (h : eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) :
+    (h : ProvableType.eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) :
     Expression.eval env x_var = 1 ∧ Expression.eval env y_var = 2 ∧ Expression.eval env z_var = 3 ∧ x = 7 := by
   simplify_provable_struct_eval
   -- now h should be literal = literal
@@ -65,8 +65,8 @@ theorem test_eval_in_conjunction {F : Type} [Field F] (env : ProverEnvironment F
 -- Test nested conjunctions with eval
 theorem test_nested_conjunctions_with_eval {F : Type} [Field F] (env : ProverEnvironment F) (x : F)
     (x_var y_var z_var a_var b_var : Var field F)
-    (h : (eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) ∧
-         eval env (SimpleStruct.mk a_var b_var) = SimpleStruct.mk 8 9) :
+    (h : (ProvableType.eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) ∧
+         ProvableType.eval env (SimpleStruct.mk a_var b_var) = SimpleStruct.mk 8 9) :
     Expression.eval env x_var = 1 ∧ Expression.eval env a_var = 8 := by
   simplify_provable_struct_eval
   -- now h should be a conjunction of literal = literal
@@ -79,8 +79,8 @@ theorem test_nested_conjunctions_with_eval {F : Type} [Field F] (env : ProverEnv
 -- Test multiple eval expressions
 theorem test_multiple_eval_expressions {F : Type} [Field F] (env1 env2 : ProverEnvironment F)
     (x1_var y1_var z1_var : Var field F) (a2_var b2_var : Var field F)
-    (h1 : eval env1 (TestInputs.mk x1_var y1_var z1_var) = TestInputs.mk 1 2 3)
-    (h2 : eval env2 (SimpleStruct.mk a2_var b2_var) = SimpleStruct.mk 4 5) :
+    (h1 : ProvableType.eval env1 (TestInputs.mk x1_var y1_var z1_var) = TestInputs.mk 1 2 3)
+    (h2 : ProvableType.eval env2 (SimpleStruct.mk a2_var b2_var) = SimpleStruct.mk 4 5) :
     Expression.eval env1 x1_var = 1 ∧ Expression.eval env2 b2_var = 5 := by
   simplify_provable_struct_eval
   -- now h should be a conjunction of literal = literal
@@ -93,7 +93,7 @@ theorem test_multiple_eval_expressions {F : Type} [Field F] (env1 env2 : ProverE
 -- Test with complex eval expressions
 theorem test_complex_eval {F : Type} [Field F] (env : ProverEnvironment F)
     (a_var b_var c_var d_var e_var : Var field F)
-    (h : eval env (TestInputs.mk (a_var + b_var) (c_var * d_var) e_var) = TestInputs.mk 5 6 7) :
+    (h : ProvableType.eval env (TestInputs.mk (a_var + b_var) (c_var * d_var) e_var) = TestInputs.mk 5 6 7) :
     Expression.eval env (a_var + b_var) = 5 ∧
     Expression.eval env (c_var * d_var) = 6 ∧
     Expression.eval env e_var = 7 := by
@@ -106,13 +106,13 @@ theorem test_complex_eval {F : Type} [Field F] (env : ProverEnvironment F)
 -- Test conjunction with an eval to be decomposed and another eval not to be decomposed
 theorem test_conjunction_with_base_and_non_base {F : Type} [Field F] (env : ProverEnvironment F) (x : F)
     (x_var y_var z_var : Var field F) (s1 s2 : Var SimpleStruct F)
-    (h : (eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) ∧
-         eval env s1 = eval env s2) :
+    (h : (ProvableType.eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) ∧
+         ProvableType.eval env s1 = ProvableType.eval env s2) :
     Expression.eval env x_var = 1 := by
   simplify_provable_struct_eval
-  -- eval env s1 = eval env s2 should be intact
+  -- ProvableType.eval env s1 = ProvableType.eval env s2 should be intact
   simp only [TestInputs.mk.injEq] at h
-  -- Since eval env s1 = eval env s2 should be intact, this simplification should fail
+  -- Since ProvableType.eval env s1 = ProvableType.eval env s2 should be intact, this simplification should fail
   fail_if_success simp only [SimpleStruct.mk.injEq] at h
   -- Both eval equalities should be simplified
   exact h.1.1.1

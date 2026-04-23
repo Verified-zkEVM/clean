@@ -14,7 +14,7 @@ def not64_bytewise_value (x : U64 (F p)) : U64 (F p) := x.map (fun x => 255 - x)
 
 omit p_large_enough in
 lemma eval_not {env} {x_var : Var U64 (F p)} :
-    eval env (not64_bytewise x_var) = not64_bytewise_value (eval env x_var) := by
+    ProvableType.eval env (not64_bytewise x_var) = not64_bytewise_value (ProvableType.eval env x_var) := by
   rw [not64_bytewise, not64_bytewise_value, U64.map, U64.map]
   simp only [circuit_norm, explicit_provable_type]
   ring_nf

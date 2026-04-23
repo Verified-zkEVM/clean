@@ -37,6 +37,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start [Or8.circuit, Or8.Assumptions, Or8.Spec]
+
   have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
   rcases input_x
   rcases input_y
@@ -56,11 +57,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start
+  -- TODO it's a regression that `Inputs.mk.injEq` is no longer identified and used automatically
+  circuit_proof_start [Inputs.mk.injEq]
   rcases input_x
   rcases input_y
-  simp only [explicit_provable_type, toVars, fromElements] at h_input ⊢
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢
+  simp only [explicit_provable_type, toVars, fromElements, circuit_norm, U32.mk.injEq] at h_input ⊢
   simp only [Or8.circuit, Or8.Assumptions, h_input]
   simp only [U32.Normalized] at h_assumptions
   omega
