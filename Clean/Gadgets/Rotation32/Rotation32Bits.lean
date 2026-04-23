@@ -56,17 +56,12 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
-
-  -- simplify statements
-  dsimp only [circuit_norm, elaborated, main,
-    ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
-  simp only [Spec, circuit_norm, elaborated,
-    ByteDecomposition.Assumptions, ByteDecomposition.Spec] at h_holds ⊢
+  circuit_proof_start [ByteDecomposition.circuit, ByteDecomposition.elaborated,
+    ByteDecomposition.Assumptions, ByteDecomposition.Spec]
 
   -- targeted rewriting of the assumptions
-  rw [Assumptions, U32.ByteVector.normalized_iff] at x_normalized
-  simp only [U32.ByteVector.getElem_eval_toLimbs, h_input, x_normalized, true_implies,
+  rw [U32.ByteVector.normalized_iff] at h_assumptions
+  simp only [circuit_norm, U32.ByteVector.getElem_eval_toLimbs, h_input, h_assumptions, true_implies,
     Fin.forall_iff] at h_holds
 
   set base := ((2^(8-offset.val) : ℕ) : F p)
@@ -74,7 +69,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
     rw [tsub_le_iff_right, le_add_iff_nonneg_right]; apply zero_le
 
   -- capture the rotation relation in terms of byte vectors
-  set y := eval env (output offset i0)
+  set x := input
+  set y := ProvableType.eval env (output offset i₀)
   set xs := x.toLimbs
   set ys := y.toLimbs
   set o := offset.val
@@ -84,8 +80,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
       ys[i].val = xs[i].val / 2^o + (xs[(i + 1) % 4].val % 2^o) * 2^(8-o) := by
     simp only [ys, y, output, U32.ByteVector.eval_fromLimbs, U32.ByteVector.toLimbs_fromLimbs,
       Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]
-    set high := env.get (i0 + i * 2 + 1)
-    set next_low := env.get (i0 + (i + 1) % 4 * 2)
+    set high := env.get (i₀ + i * 2 + 1)
+    set next_low := env.get (i₀ + (i + 1) % 4 * 2)
     have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := h_holds i hi
     have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := h_holds ((i + 1) % 4) (Nat.mod_lt _ (by norm_num))
     have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt
@@ -110,14 +106,11 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   exact ⟨ rotation32_bits_soundness offset.is_lt, y_norm ⟩
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var _ x h_input x_normalized
-
-  -- simplify goal
-  simp only [main, elaborated, circuit_norm,
-    ByteDecomposition.circuit, ByteDecomposition.Assumptions]
+  circuit_proof_start [ByteDecomposition.circuit, ByteDecomposition.elaborated,
+    ByteDecomposition.Assumptions, ByteDecomposition.Spec]
 
   -- we only have to prove the byte decomposition assumptions
-  rw [Assumptions, U32.ByteVector.normalized_iff] at x_normalized
+  rw [U32.ByteVector.normalized_iff] at h_assumptions
   simp_all only [U32.ByteVector.getElem_eval_toLimbs, forall_const]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 := {

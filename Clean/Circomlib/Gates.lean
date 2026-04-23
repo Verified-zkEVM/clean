@@ -656,7 +656,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
   have h_eval1 : env input_var[1] = input[1] := by simp [h_env, circuit_norm]
   have h_and_spec := AND.circuit.soundness offset env (input_var[0], input_var[1])
     (input[0], input[1])
-    (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
+    (by simp only [circuit_norm, ProvableType.eval_fieldPair, h_eval0, h_eval1])
     ⟨h_input0, h_input1⟩ h_hold
 
   rcases h_and_spec with ⟨h_val, h_binary⟩
@@ -716,11 +716,11 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
     constructor
     · have h_eval0 : Expression.eval env input_var[0] = input[0] :=
         by simp[h_env, circuit_norm]
-      simp only [ProvableType.eval_fieldPair, h_eval0]
+      simp only [circuit_norm, ProvableType.eval_fieldPair, h_eval0]
       exact h_binary0
     · have h_eval1 : Expression.eval env input_var[1] = input[1] :=
         by simp[h_env, circuit_norm]
-      simp only [ProvableType.eval_fieldPair, h_eval1]
+      simp only [circuit_norm, ProvableType.eval_fieldPair, h_eval1]
       exact h_binary1
 
 theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
@@ -796,7 +796,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         env
         (out1, out2)
         (env out1, env out2)
-        (by simp only [ProvableType.eval_fieldPair])
+        (by simp only [circuit_norm, ProvableType.eval_fieldPair])
         ⟨by rcases h_spec1 with ⟨_, h_binary1⟩; exact h_binary1,
          by rcases h_spec2 with ⟨_, h_binary2⟩; exact h_binary2⟩
         h_hold'.2.2
@@ -1005,14 +1005,14 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_assumptions2
 
             constructor
-            · simp only [ProvableType.eval_fieldPair]
+            · simp only [circuit_norm, ProvableType.eval_fieldPair]
               apply main_output_binary_from_completeness n1 offset env input_var1 input1
               · exact h_eval1
               · exact h_assumptions1
               · exact h_local_witnesses.1
               · exact h_comp1
 
-            · simp only [ProvableType.eval_fieldPair]
+            · simp only [circuit_norm, ProvableType.eval_fieldPair]
               have h_rest := h_local_witnesses.2
               rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_rest
               apply main_output_binary_from_completeness n2 (offset + (main input_var1).localLength offset) env input_var2 input2

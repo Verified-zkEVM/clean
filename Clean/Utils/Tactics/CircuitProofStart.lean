@@ -105,6 +105,8 @@ elab_rules : tactic
   | `(tactic| circuit_proof_start $[[$terms:term,*]]?) => do
   -- intro all hypotheses
   circuitProofStartCore
+  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `input_var):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `input):ident))) catch _ => pure ()
 
   -- try to unfold main, Assumptions and Spec as local definitions
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `Assumptions):ident] at *))

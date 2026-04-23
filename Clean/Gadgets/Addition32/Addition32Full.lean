@@ -55,7 +55,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
     simp only [circuit_norm, main, Addition8FullCarry.main]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
+  circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized, Inputs.mk.injEq, U32.mk.injEq]
 
   -- simplify circuit further
   -- TODO handle simplification of general provable types in `circuit_proof_start`
@@ -95,7 +95,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     h0 h1 h2 h3
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
+  circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized, Inputs.mk.injEq, U32.mk.injEq]
 
   -- simplify circuit further TODO
   let ⟨ x0, x1, x2, x3 ⟩ := input_x

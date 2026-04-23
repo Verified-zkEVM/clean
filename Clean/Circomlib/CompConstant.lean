@@ -90,7 +90,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 
   -- Convert sum to bits
   have hp : p > 2^135 := by linarith [‹Fact (p > 2^253)›.elim]
-  let bits ← Num2Bits.circuit 135 hp sout
+  let bits : Var (fields 135) (F p) ← Num2Bits.circuit 135 hp sout
 
   let out <== bits[127]
   return out

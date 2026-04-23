@@ -157,7 +157,7 @@ def circuit : FormalAssertion (F p) Inputs where
     enabled = 1 → inp.1 = inp.2
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [Inputs.mk.injEq]
     intro h_ie
     simp_all only [one_ne_zero, or_true, id_eq, one_mul]
     cases h_input with
@@ -179,7 +179,7 @@ def circuit : FormalAssertion (F p) Inputs where
         trivial
 
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [Inputs.mk.injEq]
     simp_all only [id_eq]
     constructor
     trivial
@@ -213,7 +213,7 @@ template LessThan(n) {
 -/
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
-  let bits ← Num2Bits.circuit (n + 1) hn diff
+  let bits : Var (fields (n + 1)) (F p) ← Num2Bits.circuit (n + 1) hn diff
   let out <== 1 - bits[n]
   return out
 

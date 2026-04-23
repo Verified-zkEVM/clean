@@ -132,11 +132,11 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  ProverAssumptions input _ _ :=
+  ProverAssumptions (input : fields 254 (F p)) _ _ :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
-  Assumptions input _ :=
+  Assumptions (input : fields 254 (F p)) _ :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
-  Spec input output _ :=
+  Spec (input : fields 254 (F p)) output _ :=
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
@@ -216,7 +216,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
   soundness := by
-    intro i0 env input_var input h_input _ h_holds
+    intro i0 env input_var (input : F p) h_input _ h_holds
     simp only [circuit_norm, main, IsZero.circuit, IsZero.main] at h_holds ⊢
     obtain ⟨ h_bits, h_iszero, h_eq ⟩ := h_holds
 
@@ -241,9 +241,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
       by_cases h_input_zero : input = 0
       · simp_rw [h_input_zero] at h_input ⊢
         have : Expression.eval env input_var = 0 := by
-          simp only [eval, fromElements, toVars, toElements] at h_input
+          simp only [circuit_norm] at h_input
           convert h_input
-          simp
         rw [this] at h_eq
         simp only [id_eq, mul_zero, dite_eq_ite, ite_self, add_zero, neg_zero, ZMod.val_zero,
           Nat.cast_zero, sub_zero] at h_eq ⊢

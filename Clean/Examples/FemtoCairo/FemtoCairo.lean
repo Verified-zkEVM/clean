@@ -62,7 +62,7 @@ def ReadOnlyTableFromFunction
 }
 
 def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
-  let bits ← Gadgets.toBits 8 (by linarith [p_large_enough.elim]) instruction
+  let bits : Var (fields 8) (F p) ← Gadgets.toBits 8 (by linarith [p_large_enough.elim]) instruction
   return {
     instrType := {
       isAdd := (1 : Expression _) - bits[0] - bits[1] + bits[0] * bits[1],
@@ -157,7 +157,7 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
 def fetchInstruction
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
     GeneralFormalCircuit (F p) field RawInstruction where
-  main := fun pc => do
+  main (pc : Expression (F p)) := do
     let programTable := ReadOnlyTableFromFunction program h_programSize
 
     let rawInstrType ← witness fun eval => program <| Fin.ofNat _ (eval pc).val
@@ -343,7 +343,7 @@ def readFromMemory :
   soundness := by
     circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess,
       Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
-      memorySize, memoryValue, memory, MemoryEntry]
+      memorySize, memoryValue, memory, MemoryEntry, MemoryReadInput.mk.injEq]
     set memoryTable := env.data.getTable MemoryTable with h_memory_table_def
     simp only [MemoryTable] at h_holds
 
@@ -351,7 +351,7 @@ def readFromMemory :
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
 
-    simp only [id_eq, fromElements, eval, size, toVars, toElements, Vector.map_mk, List.map_toArray,
+    simp only [id_eq, fromElements, ProvableType.eval, size, toVars, toElements, Vector.map_mk, List.map_toArray,
       List.map_cons, List.map_nil, Vector.getElem_mk, ↓List.getElem_toArray,
       ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
       DecodedAddressingMode.mk.injEq] at h_holds h_assumptions h_input
@@ -407,7 +407,7 @@ def readFromMemory :
 
   completeness := by
     circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly,
-      Spec.dataMemoryAccess, memory, memorySize, memoryValue]
+      Spec.dataMemoryAccess, memory, memorySize, memoryValue, MemoryReadInput.mk.injEq]
     set addr1 := env.get i₀
     set value1 := env.get (i₀ + 1)
     set addr2 := env.get (i₀ + 2)
@@ -465,11 +465,12 @@ def readFromMemory :
   Returns the next state.
 -/
 def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
-  main := fun { state, decoded, v1, v2, v3 } => do
+  main (input : Var StateTransitionInput (F p)) := do
+    let { state, decoded, v1, v2, v3 } := input
     let { instrType := { isAdd, isMul, isStoreState, isLoadState }, .. } := decoded
 
     -- Witness the claimed next state
-    let nextState ← witness fun eval => {
+    let nextState : Var State (F p) ← witness fun eval => {
       pc := if eval isLoadState = 1 then eval v1 else eval state.pc + 4
       ap := if eval isLoadState = 1 then eval v2 else eval state.ap
       fp := if eval isLoadState = 1 then eval v3 else eval state.fp
@@ -509,7 +510,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 
   soundness := by
     circuit_proof_start [DecodedInstructionType.isEncodedCorrectly, Spec.computeNextState,
-      DecodedInstructionType.val]
+      DecodedInstructionType.val, StateTransitionInput.mk.injEq, DecodedInstruction.mk.injEq]
 
     -- unpack the decoded instruction type
     obtain ⟨isAdd, isMul, isStoreState, isLoadState⟩ := input_decoded_instrType
@@ -529,7 +530,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     <;> split <;> simp_all [add_eq_zero_iff_eq_neg]
 
   completeness := by
-    circuit_proof_start [Spec.computeNextState]
+    circuit_proof_start [Spec.computeNextState, StateTransitionInput.mk.injEq, DecodedInstruction.mk.injEq]
     rcases h_assumptions with ⟨ h_encode, h_exec ⟩
     -- Turning DecodedInstructionType into ProvableStruct leads to performance problem in soundness,
     -- that's why manual decomposition follows.
@@ -625,8 +626,8 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 -/
 def femtoCairoStepElaboratedCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
-    ElaboratedCircuit (F p) State State where
-    main := fun state => do
+    GeneralElaboratedCircuit (F p) State State where
+    main (state : Var State (F p)) := do
       -- Fetch instruction
       let { rawInstrType, op1, op2, op3 } ← fetchInstruction program h_programSize state.pc
 

@@ -79,12 +79,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
-  simp only [FormalCircuit.toSubcircuit, Circuit.operations, ElaboratedCircuit.main,
-    ElaboratedCircuit.localLength, Xor32.Assumptions,
-    ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents, components, toComponents,
-    ProvableStruct.eval.go, getElem_eval_vector, h_input, Xor32.Spec, ElaboratedCircuit.output,
-    and_imp, Nat.add_zero, add_zero, and_true] at h_holds
+  simp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
+  simp only [Xor32.Assumptions, getElem_eval_vector, h_input, Xor32.Spec, and_imp] at h_holds
 
   ring_nf at h_holds
 
@@ -119,7 +115,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [BLAKE3State.Normalized]
+  circuit_proof_start [BLAKE3State.Normalized, Inputs.mk.injEq]
 
   obtain ⟨h_input_state, h_input_cv⟩ := h_input
   obtain ⟨state_norm, chaining_value_norm⟩ := h_assumptions
