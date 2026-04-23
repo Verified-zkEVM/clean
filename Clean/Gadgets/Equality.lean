@@ -98,12 +98,12 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elabo
 
 @[circuit_norm]
 theorem spec (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Spec env = (eval env x = eval env y) := by
+    ((circuit α).toSubcircuit n (x, y)).Spec env = (eval' env x = eval' env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem proverAssumptions (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).ProverAssumptions env = (eval env x = eval env y) := by
+    ((circuit α).toSubcircuit n (x, y)).ProverAssumptions env = (eval' env x = eval' env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
@@ -153,7 +153,7 @@ instance {F : Type} [Field F] : HasAssignEq (Expression F) F where
 instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
   HasAssignEq (α (Expression F)) F where
   assignEq := fun rhs => do
-    let witness ← ProvableType.witness fun env => eval env rhs
+    let witness ← ProvableType.witness fun env => eval' env rhs
     witness === rhs
     return witness
 

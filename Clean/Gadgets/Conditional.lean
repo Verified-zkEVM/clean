@@ -117,8 +117,8 @@ omit [Field F] in
 @[circuit_norm]
 theorem eval_ifElse_output [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M] {env}
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) :
-  eval env (output selector ifTrue ifFalse) =
-    outputValue (selector.eval env) (eval env ifTrue) (eval env ifFalse) := by
+  eval' env (output selector ifTrue ifFalse) =
+    outputValue (selector.eval env) (eval' env ifTrue) (eval' env ifFalse) := by
   simp only [output, outputValue, circuit_norm]
 
   -- Show that the result equals the conditional expression
