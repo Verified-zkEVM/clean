@@ -85,7 +85,7 @@ lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
   (env : Environment (F p))
   (input : Var (BinSumInput n ops) (F p))
   (input_val : BinSumInput n ops (F p))
-  (h_eval : ProvableType.eval' env input = input_val) :
+  (h_eval : eval env input = input_val) :
     Expression.eval env (inputLinearSum n ops input) =
     Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j.val]) 0 := by
   -- The main function uses input[j][k] which evaluates to input_val[j][k]
@@ -207,7 +207,9 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
     intros witness_offset env inputs_var h_witness_extends inputs h_inputs_eval h_inputs_binary
     simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit]
     convert sum_bound_of_binary_inputs hnout inputs h_inputs_binary
-    exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval
+    have h_inputs_eval' : eval env.toEnvironment inputs_var = inputs := by
+      simpa only [CircuitType.eval_var_prover_to_verifier] using h_inputs_eval
+    exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval'
 
 end BinSum
 

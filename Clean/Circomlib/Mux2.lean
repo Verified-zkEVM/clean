@@ -126,8 +126,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
       simp only [Expression.eval]
       -- Right side: eval of the computed expression
-      have h_env_i := h_env ⟨i, hi⟩
-      rw [h_env_i]
+      rw [h_env ⟨i, hi⟩]
       norm_num
 
 end MultiMux2

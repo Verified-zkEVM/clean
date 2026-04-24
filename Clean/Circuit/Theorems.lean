@@ -608,9 +608,10 @@ def FormalCircuit.isGeneralFormalCircuit {F : Type} {Input Output : TypeMap}
       intros
       apply orig.soundness <;> trivial
   completeness := by
-    simp only [circuit_norm, forall_eq']
-    intros
-    apply orig.completeness <;> trivial
+    intro offset env input_var h_env input h_input h_assumptions
+    constructor
+    · exact orig.completeness offset env input_var h_env input h_input h_assumptions
+    · trivial
 
 /--
 `FormalAssertion.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` is a generalization of
@@ -630,6 +631,8 @@ def FormalAssertion.isGeneralFormalCircuit {F : Type} {Input : TypeMap}
     intros
     apply orig.soundness <;> trivial
   completeness := by
-    simp only [circuit_norm, forall_eq']
-    rintro _ _ _ _ ⟨ _, _ ⟩
-    apply orig.completeness <;> trivial
+    intro offset env input_var h_env input h_input h_assumptions
+    rcases h_assumptions with ⟨h_assumptions, h_spec⟩
+    constructor
+    · exact orig.completeness offset env input_var h_env input h_input h_assumptions h_spec
+    · trivial

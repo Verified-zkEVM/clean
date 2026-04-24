@@ -123,6 +123,24 @@ export ProvableType (const varFromOffset)
 
 namespace CircuitType
 
+/-!
+For provable types, the preferred normal form is the concrete expression/value
+view:
+
+* variables: `M (Expression F)`, not `Var M F`;
+* verifier values: `M F`, not `Value M F`;
+* prover values: `M F`, not `ProverValue M F`.
+
+`Var M F`, `Value M F`, and `ProverValue M F` are defeq to these concrete
+forms for the default `CircuitType` instance, and are still useful at circuit
+boundaries and in APIs that work for arbitrary `CircuitType`s. Userland
+definitions and lemmas over provable data should usually use the concrete
+expression/value forms directly. This makes elaborated theorem statements line
+up with the `circuit_norm` simp normal form; in particular, lemmas about `eval`
+then elaborate as `@eval _ (M (Expression F)) (M F) ...` and can be applied by
+ordinary simplification.
+-/
+
 @[circuit_norm] lemma var_of_provableType (F) :
   Var M F = M (Expression F) := rfl
 @[circuit_norm] lemma proverValue_of_provableType (F) :
@@ -135,14 +153,35 @@ instance : ProverEval F (Var M F) (M F) := proverEval M
 instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
 instance : ProverEval F (M (Expression F)) (M F) := proverEval M
 
-lemma eval_var (env : Environment F) (v : M (Expression F)) :
-    eval env v = ProvableType.eval' env v := rfl
+@[explicit_provable_type] lemma eval_var (env : Environment F) (v : Var M F) :
+    eval env v = ProvableType.eval' env (v : M (Expression F)) := by
+  unfold eval
+  rfl
 
-lemma eval_var_prover (env : ProverEnvironment F) (v : M (Expression F)) :
-    eval env v = ProvableType.eval' env.toEnvironment v := rfl
+@[explicit_provable_type] lemma eval_var_prover (env : ProverEnvironment F) (v : Var M F) :
+    eval env v = ProvableType.eval' env.toEnvironment (v : M (Expression F)) := by
+  unfold eval
+  rfl
 
-@[circuit_norm] lemma eval_var_prover_to_verifier (env : ProverEnvironment F) (v : M (Expression F)) :
-    eval env v = eval env.toEnvironment v := rfl
+@[circuit_norm] lemma eval_var_prover_to_verifier (env : ProverEnvironment F) (v : Var M F) :
+    eval env v = eval env.toEnvironment v := by
+  rw [eval_var_prover, eval_var]
+
+@[explicit_provable_type] lemma eval_expression (env : Environment F) (v : M (Expression F)) :
+    eval env v = ProvableType.eval' env v := by
+  unfold eval
+  change (verifierEval M).eval env v = ProvableType.eval' env v
+  rfl
+
+@[explicit_provable_type] lemma eval_expression_prover (env : ProverEnvironment F) (v : M (Expression F)) :
+    eval env v = ProvableType.eval' env.toEnvironment v := by
+  unfold eval
+  change (proverEval M).eval env v = ProvableType.eval' env.toEnvironment v
+  rfl
+
+@[circuit_norm] lemma eval_expression_prover_to_verifier (env : ProverEnvironment F) (v : M (Expression F)) :
+    eval env v = eval env.toEnvironment v := by
+  rw [eval_expression_prover, eval_expression]
 
 end CircuitType
 
@@ -152,7 +191,9 @@ namespace ProvableType
 @[circuit_norm]
 theorem fromElements_eval_toElements {α : TypeMap} [ProvableType α] {env : Environment F}
     (x : α (Expression F)) :
-    fromElements (Vector.map (Expression.eval env) (toElements x)) = eval env x := rfl
+    fromElements (Vector.map (Expression.eval env) (toElements x)) = eval env x := by
+  simp only [CircuitType.eval_expression]
+  rfl
 
 end ProvableType
 
@@ -197,6 +238,8 @@ namespace CircuitType
 
 instance : VerifierEval F (Expression F) F := verifierEval field
 instance : ProverEval F (Expression F) F := proverEval field
+instance : VerifierEval F (M (Var field F)) (M F) := verifierEval M
+instance : ProverEval F (M (Var field F)) (M F) := proverEval M
 
 end CircuitType
 
@@ -247,6 +290,33 @@ instance {n : ℕ} : VerifierEval F (fields n (Expression F)) (fields n F) :=
   verifierEval (fields n)
 instance {n : ℕ} : ProverEval F (fields n (Expression F)) (fields n F) :=
   proverEval (fields n)
+
+@[circuit_norm] lemma eval_var_fields {n : ℕ} (env : Environment F) (x : Var (fields n) F) :
+    eval env x = (x : fields n (Expression F)).map (Expression.eval env) := by
+  unfold eval
+  change ProvableType.eval' (α:=fields n) env x =
+    (x : fields n (Expression F)).map (Expression.eval env)
+  rfl
+
+@[circuit_norm] lemma eval_fields_dispatch {n : ℕ} (env : Environment F) (x : fields n (Expression F)) :
+    @eval (Environment F) (fields n (Expression F)) (fields n F)
+      (verifierEval (fields n)) env x =
+      x.map (Expression.eval env) := by
+  exact eval_var_fields env x
+
+@[circuit_norm] lemma eval_var_fields_prover {n : ℕ} (env : ProverEnvironment F) (x : Var (fields n) F) :
+    eval env x = (x : fields n (Expression F)).map (Expression.eval env.toEnvironment) := by
+  unfold eval
+  change ProvableType.eval' (α:=fields n) env.toEnvironment x =
+    (x : fields n (Expression F)).map (Expression.eval env.toEnvironment)
+  rfl
+
+@[circuit_norm] lemma eval_fields_dispatch_prover {n : ℕ} (env : ProverEnvironment F)
+    (x : fields n (Expression F)) :
+    @eval (ProverEnvironment F) (fields n (Expression F)) (fields n F)
+      (proverEval (fields n)) env x =
+      x.map (Expression.eval env.toEnvironment) := by
+  exact eval_var_fields_prover env x
 
 end CircuitType
 
@@ -364,7 +434,7 @@ where
   @[circuit_norm]
   go: (cs : List WithProvableType) → ProvableTypeList (Expression F) cs → ProvableTypeList F cs
     | [], .nil => .nil
-    | _ :: cs, .cons a as => .cons (Eval.eval env a) (go cs as)
+    | _ :: cs, .cons a as => .cons (_root_.eval env a) (go cs as)
 
 /--
 `eval` === `ProvableStruct.eval`
@@ -375,9 +445,9 @@ It preserves high-level components instead of unfolding everything down to field
 -/
 @[circuit_norm ↓ high]
 theorem eval_eq_eval {α : TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : α (Expression F)),
-    Eval.eval env x = ProvableStruct.eval env x := by
+    _root_.eval env x = ProvableStruct.eval env x := by
   intro env x
-  change ProvableType.eval' env x = ProvableStruct.eval env x
+  rw [CircuitType.eval_expression]
   symm
   simp only [eval, ProvableType.eval', fromElements, toVars, toElements, size]
   congr 1
@@ -390,8 +460,16 @@ where
     simp only [componentsToElements, componentsFromElements, eval.go]
     rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
     congr
+    · exact (ProvableType.fromElements_eval_toElements (env:=env) a).symm
     -- recursively use this lemma!
     apply eval_eq_eval_aux
+
+@[circuit_norm ↓ high]
+theorem eval_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvironment F)
+    (x : α (Expression F)) :
+    _root_.eval env x = ProvableStruct.eval env.toEnvironment x := by
+  rw [CircuitType.eval_expression_prover_to_verifier]
+  exact eval_eq_eval env.toEnvironment x
 
 /--
 Alternative `varFromOffset` which creates each component separately.
@@ -441,7 +519,7 @@ variable {α : TypeMap} [ProvableType α]
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : field (Expression F)) :
     eval env x = Expression.eval env x := by
-  change ProvableType.eval' (α:=field) env x = Expression.eval env x
+  rw [CircuitType.eval_expression]
   simp [circuit_norm, explicit_provable_type]
 
 end ProvableType
@@ -454,7 +532,9 @@ namespace CircuitType
 
 @[circuit_norm] lemma eval_expr_prover (env : ProverEnvironment F) (v : Expression F) :
   eval env v = Expression.eval env v := by
-  exact ProvableType.eval_field env.toEnvironment v
+  unfold eval
+  change ProvableType.eval' (α:=field) env.toEnvironment v = Expression.eval env.toEnvironment v
+  simp [ProvableType.eval', toVars, toElements, fromElements]
 
 @[circuit_norm] lemma eval_var_field (env : Environment F) (v : field (Expression F)) :
   eval env v = Expression.eval env v := by
@@ -462,7 +542,9 @@ namespace CircuitType
 
 @[circuit_norm] lemma eval_var_field_prover (env : ProverEnvironment F) (v : field (Expression F)) :
   eval env v = Expression.eval env v := by
-  exact ProvableType.eval_field env.toEnvironment v
+  unfold eval
+  change ProvableType.eval' (α:=field) env.toEnvironment v = Expression.eval env.toEnvironment v
+  simp [ProvableType.eval', toVars, toElements, fromElements]
 
 end CircuitType
 
@@ -476,6 +558,7 @@ theorem varFromOffset_field {F} (offset : ℕ) :
 @[circuit_norm ↓]
 theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : fields n (Expression F)) :
   eval env x = x.map (Expression.eval env) := by
+  rw [CircuitType.eval_expression]
   rfl
 
 @[circuit_norm ↓]
@@ -486,8 +569,7 @@ theorem varFromOffset_fields {F} (offset : ℕ) :
 theorem eval_fieldPair {F : Type} [Field F] (env : Environment F) (t : fieldPair (Expression F)) :
     eval env t =
       (match t with | (x, y) => (Expression.eval env x, Expression.eval env y)) := by
-  change ProvableType.eval' (α:=fieldPair) env t =
-    (match t with | (x, y) => (Expression.eval env x, Expression.eval env y))
+  rw [CircuitType.eval_expression]
   simp [circuit_norm, explicit_provable_type]
 
 @[circuit_norm ↓]
@@ -504,8 +586,7 @@ theorem eval_fieldPair_snd {F : Type} [Field F] (env : Environment F) (t : field
 theorem eval_fieldTriple {F : Type} [Field F] (env : Environment F) (t : fieldTriple (Expression F)) :
     eval env t = (match t with
       | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z)) := by
-  change ProvableType.eval' (α:=fieldTriple) env t = (match t with
-      | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z))
+  rw [CircuitType.eval_expression]
   simp [circuit_norm, explicit_provable_type]
 
 @[circuit_norm ↓]
@@ -549,7 +630,7 @@ lemma fromElements_eq_iff' {M : TypeMap} [ProvableType M] {F : Type} {B : Vector
 @[circuit_norm]
 theorem eval_const {F : Type} [Field F] {α : TypeMap} [ProvableType α] {env : Environment F} {x : α F} :
     eval env (const x) = x := by
-  change eval' env (const x) = x
+  rw [CircuitType.eval_expression]
   simp only [const, fromVars, explicit_provable_type, toVars]
   rw [toElements_fromElements, Vector.map_map]
   have : Expression.eval env ∘ Expression.const = id := by
@@ -561,14 +642,13 @@ theorem eval_const {F : Type} [Field F] {α : TypeMap} [ProvableType α] {env : 
 theorem eval_const_prover {F : Type} [Field F] {α : TypeMap} [ProvableType α]
     {env : ProverEnvironment F} {x : α F} :
     eval env (const x) = x := by
-  change eval' env.toEnvironment (const x) = x
-  exact eval_const (env:=env.toEnvironment) (x:=x)
+  exact (CircuitType.eval_expression_prover env (const x)).trans (by
+    simpa only [CircuitType.eval_expression] using eval_const (env:=env.toEnvironment) (x:=x))
 
 theorem eval_varFromOffset {α : TypeMap} [ProvableType α] (env : Environment F) (offset : ℕ) :
     (eval env (varFromOffset α offset : α (Expression F)) : α F) =
       fromElements (.mapRange (size α) fun i => env.get (offset + i)) := by
-  change eval' env (varFromOffset α offset) =
-    fromElements (.mapRange (size α) fun i => env.get (offset + i))
+  rw [CircuitType.eval_expression]
   simp only [explicit_provable_type, varFromOffset, toVars, fromVars]
   rw [toElements_fromElements]
   congr
@@ -579,9 +659,8 @@ theorem eval_varFromOffset {α : TypeMap} [ProvableType α] (env : Environment F
 theorem eval_varFromOffset_prover {α : TypeMap} [ProvableType α] (env : ProverEnvironment F) (offset : ℕ) :
     (eval env (varFromOffset α offset : α (Expression F)) : α F) =
       fromElements (.mapRange (size α) fun i => env.get (offset + i)) := by
-  change eval' env.toEnvironment (varFromOffset α offset) =
-    fromElements (.mapRange (size α) fun i => env.get (offset + i))
-  exact eval_varFromOffset (α:=α) env.toEnvironment offset
+  exact (CircuitType.eval_expression_prover env (varFromOffset α offset)).trans (by
+    simpa only [CircuitType.eval_expression] using eval_varFromOffset (α:=α) env.toEnvironment offset)
 
 theorem ext_iff {F : Type} {α : TypeMap} [ProvableType α] (x y : α F) :
     x = y ↔ ∀ i (hi : i < size α), (toElements x)[i] = (toElements y)[i] := by
@@ -596,7 +675,7 @@ theorem ext_iff {F : Type} {α : TypeMap} [ProvableType α] (x y : α F) :
 theorem eval_fromElements {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env : Environment F)
   (xs : Vector (Expression F) (size α)) :
     eval env (fromElements (F:=Expression F) xs : α (Expression F)) = fromElements (xs.map env) := by
-  change eval' env (fromElements (F:=Expression F) xs) = fromElements (xs.map env)
+  rw [CircuitType.eval_expression]
   simp only [explicit_provable_type, toVars, toElements_fromElements]
 
 theorem eval_fromVars {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env : Environment F)
@@ -606,7 +685,7 @@ theorem eval_fromVars {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env
 theorem getElem_eval_toElements {F : Type} [Field F] {α : TypeMap} [ProvableType α]
   {env : Environment F} (x : α (Expression F)) (i : ℕ) (hi : i < size α) :
     Expression.eval env (toElements x)[i] = (toElements (eval env x))[i] := by
-  change Expression.eval env (toElements x)[i] = (toElements (eval' env x))[i]
+  rw [CircuitType.eval_expression]
   rw [eval', toElements_fromElements, Vector.getElem_map, toVars]
 
 theorem getElem_eval_toVars {F : Type} [Field F] {α : TypeMap} [ProvableType α]
@@ -616,7 +695,13 @@ theorem getElem_eval_toVars {F : Type} [Field F] {α : TypeMap} [ProvableType α
 theorem getElem_eval_fields {F : Type} [Field F] {n : ℕ} {env : Environment F}
   (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
     Expression.eval env x[i] = (eval env x)[i] := by
-  change Expression.eval env x[i] = (eval' env x)[i]
+  rw [CircuitType.eval_expression]
+  simp only [explicit_provable_type, fromElements, instProvableTypeFields, toVars, Vector.getElem_map]
+
+theorem getElem_eval_fields_prover {F : Type} [Field F] {n : ℕ} {env : ProverEnvironment F}
+  (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
+    Expression.eval env.toEnvironment x[i] = (eval env x)[i] := by
+  rw [CircuitType.eval_expression_prover]
   simp only [explicit_provable_type, fromElements, instProvableTypeFields, toVars, Vector.getElem_map]
 end ProvableType
 
@@ -651,7 +736,11 @@ end CircuitType
 theorem eval_vector (env : Environment F)
   (x : ProvableVector α n (Expression F)) :
     eval env x = x.map (eval env) := by
-  change ProvableType.eval' env x = x.map (fun y => ProvableType.eval' env y)
+  rw [CircuitType.eval_expression]
+  have h_map : x.map (eval env) = x.map (fun y => ProvableType.eval' env y) := by
+    ext i hi
+    simp only [Vector.getElem_map, CircuitType.eval_expression]
+  rw [h_map]
   simp only [explicit_provable_type, toVars, toElements, fromElements]
   simp only [Vector.map_flatten, Vector.map_map]
   rw [Vector.flatten_toChunks]
@@ -774,6 +863,7 @@ theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : En
   (a : α (Expression F)) (b : β (Expression F)) :
     eval env ((a, b) : ProvablePair α β (Expression F)) =
       (eval env a, eval env b) := by
+  unfold eval
   change ProvableType.eval' (α:=ProvablePair α β) env (a, b) =
     (ProvableType.eval' env a, ProvableType.eval' env b)
   simp only [ProvableType.eval', toVars, toElements, fromElements, Vector.map_append]
@@ -786,10 +876,38 @@ namespace CircuitType
     eval env ((p1, p2) : ProvablePair M N (Expression F)) = (eval env p1, eval env p2) := by
   simp only [circuit_norm]
 
+@[circuit_norm] lemma eval_var_provablePair {M N : TypeMap} [ProvableType M] [ProvableType N]
+    (env : Environment F) (p : Var (ProvablePair M N) F) :
+    eval env p = (eval env (p.1 : M (Expression F)), eval env (p.2 : N (Expression F))) := by
+  exact eval_var_pair env p.1 p.2
+
+@[circuit_norm] lemma eval_provablePair_dispatch {M N : TypeMap} [ProvableType M] [ProvableType N]
+    (env : Environment F) (p : ProvablePair M N (Expression F)) :
+    @eval (Environment F) (ProvablePair M N (Expression F)) (ProvablePair M N F)
+      (verifierEval (ProvablePair M N)) env p =
+      (eval env (p.1 : M (Expression F)), eval env (p.2 : N (Expression F))) := by
+  exact eval_var_pair env p.1 p.2
+
 @[circuit_norm] lemma eval_var_pair_prover {M N : TypeMap} [ProvableType M] [ProvableType N]
     (env : ProverEnvironment F) (p1 : M (Expression F)) (p2 : N (Expression F)) :
     eval env ((p1, p2) : ProvablePair M N (Expression F)) = (eval env p1, eval env p2) := by
-  exact eval_pair (α:=M) (β:=N) env.toEnvironment p1 p2
+  unfold eval
+  change ProvableType.eval' (α:=ProvablePair M N) env.toEnvironment (p1, p2) =
+    (ProvableType.eval' env.toEnvironment p1, ProvableType.eval' env.toEnvironment p2)
+  simp only [ProvableType.eval', toVars, toElements, fromElements, Vector.map_append]
+  rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+
+@[circuit_norm] lemma eval_var_provablePair_prover {M N : TypeMap} [ProvableType M] [ProvableType N]
+    (env : ProverEnvironment F) (p : Var (ProvablePair M N) F) :
+    eval env p = (eval env (p.1 : M (Expression F)), eval env (p.2 : N (Expression F))) := by
+  exact eval_var_pair_prover env p.1 p.2
+
+@[circuit_norm] lemma eval_provablePair_dispatch_prover {M N : TypeMap} [ProvableType M] [ProvableType N]
+    (env : ProverEnvironment F) (p : ProvablePair M N (Expression F)) :
+    @eval (ProverEnvironment F) (ProvablePair M N (Expression F)) (ProvablePair M N F)
+      (proverEval (ProvablePair M N)) env p =
+      (eval env (p.1 : M (Expression F)), eval env (p.2 : N (Expression F))) := by
+  exact eval_var_pair_prover env p.1 p.2
 
 @[circuit_norm] lemma eval_field_pair (F : Type) [Field F]
   (env : Environment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
@@ -799,7 +917,7 @@ namespace CircuitType
 @[circuit_norm] lemma eval_field_pair_prover (F : Type) [Field F]
   (env : ProverEnvironment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  exact eval_pair (α:=field) (β:=field) env.toEnvironment p1 p2
+  exact eval_var_pair_prover env p1 p2
 
 end CircuitType
 

@@ -127,6 +127,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       -- by completeness, the constraints hold
       have h_holds := completeness env h_env as
       -- by soundness, this implies the spec
+      simp only [circuit_norm] at as ⊢
       exact soundness env h_holds as
 
     localLength_eq := by

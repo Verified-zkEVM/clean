@@ -50,8 +50,9 @@ lemma lc_eq {i0} {env} {n : ℕ} :
   (Expression.eval env <| Prod.fst <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
     = fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)) := by
-  suffices (ProvableType.eval' (α:=fieldPair) env <|
-    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
+  suffices ((eval env
+    (Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1) :
+      fieldPair (Expression (F p)))) : fieldPair (F p))
     = (fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)), 2^n) by
     simp_all [circuit_norm]
   simp only [fieldFromBits, fromBits, Vector.getElem_map]
@@ -163,8 +164,9 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
     Fin.foldl n (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
       (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
     = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env) := by
-  suffices (ProvableType.eval' (α:=fieldPair) env <|
-    Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+  suffices ((eval env
+    (Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1) :
+      fieldPair (Expression (F p)))) : fieldPair (F p))
     = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env), 2^n) by
     simp_all [circuit_norm]
   simp only [fieldFromBits, fromBits, Vector.getElem_map, Vector.getElem_mapFinRange]

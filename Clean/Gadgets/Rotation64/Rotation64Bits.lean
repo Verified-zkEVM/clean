@@ -67,7 +67,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
 
   -- capture the rotation relation in terms of byte vectors
   set x := input
-  set y := ProvableType.eval' env (output offset i₀)
+  set y : U64 (F p) := eval env (output (p:=p) offset i₀)
   set xs := x.toLimbs
   set ys := y.toLimbs
   set o := offset.val

@@ -33,7 +33,16 @@ disagree: e.g. a `ProverHint Hint F` evaluates to `Unit` under `Environment F` b
 class Eval (Env : Type) (Var : Type) (Value : outParam Type) where
   eval : Env → Var → Value
 
-export Eval (eval)
+/--
+Public evaluator.
+
+Keep this wrapper irreducible so ordinary reduction cannot expose a particular
+`Eval` instance implementation. Normalization should go through explicit simp
+lemmas (`circuit_norm`, `explicit_provable_type`) instead.
+-/
+@[irreducible]
+def eval {Env Var Value : Type} [Eval Env Var Value] : Env → Var → Value :=
+  Eval.eval
 
 /-- Verifier evaluation is `Eval` specialized to `Environment F`. -/
 @[circuit_norm]
@@ -122,9 +131,13 @@ instance proverEval (M : TypeMap) [CircuitType M] :
   ProverEval F (Var M F) (ProverValue M F) := ⟨ evalProver ⟩
 
 lemma eval_verifier [CircuitType M] (env : Environment F) (v : Var M F) :
-  eval env v = evalVerifier env v := rfl
+  eval env v = evalVerifier env v := by
+  unfold eval
+  rfl
 lemma eval_prover [CircuitType M] (env : ProverEnvironment F) (v : Var M F) :
-  eval env v = evalProver env v := rfl
+  eval env v = evalProver env v := by
+  unfold eval
+  rfl
 
 /- forwarding instances to help instance search get through defeq -/
 
@@ -152,9 +165,15 @@ attribute [circuit_norm] evalVerifier evalProver
 -- all the lemmas that prove using `simp only [circuit_norm]` might actually not be needed
 
 @[circuit_norm] lemma eval_hint (env : Environment F) (v : ProverHint Hint F) :
-  eval env v = () := rfl
+  eval env v = () := by
+  unfold eval
+  change (verifierEval (Unconstrained Hint)).eval env v = ()
+  rfl
 
 @[circuit_norm] lemma eval_hint_prover (env : ProverEnvironment F) (v : ProverHint Hint F) :
-  eval env v = v env := rfl
+  eval env v = v env := by
+  unfold eval
+  change (proverEval (Unconstrained Hint)).eval env v = v env
+  rfl
 
 end CircuitType
