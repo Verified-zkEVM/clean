@@ -56,7 +56,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
   simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
   induction n generalizing i₀
-  · simp only [id_eq, Fin.getElem_fin, Fin.foldl_zero, Expression.eval]
+  · simp only [Fin.getElem_fin, Fin.foldl_zero, Expression.eval]
     simp only [not_lt_zero', IsEmpty.forall_iff, implies_true, ↓reduceIte]
   · rename_i pre h_ih
     simp only [Fin.foldl_succ_last, Expression.eval]
@@ -69,8 +69,8 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     specialize h_ih h_eval_pre (i₀:=i₀)
     simp only [vars_pre, vals_pre] at *
     simp only [Fin.getElem_fin,
-      Vector.getElem_cast, forall_const, id_eq] at h_ih
-    simp only [id_eq, Fin.getElem_fin, Fin.val_castSucc, Fin.val_last]
+      Vector.getElem_cast, forall_const] at h_ih
+    simp only [Fin.getElem_fin, Fin.val_castSucc, Fin.val_last]
     specialize h_ih (by
       intro i
       specialize h_isZero i.castSucc

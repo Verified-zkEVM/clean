@@ -56,6 +56,17 @@ instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
   operations_eq n := operations_eq a n
   subcircuitsConsistent n := subcircuitsConsistent a n
 
+instance ExplicitCircuits.from_concrete_provable_input {α : TypeMap} [ProvableType α] {β : Type}
+    {circuit : Var α F → Circuit F β} [explicit : ExplicitCircuits circuit] :
+    ExplicitCircuits (fun input : α (Expression F) => circuit input) where
+  output input n := explicit.output input n
+  localLength input n := explicit.localLength input n
+  operations input n := explicit.operations input n
+  output_eq input n := explicit.output_eq input n
+  localLength_eq input n := explicit.localLength_eq input n
+  operations_eq input n := explicit.operations_eq input n
+  subcircuitsConsistent input n := explicit.subcircuitsConsistent input n
+
 -- `pure` is an explicit circuit
 instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
   output _ := a
@@ -152,6 +163,11 @@ instance : ExplicitCircuits (F:=F) assertZero where
   output _ _ := ()
   localLength _ _ := 0
   operations e n := [.assert e]
+
+instance {e : Var field F} : ExplicitCircuit (assertZero e) where
+  output _ := ()
+  localLength _ := 0
+  operations _ := [.assert e]
 
 instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F:=F) (lookup table) where
   output _ _ := ()

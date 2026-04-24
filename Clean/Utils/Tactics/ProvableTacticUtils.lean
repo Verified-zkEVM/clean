@@ -1,5 +1,6 @@
 import Lean
 import Clean.Circuit.CircuitType
+import Clean.Circuit.Provable
 
 open Lean Meta Elab Tactic
 

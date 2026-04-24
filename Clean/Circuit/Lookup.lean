@@ -1,4 +1,4 @@
-import Clean.Circuit.CircuitType
+import Clean.Circuit.Provable
 variable {F : Type} [Field F] {α : Type} {n : ℕ}
 variable {Row : TypeMap} [ProvableType Row]
 

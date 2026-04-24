@@ -43,7 +43,7 @@ def bytesToWords {F} (bytes : Vector F 64) : Vector (U32 F) 16 :=
       bytes[base + 3]
 
 omit p_large_enough in
-lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (ProvableVector field 64) (F p))
+lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : BLAKE3Buffer (Expression (F p)))
     (h_bytes : ∀ i : Fin 64, (ProvableType.eval env bytes_var)[i].val < 256) :
     ∀ i : Fin 16, (ProvableType.eval env (α := ProvableVector U32 16) (bytesToWords bytes_var))[i].Normalized := by
   rintro ⟨i, h_i⟩

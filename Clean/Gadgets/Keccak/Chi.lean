@@ -44,7 +44,8 @@ lemma chi_loop (state : Vector ℕ 25) :
   rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+  circuit_proof_start [ Xor64.circuit, And.And64.circuit, Not.circuit,
+    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec]
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -52,22 +53,17 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [Assumptions, KeccakState.Normalized] at state_norm
-  simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
-    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd] at h_holds
+  simp only [KeccakState.Normalized] at h_assumptions
+  simp only [circuit_norm, Nat.reduceAdd] at h_holds
 
   simp_all
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
-
-  -- simplify Assumptions
+  circuit_proof_start [Xor64.circuit, And.And64.circuit, Not.circuit,
+    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec,
+    KeccakState.Normalized]
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [Assumptions, KeccakState.Normalized] at state_norm
-
-  -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
-    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd]
+  simp_all
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState :=
   { elaborated with Assumptions, Spec, soundness, completeness }

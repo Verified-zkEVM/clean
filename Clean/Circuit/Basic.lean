@@ -360,17 +360,17 @@ the verifier- and prover-value forms differ.
 class GeneralElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F]
     [CircuitType Input] [CircuitType Output] where
   name : String := "anonymous"
-  main : CircuitType.Var Input F → Circuit F (CircuitType.Var Output F)
+  main : Var Input F → Circuit F (Var Output F)
 
   /-- how many local witnesses this circuit introduces -/
-  localLength : CircuitType.Var Input F → ℕ
+  localLength : Var Input F → ℕ
 
   /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
   localLength_eq : ∀ input offset, (main input).localLength offset = localLength input
     := by intros; rfl
 
   /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
-  output : CircuitType.Var Input F → ℕ → CircuitType.Var Output F :=
+  output : Var Input F → ℕ → Var Output F :=
     fun input offset => (main input).output offset
 
   /-- correctness of `output` -/
@@ -389,9 +389,8 @@ attribute [circuit_norm] GeneralElaboratedCircuit.main GeneralElaboratedCircuit.
 
 /--
 Lift an `ElaboratedCircuit` (pure-provable) to a `GeneralElaboratedCircuit`.
-`CircuitType.Var Input F` / `CircuitType.Var Output F` coincide with `Var Input F` /
-`Var Output F` for the default `ProvableType → CircuitType` instance, so the field
-copies are definitionally typed.
+`Var Input F` / `Var Output F` are the default `ProvableType → CircuitType` variable
+forms, so the field copies are definitionally typed.
 -/
 def ElaboratedCircuit.toGeneral {F : Type} [Field F] {Input Output : TypeMap}
     [ProvableType Input] [ProvableType Output]
@@ -475,7 +474,7 @@ def GeneralFormalCircuit.WithHint.Soundness (F : Type) [Field F]
   -- for all environments that determine witness assignments
   ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions (verifier view — hints erased)
-  ∀ input_var : CircuitType.Var Input F, ∀ input : CircuitType.Value Input F,
+  ∀ input_var : Var Input F, ∀ input : CircuitType.Value Input F,
   eval' env input_var = input →
   Assumptions input env.data →
   -- if the constraints hold
@@ -491,7 +490,7 @@ def GeneralFormalCircuit.WithHint.Completeness (F : Type) [Field F]
     (ProverAssumptions : CircuitType.ProverValue Input F → ProverData F → ProverHints F → Prop)
     (ProverSpec : CircuitType.ProverValue Input F → CircuitType.ProverValue Output F → ProverHints F → Prop) :=
   -- for all prover environments which use the default witness generators for local variables
-  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : CircuitType.Var Input F,
+  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions (prover view — hints visible)
   ∀ input : CircuitType.ProverValue Input F, eval' env input_var = input →

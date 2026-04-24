@@ -463,13 +463,14 @@ lemma initial_state_and_messages_are_normalized
     (chaining_value counter_high counter_low block_len flags)
     (h_input : ProvableType.eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
-    (ProvableType.eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
-  set state_vec := initializeStateVector input_var
+    (eval' env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
+  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
+  simp only [circuit_norm] at *
   provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (ProvableType.eval env input_var_chaining_value[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (ProvableType.eval env input_var.chaining_value[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 ⟨ i, h_i ⟩
 

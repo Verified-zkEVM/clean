@@ -1,6 +1,15 @@
-import Clean.Circuit.Provable
+import Clean.Circuit.Expression
 
-variable {F : Type} [Field F] {M N : TypeMap} [ProvableType M] [ProvableType N] {Hint : Type}
+/--
+'Provable types' are structured collections of field elements.
+
+ We represent them as types generic over a single type argument (the field element),
+ i.e. `Type → Type`.
+-/
+@[reducible]
+def TypeMap := Type → Type
+
+variable {F : Type} [Field F] {M N : TypeMap} {Hint : Type}
 
 structure Unconstrained (Hint : Type) (F : Type) where
   value : Hint
@@ -57,11 +66,22 @@ with the derived types as fields. A `GeneralFormalCircuit` can then be parameter
 as `(Input Output : TypeMap) [CircuitType Input] [CircuitType Output]`.
 
 For pure-provable schemas (no hint fields) the verifier- and prover-value forms
-coincide — see the default instance below.
+coincide — see the default instance in `Provable.lean`.
 -/
 
 class CircuitType (Input : TypeMap) where
-  /-- Variable form used in `main` (what circuits operate on). -/
+  /--
+  `Var M F` is the type of variables that appear in the monadic notation of
+  `Circuit F _`s. Most elements of `Var M F`, especially interesting ones, are not
+  constant values of `M F` because variables in a circuit can depend on contents of
+  the environment.
+
+  An element of `Var M F` represents a `M F` that's polynomially dependent
+  on the environment. More concretely, an element of `Var M F` is a value of `M F`
+  with missing holes, and each hole contains a polynomial that can refer to fixed
+  positions of the environment. Given an environment, `Var M F` can be evaluated
+  to a `M F` (see `eval` below).
+  -/
   Var : TypeMap
   /-- Prover value — hint fields carry their underlying type. -/
   ProverValue : TypeMap
@@ -70,18 +90,9 @@ class CircuitType (Input : TypeMap) where
   evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → Value F
   evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → ProverValue F
 
-variable {Input : TypeMap} [CircuitType Input]
+export CircuitType (Var)
 
-/--
-Default `CircuitType` for any `ProvableType`: verifier- and prover-value coincide
-with the input type, and `Var` is the usual `α ∘ Expression`.
--/
-instance ProvableType.toCircuitType {α : TypeMap} [ProvableType α] : CircuitType α where
-  Var := _root_.Var α
-  ProverValue := α
-  Value := α
-  evalVerifier env v := ProvableType.eval env v
-  evalProver env v := ProvableType.eval env v
+variable {Input : TypeMap} [CircuitType Input]
 
 instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained Hint) where
   Var := ProverHint Hint
@@ -91,13 +102,6 @@ instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained 
   evalProver env v := v env
 
 namespace CircuitType
-@[circuit_norm] lemma var_of_provableType (F) :
-  Var M F = _root_.Var M F := rfl
-@[circuit_norm] lemma proverValue_of_provableType (F) :
-  ProverValue M F = M F := rfl
-@[circuit_norm] lemma value_of_provableType (F) :
-  Value M F = M F := rfl
-
 @[circuit_norm] lemma var_of_unconstrained (Hint F) :
   Var (Unconstrained Hint) F = ProverHint Hint F := rfl
 @[circuit_norm] lemma proverValue_of_unconstrained (Hint F) :
@@ -106,7 +110,7 @@ namespace CircuitType
   Value (Unconstrained Hint) F = Unit := rfl
 
 /--
-A `CircuitType Input` instance induces a verifier-side `Eval` on `CircuitType.Var Input F`.
+A `CircuitType Input` instance induces a verifier-side `Eval` on `Var Input F`.
 This lets `eval env var` work uniformly whether the Var came from a `ProvableType`-derived
 instance or a hand-written one.
 -/
@@ -114,30 +118,20 @@ instance or a hand-written one.
 instance verifierEval (M : TypeMap) [CircuitType M] :
   VerifierEval F (Var M F) (Value M F) := ⟨ evalVerifier ⟩
 
-/- `CircuitType` induces a prover-side `Eval` on `CircuitType.Var Input F`. -/
+/- `CircuitType` induces a prover-side `Eval` on `Var Input F`. -/
 @[circuit_norm]
 instance proverEval (M : TypeMap) [CircuitType M] :
   ProverEval F (Var M F) (ProverValue M F) := ⟨ evalProver ⟩
 
-@[circuit_norm] lemma eval_verifier (env : Environment F) (v : Var M F) :
+@[circuit_norm] lemma eval_verifier [CircuitType M] (env : Environment F) (v : Var M F) :
   eval' env v = evalVerifier env v := rfl
-@[circuit_norm] lemma eval_prover (env : ProverEnvironment F) (v : Var M F) :
+@[circuit_norm] lemma eval_prover [CircuitType M] (env : ProverEnvironment F) (v : Var M F) :
   eval' env v = evalProver env v := rfl
 
 /- forwarding instances to help instance search get through defeq -/
 
 @[circuit_norm] instance : VerifierEval F (ProverHint Hint F) Unit := verifierEval (Unconstrained Hint)
 @[circuit_norm] instance : ProverEval F (ProverHint Hint F) Hint := proverEval (Unconstrained Hint)
-@[circuit_norm] instance : VerifierEval F (_root_.Var M F) (M F) := verifierEval M
-@[circuit_norm] instance : ProverEval F (_root_.Var M F) (M F) := proverEval M
-@[circuit_norm] instance : VerifierEval F (Expression F) F := verifierEval field
-@[circuit_norm] instance : ProverEval F (Expression F) F := proverEval field
-@[circuit_norm] instance : VerifierEval F (_root_.Var M F × _root_.Var N F) (M F × N F) := verifierEval (ProvablePair M N)
-@[circuit_norm] instance : ProverEval F (_root_.Var M F × _root_.Var N F) (M F × N F) := proverEval (ProvablePair M N)
-@[circuit_norm] instance : VerifierEval F (_root_.Var field F × _root_.Var field F) (F × F) := verifierEval (ProvablePair field field)
-@[circuit_norm] instance : ProverEval F (_root_.Var field F × _root_.Var field F) (F × F) := proverEval (ProvablePair field field)
-@[circuit_norm] instance {n : ℕ} : VerifierEval F (_root_.Var (fields n) F) (fields n F) := verifierEval (fields n)
-@[circuit_norm] instance {n : ℕ} : ProverEval F (_root_.Var (fields n) F) (fields n F) := proverEval (fields n)
 
 /-!
 ## Simp bridges
@@ -151,6 +145,8 @@ Lemmas are stated on `eval` (the primary API); goals or hypotheses written with
 `evalVerifier` / `evalProver` (which are `abbrev`s over `eval`) match by reducibility.
 
 All are `rfl` thanks to the corresponding `Eval` instance.
+
+ProvableType-specific bridges live in `Provable.lean`.
 -/
 
 attribute [circuit_norm] eval' evalVerifier evalProver
@@ -158,56 +154,10 @@ attribute [circuit_norm] eval' evalVerifier evalProver
 -- TODO we also need to simp toElements and fromElements to their ProvableType versions
 -- all the lemmas that prove using `simp only [circuit_norm]` might actually not be needed
 
-@[circuit_norm] lemma eval_expr (env : Environment F) (v : Expression F) :
-  eval' env v = Expression.eval env v := by simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_expr_prover (env : ProverEnvironment F) (v : Expression F) :
-  eval' env v = Expression.eval env v := by simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_var (env : Environment F) (v : _root_.Var M F) :
-  eval' env v = ProvableType.eval env v := by simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_var_prover (env : ProverEnvironment F) (v : _root_.Var M F) :
-  eval' env v = ProvableType.eval env v := by simp only [circuit_norm]
-
 @[circuit_norm] lemma eval_hint (env : Environment F) (v : ProverHint Hint F) :
   eval' env v = () := by simp only [circuit_norm]
 
 @[circuit_norm] lemma eval_hint_prover (env : ProverEnvironment F) (v : ProverHint Hint F) :
   eval' env v = v env := by simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_var_field (env : Environment F) (v : _root_.Var field F) :
-  eval' env v = Expression.eval env v := by simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_var_field_prover (env : ProverEnvironment F) (v : _root_.Var field F) :
-  eval' env v = Expression.eval env v := by simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_var_pair (env : Environment F) (p1 : _root_.Var M F) (p2 : _root_.Var N F) :
-    eval' (Var := _root_.Var (ProvablePair M N) F) env (p1, p2) = (eval' env p1, eval' env p2) := by
-  simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_var_pair_prover (env : ProverEnvironment F) (p1 : _root_.Var M F) (p2 : _root_.Var N F) :
-    eval' (Var := _root_.Var (ProvablePair M N) F) env (p1, p2) = (eval' env p1, eval' env p2) := by
-  simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_field_pair (F : Type) [Field F]
-  (env : Environment F) (p1 : _root_.Var field F) (p2 : _root_.Var field F) :
-    eval' (Var := _root_.Var (ProvablePair field field) F) env (p1, p2) = (eval' env p1, eval' env p2) := by
-  simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_field_pair_prover (F : Type) [Field F]
-  (env : ProverEnvironment F) (p1 : _root_.Var field F) (p2 : _root_.Var field F) :
-    eval' (Var := _root_.Var (ProvablePair field field) F) env (p1, p2) = (eval' env p1, eval' env p2) := by
-  simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_fields (F : Type) [Field F] {n : ℕ}
-  (env : Environment F) (xs : _root_.Var (fields n) F) :
-    eval' (Var := _root_.Var (fields n) F) env xs = ProvableType.eval env xs := by
-  simp only [circuit_norm]
-
-@[circuit_norm] lemma eval_fields_prover (F : Type) [Field F] {n : ℕ}
-  (env : ProverEnvironment F) (xs : _root_.Var (fields n) F) :
-    eval' (Var := _root_.Var (fields n) F) env xs = ProvableType.eval env xs := by
-  simp only [circuit_norm]
 
 end CircuitType
