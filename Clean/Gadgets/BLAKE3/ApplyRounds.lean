@@ -493,7 +493,7 @@ lemma initial_state_and_messages_are_normalized
     exact h_normalized.2.1 i
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [Inputs.mk.injEq]
+  circuit_proof_start
 
   -- Equations for counter values
   have h_counter_low_eq : input_counter_low.value % 4294967296 = input_counter_low.value := by
@@ -551,7 +551,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     exact h_normalized
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [Inputs.mk.injEq]
+  circuit_proof_start
 
   -- Use the helper lemma to prove normalization
   apply initial_state_and_messages_are_normalized (p := p) env

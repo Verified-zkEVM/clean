@@ -510,7 +510,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 
   soundness := by
     circuit_proof_start [DecodedInstructionType.isEncodedCorrectly, Spec.computeNextState,
-      DecodedInstructionType.val, StateTransitionInput.mk.injEq, DecodedInstruction.mk.injEq]
+      DecodedInstructionType.val]
 
     -- unpack the decoded instruction type
     obtain ⟨isAdd, isMul, isStoreState, isLoadState⟩ := input_decoded_instrType
@@ -530,7 +530,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     <;> split <;> simp_all [add_eq_zero_iff_eq_neg]
 
   completeness := by
-    circuit_proof_start [Spec.computeNextState, StateTransitionInput.mk.injEq, DecodedInstruction.mk.injEq]
+    circuit_proof_start [Spec.computeNextState]
     rcases h_assumptions with ⟨ h_encode, h_exec ⟩
     -- Turning DecodedInstructionType into ProvableStruct leads to performance problem in soundness,
     -- that's why manual decomposition follows.

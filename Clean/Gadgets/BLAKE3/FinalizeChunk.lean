@@ -138,8 +138,7 @@ private lemma eval_bytesToWords (env : Environment (F p))
   simp_all [circuit_norm]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [Inputs.mk.injEq, ProcessBlocksState.mk.injEq,
-    IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
+  circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
     IsZero.Spec, IsZero.Assumptions,
     Or32.Spec, Or32.Assumptions,
     Compress.Spec, Compress.Assumptions,
@@ -210,10 +209,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [Inputs.mk.injEq, ProcessBlocksState.mk.injEq]
-  rcases input_state with ⟨cv, counter, blocks_compressed⟩
-  simp only [circuit_norm, ProcessBlocksState.mk.injEq] at *
-  simp only [h_input] at h_env ⊢
+  circuit_proof_start
   apply And.intro
   · trivial
   rcases h_env with ⟨h_iszero, h_env⟩

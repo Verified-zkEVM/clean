@@ -115,7 +115,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [BLAKE3State.Normalized, Inputs.mk.injEq]
+  circuit_proof_start [BLAKE3State.Normalized]
 
   obtain ⟨h_input_state, h_input_cv⟩ := h_input
   obtain ⟨state_norm, chaining_value_norm⟩ := h_assumptions

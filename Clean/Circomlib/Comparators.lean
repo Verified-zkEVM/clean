@@ -157,7 +157,7 @@ def circuit : FormalAssertion (F p) Inputs where
     enabled = 1 → inp.1 = inp.2
 
   soundness := by
-    circuit_proof_start [Inputs.mk.injEq]
+    circuit_proof_start
     intro h_ie
     simp_all only [one_ne_zero, or_true, id_eq, one_mul]
     cases h_input with
@@ -179,7 +179,7 @@ def circuit : FormalAssertion (F p) Inputs where
         trivial
 
   completeness := by
-    circuit_proof_start [Inputs.mk.injEq]
+    circuit_proof_start
     simp_all only [id_eq]
     constructor
     trivial

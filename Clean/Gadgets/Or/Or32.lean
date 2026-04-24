@@ -42,7 +42,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rcases input_x
   rcases input_y
   simp only [circuit_norm, explicit_provable_type, toVars, fromElements,
-    Inputs.mk.injEq, U32.mk.injEq] at h_input ⊢ l_components
+    U32.mk.injEq] at h_input ⊢ l_components
   simp only [U32.Normalized, circuit_norm, h_input] at *
   rcases h_holds with ⟨h_holds1, h_holds⟩
   specialize h_holds1 (by omega)
@@ -57,8 +57,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  -- TODO it's a regression that `Inputs.mk.injEq` is no longer identified and used automatically
-  circuit_proof_start [Inputs.mk.injEq]
+  circuit_proof_start
   rcases input_x
   rcases input_y
   simp only [explicit_provable_type, toVars, fromElements, circuit_norm, U32.mk.injEq] at h_input ⊢

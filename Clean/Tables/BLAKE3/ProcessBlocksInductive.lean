@@ -79,11 +79,11 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
   Spec x := x.Normalized
 
   soundness := by
-    circuit_proof_start [ProcessBlocksState.Normalized, ProcessBlocksState.mk.injEq, U32.AssertNormalized.circuit]
+    circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
     simp_all [← h_input, eval_vector]
 
   completeness := by
-    circuit_proof_start [ProcessBlocksState.mk.injEq, U32.AssertNormalized.circuit]
+    circuit_proof_start [U32.AssertNormalized.circuit]
     simp only [ProcessBlocksState.Normalized] at h_spec
     constructor
     · rintro ⟨i, h_i⟩
@@ -129,14 +129,14 @@ def circuit : FormalAssertion (F p) BlockInput where
   Spec x := x.Normalized
 
   soundness := by
-    circuit_proof_start [BlockInput.Normalized, BlockInput.mk.injEq, U32.AssertNormalized.circuit]
+    circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
     constructor
     · simp_all
     simp only [←h_input, eval_vector] -- provable_vector_simp wanted
     simp_all
 
   completeness := by
-    circuit_proof_start [BlockInput.mk.injEq, U32.AssertNormalized.circuit]
+    circuit_proof_start [U32.AssertNormalized.circuit]
     simp only [BlockInput.Normalized] at h_spec
     constructor
     · simp_all
