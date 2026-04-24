@@ -216,7 +216,7 @@ lemma value_of_literal' (a b c d : field (F p)) :
 omit p_large_enough in
 @[circuit_norm]
 lemma eval_of_literal (env : Environment (F p)) (a b c d : Expression (F p)) :
-    ProvableType.eval' env (U32.mk a b c d) =
+    eval env (U32.mk a b c d) =
     U32.mk (a.eval env) (b.eval env) (c.eval env) (d.eval env) := by
   simp only [explicit_provable_type, circuit_norm]
 

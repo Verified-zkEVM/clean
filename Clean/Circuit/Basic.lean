@@ -480,11 +480,11 @@ def GeneralFormalCircuit.toWithHint {F : Type} [Field F] {Input Output : TypeMap
   ProverSpec input output hint := circuit.ProverSpec input output hint
   soundness := by
     simpa only [GeneralFormalCircuit.WithHint.Soundness,
-      CircuitType.eval_verifier, CircuitType.eval_var, CircuitType.value_of_provableType]
+      CircuitType.eval_verifier, CircuitType.value_of_provableType]
       using circuit.soundness
   completeness := by
     simpa only [GeneralFormalCircuit.WithHint.Completeness,
-      CircuitType.eval_prover, CircuitType.eval_var_prover, CircuitType.proverValue_of_provableType]
+      CircuitType.eval_prover, CircuitType.proverValue_of_provableType]
       using circuit.completeness
 end
 

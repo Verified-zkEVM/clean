@@ -462,7 +462,7 @@ theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses
       ∧ circuit.ProverSpec (eval env input_var) (eval env (circuit.output input_var n)) env.hint) := by
   simp only [GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses,
-    CircuitType.eval_var, CircuitType.eval_var_prover]
+    CircuitType.eval_var_prover_to_verifier]
 
 /--
 Simplifies UsesLocalWitnesses for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.

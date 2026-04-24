@@ -114,32 +114,29 @@ A `CircuitType Input` instance induces a verifier-side `Eval` on `Var Input F`.
 This lets `eval env var` work uniformly whether the Var came from a `ProvableType`-derived
 instance or a hand-written one.
 -/
-@[circuit_norm]
 instance verifierEval (M : TypeMap) [CircuitType M] :
   VerifierEval F (Var M F) (Value M F) := ⟨ evalVerifier ⟩
 
 /- `CircuitType` induces a prover-side `Eval` on `Var Input F`. -/
-@[circuit_norm]
 instance proverEval (M : TypeMap) [CircuitType M] :
   ProverEval F (Var M F) (ProverValue M F) := ⟨ evalProver ⟩
 
-@[circuit_norm] lemma eval_verifier [CircuitType M] (env : Environment F) (v : Var M F) :
+lemma eval_verifier [CircuitType M] (env : Environment F) (v : Var M F) :
   eval env v = evalVerifier env v := rfl
-@[circuit_norm] lemma eval_prover [CircuitType M] (env : ProverEnvironment F) (v : Var M F) :
+lemma eval_prover [CircuitType M] (env : ProverEnvironment F) (v : Var M F) :
   eval env v = evalProver env v := rfl
 
 /- forwarding instances to help instance search get through defeq -/
 
-@[circuit_norm] instance : VerifierEval F (ProverHint Hint F) Unit := verifierEval (Unconstrained Hint)
-@[circuit_norm] instance : ProverEval F (ProverHint Hint F) Hint := proverEval (Unconstrained Hint)
+instance : VerifierEval F (ProverHint Hint F) Unit := verifierEval (Unconstrained Hint)
+instance : ProverEval F (ProverHint Hint F) Hint := proverEval (Unconstrained Hint)
 
 /-!
 ## Simp bridges
 
-`circuit_norm` should normalize a dispatched evaluation `eval` to a concrete one
-(`Expression.eval` / `ProvableType.eval'` / the underlying hint computation), so that
-the existing `circuit_norm` lemma library — which speaks `ProvableType.eval'` and
-`Expression.eval` — continues to fire.
+`circuit_norm` should normalize a dispatched evaluation `eval` to public concrete
+forms (`Expression.eval`, evaluated tuples/vectors, or the underlying hint computation),
+without generally exposing implementation-specific evaluation definitions.
 
 Lemmas are stated on `eval` (the primary API); goals or hypotheses written with
 `evalVerifier` / `evalProver` (which are `abbrev`s over `eval`) match by reducibility.
@@ -149,15 +146,15 @@ All are `rfl` thanks to the corresponding `Eval` instance.
 ProvableType-specific bridges live in `Provable.lean`.
 -/
 
-attribute [circuit_norm] eval evalVerifier evalProver
+attribute [circuit_norm] evalVerifier evalProver
 
 -- TODO we also need to simp toElements and fromElements to their ProvableType versions
 -- all the lemmas that prove using `simp only [circuit_norm]` might actually not be needed
 
 @[circuit_norm] lemma eval_hint (env : Environment F) (v : ProverHint Hint F) :
-  eval env v = () := by simp only [circuit_norm]
+  eval env v = () := rfl
 
 @[circuit_norm] lemma eval_hint_prover (env : ProverEnvironment F) (v : ProverHint Hint F) :
-  eval env v = v env := by simp only [circuit_norm]
+  eval env v = v env := rfl
 
 end CircuitType
