@@ -408,12 +408,12 @@ def ElaboratedCircuit.toGeneral {F : Type} [Field F] {Input Output : TypeMap}
 def GeneralFormalCircuit.Soundness (F : Type) [Field F]
     [CircuitType Input] [CircuitType Output]
     (circuit : GeneralElaboratedCircuit F Input Output)
-    (Assumptions : CircuitType.VerifierValue Input F → ProverData F → Prop)
-    (Spec : CircuitType.VerifierValue Input F → CircuitType.VerifierValue Output F → ProverData F → Prop) :=
+    (Assumptions : CircuitType.Value Input F → ProverData F → Prop)
+    (Spec : CircuitType.Value Input F → CircuitType.Value Output F → ProverData F → Prop) :=
   -- for all environments that determine witness assignments
   ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions (verifier view — hints erased)
-  ∀ input_var : CircuitType.Var Input F, ∀ input : CircuitType.VerifierValue Input F,
+  ∀ input_var : CircuitType.Var Input F, ∀ input : CircuitType.Value Input F,
   eval' env input_var = input →
   Assumptions input env.data →
   -- if the constraints hold
@@ -458,9 +458,9 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F]
     [CircuitType Input] [CircuitType Output]
     extends elaborated : GeneralElaboratedCircuit F Input Output where
   /-- the statement to be assumed for soundness (verifier view — hints erased) -/
-  Assumptions : CircuitType.VerifierValue Input F → ProverData F → Prop := fun _ _ => True
+  Assumptions : CircuitType.Value Input F → ProverData F → Prop := fun _ _ => True
   /-- the statement to be proved for soundness (verifier view). -/
-  Spec : CircuitType.VerifierValue Input F → CircuitType.VerifierValue Output F → ProverData F → Prop
+  Spec : CircuitType.Value Input F → CircuitType.Value Output F → ProverData F → Prop
 
   /-- the statement to be assumed for completeness (prover view — hints visible) -/
   ProverAssumptions : CircuitType.ProverValue Input F → ProverData F → ProverHints F → Prop := fun _ _ _ => True

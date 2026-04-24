@@ -48,7 +48,7 @@ abbrev evalProver {F Var Value} [ProverEval F Var Value]
 /-!
 ## `CircuitType`: the schema-level class for circuit I/O
 
-`CircuitType Input` bundles the three derived types (`Var`, `ProverValue`, `VerifierValue`)
+`CircuitType Input` bundles the three derived types (`Var`, `ProverValue`, `Value`)
 and the two eval functions that map the variable form to the two value forms
 (verifier-view, prover-view).
 
@@ -66,8 +66,8 @@ class CircuitType (Input : TypeMap) where
   /-- Prover value — hint fields carry their underlying type. -/
   ProverValue : TypeMap
   /-- Verifier value — hint fields are erased to `Unit`. -/
-  VerifierValue : TypeMap
-  evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → VerifierValue F
+  Value : TypeMap
+  evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → Value F
   evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → ProverValue F
 
 variable {Input : TypeMap} [CircuitType Input]
@@ -79,14 +79,14 @@ with the input type, and `Var` is the usual `α ∘ Expression`.
 instance ProvableType.toCircuitType {α : TypeMap} [ProvableType α] : CircuitType α where
   Var := Var α
   ProverValue := α
-  VerifierValue := α
+  Value := α
   evalVerifier env v := ProvableType.eval env v
   evalProver env v := ProvableType.eval env v
 
 instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained Hint) where
   Var := ProverHint Hint
   ProverValue _ := Hint
-  VerifierValue _ := Unit
+  Value _ := Unit
   evalVerifier _ _ := ()
   evalProver env v := v env
 
@@ -95,15 +95,15 @@ namespace CircuitType
   Var M F = _root_.Var M F := rfl
 @[circuit_norm] lemma proverValue_of_provableType (F) :
   ProverValue M F = M F := rfl
-@[circuit_norm] lemma verifierValue_of_provableType (F) :
-  VerifierValue M F = M F := rfl
+@[circuit_norm] lemma value_of_provableType (F) :
+  Value M F = M F := rfl
 
 @[circuit_norm] lemma var_of_unconstrained (Hint F) :
   Var (Unconstrained Hint) F = ProverHint Hint F := rfl
 @[circuit_norm] lemma proverValue_of_unconstrained (Hint F) :
   ProverValue (Unconstrained Hint) F = Hint := rfl
-@[circuit_norm] lemma verifierValue_of_unconstrained (Hint F) :
-  VerifierValue (Unconstrained Hint) F = Unit := rfl
+@[circuit_norm] lemma value_of_unconstrained (Hint F) :
+  Value (Unconstrained Hint) F = Unit := rfl
 
 /--
 A `CircuitType Input` instance induces a verifier-side `Eval` on `CircuitType.Var Input F`.
@@ -112,7 +112,7 @@ instance or a hand-written one.
 -/
 @[circuit_norm]
 instance verifierEval (M : TypeMap) [CircuitType M] :
-  VerifierEval F (Var M F) (VerifierValue M F) := ⟨ evalVerifier ⟩
+  VerifierEval F (Var M F) (Value M F) := ⟨ evalVerifier ⟩
 
 /- `CircuitType` induces a prover-side `Eval` on `CircuitType.Var Input F`. -/
 @[circuit_norm]
