@@ -44,8 +44,8 @@ def bytesToWords {F} (bytes : Vector F 64) : Vector (U32 F) 16 :=
 
 omit p_large_enough in
 lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (ProvableVector field 64) (F p))
-    (h_bytes : ∀ i : Fin 64, (eval env bytes_var)[i].val < 256) :
-    ∀ i : Fin 16, (eval env (α := ProvableVector U32 16) (bytesToWords bytes_var))[i].Normalized := by
+    (h_bytes : ∀ i : Fin 64, (ProvableType.eval env bytes_var)[i].val < 256) :
+    ∀ i : Fin 16, (ProvableType.eval env (α := ProvableVector U32 16) (bytesToWords bytes_var))[i].Normalized := by
   rintro ⟨i, h_i⟩
   simp only [bytesToWords, Fin.getElem_fin]
   have h0 := h_bytes ⟨ i*4, by omega ⟩
@@ -124,8 +124,8 @@ private lemma ZMod_val_chunkEnd :
 omit p_large_enough in
 private lemma eval_bytesToWords (env : Environment (F p))
     (input_var_buffer_data : Vector (Expression (F p)) 64) :
-    eval env (α := ProvableVector U32 16) (bytesToWords input_var_buffer_data) =
-      bytesToWords (eval (α:=ProvableVector field 64) env input_var_buffer_data) := by
+    ProvableType.eval env (α := ProvableVector U32 16) (bytesToWords input_var_buffer_data) =
+      bytesToWords (ProvableType.eval (α:=ProvableVector field 64) env input_var_buffer_data) := by
   simp only [bytesToWords, circuit_norm, eval_vector]
   simp only [id_eq]
   rw [Vector.ext_iff]
@@ -135,10 +135,11 @@ private lemma eval_bytesToWords (env : Environment (F p))
   have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4 + 1) (by omega)
   have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4 + 2) (by omega)
   have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4 + 3) (by omega)
-  simp_all
+  simp_all [circuit_norm]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
+  circuit_proof_start [Inputs.mk.injEq, ProcessBlocksState.mk.injEq,
+    IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
     IsZero.Spec, IsZero.Assumptions,
     Or32.Spec, Or32.Assumptions,
     Compress.Spec, Compress.Assumptions,
@@ -171,7 +172,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [h_compress']
     simp only [finalizeChunk]
     apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
-    have : Vector.map (U32.value ∘ eval env) (bytesToWords input_var_buffer_data) =
+    have : Vector.map (U32.value ∘ ProvableType.eval env) (bytesToWords input_var_buffer_data) =
         (Specs.BLAKE3.bytesToWords
         (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
       clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress
@@ -209,7 +210,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start
+  circuit_proof_start [Inputs.mk.injEq, ProcessBlocksState.mk.injEq]
+  rcases input_state with ⟨cv, counter, blocks_compressed⟩
+  simp only [circuit_norm, ProcessBlocksState.mk.injEq] at *
+  simp only [h_input] at h_env ⊢
   apply And.intro
   · trivial
   rcases h_env with ⟨h_iszero, h_env⟩
@@ -259,14 +263,13 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     omega
   )
   simp only [Or32.circuit, Or32.Spec] at h_or2
-  simp only [ProcessBlocksState.Normalized] at h_assumptions
-  simp only [h_or2, h_assumptions]
-  simp only [circuit_norm]
+  simp only [circuit_norm, ProcessBlocksState.Normalized] at h_assumptions
+  simp only [circuit_norm, h_or2, h_assumptions]
+  clear h_or2 h_or h_env
   constructor
   · apply bytesToWords_normalized
-    simp only [h_input]
-    aesop
-  omega
+    simp_all
+  · omega
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   elaborated with Assumptions, Spec, soundness, completeness

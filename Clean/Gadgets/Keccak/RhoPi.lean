@@ -41,7 +41,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [elaborated, eval_vector, Vector.getElem_map,
+  simp only [elaborated, Vector.getElem_map,
     KeccakState.value, rhoPi_loop]
 
   -- simplify constraints
@@ -49,7 +49,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [Assumptions, KeccakState.Normalized] at state_norm
   simp only [h_input, state_norm, main, circuit_norm,
     Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated] at h_holds ⊢
-  simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
+  simp_all [rhoPiConstants, rotLeft64_eq_rotRight64, ←getElem_eval_vector, Vector.getElem_mapIdx]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env state_var h_env state h_input state_norm

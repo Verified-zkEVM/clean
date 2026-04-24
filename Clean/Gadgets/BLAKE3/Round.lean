@@ -46,7 +46,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
+  circuit_proof_start [Inputs.mk.injEq]
 
   obtain ⟨h_state, h_message⟩ := h_assumptions
 
@@ -93,7 +93,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · exact c8.right
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [G.circuit, G.Assumptions, G.Spec, ProverEnvironment.UsesLocalWitnessesCompleteness,
+  circuit_proof_start [Inputs.mk.injEq, G.circuit, G.Assumptions, G.Spec, ProverEnvironment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true]
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_env

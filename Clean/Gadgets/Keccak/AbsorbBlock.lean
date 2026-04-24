@@ -53,8 +53,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     (Vector.mapFinRange 17 fun i => varFromOffset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
 
-  suffices goal : (eval env state_after_absorb).Normalized
-    ∧ (eval env state_after_absorb).value =
+  suffices goal : (ProvableType.eval env state_after_absorb).Normalized
+    ∧ (ProvableType.eval env state_after_absorb).value =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
     simp_all
   replace h_holds := h_holds.left
@@ -91,8 +91,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     (Vector.mapFinRange 17 fun i => varFromOffset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
 
-  suffices goal : (eval env state_after_absorb).Normalized
-    ∧ (eval env state_after_absorb).value =
+  suffices goal : (ProvableType.eval env state_after_absorb).Normalized
+    ∧ (ProvableType.eval env state_after_absorb).value =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
     simp_all
   replace h_env := h_env.left

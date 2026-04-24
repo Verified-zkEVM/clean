@@ -44,6 +44,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
+  simp only [circuit_norm] at h_input
   simp only [main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
@@ -52,7 +53,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_init h_assumptions
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
+  let state (i : ℕ) : KeccakState (F p) := ProvableType.eval env (stateVar n i)
 
   change (state 0).Normalized ∧
     (state 0).value = keccakRound initial_state.value roundConstants[0]
@@ -84,6 +85,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions
+  simp only [circuit_norm] at h_input h_assumptions
   simp only [main, h_input, h_assumptions, circuit_norm, KeccakRound.circuit,
     KeccakRound.elaborated, KeccakRound.Spec,
     KeccakRound.Assumptions] at h_env ⊢
@@ -95,7 +97,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i hi
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
+  let state (i : ℕ) : KeccakState (F p) := ProvableType.eval env (stateVar n i)
 
   change (state 0).Normalized at h_init
 
