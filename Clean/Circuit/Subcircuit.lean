@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
 import Clean.Circuit.Theorems
+import Clean.Utils.Tactics.SubcircuitNorm
 
 variable {F : Type} [Field F]
 
@@ -525,3 +526,68 @@ theorem FormalAssertion.toSubcircuit_completeness
     (circuit.toSubcircuit n input_var).ProverAssumptions env =
     (circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var)) := by
   rfl
+
+-- Forward reasoning lemmas for subcircuit_norm
+-- ============================================
+--
+-- These lemmas are tagged with `@[subcircuit_norm]` to enable automatic forward
+-- reasoning in circuit proofs via the `subcircuit_norm` tactic.
+--
+-- They represent one-way implications:
+--   ConstraintsHoldFlat env subcircuit.ops.toFlat → subcircuit.Spec env
+--
+-- This demonstrates the key insight from the issue "Experiment with metaprogramming
+-- to get rid of Subcircuit properties": instead of storing `Spec`/`ProverAssumptions`
+-- on `Subcircuit`, these forward-reasoning lemmas (when applied automatically by
+-- `subcircuit_norm`) can derive the same information directly from raw constraints.
+
+/--
+Forward reasoning lemma: given that the flat constraints of a `FormalCircuit`
+subcircuit hold, derive the subcircuit's `Spec` (which is `Assumptions → circuit.Spec`).
+
+This lemma is the key building block for the `subcircuit_norm` tactic:
+given a hypothesis `h : ConstraintsHoldFlat env (circuit.toSubcircuit n x).ops.toFlat`,
+`subcircuit_norm` will replace it with `h : circuit.Assumptions ... → circuit.Spec ...`.
+
+This is a one-way implication (constraints are stronger than `Assumptions → Spec`),
+which `simp` cannot handle, but `subcircuit_norm` can via forward reasoning.
+-/
+@[subcircuit_norm]
+theorem FormalCircuit.toSubcircuit_spec_of_constraints
+    {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    {circuit : FormalCircuit F Input Output} {n : ℕ} {input_var : Var Input F} {env : Environment F}
+    (h : ConstraintsHoldFlat env (circuit.toSubcircuit n input_var).ops.toFlat) :
+    (circuit.toSubcircuit n input_var).Spec env :=
+  (circuit.toSubcircuit n input_var).soundness env h
+
+/--
+Forward reasoning lemma: given that the flat constraints of a `FormalAssertion`
+subcircuit hold, derive the subcircuit's `Spec` (which is `Assumptions → circuit.Spec`).
+
+Tagged with `@[subcircuit_norm]` to enable automatic forward reasoning by the
+`subcircuit_norm` tactic.
+-/
+@[subcircuit_norm]
+theorem FormalAssertion.toSubcircuit_spec_of_constraints
+    {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
+    {circuit : FormalAssertion F Input} {n : ℕ} {input_var : Var Input F} {env : Environment F}
+    (h : ConstraintsHoldFlat env (circuit.toSubcircuit n input_var).ops.toFlat) :
+    (circuit.toSubcircuit n input_var).Spec env :=
+  (circuit.toSubcircuit n input_var).soundness env h
+
+/--
+Forward reasoning lemma: given that the flat constraints of a `GeneralFormalCircuit`
+subcircuit hold, derive the subcircuit's `Spec`
+(which is `Assumptions (in prover sense) → circuit.Assumptions → circuit.Spec`).
+
+Tagged with `@[subcircuit_norm]` to enable automatic forward reasoning by the
+`subcircuit_norm` tactic.
+-/
+@[subcircuit_norm]
+theorem GeneralFormalCircuit.toSubcircuit_spec_of_constraints
+    {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    {circuit : GeneralFormalCircuit F Input Output} {n : ℕ} {input_var : Var Input F}
+    {env : Environment F}
+    (h : ConstraintsHoldFlat env (circuit.toSubcircuit n input_var).ops.toFlat) :
+    (circuit.toSubcircuit n input_var).Spec env :=
+  (circuit.toSubcircuit n input_var).soundness env h
