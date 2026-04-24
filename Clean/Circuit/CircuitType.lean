@@ -137,8 +137,8 @@ instance proverEval (M : TypeMap) [CircuitType M] :
 ## Simp bridges
 
 `circuit_norm` should normalize a dispatched evaluation `eval` to a concrete one
-(`Expression.eval` / `ProvableType.eval` / the underlying hint computation), so that
-the existing `circuit_norm` lemma library — which speaks `ProvableType.eval` and
+(`Expression.eval` / `ProvableType.eval'` / the underlying hint computation), so that
+the existing `circuit_norm` lemma library — which speaks `ProvableType.eval'` and
 `Expression.eval` — continues to fire.
 
 Lemmas are stated on `eval` (the primary API); goals or hypotheses written with

@@ -44,8 +44,8 @@ def bytesToWords {F} (bytes : Vector F 64) : Vector (U32 F) 16 :=
 
 omit p_large_enough in
 lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : BLAKE3Buffer (Expression (F p)))
-    (h_bytes : ∀ i : Fin 64, (ProvableType.eval env bytes_var)[i].val < 256) :
-    ∀ i : Fin 16, (ProvableType.eval env (α := ProvableVector U32 16) (bytesToWords bytes_var))[i].Normalized := by
+    (h_bytes : ∀ i : Fin 64, (ProvableType.eval' env bytes_var)[i].val < 256) :
+    ∀ i : Fin 16, (ProvableType.eval' env (α := ProvableVector U32 16) (bytesToWords bytes_var))[i].Normalized := by
   rintro ⟨i, h_i⟩
   simp only [bytesToWords, Fin.getElem_fin]
   have h0 := h_bytes ⟨ i*4, by omega ⟩
@@ -124,8 +124,8 @@ private lemma ZMod_val_chunkEnd :
 omit p_large_enough in
 private lemma eval_bytesToWords (env : Environment (F p))
     (input_var_buffer_data : Vector (Expression (F p)) 64) :
-    ProvableType.eval env (α := ProvableVector U32 16) (bytesToWords input_var_buffer_data) =
-      bytesToWords (ProvableType.eval (α:=ProvableVector field 64) env input_var_buffer_data) := by
+    ProvableType.eval' env (α := ProvableVector U32 16) (bytesToWords input_var_buffer_data) =
+      bytesToWords (ProvableType.eval' (α:=ProvableVector field 64) env input_var_buffer_data) := by
   simp only [bytesToWords, circuit_norm, eval_vector]
   simp only [id_eq]
   rw [Vector.ext_iff]
@@ -171,7 +171,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [h_compress']
     simp only [finalizeChunk]
     apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
-    have : Vector.map (U32.value ∘ ProvableType.eval env) (bytesToWords input_var_buffer_data) =
+    have : Vector.map (U32.value ∘ ProvableType.eval' env) (bytesToWords input_var_buffer_data) =
         (Specs.BLAKE3.bytesToWords
         (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
       clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress

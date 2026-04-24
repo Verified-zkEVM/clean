@@ -85,7 +85,7 @@ lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
   (env : Environment (F p))
   (input : Var (BinSumInput n ops) (F p))
   (input_val : BinSumInput n ops (F p))
-  (h_eval : ProvableType.eval env input = input_val) :
+  (h_eval : ProvableType.eval' env input = input_val) :
     Expression.eval env (inputLinearSum n ops input) =
     Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j.val]) 0 := by
   -- The main function uses input[j][k] which evaluates to input_val[j][k]

@@ -45,7 +45,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd] at h_holds
   simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, eval_vector]
 
-  have s (i : ℕ) (hi : i < 5) : ProvableType.eval env (row_var[i]) = row[i] := by
+  have s (i : ℕ) (hi : i < 5) : ProvableType.eval' env (row_var[i]) = row[i] := by
     rw [←h_input, Vector.getElem_map]
 
   simp only [s] at h_holds

@@ -49,13 +49,13 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   -- abstract away intermediate U64
   let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
-  set byte_rotated := ProvableType.eval env
+  set byte_rotated := ProvableType.eval' env
     ((Rotation64Bytes.circuit byte_offset).output input_var i₀)
 
   simp only [Rotation64Bytes.circuit, Rotation64Bytes.elaborated,
     Rotation64Bytes.Assumptions, Rotation64Bytes.Spec, add_zero,
     Rotation64Bits.Assumptions, Rotation64Bits.Spec, output] at h_holds ⊢
-  set y := ProvableType.eval env (Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i₀)
+  set y := ProvableType.eval' env (Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i₀)
   simp_all only [forall_const, and_true]
 
   -- reason about rotation

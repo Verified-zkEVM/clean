@@ -100,10 +100,10 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
-    ProvableType.eval env (varFromOffset U32 0) = curr.x ∧
-    ProvableType.eval env (varFromOffset U32 4) = curr.y ∧
-    ProvableType.eval env (varFromOffset U32 8) = next.x ∧
-    ProvableType.eval env (U32.mk (var ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
+    ProvableType.eval' env (varFromOffset U32 0) = curr.x ∧
+    ProvableType.eval' env (varFromOffset U32 4) = curr.y ∧
+    ProvableType.eval' env (varFromOffset U32 8) = next.x ∧
+    ProvableType.eval' env (U32.mk (var ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
   := by
   intro env
   dsimp only [env, windowEnv]
@@ -156,8 +156,8 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
 omit p_large_enough in
 lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env;
-    ProvableType.eval env (varFromOffset U32 0) = first_row.x ∧
-    ProvableType.eval env (varFromOffset U32 4) = first_row.y := by
+    ProvableType.eval' env (varFromOffset U32 0) = first_row.x ∧
+    ProvableType.eval' env (varFromOffset U32 4) = first_row.y := by
   intro env
   dsimp only [env, windowEnv]
   have h_offset : (boundary (p:=p)).finalAssignment.offset = 8 := rfl

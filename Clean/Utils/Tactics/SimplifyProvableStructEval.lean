@@ -47,7 +47,7 @@ private partial def collectStructEvalPattern (e : Expr) : MetaM (List Expr) := d
             else
               isStructLiteral otherSide
           if otherIsLiteral then
-            -- Extract the struct expression being evaluated (last argument of ProvableType.eval)
+            -- Extract the struct expression being evaluated (last argument of ProvableType.eval')
             if let some structExpr := evalSide.getArg? 5 then
               return [structExpr]
             else
@@ -55,7 +55,7 @@ private partial def collectStructEvalPattern (e : Expr) : MetaM (List Expr) := d
 
           -- If other side is just a variable, check if eval side has a struct literal
           -- Extract the argument of eval (the struct being evaluated)
-          if let some evalArg := evalSide.getArg? 5 /- very specific to ProvableType.eval -/ then
+          if let some evalArg := evalSide.getArg? 5 /- very specific to ProvableType.eval' -/ then
             let isLit ← isStructLiteral evalArg
             if isLit then
               return [evalArg]

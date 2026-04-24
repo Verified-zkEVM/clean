@@ -53,7 +53,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_init h_assumptions
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := ProvableType.eval env (stateVar n i)
+  let state (i : ℕ) : KeccakState (F p) := ProvableType.eval' env (stateVar n i)
 
   change (state 0).Normalized ∧
     (state 0).value = keccakRound initial_state.value roundConstants[0]
@@ -97,7 +97,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i hi
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := ProvableType.eval env (stateVar n i)
+  let state (i : ℕ) : KeccakState (F p) := ProvableType.eval' env (stateVar n i)
 
   change (state 0).Normalized at h_init
 

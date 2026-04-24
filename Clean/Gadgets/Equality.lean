@@ -55,7 +55,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     simp only [circuit_norm, Prod.mk.injEq] at h_input
     obtain ⟨ hx, hy ⟩ := h_input
     rw [←hx, ←hy]
-    simp only [ProvableType.eval]
+    simp only [ProvableType.eval']
     congr 1
     ext i hi
     simp only [Vector.getElem_map]
@@ -79,7 +79,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     rw [←hx, ←hy] at h_spec
     clear hx hy
     apply_fun toElements at h_spec
-    simp only [ProvableType.eval, ProvableType.toElements_fromElements, toVars] at h_spec
+    simp only [ProvableType.eval', ProvableType.toElements_fromElements, toVars] at h_spec
     rw [Vector.ext_iff] at h_spec
 
     rw [toVars, toVars, ←Vector.forall_getElem]
