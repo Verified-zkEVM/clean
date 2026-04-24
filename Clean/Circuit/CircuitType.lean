@@ -90,7 +90,7 @@ class CircuitType (Input : TypeMap) where
   evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → Value F
   evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → ProverValue F
 
-export CircuitType (Var)
+export CircuitType (Var Value ProverValue)
 
 variable {Input : TypeMap} [CircuitType Input]
 
