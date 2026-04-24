@@ -59,7 +59,7 @@ deriving ProvableStruct
 def booleanAnd : FormalCircuit (F p) Input field where
   main | ⟨x, y⟩ => do
     -- Use witnessBool as a subcircuit with a hint synthesized from the inputs
-    let z ← witnessBool fun env => eval' env x = 1 ∧ eval' env y = 1
+    let z ← witnessBool fun env => eval env x = 1 ∧ eval env y = 1
     -- Constrain result = x * y (multiplication is AND for booleans)
     z === x * y
     return z

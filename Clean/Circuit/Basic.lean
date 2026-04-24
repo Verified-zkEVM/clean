@@ -249,12 +249,12 @@ def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
   -- for all environments that determine witness assignments
   ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions
-  ∀ input_var : Var Input F, ∀ input : Input F, eval' env input_var = input →
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
-  let output := eval' env (circuit.output input_var offset)
+  let output := eval env (circuit.output input_var offset)
   Spec input output
 
 @[circuit_norm]
@@ -264,7 +264,7 @@ def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Outpu
   ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
-  ∀ input : Input F, eval' env input_var = input →
+  ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
@@ -306,7 +306,7 @@ def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit 
   -- for all environments that determine witness assignments
   ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions
-  ∀ input_var : Var Input F, ∀ input : Input F, eval' env input_var = input →
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
@@ -320,7 +320,7 @@ def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircu
   ∀ offset, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions AND the spec
-  ∀ input : Input F, eval' env input_var = input →
+  ∀ input : Input F, eval env input_var = input →
   Assumptions input → Spec input →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
@@ -358,12 +358,12 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCir
   -- for all environments that determine witness assignments
   ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions
-  ∀ input_var : Var Input F, ∀ input : Input F, eval' env input_var = input →
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input env.data →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
-  let output := eval' env (circuit.output input_var offset)
+  let output := eval env (circuit.output input_var offset)
   Spec input output env.data
 
 @[circuit_norm]
@@ -375,12 +375,12 @@ def GeneralFormalCircuit.Completeness (F : Type) [Field F]
   ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
-  ∀ input : Input F, eval' env input_var = input →
+  ∀ input : Input F, eval env input_var = input →
   ProverAssumptions input env.data env.hint →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
   -- and, if given, the prover spec holds
-  ProverSpec input (eval' env (circuit.output input_var offset)) env.hint
+  ProverSpec input (eval env (circuit.output input_var offset)) env.hint
 
 /--
 `GeneralFormalCircuit` is the most general model of formal circuits, needed in cases where the circuit is a
@@ -423,12 +423,12 @@ def GeneralFormalCircuit.WithHint.Soundness (F : Type) [Field F]
   ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions (verifier view — hints erased)
   ∀ input_var : Var Input F, ∀ input : Value Input F,
-  eval' env input_var = input →
+  eval env input_var = input →
   Assumptions input env.data →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
-  let output := eval' env (circuit.output input_var offset)
+  let output := eval env (circuit.output input_var offset)
   Spec input output env.data
 
 @[circuit_norm]
@@ -441,12 +441,12 @@ def GeneralFormalCircuit.WithHint.Completeness (F : Type) [Field F]
   ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions (prover view — hints visible)
-  ∀ input : ProverValue Input F, eval' env input_var = input →
+  ∀ input : ProverValue Input F, eval env input_var = input →
   ProverAssumptions input env.data env.hint →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
   -- and, if given, the prover spec holds
-  ProverSpec input (eval' env (circuit.output input_var offset)) env.hint
+  ProverSpec input (eval env (circuit.output input_var offset)) env.hint
 
 /--
 Hint-aware variant of `GeneralFormalCircuit` for schemas whose prover and

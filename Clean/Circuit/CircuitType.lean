@@ -31,9 +31,9 @@ disagree: e.g. a `ProverHint Hint F` evaluates to `Unit` under `Environment F` b
 `Hint` under `ProverEnvironment F`.
 -/
 class Eval (Env : Type) (Var : Type) (Value : outParam Type) where
-  eval' : Env → Var → Value
+  eval : Env → Var → Value
 
-export Eval (eval')
+export Eval (eval)
 
 /-- Verifier evaluation is `Eval` specialized to `Environment F`. -/
 @[circuit_norm]
@@ -48,11 +48,11 @@ Explicit "verifier view" — even on a `ProverEnvironment`, this forces the veri
 instance via the `ProverEnvironment → Environment` projection.
 -/
 abbrev evalVerifier {F Var Value} [VerifierEval F Var Value]
-  (env : Environment F) (v : Var) : Value := eval' env v
+  (env : Environment F) (v : Var) : Value := eval env v
 
 /-- Explicit "prover view" — only applies where a `ProverEnvironment` is available. -/
 abbrev evalProver {F Var Value} [ProverEval F Var Value]
-  (env : ProverEnvironment F) (v : Var) : Value := eval' env v
+  (env : ProverEnvironment F) (v : Var) : Value := eval env v
 
 /-!
 ## `CircuitType`: the schema-level class for circuit I/O
@@ -124,9 +124,9 @@ instance proverEval (M : TypeMap) [CircuitType M] :
   ProverEval F (Var M F) (ProverValue M F) := ⟨ evalProver ⟩
 
 @[circuit_norm] lemma eval_verifier [CircuitType M] (env : Environment F) (v : Var M F) :
-  eval' env v = evalVerifier env v := rfl
+  eval env v = evalVerifier env v := rfl
 @[circuit_norm] lemma eval_prover [CircuitType M] (env : ProverEnvironment F) (v : Var M F) :
-  eval' env v = evalProver env v := rfl
+  eval env v = evalProver env v := rfl
 
 /- forwarding instances to help instance search get through defeq -/
 
@@ -149,15 +149,15 @@ All are `rfl` thanks to the corresponding `Eval` instance.
 ProvableType-specific bridges live in `Provable.lean`.
 -/
 
-attribute [circuit_norm] eval' evalVerifier evalProver
+attribute [circuit_norm] eval evalVerifier evalProver
 
 -- TODO we also need to simp toElements and fromElements to their ProvableType versions
 -- all the lemmas that prove using `simp only [circuit_norm]` might actually not be needed
 
 @[circuit_norm] lemma eval_hint (env : Environment F) (v : ProverHint Hint F) :
-  eval' env v = () := by simp only [circuit_norm]
+  eval env v = () := by simp only [circuit_norm]
 
 @[circuit_norm] lemma eval_hint_prover (env : ProverEnvironment F) (v : ProverHint Hint F) :
-  eval' env v = v env := by simp only [circuit_norm]
+  eval env v = v env := by simp only [circuit_norm]
 
 end CircuitType

@@ -524,9 +524,9 @@ lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : ProverEnviro
     show (w.toArray.extract start finish)[i]'(size_proof2 ▸ hi) = w.toArray[start + i]'(by simp [w.size_toArray]; exact h_idx)
     rw [Array.getElem_extract]
   rw [rhs]
-  have h_eval' := h_eval
-  simp only [ProvableType.eval_fields] at h_eval'
-  rw [h_eval', Vector.getElem_map]
+  have h_eval_simp := h_eval
+  simp only [ProvableType.eval_fields] at h_eval_simp
+  rw [h_eval_simp, Vector.getElem_map]
 
 /-- Helper to show that extracting a subvector preserves element access -/
 lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : ℕ) (hi : i < n1) (h_n1_lt : n1 ≤ n) :
