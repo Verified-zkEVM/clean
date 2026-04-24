@@ -599,7 +599,7 @@ by assuming it within `GeneralFormalCircuit.Spec`.
 def FormalCircuit.isGeneralFormalCircuit {F : Type} {Input Output : TypeMap}
   [Field F] [ProvableType Output] [ProvableType Input]
     (orig : FormalCircuit F Input Output) : GeneralFormalCircuit F Input Output where
-  elaborated := orig.elaborated.toGeneral
+  elaborated := orig.elaborated
   Assumptions i _ := orig.Assumptions i
   Spec i o _ := orig.Spec i o
   ProverAssumptions i _ _ := orig.Assumptions i
@@ -621,7 +621,7 @@ by putting it within `GeneralFormalCircuit.Assumption`.
 def FormalAssertion.isGeneralFormalCircuit {F : Type} {Input : TypeMap}
   [Field F] [ProvableType Input]
     (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit where
-  elaborated := orig.elaborated.toGeneral
+  elaborated := orig.elaborated
   Assumptions i _ := orig.Assumptions i
   Spec i _ _ := orig.Spec i
   ProverAssumptions i _ _ := orig.Assumptions i ∧ orig.Spec i

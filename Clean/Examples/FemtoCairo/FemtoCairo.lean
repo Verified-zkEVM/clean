@@ -626,7 +626,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 -/
 def femtoCairoStepElaboratedCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
-    GeneralElaboratedCircuit (F p) State State where
+    ElaboratedCircuit (F p) State State where
     main (state : Var State (F p)) := do
       -- Fetch instruction
       let { rawInstrType, op1, op2, op3 } ← fetchInstruction program h_programSize state.pc

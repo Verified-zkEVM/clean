@@ -405,16 +405,13 @@ def ElaboratedCircuit.toGeneral {F : Type} [Field F] {Input Output : TypeMap}
   subcircuitsConsistent := circuit.subcircuitsConsistent
 
 @[circuit_norm]
-def GeneralFormalCircuit.Soundness (F : Type) [Field F]
-    [CircuitType Input] [CircuitType Output]
-    (circuit : GeneralElaboratedCircuit F Input Output)
-    (Assumptions : CircuitType.Value Input F → ProverData F → Prop)
-    (Spec : CircuitType.Value Input F → CircuitType.Value Output F → ProverData F → Prop) :=
+def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → ProverData F → Prop)
+    (Spec : Input F → Output F → ProverData F → Prop) :=
   -- for all environments that determine witness assignments
   ∀ offset : ℕ, ∀ env : Environment F,
-  -- for all inputs that satisfy the assumptions (verifier view — hints erased)
-  ∀ input_var : CircuitType.Var Input F, ∀ input : CircuitType.Value Input F,
-  eval' env input_var = input →
+  -- for all inputs that satisfy the assumptions
+  ∀ input_var : Var Input F, ∀ input : Input F, eval' env input_var = input →
   Assumptions input env.data →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
@@ -424,15 +421,14 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F]
 
 @[circuit_norm]
 def GeneralFormalCircuit.Completeness (F : Type) [Field F]
-    [CircuitType Input] [CircuitType Output]
-    (circuit : GeneralElaboratedCircuit F Input Output)
-    (ProverAssumptions : CircuitType.ProverValue Input F → ProverData F → ProverHints F → Prop)
-    (ProverSpec : CircuitType.ProverValue Input F → CircuitType.ProverValue Output F → ProverHints F → Prop) :=
+    (circuit : ElaboratedCircuit F Input Output)
+    (ProverAssumptions : Input F → ProverData F → ProverHints F → Prop)
+    (ProverSpec : Input F → Output F → ProverHints F → Prop) :=
   -- for all prover environments which use the default witness generators for local variables
-  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : CircuitType.Var Input F,
+  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
-  -- for all inputs that satisfy the "honest prover" assumptions (prover view — hints visible)
-  ∀ input : CircuitType.ProverValue Input F, eval' env input_var = input →
+  -- for all inputs that satisfy the "honest prover" assumptions
+  ∀ input : Input F, eval' env input_var = input →
   ProverAssumptions input env.data env.hint →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
@@ -455,6 +451,61 @@ add the range assumption to the soundness statement, thus making the circuit har
 (in particular, not usable as a bit range check, because it already _requires_ the bit range assumption).
 -/
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F]
+    [ProvableType Input] [ProvableType Output]
+    extends elaborated : ElaboratedCircuit F Input Output where
+  /-- the statement to be assumed for soundness -/
+  Assumptions : Input F → ProverData F → Prop := fun _ _ => True
+  /-- the statement to be proved for soundness. -/
+  Spec : Input F → Output F → ProverData F → Prop
+
+  /-- the statement to be assumed for completeness -/
+  ProverAssumptions : Input F → ProverData F → ProverHints F → Prop := fun _ _ _ => True
+  /-- auxiliary statement to be proved for completeness, alongside the constraints -/
+  ProverSpec : Input F → Output F → ProverHints F → Prop := fun _ _ _ => True
+
+  soundness : GeneralFormalCircuit.Soundness F elaborated Assumptions Spec
+  completeness : GeneralFormalCircuit.Completeness F elaborated ProverAssumptions ProverSpec
+
+@[circuit_norm]
+def GeneralFormalCircuit.WithHint.Soundness (F : Type) [Field F]
+    [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralElaboratedCircuit F Input Output)
+    (Assumptions : CircuitType.Value Input F → ProverData F → Prop)
+    (Spec : CircuitType.Value Input F → CircuitType.Value Output F → ProverData F → Prop) :=
+  -- for all environments that determine witness assignments
+  ∀ offset : ℕ, ∀ env : Environment F,
+  -- for all inputs that satisfy the assumptions (verifier view — hints erased)
+  ∀ input_var : CircuitType.Var Input F, ∀ input : CircuitType.Value Input F,
+  eval' env input_var = input →
+  Assumptions input env.data →
+  -- if the constraints hold
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  -- the spec holds on the input and output
+  let output := eval' env (circuit.output input_var offset)
+  Spec input output env.data
+
+@[circuit_norm]
+def GeneralFormalCircuit.WithHint.Completeness (F : Type) [Field F]
+    [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralElaboratedCircuit F Input Output)
+    (ProverAssumptions : CircuitType.ProverValue Input F → ProverData F → ProverHints F → Prop)
+    (ProverSpec : CircuitType.ProverValue Input F → CircuitType.ProverValue Output F → ProverHints F → Prop) :=
+  -- for all prover environments which use the default witness generators for local variables
+  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : CircuitType.Var Input F,
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  -- for all inputs that satisfy the "honest prover" assumptions (prover view — hints visible)
+  ∀ input : CircuitType.ProverValue Input F, eval' env input_var = input →
+  ProverAssumptions input env.data env.hint →
+  -- the constraints hold
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
+  -- and, if given, the prover spec holds
+  ProverSpec input (eval' env (circuit.output input_var offset)) env.hint
+
+/--
+Hint-aware variant of `GeneralFormalCircuit` for schemas whose prover and
+verifier views differ.
+-/
+structure GeneralFormalCircuit.WithHint (F : Type) (Input Output : TypeMap) [Field F]
     [CircuitType Input] [CircuitType Output]
     extends elaborated : GeneralElaboratedCircuit F Input Output where
   /-- the statement to be assumed for soundness (verifier view — hints erased) -/
@@ -467,8 +518,27 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F]
   /-- auxiliary statement to be proved for completeness, alongside the constraints (prover view) -/
   ProverSpec : CircuitType.ProverValue Input F → CircuitType.ProverValue Output F → ProverHints F → Prop := fun _ _ _ => True
 
-  soundness : GeneralFormalCircuit.Soundness F elaborated Assumptions Spec
-  completeness : GeneralFormalCircuit.Completeness F elaborated ProverAssumptions ProverSpec
+  soundness : GeneralFormalCircuit.WithHint.Soundness F elaborated Assumptions Spec
+  completeness : GeneralFormalCircuit.WithHint.Completeness F elaborated ProverAssumptions ProverSpec
+
+@[circuit_norm]
+def GeneralFormalCircuit.toWithHint {F : Type} [Field F] {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output) :
+    GeneralFormalCircuit.WithHint F Input Output where
+  elaborated := circuit.elaborated.toGeneral
+  Assumptions input data := circuit.Assumptions input data
+  Spec input output data := circuit.Spec input output data
+  ProverAssumptions input data hint := circuit.ProverAssumptions input data hint
+  ProverSpec input output hint := circuit.ProverSpec input output hint
+  soundness := by
+    simpa only [GeneralFormalCircuit.WithHint.Soundness, ElaboratedCircuit.toGeneral,
+      CircuitType.eval_verifier, CircuitType.eval_var, CircuitType.value_of_provableType]
+      using circuit.soundness
+  completeness := by
+    simpa only [GeneralFormalCircuit.WithHint.Completeness, ElaboratedCircuit.toGeneral,
+      CircuitType.eval_prover, CircuitType.eval_var_prover, CircuitType.proverValue_of_provableType]
+      using circuit.completeness
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)

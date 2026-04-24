@@ -77,7 +77,7 @@ Default `CircuitType` for any `ProvableType`: verifier- and prover-value coincid
 with the input type, and `Var` is the usual `α ∘ Expression`.
 -/
 instance ProvableType.toCircuitType {α : TypeMap} [ProvableType α] : CircuitType α where
-  Var := Var α
+  Var := _root_.Var α
   ProverValue := α
   Value := α
   evalVerifier env v := ProvableType.eval env v

@@ -1,5 +1,5 @@
 /-
-  Example: Using prover hints in a `GeneralFormalCircuit` under the new
+  Example: Using prover hints in a `GeneralFormalCircuit.WithHint` under the new
   `CircuitType`-based API.
 
   The hint is modelled as `Input = Unconstrained Bool`:
@@ -23,7 +23,7 @@ namespace Examples.HintExample
   The hint callback tells the prover which boolean value to witness.
   The circuit constrains the output to be boolean (0 or 1).
 -/
-def witnessBool : GeneralFormalCircuit (F p) (Unconstrained Bool) field where
+def witnessBool : GeneralFormalCircuit.WithHint (F p) (Unconstrained Bool) field where
   main (hint : ProverEnvironment (F p) → Bool) := do
     let b ← witness fun env => if hint env then 1 else 0
     assertBool b
@@ -54,13 +54,12 @@ deriving ProvableStruct
   A circuit that computes the AND of two boolean inputs.
 
   This is a plain `FormalCircuit` (no hint input). It creates the hint
-  internally from its inputs and passes it to `witnessBool` via
-  `subcircuitWithAssertion`.
+  internally from its inputs and passes it to `witnessBool`.
 -/
 def booleanAnd : FormalCircuit (F p) Input field where
   main | ⟨x, y⟩ => do
     -- Use witnessBool as a subcircuit with a hint synthesized from the inputs
-    let z ← witnessBool fun env => eval env x = 1 ∧ eval env y = 1
+    let z ← witnessBool fun env => eval' env x = 1 ∧ eval' env y = 1
     -- Constrain result = x * y (multiplication is AND for booleans)
     z === x * y
     return z
@@ -69,17 +68,19 @@ def booleanAnd : FormalCircuit (F p) Input field where
   output _ i := var ⟨i⟩
 
   Assumptions | ⟨x, y⟩ => IsBool x ∧ IsBool y
-  Spec | ⟨x, y⟩, output => output = x * y
+  Spec | ⟨x, y⟩, z => IsBool z ∧ z.val = x.val &&& y.val
 
   soundness := by
-    circuit_proof_start [witnessBool, assertBool]
-    simp_all [circuit_norm]
+    circuit_proof_start [witnessBool, assertBool, IsBool]
+    rcases h_holds.1 with z | notz
+    · simp_all
+      cases h_holds <;> simp_all
+    · grind
 
   completeness := by
     circuit_proof_start [witnessBool, assertBool, IsBool]
     simp_all
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
       <;> simp_all
-
 
 end Examples.HintExample
