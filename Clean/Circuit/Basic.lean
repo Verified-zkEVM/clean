@@ -426,13 +426,13 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F]
 def GeneralFormalCircuit.Completeness (F : Type) [Field F]
     [CircuitType Input] [CircuitType Output]
     (circuit : GeneralElaboratedCircuit F Input Output)
-    (ProverAssumptions : CircuitType.Value Input F → ProverData F → ProverHints F → Prop)
-    (ProverSpec : CircuitType.Value Input F → CircuitType.Value Output F → ProverHints F → Prop) :=
+    (ProverAssumptions : CircuitType.ProverValue Input F → ProverData F → ProverHints F → Prop)
+    (ProverSpec : CircuitType.ProverValue Input F → CircuitType.ProverValue Output F → ProverHints F → Prop) :=
   -- for all prover environments which use the default witness generators for local variables
   ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : CircuitType.Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions (prover view — hints visible)
-  ∀ input : CircuitType.Value Input F, eval' env input_var = input →
+  ∀ input : CircuitType.ProverValue Input F, eval' env input_var = input →
   ProverAssumptions input env.data env.hint →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
@@ -463,9 +463,9 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F]
   Spec : CircuitType.VerifierValue Input F → CircuitType.VerifierValue Output F → ProverData F → Prop
 
   /-- the statement to be assumed for completeness (prover view — hints visible) -/
-  ProverAssumptions : CircuitType.Value Input F → ProverData F → ProverHints F → Prop := fun _ _ _ => True
+  ProverAssumptions : CircuitType.ProverValue Input F → ProverData F → ProverHints F → Prop := fun _ _ _ => True
   /-- auxiliary statement to be proved for completeness, alongside the constraints (prover view) -/
-  ProverSpec : CircuitType.Value Input F → CircuitType.Value Output F → ProverHints F → Prop := fun _ _ _ => True
+  ProverSpec : CircuitType.ProverValue Input F → CircuitType.ProverValue Output F → ProverHints F → Prop := fun _ _ _ => True
 
   soundness : GeneralFormalCircuit.Soundness F elaborated Assumptions Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated ProverAssumptions ProverSpec
