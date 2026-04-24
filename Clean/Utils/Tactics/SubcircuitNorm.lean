@@ -109,8 +109,9 @@ progress can be made.
 def subcircuitNormCore : TacticM Unit := do
   withMainContext do
     let env ← getEnv
-    -- Collect all names tagged with @[subcircuit_norm] into an array
-    -- Using fold instead of direct iteration for compatibility
+    -- Collect all names tagged with @[subcircuit_norm] into an array.
+    -- We use fold (accumulator pattern) since NameSet = RBTree does not
+    -- guarantee a ForIn instance across all Lean 4 versions.
     let lemmaNames : Array Name :=
       (subcircuitNormAttr.ext.getState env).fold (fun acc n => acc.push n) #[]
     if lemmaNames.isEmpty then return

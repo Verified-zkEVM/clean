@@ -578,7 +578,8 @@ theorem FormalAssertion.toSubcircuit_spec_of_constraints
 /--
 Forward reasoning lemma: given that the flat constraints of a `GeneralFormalCircuit`
 subcircuit hold, derive the subcircuit's `Spec`
-(which is `Assumptions (in prover sense) → circuit.Assumptions → circuit.Spec`).
+(which is `ProverAssumptions → circuit.Assumptions → circuit.Spec`, where
+`ProverAssumptions` are the witness-generation assumptions checked by the prover).
 
 Tagged with `@[subcircuit_norm]` to enable automatic forward reasoning by the
 `subcircuit_norm` tactic.
