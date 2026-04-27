@@ -90,12 +90,11 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 
   -- Convert sum to bits
   have hp : p > 2^135 := by linarith [‹Fact (p > 2^253)›.elim]
-  let bits : Var (fields 135) (F p) ← Num2Bits.circuit 135 hp sout
+  let bits ← Num2Bits.circuit 135 hp sout
 
   let out <== bits[127]
   return out
 
-set_option maxRecDepth 2000 in
 def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness

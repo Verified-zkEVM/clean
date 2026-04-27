@@ -58,7 +58,6 @@ def toVars (var : M (Expression F)) := toElements var
 def fromVars (vars : Vector (Expression F) (size M)) := fromElements vars
 
 namespace ProvableType
-
 variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType γ]
 
 /--
@@ -86,10 +85,6 @@ instance toCircuitType {α : TypeMap} [ProvableType α] : CircuitType α where
   Value := α
   evalVerifier env v := eval' env v
   evalProver env v := eval' env.toEnvironment v
-
-instance {α : TypeMap} [ProvableType α] {elem : Type} {valid : Var α F → ℕ → Prop}
-    [GetElem (α (Expression F)) ℕ elem valid] : GetElem (Var α F) ℕ elem valid :=
-  inferInstanceAs (GetElem (α (Expression F)) ℕ elem valid)
 
 def const (x : α F) : α (Expression F) :=
   let values : Vector F _ := toElements x
@@ -152,6 +147,10 @@ instance : VerifierEval F (Var M F) (M F) := verifierEval M
 instance : ProverEval F (Var M F) (M F) := proverEval M
 instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
 @[circuit_norm] instance : ProverEval F (M (Expression F)) (M F) := proverEval M
+
+instance {α : TypeMap} [ProvableType α] {elem : Type} {valid : Var α F → ℕ → Prop}
+    [GetElem (α (Expression F)) ℕ elem valid] : GetElem (Var α F) ℕ elem valid :=
+  inferInstanceAs (GetElem (α (Expression F)) ℕ elem valid)
 
 @[explicit_provable_type] lemma eval_var (env : Environment F) (v : Var M F) :
     eval env v = ProvableType.eval' env (v : M (Expression F)) := by
@@ -821,23 +820,16 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
     simp [ProvableType.toElements_fromElements, Vector.cast]
 
 namespace CircuitType
+variable {N : TypeMap} [ProvableType N]
 
-instance {M N : TypeMap} [ProvableType M] [ProvableType N] :
-    VerifierEval F (Var M F × Var N F) (M F × N F) :=
-  verifierEval (ProvablePair M N)
-instance {M N : TypeMap} [ProvableType M] [ProvableType N] :
-    ProverEval F (Var M F × Var N F) (M F × N F) :=
-  proverEval (ProvablePair M N)
-instance {M N : TypeMap} [ProvableType M] [ProvableType N] :
-    VerifierEval F (M (Expression F) × N (Expression F)) (M F × N F) :=
-  verifierEval (ProvablePair M N)
-instance {M N : TypeMap} [ProvableType M] [ProvableType N] :
-    ProverEval F (M (Expression F) × N (Expression F)) (M F × N F) :=
-  proverEval (ProvablePair M N)
-instance : VerifierEval F (Var field F × Var field F) (F × F) :=
-  verifierEval (ProvablePair field field)
-instance : ProverEval F (Var field F × Var field F) (F × F) :=
-  proverEval (ProvablePair field field)
+instance : VerifierEval F (Var M F × Var N F) (M F × N F) := verifierEval (ProvablePair M N)
+instance : ProverEval F (Var M F × Var N F) (M F × N F) := proverEval (ProvablePair M N)
+instance : VerifierEval F (M (Expression F) × N (Expression F)) (M F × N F) := verifierEval (ProvablePair M N)
+instance : ProverEval F (M (Expression F) × N (Expression F)) (M F × N F) := proverEval (ProvablePair M N)
+instance : VerifierEval F (Expression F × Expression F) (F × F) := verifierEval (ProvablePair field field)
+instance : ProverEval F (Expression F × Expression F) (F × F) := proverEval (ProvablePair field field)
+instance : VerifierEval F (Var field F × Var field F) (F × F) := verifierEval (ProvablePair field field)
+instance : ProverEval F (Var field F × Var field F) (F × F) := proverEval (ProvablePair field field)
 
 end CircuitType
 
@@ -864,8 +856,7 @@ def ProvablePair.toElements {α β: TypeMap} [ProvableType α] [ProvableType β]
 @[circuit_norm ↓ high]
 theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : Environment F)
   (a : α (Expression F)) (b : β (Expression F)) :
-    eval env ((a, b) : ProvablePair α β (Expression F)) =
-      (eval env a, eval env b) := by
+    eval env ((a, b) : ProvablePair α β (Expression F)) = (eval env a, eval env b) := by
   unfold eval
   change ProvableType.eval' (α:=ProvablePair α β) env (a, b) =
     (ProvableType.eval' env a, ProvableType.eval' env b)

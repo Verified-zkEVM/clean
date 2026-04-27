@@ -213,7 +213,7 @@ template LessThan(n) {
 -/
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
-  let bits : Var (fields (n + 1)) (F p) ← Num2Bits.circuit (n + 1) hn diff
+  let bits ← Num2Bits.circuit (n + 1) hn diff
   let out <== 1 - bits[n]
   return out
 

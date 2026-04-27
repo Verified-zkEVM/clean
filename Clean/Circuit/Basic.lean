@@ -397,8 +397,7 @@ this assumption is not needed as the circuit adds that constraint itself. Using 
 add the range assumption to the soundness statement, thus making the circuit hard to use
 (in particular, not usable as a bit range check, because it already _requires_ the bit range assumption).
 -/
-structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F]
-    [ProvableType Input] [ProvableType Output]
+structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   /-- the statement to be assumed for soundness -/
   Assumptions : Input F → ProverData F → Prop := fun _ _ => True
@@ -453,7 +452,7 @@ Hint-aware variant of `GeneralFormalCircuit` for schemas whose prover and
 verifier views differ.
 -/
 structure GeneralFormalCircuit.WithHint (F : Type) (Input Output : TypeMap) [Field F]
-    [CircuitType Input] [CircuitType Output]
+  [CircuitType Input] [CircuitType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   /-- the statement to be assumed for soundness (verifier view — hints erased) -/
   Assumptions : Value Input F → ProverData F → Prop := fun _ _ => True

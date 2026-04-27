@@ -31,7 +31,7 @@ disagree: e.g. a `ProverHint Hint F` evaluates to `Unit` under `Environment F` b
 `Hint` under `ProverEnvironment F`.
 -/
 class Eval (Env : Type) (Var : Type) (Value : outParam Type) where
-  eval : Env → Var → Value
+eval : Env → Var → Value
 
 /-
 `eval` is designed to be the normal form of evaluation statements across instances.

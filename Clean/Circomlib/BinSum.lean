@@ -205,11 +205,9 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
 
   completeness := by
     intros witness_offset env inputs_var h_witness_extends inputs h_inputs_eval h_inputs_binary
-    simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit]
+    simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit] at ⊢ h_inputs_eval
     convert sum_bound_of_binary_inputs hnout inputs h_inputs_binary
-    have h_inputs_eval' : eval env.toEnvironment inputs_var = inputs := by
-      simpa only [CircuitType.eval_var_prover_to_verifier] using h_inputs_eval
-    exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval'
+    exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval
 
 end BinSum
 

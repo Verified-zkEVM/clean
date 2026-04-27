@@ -874,7 +874,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Prove
     let output := env ((main input_var).output offset)
     IsBool output := by
   apply main_output_binary
-  · simpa only [CircuitType.eval_var_fields_prover, CircuitType.eval_var_fields] using h_eval
+  · simpa only [circuit_norm] using h_eval
   · assumption
   apply Circuit.can_replace_completeness (n := offset)
   · apply subcircuitsConsistent

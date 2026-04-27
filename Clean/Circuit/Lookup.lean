@@ -87,7 +87,7 @@ def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
 
 @[circuit_norm]
 lemma soundess_def {Row : TypeMap} [ProvableType Row]
-  (table : Table F Row) (env : Environment F) (entry : (Row (Expression F))) :
+  (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
     let lookup : Lookup F := { table := table.toRaw, entry := toElements entry };
     lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (eval env entry) := by
   simp only [CircuitType.eval_expression]
