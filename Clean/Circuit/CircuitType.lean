@@ -1,37 +1,23 @@
 import Clean.Circuit.Expression
 
 /--
-'Provable types' are structured collections of field elements.
+_Circuit types_ are usually just structured collections of field elements.
 
  We represent them as types generic over a single type argument (the field element),
  i.e. `Type → Type`.
 -/
-@[reducible]
-def TypeMap := Type → Type
+abbrev TypeMap := Type → Type
 
-variable {F : Type} [Field F] {M N : TypeMap} {Hint : Type}
-
-structure Unconstrained (Hint : Type) (F : Type) where
-  value : Hint
-
-/-
-  Prover hints: additional data that can be passed to a circuit's witness generation
-  but does not affect the circuit's constraints or spec.
--/
-def ProverHint (Hint : Type) (F : Type) := ProverEnvironment F → Hint
+variable {F : Type} [Field F] {M : TypeMap}
 
 /--
-`Eval Env Var Value` says: in environment `Env`, a term `v : Var` evaluates to `Value`.
+Generic typeclass for evaluation of a `Var` (symbolic circuit variable)
+to a `Value` (concrete value in the field), in a given environment.
 
-Generalizes verifier evaluation (`Env = Environment F`) and prover evaluation (`Env = ProverEnvironment F`),
-for both `ProvableType` variables and `ProverHint` hints.
-
-The `Var → Value` mapping is per-instance, so verifier- and prover-side can
-disagree: e.g. a `ProverHint Hint F` evaluates to `Unit` under `Environment F` but to
-`Hint` under `ProverEnvironment F`.
+Generalizes verifier evaluation and prover evaluation for both provable types and prover hints.
 -/
 class Eval (Env : Type) (Var : Type) (Value : outParam Type) where
-eval : Env → Var → Value
+  eval : Env → Var → Value
 
 /-
 `eval` is designed to be the normal form of evaluation statements across instances.
@@ -52,48 +38,35 @@ abbrev VerifierEval (F : Type) Var (Value : outParam Type) := Eval (Environment 
 abbrev ProverEval (F : Type) Var (Value : outParam Type) := Eval (ProverEnvironment F) Var Value
 
 /--
-Explicit "verifier view" — even on a `ProverEnvironment`, this forces the verifier
+Explicit verifier view: even on a `ProverEnvironment`, this forces the verifier
 instance via the `ProverEnvironment → Environment` projection.
 -/
 abbrev evalVerifier {F Var Value} [VerifierEval F Var Value]
   (env : Environment F) (v : Var) : Value := eval env v
 
-/-- Explicit "prover view" — only applies where a `ProverEnvironment` is available. -/
+/-- Explicit prover view. -/
 abbrev evalProver {F Var Value} [ProverEval F Var Value]
   (env : ProverEnvironment F) (v : Var) : Value := eval env v
 
-/-!
-## `CircuitType`: the schema-level class for circuit I/O
-
-`CircuitType Input` bundles the three derived types (`Var`, `ProverValue`, `Value`)
-and the two eval functions that map the variable form to the two value forms
+/--
+`CircuitType M` bundles three derived types (`Var`, `Value`, `ProverValue`)
+and two eval functions that map the variable form to the two value forms
 (verifier-view, prover-view).
 
-Parallel to `ProvableType α`: one class parameterized by a schema `Input : TypeMap`,
-with the derived types as fields. A `GeneralFormalCircuit` can then be parameterized
-as `(Input Output : TypeMap) [CircuitType Input] [CircuitType Output]`.
-
-For pure-provable schemas (no hint fields) the verifier- and prover-value forms
-coincide — see the default instance in `Provable.lean`.
+For fully provable schemas (no hint fields), the verifier- and prover-value forms
+coincide; see the default instance in `Provable.lean`.
 -/
-
-class CircuitType (Input : TypeMap) where
+class CircuitType (M : TypeMap) where
   /--
-  `Var M F` is the type of variables that appear in the monadic notation of
-  `Circuit F _`s. Most elements of `Var M F`, especially interesting ones, are not
-  constant values of `M F` because variables in a circuit can depend on contents of
-  the environment.
-
   An element of `Var M F` represents a `M F` that's polynomially dependent
   on the environment. More concretely, an element of `Var M F` is a value of `M F`
   with missing holes, and each hole contains a polynomial that can refer to fixed
-  positions of the environment. Given an environment, `Var M F` can be evaluated
-  to a `M F` (see `eval` below).
+  positions of the environment.
   -/
   Var : TypeMap
-  /-- Verifier value — hint fields are erased to `Unit`. -/
+  /-- Verifier value: hint fields are erased to `Unit`. -/
   Value : TypeMap
-  /-- Prover value — hint fields carry their underlying type. -/
+  /-- Prover value: hint fields carry their underlying type. -/
   ProverValue : TypeMap
   evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → Value F
   evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → ProverValue F
@@ -101,32 +74,42 @@ class CircuitType (Input : TypeMap) where
 export CircuitType (Var Value ProverValue)
 
 namespace CircuitType
+variable [CircuitType M]
+
+attribute [circuit_norm] evalVerifier evalProver
+
 /--
-A `CircuitType Input` instance induces a verifier-side `Eval` on `Var Input F`.
+A `CircuitType M` instance induces a verifier-side `Eval` on `Var M F`.
 This lets `eval env var` work uniformly whether the Var came from a `ProvableType`-derived
 instance or a hand-written one.
 -/
-instance verifierEval (M : TypeMap) [CircuitType M] :
+instance verifierEval M [CircuitType M] :
   VerifierEval F (Var M F) (Value M F) := ⟨ evalVerifier ⟩
 
-/- `CircuitType` induces a prover-side `Eval` on `Var Input F`. -/
-instance proverEval (M : TypeMap) [CircuitType M] :
+/- `CircuitType` induces a prover-side `Eval` on `Var M F`. -/
+instance proverEval M [CircuitType M] :
   ProverEval F (Var M F) (ProverValue M F) := ⟨ evalProver ⟩
 
-lemma eval_verifier [CircuitType M] (env : Environment F) (v : Var M F) :
+lemma eval_verifier (env : Environment F) (v : Var M F) :
   eval env v = evalVerifier env v := by
   unfold eval
   rfl
 
-lemma eval_prover [CircuitType M] (env : ProverEnvironment F) (v : Var M F) :
+lemma eval_prover (env : ProverEnvironment F) (v : Var M F) :
   eval env v = evalProver env v := by
   unfold eval
   rfl
 end CircuitType
 
-variable {Input : TypeMap} [CircuitType Input]
+/--
+`Unconstrained` acts as a type marker for circuit inputs that should only be hints to the prover.
+-/
+structure Unconstrained (Hint : Type) (F : Type) where
+  value : Hint
 
-instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained Hint) where
+variable {Hint : Type}
+
+instance Unconstrained.toCircuitType : CircuitType (Unconstrained Hint) where
   Var F := ProverEnvironment F → Hint
   ProverValue _ := Hint
   Value _ := Unit
@@ -135,26 +118,21 @@ instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained 
 
 namespace CircuitType
 @[circuit_norm] lemma var_of_unconstrained (Hint F) :
-  Var (Unconstrained Hint) F = ProverHint Hint F := rfl
+  Var (Unconstrained Hint) F = (ProverEnvironment F → Hint) := rfl
 @[circuit_norm] lemma proverValue_of_unconstrained (Hint F) :
   ProverValue (Unconstrained Hint) F = Hint := rfl
 @[circuit_norm] lemma value_of_unconstrained (Hint F) :
   Value (Unconstrained Hint) F = Unit := rfl
 
-
 /- forwarding instances to help instance search get through defeq -/
+instance : VerifierEval F (ProverEnvironment F → Hint) Unit := verifierEval (Unconstrained Hint)
+instance : ProverEval F (ProverEnvironment F → Hint) Hint := proverEval (Unconstrained Hint)
 
-instance : VerifierEval F (ProverHint Hint F) Unit := verifierEval (Unconstrained Hint)
-instance : ProverEval F (ProverHint Hint F) Hint := proverEval (Unconstrained Hint)
-
-attribute [circuit_norm] evalVerifier evalProver
-
-@[circuit_norm] lemma eval_hint (env : Environment F) (v : ProverHint Hint F) :
+@[circuit_norm] lemma eval_hint (env : Environment F) (v : ProverEnvironment F → Hint) :
   eval env v = () := by rfl
 
-@[circuit_norm] lemma eval_hint_prover (env : ProverEnvironment F) (v : ProverHint Hint F) :
+@[circuit_norm] lemma eval_hint_prover (env : ProverEnvironment F) (v : ProverEnvironment F → Hint) :
     eval env v = v env := by
   rw [eval_prover (M := Unconstrained Hint)]
   rfl
-
 end CircuitType
