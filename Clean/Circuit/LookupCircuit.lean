@@ -17,20 +17,20 @@ namespace LookupCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
 
 def proverEnvironment (circuit : LookupCircuit F α β)
-    (input : α F) (hint : ProverHints F) : ProverEnvironment F :=
+    (input : α F) (hint : ProverHint F) : ProverEnvironment F :=
   circuit.main (const input) |>.proverEnvironment hint
 
 theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β)
-    (input : α F) (hint : ProverHints F) :
+    (input : α F) (hint : ProverHint F) :
     (circuit.proverEnvironment input hint).UsesLocalWitnesses 0 ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_usesLocalWitnesses
   apply circuit.compose_computableWitnesses
   simp [ProverEnvironment.OnlyAccessedBelow, circuit_norm, circuit.computableWitnesses]
 
-def constantOutput (circuit : LookupCircuit F α β) (input : α F) (hint : ProverHints F) : β F :=
+def constantOutput (circuit : LookupCircuit F α β) (input : α F) (hint : ProverHint F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input hint)
 
-def toTable (circuit : LookupCircuit F α β) (hint : ProverHints F) : Table F (ProvablePair α β) where
+def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (ProvablePair α β) where
   name := circuit.name
 
   -- for `(input, output)` to be contained in the lookup table defined by a circuit, means that:
@@ -62,7 +62,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHints F) : Table F (
 -- this gives `circuit.lookup input` _exactly_ the same interface as `circuit input`.
 
 @[circuit_norm]
-def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHints F) :
+def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     FormalCircuit F α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
@@ -91,6 +91,6 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHints F) :
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
 
 @[circuit_norm]
-def lookup (circuit : LookupCircuit F α β) (hint : ProverHints F) (input : Var α F) : Circuit F (Var β F) :=
+def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) : Circuit F (Var β F) :=
   lookupCircuit circuit hint input
 end LookupCircuit

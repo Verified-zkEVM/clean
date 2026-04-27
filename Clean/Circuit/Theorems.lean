@@ -468,7 +468,7 @@ lemma ProverEnvironment.usesLocalWitnesses_iff_flat {n : ℕ} {ops : Operations 
 -- theorems about witness generation
 
 namespace FlatOperation
-variable {hint : ProverHints F}
+variable {hint : ProverHint F}
 
 lemma dynamicWitness_length {op : FlatOperation F} {init : List F} :
     (op.dynamicWitness hint init).length = op.singleLocalLength := by
@@ -542,7 +542,7 @@ end FlatOperation
 If a circuit satisfies `computableWitnesses`, then the `proverEnvironment` agrees with the
 circuit's witness generators.
 -/
-theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (hint : ProverHints F) (init : List F) :
+theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (hint : ProverHint F) (init : List F) :
   circuit.ComputableWitnesses init.length →
     (circuit.proverEnvironment hint init).UsesLocalWitnesses init.length (circuit.operations init.length) := by
   intro h_computable

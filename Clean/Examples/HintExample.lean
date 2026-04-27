@@ -1,14 +1,11 @@
 /-
-  Example: Using prover hints in a `GeneralFormalCircuit.WithHint` under the new
-  `CircuitType`-based API.
+Example: Using prover hints in a `GeneralFormalCircuit.WithHint` under the new
+`CircuitType`-based API.
 
-  The hint is modelled as `Input = Unconstrained Bool`:
-    - verifier-view of the input: `Unit` (hints are erased)
-    - prover-view of the input: `Bool`
-    - variable form: `ProverHint Bool F = ProverEnvironment F → Bool`
+`witnessBool` witnesses a field element (1 if the hint returns true, 0 otherwise),
+and constrains it to be boolean.
 
-  `witnessBool` witnesses a field element (1 if the hint returns true, 0 otherwise),
-  and constrains it to be boolean.
+`andBool` uses `witnessBool` as a subcircuit.
 -/
 import Clean.Circuit
 import Clean.Gadgets.Boolean
