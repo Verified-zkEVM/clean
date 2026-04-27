@@ -71,8 +71,8 @@ instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
   Var F := M (Expression F)
   ProverValue := M
   Value := M
-  evalVerifier env v := eval' env v
-  evalProver env v := eval' env.toEnvironment v
+  evalVerifier env v := ProvableType.eval' env v
+  evalProver env v := ProvableType.eval' env.toEnvironment v
 
 def const (x : M F) : M (Expression F) :=
   let values : Vector F _ := toElements x
@@ -643,7 +643,7 @@ theorem eval_varFromOffset {α : TypeMap} [ProvableType α] (env : Environment F
   simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
 
 theorem eval_varFromOffset_prover {α : TypeMap} [ProvableType α] (env : ProverEnvironment F) (offset : ℕ) :
-    (eval env (varFromOffset α offset : α (Expression F)) : α F) =
+    (Eval.eval env (varFromOffset α offset : α (Expression F)) : α F) =
       fromElements (.mapRange (size α) fun i => env.get (offset + i)) := by
   exact (CircuitType.eval_expression_prover env (varFromOffset α offset)).trans (by
     simpa only [CircuitType.eval_expression] using eval_varFromOffset (α:=α) env.toEnvironment offset)
@@ -666,19 +666,19 @@ theorem eval_fromElements {F : Type} [Field F] {α : TypeMap} [ProvableType α] 
 
 theorem getElem_eval_toElements {F : Type} [Field F] {α : TypeMap} [ProvableType α]
   {env : Environment F} (x : α (Expression F)) (i : ℕ) (hi : i < size α) :
-    Expression.eval env (toElements x)[i] = (toElements (eval env x))[i] := by
+    Expression.eval env (toElements x)[i] = (toElements (Eval.eval env x))[i] := by
   rw [CircuitType.eval_expression]
   rw [eval', toElements_fromElements, Vector.getElem_map]
 
 theorem getElem_eval_fields {F : Type} [Field F] {n : ℕ} {env : Environment F}
   (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
-    Expression.eval env x[i] = (eval env x)[i] := by
+    Expression.eval env x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression]
   simp only [explicit_provable_type, fromElements, instProvableTypeFields, Vector.getElem_map]
 
 theorem getElem_eval_fields_prover {F : Type} [Field F] {n : ℕ} {env : ProverEnvironment F}
   (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
-    Expression.eval env.toEnvironment x[i] = (eval env x)[i] := by
+    Expression.eval env.toEnvironment x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression_prover]
   simp only [explicit_provable_type, fromElements, instProvableTypeFields, Vector.getElem_map]
 end ProvableType
