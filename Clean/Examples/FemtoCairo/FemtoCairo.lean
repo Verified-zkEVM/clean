@@ -295,7 +295,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
 
-    simp only [id_eq, CircuitType.eval_expression, fromElements, ProvableType.eval',
+    simp only [id_eq, CircuitType.eval_expression, fromElements, ProvableType.eval,
       size, toElements, Vector.map_mk, List.map_toArray,
       List.map_cons, List.map_nil, Vector.getElem_mk, ↓List.getElem_toArray,
       ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,

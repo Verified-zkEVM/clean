@@ -26,7 +26,7 @@ private def hasProvableStructType (e : Expr) : MetaM Bool := do
 
 /-- Extract the value being evaluated from supported `eval` forms. -/
 private def evalArg? (e : Expr) : Option Expr :=
-  if e.isAppOf ``eval || e.isAppOf ``ProvableType.eval' then
+  if e.isAppOf ``eval || e.isAppOf ``ProvableType.eval then
     e.getAppArgs.back?
   else
     none
