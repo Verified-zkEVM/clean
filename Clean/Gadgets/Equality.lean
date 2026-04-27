@@ -24,9 +24,9 @@ theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs 
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality
-def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circuit F Unit := do
+def main {M : TypeMap} [ProvableType M] (input : Var M F × Var M F) : Circuit F Unit := do
   let (x, y) := input
-  let diffs := (toVars x).zip (toVars y) |>.map (fun (xi, yi) => xi - yi)
+  let diffs := (toElements (M:=M) x).zip (toElements y) |>.map (fun (xi, yi) => xi - yi)
   .forEach diffs assertZero
 
 @[reducible]
@@ -60,7 +60,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     ext i hi
     simp only [Vector.getElem_map]
 
-    rw [toVars, toVars, ←Vector.forall_getElem] at h_holds
+    rw [←Vector.forall_getElem] at h_holds
     specialize h_holds i hi
     rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
     simp only [Expression.eval] at h_holds
@@ -80,10 +80,10 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     clear hx hy
     apply_fun toElements at h_spec
     simp only [CircuitType.eval_expression, ProvableType.eval',
-      ProvableType.toElements_fromElements, toVars] at h_spec
+      ProvableType.toElements_fromElements] at h_spec
     rw [Vector.ext_iff] at h_spec
 
-    rw [toVars, toVars, ←Vector.forall_getElem]
+    rw [←Vector.forall_getElem]
     intro i hi
     specialize h_spec i hi
     simp only [Vector.getElem_map] at h_spec

@@ -24,18 +24,18 @@ def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { selector, ifTrue, ifFalse } := input
 
   -- Inline element-wise scalar multiplication / addition
-  let trueVars := toVars ifTrue
-  let falseVars := toVars ifFalse
+  let trueVars := toElements ifTrue
+  let falseVars := toElements ifFalse
   let resultVars := Vector.ofFn fun i => selector * (trueVars[i] - falseVars[i]) + falseVars[i]
 
-  return fromVars resultVars
+  return fromElements (M:=M) resultVars
 
 def output (selector: Expression F) (ifTrue ifFalse : Var M F) : Var M F :=
   -- Inline element-wise scalar multiplication / addition
-  let trueVars := toVars ifTrue
-  let falseVars := toVars ifFalse
+  let trueVars := toElements (M:=M) ifTrue
+  let falseVars := toElements (M:=M) ifFalse
   let resultVars := Vector.ofFn fun i => selector * (trueVars[i] - falseVars[i]) + falseVars[i]
-  fromVars resultVars
+  fromElements (M:=M) resultVars
 
 def outputValue (selector: F) (ifTrue ifFalse : M F) : M F :=
   -- Inline element-wise scalar multiplication / addition

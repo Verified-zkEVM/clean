@@ -54,7 +54,7 @@ lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : BLAKE3Buffe
   have h2 := h_bytes ⟨ i*4 + 2, by omega ⟩
   have h3 := h_bytes ⟨ i*4 + 3, by omega ⟩
   simp only [circuit_norm, eval_vector] at h0 h1 h2 h3 ⊢
-  simp only [Vector.getElem_ofFn, U32.Normalized, explicit_provable_type, toVars]
+  simp only [Vector.getElem_ofFn, U32.Normalized, explicit_provable_type]
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
   and_intros <;> assumption
 
