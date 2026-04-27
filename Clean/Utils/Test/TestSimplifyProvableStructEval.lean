@@ -16,6 +16,11 @@ structure SimpleStruct (F : Type) where
   b : F
 deriving ProvableStruct
 
+structure VectorStruct (F : Type) where
+  xs : Vector F 2
+  y : F
+deriving ProvableStruct
+
 -- Test eval with struct literal on RHS
 lemma test_eval_eq_struct_literal {F : Type} [Field F] (env : ProverEnvironment F)
     (x_var y_var z_var : Var field F)
@@ -45,6 +50,48 @@ theorem test_eval_eq_struct_variable {F : Type} [Field F] (env : ProverEnvironme
   simplify_provable_struct_eval
   -- This should simplify the eval expression
   exact h
+
+-- Test eval with a struct variable on both sides, where projections force decomposition.
+theorem test_eval_eq_decomposed_struct_variable {F : Type} [Field F] (env : ProverEnvironment F)
+    (input_var : TestInputs (Expression F)) (input : TestInputs F)
+    (h : eval env input_var = input) :
+    eval env input_var.x = input.x := by
+  provable_struct_simp
+  exact h.1
+
+-- Test the same decomposition when the input is written through the public `Var` alias.
+theorem test_eval_eq_decomposed_var_struct {F : Type} [Field F] (env : ProverEnvironment F)
+    (input_var : Var TestInputs F) (input : TestInputs F)
+    (h : eval env input_var = input) :
+    eval env input_var.x = input.x := by
+  provable_struct_simp
+  exact h.1
+
+-- Test splitting the constructor equality produced by simplifying eval on a struct variable.
+theorem test_eval_eq_decomposed_struct_variable_conjunction {F : Type} [Field F] (env : ProverEnvironment F)
+    (input_var : TestInputs (Expression F)) (input : TestInputs F)
+    (h : eval env input_var = input ∧ True) :
+    eval env input_var.y = input.y := by
+  provable_struct_simp
+  exact h.1.2.1
+
+-- Test the same decomposition when a field is itself a provable vector.
+theorem test_eval_eq_decomposed_vector_struct {F : Type} [Field F] (env : ProverEnvironment F)
+    (input_var : VectorStruct (Expression F)) (input : VectorStruct F)
+    (h : eval env input_var = input ∧ True) :
+    eval env input_var.y = input.y := by
+  provable_struct_simp
+  exact h.1.2
+
+-- Test that projected whole-struct evals are reduced to component evals after decomposition.
+theorem test_eval_projection_uses_decomposed_struct_eq {F : Type} [Field F] (env : Environment F)
+    (input_var : VectorStruct (Expression F)) (input : VectorStruct F)
+    (h : eval env input_var = input)
+    (hh : (eval env input_var).y = 1) :
+    input.y = 1 := by
+  provable_struct_simp
+  simp only [h] at hh ⊢
+  exact hh
 
 -- Test eval inside conjunctions
 theorem test_eval_in_conjunction {F : Type} [Field F] (env : ProverEnvironment F) (x : F)

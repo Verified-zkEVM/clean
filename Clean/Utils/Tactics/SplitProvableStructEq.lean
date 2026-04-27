@@ -59,6 +59,16 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
 -/
 def splitProvableStructEq : TacticM Unit := do
   withMainContext do
+    -- Struct equalities sometimes have a wrapper equality type such as
+    -- `Value MyStruct F` or `ProverValue MyStruct F`. Normalize those type
+    -- wrappers before looking for constructor equalities, so generated
+    -- `MyStruct.mk.injEq` lemmas can match.
+    try
+      evalTactic (← `(tactic|
+        simp only [CircuitType.value_of_provableType, CircuitType.proverValue_of_provableType] at *))
+    catch _ =>
+      pure ()
+
     -- First, find and apply cases on struct variables in equalities
     let varsToCase ← findStructVarsInEqualities
 

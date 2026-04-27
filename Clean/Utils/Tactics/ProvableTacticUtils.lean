@@ -4,10 +4,15 @@ import Clean.Circuit.Provable
 
 open Lean Meta Elab Tactic
 
-/-- Check if an expression is a constructor application (ends with .mk) -/
+/-- Check if an expression is a constructor application (ends with .mk).
+
+This intentionally does not unfold the expression. The struct tactics use this as
+a cheap syntactic guard before splitting constructor equalities; unfolding here
+can expand `eval` terms appearing in unrelated hypotheses and make the tactic
+far too expensive.
+-/
 def isMkConstructor (e : Expr) : MetaM Bool := do
-  let e' ← withTransparency .all (whnf e)
-  match e'.getAppFn with
+  match e.consumeMData.getAppFn with
   | .const name _ =>
     -- Check if it's a constructor (ends with .mk)
     return name.components.getLast? == some `mk

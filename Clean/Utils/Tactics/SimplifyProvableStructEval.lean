@@ -17,6 +17,13 @@ private def isStructLiteral (e : Expr) : MetaM Bool := do
       return false
   catch _ => return false
 
+/-- Check whether an expression has a type backed by `ProvableStruct`. -/
+private def hasProvableStructType (e : Expr) : MetaM Bool := do
+  try
+    let type ← inferType e
+    hasProvableStructInstance type
+  catch _ => return false
+
 /-- Extract the value being evaluated from supported `eval` forms. -/
 private def evalArg? (e : Expr) : Option Expr :=
   if e.isAppOf ``eval || e.isAppOf ``ProvableType.eval' then
@@ -59,6 +66,16 @@ private partial def collectStructEvalPattern (e : Expr) : MetaM (List Expr) := d
               return [structExpr]
             else
               return []
+
+          -- If the other side is a plain struct variable, unfold the eval side
+          -- so that `split_provable_struct_eq` can turn the resulting
+          -- constructor equality into field-wise equalities.
+          if !otherSideIsEval then
+            if ← hasProvableStructType otherSide then
+              if let some structExpr := evalArg? evalSide then
+                return [structExpr]
+              else
+                return []
 
           -- If other side is just a variable, check if eval side has a struct literal
           -- Extract the argument of eval (the struct being evaluated)
@@ -131,7 +148,23 @@ elab "simplify_provable_struct_eval" : tactic => do
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_expr))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_expr_prover))
 
-    -- Apply simp to this hypothesis
-    let hypIdent := mkIdent hypName
-    let tac ← `(tactic| simp only [$[$simpArgs],*] at $hypIdent:ident)
-    evalTactic tac
+    -- Apply the targeted eval simplification throughout the local context. A
+    -- struct eval equality often feeds other hypotheses containing projections
+    -- of the same `eval env struct`, so simplifying only the equality itself is
+    -- not enough.
+    withMainContext do
+      let ctx ← getLCtx
+      for localDecl in ctx do
+        if localDecl.isImplementationDetail then
+          continue
+        try
+          let hypIdent := mkIdent localDecl.userName
+          let tac ← `(tactic| simp only [$[$simpArgs],*] at $hypIdent:ident)
+          evalTactic tac
+        catch _ =>
+          continue
+      try
+        let tac ← `(tactic| simp only [$[$simpArgs],*])
+        evalTactic tac
+      catch _ =>
+        pure ()
