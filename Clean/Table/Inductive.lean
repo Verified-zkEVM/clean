@@ -16,14 +16,14 @@ def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) 
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
-      (ProvableType.eval' env acc_var = acc) ∧ (ProvableType.eval' env x_var = x) →
+      (eval env acc_var = acc) ∧ (eval env x_var = x) →
     -- if the constraints hold
     Circuit.ConstraintsHold.Soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- and assuming the spec on the current row and previous inputs
     Spec initialState xs row_index xs_len acc env.data →
     -- we can conclude the spec on the next row and inputs including the current input
     Spec initialState (xs.concat x) (row_index + 1) (xs_len ▸ List.length_concat)
-      (ProvableType.eval' env (step acc_var x_var |>.output ((size State) + (size Input)))) env.data
+      (eval env (step acc_var x_var |>.output ((size State) + (size Input)))) env.data
 
 def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (InputAssumptions : ℕ → Input F → ProverData F → Prop)
@@ -34,7 +34,7 @@ def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Typ
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
-    (ProvableType.eval' env acc_var = acc) ∧ (ProvableType.eval' env x_var = x) →
+    (eval env acc_var = acc) ∧ (eval env x_var = x) →
   -- when using honest-prover witnesses
   env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
   -- assuming the spec on the current row, the input_spec on the input, and initial state assumptions
@@ -121,7 +121,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
     simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get,
       Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
 
-  have h_env : ProvableType.eval' env' (varFromOffset State 0) = row.1 := by
+  have h_env : (eval env'.toEnvironment (varFromOffset State 0 : State (Expression F)) : State F) = row.1 := by
     rw [ProvableType.ext_iff]
     intro i hi
     rw [h_env_in i hi, ProvableType.eval_varFromOffset,
@@ -238,24 +238,26 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       · omega
     clear h_env'
 
-    have input_eq_1 : ProvableType.eval' env' curr_var.1 = curr.1 := by
+    have input_eq_1 : eval env'.toEnvironment curr_var.1 = curr.1 := by
       rw [ProvableType.ext_iff]
       intro i hi
       simp only [curr_var, varFromOffset_pair]
-      rw [h_env_input_1 i hi]
+      convert (h_env_input_1 i hi).symm
       simp only [ProvableType.eval_varFromOffset,
-        ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
+        ProvableType.toElements_fromElements, zero_add]
+      convert Vector.getElem_mapRange _ hi
 
-    have input_eq_2 : ProvableType.eval' env' curr_var.2 = curr.2 := by
+    have input_eq_2 : eval env'.toEnvironment curr_var.2 = curr.2 := by
       rw [ProvableType.ext_iff]
       intro i hi
       simp only [curr_var, varFromOffset_pair]
-      rw [h_env_input_2 i hi]
+      convert (h_env_input_2 i hi).symm
       simp only [s, ProvableType.eval_varFromOffset,
-        ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
+        ProvableType.toElements_fromElements, zero_add]
+      convert Vector.getElem_mapRange _ hi using 1
       ac_rfl
 
-    have next_eq : ProvableType.eval' env' (varFromOffset State (size State + size Input + main_ops.localLength)) = next.1 := by
+    have next_eq : eval env'.toEnvironment (varFromOffset (F := F) State (size State + size Input + main_ops.localLength)) = next.1 := by
       rw [ProvableType.ext_iff]
       intro i hi
       rw [h_env_output i hi, ProvableType.eval_varFromOffset,

@@ -69,9 +69,8 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     rw [Nat.mod_eq_of_lt h_alias, toBits_fromBits, Vector.ext_iff]
     simp only [circuit_norm]
     intro i hi
-    rw [ZMod.natCast_zmod_val]
-    intro i hi; specialize h_bits i hi
     simp only [circuit_norm]
+    specialize h_bits i hi
     rcases h_bits with h_bits | h_bits
       <;> simp [h_bits, ZMod.val_one]
 
@@ -217,7 +216,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   soundness := by
     intro i0 env input_var (input : F p) h_input _ h_holds
-    simp only [circuit_norm, main, IsZero.circuit, IsZero.main] at h_holds ⊢
+    simp only [circuit_norm] at h_input
+    simp only [circuit_norm, main, IsZero.circuit, IsZero.main, h_input] at h_holds ⊢
     obtain ⟨ h_bits, h_iszero, h_eq ⟩ := h_holds
 
     by_cases h_n : n = 0
@@ -239,13 +239,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         simp [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
 
       by_cases h_input_zero : input = 0
-      · simp_rw [h_input_zero] at h_input ⊢
-        have : Expression.eval env input_var = 0 := by
-          simp only [circuit_norm] at h_input
-          convert h_input
-        rw [this] at h_eq
-        simp only [id_eq, mul_zero, dite_eq_ite, ite_self, add_zero, neg_zero, ZMod.val_zero,
-          Nat.cast_zero, sub_zero] at h_eq ⊢
+      · subst h_input_zero
+        simp only [id_eq, mul_zero, dite_eq_ite, ite_self, add_zero, neg_zero, sub_zero] at h_eq ⊢
         rw [← h_eq]
         have h_f := fieldToBits_fieldFromBits hn bits h_bits'
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
@@ -264,22 +259,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
           exact h_eq
         rw [h_val_zero]
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
-      · have : Expression.eval env input_var = input := by
-          rw [← h_input]
-          simp [circuit_norm]
-        rw [this] at h_eq
-        simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
-          ↓reduceIte, zero_mul, ZMod.natCast_val]
-        have : (2 ^ n - ZMod.cast input) = fieldFromBits bits := by
-          rw [sub_eq_add_neg, ZMod.cast_id, ← h_eq]
-          let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
-          have h_expr_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
-              = fieldFromBitsExpr bits_vars := by
-            simp only [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
-          rw [← fieldFromBits_eval]
-        rw [this]
-        symm
-        apply fieldToBits_fieldFromBits hn
+      · simp_all only [↓reduceIte, mul_zero, dite_eq_ite, ite_self, add_zero, zero_mul]
+        rw [sub_eq_add_neg, ← h_eq]
+        simp only [fieldFromBits_eval]
+        rw [fieldToBits_fieldFromBits hn]
         exact h_bits'
 
   completeness := by

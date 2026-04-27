@@ -56,7 +56,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
   clear theta_norm theta_eq h_rhopi rhopi_eq rhopi_norm h_chi state_norm h_input
 
   -- simplify round constant constraint
-  set state0_before_rc := ProvableType.eval' env (varFromOffset U64 (i0 + 888))
+  set state0_before_rc := eval env (varFromOffset U64 (F:=F p) (i0 + 888))
   have h_rc_norm : state0_before_rc.Normalized := by
     simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
     exact chi_norm 0
