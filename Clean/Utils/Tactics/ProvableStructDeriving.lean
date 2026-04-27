@@ -79,6 +79,13 @@ open Lean Meta Elab Term Command Parser.Term
 
 namespace ProvableStructDeriving
 
+/-- Use a declaration name relative to the current namespace when generating commands. -/
+def relativeToCurrentNamespace (name : Name) : CommandElabM Name := do
+  let ns ← getCurrNamespace
+  if ns != .anonymous && ns.isPrefixOf name then
+    return name.replacePrefix ns .anonymous
+  return name
+
 /--
   Information about a structure parameter (other than the final F : Type parameter)
 -/
@@ -370,5 +377,215 @@ def provableStructDerivingHandler (declNames : Array Name) : CommandElabM Bool :
 
 -- Register the deriving handler
 initialize registerDerivingHandler ``ProvableStruct provableStructDerivingHandler
+
+/--
+  Generate a companion structure for one of the `CircuitType` views of a
+  derived `CircuitType`.
+-/
+def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
+    (fieldNameIdents : Array (TSyntax `ident)) (fieldTypes : Array (TSyntax `term))
+    (viewType : TSyntax `term → CommandElabM (TSyntax `term)) : CommandElabM Unit := do
+  let mut binderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
+  for info in paramInfos do
+    match info with
+    | .natural n =>
+      let nIdent := mkIdent n
+      let binder ← `(bracketedBinderF| ($nIdent : ℕ))
+      binderSyntaxes := binderSyntaxes.push binder
+    | .typeMap m =>
+      let mIdent := mkIdent m
+      let typeBinder ← `(bracketedBinderF| ($mIdent : TypeMap))
+      let instBinder ← `(bracketedBinderF| [CircuitType $mIdent])
+      binderSyntaxes := binderSyntaxes.push typeBinder
+      binderSyntaxes := binderSyntaxes.push instBinder
+    | .other n ty =>
+      let nIdent := mkIdent n
+      let tySyntax ← liftTermElabM <| PrettyPrinter.delab ty
+      let binder ← `(bracketedBinderF| ($nIdent : $tySyntax))
+      binderSyntaxes := binderSyntaxes.push binder
+
+  let fIdent := mkIdent `F
+  let fBinder ← `(bracketedBinderF| ($fIdent : Type))
+  binderSyntaxes := binderSyntaxes.push fBinder
+
+  let mut fieldSyntaxes : Array (TSyntax ``Lean.Parser.Command.structSimpleBinder) := #[]
+  for h : i in [:fieldNameIdents.size] do
+    let fname := fieldNameIdents[i]
+    let component := fieldTypes[i]!
+    let ty ← viewType component
+    let field ← `(Lean.Parser.Command.structSimpleBinder| $fname:ident : $ty)
+    fieldSyntaxes := fieldSyntaxes.push field
+
+  let viewIdent := mkIdent (← relativeToCurrentNamespace viewName)
+  let cmd ← `(
+    structure $viewIdent $binderSyntaxes:bracketedBinder* where
+      $fieldSyntaxes:structSimpleBinder*
+  )
+  elabCommand cmd
+
+/--
+  Generate the CircuitType instance declaration.
+-/
+def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
+  let env ← getEnv
+
+  unless isStructure env structName do
+    throwError "{structName} is not a structure"
+
+  let some structInfo := getStructureInfo? env structName
+    | throwError "failed to get structure info for {structName}"
+
+  let some (.inductInfo indInfo) := env.find? structName
+    | throwError "{structName} not found in environment"
+
+  let numParams := indInfo.numParams
+
+  if numParams < 1 then
+    throwError "CircuitType deriving requires at least one type parameter (F : Type), but {structName} has {numParams}"
+
+  let fieldNames := structInfo.fieldNames
+
+  if fieldNames.isEmpty then
+    throwError "CircuitType deriving requires at least one field"
+
+  let (paramInfos, componentSyntaxes) ← liftTermElabM do
+    forallTelescope indInfo.type fun args _ => do
+      let mut infos : Array ParamInfo := #[]
+      for i in [:numParams - 1] do
+        let paramFVar := args[i]!
+        let paramName ← paramFVar.fvarId!.getUserName
+        let paramType ← inferType paramFVar
+        let info ← analyzeParam paramName paramType
+        infos := infos.push info
+
+      let mut components : Array (TSyntax `term) := #[]
+      for fname in fieldNames do
+        let projFnName := structName ++ fname
+        let some (.defnInfo projInfo) := env.find? projFnName
+          | throwError "projection {projFnName} not found"
+
+        let fieldType ← forallTelescope projInfo.type fun projArgs projBody => do
+          if projArgs.size != numParams + 1 then
+            throwError "projection {projFnName} has unexpected arity: {projArgs.size} vs expected {numParams + 1}"
+
+          let mut result := projBody
+          for i in [:numParams] do
+            result := result.replaceFVar projArgs[i]! args[i]!
+          return result
+
+        let componentSyntax ← analyzeFieldType numParams args fieldType
+        components := components.push componentSyntax
+
+      return (infos, components)
+
+  let fieldNameIdents : Array (TSyntax `ident) := fieldNames.map mkIdent
+
+  let varStructName := structName ++ `Var
+  let valueStructName := structName ++ `Value
+  let proverValueStructName := structName ++ `ProverValue
+
+  let fIdent := mkIdent `F
+  mkCircuitViewStruct varStructName paramInfos fieldNameIdents componentSyntaxes
+    (fun component => `(CircuitType.Var $component $fIdent))
+  mkCircuitViewStruct valueStructName paramInfos fieldNameIdents componentSyntaxes
+    (fun component => `(CircuitType.Value $component $fIdent))
+  mkCircuitViewStruct proverValueStructName paramInfos fieldNameIdents componentSyntaxes
+    (fun component => `(CircuitType.ProverValue $component $fIdent))
+
+  let structIdent := mkIdent structName
+  let appliedStructType : TSyntax `term ←
+    if paramInfos.isEmpty then
+      `($structIdent)
+    else
+      let paramIdents := paramInfos.map (fun p => mkIdent p.name)
+      paramIdents.foldlM (init := (structIdent : TSyntax `term)) fun acc paramIdent =>
+        `($acc $paramIdent)
+
+  let viewTypeApp (viewName : Name) : CommandElabM (TSyntax `term) := do
+    let viewIdent := mkIdent (← relativeToCurrentNamespace viewName)
+    if paramInfos.isEmpty then
+      `($viewIdent)
+    else
+      let paramIdents := paramInfos.map (fun p => mkIdent p.name)
+      paramIdents.foldlM (init := (viewIdent : TSyntax `term)) fun acc paramIdent =>
+        `($acc $paramIdent)
+
+  let varType ← viewTypeApp varStructName
+  let valueType ← viewTypeApp valueStructName
+  let proverValueType ← viewTypeApp proverValueStructName
+
+  let mut instanceBinders : Array (TSyntax ``bracketedBinder) := #[]
+  for info in paramInfos do
+    match info with
+    | .natural n =>
+      let nIdent := mkIdent n
+      let binder ← `(bracketedBinderF| {$nIdent : ℕ})
+      instanceBinders := instanceBinders.push binder
+    | .typeMap m =>
+      let mIdent := mkIdent m
+      let typeBinder ← `(bracketedBinderF| {$mIdent : TypeMap})
+      let instBinder ← `(bracketedBinderF| [CircuitType $mIdent])
+      instanceBinders := instanceBinders.push typeBinder
+      instanceBinders := instanceBinders.push instBinder
+    | .other n ty =>
+      let nIdent := mkIdent n
+      let tySyntax ← liftTermElabM <| PrettyPrinter.delab ty
+      let binder ← `(bracketedBinderF| {$nIdent : $tySyntax})
+      instanceBinders := instanceBinders.push binder
+
+  let inputIdent := mkIdent `input
+  let envIdent := mkIdent `env
+  let valueMk := mkIdent (← relativeToCurrentNamespace (valueStructName ++ `mk))
+  let proverValueMk := mkIdent (← relativeToCurrentNamespace (proverValueStructName ++ `mk))
+
+  let mut verifierBody : TSyntax `term := valueMk
+  let mut proverBody : TSyntax `term := proverValueMk
+  for fname in fieldNameIdents do
+    let verifierField ← `($inputIdent.$fname:ident)
+    let verifierEval ← `(Eval.eval $envIdent $verifierField)
+    verifierBody ← `($verifierBody $verifierEval)
+
+    let proverField ← `($inputIdent.$fname:ident)
+    let proverEval ← `(Eval.eval $envIdent $proverField)
+    proverBody ← `($proverBody $proverEval)
+
+  let cmd ←
+    if instanceBinders.isEmpty then
+      `(
+        instance : CircuitType $appliedStructType where
+          Var := $varType
+          Value := $valueType
+          ProverValue := $proverValueType
+          evalVerifier := fun $envIdent $inputIdent => $verifierBody
+          evalProver := fun $envIdent $inputIdent => $proverBody
+      )
+    else
+      `(
+        instance $instanceBinders:bracketedBinder* : CircuitType $appliedStructType where
+          Var := $varType
+          Value := $valueType
+          ProverValue := $proverValueType
+          evalVerifier := fun $envIdent $inputIdent => $verifierBody
+          evalProver := fun $envIdent $inputIdent => $proverBody
+      )
+
+  elabCommand cmd
+
+/-- The deriving handler for record-shaped `CircuitType`s. -/
+def circuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool := do
+  if declNames.size != 1 then
+    return false
+  let declName := declNames[0]!
+  let env ← getEnv
+  unless isStructure env declName do
+    return false
+  try
+    mkCircuitTypeInstance declName
+    return true
+  catch e =>
+    logError m!"Failed to derive CircuitType for {declName}: {e.toMessageData}"
+    return false
+
+initialize registerDerivingHandler ``CircuitType circuitTypeDerivingHandler
 
 end ProvableStructDeriving
