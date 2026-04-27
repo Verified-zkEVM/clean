@@ -218,7 +218,7 @@ omit p_large_enough in
 lemma eval_of_literal (env : Environment (F p)) (a b c d : Expression (F p)) :
     eval env (U32.mk a b c d) =
     U32.mk (a.eval env) (b.eval env) (c.eval env) (d.eval env) := by
-  simp only [CircuitType.eval_var, explicit_provable_type, circuit_norm]
+  simp only [explicit_provable_type, circuit_norm]
 
 omit p_large_enough in
 omit [Fact (Nat.Prime p)] in
@@ -281,11 +281,11 @@ def circuit : FormalAssertion (F p) U32 where
 
   soundness := by
     rintro i0 env x_var ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp_all [CircuitType.eval_var, main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
+    simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
     rintro i0 env x_var _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp_all [CircuitType.eval_var, main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
+    simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
 end U32.AssertNormalized
 

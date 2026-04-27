@@ -53,8 +53,7 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
 theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs as h
 
-  simp only [circuit_norm, explicit_provable_type, toVars, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-    fromElements, U32.mk.injEq] at h_inputs
+  simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_inputs
   obtain ⟨h_x0, h_x1, h_x2, h_x3⟩ := h_inputs
   clear h
 

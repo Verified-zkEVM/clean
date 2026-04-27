@@ -96,7 +96,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
   rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
-  simp only [circuit_norm, ProvableType.eval_field] at h_input
+  simp only [circuit_norm] at h_input
   simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
   simp only [henv]
   have pow_8_nat : 2^8 = 2^(8-offset.val) * 2^offset.val := by simp [←pow_add]
