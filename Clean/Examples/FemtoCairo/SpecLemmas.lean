@@ -22,7 +22,7 @@ lemma ZMod_val_add_nat (x : F p) (n : ℕ) (h : x.val + n < p) :
 
 omit [Fact p.Prime] p_large_enough in
 /-- If memoryAccess succeeds, the address is in bounds -/
-lemma memoryAccess_isSome_implies_bounds {n : ℕ} [NeZero n]
+lemma memoryAccess_isSome_implies_bounds {n : ℕ}
     (memory : Fin n → F p) (addr : F p)
     (h : (memoryAccess memory addr).isSome) : addr.val < n := by
   simp only [memoryAccess, Option.isSome_iff_exists] at h
@@ -32,7 +32,7 @@ lemma memoryAccess_isSome_implies_bounds {n : ℕ} [NeZero n]
 
 omit [Fact p.Prime] p_large_enough in
 /-- If memoryAccess returns some value, the address is in bounds -/
-lemma memoryAccess_eq_some_implies_bounds {n : ℕ} [NeZero n]
+lemma memoryAccess_eq_some_implies_bounds {n : ℕ}
     (memory : Fin n → F p) (addr : F p) (v : F p)
     (h : memoryAccess memory addr = some v) : addr.val < n :=
   memoryAccess_isSome_implies_bounds memory addr (Option.isSome_iff_exists.mpr ⟨v, h⟩)
@@ -55,8 +55,8 @@ lemma decodeInstruction_eq_some_implies_bound (instr : F p) (result : ℕ × ℕ
 omit p_large_enough in
 /-- If femtoCairoMachineTransition succeeds, fetchInstruction succeeds -/
 lemma transition_isSome_implies_fetch_isSome
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (state : State (F p))
     (h : (femtoCairoMachineTransition program memory state).isSome) :
     (fetchInstruction program state.pc).isSome := by
@@ -70,7 +70,7 @@ lemma transition_isSome_implies_fetch_isSome
 omit p_large_enough in
 /-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 < programSize -/
 lemma fetchInstruction_isSome_implies_pc_bound
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
     (h_valid_size : ValidProgramSize p programSize)
     (pc : F p)
     (h : (fetchInstruction program pc).isSome) : pc.val + 3 < programSize := by
@@ -99,8 +99,8 @@ lemma fetchInstruction_isSome_implies_pc_bound
 omit p_large_enough in
 /-- If transition succeeds, decode succeeds -/
 lemma transition_isSome_implies_decode_isSome
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (state : State (F p))
     (h : (femtoCairoMachineTransition program memory state).isSome) :
     ∃ raw, fetchInstruction program state.pc = some raw ∧
@@ -122,8 +122,8 @@ lemma transition_isSome_implies_decode_isSome
 omit p_large_enough in
 /-- If transition succeeds with ValidProgram, the fetched instruction type is < 256 -/
 lemma transition_isSome_with_valid_program_implies_instr_bound
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (state : State (F p))
     (_h_valid : ValidProgram program)
     (h_trans : (femtoCairoMachineTransition program memory state).isSome) :
@@ -137,8 +137,8 @@ lemma transition_isSome_with_valid_program_implies_instr_bound
 omit p_large_enough in
 /-- If transition succeeds, all intermediate steps succeed -/
 lemma transition_isSome_implies_computeNextState_isSome
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (state : State (F p))
     (h : (femtoCairoMachineTransition program memory state).isSome) :
     ∃ raw decode v1 v2 v3,
@@ -174,8 +174,8 @@ lemma transition_isSome_implies_computeNextState_isSome
 omit p_large_enough in
 /-- If boundedExec n = some state and boundedExec (n+1).isSome, then transition(state).isSome -/
 lemma transition_isSome_of_boundedExecution_succ_isSome
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (initialState : Option (State (F p))) (state : State (F p)) (n : ℕ)
     (h_n : femtoCairoMachineBoundedExecution program memory initialState n = some state)
     (h_succ : (femtoCairoMachineBoundedExecution program memory initialState (n + 1)).isSome) :
@@ -187,15 +187,9 @@ lemma transition_isSome_of_boundedExecution_succ_isSome
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- ValidProgram ensures any program access returns a value < 256 -/
-lemma validProgram_bound {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
+lemma validProgram_bound {programSize : ℕ} {program : Fin programSize → F p}
     (h_valid : ValidProgram program) (i : Fin programSize) :
     (program i).val < 256 := h_valid i
-
-omit [Fact (Nat.Prime p)] p_large_enough in
-/-- ValidProgram + Fin.ofNat gives bound < 256 (useful when index comes from witness computation) -/
-lemma validProgram_bound_at_ofNat {programSize : ℕ} [NeZero programSize] {program : Fin programSize → F p}
-    (h_valid : ValidProgram program) (n : ℕ) :
-    (program (Fin.ofNat programSize n)).val < 256 := h_valid _
 
 omit p_large_enough in
 /-- If decodeInstruction succeeds, the result encodes a valid instruction type -/
@@ -275,7 +269,7 @@ lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : �
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- If dataMemoryAccess succeeds, specific accessed addresses are in bounds -/
 lemma dataMemoryAccess_mode0_bound
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (offset ap fp result : F p)
     (h : dataMemoryAccess memory offset 0 ap fp = some result) :
     (ap + offset).val < memorySize ∧
@@ -296,7 +290,7 @@ lemma dataMemoryAccess_mode0_bound
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- If dataMemoryAccess succeeds in mode 1 (ap-relative), the address is in bounds -/
 lemma dataMemoryAccess_mode1_bound
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (offset ap fp result : F p)
     (h : dataMemoryAccess memory offset 1 ap fp = some result) :
     (ap + offset).val < memorySize := by
@@ -306,7 +300,7 @@ lemma dataMemoryAccess_mode1_bound
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- If dataMemoryAccess succeeds in mode 2 (fp-relative), the address is in bounds -/
 lemma dataMemoryAccess_mode2_bound
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (offset ap fp result : F p)
     (h : dataMemoryAccess memory offset 2 ap fp = some result) :
     (fp + offset).val < memorySize := by
@@ -316,8 +310,8 @@ lemma dataMemoryAccess_mode2_bound
 omit p_large_enough in
 /-- If transition succeeds, all memory addresses accessed are in bounds -/
 lemma transition_isSome_implies_all_memory_bounds
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p)
     (state : State (F p))
     (h : (femtoCairoMachineTransition program memory state).isSome) :
     ∃ raw decode,
@@ -336,7 +330,7 @@ lemma transition_isSome_implies_all_memory_bounds
 omit p_large_enough in
 /-- If fetchInstruction succeeds, rawInstrType is a valid program memory value -/
 lemma fetchInstruction_rawInstrType_eq_program
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
     (pc : F p) (raw : Types.RawInstruction (F p))
     (h : fetchInstruction program pc = some raw)
     (h_bound : pc.val < programSize) :
@@ -364,7 +358,7 @@ lemma fetchInstruction_rawInstrType_eq_program
 omit p_large_enough in
 /-- Combining ValidProgram with fetchInstruction success gives rawInstrType.val < 256 -/
 lemma fetchInstruction_rawInstrType_bound
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → F p)
+    {programSize : ℕ} (program : Fin programSize → F p)
     (h_valid : ValidProgram program)
     (pc : F p) (raw : Types.RawInstruction (F p))
     (h : fetchInstruction program pc = some raw)
