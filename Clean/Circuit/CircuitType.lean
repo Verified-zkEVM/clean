@@ -33,16 +33,15 @@ disagree: e.g. a `ProverHint Hint F` evaluates to `Unit` under `Environment F` b
 class Eval (Env : Type) (Var : Type) (Value : outParam Type) where
   eval : Env → Var → Value
 
-/--
-Public evaluator.
-
-Keep this wrapper irreducible so ordinary reduction cannot expose a particular
-`Eval` instance implementation. Normalization should go through explicit simp
-lemmas (`circuit_norm`, `explicit_provable_type`) instead.
+/-
+`eval` is designed to be the normal form of evaluation statements across instances.
+It is marked irreducible so it stays intact instead of being replaced by particular
+`Eval` instance implementations on specialization/unfolding/whnf.
+Normalization should go through explicit simp lemmas (`circuit_norm`, `explicit_provable_type`) instead.
 -/
-@[irreducible]
-def eval {Env Var Value : Type} [Eval Env Var Value] : Env → Var → Value :=
-  Eval.eval
+attribute [irreducible] Eval.eval
+
+export Eval (eval)
 
 /-- Verifier evaluation is `Eval` specialized to `Environment F`. -/
 @[circuit_norm]
@@ -92,32 +91,16 @@ class CircuitType (Input : TypeMap) where
   to a `M F` (see `eval` below).
   -/
   Var : TypeMap
-  /-- Prover value — hint fields carry their underlying type. -/
-  ProverValue : TypeMap
   /-- Verifier value — hint fields are erased to `Unit`. -/
   Value : TypeMap
+  /-- Prover value — hint fields carry their underlying type. -/
+  ProverValue : TypeMap
   evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → Value F
   evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → ProverValue F
 
 export CircuitType (Var Value ProverValue)
 
-variable {Input : TypeMap} [CircuitType Input]
-
-instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained Hint) where
-  Var := ProverHint Hint
-  ProverValue _ := Hint
-  Value _ := Unit
-  evalVerifier _ _ := ()
-  evalProver env v := v env
-
 namespace CircuitType
-@[circuit_norm] lemma var_of_unconstrained (Hint F) :
-  Var (Unconstrained Hint) F = ProverHint Hint F := rfl
-@[circuit_norm] lemma proverValue_of_unconstrained (Hint F) :
-  ProverValue (Unconstrained Hint) F = Hint := rfl
-@[circuit_norm] lemma value_of_unconstrained (Hint F) :
-  Value (Unconstrained Hint) F = Unit := rfl
-
 /--
 A `CircuitType Input` instance induces a verifier-side `Eval` on `Var Input F`.
 This lets `eval env var` work uniformly whether the Var came from a `ProvableType`-derived
@@ -134,46 +117,44 @@ lemma eval_verifier [CircuitType M] (env : Environment F) (v : Var M F) :
   eval env v = evalVerifier env v := by
   unfold eval
   rfl
+
 lemma eval_prover [CircuitType M] (env : ProverEnvironment F) (v : Var M F) :
   eval env v = evalProver env v := by
   unfold eval
   rfl
+end CircuitType
+
+variable {Input : TypeMap} [CircuitType Input]
+
+instance Unconstrained.toCircuitType {Hint : Type} : CircuitType (Unconstrained Hint) where
+  Var F := ProverEnvironment F → Hint
+  ProverValue _ := Hint
+  Value _ := Unit
+  evalVerifier _ _ := ()
+  evalProver env v := v env
+
+namespace CircuitType
+@[circuit_norm] lemma var_of_unconstrained (Hint F) :
+  Var (Unconstrained Hint) F = ProverHint Hint F := rfl
+@[circuit_norm] lemma proverValue_of_unconstrained (Hint F) :
+  ProverValue (Unconstrained Hint) F = Hint := rfl
+@[circuit_norm] lemma value_of_unconstrained (Hint F) :
+  Value (Unconstrained Hint) F = Unit := rfl
+
 
 /- forwarding instances to help instance search get through defeq -/
 
 instance : VerifierEval F (ProverHint Hint F) Unit := verifierEval (Unconstrained Hint)
 instance : ProverEval F (ProverHint Hint F) Hint := proverEval (Unconstrained Hint)
 
-/-!
-## Simp bridges
-
-`circuit_norm` should normalize a dispatched evaluation `eval` to public concrete
-forms (`Expression.eval`, evaluated tuples/vectors, or the underlying hint computation),
-without generally exposing implementation-specific evaluation definitions.
-
-Lemmas are stated on `eval` (the primary API); goals or hypotheses written with
-`evalVerifier` / `evalProver` (which are `abbrev`s over `eval`) match by reducibility.
-
-All are `rfl` thanks to the corresponding `Eval` instance.
-
-ProvableType-specific bridges live in `Provable.lean`.
--/
-
 attribute [circuit_norm] evalVerifier evalProver
 
--- TODO we also need to simp toElements and fromElements to their ProvableType versions
--- all the lemmas that prove using `simp only [circuit_norm]` might actually not be needed
-
 @[circuit_norm] lemma eval_hint (env : Environment F) (v : ProverHint Hint F) :
-  eval env v = () := by
-  unfold eval
-  change (verifierEval (Unconstrained Hint)).eval env v = ()
-  rfl
+  eval env v = () := by rfl
 
 @[circuit_norm] lemma eval_hint_prover (env : ProverEnvironment F) (v : ProverHint Hint F) :
-  eval env v = v env := by
-  unfold eval
-  change (proverEval (Unconstrained Hint)).eval env v = v env
+    eval env v = v env := by
+  rw [eval_prover (M := Unconstrained Hint)]
   rfl
 
 end CircuitType
