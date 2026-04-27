@@ -181,17 +181,14 @@ theorem fromElements_eval_toElements {α : TypeMap} [ProvableType α] {env : Env
 
 end ProvableType
 
-@[reducible]
-def unit (_ : Type) := Unit
+abbrev unit (_ : Type) := Unit
 
 instance : ProvableType unit where
   size := 0
   toElements _ := #v[]
   fromElements _ := ()
 
-@[reducible] def field : TypeMap := id
-
-@[reducible] def fieldVar (F : Type) := field (Expression F)
+abbrev field : TypeMap := id
 
 @[circuit_norm]
 instance : ProvableType field where
@@ -227,14 +224,11 @@ instance : ProverEval F (M (Var field F)) (M F) := proverEval M
 
 end CircuitType
 
-@[reducible]
-def ProvablePair (α β : TypeMap) := fun F => α F × β F
+abbrev ProvablePair (α β : TypeMap) := fun F => α F × β F
 
-@[reducible]
-def fieldPair : TypeMap := fun F => F × F
+abbrev fieldPair : TypeMap := fun F => F × F
 
-@[reducible]
-def fieldTriple : TypeMap := fun F => F × F × F
+abbrev fieldTriple : TypeMap := fun F => F × F × F
 
 instance : ProvableType fieldPair where
   size := 2
@@ -249,11 +243,9 @@ instance : ProvableType fieldTriple where
 instance : NonEmptyProvableType fieldTriple where
 
 variable {n : ℕ}
-@[reducible]
-def ProvableVector (α : TypeMap) (n : ℕ) := fun F => Vector (α F) n
+abbrev ProvableVector (α : TypeMap) (n : ℕ) := fun F => Vector (α F) n
 
-@[reducible]
-def fields (n : ℕ) := fun F => Vector F n
+abbrev fields (n : ℕ) := fun F => Vector F n
 
 @[circuit_norm]
 instance : ProvableType (fields n) where
@@ -319,8 +311,7 @@ inductive ProvableTypeList (F : Type) : List WithProvableType → Type 1 where
 | nil : ProvableTypeList F []
 | cons : ∀ {a : WithProvableType} {as : List WithProvableType}, a.type F → ProvableTypeList F as → ProvableTypeList F (a :: as)
 
-@[reducible]
-def combinedSize' (cs : List WithProvableType) : ℕ := cs.map (fun x => x.provableType.size) |>.sum
+abbrev combinedSize' (cs : List WithProvableType) : ℕ := cs.map (fun x => x.provableType.size) |>.sum
 end ProvableStruct
 
 -- if we can split a type into components that are provable types, then this gives us a provable type
@@ -689,8 +680,7 @@ end ProvableType
 section
 variable {n : ℕ} {α : TypeMap} [NonEmptyProvableType α]
 
-@[reducible]
-def psize (α : TypeMap) [NonEmptyProvableType α] : ℕ+ :=
+abbrev psize (α : TypeMap) [NonEmptyProvableType α] : ℕ+ :=
   ⟨ size α, NonEmptyProvableType.nonempty ⟩
 
 instance ProvableVector.instance : ProvableType (ProvableVector α n) where
