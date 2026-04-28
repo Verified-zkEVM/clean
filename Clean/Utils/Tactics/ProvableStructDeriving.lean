@@ -1,4 +1,5 @@
 import Lean
+import Lean.Elab.Deriving.Util
 import Clean.Circuit.Provable
 
 /-!
@@ -131,6 +132,13 @@ def ParamInfo.name : ParamInfo → Name
   | .natural n => n
   | .typeMap n => n
   | .other n _ => n
+
+def mkAppliedInductiveWithoutFieldParam (indInfo : InductiveVal) (paramInfos : Array ParamInfo) :
+    CommandElabM (TSyntax `term) := do
+  if paramInfos.isEmpty then
+    return mkIdent indInfo.name
+  liftTermElabM do
+    Lean.Elab.Deriving.mkInductiveApp indInfo (paramInfos.map ParamInfo.name)
 
 /--
   Analyze a field type to determine its TypeMap.
@@ -326,9 +334,6 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
     let fname := fieldNameIdents[idx]!
     fromCompPat ← `(.cons $fname $fromCompPat)
 
-  -- Build the struct literal with fields
-  let structIdent := mkIdent structName
-
   -- For fromComponents, we build the struct constructor explicitly: StructName.mk f1 f2 f3
   let structMk := mkIdent (structName ++ `mk)
   let mkAppSyntax ← fieldNameIdents.foldlM (init := (structMk : TSyntax `term)) fun acc fname =>
@@ -341,13 +346,7 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
 
   -- Build the applied structure type if there are extra parameters
   -- e.g., Inputs n M for structure Inputs (n : ℕ) (M : TypeMap) (F : Type)
-  let appliedStructType : TSyntax `term ←
-    if paramInfos.isEmpty then
-      `($structIdent)
-    else
-      let paramIdents := paramInfos.map (fun p => mkIdent p.name)
-      paramIdents.foldlM (init := (structIdent : TSyntax `term)) fun acc paramIdent =>
-        `($acc $paramIdent)
+  let appliedStructType ← mkAppliedInductiveWithoutFieldParam indInfo paramInfos
 
   -- Build the instance binders for extra parameters using bracketedBinderF
   -- e.g., {n : ℕ} {M : TypeMap} [ProvableType M]
@@ -524,14 +523,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
   mkCircuitViewStruct proverValueStructName paramInfos fieldNameIdents componentSyntaxes
     (fun component => `(CircuitType.ProverValue $component $fIdent))
 
-  let structIdent := mkIdent structName
-  let appliedStructType : TSyntax `term ←
-    if paramInfos.isEmpty then
-      `($structIdent)
-    else
-      let paramIdents := paramInfos.map (fun p => mkIdent p.name)
-      paramIdents.foldlM (init := (structIdent : TSyntax `term)) fun acc paramIdent =>
-        `($acc $paramIdent)
+  let appliedStructType ← mkAppliedInductiveWithoutFieldParam indInfo paramInfos
 
   let viewTypeApp (viewName : Name) : CommandElabM (TSyntax `term) := do
     let viewIdent := mkIdent (← relativeToCurrentNamespace viewName)
