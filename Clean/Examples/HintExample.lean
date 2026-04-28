@@ -92,40 +92,4 @@ example (input : MixedInput.ProverValue (F p)) : U32 (F p) × Bool :=
   (input.someElement, input.someHint)
 example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
   (input.someElement, input.someHint)
-
-/--
-  A circuit with both ordinary provable input data and a prover-only hint.
-
-  The verifier sees `someElement`, but `someHint` is erased to `Unit` in the
-  soundness statement. The prover still sees the hint in completeness and uses it
-  to choose the witnessed boolean.
--/
-def witnessMixedHint : GeneralFormalCircuit.WithHint (F p) MixedInput field where
-  main (input : MixedInput.Var (F p)) := do
-    let b ← witness fun env => if input.someHint env then 1 else 0
-    assertBool b
-    return b
-
-  localLength _ := 1
-  output _ i := var ⟨i⟩
-
-  Assumptions _ _ := True
-  Spec _ (output : F p) _ := IsBool output
-
-  ProverAssumptions _ _ _ := True
-  ProverSpec input (output : F p) _ := output = if input.someHint then 1 else 0
-
-  soundness := by
-    circuit_proof_all [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-
-  completeness := by
-    circuit_proof_start [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-    have h_hint : input.someHint = input_var.someHint env := by
-      have h := congrArg MixedInput.ProverValue.someHint h_input
-      rw [CircuitType.eval_prover] at h
-      change eval env input_var.someHint = input.someHint at h
-      rw [CircuitType.eval_hint_prover] at h
-      exact h.symm
-    cases input_var.someHint env <;> simp_all
-
 end Examples.HintExample
