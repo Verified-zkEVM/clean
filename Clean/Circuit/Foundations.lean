@@ -20,7 +20,7 @@ variable [CircuitType α] [CircuitType β]
 
 /--
   Justification for using a modified statement for `ConstraintsHold`
-  in the `FormalCircuit` definition.
+  in the `GeneralFormalCircuit` definition.
 -/
 theorem original_soundness (circuit : GeneralFormalCircuit.WithHint F β α) :
     ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F),
@@ -35,7 +35,7 @@ theorem original_soundness (circuit : GeneralFormalCircuit.WithHint F β α) :
 
 /--
   Justification for using modified statements for `UsesLocalWitnesses`
-  and `ConstraintsHold` in the `FormalCircuit` definition.
+  and `ConstraintsHold` in the `GeneralFormalCircuit` definition.
 -/
 theorem original_completeness (circuit : GeneralFormalCircuit.WithHint F β α) :
     ∀ (offset : ℕ) (env : ProverEnvironment F) (b_var : Var β F),
