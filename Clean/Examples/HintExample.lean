@@ -113,10 +113,6 @@ example (input : CircuitBool.Var (F p)) : ∀ env : ProverEnvironment (F p),
     IsBool (eval env input.bool) := by
   intro env; exact input.isBool env
 
-example (env : Environment (F p)) (input : CircuitBool.Var (F p)) :
-    (eval env input).bool = eval env input.bool := by
-  simp only [CircuitType.eval_verifier (M := CircuitBool), circuit_norm]
-
 namespace CircuitBool
 variable {F : Type} [Field F]
 
