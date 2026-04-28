@@ -2,11 +2,18 @@ import Lean
 import Clean.Circuit.Provable
 
 /-!
-  # Deriving handler for ProvableStruct
+  # Deriving handlers for ProvableStruct and CircuitType
 
-  This macro generates `ProvableStruct` instances for structures where all fields
+  This file defines deriving handlers for record-shaped circuit data.
+
+  The `ProvableStruct` macro generates `ProvableStruct` instances for structures where all fields
   are of the form `M F` where `M : TypeMap` (i.e., `M : Type → Type`), and each `M`
   must have a `ProvableType M` instance.
+
+  The `CircuitType` macro generates companion `Var`, `Value`, and `ProverValue`
+  structures, plus a `CircuitType` instance, for structures whose fields implement
+  `CircuitType`. This allows circuit inputs to mix ordinary provable data with
+  prover-only hints such as `Unconstrained`.
 
   ## Basic usage
 
@@ -24,6 +31,31 @@ import Clean.Circuit.Provable
     components := [field, field, field]
     toComponents := fun ⟨pc, ap, fp⟩ => .cons pc (.cons ap (.cons fp .nil))
     fromComponents := fun (.cons pc (.cons ap (.cons fp .nil))) => MyState.mk pc ap fp
+  ```
+
+  For `CircuitType`:
+
+  ```lean
+  structure Inputs (F : Type) where
+    someElement : U32 F
+    someHint : Unconstrained Bool F
+  deriving CircuitType
+  ```
+
+  Generates companion views equivalent to:
+
+  ```lean
+  structure Inputs.Var (F : Type) where
+    someElement : Var U32 F
+    someHint : ProverEnvironment F → Bool
+
+  structure Inputs.Value (F : Type) where
+    someElement : Value U32 F
+    someHint : Unit
+
+  structure Inputs.ProverValue (F : Type) where
+    someElement : ProverValue U32 F
+    someHint : Bool
   ```
 
   ## Extra type parameters
