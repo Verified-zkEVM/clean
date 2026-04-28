@@ -100,7 +100,7 @@ on prover knowledge, because we don't surface a way to reason about the environm
 assuming honest prover witness generation.
 
 For example, it is not possible to implement `HasAssignEq`:
-we can prove the `isBool` property for the copied variable.
+we cannot prove the `isBool` property for the copied variable.
 
 So, as it stands, this pattern is less useful than the code below suggests.
 -/
