@@ -93,6 +93,17 @@ example (input : MixedInput.ProverValue (F p)) : U32 (F p) × Bool :=
 example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
   (input.someElement, input.someHint)
 
+/--
+The following seems like a cool experiment at first glance.
+The main problem is that it's not possible to generate `CircuitBool` values in a circuit based
+on prover knowledge, because we don't surface a way to reason about the environment
+assuming honest prover witness generation.
+
+For example, it is not possible to implement `HasAssignEq`:
+we can prove the `isBool` property for the copied variable.
+
+So, as it stands, this pattern is less useful than the code below suggests.
+-/
 structure CircuitBool (F : Type) where
   bool : F
   isBool [Field F] : IsBool bool
@@ -131,11 +142,11 @@ def toBool [DecidableEq F] (x : CircuitBool F) : Bool := x.bool = 1
 
 def Value.toBool [DecidableEq F] (x : CircuitBool.Value F) : Bool := x.bool = 1
 
-def negate (input : CircuitBool.Var F) : CircuitBool.Var F where
+def Var.negate (input : CircuitBool.Var F) : CircuitBool.Var F where
   bool := (1 : F) - input.bool
   isBool env := by
-    have h_input := input.isBool env
-    simp only [circuit_norm, IsBool] at h_input ⊢
+    have h_bool := input.isBool env
+    simp only [circuit_norm, IsBool] at h_bool ⊢
     grind
 end CircuitBool
 
@@ -148,17 +159,22 @@ end CircuitBool
 -/
 def boolNegate : GeneralFormalCircuit.WithHint (F p) CircuitBool CircuitBool where
   main (input : CircuitBool.Var (F p)) := do
-    return CircuitBool.negate input
+    let c := input.negate
+    -- unnecessary constraint, just there to show that completeness is automatic
+    assertBool c.bool
+    return c
 
   localLength _ := 0
-  output input _ := CircuitBool.negate input
+  output input _ := input.negate
 
+  -- we don't need any completeness statements! these are already captured by the
+  -- `CircuitBool.isBool` property
   Assumptions input _ := IsBool input.bool
   Spec input output _ := IsBool output.bool ∧
     output.toBool = ¬ input.toBool
 
   soundness := by
-    circuit_proof_start [CircuitBool.Value.toBool, CircuitBool.negate, IsBool]
+    circuit_proof_start [CircuitBool.Value.toBool, CircuitBool.Var.negate, IsBool]
     -- TODO do this automatically for circuit inputs
     rcases input with ⟨ bool, h_bool ⟩
     -- TODO why doesn't this work with simp only?
@@ -167,6 +183,10 @@ def boolNegate : GeneralFormalCircuit.WithHint (F p) CircuitBool CircuitBool whe
     grind
 
   completeness := by
-    circuit_proof_all
+    circuit_proof_start [CircuitBool.Value.toBool, CircuitBool.Var.negate, IsBool]
+    rcases input with ⟨ bool, h_bool ⟩
+    rw [CircuitBool.ProverValue.mk.injEq] at h_input
+    simp_all only [IsBool]
+    grind
 
 end Examples.HintExample

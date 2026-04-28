@@ -820,7 +820,6 @@ def mkDependentCircuitTypeInstance? (structName : Name) : CommandElabM Bool := d
       structure $nameIdent $binders:bracketedBinder* where
         $fieldSyntaxes:structSimpleBinder*
     )
-    logInfo m!"generated dependent CircuitType struct:\n{cmd}"
     elabCommand cmd
 
   mkStruct varStructName #[fBinder, fieldBinder] varFieldTypes
@@ -851,7 +850,6 @@ def mkDependentCircuitTypeInstance? (structName : Name) : CommandElabM Bool := d
       evalVerifier := fun $envIdent $inputIdent => $verifierBody
       evalProver := fun $envIdent $inputIdent => $proverBody
   )
-  logInfo m!"generated dependent CircuitType instance:\n{instanceCmd}"
   elabCommand instanceCmd
   mkCircuitEvalForwardingInstances #[] structIdent varIdent valueIdent proverValueIdent
   return true
