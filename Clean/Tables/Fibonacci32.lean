@@ -100,10 +100,10 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
-    eval env (varFromOffset U32 0) = curr.x ∧
-    eval env (varFromOffset U32 4) = curr.y ∧
-    eval env (varFromOffset U32 8) = next.x ∧
-    eval env (U32.mk (var ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
+    eval env (varFromOffset (F:=F p) U32 0) = curr.x ∧
+    eval env (varFromOffset (F:=F p) U32 4) = curr.y ∧
+    eval env (varFromOffset (F:=F p) U32 8) = next.x ∧
+    eval env (U32.mk (var (F:=F p) ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
   := by
   intro env
   dsimp only [env, windowEnv]
@@ -132,7 +132,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : ProverEnvironme
     assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
   simp only [table_norm, circuit_norm, Nat.reduceAdd, zero_add] at h_add
-  simp only [circuit_norm] at hnext_y
+  simp only [circuit_norm] at hcurr_x hcurr_y hnext_x hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
   clear hcurr_x hcurr_y hnext_x hnext_y
@@ -156,8 +156,8 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
 omit p_large_enough in
 lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env;
-    eval env (varFromOffset U32 0) = first_row.x ∧
-    eval env (varFromOffset U32 4) = first_row.y := by
+    eval env (varFromOffset (F:=F p) U32 0) = first_row.x ∧
+    eval env (varFromOffset (F:=F p) U32 4) = first_row.y := by
   intro env
   dsimp only [env, windowEnv]
   have h_offset : (boundary (p:=p)).finalAssignment.offset = 8 := rfl
@@ -176,6 +176,7 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvi
   simp only [table_norm, boundary, circuit_norm]
   simp only [and_imp]
   have ⟨hx, hy⟩ := boundary_vars first_row aux_env
+  simp only [circuit_norm] at hx hy
   rw [hx, hy]
   intro x_zero y_one
   rw [x_zero, y_one]

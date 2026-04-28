@@ -35,7 +35,8 @@ def inputLinearSub (n : ℕ) (inp : BinSubInput n (Expression (F p))) : Expressi
   Fin.foldl n (fun lin k => lin + inp[0][k] * (2^k.val : F p) - (inp[1][k] * (2^k.val : F p))) (2^n : F p)
 
 -- Lemma: evaluating `inputLinearSub` corresponds to the circuit's desired output
-lemma inputLinearSub_eval_eq_sub {n : ℕ} [hn : NeZero n] (env : Environment (F p)) (input : Var (BinSubInput n) (F p)) (input_val : BinSubInput n (F p)) (h_eval : ProvableType.eval env input = input_val) :
+lemma inputLinearSub_eval_eq_sub {n : ℕ} [hn : NeZero n] (env : Environment (F p))
+  (input : Var (BinSubInput n) (F p)) (input_val : BinSubInput n (F p)) (h_eval : eval env input = input_val) :
     Expression.eval env (inputLinearSub n input) =
       fieldFromBits input_val[0] + 2^n - fieldFromBits input_val[1] := by
   simp only [inputLinearSub, circuit_norm, eval_foldl]
@@ -83,7 +84,7 @@ lemma lin_bound {p : ℕ} [Fact p.Prime] {n : ℕ} (in0 in1 : F p)  (h0 : in0.va
 
 -- Lemma: Simplified LHS evaluation for soundness proof
 lemma soundness_lhs_eval {n : ℕ} [NeZero n] (env : Environment (F p)) (input_var : Var (BinSubInput n) (F p)) (input : BinSubInput n (F p))
-    (h_input : ProvableType.eval env input_var = input) :
+    (h_input : eval env input_var = input) :
     Expression.eval env (inputLinearSub n input_var) = fieldFromBits input[0] + 2^n - fieldFromBits input[1] := by
   apply inputLinearSub_eval_eq_sub; assumption
 
@@ -135,7 +136,7 @@ lemma completeness_sum_mod {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Env
 -- Lemma: Aux bit equals lin divided by 2^n
 lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
     (input : BinSubInput n (F p)) (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
-    (input_var : Var (BinSubInput n) (F p)) (h_input : ProvableType.eval env input_var = input)
+    (input_var : Var (BinSubInput n) (F p)) (h_input : eval env input_var = input)
     (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
     (env.get (i₀ + n)).val = (Expression.eval env (inputLinearSub n input_var)).val / 2^n := by
   rw [h_env_aux]
@@ -170,7 +171,7 @@ lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Env
 -- Lemma: Main reconstruction equation for completeness
 lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Environment (F p)) (i₀ : ℕ)
     (input : BinSubInput n (F p)) (input_var : Var (BinSubInput n) (F p))
-    (h_input : ProvableType.eval env input_var = input)
+    (h_input : eval env input_var = input)
     (h_assumptions : ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
     (h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)))
     (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i])

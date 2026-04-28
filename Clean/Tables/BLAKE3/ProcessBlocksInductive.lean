@@ -83,18 +83,13 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
     simp_all [← h_input, eval_vector]
 
   completeness := by
-    circuit_proof_start [U32.AssertNormalized.circuit]
+    circuit_proof_start [U32.AssertNormalized.circuit, getElem_eval_vector] -- provable_vector_simp wanted
     simp only [ProcessBlocksState.Normalized] at h_spec
     constructor
     · rintro ⟨i, h_i⟩
-      have : (eval env input_var_chaining_value : ProvableVector _ 8 _)[i] = input_chaining_value[i] := by simp only [h_input]
-      simp only [eval_vector] at this
-      simp only [Vector.getElem_map] at this
-      simp only [this]
       rcases h_spec with ⟨h_spec, _⟩
       specialize h_spec ⟨ i, h_i ⟩
       convert h_spec
-    simp only [←h_input, eval_vector] at h_spec -- provable_vector_simp wanted
     simp_all
 
 end BLAKE3ProcessBlocksStateNormalized

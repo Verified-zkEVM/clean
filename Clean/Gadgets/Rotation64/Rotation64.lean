@@ -44,51 +44,28 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   output _ i0 := output off i0
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
-
-  simp [circuit_norm, main, elaborated,
-    Rotation64Bits.circuit, Rotation64Bits.elaborated] at h_holds
+  circuit_proof_start [Rotation64Bits.circuit, Rotation64Bits.elaborated]
 
   -- abstract away intermediate U64
   let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
-  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
+  set byte_rotated := eval env
+    ((Rotation64Bytes.circuit byte_offset).output input_var i₀)
 
-  simp only [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions,
-    Rotation64Bytes.Spec, Rotation64Bits.Assumptions, Rotation64Bits.Spec, add_zero] at h_holds
-  simp only [Spec, elaborated, output, ElaboratedCircuit.output]
-  set y := eval env (Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0)
-
-  simp [Assumptions] at x_normalized
-  rw [←h_input] at x_normalized
-  obtain ⟨h0, h1⟩ := h_holds
-  specialize h0 x_normalized
-  obtain ⟨hy_rot, hy_norm⟩ := h0
-  specialize h1 hy_norm
-  rw [hy_rot] at h1
-  obtain ⟨hy, hy_norm⟩ := h1
-  simp only [hy_norm, and_true]
-  rw [h_input] at hy x_normalized
+  simp only [Rotation64Bytes.circuit, Rotation64Bytes.elaborated,
+    Rotation64Bytes.Assumptions, Rotation64Bytes.Spec, add_zero,
+    Rotation64Bits.Assumptions, Rotation64Bits.Spec, output] at h_holds ⊢
+  set y : U64 (F p) := eval env (Rotation64Bits.output (p:=p) ⟨ offset.val % 8, by omega ⟩ i₀)
+  simp_all only [forall_const, and_true]
 
   -- reason about rotation
-  rw [rotRight64_composition _ _ _ (U64.value_lt_of_normalized x_normalized)] at hy
-  rw [hy, Nat.div_add_mod']
+  rw [rotRight64_composition _ _ _ (U64.value_lt_of_normalized h_assumptions),
+    Nat.div_add_mod']
 
 theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var h_env x h_eval x_normalized
-
-  simp only [circuit_norm, main, elaborated,
-    Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Assumptions,
-    Rotation64Bytes.circuit, Rotation64Bytes.Assumptions, Rotation64Bytes.Spec] at h_env ⊢
-
-  obtain ⟨h0, _⟩ := h_env
-  rw [h_eval] at h0
-  specialize h0 x_normalized
-  obtain ⟨h_rot, h_norm⟩ := h0
-
-  simp only [Assumptions] at x_normalized
-  rw [h_eval]
-  simp only [x_normalized, true_and, h_norm]
+  circuit_proof_all [Rotation64Bits.circuit, Rotation64Bits.elaborated,
+    Rotation64Bits.Assumptions, Rotation64Bytes.circuit,
+    Rotation64Bytes.Assumptions, Rotation64Bytes.Spec]
 
 def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 := {
   elaborated offset with

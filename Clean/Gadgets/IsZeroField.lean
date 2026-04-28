@@ -12,7 +12,7 @@ variable {F : Type} [Field F] [DecidableEq F]
 Main circuit that checks if a field element is zero.
 Returns 1 if the input is 0, otherwise returns 0.
 -/
-def main (x : Var field F) : Circuit F (Var field F) := do
+def main (x : Expression F) : Circuit F (Expression F) := do
   -- When x ≠ 0, we need x_inv such that x * x_inv = 1
   -- When x = 0, x_inv can be anything (we use 0)
   let xInv ← witness fun env =>

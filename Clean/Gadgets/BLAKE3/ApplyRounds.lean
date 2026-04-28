@@ -68,9 +68,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     specialize h_holds2 asm2
 
     -- Now we need to show the spec holds for the output
-    simp only
-    rw [ProvableStruct.eval_eq_eval]
-    simp only [ProvableStruct.eval]
+    simp only [circuit_norm]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
 
     constructor
@@ -376,8 +374,8 @@ lemma applyRounds_eq_applySevenRounds
   simp only [applyRounds, applySevenRounds]
 
 lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
-    x < 256^4 ->
-    (eval env (U32.decomposeNatExpr x)).value = x := by
+    x < 256^4 →
+    (eval env (U32.decomposeNatExpr (p:=p) x)).value = x := by
   intro h
   simp only [U32.decomposeNatExpr, circuit_norm]
   exact U32.value_of_decomposedNat_of_small x h
@@ -466,17 +464,18 @@ lemma initial_state_and_messages_are_normalized
     (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
-  set state_vec := initializeStateVector input_var
+  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
+  simp only [circuit_norm] at *
   provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var_chaining_value[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var.chaining_value[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 ⟨ i, h_i ⟩
 
   -- Show the state is normalized
-  have h_state_normalized : (eval env state_vec).Normalized := by
+  have h_state_normalized : BLAKE3State.Normalized (eval env state_vec) := by
     simp only [BLAKE3State.Normalized, state_vec, initializeStateVector, eval_vector]
     intro i
     fin_cases i

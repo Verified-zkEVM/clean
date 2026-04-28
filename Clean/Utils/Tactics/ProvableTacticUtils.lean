@@ -1,12 +1,18 @@
 import Lean
+import Clean.Circuit.CircuitType
 import Clean.Circuit.Provable
 
 open Lean Meta Elab Tactic
 
-/-- Check if an expression is a constructor application (ends with .mk) -/
+/-- Check if an expression is a constructor application (ends with .mk).
+
+This intentionally does not unfold the expression. The struct tactics use this as
+a cheap syntactic guard before splitting constructor equalities; unfolding here
+can expand `eval` terms appearing in unrelated hypotheses and make the tactic
+far too expensive.
+-/
 def isMkConstructor (e : Expr) : MetaM Bool := do
-  let e' ← withTransparency .all (whnf e)
-  match e'.getAppFn with
+  match e.consumeMData.getAppFn with
   | .const name _ =>
     -- Check if it's a constructor (ends with .mk)
     return name.components.getLast? == some `mk
@@ -44,7 +50,7 @@ def hasProvableStructInstance (type : Expr) : MetaM Bool := do
 
 /-- Check if expression contains eval pattern (ProvableType.eval, Expression.eval, or ProvableStruct.eval) -/
 def hasEvalPattern (e : Expr) : Bool :=
-  e.isAppOf ``ProvableType.eval || e.isAppOf ``Expression.eval || e.isAppOf ``ProvableStruct.eval
+  e.isAppOf ``eval || e.isAppOf ``ProvableType.eval || e.isAppOf ``Expression.eval || e.isAppOf ``ProvableStruct.eval
 
 /-- Extract type map candidates from a type for ProvableType/ProvableStruct checking -/
 def extractTypeMapCandidates (type : Expr) : MetaM (List Expr) := do

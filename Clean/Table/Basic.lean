@@ -460,13 +460,13 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
 
 @[table_norm, table_assignment_norm]
 def assignCurrRow {W : ℕ+} (curr : Var S F) : TableConstraint W S F Unit :=
-  let vars := toVars curr
+  let vars := toElements (M:=S) curr
   forM (List.finRange (size S)) fun i =>
     assign (.curr i) vars[i]
 
 @[table_norm, table_assignment_norm]
 def assignNextRow {W : ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
-  let vars := toVars next
+  let vars := toElements (M:=S) next
   forM (List.finRange (size S)) fun i =>
     assign (.next i) vars[i]
 end TableConstraint
@@ -624,7 +624,7 @@ def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLe
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go
-attribute [table_norm low] size fromElements toElements toVars fromVars
+attribute [table_norm low] size fromElements toElements
 attribute [table_assignment_norm low] toElements
 attribute [table_norm] Circuit.ConstraintsHold.Soundness
 
@@ -654,5 +654,5 @@ macro_rules
     rw [Fin.foldr_zero]
     repeat rw [List.forM_cons]
     rw [List.forM_nil, bind_pure_unit]
-    simp only [seval, toVars, toElements, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
+    simp only [seval, toElements, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
       List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ, Fin.succ_zero_eq_one]))
