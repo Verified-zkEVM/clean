@@ -150,13 +150,6 @@ def Var.negate (input : CircuitBool.Var F) : CircuitBool.Var F where
     grind
 end CircuitBool
 
-/--
-  A circuit with both ordinary provable input data and a prover-only hint.
-
-  The verifier sees `someElement`, but `someHint` is erased to `Unit` in the
-  soundness statement. The prover still sees the hint in completeness and uses it
-  to choose the witnessed boolean.
--/
 def boolNegate : GeneralFormalCircuit.WithHint (F p) CircuitBool CircuitBool where
   main (input : CircuitBool.Var (F p)) := do
     let c := input.negate
