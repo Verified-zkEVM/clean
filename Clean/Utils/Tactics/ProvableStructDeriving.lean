@@ -141,6 +141,20 @@ def matchUnconstrainedField? (fieldType typeParamFVar : Expr) : Option Expr :=
   else
     none
 
+def matchProofOnlyField? (fieldType typeParamFVar : Expr) : MetaM (Option Expr) := do
+  match matchUnconstrainedField? fieldType typeParamFVar with
+  | some hintType => return some hintType
+  | none =>
+      if ← isProp fieldType then
+        return some fieldType
+      else
+        return none
+
+def isRawPropField (fieldType typeParamFVar : Expr) : MetaM Bool := do
+  if (matchUnconstrainedField? fieldType typeParamFVar).isSome then
+    return false
+  isProp fieldType
+
 partial def containsProjectionFrom (structName : Name) (e : Expr) : Bool :=
   let (fn, _) := e.getAppFnArgs
   if structName.isPrefixOf fn then
@@ -157,15 +171,30 @@ partial def containsProjectionFrom (structName : Name) (e : Expr) : Bool :=
     | .proj _ _ b => containsProjectionFrom structName b
     | _ => false
 
+partial def containsAnyFVar (fvars : Array Expr) (e : Expr) : Bool :=
+  if fvars.any (· == e) then
+    true
+  else
+    match e with
+    | .app f a => containsAnyFVar fvars f || containsAnyFVar fvars a
+    | .lam _ t b _ => containsAnyFVar fvars t || containsAnyFVar fvars b
+    | .forallE _ t b _ => containsAnyFVar fvars t || containsAnyFVar fvars b
+    | .letE _ t v b _ =>
+        containsAnyFVar fvars t || containsAnyFVar fvars v || containsAnyFVar fvars b
+    | .mdata _ b => containsAnyFVar fvars b
+    | .proj _ _ b => containsAnyFVar fvars b
+    | _ => false
+
 partial def dependentCircuitExprToSyntax (structName : Name) (typeParamFVar : Expr)
     (fieldNames : Array Name) (fieldKinds : Array CircuitFieldKind) (fieldTypes : Array Expr)
-    (fieldLimit : Nat) (mode : Name) (e : Expr) : MetaM (TSyntax `term) := do
+    (sourceFieldFVars : Array Expr) (fieldLimit : Nat) (mode : Name) (e : Expr) :
+    MetaM (TSyntax `term) := do
   let proverEnvType := mkApp (mkConst ``ProverEnvironment) typeParamFVar
   let expressionType := mkApp (mkConst ``Expression) typeParamFVar
 
   let fieldViewType (idx : Nat) : MetaM Expr := do
     let fieldType := fieldTypes[idx]!
-    match matchUnconstrainedField? fieldType typeParamFVar with
+    match ← matchProofOnlyField? fieldType typeParamFVar with
     | some hintType =>
         if mode == `var then
           return ← mkArrow proverEnvType hintType
@@ -197,8 +226,7 @@ partial def dependentCircuitExprToSyntax (structName : Name) (typeParamFVar : Ex
       withLocalDecl `inst .instImplicit fieldInstType fun instFVar =>
         withNewLocalInstances #[instFVar] 0 do
           withFieldDecls 0 #[] fun fieldFVars => do
-            let bodyStx ← delabTransformed (some envFVar) fieldFVars
-            `(∀ [inst : Field F], $bodyStx)
+            delabTransformed (some envFVar) fieldFVars
   else
     withFieldDecls 0 #[] fun fieldFVars =>
       delabTransformed none fieldFVars
@@ -206,6 +234,18 @@ where
   fieldIdentOfProjection? (e : Expr) : Option Name :=
     let (fn, _) := e.getAppFnArgs
     fieldNames.find? fun fieldName => fn == structName ++ fieldName
+
+  fieldIdentOfSourceFVar? (e : Expr) : Option Name :=
+    Id.run do
+      for i in [:sourceFieldFVars.size] do
+        if sourceFieldFVars[i]! == e then
+          return some fieldNames[i]!
+      return none
+
+  fieldIdentOfReference? (e : Expr) : Option Name :=
+    match fieldIdentOfProjection? e with
+    | some fieldName => some fieldName
+    | none => fieldIdentOfSourceFVar? e
 
   fieldIndex? (name : Name) : Option Nat :=
     Id.run do
@@ -224,20 +264,23 @@ where
         | throwError "missing prover environment while translating dependent Var field"
       let fieldType := fieldTypes[idx]!
       let valueType ←
-        match matchUnconstrainedField? fieldType typeParamFVar with
+        match ← matchProofOnlyField? fieldType typeParamFVar with
         | some hintType => pure hintType
         | none => pure fieldType
-      let envType ← inferType env
-      let varType ← inferType fieldFVar
-      let evalInstType ← mkAppOptM ``Eval #[envType, varType, valueType]
-      let evalInst ← mkFreshExprMVar (some evalInstType)
-      mkAppOptM ``Eval.eval #[envType, varType, valueType, evalInst, env, fieldFVar]
+      if ← isRawPropField fieldType typeParamFVar then
+        return mkApp fieldFVar env
+      else
+        let envType ← inferType env
+        let varType ← inferType fieldFVar
+        let evalInstType ← mkAppOptM ``Eval #[envType, varType, valueType]
+        let evalInst ← mkFreshExprMVar (some evalInstType)
+        mkAppOptM ``Eval.eval #[envType, varType, valueType, evalInst, env, fieldFVar]
     else
       return fieldFVar
 
   matchStructProjection? (env? : Option Expr) (fieldFVars : Array Expr) (e : Expr) :
       MetaM (Option Expr) := do
-    let some fieldName := fieldIdentOfProjection? e
+    let some fieldName := fieldIdentOfReference? e
       | return none
     return some (← replaceField env? fieldFVars fieldName)
 
@@ -246,7 +289,7 @@ where
     let (fn, args) := e.getAppFnArgs
     unless fn == ``Unconstrained.value && args.size == 3 do
       return none
-    let some fieldName := fieldIdentOfProjection? args[2]!
+    let some fieldName := fieldIdentOfReference? args[2]!
       | return none
     unless fieldKindFor fieldNames fieldKinds fieldName == .unconstrained do
       return none
@@ -563,6 +606,7 @@ initialize registerDerivingHandler ``ProvableStruct provableStructDerivingHandle
   derived `CircuitType`.
 -/
 def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
+    (includeFieldBinder : Bool)
     (fieldNameIdents : Array (TSyntax `ident)) (fieldTypes : Array (TSyntax `term))
     (viewType : TSyntax `term → CommandElabM (TSyntax `term)) : CommandElabM Unit := do
   let mut binderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
@@ -587,6 +631,9 @@ def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
   let fIdent := mkIdent `F
   let fBinder ← `(bracketedBinderF| ($fIdent : Type))
   binderSyntaxes := binderSyntaxes.push fBinder
+  if includeFieldBinder then
+    let fieldBinder ← `(bracketedBinderF| [Field $fIdent])
+    binderSyntaxes := binderSyntaxes.push fieldBinder
 
   let mut fieldSyntaxes : Array (TSyntax ``Lean.Parser.Command.structSimpleBinder) := #[]
   for h : i in [:fieldNameIdents.size] do
@@ -603,12 +650,54 @@ def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
   )
   elabCommand cmd
 
+def mkCircuitEvalForwardingInstances (paramInfos : Array ParamInfo) (circuitType : TSyntax `term)
+    (varType valueType proverValueType : TSyntax `term) : CommandElabM Unit := do
+  let mut binderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
+  for info in paramInfos do
+    match info with
+    | .natural n =>
+      let nIdent := mkIdent n
+      let binder ← `(bracketedBinderF| {$nIdent : ℕ})
+      binderSyntaxes := binderSyntaxes.push binder
+    | .typeMap m =>
+      let mIdent := mkIdent m
+      let typeBinder ← `(bracketedBinderF| {$mIdent : TypeMap})
+      let instBinder ← `(bracketedBinderF| [CircuitType $mIdent])
+      binderSyntaxes := binderSyntaxes.push typeBinder
+      binderSyntaxes := binderSyntaxes.push instBinder
+    | .other n ty =>
+      let nIdent := mkIdent n
+      let tySyntax ← liftTermElabM <| PrettyPrinter.delab ty
+      let binder ← `(bracketedBinderF| {$nIdent : $tySyntax})
+      binderSyntaxes := binderSyntaxes.push binder
+
+  let fIdent := mkIdent `F
+  let fBinder ← `(bracketedBinderF| { $fIdent : Type })
+  let fieldBinder ← `(bracketedBinderF| [Field $fIdent])
+  binderSyntaxes := binderSyntaxes.push fBinder
+  binderSyntaxes := binderSyntaxes.push fieldBinder
+
+  let cmd ← `(
+    instance $binderSyntaxes:bracketedBinder* : VerifierEval $fIdent ($varType $fIdent) ($valueType $fIdent) :=
+      CircuitType.verifierEval $circuitType
+
+    instance $binderSyntaxes:bracketedBinder* : ProverEval $fIdent ($varType $fIdent) ($proverValueType $fIdent) :=
+      CircuitType.proverEval $circuitType
+  )
+  elabCommand cmd
+
 def mkDependentCircuitTypeInstance? (structName : Name) : CommandElabM Bool := do
   let env ← getEnv
   let some structInfo := getStructureInfo? env structName
     | throwError "failed to get structure info for {structName}"
   let some (.inductInfo indInfo) := env.find? structName
     | throwError "{structName} not found in environment"
+  let ctorName ←
+    match indInfo.ctors with
+    | [ctorName] => pure ctorName
+    | _ => throwError "{structName} should have exactly one constructor"
+  let some (.ctorInfo ctorInfo) := env.find? ctorName
+    | throwError "constructor {ctorName} not found"
   let numParams := indInfo.numParams
   if numParams != 1 then
     return false
@@ -618,31 +707,34 @@ def mkDependentCircuitTypeInstance? (structName : Name) : CommandElabM Bool := d
     return false
 
   let resultOpt ← liftTermElabM do
-    forallTelescope indInfo.type fun args _ => do
+    forallTelescope ctorInfo.type fun args _ => do
+      if args.size < numParams + fieldNames.size then
+        throwError "constructor {ctorName} has unexpected arity: {args.size}"
       let typeParamFVar := args[0]!
+      let sourceFieldFVars : Array Expr :=
+        Id.run do
+          let mut result := #[]
+          for i in [:fieldNames.size] do
+            result := result.push args[numParams + i]!
+          return result
       let mut fieldTypes : Array Expr := #[]
       let mut fieldKinds : Array CircuitFieldKind := #[]
-      let mut hasDependentUnconstrained := false
+      let mut hasDependentProofOnly := false
 
-      for fname in fieldNames do
-        let projFnName := structName ++ fname
-        let some (.defnInfo projInfo) := env.find? projFnName
-          | throwError "projection {projFnName} not found"
-        let fieldType ← forallTelescope projInfo.type fun projArgs projBody => do
-          if projArgs.size != 2 then
-            throwError "projection {projFnName} has unexpected arity: {projArgs.size} vs expected 2"
-          return projBody.replaceFVar projArgs[0]! typeParamFVar
-
+      for i in [:fieldNames.size] do
+        let fieldType ← inferType sourceFieldFVars[i]!
         fieldTypes := fieldTypes.push fieldType
-        match matchUnconstrainedField? fieldType typeParamFVar with
+        match ← matchProofOnlyField? fieldType typeParamFVar with
         | some hintType =>
             fieldKinds := fieldKinds.push .unconstrained
-            if containsProjectionFrom structName hintType then
-              hasDependentUnconstrained := true
+            if ← isRawPropField fieldType typeParamFVar then
+              hasDependentProofOnly := true
+            if containsProjectionFrom structName hintType || containsAnyFVar sourceFieldFVars hintType then
+              hasDependentProofOnly := true
         | none =>
             fieldKinds := fieldKinds.push .regular
 
-      unless hasDependentUnconstrained do
+      unless hasDependentProofOnly do
         return none
 
       let mut varFieldTypes : Array (TSyntax `term) := #[]
@@ -655,14 +747,17 @@ def mkDependentCircuitTypeInstance? (structName : Name) : CommandElabM Bool := d
         let fname := fieldNames[i]!
         let fieldIdent := mkIdent fname
         let fieldType := fieldTypes[i]!
-        match matchUnconstrainedField? fieldType typeParamFVar with
+        match ← matchProofOnlyField? fieldType typeParamFVar with
         | some hintType =>
-            if containsProjectionFrom structName hintType then
+            let isRawProp ← isRawPropField fieldType typeParamFVar
+            if containsProjectionFrom structName hintType || containsAnyFVar sourceFieldFVars hintType then
               let hVar ← withLeadingFieldInstanceForallStripped typeParamFVar hintType fun hintType =>
-                dependentCircuitExprToSyntax structName typeParamFVar fieldNames fieldKinds fieldTypes i
+                dependentCircuitExprToSyntax structName typeParamFVar fieldNames fieldKinds fieldTypes
+                  sourceFieldFVars i
                   `var hintType
               let hProver ← withLeadingFieldInstanceForallStripped typeParamFVar hintType fun hintType =>
-                dependentCircuitExprToSyntax structName typeParamFVar fieldNames fieldKinds fieldTypes i
+                dependentCircuitExprToSyntax structName typeParamFVar fieldNames fieldKinds fieldTypes
+                  sourceFieldFVars i
                   `prover hintType
               let envIdent := mkIdent `env
               varFieldTypes := varFieldTypes.push (← `(∀ ($envIdent : ProverEnvironment F), $hVar))
@@ -677,7 +772,10 @@ def mkDependentCircuitTypeInstance? (structName : Name) : CommandElabM Bool := d
               valueFieldTypes := valueFieldTypes.push (← `(Unit))
               proverFieldTypes := proverFieldTypes.push hintTerm
               verifierArgs := verifierArgs.push (← `(()))
-              proverArgs := proverArgs.push (← `(eval env input.$fieldIdent:ident))
+              if isRawProp then
+                proverArgs := proverArgs.push (← `(input.$fieldIdent:ident env))
+              else
+                proverArgs := proverArgs.push (← `(eval env input.$fieldIdent:ident))
         | none =>
             if fieldType == typeParamFVar then
               varFieldTypes := varFieldTypes.push (← `(Expression F))
@@ -725,7 +823,7 @@ def mkDependentCircuitTypeInstance? (structName : Name) : CommandElabM Bool := d
     logInfo m!"generated dependent CircuitType struct:\n{cmd}"
     elabCommand cmd
 
-  mkStruct varStructName #[fBinder] varFieldTypes
+  mkStruct varStructName #[fBinder, fieldBinder] varFieldTypes
   mkStruct valueStructName #[fBinder, fieldBinder] valueFieldTypes
   mkStruct proverValueStructName #[fBinder, fieldBinder] proverFieldTypes
 
@@ -746,15 +844,16 @@ def mkDependentCircuitTypeInstance? (structName : Name) : CommandElabM Bool := d
   let envIdent := mkIdent `env
   let inputIdent := mkIdent `input
   let instanceCmd ← `(
-    instance : CircuitType.{1, 1, 1, 1} $structIdent where
+    instance : CircuitType $structIdent where
       Var := $varIdent
-      Value F := [Field F] → $valueIdent F
-      ProverValue F := [Field F] → $proverValueIdent F
-      evalVerifier := fun $envIdent $inputIdent => fun [_] => $verifierBody
-      evalProver := fun $envIdent $inputIdent => fun [_] => $proverBody
+      Value := $valueIdent
+      ProverValue := $proverValueIdent
+      evalVerifier := fun $envIdent $inputIdent => $verifierBody
+      evalProver := fun $envIdent $inputIdent => $proverBody
   )
   logInfo m!"generated dependent CircuitType instance:\n{instanceCmd}"
   elabCommand instanceCmd
+  mkCircuitEvalForwardingInstances #[] structIdent varIdent valueIdent proverValueIdent
   return true
 
 /--
@@ -822,11 +921,11 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
   let proverValueStructName := structName ++ `ProverValue
 
   let fIdent := mkIdent `F
-  mkCircuitViewStruct varStructName paramInfos fieldNameIdents componentSyntaxes
+  mkCircuitViewStruct varStructName paramInfos true fieldNameIdents componentSyntaxes
     (fun component => `(CircuitType.Var $component $fIdent))
-  mkCircuitViewStruct valueStructName paramInfos fieldNameIdents componentSyntaxes
+  mkCircuitViewStruct valueStructName paramInfos true fieldNameIdents componentSyntaxes
     (fun component => `(CircuitType.Value $component $fIdent))
-  mkCircuitViewStruct proverValueStructName paramInfos fieldNameIdents componentSyntaxes
+  mkCircuitViewStruct proverValueStructName paramInfos true fieldNameIdents componentSyntaxes
     (fun component => `(CircuitType.ProverValue $component $fIdent))
 
   let structIdent := mkIdent structName
@@ -907,6 +1006,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
       )
 
   elabCommand cmd
+  mkCircuitEvalForwardingInstances paramInfos appliedStructType varType valueType proverValueType
 
 /-- The deriving handler for record-shaped `CircuitType`s. -/
 def circuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool := do

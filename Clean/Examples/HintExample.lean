@@ -93,6 +93,52 @@ example (input : MixedInput.ProverValue (F p)) : U32 (F p) × Bool :=
 example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
   (input.someElement, input.someHint)
 
+structure CircuitBool (F : Type) where
+  bool : F
+  isBool [Field F] : IsBool bool
+deriving CircuitType
+
+example (input : CircuitBool.Var (F p)) : ∀ env : ProverEnvironment (F p),
+    IsBool (eval env input.bool) := by
+  intro env; exact input.isBool env
+
+example (env : Environment (F p)) (input : CircuitBool.Var (F p)) :
+    (eval env input).bool = eval env input.bool := by
+  simp only [CircuitType.eval_verifier (M := CircuitBool), circuit_norm]
+
+namespace CircuitBool
+variable {F : Type} [Field F]
+
+-- this seems generally useful: whenever we allow `eval` to be rewritten to a concrete `CircuitType` instance,
+-- we can immediately unfold it with `circuit_norm`!
+attribute [circuit_norm] CircuitType.evalVerifier CircuitType.evalProver
+
+-- this seems like useful simp infrastructure for any derived CircuitType
+@[circuit_norm] lemma eval_verifier (env : Environment F) (input : CircuitType.Var CircuitBool F) :
+    eval env input = CircuitType.evalVerifier env input :=
+  CircuitType.eval_verifier env input
+@[circuit_norm] lemma eval_verifier_structvar (env : Environment F) (input : Var F) :
+    eval env input = CircuitType.evalVerifier (M := CircuitBool) env input :=
+  CircuitType.eval_verifier (M := CircuitBool) env input
+@[circuit_norm] lemma eval_prover (env : ProverEnvironment F) (input : CircuitType.Var CircuitBool F) :
+    eval env input = CircuitType.evalProver (M := CircuitBool) env input :=
+  CircuitType.eval_prover env input
+@[circuit_norm] lemma eval_prover_structvar (env : ProverEnvironment F) (input : Var F) :
+    eval env input = CircuitType.evalProver (M := CircuitBool) env input :=
+  CircuitType.eval_prover (M := CircuitBool) env input
+
+def toBool [DecidableEq F] (x : CircuitBool F) : Bool := x.bool = 1
+
+def Value.toBool [DecidableEq F] (x : CircuitBool.Value F) : Bool := x.bool = 1
+
+def negate (input : CircuitBool.Var F) : CircuitBool.Var F where
+  bool := (1 : F) - input.bool
+  isBool env := by
+    have h_input := input.isBool env
+    simp only [circuit_norm, IsBool] at h_input ⊢
+    grind
+end CircuitBool
+
 /--
   A circuit with both ordinary provable input data and a prover-only hint.
 
@@ -100,56 +146,27 @@ example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
   soundness statement. The prover still sees the hint in completeness and uses it
   to choose the witnessed boolean.
 -/
-def witnessMixedHint : GeneralFormalCircuit.WithHint (F p) MixedInput field where
-  main (input : MixedInput.Var (F p)) := do
-    let b ← witness fun env => if input.someHint env then 1 else 0
-    assertBool b
-    return b
+def boolNegate : GeneralFormalCircuit.WithHint (F p) CircuitBool CircuitBool where
+  main (input : CircuitBool.Var (F p)) := do
+    return CircuitBool.negate input
 
-  localLength _ := 1
-  output _ i := var ⟨i⟩
+  localLength _ := 0
+  output input _ := CircuitBool.negate input
 
-  Assumptions _ _ := True
-  Spec _ (output : F p) _ := IsBool output
-
-  ProverAssumptions _ _ _ := True
-  ProverSpec input (output : F p) _ := output = if input.someHint then 1 else 0
+  Assumptions input _ := IsBool input.bool
+  Spec input output _ := IsBool output.bool ∧
+    output.toBool = ¬ input.toBool
 
   soundness := by
-    circuit_proof_all [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
+    circuit_proof_start [CircuitBool.Value.toBool, CircuitBool.negate, IsBool]
+    -- TODO do this automatically for circuit inputs
+    rcases input with ⟨ bool, h_bool ⟩
+    -- TODO why doesn't this work with simp only?
+    rw [CircuitBool.Value.mk.injEq] at h_input
+    simp_all only
+    grind
 
   completeness := by
-    circuit_proof_start [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-    have h_hint : input.someHint = input_var.someHint env := by
-      have h := congrArg MixedInput.ProverValue.someHint h_input
-      rw [CircuitType.eval_prover] at h
-      change eval env input_var.someHint = input.someHint at h
-      rw [CircuitType.eval_hint_prover] at h
-      exact h.symm
-    cases input_var.someHint env <;> simp_all
-
-structure InputWithProp (F : Type) where
-  bool : F
-  isBool : Unconstrained (∀ [Zero F] [One F], IsBool bool) F
-deriving CircuitType
-
--- set_option trace.Meta.synthInstance true
-
-#check InputWithProp.Value
-
-abbrev InputWithProp.Value' (F : Type) := [inst: Field F] → @InputWithProp.Value F inst
-
-#check InputWithProp.Value'
-
-instance : CircuitType Examples.HintExample.InputWithProp where
-  Var := InputWithProp.Var
-  Value F := [Field F] → InputWithProp.Value F
-  ProverValue F := [Field F] → InputWithProp.ProverValue F
-  evalVerifier env input := fun [_] => (InputWithProp.Value.mk (eval env input.bool)) ()
-  evalProver env input := fun [_] => (InputWithProp.ProverValue.mk (eval env input.bool)) (input.isBool env)
-
-example (input : InputWithProp.Var (F p)) : ∀ env : ProverEnvironment (F p),
-    IsBool (eval env input.bool) := by
-  intro env; exact input.isBool env
+    circuit_proof_all
 
 end Examples.HintExample

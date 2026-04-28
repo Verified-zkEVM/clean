@@ -41,7 +41,7 @@ example {F : Type} [Field F] (env : ProverEnvironment F) (input : Var Inputs F) 
 structure InputWithProp (F : Type) where
   bool : F
   hint : Unconstrained Bool F
-  same_content : Unconstrained (∀ [Field F], bool = if hint.value then 1 else 0) F
+  same_content [Field F] : bool = if hint.value then 1 else 0
 deriving CircuitType
 
 example : CircuitType InputWithProp := by infer_instance
@@ -53,5 +53,16 @@ example {F : Type} [Field F] (input : InputWithProp.Var F) (env : ProverEnvironm
 example {F : Type} [Field F] (input : InputWithProp.ProverValue F) :
     input.bool = if input.hint then 1 else 0 :=
   input.same_content
+
+structure InputWithPlainProp (F : Type) where
+  bool : F
+  always : True
+deriving CircuitType
+
+example : CircuitType InputWithPlainProp := by infer_instance
+
+example {F : Type} [Field F] (input : InputWithPlainProp.ProverValue F) :
+    True :=
+  input.always
 
 end TestCircuitStructDeriving
