@@ -128,4 +128,28 @@ def witnessMixedHint : GeneralFormalCircuit.WithHint (F p) MixedInput field wher
       exact h.symm
     cases input_var.someHint env <;> simp_all
 
+structure InputWithProp (F : Type) where
+  bool : F
+  isBool : Unconstrained (∀ [Zero F] [One F], IsBool bool) F
+deriving CircuitType
+
+-- set_option trace.Meta.synthInstance true
+
+#check InputWithProp.Value
+
+abbrev InputWithProp.Value' (F : Type) := [inst: Field F] → @InputWithProp.Value F inst
+
+#check InputWithProp.Value'
+
+instance : CircuitType Examples.HintExample.InputWithProp where
+  Var := InputWithProp.Var
+  Value F := [Field F] → InputWithProp.Value F
+  ProverValue F := [Field F] → InputWithProp.ProverValue F
+  evalVerifier env input := fun [_] => (InputWithProp.Value.mk (eval env input.bool)) ()
+  evalProver env input := fun [_] => (InputWithProp.ProverValue.mk (eval env input.bool)) (input.isBool env)
+
+example (input : InputWithProp.Var (F p)) : ∀ env : ProverEnvironment (F p),
+    IsBool (eval env input.bool) := by
+  intro env; exact input.isBool env
+
 end Examples.HintExample

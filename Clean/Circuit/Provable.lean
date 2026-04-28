@@ -9,7 +9,7 @@ variable {F : Type} [Field F]
 Class of types that can be used inside a circuit,
 because they can be flattened into a vector of (field) elements.
 -/
-class ProvableType (M : TypeMap) where
+class ProvableType (M : TypeMap.{1}) where
   size : ℕ
   toElements {F : Type} : M F -> Vector F size
   fromElements {F : Type} : Vector F size -> M F
@@ -31,7 +31,7 @@ class ProvableType (M : TypeMap) where
   fromElements_toElements {F : Type} : ∀ x : M F, fromElements (toElements x) = x
     := by intros; rfl
 
-class NonEmptyProvableType (M : TypeMap) extends ProvableType M where
+class NonEmptyProvableType (M : TypeMap.{1}) extends ProvableType M where
   nonempty : size > 0 := by try simp only [size]; try norm_num
 
 export ProvableType (size toElements fromElements)
@@ -43,10 +43,10 @@ attribute [circuit_norm] size ProvableType.toElements_fromElements ProvableType.
 -- to explicitly unfold provable type definitions
 attribute [explicit_provable_type low] toElements fromElements
 
-variable {M : TypeMap} [ProvableType M]
+variable {M : TypeMap.{1}} [ProvableType M]
 
 namespace ProvableType
-variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType γ]
+variable {α β γ: TypeMap.{1}} [ProvableType α] [ProvableType β] [ProvableType γ]
 
 /--
 Evaluate a variable in the given environment.
@@ -67,7 +67,7 @@ with the input type, and `Var` is `M ∘ Expression`.
 The instance lives in `Provable.lean`, after `ProvableType` is defined, to keep
 `CircuitType.lean` below `Provable.lean` in the import graph.
 -/
-instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
+instance toCircuitType {M : TypeMap.{1}} [ProvableType M] : CircuitType M where
   Var F := M (Expression F)
   ProverValue := M
   Value := M
@@ -90,7 +90,7 @@ instance [Field F] : Inhabited (M (Expression F)) where
 
 -- TODO this should be simply called `var`, analogous to `const`
 @[explicit_provable_type]
-def varFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) : M (Expression F) :=
+def varFromOffset (M : TypeMap.{1}) [ProvableType M] (offset : ℕ) : M (Expression F) :=
   let vars := Vector.mapRange (size M) fun i => var ⟨offset + i⟩
   fromElements vars
 
@@ -298,12 +298,12 @@ end CircuitType
 
 namespace ProvableStruct
 structure WithProvableType where
-  type : TypeMap
+  type : TypeMap.{1}
   provableType : ProvableType type := by infer_instance
 
 instance {c : WithProvableType} : ProvableType c.type := c.provableType
 
-instance {α : TypeMap} [ProvableType α] : CoeDep TypeMap (α) WithProvableType where
+instance {α : TypeMap.{1}} [ProvableType α] : CoeDep TypeMap.{1} (α) WithProvableType where
   coe := { type := α }
 
 -- custom heterogeneous list
@@ -316,7 +316,7 @@ end ProvableStruct
 
 -- if we can split a type into components that are provable types, then this gives us a provable type
 open ProvableStruct in
-class ProvableStruct (α : TypeMap) where
+class ProvableStruct (α : TypeMap.{1}) where
   components : List WithProvableType
   toComponents {F : Type} : α F → ProvableTypeList F components
   fromComponents {F : Type} : ProvableTypeList F components → α F
