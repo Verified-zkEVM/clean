@@ -92,4 +92,90 @@ example (input : MixedInput.ProverValue (F p)) : U32 (F p) × Bool :=
   (input.someElement, input.someHint)
 example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
   (input.someElement, input.someHint)
+
+/--
+The following seems like a cool experiment at first glance.
+The main problem is that it's not possible to generate `CircuitBool` values in a circuit based
+on prover knowledge, because we don't surface a way to reason about the environment
+assuming honest prover witness generation.
+
+For example, it is not possible to implement `HasAssignEq`:
+we cannot prove the `isBool` property for the copied variable.
+
+So, as it stands, this pattern is less useful than the code below suggests.
+-/
+structure CircuitBool (F : Type) where
+  bool : F
+  isBool [Field F] : IsBool bool
+deriving CircuitType
+
+example (input : CircuitBool.Var (F p)) : ∀ env : ProverEnvironment (F p),
+    IsBool (eval env input.bool) := by
+  intro env; exact input.isBool env
+
+namespace CircuitBool
+variable {F : Type} [Field F]
+
+-- this seems generally useful: whenever we allow `eval` to be rewritten to a concrete `CircuitType` instance,
+-- we can immediately unfold it with `circuit_norm`!
+attribute [circuit_norm] CircuitType.evalVerifier CircuitType.evalProver
+
+-- this seems like useful simp infrastructure for any derived CircuitType
+@[circuit_norm] lemma eval_verifier (env : Environment F) (input : CircuitType.Var CircuitBool F) :
+    eval env input = CircuitType.evalVerifier env input :=
+  CircuitType.eval_verifier env input
+@[circuit_norm] lemma eval_verifier_structvar (env : Environment F) (input : Var F) :
+    eval env input = CircuitType.evalVerifier (M := CircuitBool) env input :=
+  CircuitType.eval_verifier (M := CircuitBool) env input
+@[circuit_norm] lemma eval_prover (env : ProverEnvironment F) (input : CircuitType.Var CircuitBool F) :
+    eval env input = CircuitType.evalProver (M := CircuitBool) env input :=
+  CircuitType.eval_prover env input
+@[circuit_norm] lemma eval_prover_structvar (env : ProverEnvironment F) (input : Var F) :
+    eval env input = CircuitType.evalProver (M := CircuitBool) env input :=
+  CircuitType.eval_prover (M := CircuitBool) env input
+
+def toBool [DecidableEq F] (x : CircuitBool F) : Bool := x.bool = 1
+
+def Value.toBool [DecidableEq F] (x : CircuitBool.Value F) : Bool := x.bool = 1
+
+def Var.negate (input : CircuitBool.Var F) : CircuitBool.Var F where
+  bool := (1 : F) - input.bool
+  isBool env := by
+    have h_bool := input.isBool env
+    simp only [circuit_norm, IsBool] at h_bool ⊢
+    grind
+end CircuitBool
+
+def boolNegate : GeneralFormalCircuit.WithHint (F p) CircuitBool CircuitBool where
+  main (input : CircuitBool.Var (F p)) := do
+    let c := input.negate
+    -- unnecessary constraint, just there to show that completeness is automatic
+    assertBool c.bool
+    return c
+
+  localLength _ := 0
+  output input _ := input.negate
+
+  -- we don't need any completeness statements! these are already captured by the
+  -- `CircuitBool.isBool` property
+  Assumptions input _ := IsBool input.bool
+  Spec input output _ := IsBool output.bool ∧
+    output.toBool = ¬ input.toBool
+
+  soundness := by
+    circuit_proof_start [CircuitBool.Value.toBool, CircuitBool.Var.negate, IsBool]
+    -- TODO do this automatically for circuit inputs
+    rcases input with ⟨ bool, h_bool ⟩
+    -- TODO why doesn't this work with simp only?
+    rw [CircuitBool.Value.mk.injEq] at h_input
+    simp_all only
+    grind
+
+  completeness := by
+    circuit_proof_start [CircuitBool.Value.toBool, CircuitBool.Var.negate, IsBool]
+    rcases input with ⟨ bool, h_bool ⟩
+    rw [CircuitBool.ProverValue.mk.injEq] at h_input
+    simp_all only [IsBool]
+    grind
+
 end Examples.HintExample

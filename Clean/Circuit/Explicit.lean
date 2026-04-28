@@ -126,12 +126,12 @@ instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (w
   localLength _ := k
   operations n := [.witness k c]
 
-instance {α : TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
-  output _ n := varFromOffset α n
-  localLength _ _ := size α
-  operations c n := [.witness (size α) (toElements ∘ c)]
+instance {M : TypeMap} [ProvableType M] : ExplicitCircuits (ProvableType.witness (α:=M) (F:=F)) where
+  output _ n := varFromOffset M n
+  localLength _ _ := size M
+  operations c n := [.witness (size M) (toElements ∘ c)]
 
-instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
+instance {value : TypeMap} {var : Type} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
@@ -213,7 +213,7 @@ section
 example : ExplicitCircuit (witness fun _ => (0 : F) : Circuit F (Expression F)) := by infer_explicit_circuit
 
 example :
-  let add := do
+  let add : Circuit F (Expression F) := do
     let x : Expression F ← witness fun _ => 0
     let y ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
@@ -226,7 +226,7 @@ example :
 example : ExplicitCircuits (witnessField (F:=F)) := by infer_explicit_circuits
 
 example :
-  let add (x : Expression F) := do
+  let add (x : Expression F) : Circuit F (Expression F) := do
     let y : Expression F ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
     assertZero (x + y - z)

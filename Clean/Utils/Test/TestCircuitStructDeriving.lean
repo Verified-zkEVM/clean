@@ -38,4 +38,31 @@ example {F : Type} [Field F] (env : ProverEnvironment F) (input : Var Inputs F) 
   rw [CircuitType.eval_prover]
   rfl
 
+structure InputWithProp (F : Type) where
+  bool : F
+  hint : Unconstrained Bool F
+  same_content [Field F] : bool = if hint.value then 1 else 0
+deriving CircuitType
+
+example : CircuitType InputWithProp := by infer_instance
+
+example {F : Type} [Field F] (input : InputWithProp.Var F) (env : ProverEnvironment F) :
+    eval env input.bool = if eval env input.hint then 1 else 0 :=
+  input.same_content env
+
+example {F : Type} [Field F] (input : InputWithProp.ProverValue F) :
+    input.bool = if input.hint then 1 else 0 :=
+  input.same_content
+
+structure InputWithPlainProp (F : Type) where
+  bool : F
+  always : True
+deriving CircuitType
+
+example : CircuitType InputWithPlainProp := by infer_instance
+
+example {F : Type} [Field F] (input : InputWithPlainProp.ProverValue F) :
+    True :=
+  input.always
+
 end TestCircuitStructDeriving

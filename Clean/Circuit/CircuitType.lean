@@ -3,10 +3,13 @@ import Clean.Circuit.Expression
 /--
 _Circuit types_ are usually just structured collections of field elements.
 
- We represent them as types generic over a single type argument (the field element),
- i.e. `Type → Type`.
+We represent them as types generic over a single type argument (the field element),
+i.e. `Type → Type`.
 -/
 abbrev TypeMap := Type → Type
+
+/-- Field-aware maps used for concrete verifier/prover views of a `CircuitType`. -/
+abbrev FieldTypeMap := (F : Type) → [Field F] → Type
 
 variable {F : Type} [Field F] {M : TypeMap}
 
@@ -63,13 +66,13 @@ class CircuitType (M : TypeMap) where
   with missing holes, and each hole contains a polynomial that can refer to fixed
   positions of the environment.
   -/
-  Var : TypeMap
+  Var : FieldTypeMap
   /-- Verifier value: hint fields are erased to `Unit`. -/
-  Value : TypeMap
+  Value : FieldTypeMap
   /-- Prover value: hint fields carry their underlying type. -/
-  ProverValue : TypeMap
-  evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → Value F
-  evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → ProverValue F
+  ProverValue : FieldTypeMap
+  evalVerifier {F : Type} [Field F] : Environment F → Var F → Value F
+  evalProver {F : Type} [Field F] : ProverEnvironment F → Var F → ProverValue F
 
 export CircuitType (Var Value ProverValue)
 
@@ -117,11 +120,11 @@ instance Unconstrained.toCircuitType : CircuitType (Unconstrained Hint) where
   evalProver env v := v env
 
 namespace CircuitType
-@[circuit_norm] lemma var_of_unconstrained (Hint F) :
+@[circuit_norm] lemma var_of_unconstrained :
   Var (Unconstrained Hint) F = (ProverEnvironment F → Hint) := rfl
-@[circuit_norm] lemma proverValue_of_unconstrained (Hint F) :
+@[circuit_norm] lemma proverValue_of_unconstrained :
   ProverValue (Unconstrained Hint) F = Hint := rfl
-@[circuit_norm] lemma value_of_unconstrained (Hint F) :
+@[circuit_norm] lemma value_of_unconstrained :
   Value (Unconstrained Hint) F = Unit := rfl
 
 /- forwarding instances to help instance search get through defeq -/
@@ -135,4 +138,18 @@ instance : ProverEval F (ProverEnvironment F → Hint) Hint := proverEval (Uncon
     eval env v = v env := by
   rw [eval_prover (M := Unconstrained Hint)]
   rfl
+
+-- we can also allow any structures with `Prop`s to act as a `CircuitType`!
+-- (this is just an example. similar incorporation of `Prop` fields happens in the `CircuitType` deriver)
+
+private structure WrappedProp (P : Prop) (F : Type) : Type where
+  prop : P
+
+example {P : Prop} : CircuitType (WrappedProp P) where
+  Var F := WrappedProp (ProverEnvironment F → P) F
+  ProverValue _ := WrappedProp P F
+  Value _ := Unit
+  evalVerifier _ _ := ()
+  evalProver env v := ⟨ v.prop env ⟩
+
 end CircuitType

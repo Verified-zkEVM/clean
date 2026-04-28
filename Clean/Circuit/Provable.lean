@@ -69,8 +69,8 @@ The instance lives in `Provable.lean`, after `ProvableType` is defined, to keep
 -/
 instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
   Var F := M (Expression F)
-  ProverValue := M
-  Value := M
+  ProverValue F := M F
+  Value F := M F
   evalVerifier env v := ProvableType.eval env v
   evalProver env v := ProvableType.eval env.toEnvironment v
 
@@ -120,11 +120,11 @@ then elaborate as `@eval _ (M (Expression F)) (M F) ...` and can be applied by
 ordinary simplification.
 -/
 
-@[circuit_norm] lemma var_of_provableType (F) :
+@[circuit_norm] lemma var_of_provableType :
   Var M F = M (Expression F) := rfl
-@[circuit_norm] lemma proverValue_of_provableType (F) :
+@[circuit_norm] lemma proverValue_of_provableType :
   ProverValue M F = M F := rfl
-@[circuit_norm] lemma value_of_provableType (F) :
+@[circuit_norm] lemma value_of_provableType :
   Value M F = M F := rfl
 
 instance : VerifierEval F (Var M F) (M F) := verifierEval M
