@@ -18,6 +18,39 @@ def isMkConstructor (e : Expr) : MetaM Bool := do
     return name.components.getLast? == some `mk
   | _ => return false
 
+/-- Return the generated `mk.injEq` lemma for a constructor application, if it exists. -/
+def mkInjEqNameFromConstructor? (e : Expr) : MetaM (Option Name) := do
+  let env ← getEnv
+  match e.consumeMData.getAppFn with
+  | .const name _ =>
+    if name.components.getLast? == some `mk then
+      let mkInjEqName := name ++ `injEq
+      if env.contains mkInjEqName then
+        return some mkInjEqName
+    return none
+  | _ => return none
+
+/--
+Return the generated `mk.injEq` lemma for a structure type, if it exists.
+
+This uses reducible transparency so type synonyms/class projections such as
+`Value M F` can reduce to the concrete generated view structure.
+-/
+def mkInjEqNameFromType? (type : Expr) : MetaM (Option Name) := do
+  let env ← getEnv
+  let type' ← withTransparency .reducible (whnf type)
+  match type'.getAppFn with
+  | .const typeName _ =>
+    let mkInjEqName := typeName ++ `mk ++ `injEq
+    if env.contains mkInjEqName then
+      return some mkInjEqName
+    return none
+  | _ => return none
+
+/-- Check whether a type is a structure-like type with a generated `mk.injEq` lemma. -/
+def hasMkInjEqForType (type : Expr) : MetaM Bool := do
+  return (← mkInjEqNameFromType? type).isSome
+
 /-- Extract all equalities from an expression (including inside conjunctions) -/
 partial def extractEqualities (e : Expr) : MetaM (List (Expr × Expr × Expr)) := do
   -- Returns list of (equality_expr, lhs, rhs) triples

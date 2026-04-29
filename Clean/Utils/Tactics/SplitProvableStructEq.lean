@@ -37,18 +37,20 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
           -- struct_literal = variable
           match rhs with
           | .fvar fvarId =>
-            -- Check if the variable has ProvableStruct
+            -- Check if the variable has ProvableStruct, or at least a generated
+            -- structure injector lemma after reducing aliases such as `Value M F`.
             let varType ← inferType rhs
-            if ← hasProvableStructInstance varType then
+            if (← hasProvableStructInstance varType) || (← hasMkInjEqForType varType) then
               structVarsToCase := fvarId :: structVarsToCase
           | _ => pure ()
         else if rhsIsConstructor && !lhsIsConstructor then
           -- variable = struct_literal
           match lhs with
           | .fvar fvarId =>
-            -- Check if the variable has ProvableStruct
+            -- Check if the variable has ProvableStruct, or at least a generated
+            -- structure injector lemma after reducing aliases such as `Value M F`.
             let varType ← inferType lhs
-            if ← hasProvableStructInstance varType then
+            if (← hasProvableStructInstance varType) || (← hasMkInjEqForType varType) then
               structVarsToCase := fvarId :: structVarsToCase
           | _ => pure ()
 
@@ -96,8 +98,6 @@ def splitProvableStructEq : TacticM Unit := do
 
     -- Apply mk.injEq lemmas - much simpler approach
     withMainContext do
-      -- Get environment to check which lemmas exist
-      let env ← getEnv
       let mut lemmasToApply : List Ident := []
 
       -- Get all the types that appear in equalities (including inside conjunctions)
@@ -111,23 +111,24 @@ def splitProvableStructEq : TacticM Unit := do
         -- Extract all equalities from this hypothesis (handles conjunctions)
         let equalities ← extractEqualities type
 
-        for (eqExpr, _, _) in equalities do
+        for (eqExpr, lhs, rhs) in equalities do
           -- Get the type argument (first argument of Eq)
           if let some typeExpr := eqExpr.getArg? 0 then
-            -- Get the type constructor for finding mk.injEq
-            let typeExpr' ← whnf typeExpr
-            match typeExpr'.getAppFn with
-            | .const typeName _ =>
-              -- Check if mk.injEq exists for this type
-              let mkInjEqName := typeName ++ `mk ++ `injEq
-              if env.contains mkInjEqName then
-                -- Check if the full type (not just the constructor) has ProvableStruct instance
-                -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
-                if ← hasProvableStructInstance typeExpr' then
-                  let lemmaIdent := mkIdent mkInjEqName
-                  if !lemmasToApply.any (fun l => l.getId == mkInjEqName) then
-                    lemmasToApply := lemmaIdent :: lemmasToApply
-            | _ => pure ()
+            -- Get the type constructor for finding mk.injEq. Reducible
+            -- normalization lets `Value Input F` expose the generated
+            -- `Input.Value.mk.injEq` lemma.
+            if let some mkInjEqName ← mkInjEqNameFromType? typeExpr then
+              let lemmaIdent := mkIdent mkInjEqName
+              if !lemmasToApply.any (fun l => l.getId == mkInjEqName) then
+                lemmasToApply := lemmaIdent :: lemmasToApply
+
+          -- If the equality type is hidden behind an opaque class projection,
+          -- recover the injector lemma from constructor sides directly.
+          for side in #[lhs, rhs] do
+            if let some mkInjEqName ← mkInjEqNameFromConstructor? side then
+              let lemmaIdent := mkIdent mkInjEqName
+              if !lemmasToApply.any (fun l => l.getId == mkInjEqName) then
+                lemmasToApply := lemmaIdent :: lemmasToApply
 
       -- Apply all the lemmas we found
       for lemmaIdent in lemmasToApply do
