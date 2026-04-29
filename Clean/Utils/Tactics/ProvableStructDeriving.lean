@@ -194,7 +194,7 @@ def analyzeFieldType (numParams : Nat) (paramFVars : Array Expr) (fieldType : Ex
         else
           throwError "field type argument is not the type parameter: {fieldType}"
     | _ =>
-      throwError "unsupported field type for ProvableStruct: {fieldType}. Expected either F, M F, Vector F n, or Vector (M F) n where F is the type parameter."
+      throwError "unsupported field type for ProvableStruct or CircuitType: {fieldType}. Expected either F, M F, Vector F n, or Vector (M F) n where F is the type parameter."
 where
   /-- Convert an expression to syntax, handling fvars that reference other parameters -/
   exprToSyntax (paramFVars : Array Expr) (e : Expr) : MetaM (TSyntax `term) := do
