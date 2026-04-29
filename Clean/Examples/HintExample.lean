@@ -9,6 +9,7 @@ and constrains it to be boolean.
 -/
 import Clean.Circuit
 import Clean.Gadgets.Boolean
+import Clean.Types.U32
 
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
@@ -80,4 +81,34 @@ def booleanAnd : FormalCircuit (F p) Input field where
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
       <;> simp_all
 
+structure MixedInput (F : Type) where
+  someElement : U32 F
+  someHint : Unconstrained Bool F
+deriving CircuitType
+
+example (input : MixedInput.Var (F p)) : U32 (Expression (F p)) × (ProverEnvironment (F p) → Bool) :=
+  (input.someElement, input.someHint)
+example (input : MixedInput.ProverValue (F p)) : U32 (F p) × Bool :=
+  (input.someElement, input.someHint)
+example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
+  (input.someElement, input.someHint)
+
+/--
+  This captures the field-dependent hint case: the prover-only data mentions the
+  circuit field type, so `Unconstrained Bool` is not expressive enough.
+-/
+structure InputWithFieldHint (F : Type) where
+  publicInput : F
+  hinted : UnconstrainedDep field F
+deriving CircuitType
+
+example (input : InputWithFieldHint.Var (F p)) :
+    Expression (F p) × (ProverEnvironment (F p) → F p) :=
+  (input.publicInput, input.hinted)
+example (input : InputWithFieldHint.ProverValue (F p)) : F p × F p :=
+  (input.publicInput, input.hinted)
+example (input : InputWithFieldHint.Value (F p)) : F p × Unit :=
+  (input.publicInput, input.hinted)
+
+example : ProvableType (Value InputWithFieldHint) := inferInstance
 end Examples.HintExample

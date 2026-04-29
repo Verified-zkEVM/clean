@@ -124,6 +124,8 @@ elab_rules : tactic
   -- try to unfold main, Assumptions and Spec as local definitions
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `Assumptions):ident] at *))
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `Spec):ident] at *))
+  evalTactic (← `(tactic| try dsimp only [$(mkIdent `ProverAssumptions):ident] at *))
+  evalTactic (← `(tactic| try dsimp only [$(mkIdent `ProverSpec):ident] at *))
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `elaborated):ident] at *)) -- sometimes `main` is hidden behind `elaborated`
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `main):ident] at *))
 
