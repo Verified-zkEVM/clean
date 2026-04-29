@@ -455,6 +455,89 @@ def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
   elabCommand cmd
 
 /--
+  Generate a `ProvableStruct` instance for the verifier `Value` companion of a
+  derived `CircuitType`.
+
+  We generate this from the original field components instead of asking the
+  ordinary `ProvableStruct` deriver to rediscover them from fields like
+  `CircuitType.Value M F`. The latter loses the semantic context that these are
+  verifier values and can get stuck on generated typeclass arguments.
+-/
+def mkCircuitValueProvableStructInstance (valueStructName : Name) (paramInfos : Array ParamInfo)
+    (fieldNameIdents : Array (TSyntax `ident)) (componentSyntaxes : Array (TSyntax `term)) :
+    CommandElabM Unit := do
+  let valueComponents ← componentSyntaxes.mapM fun component =>
+    `(CircuitType.Value $component)
+  let componentsListSyntax ← `([$[$valueComponents],*])
+
+  let mut toCompBody : TSyntax `term ← `(.nil)
+  for i in [:fieldNameIdents.size] do
+    let idx := fieldNameIdents.size - 1 - i
+    let fname := fieldNameIdents[idx]!
+    toCompBody ← `(.cons $fname $toCompBody)
+
+  let mut fromCompPat : TSyntax `term ← `(.nil)
+  for i in [:fieldNameIdents.size] do
+    let idx := fieldNameIdents.size - 1 - i
+    let fname := fieldNameIdents[idx]!
+    fromCompPat ← `(.cons $fname $fromCompPat)
+
+  let valueStructIdent := mkIdent (← relativeToCurrentNamespace valueStructName)
+  let valueStructMk := mkIdent (← relativeToCurrentNamespace (valueStructName ++ `mk))
+  let mkAppSyntax ← fieldNameIdents.foldlM (init := (valueStructMk : TSyntax `term)) fun acc fname =>
+    `($acc $fname)
+
+  let structPatFields := fieldNameIdents.map (TSyntax.mk ·.raw)
+  let structPat ← `(⟨$[$structPatFields],*⟩)
+
+  let appliedValueStructType : TSyntax `term ←
+    if paramInfos.isEmpty then
+      `($valueStructIdent)
+    else
+      let paramIdents := paramInfos.map (fun p => mkIdent p.name)
+      paramIdents.foldlM (init := (valueStructIdent : TSyntax `term)) fun acc paramIdent =>
+        `($acc $paramIdent)
+
+  let mut binderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
+  for info in paramInfos do
+    match info with
+    | .natural n =>
+      let nIdent := mkIdent n
+      let binder ← `(bracketedBinderF| {$nIdent : ℕ})
+      binderSyntaxes := binderSyntaxes.push binder
+    | .typeMap m =>
+      let mIdent := mkIdent m
+      let typeBinder ← `(bracketedBinderF| {$mIdent : TypeMap})
+      let circuitBinder ← `(bracketedBinderF| [CircuitType $mIdent])
+      let provableValueBinder ← `(bracketedBinderF| [ProvableType (CircuitType.Value $mIdent)])
+      binderSyntaxes := binderSyntaxes.push typeBinder
+      binderSyntaxes := binderSyntaxes.push circuitBinder
+      binderSyntaxes := binderSyntaxes.push provableValueBinder
+    | .other n ty =>
+      let nIdent := mkIdent n
+      let tySyntax ← liftTermElabM <| PrettyPrinter.delab ty
+      let binder ← `(bracketedBinderF| {$nIdent : $tySyntax})
+      binderSyntaxes := binderSyntaxes.push binder
+
+  let cmd ←
+    if binderSyntaxes.isEmpty then
+      `(
+        instance : ProvableStruct $appliedValueStructType where
+          components := $componentsListSyntax
+          toComponents := fun $structPat => $toCompBody
+          fromComponents := fun ($fromCompPat) => $mkAppSyntax
+      )
+    else
+      `(
+        instance $binderSyntaxes:bracketedBinder* : ProvableStruct $appliedValueStructType where
+          components := $componentsListSyntax
+          toComponents := fun $structPat => $toCompBody
+          fromComponents := fun ($fromCompPat) => $mkAppSyntax
+      )
+
+  elabCommand cmd
+
+/--
   Generate the CircuitType instance declaration.
 -/
 def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
@@ -522,6 +605,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
     (fun component => `(CircuitType.Value $component $fIdent))
   mkCircuitViewStruct proverValueStructName paramInfos fieldNameIdents componentSyntaxes
     (fun component => `(CircuitType.ProverValue $component $fIdent))
+  mkCircuitValueProvableStructInstance valueStructName paramInfos fieldNameIdents componentSyntaxes
 
   let appliedStructType ← mkAppliedInductiveWithoutFieldParam indInfo paramInfos
 

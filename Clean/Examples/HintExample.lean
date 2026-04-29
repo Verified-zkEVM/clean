@@ -92,4 +92,23 @@ example (input : MixedInput.ProverValue (F p)) : U32 (F p) × Bool :=
   (input.someElement, input.someHint)
 example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
   (input.someElement, input.someHint)
+
+/--
+  This captures the field-dependent hint case: the prover-only data mentions the
+  circuit field type, so `Unconstrained Bool` is not expressive enough.
+-/
+structure InputWithFieldHint (F : Type) where
+  publicInput : F
+  hinted : UnconstrainedDep field F
+deriving CircuitType
+
+example (input : InputWithFieldHint.Var (F p)) :
+    Expression (F p) × (ProverEnvironment (F p) → F p) :=
+  (input.publicInput, input.hinted)
+example (input : InputWithFieldHint.ProverValue (F p)) : F p × F p :=
+  (input.publicInput, input.hinted)
+example (input : InputWithFieldHint.Value (F p)) : F p × Unit :=
+  (input.publicInput, input.hinted)
+
+example : ProvableType (Value InputWithFieldHint) := inferInstance
 end Examples.HintExample

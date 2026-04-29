@@ -74,6 +74,9 @@ instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
   evalVerifier env v := ProvableType.eval env v
   evalProver env v := ProvableType.eval env.toEnvironment v
 
+instance {M : TypeMap} [ProvableType M] : ProvableType (Value M) :=
+  inferInstanceAs (ProvableType M)
+
 def const (x : M F) : M (Expression F) :=
   let values : Vector F _ := toElements x
   fromElements (values.map .const)
@@ -187,6 +190,12 @@ instance : ProvableType unit where
   size := 0
   toElements _ := #v[]
   fromElements _ := ()
+
+instance {Hint : Type} : ProvableType (Value (Unconstrained Hint)) :=
+  inferInstanceAs (ProvableType unit)
+
+instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDep Hint)) :=
+  inferInstanceAs (ProvableType unit)
 
 abbrev field : TypeMap := id
 
