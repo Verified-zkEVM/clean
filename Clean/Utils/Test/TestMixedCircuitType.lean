@@ -25,12 +25,12 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
   output _ offset := varFromOffset field offset
   localLength _ := 1
 
-  Spec
-  | ⟨ (x : F), _ ⟩, (out : F), _ => x * out = 1
-  ProverAssumptions
-  | ⟨ (x : F), (inverse : F) ⟩, _, _ => x * inverse = 1
-  ProverSpec
-  | input, out, _ => out = input.inverse
+  Spec input out _ :=
+    input.x * out = 1
+  ProverAssumptions input _ _ :=
+    input.x * input.inverse = 1
+  ProverSpec input out _ :=
+    out = input.inverse
 
   soundness := by
     circuit_proof_start
