@@ -40,6 +40,7 @@ instance : ToJson (CellAssignment W S) where
 
 instance : ToJson (TableContext W S F) where
   toJson ctx := Json.mkObj [
+    ("inputSize", toJson ctx.inputSize),
     ("circuit", toJson ctx.circuit),
     ("assignment", toJson ctx.assignment)
   ]

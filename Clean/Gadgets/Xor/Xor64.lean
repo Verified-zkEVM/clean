@@ -81,8 +81,6 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env input_var input h_input h_as h_holds
 
-  let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
-       ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
        ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
 

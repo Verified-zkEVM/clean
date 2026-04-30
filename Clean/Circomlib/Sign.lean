@@ -14,7 +14,7 @@ We generalize this to work with any prime field by using (p-1)/2.
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
-omit [Fact (Nat.Prime p)] in
+omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 253)] in
 lemma hppre_half_254 : ((p - 1) / 2 < 2^254) := by
   calc
     _ ≤ p - 1 := by grind

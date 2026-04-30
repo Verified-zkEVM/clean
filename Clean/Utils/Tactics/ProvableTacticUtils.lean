@@ -1,16 +1,55 @@
 import Lean
+import Clean.Circuit.CircuitType
 import Clean.Circuit.Provable
 
 open Lean Meta Elab Tactic
 
-/-- Check if an expression is a constructor application (ends with .mk) -/
+/-- Check if an expression is a constructor application (ends with .mk).
+
+This intentionally does not unfold the expression. The struct tactics use this as
+a cheap syntactic guard before splitting constructor equalities; unfolding here
+can expand `eval` terms appearing in unrelated hypotheses and make the tactic
+far too expensive.
+-/
 def isMkConstructor (e : Expr) : MetaM Bool := do
-  let e' ← withTransparency .all (whnf e)
-  match e'.getAppFn with
+  match e.consumeMData.getAppFn with
   | .const name _ =>
     -- Check if it's a constructor (ends with .mk)
     return name.components.getLast? == some `mk
   | _ => return false
+
+/-- Return the generated `mk.injEq` lemma for a constructor application, if it exists. -/
+def mkInjEqNameFromConstructor? (e : Expr) : MetaM (Option Name) := do
+  let env ← getEnv
+  match e.consumeMData.getAppFn with
+  | .const name _ =>
+    if name.components.getLast? == some `mk then
+      let mkInjEqName := name ++ `injEq
+      if env.contains mkInjEqName then
+        return some mkInjEqName
+    return none
+  | _ => return none
+
+/--
+Return the generated `mk.injEq` lemma for a structure type, if it exists.
+
+This uses reducible transparency so type synonyms/class projections such as
+`Value M F` can reduce to the concrete generated view structure.
+-/
+def mkInjEqNameFromType? (type : Expr) : MetaM (Option Name) := do
+  let env ← getEnv
+  let type' ← withTransparency .reducible (whnf type)
+  match type'.getAppFn with
+  | .const typeName _ =>
+    let mkInjEqName := typeName ++ `mk ++ `injEq
+    if env.contains mkInjEqName then
+      return some mkInjEqName
+    return none
+  | _ => return none
+
+/-- Check whether a type is a structure-like type with a generated `mk.injEq` lemma. -/
+def hasMkInjEqForType (type : Expr) : MetaM Bool := do
+  return (← mkInjEqNameFromType? type).isSome
 
 /-- Extract all equalities from an expression (including inside conjunctions) -/
 partial def extractEqualities (e : Expr) : MetaM (List (Expr × Expr × Expr)) := do
@@ -44,7 +83,7 @@ def hasProvableStructInstance (type : Expr) : MetaM Bool := do
 
 /-- Check if expression contains eval pattern (ProvableType.eval, Expression.eval, or ProvableStruct.eval) -/
 def hasEvalPattern (e : Expr) : Bool :=
-  e.isAppOf ``ProvableType.eval || e.isAppOf ``Expression.eval || e.isAppOf ``ProvableStruct.eval
+  e.isAppOf ``eval || e.isAppOf ``ProvableType.eval || e.isAppOf ``Expression.eval || e.isAppOf ``ProvableStruct.eval
 
 /-- Extract type map candidates from a type for ProvableType/ProvableStruct checking -/
 def extractTypeMapCandidates (type : Expr) : MetaM (List Expr) := do

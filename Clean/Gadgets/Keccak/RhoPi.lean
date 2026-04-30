@@ -37,30 +37,28 @@ lemma rhoPi_loop (state : Vector ℕ 25) :
   simp [Specs.Keccak256.rhoPi, rhoPiConstants, rhoPiIndices, rhoPiShifts]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+  circuit_proof_start
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [elaborated, eval_vector, Vector.getElem_map,
-    KeccakState.value, rhoPi_loop]
+  simp only [eval_vector, Vector.getElem_map, KeccakState.value, rhoPi_loop]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [Assumptions, KeccakState.Normalized] at state_norm
-  simp only [h_input, state_norm, main, circuit_norm,
+  simp only [KeccakState.Normalized] at h_assumptions
+  simp only [h_input, h_assumptions, circuit_norm,
     Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated] at h_holds ⊢
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+  circuit_proof_start
 
   -- simplify assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [Assumptions, KeccakState.Normalized] at state_norm
+  simp only [KeccakState.Normalized] at h_assumptions
 
   -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [main, circuit_norm,
-    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
+  simp_all [circuit_norm, Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState :=
   { elaborated with Assumptions, Spec, soundness, completeness }
