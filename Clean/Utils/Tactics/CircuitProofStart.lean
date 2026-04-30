@@ -202,8 +202,7 @@ elab_rules : tactic
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
   try CircuitProofStart.exposeGeneratedCircuitTypeHInput catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, ProvableType.eval_field,
-    CircuitType.evalVerifier, CircuitType.evalProver] at $(mkIdent `h_input):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `h_input):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
 
   -- Additional simplification for common patterns in soundness/completeness proofs
@@ -231,5 +230,5 @@ elab_rules : tactic
   | `(tactic| circuit_proof_all $[[$terms:term,*]]?) => do
   let lemmas := terms.getD (.mk #[])
   evalTactic (← `(tactic| circuit_proof_start [$lemmas,*]))
-  evalTactic (← `(tactic| try simp_all))
+  evalTactic (← `(tactic| try first | simp_all | grind))
   evalTactic (← `(tactic| done))
