@@ -1006,11 +1006,15 @@ private lemma transition_bridge
   · simp only [Specs.Poseidon.sboxFull,
                ark_t2_eq 8 (by omega), mix_P_t2_eq, vec2_get0, vec2_get1]
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8,h9,h10⟩ := h
-    simp only [h9, h7, h8, h3, h6, h2, h5, h1, h4]; ring_nf; ac_rfl
+    simp only [h9, h7, h8, h3, h6, h2, h5, h1, h4]
+    simp [Specs.Poseidon.sigma]
+    ring_nf
   · simp only [Specs.Poseidon.sboxFull,
                ark_t2_eq 8 (by omega), mix_P_t2_eq, vec2_get0, vec2_get1]
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8,h9,h10⟩ := h
-    simp only [h10, h7, h8, h3, h6, h2, h5, h1, h4]; ring_nf; ac_rfl
+    simp only [h10, h7, h8, h3, h6, h2, h5, h1, h4]
+    simp [Specs.Poseidon.sigma]
+    ring_nf
 
 set_option maxHeartbeats 800000 in
 private lemma final_round_bridge
@@ -1027,11 +1031,15 @@ private lemma final_round_bridge
   · simp only [Specs.Poseidon.sboxFull,
                mix_t2_eq, vec2_get0]
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8⟩ := h
-    simp only [h7, h5, h6, h3, h4, h2, h1]; ring_nf; ac_rfl
+    simp only [h7, h5, h6, h3, h4, h2, h1]
+    simp [Specs.Poseidon.sigma]
+    ring_nf
   · simp only [Specs.Poseidon.sboxFull,
                mix_t2_eq, vec2_get1]
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8⟩ := h
-    simp only [h8, h5, h6, h3, h4, h2, h1]; ring_nf; ac_rfl
+    simp only [h8, h5, h6, h3, h4, h2, h1]
+    simp [Specs.Poseidon.sigma]
+    ring_nf
 
 -- Specialized wrappers for poseidon1_soundness:
 -- These take the full `(main input_var).operations i0` hypothesis and absorb
@@ -1130,6 +1138,7 @@ private theorem poseidon1_soundness :
   have hs1 := applyFullRounds1_spec env _ _ h_fr1; clear h_fr1
   have hs3 := applyPartialRoundsOpt_spec env _ _ h_partial; clear h_partial
   have hs4 := applyFullRounds2_spec env _ _ h_fr2; clear h_fr2
+  simp only [circuit_norm] at h_input
   have hb0 := ark_bridge env input_var input i0 h_input h_ark_s; clear h_ark_s
   -- Narrow normalization: only the targeted output / localLength lemmas, NO circuit_norm.
   -- circuit_norm leaves the hypotheses with heavy proof terms that poison subsequent
@@ -1179,6 +1188,7 @@ def circuit : FormalCircuit (F BN254_PRIME) field field where
 
   soundness := by
     intro i0 env input_var input h_input h_assumptions h_holds
+    simp only [circuit_norm]
     exact poseidon1_soundness i0 env input_var input h_input h_assumptions h_holds
 
   completeness := by
