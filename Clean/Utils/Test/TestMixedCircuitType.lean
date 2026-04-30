@@ -42,7 +42,28 @@ instance elaborated : ElaboratedCircuit (F p) Input field where
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness (F p) elaborated (fun _ _ => True) Spec := by
-  circuit_proof_start
+  -- manual version of what `circuit_proof_start` does, with comments
+
+  -- this part seems good to me
+  circuit_proof_start_core
+  simp only [circuit_norm] at input h_input
+  simp only [Spec, elaborated, main] at *
+
+  -- I don't like this block because we are using `provable_struct_simp` as a blackbox
+  -- twice instead of modifying it to our needs to succeed once. The middle part we're adding
+  -- feels like it belongs to `simplify_provable_struct_eval` which is one of the 3 tactics that
+  -- `provable_struct_simp` repeatedly applies.
+  provable_struct_simp
+  -- `rw` is undesirable here. the reason `simp only` doesn't work is because
+  -- we rewrote `Value Input F` to `Input.Value F` in `@eval` at `h_input`
+  -- (when we did `simp only [circuit_norm] at h_input`)
+  -- while the `eval_verifier` lemma expects the form with `Value Input F`.
+  rw [Input.eval_verifier] at h_input
+  simp only [circuit_norm] at h_input
+  provable_struct_simp
+
+  simp only [circuit_norm, h_input] at ⊢ h_holds
+
   -- Regression checks for the intended post-`circuit_proof_start` shape:
   -- the high-level verifier input is gone, and the constraints mention `input_x`.
   fail_if_success (exact input)
