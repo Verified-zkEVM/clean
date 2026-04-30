@@ -551,6 +551,113 @@ def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
 
 end ApplyFullRounds1
 
+namespace ApplyFullRounds2
+
+def body (t : Vector (Expression (F BN254_PRIME)) 2 × (F BN254_PRIME × F BN254_PRIME)) :
+    Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
+  FullRound_t2.circuit t.2.1 t.2.2 m00 m01 m10 m11 t.1
+
+def main (state : Vector (Expression (F BN254_PRIME)) 2)
+    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
+  Circuit.foldl fullRoundConstants2 state
+    (fun st c => body (st, c))
+    fullRound_constOut fullRound_constLen
+
+@[circuit_norm]
+theorem body_localLength_eq
+    (state : Vector (Expression (F BN254_PRIME)) 2) (c : F BN254_PRIME × F BN254_PRIME)
+    (n : ℕ) :
+    (body (state, c)).localLength n = 10 :=
+  fullRound_constLen.localLength_eq (state, c) n
+
+@[circuit_norm]
+theorem body_output_eq
+    (state : Vector (Expression (F BN254_PRIME)) 2) (c : F BN254_PRIME × F BN254_PRIME)
+    (n : ℕ) :
+    (body (state, c)).output n = #v[varFromOffset field (n + 8), varFromOffset field (n + 9)] := by
+  simp only [body, circuit_norm, FullRound_t2.circuit]
+
+theorem body_subcircuitsConsistent
+    (state : Vector (Expression (F BN254_PRIME)) 2) (c : F BN254_PRIME × F BN254_PRIME)
+    (n : ℕ) :
+    (body (state, c)).forAll n { subcircuit offset {m} _ := m = offset } := by
+  simp only [body, circuit_norm, FullRound_t2.circuit, Operations.forAll]
+
+@[circuit_norm]
+theorem main_localLength_eq (state : Vector (Expression (F BN254_PRIME)) 2) (n : ℕ) :
+    (main state).localLength n = 30 := by
+  simp only [main, foldl.localLength_eq, body_localLength_eq]
+
+@[circuit_norm]
+theorem main_output_eq (state : Vector (Expression (F BN254_PRIME)) 2) (n : ℕ) :
+    (main state).output n = #v[varFromOffset field (n + 28), varFromOffset field (n + 29)] := by
+  unfold main
+  rw [foldl.output_eq]
+  simp only [body_output_eq, body_localLength_eq]
+
+def roundSpec (c0 c1 : F BN254_PRIME) (input : Vector (F BN254_PRIME) 2) :
+    Vector (F BN254_PRIME) 2 :=
+  let s0 := input[0] ^ 5
+  let s1 := input[1] ^ 5
+  let a0 := s0 + c0
+  let a1 := s1 + c1
+  #v[m00 * a0 + m10 * a1, m01 * a0 + m11 * a1]
+
+def specOutput (input : Vector (F BN254_PRIME) 2) : Vector (F BN254_PRIME) 2 :=
+  let state0 := roundSpec fullRoundConstants2[0].1 fullRoundConstants2[0].2 input
+  let state1 := roundSpec fullRoundConstants2[1].1 fullRoundConstants2[1].2 state0
+  roundSpec fullRoundConstants2[2].1 fullRoundConstants2[2].2 state1
+
+def Spec (input output : Vector (F BN254_PRIME) 2) : Prop :=
+  output = specOutput input
+
+def elaborated : ElaboratedCircuit (F BN254_PRIME) (fields 2) (fields 2) where
+  main
+  localLength _ := 30
+  localLength_eq := by
+    intro input n
+    simp only [main_localLength_eq]
+  output _ i := #v[varFromOffset field (i + 28), varFromOffset field (i + 29)]
+  output_eq := by
+    intro input n
+    simp only [main_output_eq]
+  subcircuitsConsistent := by
+    intro input n
+    change (main input).forAll n { subcircuit offset {m} _ := m = offset }
+    unfold main
+    rw [forAll_def]
+    rw [foldl.forAll]
+    constructor
+    · exact body_subcircuitsConsistent _ _ _
+    · intro i hi
+      exact body_subcircuitsConsistent _ _ _
+
+theorem soundness : Soundness (F BN254_PRIME) elaborated (fun _ => True) Spec := by
+  circuit_proof_start [main, Spec]
+  simp only [body, circuit_norm] at h_holds
+  obtain ⟨h0, h_step⟩ := h_holds
+  have h0' := h0 trivial
+  have h1' := h_step 0 (by omega) trivial
+  have h2' := h_step 1 (by omega) trivial
+  simp only [FullRound_t2.circuit, circuit_norm, h_input] at h0' h1' h2'
+  simp only [specOutput, roundSpec]
+  simp +arith only [] at h1' h2' ⊢
+  rw [h2'.1, h2'.2, h1'.1, h1'.2, h0'.1, h0'.2]
+  rfl
+
+theorem completeness : Completeness (F BN254_PRIME) elaborated (fun _ => True) := by
+  circuit_proof_start [main, body]
+  exact ⟨trivial, fun _ _ => trivial⟩
+
+def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
+  elaborated
+  Assumptions _ := True
+  Spec
+  soundness
+  completeness
+
+end ApplyFullRounds2
+
 
 end Poseidon1
 
