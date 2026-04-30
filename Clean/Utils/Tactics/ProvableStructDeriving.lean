@@ -537,87 +537,6 @@ def mkCircuitValueProvableStructInstance (valueStructName : Name) (paramInfos : 
 
   elabCommand cmd
 
-/-- Generate reduction lemmas for `CircuitType` view projections and eval lemmas. -/
-def mkCircuitTypeViewReductionLemmas (structName : Name) (paramInfos : Array ParamInfo)
-    (appliedStructType varType valueType proverValueType : TSyntax `term) : CommandElabM Unit := do
-  let mut binderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
-  for info in paramInfos do
-    match info with
-    | .natural n =>
-      let nIdent := mkIdent n
-      let binder ← `(bracketedBinderF| {$nIdent : ℕ})
-      binderSyntaxes := binderSyntaxes.push binder
-    | .typeMap m =>
-      let mIdent := mkIdent m
-      let typeBinder ← `(bracketedBinderF| {$mIdent : TypeMap})
-      let instBinder ← `(bracketedBinderF| [CircuitType $mIdent])
-      binderSyntaxes := binderSyntaxes.push typeBinder
-      binderSyntaxes := binderSyntaxes.push instBinder
-    | .other n ty =>
-      let nIdent := mkIdent n
-      let tySyntax ← liftTermElabM <| PrettyPrinter.delab ty
-      let binder ← `(bracketedBinderF| {$nIdent : $tySyntax})
-      binderSyntaxes := binderSyntaxes.push binder
-
-  let fIdent := mkIdent `F
-  let fBinder ← `(bracketedBinderF| ($fIdent : Type))
-  let fImplicitBinder ← `(bracketedBinderF| {$fIdent : Type})
-  let fieldBinder ← `(bracketedBinderF| [Field $fIdent])
-  let envIdent := mkIdent `env
-  let inputIdent := mkIdent `input
-  let varLemma := mkIdent (← relativeToCurrentNamespace (structName ++ `var_eq))
-  let valueLemma := mkIdent (← relativeToCurrentNamespace (structName ++ `value_eq))
-  let proverValueLemma := mkIdent (← relativeToCurrentNamespace (structName ++ `proverValue_eq))
-  let evalVerifierLemma := mkIdent (← relativeToCurrentNamespace (structName ++ `eval_verifier))
-  let evalProverLemma := mkIdent (← relativeToCurrentNamespace (structName ++ `eval_prover))
-
-  let cmd ←
-    if binderSyntaxes.isEmpty then
-      `(
-        theorem $varLemma $fBinder :
-            CircuitType.Var $appliedStructType $fIdent = $varType $fIdent := rfl
-        theorem $valueLemma $fBinder :
-            CircuitType.Value $appliedStructType $fIdent = $valueType $fIdent := rfl
-        theorem $proverValueLemma $fBinder :
-            CircuitType.ProverValue $appliedStructType $fIdent = $proverValueType $fIdent := rfl
-        @[circuit_norm]
-        theorem $evalVerifierLemma $fImplicitBinder $fieldBinder
-            ($envIdent : Environment $fIdent)
-            ($inputIdent : CircuitType.Var $appliedStructType $fIdent) :
-            eval $envIdent $inputIdent = CircuitType.evalVerifier $envIdent $inputIdent :=
-          CircuitType.eval_verifier $envIdent $inputIdent
-        @[circuit_norm]
-        theorem $evalProverLemma $fImplicitBinder $fieldBinder
-            ($envIdent : ProverEnvironment $fIdent)
-            ($inputIdent : CircuitType.Var $appliedStructType $fIdent) :
-            eval $envIdent $inputIdent = CircuitType.evalProver $envIdent $inputIdent :=
-          CircuitType.eval_prover $envIdent $inputIdent
-      )
-    else
-      `(
-        theorem $varLemma $binderSyntaxes:bracketedBinder* $fBinder :
-            CircuitType.Var $appliedStructType $fIdent = $varType $fIdent := rfl
-        theorem $valueLemma $binderSyntaxes:bracketedBinder* $fBinder :
-            CircuitType.Value $appliedStructType $fIdent = $valueType $fIdent := rfl
-        theorem $proverValueLemma $binderSyntaxes:bracketedBinder* $fBinder :
-            CircuitType.ProverValue $appliedStructType $fIdent = $proverValueType $fIdent := rfl
-        @[circuit_norm]
-        theorem $evalVerifierLemma $binderSyntaxes:bracketedBinder*
-            $fImplicitBinder $fieldBinder
-            ($envIdent : Environment $fIdent)
-            ($inputIdent : CircuitType.Var $appliedStructType $fIdent) :
-            eval $envIdent $inputIdent = CircuitType.evalVerifier $envIdent $inputIdent :=
-          CircuitType.eval_verifier $envIdent $inputIdent
-        @[circuit_norm]
-        theorem $evalProverLemma $binderSyntaxes:bracketedBinder*
-            $fImplicitBinder $fieldBinder
-            ($envIdent : ProverEnvironment $fIdent)
-            ($inputIdent : CircuitType.Var $appliedStructType $fIdent) :
-            eval $envIdent $inputIdent = CircuitType.evalProver $envIdent $inputIdent :=
-          CircuitType.eval_prover $envIdent $inputIdent
-      )
-  elabCommand cmd
-
 /--
   Generate the CircuitType instance declaration.
 -/
@@ -741,7 +660,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
   let cmd ←
     if instanceBinders.isEmpty then
       `(
-        instance : CircuitType $appliedStructType where
+        instance : DerivedCircuitType $appliedStructType where
           Var := $varType
           Value := $valueType
           ProverValue := $proverValueType
@@ -750,7 +669,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
       )
     else
       `(
-        instance $instanceBinders:bracketedBinder* : CircuitType $appliedStructType where
+        instance $instanceBinders:bracketedBinder* : DerivedCircuitType $appliedStructType where
           Var := $varType
           Value := $valueType
           ProverValue := $proverValueType
@@ -759,7 +678,6 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
       )
 
   elabCommand cmd
-  mkCircuitTypeViewReductionLemmas structName paramInfos appliedStructType varType valueType proverValueType
 
 /-- The deriving handler for record-shaped `CircuitType`s. -/
 def circuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool := do
