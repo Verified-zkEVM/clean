@@ -956,8 +956,6 @@ instance : HMul (field (Expression F)) F (field (Expression F)) where
 instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
   hMul (a : Expression F) (b : Expression F) := a * b
 
-instance : Inv (field F) where
-  inv (x : F) : F := x⁻¹
 
 instance {n : ℕ} [OfNat F n] : OfNat (field F) n where
   ofNat : F := OfNat.ofNat n
@@ -993,6 +991,23 @@ instance : HMul (Expression F) (Var field F) (Expression F) := inferInstanceAs (
 instance : HMul (Var field F) (Expression F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
 instance : HDiv (Var field F) F (Expression F) := inferInstanceAs (HDiv (Expression F) F (Expression F))
 instance : HDiv (Var field F) ℕ (Expression F) := inferInstanceAs (HDiv (Expression F) ℕ (Expression F))
+
+  -- make `field F` behave like `F` in expressions
+instance : Zero (field F) := inferInstanceAs (Zero F)
+instance : One (field F) := inferInstanceAs (One F)
+instance : Add (field F) := inferInstanceAs (Add F)
+instance : Neg (field F) := inferInstanceAs (Neg F)
+instance : Sub (field F) := inferInstanceAs (Sub F)
+instance : Mul (field F) := inferInstanceAs (Mul F)
+instance : Inv (field F) := inferInstanceAs (Inv F)
+instance : HAdd F (field F) F := inferInstanceAs (HAdd F F F)
+instance : HAdd (field F) F F := inferInstanceAs (HAdd F F F)
+instance : HSub F (field F) F := inferInstanceAs (HSub F F F)
+instance : HSub (field F) F F := inferInstanceAs (HSub F F F)
+instance : HMul F (field F) F := inferInstanceAs (HMul F F F)
+instance : HMul (field F) F F := inferInstanceAs (HMul F F F)
+instance : HDiv F (field F) F := inferInstanceAs (HDiv F F F)
+instance : HDiv (field F) F F := inferInstanceAs (HDiv F F F)
 
 -- make `Value field F` behave like `F` in expressions
 instance : Zero (Value field F) := inferInstanceAs (Zero F)
