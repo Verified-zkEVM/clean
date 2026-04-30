@@ -46,8 +46,8 @@ theorem soundness :
   -- Regression checks for the intended post-`circuit_proof_start` shape:
   -- the high-level verifier input is gone, and the constraints mention `input_x`.
   fail_if_success (exact input)
-  have hx : Expression.eval env input_var.x = input_x := h_input.1
-  replace h_holds := h_holds
+  guard_hyp h_input :
+    input_var.x.eval env = input_x ∧ () = input_inverse
   rw [mul_comm, add_neg_eq_zero] at h_holds
   exact h_holds
 
@@ -57,8 +57,8 @@ theorem completeness :
   -- The prover-side equality should also be fieldwise; in particular the
   -- prover-only hint is connected to the generated witness by `h_env`.
   fail_if_success (exact input)
-  have hx : Expression.eval env.toEnvironment input_var.x = input_x := h_input.1
-  have hinv : input_var.inverse env = input_inverse := h_input.2
+  guard_hyp h_input :
+    input_var.x.eval env.toEnvironment = input_x ∧ input_var.inverse env = input_inverse
   constructor
   · rw [h_env, mul_comm, h_assumptions]
     ring
