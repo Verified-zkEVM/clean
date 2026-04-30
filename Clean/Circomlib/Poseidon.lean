@@ -435,7 +435,7 @@ private instance fullRound_constLen :
   localLength := 10
   localLength_eq := by
     intro ⟨st, c0, c1⟩ n
-    simp only [circuit_norm, FullRound_t2.circuit, FullRound_t2.main, Sigma.main]
+    simp only [circuit_norm, FullRound_t2.circuit]
 
 private theorem fullRound_constOut :
     ConstantOutput (fun (t : Vector (Expression (F BN254_PRIME)) 2 ×
@@ -1160,10 +1160,8 @@ private theorem poseidon1_soundness :
   -- Both sides should now match poseidon1Opt's structure.
   rfl
 
--- The formal circuit with meaningful spec
-set_option maxHeartbeats 800000 in
-def circuit : FormalCircuit (F BN254_PRIME) field field where
-  main := main
+def elaborated : ElaboratedCircuit (F BN254_PRIME) field field where
+  main
   localLength _ := 416
   localLength_eq input n := by
     simp only [main, applyFullRounds1_localLength, applyFullRounds2_localLength,
@@ -1180,23 +1178,28 @@ def circuit : FormalCircuit (F BN254_PRIME) field field where
                applyPartialRoundsOpt_subcircuitsConsistent,
                and_true]
 
-  Assumptions _ := True
+-- THE KEY SPEC: circuit output equals the optimized Poseidon hash function
+def Spec (input : F BN254_PRIME) (output : F BN254_PRIME) :=
+  output = Specs.PoseidonOptimized.poseidon1Opt input
 
-  -- THE KEY SPEC: circuit output equals the optimized Poseidon hash function
-  Spec (input : F BN254_PRIME) (output : F BN254_PRIME) :=
-    output = Specs.PoseidonOptimized.poseidon1Opt input
+theorem soundness : Soundness (F BN254_PRIME) elaborated (fun _ => True) Spec := by
+  intro i0 env input_var input h_input h_assumptions h_holds
+  simp only [circuit_norm, Spec]
+  exact poseidon1_soundness i0 env input_var input h_input h_assumptions h_holds
 
-  soundness := by
-    intro i0 env input_var input h_input h_assumptions h_holds
-    simp only [circuit_norm]
-    exact poseidon1_soundness i0 env input_var input h_input h_assumptions h_holds
+theorem completeness : Completeness (F BN254_PRIME) elaborated (fun _ => True) := by
+  circuit_proof_start [main, applyFullRounds1, applyFullRounds2, applyPartialRoundsOpt,
+    Ark_t2.main, transitionRound, finalRound, Sigma.main,
+    FullRound_t2.circuit, PartialRoundOpt_t2.circuit]
+  grind
 
-  completeness := by
-    circuit_proof_start [main, applyFullRounds1, applyFullRounds2, applyPartialRoundsOpt,
-                         Ark_t2.main, transitionRound, finalRound, Sigma.main,
-                         FullRound_t2.circuit, FullRound_t2.main,
-                         PartialRoundOpt_t2.circuit, PartialRoundOpt_t2.main]
-    simp_all +arith
+-- The formal circuit with meaningful spec
+set_option maxHeartbeats 800000 in
+def circuit : FormalCircuit (F BN254_PRIME) field field where
+  elaborated
+  Spec
+  soundness
+  completeness
 
 end Poseidon1
 
