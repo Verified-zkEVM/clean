@@ -15,6 +15,15 @@ structure NonProvableStruct (F : Type) where
   a : F
   b : F
 
+-- Ordinary records without ProvableStruct should remain opaque.
+theorem test_non_provable_struct_not_split {F : Type} [Field F]
+    (h : (NonProvableStruct.mk 1 2 : NonProvableStruct F) = NonProvableStruct.mk 3 4) :
+    (NonProvableStruct.mk 1 2 : NonProvableStruct F) = NonProvableStruct.mk 3 4 := by
+  fail_if_success
+    split_provable_struct_eq
+    exact h.1
+  exact h
+
 -- Test basic struct literal = struct literal
 theorem test_struct_literal_eq_literal {F : Type} [Field F]
     (h : (TestInputs.mk 1 2 3 : TestInputs F) = TestInputs.mk 4 5 6) :
