@@ -76,8 +76,6 @@ export CircuitType (Var Value ProverValue)
 namespace CircuitType
 variable [CircuitType M]
 
-attribute [circuit_norm] evalVerifier evalProver
-
 /--
 A `CircuitType M` instance induces a verifier-side `Eval` on `Var M F`.
 This lets `eval env var` work uniformly whether the Var came from a `ProvableType`-derived
@@ -91,14 +89,15 @@ instance proverEval M [CircuitType M] :
   ProverEval F (Var M F) (ProverValue M F) := ⟨ evalProver ⟩
 
 lemma eval_verifier (env : Environment F) (v : Var M F) :
-  eval env v = evalVerifier env v := by
-  unfold eval
-  rfl
+  eval env v = evalVerifier env v := by with_unfolding_all rfl
 
 lemma eval_prover (env : ProverEnvironment F) (v : Var M F) :
-  eval env v = evalProver env v := by
-  unfold eval
-  rfl
+  eval env v = evalProver env v := by with_unfolding_all rfl
+
+-- the normal form of evaluation is `eval`; but once we specialize it to a particular `CircuitType`,
+-- by applying `eval_verifier` or `eval_prover`, we want to immediately simplify the resulting
+-- `evalVerifier` or `evalProver` to their definitions.
+attribute [circuit_norm] evalVerifier evalProver
 end CircuitType
 
 /--
