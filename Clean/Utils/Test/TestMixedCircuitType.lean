@@ -19,7 +19,7 @@ deriving CircuitType
 def circuit : GeneralFormalCircuit.WithHint F Input field where
   main input := do
     let inverse ← witness input.inverse
-    inverse * input.x === 1
+    input.x * inverse === 1
     return inverse
 
   output _ offset := varFromOffset field offset
@@ -39,7 +39,7 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     fail_if_success (exact input)
     guard_hyp h_input :
       input_var.x.eval env = input_x ∧ () = input_inverse
-    rwa [mul_comm]
+    exact h_holds
 
   completeness := by
     circuit_proof_start
@@ -49,6 +49,6 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     guard_hyp h_input :
       input_var.x.eval env.toEnvironment = input_x ∧ input_var.inverse env = input_inverse
     refine ⟨ ?_, h_env ⟩
-    rwa [h_env, mul_comm]
+    rwa [h_env]
 
 end TestMixedCircuitType
