@@ -4,6 +4,9 @@ use p3_challenger::{CanObserve, CanSample, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{ExtensionField, Field};
 
+// Re-export StarkGenericConfig from p3_uni_stark so we're compatible with p3-lookup
+pub use p3_uni_stark::StarkGenericConfig;
+
 pub type PcsError<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
     <SC as StarkGenericConfig>::Challenge,
     <SC as StarkGenericConfig>::Challenger,
@@ -20,30 +23,6 @@ pub type PackedVal<SC> = <Val<SC> as Field>::Packing;
 
 pub type PackedChallenge<SC> =
     <<SC as StarkGenericConfig>::Challenge as ExtensionField<Val<SC>>>::ExtensionPacking;
-
-pub trait StarkGenericConfig {
-    /// The PCS used to commit to trace polynomials.
-    type Pcs: Pcs<Self::Challenge, Self::Challenger>;
-
-    /// The field from which most random challenges are drawn.
-    type Challenge: ExtensionField<Val<Self>>;
-
-    /// The challenger (Fiat-Shamir) implementation used.
-    type Challenger: FieldChallenger<Val<Self>>
-        + CanObserve<<Self::Pcs as Pcs<Self::Challenge, Self::Challenger>>::Commitment>
-        + CanSample<Self::Challenge>;
-
-    /// Get a reference to the PCS used by this proof configuration.
-    fn pcs(&self) -> &Self::Pcs;
-
-    /// Get an initialisation of the challenger used by this proof configuration.
-    fn initialise_challenger(&self) -> Self::Challenger;
-
-    /// Returns 1 if the PCS is zero-knowledge, 0 otherwise.
-    fn is_zk(&self) -> usize {
-        Self::Pcs::ZK as usize
-    }
-}
 
 #[derive(Debug)]
 pub struct StarkConfig<Pcs, Challenge, Challenger> {

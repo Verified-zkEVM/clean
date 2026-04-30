@@ -17,8 +17,53 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
+/-- Arbitrary data a prover can witness and refer to in a circuit spec -/
+def ProverData (F : Type) :=
+  String → (n : ℕ) → Array (Vector F n)
+
+/-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
+distinct to emphasize that hints are *not* committed: they feed only the
+witness-generation step and never appear in the proof. -/
+def ProverHint (F : Type) :=
+  String → (n : ℕ) → Array (Vector F n)
+
+/-- Placeholder `ProverHint` that returns an empty array for every key. -/
+def ProverHint.empty (F : Type) : ProverHint F := fun _ _ => #[]
+
+/--
+  `Environment` represents the data that is provided at runtime to concretely
+  specify the witness assignment of a circuit (`get`) and any additional witness data
+  external to the current circuit (`data`).
+
+  In the abstract plaintext-witness version of the protocol, the full
+  `Environment` is passed from the prover to the verifier.
+  All constraints can be checked against the `Environment`.
+  Soundness theorems have the form `∀ env : Environment F, ...`.
+ -/
 structure Environment (F : Type) where
+  /-- Assignment of a circuit's variables to field elements -/
   get : ℕ → F
+  /-- Additional witness data not part of the current circuit's witness, such as the content
+   of lookup tables, made available for potential re-witnessing and for statements concerning
+   the verifier, such as a circuit's spec. -/
+  data : ProverData F
+
+/--
+  `ProverEnvironment` is `Environment` plus the prover's runtime `ProverHint`.
+  In some circuits, the additional `hint` is necessary to give an honest prover
+  sufficient information to generate a witness.
+  Completeness theorems are formulated against the `ProverEnvironment`.
+-/
+structure ProverEnvironment (F : Type) extends Environment F where
+  /-- Runtime-only hashmap of prover hints, never committed into the proof. -/
+  hint : ProverHint F
+
+/-- Project a `ProverEnvironment` to its `Environment`. -/
+instance : Coe (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.toEnvironment⟩
+instance : CoeOut (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.toEnvironment⟩
+
+instance {α} : Coe (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
+instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 
 namespace Expression
 variable [Field F]
@@ -47,38 +92,22 @@ instance [Repr F] : Repr (Expression F) where
   reprPrec e _ := toString e
 
 -- combine expressions elegantly
-instance : Zero (Expression F) where
-  zero := const 0
+instance : Zero (Expression F) where zero := const 0
+instance : One (Expression F) where one := const 1
+instance : Add (Expression F) where add := add
+instance : Neg (Expression F) where neg e := mul (const (-1)) e
+instance : Sub (Expression F) where sub e₁ e₂ := add e₁ (-e₂)
+instance : Mul (Expression F) where mul := mul
 
-instance : One (Expression F) where
-  one := const 1
-
-instance : Add (Expression F) where
-  add := add
-
-instance : Neg (Expression F) where
-  neg e := mul (const (-1)) e
-
-instance : Sub (Expression F) where
-  sub e₁ e₂ := add e₁ (-e₂)
-
-instance : Mul (Expression F) where
-  mul := mul
-
-instance : Coe F (Expression F) where
-  coe f := const f
-
+instance : Coe F (Expression F) where coe f := const f
 instance {n : ℕ} [OfNat F n] : OfNat (Expression F) n where
   ofNat := const (OfNat.ofNat n)
 
-instance : HMul F (Expression F) (Expression F) where
-  hMul f e := mul f e
+instance : HMul F (Expression F) (Expression F) where hMul f e := mul f e
+instance : HMul (Expression F) F (Expression F) where hMul f e := mul f e
 
-instance : HDiv (Expression F) F (Expression F) where
-  hDiv e f := mul (f⁻¹ : F) e
-
-instance : HDiv (Expression F) ℕ (Expression F) where
-  hDiv e f := mul (f⁻¹ : F) e
+instance : HDiv (Expression F) F (Expression F) where hDiv e f := mul (f⁻¹ : F) e
+instance : HDiv (Expression F) ℕ (Expression F) where hDiv e f := mul (f⁻¹ : F) e
 
 -- TODO probably should just make Variable F := ℕ
 instance {n : ℕ} : OfNat (Variable F) n where
@@ -86,6 +115,9 @@ instance {n : ℕ} : OfNat (Variable F) n where
 end Expression
 
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
+  coe env x := x.eval env
+
+instance [Field F] : CoeFun (ProverEnvironment F) (fun _ => (Expression F) → F) where
   coe env x := x.eval env
 
 instance [Field F] : Inhabited F where
@@ -103,6 +135,12 @@ variable [Field F]
 @[circuit_norm]
 lemma eval_mul (env : Environment F) (a b : Expression F) :
     Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
+  simp only [Expression.eval]
+
+/-- Expression.eval distributes over addition -/
+@[circuit_norm]
+lemma eval_add (env : Environment F) (a b : Expression F) :
+    Expression.eval env (Expression.add a b) = (Expression.eval env a) + (Expression.eval env b) := by
   simp only [Expression.eval]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/

@@ -27,7 +27,7 @@ def decodeInstruction (instr : (F p)) : Option (ℕ × ℕ × ℕ × ℕ) :=
   Safe memory access function. Returns `some value` if the address is within bounds,
   otherwise returns `none`.
 -/
-def memoryAccess {n : ℕ} [NeZero n] (memory : Fin n → F p) (addr : F p) : Option (F p) :=
+def memoryAccess {n : ℕ} (memory : Fin n → F p) (addr : F p) : Option (F p) :=
   if h : addr.val < n then
     some (memory ⟨addr.val, h⟩)
   else
@@ -37,7 +37,7 @@ def memoryAccess {n : ℕ} [NeZero n] (memory : Fin n → F p) (addr : F p) : Op
   Fetch an instruction from the program memory at the given program counter (pc).
 -/
 def fetchInstruction
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {programSize : ℕ} (program : Fin programSize → (F p))
     (pc : (F p)) : Option (RawInstruction (F p)) := do
   let type ← memoryAccess program pc
   let op1 ← memoryAccess program (pc + 1)
@@ -51,7 +51,7 @@ def fetchInstruction
   - mode: addressing mode (0=double, 1=ap-relative, 2=fp-relative, 3=immediate)
 -/
 def dataMemoryAccess
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    {memorySize : ℕ} (memory : Fin memorySize → (F p))
     (addr : (F p)) (mode : ℕ) (ap : F p) (fp : F p) : Option (F p) :=
   match mode with
   | 0 => do
@@ -59,19 +59,7 @@ def dataMemoryAccess
       memoryAccess memory addr'
   | 1 => memoryAccess memory (ap + addr)
   | 2 => memoryAccess memory (fp + addr)
-  | _ => addr
-
-/--
-  Set of accessed addresses in the circuit. Current implementation
-  accesses all addresses touched by all of the addressing modes.
--/
-def dataMemoryAddresses
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (addr : (F p)) (ap : F p) (fp : F p) : Set (F p) :=
-  {fp + addr, ap + addr, addr} ∪
-  match memoryAccess memory (ap + addr) with
-   | some addr' => {addr'}
-   | none => ∅
+  | _ => some addr
 
 /--
   Compute the next state of the femtoCairo machine based on the current state and instruction
@@ -111,8 +99,8 @@ def computeNextState
   if all individual transitions are valid.
 -/
 def femtoCairoMachineTransition
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    {programSize : ℕ} (program : Fin programSize → (F p))
+    {memorySize : ℕ} (memory : Fin memorySize → (F p))
     (state : State (F p)) : Option (State (F p)) := do
   -- fetch instruction
   let { rawInstrType, op1, op2, op3 } ← fetchInstruction program state.pc
@@ -134,13 +122,27 @@ def femtoCairoMachineTransition
   transition execution completed successfully, otherwise returns None.
 -/
 def femtoCairoMachineBoundedExecution
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    {programSize : ℕ} (program : Fin programSize → (F p))
+    {memorySize : ℕ} (memory : Fin memorySize → (F p))
     (state : Option (State (F p))) (steps : Nat) :
     Option (State (F p)) := match steps with
   | 0 => state
   | i + 1 => do
     let reachedState ← femtoCairoMachineBoundedExecution program memory state i
     femtoCairoMachineTransition program memory reachedState
+
+/--
+  A program is valid if all instruction bytes in the program memory are < 256.
+  This ensures that `decodeInstruction` will always succeed for any fetched instruction.
+-/
+def ValidProgram {programSize : ℕ} (program : Fin programSize → F p) : Prop :=
+  ∀ (i : Fin programSize), (program i).val < 256
+
+/--
+  Program size is valid if `programSize + 3 < p`. This ensures no field arithmetic
+  wraparound can occur when accessing consecutive instruction addresses (pc, pc+1, pc+2, pc+3).
+  In practice, this is always satisfied since program sizes are much smaller than cryptographic primes.
+-/
+def ValidProgramSize (p : ℕ) (programSize : ℕ) : Prop := programSize + 3 < p
 
 end Examples.FemtoCairo.Spec

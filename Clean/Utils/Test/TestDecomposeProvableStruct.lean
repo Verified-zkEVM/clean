@@ -1,5 +1,5 @@
+import Clean.Circuit
 import Clean.Utils.Tactics
-import Clean.Circuit.Provable
 
 namespace TestDecomposeProvableStruct
 
@@ -8,11 +8,7 @@ structure TestInputs (F : Type) where
   x : F
   y : F
   z : F
-
-instance : ProvableStruct TestInputs where
-  components := [field, field, field]
-  toComponents := fun { x, y, z } => .cons x (.cons y (.cons z .nil))
-  fromComponents := fun (.cons x (.cons y (.cons z .nil))) => { x, y, z }
+deriving ProvableStruct
 
 -- Test theorem using the new tactic
 theorem test_decompose_simple {F : Type} [Field F] (input : TestInputs F) :
@@ -31,11 +27,7 @@ theorem test_decompose_simple {F : Type} [Field F] (input : TestInputs F) :
 structure NestedInputs (F : Type) where
   first : TestInputs F
   second : TestInputs F
-
-instance : ProvableStruct NestedInputs where
-  components := [TestInputs, TestInputs]
-  toComponents := fun { first, second } => .cons first (.cons second .nil)
-  fromComponents := fun (.cons first (.cons second .nil)) => { first, second }
+deriving ProvableStruct
 
 theorem test_decompose_nested {F : Type} [Field F] (input : NestedInputs F) :
     input.first.x + input.second.y = input.second.y + input.first.x := by

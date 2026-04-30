@@ -80,9 +80,9 @@ lemma forAll_flatten (xs : Vector α m) {circuit : α → Circuit F β} (constan
 
 -- helper lemma to do induction on (List.ofFn ...).flatten terms
 private lemma ofFn_flatten_cons {circuit : α → Circuit F β} (constant : ConstantLength circuit) (x : α) (xs : Vector α m) (n : ℕ) :
-  (List.ofFn fun i => (circuit (Vector.cons x xs)[i.val]).operations (n + i * constant.localLength)).flatten
+  (List.ofFn fun i => (circuit (Vector.listCons x xs)[i.val]).operations (n + i * constant.localLength)).flatten
     = (circuit x).operations n ++ (List.ofFn fun i => (circuit xs[i.val]).operations (n + constant.localLength + i * constant.localLength)).flatten := by
-  simp +arith [Vector.cons, add_mul]
+  simp +arith [Vector.listCons, add_mul]
 
 namespace ForM
 variable {circuit : α → Circuit F Unit} (xs : Vector α m) (constant : ConstantLength circuit) (n : ℕ)
@@ -92,7 +92,7 @@ theorem localLength_eq : (xs.forM circuit).localLength n = m * constant.localLen
   induction xs using Vector.induct generalizing n
   case nil => ac_rfl
   case cons x xs ih =>
-    rw [Vector.forM_toList, Vector.cons, Vector.toList_mk, List.forM_cons, ←Vector.forM_toList,
+    rw [Vector.forM_toList, Vector.listCons, Vector.toList_mk, List.forM_cons, ←Vector.forM_toList,
       bind_localLength_eq, ih, constant.localLength_eq]
     ring
 
@@ -104,7 +104,7 @@ theorem operations_eq :
   induction xs using Vector.induct generalizing n
   case nil => rfl
   case cons x xs ih =>
-    rw [ofFn_flatten_cons, Vector.forM_toList, Vector.cons, Vector.toList_mk, List.forM_cons, ←Vector.forM_toList,
+    rw [ofFn_flatten_cons, Vector.forM_toList, Vector.listCons, Vector.toList_mk, List.forM_cons, ←Vector.forM_toList,
       bind_operations_eq, ih, constant.localLength_eq]
 
 theorem forAll_iff {prop : Condition F} :
@@ -146,12 +146,12 @@ lemma ext_map_toList (f g : Circuit F (Vector α n)) :
     exact h
 
 lemma mapM_cons (xs : Vector α n) (body : α → Circuit F β) (x : α) :
-  (Vector.cons x xs).mapM body = do
+  (Vector.listCons x xs).mapM body = do
     let y ← body x
     let ys ← xs.mapM body
-    return Vector.cons y ys := by
+    return Vector.listCons y ys := by
   apply ext_map_toList
-  rw [Vector.toList_mapM, Vector.toList_cons, List.mapM_cons, ←Vector.toList_mapM]
+  rw [Vector.toList_mapM, Vector.toList_listCons, List.mapM_cons, ←Vector.toList_mapM]
   simp only [map_bind, map_pure]
   rfl
 
@@ -180,14 +180,14 @@ namespace FoldlM
 @[reducible]
 def prod (circuit : β → α → Circuit F β) : β × α → Circuit F β := fun t => circuit t.1 t.2
 
-variable {env : Environment F} {prop : Condition F} {xs : Vector α m}
+variable {env : ProverEnvironment F} {prop : Condition F} {xs : Vector α m}
   {circuit : β → α → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
 lemma foldlM_cons (x : α) :
-  (Vector.cons x xs).foldlM circuit init = (do
+  (Vector.listCons x xs).foldlM circuit init = (do
     let init' ← circuit init x
     xs.foldlM circuit init') := by
-  rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]
+  rw [Vector.foldlM_toList, Vector.listCons, Vector.toList_mk, List.foldlM_cons]
   simp only [←Vector.foldlM_toList]
 
 theorem localLength_eq :
@@ -199,7 +199,7 @@ theorem localLength_eq :
     ring
 
 lemma finFoldl_cons_succ (x : α) :
-  Fin.foldl (m + 1) (fun acc i => (circuit acc (Vector.cons x xs)[i.val]).output (n + i * constant.localLength)) init
+  Fin.foldl (m + 1) (fun acc i => (circuit acc (Vector.listCons x xs)[i.val]).output (n + i * constant.localLength)) init
     = Fin.foldl m (fun acc i => (circuit acc xs[i.val]).output (n + constant.localLength + i * constant.localLength)) ((circuit init x).output n) := by
   set k := constant.localLength
   rw [Fin.foldl_succ]
@@ -207,13 +207,13 @@ lemma finFoldl_cons_succ (x : α) :
   congr
   funext acc i
   rw [add_mul, add_assoc, add_comm k]
-  simp [Vector.cons]
+  simp [Vector.listCons]
 
 theorem output_eq :
   (xs.foldlM circuit init).output n =
     Fin.foldl m (fun acc i => (circuit acc xs[i.val]).output (n + i * constant.localLength)) init := by
   induction xs using Vector.induct generalizing init n
-  case nil => rfl
+  case nil => aesop
   case cons x xs ih =>
     rw [foldlM_cons, bind_output_eq, ih, constant.localLength_eq (init, x), finFoldl_cons_succ]
 
@@ -224,10 +224,10 @@ lemma foldlAcc_zero [NeZero m] : foldlAcc n xs circuit init 0 = init := by
   simp [foldlAcc, Fin.foldl_zero]
 
 lemma foldlAcc_cons_succ (i : Fin m) (x : α) [constant : ConstantLength (prod circuit)] :
-  foldlAcc n (Vector.cons x xs) circuit init i.succ =
+  foldlAcc n (Vector.listCons x xs) circuit init i.succ =
     foldlAcc (n + (circuit init x).localLength n) xs circuit ((circuit init x).output n) i := by
   simp only [foldlAcc]
-  simp only [Fin.val_succ, Vector.cons, Vector.getElem_mk, List.getElem_toArray, Fin.foldl_succ,
+  simp only [Fin.val_succ, Vector.listCons, Vector.getElem_mk, List.getElem_toArray, Fin.foldl_succ,
     List.getElem_cons_succ, add_mul, one_mul,
     Fin.val_zero, List.getElem_cons_zero, zero_mul, add_zero]
   congr
@@ -243,7 +243,7 @@ theorem operations_eq :
   | cons x xs ih =>
     rw [foldlM_cons, bind_operations_eq, ih, List.ofFn_succ, List.flatten_cons]
     simp only [foldlAcc_cons_succ, foldlAcc_zero]
-    simp +arith [Vector.cons, add_mul, constant.localLength_eq (init, x)]
+    simp +arith [Vector.listCons, add_mul, constant.localLength_eq (init, x)]
 
 variable {prop : Condition F}
 
@@ -264,7 +264,7 @@ theorem forAll_iff {constant : ConstantLength (prod circuit)} :
 
 -- specialization to xs := Vector.finRange m
 section
-variable {env : Environment F} {prop : Condition F} {m : ℕ}
+variable {env : ProverEnvironment F} {prop : Condition F} {m : ℕ}
   {Acc : ℕ → Type}
   {circuit : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
@@ -390,7 +390,7 @@ def foldlRange (m : ℕ) [Inhabited β] (init : β) (body : β → Fin m → Cir
   (Vector.finRange m).foldlM body init
 
 section forEach
-variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -411,15 +411,15 @@ lemma forEach.forAll :
 
 @[circuit_norm ↓]
 lemma forEach.soundness :
-  ConstraintsHold.Soundness env ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  ConstraintsHold.Soundness env_v ((forEach xs body constant).operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [forEach, ConstraintsHold.soundness_iff_forAll']
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
 
 /-- variant of `forEach.soundness`, for when the constraints don't depend on the input offset -/
 lemma forEach.soundness' :
-  ConstraintsHold.Soundness env (forEach xs body constant |>.operations n) →
-    ∀ x ∈ xs, ∃ k : ℕ, ConstraintsHold.Soundness env (body x |>.operations k) := by
+  ConstraintsHold.Soundness env_v (forEach xs body constant |>.operations n) →
+    ∀ x ∈ xs, ∃ k : ℕ, ConstraintsHold.Soundness env_v (body x |>.operations k) := by
   simp only [forEach, ConstraintsHold.soundness_iff_forAll', ForM.forAll_iff]
   intro h x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
@@ -441,7 +441,7 @@ lemma forEach.usesLocalWitnesses :
 end forEach
 
 section map
-variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F β} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -464,8 +464,8 @@ lemma map.forAll :
 
 @[circuit_norm ↓]
 lemma map.soundness :
-  ConstraintsHold.Soundness env (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  ConstraintsHold.Soundness env_v (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [map, ConstraintsHold.soundness_iff_forAll']
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
 
@@ -485,7 +485,7 @@ lemma map.usesLocalWitnesses :
 end map
 
 section mapFinRange
-variable {env : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
   {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -510,8 +510,8 @@ lemma mapFinRange.forAll :
 
 @[circuit_norm ↓]
 lemma mapFinRange.soundness :
-  ConstraintsHold.Soundness env (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body i |>.operations (n + i*(body 0).localLength)) := by
+  ConstraintsHold.Soundness env_v (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body i |>.operations (n + i*(body 0).localLength)) := by
   simp only [mapFinRange, ConstraintsHold.soundness_iff_forAll']
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
 
@@ -531,7 +531,7 @@ lemma mapFinRange.usesLocalWitnesses :
 end mapFinRange
 
 section foldl
-variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
   {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)}
 
@@ -568,11 +568,11 @@ lemma foldl.forAll [NeZero m] :
 
 @[circuit_norm ↓]
 lemma foldl.soundness [NeZero m] :
-  ConstraintsHold.Soundness env (foldl xs init body const_out constant |>.operations n) ↔
-    ConstraintsHold.Soundness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+  ConstraintsHold.Soundness env_v (foldl xs init body const_out constant |>.operations n) ↔
+    ConstraintsHold.Soundness env_v (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let acc := (body default xs[i]).output (n + i*(body default default).localLength);
-      ConstraintsHold.Soundness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
+      ConstraintsHold.Soundness env_v (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
   simp only [foldl, ConstraintsHold.soundness_iff_forAll']
   rw [FoldlM.forAll_iff_const constant const_out]
 
@@ -599,7 +599,7 @@ lemma foldl.usesLocalWitnesses [NeZero m] :
 end foldl
 
 section foldlRange
-variable {env : Environment F} {m n : ℕ} [Inhabited β]
+variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited β]
   {body : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
 
 @[circuit_norm ↓]
@@ -634,9 +634,9 @@ lemma foldlRange.forAll :
 
 @[circuit_norm ↓]
 lemma foldlRange.soundness :
-  ConstraintsHold.Soundness env (foldlRange m init body constant |>.operations n) ↔
+  ConstraintsHold.Soundness env_v (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-    ConstraintsHold.Soundness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+    ConstraintsHold.Soundness env_v (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
     |>.operations (n + i * (body default i).localLength)) := by
   simp only [ConstraintsHold.soundness_iff_forAll', foldlRange.forAll]
 

@@ -68,9 +68,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     specialize h_holds2 asm2
 
     -- Now we need to show the spec holds for the output
-    simp only
-    rw [ProvableStruct.eval_eq_eval]
-    simp only [ProvableStruct.eval]
+    simp only [circuit_norm]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
 
     constructor
@@ -376,12 +374,11 @@ lemma applyRounds_eq_applySevenRounds
   simp only [applyRounds, applySevenRounds]
 
 lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
-    x < 256^4 ->
-    (eval env (U32.decomposeNatExpr x)).value = x := by
-  intro _
-  simp only [U32.decomposeNatExpr]
-  apply U32.value_of_decomposedNat_of_small
-  assumption
+    x < 256^4 →
+    (eval env (U32.decomposeNatExpr (p:=p) x)).value = x := by
+  intro h
+  simp only [U32.decomposeNatExpr, circuit_norm]
+  exact U32.value_of_decomposedNat_of_small x h
 
 -- Tactic for common steps in state vector normalization proof
 syntax "state_vec_norm_simp" : tactic
@@ -406,13 +403,7 @@ structure Inputs (F : Type) where
   counter_low : U32 F
   block_len : U32 F
   flags : U32 F
-
-instance : ProvableStruct Inputs where
-  components := [ProvableVector U32 8, ProvableVector U32 16, U32, U32, U32, U32]
-  toComponents := fun { chaining_value, block_words, counter_high, counter_low, block_len, flags } =>
-    .cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))
-  fromComponents := fun (.cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))) =>
-    { chaining_value, block_words, counter_high, counter_low, block_len, flags }
+deriving ProvableStruct
 
 /--
 Initializes the BLAKE3 state vector from input variables.
@@ -473,17 +464,18 @@ lemma initial_state_and_messages_are_normalized
     (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
-  set state_vec := initializeStateVector input_var
+  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
+  simp only [circuit_norm] at *
   provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var_chaining_value[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var.chaining_value[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 ⟨ i, h_i ⟩
 
   -- Show the state is normalized
-  have h_state_normalized : (eval env state_vec).Normalized := by
+  have h_state_normalized : BLAKE3State.Normalized (eval env state_vec) := by
     simp only [BLAKE3State.Normalized, state_vec, initializeStateVector, eval_vector]
     intro i
     fin_cases i
@@ -522,7 +514,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
-    apply initial_state_and_messages_are_normalized
+    apply initial_state_and_messages_are_normalized env
     · simp only [circuit_norm, h_input]
       rfl
     · simp only [Assumptions]
@@ -563,7 +555,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
 
   -- Use the helper lemma to prove normalization
-  apply initial_state_and_messages_are_normalized env
+  apply initial_state_and_messages_are_normalized (p := p) env
   · simp only [h_input, circuit_norm]
     rfl
   · simp only [Assumptions]

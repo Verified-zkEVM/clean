@@ -9,11 +9,7 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 structure Inputs (F : Type) where
   state : KeccakState F
   d : KeccakRow F
-
-instance : ProvableStruct Inputs where
-  components := [KeccakState, KeccakRow]
-  toComponents := fun { state, d } => .cons state (.cons d .nil)
-  fromComponents := fun (.cons state (.cons d .nil)) => { state, d }
+deriving ProvableStruct
 
 def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
   | { state, d } => .mapFinRange 25 fun i =>

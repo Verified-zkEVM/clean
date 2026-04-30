@@ -1,4 +1,4 @@
-import Clean.Circuit.Basic
+import Clean.Circuit
 import Clean.Gadgets.Xor.ByteXorTable
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -10,11 +10,7 @@ open FieldUtils
 structure Inputs (F : Type) where
   x: F
   y: F
-
-instance : ProvableStruct Inputs where
-  components := [field, field]
-  toComponents := fun { x, y } => .cons x (.cons y .nil)
-  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+deriving ProvableStruct
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
@@ -24,7 +20,7 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val ||| y.val ∧ z.val < 256
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let ⟨x, y⟩ := input
   let or ← witness fun eval => (eval x).val ||| (eval y).val
   -- we prove OR correct using an XOR lookup

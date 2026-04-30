@@ -3,7 +3,6 @@ import Clean.Gadgets.BLAKE3.BLAKE3State
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Rotation32.Rotation32
 import Clean.Specs.BLAKE3
-import Clean.Circuit.Provable
 import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.G
@@ -16,11 +15,7 @@ structure Inputs (F : Type) where
   state : BLAKE3State F
   x : U32 F
   y : U32 F
-
-instance : ProvableStruct Inputs where
-  components := [BLAKE3State, U32, U32]
-  toComponents := fun { state, x, y } => .cons state (.cons x (.cons y .nil))
-  fromComponents := fun (.cons state (.cons x (.cons y .nil))) => { state, x, y }
+deriving ProvableStruct
 
 def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, x, y } := input
@@ -111,9 +106,15 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
     simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set]
     repeat' split
     · exact c11.right
-    · exact c12.right
+    · simp only [U32.Normalized, explicit_provable_type, Vector.map_mk, List.map_toArray,
+        List.map_cons, List.map_nil, fromElements] at c12 ⊢
+      simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c12 ⊢
+      exact c12.right
     · exact c14.right
-    · exact c9.right
+    · simp only [U32.Normalized, explicit_provable_type, Vector.map_mk, List.map_toArray,
+        List.map_cons, List.map_nil, fromElements] at c9 ⊢
+      simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c9 ⊢
+      exact c9.right
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Assumptions := by

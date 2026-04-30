@@ -1,10 +1,5 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
+import Clean.Circuit
 import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
 import Clean.Utils.Field
 import Clean.Types.U64
 import Clean.Gadgets.Xor.ByteXorTable
@@ -18,11 +13,7 @@ open Gadgets.Xor
 structure Inputs (F : Type) where
   x: U64 F
   y: U64 F
-
-instance : ProvableStruct Inputs where
-  components := [U64, U64]
-  toComponents := fun { x, y } => .cons x (.cons y .nil)
-  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
@@ -90,8 +81,6 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env input_var input h_input h_as h_holds
 
-  let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
-       ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
        ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
 
@@ -118,8 +107,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
   simp only [Assumptions, circuit_norm, U64.Normalized] at as
-  simp only [h_input, circuit_norm, main, ByteXorTable,
-    explicit_provable_type, Fin.forall_iff] at h_env ⊢
+  simp only [h_input, circuit_norm, main, ByteXorTable, Fin.forall_iff] at h_env ⊢
+  simp only [circuit_norm, explicit_provable_type] at h_env ⊢
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
   simp_all [xor_val]
 

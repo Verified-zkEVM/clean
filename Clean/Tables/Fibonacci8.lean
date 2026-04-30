@@ -55,7 +55,7 @@ def fib8 : ℕ -> ℕ
   | 1 => 1
   | (n + 2) => (fib8 n + fib8 (n + 1)) % 256
 
-def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : ProverData (F p)) : Prop :=
   trace.ForAllRowsOfTraceWithIndex fun row index =>
     (row.x.val = fib8 index) ∧
     (row.y.val = fib8 (index + 1))
@@ -74,8 +74,8 @@ lemma boundaryFib_eq : boundaryFib (p:=p) = (do
   := rfl
 
 omit p_large_enough in
-lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) boundaryFib.operations
+lemma boundary_step (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
+  Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env).toEnvironment boundaryFib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`
   set env := boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
@@ -96,7 +96,7 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)
 
 def formalFibTable : FormalTable (F p) RowType := {
   constraints := fibTable
-  Spec := Spec
+  Spec
 
   soundness := by
     intro N trace envs _
@@ -107,7 +107,7 @@ def formalFibTable : FormalTable (F p) RowType := {
     | zero => simp [table_norm]
     | one first_row =>
       simp [table_norm]
-      exact boundary_step first_row (envs 0 0)
+      exact boundary_step first_row (envs.toEnvironment 0 0)
     | more curr next rest ih1 ih2 =>
       -- first, we prove the inductive part of the Spec
       -- TODO this should be easier, or there should be a custom induction for it
@@ -129,18 +129,30 @@ def formalFibTable : FormalTable (F p) RowType := {
       replace ConstraintsHold := ConstraintsHold.left
       simp [table_norm] at ConstraintsHold
 
-      set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
+      set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs.toEnvironment 1 (rest.len + 1))
 
       simp only [fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
           Gadgets.Addition8.circuit] at ConstraintsHold
       simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
 
-      have hx_curr : env.get 0 = curr.x := by rfl
-      have hy_curr : env.get 1 = curr.y := by rfl
-      have hx_next : env.get 2 = next.x := by rfl
-      have hy_next : env.get (2 + 1) = next.y := by rfl
-      rw [hx_curr, hy_curr, hx_next, hy_next] at ConstraintsHold
-      clear hx_curr hy_curr hx_next hy_next
+      -- NOTE: In Lean 4.25.0-rc2, Vector/List indexing doesn't reduce definitionally
+      -- as it did in v4.24.0. We use explicit simp lemmas to reduce the expressions.
+      -- See: https://github.com/leanprover/lean4/issues/10736 for related issues.
+      have env_simp : env.get 0 = curr.x ∧ env.get 1 = curr.y ∧
+                      env.get 2 = next.x ∧ env.get (2 + 1) = next.y := by
+        simp only [env, windowEnv, fibRelation, table_assignment_norm, table_norm, circuit_norm,
+          copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
+        refine ⟨?_, ?_, ?_, ?_⟩
+        all_goals simp only [Vector.toList_mk, List.getElem_set, ite_true,
+          Vector.toList_append, Vector.mapFinRange_zero, Vector.mapFinRange_succ,
+          Vector.mapRange_zero, Vector.mapRange_succ, Vector.toList_push,
+          List.nil_append, List.append_assoc]
+        · simp only [dif_pos (by omega : 0 < 5)]; rfl
+        · simp only [dif_pos (by omega : 1 < 5)]; rfl
+        · simp only [dif_pos (by omega : 2 < 5)]; rfl
+        · simp only [dif_pos (by omega : 2 + 1 < 5)]; rfl
+      rw [env_simp.1, env_simp.2.1, env_simp.2.2.1, env_simp.2.2.2] at ConstraintsHold
+      clear env_simp
 
       have ⟨eq_holds, add_holds⟩ := ConstraintsHold
       rw [add_neg_eq_zero] at eq_holds

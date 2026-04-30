@@ -39,31 +39,6 @@ pub enum CleanOp {
     },
 }
 
-impl CleanOp {
-    /// Recursively find all lookup operations
-    fn find_lookup_ops(&self, ctx: &Vec<CircuitOp>) -> Vec<LookupOp> {
-        let mut lookup_ops = Vec::new();
-        for op in ctx {
-            match op {
-                CircuitOp::Lookup { lookup } => {
-                    lookup_ops.push(lookup.clone());
-                }
-                CircuitOp::Subcircuit { subcircuit } => {
-                    lookup_ops.extend(self.find_lookup_ops(subcircuit));
-                }
-                _ => {}
-            }
-        }
-        lookup_ops
-    }
-
-    pub fn lookups(&self) -> Vec<LookupOp> {
-        match self {
-            CleanOp::Boundary { context, .. } => self.find_lookup_ops(&context.circuit),
-            CleanOp::EveryRowExceptLast { context } => self.find_lookup_ops(&context.circuit),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct OpContext {
@@ -126,27 +101,34 @@ pub struct Assignment {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase", untagged)]
-#[allow(clippy::large_enum_variant)]
-pub enum VarLocation {
-    Cell { row: usize, column: usize },
-    Aux { aux: usize },
+pub struct VarLocation {
+    pub row: usize,
+    pub column: usize,
 }
 
-/// Current or next row transition
-#[derive(Debug)]
-pub enum Transition {
-    Current,
-    Next,
+/// Which rows a lookup applies to during trace generation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LookupRowScope {
+    /// Lookup applies only on row 0.
+    FirstRow,
+    /// Lookup applies only on the last row (height - 1).
+    LastRow,
+    /// Lookup applies on rows 0..height-1 (all except last).
+    EveryRowExceptLast,
 }
 
-#[derive(Debug)]
-pub enum LookupRow {
-    /// Specific boundary row
-    Boundary {
-        row: BoundaryRow,
-    },
-    Transition(Transition),
+impl LookupRowScope {
+    /// Whether this scope is active on the given row of a trace with `height` rows.
+    pub fn is_active(self, row_idx: usize, height: usize) -> bool {
+        if height == 0 {
+            return false;
+        }
+        match self {
+            LookupRowScope::FirstRow => row_idx == 0,
+            LookupRowScope::LastRow => row_idx == height - 1,
+            LookupRowScope::EveryRowExceptLast => row_idx < height - 1,
+        }
+    }
 }
 
 /// AST expression utilities
@@ -240,79 +222,25 @@ impl CleanOps {
         &self.ops
     }
 
-    /// Process lookups for all operations
-    pub fn process_lookups<C>(&self, mut callback: C)
-    where
-        C: FnMut(LookupRow, usize),
-    {
+    /// Get all lookup operations paired with their assignment context and row scope.
+    /// This is needed for expression-based lookups where var indices must
+    /// be resolved to trace columns via the assignment.
+    pub fn lookup_ops_with_assignments(&self) -> Vec<(LookupOp, Assignment, LookupRowScope)> {
+        let mut result = Vec::new();
         for op in &self.ops {
-            // Extract context and check for boundary row match if needed
-            let (context, boundary_row) = match op {
-                CleanOp::Boundary { context, row } => (context, Some(row)),
-                CleanOp::EveryRowExceptLast { context } => (context, None),
+            let (context, scope) = match op {
+                CleanOp::Boundary { row: BoundaryRow::FirstRow, context } =>
+                    (context, LookupRowScope::FirstRow),
+                CleanOp::Boundary { row: BoundaryRow::LastRow, context } =>
+                    (context, LookupRowScope::LastRow),
+                CleanOp::EveryRowExceptLast { context } =>
+                    (context, LookupRowScope::EveryRowExceptLast),
             };
-
-            // Process all lookups in the context
-            for lookup in op.lookups() {
-                for entry in lookup.entry.iter() {
-                    match entry {
-                        ExprNode::Var { index } => {
-                            // todo: assume we would always lookup the current row
-                            let var = &context.assignment.vars[*index];
-                            match var {
-                                VarLocation::Cell { row, column } => {
-                                    if let Some(boundary_row) = boundary_row {
-                                        // Convert usize row to boundary row for comparison
-                                        let expected_row_value = match boundary_row {
-                                            BoundaryRow::FirstRow => 0,
-                                            BoundaryRow::LastRow => panic!(
-                                                "LastRow boundary not supported in cell lookups"
-                                            ),
-                                        };
-
-                                        if *row != expected_row_value {
-                                            panic!(
-                                                "Boundary row {} does not match the lookup row {}",
-                                                expected_row_value, row
-                                            );
-                                        }
-
-                                        callback(
-                                            LookupRow::Boundary {
-                                                row: boundary_row.clone(),
-                                            },
-                                            *column,
-                                        );
-                                    } else if *row == 0 {
-                                        callback(
-                                            LookupRow::Transition(Transition::Current),
-                                            *column,
-                                        );
-                                    } else if *row == 1 {
-                                        callback(LookupRow::Transition(Transition::Next), *column);
-                                    } else {
-                                        panic!("Invalid row index in VarLocation");
-                                    }
-                                }
-                                VarLocation::Aux { .. } => {
-                                    // Handle aux variables through the callback if needed
-                                    todo!()
-                                }
-                            }
-                        }
-                        _ => panic!("Invalid lookup entry"),
-                    }
-                }
+            let lookups = AstUtils::find_lookup_ops(&context.circuit);
+            for lookup in lookups {
+                result.push((lookup, context.assignment.clone(), scope));
             }
         }
-    }
-
-    /// Get all lookup operations from the clean operations
-    pub fn lookup_ops(&self) -> Vec<LookupOp> {
-        let ops = self.ops.iter().flat_map(|op| match op {
-            CleanOp::Boundary { context, .. } => context.circuit.clone(),
-            CleanOp::EveryRowExceptLast { context, .. } => context.circuit.clone(),
-        });
-        AstUtils::find_lookup_ops(&ops.collect::<Vec<_>>())
+        result
     }
 }

@@ -40,3 +40,12 @@ Inside exponent expressions, we omit spaces around operators:
 
 - ✅ `2^(8-o)`, `2^(n+1)`, `x^(a*b)`
 - ❌ `2^(8 - o)`, `2^(n + 1)`, `x^(a * b)`
+
+### 4. Simp Set Management
+
+We do not modify the default `[simp]` set. Instead, add simplification lemmas to `[circuit_norm]`:
+
+- ✅ `@[circuit_norm] lemma my_simp_lemma : ...`
+- ❌ `@[simp] lemma my_simp_lemma : ...`
+
+Use `simp only [circuit_norm]` to apply circuit-specific simplifications.

@@ -215,9 +215,9 @@ lemma value_of_literal' (a b c d : field (F p)) :
 
 omit p_large_enough in
 @[circuit_norm]
-lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
+lemma eval_of_literal (env : Environment (F p)) (a b c d : Expression (F p)) :
     eval env (U32.mk a b c d) =
-    U32.mk (eval env a) (eval env b) (eval env c) (eval env d) := by
+    U32.mk (a.eval env) (b.eval env) (c.eval env) (d.eval env) := by
   simp only [explicit_provable_type, circuit_norm]
 
 omit p_large_enough in
@@ -267,7 +267,7 @@ open Gadgets (ByteTable)
   Assert that a 32-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-def main (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
+def main (inputs : Var U32 (F p)) : Circuit (F p) Unit := do
   let ⟨ x0, x1, x2, x3 ⟩ := inputs
   lookup ByteTable x0
   lookup ByteTable x1
@@ -292,7 +292,7 @@ end U32.AssertNormalized
 /--
   Witness a 32-bit unsigned integer.
 -/
-def U32.witness (compute : Environment (F p) → U32 (F p)) := do
+def U32.witness (compute : ProverEnvironment (F p) → U32 (F p)) := do
   let x ← ProvableType.witness compute
   U32.AssertNormalized.circuit x
   return x
@@ -327,15 +327,16 @@ theorem normalized_iff {x : U32 (F p)} :
     simp_all
 
 lemma toLimbs_map {α β : Type} (x : U32 α) (f : α → β) :
-  toLimbs (map x f) = (toLimbs x).map f := rfl
+    toLimbs (map x f) = (toLimbs x).map f := by
+  simp [toLimbs, toElements, map]
 
 lemma getElem_eval_toLimbs {F} [Field F] {env : Environment F} {x : U32 (Expression F)} {i : ℕ} (hi : i < 4) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
-  simp only [toLimbs, eval, size, toVars, ProvableType.toElements_fromElements, Vector.getElem_map]
+  exact ProvableType.getElem_eval_toElements x i hi
 
 lemma eval_fromLimbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 4} :
     eval env (U32.fromLimbs v) = .fromLimbs (v.map env) := by
-  simp only [U32.fromLimbs, ProvableType.eval_fromElements]
+  simp only [circuit_norm, U32.fromLimbs, ProvableType.eval_fromElements]
 end ByteVector
 
 -- Bitwise operations on U32

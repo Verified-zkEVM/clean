@@ -16,13 +16,9 @@ https://github.com/iden3/circomlib/blob/master/circuits/mux1.circom
 namespace MultiMux1
 
 structure Inputs (n : ℕ) (F : Type) where
-  c : ProvableVector (ProvablePair field field) n F  -- n pairs of constants
-  s : F                 -- selector
-
-instance {n : ℕ} : ProvableStruct (Inputs n) where
-  components := [ProvableVector (ProvablePair field field) n, field]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
+  c : ProvableVector fieldPair n F  -- n pairs of constants
+  s : F                              -- selector
+deriving ProvableStruct
 /-
 template MultiMux1(n) {
     signal input c[n][2]; // Constants
@@ -77,9 +73,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   soundness := by
     simp only [circuit_norm, main]
-    intro offset env input_var input h_input h_assumptions h_output
-    -- We need to show the spec holds for all i < n
-    intro i hi
+    intro offset env input_var input h_input h_assumptions h_output i hi
     -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
     -- We need to show this equals if s = 0 then c[i][0] else c[i][1]
 
@@ -110,13 +104,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         rw [h0]
         simp only [mul_zero, circuit_norm]
         norm_num
-        rfl
       | inr h1 =>
         -- When s = 1
         rw [h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
         norm_num
-        rfl
 
   completeness := by
     circuit_proof_start
@@ -138,11 +130,8 @@ namespace Mux1
 structure Inputs (F : Type) where
   c : Vector F 2  -- 2 constants
   s : F           -- selector
+deriving ProvableStruct
 
-instance : ProvableStruct Inputs where
-  components := [fields 2, field]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
 /-
 template Mux1() {
     var i;

@@ -13,9 +13,17 @@ It is needed because we already need to talk about operations in the `Subcircuit
 which in turn is needed to define `Operation`.
 -/
 inductive FlatOperation (F : Type) where
-  | witness : (m : ℕ) → (Environment F → Vector F m) → FlatOperation F
+  | witness : (m : ℕ) → (ProverEnvironment F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
+
+inductive NestedOperations (F : Type) where
+  | single : FlatOperation F → NestedOperations F
+  | nested : String × List (NestedOperations F) → NestedOperations F
+
+def NestedOperations.toFlat {F : Type} : NestedOperations F → List (FlatOperation F)
+  | .single op => [op]
+  | .nested (_, lst) => List.flatMap toFlat lst
 
 namespace FlatOperation
 instance [Repr F] : Repr (FlatOperation F) where
@@ -33,8 +41,7 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
   | [] => True
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval ops
-    | lookup { table, entry } =>
-      table.Contains (entry.map eval) ∧ ConstraintsHoldFlat eval ops
+    | lookup l => l.Contains eval ∧ ConstraintsHoldFlat eval ops
     | _ => ConstraintsHoldFlat eval ops
 
 @[circuit_norm]
@@ -44,7 +51,7 @@ def localLength : List (FlatOperation F) → ℕ
   | assert _ :: ops | lookup _ :: ops => localLength ops
 
 @[circuit_norm]
-def localWitnesses (env : Environment F) : (l : List (FlatOperation F)) → Vector F (localLength l)
+def localWitnesses (env : ProverEnvironment F) : (l : List (FlatOperation F)) → Vector F (localLength l)
   | [] => #v[]
   | witness _ compute :: ops => compute env ++ localWitnesses env ops
   | assert _ :: ops | lookup _ :: ops => localWitnesses env ops
@@ -66,7 +73,7 @@ end FlatOperation
 export FlatOperation (ConstraintsHoldFlat)
 
 @[circuit_norm]
-def Environment.ExtendsVector (env : Environment F) (wit : Vector F n) (offset : ℕ) : Prop :=
+def ProverEnvironment.ExtendsVector (env : ProverEnvironment F) (wit : Vector F n) (offset : ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
 open FlatOperation in
@@ -78,37 +85,35 @@ To enable composition of formal proofs, subcircuits come with custom `Soundness`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
 structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
-  ops : List (FlatOperation F)
+  ops : NestedOperations F
 
   -- we have a low-level notion of "the constraints hold on these operations".
-  -- for convenience, we allow the framework to transform that into custom `Soundness`,
-  -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  Soundness : Environment F → Prop
-  Completeness : Environment F → Prop
-  UsesLocalWitnesses : Environment F → Prop
+  -- for convenience, we allow the framework to transform that into custom `Spec`,
+  -- `ProverAssumptions` and `ProverSpec` statements (which may involve inputs/outputs, assumptions on inputs, etc)
+  Spec : Environment F → Prop
+  ProverAssumptions : ProverEnvironment F → Prop
+  ProverSpec : ProverEnvironment F → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
   localLength : ℕ
 
-  -- `Soundness` needs to follow from the constraints for any witness
-  imply_soundness : ∀ env,
-    ConstraintsHoldFlat env ops → Soundness env
+  -- soundness: `Spec` needs to follow from the constraints for any witness
+  soundness : ∀ env,
+    ConstraintsHoldFlat env ops.toFlat → Spec env
 
-  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
-    Completeness env → ConstraintsHoldFlat env ops
-
-  -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
-    UsesLocalWitnesses env
+  -- completeness: `ProverAssumptions` needs to imply the constraints,
+  -- when using the locally declared witness generators of this circuit.
+  -- `ProverSpec` also needs to follow from the local witness generator condition.
+  completeness : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
+    (ProverAssumptions env → ConstraintsHoldFlat env ops.toFlat) ∧ ProverSpec env
 
   -- `localLength` must be consistent with the operations
-  localLength_eq : localLength = FlatOperation.localLength ops
+  localLength_eq : localLength = FlatOperation.localLength ops.toFlat
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
-  (FlatOperation.localWitnesses env sc.ops).cast sc.localLength_eq.symm
+  (FlatOperation.localWitnesses env sc.ops.toFlat).cast sc.localLength_eq.symm
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -117,7 +122,7 @@ In addition to `witness`, `assert` and `lookup`,
 `Operation` can also be a `subcircuit`, which itself is essentially a list of operations.
 -/
 inductive Operation (F : Type) [Field F] where
-  | witness : (m : ℕ) → (compute : Environment F → Vector F m) → Operation F
+  | witness : (m : ℕ) → (compute : ProverEnvironment F → Vector F m) → Operation F
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
   | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
@@ -128,7 +133,7 @@ instance [Repr F] : Repr (Operation F) where
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
-    | subcircuit { ops, .. } => "(Subcircuit " ++ reprStr ops ++ ")"
+    | subcircuit { ops, .. } => "(Subcircuit " ++ reprStr ops.toFlat ++ ")"
 
 /--
 The number of witness variables introduced by this operation.
@@ -140,7 +145,7 @@ def localLength : Operation F → ℕ
   | .lookup _ => 0
   | .subcircuit s => s.localLength
 
-def localWitnesses (env : Environment F) : (op : Operation F) → Vector F op.localLength
+def localWitnesses (env : ProverEnvironment F) : (op : Operation F) → Vector F op.localLength
   | .witness _ c => c env
   | .assert _ => #v[]
   | .lookup _ => #v[]
@@ -163,7 +168,14 @@ def toFlat : Operations F → List (FlatOperation F)
   | .witness m c :: ops => .witness m c :: toFlat ops
   | .assert e :: ops => .assert e :: toFlat ops
   | .lookup l :: ops => .lookup l :: toFlat ops
-  | .subcircuit s :: ops => s.ops ++ toFlat ops
+  | .subcircuit s :: ops => s.ops.toFlat ++ toFlat ops
+
+def toNested : Operations F → List (NestedOperations F)
+  | [] => []
+  | .witness m c :: ops => .single (.witness m c) :: toNested ops
+  | .assert e :: ops => .single (.assert e) :: toNested ops
+  | .lookup l :: ops => .single (.lookup l) :: toNested ops
+  | .subcircuit s :: ops => s.ops :: toNested ops
 
 /--
 The number of witness variables introduced by these operations.
@@ -180,7 +192,8 @@ def localLength : Operations F → ℕ
 The actual vector of witnesses created by these operations in the given environment.
 -/
 @[circuit_norm]
-def localWitnesses (env : Environment F) : (ops : Operations F) → Vector F ops.localLength
+def localWitnesses (env : ProverEnvironment F) :
+    (ops : Operations F) → Vector F ops.localLength
   | [] => #v[]
   | .witness _ c :: ops => c env ++ localWitnesses env ops
   | .assert _ :: ops => localWitnesses env ops
@@ -210,7 +223,7 @@ A `Condition` lets you define a predicate on operations, given the type and cont
 current operation as well as the current offset.
 -/
 structure Condition (F : Type) [Field F] where
-  witness (offset : ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
+  witness (offset : ℕ) : (m : ℕ) → (ProverEnvironment F → Vector F m) → Prop := fun _ _ => True
   assert (offset : ℕ) (_ : Expression F) : Prop := True
   lookup (offset : ℕ) (_ : Lookup F) : Prop := True
   subcircuit (offset : ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True
@@ -222,7 +235,7 @@ def Condition.apply (condition : Condition F) (offset : ℕ) : Operation F → P
   | .lookup l => condition.lookup offset l
   | .subcircuit s => condition.subcircuit offset s
 
-def Condition.implies (c c': Condition F) : Condition F where
+def Condition.implies (c c' : Condition F) : Condition F where
   witness n m compute := c.witness n m compute → c'.witness n m compute
   assert offset e := c.assert offset e → c'.assert offset e
   lookup offset l := c.lookup offset l → c'.lookup offset l
@@ -305,4 +318,4 @@ def FlatOperation.forAll (offset : ℕ) (condition : Condition F) : List (FlatOp
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
 
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
-  forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops } ops
+  forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops.toFlat } ops

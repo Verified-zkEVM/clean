@@ -32,15 +32,19 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
 
--- interestingly, `Fin.foldl` is defeq to `List.foldl`. the proofs below use this fact!
-example (state : Vector ℕ 25) :
+-- `Fin.foldl` relates to `Vector.foldl` via this lemma
+lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
   Fin.foldl 24 (fun state j => keccakRound state roundConstants[j]) state
-  = roundConstants.foldl keccakRound state := rfl
+  = roundConstants.foldl keccakRound state := by
+  simp only [Vector.foldl, roundConstants, Fin.foldl_eq_foldl_finRange]
+  rw [← Array.foldl_toList, ← List.foldl_map]
+  simp [List.finRange]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
+  simp only [circuit_norm] at h_input
   simp only [main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
@@ -49,7 +53,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_init h_assumptions
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
+  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar (p:=p) n i)
 
   change (state 0).Normalized ∧
     (state 0).value = keccakRound initial_state.value roundConstants[0]
@@ -72,13 +76,16 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       use h_succ.left
       rw [h_succ.right, Fin.foldl_succ_last, ih.right]
       simp
-  exact h_inductive 23 (by norm_num)
+  have h := h_inductive 23 (by norm_num)
+  simp only [keccakPermutation, ← fin_foldl_eq_vector_foldl] at h ⊢
+  exact h
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro n env initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions
+  simp only [circuit_norm] at h_input h_assumptions
   simp only [main, h_input, h_assumptions, circuit_norm, KeccakRound.circuit,
     KeccakRound.elaborated, KeccakRound.Spec,
     KeccakRound.Assumptions] at h_env ⊢
@@ -90,7 +97,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i hi
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
+  let state (i : ℕ) : KeccakState (F p) := eval env.toEnvironment (stateVar (p:=p) n i)
 
   change (state 0).Normalized at h_init
 

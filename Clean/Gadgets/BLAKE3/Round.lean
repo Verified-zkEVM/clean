@@ -3,6 +3,7 @@ import Clean.Gadgets.BLAKE3.BLAKE3G
 import Clean.Specs.BLAKE3
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics
+import Clean.Utils.Tactics.ProvableStructDeriving
 
 namespace Gadgets.BLAKE3.Round
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -13,11 +14,7 @@ open Specs.BLAKE3 (round roundConstants)
 structure Inputs (F : Type) where
   state : BLAKE3State F
   message : Vector (U32 F) 16
-
-instance : ProvableStruct Inputs where
-  components := [BLAKE3State, ProvableVector U32 16]
-  toComponents := fun { state, message } => .cons state (.cons message .nil)
-  fromComponents := fun (.cons state (.cons message .nil)) => { state, message }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, message } := input
@@ -96,7 +93,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · exact c8.right
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [G.circuit, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesCompleteness,
+  circuit_proof_start [G.circuit, G.Assumptions, G.Spec, ProverEnvironment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true]
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_env

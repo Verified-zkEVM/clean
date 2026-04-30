@@ -72,7 +72,7 @@ def fib32Table : List (TableOperation RowType (F p)) := [
   - the second U32 value is the (i+1)-th fibonacci number
   - both U32 values are normalized
 -/
-def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : ProverData (F p)) : Prop :=
   trace.ForAllRowsOfTraceWithIndex fun row index =>
     (row.x.value = fib32 index) ∧
     (row.y.value = fib32 (index + 1)) ∧
@@ -98,12 +98,12 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
     Vector.mapRange_zero, Vector.mapRange_succ]
   simp
 
-lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
+lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
-    eval env (varFromOffset U32 0) = curr.x ∧
-    eval env (varFromOffset U32 4) = curr.y ∧
-    eval env (varFromOffset U32 8) = next.x ∧
-    eval env (U32.mk (var ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
+    eval env (varFromOffset (F:=F p) U32 0) = curr.x ∧
+    eval env (varFromOffset (F:=F p) U32 4) = curr.y ∧
+    eval env (varFromOffset (F:=F p) U32 8) = next.x ∧
+    eval env (U32.mk (var (F:=F p) ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
   := by
   intro env
   dsimp only [env, windowEnv]
@@ -120,7 +120,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   Main lemma that shows that if the constraints hold over the two-row window,
   then the Spec of add32 and equality are satisfied
 -/
-lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
+lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p))
   : recursiveRelation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env →
   curr.y = next.x ∧
   (curr.x.Normalized → curr.y.Normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.Normalized)
@@ -132,7 +132,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
     assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
   simp only [table_norm, circuit_norm, Nat.reduceAdd, zero_add] at h_add
-  simp only [circuit_norm] at hnext_y
+  simp only [circuit_norm] at hcurr_x hcurr_y hnext_x hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
   clear hcurr_x hcurr_y hnext_x hnext_y
@@ -144,17 +144,40 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   obtain ⟨ h_add_mod, h_norm_next_y ⟩ := h_add
   exact ⟨h_add_mod, h_norm_next_y⟩
 
-lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
+omit p_large_enough in
+lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
+    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
+       .input ⟨0, 7⟩] := by
+  dsimp only [table_assignment_norm, circuit_norm, boundary]
+  simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
+    Vector.mapRange_zero]
+  simp
+
+omit p_large_enough in
+lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
+    let env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env;
+    eval env (varFromOffset (F:=F p) U32 0) = first_row.x ∧
+    eval env (varFromOffset (F:=F p) U32 4) = first_row.y := by
+  intro env
+  dsimp only [env, windowEnv]
+  have h_offset : (boundary (p:=p)).finalAssignment.offset = 8 := rfl
+  simp only [h_offset]
+  rw [boundary_assignment]
+  simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]
+  simp only [Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
+    Fin.isValue, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
+  and_intros <;> rfl
+
+lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
+  Circuit.ConstraintsHold.Soundness (F := F p) (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
   simp only [table_norm, boundary, circuit_norm]
   simp only [and_imp]
-  have hx : eval env (varFromOffset U32 0) = first_row.x := rfl
-  have hy : eval env (varFromOffset U32 4) = first_row.y := rfl
+  have ⟨hx, hy⟩ := boundary_vars first_row aux_env
+  simp only [circuit_norm] at hx hy
   rw [hx, hy]
-  clear hx hy
   intro x_zero y_one
   rw [x_zero, y_one]
   simp only [U32.fromByte_normalized, U32.fromByte_value, fib32]
@@ -182,7 +205,7 @@ def formalFib32Table : FormalTable (F p) RowType := {
     -- base case 2
     | one first_row =>
       simp [table_norm]
-      apply boundary_constraints first_row (envs 0 0)
+      apply boundary_constraints first_row (envs.toEnvironment 0 0)
 
     -- inductive step
     | more curr next rest ih1 ih2 =>
@@ -196,7 +219,7 @@ def formalFib32Table : FormalTable (F p) RowType := {
       let ⟨curr_fib0, curr_fib1, curr_normalized_x, curr_normalized_y⟩ := ih2.left
 
       -- simplfy constraints
-      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 _) ConstraintsHold
+      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs.toEnvironment 1 _) ConstraintsHold
 
       -- finish induction
       specialize add_spec curr_normalized_x curr_normalized_y

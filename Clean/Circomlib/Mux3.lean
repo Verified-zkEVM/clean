@@ -18,11 +18,7 @@ namespace MultiMux3
 structure Inputs (n : ℕ) (F : Type) where
   c : ProvableVector (fields 8) n F  -- n vectors of 8 constants each
   s : Vector F 3                      -- 3-bit selector
-
-instance {n : ℕ} : ProvableStruct (Inputs n) where
-  components := [ProvableVector (fields 8) n, fields 3]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
+deriving ProvableStruct
 /-
 template MultiMux3(n) {
     signal input c[n][8];  // Constants
@@ -43,7 +39,7 @@ template MultiMux3(n) {
     signal  s10;
     s10 <== s[1] * s[0];
 
-    for (var i=0; i<n; i++) {
+    for (var i=0; i < n; i++) {
 
          a210[i] <==  ( c[i][ 7]-c[i][ 6]-c[i][ 5]+c[i][ 4] - c[i][ 3]+c[i][ 2]+c[i][ 1]-c[i][ 0] ) * s10;
           a21[i] <==  ( c[i][ 6]-c[i][ 4]-c[i][ 2]+c[i][ 0] ) * s[1];
@@ -162,11 +158,7 @@ namespace Mux3
 structure Inputs (F : Type) where
   c : Vector F 8  -- 8 constants
   s : Vector F 3  -- 3-bit selector
-
-instance : ProvableStruct Inputs where
-  components := [fields 8, fields 3]
-  toComponents := fun {c, s} => .cons c (.cons s .nil)
-  fromComponents := fun (.cons c (.cons s .nil)) => ⟨c, s⟩
+deriving ProvableStruct
 /-
 template Mux3() {
     var i;

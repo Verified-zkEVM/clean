@@ -41,15 +41,7 @@ structure ProcessBlocksState (F : Type) where
   chaining_value : Vector (U32 F) 8    -- Current chaining value (8 × 32-bit words)
   chunk_counter : U32 F                 -- Which chunk number this is
   blocks_compressed : U32 F             -- Number of blocks compressed so far
-
-instance : ProvableStruct ProcessBlocksState where
-  components := [ProvableVector U32 8, U32, U32]
-  toComponents := fun { chaining_value, chunk_counter, blocks_compressed } =>
-    .cons chaining_value (.cons chunk_counter (.cons blocks_compressed .nil))
-  fromComponents := fun xss =>
-    match xss with
-    | .cons cv (.cons cc (.cons bc .nil)) =>
-      { chaining_value := cv, chunk_counter := cc, blocks_compressed := bc }
+deriving ProvableStruct
 
 /--
 Convert ProcessBlocksState to ChunkState for integration with the spec.
@@ -91,18 +83,13 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
     simp_all [← h_input, eval_vector]
 
   completeness := by
-    circuit_proof_start [U32.AssertNormalized.circuit]
+    circuit_proof_start [U32.AssertNormalized.circuit, getElem_eval_vector] -- provable_vector_simp wanted
     simp only [ProcessBlocksState.Normalized] at h_spec
     constructor
     · rintro ⟨i, h_i⟩
-      have : (eval env input_var_chaining_value : ProvableVector _ 8 _)[i] = input_chaining_value[i] := by simp only [h_input]
-      simp only [eval_vector] at this
-      simp only [Vector.getElem_map] at this
-      simp only [this]
       rcases h_spec with ⟨h_spec, _⟩
       specialize h_spec ⟨ i, h_i ⟩
       convert h_spec
-    simp only [←h_input, eval_vector] at h_spec -- provable_vector_simp wanted
     simp_all
 
 end BLAKE3ProcessBlocksStateNormalized
@@ -114,15 +101,7 @@ A chunk might contain less than 16 blocks, and `block_exists` indicates empty ro
 structure BlockInput (F : Type) where
   block_exists : F                      -- 0 or 1 (boolean flag)
   block_data : Vector (U32 F) 16        -- 16 words = 64 bytes when exists
-
-instance : ProvableStruct BlockInput where
-  components := [field, ProvableVector U32 16]
-  toComponents := fun { block_exists, block_data } =>
-    .cons block_exists (.cons block_data .nil)
-  fromComponents := fun xss =>
-    match xss with
-    | .cons block_exists (.cons data .nil) =>
-      { block_exists := block_exists, block_data := data }
+deriving ProvableStruct
 
 def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   IsBool input.block_exists ∧
@@ -218,7 +197,8 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     blocks_compressed := muxedBlocksCompressed
   }
 
-def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i (_ : inputs.length = i) (state : ProcessBlocksState (F p)) :=
+def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i
+  (_ : inputs.length = i) (state : ProcessBlocksState (F p)) (_ : ProverData (F p)) :=
     inputs.length < 2^32 →
     initialState.Normalized ∧
     (∀ input ∈ inputs, input.Normalized) ∧
@@ -278,7 +258,6 @@ private lemma step_process_block (env : Environment (F p))
     simp [acc_normalized, circuit_norm])
   dsimp only [Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
-  dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
   specialize h_vector_cond (by simp only [circuit_norm])
   specialize h_u32_cond (by simp only [circuit_norm])
   simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
@@ -338,16 +317,17 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       | inl _ => assumption
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
-    simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
+    simp only [Conditional.circuit, h_eval, step, circuit_norm] at h_holds ⊢
     simp only [circuit_norm, h_holds, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢
     simp_all only [circuit_norm]
     omega
 
-def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initialState.Normalized
+def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) (_ : ProverData (F p)) :=
+  initialState.Normalized
 
-def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
-    input.Normalized ∧ i < 2^32
+def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : ProverData (F p)) :=
+  input.Normalized ∧ i < 2^32
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
@@ -393,7 +373,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
           simp only [h_witnesses_iszero]
           norm_num
       · norm_num
-    simp_all only [Addition32.circuit, Addition32.Assumptions, Conditional.circuit, Conditional.Assumptions]
+    simp_all only [Addition32.circuit, Addition32.Assumptions]
     constructor
     · dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
       rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
@@ -425,8 +405,8 @@ The InductiveTable for processBlocks.
 def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   step
   Spec
-  InitialStateAssumptions initialState := initialState.Normalized
-  InputAssumptions i input := input.Normalized ∧ i < 2^32
+  InitialStateAssumptions initialState _ := initialState.Normalized
+  InputAssumptions i input _ := input.Normalized ∧ i < 2^32
   soundness
   completeness
   subcircuitsConsistent := by

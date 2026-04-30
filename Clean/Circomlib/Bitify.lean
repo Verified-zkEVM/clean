@@ -50,7 +50,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
   (Expression.eval env <| Prod.fst <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
     = fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)) := by
-  suffices (eval (α:=fieldPair) env <|
+  suffices (eval (Var:=Var fieldPair (F p)) env <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
     = (fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)), 2^n) by
     simp_all [circuit_norm]
@@ -58,7 +58,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
   induction n with
   | zero => simp [circuit_norm]
   | succ n ih =>
-    simp_all only [circuit_norm, Prod.mk.injEq, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last,
+    simp_all only [circuit_norm, Prod.mk.injEq, Fin.foldl_succ_last, Fin.val_castSucc, Fin.val_last,
       Expression.eval, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow, Nat.cast_ofNat,
       pow_succ', two_mul, add_right_inj, mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq, and_true]
     left
@@ -72,11 +72,11 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := input.val < 2^n
+  ProverAssumptions input _ _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
-  Spec input bits :=
+  Spec input bits _ :=
     input.val < 2^n
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
@@ -115,9 +115,9 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  Assumptions input := input.val < 2^n
+  ProverAssumptions input _ _ := input.val < 2^n
 
-  Spec input output :=
+  Spec input output _ :=
     input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
@@ -163,7 +163,7 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
     Fin.foldl n (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
       (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
     = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env) := by
-  suffices (eval (α:=fieldPair) env <|
+  suffices (eval (Var:=Var fieldPair (F p)) env <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
     = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env), 2^n) by
     simp_all [circuit_norm]
@@ -174,7 +174,7 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
     specialize ih (v := v.pop)
     simp only [Fin.getElem_fin, Vector.getElem_pop', Fin.eta] at ih
     simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, pow_succ', two_mul,
-      Fin.coe_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
+      Fin.val_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 

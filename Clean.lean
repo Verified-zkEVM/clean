@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath
 import Clean.Utils.OfflineMemory
 import Clean.Circomlib.AliasCheck
@@ -17,6 +18,7 @@ import Clean.Circomlib.Sign
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
+import Clean.Examples.HintExample
 import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Tables.Fibonacci8
 import Clean.Tables.Fibonacci32
@@ -34,5 +36,3 @@ import Clean.Gadgets.BLAKE3.Permute
 import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Gadgets.BLAKE3.Round
 import Clean.Gadgets.BLAKE3.FinalizeChunk
-import Clean.Test
-import Clean.Specs.BLAKE3.ChunkProcessingTests

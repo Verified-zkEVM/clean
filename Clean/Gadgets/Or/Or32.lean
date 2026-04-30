@@ -1,4 +1,3 @@
-import Clean.Circuit.Provable
 import Clean.Utils.Tactics
 import Clean.Types.U32
 import Clean.Gadgets.Or.Or8
@@ -12,11 +11,7 @@ open Gadgets.Or
 structure Inputs (F : Type) where
   x : U32 F
   y : U32 F
-
-instance : ProvableStruct Inputs where
-  components := [U32, U32]
-  toComponents := fun { x, y } => .cons x (.cons y .nil)
-  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
@@ -41,16 +36,14 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   localLength _ := 4
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
+  circuit_proof_start [Or8.circuit, Or8.Assumptions, Or8.Spec]
+
   have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
   rcases input_x
   rcases input_y
-  rcases input_var_x
-  rcases input_var_y
-  simp only [U32.Normalized] at *
-  simp only [explicit_provable_type, toVars, fromElements] at h_input ⊢ l_components
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢ l_components
-  simp only [Or8.circuit, Or8.Assumptions, Or8.Spec, h_input] at h_holds
+  simp only [circuit_norm, explicit_provable_type, fromElements,
+    U32.mk.injEq] at h_input ⊢ l_components
+  simp only [U32.Normalized, circuit_norm, h_input] at *
   rcases h_holds with ⟨h_holds1, h_holds⟩
   specialize h_holds1 (by omega)
   rcases h_holds with ⟨h_holds2, h_holds⟩
@@ -58,7 +51,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rcases h_holds with ⟨h_holds3, h_holds4⟩
   specialize h_holds3 (by omega)
   specialize h_holds4 (by omega)
-  simp only [U32.value] at ⊢ l_components
   simp only [h_holds1.2, h_holds2.2, h_holds3.2, h_holds4.2] -- use the Normalized conditions
   simp only [h_holds1.1, h_holds2.1, h_holds3.1, h_holds4.1, l_components]
   ring_nf
@@ -68,8 +60,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
   rcases input_x
   rcases input_y
-  simp only [explicit_provable_type, toVars, fromElements] at h_input ⊢
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢
+  simp only [explicit_provable_type, fromElements, circuit_norm, U32.mk.injEq] at h_input ⊢
   simp only [Or8.circuit, Or8.Assumptions, h_input]
   simp only [U32.Normalized] at h_assumptions
   omega

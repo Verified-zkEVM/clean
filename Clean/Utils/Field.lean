@@ -1,6 +1,7 @@
 import Mathlib.Algebra.Field.ZMod
 import Mathlib.Algebra.Order.Star.Basic
 import Mathlib.Analysis.Normed.Ring.Lemmas
+import Clean.Circuit.SimpGadget
 
 -- main field definition
 def F p := ZMod p
@@ -104,6 +105,19 @@ theorem val_of_natToField_eq {n : ℕ} (lt : n < p) : (natToField n lt).val = n 
 def less_than_p (x : F p) : x.val < p := by
   rcases p with _ | n; cases p_ne_zero rfl
   exact x.is_lt
+
+@[circuit_norm, grind =]
+lemma natCast_val (a : F p) : (a.val : F p) = a := ZMod.natCast_zmod_val _
+
+@[circuit_norm, grind .]
+lemma fin_val_natCast_val_lt {p : ℕ} {n : ℕ} (x : Fin n) : (x.val : F p).val < n := by
+  grw [ZMod.val_natCast, Nat.mod_le]
+  exact x.isLt
+
+@[grind =]
+lemma fin_val_natCast_val_eq_of_lt {p : ℕ} {n : ℕ} (x : Fin n) (hn : n < p) : (x.val : F p).val = x.val := by
+  rw [ZMod.val_natCast_of_lt (a := x.val)]
+  linarith [hn, x.isLt]
 
 def mod (x : F p) (c : ℕ+) (lt : c < p) : F p :=
   FieldUtils.natToField (x.val % c) (by linarith [Nat.mod_lt x.val c.pos, lt])

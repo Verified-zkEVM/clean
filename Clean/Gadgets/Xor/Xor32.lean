@@ -1,10 +1,5 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
+import Clean.Circuit
 import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
 import Clean.Utils.Field
 import Clean.Types.U32
 import Clean.Gadgets.Xor.ByteXorTable
@@ -18,11 +13,7 @@ open Gadgets.Xor
 structure Inputs (F : Type) where
   x: U32 F
   y: U32 F
-
-instance : ProvableStruct Inputs where
-  components := [U32, U32]
-  toComponents := fun { x, y } => .cons x (.cons y .nil)
-  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
@@ -76,8 +67,6 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env input_var input h_input h_as h_holds
 
-  let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
-       ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3 ⟩,
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
 
@@ -101,8 +90,6 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env input_var h_env input h_input as
-  let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
-       ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3 ⟩,
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
@@ -112,8 +99,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
 
-  simp only [h_input, circuit_norm, main, ByteXorTable,
-    explicit_provable_type, Fin.forall_iff] at h_env ⊢
+  simp only [h_input, circuit_norm, main, ByteXorTable, Fin.forall_iff] at h_env ⊢
+  simp only [circuit_norm, explicit_provable_type] at h_env ⊢
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
   simp_all [xor_val]
 

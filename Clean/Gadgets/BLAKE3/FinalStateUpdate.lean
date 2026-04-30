@@ -2,6 +2,7 @@ import Clean.Gadgets.Xor.Xor32
 import Clean.Gadgets.BLAKE3.BLAKE3State
 import Clean.Specs.BLAKE3
 import Clean.Circuit.Provable
+import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.FinalStateUpdate
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -12,11 +13,7 @@ open Specs.BLAKE3 (finalStateUpdate)
 structure Inputs (F : Type) where
   state : BLAKE3State F
   chaining_value : Vector (U32 F) 8
-
-instance : ProvableStruct Inputs where
-  components := [BLAKE3State, ProvableVector U32 8]
-  toComponents := fun { state, chaining_value } => .cons state (.cons chaining_value .nil)
-  fromComponents := fun (.cons state (.cons chaining_value .nil)) => { state, chaining_value }
+deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, chaining_value } := input
@@ -82,12 +79,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
-  simp only [FormalCircuit.toSubcircuit, Circuit.operations, ElaboratedCircuit.main,
-    ElaboratedCircuit.localLength, Xor32.Assumptions,
-    ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
-    ProvableStruct.eval.go, getElem_eval_vector, h_input, Xor32.Spec, ElaboratedCircuit.output,
-    and_imp, Nat.add_zero, add_zero, and_true] at h_holds
+  simp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
+  simp only [Xor32.Assumptions, getElem_eval_vector, h_input, Xor32.Spec, and_imp] at h_holds
 
   ring_nf at h_holds
 
@@ -122,18 +115,24 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  rintro i0 env ⟨state_var, chaining_value_var⟩ henv ⟨state, chaining_value⟩ h_input h_normalized
-  simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
-    ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
-  obtain ⟨state_norm, chaining_value_norm⟩ := h_normalized
-  simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
-    Fin.val_eq_zero, IsEmpty.forall_iff, and_true,
-    Fin.getElem_fin] at state_norm chaining_value_norm
-  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at henv ⊢
-  simp only [h_input, circuit_norm, and_imp,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
-  simp_all only [forall_const, and_self]
+  circuit_proof_start [BLAKE3State.Normalized]
+
+  obtain ⟨h_input_state, h_input_cv⟩ := h_input
+  obtain ⟨state_norm, chaining_value_norm⟩ := h_assumptions
+
+  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_env ⊢
+  simp only [h_input_state, h_input_cv, circuit_norm, and_imp,
+    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at h_env ⊢
+
+  -- Prove all normalization facts from the universal hypotheses
+  refine ⟨⟨state_norm 0, state_norm 8⟩, ⟨state_norm 1, state_norm 9⟩,
+    ⟨state_norm 2, state_norm 10⟩, ⟨state_norm 3, state_norm 11⟩,
+    ⟨state_norm 4, state_norm 12⟩, ⟨state_norm 5, state_norm 13⟩,
+    ⟨state_norm 6, state_norm 14⟩, ⟨state_norm 7, state_norm 15⟩,
+    ⟨chaining_value_norm 0, state_norm 8⟩, ⟨chaining_value_norm 1, state_norm 9⟩,
+    ⟨chaining_value_norm 2, state_norm 10⟩, ⟨chaining_value_norm 3, state_norm 11⟩,
+    ⟨chaining_value_norm 4, state_norm 12⟩, ⟨chaining_value_norm 5, state_norm 13⟩,
+    ⟨chaining_value_norm 6, state_norm 14⟩, chaining_value_norm 7, state_norm 15⟩
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness

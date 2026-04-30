@@ -11,6 +11,10 @@ namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 instance hp135 : Fact (p > 2^135) := .mk (by linarith [‹Fact (p > 2^253)›.elim])
+instance hppre254 : Fact (p - 1 < 2^254) := .mk (by
+  calc
+    p - 1 ≤ p := by grind
+    _ < _ := by linarith [‹Fact (p < 2^254)›.elim])
 
 namespace AliasCheck
 /-
@@ -27,7 +31,7 @@ template AliasCheck() {
 -/
 def main (input : Vector (Expression (F p)) 254) := do
   -- CompConstant(-1) means we're comparing against p-1 (since -1 ≡ p-1 mod p)
-  let comp_out ← CompConstant.circuit (p - 1) input
+  let comp_out ← CompConstant.circuit (p - 1) hppre254.elim input
   comp_out === 0
 
 def circuit : FormalAssertion (F p) (fields 254) where
@@ -42,11 +46,14 @@ def circuit : FormalAssertion (F p) (fields 254) where
     simp only [circuit_norm, main, CompConstant.circuit]
     simp_all
     have : p > 2^135 := hp135.elim
+    have ppre_small : p - 1 < 2^254 := hppre254.elim
+    intros offset env input_var h_binary h_sub
     omega
 
   completeness := by
     simp only [circuit_norm, main, CompConstant.circuit]
     simp_all
+    have ppre_small : p - 1 < 2^254 := hppre254.elim
     omega
 end AliasCheck
 

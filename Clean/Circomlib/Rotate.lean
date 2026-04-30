@@ -51,7 +51,7 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     simp only [Vector.getElem_toArray]
     congr 1
     -- Prove index equality via Fin arithmetic
-    simp [Fin.coe_cast, Fin.val_add]
+    simp [Fin.val_cast, Fin.val_add]
 
   completeness := by
     circuit_proof_start
