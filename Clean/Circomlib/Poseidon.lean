@@ -49,6 +49,7 @@ def circuit : FormalCircuit (F p) field field where
   localLength _ := 3
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  output _ i := varFromOffset field (i + 2)
 
   Assumptions _ := True
   Spec (input : F p) (output : F p) := output = input ^ 5
@@ -101,6 +102,7 @@ def circuit (c0 c1 : F p) : FormalCircuit (F p) (fields 2) (fields 2) where
   localLength _ := 2
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
 
   Assumptions _ := True
   Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
@@ -154,6 +156,7 @@ def circuit (m00 m01 m10 m11 : F p) : FormalCircuit (F p) (fields 2) (fields 2) 
   localLength _ := 2
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
 
   Assumptions _ := True
   Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
@@ -197,6 +200,7 @@ def circuit (s0 s1 s2 : F p) : FormalCircuit (F p) (fields 2) (fields 2) where
   localLength _ := 2
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
 
   Assumptions _ := True
   Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
@@ -242,8 +246,8 @@ namespace FullRound_t2
 def main (c0 c1 m00 m01 m10 m11 : F p) (input : Vector (Expression (F p)) 2)
     : Circuit (F p) (Vector (Expression (F p)) 2) := do
   -- S-box on both elements
-  let s0 ← Sigma.main input[0]
-  let s1 ← Sigma.main input[1]
+  let s0 ← Sigma.circuit input[0]
+  let s1 ← Sigma.circuit input[1]
 
   -- ARK
   let a0 <== s0 + Expression.const c0
@@ -260,8 +264,9 @@ def circuit (c0 c1 m00 m01 m10 m11 : F p) : FormalCircuit (F p) (fields 2) (fiel
   main := main c0 c1 m00 m01 m10 m11
   -- 3 witnesses per Sigma (×2) + 2 for ARK + 2 for MIX = 10
   localLength _ := 10
-  localLength_eq := by simp [circuit_norm, main, Sigma.main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main, Sigma.main]
+  localLength_eq := by simp [circuit_norm, main, Sigma.circuit]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main, Sigma.circuit]
+  output _ i := #v[varFromOffset field (i + 8), varFromOffset field (i + 9)]
 
   Assumptions _ := True
   Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
@@ -273,25 +278,11 @@ def circuit (c0 c1 m00 m01 m10 m11 : F p) : FormalCircuit (F p) (fields 2) (fiel
     output[1] = m01 * a0 + m11 * a1
 
   soundness := by
-    intro offset env input_var input h_input h_assumptions h_constraints
-    simp only [circuit_norm, main, Sigma.main] at *
-    obtain ⟨h_s0_in2, h_s0_in4, h_s0_out, h_s1_in2, h_s1_in4, h_s1_out,
-            h_a0, h_a1, h_out0, h_out1⟩ := h_constraints
-    rw [← h_input]
-    simp only [circuit_norm] at *
-    -- Derive s0 = input[0]^5
-    have hs0 : env.get (offset + 2) = (input_var[0]).eval env ^ 5 := by
-      rw [h_s0_out, h_s0_in4, h_s0_in2]; ring
-    -- Derive s1 = input[1]^5
-    have hs1 : env.get (offset + 5) = (input_var[1]).eval env ^ 5 := by
-      rw [h_s1_out, h_s1_in4, h_s1_in2]; ring
-    -- Substitute through
-    constructor
-    · rw [h_out0, h_a0, h_a1, hs0, hs1]
-    · rw [h_out1, h_a0, h_a1, hs0, hs1]
+    circuit_proof_start [Sigma.circuit]
+    grind
 
   completeness := by
-    simp_all only [circuit_norm, main, Sigma.main]
+    circuit_proof_all [Sigma.circuit]
 
 end FullRound_t2
 
@@ -308,7 +299,7 @@ namespace PartialRoundOpt_t2
 def main (c0 s0 s1 s2 : F p) (input : Vector (Expression (F p)) 2)
     : Circuit (F p) (Vector (Expression (F p)) 2) := do
   -- S-box on first element only
-  let sbox0 ← Sigma.main input[0]
+  let sbox0 ← Sigma.circuit input[0]
 
   -- ARK on first element only
   let a0 <== sbox0 + Expression.const c0
@@ -323,8 +314,9 @@ def circuit (c0 s0 s1 s2 : F p) : FormalCircuit (F p) (fields 2) (fields 2) wher
   main := main c0 s0 s1 s2
   -- 3 witnesses for Sigma + 1 for ARK + 2 for MixS = 6
   localLength _ := 6
-  localLength_eq := by simp [circuit_norm, main, Sigma.main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main, Sigma.main]
+  localLength_eq := by simp [circuit_norm, main, Sigma.circuit]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main, Sigma.circuit]
+  output _ i := #v[varFromOffset field (i + 4), varFromOffset field (i + 5)]
 
   Assumptions _ := True
   Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
@@ -333,19 +325,11 @@ def circuit (c0 s0 s1 s2 : F p) : FormalCircuit (F p) (fields 2) (fields 2) wher
     output[1] = input[1] + a0 * s2
 
   soundness := by
-    intro offset env input_var input h_input h_assumptions h_constraints
-    simp only [circuit_norm, main, Sigma.main] at *
-    obtain ⟨h_s0_in2, h_s0_in4, h_s0_out, h_a0, h_out0, h_out1⟩ := h_constraints
-    rw [← h_input]
-    simp only [circuit_norm] at *
-    have hs0 : env.get (offset + 2) = (input_var[0]).eval env ^ 5 := by
-      rw [h_s0_out, h_s0_in4, h_s0_in2]; ring
-    constructor
-    · rw [h_out0, h_a0, hs0]
-    · rw [h_out1, h_a0, hs0]
+    circuit_proof_start [Sigma.circuit]
+    grind
 
   completeness := by
-    simp_all only [circuit_norm, main, Sigma.main]
+    circuit_proof_all [Sigma.circuit]
 
 end PartialRoundOpt_t2
 
