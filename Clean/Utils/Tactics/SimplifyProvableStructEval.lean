@@ -148,6 +148,20 @@ elab "simplify_provable_struct_eval" : tactic => do
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_expr))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_expr_prover))
 
+    -- Expose derived `CircuitType` evals before reducing the resulting value
+    -- constructors.
+    try
+      let hypIdent := mkIdent hypName
+      let tac ← `(tactic| simp only [
+        DerivedCircuitType.eval_verifier,
+        DerivedCircuitType.eval_prover,
+        CircuitType.evalVerifier,
+        CircuitType.evalProver
+      ] at $hypIdent:ident)
+      evalTactic tac
+    catch _ =>
+      pure ()
+
     -- Apply the targeted eval simplification throughout the local context. A
     -- struct eval equality often feeds other hypotheses containing projections
     -- of the same `eval env struct`, so simplifying only the equality itself is

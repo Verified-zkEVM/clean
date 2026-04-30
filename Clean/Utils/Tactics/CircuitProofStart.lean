@@ -157,5 +157,5 @@ elab_rules : tactic
   | `(tactic| circuit_proof_all $[[$terms:term,*]]?) => do
   let lemmas := terms.getD (.mk #[])
   evalTactic (← `(tactic| circuit_proof_start [$lemmas,*]))
-  evalTactic (← `(tactic| try simp_all))
+  evalTactic (← `(tactic| try first | simp_all | grind))
   evalTactic (← `(tactic| done))
