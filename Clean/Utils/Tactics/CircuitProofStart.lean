@@ -5,76 +5,6 @@ import Clean.Utils.Tactics.ProvableStructSimp
 open Lean Elab Tactic Meta
 open Circuit
 
-namespace CircuitProofStart
-
-/-- If `name` is a generated view structure name like `Input.Var`, return `Input`. -/
-private def baseNameOfVarView? (name : Name) : Option Name :=
-  match name with
-  | .str base "Var" => some base
-  | _ => none
-
-/-- Extract the underlying circuit type from a type like `Var Input F`, if present. -/
-private def circuitTypeOfVarProjection? (type : Expr) : Option Name :=
-  if type.getAppFn.isConstOf ``CircuitType.Var then
-    match type.getAppArgs[0]? with
-    | some e =>
-      match e with
-      | Expr.const name _ => some name
-      | _ => none
-    | _ => none
-  else
-    none
-
-/--
-Find generated eval-exposure lemmas for the `h_input` variable, if it is a
-derived record-shaped `CircuitType` input.
-
-For a derived input `Input`, the `CircuitType` deriver generates
-`Input.Var` and lemmas `Input.eval_verifier` / `Input.eval_prover`. We detect
-that shape from the type of the final argument of `eval env input_var`.
--/
-private def generatedEvalLemmasForHInput : TacticM (Array Name) := do
-  withMainContext do
-    let hInput ← getLocalDeclFromUserName `h_input
-    let hType ← instantiateMVars hInput.type
-    unless hType.isAppOf ``Eq do
-      return #[]
-    let some lhs := hType.getArg? 1
-      | return #[]
-    let some inputVar := lhs.getAppArgs.back?
-      | return #[]
-    let inputVarType ← inferType inputVar
-    let inputVarType ← withTransparency .reducible (whnf inputVarType)
-    let some baseName := circuitTypeOfVarProjection? inputVarType <|>
-        (inputVarType.getAppFn.constName?.bind baseNameOfVarView?)
-      | return #[]
-    let env ← getEnv
-    let candidates := #[baseName ++ `eval_verifier, baseName ++ `eval_prover]
-    return candidates.filter env.contains
-
-/--
-Expose `h_input` using generated record `CircuitType` eval lemmas only.
-
-This intentionally does not rewrite with generic `CircuitType.eval_verifier` /
-`CircuitType.eval_prover`: hand-written `CircuitType`s may be abstract and should
-not be unfolded unless they provide an explicit lemma with this shape.
--/
-private def exposeGeneratedCircuitTypeHInput : TacticM Unit := do
-  let lemmas ← generatedEvalLemmasForHInput
-  if lemmas.isEmpty then
-    throwError "no generated CircuitType eval lemma found for h_input"
-  let mut progressed := false
-  for lemmaName in lemmas do
-    try
-      evalTactic (← `(tactic| rw [$(mkIdent lemmaName):ident] at $(mkIdent `h_input):ident))
-      progressed := true
-    catch _ =>
-      pure ()
-  unless progressed do
-    throwError "generated CircuitType eval lemmas did not rewrite h_input"
-
-end CircuitProofStart
-
 /--
   Introduce all standard parameters and hypotheses for Soundness or Completeness.
 -/
@@ -200,9 +130,6 @@ elab_rules : tactic
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `main):ident] at *))
 
   -- simplify structs / eval first
-  try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
-  try CircuitProofStart.exposeGeneratedCircuitTypeHInput catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `h_input):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
 
   -- Additional simplification for common patterns in soundness/completeness proofs

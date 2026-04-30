@@ -537,7 +537,7 @@ def mkCircuitValueProvableStructInstance (valueStructName : Name) (paramInfos : 
 
   elabCommand cmd
 
-/-- Generate `[circuit_norm]` lemmas reducing `CircuitType` view projections to generated structs. -/
+/-- Generate reduction lemmas for `CircuitType` view projections and eval lemmas. -/
 def mkCircuitTypeViewReductionLemmas (structName : Name) (paramInfos : Array ParamInfo)
     (appliedStructType varType valueType proverValueType : TSyntax `term) : CommandElabM Unit := do
   let mut binderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
@@ -576,16 +576,16 @@ def mkCircuitTypeViewReductionLemmas (structName : Name) (paramInfos : Array Par
       `(
         theorem $varLemma $fBinder :
             CircuitType.Var $appliedStructType $fIdent = $varType $fIdent := rfl
-        @[circuit_norm] theorem $valueLemma $fBinder :
+        theorem $valueLemma $fBinder :
             CircuitType.Value $appliedStructType $fIdent = $valueType $fIdent := rfl
-        @[circuit_norm] theorem $proverValueLemma $fBinder :
+        theorem $proverValueLemma $fBinder :
             CircuitType.ProverValue $appliedStructType $fIdent = $proverValueType $fIdent := rfl
-        @[circuit_norm] theorem $evalVerifierLemma $fImplicitBinder $fieldBinder
+        theorem $evalVerifierLemma $fImplicitBinder $fieldBinder
             ($envIdent : Environment $fIdent)
             ($inputIdent : CircuitType.Var $appliedStructType $fIdent) :
             eval $envIdent $inputIdent = CircuitType.evalVerifier $envIdent $inputIdent :=
           CircuitType.eval_verifier $envIdent $inputIdent
-        @[circuit_norm] theorem $evalProverLemma $fImplicitBinder $fieldBinder
+        theorem $evalProverLemma $fImplicitBinder $fieldBinder
             ($envIdent : ProverEnvironment $fIdent)
             ($inputIdent : CircuitType.Var $appliedStructType $fIdent) :
             eval $envIdent $inputIdent = CircuitType.evalProver $envIdent $inputIdent :=
@@ -595,17 +595,17 @@ def mkCircuitTypeViewReductionLemmas (structName : Name) (paramInfos : Array Par
       `(
         theorem $varLemma $binderSyntaxes:bracketedBinder* $fBinder :
             CircuitType.Var $appliedStructType $fIdent = $varType $fIdent := rfl
-        @[circuit_norm] theorem $valueLemma $binderSyntaxes:bracketedBinder* $fBinder :
+        theorem $valueLemma $binderSyntaxes:bracketedBinder* $fBinder :
             CircuitType.Value $appliedStructType $fIdent = $valueType $fIdent := rfl
-        @[circuit_norm] theorem $proverValueLemma $binderSyntaxes:bracketedBinder* $fBinder :
+        theorem $proverValueLemma $binderSyntaxes:bracketedBinder* $fBinder :
             CircuitType.ProverValue $appliedStructType $fIdent = $proverValueType $fIdent := rfl
-        @[circuit_norm] theorem $evalVerifierLemma $binderSyntaxes:bracketedBinder*
+        theorem $evalVerifierLemma $binderSyntaxes:bracketedBinder*
             $fImplicitBinder $fieldBinder
             ($envIdent : Environment $fIdent)
             ($inputIdent : CircuitType.Var $appliedStructType $fIdent) :
             eval $envIdent $inputIdent = CircuitType.evalVerifier $envIdent $inputIdent :=
           CircuitType.eval_verifier $envIdent $inputIdent
-        @[circuit_norm] theorem $evalProverLemma $binderSyntaxes:bracketedBinder*
+        theorem $evalProverLemma $binderSyntaxes:bracketedBinder*
             $fImplicitBinder $fieldBinder
             ($envIdent : ProverEnvironment $fIdent)
             ($inputIdent : CircuitType.Var $appliedStructType $fIdent) :
