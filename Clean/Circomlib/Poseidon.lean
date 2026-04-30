@@ -444,6 +444,34 @@ theorem partialRound_constOut :
   intro ⟨st, c0, s0, s1, s2⟩ n
   simp only [circuit_norm, PartialRoundOpt_t2.circuit]
 
+namespace InitialArk
+
+def main (input : Expression (F BN254_PRIME))
+    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) := do
+  let state : Vector (Expression (F BN254_PRIME)) 2 := #v[Expression.const 0, input]
+  Ark_t2.circuit (C_t2[0]'(by omega)) (C_t2[1]'(by omega)) state
+
+def circuit : FormalCircuit (F BN254_PRIME) field (fields 2) where
+  main
+  localLength _ := 2
+  localLength_eq := by simp [circuit_norm, main, Ark_t2.circuit]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main, Ark_t2.circuit]
+  output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
+
+  Assumptions _ := True
+  Spec (input : F BN254_PRIME) (output : Vector (F BN254_PRIME) 2) :=
+    output[0] = (0 : F BN254_PRIME) + (C_t2[0]'(by omega) : F BN254_PRIME) ∧
+    output[1] = input + (C_t2[1]'(by omega) : F BN254_PRIME)
+
+  soundness := by
+    circuit_proof_start [Ark_t2.circuit]
+    simp_all
+
+  completeness := by
+    circuit_proof_all [Ark_t2.circuit]
+
+end InitialArk
+
 namespace ApplyFullRounds1
 
 def body (t : Vector (Expression (F BN254_PRIME)) 2 × (F BN254_PRIME × F BN254_PRIME)) :
