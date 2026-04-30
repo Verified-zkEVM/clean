@@ -51,4 +51,30 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
+def parent : GeneralFormalCircuit F field field where
+  main input := do
+    circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
+
+  output _ offset := varFromOffset field offset
+  localLength _ := 1
+
+  Spec input out _ :=
+    input * out = 1
+  ProverAssumptions input _ _ :=
+    input ≠ 0
+
+  soundness := by
+    circuit_proof_start [circuit]
+    -- The subcircuit spec should be stated in terms of the parent input, not
+    -- the inline mixed child input passed to the subcircuit.
+    guard_hyp h_holds : input * env.get i₀ = 1
+    exact h_holds
+
+  completeness := by
+    circuit_proof_start [circuit]
+    -- The child prover assumptions should reduce to the parent input and the
+    -- inline inverse hint.
+    guard_target = input * input⁻¹ = 1
+    exact mul_inv_cancel₀ (G₀ := F) h_assumptions
+
 end TestMixedCircuitType

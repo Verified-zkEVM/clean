@@ -9,6 +9,23 @@ open Lean.Meta
 open Lean
 open ProvableStructNaming
 
+private def viewReductionLemmaFromConstructor? (e : Expr) : MetaM (Option Name) := do
+  let env ← getEnv
+  match e.consumeMData.getAppFn with
+  | .const (.str (.str base "Value") "mk") _ =>
+    let lemmaName := base ++ `value_eq
+    return if env.contains lemmaName then some lemmaName else none
+  | .const (.str (.str base "ProverValue") "mk") _ =>
+    let lemmaName := base ++ `proverValue_eq
+    return if env.contains lemmaName then some lemmaName else none
+  | _ => return none
+
+private def addLemmaIfMissing (lemmas : List Ident) (lemmaName : Name) : List Ident :=
+  if lemmas.any (fun l => l.getId == lemmaName) then
+    lemmas
+  else
+    lemmas ++ [mkIdent lemmaName]
+
 /--
   Find struct variables that appear in equalities with struct literals
   Returns a list of FVarIds that should have cases applied
@@ -40,7 +57,8 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
             -- Check if the variable has ProvableStruct, or at least a generated
             -- structure injector lemma after reducing aliases such as `Value M F`.
             let varType ← inferType rhs
-            if (← hasProvableStructInstance varType) || (← hasMkInjEqForType varType) then
+            if (← hasProvableStructInstance varType) || (← hasMkInjEqForType varType) ||
+                (← mkInjEqNameFromConstructor? lhs).isSome then
               structVarsToCase := fvarId :: structVarsToCase
           | _ => pure ()
         else if rhsIsConstructor && !lhsIsConstructor then
@@ -50,7 +68,8 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
             -- Check if the variable has ProvableStruct, or at least a generated
             -- structure injector lemma after reducing aliases such as `Value M F`.
             let varType ← inferType lhs
-            if (← hasProvableStructInstance varType) || (← hasMkInjEqForType varType) then
+            if (← hasProvableStructInstance varType) || (← hasMkInjEqForType varType) ||
+                (← mkInjEqNameFromConstructor? rhs).isSome then
               structVarsToCase := fvarId :: structVarsToCase
           | _ => pure ()
 
@@ -118,17 +137,15 @@ def splitProvableStructEq : TacticM Unit := do
             -- normalization lets `Value Input F` expose the generated
             -- `Input.Value.mk.injEq` lemma.
             if let some mkInjEqName ← mkInjEqNameFromType? typeExpr then
-              let lemmaIdent := mkIdent mkInjEqName
-              if !lemmasToApply.any (fun l => l.getId == mkInjEqName) then
-                lemmasToApply := lemmaIdent :: lemmasToApply
+              lemmasToApply := addLemmaIfMissing lemmasToApply mkInjEqName
 
           -- If the equality type is hidden behind an opaque class projection,
           -- recover the injector lemma from constructor sides directly.
           for side in #[lhs, rhs] do
+            if let some viewLemmaName ← viewReductionLemmaFromConstructor? side then
+              lemmasToApply := addLemmaIfMissing lemmasToApply viewLemmaName
             if let some mkInjEqName ← mkInjEqNameFromConstructor? side then
-              let lemmaIdent := mkIdent mkInjEqName
-              if !lemmasToApply.any (fun l => l.getId == mkInjEqName) then
-                lemmasToApply := lemmaIdent :: lemmasToApply
+              lemmasToApply := addLemmaIfMissing lemmasToApply mkInjEqName
 
       -- Apply all the lemmas we found
       for lemmaIdent in lemmasToApply do

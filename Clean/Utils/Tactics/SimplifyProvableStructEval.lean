@@ -40,8 +40,8 @@ private def generatedCircuitTypeLemmas (e : Expr) (suffixes : Array Name) : Meta
 /--
 Generated eval lemmas for derived record `CircuitType`s.
 
-These are used only by the targeted eval simplifier so hand-written
-`CircuitType`s are not globally unfolded by `circuit_norm`.
+These lemmas are generated only for derived record `CircuitType`s; hand-written
+`CircuitType`s keep control over whether their eval behavior is exposed.
 -/
 private def generatedCircuitTypeEvalLemmas (e : Expr) : MetaM (Array Name) :=
   generatedCircuitTypeLemmas e #[`eval_verifier, `eval_prover]
