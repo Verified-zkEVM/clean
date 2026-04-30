@@ -665,6 +665,39 @@ def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) :=
 
 end TransitionRound
 
+namespace FinalRound
+
+def main (input : Vector (Expression (F BN254_PRIME)) 2)
+    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) := do
+  let s0 ← Sigma.circuit input[0]
+  let s1 ← Sigma.circuit input[1]
+  let out0 <== Expression.const m00 * s0 + Expression.const m10 * s1
+  let out1 <== Expression.const m01 * s0 + Expression.const m11 * s1
+  return #v[out0, out1]
+
+def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
+  main
+  localLength _ := 8
+  localLength_eq := by simp [circuit_norm, main, Sigma.circuit]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main, Sigma.circuit]
+  output _ i := #v[varFromOffset field (i + 6), varFromOffset field (i + 7)]
+
+  Assumptions _ := True
+  Spec (input : Vector (F BN254_PRIME) 2) (output : Vector (F BN254_PRIME) 2) :=
+    let s0 := input[0] ^ 5
+    let s1 := input[1] ^ 5
+    output[0] = m00 * s0 + m10 * s1 ∧
+    output[1] = m01 * s0 + m11 * s1
+
+  soundness := by
+    circuit_proof_start [Sigma.circuit]
+    grind
+
+  completeness := by
+    circuit_proof_all [Sigma.circuit]
+
+end FinalRound
+
 
 end Poseidon1
 
