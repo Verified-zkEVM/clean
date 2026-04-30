@@ -206,24 +206,6 @@ instance : ProvableType field where
   fromElements := fun ⟨⟨[x]⟩, _⟩ => x
 instance : NonEmptyProvableType field where
 
-instance : Zero (Var field F) := inferInstanceAs (Zero (Expression F))
-instance : One (Var field F) := inferInstanceAs (One (Expression F))
-instance : Add (Var field F) := inferInstanceAs (Add (Expression F))
-instance : Neg (Var field F) := inferInstanceAs (Neg (Expression F))
-instance : Sub (Var field F) := inferInstanceAs (Sub (Expression F))
-instance : Mul (Var field F) := inferInstanceAs (Mul (Expression F))
-instance : Coe F (Var field F) := inferInstanceAs (Coe F (Expression F))
-instance {n : ℕ} [OfNat F n] : OfNat (Var field F) n := inferInstanceAs (OfNat (Expression F) n)
-instance : HMul F (Var field F) (Var field F) := inferInstanceAs (HMul F (Expression F) (Expression F))
-instance : HAdd (Expression F) (Var field F) (Var field F) := inferInstanceAs (HAdd (Expression F) (Expression F) (Expression F))
-instance : HAdd (Var field F) (Expression F) (Var field F) := inferInstanceAs (HAdd (Expression F) (Expression F) (Expression F))
-instance : HSub (Expression F) (Var field F) (Var field F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
-instance : HSub (Var field F) (Expression F) (Var field F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
-instance : HMul (Expression F) (Var field F) (Var field F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
-instance : HMul (Var field F) (Expression F) (Var field F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
-instance : HDiv (Var field F) F (Var field F) := inferInstanceAs (HDiv (Expression F) F (Expression F))
-instance : HDiv (Var field F) ℕ (Var field F) := inferInstanceAs (HDiv (Expression F) ℕ (Expression F))
-
 namespace CircuitType
 
 instance : VerifierEval F (Expression F) F := verifierEval field
@@ -974,9 +956,6 @@ instance : HMul (field (Expression F)) F (field (Expression F)) where
 instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
   hMul (a : Expression F) (b : Expression F) := a * b
 
-instance : Inv (field F) where
-  inv (x : F) : F := x⁻¹
-
 instance {n : ℕ} [OfNat F n] : OfNat (field F) n where
   ofNat : F := OfNat.ofNat n
 
@@ -991,3 +970,74 @@ instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
 
 instance [DecidableEq F] : DecidableEq (field F) :=
   inferInstanceAs (DecidableEq F)
+
+-- make `Var field F` behave like `Expression F` in expressions
+instance : Zero (Var field F) := inferInstanceAs (Zero (Expression F))
+instance : One (Var field F) := inferInstanceAs (One (Expression F))
+instance : Add (Var field F) := inferInstanceAs (Add (Expression F))
+instance : Neg (Var field F) := inferInstanceAs (Neg (Expression F))
+instance : Sub (Var field F) := inferInstanceAs (Sub (Expression F))
+instance : Mul (Var field F) := inferInstanceAs (Mul (Expression F))
+instance : Coe F (Var field F) := inferInstanceAs (Coe F (Expression F))
+instance {n : ℕ} [OfNat F n] : OfNat (Var field F) n := inferInstanceAs (OfNat (Expression F) n)
+instance : HMul (Var field F) F (Expression F) := inferInstanceAs (HMul (Expression F) F (Expression F))
+instance : HMul F (Var field F) (Expression F) := inferInstanceAs (HMul F (Expression F) (Expression F))
+instance : HAdd (Expression F) (Var field F) (Expression F) := inferInstanceAs (HAdd (Expression F) (Expression F) (Expression F))
+instance : HAdd (Var field F) (Expression F) (Expression F) := inferInstanceAs (HAdd (Expression F) (Expression F) (Expression F))
+instance : HSub (Expression F) (Var field F) (Expression F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
+instance : HSub (Var field F) (Expression F) (Expression F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
+instance : HMul (Expression F) (Var field F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
+instance : HMul (Var field F) (Expression F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
+instance : HDiv (Var field F) F (Expression F) := inferInstanceAs (HDiv (Expression F) F (Expression F))
+instance : HDiv (Var field F) ℕ (Expression F) := inferInstanceAs (HDiv (Expression F) ℕ (Expression F))
+
+  -- make `field F` behave like `F` in expressions
+instance : Zero (field F) := inferInstanceAs (Zero F)
+instance : One (field F) := inferInstanceAs (One F)
+instance : Add (field F) := inferInstanceAs (Add F)
+instance : Neg (field F) := inferInstanceAs (Neg F)
+instance : Sub (field F) := inferInstanceAs (Sub F)
+instance : Mul (field F) := inferInstanceAs (Mul F)
+instance : Inv (field F) := inferInstanceAs (Inv F)
+instance : HAdd F (field F) F := inferInstanceAs (HAdd F F F)
+instance : HAdd (field F) F F := inferInstanceAs (HAdd F F F)
+instance : HSub F (field F) F := inferInstanceAs (HSub F F F)
+instance : HSub (field F) F F := inferInstanceAs (HSub F F F)
+instance : HMul F (field F) F := inferInstanceAs (HMul F F F)
+instance : HMul (field F) F F := inferInstanceAs (HMul F F F)
+instance : HDiv F (field F) F := inferInstanceAs (HDiv F F F)
+instance : HDiv (field F) F F := inferInstanceAs (HDiv F F F)
+
+-- make `Value field F` behave like `F` in expressions
+instance : Zero (Value field F) := inferInstanceAs (Zero F)
+instance : One (Value field F) := inferInstanceAs (One F)
+instance : Add (Value field F) := inferInstanceAs (Add F)
+instance : Neg (Value field F) := inferInstanceAs (Neg F)
+instance : Sub (Value field F) := inferInstanceAs (Sub F)
+instance : Mul (Value field F) := inferInstanceAs (Mul F)
+instance {n : ℕ} [OfNat F n] : OfNat (Value field F) n := inferInstanceAs (OfNat F n)
+instance : HAdd F (Value field F) F := inferInstanceAs (HAdd F F F)
+instance : HAdd (Value field F) F F := inferInstanceAs (HAdd F F F)
+instance : HSub F (Value field F) F := inferInstanceAs (HSub F F F)
+instance : HSub (Value field F) F F := inferInstanceAs (HSub F F F)
+instance : HMul F (Value field F) F := inferInstanceAs (HMul F F F)
+instance : HMul (Value field F) F F := inferInstanceAs (HMul F F F)
+instance : HDiv (Value field F) F F := inferInstanceAs (HDiv F F F)
+instance : HDiv F (Value field F) F := inferInstanceAs (HDiv F F F)
+
+-- make `ProverValue field F` behave like `F` in expressions
+instance : Zero (ProverValue field F) := inferInstanceAs (Zero F)
+instance : One (ProverValue field F) := inferInstanceAs (One F)
+instance : Add (ProverValue field F) := inferInstanceAs (Add F)
+instance : Neg (ProverValue field F) := inferInstanceAs (Neg F)
+instance : Sub (ProverValue field F) := inferInstanceAs (Sub F)
+instance : Mul (ProverValue field F) := inferInstanceAs (Mul F)
+instance {n : ℕ} [OfNat F n] : OfNat (ProverValue field F) n := inferInstanceAs (OfNat F n)
+instance : HAdd F (ProverValue field F) F := inferInstanceAs (HAdd F F F)
+instance : HAdd (ProverValue field F) F F := inferInstanceAs (HAdd F F F)
+instance : HSub F (ProverValue field F) F := inferInstanceAs (HSub F F F)
+instance : HSub (ProverValue field F) F F := inferInstanceAs (HSub F F F)
+instance : HMul F (ProverValue field F) F := inferInstanceAs (HMul F F F)
+instance : HMul (ProverValue field F) F F := inferInstanceAs (HMul F F F)
+instance : HDiv (ProverValue field F) F F := inferInstanceAs (HDiv F F F)
+instance : HDiv F (ProverValue field F) F := inferInstanceAs (HDiv F F F)

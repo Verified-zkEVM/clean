@@ -660,7 +660,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
   let cmd ←
     if instanceBinders.isEmpty then
       `(
-        instance : CircuitType $appliedStructType where
+        instance : DerivedCircuitType $appliedStructType where
           Var := $varType
           Value := $valueType
           ProverValue := $proverValueType
@@ -669,7 +669,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
       )
     else
       `(
-        instance $instanceBinders:bracketedBinder* : CircuitType $appliedStructType where
+        instance $instanceBinders:bracketedBinder* : DerivedCircuitType $appliedStructType where
           Var := $varType
           Value := $valueType
           ProverValue := $proverValueType

@@ -9,6 +9,78 @@ open Lean.Meta
 open Lean
 open ProvableStructNaming
 
+private def derivedCircuitTypeOfValueType? (type : Expr) : Option Expr :=
+  if type.getAppFn.isConstOf ``CircuitType.Value then
+    type.getAppArgs[0]?
+  else if type.getAppFn.isConstOf ``CircuitType.ProverValue then
+    type.getAppArgs[0]?
+  else
+    none
+
+private def hasDerivedCircuitType (m : Expr) : MetaM Bool := do
+  let instType ← mkAppM ``DerivedCircuitType #[m]
+  match ← trySynthInstance instType with
+  | .some _ => return true
+  | _ => return false
+
+private def hasDerivedCircuitTypeValueType (type : Expr) : MetaM Bool := do
+  match derivedCircuitTypeOfValueType? type with
+  | some m => hasDerivedCircuitType m
+  | none => return false
+
+private def mkInjNameFromConstructor? (e : Expr) : MetaM (Option Name) := do
+  let env ← getEnv
+  match e.consumeMData.getAppFn with
+  | .const name _ =>
+    if name.components.getLast? == some `mk then
+      let mkInjName := name ++ `inj
+      if env.contains mkInjName then
+        return some mkInjName
+    return none
+  | _ => return none
+
+private def addIdentLemmaIfMissing
+    (lemmas : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) (lemmaName : Name) :
+    MetaM (Array (TSyntax `Lean.Parser.Tactic.simpLemma)) := do
+  let key := toString lemmaName
+  if lemmas.any (fun l => toString l == key) then
+    return lemmas
+  else
+    let lemmaIdent := mkIdent lemmaName
+    return lemmas.push (← `(Lean.Parser.Tactic.simpLemma| $lemmaIdent:ident))
+
+private def splitDerivedCircuitTypeEqualities : TacticM Unit := do
+  withMainContext do
+    let ctx ← getLCtx
+    for localDecl in ctx do
+      if localDecl.isImplementationDetail then
+        continue
+
+      let type ← instantiateMVars localDecl.type
+      unless type.isAppOf `Eq do
+        continue
+      let some typeExpr := type.getArg? 0
+        | continue
+      unless ← hasDerivedCircuitTypeValueType typeExpr do
+        continue
+
+      let some lhs := type.getArg? 1
+        | continue
+      let some rhs := type.getArg? 2
+        | continue
+
+      let mut split := false
+      for side in #[lhs, rhs] do
+        unless split do
+          if let some mkInjName ← mkInjNameFromConstructor? side then
+            try
+              let hypIdent := mkIdent localDecl.userName
+              let injIdent := mkIdent mkInjName
+              evalTactic (← `(tactic| replace $hypIdent:ident := $injIdent:ident $hypIdent:ident))
+              split := true
+            catch e =>
+              trace[Meta.Tactic] "Failed to inject derived CircuitType equality {localDecl.userName}: {e.toMessageData}"
+
 /--
   Find struct variables that appear in equalities with struct literals
   Returns a list of FVarIds that should have cases applied
@@ -37,18 +109,20 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
           -- struct_literal = variable
           match rhs with
           | .fvar fvarId =>
-            -- Check if the variable has ProvableStruct
+            -- Keep ordinary records opaque: besides ProvableStruct variables,
+            -- only DerivedCircuitType variables opt into splitting here.
             let varType ← inferType rhs
-            if ← hasProvableStructInstance varType then
+            if (← hasProvableStructInstance varType) || (← hasDerivedCircuitTypeValueType varType) then
               structVarsToCase := fvarId :: structVarsToCase
           | _ => pure ()
         else if rhsIsConstructor && !lhsIsConstructor then
           -- variable = struct_literal
           match lhs with
           | .fvar fvarId =>
-            -- Check if the variable has ProvableStruct
+            -- Keep ordinary records opaque: besides ProvableStruct variables,
+            -- only DerivedCircuitType variables opt into splitting here.
             let varType ← inferType lhs
-            if ← hasProvableStructInstance varType then
+            if (← hasProvableStructInstance varType) || (← hasDerivedCircuitTypeValueType varType) then
               structVarsToCase := fvarId :: structVarsToCase
           | _ => pure ()
 
@@ -94,11 +168,17 @@ def splitProvableStructEq : TacticM Unit := do
       -- Update the goal after cases
       replaceMainGoal [currentGoal]
 
+    -- DerivedCircuitType equalities can have equality types like
+    -- `Value M F` / `ProverValue M F`, which do not expose the generated
+    -- `mk.injEq` theorem to simp. Constructor injection splits them directly.
+    try
+      splitDerivedCircuitTypeEqualities
+    catch _ =>
+      pure ()
+
     -- Apply mk.injEq lemmas - much simpler approach
     withMainContext do
-      -- Get environment to check which lemmas exist
-      let env ← getEnv
-      let mut lemmasToApply : List Ident := []
+      let mut lemmasToApply : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
 
       -- Get all the types that appear in equalities (including inside conjunctions)
       let ctx ← getLCtx
@@ -111,31 +191,30 @@ def splitProvableStructEq : TacticM Unit := do
         -- Extract all equalities from this hypothesis (handles conjunctions)
         let equalities ← extractEqualities type
 
-        for (eqExpr, _, _) in equalities do
+        for (eqExpr, lhs, rhs) in equalities do
           -- Get the type argument (first argument of Eq)
           if let some typeExpr := eqExpr.getArg? 0 then
-            -- Get the type constructor for finding mk.injEq
-            let typeExpr' ← whnf typeExpr
-            match typeExpr'.getAppFn with
-            | .const typeName _ =>
-              -- Check if mk.injEq exists for this type
-              let mkInjEqName := typeName ++ `mk ++ `injEq
-              if env.contains mkInjEqName then
-                -- Check if the full type (not just the constructor) has ProvableStruct instance
-                -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
-                if ← hasProvableStructInstance typeExpr' then
-                  let lemmaIdent := mkIdent mkInjEqName
-                  if !lemmasToApply.any (fun l => l.getId == mkInjEqName) then
-                    lemmasToApply := lemmaIdent :: lemmasToApply
-            | _ => pure ()
+            -- Get the type constructor for finding mk.injEq. Reducible
+            -- normalization lets `Value Input F` expose the generated
+            -- `Input.Value.mk.injEq` lemma.
+            if let some mkInjEqName ← mkInjEqNameFromType? typeExpr then
+              if (← hasProvableStructInstance typeExpr) || (← hasDerivedCircuitTypeValueType typeExpr) then
+                lemmasToApply ← addIdentLemmaIfMissing lemmasToApply mkInjEqName
+
+            -- If a DerivedCircuitType equality type is hidden behind an opaque class
+            -- projection, recover the injector lemma from constructor sides
+            -- directly. Do not use this path for arbitrary record equalities.
+            if ← hasDerivedCircuitTypeValueType typeExpr then
+              for side in #[lhs, rhs] do
+                if let some mkInjEqName ← mkInjEqNameFromConstructor? side then
+                  lemmasToApply ← addIdentLemmaIfMissing lemmasToApply mkInjEqName
 
       -- Apply all the lemmas we found
-      for lemmaIdent in lemmasToApply do
+      if !lemmasToApply.isEmpty then
         try
-          evalTactic (← `(tactic| simp only [$lemmaIdent:ident] at *))
+          evalTactic (← `(tactic| simp only [$[$lemmasToApply],*] at *))
         catch e =>
-          trace[Meta.Tactic] "Failed to apply lemma {lemmaIdent}: {e.toMessageData}"
-          continue
+          trace[Meta.Tactic] "Failed to apply struct equality lemmas: {e.toMessageData}"
 
 /--
   Automatically split struct equalities (where struct has ProvableStruct instance) into field-wise equalities.

@@ -92,38 +92,22 @@ instance [Repr F] : Repr (Expression F) where
   reprPrec e _ := toString e
 
 -- combine expressions elegantly
-instance : Zero (Expression F) where
-  zero := const 0
+instance : Zero (Expression F) where zero := const 0
+instance : One (Expression F) where one := const 1
+instance : Add (Expression F) where add := add
+instance : Neg (Expression F) where neg e := mul (const (-1)) e
+instance : Sub (Expression F) where sub e₁ e₂ := add e₁ (-e₂)
+instance : Mul (Expression F) where mul := mul
 
-instance : One (Expression F) where
-  one := const 1
-
-instance : Add (Expression F) where
-  add := add
-
-instance : Neg (Expression F) where
-  neg e := mul (const (-1)) e
-
-instance : Sub (Expression F) where
-  sub e₁ e₂ := add e₁ (-e₂)
-
-instance : Mul (Expression F) where
-  mul := mul
-
-instance : Coe F (Expression F) where
-  coe f := const f
-
+instance : Coe F (Expression F) where coe f := const f
 instance {n : ℕ} [OfNat F n] : OfNat (Expression F) n where
   ofNat := const (OfNat.ofNat n)
 
-instance : HMul F (Expression F) (Expression F) where
-  hMul f e := mul f e
+instance : HMul F (Expression F) (Expression F) where hMul f e := mul f e
+instance : HMul (Expression F) F (Expression F) where hMul f e := mul f e
 
-instance : HDiv (Expression F) F (Expression F) where
-  hDiv e f := mul (f⁻¹ : F) e
-
-instance : HDiv (Expression F) ℕ (Expression F) where
-  hDiv e f := mul (f⁻¹ : F) e
+instance : HDiv (Expression F) F (Expression F) where hDiv e f := mul (f⁻¹ : F) e
+instance : HDiv (Expression F) ℕ (Expression F) where hDiv e f := mul (f⁻¹ : F) e
 
 -- TODO probably should just make Variable F := ℕ
 instance {n : ℕ} : OfNat (Variable F) n where
