@@ -658,6 +658,13 @@ def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
 
 end ApplyFullRounds2
 
+namespace TransitionRound
+
+def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) :=
+  FullRound_t2.circuit (C_t2[8]'(by omega)) (C_t2[9]'(by omega)) p00 p01 p10 p11
+
+end TransitionRound
+
 
 end Poseidon1
 
