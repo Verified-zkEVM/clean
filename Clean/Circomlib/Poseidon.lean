@@ -426,7 +426,7 @@ private theorem fullRound_constOut :
         (F BN254_PRIME × F BN254_PRIME)) =>
       FullRound_t2.circuit t.2.1 t.2.2 m00 m01 m10 m11 t.1) := by
   intro ⟨st, c0, c1⟩ n
-  simp only [circuit_norm, FullRound_t2.circuit, FullRound_t2.main, Sigma.main]
+  simp only [circuit_norm, FullRound_t2.circuit]
 
 private instance partialRound_constLen :
     ConstantLength (fun (t : Vector (Expression (F BN254_PRIME)) 2 ×
@@ -435,14 +435,14 @@ private instance partialRound_constLen :
   localLength := 6
   localLength_eq := by
     intro ⟨st, c0, s0, s1, s2⟩ n
-    simp only [circuit_norm, PartialRoundOpt_t2.circuit, PartialRoundOpt_t2.main, Sigma.main]
+    simp only [circuit_norm, PartialRoundOpt_t2.circuit]
 
 private theorem partialRound_constOut :
     ConstantOutput (fun (t : Vector (Expression (F BN254_PRIME)) 2 ×
         (F BN254_PRIME × F BN254_PRIME × F BN254_PRIME × F BN254_PRIME)) =>
       PartialRoundOpt_t2.circuit t.2.1 t.2.2.1 t.2.2.2.1 t.2.2.2.2 t.1) := by
   intro ⟨st, c0, s0, s1, s2⟩ n
-  simp only [circuit_norm, PartialRoundOpt_t2.circuit, PartialRoundOpt_t2.main, Sigma.main]
+  simp only [circuit_norm, PartialRoundOpt_t2.circuit]
 
 -- Bridge lemmas: state the localLength in the `subcircuit` form that simp can match
 -- after `foldl.localLength_eq` beta-reduces `(body default default)` via CoeFun.
