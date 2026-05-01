@@ -87,6 +87,7 @@ The circuit body is identical to `Addition8.circuit`; only the soundness proof o
 changes.  The proof is a single `circuit_proof_all_raw` invocation.
 -/
 def circuit : RawFormalCircuit (F p) Inputs field where
+  -- Uses the standard FormalCircuit (Gadgets.Addition8Full.circuit), not Addition8Full.Raw.circuit.
   main := fun { x, y } =>
     Addition8Full.circuit { x, y, carryIn := 0 }
 
@@ -97,7 +98,7 @@ def circuit : RawFormalCircuit (F p) Inputs field where
 
   Spec | { x, y }, z => z.val = (x.val + y.val) % 256
 
-  -- One tactic: wraps Addition8Full.circuit which wraps Addition8FullCarry.circuit.
+  -- One tactic: wraps Addition8Full.circuit (the standard FormalCircuit, not Addition8Full.Raw.circuit).
   soundness := by
     circuit_proof_all_raw [Addition8Full.circuit, IsBool]
 
