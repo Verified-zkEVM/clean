@@ -317,6 +317,9 @@ def partialRoundConstants : Vector (F BN254_PRIME × F BN254_PRIME × F BN254_PR
     let s2 : F BN254_PRIME := S_t2[3*i.val + 2]'(by omega)
     (c0, s0, s1, s2)
 
+def partialRoundIndices : Vector (Fin 56) 56 :=
+  Vector.ofFn fun i => i
+
 private lemma ark_t2_eq (offset : ℕ) (ho : offset + 1 < 72)
     (state : Vector (F BN254_PRIME) 2) :
     Specs.Poseidon.ark C_t2 offset state =
@@ -573,35 +576,39 @@ def circuit (round : Fin 56) : FormalCircuit (F BN254_PRIME) (fields 2) (fields 
 
 end PartialRoundOptStep_t2
 
+private lemma partialRoundsOpt_induction
+    (nRounds cOffset sRound : ℕ)
+    (hr : sRound + nRounds ≤ 56)
+    (states : ℕ → Vector (F BN254_PRIME) 2)
+    (h_round : ∀ (i : ℕ) (_ : i < nRounds),
+        states (i + 1) = Specs.PoseidonOptimized.partialRoundOpt_t2 C_t2 S_t2
+          (cOffset + i) (sRound + i) (states i) (by omega)) :
+    states nRounds = Specs.PoseidonOptimized.partialRoundsOpt_t2 C_t2 S_t2
+      nRounds cOffset sRound (states 0) hr := by
+  induction nRounds generalizing cOffset sRound states with
+  | zero =>
+      simp [Specs.PoseidonOptimized.partialRoundsOpt_t2]
+  | succ k ih =>
+      simp only [Specs.PoseidonOptimized.partialRoundsOpt_t2]
+      have h0 := h_round 0 (by omega)
+      simp only [Nat.add_zero] at h0
+      rw [← h0]
+      apply ih (cOffset + 1) (sRound + 1) (by omega) (fun j => states (j + 1))
+      intro i hi
+      have hi' := h_round (i + 1) (by omega)
+      convert hi' using 2 <;> omega
+
 namespace ApplyPartialRoundsOpt
 
 def main (state : Vector (Expression (F BN254_PRIME)) 2)
     : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
-  Circuit.foldl partialRoundConstants state
-    (fun st c => PartialRoundOpt_t2.circuit c.1 c.2.1 c.2.2.1 c.2.2.2 st)
-    (by simp only [circuit_norm, PartialRoundOpt_t2.circuit])
-
-def roundSpec
-    (c : F BN254_PRIME × F BN254_PRIME × F BN254_PRIME × F BN254_PRIME)
-    (input : Vector (F BN254_PRIME) 2) : Vector (F BN254_PRIME) 2 :=
-  let a0 := input[0] ^ 5 + c.1
-  #v[c.2.1 * a0 + c.2.2.1 * input[1], input[1] + a0 * c.2.2.2]
-
-def specState (input : Vector (F BN254_PRIME) 2) (rounds : ℕ) : Vector (F BN254_PRIME) 2 :=
-  (List.range rounds).foldl
-    (fun state i => if h : i < 56 then roundSpec partialRoundConstants[i] state else state)
-    input
-
-theorem specState_zero (input : Vector (F BN254_PRIME) 2) :
-    specState input 0 = input := by
-  simp [specState]
-
-theorem specState_succ (input : Vector (F BN254_PRIME) 2) (rounds : ℕ) (h : rounds < 56) :
-    specState input (rounds + 1) = roundSpec partialRoundConstants[rounds] (specState input rounds) := by
-  simp [specState, List.range_succ, h]
+  Circuit.foldl partialRoundIndices state
+    (fun st round => PartialRoundOptStep_t2.circuit round st)
+    (by simp only [circuit_norm, PartialRoundOptStep_t2.circuit,
+      PartialRoundOptStep_t2.elaborated])
 
 def Spec (input output : Vector (F BN254_PRIME) 2) : Prop :=
-  output = specState input 56
+  output = Specs.PoseidonOptimized.partialRoundsOpt_t2 C_t2 S_t2 56 10 0 input (by omega)
 
 def Assumptions (_ : Vector (F BN254_PRIME) 2) : Prop :=
   True
@@ -615,46 +622,39 @@ def elaborated : ElaboratedCircuit (F BN254_PRIME) (fields 2) (fields 2) where
   main
   localLength _ := 336
   localLength_eq := by
-    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit]
+    simp only [circuit_norm, main, PartialRoundOptStep_t2.circuit,
+      PartialRoundOptStep_t2.elaborated]
   output _ i := #v[varFromOffset field (i + 334), varFromOffset field (i + 335)]
   output_eq := by
-    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit]
+    simp only [circuit_norm, main, PartialRoundOptStep_t2.circuit,
+      PartialRoundOptStep_t2.elaborated]
   subcircuitsConsistent := by
-    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit]
+    simp only [circuit_norm, main, PartialRoundOptStep_t2.circuit,
+      PartialRoundOptStep_t2.elaborated]
 
 theorem soundness : Soundness (F BN254_PRIME) elaborated Assumptions Spec := by
-  circuit_proof_start [PartialRoundOpt_t2.circuit]
+  circuit_proof_start [PartialRoundOptStep_t2.circuit, PartialRoundOptStep_t2.elaborated,
+    PartialRoundOptStep_t2.Spec]
   obtain ⟨h0, h_step⟩ := h_holds
   have h0' := h0
   have h_round : ∀ (k : ℕ) (hk : k < 56),
-      envState env input i₀ (k + 1) = roundSpec (partialRoundConstants[k]'hk) (envState env input i₀ k) := by
+      envState env input i₀ (k + 1) =
+        Specs.PoseidonOptimized.partialRoundOpt_t2 C_t2 S_t2 (10 + k) k
+          (envState env input i₀ k) hk := by
     intro k hk
     rcases k with _ | j
-    · apply Vector.ext
-      intro idx hidx
-      have hidx' : idx = 0 ∨ idx = 1 := by omega
-      rcases hidx' with rfl | rfl
-      · simp +arith [envState, roundSpec, h0'.1]
-      · simp +arith [envState, roundSpec, h0'.2]
+    · exact Vector.toArray_inj.mp (by simpa [partialRoundIndices, envState] using h0')
     · have hj := h_step j (by omega)
-      simp +arith only [] at hj
-      apply Vector.ext
-      intro idx hidx
-      have hidx' : idx = 0 ∨ idx = 1 := by omega
-      rcases hidx' with rfl | rfl
-      · simp +arith [envState, roundSpec, hj.1]
-      · simp +arith [envState, roundSpec, hj.2]
-  have h_state : ∀ (k : ℕ), k ≤ 56 → envState env input i₀ k = specState input k := by
-    intro k hk
-    induction k with
-    | zero =>
-        simp only [envState, specState_zero, ↓reduceIte]
-    | succ k ih =>
-        rw [h_round k (by omega), ih (by omega), specState_succ input k (by omega)]
-  exact congr_arg Vector.toArray (h_state 56 (by omega))
+      exact Vector.toArray_inj.mp (by simpa +arith [partialRoundIndices, envState] using hj)
+  have h_final := partialRoundsOpt_induction 56 10 0 (by omega)
+    (fun k => envState env input i₀ k)
+    (by
+      intro i hi
+      simpa +arith only [] using h_round i hi)
+  exact congr_arg Vector.toArray h_final
 
 theorem completeness : Completeness (F BN254_PRIME) elaborated Assumptions := by
-  circuit_proof_start [PartialRoundOpt_t2.circuit]
+  circuit_proof_start [PartialRoundOptStep_t2.circuit]
 
 def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) := {
   elaborated with
