@@ -1,6 +1,4 @@
 import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Gadgets.Equality
 import Clean.Specs.Poseidon
 import Clean.Specs.PoseidonOptimized
 import Clean.Utils.Tactics.CircuitProofStart
@@ -22,7 +20,6 @@ open Specs.PoseidonOptimized (P_t2 S_t2)
 
 -- BN254 prime facts (BN254_PRIME is a well-known prime, proofs omitted for performance)
 instance : Fact (Nat.Prime BN254_PRIME) := ⟨by sorry⟩
-instance : Fact (BN254_PRIME > 2) := ⟨by decide⟩
 
 /-
 ============================================================================
@@ -195,14 +192,6 @@ namespace Poseidon1
 
 open Circuit
 
--- Helper to get matrix elements as field elements
-def getM (i j : ℕ) (hi : i < 2) (hj : j < 2) : F := (M_t2[i]'hi)[j]'hj
--- MDS matrix elements (M)
-def m00 : F := getM 0 0 (by omega) (by omega)
-def m01 : F := getM 0 1 (by omega) (by omega)
-def m10 : F := getM 1 0 (by omega) (by omega)
-def m11 : F := getM 1 1 (by omega) (by omega)
-
 -- Offsets for foldl full-round phases, matching the optimized spec recursion.
 def fullRoundOffsets (offset : ℕ) (h : offset + 4 < 71) : Vector (Fin 71) 3 :=
   Vector.ofFn fun i =>
@@ -210,16 +199,6 @@ def fullRoundOffsets (offset : ℕ) (h : offset + 4 < 71) : Vector (Fin 71) 3 :=
 
 def zeroRoundConstants : Vector ℕ 72 :=
   Vector.ofFn fun _ => 0
-
--- Partial round constants: 56 tuples of (c0, s0, s1, s2)
--- C[10..65] for c0, S[0..167] for sparse matrix (3 per round)
-def partialRoundConstants : Vector (F × F × F × F) 56 :=
-  Vector.ofFn fun i =>
-    let c0 : F := C_t2[10 + i.val]'(by omega)
-    let s0 : F := S_t2[3*i.val]'(by omega)
-    let s1 : F := S_t2[3*i.val + 1]'(by omega)
-    let s2 : F := S_t2[3*i.val + 2]'(by omega)
-    (c0, s0, s1, s2)
 
 def partialRoundIndices : Vector (Fin 56) 56 :=
   Vector.ofFn fun i => i
@@ -255,12 +234,6 @@ private lemma mix_matrix_t2_eq (M : Vector (Vector ℕ 2) 2)
   rcases hidx' with rfl | rfl
   · simp +decide [List.range, List.range.loop, List.foldl]
   · simp +decide [List.range, List.range.loop, List.foldl]
-
-private lemma mix_t2_eq (state : Vector F 2) :
-    Specs.Poseidon.mix M_t2 state =
-      #v[m00 * state[0] + m10 * state[1], m01 * state[0] + m11 * state[1]] := by
-  rw [mix_matrix_t2_eq]
-  rfl
 
 private lemma mixS_t2_eq (round : ℕ) (hr : round < 56) (state : Vector F 2) :
     Specs.PoseidonOptimized.mixS_t2 S_t2 round state hr =
