@@ -90,6 +90,8 @@ template Ark(t, C, r) {
 -/
 namespace Ark_t2
 
+-- TODO is this even used???
+
 def main (c0 c1 : F p) (input : Vector (Expression (F p)) 2)
     : Circuit (F p) (Vector (Expression (F p)) 2) := do
   let out0 <== input[0] + Expression.const c0
@@ -144,6 +146,8 @@ For t=2:
 -/
 namespace Mix_t2
 
+-- TODO is this even used???
+
 def main (m00 m01 m10 m11 : F p) (input : Vector (Expression (F p)) 2)
     : Circuit (F p) (Vector (Expression (F p)) 2) := do
   let out0 <== Expression.const m00 * input[0] + Expression.const m10 * input[1]
@@ -188,6 +192,8 @@ For t=2, each round uses 3 sparse constants from S:
 This is more efficient than full matrix multiplication.
 -/
 namespace MixS_t2
+
+-- TODO is this even used???
 
 def main (s0 s1 s2 : F p) (input : Vector (Expression (F p)) 2)
     : Circuit (F p) (Vector (Expression (F p)) 2) := do
@@ -269,6 +275,7 @@ def circuit (c0 c1 m00 m01 m10 m11 : F p) : FormalCircuit (F p) (fields 2) (fiel
   output _ i := #v[varFromOffset field (i + 8), varFromOffset field (i + 9)]
 
   Assumptions _ := True
+  -- TODO should be formulated in terms of Specs.PoseidonOptimized
   Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
     let s0 := input[0] ^ 5
     let s1 := input[1] ^ 5
@@ -319,6 +326,7 @@ def circuit (c0 s0 s1 s2 : F p) : FormalCircuit (F p) (fields 2) (fields 2) wher
   output _ i := #v[varFromOffset field (i + 4), varFromOffset field (i + 5)]
 
   Assumptions _ := True
+  -- TODO should be formulated in terms of Specs.PoseidonOptimized
   Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
     let a0 := input[0] ^ 5 + c0
     output[0] = s0 * a0 + s1 * input[1] ∧
@@ -390,6 +398,8 @@ def p11 : F BN254_PRIME := getP 1 1 (by omega) (by omega)
 -- Pre-computed constant vectors for full rounds (using Circuit.foldl like Keccak)
 -- Each element is (c0, c1) pair for one full round
 
+-- TODO can't we pull those constants from Specs.PoseidonOptimized???
+
 -- First 3 full rounds: C[2..7]
 def fullRoundConstants1 : Vector (F BN254_PRIME × F BN254_PRIME) 3 :=
   #v[(C_t2[2], C_t2[3]), (C_t2[4], C_t2[5]), (C_t2[6], C_t2[7])]
@@ -408,6 +418,8 @@ def partialRoundConstants : Vector (F BN254_PRIME × F BN254_PRIME × F BN254_PR
     let s2 : F BN254_PRIME := S_t2[3*i.val + 2]'(by omega)
     (c0, s0, s1, s2)
 
+-- TODO: this comment seems wrong, the problem is that the constOut auto-tactic
+-- doesn't get past `FullRound_t2.circuit`. (the constLen tactic does.)
 -- Explicit ConstantLength/ConstantOutput instances for the foldl loops.
 -- These bypass the auto-param synthesis which times out trying to evaluate
 -- BN254 field constants (m00/m01/m10/m11) via kernel whnf.
@@ -418,14 +430,12 @@ instance fullRound_constLen :
       FullRound_t2.circuit t.2.1 t.2.2 m00 m01 m10 m11 t.1) where
   localLength := 10
   localLength_eq := by
-    intro ⟨st, c0, c1⟩ n
     simp only [circuit_norm, FullRound_t2.circuit]
 
 theorem fullRound_constOut :
     ConstantOutput (fun (t : Vector (Expression (F BN254_PRIME)) 2 ×
         (F BN254_PRIME × F BN254_PRIME)) =>
       FullRound_t2.circuit t.2.1 t.2.2 m00 m01 m10 m11 t.1) := by
-  intro ⟨st, c0, c1⟩ n
   simp only [circuit_norm, FullRound_t2.circuit]
 
 instance partialRound_constLen :
@@ -459,6 +469,7 @@ def circuit : FormalCircuit (F BN254_PRIME) field (fields 2) where
   output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
 
   Assumptions _ := True
+  -- TODO should be formulated in terms of Specs.PoseidonOptimized
   Spec (input : F BN254_PRIME) (output : Vector (F BN254_PRIME) 2) :=
     output[0] = (0 : F BN254_PRIME) + (C_t2[0]'(by omega) : F BN254_PRIME) ∧
     output[1] = input + (C_t2[1]'(by omega) : F BN254_PRIME)
@@ -473,48 +484,11 @@ def circuit : FormalCircuit (F BN254_PRIME) field (fields 2) where
 end InitialArk
 
 namespace ApplyFullRounds1
-
-def body (t : Vector (Expression (F BN254_PRIME)) 2 × (F BN254_PRIME × F BN254_PRIME)) :
-    Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
-  FullRound_t2.circuit t.2.1 t.2.2 m00 m01 m10 m11 t.1
-
 def main (state : Vector (Expression (F BN254_PRIME)) 2)
     : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
   Circuit.foldl fullRoundConstants1 state
-    (fun st c => body (st, c))
-    fullRound_constOut fullRound_constLen
-
-@[circuit_norm]
-theorem body_localLength_eq
-    (state : Vector (Expression (F BN254_PRIME)) 2) (c : F BN254_PRIME × F BN254_PRIME)
-    (n : ℕ) :
-    (body (state, c)).localLength n = 10 :=
-  fullRound_constLen.localLength_eq (state, c) n
-
-@[circuit_norm]
-theorem body_output_eq
-    (state : Vector (Expression (F BN254_PRIME)) 2) (c : F BN254_PRIME × F BN254_PRIME)
-    (n : ℕ) :
-    (body (state, c)).output n = #v[varFromOffset field (n + 8), varFromOffset field (n + 9)] := by
-  simp only [body, circuit_norm, FullRound_t2.circuit]
-
-theorem body_subcircuitsConsistent
-    (state : Vector (Expression (F BN254_PRIME)) 2) (c : F BN254_PRIME × F BN254_PRIME)
-    (n : ℕ) :
-    (body (state, c)).forAll n { subcircuit offset {m} _ := m = offset } := by
-  simp only [body, circuit_norm, FullRound_t2.circuit, Operations.forAll]
-
-@[circuit_norm]
-theorem main_localLength_eq (state : Vector (Expression (F BN254_PRIME)) 2) (n : ℕ) :
-    (main state).localLength n = 30 := by
-  simp only [main, foldl.localLength_eq, body_localLength_eq]
-
-@[circuit_norm]
-theorem main_output_eq (state : Vector (Expression (F BN254_PRIME)) 2) (n : ℕ) :
-    (main state).output n = #v[varFromOffset field (n + 28), varFromOffset field (n + 29)] := by
-  unfold main
-  rw [foldl.output_eq]
-  simp only [body_output_eq, body_localLength_eq]
+    (fun st c => FullRound_t2.circuit c.1 c.2 m00 m01 m10 m11 st)
+    (by simp only [circuit_norm, FullRound_t2.circuit])
 
 def roundSpec (c0 c1 : F BN254_PRIME) (input : Vector (F BN254_PRIME) 2) :
     Vector (F BN254_PRIME) 2 :=
@@ -524,55 +498,31 @@ def roundSpec (c0 c1 : F BN254_PRIME) (input : Vector (F BN254_PRIME) 2) :
   let a1 := s1 + c1
   #v[m00 * a0 + m10 * a1, m01 * a0 + m11 * a1]
 
-def specOutput (input : Vector (F BN254_PRIME) 2) : Vector (F BN254_PRIME) 2 :=
+-- TODO should be formulated in terms of Specs.PoseidonOptimized
+def Spec (input output : Vector (F BN254_PRIME) 2) : Prop :=
   let state0 := roundSpec fullRoundConstants1[0].1 fullRoundConstants1[0].2 input
   let state1 := roundSpec fullRoundConstants1[1].1 fullRoundConstants1[1].2 state0
-  roundSpec fullRoundConstants1[2].1 fullRoundConstants1[2].2 state1
-
-def Spec (input output : Vector (F BN254_PRIME) 2) : Prop :=
-  output = specOutput input
+  output = roundSpec fullRoundConstants1[2].1 fullRoundConstants1[2].2 state1
 
 def elaborated : ElaboratedCircuit (F BN254_PRIME) (fields 2) (fields 2) where
   main
   localLength _ := 30
-  localLength_eq := by
-    intro input n
-    simp only [main_localLength_eq]
   output _ i := #v[varFromOffset field (i + 28), varFromOffset field (i + 29)]
-  output_eq := by
-    intro input n
-    simp only [main_output_eq]
   subcircuitsConsistent := by
-    intro input n
-    change (main input).forAll n { subcircuit offset {m} _ := m = offset }
-    unfold main
-    rw [forAll_def]
-    rw [foldl.forAll]
-    constructor
-    · exact body_subcircuitsConsistent _ _ _
-    · intro i hi
-      exact body_subcircuitsConsistent _ _ _
+    simp only [circuit_norm, main]
 
 theorem soundness : Soundness (F BN254_PRIME) elaborated (fun _ => True) Spec := by
-  circuit_proof_start [main, Spec]
-  simp only [body, circuit_norm] at h_holds
+  circuit_proof_start [FullRound_t2.circuit, roundSpec]
   obtain ⟨h0, h_step⟩ := h_holds
-  have h0' := h0 trivial
-  have h1' := h_step 0 (by omega) trivial
-  have h2' := h_step 1 (by omega) trivial
-  simp only [FullRound_t2.circuit, circuit_norm, h_input] at h0' h1' h2'
-  simp only [specOutput, roundSpec]
-  simp +arith only [] at h1' h2' ⊢
-  rw [h2'.1, h2'.2, h1'.1, h1'.2, h0'.1, h0'.2]
-  rfl
+  have h1 := h_step 0 (by omega)
+  have h2 := h_step 1 (by omega)
+  simp_all only
 
 theorem completeness : Completeness (F BN254_PRIME) elaborated (fun _ => True) := by
-  circuit_proof_start [main, body]
-  exact ⟨trivial, fun _ _ => trivial⟩
+  circuit_proof_start [FullRound_t2.circuit, roundSpec]
 
 def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
   elaborated
-  Assumptions _ := True
   Spec
   soundness
   completeness
@@ -685,13 +635,6 @@ def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
   completeness
 
 end ApplyFullRounds2
-
-namespace TransitionRound
-
-def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) :=
-  FullRound_t2.circuit (C_t2[8]'(by omega)) (C_t2[9]'(by omega)) p00 p01 p10 p11
-
-end TransitionRound
 
 namespace FinalRound
 
