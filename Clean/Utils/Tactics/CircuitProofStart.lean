@@ -9,8 +9,8 @@ open Circuit
 
 /-- Return `true` iff `type` weak-head normalizes to an `And` conjunction. -/
 private def isAndType (type : Expr) : MetaM Bool := do
-  let type ← whnf type
-  return type.getAppFn.constName? == some ``And
+  let whnfType ← whnf type
+  return whnfType.getAppFn.constName? == some ``And
 
 /--
   Split `hypName : A ∧ B ∧ ...` into top-level hypotheses by repeatedly peeling off
@@ -21,7 +21,7 @@ private def isAndType (type : Expr) : MetaM Bool := do
   `[h_holds_1, h_holds_2, h_holds]`.
 -/
 private partial def splitAndHypothesis (hypName : Name) : TacticM (Array Name) := do
-  let rec go (current : Name) (idx : Nat) (acc : Array Name) : TacticM (Array Name) := do
+  let rec splitNext (current : Name) (idx : Nat) (acc : Array Name) : TacticM (Array Name) := do
     withMainContext do
       let lctx ← getLCtx
       let some decl := lctx.findFromUserName? current
@@ -31,8 +31,8 @@ private partial def splitAndHypothesis (hypName : Name) : TacticM (Array Name) :
       let leftName := current.appendAfter s!"_{idx}"
       evalTactic (← `(tactic|
         rcases $(mkIdent current):ident with ⟨$(mkIdent leftName):ident, $(mkIdent current):ident⟩))
-      go current (idx + 1) (acc.push leftName)
-  go hypName 1 #[]
+      splitNext current (idx + 1) (acc.push leftName)
+  splitNext hypName 1 #[]
 
 /--
   Introduce all standard parameters and hypotheses for Soundness or Completeness.
