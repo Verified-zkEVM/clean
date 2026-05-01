@@ -342,6 +342,14 @@ private lemma mix_t2_eq (state : Vector (F BN254_PRIME) 2) :
   · simp +decide [List.range, List.range.loop, List.foldl]
     rfl
 
+private lemma mixS_t2_eq (round : ℕ) (hr : round < 56) (state : Vector (F BN254_PRIME) 2) :
+    Specs.PoseidonOptimized.mixS_t2 S_t2 round state hr =
+      #v[(S_t2[round * 3]'(by omega) : F BN254_PRIME) * state[0] +
+         (S_t2[round * 3 + 1]'(by omega) : F BN254_PRIME) * state[1],
+         state[1] + state[0] * (S_t2[round * 3 + 2]'(by omega) : F BN254_PRIME)] := by
+  simp [Specs.PoseidonOptimized.mixS_t2]
+  exact ⟨rfl, rfl⟩
+
 namespace InitialArk
 
 def main (input : Expression (F BN254_PRIME))
@@ -520,6 +528,50 @@ def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
     circuit_proof_all [Sigma.circuit]
 
 end FinalRound
+
+namespace PartialRoundOptStep_t2
+
+def main (round : Fin 56) (state : Vector (Expression (F BN254_PRIME)) 2)
+    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
+  PartialRoundOpt_t2.circuit
+    (C_t2[10 + round.val]'(by omega) : F BN254_PRIME)
+    (S_t2[3*round.val]'(by omega) : F BN254_PRIME)
+    (S_t2[3*round.val + 1]'(by omega) : F BN254_PRIME)
+    (S_t2[3*round.val + 2]'(by omega) : F BN254_PRIME)
+    state
+
+def Spec (round : Fin 56) (input output : Vector (F BN254_PRIME) 2) : Prop :=
+  output = Specs.PoseidonOptimized.partialRoundOpt_t2 C_t2 S_t2 (10 + round.val)
+    round.val input round.isLt
+
+def elaborated (round : Fin 56) : ElaboratedCircuit (F BN254_PRIME) (fields 2) (fields 2) where
+  main := main round
+  localLength _ := 6
+  output _ i := #v[varFromOffset field (i + 4), varFromOffset field (i + 5)]
+  subcircuitsConsistent := by
+    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit]
+
+theorem soundness (round : Fin 56) :
+    Soundness (F BN254_PRIME) (elaborated round) (fun _ => True) (Spec round) := by
+  circuit_proof_start [PartialRoundOpt_t2.circuit]
+  simp only [Specs.PoseidonOptimized.partialRoundOpt_t2, Specs.Poseidon.sigma,
+    dif_pos (show 10 + round.val < 72 by omega), mixS_t2_eq]
+  obtain ⟨h0, h1⟩ := h_holds
+  rw [h0, h1]
+  simp +arith [show round.val * 3 = 3 * round.val by ring]
+  constructor <;> rfl
+
+theorem completeness (round : Fin 56) :
+    Completeness (F BN254_PRIME) (elaborated round) (fun _ => True) := by
+  circuit_proof_start [PartialRoundOpt_t2.circuit]
+
+def circuit (round : Fin 56) : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
+  elaborated := elaborated round
+  Spec := Spec round
+  soundness := soundness round
+  completeness := completeness round
+
+end PartialRoundOptStep_t2
 
 namespace ApplyPartialRoundsOpt
 
