@@ -504,14 +504,17 @@ def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
 
   Assumptions _ := True
   Spec (input : Vector (F BN254_PRIME) 2) (output : Vector (F BN254_PRIME) 2) :=
-    let s0 := input[0] ^ 5
-    let s1 := input[1] ^ 5
-    output[0] = m00 * s0 + m10 * s1 ∧
-    output[1] = m01 * s0 + m11 * s1
+    output = (input |> Specs.Poseidon.sboxFull |> Specs.Poseidon.mix M_t2)
 
   soundness := by
     circuit_proof_start [Sigma.circuit]
-    grind
+    have h_in0 : Expression.eval env input_var[0] = input[0] := by
+      simpa using congrArg (fun v => v[0]) h_input
+    have h_in1 : Expression.eval env input_var[1] = input[1] := by
+      simpa using congrArg (fun v => v[1]) h_input
+    rw [mix_t2_eq]
+    simp_all [Specs.Poseidon.sboxFull, Specs.Poseidon.sigma]
+    constructor <;> rfl
 
   completeness := by
     circuit_proof_all [Sigma.circuit]
