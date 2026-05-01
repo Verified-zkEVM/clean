@@ -125,8 +125,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : ConstraintsHold env (circuit.main input_var i₀).2 := h_holds
   sorry
 
--- Test that circuit_proof_start_raw automatically splits conjunction-shaped h_holds
--- and normalizes raw subcircuit constraints in the real RawAddition8FullCarry example.
+-- Test that circuit_proof_start_raw rewrites raw subcircuit constraints deeply inside
+-- conjunction-shaped h_holds in the real RawAddition8FullCarry example.
 example {p : ℕ} [Fact p.Prime] [Fact (p > 512)] :
     RawSoundness (F p) Gadgets.Addition8FullCarry.Raw.circuit.elaborated
       Gadgets.Addition8FullCarry.Assumptions Gadgets.Addition8FullCarry.Spec := by
@@ -134,12 +134,10 @@ example {p : ℕ} [Fact p.Prime] [Fact (p > 512)] :
   set z := env.get i₀
   set carry_out := env.get (i₀ + 1)
   -- This test is about the tactic state after `circuit_proof_start_raw`, not the full
-  -- arithmetic proof. The three assertions below verify that the tactic has already:
-  -- 1. split the conjunction-shaped `h_holds` into leaf hypotheses, and
-  -- 2. normalized the raw `assertBool` subcircuit fact to `IsBool carry_out`.
-  have : z.val < 256 := h_holds_1
-  have : IsBool carry_out := h_holds_2
-  have : x + y + carry_in + -z + -(carry_out * 256) = 0 := h_holds
+  -- arithmetic proof. The assertion below verifies that the tactic has already rewritten
+  -- the raw subcircuit constraint inside the conjunction to `IsBool carry_out`.
+  have : z.val < 256 ∧ IsBool carry_out ∧
+      x + y + carry_in + -z + -(carry_out * 256) = 0 := h_holds
   sorry
 
 end RawSoundnessTests

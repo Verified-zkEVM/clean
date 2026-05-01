@@ -31,18 +31,20 @@ ConstraintsHoldFlat env (assertBool.toSubcircuit n carryOut_var).ops.toFlat
 ```
 circuit_proof_start_raw [ByteTable]     (intro + normalize h_holds in the raw setting)
   ↓ introduces the offset variable (written as `i₀` in this example)
-  h_holds_1 : z.val < 256
-  h_holds_2 : IsBool carry_out
-  h_holds   : x + y + carryIn + -z + -(carryOut * 256) = 0
+  h_holds : z.val < 256
+          ∧ IsBool carry_out
+          ∧ x + y + carryIn + -z + -(carryOut * 256) = 0
+  ↓
+obtain ⟨h_byte, h_bool_raw, h_add⟩ := h_holds
   ↓
 ... same arithmetic proof as Addition8FullCarry.circuit.soundness ...
 ```
 
 Note: this file now uses `circuit_proof_start_raw` directly in the real
 `RawAddition8FullCarry.soundness` proof. For this circuit, `h_holds` starts out as a
-conjunction, and `circuit_proof_start_raw` now splits it into leaf hypotheses before
-running `subcircuit_norm`, so the `assertBool` subcircuit fact is already normalized to
-`IsBool carry_out` when the user continues the proof. For circuits with a single subcircuit
+conjunction, and `circuit_proof_start_raw` now uses the deep `subcircuit_norm` traversal
+to rewrite the raw `assertBool` subcircuit fact *inside that conjunction* before the user
+continues the proof. For circuits with a single subcircuit
 (e.g. `Addition8Full.Raw`, `Addition8.Raw`), the whole proof reduces to a single
 `circuit_proof_all_raw [...]` invocation.
 -/
@@ -72,26 +74,27 @@ def circuit : RawFormalCircuit (F p) Inputs Outputs where
 
   soundness := by
     -- `circuit_proof_start_raw` does the standard RawSoundness introductions and
-    -- normalization. For this conjunction-shaped `h_holds`, it also splits the
-    -- conjunction and normalizes the raw `assertBool` subcircuit fact automatically.
+    -- normalization. For this conjunction-shaped `h_holds`, it also rewrites the
+    -- raw `assertBool` subcircuit fact inside the conjunction automatically.
     -- The offset variable introduced by the tactic is `i₀`, which is then used below
     -- to name the witness positions for `z` and `carry_out`.
     circuit_proof_start_raw [ByteTable]
 
     set z := env.get i₀
     set carry_out := env.get (i₀ + 1)
+    obtain ⟨h_byte, h_bool_raw, h_add⟩ := h_holds
 
     -- From here, identical to Addition8FullCarry.circuit.soundness
     guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in
-    guard_hyp h_holds_1 : z.val < 256
-    guard_hyp h_holds_2 : IsBool carry_out
-    guard_hyp h_holds : x + y + carry_in + -z + -(carry_out * 256) = 0
+    guard_hyp h_byte : z.val < 256
+    guard_hyp h_bool_raw : IsBool carry_out
+    guard_hyp h_add : x + y + carry_in + -z + -(carry_out * 256) = 0
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
          carry_out.val = (x.val + y.val + carry_in.val) / 256
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     apply Addition8.Theorems.soundness x y z carry_in carry_out
-      as_x as_y h_holds_1 as_carry_in h_holds_2 h_holds
+      as_x as_y h_byte as_carry_in h_bool_raw h_add
 
   completeness := by
     -- Completeness is the same as FormalCircuit.

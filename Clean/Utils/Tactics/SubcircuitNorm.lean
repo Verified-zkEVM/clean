@@ -1,4 +1,5 @@
 import Lean
+import Lean.PrettyPrinter.Delaborator.Basic
 import Clean.Circuit.Basic
 open Lean Elab Tactic Meta
 
@@ -22,7 +23,9 @@ one-way implication (making the proof "logically weaker" but "practically easier
 
 `simp` cannot handle one-way implications; it requires equalities or iff lemmas.
 This tactic provides a custom forward-reasoning mechanism: it automatically applies
-any lemma tagged with `@[subcircuit_norm]` to hypotheses in the proof context.
+any lemma tagged with `@[subcircuit_norm]` to hypotheses in the proof context, and
+it can recurse into larger propositions (such as conjunctions and implication bodies)
+to rewrite matching subexpressions in place.
 
 ## Usage
 
@@ -60,8 +63,9 @@ theorem myLemma {implicit args} (h : SomeConstraint) : SomeDerivedFact
 ```
 
 When `subcircuit_norm` is applied in a proof context, it scans all hypotheses
-and, for each hypothesis `h : P`, tries to apply any tagged lemma `l : P → Q`,
-replacing `h` with the derived `h : Q`.
+and tries to apply tagged lemmas deeply inside each hypothesis type. If it finds
+`l : P → Q` and a matching subexpression `P` in positive position, it replaces that
+subexpression with `Q`, producing a logically weaker but more useful hypothesis.
 
 **Convention**: The hypothesis to be forwarded should be the **only explicit argument**;
 other arguments (e.g., `n : ℕ`, `env : Environment F`) should be implicit so that
@@ -83,28 +87,81 @@ initialize subcircuitNormAttr : TagAttribute ←
      Tag lemmas of the form `(h : P) → Q` to enable automatic replacement of \
      hypothesis `h : P` with `h : Q` in circuit proofs."
 
-/--
-Try to apply a single `@[subcircuit_norm]` lemma to a hypothesis in forward direction.
+/-- Build a proof transformer from a tagged forward lemma when its premise matches `type`. -/
+private def mkForwardTransformer? (lemmaName : Name) (type : Expr) : MetaM (Option (Expr × Expr)) := do
+  withLocalDeclD `h type fun h => do
+    try
+      let proof ← mkAppM lemmaName #[h]
+      let newType ← instantiateMVars (← inferType proof)
+      if ← isDefEq newType type then
+        return none
+      let transformer ← mkLambdaFVars #[h] proof
+      return some (newType, transformer)
+    catch _ =>
+      return none
 
-Attempts `replace h := lemma h` and returns `true` if successful (i.e., the
-hypothesis type was changed).
+/--
+Try to rewrite `type` once using the tagged forward lemmas, descending recursively into
+positive logical structure when the whole expression does not match directly.
+
+Returns `(newType, proof)` where `proof : type → newType`.
 -/
-private def trySubcircuitNormLemma (lemmaName : Name) (hypName : Name) : TacticM Bool := do
-  try
-    let l := mkIdent lemmaName
-    let h := mkIdent hypName
-    evalTactic (← `(tactic| replace $h := $l $h))
-    return true
-  catch _ =>
-    return false
+private partial def rewritePropOnce (lemmaNames : Array Name) (type : Expr) :
+    MetaM (Option (Expr × Expr)) := do
+  let type ← instantiateMVars type
+
+  for lemmaName in lemmaNames do
+    if let some result ← mkForwardTransformer? lemmaName type then
+      return some result
+
+  match type with
+  | .app (.app andFn left) right =>
+      if andFn.constName? == some ``And then
+        if let some (newLeft, leftTransformer) ← rewritePropOnce lemmaNames left then
+          withLocalDeclD `h type fun h => do
+            let leftProof ← mkAppM ``And.left #[h]
+            let rightProof ← mkAppM ``And.right #[h]
+            let newLeftProof := mkApp leftTransformer leftProof
+            let proof ← mkAppM ``And.intro #[newLeftProof, rightProof]
+            let newType := mkApp2 andFn newLeft right
+            let transformer ← mkLambdaFVars #[h] proof
+            return some (newType, transformer)
+        if let some (newRight, rightTransformer) ← rewritePropOnce lemmaNames right then
+          withLocalDeclD `h type fun h => do
+            let leftProof ← mkAppM ``And.left #[h]
+            let rightProof ← mkAppM ``And.right #[h]
+            let newRightProof := mkApp rightTransformer rightProof
+            let proof ← mkAppM ``And.intro #[leftProof, newRightProof]
+            let newType := mkApp2 andFn left newRight
+            let transformer ← mkLambdaFVars #[h] proof
+            return some (newType, transformer)
+      return none
+  | .forallE binderName domain body binderInfo =>
+      withLocalDecl binderName binderInfo domain fun x => do
+        let body := body.instantiate1 x
+        if let some (newBody, bodyTransformer) ← rewritePropOnce lemmaNames body then
+          withLocalDeclD `h type fun h => do
+            let proofAtX := mkApp bodyTransformer (mkApp h x)
+            let proof ← mkLambdaFVars #[x] proofAtX
+            let newType ← mkForallFVars #[x] newBody
+            let transformer ← mkLambdaFVars #[h] proof
+            return some (newType, transformer)
+        return none
+  | _ => return none
+
+/-- Replace `hypName` with a new type and proof term produced by `rewritePropOnce`. -/
+private def replaceHypothesis (hypName : Name) (newType proof : Expr) : TacticM Unit := do
+  let hypIdent := mkIdent hypName
+  let typeSyntax ← PrettyPrinter.delab (← instantiateMVars newType)
+  let proofSyntax ← PrettyPrinter.delab (← instantiateMVars proof)
+  evalTactic (← `(tactic| replace $hypIdent:ident : $typeSyntax := by exact $proofSyntax))
 
 /--
 Core implementation of the `subcircuit_norm` tactic.
 
-Scans all hypotheses in the current context and tries to apply each
-`@[subcircuit_norm]`-tagged lemma to each hypothesis. Restarts scanning
-whenever a hypothesis is successfully replaced. Terminates when no more
-progress can be made.
+Scans all hypotheses in the current context and tries to apply the tagged forward
+lemmas deeply inside each hypothesis type. Restarts scanning whenever a hypothesis
+is successfully replaced. Terminates when no more progress can be made.
 -/
 def subcircuitNormCore : TacticM Unit := do
   withMainContext do
@@ -121,10 +178,11 @@ def subcircuitNormCore : TacticM Unit := do
         let ctx ← getLCtx
         for hypDecl in ctx do
           if hypDecl.isImplementationDetail then continue
-          for lemmaName in lemmaNames do
-            if ← trySubcircuitNormLemma lemmaName hypDecl.userName then
-              go
-              return
+          if let some (newType, transformer) ← rewritePropOnce lemmaNames hypDecl.type then
+            let proof := mkApp transformer hypDecl.toExpr
+            replaceHypothesis hypDecl.userName newType proof
+            go
+            return
     go
 
 /--
@@ -132,8 +190,11 @@ def subcircuitNormCore : TacticM Unit := do
 
 This tactic:
 1. Collects all lemmas tagged with `@[subcircuit_norm]`
-2. For each hypothesis `h : P` and each tagged lemma `l : P → Q`, performs `replace h := l h`
-3. Repeats until no more progress
+2. Deeply walks each hypothesis type in positive position, looking for subexpressions
+   matching the premise of a tagged lemma `l : P → Q`
+3. Replaces the hypothesis with the transformed result, proving the new hypothesis from
+   the old one automatically
+4. Repeats until no more progress
 
 **Primary use case**: In circuit soundness/completeness proofs, automatically replace
 "raw constraint" hypotheses with their high-level specifications.
@@ -145,6 +206,9 @@ theorem assertBool_forward {n} {x} {env} (h : ConstraintsHoldFlat env ...) : IsB
 ```
 and hypothesis `h : ConstraintsHoldFlat env (assertBool.toSubcircuit n x).ops.toFlat`,
 `subcircuit_norm` replaces `h` with `h : IsBool (eval env x)`.
+
+It also works under larger propositions such as
+`h : A ∧ ConstraintsHoldFlat env (...) ∧ B`, rewriting just the matching middle part.
 
 **Relationship to `circuit_norm`**: `circuit_norm` handles equality/iff lemmas via `simp`.
 `subcircuit_norm` extends this with one-way implications, enabling replacement of hypotheses
