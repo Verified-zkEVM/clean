@@ -78,53 +78,6 @@ end Sigma
 
 /-
 ============================================================================
-ARK: Add Round Constants for t=2
-============================================================================
-template Ark(t, C, r) {
-    signal input in[t];
-    signal output out[t];
-    for (var i=0; i < t; i++) {
-        out[i] <== in[i] + C[i + r];
-    }
-}
--/
-namespace Ark_t2
-
--- TODO is this even used???
-
-def main (c0 c1 : F p) (input : Vector (Expression (F p)) 2)
-    : Circuit (F p) (Vector (Expression (F p)) 2) := do
-  let out0 <== input[0] + Expression.const c0
-  let out1 <== input[1] + Expression.const c1
-  return #v[out0, out1]
-
--- Parameterized circuit: constants c0, c1 are fixed at circuit construction time
-def circuit (c0 c1 : F p) : FormalCircuit (F p) (fields 2) (fields 2) where
-  main := main c0 c1
-  localLength _ := 2
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
-  output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
-
-  Assumptions _ := True
-  Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
-    output[0] = input[0] + c0 ∧ output[1] = input[1] + c1
-
-  soundness := by
-    intro offset env input_var input h_input h_assumptions h_constraints
-    simp only [circuit_norm, main] at *
-    obtain ⟨h_out0, h_out1⟩ := h_constraints
-    rw [← h_input]
-    simp only [circuit_norm] at *
-    constructor <;> assumption
-
-  completeness := by
-    simp_all only [circuit_norm, main]
-
-end Ark_t2
-
-/-
-============================================================================
 MIX: Matrix Multiplication for t=2
 ============================================================================
 template Mix(t, M) {
@@ -144,41 +97,6 @@ For t=2:
   out[0] = M[0][0]*in[0] + M[1][0]*in[1]
   out[1] = M[0][1]*in[0] + M[1][1]*in[1]
 -/
-namespace Mix_t2
-
--- TODO is this even used???
-
-def main (m00 m01 m10 m11 : F p) (input : Vector (Expression (F p)) 2)
-    : Circuit (F p) (Vector (Expression (F p)) 2) := do
-  let out0 <== Expression.const m00 * input[0] + Expression.const m10 * input[1]
-  let out1 <== Expression.const m01 * input[0] + Expression.const m11 * input[1]
-  return #v[out0, out1]
-
--- Parameterized circuit: matrix elements are fixed at circuit construction time
-def circuit (m00 m01 m10 m11 : F p) : FormalCircuit (F p) (fields 2) (fields 2) where
-  main := main m00 m01 m10 m11
-  localLength _ := 2
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
-  output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
-
-  Assumptions _ := True
-  Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
-    output[0] = m00 * input[0] + m10 * input[1] ∧
-    output[1] = m01 * input[0] + m11 * input[1]
-
-  soundness := by
-    intro offset env input_var input h_input h_assumptions h_constraints
-    simp only [circuit_norm, main] at *
-    obtain ⟨h_out0, h_out1⟩ := h_constraints
-    rw [← h_input]
-    simp only [circuit_norm] at *
-    constructor <;> assumption
-
-  completeness := by
-    simp_all only [circuit_norm, main]
-
-end Mix_t2
 
 /-
 ============================================================================
@@ -191,40 +109,6 @@ For t=2, each round uses 3 sparse constants from S:
 
 This is more efficient than full matrix multiplication.
 -/
-namespace MixS_t2
-
--- TODO is this even used???
-
-def main (s0 s1 s2 : F p) (input : Vector (Expression (F p)) 2)
-    : Circuit (F p) (Vector (Expression (F p)) 2) := do
-  let out0 <== Expression.const s0 * input[0] + Expression.const s1 * input[1]
-  let out1 <== input[1] + input[0] * Expression.const s2
-  return #v[out0, out1]
-
-def circuit (s0 s1 s2 : F p) : FormalCircuit (F p) (fields 2) (fields 2) where
-  main := main s0 s1 s2
-  localLength _ := 2
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
-  output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
-
-  Assumptions _ := True
-  Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
-    output[0] = s0 * input[0] + s1 * input[1] ∧
-    output[1] = input[1] + input[0] * s2
-
-  soundness := by
-    intro offset env input_var input h_input h_assumptions h_constraints
-    simp only [circuit_norm, main] at *
-    obtain ⟨h_out0, h_out1⟩ := h_constraints
-    rw [← h_input]
-    simp only [circuit_norm] at *
-    constructor <;> assumption
-
-  completeness := by
-    simp_all only [circuit_norm, main]
-
-end MixS_t2
 
 /-
 ============================================================================
@@ -423,13 +307,15 @@ namespace InitialArk
 def main (input : Expression (F BN254_PRIME))
     : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) := do
   let state : Vector (Expression (F BN254_PRIME)) 2 := #v[Expression.const 0, input]
-  Ark_t2.circuit (C_t2[0]'(by omega)) (C_t2[1]'(by omega)) state
+  let out0 <== state[0] + Expression.const (C_t2[0]'(by omega) : F BN254_PRIME)
+  let out1 <== state[1] + Expression.const (C_t2[1]'(by omega) : F BN254_PRIME)
+  return #v[out0, out1]
 
 def circuit : FormalCircuit (F BN254_PRIME) field (fields 2) where
   main
   localLength _ := 2
-  localLength_eq := by simp [circuit_norm, main, Ark_t2.circuit]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main, Ark_t2.circuit]
+  localLength_eq := by simp [circuit_norm, main]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main]
   output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
 
   Assumptions _ := True
@@ -439,11 +325,11 @@ def circuit : FormalCircuit (F BN254_PRIME) field (fields 2) where
     output[1] = input + (C_t2[1]'(by omega) : F BN254_PRIME)
 
   soundness := by
-    circuit_proof_start [Ark_t2.circuit]
+    circuit_proof_start
     simp_all
 
   completeness := by
-    circuit_proof_all [Ark_t2.circuit]
+    circuit_proof_all
 
 end InitialArk
 
