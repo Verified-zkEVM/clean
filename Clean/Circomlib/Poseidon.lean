@@ -78,6 +78,22 @@ end Sigma
 
 /-
 ============================================================================
+ARK: Add Round Constants for t=2
+============================================================================
+template Ark(t, C, r) {
+    signal input in[t];
+    signal output out[t];
+    for (var i=0; i < t; i++) {
+        out[i] <== in[i] + C[i + r];
+    }
+}
+
+For t=2:
+  out[0] = in[0] + C[r]
+  out[1] = in[1] + C[r + 1]
+
+ARK is inlined into InitialArk and the full-round code below.
+============================================================================
 MIX: Matrix Multiplication for t=2
 ============================================================================
 template Mix(t, M) {
@@ -96,10 +112,9 @@ template Mix(t, M) {
 For t=2:
   out[0] = M[0][0]*in[0] + M[1][0]*in[1]
   out[1] = M[0][1]*in[0] + M[1][1]*in[1]
--/
 
-/-
-============================================================================
+MIX is inlined into the full-round code below.
+
 MIXS: Sparse Matrix Multiplication for t=2 (optimized partial rounds)
 ============================================================================
 In circomlib's optimized implementation, partial rounds use sparse matrices.
@@ -108,6 +123,8 @@ For t=2, each round uses 3 sparse constants from S:
   out[1] = in[1] + in[0]*S[2]
 
 This is more efficient than full matrix multiplication.
+
+MIXS is inlined into the partial-round code below.
 -/
 
 /-
