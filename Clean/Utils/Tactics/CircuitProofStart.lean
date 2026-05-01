@@ -15,6 +15,10 @@ private def isAndType (type : Expr) : MetaM Bool := do
 /--
   Helper for `splitAndHypothesis`: split `current : A ∧ B ∧ ...` by repeatedly peeling off
   the leftmost conjunct and accumulating the generated hypothesis names.
+
+  * `current` is the current hypothesis name being split
+  * `idx` is the counter used to generate fresh names like `h_holds_1`
+  * `acc` stores the hypothesis names generated so far, in left-to-right order
 -/
 private partial def splitAndHypothesisAux
     (current : Name) (idx : Nat) (acc : Array Name) : TacticM (Array Name) := do
@@ -229,7 +233,7 @@ elab_rules : tactic
   evalTactic (← `(tactic| circuit_proof_start [$lemmas,*]))
   -- Step 2: split h_holds into top-level conjunction components when needed, so that
   -- subcircuit_norm can act on raw subcircuit hypotheses in multi-operation circuits too.
-  let holdNames ← splitAndHypothesis `h_holds
+  let holdsNames ← splitAndHypothesis `h_holds
   -- Step 3: apply subcircuit_norm — transforms ConstraintsHoldFlat → Spec on the split
   -- hypotheses (and on h_holds directly in single-subcircuit circuits).
   evalTactic (← `(tactic| try subcircuit_norm))
@@ -238,7 +242,7 @@ elab_rules : tactic
     | some ts => ts.getElems.map fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
     | none => #[]
   let lemmasArray ← extraLemmas.mapM id
-  for holdName in holdNames do
+  for holdName in holdsNames do
     try
       evalTactic (← `(tactic|
         simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent holdName):ident))
