@@ -8,7 +8,7 @@ open Lean Elab Tactic Meta
 open Circuit
 
 /-- Return `true` if and only if `type` weak-head normalizes to an `And` conjunction. -/
-private def isAndType (type : Expr) : MetaM Bool := do
+private def isConjunction (type : Expr) : MetaM Bool := do
   let whnfType ← whnf type
   return whnfType.getAppFn.constName? == some ``And
 
@@ -26,7 +26,7 @@ private partial def splitAndHypothesisAux
     let lctx ← getLCtx
     let some decl := lctx.findFromUserName? current
       | return acc.push current
-    if !(← isAndType decl.type) then
+    if !(← isConjunction decl.type) then
       return acc.push current
     let leftName := current.appendAfter s!"_{idx}"
     evalTactic (← `(tactic|
