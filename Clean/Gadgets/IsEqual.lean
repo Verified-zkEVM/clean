@@ -24,7 +24,7 @@ Compute element-wise differences between two values of a ProvableType.
 Defined separately so it survives circuit normalization as a single vector.
 -/
 def diffs (x y : Var α F) : Vector (Expression F) (size α) :=
-  Vector.mapFinRange (size α) fun i => (toVars x)[↑i] - (toVars y)[↑i]
+  Vector.mapFinRange (size α) fun i => (toElements (M:=α) x)[↑i] - (toElements (M:=α) y)[↑i]
 
 /--
 Circuit that checks if two values of a ProvableType are equal.
@@ -34,7 +34,7 @@ Uses three constraints per field element (IsZeroField on each component differen
 def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
   let (x, y) := input
   let d := diffs x y
-  IsZero.circuit (fromVars d)
+  IsZero.circuit (fromElements (M:=α) d)
 
 instance elaborated : ElaboratedCircuit F (ProvablePair α α) field where
   main
@@ -52,9 +52,8 @@ def Spec (input : α F × α F) (output : F) : Prop :=
 theorem soundness : Soundness F (elaborated (α := α)) Assumptions Spec := by
   circuit_proof_start [IsZero.circuit, IsZero.elaborated, IsZero.Assumptions, IsZero.Spec]
   rw [h_holds]
-  have h_pair := h_input; rw [eval_pair] at h_pair
-  have h_x : eval env input_var.1 = input.1 := congrArg Prod.fst h_pair
-  have h_y : eval env input_var.2 = input.2 := congrArg Prod.snd h_pair
+  have h_x : eval env input_var.1 = input.1 := congrArg Prod.fst h_input
+  have h_y : eval env input_var.2 = input.2 := congrArg Prod.snd h_input
   apply if_congr _ rfl rfl
   -- Helper: relate evaluated diffs to element-wise subtraction
   have h_diff : ∀ (i : ℕ) (_ : i < size α),
@@ -62,7 +61,7 @@ theorem soundness : Soundness F (elaborated (α := α)) Assumptions Spec := by
       (toElements input.1)[i] - (toElements input.2)[i] := by
     intro i hi
     simp only [diffs, Vector.getElem_mapFinRange, Expression.eval, neg_one_mul]
-    erw [ProvableType.getElem_eval_toVars input_var.1 i, ProvableType.getElem_eval_toVars input_var.2 i,
+    erw [ProvableType.getElem_eval_toElements input_var.1 i, ProvableType.getElem_eval_toElements input_var.2 i,
       h_x, h_y]
     ring
   -- Helper: (toElements 0)[i] = 0
