@@ -755,41 +755,16 @@ theorem soundness : Soundness (F BN254_PRIME) elaborated (fun _ => True) Spec :=
   circuit_proof_start [InitialArk.circuit, ApplyFullRounds1.circuit, TransitionRound.circuit,
     ApplyPartialRoundsOpt.circuit, ApplyFullRounds2.circuit, FinalRound.circuit]
   simp +arith only [circuit_norm, ApplyFullRounds1.elaborated, TransitionRound.elaborated,
-    ApplyPartialRoundsOpt.elaborated, ApplyFullRounds2.elaborated] at h_holds ⊢
+    ApplyPartialRoundsOpt.elaborated, ApplyFullRounds2.elaborated,
+    ApplyFullRounds1.Spec, TransitionRound.Spec, ApplyPartialRoundsOpt.Spec,
+    ApplyFullRounds2.Spec, ApplyPartialRoundsOpt.Assumptions,
+    Specs.PoseidonOptimized.poseidon1Opt] at h_holds ⊢
   obtain ⟨h_init, h_full1, h_transition, h_partial_step, h_full2, h_final⟩ := h_holds
-  have h_partial := h_partial_step trivial
-  simp [ApplyFullRounds1.Spec, TransitionRound.Spec, ApplyPartialRoundsOpt.Spec,
-    ApplyFullRounds2.Spec] at h_full1 h_transition h_partial h_full2
-  have h_init_vec : #v[env.get i₀, env.get (i₀ + 1)] =
-      Specs.Poseidon.ark C_t2 0 #v[0, input] := by
-    exact Vector.toArray_inj.mp (by simpa using h_init)
-  have h_full1_vec : #v[env.get (i₀ + 30), env.get (i₀ + 31)] =
-      Specs.PoseidonOptimized.fullRoundsOpt_t2 C_t2 M_t2 3 2
-        #v[env.get i₀, env.get (i₀ + 1)] := by
-    exact Vector.toArray_inj.mp (by simpa using h_full1)
-  have h_transition_vec : #v[env.get (i₀ + 40), env.get (i₀ + 41)] =
-      Specs.Poseidon.mix P_t2
-        (Specs.Poseidon.ark C_t2 8
-          (Specs.Poseidon.sboxFull #v[env.get (i₀ + 30), env.get (i₀ + 31)])) := by
-    exact Vector.toArray_inj.mp (by simpa using h_transition)
-  have h_partial_vec : #v[env.get (i₀ + 376), env.get (i₀ + 377)] =
-      Specs.PoseidonOptimized.partialRoundsOpt_t2 C_t2 S_t2 56 10 0
-        #v[env.get (i₀ + 40), env.get (i₀ + 41)] (by omega) := by
-    exact Vector.toArray_inj.mp (by simpa using h_partial)
-  have h_full2_vec : #v[env.get (i₀ + 406), env.get (i₀ + 407)] =
-      Specs.PoseidonOptimized.fullRoundsOpt_t2 C_t2 M_t2 3 66
-        #v[env.get (i₀ + 376), env.get (i₀ + 377)] := by
-    exact Vector.toArray_inj.mp (by simpa using h_full2)
-  have h_final_vec : #v[env.get (i₀ + 414), env.get (i₀ + 415)] =
-      Specs.Poseidon.mix M_t2
-        (Specs.Poseidon.sboxFull #v[env.get (i₀ + 406), env.get (i₀ + 407)]) := by
-    exact Vector.toArray_inj.mp (by simpa using h_final)
-  have h_final0 : env.get (i₀ + 414) =
-      (Specs.Poseidon.mix M_t2
-        (Specs.Poseidon.sboxFull #v[env.get (i₀ + 406), env.get (i₀ + 407)]))[0] := by
-    simpa using congrArg (fun v : Vector (F BN254_PRIME) 2 => v[0]) h_final_vec
-  rw [h_final0, h_full2_vec, h_partial_vec, h_transition_vec, h_full1_vec, h_init_vec]
-  simp [Specs.PoseidonOptimized.poseidon1Opt]
+  simp only [Vector.toArray_inj (xs := #v[_, _])] at *
+  have h_final0 : env.get (i₀ + 414) = (Specs.Poseidon.mix M_t2
+    (Specs.Poseidon.sboxFull #v[env.get (i₀ + 406), env.get (i₀ + 407)]))[0] :=
+    congrArg (fun v => v[0]) h_final
+  rw [h_final0, h_full2, h_partial_step, h_transition, h_full1, h_init]
 
 theorem completeness : Completeness (F BN254_PRIME) elaborated (fun _ => True) := by
   circuit_proof_start [InitialArk.circuit, ApplyFullRounds1.circuit, TransitionRound.circuit,
@@ -801,7 +776,6 @@ def circuit : FormalCircuit (F BN254_PRIME) field field where
   Spec
   soundness
   completeness
-
 
 end Poseidon1
 
