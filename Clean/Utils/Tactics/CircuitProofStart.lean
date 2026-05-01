@@ -2,6 +2,7 @@ import Lean
 import Clean.Circuit.Basic
 import Clean.Circuit.RawCircuit
 import Clean.Utils.Tactics.ProvableStructSimp
+import Clean.Utils.Tactics.SubcircuitNorm
 
 open Lean Elab Tactic Meta
 open Circuit
@@ -88,11 +89,8 @@ partial def circuitProofStartCore : TacticM Unit := do
   `FormalAssertion.Soundness`, `FormalAssertion.Completeness`,
   `GeneralFormalCircuit.Soundness`, `GeneralFormalCircuit.Completeness`, or `RawSoundness`.
 
-  For `RawSoundness` goals, `circuit_proof_start_raw` is an equivalent convenience
-  alias that makes the intent clear. Neither tactic automatically calls `subcircuit_norm`;
-  after `circuit_proof_start_raw`, the user should `obtain` the conjunction from
-  `h_holds` and then call `subcircuit_norm` to transform raw `ConstraintsHoldFlat`
-  subcircuit hypotheses into their `Spec` form.
+  For `RawSoundness` goals, use `circuit_proof_start_raw` (which also runs `subcircuit_norm`)
+  or `circuit_proof_all_raw` (which also closes the goal with `simp_all`) instead.
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`
@@ -151,48 +149,90 @@ elab "circuit_proof_start_core" : tactic => do
   Tactic for starting `RawSoundness` proofs — the alternative proof pipeline using
   `subcircuit_norm` instead of the built-in `ConstraintsHold.Soundness` simplification.
 
-  This tactic is identical to `circuit_proof_start` except it also applies
-  `subcircuit_norm` after expanding `h_holds`, to transform raw
-  `ConstraintsHoldFlat env s.ops.toFlat` terms (produced by the plain `ConstraintsHold`
-  definition) into `s.Spec env` terms.
+  This tactic extends `circuit_proof_start` with two extra steps after expanding `h_holds`:
 
-  **Workflow** (for a circuit with a subcircuit like `assertBool`):
+  1. `subcircuit_norm` — attempts to transform any `ConstraintsHoldFlat env s.ops.toFlat`
+     hypothesis directly into `s.Spec env`.  This is a no-op when `h_holds` is a
+     conjunction (the `ConstraintsHoldFlat` term is buried inside), so for circuits like
+     `Addition8FullCarry` the user must `obtain` the parts first and then call
+     `subcircuit_norm` manually.  For circuits with a **single** subcircuit call this step
+     fires automatically (e.g. `Addition8Full`, `Addition8`).
 
-  1. Introduces `h_holds : ConstraintsHold env (main input_var |>.operations i₀)`
-  2. `simp [circuit_norm, h_input] at h_holds` expands it to:
-     ```
-     h_holds : z.val < 256 ∧ ConstraintsHoldFlat env (assertBool.toSubcircuit n x).ops.toFlat ∧ ...
-     ```
-  3. `subcircuit_norm` transforms all `ConstraintsHoldFlat env s.ops.toFlat` hypotheses
-     into `s.Spec env`.
-     **Note**: This step acts on individually split hypotheses. After `circuit_proof_start_raw`,
-     the user should do `obtain ⟨h1, h2, ...⟩ := h_holds` before `subcircuit_norm`
-     if `h_holds` is a conjunction (which it usually is for multi-operation circuits).
+  2. A second `simp [circuit_norm, ...]` on `h_holds` — simplifies any `s.Spec env`
+     implication introduced by step 1 into its concrete `Assumptions → circuit.Spec` form.
 
-  4. `simp [circuit_norm]` further simplifies `s.Spec env` to the concrete spec statement.
+  **Workflow** (for a circuit with a single subcircuit):
 
-  **Example**:
-  ```lean
-  theorem soundness : RawSoundness (F p) elaborated Assumptions Spec := by
-    circuit_proof_start_raw
-    obtain ⟨h_byte, h_bool_raw, h_add⟩ := h_holds
-    subcircuit_norm
-    simp only [circuit_norm] at h_bool_raw
-    -- h_bool_raw : IsBool carry_out  (same as with circuit_proof_start on FormalCircuit)
-    ...
   ```
+  circuit_proof_start_raw [Addition8FullCarry.circuit, ...]
+    step 1 (circuit_proof_start):
+      h_holds = ConstraintsHoldFlat env (Addition8FullCarry.circuit.toSubcircuit n x).ops.toFlat
+    step 2 (subcircuit_norm fires):
+      h_holds = (Addition8FullCarry.circuit.toSubcircuit n x).Spec env
+    step 3 (second simp [circuit_norm, ...]):
+      h_holds = Addition8FullCarry.Assumptions inputs → Addition8FullCarry.Spec inputs output
+  ```
+
+  For circuits with **multiple** subcircuits / assertions (like `Addition8FullCarry`), steps 2 and 3
+  are no-ops on the unsplit conjunction. The user manually does:
+  ```lean
+  obtain ⟨h_byte, h_bool_raw, h_add⟩ := h_holds
+  subcircuit_norm   -- now acts on h_bool_raw
+  simp [circuit_norm] at h_bool_raw
+  ```
+
+  **`circuit_proof_all_raw`** is a one-shot version that also runs `simp_all` after these
+  steps, closing the goal completely for circuits whose soundness follows directly.
 
   **Supported goal types**: `RawSoundness` only. Use `circuit_proof_start` for all other goal types.
 -/
 syntax "circuit_proof_start_raw" ("[" term,* "]")? : tactic
 
--- circuit_proof_start_raw delegates to circuit_proof_start.
--- Both tactics apply the same steps; having a separate name makes the intent clear
--- (this is a RawSoundness proof that will use subcircuit_norm for forward reasoning).
 elab_rules : tactic
   | `(tactic| circuit_proof_start_raw $[[$terms:term,*]]?) => do
   let lemmas := terms.getD (.mk #[])
+  -- Step 1: all normal circuit_proof_start steps (introduces parameters, simp on h_holds, etc.)
   evalTactic (← `(tactic| circuit_proof_start [$lemmas,*]))
+  -- Step 2: apply subcircuit_norm — transforms ConstraintsHoldFlat → Spec when h_holds is
+  -- a direct ConstraintsHoldFlat term (fires for single-subcircuit circuits).
+  evalTactic (← `(tactic| try subcircuit_norm))
+  -- Step 3: simplify any Spec implications that subcircuit_norm introduced
+  let extraLemmas := match terms with
+    | some ts => ts.getElems.map fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
+    | none => #[]
+  let lemmasArray ← extraLemmas.mapM id
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+
+/--
+  One-shot tactic for `RawSoundness` proofs whose correctness follows immediately from the
+  subcircuit specs after normalisation.
+
+  Equivalent to:
+  ```lean
+  circuit_proof_start_raw [lemmas...]   -- intro + expand + subcircuit_norm + second simp
+  simp_all                              -- close by combining h_holds with h_assumptions
+  ```
+
+  Works out of the box for circuits that wrap a **single** subcircuit (e.g. `Addition8Full`,
+  `Addition8`).  For circuits with multiple operations the user needs to `obtain`/split
+  `h_holds` manually before the `simp_all` step can close the goal.
+
+  **Example**:
+  ```lean
+  -- Raw analogue of Addition8Full, proved in one tactic:
+  soundness := by
+    circuit_proof_all_raw [Addition8FullCarry.circuit, Addition8FullCarry.Assumptions,
+                            Addition8FullCarry.Spec]
+  ```
+-/
+syntax "circuit_proof_all_raw" ("[" term,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| circuit_proof_all_raw $[[$terms:term,*]]?) => do
+  let lemmas := terms.getD (.mk #[])
+  evalTactic (← `(tactic| circuit_proof_start_raw [$lemmas,*]))
+  evalTactic (← `(tactic| try simp_all))
+  evalTactic (← `(tactic| done))
 
 -- version of circuit_proof_start that attempts to close the goal with `simp_all`
 syntax "circuit_proof_all" ("[" term,* "]")? : tactic

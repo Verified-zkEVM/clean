@@ -48,7 +48,12 @@ simp [circuit_norm] at h_bool_raw
 ```
 
 Note: `circuit_proof_start_raw` (demonstrated in `TestCircuitProofStart.lean`) is a
-convenience wrapper that does steps 1–3 in one call for `RawSoundness` goals.
+convenience wrapper that also automatically calls `subcircuit_norm` after expanding `h_holds`.
+For this circuit, `h_holds` is a conjunction so the auto-`subcircuit_norm` in
+`circuit_proof_start_raw` is a no-op — the user must `obtain` first and then call
+`subcircuit_norm` manually (as shown above).  For circuits with a single subcircuit
+(e.g. `Addition8Full.Raw`, `Addition8.Raw`), the whole proof reduces to a single
+`circuit_proof_all_raw [...]` invocation.
 -/
 
 namespace Gadgets.Addition8FullCarry.Raw
