@@ -152,8 +152,9 @@ elab "circuit_proof_start_core" : tactic => do
   This tactic extends `circuit_proof_start` with two extra steps after expanding `h_holds`:
 
   1. `subcircuit_norm` — attempts to transform any `ConstraintsHoldFlat env s.ops.toFlat`
-     hypothesis directly into `s.Spec env`. If `h_holds` is a conjunction, this first pass
-     is a no-op because the `ConstraintsHoldFlat` term is still buried inside the conjunction.
+     hypothesis directly into `s.Spec env`. If `h_holds` is a conjunction, this automatic
+     first `subcircuit_norm` pass is a no-op because the `ConstraintsHoldFlat` term is still
+     buried inside the conjunction.
      That is the expected situation for multi-operation circuits such as
      `Addition8FullCarry.Raw`: the user first splits `h_holds`, and then `subcircuit_norm`
      applies to the resulting raw subcircuit hypothesis.

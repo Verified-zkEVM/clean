@@ -30,7 +30,7 @@ ConstraintsHoldFlat env (assertBool.toSubcircuit n carryOut_var).ops.toFlat
 
 ```
 circuit_proof_start_raw [ByteTable]     (intro + normalize h_holds in the raw setting)
-  ↓ introduces `i₀` as the offset variable
+  ↓ introduces the offset variable (written as `i₀` in this example)
   h_holds : z.val < 256
         ∧ ConstraintsHoldFlat env (assertBool.toSubcircuit n x).ops.toFlat  ← raw!
         ∧ x + y + carryIn + -z + -(carryOut * 256) = 0
