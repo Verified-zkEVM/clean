@@ -133,6 +133,10 @@ example {p : ℕ} [Fact p.Prime] [Fact (p > 512)] :
   circuit_proof_start_raw [ByteTable]
   set z := env.get i₀
   set carry_out := env.get (i₀ + 1)
+  -- This test is about the tactic state after `circuit_proof_start_raw`, not the full
+  -- arithmetic proof. The three `have` lines below verify that the tactic has already:
+  -- 1. split the conjunction-shaped `h_holds` into leaf hypotheses, and
+  -- 2. normalized the raw `assertBool` subcircuit fact to `IsBool carry_out`.
   have : z.val < 256 := h_holds_1
   have : IsBool carry_out := h_holds_2
   have : x + y + carry_in + -z + -(carry_out * 256) = 0 := h_holds

@@ -7,10 +7,27 @@ import Clean.Utils.Tactics.SubcircuitNorm
 open Lean Elab Tactic Meta
 open Circuit
 
-/-- Return `true` iff `type` weak-head normalizes to an `And` conjunction. -/
+/-- Return `true` if and only if `type` weak-head normalizes to an `And` conjunction. -/
 private def isAndType (type : Expr) : MetaM Bool := do
   let whnfType ← whnf type
   return whnfType.getAppFn.constName? == some ``And
+
+/--
+  Helper for `splitAndHypothesis`: split `current : A ∧ B ∧ ...` by repeatedly peeling off
+  the leftmost conjunct and accumulating the generated hypothesis names.
+-/
+private partial def splitAndHypothesisAux
+    (current : Name) (idx : Nat) (acc : Array Name) : TacticM (Array Name) := do
+  withMainContext do
+    let lctx ← getLCtx
+    let some decl := lctx.findFromUserName? current
+      | return acc.push current
+    if !(← isAndType decl.type) then
+      return acc.push current
+    let leftName := current.appendAfter s!"_{idx}"
+    evalTactic (← `(tactic|
+      rcases $(mkIdent current):ident with ⟨$(mkIdent leftName):ident, $(mkIdent current):ident⟩))
+    splitAndHypothesisAux current (idx + 1) (acc.push leftName)
 
 /--
   Split `hypName : A ∧ B ∧ ...` into top-level hypotheses by repeatedly peeling off
@@ -21,18 +38,7 @@ private def isAndType (type : Expr) : MetaM Bool := do
   `[h_holds_1, h_holds_2, h_holds]`.
 -/
 private partial def splitAndHypothesis (hypName : Name) : TacticM (Array Name) := do
-  let rec splitNext (current : Name) (idx : Nat) (acc : Array Name) : TacticM (Array Name) := do
-    withMainContext do
-      let lctx ← getLCtx
-      let some decl := lctx.findFromUserName? current
-        | return acc.push current
-      if !(← isAndType decl.type) then
-        return acc.push current
-      let leftName := current.appendAfter s!"_{idx}"
-      evalTactic (← `(tactic|
-        rcases $(mkIdent current):ident with ⟨$(mkIdent leftName):ident, $(mkIdent current):ident⟩))
-      splitNext current (idx + 1) (acc.push leftName)
-  splitNext hypName 1 #[]
+  splitAndHypothesisAux hypName 1 #[]
 
 /--
   Introduce all standard parameters and hypotheses for Soundness or Completeness.
