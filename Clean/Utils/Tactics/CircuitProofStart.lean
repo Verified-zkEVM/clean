@@ -164,6 +164,7 @@ elab "circuit_proof_start_core" : tactic => do
   **Workflow** (multi-operation circuit, e.g. `Addition8FullCarry.Raw`):
 
   ```
+  -- actual usage in Clean/Gadgets/Addition8/RawAddition8FullCarry.lean
   circuit_proof_start_raw [ByteTable]
     ↓
   h_holds : z.val < 256

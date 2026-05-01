@@ -84,7 +84,8 @@ def circuit : RawFormalCircuit (F p) Inputs Outputs where
     -- `circuit_proof_start_raw` does the standard RawSoundness introductions and
     -- normalization. The key result is that `h_holds` is expanded to a conjunction
     -- containing the raw `ConstraintsHoldFlat` hypothesis for `assertBool`.
-    -- The offset variable introduced by the tactic is `i₀`.
+    -- The offset variable introduced by the tactic is `i₀`, which is then used below
+    -- to name the witness positions for `z` and `carry_out`.
     circuit_proof_start_raw [ByteTable]
 
     set z := env.get i₀
