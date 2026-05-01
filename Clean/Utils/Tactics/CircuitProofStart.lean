@@ -38,8 +38,8 @@ private partial def splitAndHypothesisAux
   the leftmost conjunct.
 
   Returns the list of hypothesis names that remain after splitting, in left-to-right order.
-  For example, splitting `h_holds : A ∧ B ∧ C` yields the names
-  `[h_holds_1, h_holds_2, h_holds]`.
+  For example, splitting `h_holds : A ∧ B ∧ C` yields the three hypotheses
+  `h_holds_1 : A`, `h_holds_2 : B`, and `h_holds : C`.
 -/
 private partial def splitAndHypothesis (hypName : Name) : TacticM (Array Name) := do
   splitAndHypothesisAux hypName 1 #[]
@@ -199,7 +199,7 @@ elab "circuit_proof_start_core" : tactic => do
      any `s.Spec env` implication introduced by step 2 into its concrete
      `Assumptions → circuit.Spec` form.
 
-  **Workflow** (multi-operation circuit, e.g. `Addition8FullCarry.Raw`):
+  **Workflow** (multi-operation circuit, e.g. `RawAddition8FullCarry`):
 
   ```
   -- actual usage in Clean/Gadgets/Addition8/RawAddition8FullCarry.lean
@@ -214,7 +214,7 @@ elab "circuit_proof_start_core" : tactic => do
   simp [circuit_norm] at h_holds_2
   ```
 
-  For circuits with a **single** subcircuit call (e.g. `Addition8Full.Raw`, `Addition8.Raw`),
+  For circuits with a **single** subcircuit call (e.g. `RawAddition8Full`, `RawAddition8`),
   step 1 leaves `h_holds` unchanged as a bare `ConstraintsHoldFlat ...` hypothesis, so the
   automatic `subcircuit_norm` + second `simp` pass rewrites it all the way to
   `Assumptions → circuit.Spec`.
