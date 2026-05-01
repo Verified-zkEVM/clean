@@ -1,5 +1,6 @@
 import Clean.Utils.Tactics
 import Clean.Circuit
+import Clean.Circuit.RawCircuit
 import Clean.Utils.Field
 
 namespace TestCircuitProofStart
@@ -101,6 +102,29 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 end NamePreservationTests
+
+section RawSoundnessTests
+-- Test that circuit_proof_start_raw works for RawSoundness goals
+
+-- Test that circuit_proof_start_raw introduces the correct parameters for RawSoundness
+example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop)
+    (Spec : Input F → Output F → Prop) :
+    RawSoundness F circuit Assumptions Spec := by
+  circuit_proof_start_raw
+  -- After circuit_proof_start_raw, we should have the same parameters as circuit_proof_start,
+  -- but h_holds uses ConstraintsHold (raw) instead of ConstraintsHold.Soundness
+  have : ℕ := i₀
+  have : Environment F := env
+  have : Input (Expression F) := input_var
+  have : Input F := input
+  have : eval env input_var = input := h_input
+  have : Assumptions input := h_assumptions
+  -- KEY DIFFERENCE: h_holds uses ConstraintsHold, not ConstraintsHold.Soundness
+  have : ConstraintsHold env (circuit.main input_var i₀).2 := h_holds
+  sorry
+
+end RawSoundnessTests
 
 section LocalDefinitionUnfoldingTests
 -- Test that local Assumptions and Spec definitions are unfolded
