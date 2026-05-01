@@ -726,6 +726,156 @@ def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
 
 end FinalRound
 
+namespace ApplyPartialRoundsOpt
+
+def body (t : Vector (Expression (F BN254_PRIME)) 2 ×
+    (F BN254_PRIME × F BN254_PRIME × F BN254_PRIME × F BN254_PRIME)) :
+    Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
+  PartialRoundOpt_t2.circuit t.2.1 t.2.2.1 t.2.2.2.1 t.2.2.2.2 t.1
+
+def main (state : Vector (Expression (F BN254_PRIME)) 2)
+    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
+  Circuit.foldl partialRoundConstants state
+    (fun st c => body (st, c))
+    partialRound_constOut partialRound_constLen
+
+@[circuit_norm]
+theorem body_localLength_eq
+    (state : Vector (Expression (F BN254_PRIME)) 2)
+    (c : F BN254_PRIME × F BN254_PRIME × F BN254_PRIME × F BN254_PRIME)
+    (n : ℕ) :
+    (body (state, c)).localLength n = 6 :=
+  partialRound_constLen.localLength_eq (state, c) n
+
+@[circuit_norm]
+theorem body_output_eq
+    (state : Vector (Expression (F BN254_PRIME)) 2)
+    (c : F BN254_PRIME × F BN254_PRIME × F BN254_PRIME × F BN254_PRIME)
+    (n : ℕ) :
+    (body (state, c)).output n = #v[varFromOffset field (n + 4), varFromOffset field (n + 5)] := by
+  simp only [body, circuit_norm, PartialRoundOpt_t2.circuit]
+
+theorem body_subcircuitsConsistent
+    (state : Vector (Expression (F BN254_PRIME)) 2)
+    (c : F BN254_PRIME × F BN254_PRIME × F BN254_PRIME × F BN254_PRIME)
+    (n : ℕ) :
+    (body (state, c)).forAll n { subcircuit offset {m} _ := m = offset } := by
+  simp only [body, circuit_norm, PartialRoundOpt_t2.circuit, Operations.forAll]
+
+@[circuit_norm]
+theorem main_localLength_eq (state : Vector (Expression (F BN254_PRIME)) 2) (n : ℕ) :
+    (main state).localLength n = 336 := by
+  simp only [main, foldl.localLength_eq, body_localLength_eq]
+
+@[circuit_norm]
+theorem main_output_eq (state : Vector (Expression (F BN254_PRIME)) 2) (n : ℕ) :
+    (main state).output n = #v[varFromOffset field (n + 334), varFromOffset field (n + 335)] := by
+  unfold main
+  rw [foldl.output_eq]
+  simp only [body_output_eq, body_localLength_eq]
+
+def roundSpec
+    (c : F BN254_PRIME × F BN254_PRIME × F BN254_PRIME × F BN254_PRIME)
+    (input : Vector (F BN254_PRIME) 2) : Vector (F BN254_PRIME) 2 :=
+  let a0 := input[0] ^ 5 + c.1
+  #v[c.2.1 * a0 + c.2.2.1 * input[1], input[1] + a0 * c.2.2.2]
+
+def specState (input : Vector (F BN254_PRIME) 2) (rounds : ℕ) : Vector (F BN254_PRIME) 2 :=
+  (List.range rounds).foldl
+    (fun state i => if h : i < 56 then roundSpec partialRoundConstants[i] state else state)
+    input
+
+theorem specState_zero (input : Vector (F BN254_PRIME) 2) :
+    specState input 0 = input := by
+  simp [specState]
+
+theorem specState_succ (input : Vector (F BN254_PRIME) 2) (rounds : ℕ) (h : rounds < 56) :
+    specState input (rounds + 1) = roundSpec partialRoundConstants[rounds] (specState input rounds) := by
+  simp [specState, List.range_succ, h]
+
+def specOutput (input : Vector (F BN254_PRIME) 2) : Vector (F BN254_PRIME) 2 :=
+  specState input 56
+
+def Spec (input output : Vector (F BN254_PRIME) 2) : Prop :=
+  output = specOutput input
+
+def Assumptions (_ : Vector (F BN254_PRIME) 2) : Prop :=
+  True
+
+def envState (env : Environment (F BN254_PRIME)) (input : Vector (F BN254_PRIME) 2)
+    (n k : ℕ) : Vector (F BN254_PRIME) 2 :=
+  if k = 0 then input
+  else #v[env.get (n + (k - 1) * 6 + 4), env.get (n + (k - 1) * 6 + 5)]
+
+def elaborated : ElaboratedCircuit (F BN254_PRIME) (fields 2) (fields 2) where
+  main
+  localLength _ := 336
+  localLength_eq := by
+    intro input n
+    simp only [main_localLength_eq]
+  output _ i := #v[varFromOffset field (i + 334), varFromOffset field (i + 335)]
+  output_eq := by
+    intro input n
+    simp only [main_output_eq]
+  subcircuitsConsistent := by
+    intro input n
+    change (main input).forAll n { subcircuit offset {m} _ := m = offset }
+    unfold main
+    rw [forAll_def]
+    rw [foldl.forAll]
+    constructor
+    · exact body_subcircuitsConsistent _ _ _
+    · intro i hi
+      exact body_subcircuitsConsistent _ _ _
+
+theorem soundness : Soundness (F BN254_PRIME) elaborated Assumptions Spec := by
+  circuit_proof_start [main, Spec]
+  simp only [body, circuit_norm] at h_holds
+  obtain ⟨h0, h_step⟩ := h_holds
+  have h0' := h0 trivial
+  simp only [PartialRoundOpt_t2.circuit, circuit_norm, h_input] at h0'
+  have h_round : ∀ (k : ℕ) (hk : k < 56),
+      envState env input i₀ (k + 1) = roundSpec (partialRoundConstants[k]'hk) (envState env input i₀ k) := by
+    intro k hk
+    rcases k with _ | j
+    · apply Vector.ext
+      intro idx hidx
+      have hidx' : idx = 0 ∨ idx = 1 := by omega
+      rcases hidx' with rfl | rfl
+      · simp +arith [envState, roundSpec, h0'.1]
+      · simp +arith [envState, roundSpec, h0'.2]
+    · have hj := h_step j (by omega) trivial
+      simp only [PartialRoundOpt_t2.circuit, circuit_norm] at hj
+      simp +arith only [] at hj
+      apply Vector.ext
+      intro idx hidx
+      have hidx' : idx = 0 ∨ idx = 1 := by omega
+      rcases hidx' with rfl | rfl
+      · simp +arith [envState, roundSpec, hj.1]
+      · simp +arith [envState, roundSpec, hj.2]
+  have h_state : ∀ (k : ℕ), k ≤ 56 → envState env input i₀ k = specState input k := by
+    intro k hk
+    induction k with
+    | zero =>
+        simp only [envState, specState_zero, ↓reduceIte]
+    | succ k ih =>
+        rw [h_round k (by omega), ih (by omega), specState_succ input k (by omega)]
+  exact congr_arg Vector.toArray (h_state 56 (by omega))
+
+theorem completeness : Completeness (F BN254_PRIME) elaborated Assumptions := by
+  circuit_proof_start [main, body]
+  exact ⟨trivial, fun _ _ => trivial⟩
+
+def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) := {
+  elaborated with
+  Assumptions,
+  Spec,
+  soundness,
+  completeness := by simp [completeness]
+}
+
+end ApplyPartialRoundsOpt
+
 
 end Poseidon1
 
