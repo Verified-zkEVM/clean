@@ -759,17 +759,14 @@ theorem soundness : Soundness (F BN254_PRIME) elaborated (fun _ => True) Spec :=
     ApplyFullRounds1.Spec, TransitionRound.Spec, ApplyPartialRoundsOpt.Spec,
     ApplyFullRounds2.Spec, ApplyPartialRoundsOpt.Assumptions,
     Specs.PoseidonOptimized.poseidon1Opt] at h_holds ⊢
-  obtain ⟨h_init, h_full1, h_transition, h_partial_step, h_full2, h_final⟩ := h_holds
-  simp only [Vector.toArray_inj (xs := #v[_, _])] at *
-  have h_final0 : env.get (i₀ + 414) = (Specs.Poseidon.mix M_t2
-    (Specs.Poseidon.sboxFull #v[env.get (i₀ + 406), env.get (i₀ + 407)]))[0] :=
-    congrArg (fun v => v[0]) h_final
-  rw [h_final0, h_full2, h_partial_step, h_transition, h_full1, h_init]
+  -- get rid of the [0] in the output
+  apply congrArg (fun v => v[0]) (a₁ := #v[env.get (i₀ + 414), env.get (i₀ + 415)])
+  simp_all
 
 theorem completeness : Completeness (F BN254_PRIME) elaborated (fun _ => True) := by
   circuit_proof_start [InitialArk.circuit, ApplyFullRounds1.circuit, TransitionRound.circuit,
-    ApplyPartialRoundsOpt.circuit, ApplyFullRounds2.circuit, FinalRound.circuit]
-  simp [ApplyPartialRoundsOpt.Assumptions]
+    ApplyPartialRoundsOpt.circuit, ApplyFullRounds2.circuit, FinalRound.circuit,
+    ApplyPartialRoundsOpt.Assumptions]
 
 def circuit : FormalCircuit (F BN254_PRIME) field field where
   elaborated
