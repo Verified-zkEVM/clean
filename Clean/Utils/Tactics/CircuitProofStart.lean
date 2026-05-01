@@ -152,34 +152,35 @@ elab "circuit_proof_start_core" : tactic => do
   This tactic extends `circuit_proof_start` with two extra steps after expanding `h_holds`:
 
   1. `subcircuit_norm` — attempts to transform any `ConstraintsHoldFlat env s.ops.toFlat`
-     hypothesis directly into `s.Spec env`.  This is a no-op when `h_holds` is a
-     conjunction (the `ConstraintsHoldFlat` term is buried inside), so for circuits like
-     `Addition8FullCarry` the user must `obtain` the parts first and then call
-     `subcircuit_norm` manually.  For circuits with a **single** subcircuit call this step
-     fires automatically (e.g. `Addition8Full`, `Addition8`).
+     hypothesis directly into `s.Spec env`. If `h_holds` is a conjunction, this first pass
+     is a no-op because the `ConstraintsHoldFlat` term is still buried inside the conjunction.
+     That is the expected situation for multi-operation circuits such as
+     `Addition8FullCarry.Raw`: the user first splits `h_holds`, and then `subcircuit_norm`
+     applies to the resulting raw subcircuit hypothesis.
 
   2. A second `simp [circuit_norm, ...]` on `h_holds` — simplifies any `s.Spec env`
      implication introduced by step 1 into its concrete `Assumptions → circuit.Spec` form.
 
-  **Workflow** (for a circuit with a single subcircuit):
+  **Workflow** (multi-operation circuit, e.g. `Addition8FullCarry.Raw`):
 
   ```
-  circuit_proof_start_raw [Addition8FullCarry.circuit, ...]
-    step 1 (circuit_proof_start):
-      h_holds = ConstraintsHoldFlat env (Addition8FullCarry.circuit.toSubcircuit n x).ops.toFlat
-    step 2 (subcircuit_norm fires):
-      h_holds = (Addition8FullCarry.circuit.toSubcircuit n x).Spec env
-    step 3 (second simp [circuit_norm, ...]):
-      h_holds = Addition8FullCarry.Assumptions inputs → Addition8FullCarry.Spec inputs output
-  ```
-
-  For circuits with **multiple** subcircuits / assertions (like `Addition8FullCarry`), steps 2 and 3
-  are no-ops on the unsplit conjunction. The user manually does:
-  ```lean
+  circuit_proof_start_raw [ByteTable]
+    ↓
+  h_holds : z.val < 256
+          ∧ ConstraintsHoldFlat env (assertBool.toSubcircuit n x).ops.toFlat
+          ∧ x + y + carryIn + -z + -(carryOut * 256) = 0
+    ↓
   obtain ⟨h_byte, h_bool_raw, h_add⟩ := h_holds
-  subcircuit_norm   -- now acts on h_bool_raw
+    ↓
+  subcircuit_norm            -- acts on h_bool_raw now that it is split out
+    ↓
   simp [circuit_norm] at h_bool_raw
   ```
+
+  For circuits with a **single** subcircuit call (e.g. `Addition8Full.Raw`, `Addition8.Raw`),
+  step 1 often produces `h_holds` as a bare `ConstraintsHoldFlat ...` hypothesis, so the
+  automatic `subcircuit_norm` + second `simp` pass rewrites it all the way to
+  `Assumptions → circuit.Spec`.
 
   **`circuit_proof_all_raw`** is a one-shot version that also runs `simp_all` after these
   steps, closing the goal completely for circuits whose soundness follows directly.
@@ -214,8 +215,9 @@ elab_rules : tactic
   ```
 
   Works out of the box for circuits that wrap a **single** subcircuit (e.g. `Addition8Full`,
-  `Addition8`).  For circuits with multiple operations the user needs to `obtain`/split
-  `h_holds` manually before the `simp_all` step can close the goal.
+  `Addition8`). For circuits with multiple operations, `circuit_proof_start_raw` is still the
+  intended entry point, but the user needs to `obtain`/split `h_holds` manually before the
+  final `subcircuit_norm` / `simp_all` steps can close the goal.
 
   **Example**:
   ```lean

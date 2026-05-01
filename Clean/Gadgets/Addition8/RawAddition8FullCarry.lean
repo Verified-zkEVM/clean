@@ -29,12 +29,11 @@ ConstraintsHoldFlat env (assertBool.toSubcircuit n carryOut_var).ops.toFlat
 ## The alternative proof pipeline
 
 ```
-unfold RawSoundness; rintro ...         (standard intro, exposing raw h_holds)
+circuit_proof_start_raw [ByteTable]     (intro + normalize h_holds in the raw setting)
   ↓
-simp_all [circuit_norm, Spec, Assumptions, main, ByteTable]   (expand h_holds)
-  ↓ h_holds : z.val < 256
-            ∧ ConstraintsHoldFlat env (assertBool.toSubcircuit n x).ops.toFlat  ← raw!
-            ∧ x + y + carryIn + -z + -(carryOut * 256) = 0
+h_holds : z.val < 256
+        ∧ ConstraintsHoldFlat env (assertBool.toSubcircuit n x).ops.toFlat  ← raw!
+        ∧ x + y + carryIn + -z + -(carryOut * 256) = 0
   ↓
 obtain ⟨h_byte, h_bool_raw, h_add⟩ := h_holds
   ↓
@@ -47,11 +46,13 @@ simp [circuit_norm] at h_bool_raw
 ... same arithmetic proof as Addition8FullCarry.circuit.soundness ...
 ```
 
-Note: `circuit_proof_start_raw` (demonstrated in `TestCircuitProofStart.lean`) is a
-convenience wrapper that also automatically calls `subcircuit_norm` after expanding `h_holds`.
-For this circuit, `h_holds` is a conjunction so the auto-`subcircuit_norm` in
-`circuit_proof_start_raw` is a no-op — the user must `obtain` first and then call
-`subcircuit_norm` manually (as shown above).  For circuits with a single subcircuit
+Note: this file now uses `circuit_proof_start_raw` directly in the real
+`RawAddition8FullCarry.soundness` proof. For this circuit, `h_holds` is a conjunction,
+so the auto-`subcircuit_norm` inside `circuit_proof_start_raw` cannot yet rewrite the
+buried `ConstraintsHoldFlat` term by itself; the user first `obtain`s the conjuncts and
+then calls `subcircuit_norm` manually. This is still useful: the tactic handles the whole
+intro / `provable_struct_simp` / raw `h_holds` normalization pipeline, leaving only the
+subcircuit-focused reasoning afterwards. For circuits with a single subcircuit
 (e.g. `Addition8Full.Raw`, `Addition8.Raw`), the whole proof reduces to a single
 `circuit_proof_all_raw [...]` invocation.
 -/
@@ -80,30 +81,17 @@ def circuit : RawFormalCircuit (F p) Inputs Outputs where
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
 
   soundness := by
-    -- Unfold RawSoundness (not Soundness!) and introduce the standard parameters.
-    -- The KEY DIFFERENCE: h_holds has type  ConstraintsHold env ...
-    -- (not ConstraintsHold.Soundness), so subcircuit constraints appear raw.
-    unfold RawSoundness
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
+    -- `circuit_proof_start_raw` does the standard RawSoundness introductions and
+    -- normalization. The key result is that `h_holds` is expanded to a conjunction
+    -- containing the raw `ConstraintsHoldFlat` hypothesis for `assertBool`.
+    circuit_proof_start_raw [ByteTable]
 
-    -- characterize inputs
-    replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
-      simpa [circuit_norm] using h_inputs
-
-    -- Expand h_holds using circuit_norm + main + ByteTable.
-    -- Because h_holds is ConstraintsHold (not ConstraintsHold.Soundness), the
-    -- `assertBool` subcircuit does NOT automatically become `IsBool`.
-    -- Instead, simp leaves the subcircuit as an unexpanded ConstraintsHoldFlat term:
-    --   ConstraintsHoldFlat env (assertBool.toSubcircuit n x).ops.toFlat
-    -- (ConstraintsHoldFlat is not in circuit_norm, so it is not unfolded further.)
-    simp_all only [circuit_norm, Spec, Assumptions, main, ByteTable]
-
-    set z := env.get i0
-    set carry_out := env.get (i0 + 1)
+    set z := env.get i₀
+    set carry_out := env.get (i₀ + 1)
 
     -- h_holds is now:
     --   z.val < 256
-    --   ∧ ConstraintsHoldFlat env (assertBool.toSubcircuit n (var ⟨i0+1⟩)).ops.toFlat
+    --   ∧ ConstraintsHoldFlat env (assertBool.toSubcircuit n (var ⟨i₀+1⟩)).ops.toFlat
     --   ∧ x + y + carry_in + -z + -(carry_out * 256) = 0
     obtain ⟨h_byte, h_bool_raw, h_add⟩ := h_holds
 
