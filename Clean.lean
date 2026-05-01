@@ -15,6 +15,7 @@ import Clean.Circomlib.Mux2
 import Clean.Circomlib.Mux3
 import Clean.Circomlib.Rotate
 import Clean.Circomlib.Sign
+import Clean.Circomlib.Poseidon
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
