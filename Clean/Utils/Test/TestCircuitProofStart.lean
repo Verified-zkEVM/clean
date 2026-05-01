@@ -1,6 +1,7 @@
 import Clean.Utils.Tactics
 import Clean.Circuit
 import Clean.Circuit.RawCircuit
+import Clean.Gadgets.Addition8.RawAddition8FullCarry
 import Clean.Utils.Field
 
 namespace TestCircuitProofStart
@@ -122,6 +123,19 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : Assumptions input := h_assumptions
   -- KEY DIFFERENCE: h_holds uses ConstraintsHold, not ConstraintsHold.Soundness
   have : ConstraintsHold env (circuit.main input_var i₀).2 := h_holds
+  sorry
+
+-- Test that circuit_proof_start_raw automatically splits conjunction-shaped h_holds
+-- and normalizes raw subcircuit constraints in the real RawAddition8FullCarry example.
+example {p : ℕ} [Fact p.Prime] [Fact (p > 512)] :
+    RawSoundness (F p) Gadgets.Addition8FullCarry.Raw.circuit.elaborated
+      Gadgets.Addition8FullCarry.Assumptions Gadgets.Addition8FullCarry.Spec := by
+  circuit_proof_start_raw [ByteTable]
+  set z := env.get i₀
+  set carry_out := env.get (i₀ + 1)
+  have : z.val < 256 := h_holds_1
+  have : IsBool carry_out := h_holds_2
+  have : x + y + carry_in + -z + -(carry_out * 256) = 0 := h_holds
   sorry
 
 end RawSoundnessTests
