@@ -17,11 +17,13 @@ https://github.com/iden3/circomlib/blob/master/circuits/poseidon.circom
 
 namespace Circomlib.Poseidon
 
--- Import constants from specs (but NOT the type F which conflicts with Clean's F p)
+-- Import constants from specs, but not the spec field abbreviation `F`.
 open Specs.Poseidon (BN254_PRIME C_t2 M_t2)
 open Specs.PoseidonOptimized (P_t2 S_t2)
 
-variable {p : ℕ} [Fact p.Prime]
+-- BN254 prime facts (BN254_PRIME is a well-known prime, proofs omitted for performance)
+instance : Fact (Nat.Prime BN254_PRIME) := ⟨by sorry⟩
+instance : Fact (BN254_PRIME > 2) := ⟨by decide⟩
 
 /-
 ============================================================================
@@ -38,13 +40,14 @@ template Sigma() {
 -/
 namespace Sigma
 
-def main (input : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Expression (F BN254_PRIME)) :
+    Circuit (F BN254_PRIME) (Expression (F BN254_PRIME)) := do
   let in2 <== input * input
   let in4 <== in2 * in2
   let out <== in4 * input
   return out
 
-def circuit : FormalCircuit (F p) field field where
+def circuit : FormalCircuit (F BN254_PRIME) field field where
   main := main
   localLength _ := 3
   localLength_eq := by simp [circuit_norm, main]
@@ -52,7 +55,7 @@ def circuit : FormalCircuit (F p) field field where
   output _ i := varFromOffset field (i + 2)
 
   Assumptions _ := True
-  Spec (input : F p) (output : F p) := output = input ^ 5
+  Spec (input : F BN254_PRIME) (output : F BN254_PRIME) := output = input ^ 5
 
   soundness := by
     -- Introduce all the quantified variables and hypotheses
@@ -156,46 +159,8 @@ PARTIAL ROUND (OPTIMIZED) for t=2: SBOX on first → ARK on first → MixS
 In the optimized circomlib implementation, partial rounds use sparse matrix
 multiplication (MixS) instead of full matrix multiplication (Mix).
 This is more efficient and matches the actual circomlib implementation.
+The concrete optimized partial-round component below implements this directly.
 -/
-namespace PartialRoundOpt_t2
-
-def main (c0 s0 s1 s2 : F p) (input : Vector (Expression (F p)) 2)
-    : Circuit (F p) (Vector (Expression (F p)) 2) := do
-  -- S-box on first element only
-  let sbox0 ← Sigma.circuit input[0]
-
-  -- ARK on first element only
-  let a0 <== sbox0 + Expression.const c0
-
-  -- MixS (sparse matrix multiplication)
-  let out0 <== Expression.const s0 * a0 + Expression.const s1 * input[1]
-  let out1 <== input[1] + a0 * Expression.const s2
-  return #v[out0, out1]
-
--- Optimized partial round using sparse matrix
-def circuit (c0 s0 s1 s2 : F p) : FormalCircuit (F p) (fields 2) (fields 2) where
-  main := main c0 s0 s1 s2
-  -- 3 witnesses for Sigma + 1 for ARK + 2 for MixS = 6
-  localLength _ := 6
-  localLength_eq := by simp [circuit_norm, main, Sigma.circuit]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main, Sigma.circuit]
-  output _ i := #v[varFromOffset field (i + 4), varFromOffset field (i + 5)]
-
-  Assumptions _ := True
-  -- TODO should be formulated in terms of Specs.PoseidonOptimized
-  Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
-    let a0 := input[0] ^ 5 + c0
-    output[0] = s0 * a0 + s1 * input[1] ∧
-    output[1] = input[1] + a0 * s2
-
-  soundness := by
-    circuit_proof_start [Sigma.circuit]
-    grind
-
-  completeness := by
-    circuit_proof_all [Sigma.circuit]
-
-end PartialRoundOpt_t2
 
 /-
 ============================================================================
@@ -230,10 +195,6 @@ Total witnesses: Initial ARK (2) + 3 full rounds (24) + transition round (8)
 namespace Poseidon1
 
 open Circuit
-
--- BN254 prime facts (BN254_PRIME is a well-known prime, proofs omitted for performance)
-instance : Fact (Nat.Prime BN254_PRIME) := ⟨by sorry⟩
-instance : Fact (BN254_PRIME > 2) := ⟨by decide⟩
 
 -- Helper to get matrix elements as field elements
 def getM (i j : ℕ) (hi : i < 2) (hj : j < 2) : F BN254_PRIME := (M_t2[i]'hi)[j]'hj
@@ -441,13 +402,12 @@ end ApplyFullRounds
 namespace PartialRoundOptStep_t2
 
 def main (round : Fin 56) (state : Vector (Expression (F BN254_PRIME)) 2)
-    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
-  PartialRoundOpt_t2.circuit
-    (C_t2[10 + round.val]'(by omega) : F BN254_PRIME)
-    (S_t2[3*round.val]'(by omega) : F BN254_PRIME)
-    (S_t2[3*round.val + 1]'(by omega) : F BN254_PRIME)
-    (S_t2[3*round.val + 2]'(by omega) : F BN254_PRIME)
-    state
+    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) := do
+  let sbox0 ← Sigma.circuit state[0]
+  let a0 <== sbox0 + .const C_t2[10 + round.val]
+  let out0 <== .const S_t2[3*round.val] * a0 + .const S_t2[3*round.val + 1] * state[1]
+  let out1 <== state[1] + a0 * .const S_t2[3*round.val + 2]
+  return #v[out0, out1]
 
 def Spec (round : Fin 56) (input output : Vector (F BN254_PRIME) 2) : Prop :=
   output = Specs.PoseidonOptimized.partialRoundOpt_t2 C_t2 S_t2 (10 + round.val)
@@ -458,21 +418,26 @@ def elaborated (round : Fin 56) : ElaboratedCircuit (F BN254_PRIME) (fields 2) (
   localLength _ := 6
   output _ i := #v[varFromOffset field (i + 4), varFromOffset field (i + 5)]
   subcircuitsConsistent := by
-    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit]
+    simp +arith only [circuit_norm, main, Sigma.circuit]
 
 theorem soundness (round : Fin 56) :
     Soundness (F BN254_PRIME) (elaborated round) (fun _ => True) (Spec round) := by
-  circuit_proof_start [PartialRoundOpt_t2.circuit]
+  circuit_proof_start [Sigma.circuit]
   simp only [Specs.PoseidonOptimized.partialRoundOpt_t2, Specs.Poseidon.sigma,
     dif_pos (show 10 + round.val < 72 by omega), mixS_t2_eq]
-  obtain ⟨h0, h1⟩ := h_holds
-  rw [h0, h1]
+  obtain ⟨h0, h1, h2, h3⟩ := h_holds
+  have h_in0 : Expression.eval env input_var[0] = input[0] := by
+    simpa using congrArg (fun v => v[0]) h_input
+  have h_in1 : Expression.eval env input_var[1] = input[1] := by
+    simpa using congrArg (fun v => v[1]) h_input
+  rw [h2, h3, h1, h0, h_in0, h_in1]
   simp +arith [show round.val * 3 = 3 * round.val by ring]
   constructor <;> rfl
 
 theorem completeness (round : Fin 56) :
     Completeness (F BN254_PRIME) (elaborated round) (fun _ => True) := by
-  circuit_proof_start [PartialRoundOpt_t2.circuit]
+  circuit_proof_start [Sigma.circuit]
+  simp_all
 
 def circuit (round : Fin 56) : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
   elaborated := elaborated round
