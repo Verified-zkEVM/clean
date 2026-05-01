@@ -146,53 +146,8 @@ In circomlib, full rounds are inlined in the main Poseidon template:
         }
     }
 
-We factor this out as a reusable FullRound_t2 component for clarity.
+The optimized full-round component below implements this directly.
 -/
-namespace FullRound_t2
-
-def main (c0 c1 m00 m01 m10 m11 : F p) (input : Vector (Expression (F p)) 2)
-    : Circuit (F p) (Vector (Expression (F p)) 2) := do
-  -- S-box on both elements
-  let s0 ← Sigma.circuit input[0]
-  let s1 ← Sigma.circuit input[1]
-
-  -- ARK
-  let a0 := s0 + Expression.const c0
-  let a1 := s1 + Expression.const c1
-
-  -- MIX
-  let out0 <== Expression.const m00 * a0 + Expression.const m10 * a1
-  let out1 <== Expression.const m01 * a0 + Expression.const m11 * a1
-  return #v[out0, out1]
-
--- Full round: SBOX → ARK → MIX
--- Spec: output = M * (sbox(input) + c) where sbox applies x^5 to each element
-def circuit (c0 c1 m00 m01 m10 m11 : F p) : FormalCircuit (F p) (fields 2) (fields 2) where
-  main := main c0 c1 m00 m01 m10 m11
-  -- 3 witnesses per Sigma (×2) + 2 for MIX = 8
-  localLength _ := 8
-  localLength_eq := by simp [circuit_norm, main, Sigma.circuit]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main, Sigma.circuit]
-  output _ i := #v[varFromOffset field (i + 6), varFromOffset field (i + 7)]
-
-  Assumptions _ := True
-  -- TODO should be formulated in terms of Specs.PoseidonOptimized
-  Spec (input : Vector (F p) 2) (output : Vector (F p) 2) :=
-    let s0 := input[0] ^ 5
-    let s1 := input[1] ^ 5
-    let a0 := s0 + c0
-    let a1 := s1 + c1
-    output[0] = m00 * a0 + m10 * a1 ∧
-    output[1] = m01 * a0 + m11 * a1
-
-  soundness := by
-    circuit_proof_start [Sigma.circuit]
-    grind
-
-  completeness := by
-    circuit_proof_all [Sigma.circuit]
-
-end FullRound_t2
 
 /-
 ============================================================================
@@ -391,9 +346,14 @@ namespace FullRoundOpt_t2
 
 def main (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71)
     (state : Vector (Expression (F BN254_PRIME)) 2)
-    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
-  FullRound_t2.circuit C[offset.val] C[offset.val + 1]
-    M[0][0] M[0][1] M[1][0] M[1][1] state
+    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) := do
+  let s0 ← Sigma.circuit state[0]
+  let s1 ← Sigma.circuit state[1]
+  let a0 := s0 + .const C[offset.val]
+  let a1 := s1 + .const C[offset.val + 1]
+  let out0 <== .const M[0][0] * a0 + .const M[1][0] * a1
+  let out1 <== .const M[0][1] * a0 + .const M[1][1] * a1
+  return #v[out0, out1]
 
 def Spec (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71)
     (input output : Vector (F BN254_PRIME) 2) : Prop :=
@@ -405,21 +365,27 @@ def elaborated (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 7
   localLength _ := 8
   output _ i := #v[varFromOffset field (i + 6), varFromOffset field (i + 7)]
   subcircuitsConsistent := by
-    simp only [circuit_norm, main, FullRound_t2.circuit]
+    simp +arith only [circuit_norm, main, Sigma.circuit]
 
 theorem soundness (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71) :
     Soundness (F BN254_PRIME) (elaborated C M offset) (fun _ => True) (Spec C M offset) := by
-  circuit_proof_start [FullRound_t2.circuit]
+  circuit_proof_start [Sigma.circuit]
   simp only [Specs.PoseidonOptimized.fullRoundOpt_t2, Specs.Poseidon.sboxFull]
   rw [ark_t2_eq C offset.val (by omega)]
   simp only [Specs.Poseidon.sigma, mix_matrix_t2_eq, Vector.getElem_map]
-  obtain ⟨h0, h1⟩ := h_holds
-  rw [h0, h1]
+  obtain ⟨h0, h1, h2, h3⟩ := h_holds
+  have h_in0 : Expression.eval env input_var[0] = input[0] := by
+    simpa using congrArg (fun v => v[0]) h_input
+  have h_in1 : Expression.eval env input_var[1] = input[1] := by
+    simpa using congrArg (fun v => v[1]) h_input
+  rw [h2, h3, h0, h1]
+  rw [h_in0, h_in1]
   rfl
 
 theorem completeness (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71) :
     Completeness (F BN254_PRIME) (elaborated C M offset) (fun _ => True) := by
-  circuit_proof_start [FullRound_t2.circuit]
+  circuit_proof_start [Sigma.circuit]
+  simp_all
 
 def circuit (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71) :
     FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
