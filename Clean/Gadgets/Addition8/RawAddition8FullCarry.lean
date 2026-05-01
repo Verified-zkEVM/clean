@@ -81,21 +81,17 @@ def circuit : RawFormalCircuit (F p) Inputs Outputs where
     set z := env.get i₀
     set carry_out := env.get (i₀ + 1)
 
-    have h_byte : z.val < 256 := h_holds_1
-    have h_bool_raw : IsBool carry_out := h_holds_2
-    have h_add : x + y + carry_in + -z + -(carry_out * 256) = 0 := h_holds
-
     -- From here, identical to Addition8FullCarry.circuit.soundness
     guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in
-    guard_hyp h_byte : z.val < 256
-    guard_hyp h_bool_raw : IsBool carry_out
-    guard_hyp h_add : x + y + carry_in + -z + -(carry_out * 256) = 0
+    guard_hyp h_holds_1 : z.val < 256
+    guard_hyp h_holds_2 : IsBool carry_out
+    guard_hyp h_holds : x + y + carry_in + -z + -(carry_out * 256) = 0
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
          carry_out.val = (x.val + y.val + carry_in.val) / 256
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     apply Addition8.Theorems.soundness x y z carry_in carry_out
-      as_x as_y h_byte as_carry_in h_bool_raw h_add
+      as_x as_y h_holds_1 as_carry_in h_holds_2 h_holds
 
   completeness := by
     -- Completeness is the same as FormalCircuit.

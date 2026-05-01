@@ -23,11 +23,13 @@ private def isConjunction (type : Expr) : MetaM Bool := do
 private partial def splitAndHypothesisAux
     (current : Name) (idx : Nat) (acc : Array Name) : TacticM (Array Name) := do
   withMainContext do
+    let finished := acc.push current
     let lctx ← getLCtx
     let some decl := lctx.findFromUserName? current
-      | return acc.push current
-    if !(← isConjunction decl.type) then
-      return acc.push current
+      | return finished
+    let shouldStop := !(← isConjunction decl.type)
+    if shouldStop then
+      return finished
     let leftName := current.appendAfter s!"_{idx}"
     evalTactic (← `(tactic|
       rcases $(mkIdent current):ident with ⟨$(mkIdent leftName):ident, $(mkIdent current):ident⟩))
