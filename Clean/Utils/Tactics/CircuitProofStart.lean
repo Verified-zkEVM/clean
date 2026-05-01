@@ -215,7 +215,7 @@ elab_rules : tactic
   ```
 
   Works out of the box for circuits that wrap a **single** subcircuit (e.g. `Addition8Full`,
-  `Addition8`). For circuits with multiple operations, `circuit_proof_start_raw` is still the
+  `Addition8`). For circuits with multiple operations, `circuit_proof_start_raw` remains the
   intended entry point, but the user needs to `obtain`/split `h_holds` manually before the
   final `subcircuit_norm` / `simp_all` steps can close the goal.
 
