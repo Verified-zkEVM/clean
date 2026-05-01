@@ -7,6 +7,7 @@ import Clean.Utils.Tactics.SubcircuitNorm
 open Lean Elab Tactic Meta
 open Circuit
 
+/-- Return `true` iff `type` weak-head normalizes to an `And` conjunction. -/
 private def isAndType (type : Expr) : MetaM Bool := do
   let type ← whnf type
   return type.getAppFn.constName? == some ``And
