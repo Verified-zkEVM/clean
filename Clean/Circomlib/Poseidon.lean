@@ -345,6 +345,19 @@ private lemma mix_t2_eq (state : Vector (F BN254_PRIME) 2) :
   · simp +decide [List.range, List.range.loop, List.foldl]
     rfl
 
+private lemma mix_P_t2_eq (state : Vector (F BN254_PRIME) 2) :
+    Specs.Poseidon.mix P_t2 state =
+      #v[p00 * state[0] + p10 * state[1], p01 * state[0] + p11 * state[1]] := by
+  apply Vector.ext
+  intro idx hidx
+  simp only [Specs.Poseidon.mix, p00, p01, p10, p11, getP, Vector.getElem_ofFn]
+  have hidx' : idx = 0 ∨ idx = 1 := by omega
+  rcases hidx' with rfl | rfl
+  · simp +decide [List.range, List.range.loop, List.foldl]
+    rfl
+  · simp +decide [List.range, List.range.loop, List.foldl]
+    rfl
+
 private lemma mixS_t2_eq (round : ℕ) (hr : round < 56) (state : Vector (F BN254_PRIME) 2) :
     Specs.PoseidonOptimized.mixS_t2 S_t2 round state hr =
       #v[(S_t2[round * 3]'(by omega) : F BN254_PRIME) * state[0] +
@@ -458,6 +471,46 @@ def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
   soundness
   completeness
 end ApplyFullRounds1
+
+namespace TransitionRound
+
+def main (state : Vector (Expression (F BN254_PRIME)) 2)
+    : Circuit (F BN254_PRIME) (Vector (Expression (F BN254_PRIME)) 2) :=
+  FullRound_t2.circuit
+    (C_t2[8]'(by omega) : F BN254_PRIME)
+    (C_t2[9]'(by omega) : F BN254_PRIME)
+    p00 p01 p10 p11 state
+
+def Spec (input output : Vector (F BN254_PRIME) 2) : Prop :=
+  output = (input |> Specs.Poseidon.sboxFull |> Specs.Poseidon.ark C_t2 8 |>
+    Specs.Poseidon.mix P_t2)
+
+def elaborated : ElaboratedCircuit (F BN254_PRIME) (fields 2) (fields 2) where
+  main
+  localLength _ := 10
+  output _ i := #v[varFromOffset field (i + 8), varFromOffset field (i + 9)]
+  subcircuitsConsistent := by
+    simp only [circuit_norm, main, FullRound_t2.circuit]
+
+theorem soundness : Soundness (F BN254_PRIME) elaborated (fun _ => True) Spec := by
+  circuit_proof_start [FullRound_t2.circuit]
+  simp only [Specs.Poseidon.sboxFull]
+  rw [ark_t2_eq 8 (by omega)]
+  simp only [Specs.Poseidon.sigma, mix_P_t2_eq, Vector.getElem_map]
+  obtain ⟨h0, h1⟩ := h_holds
+  rw [h0, h1]
+  rfl
+
+theorem completeness : Completeness (F BN254_PRIME) elaborated (fun _ => True) := by
+  circuit_proof_start [FullRound_t2.circuit]
+
+def circuit : FormalCircuit (F BN254_PRIME) (fields 2) (fields 2) where
+  elaborated
+  Spec
+  soundness
+  completeness
+
+end TransitionRound
 
 namespace ApplyFullRounds2
 
