@@ -88,8 +88,11 @@ partial def circuitProofStartCore : TacticM Unit := do
   `FormalAssertion.Soundness`, `FormalAssertion.Completeness`,
   `GeneralFormalCircuit.Soundness`, `GeneralFormalCircuit.Completeness`, or `RawSoundness`.
 
-  For `RawSoundness` goals, prefer `circuit_proof_start_raw` which also applies
-  `subcircuit_norm` after expanding `h_holds`.
+  For `RawSoundness` goals, `circuit_proof_start_raw` is an equivalent convenience
+  alias that makes the intent clear. Neither tactic automatically calls `subcircuit_norm`;
+  after `circuit_proof_start_raw`, the user should `obtain` the conjunction from
+  `h_holds` and then call `subcircuit_norm` to transform raw `ConstraintsHoldFlat`
+  subcircuit hypotheses into their `Spec` form.
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`
@@ -183,31 +186,13 @@ elab "circuit_proof_start_core" : tactic => do
 -/
 syntax "circuit_proof_start_raw" ("[" term,* "]")? : tactic
 
+-- circuit_proof_start_raw delegates to circuit_proof_start.
+-- Both tactics apply the same steps; having a separate name makes the intent clear
+-- (this is a RawSoundness proof that will use subcircuit_norm for forward reasoning).
 elab_rules : tactic
   | `(tactic| circuit_proof_start_raw $[[$terms:term,*]]?) => do
-  -- intro all hypotheses (same as circuit_proof_start)
-  circuitProofStartCore
-
-  -- try to unfold main, Assumptions and Spec as local definitions
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `Assumptions):ident] at *))
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `Spec):ident] at *))
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `elaborated):ident] at *))
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `main):ident] at *))
-
-  -- simplify structs / eval first
-  try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
-
-  -- Additional simplification for common patterns
-  let extraLemmas := match terms with
-    | some terms => terms.getElems.map fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
-    | none => #[]
-  let lemmasArray ← extraLemmas.mapM id
-
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_input):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident))) catch _ => pure ()
-  -- For RawSoundness, expand h_holds using circuit_norm (gives ConstraintsHoldFlat for subcircuits)
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
+  let lemmas := terms.getD (.mk #[])
+  evalTactic (← `(tactic| circuit_proof_start [$lemmas,*]))
 
 -- version of circuit_proof_start that attempts to close the goal with `simp_all`
 syntax "circuit_proof_all" ("[" term,* "]")? : tactic
