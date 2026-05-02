@@ -59,12 +59,12 @@ currently does automatically (via `s.Spec env`).
 -/
 example (n : ℕ) (x_var : Expression (F p)) (env : Environment (F p))
     (h : ConstraintsHoldFlat env (assertBool.toSubcircuit n x_var).ops.toFlat) :
-    IsBool (eval env x_var) := by
+    IsBool (Expression.eval env x_var) := by
   subcircuit_norm
   -- h : (assertBool.toSubcircuit n x_var).Spec env
   simp only [circuit_norm] at h
-  -- h : True → IsBool (eval env x_var)
-  exact h trivial
+  -- h : IsBool (Expression.eval env x_var)
+  exact h
 
 end BasicForwardReasoning
 
@@ -83,6 +83,41 @@ example (n m : ℕ) (x_var y_var : Expression (F p)) (env : Environment (F p))
   exact ⟨hx, hy⟩
 
 end MultipleHypotheses
+
+section DeepTraversal
+
+/--
+Test that `subcircuit_norm` rewrites matching propositions *inside* conjunctions,
+rather than only when the whole hypothesis exactly matches a tagged lemma premise.
+-/
+example (n : ℕ) (x_var : Expression (F p)) (env : Environment (F p))
+    (h : True ∧ ConstraintsHoldFlat env (assertBool.toSubcircuit n x_var).ops.toFlat) :
+    True ∧ (assertBool.toSubcircuit n x_var).Spec env := by
+  subcircuit_norm
+  exact h
+
+/--
+Test that `subcircuit_norm` also rewrites inside implication / forall bodies.
+This is the key "deep walk" behavior needed for a simp-like forward reasoning tactic.
+-/
+example (n : ℕ) (x_var : Expression (F p)) (env : Environment (F p))
+    (h : True → ConstraintsHoldFlat env (assertBool.toSubcircuit n x_var).ops.toFlat) :
+    True → (assertBool.toSubcircuit n x_var).Spec env := by
+  subcircuit_norm
+  exact h
+
+/--
+Full deep-rewrite chain: rewrite under both conjunction and implication, then simplify
+with `circuit_norm` to recover the concrete `IsBool` fact.
+-/
+example (n : ℕ) (x_var : Expression (F p)) (env : Environment (F p))
+    (h : True ∧ (True → ConstraintsHoldFlat env (assertBool.toSubcircuit n x_var).ops.toFlat)) :
+    IsBool (Expression.eval env x_var) := by
+  subcircuit_norm
+  simp only [circuit_norm] at h
+  simpa [IsBool] using h
+
+end DeepTraversal
 
 section FormalCircuitForwardReasoning
 

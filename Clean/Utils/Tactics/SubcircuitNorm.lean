@@ -1,5 +1,6 @@
 import Lean
 import Lean.PrettyPrinter.Delaborator.Basic
+import Batteries.Lean.TagAttribute
 import Clean.Circuit.Basic
 open Lean Elab Tactic Meta
 
@@ -117,36 +118,44 @@ private partial def rewritePropOnce (lemmaNames : Array Name) (type : Expr) :
   match type with
   | .app (.app andFn left) right =>
       if andFn.constName? == some ``And then
-        if let some (newLeft, leftTransformer) ← rewritePropOnce lemmaNames left then
-          withLocalDeclD `h type fun h => do
-            let leftProof ← mkAppM ``And.left #[h]
-            let rightProof ← mkAppM ``And.right #[h]
-            let newLeftProof := mkApp leftTransformer leftProof
-            let proof ← mkAppM ``And.intro #[newLeftProof, rightProof]
-            let newType := mkApp2 andFn newLeft right
-            let transformer ← mkLambdaFVars #[h] proof
-            return some (newType, transformer)
-        if let some (newRight, rightTransformer) ← rewritePropOnce lemmaNames right then
-          withLocalDeclD `h type fun h => do
-            let leftProof ← mkAppM ``And.left #[h]
-            let rightProof ← mkAppM ``And.right #[h]
-            let newRightProof := mkApp rightTransformer rightProof
-            let proof ← mkAppM ``And.intro #[leftProof, newRightProof]
-            let newType := mkApp2 andFn left newRight
-            let transformer ← mkLambdaFVars #[h] proof
-            return some (newType, transformer)
-      return none
+        match (← rewritePropOnce lemmaNames left) with
+        | some (newLeft, leftTransformer) =>
+            withLocalDeclD `h type fun h => do
+              let leftProof ← mkAppM ``And.left #[h]
+              let rightProof ← mkAppM ``And.right #[h]
+              let newLeftProof := mkApp leftTransformer leftProof
+              let proof ← mkAppM ``And.intro #[newLeftProof, rightProof]
+              let newType := mkApp2 andFn newLeft right
+              let transformer ← mkLambdaFVars #[h] proof
+              return some (newType, transformer)
+        | none =>
+            match (← rewritePropOnce lemmaNames right) with
+            | some (newRight, rightTransformer) =>
+                withLocalDeclD `h type fun h => do
+                  let leftProof ← mkAppM ``And.left #[h]
+                  let rightProof ← mkAppM ``And.right #[h]
+                  let newRightProof := mkApp rightTransformer rightProof
+                  let proof ← mkAppM ``And.intro #[leftProof, newRightProof]
+                  let newType := mkApp2 andFn left newRight
+                  let transformer ← mkLambdaFVars #[h] proof
+                  return some (newType, transformer)
+            | none =>
+                return none
+      else
+        return none
   | .forallE binderName domain body binderInfo =>
       withLocalDecl binderName binderInfo domain fun x => do
         let body := body.instantiate1 x
-        if let some (newBody, bodyTransformer) ← rewritePropOnce lemmaNames body then
-          withLocalDeclD `h type fun h => do
-            let proofAtX := mkApp bodyTransformer (mkApp h x)
-            let proof ← mkLambdaFVars #[x] proofAtX
-            let newType ← mkForallFVars #[x] newBody
-            let transformer ← mkLambdaFVars #[h] proof
-            return some (newType, transformer)
-        return none
+        match (← rewritePropOnce lemmaNames body) with
+        | some (newBody, bodyTransformer) =>
+            withLocalDeclD `h type fun h => do
+              let proofAtX := mkApp bodyTransformer (mkApp h x)
+              let proof ← mkLambdaFVars #[x] proofAtX
+              let newType ← mkForallFVars #[x] newBody
+              let transformer ← mkLambdaFVars #[h] proof
+              return some (newType, transformer)
+        | none =>
+            return none
   | _ => return none
 
 /-- Replace `hypName` with a new type and proof term produced by `rewritePropOnce`. -/
@@ -163,27 +172,19 @@ Scans all hypotheses in the current context and tries to apply the tagged forwar
 lemmas deeply inside each hypothesis type. Restarts scanning whenever a hypothesis
 is successfully replaced. Terminates when no more progress can be made.
 -/
-def subcircuitNormCore : TacticM Unit := do
+partial def subcircuitNormCore : TacticM Unit := do
   withMainContext do
     let env ← getEnv
-    -- Collect all names tagged with @[subcircuit_norm] into an array.
-    -- We use fold (accumulator pattern) since NameSet = RBTree does not
-    -- guarantee a ForIn instance across all Lean 4 versions.
-    let lemmaNames : Array Name :=
-      (subcircuitNormAttr.ext.getState env).fold (fun acc n => acc.push n) #[]
+    let lemmaNames : Array Name := subcircuitNormAttr.getDecls env
     if lemmaNames.isEmpty then return
-
-    let rec go : TacticM Unit := do
-      withMainContext do
-        let ctx ← getLCtx
-        for hypDecl in ctx do
-          if hypDecl.isImplementationDetail then continue
-          if let some (newType, transformer) ← rewritePropOnce lemmaNames hypDecl.type then
-            let proof := mkApp transformer hypDecl.toExpr
-            replaceHypothesis hypDecl.userName newType proof
-            go
-            return
-    go
+    let ctx ← getLCtx
+    for hypDecl in ctx do
+      if hypDecl.isImplementationDetail then continue
+      if let some (newType, transformer) ← rewritePropOnce lemmaNames hypDecl.type then
+        let proof := mkApp transformer hypDecl.toExpr
+        replaceHypothesis hypDecl.userName newType proof
+        subcircuitNormCore
+        return
 
 /--
 `subcircuit_norm` applies all `@[subcircuit_norm]` lemmas to hypotheses in forward direction.

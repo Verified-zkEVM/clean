@@ -34,9 +34,10 @@ automatically simplified `s.Spec env`.
 The `subcircuit_norm` tactic bridges this gap. After expanding `h_holds` with
 `simp [circuit_norm]`, the user can:
 
-1. `obtain` to split the conjunction in `h_holds`
-2. `subcircuit_norm` to transform `ConstraintsHoldFlat env s.ops.toFlat` → `s.Spec env`
-3. `simp [circuit_norm]` to further simplify the spec
+1. `subcircuit_norm` to deeply transform any `ConstraintsHoldFlat env s.ops.toFlat`
+   subexpression inside `h_holds` into `s.Spec env`
+2. `simp [circuit_norm]` to further simplify the spec
+3. `obtain`/`rcases` only afterwards, if desired, to unpack the normalized conjunction
 
 This demonstrates that `Subcircuit.Spec` (which `ConstraintsHold.Soundness` uses)
 could in principle be removed from the `Subcircuit` type, with `subcircuit_norm`
@@ -94,11 +95,11 @@ the `subcircuit_norm` tactic can perform the same transformation explicitly.
 **Proof pipeline for soundness**:
 1. `circuit_proof_start_raw` — introduces parameters with `h_holds : ConstraintsHold env ...`
 2. `simp [circuit_norm, h_input]` at `h_holds` — expands the raw constraints,
-   exposing `ConstraintsHoldFlat env s.ops.toFlat` for subcircuits
-3. `obtain ⟨h1, h2, ...⟩ := h_holds` — splits the conjunction
-4. `subcircuit_norm` — transforms `ConstraintsHoldFlat env s.ops.toFlat` → `s.Spec env`
-   for each subcircuit hypothesis
-5. `simp [circuit_norm]` — further simplifies the resulting `s.Spec env` hypotheses
+    exposing `ConstraintsHoldFlat env s.ops.toFlat` for subcircuits
+3. `subcircuit_norm` — deeply transforms `ConstraintsHoldFlat env s.ops.toFlat` → `s.Spec env`
+   inside the resulting proposition
+4. `simp [circuit_norm]` — further simplifies the resulting `s.Spec env` subexpressions
+5. `obtain ⟨h1, h2, ...⟩ := h_holds` — optionally splits the normalized conjunction
 
 **Completeness**: Unchanged from `FormalCircuit` — uses the same `Completeness` definition.
 

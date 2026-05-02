@@ -7,6 +7,37 @@ import Clean.Utils.Tactics.SubcircuitNorm
 open Lean Elab Tactic Meta
 open Circuit
 
+/-- Return `true` if and only if `type` weak-head normalizes to an `And` conjunction. -/
+private def isConjunction (type : Expr) : MetaM Bool := do
+  let whnfType ← whnf type
+  return whnfType.getAppFn.constName? == some ``And
+
+/--
+  Helper for `splitAndHypothesis`: split `current : A ∧ B ∧ ...` by repeatedly peeling off
+  the leftmost conjunct and accumulating the generated hypothesis names.
+-/
+private partial def splitAndHypothesisAux
+    (current : Name) (idx : Nat) (acc : Array Name) : TacticM (Array Name) := do
+  withMainContext do
+    let finished := acc.push current
+    let lctx ← getLCtx
+    let some decl := lctx.findFromUserName? current
+      | return finished
+    let shouldStop := !(← isConjunction decl.type)
+    if shouldStop then
+      return finished
+    let leftName := current.appendAfter s!"_{idx}"
+    evalTactic (← `(tactic|
+      rcases $(mkIdent current):ident with ⟨$(mkIdent leftName):ident, $(mkIdent current):ident⟩))
+    splitAndHypothesisAux current (idx + 1) (acc.push leftName)
+
+/--
+  Split `hypName : A ∧ B ∧ ...` into top-level hypotheses by repeatedly peeling off
+  the leftmost conjunct.
+-/
+private partial def splitAndHypothesis (hypName : Name) : TacticM (Array Name) := do
+  splitAndHypothesisAux hypName 1 #[]
+
 /--
   Introduce all standard parameters and hypotheses for Soundness or Completeness.
 -/
@@ -149,13 +180,15 @@ elab "circuit_proof_start_core" : tactic => do
   Tactic for starting `RawSoundness` proofs — the alternative proof pipeline using
   `subcircuit_norm` instead of the built-in `ConstraintsHold.Soundness` simplification.
 
-  This tactic extends `circuit_proof_start` with two extra steps after expanding `h_holds`:
+  This tactic extends `circuit_proof_start` with three extra steps after expanding `h_holds`:
 
-  1. `subcircuit_norm` — deeply traverses `h_holds` and transforms any
+  1. Split `h_holds` into top-level conjunct hypotheses when it is a conjunction.
+
+  2. `subcircuit_norm` — deeply traverses the resulting hypotheses and transforms any
      `ConstraintsHoldFlat env s.ops.toFlat` subexpression into `s.Spec env`.
 
-  2. A second `simp [circuit_norm, ...]` on `h_holds` — simplifies
-     any `s.Spec env` implication introduced by step 1 into its concrete
+  3. A second `simp [circuit_norm, ...]` on the split `h_holds*` hypotheses — simplifies
+     any `s.Spec env` implication introduced by step 2 into its concrete
      `Assumptions → circuit.Spec` form.
 
   **Workflow** (multi-operation circuit, e.g. `RawAddition8FullCarry`):
@@ -164,15 +197,15 @@ elab "circuit_proof_start_core" : tactic => do
   -- actual usage in Clean/Gadgets/Addition8/RawAddition8FullCarry.lean
   circuit_proof_start_raw [ByteTable]
     ↓
-  h_holds : z.val < 256
-          ∧ (assertBool.toSubcircuit n x).Spec env
-          ∧ x + y + carryIn + -z + -(carryOut * 256) = 0
+  h_holds_1 : z.val < 256
+  h_holds_2 : IsBool carry_out
+  h_holds   : x + y + carryIn + -z + -(carryOut * 256) = 0
     ↓
-  simp [circuit_norm] at h_holds
+  ... continue the proof directly ...
   ```
 
   For circuits with a **single** subcircuit call (e.g. `RawAddition8Full`, `RawAddition8`),
-  step 1 rewrites `h_holds` itself when it is a bare `ConstraintsHoldFlat ...` hypothesis, so the
+  step 1 leaves `h_holds` itself when it is a bare `ConstraintsHoldFlat ...` hypothesis, so the
   automatic `subcircuit_norm` + second `simp` pass rewrites it all the way to
   `Assumptions → circuit.Spec`.
 
@@ -188,17 +221,21 @@ elab_rules : tactic
   let lemmas := terms.getD (.mk #[])
   -- Step 1: all normal circuit_proof_start steps (introduces parameters, simp on h_holds, etc.)
   evalTactic (← `(tactic| circuit_proof_start [$lemmas,*]))
-  -- Step 2: apply subcircuit_norm — deeply transforms ConstraintsHoldFlat → Spec inside h_holds.
+  -- Step 2: split h_holds into top-level conjunction components when needed.
+  let holdsNames ← splitAndHypothesis `h_holds
+  -- Step 3: apply subcircuit_norm — deeply transforms ConstraintsHoldFlat → Spec.
   evalTactic (← `(tactic| try subcircuit_norm))
-  -- Step 3: simplify any Spec implications that subcircuit_norm introduced.
+  -- Step 4: simplify any Spec implications that subcircuit_norm introduced.
   let extraLemmas := match terms with
     | some ts => ts.getElems.map fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
     | none => #[]
   let lemmasArray ← extraLemmas.mapM id
-  try (evalTactic (← `(tactic|
-    simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident)))
-  catch _ =>
-    pure ()
+  for holdName in holdsNames do
+    try
+      evalTactic (← `(tactic|
+        simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent holdName):ident))
+    catch _ =>
+      pure ()
 
 /--
   One-shot tactic for `RawSoundness` proofs whose correctness follows immediately from the
@@ -211,9 +248,8 @@ elab_rules : tactic
   ```
 
   Works out of the box for circuits that wrap a **single** subcircuit (e.g. `Addition8Full`,
-  `Addition8`). For circuits with multiple operations, `circuit_proof_start_raw` now also
-  normalizes raw subcircuit constraints *inside* conjunction-shaped `h_holds`, so those
-  larger propositions are rewritten automatically as well.
+  `Addition8`). For circuits with multiple operations, `circuit_proof_start_raw` also
+  splits conjunction-shaped `h_holds` before normalizing the resulting hypotheses.
 
   **Example**:
   ```lean
