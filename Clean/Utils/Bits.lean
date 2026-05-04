@@ -156,9 +156,6 @@ theorem fieldFromBits_eval {n : ℕ} {eval : Environment (F p)} (bits : Vector (
     obtain ih := ih bits.pop
     simp [Vector.getElem_pop'] at ih
     simp [Fin.foldl_succ_last, ih, Expression.eval]
-    apply Or.inl
-    symm
-    rw [ZMod.cast_id]
 
 theorem fieldToBits_bits {n : ℕ} {x : F p} :
     ∀ i (_ : i < n), (fieldToBits n x)[i] = 0 ∨ (fieldToBits n x)[i] = 1 := by
@@ -190,13 +187,9 @@ lemma fieldToBits_fieldFromBits_aux {n : ℕ} (hn : 2^n < p) (bits : Vector (F p
     exact thm_lt
   · intro i hi
     simp
-    have h := ZMod.val_natCast p ((fromBits (Vector.map ZMod.val bits)))
-    simp_rw [h]
     have h_lt : fromBits (Vector.map ZMod.val bits) < p := by linarith
     simp_rw [Nat.mod_eq_of_lt h_lt, thm_val]
     simp
-    rw [ZMod.cast_id]
-    rfl
 
 /-- The result of `fieldFromBits` is less than 2^n -/
 theorem fieldFromBits_lt {n : ℕ} (bits : Vector (F p) n)

@@ -60,7 +60,7 @@ namespace Utils.StateTransition
 variable {S : Type*} [DecidableEq S] [Fintype S]
 
 /-- A transition from one state to another. -/
-def Transition (S : Type*) := S × S
+@[reducible] def Transition (S : Type*) := S × S
 
 instance [Fintype S] : Fintype (Transition S) := instFintypeProd S S
 
@@ -364,13 +364,19 @@ lemma countTransitionInPath_append_singleton (path : List S) (x y : S)
   | nil =>
     simp
     have : x = h := by simpa using h_last.symm
-    simp [this]
+    subst this
+    exact List.count_singleton_self
   | cons h2 t2 ih =>
-    simp only [List.cons_append, List.zip_cons_cons, List.count_cons, beq_iff_eq]
+    rw [List.cons_append, List.zip_cons_cons]
     by_cases h_eq : (h, h2) = (x, y)
-    · aesop
-    · simp [h_eq]
-      -- Now apply IH for h2 :: t2
+    · exfalso
+      apply h_not_in
+      rw [List.tail_cons, List.zip_cons_cons]
+      simp [h_eq]
+    · have h_step : List.count (x, y) ((h, h2) :: ((h2 :: (t2 ++ [y])).zip (t2 ++ [y])))
+          = List.count (x, y) ((h2 :: (t2 ++ [y])).zip (t2 ++ [y])) := by
+        simp [List.count_cons, h_eq]
+      rw [h_step]
       apply ih
       · simp
       · rw [← List.getLast?_cons_cons]; exact h_last

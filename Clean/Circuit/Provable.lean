@@ -424,6 +424,14 @@ where
   | [], .nil => rfl
   | c :: cs, .cons a as => by
     simp only [componentsToElements, componentsFromElements, eval.go]
+    change ProvableTypeList.cons (Eval.eval env a) (eval.go env cs as) =
+      ProvableTypeList.cons
+        (fromElements
+          (Vector.cast (Nat.min_add_right_self (a := size c.type) (b := combinedSize' cs))
+            ((Vector.map (Expression.eval env) (toElements a ++ componentsToElements cs as)).take (size c.type))))
+        (componentsFromElements cs
+          (Vector.cast (Nat.add_sub_self_left (size c.type) (combinedSize' cs))
+            ((Vector.map (Expression.eval env) (toElements a ++ componentsToElements cs as)).drop (size c.type))))
     rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
     congr
     · exact (ProvableType.fromElements_eval_toElements (env:=env) a).symm
@@ -469,8 +477,22 @@ where
     | c :: cs, offset => by
       simp only [varFromOffset.go, componentsFromElements, ProvableType.varFromOffset]
       have h_size : combinedSize' (c :: cs) = size c.type + combinedSize' cs := rfl
-      rw [Vector.cast_mapRange h_size, Vector.mapRange_add_eq_append, Vector.cast_rfl,
-        Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+      rw [Vector.cast_mapRange h_size, Vector.mapRange_add_eq_append]
+      change ProvableTypeList.cons
+          (fromElements (Vector.mapRange (size c.type) fun i ↦ var (F:=F) ⟨offset + i⟩))
+          (varFromOffset.go cs (offset + size c.type)) =
+        ProvableTypeList.cons
+          (fromElements
+            (Vector.cast (Nat.min_add_right_self (a := size c.type) (b := combinedSize' cs))
+              (((Vector.mapRange (size c.type) fun i ↦ var (F:=F) ⟨offset + i⟩) ++
+                Vector.mapRange (combinedSize' cs) fun i ↦ var (F:=F) ⟨offset + (size c.type + i)⟩).take
+                (size c.type))))
+          (componentsFromElements cs
+            (Vector.cast (Nat.add_sub_self_left (size c.type) (combinedSize' cs))
+              (((Vector.mapRange (size c.type) fun i ↦ var (F:=F) ⟨offset + i⟩) ++
+                Vector.mapRange (combinedSize' cs) fun i ↦ var (F:=F) ⟨offset + (size c.type + i)⟩).drop
+                (size c.type))))
+      rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
       congr
       -- recursively use this lemma
       rw [varFromOffset_eq_varFromOffset_aux]
@@ -679,9 +701,12 @@ instance ProvableVector.instance : ProvableType (ProvableVector α n) where
   toElements x := x.map toElements |>.flatten
   fromElements v := v.toChunks (psize α) |>.map fromElements
   fromElements_toElements x := by
-    rw [Vector.flatten_toChunks, Vector.map_map, ProvableType.fromElements_comp_toElements, Vector.map_id]
+    rw [show Vector.toChunks (psize α) (Vector.map toElements x).flatten = Vector.map toElements x
+          from Vector.flatten_toChunks (psize α) (Vector.map toElements x),
+        Vector.map_map, ProvableType.fromElements_comp_toElements, Vector.map_id]
   toElements_fromElements v := by
-    rw [Vector.map_map, ProvableType.toElements_comp_fromElements, Vector.map_id, Vector.toChunks_flatten]
+    rw [Vector.map_map, ProvableType.toElements_comp_fromElements, Vector.map_id]
+    exact Vector.toChunks_flatten (psize α) v
 
 namespace CircuitType
 
@@ -702,7 +727,9 @@ theorem eval_vector (env : Environment F)
   rw [h_map]
   simp only [explicit_provable_type, toElements, fromElements]
   simp only [Vector.map_flatten, Vector.map_map]
-  rw [Vector.flatten_toChunks]
+  rw [show Vector.toChunks (psize α) (Vector.map (Vector.map (Expression.eval env) ∘ toElements) x).flatten
+        = Vector.map (Vector.map (Expression.eval env) ∘ toElements) x
+      from Vector.flatten_toChunks (psize α) _]
   simp [explicit_provable_type]
 
 theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) :
@@ -750,14 +777,25 @@ theorem varFromOffset_vector {F : Type} [Field F] {α : TypeMap} [NonEmptyProvab
   | succ n ih =>
     rw [Vector.mapRange_succ, ←ih]
     simp only [varFromOffset, fromElements, size]
-    rw [←Vector.map_push, Vector.toChunks_push]
+    rw [←Vector.map_push]
+    congr 1
+    have h := Vector.toChunks_push (psize α)
+        (Vector.mapRange (n * size α) fun i ↦ var (F:=F) ⟨offset + i⟩)
+        (Vector.mapRange (size α) fun i ↦ var (F:=F) ⟨offset + size α * n + i⟩)
+    simp at h
+    rw [h]
     congr
     conv => rhs; congr; rhs; congr; intro i; rw [mul_comm, add_assoc]
     let create (i : ℕ) : Expression F := var ⟨ offset + i ⟩
     have h_create : (fun i => var ⟨ offset + (n * size α + i) ⟩) = (fun i ↦ create (n * size α + i)) := rfl
-    rw [h_create, ←Vector.mapRange_add_eq_append]
+    have h_first : (fun i ↦ var (F:=F) ⟨offset + i⟩) = create := rfl
+    rw [h_create, h_first]
     have h_size_succ : (n + 1) * size α = n * size α + size α := by rw [add_mul]; ac_rfl
-    rw [←Vector.cast_mapRange h_size_succ]
+    rw [show Vector.mapRange ((n + 1) * size α) create
+          = (Vector.mapRange (n * size α + size α) create).cast h_size_succ.symm
+        from Vector.cast_mapRange h_size_succ]
+    rw [Vector.mapRange_add_eq_append]
+    rfl
 end
 
 -- `ProvablePair`
@@ -879,6 +917,7 @@ theorem eval_pair_left_expr {β : TypeMap} [ProvableType β] (env : Environment 
     eval env ((a, b) : ProvablePair field β (Expression F)) =
       (Expression.eval env a, eval env b) := by
   rw [eval_pair (α:=field), ProvableType.eval_field]
+  rfl
 
 @[circuit_norm ↓ high]
 theorem eval_pair_right_expr {α : TypeMap} [ProvableType α] (env : Environment F)
@@ -886,6 +925,7 @@ theorem eval_pair_right_expr {α : TypeMap} [ProvableType α] (env : Environment
     eval env ((a, b) : ProvablePair α field (Expression F)) =
       (eval env a, Expression.eval env b) := by
   rw [eval_pair (β:=field), ProvableType.eval_field]
+  rfl
 
 @[circuit_norm ↓ high]
 theorem eval_pair_both_expr (env : Environment F)
@@ -893,6 +933,7 @@ theorem eval_pair_both_expr (env : Environment F)
     eval env ((a, b) : ProvablePair field field (Expression F)) =
       (Expression.eval env a, Expression.eval env b) := by
   simp only [eval_pair (α:=field) (β:=field), ProvableType.eval_field]
+  rfl
 
 -- Specialized lemmas for Vector (Expression F) to handle type inference issues with vectors
 @[circuit_norm ↓ high]
@@ -923,7 +964,12 @@ theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] 
     varFromOffset (F:=F) (ProvablePair α β) offset
     = (varFromOffset α offset, varFromOffset β (offset + size α)) := by
   simp only [varFromOffset, ProvablePair.instance]
-  rw [Vector.mapRange_add_eq_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+  rw [show Vector.mapRange (size (ProvablePair α β)) (fun i ↦ var (F:=F) ⟨offset + i⟩)
+        = Vector.mapRange (size α) (fun i ↦ var (F:=F) ⟨offset + i⟩) ++
+          Vector.mapRange (size β) (fun i ↦ var (F:=F) ⟨offset + (size α + i)⟩)
+      from Vector.mapRange_add_eq_append _]
+  show (fromElements _, fromElements _) = _
+  rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
   ac_rfl
 
 instance {α : TypeMap} [ProvableType α] : Zero (α F) where

@@ -25,9 +25,9 @@ theorem localLength_cons {a : Operation F} {as : Operations F} :
 theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : ProverEnvironment F) :
   localWitnesses env (op :: ops) =
     (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
-  cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
-  rw [Vector.empty_append]; simp
-  rw [Vector.empty_append]; simp
+  cases op <;>
+    (apply Vector.toArray_inj.mp; rw [Vector.toArray_cast, Vector.toArray_append];
+      simp [localWitnesses, Operation.localWitnesses])
 
 @[circuit_norm]
 theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl

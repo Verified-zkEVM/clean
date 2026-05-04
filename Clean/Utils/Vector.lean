@@ -129,7 +129,7 @@ lemma inductPush_listCons_push {motive : {n : ℕ} → Vector α n → Sort u}
     inductPush nil push' (listCons x (xs.push a)) =
       push' (listCons x xs) a (inductPush nil push' (listCons x xs)) := by
   conv => lhs; simp only [listCons, inductPush]
-  rw [cast_eq_iff_heq]
+  apply cast_eq_iff_heq.mpr
   have h_push_len : (xs.push a).toList.length = n + 1 := by simp
   have h_to_push_cons :
       HEq (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).1 (listCons x xs) := by

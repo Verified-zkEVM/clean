@@ -137,27 +137,51 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   output_eq c n := by
     rw [inst.witness_eq]
     show _ = inst.var_eq ▸ (ProvableType.witness c).output n
-    rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
-      cast_fst, cast_apply (by rw [inst.var_eq])]
+    rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast, cast_fst]
+    congr 1
+    exact cast_apply (by rw [inst.var_eq]) _ _
 
   localLength _ _ := size value
   localLength_eq c n := by
-    rw [inst.witness_eq, Circuit.localLength, eqRec_eq_cast,
-      cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
-    rfl
+    rw [inst.witness_eq, Circuit.localLength, eqRec_eq_cast]
+    have h_first_eq : value (Expression F) = var F := by rw [inst.var_eq]
+    have h_pair_eq : (value (Expression F) × Operations F) = (var F × Operations F) :=
+      h_first_eq ▸ rfl
+    have h_eq : (cast (show (ℕ → value (Expression F) × Operations F)
+            = (ℕ → var F × Operations F) from h_pair_eq ▸ rfl)
+          (ProvableType.witness c) n).2
+        = (ProvableType.witness c n).2 := by
+      rw [cast_apply h_pair_eq (ProvableType.witness c) n]
+      exact snd_cast h_first_eq _
+    exact h_eq ▸ rfl
 
   operations c n := [.witness (size value) (toElements ∘ c)]
   operations_eq c n := by
-    rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
-      snd_cast (by rw [inst.var_eq])]
-    rfl
+    rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast]
+    have h_first_eq : value (Expression F) = var F := by rw [inst.var_eq]
+    have h_pair_eq : (value (Expression F) × Operations F) = (var F × Operations F) :=
+      h_first_eq ▸ rfl
+    have h_eq : (cast (show (ℕ → value (Expression F) × Operations F)
+            = (ℕ → var F × Operations F) from h_pair_eq ▸ rfl)
+          (ProvableType.witness c) n).2
+        = (ProvableType.witness c n).2 := by
+      rw [cast_apply h_pair_eq (ProvableType.witness c) n]
+      exact snd_cast h_first_eq _
+    exact h_eq ▸ rfl
 
   subcircuitsConsistent c n := by
     simp only [circuit_norm]
-    rw [inst.witness_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
-      snd_cast (by rw [inst.var_eq])]
-    reduce
-    trivial
+    rw [inst.witness_eq, eqRec_eq_cast]
+    have h_first_eq : value (Expression F) = var F := by rw [inst.var_eq]
+    have h_pair_eq : (value (Expression F) × Operations F) = (var F × Operations F) :=
+      h_first_eq ▸ rfl
+    have h_eq : (cast (show (ℕ → value (Expression F) × Operations F)
+            = (ℕ → var F × Operations F) from h_pair_eq ▸ rfl)
+          (ProvableType.witness c) n).2
+        = (ProvableType.witness c n).2 := by
+      rw [cast_apply h_pair_eq (ProvableType.witness c) n]
+      exact snd_cast h_first_eq _
+    exact h_eq ▸ by reduce; trivial
 
 instance : ExplicitCircuits (F:=F) assertZero where
   output _ _ := ()

@@ -8,6 +8,7 @@ open Bits (toBits toBits_injective)
 
 -- Theorems about 64-bit rotation
 
+set_option maxHeartbeats 400000 in
 /--
   Our definition of right rotation of a 64-bit integer is equal to
   the one provided by `BitVec.rotateRight`

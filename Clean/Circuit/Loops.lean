@@ -120,7 +120,8 @@ variable {circuit : α → Circuit F β} {xs : Vector α m} [constant: ConstantL
 theorem localLength_eq : (xs.mapM circuit).localLength n = m * constant.localLength := by
   induction xs using Vector.inductPush
   case nil =>
-    rw [Vector.mapM_mk_empty, pure_localLength_eq, zero_mul]
+    rw [show Vector.mapM circuit (#v[] : Vector α 0) = pure #v[] from Vector.mapM_mk_empty,
+      pure_localLength_eq, zero_mul]
   case push xs x ih =>
     rw [Vector.mapM_push, bind_localLength_eq, bind_localLength_eq, pure_localLength_eq, ih, constant.localLength_eq]
     ring
@@ -158,7 +159,9 @@ lemma mapM_cons (xs : Vector α n) (body : α → Circuit F β) (x : α) :
 theorem operations_eq : (xs.mapM circuit).operations n =
     (List.ofFn fun (i : Fin m) => (circuit xs[i.val]).operations (n + i * constant.localLength)).flatten := by
   induction xs using Vector.induct generalizing n
-  case nil => simp [pure_operations_eq]
+  case nil =>
+    rw [show Vector.mapM circuit (#v[] : Vector α 0) = pure #v[] from Vector.mapM_mk_empty]
+    simp [pure_operations_eq]
   case cons x xs ih =>
     rw [mapM_cons, bind_operations_eq, bind_operations_eq, pure_operations_eq, ih,
       constant.localLength_eq, List.append_nil, ofFn_flatten_cons]
