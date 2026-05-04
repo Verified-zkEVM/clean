@@ -128,7 +128,7 @@ def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : ProverEnvir
     (var, [.witness (size α) (fun env => compute env |> toElements)])
 
 @[circuit_norm]
-def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
+def ProvableVector.witness {α : TypeMap} [ProvableType α] (m : ℕ)
     (compute : ProverEnvironment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
   ProvableType.witness (α:=ProvableVector α m) compute
 
@@ -508,7 +508,7 @@ instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F)
 instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
   witness := ProvableType.witness
 
-instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
+instance {m : ℕ} (α : TypeMap) [ProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
   witness := ProvableVector.witness m
 
@@ -585,7 +585,7 @@ class ConstantLength (circuit : α → Circuit F β) where
   localLength : ℕ
   localLength_eq : ∀ (a : α) (n : ℕ), (circuit a).localLength n = localLength
 
-def ConstantLength.fromConstantLength {circuit : α → Circuit F β} [Inhabited α]
+instance ConstantLength.fromConstantLength {circuit : α → Circuit F β} [Inhabited α]
     (h : ∀ (a : α) n, (circuit a).localLength n = (circuit default).localLength 0) : ConstantLength circuit where
   localLength := (circuit default).localLength 0
   localLength_eq a n := h a n
