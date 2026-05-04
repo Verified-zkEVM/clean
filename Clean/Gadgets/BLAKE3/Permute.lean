@@ -36,7 +36,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     fin_cases i <;> simp only [msgPermutation, h_assumptions]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_all
+  simp [circuit_norm, main]
 
 def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State :=
   { elaborated with Assumptions, Spec, soundness, completeness }

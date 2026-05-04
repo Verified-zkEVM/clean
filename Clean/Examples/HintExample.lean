@@ -41,7 +41,12 @@ def witnessBool : GeneralFormalCircuit.WithHint (F p) (Unconstrained Bool) field
 
   completeness := by
     circuit_proof_start [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-    cases input_var env <;> simp_all
+    cases input
+    · simp_all [toElements]
+      exact ⟨Or.inl rfl, rfl⟩
+    · simp_all [toElements]
+      refine ⟨Or.inr ?_, rfl⟩
+      exact add_neg_cancel 1
 
 structure Input (F : Type) where
   x : F
@@ -70,13 +75,33 @@ def booleanAnd : FormalCircuit (F p) Input field where
 
   soundness := by
     circuit_proof_start [witnessBool, assertBool, IsBool]
+    have h_x : Expression.eval env input_var_x = input_x := by
+      have h := congrArg Input.x h_input
+      simp only [ProvableStruct.eval_eq_eval] at h
+      reduce at h
+      exact h
+    have h_y : Expression.eval env input_var_y = input_y := by
+      have h := congrArg Input.y h_input
+      simp only [ProvableStruct.eval_eq_eval] at h
+      reduce at h
+      exact h
     rcases h_holds.1 with z | notz
     · simp_all
-      cases h_holds <;> simp_all
+      cases h_holds <;> simp_all <;> exact Or.inl rfl
     · grind
 
   completeness := by
     circuit_proof_start [witnessBool, assertBool, IsBool]
+    have h_x : Expression.eval env.toEnvironment input_var_x = input_x := by
+      have h := congrArg Input.x h_input
+      simp only [ProvableStruct.eval_eq_eval] at h
+      reduce at h
+      exact h
+    have h_y : Expression.eval env.toEnvironment input_var_y = input_y := by
+      have h := congrArg Input.y h_input
+      simp only [ProvableStruct.eval_eq_eval] at h
+      reduce at h
+      exact h
     simp_all
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
       <;> simp_all
