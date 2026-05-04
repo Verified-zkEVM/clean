@@ -90,6 +90,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
+  have h_x : Expression.eval env x_var = x := by
+    have h := congrArg Inputs.x h_input; simp at h; exact h
+  have h_y : Expression.eval env y_var = y := by
+    have h := congrArg Inputs.y h_input; simp at h; exact h
+  rw [h_x, h_y] at h_constraint
+  obtain ⟨ _, _, h_constraint ⟩ := h_constraint
   set w := env.get i
   -- The constraint from lookup is about xor = 2*or - x - y
   -- which in field arithmetic is 2*w + -x + -y
@@ -130,6 +136,11 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
+  have h_x : Expression.eval env.toEnvironment x_var = x := by
+    have h := congrArg Inputs.x h_input; simp at h; exact h
+  have h_y : Expression.eval env.toEnvironment y_var = y := by
+    have h := congrArg Inputs.y h_input; simp at h; exact h
+  rw [h_x, h_y]
   set w : F p := ZMod.val x ||| ZMod.val y
   have hw : w = ZMod.val x ||| ZMod.val y := rfl
   let z := 2*w - x - y
@@ -154,6 +165,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   have : 2 * w + -x + -y = 2*w - x - y := by ring
   rw [this]
+  refine ⟨hx_byte, hy_byte, ?_⟩
 
   simp only [w]
   rw [← or_times_two_sub_xor']

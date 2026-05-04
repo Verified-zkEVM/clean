@@ -162,7 +162,7 @@ lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := b
     rw [FieldUtils.val_lt_p]
     assumption
     linarith [p_large_enough.elim]
-  simp [h]
+  exact ⟨h _, h _, h _, h _⟩
 
 theorem value_fromUInt32 (x : UInt32) : value (fromUInt32 (p:=p) x) = x.toNat := by
   simp only [fromUInt32, UInt32.toFin_val]
@@ -174,12 +174,12 @@ def fromByte (x : Fin 256) : U32 (F p) :=
 
 lemma fromByte_value {x : Fin 256} : (fromByte x).value (p:=p) = x := by
   simp [value, fromByte]
-  apply FieldUtils.val_lt_p x
+  apply Nat.mod_eq_of_lt
   linarith [x.is_lt, p_large_enough.elim]
 
 lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   simp [Normalized, fromByte]
-  rw [FieldUtils.val_lt_p x]
+  rw [Nat.mod_eq_of_lt]
   repeat linarith [x.is_lt, p_large_enough.elim]
 
 omit p_large_enough in
