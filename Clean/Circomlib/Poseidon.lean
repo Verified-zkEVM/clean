@@ -190,64 +190,33 @@ Total witnesses: Initial ARK (2) + 3 full rounds (24) + transition round (8)
 -/
 namespace Poseidon1
 
-open Circuit
-
-private lemma ark_t2_eq (C : Vector ℕ 72) (offset : ℕ) (ho : offset + 1 < 72)
-    (state : Vector F 2) :
-    Specs.Poseidon.ark C offset state =
-      #v[state[0] + (C[offset]'(by omega) : F),
-         state[1] + (C[offset + 1]'ho : F)] := by
-  apply Vector.ext
-  intro idx hidx
-  have hidx' : idx = 0 ∨ idx = 1 := by omega
-  rcases hidx' with rfl | rfl
-  · simp [Specs.Poseidon.ark, show offset < 72 by omega]
-  · simp [Specs.Poseidon.ark, ho]
+private lemma ark_t2_eq (C : Vector ℕ 72) (offset : ℕ) (ho : offset + 1 < 72) (state : Vector F 2) :
+  Specs.Poseidon.ark C offset state =
+    #v[state[0] + C[offset], state[1] + C[offset + 1]] := by
+  simp [Specs.Poseidon.ark, ho, show offset < 72 by omega, Array.ofFn_succ]
 
 private lemma ark_zero_t2_eq (state : Vector F 2) :
     Specs.Poseidon.ark (.replicate 72 0) 0 state = state := by
-  apply Vector.ext
-  intro idx hidx
-  have hidx' : idx = 0 ∨ idx = 1 := by omega
-  rcases hidx' with rfl | rfl <;> simp [Specs.Poseidon.ark]
+  rw [ark_t2_eq _ _ (by norm_num)]; simp; grind
 
-private lemma mix_matrix_t2_eq (M : Vector (Vector ℕ 2) 2)
-    (state : Vector F 2) :
+private lemma mix_matrix_t2_eq (M : Vector (Vector ℕ 2) 2) (state : Vector F 2) :
     Specs.Poseidon.mix M state =
-      #v[(M[0][0] : F) * state[0] + (M[1][0] : F) * state[1],
-         (M[0][1] : F) * state[0] + (M[1][1] : F) * state[1]] := by
-  apply Vector.ext
-  intro idx hidx
-  simp only [Specs.Poseidon.mix, Vector.getElem_ofFn]
-  have hidx' : idx = 0 ∨ idx = 1 := by omega
-  rcases hidx' with rfl | rfl
-  · simp +decide [List.range, List.range.loop, List.foldl]
-  · simp +decide [List.range, List.range.loop, List.foldl]
-
-private lemma mixS_t2_eq (round : ℕ) (hr : round < 56) (state : Vector F 2) :
-    Specs.PoseidonOptimized.mixS_t2 S_t2 round state hr =
-      #v[(S_t2[round * 3]'(by omega) : F) * state[0] +
-         (S_t2[round * 3 + 1]'(by omega) : F) * state[1],
-         state[1] + state[0] * (S_t2[round * 3 + 2]'(by omega) : F)] := by
-  simp [Specs.PoseidonOptimized.mixS_t2]
+      #v[M[0][0] * state[0] + M[1][0] * state[1],
+         M[0][1] * state[0] + M[1][1] * state[1]] := by
+  simp [Specs.Poseidon.mix, List.range_succ, Array.ofFn_succ]
 
 namespace InitialArk
 
-def main (input : Expression F)
-    : Circuit F (Vector (Expression F) 2) := do
-  let state : Vector (Expression F) 2 := #v[Expression.const 0, input]
-  let out0 <== state[0] + Expression.const (C_t2[0] : F)
-  let out1 <== state[1] + Expression.const (C_t2[1] : F)
-  return #v[out0, out1]
-
 def circuit : FormalCircuit F field (fields 2) where
-  main
+  main input := do
+    let state := #v[.const 0, input]
+    let out0 <== state[0] + .const C_t2[0]
+    let out1 <== state[1] + .const C_t2[1]
+    return #v[out0, out1]
+
   localLength _ := 2
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
   output _ i := #v[varFromOffset field i, varFromOffset field (i + 1)]
 
-  Assumptions _ := True
   Spec (input : F) (output : Vector F 2) :=
     output = Specs.Poseidon.ark C_t2 0 #v[0, input]
 
@@ -255,7 +224,6 @@ def circuit : FormalCircuit F field (fields 2) where
     circuit_proof_start
     rw [ark_t2_eq C_t2 0 (by omega)]
     simp_all
-
   completeness := by
     circuit_proof_all
 
@@ -379,7 +347,7 @@ theorem soundness (round : Fin 56) :
     Soundness F (elaborated round) (fun _ => True) (Spec round) := by
   circuit_proof_start [Sigma.circuit]
   simp only [Specs.PoseidonOptimized.partialRoundOpt_t2, Specs.Poseidon.sigma,
-    dif_pos (show 10 + round.val < 72 by omega), mixS_t2_eq]
+    dif_pos (show 10 + round.val < 72 by omega), Specs.PoseidonOptimized.mixS_t2]
   obtain ⟨h0, h1, h2, h3⟩ := h_holds
   have h_in0 : Expression.eval env input_var[0] = input[0] := by
     simpa using congrArg (fun v => v[0]) h_input
