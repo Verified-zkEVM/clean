@@ -26,12 +26,9 @@ Matches circomlib's MixS template exactly
 --          out[1] = in[1] + in[0]*S[2]
 def mixS_t2 (S : Vector ℕ 168) (round : ℕ) (state : Vector F 2) (hr : round < 56) : Vector F 2 :=
   let base := round * 3
-  have hb0 : base < 168 := by omega
-  have hb1 : base + 1 < 168 := by omega
-  have hb2 : base + 2 < 168 := by omega
-  let s0 : F := S[base]'hb0
-  let s1 : F := S[base + 1]'hb1
-  let s2 : F := S[base + 2]'hb2
+  let s0 : F := S[base]
+  let s1 : F := S[base + 1]
+  let s2 : F := S[base + 2]
   let out0 := s0 * state[0] + s1 * state[1]
   let out1 := state[1] + state[0] * s2
   #v[out0, out1]
@@ -42,16 +39,11 @@ def mixS_t2 (S : Vector ℕ 168) (round : ℕ) (state : Vector F 2) (hr : round 
 --          out[2] = in[2] + in[0]*S[4]
 def mixS_t3 (S : Vector ℕ 285) (round : ℕ) (state : Vector F 3) (hr : round < 57) : Vector F 3 :=
   let base := round * 5
-  have hb0 : base < 285 := by omega
-  have hb1 : base + 1 < 285 := by omega
-  have hb2 : base + 2 < 285 := by omega
-  have hb3 : base + 3 < 285 := by omega
-  have hb4 : base + 4 < 285 := by omega
-  let s0 : F := S[base]'hb0
-  let s1 : F := S[base + 1]'hb1
-  let s2 : F := S[base + 2]'hb2
-  let s3 : F := S[base + 3]'hb3
-  let s4 : F := S[base + 4]'hb4
+  let s0 : F := S[base]
+  let s1 : F := S[base + 1]
+  let s2 : F := S[base + 2]
+  let s3 : F := S[base + 3]
+  let s4 : F := S[base + 4]
   let out0 := s0 * state[0] + s1 * state[1] + s2 * state[2]
   let out1 := state[1] + state[0] * s3
   let out2 := state[2] + state[0] * s4
@@ -64,20 +56,13 @@ def mixS_t3 (S : Vector ℕ 285) (round : ℕ) (state : Vector F 3) (hr : round 
 --          out[3] = in[3] + in[0]*S[6]
 def mixS_t4 (S : Vector ℕ 392) (round : ℕ) (state : Vector F 4) (hr : round < 56) : Vector F 4 :=
   let base := round * 7
-  have hb0 : base < 392 := by omega
-  have hb1 : base + 1 < 392 := by omega
-  have hb2 : base + 2 < 392 := by omega
-  have hb3 : base + 3 < 392 := by omega
-  have hb4 : base + 4 < 392 := by omega
-  have hb5 : base + 5 < 392 := by omega
-  have hb6 : base + 6 < 392 := by omega
-  let s0 : F := S[base]'hb0
-  let s1 : F := S[base + 1]'hb1
-  let s2 : F := S[base + 2]'hb2
-  let s3 : F := S[base + 3]'hb3
-  let s4 : F := S[base + 4]'hb4
-  let s5 : F := S[base + 5]'hb5
-  let s6 : F := S[base + 6]'hb6
+  let s0 : F := S[base]
+  let s1 : F := S[base + 1]
+  let s2 : F := S[base + 2]
+  let s3 : F := S[base + 3]
+  let s4 : F := S[base + 4]
+  let s5 : F := S[base + 5]
+  let s6 : F := S[base + 6]
   let out0 := s0 * state[0] + s1 * state[1] + s2 * state[2] + s3 * state[3]
   let out1 := state[1] + state[0] * s4
   let out2 := state[2] + state[0] * s5
@@ -122,7 +107,7 @@ def partialRoundOpt_t2 (C : Vector ℕ 72) (S : Vector ℕ 168) (cOffset : ℕ) 
     (state : Vector F 2) (hr : sRound < 56) : Vector F 2 :=
   let state' : Vector F 2 :=
     if hc : cOffset < 72 then
-      #v[sigma state[0] + (C[cOffset]'hc : F), state[1]]
+      #v[sigma state[0] + C[cOffset], state[1]]
     else
       #v[sigma state[0], state[1]]
   mixS_t2 S sRound state' hr

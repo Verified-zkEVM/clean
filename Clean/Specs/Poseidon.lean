@@ -38,7 +38,7 @@ def sigma (x : F) : F := x ^ 5
 def ark {n t : ℕ} (C : Vector ℕ n) (offset : ℕ) (state : Vector F t) : Vector F t :=
   Vector.ofFn fun i =>
     if h : offset + i < n then
-      state[i] + (C[offset + i]'h : F)
+      state[i] + C[offset + i]
     else
       state[i]
 
@@ -47,7 +47,7 @@ def mix {t : ℕ} (M : Vector (Vector ℕ t) t) (state : Vector F t) : Vector F 
   Vector.ofFn fun i =>
     (List.range t).foldl (fun acc j =>
       if hj : j < t then
-        acc + (M[j]'hj)[i]'(by omega) * state[j]'hj
+        acc + M[j][i] * state[j]
       else acc
     ) 0
 
@@ -58,7 +58,7 @@ def sboxFull {t : ℕ} (state : Vector F t) : Vector F t :=
 -- Apply S-box to first element only (partial round)
 def sboxPartial {t : ℕ} (state : Vector F t) (h : 0 < t) : Vector F t :=
   Vector.ofFn fun i =>
-    if i.val = 0 then sigma (state[0]'h)
+    if i.val = 0 then sigma state[0]
     else state[i]
 
 /-
@@ -80,9 +80,9 @@ def partialRoundCircom {n t : ℕ} (C : Vector ℕ n) (M : Vector (Vector ℕ t)
   -- Apply sbox to first element, then add round constant to first element
   let state' : Vector F t := Vector.ofFn fun i =>
     if i.val = 0 then
-      let sboxed := sigma (state[0]'h)
+      let sboxed := sigma state[0]
       if hoff : offset < n then
-        sboxed + (C[offset]'hoff : F)
+        sboxed + C[offset]
       else sboxed
     else state[i]
   mix M state'
@@ -124,7 +124,7 @@ def poseidon1 (input : F) : F :=
   let t := 2
   let nP := 56  -- N_ROUNDS_P[0]
   -- Initial state: [initialState, input]
-  let state : Vector F 2 := #v[(0 : F), input]
+  let state : Vector F 2 := #v[0, input]
   -- Initial ARK with C[0..1]
   let state := ark C_t2 0 state
   -- First half full rounds (4): SBOX → ARK → MIX
