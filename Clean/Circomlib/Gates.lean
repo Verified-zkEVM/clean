@@ -40,8 +40,8 @@ def main (input : Expression (F p) × Expression (F p)) := do
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  localLength_eq := by intros; simp [circuit_norm, main]; rfl
+  subcircuitsConsistent := by intros; simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -82,7 +82,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
+  localLength_eq := by intros; simp [circuit_norm, main]; rfl
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
@@ -122,7 +122,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
+  localLength_eq := by intros; simp [circuit_norm, main]; rfl
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
@@ -162,7 +162,7 @@ def main (input : Expression (F p)) := do
 def circuit : FormalCircuit (F p) field field where
   main
   localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
+  localLength_eq := by intros; simp [circuit_norm, main]; rfl
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input
@@ -204,7 +204,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
+  localLength_eq := by intros; simp [circuit_norm, main]; rfl
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
@@ -246,7 +246,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
+  localLength_eq := by intros; simp [circuit_norm, main]; rfl
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
@@ -432,21 +432,14 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         · apply AND.circuit.subcircuitsConsistent
         · exact h_witnesses
       · intro h_completeness
-        simp only [AND.circuit, AND.main, circuit_norm] at h_completeness ⊢
-        simp only [Nat.add_zero]
-        unfold ProverEnvironment.UsesLocalWitnesses Operations.forAllFlat
-        unfold Operations.forAll
-
-        constructor
-        · simp only [ProverEnvironment.ExtendsVector]
-          intro i
-          fin_cases i
-          simp only [add_zero]
-          exact h_completeness
-        · simp only [Operations.forAll]
-          simp only [circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main]
-          rw [Circuit.forEach]
-          simp_all [assertZero, circuit_norm, Operations.toFlat, FlatOperation.forAll]
+        rw [env.usesLocalWitnessesCompleteness_iff_forAll] at h_completeness
+        rw [env.usesLocalWitnesses_iff_forAll]
+        revert h_completeness
+        simp only [AND.circuit, AND.main, circuit_norm, FormalAssertion.toSubcircuit,
+          Gadgets.Equality.main, assertZero, Operations.forAll, Operations.toFlat,
+          FlatOperation.forAll]
+        intros
+        simp_all [Circuit.forEach, Vector.forM]
     | m + 3 =>
       intros
       subst offset2
@@ -479,13 +472,12 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           · aesop
           · omega
           · omega
-        · simp only [AND.circuit] at h_c3 ⊢
-          simp only [AND.main, circuit_norm] at h_c3 ⊢
+        · unfold ProverEnvironment.UsesLocalWitnessesCompleteness at h_c3
+          simp only [AND.circuit, AND.main, circuit_norm] at h_c3 ⊢
           constructor
-          · exact h_c3
+          · exact h_c3.1 0
           · simp only [circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main]
-            rw [Circuit.forEach]
-            simp_all [assertZero, circuit_norm, Operations.toFlat, FlatOperation.forAll]
+            simp_all [assertZero, circuit_norm, Operations.forAll]
 
 -- Extract Assumptions and Spec outside the circuit
 def Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=

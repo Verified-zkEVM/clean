@@ -33,16 +33,19 @@ def Spec (x : F) (output : F) : Prop :=
   output = if x = 0 then 1 else 0
 
 theorem soundness : Soundness F elaborated Assumptions (Spec (F:=F)) := by
-  circuit_proof_start
+  circuit_proof_start [main]
   split
-  · rename_i h_input
-    simp only [h_input] at *
-    norm_num at *
-    assumption
-  · aesop
+  · rename_i h_zero
+    simp [h_zero] at h_holds
+    exact h_holds
+  · rename_i h_nonzero
+    obtain ⟨h1, h2⟩ := h_holds
+    rcases (mul_eq_zero (a := env.get (i₀ + 1)) (b := input)).mp h2 with h | h
+    · exact h
+    · contradiction
 
 theorem completeness : Completeness F elaborated Assumptions := by
-  circuit_proof_start
+  circuit_proof_start [main]
   aesop
 
 def circuit : FormalCircuit F field field := {
