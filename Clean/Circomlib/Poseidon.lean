@@ -192,17 +192,6 @@ namespace Poseidon1
 
 open Circuit
 
--- Offsets for foldl full-round phases, matching the optimized spec recursion.
-def fullRoundOffsets (offset : ℕ) (h : offset + 4 < 71) : Vector (Fin 71) 3 :=
-  Vector.ofFn fun i =>
-    ⟨offset + 2*i.val, by omega⟩
-
-def zeroRoundConstants : Vector ℕ 72 :=
-  Vector.ofFn fun _ => 0
-
-def partialRoundIndices : Vector (Fin 56) 56 :=
-  Vector.ofFn fun i => i
-
 private lemma ark_t2_eq (C : Vector ℕ 72) (offset : ℕ) (ho : offset + 1 < 72)
     (state : Vector F 2) :
     Specs.Poseidon.ark C offset state =
@@ -216,11 +205,11 @@ private lemma ark_t2_eq (C : Vector ℕ 72) (offset : ℕ) (ho : offset + 1 < 72
   · simp [Specs.Poseidon.ark, ho]
 
 private lemma ark_zero_t2_eq (state : Vector F 2) :
-    Specs.Poseidon.ark zeroRoundConstants 0 state = state := by
+    Specs.Poseidon.ark (.replicate 72 0) 0 state = state := by
   apply Vector.ext
   intro idx hidx
   have hidx' : idx = 0 ∨ idx = 1 := by omega
-  rcases hidx' with rfl | rfl <;> simp [Specs.Poseidon.ark, zeroRoundConstants]
+  rcases hidx' with rfl | rfl <;> simp [Specs.Poseidon.ark]
 
 private lemma mix_matrix_t2_eq (M : Vector (Vector ℕ 2) 2)
     (state : Vector F 2) :
@@ -272,11 +261,10 @@ def circuit : FormalCircuit F field (fields 2) where
 
 end InitialArk
 
-namespace FullRoundOpt_t2
+namespace FullRound_t2
 
-def main (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71)
-    (state : Vector (Expression F) 2)
-    : Circuit F (Vector (Expression F) 2) := do
+def main (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71) (state : Vector (Expression F) 2) :
+    Circuit F (Vector (Expression F) 2) := do
   let s0 ← Sigma.circuit state[0]
   let s1 ← Sigma.circuit state[1]
   let a0 := s0 + .const C[offset.val]
@@ -324,16 +312,15 @@ def circuit (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71) 
   soundness := soundness C M offset
   completeness := completeness C M offset
 
-end FullRoundOpt_t2
+end FullRound_t2
 
 namespace ApplyFullRounds
 
-def main (offset : ℕ) (h : offset + 4 < 71)
-    (state : Vector (Expression F) 2)
-    : Circuit F (Vector (Expression F) 2) :=
-  Circuit.foldl (fullRoundOffsets offset h) state
-    (fun st offset => FullRoundOpt_t2.circuit C_t2 M_t2 offset st)
-    (by simp only [circuit_norm, FullRoundOpt_t2.circuit, FullRoundOpt_t2.elaborated])
+def main (offset : ℕ) (h : offset + 4 < 71) (state : Vector (Expression F) 2) :
+    Circuit F (Vector (Expression F) 2) :=
+  Circuit.foldl (.ofFn fun (i : Fin 3) => ⟨offset + 2*i.val, by omega⟩) state
+    (fun st offset => FullRound_t2.circuit C_t2 M_t2 offset st)
+    (by simp only [circuit_norm, FullRound_t2.circuit, FullRound_t2.elaborated])
 
 def Spec (offset : ℕ) (input output : Vector F 2) : Prop :=
   output = Specs.PoseidonOptimized.fullRoundsOpt_t2 C_t2 M_t2 3 offset input
@@ -348,16 +335,15 @@ def elaborated (offset : ℕ) (h : offset + 4 < 71) :
 
 theorem soundness (offset : ℕ) (h : offset + 4 < 71) :
     Soundness F (elaborated offset h) (fun _ => True) (Spec offset) := by
-  circuit_proof_start [FullRoundOpt_t2.circuit, FullRoundOpt_t2.elaborated, FullRoundOpt_t2.Spec]
+  circuit_proof_start [FullRound_t2.circuit, FullRound_t2.elaborated, FullRound_t2.Spec]
   obtain ⟨h0, h_step⟩ := h_holds
   have h1 := h_step 0 (by omega)
   have h2 := h_step 1 (by omega)
-  simp_all [Specs.PoseidonOptimized.fullRoundsOpt_t2,
-    fullRoundOffsets]
+  simp_all [Specs.PoseidonOptimized.fullRoundsOpt_t2]
 
 theorem completeness (offset : ℕ) (h : offset + 4 < 71) :
     Completeness F (elaborated offset h) (fun _ => True) := by
-  circuit_proof_start [FullRoundOpt_t2.circuit]
+  circuit_proof_start [FullRound_t2.circuit]
 
 def circuit (offset : ℕ) (h : offset + 4 < 71) :
     FormalCircuit F (fields 2) (fields 2) where
@@ -368,10 +354,10 @@ def circuit (offset : ℕ) (h : offset + 4 < 71) :
 
 end ApplyFullRounds
 
-namespace PartialRoundOptStep_t2
+namespace PartialRoundOpt_t2
 
-def main (round : Fin 56) (state : Vector (Expression F) 2)
-    : Circuit F (Vector (Expression F) 2) := do
+def main (round : Fin 56) (state : Vector (Expression F) 2) :
+    Circuit F (Vector (Expression F) 2) := do
   let sbox0 ← Sigma.circuit state[0]
   let a0 <== sbox0 + .const C_t2[10 + round.val]
   let out0 <== .const S_t2[3*round.val] * a0 + .const S_t2[3*round.val + 1] * state[1]
@@ -413,7 +399,7 @@ def circuit (round : Fin 56) : FormalCircuit F (fields 2) (fields 2) where
   soundness := soundness round
   completeness := completeness round
 
-end PartialRoundOptStep_t2
+end PartialRoundOpt_t2
 
 private lemma partialRoundsOpt_induction
     (nRounds cOffset sRound : ℕ)
@@ -441,10 +427,10 @@ namespace ApplyPartialRoundsOpt
 
 def main (state : Vector (Expression F) 2)
     : Circuit F (Vector (Expression F) 2) :=
-  Circuit.foldl partialRoundIndices state
-    (fun st round => PartialRoundOptStep_t2.circuit round st)
-    (by simp only [circuit_norm, PartialRoundOptStep_t2.circuit,
-      PartialRoundOptStep_t2.elaborated])
+  Circuit.foldl (.finRange 56) state
+    (fun st round => PartialRoundOpt_t2.circuit round st)
+    (by simp only [circuit_norm, PartialRoundOpt_t2.circuit,
+      PartialRoundOpt_t2.elaborated])
 
 def Spec (input output : Vector F 2) : Prop :=
   output = Specs.PoseidonOptimized.partialRoundsOpt_t2 C_t2 S_t2 56 10 0 input (by omega)
@@ -461,39 +447,39 @@ def elaborated : ElaboratedCircuit F (fields 2) (fields 2) where
   main
   localLength _ := 336
   localLength_eq := by
-    simp only [circuit_norm, main, PartialRoundOptStep_t2.circuit,
-      PartialRoundOptStep_t2.elaborated]
+    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit,
+      PartialRoundOpt_t2.elaborated]
   output _ i := #v[varFromOffset field (i + 334), varFromOffset field (i + 335)]
   output_eq := by
-    simp only [circuit_norm, main, PartialRoundOptStep_t2.circuit,
-      PartialRoundOptStep_t2.elaborated]
+    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit,
+      PartialRoundOpt_t2.elaborated]
   subcircuitsConsistent := by
-    simp only [circuit_norm, main, PartialRoundOptStep_t2.circuit,
-      PartialRoundOptStep_t2.elaborated]
+    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit,
+      PartialRoundOpt_t2.elaborated]
 
 theorem soundness : Soundness F elaborated Assumptions Spec := by
-  circuit_proof_start [PartialRoundOptStep_t2.circuit, PartialRoundOptStep_t2.elaborated,
-    PartialRoundOptStep_t2.Spec]
+  circuit_proof_start [PartialRoundOpt_t2.circuit, PartialRoundOpt_t2.elaborated,
+    PartialRoundOpt_t2.Spec]
   obtain ⟨h0, h_step⟩ := h_holds
-  have h0' := h0
   have h_round : ∀ (k : ℕ) (hk : k < 56),
       envState env input i₀ (k + 1) =
         Specs.PoseidonOptimized.partialRoundOpt_t2 C_t2 S_t2 (10 + k) k
           (envState env input i₀ k) hk := by
     intro k hk
     rcases k with _ | j
-    · exact Vector.toArray_inj.mp (by simpa [partialRoundIndices, envState] using h0')
+    · exact Vector.toArray_inj.mp (by simpa [envState] using h0)
     · have hj := h_step j (by omega)
-      exact Vector.toArray_inj.mp (by simpa +arith [partialRoundIndices, envState] using hj)
+      exact Vector.toArray_inj.mp (by simpa +arith [envState] using hj)
   have h_final := partialRoundsOpt_induction 56 10 0 (by omega)
     (fun k => envState env input i₀ k)
     (by
       intro i hi
-      simpa +arith only [] using h_round i hi)
+      simp only [zero_add]
+      exact h_round i hi)
   exact congr_arg Vector.toArray h_final
 
 theorem completeness : Completeness F elaborated Assumptions := by
-  circuit_proof_start [PartialRoundOptStep_t2.circuit]
+  circuit_proof_start [PartialRoundOpt_t2.circuit]
 
 def circuit : FormalCircuit F (fields 2) (fields 2) := {
   elaborated with
@@ -508,10 +494,10 @@ end ApplyPartialRoundsOpt
 def main (input : Expression F) : Circuit F (Expression F) := do
   let state ← InitialArk.circuit input
   let state ← ApplyFullRounds.circuit 2 (by omega) state
-  let state ← FullRoundOpt_t2.circuit C_t2 P_t2 ⟨8, by omega⟩ state
+  let state ← FullRound_t2.circuit C_t2 P_t2 ⟨8, by omega⟩ state
   let state ← ApplyPartialRoundsOpt.circuit state
   let state ← ApplyFullRounds.circuit 66 (by omega) state
-  let state ← FullRoundOpt_t2.circuit zeroRoundConstants M_t2 ⟨0, by omega⟩ state
+  let state ← FullRound_t2.circuit (.replicate 72 0) M_t2 ⟨0, by omega⟩ state
   return state[0]
 
 def Spec (input output : F) : Prop :=
@@ -522,23 +508,23 @@ def elaborated : ElaboratedCircuit F field field where
   localLength _ := 402
   localLength_eq := by
     simp only [circuit_norm, main, InitialArk.circuit, ApplyFullRounds.circuit,
-      ApplyFullRounds.elaborated, FullRoundOpt_t2.circuit, FullRoundOpt_t2.elaborated,
+      ApplyFullRounds.elaborated, FullRound_t2.circuit, FullRound_t2.elaborated,
       ApplyPartialRoundsOpt.circuit, ApplyPartialRoundsOpt.elaborated]
   output _ i := varFromOffset field (i + 400)
   output_eq := by
     simp only [circuit_norm, main, InitialArk.circuit, ApplyFullRounds.circuit,
-      ApplyFullRounds.elaborated, FullRoundOpt_t2.circuit, FullRoundOpt_t2.elaborated,
+      ApplyFullRounds.elaborated, FullRound_t2.circuit, FullRound_t2.elaborated,
       ApplyPartialRoundsOpt.circuit, ApplyPartialRoundsOpt.elaborated]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, InitialArk.circuit, ApplyFullRounds.circuit,
-      ApplyFullRounds.elaborated, FullRoundOpt_t2.circuit, FullRoundOpt_t2.elaborated,
+      ApplyFullRounds.elaborated, FullRound_t2.circuit, FullRound_t2.elaborated,
       ApplyPartialRoundsOpt.circuit, ApplyPartialRoundsOpt.elaborated]
 
 theorem soundness : Soundness F elaborated (fun _ => True) Spec := by
-  circuit_proof_start [InitialArk.circuit, ApplyFullRounds.circuit, FullRoundOpt_t2.circuit,
+  circuit_proof_start [InitialArk.circuit, ApplyFullRounds.circuit, FullRound_t2.circuit,
     ApplyPartialRoundsOpt.circuit]
-  simp +arith only [circuit_norm, ApplyFullRounds.elaborated, FullRoundOpt_t2.elaborated,
-    ApplyPartialRoundsOpt.elaborated, ApplyFullRounds.Spec, FullRoundOpt_t2.Spec,
+  simp +arith only [circuit_norm, ApplyFullRounds.elaborated, FullRound_t2.elaborated,
+    ApplyPartialRoundsOpt.elaborated, ApplyFullRounds.Spec, FullRound_t2.Spec,
     ApplyPartialRoundsOpt.Spec, ApplyPartialRoundsOpt.Assumptions,
     Specs.PoseidonOptimized.fullRoundOpt_t2, ark_zero_t2_eq,
     Specs.PoseidonOptimized.poseidon1Opt] at h_holds ⊢
@@ -547,7 +533,7 @@ theorem soundness : Soundness F elaborated (fun _ => True) Spec := by
   simp_all
 
 theorem completeness : Completeness F elaborated (fun _ => True) := by
-  circuit_proof_start [InitialArk.circuit, ApplyFullRounds.circuit, FullRoundOpt_t2.circuit,
+  circuit_proof_start [InitialArk.circuit, ApplyFullRounds.circuit, FullRound_t2.circuit,
     ApplyPartialRoundsOpt.circuit, ApplyPartialRoundsOpt.Assumptions]
 
 def circuit : FormalCircuit F field field where
