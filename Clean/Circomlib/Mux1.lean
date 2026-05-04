@@ -91,37 +91,31 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [h_output_i]
 
     -- Now we can work with the components
+    reduce at h_input
     rw [← h_input] at h_assumptions ⊢
-    -- Extract the fact that s is boolean
-    -- IsBool means s = 0 ∨ s = 1
     simp only [eval_vector]
     simp only [Vector.getElem_map]
-    simp only at h_assumptions
 
     cases h_assumptions with
       | inl h0 =>
-        -- When s = 0
-        rw [h0]
+        simp only at h0
+        rw [show input_var.s = input_var.2 from rfl, h0]
         simp only [mul_zero, circuit_norm]
         norm_num
       | inr h1 =>
-        -- When s = 1
-        rw [h1]
+        simp only at h1
+        rw [show input_var.s = input_var.2 from rfl, h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
         norm_num
 
   completeness := by
     circuit_proof_start
-    -- We need to show that the witnessed values equal the computed expressions
     ext i hi
-    -- Left side: eval of varFromOffset
     simp only [Vector.getElem_map, Vector.getElem_mapRange]
-    -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
     simp only [Expression.eval]
-    -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
     rw [h_env_i]
-    norm_num
+    simp [Vector.getElem_map, toElements, Expression.eval]
 
 end MultiMux1
 
