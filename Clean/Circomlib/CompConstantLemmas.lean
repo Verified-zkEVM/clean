@@ -917,7 +917,7 @@ lemma div_losses_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127
     calc 2 * n * 2^127 + (Λ - W) < 2 * n * 2^127 + 2^127 := by omega
       _ = (2 * n + 1) * 2^127 := by ring
   apply Nat.div_eq_of_lt_le
-  · omega
+  · exact Nat.le_add_right _ _
   · exact h_upper
 
 omit [Fact (p < 2 ^ 254)] in
