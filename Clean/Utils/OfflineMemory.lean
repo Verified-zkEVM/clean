@@ -275,7 +275,10 @@ example : MemoryAccessList.isConsistentOnline [
   (2, 0, 42, 44),
   (3, 2, 0, 45),
   (4, 1, 43, 46)
-].reverse (by simp [MemoryAccessList.isTimestampSorted]):= by
+].reverse (by
+  show List.Pairwise timestamp_ordering _
+  refine .cons ?_ (.cons ?_ (.cons ?_ (.cons ?_ (.cons ?_ .nil))))
+  all_goals (intro a ha; fin_cases ha <;> (show timestamp_ordering _ _; simp [timestamp_ordering]))) := by
   simp_all [MemoryAccessList.isConsistentOnline, MemoryAccessList.lastWriteValue]
 
 example : ¬ MemoryAccessList.isConsistentOnline [
@@ -284,7 +287,10 @@ example : ¬ MemoryAccessList.isConsistentOnline [
   (2, 0, 43, 44), -- inconsistent read
   (3, 2, 0, 45),
   (4, 1, 43, 46)
-].reverse (by simp [MemoryAccessList.isTimestampSorted]):= by
+].reverse (by
+  show List.Pairwise timestamp_ordering _
+  refine .cons ?_ (.cons ?_ (.cons ?_ (.cons ?_ (.cons ?_ .nil))))
+  all_goals (intro a ha; fin_cases ha <;> (show timestamp_ordering _ _; simp [timestamp_ordering]))) := by
   simp_all [MemoryAccessList.isConsistentOnline, MemoryAccessList.lastWriteValue]
 
 /--
@@ -311,6 +317,7 @@ theorem MemoryAccessList.filterAddress_cons (head : MemoryAccess) (tail : Memory
         else (MemoryAccessList.filterAddress tail addr))) := by
   obtain ⟨_t, a, _r, _w⟩ := head
   simp [filterAddress, List.filter_cons]
+  rfl
 
 /--
   A memory access list is consistent for a single address if the reads and writes to that address are consistent.
