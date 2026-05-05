@@ -152,7 +152,7 @@ elab "simplify_provable_struct_eval" : tactic => do
     -- constructors.
     try
       let hypIdent := mkIdent hypName
-      let tac ← `(tactic| simp only [
+      let tac ← `(tactic| simp +instances only [
         DerivedCircuitType.eval_verifier,
         DerivedCircuitType.eval_prover,
         CircuitType.evalVerifier,
@@ -173,12 +173,12 @@ elab "simplify_provable_struct_eval" : tactic => do
           continue
         try
           let hypIdent := mkIdent localDecl.userName
-          let tac ← `(tactic| simp only [$[$simpArgs],*] at $hypIdent:ident)
+          let tac ← `(tactic| simp +instances only [$[$simpArgs],*] at $hypIdent:ident)
           evalTactic tac
         catch _ =>
           continue
       try
-        let tac ← `(tactic| simp only [$[$simpArgs],*])
+        let tac ← `(tactic| simp +instances only [$[$simpArgs],*])
         evalTactic tac
       catch _ =>
         pure ()
