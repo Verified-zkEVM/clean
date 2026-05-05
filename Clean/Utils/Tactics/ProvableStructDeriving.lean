@@ -273,8 +273,28 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
   if fieldNames.isEmpty then
     throwError "ProvableStruct deriving requires at least one field"
 
+  let rec fieldTypeToSyntax (args : Array Expr) (e : Expr) : TermElabM (TSyntax `term) := do
+    if e == args[indInfo.numParams - 1]! then
+      return mkIdent `F
+    match e with
+    | .fvar fvarId =>
+      for h : i in [:args.size] do
+        if args[i] == e then
+          return mkIdent (← fvarId.getUserName)
+      throwError "unknown free variable in field type: {e}"
+    | .const name _ =>
+      return mkIdent name
+    | .app f arg =>
+      let fSyntax ← fieldTypeToSyntax args f
+      let argSyntax ← fieldTypeToSyntax args arg
+      `($fSyntax $argSyntax)
+    | .lit (.natVal n) =>
+      return Syntax.mkNumLit (toString n)
+    | _ =>
+      PrettyPrinter.delab e
+
   -- Do all analysis within a single forallTelescope to keep fvars consistent
-  let (paramInfos, componentSyntaxes) ← liftTermElabM do
+  let (paramInfos, componentSyntaxes, fieldTypeSyntaxes) ← liftTermElabM do
     forallTelescope indInfo.type fun args _ => do
       -- args are the parameters: param_0, param_1, ..., param_(n-2), F
       -- We need info for all but the last one (F : Type)
@@ -288,6 +308,7 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
 
       -- Analyze each field to determine its TypeMap
       let mut components : Array (TSyntax `term) := #[]
+      let mut fieldTypes : Array (TSyntax `term) := #[]
       for fname in fieldNames do
         -- Get projection function info
         let projFnName := structName ++ fname
@@ -312,8 +333,10 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
 
         let componentSyntax ← analyzeFieldType numParams args fieldType
         components := components.push componentSyntax
+        let fieldTypeSyntax ← fieldTypeToSyntax args fieldType
+        fieldTypes := fieldTypes.push fieldTypeSyntax
 
-      return (infos, components)
+      return (infos, components, fieldTypes)
 
   let fieldNameIdents : Array (TSyntax `ident) := fieldNames.map mkIdent
 
@@ -370,6 +393,32 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
       let binder ← `(bracketedBinderF| {$nIdent : $tySyntax})
       binderSyntaxes := binderSyntaxes.push binder
 
+  -- Generate a public simp lemma in terms of the original field types, avoiding
+  -- the private `fromComponents.match_1` equation theorem whose implicit
+  -- arguments expose less-normal component types.
+  let theoremFIdent : TSyntax `ident := mkIdent `F
+  let theoremFTerm : TSyntax `term := TSyntax.mk theoremFIdent.raw
+  let theoremFBinder ← `(bracketedBinderF| {$theoremFIdent:ident : Type})
+
+  let mut fieldBinderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
+  for i in [:fieldNameIdents.size] do
+    let fname := fieldNameIdents[i]!
+    let fieldType := fieldTypeSyntaxes[i]!
+    let binder ← `(bracketedBinderF| ($fname : $fieldType))
+    fieldBinderSyntaxes := fieldBinderSyntaxes.push binder
+
+  let mut theoremFromCompTerm : TSyntax `term ← `(.nil)
+  for i in [:fieldNameIdents.size] do
+    let idx := fieldNameIdents.size - 1 - i
+    let fname := fieldNameIdents[idx]!
+    theoremFromCompTerm ← `(.cons $fname $theoremFromCompTerm)
+
+  let theoremMkAppSyntax ← fieldNameIdents.foldlM (init := (structMk : TSyntax `term)) fun acc fname =>
+    `($acc $fname)
+
+  let theoremName ← relativeToCurrentNamespace (structName ++ `fromComponents_cons)
+  let theoremIdent := mkIdent theoremName
+
   -- Build the full instance command
   let cmd ←
     if binderSyntaxes.isEmpty then
@@ -388,6 +437,18 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
       )
 
   elabCommand cmd
+
+  let theoremCmd ← `(
+      @[circuit_norm]
+      theorem $theoremIdent:ident $binderSyntaxes:bracketedBinder* $theoremFBinder:bracketedBinder
+          $fieldBinderSyntaxes:bracketedBinder* :
+          fromComponents (α := $appliedStructType) (F := $theoremFTerm)
+            (($theoremFromCompTerm : ProvableStruct.ProvableTypeList $theoremFTerm $componentsListSyntax)) =
+            $theoremMkAppSyntax := by
+        rfl
+    )
+
+  elabCommand theoremCmd
 
 /-- The deriving handler for ProvableStruct -/
 def provableStructDerivingHandler (declNames : Array Name) : CommandElabM Bool := do

@@ -331,7 +331,7 @@ class ProvableStruct (α : TypeMap) where
 
 export ProvableStruct (components toComponents fromComponents)
 
-attribute [circuit_norm] components toComponents fromComponents
+attribute [circuit_norm] components toComponents
   ProvableStruct.combinedSize ProvableStruct.combinedSize'
 
 namespace ProvableStruct
