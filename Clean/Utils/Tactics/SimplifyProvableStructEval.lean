@@ -31,6 +31,32 @@ private def evalArg? (e : Expr) : Option Expr :=
   else
     none
 
+private def structNameFromType? (type : Expr) : MetaM (Option Name) := do
+  let type' ← withTransparency .all (whnf type)
+  match type'.getAppFn with
+  | .const name _ => return some name
+  | _ => return none
+
+private def fromComponentsConsNameFromType? (type : Expr) : MetaM (Option Name) := do
+  let env ← getEnv
+  match ← structNameFromType? type with
+  | some structName =>
+      let theoremName := structName ++ `fromComponents_cons
+      if env.contains theoremName then
+        return some theoremName
+      return none
+  | none => return none
+
+private def addIdentLemmaIfMissing
+    (lemmas : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) (lemmaName : Name) :
+    MetaM (Array (TSyntax `Lean.Parser.Tactic.simpLemma)) := do
+  let key := toString lemmaName
+  if lemmas.any (fun l => toString l == key) then
+    return lemmas
+  else
+    let lemmaIdent := mkIdent lemmaName
+    return lemmas.push (← `(Lean.Parser.Tactic.simpLemma| $lemmaIdent:ident))
+
 /-- Check if an expression contains a struct eval equality pattern, including inside conjunctions.
     Returns the struct expression being evaluated if a pattern is found. -/
 private partial def collectStructEvalPattern (e : Expr) : MetaM (List Expr) := do
@@ -134,10 +160,19 @@ elab "simplify_provable_struct_eval" : tactic => do
       simpArgs := simpArgs.push evalLemma
       let evalProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_eq_eval_prover (x := $castStructSyntax))
       simpArgs := simpArgs.push evalProverLemma
+      let evalVarLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_var_eq_eval (x := $castStructSyntax))
+      simpArgs := simpArgs.push evalVarLemma
+      let evalVarProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_var_eq_eval_prover (x := $castStructSyntax))
+      simpArgs := simpArgs.push evalVarProverLemma
+      let evalFieldVarLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_field_var_eq_eval (x := $castStructSyntax))
+      simpArgs := simpArgs.push evalFieldVarLemma
+      let evalFieldVarProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_field_var_eq_eval_prover (x := $castStructSyntax))
+      simpArgs := simpArgs.push evalFieldVarProverLemma
+      if let some fromComponentsConsName ← fromComponentsConsNameFromType? structType then
+        simpArgs ← addIdentLemmaIfMissing simpArgs fromComponentsConsName
 
     -- Add the other simp lemmas
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval))
-    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.fromComponents))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.components))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.toComponents))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval.go))

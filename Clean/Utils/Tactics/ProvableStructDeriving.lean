@@ -273,7 +273,15 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
   if fieldNames.isEmpty then
     throwError "ProvableStruct deriving requires at least one field"
 
+  let extractNatLit? (e : Expr) : Option Nat :=
+    match e with
+    | .lit (.natVal n) => some n
+    | .app (.app (.app (.const ``OfNat.ofNat _) _) (.lit (.natVal n))) _ => some n
+    | _ => none
+
   let rec fieldTypeToSyntax (args : Array Expr) (e : Expr) : TermElabM (TSyntax `term) := do
+    if let some n := extractNatLit? e then
+      return Syntax.mkNumLit (toString n)
     if e == args[indInfo.numParams - 1]! then
       return mkIdent `F
     match e with
