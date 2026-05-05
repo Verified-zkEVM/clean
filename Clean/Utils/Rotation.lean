@@ -8,6 +8,17 @@ open Bits (toBits toBits_injective)
 
 -- Theorems about 64-bit rotation
 
+private lemma toUInt64_mod_64_pos {offset : ℕ} (h : offset % 64 ≠ 0) :
+    (0 : UInt64) < (offset % 64).toUInt64 := by
+  have hpos : 0 < offset % 64 := Nat.pos_of_ne_zero h
+  have hlt64 : offset % 64 < 64 := Nat.mod_lt offset (by norm_num)
+  apply (UInt64.lt_iff_toNat_lt).mpr
+  simp only [UInt64.toNat_zero, Nat.toUInt64_eq]
+  rw [show (UInt64.ofNat (offset % 64)).toNat = (offset % 64) % 2^64 by rfl,
+    Nat.mod_eq_of_lt (Nat.lt_trans hlt64 (by norm_num))]
+  exact hpos
+
+set_option maxHeartbeats 800000 in
 /--
   Our definition of right rotation of a 64-bit integer is equal to
   the one provided by `BitVec.rotateRight`
@@ -50,32 +61,26 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
 
     let x_bv := x.toUInt64
     let offset_bv := (offset % 64).toUInt64
-    have h_sat : offset_bv < 64 → offset_bv > 0 →
-        (x_bv % 1<<<offset_bv) <<< (64 - offset_bv) = x_bv <<< (64 - offset_bv) := by
-      bv_decide
-
     have offset_bv_lt : offset_bv < 64 := by
       simp only [offset_bv]
       simp only [UInt64.lt_iff_toNat_lt, UInt64.toNat_ofNat]
       apply Nat.mod_lt_of_lt
       apply Nat.mod_lt offset (by linarith)
 
-    have offset_bv_pos : offset_bv > 0 := by
-      simp only [Nat.toUInt64_eq, offset_bv]
-      have := Nat.pos_of_ne_zero cond
-      rw [gt_iff_lt, UInt64.lt_ofNat_iff]
-      simp only [UInt64.toNat_zero]
-      · assumption
-      · simp [UInt64.size]
-        have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
-        linarith
+    have offset_bv_pos : (0 : UInt64) < (offset % 64).toUInt64 :=
+      toUInt64_mod_64_pos cond
 
-    specialize h_sat offset_bv_lt offset_bv_pos
+    have h_sat :
+        (x_bv % 1<<<offset_bv) <<< (64 - offset_bv) = x_bv <<< (64 - offset_bv) := by
+      simp only [offset_bv] at offset_bv_lt ⊢
+      bv_decide
     apply_fun UInt64.toNat at h_sat
 
-    simp only [UInt64.toNat_shiftLeft, UInt64.toNat_mod, UInt64.toNat_ofNat,
-      x_bv, offset_bv] at h_sat
-    simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.one_mod] at h_sat
+    rw [UInt64.toNat_shiftLeft, UInt64.toNat_shiftLeft] at h_sat
+    rw [UInt64.toNat_mod] at h_sat
+    rw [UInt64.toNat_shiftLeft] at h_sat
+    simp only [x_bv, offset_bv] at h_sat
+    simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat'] at h_sat
     rw [Nat.mod_eq_of_lt h] at h_sat
 
     have h' : UInt64.ofNat (offset % 64) ≤ 64 := by

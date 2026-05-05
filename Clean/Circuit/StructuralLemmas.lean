@@ -56,6 +56,13 @@ lemma FormalCircuit.concat_assumptions {F Input Mid Output} [Field F] [ProvableT
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
   simp only [FormalCircuit.concat]
 
+@[circuit_norm]
+lemma FormalCircuit.concat_localLength {F Input Mid Output} [Field F] [ProvableType Input] [ProvableType Mid] [ProvableType Output]
+    (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 input :
+    (c1.concat c2 p0 p1).localLength input =
+      c1.localLength input + c2.localLength (c1.output input 0) := by
+  rfl
+
 /--
 Weaken the specification of a FormalCircuit.
 
@@ -99,3 +106,9 @@ lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableT
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]
+
+@[circuit_norm]
+lemma FormalCircuit.weakenSpec_localLength {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication input :
+    (c.weakenSpec WeakerSpec h_spec_implication).localLength input = c.localLength input := by
+  rfl

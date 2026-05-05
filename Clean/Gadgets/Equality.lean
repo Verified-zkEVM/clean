@@ -60,7 +60,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     ext i hi
     simp only [Vector.getElem_map]
 
-    rw [←Vector.forall_getElem] at h_holds
+    rw [Vector.forall_mem_iff_forall_getElem] at h_holds
     specialize h_holds i hi
     rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
     simp only [Expression.eval] at h_holds
@@ -83,7 +83,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
       ProvableType.toElements_fromElements] at h_spec
     rw [Vector.ext_iff] at h_spec
 
-    rw [←Vector.forall_getElem]
+    rw [Vector.forall_mem_iff_forall_getElem]
     intro i hi
     specialize h_spec i hi
     simp only [Vector.getElem_map] at h_spec
