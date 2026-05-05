@@ -34,7 +34,7 @@ lemma ConstantLength.length_eq_default {circuit : α → Circuit F β} (_ : Cons
    (circuit a).localLength n = (circuit default).localLength 0 := by
   simp only [ConstantLength.localLength_eq]
 
-def ConstantLength.fromConstantLength' [Inhabited β] (body : β × Fin m → Circuit F β)
+instance ConstantLength.fromConstantLength' [Inhabited β] (body : β × Fin m → Circuit F β)
     (h : ∀ (acc : β) (i i' : Fin m) n,
       (body (acc, i)).localLength n = (body (default, i')).localLength 0) :
     ConstantLength body where
@@ -120,7 +120,11 @@ variable {circuit : α → Circuit F β} {xs : Vector α m} [constant: ConstantL
 theorem localLength_eq : (xs.mapM circuit).localLength n = m * constant.localLength := by
   induction xs using Vector.inductPush
   case nil =>
-    rw [Vector.mapM_mk_empty, pure_localLength_eq, zero_mul]
+    rw [zero_mul]
+    apply Eq.trans
+    · apply congrArg (fun c : Circuit F (Vector β 0) => c.localLength n)
+      exact Vector.mapM_mk_empty
+    exact pure_localLength_eq #v[] n
   case push xs x ih =>
     rw [Vector.mapM_push, bind_localLength_eq, bind_localLength_eq, pure_localLength_eq, ih, constant.localLength_eq]
     ring
@@ -158,7 +162,12 @@ lemma mapM_cons (xs : Vector α n) (body : α → Circuit F β) (x : α) :
 theorem operations_eq : (xs.mapM circuit).operations n =
     (List.ofFn fun (i : Fin m) => (circuit xs[i.val]).operations (n + i * constant.localLength)).flatten := by
   induction xs using Vector.induct generalizing n
-  case nil => simp [pure_operations_eq]
+  case nil =>
+    rw [List.ofFn_zero, List.flatten_nil]
+    apply Eq.trans
+    · apply congrArg (fun c : Circuit F (Vector β 0) => c.operations n)
+      exact Vector.mapM_mk_empty
+    exact pure_operations_eq #v[] n
   case cons x xs ih =>
     rw [mapM_cons, bind_operations_eq, bind_operations_eq, pure_operations_eq, ih,
       constant.localLength_eq, List.append_nil, ofFn_flatten_cons]

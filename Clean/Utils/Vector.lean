@@ -76,6 +76,16 @@ theorem heq_cast {v : Vector α n} (h : n = m) : HEq v (v.cast h) := by
   subst h
   rw [heq_eq_eq, cast_rfl]
 
+lemma cast_eq_iff_eq_cast {v : Vector α n} {w : Vector α m} (h : n = m) :
+    v.cast h = w ↔ v = w.cast h.symm := by
+  subst h
+  simp
+
+lemma eq_cast_iff_cast_eq {v : Vector α m} {w : Vector α n} (h : n = m) :
+    v = w.cast h ↔ v.cast h.symm = w := by
+  subst h
+  simp
+
 /- induction principle for Vector.cons -/
 universe u
 

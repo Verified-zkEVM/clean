@@ -137,27 +137,44 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   output_eq c n := by
     rw [inst.witness_eq]
     show _ = inst.var_eq ▸ (ProvableType.witness c).output n
-    rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
-      cast_fst, cast_apply (by rw [inst.var_eq])]
+    rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast]
+    rw [cast_fst]
+    apply congrArg Prod.fst
+    exact cast_apply (by rw [inst.var_eq]) (ProvableType.witness c) n
 
   localLength _ _ := size value
   localLength_eq c n := by
-    rw [inst.witness_eq, Circuit.localLength, eqRec_eq_cast,
-      cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
+    rw [inst.witness_eq, Circuit.localLength, eqRec_eq_cast]
+    apply Eq.trans
+    · apply congrArg (fun p : var F × Operations F => Operations.localLength p.2)
+      exact cast_apply (by rw [inst.var_eq]) (ProvableType.witness c) n
+    rw [snd_cast (by rw [inst.var_eq])]
     rfl
 
   operations c n := [.witness (size value) (toElements ∘ c)]
   operations_eq c n := by
-    rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
-      snd_cast (by rw [inst.var_eq])]
+    rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast]
+    apply Eq.trans
+    · apply congrArg Prod.snd
+      exact cast_apply (by rw [inst.var_eq]) (ProvableType.witness c) n
+    rw [snd_cast (by rw [inst.var_eq])]
     rfl
 
   subcircuitsConsistent c n := by
     simp only [circuit_norm]
-    rw [inst.witness_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
-      snd_cast (by rw [inst.var_eq])]
+    rw [inst.witness_eq, eqRec_eq_cast]
+    apply Eq.mp
+      (congrArg (fun p : var F × Operations F => Operations.forAll n
+        { subcircuit := fun offset {n} x => n = offset } p.2)
+        (cast_apply (by rw [inst.var_eq]) (ProvableType.witness c) n)).symm
+    rw [snd_cast (by rw [inst.var_eq])]
     reduce
     trivial
+
+instance {value var : TypeMap} [ProvableType value] [Witnessable F value var]
+    {c : ProverEnvironment F → value F} :
+    ExplicitCircuit (witness (F:=F) (value:=value) (var:=var) c) :=
+  ExplicitCircuits.to_single (witness (F:=F) (value:=value) (var:=var)) c
 
 instance : ExplicitCircuits (F:=F) assertZero where
   output _ _ := ()
@@ -173,6 +190,10 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuit
   output _ _ := ()
   localLength _ _ := 0
   operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
+
+instance {α : TypeMap} [ProvableType α] {table : Table F α} {entry : Var α F} :
+    ExplicitCircuit (lookup table entry) :=
+  ExplicitCircuits.to_single (lookup table) entry
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     ExplicitCircuit (subcircuit circuit input) where
