@@ -438,6 +438,34 @@ theorem eval_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvi
   rw [CircuitType.eval_expression_prover_to_verifier]
   exact eval_eq_eval env.toEnvironment x
 
+@[circuit_norm ↓ high]
+theorem eval_var_eq_eval {α : TypeMap} [ProvableStruct α] (env : Environment F)
+    (x : Var α F) :
+    Eval.eval env x = ProvableStruct.eval env (x : α (Expression F)) := by
+  rw [CircuitType.eval_var]
+  rw [← CircuitType.eval_expression]
+  exact eval_eq_eval env (x : α (Expression F))
+
+@[circuit_norm ↓ high]
+theorem eval_var_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvironment F)
+    (x : Var α F) :
+    Eval.eval env x = ProvableStruct.eval env.toEnvironment (x : α (Expression F)) := by
+  rw [CircuitType.eval_var_prover]
+  rw [← CircuitType.eval_expression]
+  exact eval_eq_eval env.toEnvironment (x : α (Expression F))
+
+@[circuit_norm ↓ high]
+theorem eval_field_var_eq_eval {α : TypeMap} [ProvableStruct α] (env : Environment F)
+    (x : α (Var field F)) :
+    Eval.eval env x = ProvableStruct.eval env (x : α (Expression F)) := by
+  exact eval_eq_eval env (x : α (Expression F))
+
+@[circuit_norm ↓ high]
+theorem eval_field_var_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvironment F)
+    (x : α (Var field F)) :
+    Eval.eval env x = ProvableStruct.eval env.toEnvironment (x : α (Expression F)) := by
+  exact eval_eq_eval_prover env (x : α (Expression F))
+
 /--
 Alternative `varFromOffset` which creates each component separately.
 -/
