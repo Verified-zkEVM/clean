@@ -63,6 +63,10 @@ instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
 
 theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
   circuit_proof_start [output]
+  -- TODO(Lean 4.29): `simp` no longer exposes this constructor form from the
+  -- generated `ProvableStruct.fromComponents` match. Remove this once the
+  -- tactic layer handles that reduction again.
+  change Inputs.mk _ _ _ = input at h_input
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
