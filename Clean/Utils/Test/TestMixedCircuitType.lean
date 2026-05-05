@@ -11,6 +11,14 @@ verifier/prover values.
 namespace TestMixedCircuitType
 variable {F : Type} [Field F]
 
+-- TODO still annoying that we need this with such specificity but could be acceptable
+omit [Field F] in @[circuit_norm]
+lemma hmul_fieldexpr_fieldexpr :
+  (@HMul.hMul (field (Expression F)) (field (Expression F)) (field (Expression F))
+    (@instHMul (field (Expression F)) (@instMulVarField F))) =
+  (@HMul.hMul (field (Expression F)) (field (Expression F)) (field (Expression F))
+    inferInstance) := by rfl
+
 structure Input (F : Type) where
   x : F
   inverse : UnconstrainedDep field F
@@ -34,6 +42,8 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
 
   soundness := by
     circuit_proof_start
+    -- normalization pass that goes beyond circuit_norm, possibly using different simp set
+    simp only [circuit_norm, field, id_eq] at input_x input_inverse input_var h_input
     -- Regression checks for the intended post-`circuit_proof_start` shape:
     -- the high-level verifier input is gone, and the constraints mention `input_x`.
     fail_if_success (exact input)
@@ -43,11 +53,14 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
 
   completeness := by
     circuit_proof_start
+    -- normalization pass that goes beyond circuit_norm, possibly using different simp set
+    simp only [circuit_norm, field, id_eq] at input_x input_inverse input_var h_input
     -- The prover-side equality should also be fieldwise; in particular the
     -- prover-only hint is connected to the generated witness by `h_env`.
     fail_if_success (exact input)
     guard_hyp h_input :
-      input_var.x.eval env.toEnvironment = input_x ∧ input_var.inverse env = input_inverse
+      @Eq F (input_var.x.eval env.toEnvironment) input_x ∧
+      @Eq F (input_var.inverse env) input_inverse
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
@@ -67,7 +80,7 @@ def parent : GeneralFormalCircuit F field field where
     circuit_proof_start [circuit]
     -- The subcircuit spec should be stated in terms of the parent input, not
     -- the inline mixed child input passed to the subcircuit.
-    guard_hyp h_holds : input * env.get i₀ = 1
+    guard_hyp h_holds :~ input * env.get i₀ = 1
     exact h_holds
 
   completeness := by
