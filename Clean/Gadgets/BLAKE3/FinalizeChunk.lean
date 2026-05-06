@@ -141,7 +141,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     ApplyRounds.Spec, ApplyRounds.Assumptions,
     FinalStateUpdate.circuit, FinalStateUpdate.Spec, FinalStateUpdate.Assumptions]
   rcases h_holds with ⟨h_IsZero, h_Or32_1, h_Or32_2, h_Compress⟩
-  simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, id_eq, mul_one, Nat.ofNat_pos, and_self, and_true, true_and,
+  simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, id_eq, mul_one, Nat.ofNat_pos, and_true, true_and,
     Nat.reduceMul, and_imp, Nat.reducePow, mul_zero, add_zero]
   specialize h_Or32_1 (by
     split <;> simp [ZMod.val_one])
