@@ -73,16 +73,19 @@ variable [ProvableType α] [ProvableType β]
 theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
     ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F) (b : β F),
     eval env b_var = b → circuit.Assumptions b →
-    -- if the constraints hold (original definition)
+    -- if the constraints and guarantees hold (original definition)
     Operations.ConstraintsHold env (circuit.main b_var |>.operations offset) →
-    -- the spec holds
+    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) →
+    -- the spec and requirements hold
     let a := eval env (circuit.output b_var offset)
-    circuit.Spec b a := by
+    circuit.Spec b a ∧ Operations.FullRequirements env (circuit.main b_var |>.operations offset) := by
 
-  intro offset env b_var b h_input h_assumptions h_holds
-  have h_holds' : ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) := by
-    sorry
-  exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
+  intro offset env b_var b h_input h_assumptions h_constraints h_guarantees
+  have h_holds' : ConstraintsHoldWithInteractions.Soundness env (circuit.main b_var |>.operations offset) :=
+    Circuit.can_replace_soundness h_constraints h_guarantees
+  have h_soundness := circuit.soundness offset env b_var b h_input h_assumptions h_holds'
+  exact ⟨h_soundness.1,
+    Circuit.requirements_toFlat_of_soundness h_constraints h_guarantees h_soundness.2⟩
 
 /--
   Justification for using modified statements for `UsesLocalWitnesses`
@@ -93,16 +96,14 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
     eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
-    -- the constraints hold (original definition)
-    Operations.ConstraintsHold env (circuit.main b_var |>.operations offset) := by
+    -- the constraints and guarantees hold (original definition)
+    Operations.ConstraintsHold env (circuit.main b_var |>.operations offset) ∧
+    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env
   have h_env' := ProverEnvironment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
-  have h_compl := circuit.completeness offset env b_var h_env' b h_input h_assumptions
-  have h_compl_inter :
-      ConstraintsHoldWithInteractions.Completeness env (circuit.main b_var |>.operations offset) := by
-    sorry
-  exact Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env h_compl_inter
+  have h_compl_inter := circuit.completeness offset env b_var h_env' b h_input h_assumptions
+  exact Circuit.can_replace_completeness_and_guarantees (circuit.subcircuitsConsistent ..) h_env h_compl_inter
 
 /--
   Justification for using a modified statement for `ConstraintsHold`
@@ -111,15 +112,18 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
 theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
     ∀ (offset : ℕ) (env : Environment F) (b_var : Var β F) (b : β F),
     eval env b_var = b → circuit.Assumptions b →
-    -- if the constraints hold (original definition)
+    -- if the constraints and guarantees hold (original definition)
     Operations.ConstraintsHold env (circuit.main b_var |>.operations offset) →
-    -- the spec holds
-    circuit.Spec b := by
+    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) →
+    -- the spec and requirements hold
+    circuit.Spec b ∧ Operations.FullRequirements env (circuit.main b_var |>.operations offset) := by
 
-  intro offset env b_var b h_input h_assumptions h_holds
-  have h_holds' : ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) := by
-    sorry
-  exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
+  intro offset env b_var b h_input h_assumptions h_constraints h_guarantees
+  have h_holds' : ConstraintsHoldWithInteractions.Soundness env (circuit.main b_var |>.operations offset) :=
+    Circuit.can_replace_soundness h_constraints h_guarantees
+  have h_soundness := circuit.soundness offset env b_var b h_input h_assumptions h_holds'
+  exact ⟨h_soundness.1,
+    Circuit.requirements_toFlat_of_soundness h_constraints h_guarantees h_soundness.2⟩
 
 /--
   Justification for using modified statements for `UsesLocalWitnesses`
@@ -131,15 +135,14 @@ theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the spec implies that the constraints hold (original definition)
-    circuit.Spec b → Operations.ConstraintsHold env (circuit.main b_var |>.operations offset) := by
+    circuit.Spec b →
+    Operations.ConstraintsHold env (circuit.main b_var |>.operations offset) ∧
+    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env h_spec
   have h_env' := ProverEnvironment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
-  have h_compl := circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec
-  have h_compl_inter :
-      ConstraintsHoldWithInteractions.Completeness env (circuit.main b_var |>.operations offset) := by
-    sorry
-  exact Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env h_compl_inter
+  have h_compl_inter := circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec
+  exact Circuit.can_replace_completeness_and_guarantees (circuit.subcircuitsConsistent ..) h_env h_compl_inter
 
 /--
   Target foundational theorem for general circuits with interactions:

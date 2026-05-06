@@ -99,26 +99,25 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
   have soundness : ∀ env : Environment F,
     let input := eval env input_var
     let output := eval env (circuit.output input_var n)
+    circuit.Assumptions input →
     ConstraintsHoldFlat env nestedOps.toFlat →
     FlatOperation.Guarantees env nestedOps.toFlat →
-    ((circuit.Assumptions input → circuit.Spec input output) ∧
-      FlatOperation.Requirements env nestedOps.toFlat) := by
+    circuit.Spec input output ∧ FlatOperation.Requirements env nestedOps.toFlat := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
-    intro env input output h_holds _
+    intro env input output as h_holds h_guarantees
     rw [ops.toNested_toFlat] at h_holds
+    rw [ops.toNested_toFlat, FlatOperation.guarantees_toFlat] at h_guarantees
     refine ⟨ ?_, ?_ ⟩
-
-    -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-    · intro as
-      suffices h: ConstraintsHold.Soundness env ops by
-        exact circuit.soundness n env input_var input rfl as h
-
-    -- so we just need to go from flattened constraints to constraints
-      guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
-      stop
-      apply can_replace_soundness
-      exact constraintsHold_toFlat_iff.mp h_holds
-    · sorry
+    · have h := can_replace_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
+      exact (circuit.soundness n env input_var input rfl as h).1
+    · have h_nested : nestedOps.toFlat = ops.toFlat := by
+        dsimp only [nestedOps]
+        exact ops.toNested_toFlat
+      rw [h_nested]
+      rw [FlatOperation.requirements_toFlat]
+      have h := can_replace_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
+      exact requirements_toFlat_of_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
+        (circuit.soundness n env input_var input rfl as h).2
 
   have completeness : ∀ env : ProverEnvironment F,
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
@@ -137,15 +136,14 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
-    have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as
-    have h_holds_inter : ConstraintsHoldWithInteractions.Completeness env ops := by
-      sorry
+    have h_holds_inter := circuit.completeness n env input_var h_env_completeness input rfl as
 
     -- so we just need to go from constraints to flattened constraints
     refine ⟨ ?_, ?_ ⟩
     · apply constraintsHold_toFlat_iff.mpr
       exact can_replace_completeness h_consistent h_env h_holds_inter
-    · sorry
+    · rw [FlatOperation.guarantees_toFlat]
+      exact can_replace_completeness_guarantees h_consistent h_env h_holds_inter
 
   {
     ops := nestedOps,
@@ -155,11 +153,12 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     ProverSpec env := circuit.Assumptions (eval env input_var) →
       circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
+    channelsWithGuarantees := circuit.channelsWithGuarantees
+    channelsWithRequirements := circuit.channelsWithRequirements
 
     soundness := by
       intro env assumptions h_constraints h_guarantees
-      exact ⟨(soundness env h_constraints h_guarantees).1 assumptions,
-        (soundness env h_constraints h_guarantees).2⟩
+      exact soundness env assumptions h_constraints h_guarantees
     completeness := by
       intro env h_env
       use completeness env h_env
@@ -168,7 +167,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       have h_holds := completeness env h_env as
       -- by soundness, this implies the spec
       simp only [circuit_norm] at as ⊢
-      exact (soundness env h_holds.1 h_holds.2).1 as
+      exact (soundness env as h_holds.1 h_holds.2).1
 
     localLength_eq := by
       rw [ops.toNested_toFlat, ←circuit.localLength_eq input_var n,
@@ -192,24 +191,30 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
     ProverAssumptions env := circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var),
     ProverSpec _ := True,
     localLength := circuit.localLength input_var
+    channelsWithGuarantees := circuit.channelsWithGuarantees
+    channelsWithRequirements := circuit.channelsWithRequirements
 
     soundness := by
       -- we are given an environment where the constraints hold, and can assume the assumptions are true
-      intro env as h_holds _
+      intro env as h_holds h_guarantees
       let input : β F := eval env input_var
       refine ⟨ ?_, ?_ ⟩
       · rw [ops.toNested_toFlat] at h_holds
+        rw [ops.toNested_toFlat, FlatOperation.guarantees_toFlat] at h_guarantees
 
         -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-        suffices h: ConstraintsHold.Soundness env ops by
-          exact circuit.soundness n env input_var input rfl as h
-
-        -- so we just need to go from flattened constraints to constraints
-        guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
-        stop
-        apply can_replace_soundness
-        exact constraintsHold_toFlat_iff.mp h_holds
-      · sorry
+        have h := can_replace_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
+        exact (circuit.soundness n env input_var input rfl as h).1
+      · rw [ops.toNested_toFlat] at h_holds
+        rw [ops.toNested_toFlat, FlatOperation.guarantees_toFlat] at h_guarantees
+        have h_nested : nestedOps.toFlat = ops.toFlat := by
+          dsimp only [nestedOps]
+          exact ops.toNested_toFlat
+        rw [h_nested]
+        rw [FlatOperation.requirements_toFlat]
+        have h := can_replace_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
+        exact requirements_toFlat_of_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
+          (circuit.soundness n env input_var input rfl as h).2
 
     completeness := by
       -- we are given that the assumptions and the spec are true
@@ -228,9 +233,7 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
-      have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
-      have h_holds_inter : ConstraintsHoldWithInteractions.Completeness env ops := by
-        sorry
+      have h_holds_inter := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
 
       -- so we just need to go from constraints to flattened constraints
       constructor
@@ -647,7 +650,7 @@ theorem FormalAssertion.toSubcircuit_usesLocalWitnesses (circuit : FormalAsserti
 
 @[circuit_norm]
 theorem FormalCircuit.toSubcircuit_channelsWithGuarantees (circuit : FormalCircuit F Input Output) :
-  (circuit.toSubcircuit n input_var).channelsWithGuarantees = [] := rfl
+  (circuit.toSubcircuit n input_var).channelsWithGuarantees = circuit.channelsWithGuarantees := rfl
 
 @[circuit_norm]
 theorem GeneralFormalCircuit.toSubcircuit_channelsWithGuarantees
@@ -658,11 +661,11 @@ theorem GeneralFormalCircuit.toSubcircuit_channelsWithGuarantees
 
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_channelsWithGuarantees (circuit : FormalAssertion F Input) :
-  (circuit.toSubcircuit n input_var).channelsWithGuarantees = [] := rfl
+  (circuit.toSubcircuit n input_var).channelsWithGuarantees = circuit.channelsWithGuarantees := rfl
 
 @[circuit_norm]
 theorem FormalCircuit.toSubcircuit_channelsWithRequirements (circuit : FormalCircuit F Input Output) :
-  (circuit.toSubcircuit n input_var).channelsWithRequirements = [] := rfl
+  (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := rfl
 
 @[circuit_norm]
 theorem GeneralFormalCircuit.toSubcircuit_channelsWithRequirements
@@ -673,19 +676,43 @@ theorem GeneralFormalCircuit.toSubcircuit_channelsWithRequirements
 
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_channelsWithRequirements (circuit : FormalAssertion F Input) :
-  (circuit.toSubcircuit n input_var).channelsWithRequirements = [] := rfl
+  (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := rfl
 
 @[circuit_norm]
 theorem FormalCircuit.toSubcircuit_channelsLawful
     (circuit : FormalCircuit F Input Output) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
-  sorry
+  constructor
+  · intro env
+    simp only [FormalCircuit.toSubcircuit]
+    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
+    exact circuit.elaborated.in_channels_or_guarantees_full input_var n env
+  constructor
+  · intro env
+    simp only [FormalCircuit.toSubcircuit]
+    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
+    exact circuit.elaborated.in_channels_or_requirements_full input_var n env
+  · simp only [FormalCircuit.toSubcircuit]
+    rw [Operations.toNested_toFlat, Operations.channels_toFlat]
+    exact circuit.elaborated.channels_subset input_var n
 
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_channelsLawful
     (circuit : FormalAssertion F Input) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
-  sorry
+  constructor
+  · intro env
+    simp only [FormalAssertion.toSubcircuit]
+    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
+    exact circuit.elaborated.in_channels_or_guarantees_full input_var n env
+  constructor
+  · intro env
+    simp only [FormalAssertion.toSubcircuit]
+    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
+    exact circuit.elaborated.in_channels_or_requirements_full input_var n env
+  · simp only [FormalAssertion.toSubcircuit]
+    rw [Operations.toNested_toFlat, Operations.channels_toFlat]
+    exact circuit.elaborated.channels_subset input_var n
 
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful

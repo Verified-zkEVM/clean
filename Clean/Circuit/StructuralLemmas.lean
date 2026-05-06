@@ -36,6 +36,14 @@ def FormalCircuit.concat
     output_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+    channelsWithGuarantees := circuit1.channelsWithGuarantees ++ circuit2.channelsWithGuarantees
+    guarantees_in_declared_channels := by
+      simp only [Circuit.bind_def, circuit_norm]
+    channelsWithRequirements := circuit1.channelsWithRequirements ++ circuit2.channelsWithRequirements
+    requirements_in_declared_channels := by
+      simp only [Circuit.bind_def, circuit_norm]
+    used_channels_declared := by
+      simp only [Circuit.bind_def, circuit_norm]
   }
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
@@ -44,7 +52,10 @@ def FormalCircuit.concat
     intros
     rename_i h_hold
     simp only [Circuit.bind_def, circuit_norm] at h_hold
-    aesop
+    constructor
+    · aesop
+    · simp only [Circuit.bind_def, circuit_norm]
+      aesop
   completeness := by
     simp only [circuit_norm]
     aesop
@@ -87,7 +98,7 @@ def FormalCircuit.weakenSpec
     -- Use the original circuit's soundness
     have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds
     -- Apply the implication to get the weaker spec
-    exact h_spec_implication input _ h_assumptions h_strong_spec
+    exact ⟨h_spec_implication input _ h_assumptions h_strong_spec.1, h_strong_spec.2⟩
   completeness := by
     -- Completeness is preserved since we use the same elaborated circuit
     -- and the same assumptions
@@ -121,13 +132,6 @@ def GeneralFormalCircuit.weakenSpec
     have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds
     exact ⟨ h_spec_implication input _ _ h_strong_spec.1, h_strong_spec.2 ⟩
   completeness := circuit.completeness
-  channelsWithGuarantees := circuit.channelsWithGuarantees
-  guarantees_in_declared_channels := circuit.guarantees_in_declared_channels
-  channelsWithRequirements := circuit.channelsWithRequirements
-  requirements_in_declared_channels := circuit.requirements_in_declared_channels
-  used_channels_declared := circuit.used_channels_declared
-  exposedChannels := circuit.exposedChannels
-  exposedChannels_eq := circuit.exposedChannels_eq
 
 @[circuit_norm]
 lemma GeneralFormalCircuit.weakenSpec_assumptions

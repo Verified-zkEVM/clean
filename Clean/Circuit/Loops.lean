@@ -627,6 +627,49 @@ lemma map.output_eq :
     xs.mapIdx fun i x => (body x).output (n + i*(body default).localLength) := by
   rw [map, MapM.output_eq, ConstantLength.localLength_eq]
 
+lemma map.operations_eq :
+    (map xs body constant).operations n =
+      (List.ofFn fun (i : Fin m) =>
+        (body xs[i.val]).operations (n + i * (body default).localLength)).flatten := by
+  simp only [map]
+  rw [MapM.operations_eq, ConstantLength.localLength_eq]
+
+@[circuit_norm ↓]
+lemma map.subcircuitChannelsWithGuarantees :
+    ((map xs body constant).operations n).subcircuitChannelsWithGuarantees =
+      (List.ofFn fun (i : Fin m) =>
+        (body xs[i.val]).operations (n + i * (body default).localLength) |>.subcircuitChannelsWithGuarantees).flatten := by
+  rw [map.operations_eq]
+  simp only [Operations.subcircuitChannelsWithGuarantees]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
+@[circuit_norm ↓]
+lemma map.subcircuitChannelsWithRequirements :
+    ((map xs body constant).operations n).subcircuitChannelsWithRequirements =
+      (List.ofFn fun (i : Fin m) =>
+        (body xs[i.val]).operations (n + i * (body default).localLength) |>.subcircuitChannelsWithRequirements).flatten := by
+  rw [map.operations_eq]
+  simp only [Operations.subcircuitChannelsWithRequirements]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
+@[circuit_norm ↓]
+lemma map.shallowChannels :
+    ((map xs body constant).operations n).shallowChannels =
+      (List.ofFn fun (i : Fin m) =>
+        (body xs[i.val]).operations (n + i * (body default).localLength) |>.shallowChannels).flatten := by
+  rw [map.operations_eq]
+  simp only [Operations.shallowChannels]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
 @[circuit_norm ↓]
 lemma map.forAll :
   Operations.forAll n prop (map xs body constant |>.operations n) ↔
@@ -796,6 +839,54 @@ lemma foldl.output_eq [NeZero m] :
   rcases m with _ | m
   · nomatch this
   simp only [Fin.foldl_const, Fin.val_last, add_tsub_cancel_right]
+
+lemma foldl.operations_eq :
+    (foldl xs init body const_out constant).operations n =
+      (List.ofFn fun (i : Fin m) =>
+        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
+          (n + i * (body default default).localLength)).flatten := by
+  rw [foldl, FoldlM.operations_eq]
+  congr! 4
+  rw [constant.localLength_eq (_, _) _]
+
+@[circuit_norm ↓]
+lemma foldl.subcircuitChannelsWithGuarantees :
+    ((foldl xs init body const_out constant).operations n).subcircuitChannelsWithGuarantees =
+      (List.ofFn fun (i : Fin m) =>
+        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
+          (n + i * (body default default).localLength) |>.subcircuitChannelsWithGuarantees).flatten := by
+  rw [foldl.operations_eq]
+  simp only [Operations.subcircuitChannelsWithGuarantees]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
+@[circuit_norm ↓]
+lemma foldl.subcircuitChannelsWithRequirements :
+    ((foldl xs init body const_out constant).operations n).subcircuitChannelsWithRequirements =
+      (List.ofFn fun (i : Fin m) =>
+        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
+          (n + i * (body default default).localLength) |>.subcircuitChannelsWithRequirements).flatten := by
+  rw [foldl.operations_eq]
+  simp only [Operations.subcircuitChannelsWithRequirements]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
+
+@[circuit_norm ↓]
+lemma foldl.shallowChannels :
+    ((foldl xs init body const_out constant).operations n).shallowChannels =
+      (List.ofFn fun (i : Fin m) =>
+        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
+          (n + i * (body default default).localLength) |>.shallowChannels).flatten := by
+  rw [foldl.operations_eq]
+  simp only [Operations.shallowChannels]
+  rw [List.map_flatten, List.flatten_flatten]
+  apply congrArg List.flatten
+  rw [List.map_ofFn, List.map_ofFn]
+  rfl
 
 @[circuit_norm ↓]
 lemma foldl.forAll [NeZero m] :

@@ -11,14 +11,15 @@ namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
 theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    ConstraintsHold.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
+    ConstraintsHoldWithInteractions.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
 theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
-    (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
+    (∀ x ∈ xs, x.eval env = 0) →
+    ConstraintsHoldWithInteractions.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
@@ -49,6 +50,8 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     intro offset env input_var input h_input _ h_holds
     replace h_holds := allZero.soundness h_holds
     simp only at h_holds
+    constructor; swap
+    · simp only [main, circuit_norm]
 
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := input_var

@@ -277,7 +277,56 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitTy
       simp only [circuit_norm]
       all_goals try first | ac_rfl | trivial
 
+  -- expose the channel guarantees and requirements, for end-to-end proofs
+  channelsWithGuarantees : List (RawChannel F) := []
+  guarantees_in_declared_channels : ∀ input_var offset,
+    let ops := (main input_var).operations offset
+    ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
+    ∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env := by
+    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
+    try dsimp only [main]
+    simp +arith only [circuit_norm, seval]
+    try tauto -- for permuting conjunctions
+
+  channelsWithRequirements : List (RawChannel F) := []
+  requirements_in_declared_channels : ∀ input_var offset,
+    let ops := (main input_var).operations offset
+    ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
+      ∀ env, ops.InChannelsOrRequirements channelsWithRequirements env := by
+    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
+    try dsimp only [main]
+    simp +arith only [circuit_norm, seval]
+    try tauto -- for permuting conjunctions
+
+  -- even if the conditions so far theoretically allow it, we must not leave out any channels
+  -- we interacted with from the combination of both lists. this is because "did not interact with a given channel"
+  -- is important knowledge during end to end proofs, when we need to prove that _all_ interactions
+  -- with a given channel have some property.
+  -- (if this ever becomes too restrictive for real circuits, we can relax by introducing a third list of "other channels")
+  used_channels_declared : ∀ input_var offset,
+    let ops := (main input_var).operations offset
+    ∀ channel ∈ ops.shallowChannels,
+      channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements := by
+    -- TODO this tactic would bee more effective if it would unfold all channels used in the circuit
+    try dsimp only [main]
+    simp +arith only [circuit_norm, seval]
+    try tauto
+
+  exposedChannels (_ : Var Input F) (n : ℕ) : List (ExposedChannel F) := []
+  exposedChannels_eq : ∀ input_var offset,
+    let ops := (main input_var).operations offset
+    ∀ exposed ∈ exposedChannels input_var offset,
+      ops.interactionsWith exposed.channel = exposed.interactions := by
+    -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
+    simp only [circuit_norm, seval]
+    try tauto
+
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
+
+@[circuit_norm]
+def ElaboratedCircuit.channels [CircuitType Input] [CircuitType Output]
+    (circuit : ElaboratedCircuit F Input Output) :=
+  circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
 
 variable [ProvableType Input] [ProvableType Output]
 
@@ -290,10 +339,11 @@ def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output
+  Spec input output ∧
+  Operations.Requirements env (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
 def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
@@ -305,7 +355,7 @@ def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Outpu
   ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
 
 /--
 `FormalCircuit` is the main object that encapsulates correctness of a circuit.
@@ -347,9 +397,10 @@ def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit 
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input
-  Spec input
+  Spec input ∧
+  Operations.Requirements env (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
 def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
@@ -361,7 +412,7 @@ def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircu
   ∀ input : Input F, eval env input_var = input →
   Assumptions input → Spec input →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
 
 /--
 `FormalAssertion` models a subcircuit that is "assertion-like":
@@ -451,53 +502,6 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   soundness : GeneralFormalCircuit.Soundness F elaborated Assumptions Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated ProverAssumptions ProverSpec
 
-  -- expose the channel guarantees and requirements, for end-to-end proofs
-  channelsWithGuarantees : List (RawChannel F) := []
-  guarantees_in_declared_channels : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
-    ∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env := by
-    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
-    try dsimp only [elaborated]
-    try dsimp only [main]
-    simp only [circuit_norm, seval]
-    try tauto -- for permuting conjunctions
-
-  channelsWithRequirements : List (RawChannel F) := []
-  requirements_in_declared_channels : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-      ∀ env, ops.InChannelsOrRequirements channelsWithRequirements env := by
-    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
-    try dsimp only [elaborated]
-    try dsimp only [main]
-    simp only [circuit_norm, seval]
-    try tauto -- for permuting conjunctions
-
-  -- even if the conditions so far theoretically allow it, we must not leave out any channels
-  -- we interacted with from the combination of both lists. this is because "did not interact with a given channel"
-  -- is important knowledge during end to end proofs, when we need to prove that _all_ interactions
-  -- with a given channel have some property.
-  -- (if this ever becomes too restrictive for real circuits, we can relax by introducing a third list of "other channels")
-  used_channels_declared : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ∀ channel ∈ ops.shallowChannels,
-      channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements := by
-    -- TODO this tactic would bee more effective if it would unfold all channels used in the circuit
-    try dsimp only [elaborated]
-    try dsimp only [main]
-    simp only [circuit_norm, seval]
-    try tauto
-
-  exposedChannels (_ : Var Input F) (n : ℕ) : List (ExposedChannel F) := []
-  exposedChannels_eq : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ∀ exposed ∈ exposedChannels input_var offset,
-      ops.interactionsWith exposed.channel = exposed.interactions := by
-    -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
-    simp only [circuit_norm, seval]
-    try tauto
-
 @[circuit_norm]
 def GeneralFormalCircuit.WithHint.Soundness (F : Type) [Field F]
     [CircuitType Input] [CircuitType Output]
@@ -554,53 +558,6 @@ structure GeneralFormalCircuit.WithHint (F : Type) (Input Output : TypeMap) [Fie
   soundness : GeneralFormalCircuit.WithHint.Soundness F elaborated Assumptions Spec
   completeness : GeneralFormalCircuit.WithHint.Completeness F elaborated ProverAssumptions ProverSpec
 
-  -- expose the channel guarantees and requirements, for end-to-end proofs
-  channelsWithGuarantees : List (RawChannel F) := []
-  guarantees_in_declared_channels : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
-    ∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env := by
-    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
-    try dsimp only [elaborated]
-    try dsimp only [main]
-    simp only [circuit_norm, seval]
-    try tauto -- for permuting conjunctions
-
-  channelsWithRequirements : List (RawChannel F) := []
-  requirements_in_declared_channels : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-      ∀ env, ops.InChannelsOrRequirements channelsWithRequirements env := by
-    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
-    try dsimp only [elaborated]
-    try dsimp only [main]
-    simp only [circuit_norm, seval]
-    try tauto -- for permuting conjunctions
-
-  -- even if the conditions so far theoretically allow it, we must not leave out any channels
-  -- we interacted with from the combination of both lists. this is because "did not interact with a given channel"
-  -- is important knowledge during end to end proofs, when we need to prove that _all_ interactions
-  -- with a given channel have some property.
-  -- (if this ever becomes too restrictive for real circuits, we can relax by introducing a third list of "other channels")
-  used_channels_declared : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ∀ channel ∈ ops.shallowChannels,
-      channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements := by
-    -- TODO this tactic would bee more effective if it would unfold all channels used in the circuit
-    try dsimp only [elaborated]
-    try dsimp only [main]
-    simp only [circuit_norm, seval]
-    try tauto
-
-  exposedChannels (_ : Var Input F) (n : ℕ) : List (ExposedChannel F) := []
-  exposedChannels_eq : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ∀ exposed ∈ exposedChannels input_var offset,
-      ops.interactionsWith exposed.channel = exposed.interactions := by
-    -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
-    simp only [circuit_norm, seval]
-    try tauto
-
 @[circuit_norm]
 def GeneralFormalCircuit.toWithHint {F : Type} [Field F] {Input Output : TypeMap}
     [ProvableType Input] [ProvableType Output]
@@ -611,13 +568,6 @@ def GeneralFormalCircuit.toWithHint {F : Type} [Field F] {Input Output : TypeMap
   Spec input output data := circuit.Spec input output data
   ProverAssumptions input data hint := circuit.ProverAssumptions input data hint
   ProverSpec input output hint := circuit.ProverSpec input output hint
-  channelsWithGuarantees := circuit.channelsWithGuarantees
-  guarantees_in_declared_channels := circuit.guarantees_in_declared_channels
-  channelsWithRequirements := circuit.channelsWithRequirements
-  requirements_in_declared_channels := circuit.requirements_in_declared_channels
-  used_channels_declared := circuit.used_channels_declared
-  exposedChannels input offset := circuit.exposedChannels input offset
-  exposedChannels_eq := circuit.exposedChannels_eq
   soundness := by
     simpa only [GeneralFormalCircuit.WithHint.Soundness,
       CircuitType.eval_verifier, CircuitType.value_of_provableType]
