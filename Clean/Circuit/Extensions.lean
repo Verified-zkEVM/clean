@@ -24,16 +24,15 @@ def getOffset : Circuit F ℕ := fun n => (n, [])
 def valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
   fromElements <| .mapRange _ fun i => env.get (offset + i)
 
-theorem ProvableType.eval_varFromOffset_valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) :
-    eval env (varFromOffset α offset) = valueFromOffset α offset env := by
-  simp only [varFromOffset, valueFromOffset, fromVars, ProvableType.eval_fromElements, Vector.map_mapRange]
-  rfl
+theorem eval_varFromOffset_valueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) :
+    Eval.eval env (varFromOffset (F:=F) α offset) = valueFromOffset α offset env := by
+  rw [ProvableType.eval_varFromOffset, valueFromOffset]
 
 def witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
   let offset ← getOffset
-  witness (valueFromOffset α offset)
+  witness fun env => valueFromOffset α offset env
 
-theorem witnessAny_localWitnesses (n : ℕ) (env : Environment F) :
+theorem witnessAny_localWitnesses (n : ℕ) (env : ProverEnvironment F) :
     env.UsesLocalWitnessesCompleteness n (witnessAny α |>.operations n) ↔ True := by
   simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
     ProvableType.toElements_fromElements]

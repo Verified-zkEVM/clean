@@ -24,7 +24,7 @@ example : ExplicitCircuit.output (circuit32 default) 0
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..
 
-example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Var field (F pBabybear)) env (i0 : ℕ) :
+example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Expression (F pBabybear)) env (i0 : ℕ) :
   Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carryIn ⟩).operations i0)
   ↔
   (ZMod.val (env.get i0) < 256 ∧ IsBool (env.get (i0 + 1)) ∧

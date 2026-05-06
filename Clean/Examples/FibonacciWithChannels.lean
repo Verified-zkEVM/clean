@@ -132,14 +132,14 @@ lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {
      (channel.pulled msg).toRaw.eval env = channel.pulledValue (eval env msg) := by
   simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
   congr
-  rw [←ProvableType.fromElements_eq_iff]
+  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
   rfl
 
 lemma eval_pushed {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pushed msg).toRaw.eval env = channel.pushedValue (eval env msg) := by
   simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
   congr
-  rw [←ProvableType.fromElements_eq_iff]
+  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
   rfl
 end Channel
 
@@ -328,7 +328,7 @@ theorem weakSoundness {table : AbstractTable F} {env : Environment F} :
   set inputVar := varFromOffset table.Input 0
   set ops := (table.circuit.main inputVar).operations (size table.Input)
   convert table.circuit.original_full_soundness _ _ _ h_constraints h_guarantees
-  simp only [rowInput, ProvableType.eval_varFromOffset_valueFromOffset, inputVar]
+  simp only [rowInput, inputVar, eval_varFromOffset_valueFromOffset]
 
 end AbstractTable
 
@@ -349,10 +349,11 @@ abbrev Environment.fromInput (row : Message F) (data : ProverData F) : Environme
 @[circuit_norm]
 lemma ProvableType.eval_fromInput_varFromOffset_zero
   (input : Message F) (data : ProverData F) :
-    eval (.fromInput input data) (varFromOffset Message 0) = input := by
-  simp only [Environment.fromInput, eval_varFromOffset]
-  rw [ProvableType.fromElements_eq_iff, Vector.ext_iff]
+    Eval.eval (Environment.fromInput input data) (varFromOffset (F:=F) Message 0) = input := by
+  simp only [Environment.fromInput, Environment.fromArray]
+  rw [eval_varFromOffset, ProvableType.fromElements_eq_iff, Vector.ext_iff]
   intro i hi
+  simp only
   rw [Vector.getElem_mapRange, zero_add, Vector.getElem?_toArray,
     Vector.getElem?_eq_getElem hi, Option.getD_some]
 
@@ -2489,10 +2490,10 @@ noncomputable def rowPush (witness : VmWitness vm) {table} (_ : table ∈ witnes
   eval (table.environment row) (vm.push (witness.mem_allTables_abstract_of_mem_allTables ‹_›))
 
 noncomputable def verifierPull (witness : VmWitness vm) : vm.Message F :=
-  eval (.fromInput witness.publicInput witness.data) (vm.pull Ensemble.mem_allTables_verifierTable)
+  eval (Environment.fromInput witness.publicInput witness.data) (vm.pull Ensemble.mem_allTables_verifierTable)
 
 noncomputable def verifierPush (witness : VmWitness vm) : vm.Message F :=
-  eval (.fromInput witness.publicInput witness.data) (vm.push Ensemble.mem_allTables_verifierTable)
+  eval (Environment.fromInput witness.publicInput witness.data) (vm.push Ensemble.mem_allTables_verifierTable)
 
 lemma interactionValuesWith_eq (witness : VmWitness vm)
     {table} (_ : table ∈ witness.allTables) (row : Array F) :
@@ -2908,11 +2909,6 @@ end SoundEnsemble
 end
 
 -- CONCRETE EXAMPLE STARTS HERE
-
-@[circuit_norm]
-lemma FieldUtils.fin_val_natCast_val_lt {p : ℕ} {n : ℕ} (x : Fin n) : (x.val : F p).val < n := by
-  grw [ZMod.val_natCast, Nat.mod_le]
-  exact x.isLt
 
 instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <| by
   simp [F, ZMod.ringChar_zmod_n]

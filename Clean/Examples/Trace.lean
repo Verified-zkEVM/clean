@@ -9,7 +9,7 @@ open Tables.Fibonacci8Table
 def fibRelationBabybear := fibRelation (p:=pBabybear)
 def initRow : RowType (F pBabybear) := { x := 0, y := 1 }
 
-#eval witnesses fibRelationBabybear initRow 20
+#eval witnesses fibRelationBabybear (.empty _) initRow 20
 
 -- def data := Lean.toJson (witnesses fibRelationBabybear initRow 1000000)
 

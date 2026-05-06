@@ -134,7 +134,7 @@ lemma InteractionWithChannel.toRaw_assumeGuarantees (i : InteractionWithChannel 
 lemma Channel.interactionFromRaw_eq (env : Environment F)
   (mult : F) (msg : Message (Expression F)) :
     Channel.interactionFromRaw (mult, (toElements msg).map env) = (mult, eval env msg) := by
-  rfl
+  simp [Channel.interactionFromRaw, ProvableType.fromElements_eval_toElements]
 
 variable {Message' : TypeMap} [ProvableType Message']
 
@@ -147,7 +147,9 @@ def AbstractInteraction.Guarantees (i : AbstractInteraction F) (env : Environmen
 
 @[circuit_norm]
 lemma AbstractInteraction.guarantees_def (env : Environment F) (int : InteractionWithChannel channel) :
-    int.toRaw.Guarantees env ↔ int.Guarantees env := by rfl
+    int.toRaw.Guarantees env ↔ int.Guarantees env := by
+  simp [AbstractInteraction.Guarantees, InteractionWithChannel.Guarantees,
+    InteractionWithChannel.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
 
 @[circuit_norm]
 def InteractionWithChannel.Requirements (i : InteractionWithChannel channel) (env : Environment F) : Prop :=
@@ -158,4 +160,6 @@ def AbstractInteraction.Requirements (i : AbstractInteraction F) (env : Environm
 
 @[circuit_norm]
 lemma AbstractInteraction.requirements_def (env : Environment F) (int : InteractionWithChannel channel) :
-    int.toRaw.Requirements env ↔ int.Requirements env := by rfl
+    int.toRaw.Requirements env ↔ int.Requirements env := by
+  simp [AbstractInteraction.Requirements, InteractionWithChannel.Requirements,
+    InteractionWithChannel.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]

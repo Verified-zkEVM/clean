@@ -365,7 +365,7 @@ def OffsetConsistent (table : TableConstraint W S F α) : Prop :=
 -- construct an env by taking the result of the assignment function for input/output cells,
 -- and allowing arbitrary values for aux cells and invalid variables
 def windowEnv (table : TableConstraint W S F Unit)
-  (window : TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
+  (window : TraceOfLength F S W) (aux_env : ProverEnvironment F) : ProverEnvironment F :=
   let assignment := table.finalAssignment
   { aux_env with get i :=
       if hi : i < assignment.offset then
@@ -381,7 +381,7 @@ def windowEnv (table : TableConstraint W S F Unit)
 -/
 @[table_norm]
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
-  (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
+  (window : TraceOfLength F S W) (aux_env : ProverEnvironment F) : Prop :=
   let env := windowEnv table window aux_env
   Circuit.ConstraintsHold.Soundness env table.operations
 
@@ -453,19 +453,19 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   | .var v => assignVar off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
-    let new_var ← witnessVar x.eval
+    let new_var ← witnessVar fun env => x.eval env
     assertZero (x - var new_var)
     assignVar off new_var
 
 @[table_norm, table_assignment_norm]
 def assignCurrRow {W : ℕ+} (curr : Var S F) : TableConstraint W S F Unit :=
-  let vars := toVars curr
+  let vars := toElements (M:=S) curr
   forM (List.finRange (size S)) fun i =>
     assign (.curr i) vars[i]
 
 @[table_norm, table_assignment_norm]
 def assignNextRow {W : ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
-  let vars := toVars next
+  let vars := toElements (M:=S) next
   forM (List.finRange (size S)) fun i =>
     assign (.next i) vars[i]
 end TableConstraint
@@ -522,8 +522,10 @@ structure TableEnvironments (F : Type) where
   /-- auxiliary data available to all rows -/
   data : ProverData F
 
-def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : Environment F :=
-  { envs with get := envs.witnessEnvs constraint row }
+def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : ProverEnvironment F :=
+  { envs with
+    get := envs.witnessEnvs constraint row
+    hint := .empty F }
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
@@ -553,8 +555,8 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
   -/
   @[table_norm]
-  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
-    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
+  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (ProverEnvironment F)))) :
+    Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (ProverEnvironment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
     | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> curr +> next) rest
@@ -621,7 +623,7 @@ def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLe
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go
-attribute [table_norm low] size fromElements toElements toVars fromVars
+attribute [table_norm low] size fromElements toElements
 attribute [table_assignment_norm low] toElements
 attribute [table_norm] Circuit.ConstraintsHold.Soundness
 
@@ -651,5 +653,5 @@ macro_rules
     rw [Fin.foldr_zero]
     repeat rw [List.forM_cons]
     rw [List.forM_nil, bind_pure_unit]
-    simp only [seval, toVars, toElements, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
+    simp only [seval, toElements, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
       List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ, Fin.succ_zero_eq_one]))

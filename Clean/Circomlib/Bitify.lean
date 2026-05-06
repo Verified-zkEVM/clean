@@ -50,7 +50,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
   (Expression.eval env <| Prod.fst <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
     = fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)) := by
-  suffices (eval (α:=fieldPair) env <|
+  suffices (eval (Var:=Var fieldPair (F p)) env <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
     = (fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)), 2^n) by
     simp_all [circuit_norm]
@@ -72,7 +72,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input _ := input.val < 2^n
+  ProverAssumptions input _ _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
@@ -115,7 +115,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  Assumptions input _ := input.val < 2^n
+  ProverAssumptions input _ _ := input.val < 2^n
 
   Spec input output _ :=
     input.val < 2^n ∧ output = fieldToBits n input
@@ -163,7 +163,7 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
     Fin.foldl n (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
       (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
     = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env) := by
-  suffices (eval (α:=fieldPair) env <|
+  suffices (eval (Var:=Var fieldPair (F p)) env <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
     = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env), 2^n) by
     simp_all [circuit_norm]

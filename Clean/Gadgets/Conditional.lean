@@ -10,8 +10,6 @@ section
 variable {F : Type} [Field F]
 variable {M : TypeMap} [ProvableType M]
 
-open ProvableType
-
 /--
 Inputs for conditional selection between two ProvableTypes.
 Contains a selector bit and two data values.
@@ -26,18 +24,18 @@ def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { selector, ifTrue, ifFalse } := input
 
   -- Inline element-wise scalar multiplication / addition
-  let trueVars := toVars ifTrue
-  let falseVars := toVars ifFalse
+  let trueVars := toElements ifTrue
+  let falseVars := toElements ifFalse
   let resultVars := Vector.ofFn fun i => selector * (trueVars[i] - falseVars[i]) + falseVars[i]
 
-  return fromVars resultVars
+  return fromElements (M:=M) resultVars
 
 def output (selector: Expression F) (ifTrue ifFalse : Var M F) : Var M F :=
   -- Inline element-wise scalar multiplication / addition
-  let trueVars := toVars ifTrue
-  let falseVars := toVars ifFalse
+  let trueVars := toElements (M:=M) ifTrue
+  let falseVars := toElements (M:=M) ifFalse
   let resultVars := Vector.ofFn fun i => selector * (trueVars[i] - falseVars[i]) + falseVars[i]
-  fromVars resultVars
+  fromElements (M:=M) resultVars
 
 def outputValue (selector: F) (ifTrue ifFalse : M F) : M F :=
   -- Inline element-wise scalar multiplication / addition
@@ -120,14 +118,13 @@ theorem eval_ifElse_output {M : TypeMap} [ProvableType M] {env}
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) :
   eval env (output selector ifTrue ifFalse) =
     outputValue (selector.eval env) (eval env ifTrue) (eval env ifFalse) := by
-  simp only [output, outputValue]
+  simp only [output, outputValue, circuit_norm]
 
   -- Show that the result equals the conditional expression
-  rw [ProvableType.ext_iff, fromVars, toVars]
+  rw [ProvableType.ext_iff]
   intro i hi
   rw [ProvableType.eval_fromElements]
-  simp only [circuit_norm, ProvableType.toElements_fromElements,
-    Vector.getElem_map, Vector.getElem_ofFn, ProvableType.getElem_eval_toElements]
+  simp only [circuit_norm, Vector.getElem_map, Vector.getElem_ofFn, ProvableType.getElem_eval_toElements]
   ring
 end
 

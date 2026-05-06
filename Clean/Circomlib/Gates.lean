@@ -406,7 +406,7 @@ theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset :
         · apply AND.circuit.subcircuitsConsistent
 
 -- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
-lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : Environment (F p)) :
+lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : ProverEnvironment (F p)) :
     offset1 = offset2 ->
     (env.UsesLocalWitnesses offset1 ((main input).operations offset2) ↔
      env.UsesLocalWitnessesCompleteness offset1 ((main input).operations offset2)) := by
@@ -428,20 +428,20 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
       constructor
       ·
         intro h_witnesses
-        apply Environment.can_replace_usesLocalWitnessesCompleteness
+        apply ProverEnvironment.can_replace_usesLocalWitnessesCompleteness
         · apply AND.circuit.subcircuitsConsistent
         · exact h_witnesses
       · intro h_completeness
         simp only [AND.circuit, AND.main, circuit_norm] at h_completeness ⊢
         simp only [Nat.add_zero]
-        unfold Environment.UsesLocalWitnesses Operations.forAllFlat
+        unfold ProverEnvironment.UsesLocalWitnesses Operations.forAllFlat
         unfold Operations.forAll
 
         constructor
-        · simp only [Environment.ExtendsVector, Vector.getElem_mk]
+        · simp only [ProverEnvironment.ExtendsVector]
           intro i
           fin_cases i
-          simp only [add_zero, List.getElem_toArray]
+          simp only [add_zero]
           exact h_completeness
         · simp only [Operations.forAll]
           simp only [circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main]
@@ -455,7 +455,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
       · intro h_witnesses
         let n1 := (m + 3) / 2
         let n2 := (m + 3) - n1
-        apply Environment.can_replace_usesLocalWitnessesCompleteness
+        apply ProverEnvironment.can_replace_usesLocalWitnessesCompleteness
         · rw [← main]
           apply subcircuitsConsistent
         · exact h_witnesses
@@ -463,18 +463,18 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         simp only [circuit_norm] at h_completeness ⊢
         rcases h_completeness with ⟨ h_c1, h_c2, h_c3 ⟩
 
-        rw[Environment.UsesLocalWitnesses, Operations.forAllFlat]
+        rw[ProverEnvironment.UsesLocalWitnesses, Operations.forAllFlat]
 
         rw [Operations.forAll_append]
         constructor
-        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnesses]
+        · rw[← Operations.forAllFlat, ← ProverEnvironment.UsesLocalWitnesses]
           rw[IH]
           · aesop
           · omega
           · trivial
         rw [Operations.forAll_append]
         constructor
-        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnesses]
+        · rw[← Operations.forAllFlat, ← ProverEnvironment.UsesLocalWitnesses]
           rw[IH]
           · aesop
           · omega
@@ -495,14 +495,15 @@ def Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
   output.val = (input.map (·.val)).foldl (· &&& ·) 1 ∧ IsBool output
 
 /-- If eval env v = w for vectors v and w, then evaluating extracted subvectors preserves equality -/
-lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment (F p)}
+lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : ProverEnvironment (F p)}
     {v : Var (fields n) (F p)} {w : fields n (F p)}
     (h_eval : w = eval env v)
     (h_bounds : finish ≤ n) (h_start : start ≤ finish) :
-    ProvableType.eval (α := fields (finish - start)) env
-      ⟨v.toArray.extract start finish, by simp [Array.size_extract]; omega⟩ =
+    eval env
+      (⟨v.toArray.extract start finish, by simp [Array.size_extract]; omega⟩ :
+        fields (finish - start) (Expression (F p))) =
     ⟨w.toArray.extract start finish, by simp [Array.size_extract]; omega⟩ := by
-  simp only [ProvableType.eval_fields]
+  simp only [CircuitType.eval_fields_dispatch_prover]
   apply Vector.ext
   intro i hi
   simp only [Vector.getElem_map]
@@ -524,9 +525,9 @@ lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment 
     show (w.toArray.extract start finish)[i]'(size_proof2 ▸ hi) = w.toArray[start + i]'(by simp [w.size_toArray]; exact h_idx)
     rw [Array.getElem_extract]
   rw [rhs]
-  have h_eval' := h_eval
-  simp only [ProvableType.eval_fields] at h_eval'
-  rw [h_eval', Vector.getElem_map]
+  have h_eval_simp := h_eval
+  simp only [CircuitType.eval_var_fields_prover] at h_eval_simp
+  rw [h_eval_simp, Vector.getElem_map]
 
 /-- Helper to show that extracting a subvector preserves element access -/
 lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : ℕ) (hi : i < n1) (h_n1_lt : n1 ≤ n) :
@@ -656,7 +657,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
   have h_eval1 : env input_var[1] = input[1] := by simp [h_env, circuit_norm]
   have h_and_spec := AND.circuit.soundness offset env (input_var[0], input_var[1])
     (input[0], input[1])
-    (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
+    (by simp only [circuit_norm, h_eval0, h_eval1])
     ⟨h_input0, h_input1⟩ h_hold
 
   rcases h_and_spec with ⟨h_val, h_binary⟩
@@ -677,7 +678,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
 
 /-- Completeness for n = 0 case -/
 lemma completeness_zero {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
+    (offset : ℕ) (env : ProverEnvironment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p))
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (_h_env : input = eval env input_var)
@@ -687,7 +688,7 @@ lemma completeness_zero {p : ℕ} [Fact p.Prime]
 
 /-- Completeness for n = 1 case -/
 lemma completeness_one {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
+    (offset : ℕ) (env : ProverEnvironment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p))
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (_h_env : input = eval env input_var)
@@ -697,7 +698,7 @@ lemma completeness_one {p : ℕ} [Fact p.Prime]
 
 /-- Completeness for n = 2 case -/
 lemma completeness_two {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
+    (offset : ℕ) (env : ProverEnvironment (F p)) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p))
     (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (h_env : input = eval env input_var)
@@ -716,11 +717,11 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
     constructor
     · have h_eval0 : Expression.eval env input_var[0] = input[0] :=
         by simp[h_env, circuit_norm]
-      simp only [ProvableType.eval_fieldPair, h_eval0]
+      simp only [circuit_norm, h_eval0]
       exact h_binary0
     · have h_eval1 : Expression.eval env input_var[1] = input[1] :=
         by simp[h_env, circuit_norm]
-      simp only [ProvableType.eval_fieldPair, h_eval1]
+      simp only [circuit_norm, h_eval1]
       exact h_binary1
 
 theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
@@ -753,13 +754,13 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         simp only [input_var1, input1]
         apply Vector.ext
         intro i hi
-        simp only [h_env, ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
+        simp only [h_env, CircuitType.eval_var_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
 
       have h_eval2 : input2 = eval env input_var2 := by
         simp only [input_var2, input2]
         apply Vector.ext
         intro i hi
-        simp only [h_env, ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
+        simp only [h_env, CircuitType.eval_var_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
 
       have h_assumptions1 : Assumptions n1 input1 := by
         intro i hi
@@ -796,7 +797,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         env
         (out1, out2)
         (env out1, env out2)
-        (by simp only [ProvableType.eval_fieldPair])
+        (by simp only [circuit_norm])
         ⟨by rcases h_spec1 with ⟨_, h_binary1⟩; exact h_binary1,
          by rcases h_spec2 with ⟨_, h_binary2⟩; exact h_binary2⟩
         h_hold'.2.2
@@ -865,7 +866,7 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (by
       sorry)).2
 
-lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p))
+lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : ProverEnvironment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : input = eval env input_var)
     (h_assumptions : Assumptions n input)
@@ -874,7 +875,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
     let output := env ((main input_var).output offset)
     IsBool output := by
   apply main_output_binary
-  · assumption
+  · simpa only [circuit_norm] using h_eval
   · assumption
   apply Circuit.can_replace_completeness (n := offset)
   · apply subcircuitsConsistent
@@ -887,7 +888,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
     exact h_compl_inter
 
 theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
-    ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
+    ∀ (offset : ℕ) (env : ProverEnvironment (F p)) (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
     env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset) →
     input = eval env input_var →
@@ -915,13 +916,13 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         apply Vector.ext
         intro i hi
         -- Need to show: input[i] = (eval env (Vector.cast _ (Vector.take input_var n1)))[i]
-        simp only [h_env, ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
+        simp only [h_env, CircuitType.eval_var_fields_prover, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
 
       have h_eval2 : input2 = eval env input_var2 := by
         simp only [input_var2, input2]
         apply Vector.ext
         intro i hi
-        simp only [h_env, ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
+        simp only [h_env, CircuitType.eval_var_fields_prover, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
       have h_assumptions1 : Assumptions n1 input1 := by
         intro i hi
         -- input1[i] = input[i] since input1 is take of input
@@ -1009,14 +1010,14 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_assumptions2
 
             constructor
-            · simp only [ProvableType.eval_fieldPair]
+            · simp only [circuit_norm]
               apply main_output_binary_from_completeness n1 offset env input_var1 input1
               · exact h_eval1
               · exact h_assumptions1
               · exact h_local_witnesses.1
               · exact h_comp1
 
-            · simp only [ProvableType.eval_fieldPair]
+            · simp only [circuit_norm]
               have h_rest := h_local_witnesses.2
               rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_rest
               apply main_output_binary_from_completeness n2 (offset + (main input_var1).localLength offset) env input_var2 input2

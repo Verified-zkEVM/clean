@@ -49,7 +49,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_init h_assumptions
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar i₀ i)
+  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar (p:=p) i₀ i)
 
   change (state 0).Normalized ∧
     (state 0).value = keccakRound input.value roundConstants[0]
@@ -90,7 +90,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i hi
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar i₀ i)
+  let state (i : ℕ) : KeccakState (F p) := eval env.toEnvironment (stateVar (p:=p) i₀ i)
 
   change (state 0).Normalized at h_init
 

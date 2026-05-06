@@ -1,4 +1,5 @@
 /.lake
 .vscode
+.codex
 backends/plonky3/target
 backends/plonky3/tests/fixtures/output
