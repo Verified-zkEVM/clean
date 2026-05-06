@@ -144,12 +144,14 @@ theorem FormalCircuitWithInteractions.original_full_soundness
     let ops := circuit.main input_var |>.operations offset;
     let input := eval env input_var;
     let output := eval env (circuit.output input_var offset);
+    circuit.Assumptions input env →
     ops.ConstraintsHold env → ops.FullGuarantees env →
     circuit.Spec input output env ∧ ops.FullRequirements env := by
-  intro offset env input_var ops input output h_constraints h_full_guarantees
+  intro offset env input_var ops input output h_assumptions h_constraints h_full_guarantees
   have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
     Circuit.can_replace_soundness h_constraints h_full_guarantees
-  have ⟨ h_spec, h_requirements ⟩ := circuit.soundness offset env input_var input rfl h_soundness_input
+  have ⟨ h_spec, h_requirements ⟩ :=
+    circuit.soundness offset env input_var input rfl h_assumptions h_soundness_input
   use h_spec
   apply Circuit.requirements_toFlat_of_soundness h_constraints h_full_guarantees h_requirements
 
@@ -162,7 +164,7 @@ theorem FormalCircuitWithInteractions.original_full_completeness
     ∀ (offset : ℕ) (env : ProverEnvironment F) (input_var : Var β F),
     let ops := circuit.main input_var |>.operations offset;
     let input := eval env input_var;
-    env.UsesLocalWitnesses offset ops → circuit.Assumptions input env →
+    env.UsesLocalWitnesses offset ops → circuit.ProverAssumptions input env →
     ops.ConstraintsHold env ∧ ops.FullGuarantees env := by
   intro offset env input_var ops input h_env h_assumptions
   have h_consistent := circuit.subcircuitsConsistent input_var offset

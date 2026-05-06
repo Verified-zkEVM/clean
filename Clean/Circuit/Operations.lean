@@ -254,16 +254,17 @@ open FlatOperation in
 This is a low-level way to model a subcircuit:
 A nested list of circuit operations, instantiated at a certain offset.
 
-To enable composition of formal proofs, subcircuits come with custom `Soundness` and `Completeness`
+To enable composition of formal proofs, subcircuits come with custom
+`Spec`, `Assumptions`, `ProverSpec` and `ProverAssumptions`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
 structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   ops : NestedOperations F
 
   -- we have a low-level notion of "the constraints hold on these operations".
-  -- for convenience, we allow the framework to transform that into custom `Spec`,
+  -- for convenience, we allow the framework to transform that into custom `Spec`, `Assumptions`,
   -- `ProverAssumptions` and `ProverSpec` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  -- TODO we should separate Spec and Assumptions here
+  Assumptions : Environment F → Prop
   Spec : Environment F → Prop
   ProverAssumptions : ProverEnvironment F → Prop
   ProverSpec : ProverEnvironment F → Prop
@@ -272,8 +273,9 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- even though it could be derived from the operations
   localLength : ℕ
 
-  -- soundness: `Spec` and local requirements need to follow from constraints and guarantees.
+  -- soundness: `Spec` and local requirements need to follow from assumptions, constraints and guarantees.
   soundness : ∀ env,
+    Assumptions env →
     ConstraintsHoldFlat env ops.toFlat →
     FlatOperation.Guarantees env ops.toFlat →
     Spec env ∧ FlatOperation.Requirements env ops.toFlat
@@ -733,11 +735,15 @@ def FullGuarantees (env : Environment F) (ops : Operations F) : Prop :=
 -- TODO rename to ShallowRequirements
 @[circuit_norm]
 def Requirements (env : Environment F) (ops : Operations F) : Prop :=
-  ops.forAllNoOffset { interact i := i.Requirements env }
+  ops.forAllNoOffset {
+    interact i := i.Requirements env
+    subcircuit s := s.Assumptions env
+  }
 
 lemma requirements_iff_forall_mem {env : Environment F} {ops : Operations F} :
     Requirements env ops ↔
-    ∀ i ∈ ops.shallowInteractions, i.Requirements env := by
+    (∀ i ∈ ops.shallowInteractions, i.Requirements env) ∧
+    (∀ s ∈ ops.subcircuits, s.2.Assumptions env) := by
   simp [Requirements, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
@@ -788,7 +794,7 @@ def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
     assert e := env e = 0
     lookup l := l.Soundness env
     interact i := i.Guarantees env
-    subcircuit s := s.Spec env
+    subcircuit s := s.Assumptions env → s.Spec env
   }
 
 lemma constraintsHoldWithInteractions_soundness_iff_forall_mem {env : Environment F} {ops : Operations F} :
@@ -796,7 +802,7 @@ lemma constraintsHoldWithInteractions_soundness_iff_forall_mem {env : Environmen
     (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
     (∀ l ∈ ops.shallowLookups, l.Soundness env) ∧
     (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
-    (∀ s ∈ ops.subcircuits, s.2.Spec env) := by
+    (∀ s ∈ ops.subcircuits, s.2.Assumptions env → s.2.Spec env) := by
   simp [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]

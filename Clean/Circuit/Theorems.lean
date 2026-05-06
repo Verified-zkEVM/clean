@@ -156,12 +156,19 @@ theorem can_replace_soundness {ops : Operations F} {env} :
     have soundness := s.2.soundness env
     rw [FlatOperation.constraintsHoldFlat_iff_forall_mem,
       FlatOperation.guarantees_iff_forall_mem] at soundness
-    exact soundness ⟨h_sub_constraints s h_mem, h_sub_lookups s h_mem⟩ (h_sub_guarantees s h_mem) |>.1
+    exact fun h_assumptions =>
+      soundness h_assumptions ⟨h_sub_constraints s h_mem, h_sub_lookups s h_mem⟩
+        (h_sub_guarantees s h_mem) |>.1
 
 open Operations in
 /--
-Recursive requirements lifting from top-level requirements, given recursive constraints
+Recursive requirements lifting from top-level requirements, recursive constraints,
 and flattened guarantees.
+
+The direct `ops.Requirements env` hypothesis contains both shallow interaction
+requirements and direct subcircuit assumptions. The subcircuit assumptions are
+passed to `Subcircuit.soundness`, which derives each subcircuit's flat
+requirements internally.
 -/
 theorem requirements_toFlat_of_soundness {ops : Operations F} {env} :
   ops.ConstraintsHold env → ops.FullGuarantees env → ops.Requirements env →
@@ -170,15 +177,16 @@ theorem requirements_toFlat_of_soundness {ops : Operations F} {env} :
     requirements_iff_forall_mem]
   intro h_constraints h_guarantees h_requirements
   rw [Operations.forall_interactions_iff]
-  use h_requirements
+  use h_requirements.1
   intro s h_mem
   have soundness := s.2.soundness env
   rw [FlatOperation.constraintsHoldFlat_iff_forall_mem,
     FlatOperation.guarantees_iff_forall_mem, FlatOperation.requirements_iff_forall_mem] at soundness
   rw [Operations.forall_constraints_iff, Operations.forall_lookups_iff] at h_constraints
   rw [Operations.forall_interactions_iff] at h_guarantees
-  specialize soundness ⟨h_constraints.1.2 s h_mem, h_constraints.2.2 s h_mem⟩ (h_guarantees.2 s h_mem)
-  exact soundness.2
+  exact (soundness (h_requirements.2 s h_mem)
+    ⟨h_constraints.1.2 s h_mem, h_constraints.2.2 s h_mem⟩
+    (h_guarantees.2 s h_mem)).2
 
 end Circuit
 
@@ -367,7 +375,7 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0
     lookup _ l := l.Soundness env
-    subcircuit _ _ s := s.Spec env
+    subcircuit _ _ s := s.Assumptions env → s.Spec env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -477,7 +485,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.Soundness env,
-    subcircuit _ _ s := s.Spec env
+    subcircuit _ _ s := s.Assumptions env → s.Spec env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 

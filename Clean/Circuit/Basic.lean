@@ -191,7 +191,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
     l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
   | .interact _ :: ops => ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
-    s.Spec eval ∧ ConstraintsHold.Soundness eval ops
+    (s.Assumptions eval → s.Spec eval) ∧ ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -519,9 +519,11 @@ def GeneralFormalCircuit.toWithHint {F : Type} [Field F] {Input Output : TypeMap
 /-- Soundness for general circuits that change interactions -/
 @[circuit_norm]
 def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Environment F → Prop)
     (Spec : Input F → Output F → Environment F → Prop) :=
   ∀ offset : ℕ, ∀ env,
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  Assumptions input env →
   ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
   let output := eval env (circuit.output input_var offset)
   Spec input output env ∧
@@ -529,21 +531,24 @@ def FormalCircuitWithInteractions.Soundness (F : Type) [Field F] (circuit : Elab
 
 @[circuit_norm]
 def FormalCircuitWithInteractions.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Environment F → Prop) :=
+    (ProverAssumptions : Input F → ProverEnvironment F → Prop) :=
   ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input env →
+  ProverAssumptions input env →
   ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
 
 /-- GeneralFormalCircuit variant for circuits that change interactions -/
 structure FormalCircuitWithInteractions (F : Type) (Input Output : TypeMap) [Field F]
     [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Environment F → Prop
+  /-- the statement to be assumed for soundness -/
+  Assumptions : Input F → Environment F → Prop := fun _ _ => True
   Spec : Input F → Output F → Environment F → Prop
-  soundness : FormalCircuitWithInteractions.Soundness F elaborated Spec
-  completeness : FormalCircuitWithInteractions.Completeness F elaborated Assumptions
+  /-- the statement to be assumed for completeness -/
+  ProverAssumptions : Input F → ProverEnvironment F → Prop := fun _ _ => True
+  soundness : FormalCircuitWithInteractions.Soundness F elaborated Assumptions Spec
+  completeness : FormalCircuitWithInteractions.Completeness F elaborated ProverAssumptions
 
   -- expose the channel guarantees and requirements, for end-to-end proofs
   channelsWithGuarantees : List (RawChannel F) := []
