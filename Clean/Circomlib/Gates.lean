@@ -374,6 +374,13 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
   rw [bind_forAll]
   exact ⟨hf, hg⟩
 
+theorem Circuit.subcircuitsLawful_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ)
+    (hf : (f.operations offset).SubcircuitsLawful)
+    (hg : ((g (f.output offset)).operations (offset + f.localLength offset)).SubcircuitsLawful) :
+    ((f >>= g).operations offset).SubcircuitsLawful := by
+  rw [Circuit.bind_operations_eq, Operations.subcircuitsLawful_append]
+  exact ⟨hf, hg⟩
+
 -- Helper theorem for subcircuitsConsistent
 theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     Operations.SubcircuitsConsistent offset ((main input).operations offset) := by
@@ -404,6 +411,36 @@ theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset :
         · let input2 : Var (fields n2) (F p) := input.drop n1 |>.cast (by omega)
           apply IH n2 h_n2_lt input2
         · apply AND.circuit.subcircuitsConsistent
+
+theorem subcircuitsLawful (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+    ((main input).operations offset).SubcircuitsLawful := by
+  induction n using Nat.strong_induction_on generalizing offset with
+  | _ n IH =>
+    match n with
+    | 0 =>
+      simp only [main, Circuit.operations, Circuit.pure_def]
+      simp only [circuit_norm]
+    | 1 =>
+      simp only [main, Circuit.operations, Circuit.pure_def]
+      simp only [circuit_norm]
+    | 2 =>
+      simp only [main, Circuit.operations]
+      exact AND.circuit.subcircuitsLawful (input[0], input[1]) offset
+    | m + 3 =>
+      rw [main]
+      let n1 := (m + 3) / 2
+      let n2 := (m + 3) - n1
+      have h_n1_lt : n1 < m + 3 := by unfold n1; omega
+      have h_n2_lt : n2 < m + 3 := by unfold n2; omega
+      simp only [Circuit.operations]
+      apply Circuit.subcircuitsLawful_bind
+      ·
+        let input1 : Var (fields n1) (F p) := input.take n1 |>.cast (by simp only [Nat.min_def, n1]; split <;> omega)
+        apply IH n1 h_n1_lt input1
+      · apply Circuit.subcircuitsLawful_bind
+        · let input2 : Var (fields n2) (F p) := input.drop n1 |>.cast (by omega)
+          apply IH n2 h_n2_lt input2
+        · apply AND.circuit.subcircuitsLawful
 
 -- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
 lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : ProverEnvironment (F p)) :
@@ -1031,6 +1068,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   localLength _ := n - 1
   localLength_eq := localLength_eq n
   subcircuitsConsistent := subcircuitsConsistent n
+  subcircuitsLawful := subcircuitsLawful n
 
   Assumptions := Assumptions n
   Spec := Spec n

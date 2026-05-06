@@ -72,6 +72,7 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
 def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := decodeInstructionMain
   localLength _ := 8
+  subcircuitsLawful _ _ := by simp only [decodeInstructionMain, circuit_norm]
 
   ProverAssumptions
   | instruction, _, _ => instruction.val < 256

@@ -40,6 +40,9 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   subcircuitsConsistent x i0 := by
     simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+  subcircuitsLawful _ _ := by
+    simp only [main]
+    fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 
   output_eq := by
     intros
