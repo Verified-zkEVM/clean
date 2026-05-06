@@ -334,77 +334,6 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
     channelsWithRequirements := circuit.channelsWithRequirements
   }
 
--- TODO this is not done, if we really decide to have a variant of constraints-hold with interactions,
--- then we need to change the Subcircuit structure to include them as well
-def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInteractions F β α)
-    (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
-  let ops := circuit.main input_var |>.operations n
-  let nestedOps : NestedOperations F := .nested ⟨ circuit.name, ops.toNested ⟩
-  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
-
-  have imply_soundness : ∀ env : Environment F,
-      let input := eval env input_var
-      let output := eval env (circuit.output input_var n)
-      circuit.Assumptions input env →
-      ConstraintsHoldFlat env nestedOps.toFlat →
-      FlatOperation.Guarantees env nestedOps.toFlat →
-      (circuit.Spec input output env ∧ FlatOperation.Requirements env nestedOps.toFlat) := by
-    intro env input output h_assumptions h_holds h_guarantees
-    rw [ops.toNested_toFlat] at *
-    rw [constraintsHold_toFlat_iff] at h_holds
-    rw [FlatOperation.guarantees_toFlat] at h_guarantees
-    rw [FlatOperation.requirements_toFlat]
-    have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
-      can_replace_soundness h_holds h_guarantees
-    have ⟨ h_spec, h_req ⟩ := circuit.soundness n env input_var input rfl h_assumptions h_soundness_input
-    use h_spec
-    exact requirements_toFlat_of_soundness h_holds h_guarantees h_req
-
-  have implied_by_completeness : ∀ env : ProverEnvironment F,
-      env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
-      circuit.ProverAssumptions (eval env input_var) env →
-      ConstraintsHoldFlat env nestedOps.toFlat ∧ FlatOperation.Guarantees env nestedOps.toFlat := by
-    intro env h_env assumptions
-    set input := eval env input_var
-    rw [ops.toNested_toFlat] at h_env ⊢
-    rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env
-    have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
-    have h_holds_inter := circuit.completeness n env input_var h_env_completeness input rfl assumptions
-    rw [constraintsHold_toFlat_iff, FlatOperation.guarantees_toFlat]
-    exact can_replace_completeness_and_guarantees h_consistent h_env h_holds_inter
-
-  {
-    ops := nestedOps,
-    Assumptions env := circuit.Assumptions (eval env input_var) env,
-    Spec env := circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env,
-    ProverAssumptions env := circuit.ProverAssumptions (eval env input_var) env,
-    ProverSpec env := circuit.ProverAssumptions (eval env input_var) env →
-      circuit.Assumptions (eval env.toEnvironment input_var) env.toEnvironment →
-      circuit.Spec (eval env.toEnvironment input_var) (eval env.toEnvironment (circuit.output input_var n)) env.toEnvironment,
-    localLength := circuit.localLength input_var
-
-    soundness := by
-      intro env assumptions h_constraints h_guarantees
-      exact imply_soundness env assumptions h_constraints h_guarantees
-    completeness := by
-      intro env h_env
-      constructor
-      · intro assumptions
-        exact implied_by_completeness env h_env assumptions
-      -- constraints hold by completeness, which implies the spec by soundness
-      intro assumptions
-      have h := implied_by_completeness env h_env assumptions
-      intro verifier_assumptions
-      exact (imply_soundness env.toEnvironment verifier_assumptions h.1 h.2).1
-
-    localLength_eq := by
-      rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
-        FlatOperation.localLength_toFlat]
-
-    channelsWithGuarantees := circuit.channelsWithGuarantees
-    channelsWithRequirements := circuit.channelsWithRequirements
-  }
-
 /--
 Theorem and implementation that allows us to take a pure general formal circuit
 and use it as a subcircuit. The implementation delegates to the hint-aware
@@ -449,14 +378,6 @@ def subcircuitWithHintAssertion [CircuitType α] [CircuitType β]
     let subcircuit := circuit.toSubcircuit offset b
     (a, [.subcircuit subcircuit])
 
-/-- Include a general subcircuit. -/
-@[circuit_norm]
-def subcircuitWithInteractions (circuit : FormalCircuitWithInteractions F β α) (b : Var β F) : Circuit F (Var α F) :=
-  fun offset =>
-    let a := circuit.output b offset
-    let subcircuit := circuit.toSubcircuit offset b
-    (a, [.subcircuit subcircuit])
-
 -- we'd like to use subcircuits like functions
 
 instance : CoeFun (FormalCircuit F β α) (fun _ => Var β F → Circuit F (Var α F)) where
@@ -472,10 +393,6 @@ instance :
 instance [CircuitType α] [CircuitType β] :
     CoeFun (GeneralFormalCircuit.WithHint F β α) (fun _ => Var β F → Circuit F (Var α F)) where
   coe circuit input := subcircuitWithHintAssertion circuit input
-
-instance : CoeFun (FormalCircuitWithInteractions F β α)
-    (fun _ => Var β F → Circuit F (Var α F)) where
-  coe circuit input := subcircuitWithInteractions circuit input
 
 namespace Circuit
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
@@ -496,8 +413,6 @@ lemma subcircuitWithHintAssertion_localLength_eq [CircuitType α] [CircuitType �
     (circuit : GeneralFormalCircuit.WithHint F β α) (input : Var β F) (offset : ℕ) :
     (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 
-lemma subcircuitWithInteractions_localLength_eq (circuit : FormalCircuitWithInteractions F β α) (input : Var β F) (offset : ℕ) :
-  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 end Circuit
 
 -- subcircuit composability for `ComputableWitnesses`
@@ -601,11 +516,6 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_localLength
 theorem FormalAssertion.toSubcircuit_localLength (circuit : FormalAssertion F Input) :
   (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := rfl
 
-@[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_localLength
-  (circuit : FormalCircuitWithInteractions F Input Output) :
-  (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := rfl
-
 -- Simplification lemmas for toSubcircuit.Soundness
 
 @[circuit_norm]
@@ -635,12 +545,6 @@ theorem FormalAssertion.toSubcircuit_assumptions (circuit : FormalAssertion F In
     circuit.Assumptions (eval env input_var) := rfl
 
 @[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_assumptions
-  (circuit : FormalCircuitWithInteractions F Input Output) :
-  (circuit.toSubcircuit n input_var).Assumptions env =
-    circuit.Assumptions (eval env input_var) env := rfl
-
-@[circuit_norm]
 theorem FormalCircuit.toSubcircuit_soundness (circuit : FormalCircuit F Input Output) :
   (circuit.toSubcircuit n input_var).Spec env =
     circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) := rfl
@@ -668,11 +572,6 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_soundness
 theorem FormalAssertion.toSubcircuit_soundness (circuit : FormalAssertion F Input) :
   (circuit.toSubcircuit n input_var).Spec env =
     circuit.Spec (eval env input_var) := rfl
-
-@[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_soundness (circuit : FormalCircuitWithInteractions F Input Output) :
-  (circuit.toSubcircuit n input_var).Spec env =
-    circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) env := rfl
 
 -- Simplification lemmas for toSubcircuit.Completeness
 
@@ -704,11 +603,6 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_completeness
 theorem FormalAssertion.toSubcircuit_completeness (circuit : FormalAssertion F Input) :
   (circuit.toSubcircuit n input_var).ProverAssumptions env_p =
     (circuit.Assumptions (eval env_p input_var) ∧ circuit.Spec (eval env_p input_var)) := rfl
-
-@[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_completeness (circuit : FormalCircuitWithInteractions F Input Output) :
-  (circuit.toSubcircuit n input_var).ProverAssumptions env_p =
-    circuit.ProverAssumptions (eval env_p input_var) env_p := rfl
 
 -- Simplification lemmas for toSubcircuit.UsesLocalWitnesses
 
@@ -749,15 +643,6 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses
 theorem FormalAssertion.toSubcircuit_usesLocalWitnesses (circuit : FormalAssertion F Input) :
   (circuit.toSubcircuit n input_var).ProverSpec env_p = True := rfl
 
-@[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_usesLocalWitnesses
-  (circuit : FormalCircuitWithInteractions F Input Output) :
-  (circuit.toSubcircuit n input_var).ProverSpec env_p =
-  (circuit.ProverAssumptions (eval env_p input_var) env_p →
-    circuit.Assumptions (eval env_p.toEnvironment input_var) env_p.toEnvironment →
-    circuit.Spec (eval env_p.toEnvironment input_var)
-      (eval env_p.toEnvironment (circuit.output input_var n)) env_p.toEnvironment) := rfl
-
 -- Simplification lemmas for toSubcircuit channelsWithGuarantees and channelsWithRequirements
 
 @[circuit_norm]
@@ -776,12 +661,6 @@ theorem FormalAssertion.toSubcircuit_channelsWithGuarantees (circuit : FormalAss
   (circuit.toSubcircuit n input_var).channelsWithGuarantees = [] := rfl
 
 @[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_channelsWithGuarantees
-  (circuit : FormalCircuitWithInteractions F Input Output) :
-  (circuit.toSubcircuit n input_var).channelsWithGuarantees = circuit.channelsWithGuarantees := by
-  simp [FormalCircuitWithInteractions.toSubcircuit]
-
-@[circuit_norm]
 theorem FormalCircuit.toSubcircuit_channelsWithRequirements (circuit : FormalCircuit F Input Output) :
   (circuit.toSubcircuit n input_var).channelsWithRequirements = [] := rfl
 
@@ -795,30 +674,6 @@ theorem GeneralFormalCircuit.toSubcircuit_channelsWithRequirements
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_channelsWithRequirements (circuit : FormalAssertion F Input) :
   (circuit.toSubcircuit n input_var).channelsWithRequirements = [] := rfl
-
-@[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_channelsWithRequirements
-  (circuit : FormalCircuitWithInteractions F Input Output) :
-  (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := by
-  simp [FormalCircuitWithInteractions.toSubcircuit]
-
-@[circuit_norm]
-theorem FormalCircuitWithInteractions.toSubcircuit_channelsLawful
-    (circuit : FormalCircuitWithInteractions F Input Output) :
-    (circuit.toSubcircuit n input_var).ChannelsLawful := by
-  constructor
-  · intro env
-    simp only [FormalCircuitWithInteractions.toSubcircuit]
-    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
-    exact circuit.in_channels_or_guarantees_full input_var n env
-  constructor
-  · intro env
-    simp only [FormalCircuitWithInteractions.toSubcircuit]
-    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-    exact circuit.in_channels_or_requirements_full input_var n env
-  · simp only [FormalCircuitWithInteractions.toSubcircuit]
-    rw [Operations.toNested_toFlat, Operations.channels_toFlat]
-    exact circuit.channels_subset input_var n
 
 @[circuit_norm]
 theorem FormalCircuit.toSubcircuit_channelsLawful
@@ -890,9 +745,4 @@ theorem FormalAssertion.toSubcircuit_interactions (circuit : FormalAssertion F I
   simp only [FormalAssertion.toSubcircuit]
   rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 
-theorem FormalCircuitWithInteractions.toSubcircuit_interactions (circuit : FormalCircuitWithInteractions F Input Output) :
-  FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
-    (circuit.main input_var |>.operations n |>.interactions) := by
-  simp only [FormalCircuitWithInteractions.toSubcircuit]
-  rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 end
