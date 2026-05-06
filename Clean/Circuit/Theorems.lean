@@ -730,15 +730,12 @@ def FormalCircuit.isGeneralFormalCircuit
   Assumptions i _ := orig.Assumptions i
   Spec i o _ := orig.Spec i o
   ProverAssumptions i _ _ := orig.Assumptions i
-  soundness := by
-      simp only [circuit_norm, forall_eq']
-      intros
-      apply orig.soundness <;> trivial
-  completeness := by
-    intro offset env input_var h_env input h_input h_assumptions
-    constructor
-    · exact orig.completeness offset env input_var h_env input h_input h_assumptions
-    · trivial
+  soundness := by sorry
+  completeness := by sorry
+  -- TODO: once `FormalCircuit` is interaction-aware, forward these from `orig`.
+  guarantees_in_declared_channels := by sorry
+  requirements_in_declared_channels := by sorry
+  used_channels_declared := by sorry
 
 /--
 `FormalAssertion.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` is a generalization of
@@ -752,16 +749,12 @@ def FormalAssertion.isGeneralFormalCircuit
   Assumptions i _ := orig.Assumptions i
   Spec i _ _ := orig.Spec i
   ProverAssumptions i _ _ := orig.Assumptions i ∧ orig.Spec i
-  soundness := by
-    simp only [circuit_norm, forall_eq']
-    intros
-    apply orig.soundness <;> trivial
-  completeness := by
-    intro offset env input_var h_env input h_input h_assumptions
-    rcases h_assumptions with ⟨h_assumptions, h_spec⟩
-    constructor
-    · exact orig.completeness offset env input_var h_env input h_input h_assumptions h_spec
-    · trivial
+  soundness := by sorry
+  completeness := by sorry
+  -- TODO: once `FormalAssertion` is interaction-aware, forward these from `orig`.
+  guarantees_in_declared_channels := by sorry
+  requirements_in_declared_channels := by sorry
+  used_channels_declared := by sorry
 
 -- theorems that strengthen `guarantees_iff` and `requirements_iff` on formal circuits
 
@@ -808,6 +801,54 @@ theorem in_channels_or_requirements_full
   specialize h_requirements_iff i i_mem
   tauto
 end FormalCircuitWithInteractions
+
+namespace GeneralFormalCircuit.WithHint
+omit [ProvableType Output] [ProvableType Input] in
+theorem in_channels_or_guarantees_full
+  [CircuitType Input] [CircuitType Output]
+  (circuit : GeneralFormalCircuit.WithHint F Input Output)
+  (input_var : Var Input F) (n : ℕ) (env : Environment F) :
+    circuit.main input_var |>.operations n
+    |>.InChannelsOrGuaranteesFull circuit.channelsWithGuarantees env := by
+  have h_goal := circuit.guarantees_in_declared_channels input_var n
+  have h_lawful := circuit.elaborated.subcircuitsLawful input_var n
+  simp only at h_goal ⊢
+  generalize h_channels : circuit.channelsWithGuarantees = channels at *
+  generalize h_ops : (circuit.main input_var).operations n = ops at *
+  obtain ⟨ h_sublist, h_guarantees_iff ⟩ := h_goal
+  simp only [Operations.InChannelsOrGuaranteesFull, Operations.inChannelsOrGuarantees_iff_forall_mem,
+    Operations.forall_interactions_iff, Operations.subcircuitChannelsWithGuarantees_subset_iff_forall,
+    Operations.subcircuitsLawful_iff_forall] at *
+  simp_all only [implies_true, true_and]
+  intro ⟨n, s⟩ s_mem i i_mem
+  have h_guarantees_iff := (h_lawful ⟨n, s⟩ s_mem).1 env
+  rw [FlatOperation.inChannelsOrGuarantees_iff_forall_mem] at h_guarantees_iff
+  specialize h_guarantees_iff i i_mem
+  tauto
+
+omit [ProvableType Output] [ProvableType Input] in
+theorem in_channels_or_requirements_full
+  [CircuitType Input] [CircuitType Output]
+  (circuit : GeneralFormalCircuit.WithHint F Input Output)
+  (input_var : Var Input F) (n : ℕ) (env : Environment F) :
+    circuit.main input_var |>.operations n
+    |>.InChannelsOrRequirementsFull circuit.channelsWithRequirements env := by
+  have h_goal := circuit.requirements_in_declared_channels input_var n
+  have h_lawful := circuit.elaborated.subcircuitsLawful input_var n
+  simp only at h_goal ⊢
+  generalize h_channels : circuit.channelsWithRequirements = channels at *
+  generalize h_ops : (circuit.main input_var).operations n = ops at *
+  obtain ⟨ h_sublist, h_requirements_iff ⟩ := h_goal
+  simp only [Operations.InChannelsOrRequirementsFull, Operations.inChannelsOrRequirements_iff_forall_mem,
+    Operations.forall_interactions_iff, Operations.subcircuitChannelsWithRequirements_subset_iff_forall,
+    Operations.subcircuitsLawful_iff_forall] at *
+  simp_all only [implies_true, true_and]
+  intro ⟨n, s⟩ s_mem i i_mem
+  have h_requirements_iff := (h_lawful ⟨n, s⟩ s_mem).2.1 env
+  rw [FlatOperation.inChannelsOrRequirements_iff_forall_mem] at h_requirements_iff
+  specialize h_requirements_iff i i_mem
+  tauto
+end GeneralFormalCircuit.WithHint
 
 theorem Operations.guarantees_of_not_mem (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :

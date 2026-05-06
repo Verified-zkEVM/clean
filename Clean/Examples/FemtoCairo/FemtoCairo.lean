@@ -688,6 +688,7 @@ def femtoCairoStepSoundness
               contradiction
             case h_1 next_state h_eq_next =>
               rw [h_eq_next, ←c_next]
+              simp_all only [circuit_norm, explicit_provable_type]
 
 def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
   (h_programSize : programSize < p) :
@@ -734,6 +735,15 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   Spec := femtoCairoStepSpec program
   soundness := femtoCairoStepSoundness program h_programSize
   completeness := femtoCairoStepCompleteness program h_programSize
+  guarantees_in_declared_channels := by
+    simp only [femtoCairoStepElaboratedCircuit, fetchInstruction, decodeInstruction,
+      readFromMemory, nextState, circuit_norm, seval]
+  requirements_in_declared_channels := by
+    simp only [femtoCairoStepElaboratedCircuit, fetchInstruction, decodeInstruction,
+      readFromMemory, nextState, circuit_norm, seval]
+  used_channels_declared := by
+    simp only [femtoCairoStepElaboratedCircuit, fetchInstruction, decodeInstruction,
+      readFromMemory, nextState, circuit_norm, seval]
 
 /--
   The femtoCairo table, which defines the step relation for the femtoCairo VM.
