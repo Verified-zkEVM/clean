@@ -80,8 +80,7 @@ lemma forAll_flatten (xs : Vector α m) {circuit : α → Circuit F β} (constan
 
 lemma forAllNoOffset_flatten_abstract {prop' : ConditionNoOffset F}
     (circuit : Fin m → Circuit F β) (constant : ConstantLength circuit) :
-  Operations.forAllNoOffset prop'
-      (List.ofFn fun i => (circuit i).operations (n + i * constant.localLength)).flatten ↔
+  Operations.forAllNoOffset prop' ((List.ofFn fun i => (circuit i).operations (n + i * constant.localLength)).flatten) ↔
     ∀ (i : Fin m),
       Operations.forAllNoOffset prop' ((circuit i).operations (n + i * constant.localLength)) := by
   induction m generalizing n with
@@ -103,8 +102,7 @@ lemma forAllNoOffset_flatten_abstract {prop' : ConditionNoOffset F}
 
 lemma forAllNoOffset_flatten {prop' : ConditionNoOffset F}
     (xs : Vector α m) {circuit : α → Circuit F β} (constant : ConstantLength circuit) :
-  Operations.forAllNoOffset prop'
-      (List.ofFn fun (i : Fin m) => (circuit xs[i.val]).operations (n + i * constant.localLength)).flatten ↔
+  Operations.forAllNoOffset prop' ((List.ofFn fun (i : Fin m) => (circuit xs[i.val]).operations (n + i * constant.localLength)).flatten) ↔
     ∀ (i : Fin m),
       Operations.forAllNoOffset prop' ((circuit xs[i.val]).operations (n + i * constant.localLength)) :=
   forAllNoOffset_flatten_abstract (fun i : Fin m => circuit xs[i.val]) {
@@ -144,6 +142,13 @@ theorem forAll_iff {prop : Condition F} :
   (xs.forM circuit).forAll n prop ↔
     ∀ (i : Fin m), (circuit xs[i.val]).forAll (n + i * constant.localLength) prop := by
   rw [forAll_def, operations_eq, forAll_flatten]
+
+theorem forAllNoOffset_iff {prop' : ConditionNoOffset F} :
+  ((xs.forM circuit).operations n).forAllNoOffset prop' ↔
+    ∀ (i : Fin m),
+      ((circuit xs[i.val]).operations (n + i * constant.localLength)).forAllNoOffset prop' := by
+  rw [operations_eq, forAllNoOffset_flatten]
+
 end ForM
 
 namespace MapM
@@ -202,8 +207,8 @@ theorem forAll_iff :
   rw [forAll_def, operations_eq, forAll_flatten]
 
 theorem forAllNoOffset_iff :
-  Operations.forAllNoOffset prop' ((xs.mapM circuit).operations n) ↔
-    ∀ (i : Fin m), Operations.forAllNoOffset prop' ((circuit xs[i.val]).operations (n + i * constant.localLength)) := by
+  ((xs.mapM circuit).operations n).forAllNoOffset prop' ↔
+    ∀ (i : Fin m), ((circuit xs[i.val]).operations (n + i * constant.localLength)).forAllNoOffset prop' := by
   rw [operations_eq, forAllNoOffset_flatten]
 
 -- specialization to mapFinRangeM
@@ -215,17 +220,18 @@ theorem mapFinRangeM_forAll_iff {circuit : Fin m → Circuit F β} [constant : C
 
 theorem mapFinRangeM_forAllNoOffset_iff {circuit : Fin m → Circuit F β}
     [constant : ConstantLength circuit] :
-  Operations.forAllNoOffset prop' ((Vector.mapFinRangeM m circuit).operations n) ↔
-    ∀ i : Fin m, Operations.forAllNoOffset prop' ((circuit i).operations (n + i * constant.localLength)) := by
+  ((Vector.mapFinRangeM m circuit).operations n).forAllNoOffset prop' ↔
+    ∀ i : Fin m, ((circuit i).operations (n + i * constant.localLength)).forAllNoOffset prop' := by
   rw [Vector.mapFinRangeM, forAllNoOffset_iff]
   simp only [Vector.getElem_finRange]
+
 end MapM
 
 namespace FoldlM
 @[reducible]
 def prod (circuit : β → α → Circuit F β) : β × α → Circuit F β := fun t => circuit t.1 t.2
 
-variable {env : ProverEnvironment F} {prop : Condition F} {xs : Vector α m}
+variable {env : ProverEnvironment F} {prop : Condition F} {prop' : ConditionNoOffset F} {xs : Vector α m}
   {circuit : β → α → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
 lemma foldlM_cons (x : α) :
@@ -300,10 +306,29 @@ lemma forAll_flatten_foldl :
     localLength_eq i n := constant.localLength_eq (_, _) _
   }
 
+lemma forAllNoOffset_flatten_foldl :
+  Operations.forAllNoOffset prop' ((List.ofFn fun (i : Fin m) =>
+        (circuit (foldlAcc n xs circuit init i) xs[i.val]).operations (n + i * constant.localLength)).flatten)
+    ↔ ∀ (i : Fin m),
+      Operations.forAllNoOffset prop' ((circuit (foldlAcc n xs circuit init i) xs[i.val]).operations (n + i * constant.localLength)) :=
+  forAllNoOffset_flatten_abstract (fun i : Fin m => circuit (foldlAcc n xs circuit init i) xs[i.val]) {
+    localLength := constant.localLength
+    localLength_eq i n := constant.localLength_eq (_, _) _
+  }
+
 theorem forAll_iff {constant : ConstantLength (prod circuit)} :
   (xs.foldlM circuit init).forAll n prop ↔
     ∀ i : Fin m, (circuit (foldlAcc n xs circuit init i) xs[i.val]).forAll (n + i * (circuit init xs[i.val]).localLength) prop := by
   rw [forAll_def, operations_eq, forAll_flatten_foldl, iff_iff_eq]
+  congr!
+  rw [←constant.localLength_eq (init, _)]
+
+theorem forAllNoOffset_iff {constant : ConstantLength (prod circuit)} :
+  ((xs.foldlM circuit init).operations n).forAllNoOffset prop' ↔
+    ∀ i : Fin m,
+      ((circuit (foldlAcc n xs circuit init i) xs[i.val]).operations
+        (n + i * (circuit init xs[i.val]).localLength)).forAllNoOffset prop' := by
+  rw [operations_eq, forAllNoOffset_flatten_foldl, iff_iff_eq]
   congr!
   rw [←constant.localLength_eq (init, _)]
 
@@ -318,6 +343,14 @@ theorem forAll_iff_finRange {constant : ConstantLength (prod circuit)} :
     ∀ i : Fin m, (circuit (foldlAcc n (Vector.finRange m) circuit init i) i)
     |>.forAll (n + i * (circuit init i).localLength) prop := by
   simp only [forAll_iff, Vector.getElem_finRange]
+
+theorem forAllNoOffset_iff_finRange {constant : ConstantLength (prod circuit)} :
+  (((Vector.finRange m).foldlM circuit init).operations n).forAllNoOffset prop' ↔
+    ∀ i : Fin m,
+      ((circuit (foldlAcc n (Vector.finRange m) circuit init i) i).operations
+        (n + i * (circuit init i).localLength)).forAllNoOffset prop' := by
+  simp only [forAllNoOffset_iff, Vector.getElem_finRange]
+
 end
 -- we can massively simplify the foldlM theory when assuming the body's output is independent of the input
 
@@ -403,6 +436,39 @@ theorem forAll_iff_const [NeZero m] (constant : ConstantLength (prod circuit))
     rw [ConstantLength.length_eq_default constant (init, _)]
     rfl
 
+theorem forAllNoOffset_iff_const [NeZero m] (constant : ConstantLength (prod circuit))
+    (h_const_out : ConstantOutput (prod circuit)) :
+  ((xs.foldlM circuit init).operations n).forAllNoOffset prop' ↔
+  ((circuit init (xs[0]'(NeZero.pos m))).operations n).forAllNoOffset prop' ∧
+  ∀ (i : ℕ) (hi : i + 1 < m),
+    let acc := (circuit default xs[i]).output (n + i*(circuit default default).localLength);
+    ((circuit acc xs[i + 1]).operations (n + (i + 1)*(circuit default default).localLength)).forAllNoOffset prop' := by
+  rw [forAllNoOffset_iff (constant:=constant)]
+  set k := (circuit default default).localLength
+  simp only
+  constructor
+  · intro h
+    constructor
+    · specialize h 0
+      simp only [Fin.val_zero] at h
+      rw [foldlAcc_zero, zero_mul, add_zero] at h
+      exact h
+    · intro i hi
+      specialize h ⟨ i + 1, hi ⟩
+      rw [foldlAcc_const_succ constant h_const_out] at h
+      convert h using 3
+      rw [ConstantLength.length_eq_default constant (init, _)]
+      rfl
+  intro h i
+  rcases i with ⟨ _ | i, hi ⟩
+  · simp only [Fin.mk_zero']
+    rw [foldlAcc_zero, zero_mul, add_zero]
+    exact h.left
+  · rw [foldlAcc_const_succ constant h_const_out]
+    convert (h.right i hi) using 3
+    rw [ConstantLength.length_eq_default constant (init, _)]
+    rfl
+
 end FoldlM
 
 def forEach {m : ℕ} [Inhabited α] (xs : Vector α m) (body : α → Circuit F Unit)
@@ -445,6 +511,7 @@ def foldlRange (m : ℕ) [Inhabited β] (init : β) (body : β → Fin m → Cir
 section forEach
 variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantLength body} {prop : Condition F}
+  {prop' : ConditionNoOffset F}
 
 @[circuit_norm ↓]
 lemma forEach.localLength_eq :
@@ -461,6 +528,14 @@ lemma forEach.forAll :
     ∀ i : Fin m, (body xs[i.val] |>.forAll (n + i*(body default).localLength) prop) := by
   simp only [forEach, ←forAll_def]
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
+
+@[circuit_norm ↓]
+lemma forEach.forAllNoOffset :
+  ((forEach xs body constant).operations n).forAllNoOffset prop' ↔
+    ∀ i : Fin m,
+      ((body xs[i.val]).operations (n + i*(body default).localLength)).forAllNoOffset prop' := by
+  simp only [forEach]
+  rw [ForM.forAllNoOffset_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma forEach.soundness :
@@ -496,6 +571,7 @@ end forEach
 section map
 variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F β} {constant : ConstantLength body} {prop : Condition F}
+  {prop' : ConditionNoOffset F}
 
 @[circuit_norm ↓]
 lemma map.localLength_eq :
@@ -514,6 +590,14 @@ lemma map.forAll :
     ∀ i : Fin m, (body xs[i.val] |>.forAll (n + i*(body default).localLength) prop) := by
   simp only [map, ←forAll_def]
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
+
+@[circuit_norm ↓]
+lemma map.forAllNoOffset :
+  ((map xs body constant).operations n).forAllNoOffset prop' ↔
+    ∀ i : Fin m,
+      ((body xs[i.val]).operations (n + i*(body default).localLength)).forAllNoOffset prop' := by
+  simp only [map]
+  rw [MapM.forAllNoOffset_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma map.soundness :
@@ -610,10 +694,17 @@ lemma mapFinRange.forAll :
 
 @[circuit_norm ↓]
 lemma mapFinRange.forAll' :
-  Operations.forAllNoOffset prop' (mapFinRange m body constant n |>.2) ↔
-    ∀ i : Fin m, ((body i (n + i*(body 0).localLength)).2 |> Operations.forAllNoOffset prop') := by
+  ((mapFinRange m body constant).operations n).forAllNoOffset prop' ↔
+    ∀ i : Fin m, ((body i).operations (n + i*(body 0).localLength)).forAllNoOffset prop' := by
   simp only [mapFinRange]
   rw [MapM.mapFinRangeM_forAllNoOffset_iff, ConstantLength.localLength_eq]
+
+@[circuit_norm ↓]
+lemma mapFinRange.subcircuitsLawful :
+  ((mapFinRange m body constant).operations n).SubcircuitsLawful ↔
+    ∀ i : Fin m, ((body i).operations (n + i*(body 0).localLength)).SubcircuitsLawful := by
+  rw [Operations.subcircuitsLawful_iff_forAllNoOffset, mapFinRange.forAll']
+  simp only [← Operations.subcircuitsLawful_iff_forAllNoOffset]
 
 @[circuit_norm ↓]
 lemma mapFinRange.soundness :
@@ -641,6 +732,7 @@ section foldl
 variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
   {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)}
+  {prop' : ConditionNoOffset F}
 
 @[circuit_norm ↓]
 lemma foldl.localLength_eq :
@@ -672,6 +764,17 @@ lemma foldl.forAll [NeZero m] :
       (body acc xs[i + 1]).forAll (n + (i + 1)*k) prop := by
   simp only [foldl, ←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
+
+@[circuit_norm ↓]
+lemma foldl.forAllNoOffset [NeZero m] :
+  ((foldl xs init body const_out constant).operations n).forAllNoOffset prop' ↔
+    ((body init (xs[0]'(NeZero.pos m))).operations n).forAllNoOffset prop' ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let k := (body default default).localLength;
+      let acc := (body default xs[i]).output (n + i*k);
+      ((body acc xs[i + 1]).operations (n + (i + 1)*k)).forAllNoOffset prop' := by
+  simp only [foldl]
+  rw [FoldlM.forAllNoOffset_iff_const constant const_out]
 
 @[circuit_norm ↓]
 lemma foldl.soundness [NeZero m] :
@@ -708,6 +811,7 @@ end foldl
 section foldlRange
 variable {env : ProverEnvironment F} {env_v : Environment F} {m n : ℕ} [Inhabited β]
   {body : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
+  {prop' : ConditionNoOffset F}
 
 @[circuit_norm ↓]
 lemma foldlRange.localLength_eq :
@@ -736,6 +840,17 @@ lemma foldlRange.forAll :
       |>.forAll (n + i * (body default i).localLength) prop := by
   simp only [foldlRange, ←forAll_def]
   rw [FoldlM.forAll_iff_finRange (constant:=constant)]
+  congr! 4
+  rw [constant.localLength_eq (_, _), constant.localLength_eq (_, _)]
+
+@[circuit_norm ↓]
+lemma foldlRange.forAllNoOffset :
+  ((foldlRange m init body constant).operations n).forAllNoOffset prop' ↔
+    ∀ i : Fin m,
+      ((body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
+        (n + i * (body default i).localLength)).forAllNoOffset prop' := by
+  simp only [foldlRange]
+  rw [FoldlM.forAllNoOffset_iff_finRange (constant:=constant)]
   congr! 4
   rw [constant.localLength_eq (_, _), constant.localLength_eq (_, _)]
 

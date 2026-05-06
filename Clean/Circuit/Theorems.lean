@@ -465,6 +465,15 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
   rw [h_ops, Operations.forAll_append, add_comm n]
 
+@[circuit_norm]
+theorem bind_forAllNoOffset {f : Circuit F α} {g : α → Circuit F β} {prop : ConditionNoOffset F} :
+  ((f >>= g).operations n).forAllNoOffset prop ↔
+    (f.operations n).forAllNoOffset prop ∧
+      (((g (f.output n)).operations (n + f.localLength n)).forAllNoOffset prop) := by
+  have h_ops : (f >>= g).operations n =
+      f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
+  rw [h_ops, Operations.forAllNoOffset_append]
+
 -- definition of `forAll` for circuits which uses the same offset in two places
 
 @[reducible, circuit_norm]
@@ -763,15 +772,17 @@ theorem in_channels_or_guarantees_full
     circuit.main input_var |>.operations n
     |>.InChannelsOrGuaranteesFull circuit.channelsWithGuarantees env := by
   have h_goal := circuit.guarantees_iff input_var n
+  have h_lawful := circuit.elaborated.subcircuitsLawful input_var n
   simp only at h_goal ⊢
-  generalize circuit.channelsWithGuarantees = channels at *
-  generalize (circuit.main input_var).operations n = ops at *
+  generalize h_channels : circuit.channelsWithGuarantees = channels at *
+  generalize h_ops : (circuit.main input_var).operations n = ops at *
   obtain ⟨ h_sublist, h_guarantees_iff ⟩ := h_goal
   simp only [Operations.InChannelsOrGuaranteesFull, Operations.inChannelsOrGuarantees_iff_forall_mem,
-    Operations.forall_interactions_iff, Operations.subcircuitChannelsWithGuarantees_subset_iff_forall] at *
+    Operations.forall_interactions_iff, Operations.subcircuitChannelsWithGuarantees_subset_iff_forall,
+    Operations.subcircuitsLawful_iff_forall] at *
   simp_all only [implies_true, true_and]
   intro ⟨n, s⟩ s_mem i i_mem
-  have h_guarantees_iff := s.guarantees_iff env
+  have h_guarantees_iff := (h_lawful ⟨n, s⟩ s_mem).1 env
   rw [FlatOperation.inChannelsOrGuarantees_iff_forall_mem] at h_guarantees_iff
   specialize h_guarantees_iff i i_mem
   tauto
@@ -782,15 +793,17 @@ theorem in_channels_or_requirements_full
     circuit.main input_var |>.operations n
     |>.InChannelsOrRequirementsFull circuit.channelsWithRequirements env := by
   have h_goal := circuit.requirements_iff input_var n
+  have h_lawful := circuit.elaborated.subcircuitsLawful input_var n
   simp only at h_goal ⊢
-  generalize circuit.channelsWithRequirements = channels at *
-  generalize (circuit.main input_var).operations n = ops at *
+  generalize h_channels : circuit.channelsWithRequirements = channels at *
+  generalize h_ops : (circuit.main input_var).operations n = ops at *
   obtain ⟨ h_sublist, h_requirements_iff ⟩ := h_goal
   simp only [Operations.InChannelsOrRequirementsFull, Operations.inChannelsOrRequirements_iff_forall_mem,
-    Operations.forall_interactions_iff, Operations.subcircuitChannelsWithRequirements_subset_iff_forall] at *
+    Operations.forall_interactions_iff, Operations.subcircuitChannelsWithRequirements_subset_iff_forall,
+    Operations.subcircuitsLawful_iff_forall] at *
   simp_all only [implies_true, true_and]
   intro ⟨n, s⟩ s_mem i i_mem
-  have h_requirements_iff := s.requirements_iff env
+  have h_requirements_iff := (h_lawful ⟨n, s⟩ s_mem).2.1 env
   rw [FlatOperation.inChannelsOrRequirements_iff_forall_mem] at h_requirements_iff
   specialize h_requirements_iff i i_mem
   tauto
@@ -867,15 +880,18 @@ theorem FormalCircuitWithInteractions.requirements_iff'
   apply circuit.in_channels_or_requirements_full
 
 theorem Operations.channels_subset {ops : Operations F} :
+    ops.SubcircuitsLawful →
     ops.channels ⊆ ops.shallowChannels ++
       ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements := by
+  intro h_lawful
   simp only [List.subset_def, channels, List.mem_map,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂]
   rw [forall_interactions_iff, shallowChannels_eq_interactions_map]
+  rw [Operations.subcircuitsLawful_iff_forall] at h_lawful
   constructor
   · intro i i_mem; simp; left; use i
   intro ⟨ n, s ⟩ s_mem
-  have h_all := s.channels_subset
+  have h_all := (h_lawful ⟨n, s⟩ s_mem).2.2
   simp only [FlatOperation.channels, List.subset_def, List.mem_map, List.mem_append,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂] at h_all
   simp only [subcircuitChannelsWithGuarantees_eq_subcircuits_map,
@@ -898,6 +914,7 @@ theorem FormalCircuitWithInteractions.channels_subset
   set ops := (circuit.main input_var).operations n
   trans ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
   apply Operations.channels_subset
+  exact circuit.elaborated.subcircuitsLawful input_var n
   simp_all only [channels, List.append_assoc, List.append_subset, List.subset_append_of_subset_left,
     List.subset_append_of_subset_right, and_self, and_true]
   simp only [List.subset_def, List.mem_append]

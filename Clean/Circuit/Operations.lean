@@ -295,12 +295,10 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   channelsWithGuarantees : List (RawChannel F) := []
   channelsWithRequirements : List (RawChannel F) := []
 
-  -- TODO maybe we don't need that, if we have a lawfulness property separately
-  guarantees_iff : ∀ env,
-    InChannelsOrGuarantees channelsWithGuarantees env ops.toFlat
-  requirements_iff : ∀ env,
-    InChannelsOrRequirements channelsWithRequirements env ops.toFlat
-  channels_subset : channels ops.toFlat ⊆ channelsWithGuarantees ++ channelsWithRequirements
+def Subcircuit.ChannelsLawful (s : Subcircuit F n) : Prop :=
+  (∀ env, FlatOperation.InChannelsOrGuarantees s.channelsWithGuarantees env s.ops.toFlat) ∧
+  (∀ env, FlatOperation.InChannelsOrRequirements s.channelsWithRequirements env s.ops.toFlat) ∧
+  FlatOperation.channels s.ops.toFlat ⊆ s.channelsWithGuarantees ++ s.channelsWithRequirements
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
@@ -613,6 +611,9 @@ def SubcircuitsConsistent (offset : ℕ) (ops : Operations F) := ops.forAll offs
   subcircuit offset {n} _ := n = offset
 }
 
+def SubcircuitsLawful (ops : Operations F) : Prop :=
+  ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful
+
 /--
 Induction principle for operations _with subcircuit consistency_.
 
@@ -693,6 +694,17 @@ lemma forAllNoOffset_iff_forall_mem {condition : ConditionNoOffset F} {ops : Ope
     shallowWitnessOperations, subcircuits,
     List.mem_cons, or_imp, forall_and, forall_eq]
   tauto
+
+lemma subcircuitsLawful_iff_forall {ops : Operations F} :
+    ops.SubcircuitsLawful ↔ ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful := by
+  rfl
+
+@[circuit_norm]
+lemma subcircuitsLawful_iff_forAllNoOffset {ops : Operations F} :
+    ops.SubcircuitsLawful ↔ ops.forAllNoOffset {
+      subcircuit s := s.ChannelsLawful
+    } := by
+  simp [SubcircuitsLawful, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
 def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
@@ -921,6 +933,12 @@ namespace Operations
 @[circuit_norm] lemma subcircuits_append (ops1 ops2 : Operations F) :
     subcircuits (ops1 ++ ops2) = subcircuits ops1 ++ subcircuits ops2 := by
   induction ops1 using induct <;> simp_all [subcircuits]
+
+@[circuit_norm]
+theorem subcircuitsLawful_append (ops ops' : Operations F) :
+    SubcircuitsLawful (ops ++ ops') ↔ SubcircuitsLawful ops ∧ SubcircuitsLawful ops' := by
+  simp [SubcircuitsLawful, subcircuits_append, List.mem_append]
+  grind
 
 theorem interactionsWith_append {channel : RawChannel F} {ops1 ops2 : Operations F} :
     interactionsWith channel (ops1 ++ ops2) =

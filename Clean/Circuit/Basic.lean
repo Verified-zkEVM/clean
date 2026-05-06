@@ -269,6 +269,14 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitTy
       try first | ac_rfl | trivial
     )
 
+  /-- technical condition: all subcircuits expose lawful channel metadata -/
+  subcircuitsLawful : ∀ input offset, ((main input).operations offset).SubcircuitsLawful
+    := by
+      intros
+      try dsimp only [main]
+      simp only [circuit_norm]
+      all_goals try first | ac_rfl | trivial
+
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 variable [ProvableType Input] [ProvableType Output]

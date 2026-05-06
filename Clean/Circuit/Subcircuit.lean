@@ -174,9 +174,6 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       rw [ops.toNested_toFlat, ←circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
 
-    guarantees_iff := sorry
-    requirements_iff := sorry
-    channels_subset := sorry
   }
 
 /--
@@ -246,9 +243,6 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
 
-    guarantees_iff := sorry
-    requirements_iff := sorry
-    channels_subset := sorry
   }
 
 /--
@@ -338,9 +332,6 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
         FlatOperation.localLength_toFlat]
 
-    guarantees_iff := sorry
-    requirements_iff := sorry
-    channels_subset := sorry
   }
 
 -- TODO this is not done, if we really decide to have a variant of constraints-hold with interactions,
@@ -412,17 +403,6 @@ def FormalCircuitWithInteractions.toSubcircuit (circuit : FormalCircuitWithInter
 
     channelsWithGuarantees := circuit.channelsWithGuarantees
     channelsWithRequirements := circuit.channelsWithRequirements
-    guarantees_iff := by
-      intro env
-      rw [ops.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
-      apply circuit.in_channels_or_guarantees_full
-    requirements_iff := by
-      intro env
-      rw [ops.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-      apply circuit.in_channels_or_requirements_full
-    channels_subset := by
-      rw [ops.toNested_toFlat, Operations.channels_toFlat]
-      apply circuit.channels_subset
   }
 
 /--
@@ -817,6 +797,49 @@ theorem FormalCircuitWithInteractions.toSubcircuit_channelsWithRequirements
   (circuit : FormalCircuitWithInteractions F Input Output) :
   (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := by
   simp [FormalCircuitWithInteractions.toSubcircuit]
+
+@[circuit_norm]
+theorem FormalCircuitWithInteractions.toSubcircuit_channelsLawful
+    (circuit : FormalCircuitWithInteractions F Input Output) :
+    (circuit.toSubcircuit n input_var).ChannelsLawful := by
+  constructor
+  · intro env
+    simp only [FormalCircuitWithInteractions.toSubcircuit]
+    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
+    exact circuit.in_channels_or_guarantees_full input_var n env
+  constructor
+  · intro env
+    simp only [FormalCircuitWithInteractions.toSubcircuit]
+    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
+    exact circuit.in_channels_or_requirements_full input_var n env
+  · simp only [FormalCircuitWithInteractions.toSubcircuit]
+    rw [Operations.toNested_toFlat, Operations.channels_toFlat]
+    exact circuit.channels_subset input_var n
+
+@[circuit_norm]
+theorem FormalCircuit.toSubcircuit_channelsLawful
+    (circuit : FormalCircuit F Input Output) :
+    (circuit.toSubcircuit n input_var).ChannelsLawful := by
+  sorry
+
+@[circuit_norm]
+theorem FormalAssertion.toSubcircuit_channelsLawful
+    (circuit : FormalAssertion F Input) :
+    (circuit.toSubcircuit n input_var).ChannelsLawful := by
+  sorry
+
+@[circuit_norm]
+theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful
+    {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F) :
+    (circuit.toSubcircuit n input_var).ChannelsLawful := by
+  sorry
+
+@[circuit_norm]
+theorem GeneralFormalCircuit.toSubcircuit_channelsLawful
+    (circuit : GeneralFormalCircuit F Input Output) :
+    (circuit.toSubcircuit n input_var).ChannelsLawful := by
+  sorry
 
 -- simplification lemmas for FlatOperations.interactions (toSubcircuit ..).ops.toFlat
 
