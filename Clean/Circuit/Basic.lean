@@ -163,24 +163,7 @@ namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
 
 /--
-What it means that "constraints hold" on a sequence of operations.
-- For assertions, the expression must evaluate to 0
-- For lookups, the evaluated entry must be in the table
-- For subcircuits, the constraints must hold on the subcircuit's flat operations
--/
-@[circuit_norm]
-def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
-  | [] => True
-  | .witness _ _ :: ops => ConstraintsHold eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
-  | .lookup l :: ops =>
-    l.Contains eval ∧ ConstraintsHold eval ops
-  | .interact _ :: ops => ConstraintsHold eval ops
-  | .subcircuit s :: ops =>
-    ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
-
-/--
-Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
+TODO remove
 -/
 @[circuit_norm]
 def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Prop
@@ -194,7 +177,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
     (s.Assumptions eval → s.Spec eval) ∧ ConstraintsHold.Soundness eval ops
 
 /--
-Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
+TODO remove
 -/
 @[circuit_norm]
 def ConstraintsHold.Completeness (eval : ProverEnvironment F) : List (Operation F) → Prop
@@ -235,7 +218,6 @@ def ProverEnvironment.UsesLocalWitnessesFlat (env : ProverEnvironment F) (n : �
   FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute env) n } ops
 
 section
-open Circuit (ConstraintsHold)
 variable {Input Output : TypeMap}
 
 /--

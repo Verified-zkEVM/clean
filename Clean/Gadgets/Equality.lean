@@ -6,7 +6,6 @@ import Clean.Circuit.Loops
 import Clean.Circuit.Explicit
 
 variable {F : Type} [Field F]
-open Circuit (ConstraintsHold)
 
 namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero

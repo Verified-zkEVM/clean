@@ -346,27 +346,6 @@ end ProverEnvironment
 
 namespace Circuit
 
-theorem constraintsHold_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
-  ConstraintsHold env ops ↔ ops.forAll n {
-    assert _ e := env e = 0
-    lookup _ l := l.Contains env
-    subcircuit _ _ s := ConstraintsHoldFlat env s.ops.toFlat
-  } := by
-  induction ops using Operations.induct generalizing n with
-  | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
-    simp_all only [circuit_norm, and_congr_right_iff]
-    intros
-    apply ih
-
-theorem constraintsHold_iff_forAll' (env : Environment F) (ops : Operations F) :
-  ConstraintsHold env ops ↔ ops.forAllNoOffset {
-    assert e := env e = 0
-    lookup l := l.Contains env
-    subcircuit s := ConstraintsHoldFlat env s.ops.toFlat
-  } := by
-  induction ops using Operations.induct <;> simp_all only [circuit_norm]
-
 theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0

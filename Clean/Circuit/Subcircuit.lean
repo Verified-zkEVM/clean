@@ -4,7 +4,6 @@ import Clean.Circuit.Theorems
 variable {F : Type} [Field F]
 
 namespace FlatOperation
-open Circuit (ConstraintsHold.Completeness ConstraintsHold)
 
 lemma constraintsHold_cons : ∀ {op : FlatOperation F}, ∀ {ops : List (FlatOperation F)}, ∀ {env : Environment F},
     ConstraintsHoldFlat env (op :: ops) ↔ ConstraintsHoldFlat env [op] ∧ ConstraintsHoldFlat env ops := by

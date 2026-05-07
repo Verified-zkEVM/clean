@@ -538,7 +538,6 @@ lemma forall_witnessOperations_iff {ops : Operations F} {motive : WitnessOperati
   induction ops using induct; all_goals
   simp only [witnessOperations, shallowWitnessOperations, subcircuits, List.mem_append, List.mem_cons, or_imp, forall_and, forall_eq]
   try tauto
-
 end Operations
 
 -- generic folding over `Operations` resulting in a proposition
@@ -615,6 +614,20 @@ theorem forAllNoOffset_append {condition : ConditionNoOffset F} {as bs: Operatio
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
     simp only [List.cons_append, forAllNoOffset, ih, and_assoc]
 
+lemma forAllNoOffset_iff_forall_mem {condition : ConditionNoOffset F} {ops : Operations F} :
+  forAllNoOffset condition ops ↔
+    (∀ e ∈ shallowConstraints ops, condition.assert e) ∧
+    (∀ l ∈ shallowLookups ops, condition.lookup l) ∧
+    (∀ i ∈ shallowInteractions ops, condition.interact i) ∧
+    (∀ t ∈ shallowWitnessOperations ops, condition.witness t.1 t.2) ∧
+    (∀ s ∈ subcircuits ops, condition.subcircuit s.2) := by
+  induction ops using induct
+  all_goals
+  simp only [forAllNoOffset, shallowConstraints, shallowLookups, shallowInteractions,
+    shallowWitnessOperations, subcircuits,
+    List.mem_cons, or_imp, forall_and, forall_eq]
+  tauto
+
 /--
 Subcircuits start at the same variable offset that the circuit currently is.
 In practice, this is always true since subcircuits are instantiated using `subcircuit` or `assertion`.
@@ -623,9 +636,6 @@ In practice, this is always true since subcircuits are instantiated using `subci
 def SubcircuitsConsistent (offset : ℕ) (ops : Operations F) := ops.forAll offset {
   subcircuit offset {n} _ := n = offset
 }
-
-def SubcircuitChannelsLawful (ops : Operations F) : Prop :=
-  ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful
 
 /--
 Induction principle for operations _with subcircuit consistency_.
@@ -664,7 +674,53 @@ where motive' : (ops : Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsi
     have n_eq : n = n' := h.left
     subst n_eq
     exact subcircuit n s ops (motive' ops _ h.right)
+
+/--
+What it means that "constraints hold" on a sequence of operations.
+- For assertions, the expression must evaluate to 0
+- For lookups, the evaluated entry must be in the table
+By using the full `constraints` and `lookups` here, we include constraints in subcircuits.
+-/
+@[circuit_norm]
+def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
+  (∀ e ∈ ops.constraints, env e = 0) ∧ (∀ l ∈ ops.lookups, l.Contains env)
 end Operations
+
+/-- Version of `ConstraintsHold` that replaces the statement of subcircuits with `Assumptions → Spec`. -/
+@[circuit_norm]
+def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
+    (ops : Operations F) : Prop := ops.forAllNoOffset {
+  assert e := env e = 0
+  lookup l := l.Soundness env
+  interact i := i.Guarantees env
+  subcircuit s := s.Assumptions env → s.Spec env
+}
+
+/-- Version of `ConstraintsHold` that replaces the statement of subcircuits with their `ProverAssumptions`. -/
+@[circuit_norm]
+def ConstraintsHoldWithInteractions.Completeness (env : ProverEnvironment F)
+    (ops : Operations F) : Prop := ops.forAllNoOffset {
+  assert e := env e = 0
+  lookup l := l.Completeness env
+  interact i := i.Guarantees env
+  subcircuit s := s.ProverAssumptions env
+}
+
+lemma constraintsHoldWithInteractions_soundness_iff_forall_mem {env : Environment F} {ops : Operations F} :
+    ConstraintsHoldWithInteractions.Soundness env ops ↔
+    (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
+    (∀ l ∈ ops.shallowLookups, l.Soundness env) ∧
+    (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
+    (∀ s ∈ ops.subcircuits, s.2.Assumptions env → s.2.Spec env) := by
+  simp [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_iff_forall_mem]
+
+lemma constraintsHoldWithInteractions_completeness_iff_forall_mem {env : ProverEnvironment F} {ops : Operations F} :
+    ConstraintsHoldWithInteractions.Completeness env ops ↔
+    (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
+    (∀ l ∈ ops.shallowLookups, l.Completeness env) ∧
+    (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
+    (∀ s ∈ ops.subcircuits, s.2.ProverAssumptions env) := by
+  simp [ConstraintsHoldWithInteractions.Completeness, Operations.forAllNoOffset_iff_forall_mem]
 
 def Condition.ignoreSubcircuit (condition : Condition F) : Condition F :=
   { condition with subcircuit _ _ _ := True }
@@ -694,34 +750,6 @@ namespace Operations
 def forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops.toFlat } ops
 
-lemma forAllNoOffset_iff_forall_mem {condition : ConditionNoOffset F} {ops : Operations F} :
-  forAllNoOffset condition ops ↔
-    (∀ e ∈ shallowConstraints ops, condition.assert e) ∧
-    (∀ l ∈ shallowLookups ops, condition.lookup l) ∧
-    (∀ i ∈ shallowInteractions ops, condition.interact i) ∧
-    (∀ t ∈ shallowWitnessOperations ops, condition.witness t.1 t.2) ∧
-    (∀ s ∈ subcircuits ops, condition.subcircuit s.2) := by
-  induction ops using induct
-  all_goals
-  simp only [forAllNoOffset, shallowConstraints, shallowLookups, shallowInteractions,
-    shallowWitnessOperations, subcircuits,
-    List.mem_cons, or_imp, forall_and, forall_eq]
-  tauto
-
-lemma subcircuitChannelsLawful_iff_forall {ops : Operations F} :
-    ops.SubcircuitChannelsLawful ↔ ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful := by
-  rfl
-
-@[circuit_norm]
-lemma subcircuitChannelsLawful_iff_forAllNoOffset {ops : Operations F} :
-    ops.SubcircuitChannelsLawful ↔ ops.forAllNoOffset {
-      subcircuit s := s.ChannelsLawful
-    } := by
-  simp [SubcircuitChannelsLawful, forAllNoOffset_iff_forall_mem]
-
-@[circuit_norm]
-def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
-  (∀ e ∈ ops.constraints, env e = 0) ∧ (∀ l ∈ ops.lookups, l.Contains env)
 
 def subcircuitChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) :=
   ops.map (fun
@@ -836,42 +864,6 @@ def InChannelsOrRequirementsFull (channels : List (RawChannel F)) (env : Environ
   ∀ i ∈ ops.interactions, i.channel ∈ channels ∨ i.Requirements env
 end Operations
 
-@[circuit_norm]
-def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
-    (ops : Operations F) : Prop :=
-  ops.forAllNoOffset {
-    assert e := env e = 0
-    lookup l := l.Soundness env
-    interact i := i.Guarantees env
-    subcircuit s := s.Assumptions env → s.Spec env
-  }
-
-lemma constraintsHoldWithInteractions_soundness_iff_forall_mem {env : Environment F} {ops : Operations F} :
-    ConstraintsHoldWithInteractions.Soundness env ops ↔
-    (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
-    (∀ l ∈ ops.shallowLookups, l.Soundness env) ∧
-    (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
-    (∀ s ∈ ops.subcircuits, s.2.Assumptions env → s.2.Spec env) := by
-  simp [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_iff_forall_mem]
-
-@[circuit_norm]
-def ConstraintsHoldWithInteractions.Completeness (env : ProverEnvironment F)
-    (ops : Operations F) : Prop :=
-  ops.forAllNoOffset {
-    assert e := env e = 0
-    lookup l := l.Completeness env
-    interact i := i.Guarantees env
-    subcircuit s := s.ProverAssumptions env
-  }
-
-lemma constraintsHoldWithInteractions_completeness_iff_forall_mem {env : ProverEnvironment F} {ops : Operations F} :
-    ConstraintsHoldWithInteractions.Completeness env ops ↔
-    (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
-    (∀ l ∈ ops.shallowLookups, l.Completeness env) ∧
-    (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
-    (∀ s ∈ ops.subcircuits, s.2.ProverAssumptions env) := by
-  simp [ConstraintsHoldWithInteractions.Completeness, Operations.forAllNoOffset_iff_forall_mem]
-
 namespace Operations
 -- simp lemmas for suboperations
 
@@ -970,12 +962,6 @@ namespace Operations
 @[circuit_norm] lemma subcircuits_append (ops1 ops2 : Operations F) :
     subcircuits (ops1 ++ ops2) = subcircuits ops1 ++ subcircuits ops2 := by
   induction ops1 using induct <;> simp_all [subcircuits]
-
-@[circuit_norm]
-theorem subcircuitChannelsLawful_append (ops ops' : Operations F) :
-    SubcircuitChannelsLawful (ops ++ ops') ↔ SubcircuitChannelsLawful ops ∧ SubcircuitChannelsLawful ops' := by
-  simp [SubcircuitChannelsLawful, subcircuits_append, List.mem_append]
-  grind
 
 theorem interactionsWith_append {channel : RawChannel F} {ops1 ops2 : Operations F} :
     interactionsWith channel (ops1 ++ ops2) =
@@ -1077,6 +1063,24 @@ lemma shallowChannels_eq_interactions_map {ops : Operations F} :
     shallowChannels (ops1 ++ ops2) = shallowChannels ops1 ++ shallowChannels ops2 := by
   simp [shallowChannels_eq_interactions_map, shallowInteractions_append]
 
+def SubcircuitChannelsLawful (ops : Operations F) : Prop :=
+  ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful
+
+@[circuit_norm]
+theorem subcircuitChannelsLawful_append (ops ops' : Operations F) :
+    SubcircuitChannelsLawful (ops ++ ops') ↔ SubcircuitChannelsLawful ops ∧ SubcircuitChannelsLawful ops' := by
+  simp [SubcircuitChannelsLawful, subcircuits_append, List.mem_append]
+  grind
+
+lemma subcircuitChannelsLawful_iff_forall {ops : Operations F} :
+    ops.SubcircuitChannelsLawful ↔ ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful := by rfl
+
+@[circuit_norm]
+lemma subcircuitChannelsLawful_iff_forAllNoOffset {ops : Operations F} :
+  ops.SubcircuitChannelsLawful ↔
+    ops.forAllNoOffset { subcircuit s := s.ChannelsLawful } := by
+  simp [SubcircuitChannelsLawful, forAllNoOffset_iff_forall_mem]
+
 def shallowChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) :=
   (ops.shallowInteractions.filter (·.assumeGuarantees)).map (·.channel)
 
@@ -1116,8 +1120,7 @@ def ChannelsLawful (ops : Operations F)
   -- Every subcircuit used by this circuit exposes lawful channel metadata itself.
   ops.SubcircuitChannelsLawful
 
-theorem channelsLawful_nil :
-    ChannelsLawful ([] : Operations F) [] [] [] := by
+theorem channelsLawful_nil : ChannelsLawful ([] : Operations F) [] [] [] := by
   simp [ChannelsLawful, InChannelsOrGuarantees, InChannelsOrRequirements, SubcircuitChannelsLawful,
     subcircuitChannelsWithGuarantees, subcircuitChannelsWithRequirements, shallowChannels, subcircuits,
     forAllNoOffset]
@@ -1130,8 +1133,7 @@ theorem channelsLawful_append_of_channelsLawful {ops ops' : Operations F}
     ops'.ChannelsLawful channelsWithGuarantees' channelsWithRequirements' exposedChannels' →
     (ops ++ ops').ChannelsLawful
       (channelsWithGuarantees ++ channelsWithGuarantees')
-      (channelsWithRequirements ++ channelsWithRequirements')
-      [] := by
+      (channelsWithRequirements ++ channelsWithRequirements') [] := by
   intro h h'
   dsimp only [ChannelsLawful] at h h' ⊢
   obtain ⟨h_g_subset, h_g, h_r_subset, h_r, h_shallow, _, h_sub⟩ := h
