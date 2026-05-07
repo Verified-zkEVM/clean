@@ -155,8 +155,7 @@ def Channel.fromStatic (F : Type) [Field F]
     (Message : TypeMap) [ProvableType Message]
     (slc : StaticLookupChannel F Message) : Channel F Message where
   name := slc.name
-  Guarantees mult msg _ := mult = -1 → slc.Guarantees msg
-  Requirements mult msg _ := mult ≠ -1 → slc.Guarantees msg
+  Guarantees msg _ := slc.Guarantees msg
 
 abbrev StaticLookupChannel.toChannel (slc : StaticLookupChannel F Message) :=
   Channel.fromStatic F Message slc
@@ -2167,33 +2166,27 @@ A "normal" channel is one where
 - only pull interactions cause guarantees to be added
 - only push interactions cause requirements to be added
 -/
-class NormalChannel.Raw (channel : RawChannel F) : Prop where
+class NormalChannel (channel : RawChannel F) : Prop where
   grts_of_reqs : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
     channel.Requirements mult msg data → channel.Guarantees (-1) msg data
   grts_of_ne_neg_one : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
     channel.Guarantees mult msg data
   reqs_neg_one : ∀ (msg : Vector F channel.arity) (data), channel.Requirements (-1) msg data
 
-class NormalChannel (channel : Channel F Message) : Prop where
-  grts_of_reqs : ∀ (msg : Message F) (mult : F) data, mult ≠ -1 →
-    channel.Requirements mult msg data → channel.Guarantees (-1) msg data
-  grts_of_ne_neg_one : ∀ (msg : Message F) (mult : F) data, mult ≠ -1 →
-    channel.Guarantees mult msg data
-  reqs_neg_one : ∀ (msg : Message F) (data), channel.Requirements (-1) msg data
-
-instance (channel : Channel F Message) [NormalChannel channel] : NormalChannel.Raw channel.toRaw where
+instance (channel : Channel F Message) : NormalChannel channel.toRaw where
   grts_of_reqs := by
     intro msg mult data mult_ne_neg_one reqs
-    apply NormalChannel.grts_of_reqs (fromElements msg) _ _ mult_ne_neg_one reqs
+    simp [Channel.toRaw, mult_ne_neg_one] at reqs ⊢
+    exact reqs
   grts_of_ne_neg_one := by
     intro msg mult data mult_ne_neg_one
-    apply NormalChannel.grts_of_ne_neg_one (fromElements msg) _ _ mult_ne_neg_one
+    simp [Channel.toRaw, mult_ne_neg_one]
   reqs_neg_one := by
     intro msg
-    apply NormalChannel.reqs_neg_one (fromElements msg)
+    simp [Channel.toRaw]
 
 /-- Normal channels are consistent, thanks to `exists_push_of_pull` -/
-theorem normalChannel_consistent [DecidableEq F] (channel : RawChannel F) [NormalChannel.Raw channel] :
+theorem normalChannel_consistent [DecidableEq F] (channel : RawChannel F) [NormalChannel channel] :
     channel.Consistent := by
   constructor
   intro interactions data balance reqs a a_mem
@@ -2205,17 +2198,17 @@ theorem normalChannel_consistent [DecidableEq F] (channel : RawChannel F) [Norma
   suffices channel.Guarantees a.mult ⟨ a.msg, a_msg_size ⟩ data by convert this
   by_cases a_mult : a.mult = -1
   -- if the multiplitity is not -1, this is trivial by `grts_of_ne_neg_one`
-  case neg => exact NormalChannel.Raw.grts_of_ne_neg_one ⟨ a.msg, a_msg_size ⟩ a.mult data a_mult
+  case neg => exact NormalChannel.grts_of_ne_neg_one ⟨ a.msg, a_msg_size ⟩ a.mult data a_mult
   -- if the multiplicity is -1, we get the corresponding push interaction and apply `grts_of_reqs`
   rw [a_mult]
   have ⟨ b, b_mem, b_msg_eq, b_mult_ne_neg_one ⟩ := exists_push_of_pull interactions balance a a_mem a_mult
-  apply NormalChannel.Raw.grts_of_reqs ⟨ a.msg, a_msg_size ⟩ b.mult data b_mult_ne_neg_one
+  apply NormalChannel.grts_of_reqs ⟨ a.msg, a_msg_size ⟩ b.mult data b_mult_ne_neg_one
   have ⟨ b_channel_eq, b_reqs ⟩ := reqs _ b_mem
   symm at b_channel_eq
   simp only [b_msg_eq] at b_reqs
   convert b_reqs
 
-instance [DecidableEq F] (channel : RawChannel F) [NormalChannel.Raw channel] : channel.Consistent :=
+instance [DecidableEq F] (channel : RawChannel F) [NormalChannel channel] : channel.Consistent :=
   normalChannel_consistent channel
 
 lemma one_ne_neg_one [Fact (ringChar F ≠ 2)] : (1 : F) ≠ -1 :=
@@ -2252,7 +2245,7 @@ By narrowing the conclusion to only the guarantees of the push, the formulation 
 avoids talking about cycles at all, and achieves a comparatively simple proof by induction.
 -/
 theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar F ≠ 2)] [DecidableEq F]
-    (channel : RawChannel F) [NormalChannel.Raw channel]
+    (channel : RawChannel F) [NormalChannel channel]
     (pulls pushes : List (Interaction F)) (balance : BalancedInteractions (pulls ++ pushes)) (data : ProverData F)
   -- same length
   (n : ℕ) (len_pulls : pulls.length = n) (len_pushes : pushes.length = n)
@@ -2296,7 +2289,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
       suffices grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         simp only [Interaction.Guarantees]
         convert fun _ => grt'
-      apply NormalChannel.Raw.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
+      apply NormalChannel.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one
       simp only [Interaction.Requirements, Interaction.msgVector, push_j_msg] at push_j_req
       convert push_j_req
     -- if i = j, we're done
@@ -2419,7 +2412,6 @@ theorem SoundVmEnsemble.soundness [DecidableEq F] (ens : SoundVmEnsemble F Publi
 structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
   channel : Channel F Message
-  [normalChannel : NormalChannel (F:=F) channel]
 
   tables : List (AbstractTable F)
   verifier : GeneralFormalCircuit F PublicIO unit
@@ -2446,7 +2438,6 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
       Operations.ChannelRequirements channel env (verifier.main input_var |>.operations offset)
 
 instance [DecidableEq F] (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
-instance [DecidableEq F] (vm : VmTables F PublicIO) : NormalChannel vm.channel := vm.normalChannel
 
 lemma AbstractTable.interactionsWith_of_exposedChannels {table : AbstractTable F} {channel : RawChannel F}
   {interactions : List (AbstractInteraction F)}
@@ -2696,8 +2687,7 @@ lemma pull_requirements (witness : VmWitness vm) : ∀ pull ∈ witness.pulls, p
   simp only [pulls, List.mem_flatMap, List.mem_attach, List.mem_map, true_and, Subtype.exists,
     forall_exists_index, and_imp]
   rintro pull _ _ _ _ rfl
-  simp only [circuit_norm, Interaction.Requirements]
-  apply vm.normalChannel.reqs_neg_one
+  simp [circuit_norm, Interaction.Requirements, Channel.toRaw]
 
 lemma push_guarantees (witness : VmWitness vm) : ∀ push ∈ witness.pushes, push.Guarantees witness.data := by
   simp only [pushes, List.mem_flatMap, List.mem_attach, List.mem_map, true_and, Subtype.exists,
@@ -3063,10 +3053,6 @@ instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <
 
 variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
 
-instance (channel : StaticLookupChannel (F p) field) : NormalChannel (Channel.fromStatic _ _ channel) := by
-  constructor; all_goals
-  tauto
-
 def BytesTable : StaticLookupChannel (F p) field where
   name := "bytes"
   table := List.finRange 256 |>.map ByteUtils.fromByte
@@ -3102,13 +3088,8 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
 instance Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
   Guarantees
-  | mult, (x, y, z), _ =>
-    mult = -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
-  Requirements
-  | mult, (x, y, z), _ =>
-    mult ≠ -1 → x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
-
-instance : NormalChannel (Add8Channel (p:=p)) := by constructor <;> tauto
+  | (x, y, z), _ =>
+    x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
 
 structure Add8Inputs F where
   x : F
@@ -3188,13 +3169,8 @@ instance FibonacciChannel : Channel (F p) fieldTriple where
   name := "fibonacci"
   -- when pulling, we want the guarantee that the input is a valid Fibonacci step
   Guarantees
-  | m, (n, x, y), _ => m = -1 →
+  | (n, x, y), _ =>
     ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
-  Requirements
-  | m, (n, x, y), _ => m ≠ -1 →
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
-
-instance : NormalChannel (FibonacciChannel (p:=p)) := by constructor <;> simp_all [FibonacciChannel]
 
 def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
   main | (n, x, y) => do

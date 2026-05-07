@@ -260,8 +260,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   localLength _ _ := 0
   operations msg _ := [.interact (channel.pulled msg).toRaw]
   channelsWithGuarantees _ _ := [channel.toRaw]
-  -- TODO: remove here once Channel is redefined and a pull creates no requirements by definition
-  channelsWithRequirements _ _ := [channel.toRaw]
+  channelsWithRequirements _ _ := []
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
     ExplicitCircuits (F:=F) (Channel.push channel) where
