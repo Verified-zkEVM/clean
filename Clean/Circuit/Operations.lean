@@ -750,7 +750,6 @@ namespace Operations
 def forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops.toFlat } ops
 
-
 def subcircuitChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) :=
   ops.map (fun
     | .subcircuit s => s.channelsWithGuarantees
