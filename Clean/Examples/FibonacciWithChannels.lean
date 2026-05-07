@@ -3164,6 +3164,10 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     · simpa [floorDiv256, h_env] using add_completeness_bool
     · simpa [h_input_z, floorDiv256, h_env] using add_completeness_add
 
+example (input : Var Add8Inputs (F p)) :
+    ExplicitCircuit (add8.main input) := by
+  infer_explicit_circuit
+
 -- define valid Fibonacci state transitions
 
 def fibonacci : ℕ → (ℕ × ℕ)
@@ -3242,6 +3246,10 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
     linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
+example (input : Var fieldTriple (F p)) :
+    ExplicitCircuit (fib8.main input) := by
+  infer_explicit_circuit
+
 -- additional circuits that pull/push remaining channel interactions
 -- these really wouldn't have to be circuits, need to find a better place for tying together channels
 
@@ -3275,6 +3283,10 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
     rcases input with ⟨ n, x, y ⟩
     simp only [Prod.mk.injEq] at h_input
     simpa [circuit_norm, reduceIte] using h_assumptions
+
+example (input : Var fieldTriple (F p)) :
+    ExplicitCircuit (fibonacciVerifier.main input) := by
+  infer_explicit_circuit
 
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel

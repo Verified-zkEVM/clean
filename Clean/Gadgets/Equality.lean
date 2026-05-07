@@ -3,6 +3,7 @@ This file provides the built-in `assertEquals` gadget, which works for any prova
 and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
 import Clean.Circuit.Loops
+import Clean.Circuit.Explicit
 
 variable {F : Type} [Field F]
 open Circuit (ConstraintsHold)
@@ -173,3 +174,20 @@ syntax "let " ident " : " term " <== " term : doElem
 macro_rules
   | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assignEq $e)
   | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assignEq $e)
+
+-- `ExplicitCircuit` integration
+
+instance {F : Type} [Field F] {x y : Expression F} :
+  ExplicitCircuit (Expression.assertEquals x y) := inferInstance
+
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] {x y : α (Expression F)} :
+    ExplicitCircuit (assertEquals x y) := inferInstanceAs <|
+  ExplicitCircuit (Gadgets.Equality.circuit α (x, y))
+
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] {x y : α (Expression F)} :
+    ExplicitCircuit (HasAssertEq.assert_eq x y) :=
+  inferInstanceAs (ExplicitCircuit (assertEquals x y))
+
+instance {F : Type} [Field F] {x y : Expression F} :
+    ExplicitCircuit (HasAssertEq.assert_eq x y) :=
+  inferInstanceAs (ExplicitCircuit (Expression.assertEquals x y))

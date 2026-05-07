@@ -245,6 +245,32 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuit
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := []
 
+instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
+    {mult : Expression F} :
+    ExplicitCircuits (F:=F) (Channel.emit channel mult) where
+  output _ _ := ()
+  localLength _ _ := 0
+  operations msg _ := [.interact (channel.emitted mult msg).toRaw]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := [channel.toRaw]
+
+instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
+    ExplicitCircuits (F:=F) (Channel.pull channel) where
+  output _ _ := ()
+  localLength _ _ := 0
+  operations msg _ := [.interact (channel.pulled msg).toRaw]
+  channelsWithGuarantees _ _ := [channel.toRaw]
+  -- TODO: remove here once Channel is redefined and a pull creates no requirements by definition
+  channelsWithRequirements _ _ := [channel.toRaw]
+
+instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
+    ExplicitCircuits (F:=F) (Channel.push channel) where
+  output _ _ := ()
+  localLength _ _ := 0
+  operations msg _ := [.interact (channel.pushed msg).toRaw]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := [channel.toRaw]
+
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     ExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n
@@ -274,6 +300,7 @@ macro_rules
     repeat (
       try intros
       first
+        | infer_instance
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
       repeat infer_instance
