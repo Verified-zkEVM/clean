@@ -31,6 +31,12 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
+  guarantees_in_declared_channels state i0 := by
+    simp only [main, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
+  requirements_in_declared_channels state i0 := by
+    simp only [main, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
+  used_channels_declared state i0 := by
+    simp only [main, circuit_norm, KeccakRound.circuit]
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :

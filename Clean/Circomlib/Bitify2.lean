@@ -51,8 +51,14 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     Num2Bits.main, AliasCheck.circuit]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
-  subcircuitsLawful := by simp +arith [circuit_norm, main,
-    Num2Bits.main, AliasCheck.circuit]
+  subcircuitsLawful := by
+    simp only [circuit_norm, main, Num2Bits.main]
+  guarantees_in_declared_channels := by
+    simp only [circuit_norm, main, Num2Bits.main, AliasCheck.circuit]
+  requirements_in_declared_channels := by
+    simp only [circuit_norm, main, Num2Bits.main, AliasCheck.circuit]
+  used_channels_declared := by
+    simp only [circuit_norm, main, Num2Bits.main, AliasCheck.circuit]
 
   Spec input bits :=
     bits = fieldToBits 254 input

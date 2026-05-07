@@ -31,6 +31,12 @@ instance elaborated : ElaboratedCircuit F M field where
     simp +arith [circuit_norm, main, IsZeroField.circuit]
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
+  guarantees_in_declared_channels := by
+    simp only [circuit_norm, main, IsZeroField.circuit, IsZeroField.elaborated]
+  requirements_in_declared_channels := by
+    simp only [circuit_norm, main, IsZeroField.circuit, IsZeroField.elaborated]
+  used_channels_declared := by
+    simp only [circuit_norm, main, IsZeroField.circuit, IsZeroField.elaborated]
 
 def Assumptions (_ : M F) : Prop := True
 
@@ -100,7 +106,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     · next h_ex h_all => exfalso; exact h_ex (fun i hi => h_all i (by omega))
 
 theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
-  circuit_proof_start
+  circuit_proof_start [IsZeroField.circuit, IsZeroField.elaborated, IsZeroField.Assumptions]
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
     arg 1
@@ -109,7 +115,10 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assump
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff <;> assumption
+  apply foldl_isZero_eq_one_iff
+  · assumption
+  · intro i _
+    exact h_holds i
 
 theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]

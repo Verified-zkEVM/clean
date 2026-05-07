@@ -54,6 +54,18 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
   subcircuitsLawful _ _ := by
     simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+  guarantees_in_declared_channels := by
+    intro input_var offset
+    simp only [main]
+    fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+  requirements_in_declared_channels := by
+    intro input_var offset
+    simp only [main]
+    fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+  used_channels_declared := by
+    intro input_var offset
+    simp only [main]
+    fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 
   output_eq := by
     intros
@@ -75,10 +87,10 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (
   dsimp only [Assumptions, U64.Normalized] at as
   obtain ⟨ h0, h1, h2, h3, h4, h5, h6, h7 ⟩ := as
 
-  simp [circuit_norm, Spec, U64.value, -Nat.reducePow]
+  simp [circuit_norm, main, Spec, U64.value, -Nat.reducePow]
   constructor
-  · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, circuit_norm, -Nat.reducePow]; omega)
-  · fin_cases off <;> simp_all [circuit_norm, U64.Normalized, explicit_provable_type]
+  · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, U64.Normalized, circuit_norm, -Nat.reducePow]; omega)
+  · fin_cases off <;> simp_all [circuit_norm, explicit_provable_type]
 
 theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions

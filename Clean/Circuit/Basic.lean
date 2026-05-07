@@ -322,6 +322,8 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitTy
     try tauto
 
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
+  ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
+  ElaboratedCircuit.exposedChannels
 
 @[circuit_norm]
 def ElaboratedCircuit.channels [CircuitType Input] [CircuitType Output]

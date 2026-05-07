@@ -44,7 +44,8 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   output _ i0 := output off i0
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  circuit_proof_start [Rotation64Bits.circuit, Rotation64Bits.elaborated]
+  circuit_proof_start [Rotation64Bits.circuit, Rotation64Bits.elaborated,
+    Rotation64Bytes.circuit, Rotation64Bytes.elaborated]
 
   -- abstract away intermediate U64
   let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
@@ -52,8 +53,7 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   set byte_rotated := eval env
     ((Rotation64Bytes.circuit byte_offset).output input_var i₀)
 
-  simp only [Rotation64Bytes.circuit, Rotation64Bytes.elaborated,
-    Rotation64Bytes.Assumptions, Rotation64Bytes.Spec, add_zero,
+  simp only [Rotation64Bytes.Assumptions, Rotation64Bytes.Spec,
     Rotation64Bits.Assumptions, Rotation64Bits.Spec, output] at h_holds ⊢
   set y : U64 (F p) := eval env (Rotation64Bits.output (p:=p) ⟨ offset.val % 8, by omega ⟩ i₀)
   simp_all only [forall_const, and_true]

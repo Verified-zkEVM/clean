@@ -96,7 +96,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp only [circuit_norm, main, IsZero.circuit]
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [IsZero.circuit]
     rw [← h_input]
     simp only [id_eq]
 
@@ -106,8 +106,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rw [← h_input]
 
     rw [h1, h2] at h_holds
-    simp only [IsZero.circuit] at h_holds ⊢
-
     rw [h_holds, h1, h2]
 
     apply ite_congr
@@ -118,8 +116,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rfl
     . intro h_eq
       rfl
-
-    trivial
 
 end IsEqual
 
@@ -157,7 +153,7 @@ def circuit : FormalAssertion (F p) Inputs where
     enabled = 1 → inp.1 = inp.2
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [IsZero.circuit]
     intro h_ie
     simp_all only [one_ne_zero, or_true, id_eq, one_mul]
     cases h_input with
@@ -168,15 +164,11 @@ def circuit : FormalAssertion (F p) Inputs where
       | intro h1 h2 =>
         rw [h1] at h2
         rw [add_comm] at h2
-        simp only [id_eq] at h2
         split_ifs at h2 with h_ifs
         . simp_all only [neg_add_cancel]
           rw [add_comm, neg_add_eq_zero] at h_ifs
           exact h_ifs
         . simp_all only [neg_zero, zero_add, one_ne_zero]
-        rw [add_comm, neg_add_eq_zero] at h2
-        rw [h2] at h1
-        trivial
 
   completeness := by
     circuit_proof_start
