@@ -250,32 +250,8 @@ def ElaboratedCircuit.ChannelsLawful [CircuitType Input] [CircuitType Output]
     (channelsWithGuarantees channelsWithRequirements : List (RawChannel F))
     (exposedChannels : Var Input F → ℕ → List (ExposedChannel F)) : Prop :=
   ∀ input_var offset,
-    let ops := (main input_var).operations offset
-
-    -- The `channelsWithGuarantees` cover all interactions that add guarantees.
-    ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
-    (∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env) ∧
-
-    -- The `channelsWithRequirements` cover all interactions that add requirements.
-    ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-    (∀ env, ops.InChannelsOrRequirements channelsWithRequirements env) ∧
-
-    -- Together, the two channel lists cover all interactions.
-    -- Even if the conditions so far theoretically allow it, we must not leave out any channels
-    -- we interacted with from the combination of both lists. This is because "did not interact
-    -- with a given channel" is important knowledge during end-to-end proofs, when we need to prove
-    -- that _all_ interactions with a given channel have some property.
-    -- (If this ever becomes too restrictive for real circuits, we can relax by introducing a third
-    -- list of "other channels".)
-    (∀ channel ∈ ops.shallowChannels,
-      channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements) ∧
-
-    -- Exposed channel data agrees with the actual interactions in the circuit.
-    (∀ exposed ∈ exposedChannels input_var offset,
-      ops.interactionsWith exposed.channel = exposed.interactions) ∧
-
-    -- Every subcircuit used by this circuit exposes lawful channel metadata itself.
-    ops.SubcircuitChannelsLawful
+    ((main input_var).operations offset).ChannelsLawful
+      channelsWithGuarantees channelsWithRequirements (exposedChannels input_var offset)
 
 
 /-

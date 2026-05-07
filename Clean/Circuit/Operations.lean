@@ -602,6 +602,19 @@ def forAllNoOffset (condition : ConditionNoOffset F) : Operations F → Prop
   | .interact i :: ops => condition.interact i ∧ forAllNoOffset condition ops
   | .subcircuit s :: ops => condition.subcircuit s ∧ forAllNoOffset condition ops
 
+@[circuit_norm]
+theorem forAllNoOffset_empty {condition : ConditionNoOffset F} :
+    forAllNoOffset condition [] = True := rfl
+
+@[circuit_norm]
+theorem forAllNoOffset_append {condition : ConditionNoOffset F} {as bs: Operations F} :
+    forAllNoOffset condition (as ++ bs) ↔
+      forAllNoOffset condition as ∧ forAllNoOffset condition bs := by
+  induction as using induct with
+  | empty => simp [forAllNoOffset]
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
+    simp only [List.cons_append, forAllNoOffset, ih, and_assoc]
+
 /--
 Subcircuits start at the same variable offset that the circuit currently is.
 In practice, this is always true since subcircuits are instantiated using `subcircuit` or `assertion`.
@@ -780,6 +793,18 @@ lemma inChannelsOrGuarantees_iff_forall_mem {channels : List (RawChannel F)} {en
     ∀ i ∈ ops.shallowInteractions, i.channel ∈ channels ∨ i.Guarantees env := by
   simp [InChannelsOrGuarantees, forAllNoOffset_iff_forall_mem]
 
+theorem InChannelsOrGuarantees.mono {channels channels' : List (RawChannel F)}
+    {env : Environment F} {ops : Operations F} :
+    channels ⊆ channels' →
+    ops.InChannelsOrGuarantees channels env →
+    ops.InChannelsOrGuarantees channels' env := by
+  intro h_subset h
+  rw [inChannelsOrGuarantees_iff_forall_mem] at h ⊢
+  intro i h_i
+  rcases h i h_i with h_channel | h_guarantees
+  · exact Or.inl (h_subset h_channel)
+  · exact Or.inr h_guarantees
+
 @[circuit_norm]
 def InChannelsOrGuaranteesFull (channels : List (RawChannel F)) (env : Environment F) (ops : Operations F) : Prop :=
   ∀ i ∈ ops.interactions, i.channel ∈ channels ∨ i.Guarantees env
@@ -793,6 +818,18 @@ lemma inChannelsOrRequirements_iff_forall_mem {channels : List (RawChannel F)} {
     InChannelsOrRequirements channels env ops ↔
     ∀ i ∈ ops.shallowInteractions, i.channel ∈ channels ∨ i.Requirements env := by
   simp [InChannelsOrRequirements, forAllNoOffset_iff_forall_mem]
+
+theorem InChannelsOrRequirements.mono {channels channels' : List (RawChannel F)}
+    {env : Environment F} {ops : Operations F} :
+    channels ⊆ channels' →
+    ops.InChannelsOrRequirements channels env →
+    ops.InChannelsOrRequirements channels' env := by
+  intro h_subset h
+  rw [inChannelsOrRequirements_iff_forall_mem] at h ⊢
+  intro i h_i
+  rcases h i h_i with h_channel | h_requirements
+  · exact Or.inl (h_subset h_channel)
+  · exact Or.inr h_requirements
 
 @[circuit_norm]
 def InChannelsOrRequirementsFull (channels : List (RawChannel F)) (env : Environment F) (ops : Operations F) : Prop :=
@@ -1039,6 +1076,99 @@ lemma shallowChannels_eq_interactions_map {ops : Operations F} :
 @[circuit_norm] theorem shallowChannels_append (ops1 ops2 : Operations F) :
     shallowChannels (ops1 ++ ops2) = shallowChannels ops1 ++ shallowChannels ops2 := by
   simp [shallowChannels_eq_interactions_map, shallowInteractions_append]
+
+def shallowChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) :=
+  (ops.shallowInteractions.filter (·.assumeGuarantees)).map (·.channel)
+
+def shallowChannelsWithRequirements (ops : Operations F) : List (RawChannel F) :=
+  (ops.shallowInteractions.filter fun i => !i.assumeGuarantees).map (·.channel)
+
+/--
+Property we require from a circuit that exposes three channel lists:
+`channelsWithGuarantees`, `channelsWithRequirements`, and `exposedChannels`.
+ -/
+@[circuit_norm]
+def ChannelsLawful (ops : Operations F)
+    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F))
+    (exposedChannels : List (ExposedChannel F)) : Prop :=
+  -- The `channelsWithGuarantees` cover all interactions that add guarantees.
+  ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
+  (∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env) ∧
+
+  -- The `channelsWithRequirements` cover all interactions that add requirements.
+  ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
+  (∀ env, ops.InChannelsOrRequirements channelsWithRequirements env) ∧
+
+  -- Together, the two channel lists cover all interactions.
+  -- Even if the conditions so far theoretically allow it, we must not leave out any channels
+  -- we interacted with from the combination of both lists. This is because "did not interact
+  -- with a given channel" is important knowledge during end-to-end proofs, when we need to prove
+  -- that _all_ interactions with a given channel have some property.
+  -- (If this ever becomes too restrictive for real circuits, we can relax by introducing a third
+  -- list of "other channels".)
+  (∀ channel ∈ ops.shallowChannels,
+    channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements) ∧
+
+  -- Exposed channel data agrees with the actual interactions in the circuit.
+  (∀ exposed ∈ exposedChannels,
+    ops.interactionsWith exposed.channel = exposed.interactions) ∧
+
+  -- Every subcircuit used by this circuit exposes lawful channel metadata itself.
+  ops.SubcircuitChannelsLawful
+
+theorem channelsLawful_nil :
+    ChannelsLawful ([] : Operations F) [] [] [] := by
+  simp [ChannelsLawful, InChannelsOrGuarantees, InChannelsOrRequirements, SubcircuitChannelsLawful,
+    subcircuitChannelsWithGuarantees, subcircuitChannelsWithRequirements, shallowChannels, subcircuits,
+    forAllNoOffset]
+
+theorem channelsLawful_append_of_channelsLawful {ops ops' : Operations F}
+    {channelsWithGuarantees channelsWithGuarantees' channelsWithRequirements channelsWithRequirements' :
+      List (RawChannel F)}
+    {exposedChannels exposedChannels' : List (ExposedChannel F)} :
+    ops.ChannelsLawful channelsWithGuarantees channelsWithRequirements exposedChannels →
+    ops'.ChannelsLawful channelsWithGuarantees' channelsWithRequirements' exposedChannels' →
+    (ops ++ ops').ChannelsLawful
+      (channelsWithGuarantees ++ channelsWithGuarantees')
+      (channelsWithRequirements ++ channelsWithRequirements')
+      [] := by
+  intro h h'
+  dsimp only [ChannelsLawful] at h h' ⊢
+  obtain ⟨h_g_subset, h_g, h_r_subset, h_r, h_shallow, _, h_sub⟩ := h
+  obtain ⟨h_g_subset', h_g', h_r_subset', h_r', h_shallow', _, h_sub'⟩ := h'
+  have append_subset_append {as bs cs ds : List (RawChannel F)}
+      (h_as : as ⊆ cs) (h_bs : bs ⊆ ds) : as ++ bs ⊆ cs ++ ds := by
+    intro channel h_channel
+    rw [List.mem_append] at h_channel ⊢
+    rcases h_channel with h_channel | h_channel
+    · exact Or.inl (h_as h_channel)
+    · exact Or.inr (h_bs h_channel)
+  and_intros
+  · rw [subcircuitChannelsWithGuarantees_append]
+    exact append_subset_append h_g_subset h_g_subset'
+  · intro env
+    rw [InChannelsOrGuarantees, forAllNoOffset_append]
+    exact ⟨h_g env |>.mono (List.subset_append_left _ _),
+      h_g' env |>.mono (List.subset_append_right _ _)⟩
+  · rw [subcircuitChannelsWithRequirements_append]
+    exact append_subset_append h_r_subset h_r_subset'
+  · intro env
+    rw [InChannelsOrRequirements, forAllNoOffset_append]
+    exact ⟨h_r env |>.mono (List.subset_append_left _ _),
+      h_r' env |>.mono (List.subset_append_right _ _)⟩
+  · rw [shallowChannels_append]
+    intro channel h_channel
+    rw [List.mem_append] at h_channel
+    rcases h_channel with h_channel | h_channel
+    · rcases h_shallow channel h_channel with h_channel | h_channel
+      · exact Or.inl (List.mem_append_left _ h_channel)
+      · exact Or.inr (List.mem_append_left _ h_channel)
+    · rcases h_shallow' channel h_channel with h_channel | h_channel
+      · exact Or.inl (List.mem_append_right _ h_channel)
+      · exact Or.inr (List.mem_append_right _ h_channel)
+  · simp
+  · rw [subcircuitChannelsLawful_append]
+    exact ⟨h_sub, h_sub'⟩
 
 @[circuit_norm] lemma toFlat_nil : toFlat ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma toFlat_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :

@@ -21,10 +21,12 @@ example : ExplicitCircuit.output (circuit32 default) 0
   -- rfl -- also works
   dsimp only [explicit_circuit_norm, explicit, ProvableType.varFromOffset_field, assertBool]
 
+example : ExplicitCircuit.channelsWithGuarantees (circuit32 default) 0 = [] := by
+  -- rfl -- also works
+  simp only [explicit_circuit_norm, assertBool, List.append_nil]
+
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..
-example : ((circuit32 default).operations 0).SubcircuitChannelsLawful :=
-  ExplicitCircuits.subcircuitChannelsLawful _ _
 
 example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Expression (F pBabybear)) env (i0 : ℕ) :
   Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carryIn ⟩).operations i0)
