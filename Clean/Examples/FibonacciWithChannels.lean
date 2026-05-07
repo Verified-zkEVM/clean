@@ -34,15 +34,6 @@ namespace Interaction
 def msgVector (i : Interaction F) : Vector F i.channel.arity :=
   ⟨ i.msg, i.same_size ⟩
 
-omit [Field F] in
-lemma msgVector_eq_iff_msg_eq_toArray
-    {channel : RawChannel F} {i : Interaction F} {msg : Vector F channel.arity}
-    (h : i.channel = channel) :
-    h ▸ i.msgVector = msg ↔ i.msg = msg.toArray := by
-  cases h
-  cases msg
-  simp [Interaction.msgVector]
-
 def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees i.mult i.msgVector data
 
@@ -50,7 +41,8 @@ def Requirements (i : Interaction F) (data : ProverData F) : Prop :=
   i.channel.Requirements i.mult i.msgVector data
 end Interaction
 
-def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
+namespace AbstractInteraction
+def eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
   channel := i.channel
   mult := env i.mult
   msg := (i.msg.map env).toArray
@@ -58,53 +50,56 @@ def AbstractInteraction.eval (env : Environment F) (i : AbstractInteraction F) :
   assumeGuarantees := i.assumeGuarantees
 
 @[circuit_norm]
-lemma AbstractInteraction.eval_channel {i : AbstractInteraction F} {env : Environment F} :
+lemma eval_channel {i : AbstractInteraction F} {env : Environment F} :
   (i.eval env).channel = i.channel := rfl
 
 @[circuit_norm]
-lemma AbstractInteraction.eval_guarantees {i : AbstractInteraction F} {env : Environment F} :
+lemma eval_guarantees {i : AbstractInteraction F} {env : Environment F} :
     (i.eval env).Guarantees env.data ↔ i.Guarantees env := by
   simp only [Interaction.Guarantees, AbstractInteraction.eval, AbstractInteraction.Guarantees]
   rfl
 
 @[circuit_norm]
-lemma AbstractInteraction.eval_requirements {i : AbstractInteraction F} {env : Environment F} :
+lemma eval_requirements {i : AbstractInteraction F} {env : Environment F} :
     (i.eval env).Requirements env.data ↔ i.Requirements env := by
   simp only [Interaction.Requirements, AbstractInteraction.eval, AbstractInteraction.Requirements]
   rfl
+end AbstractInteraction
 
+namespace Operations
 @[circuit_norm]
-def Operations.interactionValues (ops : Operations F)
+def interactionValues (ops : Operations F)
     (env : Environment F) : List (Interaction F) :=
   ops.interactions.map (AbstractInteraction.eval env)
 
 -- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
 open Classical in
-@[circuit_norm]
-noncomputable def Operations.interactionValuesWith (channel : RawChannel F)
+noncomputable def interactionValuesWith (channel : RawChannel F)
     (ops : Operations F) (env : Environment F) : List (Interaction F) :=
   ops.interactionsWith channel |>.map (·.eval env)
 
-lemma Operations.interactionValuesWith_eq_map {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
+@[circuit_norm]
+lemma interactionValuesWith_eq_map {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
     ops.interactionValuesWith channel env = (ops.interactionsWith channel).map (·.eval env) := rfl
 
 open Classical in
-lemma Operations.interactionValuesWith_eq_filter {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
+lemma interactionValuesWith_eq_filter {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
     ops.interactionValuesWith channel env = (ops.interactionValues env).filter (·.channel = channel) := by
   simp only [interactionValuesWith, interactionsWith, interactionValues, List.filter_map]
   rfl
 
-lemma Operations.channel_eq_of_mem_interactionsWith {channel : RawChannel F} {ops : Operations F}
+lemma channel_eq_of_mem_interactionsWith {channel : RawChannel F} {ops : Operations F}
   {i : AbstractInteraction F} :
     i ∈ ops.interactionsWith channel → i.channel = channel := by
   simp_all [interactionsWith]
 
 @[circuit_norm]
-lemma Operations.forall_interactionsWith_iff {channel : RawChannel F} {ops : Operations F}
+lemma forall_interactionsWith_iff {channel : RawChannel F} {ops : Operations F}
   {motive : AbstractInteraction F → Prop} :
     (∀ i ∈ ops.interactionsWith channel, motive i) ↔
     (∀ i ∈ ops.interactions, i.channel = channel → motive i) := by
   simp [interactionsWith]
+end Operations
 
 @[circuit_norm]
 theorem witnessAny_interactionsWith {n : ℕ} {channel : RawChannel F} :
@@ -1662,8 +1657,6 @@ def TableSoundness [DecidableEq F] (ens : Ensemble F PublicIO) (finished : List 
 
 @[circuit_norm]
 abbrev SoundChannels [DecidableEq F] (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
-  -- TODO: make the verifier table use witness instead of public input, so that
-  -- we can state properties about it at the static level
   _root_.SoundChannels ens.allTables finished
 
 @[circuit_norm]
