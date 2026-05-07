@@ -253,7 +253,6 @@ def ElaboratedCircuit.ChannelsLawful [CircuitType Input] [CircuitType Output]
     ((main input_var).operations offset).ChannelsLawful
       channelsWithGuarantees channelsWithRequirements (exposedChannels input_var offset)
 
-
 /-
 Common base type for circuits that are to be used in formal proofs.
 
