@@ -82,7 +82,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : Input F := input
   have : eval env input_var = input := h_input
   have : Assumptions input := h_assumptions
-  have : ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var i₀).2 := h_holds
+  have : ConstraintsHold.Soundness env (circuit.main input_var i₀).2 := h_holds
   sorry
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]

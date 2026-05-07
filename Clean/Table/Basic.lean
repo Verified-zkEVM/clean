@@ -383,7 +383,7 @@ def windowEnv (table : TableConstraint W S F Unit)
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : ProverEnvironment F) : Prop :=
   let env := windowEnv table window aux_env
-  ConstraintsHoldWithInteractions.Soundness env table.operations
+  ConstraintsHold.Soundness env table.operations
 
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=

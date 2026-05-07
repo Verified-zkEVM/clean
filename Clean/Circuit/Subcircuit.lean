@@ -274,7 +274,7 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
         (can_replace_soundness (constraintsHold_toFlat_iff.mp constraints) guarantees)).1
     · rw [FlatOperation.requirements_toFlat]
       rw [FlatOperation.guarantees_toFlat] at guarantees
-      have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
+      have h_soundness_input : ConstraintsHold.Soundness env ops :=
         can_replace_soundness (constraintsHold_toFlat_iff.mp constraints) guarantees
       have h_req := (circuit.soundness n env input_var input rfl assumptions h_soundness_input).2
       exact requirements_toFlat_of_soundness (circuit.subcircuitChannelsLawful input_var n)

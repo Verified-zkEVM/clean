@@ -264,7 +264,7 @@ def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
   Spec input output ∧
@@ -280,7 +280,7 @@ def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Outpu
   ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- the constraints hold
-  ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
 
 /--
 `FormalCircuit` is the main object that encapsulates correctness of a circuit.
@@ -322,7 +322,7 @@ def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit 
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input
   Spec input ∧
   Operations.Requirements env (circuit.main input_var |>.operations offset)
@@ -337,7 +337,7 @@ def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircu
   ∀ input : Input F, eval env input_var = input →
   Assumptions input → Spec input →
   -- the constraints hold
-  ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
 
 /--
 `FormalAssertion` models a subcircuit that is "assertion-like":
@@ -375,7 +375,7 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCir
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input env.data →
   -- if the constraints hold
-  ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
   Spec input output env.data ∧
@@ -393,7 +393,7 @@ def GeneralFormalCircuit.Completeness (F : Type) [Field F]
   ∀ input : Input F, eval env input_var = input →
   ProverAssumptions input env.data env.hint →
   -- the constraints hold
-  ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset) ∧
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
   -- and, if given, the prover spec holds
   ProverSpec input (eval env (circuit.output input_var offset)) env.hint
 
@@ -440,7 +440,7 @@ def GeneralFormalCircuit.WithHint.Soundness (F : Type) [Field F]
   eval env input_var = input →
   Assumptions input env.data →
   -- if the constraints hold
-  ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
   Spec input output env.data ∧
@@ -459,7 +459,7 @@ def GeneralFormalCircuit.WithHint.Completeness (F : Type) [Field F]
   ∀ input : ProverValue Input F, eval env input_var = input →
   ProverAssumptions input env.data env.hint →
   -- the constraints hold
-  ConstraintsHoldWithInteractions.Completeness env (circuit.main input_var |>.operations offset) ∧
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
   -- and, if given, the prover spec holds
   ProverSpec input (eval env (circuit.output input_var offset)) env.hint
 

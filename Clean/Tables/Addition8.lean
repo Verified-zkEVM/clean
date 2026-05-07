@@ -66,7 +66,7 @@ def formalAdd8Table : FormalTable (F p) RowType := {
 
         -- first, abstract away `env` to avoid blow-up of expression size
         let env := add8Inline.windowEnv ⟨<+> +> row, rfl⟩ (envs.toEnvironment 0 rest.len)
-        change ConstraintsHoldWithInteractions.Soundness env.toEnvironment _ at h_holds
+        change ConstraintsHold.Soundness env.toEnvironment _ at h_holds
         have ⟨ h_x_env, h_y_env, h_z_env ⟩ := add8_vars row (envs.toEnvironment 0 rest.len)
 
         -- this is the slowest step, but still ok

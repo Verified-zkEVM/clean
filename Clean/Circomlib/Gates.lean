@@ -578,8 +578,8 @@ lemma completeness_zero {p : ℕ} [Fact p.Prime]
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 0 input) :
-    ConstraintsHoldWithInteractions.Completeness env ((main input_var).operations offset) := by
-  simp [main, ConstraintsHoldWithInteractions.Completeness, Circuit.pure_operations_eq]
+    ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+  simp [main, ConstraintsHold.Completeness, Circuit.pure_operations_eq]
   trivial
 
 /-- Completeness for n = 1 case -/
@@ -589,8 +589,8 @@ lemma completeness_one {p : ℕ} [Fact p.Prime]
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 1 input) :
-    ConstraintsHoldWithInteractions.Completeness env ((main input_var).operations offset) := by
-  simp [main, ConstraintsHoldWithInteractions.Completeness, Circuit.pure_operations_eq]
+    ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+  simp [main, ConstraintsHold.Completeness, Circuit.pure_operations_eq]
   trivial
 
 /-- Completeness for n = 2 case -/
@@ -600,7 +600,7 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 2 input) :
-    ConstraintsHoldWithInteractions.Completeness env ((main input_var).operations offset) := by
+    ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   simp only [main, circuit_norm]
 
   have h_binary0 : IsBool input[0] := h_assumptions 0 (by norm_num)
@@ -619,7 +619,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       (input : fields n (F p)),
     eval env input_var = input →
     Assumptions n input →
-    ConstraintsHoldWithInteractions.Soundness env ((main input_var).operations offset) →
+    ConstraintsHold.Soundness env ((main input_var).operations offset) →
     Spec n input (env ((main input_var).output offset)) := by
   induction n using Nat.strong_induction_on with
   | _ n IH =>
@@ -758,7 +758,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Prove
     (h_eval : input = eval env input_var)
     (h_assumptions : Assumptions n input)
     (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
-    (h_completeness : ConstraintsHoldWithInteractions.Completeness env ((main input_var).operations offset)) :
+    (h_completeness : ConstraintsHold.Completeness env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
     IsBool output := by
   induction n using Nat.strong_induction_on generalizing offset with
@@ -785,7 +785,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset) →
     input = eval env input_var →
     Assumptions n input →
-    ConstraintsHoldWithInteractions.Completeness env ((main input_var).operations offset) := by
+    ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   induction n using Nat.strong_induction_on with
   | _ n IH =>
     intro offset env input_var input h_local_witnesses h_env h_assumptions
@@ -854,7 +854,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         simp only [input_var2, Vector.drop_eq_cast_extract, n1]
         rfl
 
-      suffices ConstraintsHoldWithInteractions.Completeness env
+      suffices ConstraintsHold.Completeness env
         ((main input_var1 >>= fun out1 =>
           main input_var2 >>= fun out2 =>
           AND.circuit (out1, out2)).operations offset) by
@@ -881,13 +881,13 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         · let out1 := (main input_var1).output offset
           let out2 := (main input_var2).output (offset + (main input_var1).localLength offset)
 
-          have h_comp1 : ConstraintsHoldWithInteractions.Completeness env ((main input_var1).operations offset) := by
+          have h_comp1 : ConstraintsHold.Completeness env ((main input_var1).operations offset) := by
               apply IH n1 h_n1_lt offset env input_var1
               · exact h_local_witnesses.1
               · exact h_eval1
               · exact h_assumptions1
 
-          have h_comp2 : ConstraintsHoldWithInteractions.Completeness env ((main input_var2).operations (offset + (main input_var1).localLength offset)) := by
+          have h_comp2 : ConstraintsHold.Completeness env ((main input_var2).operations (offset + (main input_var1).localLength offset)) := by
               apply IH n2 h_n2_lt (offset + (main input_var1).localLength offset) env input_var2
               · have h_rest := h_local_witnesses.2
                 rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_rest

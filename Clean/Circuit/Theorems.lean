@@ -127,14 +127,14 @@ Soundness theorem which proves that we can replace constraints in subcircuits
 with their `Soundness` statement.
 
 Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies assuming the nested version
-`ConstraintsHoldWithInteractions.Soundness` when defining soundness for formal circuits,
+`ConstraintsHold.Soundness` when defining soundness for formal circuits,
 because it is implied by the flat version.
 -/
 theorem can_replace_soundness {ops : Operations F} {env} :
   ops.ConstraintsHold env → ops.FullGuarantees env →
-    ConstraintsHoldWithInteractions.Soundness env ops := by
+    ConstraintsHold.Soundness env ops := by
   simp only [Operations.ConstraintsHold, Operations.FullGuarantees,
-    constraintsHoldWithInteractions_soundness_iff_forall_mem, Operations.forall_constraints_iff,
+    constraintsHold_soundness_iff_forall_mem, Operations.forall_constraints_iff,
     Operations.forall_lookups_iff, Operations.forall_interactions_iff]
   rintro ⟨⟨h_constraints, h_sub_constraints⟩, ⟨h_lookups, h_sub_lookups⟩⟩ ⟨h_guarantees, h_sub_guarantees⟩
   simp_all only [implies_true, true_and]
@@ -351,15 +351,15 @@ Completeness theorem which proves that we can replace constraints in subcircuits
 with their `completeness` statement.
 
 Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies only proving the nested version
-`ConstraintsHoldWithInteractions.Completeness` when defining formal circuits,
+`ConstraintsHold.Completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
 theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ}
   (h_consistent : ops.SubcircuitsConsistent n) :
     env.UsesLocalWitnesses n ops →
-    ConstraintsHoldWithInteractions.Completeness env ops →
+    ConstraintsHold.Completeness env ops →
     ops.ConstraintsHold env := by
-  rw [constraintsHoldWithInteractions_completeness_iff_forall_mem,
+  rw [constraintsHold_completeness_iff_forall_mem,
     Operations.ConstraintsHold, Operations.forall_constraints_iff, Operations.forall_lookups_iff]
   intro h_env ⟨ h_constraints, h_lookups, h_guarantees, h_subcircuit ⟩
   have lookups_contains : (∀ l ∈ ops.shallowLookups, l.Contains env) := by
@@ -378,9 +378,9 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ}
 theorem can_replace_completeness_guarantees {env} {ops : Operations F} {n : ℕ}
   (h_consistent : ops.SubcircuitsConsistent n) :
     env.UsesLocalWitnesses n ops →
-    ConstraintsHoldWithInteractions.Completeness env ops →
+    ConstraintsHold.Completeness env ops →
     ops.FullGuarantees env := by
-  rw [constraintsHoldWithInteractions_completeness_iff_forall_mem,
+  rw [constraintsHold_completeness_iff_forall_mem,
     Operations.FullGuarantees, Operations.forall_interactions_iff]
   intro h_env ⟨ h_constraints, h_lookups, h_guarantees, h_subcircuit ⟩
   use h_guarantees
@@ -395,7 +395,7 @@ theorem can_replace_completeness_guarantees {env} {ops : Operations F} {n : ℕ}
 theorem can_replace_completeness_and_guarantees {env} {ops : Operations F} {n : ℕ}
   (h_consistent : ops.SubcircuitsConsistent n) :
     env.UsesLocalWitnesses n ops →
-    ConstraintsHoldWithInteractions.Completeness env ops →
+    ConstraintsHold.Completeness env ops →
     (ops.ConstraintsHold env ∧ ops.FullGuarantees env) := by
   intro h_env h_compl
   exact ⟨ can_replace_completeness h_consistent h_env h_compl,

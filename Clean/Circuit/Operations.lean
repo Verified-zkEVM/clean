@@ -164,7 +164,7 @@ lemma forAllNoOffset_iff_forall_mem {condition : Condition F} {ops : List (FlatO
     simp_all [constraints, lookups, interactions, witnessOperations]
     try tauto)
 
-def ConstraintsHoldWithInteractions (eval : Environment F) :=
+def ConstraintsHold (eval : Environment F) :=
   forAllNoOffset {
     assert e := eval e = 0
     lookup l := l.Contains eval
@@ -172,13 +172,13 @@ def ConstraintsHoldWithInteractions (eval : Environment F) :=
   }
 
 @[circuit_norm]
-lemma constraintsHoldWithInteractions_iff_forall_mem {eval : Environment F}
+lemma constraintsHold_iff_forall_mem {eval : Environment F}
     {ops : List (FlatOperation F)} :
-  ConstraintsHoldWithInteractions eval ops ↔
+  ConstraintsHold eval ops ↔
     (∀ e ∈ constraints ops, eval e = 0) ∧
     (∀ l ∈ lookups ops, l.Contains eval) ∧
     (∀ i ∈ interactions ops, i.Guarantees eval) := by
-  simp [ConstraintsHoldWithInteractions, forAllNoOffset_iff_forall_mem]
+  simp [ConstraintsHold, forAllNoOffset_iff_forall_mem]
 
 def Guarantees (env : Environment F) : List (FlatOperation F) → Prop :=
   forAllNoOffset { interact i := i.Guarantees env }
@@ -688,7 +688,7 @@ end Operations
 
 /-- Version of `ConstraintsHold` that replaces the statement of subcircuits with `Assumptions → Spec`. -/
 @[circuit_norm]
-def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
+def ConstraintsHold.Soundness (env : Environment F)
     (ops : Operations F) : Prop := ops.forAllNoOffset {
   assert e := env e = 0
   lookup l := l.Soundness env
@@ -698,7 +698,7 @@ def ConstraintsHoldWithInteractions.Soundness (env : Environment F)
 
 /-- Version of `ConstraintsHold` that replaces the statement of subcircuits with their `ProverAssumptions`. -/
 @[circuit_norm]
-def ConstraintsHoldWithInteractions.Completeness (env : ProverEnvironment F)
+def ConstraintsHold.Completeness (env : ProverEnvironment F)
     (ops : Operations F) : Prop := ops.forAllNoOffset {
   assert e := env e = 0
   lookup l := l.Completeness env
@@ -706,21 +706,21 @@ def ConstraintsHoldWithInteractions.Completeness (env : ProverEnvironment F)
   subcircuit s := s.ProverAssumptions env
 }
 
-lemma constraintsHoldWithInteractions_soundness_iff_forall_mem {env : Environment F} {ops : Operations F} :
-    ConstraintsHoldWithInteractions.Soundness env ops ↔
+lemma constraintsHold_soundness_iff_forall_mem {env : Environment F} {ops : Operations F} :
+    ConstraintsHold.Soundness env ops ↔
     (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
     (∀ l ∈ ops.shallowLookups, l.Soundness env) ∧
     (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
     (∀ s ∈ ops.subcircuits, s.2.Assumptions env → s.2.Spec env) := by
-  simp [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_iff_forall_mem]
+  simp [ConstraintsHold.Soundness, Operations.forAllNoOffset_iff_forall_mem]
 
-lemma constraintsHoldWithInteractions_completeness_iff_forall_mem {env : ProverEnvironment F} {ops : Operations F} :
-    ConstraintsHoldWithInteractions.Completeness env ops ↔
+lemma constraintsHold_completeness_iff_forall_mem {env : ProverEnvironment F} {ops : Operations F} :
+    ConstraintsHold.Completeness env ops ↔
     (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
     (∀ l ∈ ops.shallowLookups, l.Completeness env) ∧
     (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
     (∀ s ∈ ops.subcircuits, s.2.ProverAssumptions env) := by
-  simp [ConstraintsHoldWithInteractions.Completeness, Operations.forAllNoOffset_iff_forall_mem]
+  simp [ConstraintsHold.Completeness, Operations.forAllNoOffset_iff_forall_mem]
 
 def Condition.ignoreSubcircuit (condition : Condition F) : Condition F :=
   { condition with subcircuit _ _ _ := True }

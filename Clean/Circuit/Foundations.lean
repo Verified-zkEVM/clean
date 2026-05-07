@@ -31,7 +31,7 @@ theorem original_soundness (circuit : GeneralFormalCircuit.WithHint F β α) :
     -- the spec and requirements hold
     circuit.Spec input output env.data ∧ ops.FullRequirements env := by
   intro offset env b_var ops input output h_assumptions h_constraints h_full_guarantees
-  have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
+  have h_soundness_input : ConstraintsHold.Soundness env ops :=
     Circuit.can_replace_soundness h_constraints h_full_guarantees
   have ⟨ h_spec, h_requirements ⟩ :=
     circuit.soundness offset env b_var input rfl h_assumptions h_soundness_input
@@ -80,7 +80,7 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
     circuit.Spec b a ∧ Operations.FullRequirements env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_constraints h_guarantees
-  have h_holds' : ConstraintsHoldWithInteractions.Soundness env (circuit.main b_var |>.operations offset) :=
+  have h_holds' : ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) :=
     Circuit.can_replace_soundness h_constraints h_guarantees
   have h_soundness := circuit.soundness offset env b_var b h_input h_assumptions h_holds'
   exact ⟨h_soundness.1,
@@ -119,7 +119,7 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
     circuit.Spec b ∧ Operations.FullRequirements env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_constraints h_guarantees
-  have h_holds' : ConstraintsHoldWithInteractions.Soundness env (circuit.main b_var |>.operations offset) :=
+  have h_holds' : ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) :=
     Circuit.can_replace_soundness h_constraints h_guarantees
   have h_soundness := circuit.soundness offset env b_var b h_input h_assumptions h_holds'
   exact ⟨h_soundness.1,
@@ -159,7 +159,7 @@ theorem GeneralFormalCircuit.original_full_soundness
     ops.ConstraintsHold env → ops.FullGuarantees env →
     circuit.Spec input output env.data ∧ ops.FullRequirements env := by
   intro offset env input_var ops input output h_assumptions h_constraints h_full_guarantees
-  have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
+  have h_soundness_input : ConstraintsHold.Soundness env ops :=
     Circuit.can_replace_soundness h_constraints h_full_guarantees
   have ⟨ h_spec, h_requirements ⟩ :=
     circuit.soundness offset env input_var input rfl h_assumptions h_soundness_input

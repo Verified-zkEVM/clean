@@ -11,7 +11,7 @@ namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
 theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    ConstraintsHoldWithInteractions.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
+    ConstraintsHold.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
@@ -19,7 +19,7 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
 
 theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) →
-    ConstraintsHoldWithInteractions.Completeness env ((allZero xs).operations offset) := by
+    ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)

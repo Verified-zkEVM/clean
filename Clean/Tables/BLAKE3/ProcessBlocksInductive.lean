@@ -221,7 +221,7 @@ private lemma step_process_block (env : Environment (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
     (h_x : x.block_exists = 1)
-    (h_holds : ConstraintsHoldWithInteractions.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
+    (h_holds : ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
     (acc_normalized : acc.Normalized)
     (x_normalized : x.Normalized)
     (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :

@@ -169,7 +169,7 @@ lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
   and_intros <;> rfl
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
-  ConstraintsHoldWithInteractions.Soundness (F := F p) (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
+  ConstraintsHold.Soundness (F := F p) (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
