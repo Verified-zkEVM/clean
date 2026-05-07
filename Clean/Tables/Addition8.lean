@@ -34,9 +34,22 @@ def add8Table : List (TableOperation RowType (F p)) := [
 def Spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.ForAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
+lemma add8_vars (row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
+    let env := add8Inline.windowEnv ⟨<+> +> row, rfl⟩ aux_env;
+    env.get 0 = row.x ∧
+    env.get 1 = row.y ∧
+    env.get 3 = row.z := by
+  intro env
+  simp [env, windowEnv, TableConstraint.finalAssignment, add8Inline, table_assignment_norm,
+    circuit_norm, Gadgets.Addition8.circuit, Vector.mapFinRange_zero, Vector.mapFinRange_succ,
+    Vector.mapRange_zero, Vector.mapRange_succ, Vector.getElem_mk,
+    Pure.pure]
+  change row.x = row.x ∧ row.y = row.y
+  simp
+
 def formalAdd8Table : FormalTable (F p) RowType := {
   constraints := add8Table,
-  Spec := Spec_add8,
+  Spec trace _ := Spec_add8 trace,
   soundness := by
     intro N trace envs _
     simp [table_norm, add8Table, Spec_add8]
@@ -52,8 +65,9 @@ def formalAdd8Table : FormalTable (F p) RowType := {
         -- simplify constraints
 
         -- first, abstract away `env` to avoid blow-up of expression size
-        let env := add8Inline.windowEnv ⟨<+> +> row, rfl⟩ (envs 0 rest.len)
-        change Circuit.ConstraintsHold.Soundness env _ at h_holds
+        let env := add8Inline.windowEnv ⟨<+> +> row, rfl⟩ (envs.toEnvironment 0 rest.len)
+        change ConstraintsHoldWithInteractions.Soundness env.toEnvironment _ at h_holds
+        have ⟨ h_x_env, h_y_env, h_z_env ⟩ := add8_vars row (envs.toEnvironment 0 rest.len)
 
         -- this is the slowest step, but still ok
         simp [table_norm, circuit_norm, varFromOffset, Vector.mapRange,
@@ -62,14 +76,11 @@ def formalAdd8Table : FormalTable (F p) RowType := {
 
         change _ ∧ _ ∧ (_ → _) at h_holds
 
-        -- resolve assignment
-        have h_x_env : env.get 0 = row.x := rfl
-        have h_y_env : env.get 1 = row.y := rfl
-        have h_z_env : env.get 3 = row.z := rfl
-        simp only [h_x_env, h_y_env, h_z_env] at h_holds
-
         -- now we prove a local property about the current row, from the constraints
         obtain ⟨ lookup_x, lookup_y, h_add⟩ := h_holds
+        rw [h_x_env] at lookup_x
+        rw [h_y_env] at lookup_y
+        rw [h_z_env, h_x_env, h_y_env] at h_add
         exact h_add lookup_x lookup_y
 }
 

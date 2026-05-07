@@ -383,7 +383,7 @@ def windowEnv (table : TableConstraint W S F Unit)
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : ProverEnvironment F) : Prop :=
   let env := windowEnv table window aux_env
-  Circuit.ConstraintsHold.Soundness env table.operations
+  ConstraintsHoldWithInteractions.Soundness env table.operations
 
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
@@ -625,7 +625,6 @@ def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLe
 attribute [table_norm] List.mapIdx List.mapIdx.go
 attribute [table_norm low] size fromElements toElements
 attribute [table_assignment_norm low] toElements
-attribute [table_norm] Circuit.ConstraintsHold.Soundness
 
 attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
 

@@ -18,7 +18,7 @@ def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) 
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
       (eval env acc_var = acc) ∧ (eval env x_var = x) →
     -- if the constraints hold
-    Circuit.ConstraintsHold.Soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
+    ConstraintsHoldWithInteractions.Soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- and assuming the spec on the current row and previous inputs
     Spec initialState xs row_index xs_len acc env.data →
     -- we can conclude the spec on the next row and inputs including the current input
@@ -41,7 +41,7 @@ def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Typ
   InitialStateAssumptions initialState env.data ∧
   Spec initialState xs row_index xs_len acc env.data ∧ InputAssumptions row_index x env.data →
   -- the constraints hold
-  Circuit.ConstraintsHold.Completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
+  ConstraintsHoldWithInteractions.Completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
 
 /--
 In the case of two-row windows, an `InductiveTable` is basically a `FormalCircuit` but
@@ -108,7 +108,7 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
   ]
 
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : ProverEnvironment F} :
-  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
+  ConstraintsHoldWithInteractions.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
     (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by
   set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
@@ -171,6 +171,8 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       List.size_toArray, List.length_nil, List.push_toArray, List.nil_append,
       List.length_cons, zero_add, List.cons_append, reduceIte, and_true] at constraints
     obtain ⟨ input_eq, output_eq ⟩ := constraints
+    change ConstraintsHoldWithInteractions.Soundness (F:=F) _ _ at input_eq
+    change if _ then ConstraintsHoldWithInteractions.Soundness (F:=F) _ _ else _ at output_eq
     rw [equalityConstraint.soundness] at input_eq output_eq
     simp only [table_norm, and_true, Trace.ForAllRowsWithPrevious]
     constructor
@@ -265,7 +267,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp only [t, s, x]
       ac_rfl
 
-    have constraints : Circuit.ConstraintsHold.Soundness
+    have constraints : ConstraintsHoldWithInteractions.Soundness
         env' ((table.step curr_var.1 curr_var.2).operations (size State + size Input)) := by
       simp only [curr_var, varFromOffset_pair, zero_add]
       exact main_constraints
@@ -285,6 +287,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     use h_soundness
 
     intro h_len
+    change if _ then ConstraintsHoldWithInteractions.Soundness (F:=F) _ _ else _ at output_eq
     rw [equalityConstraint.soundness] at output_eq
     rw [←h_len] at output_eq
     simp only [add_tsub_cancel_right, reduceIte] at output_eq

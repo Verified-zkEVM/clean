@@ -158,39 +158,6 @@ def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
     (compute : ProverEnvironment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
   ProvableType.witness (α:=ProvableVector α m) compute
 
-namespace Circuit
-
--- formal concepts of soundness and completeness of a circuit
-
-/--
-TODO remove
--/
-@[circuit_norm]
-def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Prop
-  | [] => True
-  | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
-  | .lookup l :: ops =>
-    l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
-  | .interact _ :: ops => ConstraintsHold.Soundness eval ops
-  | .subcircuit s :: ops =>
-    (s.Assumptions eval → s.Spec eval) ∧ ConstraintsHold.Soundness eval ops
-
-/--
-TODO remove
--/
-@[circuit_norm]
-def ConstraintsHold.Completeness (eval : ProverEnvironment F) : List (Operation F) → Prop
-  | [] => True
-  | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
-  | .lookup l :: ops =>
-    l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
-  | .interact _ :: ops => ConstraintsHold.Completeness eval ops
-  | .subcircuit s :: ops =>
-    s.ProverAssumptions eval ∧ ConstraintsHold.Completeness eval ops
-end Circuit
-
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
 matches the output of the witness generator passed along with a `witness` declaration,

@@ -29,7 +29,7 @@ example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..
 
 example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Expression (F pBabybear)) env (i0 : ℕ) :
-  Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carryIn ⟩).operations i0)
+  ConstraintsHoldWithInteractions.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carryIn ⟩).operations i0)
   ↔
   (ZMod.val (env.get i0) < 256 ∧ IsBool (env.get (i0 + 1)) ∧
     Expression.eval env x0 + Expression.eval env y0 + Expression.eval env carryIn + -env.get i0 + -(env.get (i0 + 1) * 256) = 0) ∧
@@ -57,6 +57,6 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Expression (F pBabybear)) env (i0 : �
   rw [ExplicitCircuit.operations_eq]
   dsimp only [explicit_circuit_norm, explicit, assertBool]
   -- simp `ConstraintsHold` expression
-  simp only [Circuit.ConstraintsHold.append_soundness, Circuit.ConstraintsHold.Soundness, Gadgets.ByteTable]
+  simp only [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_append, Gadgets.ByteTable]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions
   simp only [circuit_norm, Nat.reduceAdd]

@@ -82,7 +82,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : Input F := input
   have : eval env input_var = input := h_input
   have : Assumptions input := h_assumptions
-  have : ConstraintsHold.Soundness env (circuit.main input_var i₀).2 := h_holds
+  have : ConstraintsHoldWithInteractions.Soundness env (circuit.main input_var i₀).2 := h_holds
   sorry
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
@@ -169,7 +169,12 @@ example : Soundness (F p) elaborated TestAssumptions TestSpec := by
   circuit_proof_start
   -- elaborated should be unfolded to testCircuit
   -- Check that h_holds now refers to testCircuit.main, not elaborated.main
-  guard_hyp h_holds : ConstraintsHold.Soundness env (testCircuit.main input_var i₀).2
+  guard_hyp h_holds : Operations.forAllNoOffset {
+    assert e := env e = 0
+    lookup l := l.Soundness env
+    interact i := i.Guarantees env
+    subcircuit s := s.Assumptions env → s.Spec env
+  } (testCircuit.main input_var i₀).2
   sorry
 end UnfoldTest3
 

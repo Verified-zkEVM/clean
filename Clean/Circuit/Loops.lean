@@ -581,29 +581,6 @@ lemma forEach.forAllNoOffset :
   rw [ForM.forAllNoOffset_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
-lemma forEach.soundness :
-  ConstraintsHold.Soundness env_v ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
-  simp only [forEach, ConstraintsHold.soundness_iff_forAll']
-  rw [ForM.forAll_iff, ConstantLength.localLength_eq]
-
-/-- variant of `forEach.soundness`, for when the constraints don't depend on the input offset -/
-lemma forEach.soundness' :
-  ConstraintsHold.Soundness env_v (forEach xs body constant |>.operations n) →
-    ∀ x ∈ xs, ∃ k : ℕ, ConstraintsHold.Soundness env_v (body x |>.operations k) := by
-  simp only [forEach, ConstraintsHold.soundness_iff_forAll', ForM.forAll_iff]
-  intro h x hx
-  obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
-  exact ⟨ _ , h ⟨i, hi⟩ ⟩
-
-@[circuit_norm ↓]
-lemma forEach.completeness :
-  ConstraintsHold.Completeness env ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
-  simp only [forEach, ConstraintsHold.completeness_iff_forAll']
-  rw [ForM.forAll_iff, ConstantLength.localLength_eq]
-
-@[circuit_norm ↓]
 lemma forEach.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness n ((forEach xs body constant).operations n) ↔
     ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
@@ -684,20 +661,6 @@ lemma map.forAllNoOffset :
       ((body xs[i.val]).operations (n + i*(body default).localLength)).forAllNoOffset prop' := by
   simp only [map]
   rw [MapM.forAllNoOffset_iff, ConstantLength.localLength_eq]
-
-@[circuit_norm ↓]
-lemma map.soundness :
-  ConstraintsHold.Soundness env_v (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
-  simp only [map, ConstraintsHold.soundness_iff_forAll']
-  rw [MapM.forAll_iff, ConstantLength.localLength_eq]
-
-@[circuit_norm ↓]
-lemma map.completeness :
-  ConstraintsHold.Completeness env (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
-  simp only [map, ConstraintsHold.completeness_iff_forAll']
-  rw [MapM.forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma map.usesLocalWitnesses :
@@ -784,20 +747,6 @@ lemma mapFinRange.forAll' :
     ∀ i : Fin m, ((body i).operations (n + i*(body 0).localLength)).forAllNoOffset prop' := by
   simp only [mapFinRange]
   rw [MapM.mapFinRangeM_forAllNoOffset_iff, ConstantLength.localLength_eq]
-
-@[circuit_norm ↓]
-lemma mapFinRange.soundness :
-  ConstraintsHold.Soundness env_v (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env_v (body i |>.operations (n + i*(body 0).localLength)) := by
-  simp only [mapFinRange, ConstraintsHold.soundness_iff_forAll']
-  rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
-
-@[circuit_norm ↓]
-lemma mapFinRange.completeness :
-  ConstraintsHold.Completeness env (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env (body i |>.operations (n + i*(body 0).localLength)) := by
-  simp only [mapFinRange, ConstraintsHold.completeness_iff_forAll']
-  rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma mapFinRange.usesLocalWitnesses :
@@ -902,26 +851,6 @@ lemma foldl.forAllNoOffset [NeZero m] :
       ((body acc xs[i + 1]).operations (n + (i + 1)*k)).forAllNoOffset prop' := by
   simp only [foldl]
   rw [FoldlM.forAllNoOffset_iff_const constant const_out]
-
-@[circuit_norm ↓]
-lemma foldl.soundness [NeZero m] :
-  ConstraintsHold.Soundness env_v (foldl xs init body const_out constant |>.operations n) ↔
-    ConstraintsHold.Soundness env_v (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
-    ∀ (i : ℕ) (hi : i + 1 < m),
-      let acc := (body default xs[i]).output (n + i*(body default default).localLength);
-      ConstraintsHold.Soundness env_v (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
-  simp only [foldl, ConstraintsHold.soundness_iff_forAll']
-  rw [FoldlM.forAll_iff_const constant const_out]
-
-@[circuit_norm ↓]
-lemma foldl.completeness [NeZero m] :
-  ConstraintsHold.Completeness env (foldl xs init body const_out constant |>.operations n) ↔
-    ConstraintsHold.Completeness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
-    ∀ (i : ℕ) (hi : i + 1 < m),
-      let acc := (body default xs[i]).output (n + i*(body default default).localLength);
-      ConstraintsHold.Completeness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
-  simp only [foldl, ConstraintsHold.completeness_iff_forAll']
-  rw [FoldlM.forAll_iff_const constant const_out]
 
 @[circuit_norm ↓]
 lemma foldl.usesLocalWitnesses [NeZero m] :
@@ -1029,22 +958,6 @@ lemma foldlRange.forAllNoOffset :
   rw [FoldlM.forAllNoOffset_iff_finRange (constant:=constant)]
   congr! 4
   rw [constant.localLength_eq (_, _), constant.localLength_eq (_, _)]
-
-@[circuit_norm ↓]
-lemma foldlRange.soundness :
-  ConstraintsHold.Soundness env_v (foldlRange m init body constant |>.operations n) ↔
-    ∀ i : Fin m,
-    ConstraintsHold.Soundness env_v (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
-    |>.operations (n + i * (body default i).localLength)) := by
-  simp only [ConstraintsHold.soundness_iff_forAll', foldlRange.forAll]
-
-@[circuit_norm ↓]
-lemma foldlRange.completeness :
-  ConstraintsHold.Completeness env (foldlRange m init body constant |>.operations n) ↔
-    ∀ i : Fin m,
-    ConstraintsHold.Completeness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
-    |>.operations (n + i * (body default i).localLength)) := by
-  simp only [ConstraintsHold.completeness_iff_forAll', foldlRange.forAll]
 
 @[circuit_norm ↓]
 lemma foldlRange.usesLocalWitnesses :
