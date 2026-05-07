@@ -18,10 +18,11 @@ section
 variable {F : Type} [Field F]
 variable {Input Output Message : TypeMap} [ProvableType Input] [ProvableType Output] [ProvableType Message]
 
--- TODO should we encode the channel width in the type, or not?
--- if not, we have trouble passing interactions to channel.Guarantees / Requirements
--- => but that doesn't really matter, we can always do (i.channel = channel) → i.Guarantees ...
--- if we do, we have to define a channel filtering mechanism that establishes the output type
+/--
+Concrete interaction values are heterogeneous: after evaluation, we collect interactions for
+all channels in one list. The typed `Channel F Message` wrapper still remembers message shape
+when building interactions, while this raw representation carries the channel arity explicitly.
+-/
 structure Interaction (F : Type) where
   channel : RawChannel F
   mult : F
@@ -156,9 +157,6 @@ def Channel.fromStatic (F : Type) [Field F]
     (slc : StaticLookupChannel F Message) : Channel F Message where
   name := slc.name
   Guarantees msg _ := slc.Guarantees msg
-
-abbrev StaticLookupChannel.toChannel (slc : StaticLookupChannel F Message) :=
-  Channel.fromStatic F Message slc
 
 -- define what global soundness means for an ensemble of circuits/tables and channels
 
