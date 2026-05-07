@@ -130,19 +130,19 @@ end Circuit
 @[circuit_norm]
 def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : InteractionWithChannel channel := ⟨ mult, msg, false ⟩
+  let interaction : ChannelInteraction channel := ⟨ mult, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
 def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : InteractionWithChannel channel := ⟨ -1, msg, true ⟩
+  let interaction : ChannelInteraction channel := ⟨ -1, msg, true ⟩
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : InteractionWithChannel channel := ⟨ 1, msg, false ⟩
+  let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 /-- Create a new variable of an arbitrary "provable type". -/

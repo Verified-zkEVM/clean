@@ -76,28 +76,28 @@ lemma Channel.toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
       fun mult message data ↦ mult ≠ (-1 : F) → channel2.Guarantees (fromElements message) data := by
   simp only [Channel.toRaw, RawChannel.mk.injEq]
 
-structure InteractionWithChannel (channel : Channel F Message) where
+structure ChannelInteraction (channel : Channel F Message) where
   mult : Expression F
   msg : Message (Expression F)
   assumeGuarantees : Bool
 
 variable {channel : Channel F Message}
 
-def InteractionWithChannel.toRaw (i : InteractionWithChannel channel) : AbstractInteraction F :=
+def ChannelInteraction.toRaw (i : ChannelInteraction channel) : AbstractInteraction F :=
   ⟨ channel.toRaw, i.mult, toElements i.msg, i.assumeGuarantees ⟩
 
 /-- Normal form for a channel interaction. -/
-def emitted (mult : Expression F) (msg : Message (Expression F)) : InteractionWithChannel channel :=
+def emitted (mult : Expression F) (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult, msg, assumeGuarantees := false }
 
 /-- Convenience alias for interaction with multiplicity `-1`. -/
 @[circuit_norm]
-def pulled {channel : Channel F Message} (msg : Message (Expression F)) : InteractionWithChannel channel :=
+def pulled {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := -1, msg, assumeGuarantees := true }
 
 /-- Convenience alias for interaction with multiplicity `1`. -/
 @[circuit_norm]
-def pushed {channel : Channel F Message} (msg : Message (Expression F)) : InteractionWithChannel channel :=
+def pushed {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := 1, msg, assumeGuarantees := false }
 
 @[circuit_norm] def Channel.emitted (channel : Channel F Message) mult msg :=
@@ -113,49 +113,49 @@ structure ExposedChannel (F : Type) [Field F] where
 
 @[circuit_norm]
 def expose {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (interactions : List (InteractionWithChannel channel)) : List (ExposedChannel F) :=
+    (interactions : List (ChannelInteraction channel)) : List (ExposedChannel F) :=
   [{ channel, interactions := interactions.map (·.toRaw) }]
 
 @[circuit_norm]
-lemma InteractionWithChannel.toRaw_channel (i : InteractionWithChannel channel) :
+lemma ChannelInteraction.toRaw_channel (i : ChannelInteraction channel) :
   i.toRaw.channel = channel.toRaw := rfl
 
 @[circuit_norm]
-lemma InteractionWithChannel.toRaw_mult (i : InteractionWithChannel channel) :
+lemma ChannelInteraction.toRaw_mult (i : ChannelInteraction channel) :
   i.toRaw.mult = i.mult := rfl
 
 @[circuit_norm]
-lemma InteractionWithChannel.toRaw_msg (i : InteractionWithChannel channel) :
+lemma ChannelInteraction.toRaw_msg (i : ChannelInteraction channel) :
     i.toRaw.msg = toElements i.msg := rfl
 
 @[circuit_norm]
-lemma InteractionWithChannel.toRaw_assumeGuarantees (i : InteractionWithChannel channel) :
+lemma ChannelInteraction.toRaw_assumeGuarantees (i : ChannelInteraction channel) :
     i.toRaw.assumeGuarantees = i.assumeGuarantees := rfl
 
 variable {Message' : TypeMap} [ProvableType Message']
 
 @[circuit_norm]
-def InteractionWithChannel.Guarantees (i : InteractionWithChannel channel) (env : Environment F) : Prop :=
+def ChannelInteraction.Guarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
   i.assumeGuarantees → Expression.eval env i.mult = -1 → channel.Guarantees (eval env i.msg) env.data
 
 def AbstractInteraction.Guarantees (i : AbstractInteraction F) (env : Environment F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees (env i.mult) (i.msg.map env) env.data
 
 @[circuit_norm]
-lemma AbstractInteraction.guarantees_def (env : Environment F) (int : InteractionWithChannel channel) :
+lemma AbstractInteraction.guarantees_def (env : Environment F) (int : ChannelInteraction channel) :
     int.toRaw.Guarantees env ↔ int.Guarantees env := by
-  simp [AbstractInteraction.Guarantees, InteractionWithChannel.Guarantees,
-    InteractionWithChannel.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
+  simp [AbstractInteraction.Guarantees, ChannelInteraction.Guarantees,
+    ChannelInteraction.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
 
 @[circuit_norm]
-def InteractionWithChannel.Requirements (i : InteractionWithChannel channel) (env : Environment F) : Prop :=
+def ChannelInteraction.Requirements (i : ChannelInteraction channel) (env : Environment F) : Prop :=
   Expression.eval env i.mult ≠ -1 → channel.Guarantees (eval env i.msg) env.data
 
 def AbstractInteraction.Requirements (i : AbstractInteraction F) (env : Environment F) : Prop :=
   i.channel.Requirements (env i.mult) (i.msg.map env) env.data
 
 @[circuit_norm]
-lemma AbstractInteraction.requirements_def (env : Environment F) (int : InteractionWithChannel channel) :
+lemma AbstractInteraction.requirements_def (env : Environment F) (int : ChannelInteraction channel) :
     int.toRaw.Requirements env ↔ int.Requirements env := by
-  simp [AbstractInteraction.Requirements, InteractionWithChannel.Requirements,
-    InteractionWithChannel.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
+  simp [AbstractInteraction.Requirements, ChannelInteraction.Requirements,
+    ChannelInteraction.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
