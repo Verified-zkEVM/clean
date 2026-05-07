@@ -2454,7 +2454,7 @@ lemma AbstractTable.interactionsWith_of_exposedChannels {table : AbstractTable F
     table.operations.interactionsWith channel = interactions := by
   rw [AbstractTable.interactionsWith_eq]
   simp only [circuit_norm, AbstractTable.exposedChannels] at *
-  convert table.circuit.exposedChannels_eq _ _ _ h_exposed
+  convert table.circuit.interactionsWith_eq_of_mem_exposedChannels _ _ _ h_exposed
 
 def List.flattenPairs {α : Type} (pairs : List (α × α)) : List α :=
   pairs.map (fun (a, b) => [a, b]) |>.flatten
@@ -3211,7 +3211,7 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
   | (n, x, y), i₀ =>
     let z := var ⟨ i₀ ⟩
     expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
-  exposedChannels_eq := by
+  channelsLawful := by
     simp only [circuit_norm, Add8Channel, FibonacciChannel]
 
   ProverAssumptions
@@ -3259,7 +3259,7 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
   exposedChannels
   | (n, x, y), _ =>
     expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
-  exposedChannels_eq := by simp only [circuit_norm, FibonacciChannel]
+  channelsLawful := by simp only [circuit_norm, FibonacciChannel]
   ProverAssumptions
   | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   Spec

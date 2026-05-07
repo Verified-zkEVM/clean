@@ -116,7 +116,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       rw [h_nested]
       rw [FlatOperation.requirements_toFlat]
       have h := can_replace_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
-      exact requirements_toFlat_of_soundness (circuit.subcircuitsLawful input_var n)
+      exact requirements_toFlat_of_soundness (circuit.subcircuitChannelsLawful input_var n)
         (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
         (circuit.soundness n env input_var input rfl as h).2
 
@@ -214,7 +214,7 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
         rw [h_nested]
         rw [FlatOperation.requirements_toFlat]
         have h := can_replace_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
-        exact requirements_toFlat_of_soundness (circuit.subcircuitsLawful input_var n)
+        exact requirements_toFlat_of_soundness (circuit.subcircuitChannelsLawful input_var n)
           (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
           (circuit.soundness n env input_var input rfl as h).2
 
@@ -278,7 +278,7 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
       have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
         can_replace_soundness (constraintsHold_toFlat_iff.mp constraints) guarantees
       have h_req := (circuit.soundness n env input_var input rfl assumptions h_soundness_input).2
-      exact requirements_toFlat_of_soundness (circuit.subcircuitsLawful input_var n)
+      exact requirements_toFlat_of_soundness (circuit.subcircuitChannelsLawful input_var n)
         (constraintsHold_toFlat_iff.mp constraints) guarantees h_req
 
   have implied_by_assumptions : ∀ env : ProverEnvironment F,
@@ -734,14 +734,14 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful
     exact circuit.in_channels_or_requirements_full input_var n env
   · simp only [GeneralFormalCircuit.WithHint.toSubcircuit]
     rw [Operations.toNested_toFlat, Operations.channels_toFlat]
-    have shallowChannels_subset := circuit.used_channels_declared input_var n
-    have channelsWithGuarantees_subset := (circuit.guarantees_in_declared_channels input_var n).1
-    have channelsWithRequirements_subset := (circuit.requirements_in_declared_channels input_var n).1
+    have shallowChannels_subset := circuit.mem_channelsWithGuarantees_or_mem_channelsWithRequirements_of_mem_shallowChannels input_var n
+    have channelsWithGuarantees_subset := circuit.subcircuitChannelsWithGuarantees_subset_channelsWithGuarantees input_var n
+    have channelsWithRequirements_subset := circuit.subcircuitChannelsWithRequirements_subset_channelsWithRequirements input_var n
     simp only at *
     set ops := (circuit.main input_var).operations n
     trans ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
     · apply Operations.channels_subset
-      exact circuit.elaborated.subcircuitsLawful input_var n
+      exact circuit.elaborated.subcircuitChannelsLawful input_var n
     · simp_all only [List.append_assoc, List.append_subset, List.subset_append_of_subset_left,
         List.subset_append_of_subset_right, and_self, and_true]
       simp only [List.subset_def, List.mem_append]

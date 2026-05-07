@@ -344,11 +344,11 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
   rw [bind_forAll]
   exact ⟨hf, hg⟩
 
-theorem Circuit.subcircuitsLawful_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ)
-    (hf : (f.operations offset).SubcircuitsLawful)
-    (hg : ((g (f.output offset)).operations (offset + f.localLength offset)).SubcircuitsLawful) :
-    ((f >>= g).operations offset).SubcircuitsLawful := by
-  rw [Circuit.bind_operations_eq, Operations.subcircuitsLawful_append]
+theorem Circuit.subcircuitChannelsLawful_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ)
+    (hf : (f.operations offset).SubcircuitChannelsLawful)
+    (hg : ((g (f.output offset)).operations (offset + f.localLength offset)).SubcircuitChannelsLawful) :
+    ((f >>= g).operations offset).SubcircuitChannelsLawful := by
+  rw [Circuit.bind_operations_eq, Operations.subcircuitChannelsLawful_append]
   exact ⟨hf, hg⟩
 
 -- Helper theorem for subcircuitsConsistent
@@ -370,8 +370,8 @@ theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset :
       apply IH ((m + 3) - ((m + 3) / 2)) (by omega)
       simp only [circuit_norm, AND.circuit]
 
-theorem subcircuitsLawful (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
-    ((main input).operations offset).SubcircuitsLawful := by
+theorem subcircuitChannelsLawful (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+    ((main input).operations offset).SubcircuitChannelsLawful := by
   induction n using Nat.strong_induction_on generalizing offset with
   | _ n IH =>
     match n with
@@ -380,13 +380,13 @@ theorem subcircuitsLawful (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ
     | 2 => simp only [main, circuit_norm]
     | m + 3 =>
       simp only [main]
-      apply Circuit.subcircuitsLawful_bind
+      apply Circuit.subcircuitChannelsLawful_bind
       apply IH ((m + 3) / 2) (by omega)
-      apply Circuit.subcircuitsLawful_bind
+      apply Circuit.subcircuitChannelsLawful_bind
       apply IH ((m + 3) - ((m + 3) / 2)) (by omega)
       simp only [circuit_norm, AND.circuit]
 
-theorem guarantees_in_declared_channels (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+theorem subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     ((main input).operations offset).subcircuitChannelsWithGuarantees ⊆ [] ∧
       ∀ env, ((main input).operations offset).InChannelsOrGuarantees [] env := by
   suffices ((main input).operations offset).subcircuitChannelsWithGuarantees = [] ∧
@@ -408,7 +408,7 @@ theorem guarantees_in_declared_channels (n : ℕ) (input : Var (fields n) (F p))
         · simpa only [circuit_norm] using (IH n1 (by omega) _ _).2 env
         · simpa only [circuit_norm] using (IH n2 (by omega) _ _).2 env
 
-theorem requirements_in_declared_channels (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+theorem subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     ((main input).operations offset).subcircuitChannelsWithRequirements ⊆ [] ∧
       ∀ env, ((main input).operations offset).InChannelsOrRequirements [] env := by
   suffices ((main input).operations offset).subcircuitChannelsWithRequirements = [] ∧
@@ -444,7 +444,7 @@ theorem requirements (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) (en
       · apply IH ((m + 3) / 2) (by omega)
       · apply IH ((m + 3) - ((m + 3) / 2)) (by omega)
 
-theorem used_channels_declared (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+theorem mem_nil_or_mem_nil_of_mem_shallowChannels (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     ∀ channel ∈ ((main input).operations offset).shallowChannels,
       channel ∈ ([] : List (RawChannel (F p))) ∨ channel ∈ ([] : List (RawChannel (F p))) := by
   suffices ((main input).operations offset).shallowChannels = [] by simp [this]
@@ -917,10 +917,16 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   localLength _ := n - 1
   localLength_eq := localLength_eq n
   subcircuitsConsistent := subcircuitsConsistent n
-  subcircuitsLawful := subcircuitsLawful n
-  guarantees_in_declared_channels := guarantees_in_declared_channels n
-  requirements_in_declared_channels := requirements_in_declared_channels n
-  used_channels_declared := used_channels_declared n
+  channelsLawful := by
+    intro input_var offset
+    and_intros
+    · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).1
+    · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).2
+    · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).1
+    · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).2
+    · exact mem_nil_or_mem_nil_of_mem_shallowChannels n input_var offset
+    · simp only [circuit_norm]
+    · exact subcircuitChannelsLawful n input_var offset
 
   Assumptions := Assumptions n
   Spec := Spec n

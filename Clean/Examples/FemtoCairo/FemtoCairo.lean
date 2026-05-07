@@ -72,7 +72,7 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
 def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := decodeInstructionMain
   localLength _ := 8
-  subcircuitsLawful _ _ := by simp only [decodeInstructionMain, circuit_norm]
+  channelsLawful := by simp only [decodeInstructionMain, Gadgets.toBits, circuit_norm]
 
   ProverAssumptions
   | instruction, _, _ => instruction.val < 256
@@ -734,13 +734,7 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   Spec := femtoCairoStepSpec program
   soundness := femtoCairoStepSoundness program h_programSize
   completeness := femtoCairoStepCompleteness program h_programSize
-  guarantees_in_declared_channels := by
-    simp only [femtoCairoStepElaboratedCircuit, fetchInstruction, decodeInstruction,
-      readFromMemory, nextState, circuit_norm, seval]
-  requirements_in_declared_channels := by
-    simp only [femtoCairoStepElaboratedCircuit, fetchInstruction, decodeInstruction,
-      readFromMemory, nextState, circuit_norm, seval]
-  used_channels_declared := by
+  channelsLawful := by
     simp only [femtoCairoStepElaboratedCircuit, fetchInstruction, decodeInstruction,
       readFromMemory, nextState, circuit_norm, seval]
 

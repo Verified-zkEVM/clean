@@ -31,11 +31,7 @@ instance elaborated : ElaboratedCircuit F M field where
     simp +arith [circuit_norm, main, IsZeroField.circuit]
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
-  guarantees_in_declared_channels := by
-    simp only [circuit_norm, main, IsZeroField.circuit, IsZeroField.elaborated]
-  requirements_in_declared_channels := by
-    simp only [circuit_norm, main, IsZeroField.circuit, IsZeroField.elaborated]
-  used_channels_declared := by
+  channelsLawful := by
     simp only [circuit_norm, main, IsZeroField.circuit, IsZeroField.elaborated]
 
 def Assumptions (_ : M F) : Prop := True

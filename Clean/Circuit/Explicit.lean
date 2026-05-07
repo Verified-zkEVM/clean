@@ -23,7 +23,7 @@ class ExplicitCircuit (circuit : Circuit F α) where
   subcircuitsConsistent : ∀ n : ℕ, (circuit.operations n).SubcircuitsConsistent n := by
     intro _; and_intros <;> try first | ac_rfl | trivial
   /-- same condition as in `ElaboratedCircuit`: subcircuits must expose lawful channel metadata -/
-  subcircuitsLawful : ∀ n : ℕ, (circuit.operations n).SubcircuitsLawful := by
+  subcircuitChannelsLawful : ∀ n : ℕ, (circuit.operations n).SubcircuitChannelsLawful := by
     intro _
     try dsimp only [circuit]
     simp only [circuit_norm]
@@ -39,7 +39,7 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
   operations_eq : ∀ (a : α) (n : ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
   subcircuitsConsistent : ∀ (a : α) (n : ℕ), ((circuit a).operations n).SubcircuitsConsistent n := by
     intro _ _; and_intros <;> try first | ac_rfl | trivial
-  subcircuitsLawful : ∀ (a : α) (n : ℕ), ((circuit a).operations n).SubcircuitsLawful := by
+  subcircuitChannelsLawful : ∀ (a : α) (n : ℕ), ((circuit a).operations n).SubcircuitChannelsLawful := by
     intro _ _
     try dsimp only [circuit]
     simp only [circuit_norm]
@@ -56,7 +56,7 @@ instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
   localLength_eq a n := (explicit a).localLength_eq n
   operations_eq a n := (explicit a).operations_eq n
   subcircuitsConsistent a n := (explicit a).subcircuitsConsistent n
-  subcircuitsLawful a n := (explicit a).subcircuitsLawful n
+  subcircuitChannelsLawful a n := (explicit a).subcircuitChannelsLawful n
 
 instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
     [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
@@ -67,7 +67,7 @@ instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
   localLength_eq n := localLength_eq a n
   operations_eq n := operations_eq a n
   subcircuitsConsistent n := subcircuitsConsistent a n
-  subcircuitsLawful n := subcircuitsLawful a n
+  subcircuitChannelsLawful n := subcircuitChannelsLawful a n
 
 instance ExplicitCircuits.from_concrete_provable_input {α : TypeMap} [ProvableType α] {β : Type}
     {circuit : Var α F → Circuit F β} [explicit : ExplicitCircuits circuit] :
@@ -79,7 +79,7 @@ instance ExplicitCircuits.from_concrete_provable_input {α : TypeMap} [ProvableT
   localLength_eq input n := explicit.localLength_eq input n
   operations_eq input n := explicit.operations_eq input n
   subcircuitsConsistent input n := explicit.subcircuitsConsistent input n
-  subcircuitsLawful input n := explicit.subcircuitsLawful input n
+  subcircuitChannelsLawful input n := explicit.subcircuitChannelsLawful input n
 
 -- `pure` is an explicit circuit
 instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
@@ -113,9 +113,9 @@ instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
   subcircuitsConsistent n := by
     rw [Operations.SubcircuitsConsistent, Circuit.bind_forAll]
     exact ⟨ f_explicit.subcircuitsConsistent .., (g_explicit _).subcircuitsConsistent .. ⟩
-  subcircuitsLawful n := by
-    rw [Circuit.bind_operations_eq, Operations.subcircuitsLawful_append]
-    exact ⟨ f_explicit.subcircuitsLawful n, (g_explicit (f.output n)).subcircuitsLawful (n + f.localLength n) ⟩
+  subcircuitChannelsLawful n := by
+    rw [Circuit.bind_operations_eq, Operations.subcircuitChannelsLawful_append]
+    exact ⟨ f_explicit.subcircuitChannelsLawful n, (g_explicit (f.output n)).subcircuitChannelsLawful (n + f.localLength n) ⟩
 
 -- `map` of an explicit circuit yields an explicit circuit
 instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
@@ -130,9 +130,9 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   subcircuitsConsistent n := by
     rw [Circuit.map_operations_eq]
     exact g_explicit.subcircuitsConsistent n
-  subcircuitsLawful n := by
+  subcircuitChannelsLawful n := by
     rw [Circuit.map_operations_eq]
-    exact g_explicit.subcircuitsLawful n
+    exact g_explicit.subcircuitChannelsLawful n
 
 -- basic operations are explicit circuits
 
@@ -178,7 +178,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       snd_cast (by rw [inst.var_eq])]
     reduce
     trivial
-  subcircuitsLawful c n := by
+  subcircuitChannelsLawful c n := by
     simp only [circuit_norm]
     rw [inst.witness_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
@@ -205,7 +205,7 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalC
   localLength _ := circuit.localLength input
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
   subcircuitsConsistent n := by simp [circuit_norm]
-  subcircuitsLawful n := by simp [circuit_norm]
+  subcircuitChannelsLawful n := by simp [circuit_norm]
 
 instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     ExplicitCircuit (assertion circuit input) where
@@ -213,7 +213,7 @@ instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {inpu
   localLength _ := circuit.localLength input
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
   subcircuitsConsistent n := by simp [circuit_norm]
-  subcircuitsLawful n := by simp [circuit_norm]
+  subcircuitChannelsLawful n := by simp [circuit_norm]
 
 syntax "infer_explicit_circuit" : tactic
 

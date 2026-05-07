@@ -786,13 +786,6 @@ lemma mapFinRange.forAll' :
   rw [MapM.mapFinRangeM_forAllNoOffset_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
-lemma mapFinRange.subcircuitsLawful :
-  ((mapFinRange m body constant).operations n).SubcircuitsLawful ↔
-    ∀ i : Fin m, ((body i).operations (n + i*(body 0).localLength)).SubcircuitsLawful := by
-  rw [Operations.subcircuitsLawful_iff_forAllNoOffset, mapFinRange.forAll']
-  simp only [← Operations.subcircuitsLawful_iff_forAllNoOffset]
-
-@[circuit_norm ↓]
 lemma mapFinRange.soundness :
   ConstraintsHold.Soundness env_v (mapFinRange m body constant |>.operations n) ↔
     ∀ i : Fin m, ConstraintsHold.Soundness env_v (body i |>.operations (n + i*(body 0).localLength)) := by

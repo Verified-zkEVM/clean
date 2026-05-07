@@ -611,7 +611,7 @@ def SubcircuitsConsistent (offset : ℕ) (ops : Operations F) := ops.forAll offs
   subcircuit offset {n} _ := n = offset
 }
 
-def SubcircuitsLawful (ops : Operations F) : Prop :=
+def SubcircuitChannelsLawful (ops : Operations F) : Prop :=
   ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful
 
 /--
@@ -695,16 +695,16 @@ lemma forAllNoOffset_iff_forall_mem {condition : ConditionNoOffset F} {ops : Ope
     List.mem_cons, or_imp, forall_and, forall_eq]
   tauto
 
-lemma subcircuitsLawful_iff_forall {ops : Operations F} :
-    ops.SubcircuitsLawful ↔ ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful := by
+lemma subcircuitChannelsLawful_iff_forall {ops : Operations F} :
+    ops.SubcircuitChannelsLawful ↔ ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful := by
   rfl
 
 @[circuit_norm]
-lemma subcircuitsLawful_iff_forAllNoOffset {ops : Operations F} :
-    ops.SubcircuitsLawful ↔ ops.forAllNoOffset {
+lemma subcircuitChannelsLawful_iff_forAllNoOffset {ops : Operations F} :
+    ops.SubcircuitChannelsLawful ↔ ops.forAllNoOffset {
       subcircuit s := s.ChannelsLawful
     } := by
-  simp [SubcircuitsLawful, forAllNoOffset_iff_forall_mem]
+  simp [SubcircuitChannelsLawful, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]
 def ConstraintsHold (env : Environment F) (ops : Operations F) : Prop :=
@@ -935,9 +935,9 @@ namespace Operations
   induction ops1 using induct <;> simp_all [subcircuits]
 
 @[circuit_norm]
-theorem subcircuitsLawful_append (ops ops' : Operations F) :
-    SubcircuitsLawful (ops ++ ops') ↔ SubcircuitsLawful ops ∧ SubcircuitsLawful ops' := by
-  simp [SubcircuitsLawful, subcircuits_append, List.mem_append]
+theorem subcircuitChannelsLawful_append (ops ops' : Operations F) :
+    SubcircuitChannelsLawful (ops ++ ops') ↔ SubcircuitChannelsLawful ops ∧ SubcircuitChannelsLawful ops' := by
+  simp [SubcircuitChannelsLawful, subcircuits_append, List.mem_append]
   grind
 
 theorem interactionsWith_append {channel : RawChannel F} {ops1 ops2 : Operations F} :

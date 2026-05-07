@@ -238,6 +238,46 @@ section
 open Circuit (ConstraintsHold)
 variable {Input Output : TypeMap}
 
+/--
+Channel lawfulness for an elaborated circuit.
+
+This bundles the structural facts that connect the circuit's actual operations to its
+declared channel interface.
+-/
+@[circuit_norm]
+def ElaboratedCircuit.ChannelsLawful [CircuitType Input] [CircuitType Output]
+    (main : Var Input F → Circuit F (Var Output F))
+    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F))
+    (exposedChannels : Var Input F → ℕ → List (ExposedChannel F)) : Prop :=
+  ∀ input_var offset,
+    let ops := (main input_var).operations offset
+
+    -- The `channelsWithGuarantees` cover all interactions that add guarantees.
+    ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
+    (∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env) ∧
+
+    -- The `channelsWithRequirements` cover all interactions that add requirements.
+    ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
+    (∀ env, ops.InChannelsOrRequirements channelsWithRequirements env) ∧
+
+    -- Together, the two channel lists cover all interactions.
+    -- Even if the conditions so far theoretically allow it, we must not leave out any channels
+    -- we interacted with from the combination of both lists. This is because "did not interact
+    -- with a given channel" is important knowledge during end-to-end proofs, when we need to prove
+    -- that _all_ interactions with a given channel have some property.
+    -- (If this ever becomes too restrictive for real circuits, we can relax by introducing a third
+    -- list of "other channels".)
+    (∀ channel ∈ ops.shallowChannels,
+      channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements) ∧
+
+    -- Exposed channel data agrees with the actual interactions in the circuit.
+    (∀ exposed ∈ exposedChannels input_var offset,
+      ops.interactionsWith exposed.channel = exposed.interactions) ∧
+
+    -- Every subcircuit used by this circuit exposes lawful channel metadata itself.
+    ops.SubcircuitChannelsLawful
+
+
 /-
 Common base type for circuits that are to be used in formal proofs.
 
@@ -269,67 +309,26 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitTy
       try first | ac_rfl | trivial
     )
 
-  /-- technical condition: all subcircuits expose lawful channel metadata -/
-  subcircuitsLawful : ∀ input offset, ((main input).operations offset).SubcircuitsLawful
-    := by
-      intros
-      try dsimp only [main]
-      simp only [circuit_norm]
-      all_goals try first | ac_rfl | trivial
-
-  -- expose the channel guarantees and requirements, for end-to-end proofs
+  /-- expose the channel guarantees and requirements, for end-to-end proofs -/
   channelsWithGuarantees : List (RawChannel F) := []
-  guarantees_in_declared_channels : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
-    ∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env := by
-    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithGuarantees`
-    try dsimp only [main]
-    simp +arith only [circuit_norm, seval]
-    try tauto -- for permuting conjunctions
-
   channelsWithRequirements : List (RawChannel F) := []
-  requirements_in_declared_channels : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-      ∀ env, ops.InChannelsOrRequirements channelsWithRequirements env := by
-    -- TODO this tactic would be more effective if it would unfold all channels in `channelsWithRequirements`
-    try dsimp only [main]
-    simp +arith only [circuit_norm, seval]
-    try tauto -- for permuting conjunctions
 
-  -- even if the conditions so far theoretically allow it, we must not leave out any channels
-  -- we interacted with from the combination of both lists. this is because "did not interact with a given channel"
-  -- is important knowledge during end to end proofs, when we need to prove that _all_ interactions
-  -- with a given channel have some property.
-  -- (if this ever becomes too restrictive for real circuits, we can relax by introducing a third list of "other channels")
-  used_channels_declared : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ∀ channel ∈ ops.shallowChannels,
-      channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements := by
-    -- TODO this tactic would bee more effective if it would unfold all channels used in the circuit
-    try dsimp only [main]
-    simp +arith only [circuit_norm, seval]
-    try tauto
-
+  /-- optionally, you can expose the interactions with any channel in full detail -/
   exposedChannels (_ : Var Input F) (n : ℕ) : List (ExposedChannel F) := []
-  exposedChannels_eq : ∀ input_var offset,
-    let ops := (main input_var).operations offset
-    ∀ exposed ∈ exposedChannels input_var offset,
-      ops.interactionsWith exposed.channel = exposed.interactions := by
-    -- TODO this tactic would be more effective if it would unfold all channels used in the circuit
+
+  channelsLawful : ElaboratedCircuit.ChannelsLawful main
+      channelsWithGuarantees channelsWithRequirements exposedChannels := by
+    -- TODO this tactic would be more effective if it would unfold all channel declarations/uses.
+    dsimp only [ElaboratedCircuit.ChannelsLawful]
+    try dsimp only [main]
     simp only [circuit_norm, seval]
-    try tauto
+    try first | ac_rfl | trivial | tauto
 
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
   ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
   ElaboratedCircuit.exposedChannels
 
-@[circuit_norm]
-def ElaboratedCircuit.channels [CircuitType Input] [CircuitType Output]
-    (circuit : ElaboratedCircuit F Input Output) :=
-  circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
-
+section
 variable [ProvableType Input] [ProvableType Output]
 
 @[circuit_norm]
@@ -588,6 +587,68 @@ def GeneralFormalCircuit.WithHint.channels
     [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint F Input Output) :=
   circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
+end
+
+namespace ElaboratedCircuit
+variable [CircuitType Input] [CircuitType Output]
+
+-- named projections of ChannelsLawful fields
+
+theorem subcircuitChannelsWithGuarantees_subset_channelsWithGuarantees
+  (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset,
+    ((circuit.main input_var).operations offset).subcircuitChannelsWithGuarantees ⊆
+      circuit.channelsWithGuarantees := by
+  intro input_var offset
+  exact (circuit.channelsLawful input_var offset).1
+
+theorem inChannelsOrGuarantees_channelsWithGuarantees
+  (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset env,
+    ((circuit.main input_var).operations offset).InChannelsOrGuarantees
+      circuit.channelsWithGuarantees env := by
+  intro input_var offset env
+  exact (circuit.channelsLawful input_var offset).2.1 env
+
+theorem subcircuitChannelsWithRequirements_subset_channelsWithRequirements
+    (circuit : ElaboratedCircuit F Input Output) :
+    ∀ input_var offset,
+      ((circuit.main input_var).operations offset).subcircuitChannelsWithRequirements ⊆
+        circuit.channelsWithRequirements := by
+  intro input_var offset
+  exact (circuit.channelsLawful input_var offset).2.2.1
+
+theorem inChannelsOrRequirements_channelsWithRequirements
+  (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset env,
+    ((circuit.main input_var).operations offset).InChannelsOrRequirements
+      circuit.channelsWithRequirements env := by
+  intro input_var offset env
+  exact (circuit.channelsLawful input_var offset).2.2.2.1 env
+
+theorem mem_channelsWithGuarantees_or_mem_channelsWithRequirements_of_mem_shallowChannels
+  (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset,
+    let ops := (circuit.main input_var).operations offset
+    ∀ channel ∈ ops.shallowChannels,
+      channel ∈ circuit.channelsWithGuarantees ∨ channel ∈ circuit.channelsWithRequirements :=
+  fun input_var offset => (circuit.channelsLawful input_var offset).2.2.2.2.1
+
+theorem interactionsWith_eq_of_mem_exposedChannels (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset,
+    let ops := (circuit.main input_var).operations offset
+    ∀ exposed ∈ circuit.exposedChannels input_var offset,
+      ops.interactionsWith exposed.channel = exposed.interactions :=
+  fun input_var offset => (circuit.channelsLawful input_var offset).2.2.2.2.2.1
+
+theorem subcircuitChannelsLawful (circuit : ElaboratedCircuit F Input Output) :
+    ∀ input offset, ((circuit.main input).operations offset).SubcircuitChannelsLawful :=
+  fun input offset => (circuit.channelsLawful input offset).2.2.2.2.2.2
+
+@[circuit_norm]
+def channels (circuit : ElaboratedCircuit F Input Output) :=
+  circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
+end ElaboratedCircuit
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)

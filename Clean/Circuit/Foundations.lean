@@ -38,7 +38,7 @@ theorem original_soundness (circuit : GeneralFormalCircuit.WithHint F β α) :
   have ⟨ h_spec, h_requirements ⟩ :=
     circuit.soundness offset env b_var input rfl h_assumptions h_soundness_input
   use h_spec
-  exact Circuit.requirements_toFlat_of_soundness (circuit.subcircuitsLawful b_var offset)
+  exact Circuit.requirements_toFlat_of_soundness (circuit.subcircuitChannelsLawful b_var offset)
     h_constraints h_full_guarantees h_requirements
 
 /--
@@ -86,7 +86,7 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
     Circuit.can_replace_soundness h_constraints h_guarantees
   have h_soundness := circuit.soundness offset env b_var b h_input h_assumptions h_holds'
   exact ⟨h_soundness.1,
-    Circuit.requirements_toFlat_of_soundness (circuit.subcircuitsLawful b_var offset)
+    Circuit.requirements_toFlat_of_soundness (circuit.subcircuitChannelsLawful b_var offset)
       h_constraints h_guarantees h_soundness.2⟩
 
 /--
@@ -125,7 +125,7 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
     Circuit.can_replace_soundness h_constraints h_guarantees
   have h_soundness := circuit.soundness offset env b_var b h_input h_assumptions h_holds'
   exact ⟨h_soundness.1,
-    Circuit.requirements_toFlat_of_soundness (circuit.subcircuitsLawful b_var offset)
+    Circuit.requirements_toFlat_of_soundness (circuit.subcircuitChannelsLawful b_var offset)
       h_constraints h_guarantees h_soundness.2⟩
 
 /--
@@ -166,7 +166,7 @@ theorem GeneralFormalCircuit.original_full_soundness
   have ⟨ h_spec, h_requirements ⟩ :=
     circuit.soundness offset env input_var input rfl h_assumptions h_soundness_input
   use h_spec
-  exact Circuit.requirements_toFlat_of_soundness (circuit.subcircuitsLawful input_var offset)
+  exact Circuit.requirements_toFlat_of_soundness (circuit.subcircuitChannelsLawful input_var offset)
     h_constraints h_full_guarantees h_requirements
 
 /--
