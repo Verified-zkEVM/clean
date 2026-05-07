@@ -171,22 +171,29 @@ passed to `Subcircuit.soundness`, which derives each subcircuit's flat
 requirements internally.
 -/
 theorem requirements_toFlat_of_soundness {ops : Operations F} {env} :
-  ops.ConstraintsHold env → ops.FullGuarantees env → ops.Requirements env →
+  ops.SubcircuitsLawful → ops.ConstraintsHold env → ops.FullGuarantees env → ops.Requirements env →
     ops.FullRequirements env := by
   simp only [Operations.ConstraintsHold, Operations.FullGuarantees, Operations.FullRequirements,
-    requirements_iff_forall_mem]
-  intro h_constraints h_guarantees h_requirements
+    Operations.subcircuitsLawful_iff_forall, requirements_iff_forall_mem]
+  intro h_lawful h_constraints h_guarantees h_requirements
   rw [Operations.forall_interactions_iff]
   use h_requirements.1
   intro s h_mem
-  have soundness := s.2.soundness env
-  rw [FlatOperation.constraintsHoldFlat_iff_forall_mem,
-    FlatOperation.guarantees_iff_forall_mem, FlatOperation.requirements_iff_forall_mem] at soundness
-  rw [Operations.forall_constraints_iff, Operations.forall_lookups_iff] at h_constraints
-  rw [Operations.forall_interactions_iff] at h_guarantees
-  exact (soundness (h_requirements.2 s h_mem)
-    ⟨h_constraints.1.2 s h_mem, h_constraints.2.2 s h_mem⟩
-    (h_guarantees.2 s h_mem)).2
+  rcases h_requirements.2 s h_mem with h_empty | h_assumptions
+  · have h_requirements_iff := (h_lawful s h_mem).2.1 env
+    rw [FlatOperation.inChannelsOrRequirements_iff_forall_mem] at h_requirements_iff
+    intro i i_mem
+    specialize h_requirements_iff i i_mem
+    simp [h_empty] at h_requirements_iff
+    exact h_requirements_iff
+  · have soundness := s.2.soundness env
+    rw [FlatOperation.constraintsHoldFlat_iff_forall_mem,
+      FlatOperation.guarantees_iff_forall_mem, FlatOperation.requirements_iff_forall_mem] at soundness
+    rw [Operations.forall_constraints_iff, Operations.forall_lookups_iff] at h_constraints
+    rw [Operations.forall_interactions_iff] at h_guarantees
+    exact (soundness h_assumptions
+      ⟨h_constraints.1.2 s h_mem, h_constraints.2.2 s h_mem⟩
+      (h_guarantees.2 s h_mem)).2
 
 end Circuit
 

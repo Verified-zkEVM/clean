@@ -749,13 +749,13 @@ def FullGuarantees (env : Environment F) (ops : Operations F) : Prop :=
 def Requirements (env : Environment F) (ops : Operations F) : Prop :=
   ops.forAllNoOffset {
     interact i := i.Requirements env
-    subcircuit s := s.Assumptions env
+    subcircuit s := s.channelsWithRequirements = [] ∨ s.Assumptions env
   }
 
 lemma requirements_iff_forall_mem {env : Environment F} {ops : Operations F} :
     Requirements env ops ↔
     (∀ i ∈ ops.shallowInteractions, i.Requirements env) ∧
-    (∀ s ∈ ops.subcircuits, s.2.Assumptions env) := by
+    (∀ s ∈ ops.subcircuits, s.2.channelsWithRequirements = [] ∨ s.2.Assumptions env) := by
   simp [Requirements, forAllNoOffset_iff_forall_mem]
 
 @[circuit_norm]

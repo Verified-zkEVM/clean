@@ -116,7 +116,8 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       rw [h_nested]
       rw [FlatOperation.requirements_toFlat]
       have h := can_replace_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
-      exact requirements_toFlat_of_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
+      exact requirements_toFlat_of_soundness (circuit.subcircuitsLawful input_var n)
+        (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
         (circuit.soundness n env input_var input rfl as h).2
 
   have completeness : ∀ env : ProverEnvironment F,
@@ -213,7 +214,8 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
         rw [h_nested]
         rw [FlatOperation.requirements_toFlat]
         have h := can_replace_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
-        exact requirements_toFlat_of_soundness (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
+        exact requirements_toFlat_of_soundness (circuit.subcircuitsLawful input_var n)
+          (constraintsHold_toFlat_iff.mp h_holds) h_guarantees
           (circuit.soundness n env input_var input rfl as h).2
 
     completeness := by
@@ -276,7 +278,8 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
       have h_soundness_input : ConstraintsHoldWithInteractions.Soundness env ops :=
         can_replace_soundness (constraintsHold_toFlat_iff.mp constraints) guarantees
       have h_req := (circuit.soundness n env input_var input rfl assumptions h_soundness_input).2
-      exact requirements_toFlat_of_soundness (constraintsHold_toFlat_iff.mp constraints) guarantees h_req
+      exact requirements_toFlat_of_soundness (circuit.subcircuitsLawful input_var n)
+        (constraintsHold_toFlat_iff.mp constraints) guarantees h_req
 
   have implied_by_assumptions : ∀ env : ProverEnvironment F,
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
