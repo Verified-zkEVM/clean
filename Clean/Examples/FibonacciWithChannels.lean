@@ -890,6 +890,7 @@ variable {ens : Ensemble F PublicIO}
 
 @[circuit_norm] lemma verifierTable_circuit : ens.verifierTable.circuit = ens.verifier := rfl
 @[circuit_norm] lemma verifierTable_input : ens.verifierTable.Input = PublicIO := rfl
+@[circuit_norm] lemma verifierTable_output : ens.verifierTable.Output = unit := rfl
 
 @[circuit_norm] lemma mem_allTables_verifierTable:
   ens.verifierTable ∈ ens.allTables := by simp [allTables]
@@ -1182,7 +1183,7 @@ lemma orderedChannelLt_append_left {channel : RawChannel F} {ts₁ ts₂ ss : Li
   tauto
 
 @[circuit_norm]
-lemma orderedChannel_append_right {channel : RawChannel F} {ts ss₁ ss₂ : List (AbstractTable F)} :
+lemma orderedChannelLt_append_right {channel : RawChannel F} {ts ss₁ ss₂ : List (AbstractTable F)} :
   OrderedChannelLt channel ts (ss₁ ++ ss₂) ↔
     OrderedChannelLt channel ts ss₁ ∧ OrderedChannelLt channel ts ss₂ := by
   simp only [OrderedChannelLt, circuit_norm]
@@ -1263,7 +1264,17 @@ lemma orderedChannel_append (ts ss : List (AbstractTable F)) (channel : RawChann
     OrderedChannel channel ts ∧ OrderedChannel channel ss ∧ OrderedChannelLt channel ss ts := by
   simp only [orderedChannel_iff]
   constructor
-  · grind
+  · rintro ⟨ordered_refl, ordered_split⟩
+    simp_all
+    constructor
+    · intro ts' ss' h_append
+      have hlt := ordered_split ts' (ss' ++ ss) (by simp [h_append])
+      rw [orderedChannelLt_append_left] at hlt
+      tauto
+    · intro ts' ss' h_append
+      have hlt := ordered_split (ts ++ ts') ss' (by simp [h_append])
+      rw [orderedChannelLt_append_right] at hlt
+      tauto
   · simp only [List.append_eq_append_iff, ←exists_or]
     grind
 

@@ -688,7 +688,6 @@ def femtoCairoStepSoundness
               contradiction
             case h_1 next_state h_eq_next =>
               rw [h_eq_next, ←c_next]
-              simp_all only [circuit_norm, explicit_provable_type]
 
 def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
   (h_programSize : programSize < p) :
