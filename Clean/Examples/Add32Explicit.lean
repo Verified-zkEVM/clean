@@ -57,6 +57,7 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Expression (F pBabybear)) env (i0 : â
   rw [ExplicitCircuit.operations_eq]
   dsimp only [explicit_circuit_norm, explicit, assertBool]
   -- simp `ConstraintsHold` expression
-  simp only [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_append, Gadgets.ByteTable]
+  simp only [ConstraintsHoldWithInteractions.Soundness, Operations.forAllNoOffset_append,
+    Operations.forAllNoOffset, Gadgets.ByteTable]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions
   simp only [circuit_norm, Nat.reduceAdd]
