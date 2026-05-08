@@ -247,7 +247,7 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuit
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
     {mult : Expression F} :
-    ExplicitCircuits (F:=F) (Channel.emit channel mult) where
+    ExplicitCircuits (F:=F) (channel.emit mult) where
   output _ _ := ()
   localLength _ _ := 0
   operations msg _ := [.interact (channel.emitted mult msg).toRaw]
@@ -255,7 +255,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   channelsWithRequirements _ _ := [channel.toRaw]
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
-    ExplicitCircuits (F:=F) (Channel.pull channel) where
+    ExplicitCircuits (F:=F) (channel.pull) where
   output _ _ := ()
   localLength _ _ := 0
   operations msg _ := [.interact (channel.pulled msg).toRaw]
@@ -263,7 +263,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   channelsWithRequirements _ _ := []
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
-    ExplicitCircuits (F:=F) (Channel.push channel) where
+    ExplicitCircuits (F:=F) (channel.push) where
   output _ _ := ()
   localLength _ _ := 0
   operations msg _ := [.interact (channel.pushed msg).toRaw]
@@ -278,7 +278,6 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalC
   channelsWithGuarantees _ := circuit.channelsWithGuarantees
   channelsWithRequirements _ := circuit.channelsWithRequirements
   subcircuitsConsistent n := by simp [circuit_norm]
-  channelsLawful n := by simp [Operations.ChannelsLawful, circuit_norm]
 
 instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     ExplicitCircuit (assertion circuit input) where
@@ -288,7 +287,6 @@ instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {inpu
   channelsWithGuarantees _ := circuit.channelsWithGuarantees
   channelsWithRequirements _ := circuit.channelsWithRequirements
   subcircuitsConsistent n := by simp [circuit_norm]
-  channelsLawful n := by simp [Operations.ChannelsLawful, circuit_norm]
 
 syntax "infer_explicit_circuit" : tactic
 

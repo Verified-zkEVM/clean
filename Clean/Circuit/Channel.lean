@@ -3,7 +3,7 @@ import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
 import Mathlib.Data.Finsupp.Defs
 
-variable {F : Type} [Field F] {α : Type} {n : ℕ}
+variable {F : Type} [Field F]
 variable {Message : TypeMap} [ProvableType Message]
 
 structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
@@ -25,6 +25,53 @@ structure RawChannel (F : Type) where
   -/
   Requirements (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
 
+namespace Channel
+/--
+Convert a `Channel` to a `RawChannel` by removing the type argument,
+and adapting to the more general guarantees/requirements split.
+-/
+def toRaw (channel : Channel F Message) : RawChannel F where
+  name := channel.name
+  arity := size Message
+  Guarantees mult message data :=
+    mult = -1 → channel.Guarantees (fromElements message) data
+  Requirements mult message data :=
+    mult ≠ -1 →
+    channel.Guarantees (fromElements message) data
+
+instance : CoeOut (Channel F Message) (RawChannel F) where
+  coe := toRaw
+
+@[circuit_norm]
+lemma toRaw_name (channel : Channel F Message) :
+    channel.toRaw.name = channel.name := rfl
+@[circuit_norm]
+lemma toRaw_arity (channel : Channel F Message) :
+    channel.toRaw.arity = size Message := rfl
+
+/--
+Expose equality of raw channels coming from typed channels in a form that `simp` can use.
+In practice this mostly lets `circuit_norm` discharge channel comparisons by reducing them
+to name mismatches, while equal concrete channels close by reflexivity.
+-/
+@[circuit_norm]
+lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
+  (channel1 : Channel F Message) (channel2 : Channel F Message2) :
+    channel1.toRaw = channel2.toRaw ↔
+    channel1.name = channel2.name ∧
+    size Message = size Message2 ∧
+    ((fun mult message data ↦ mult = (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
+      fun mult message data ↦ mult = (-1 : F) → channel2.Guarantees (fromElements message) data) ∧
+    (fun mult message data ↦ mult ≠ (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
+      fun mult message data ↦ mult ≠ (-1 : F) → channel2.Guarantees (fromElements message) data := by
+  simp only [toRaw, RawChannel.mk.injEq]
+end Channel
+
+structure ChannelInteraction (channel : Channel F Message) where
+  mult : Expression F
+  msg : Message (Expression F)
+  assumeGuarantees : Bool
+
 structure AbstractInteraction (F : Type) where
   channel : RawChannel F
   mult : Expression F
@@ -36,51 +83,6 @@ instance [Repr F] : Repr (AbstractInteraction F) where
     "(Interaction channel=" ++ i.channel.name ++
     ", mult=" ++ repr i.mult ++ ", msg=" ++ repr i.msg ++ ")"
 
-/--
-Convert a `Channel` to a `RawChannel` by removing the type argument,
-and adapting to the more general guarantees/requirements split.
--/
-def Channel.toRaw (channel : Channel F Message) : RawChannel F where
-  name := channel.name
-  arity := size Message
-  Guarantees mult message data :=
-    mult = -1 → channel.Guarantees (fromElements message) data
-  Requirements mult message data :=
-    mult ≠ -1 →
-    channel.Guarantees (fromElements message) data
-
-instance : CoeOut (Channel F Message) (RawChannel F) where
-  coe := Channel.toRaw
-
-@[circuit_norm]
-lemma Channel.toRaw_name (channel : Channel F Message) :
-    channel.toRaw.name = channel.name := rfl
-@[circuit_norm]
-lemma Channel.toRaw_arity (channel : Channel F Message) :
-    channel.toRaw.arity = size Message := rfl
-
-/--
-Expose equality of raw channels coming from typed channels in a form that `simp` can use.
-In practice this mostly lets `circuit_norm` discharge channel comparisons by reducing them
-to name mismatches, while equal concrete channels close by reflexivity.
--/
-@[circuit_norm]
-lemma Channel.toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
-  (channel1 : Channel F Message) (channel2 : Channel F Message2) :
-    channel1.toRaw = channel2.toRaw ↔
-    channel1.name = channel2.name ∧
-    size Message = size Message2 ∧
-    ((fun mult message data ↦ mult = (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
-      fun mult message data ↦ mult = (-1 : F) → channel2.Guarantees (fromElements message) data) ∧
-    (fun mult message data ↦ mult ≠ (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
-      fun mult message data ↦ mult ≠ (-1 : F) → channel2.Guarantees (fromElements message) data := by
-  simp only [Channel.toRaw, RawChannel.mk.injEq]
-
-structure ChannelInteraction (channel : Channel F Message) where
-  mult : Expression F
-  msg : Message (Expression F)
-  assumeGuarantees : Bool
-
 variable {channel : Channel F Message}
 
 def ChannelInteraction.toRaw (i : ChannelInteraction channel) : AbstractInteraction F :=
@@ -90,15 +92,46 @@ def ChannelInteraction.toRaw (i : ChannelInteraction channel) : AbstractInteract
 def emitted (mult : Expression F) (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult, msg, assumeGuarantees := false }
 
+omit [Field F] in @[circuit_norm]
+lemma emitted_def (mult : Expression F) (msg : Message (Expression F)) :
+  ({ mult, msg, assumeGuarantees := false } : ChannelInteraction channel) = emitted mult msg := rfl
+omit [Field F] in @[circuit_norm]
+lemma emitted_mult (mult : Expression F) (msg : Message (Expression F)) :
+  (emitted mult msg : ChannelInteraction channel).mult = mult := rfl
+omit [Field F] in @[circuit_norm]
+lemma emitted_msg (mult : Expression F) (msg : Message (Expression F)) :
+  (emitted mult msg : ChannelInteraction channel).msg = msg := rfl
+omit [Field F] in @[circuit_norm]
+lemma emitted_assumeGuarantees (mult : Expression F) (msg : Message (Expression F)) :
+  (emitted mult msg : ChannelInteraction channel).assumeGuarantees = false := rfl
+
 /-- Convenience alias for interaction with multiplicity `-1`. -/
-@[circuit_norm]
 def pulled {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := -1, msg, assumeGuarantees := true }
 
+@[circuit_norm] lemma pulled_def (msg : Message (Expression F)) :
+  ({ mult := -1, msg, assumeGuarantees := true } : ChannelInteraction channel) = pulled msg := rfl
+@[circuit_norm] lemma pulled_mult (msg : Message (Expression F)) :
+  (pulled msg : ChannelInteraction channel).mult = -1 := rfl
+@[circuit_norm] lemma pulled_msg (msg : Message (Expression F)) :
+  (pulled msg : ChannelInteraction channel).msg = msg := rfl
+@[circuit_norm] lemma pulled_assumeGuarantees (msg : Message (Expression F)) :
+  (pulled msg : ChannelInteraction channel).assumeGuarantees = true := rfl
+
 /-- Convenience alias for interaction with multiplicity `1`. -/
-@[circuit_norm]
 def pushed {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := 1, msg, assumeGuarantees := false }
+
+@[circuit_norm] lemma pushed_def (msg : Message (Expression F)) :
+  ({ mult := 1, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushed msg := rfl
+@[circuit_norm] lemma emitted_eq_pushed (msg : Message (Expression F)) :
+  (emitted 1 msg : ChannelInteraction channel) = pushed msg := rfl
+@[circuit_norm] lemma pushed_mult (msg : Message (Expression F)) :
+  (pushed msg : ChannelInteraction channel).mult = 1 := rfl
+@[circuit_norm] lemma pushed_msg (msg : Message (Expression F)) :
+  (pushed msg : ChannelInteraction channel).msg = msg := rfl
+@[circuit_norm] lemma pushed_assumeGuarantees (msg : Message (Expression F)) :
+  (pushed msg : ChannelInteraction channel).assumeGuarantees = false := rfl
 
 @[circuit_norm] def Channel.emitted (channel : Channel F Message) mult msg :=
   _root_.emitted (channel := channel) mult msg
