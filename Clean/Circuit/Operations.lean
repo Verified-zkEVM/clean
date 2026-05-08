@@ -1172,6 +1172,39 @@ theorem channelsLawful_append_of_channelsLawful {ops ops' : Operations F}
   · rw [subcircuitChannelsLawful_append]
     exact ⟨h_sub, h_sub'⟩
 
+@[circuit_norm]
+def interactionValues (ops : Operations F)
+    (env : Environment F) : List (Interaction F) :=
+  ops.interactions.map (AbstractInteraction.eval env)
+
+-- TODO this should probably be rewritten into an easily-simplifying form, for `FormalCircuit.exposedInteractions`
+open Classical in
+noncomputable def interactionValuesWith (channel : RawChannel F)
+    (ops : Operations F) (env : Environment F) : List (Interaction F) :=
+  ops.interactionsWith channel |>.map (·.eval env)
+
+@[circuit_norm]
+lemma interactionValuesWith_eq_map {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
+    ops.interactionValuesWith channel env = (ops.interactionsWith channel).map (·.eval env) := rfl
+
+open Classical in
+lemma interactionValuesWith_eq_filter {channel : RawChannel F} {ops : Operations F} {env : Environment F} :
+    ops.interactionValuesWith channel env = (ops.interactionValues env).filter (·.channel = channel) := by
+  simp only [interactionValuesWith, interactionsWith, interactionValues, List.filter_map]
+  rfl
+
+lemma channel_eq_of_mem_interactionsWith {channel : RawChannel F} {ops : Operations F}
+  {i : AbstractInteraction F} :
+    i ∈ ops.interactionsWith channel → i.channel = channel := by
+  simp_all [interactionsWith]
+
+@[circuit_norm]
+lemma forall_interactionsWith_iff {channel : RawChannel F} {ops : Operations F}
+  {motive : AbstractInteraction F → Prop} :
+    (∀ i ∈ ops.interactionsWith channel, motive i) ↔
+    (∀ i ∈ ops.interactions, i.channel = channel → motive i) := by
+  simp [interactionsWith]
+
 @[circuit_norm] lemma toFlat_nil : toFlat ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma toFlat_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
   toFlat (.witness m c :: ops) = .witness m c :: toFlat ops := rfl

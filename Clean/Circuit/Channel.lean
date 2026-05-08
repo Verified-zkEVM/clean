@@ -67,6 +67,29 @@ lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
   simp only [toRaw, RawChannel.mk.injEq]
 end Channel
 
+/--
+Static lookup channels expose a predicate that is equivalent
+to being a member of a fixed list of values.
+-/
+structure StaticLookupChannel (F : Type) [Field F] (Message : TypeMap) [ProvableType Message] where
+  name : String
+  table : List (Message F)
+  Guarantees : Message F → Prop
+  guarantees_iff : ∀ msg, Guarantees msg ↔ msg ∈ table
+
+@[circuit_norm]
+def Channel.fromStatic (F : Type) [Field F]
+    (Message : TypeMap) [ProvableType Message]
+    (slc : StaticLookupChannel F Message) : Channel F Message where
+  name := slc.name
+  Guarantees msg _ := slc.Guarantees msg
+
+/--
+A _channel interaction_ is a channel message along with a multiplicity.
+
+In addition, via `assumeGuarantees`, the interaction can opt into carrying the
+channel guarantees as assumptions (relevant in soundness and completeness proofs).
+-/
 structure ChannelInteraction (channel : Channel F Message) where
   mult : Expression F
   msg : Message (Expression F)
@@ -189,3 +212,85 @@ structure ExposedChannel (F : Type) [Field F] where
 def expose {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (interactions : List (ChannelInteraction channel)) : List (ExposedChannel F) :=
   [{ channel, interactions := interactions.map (·.toRaw) }]
+
+/--
+Concrete interaction values are heterogeneous: after evaluation, we collect interactions for
+all channels in one list. The typed `Channel F Message` wrapper still remembers message shape
+when building interactions, while this raw representation carries the channel arity explicitly.
+-/
+structure Interaction (F : Type) where
+  channel : RawChannel F
+  mult : F
+  msg : Array F
+  same_size : msg.size = channel.arity
+  assumeGuarantees : Bool
+
+namespace Interaction
+def msgVector (i : Interaction F) : Vector F i.channel.arity :=
+  ⟨ i.msg, i.same_size ⟩
+
+def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
+  i.assumeGuarantees → i.channel.Guarantees i.mult i.msgVector data
+
+def Requirements (i : Interaction F) (data : ProverData F) : Prop :=
+  i.channel.Requirements i.mult i.msgVector data
+end Interaction
+
+namespace AbstractInteraction
+def eval (env : Environment F) (i : AbstractInteraction F) : Interaction F where
+  channel := i.channel
+  mult := env i.mult
+  msg := (i.msg.map env).toArray
+  same_size := by simp
+  assumeGuarantees := i.assumeGuarantees
+
+@[circuit_norm]
+lemma eval_channel {i : AbstractInteraction F} {env : Environment F} :
+  (i.eval env).channel = i.channel := rfl
+
+@[circuit_norm]
+lemma eval_guarantees {i : AbstractInteraction F} {env : Environment F} :
+    (i.eval env).Guarantees env.data ↔ i.Guarantees env := by
+  simp only [Interaction.Guarantees, AbstractInteraction.eval, AbstractInteraction.Guarantees]
+  rfl
+
+@[circuit_norm]
+lemma eval_requirements {i : AbstractInteraction F} {env : Environment F} :
+    (i.eval env).Requirements env.data ↔ i.Requirements env := by
+  simp only [Interaction.Requirements, AbstractInteraction.eval, AbstractInteraction.Requirements]
+  rfl
+end AbstractInteraction
+
+namespace Channel
+@[circuit_norm]
+def pulledValue (channel : Channel F Message) (msg : Message F) : Interaction F where
+  channel := channel.toRaw
+  mult := -1
+  msg := (toElements msg).toArray
+  same_size := by simp [Channel.toRaw]
+  assumeGuarantees := true
+
+@[circuit_norm]
+def pushedValue (channel : Channel F Message) (msg : Message F) : Interaction F where
+  channel := channel.toRaw
+  mult := 1
+  msg := (toElements msg).toArray
+  same_size := by simp [Channel.toRaw]
+  assumeGuarantees := false
+
+lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
+     (channel.pulled msg).toRaw.eval env = channel.pulledValue (eval env msg) := by
+  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
+  simp only [mul_one, and_true, true_and]
+  congr
+  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
+  rfl
+
+lemma eval_pushed {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
+     (channel.pushed msg).toRaw.eval env = channel.pushedValue (eval env msg) := by
+  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
+  simp only [and_true, true_and]
+  congr
+  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
+  rfl
+end Channel
