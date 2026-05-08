@@ -561,20 +561,6 @@ abbrev PartialBalancedChannels [DecidableEq F] {ens : Ensemble F PublicIO} (fini
 end EnsembleWitness
 
 namespace Ensemble
-def empty (F : Type) [Field F] (PublicIO : TypeMap) [ProvableType PublicIO] :
-  Ensemble F PublicIO where
-    tables := []
-    channels := []
-
-@[circuit_norm] lemma empty_tables :
-  (empty F PublicIO).tables = [] := rfl
-@[circuit_norm] lemma empty_channels :
-  (empty F PublicIO).channels = [] := rfl
-@[circuit_norm] lemma empty_verifier :
-  (empty F PublicIO).verifier = .empty F PublicIO := rfl
-@[circuit_norm] lemma empty_allTables :
-  (empty F PublicIO).allTables = [⟨ .empty F PublicIO ⟩] := rfl
-
 /-- Partial balanced channel is trivially weaker than balanced channel -/
 lemma partialBalancedChannel_of_balancedChannel [DecidableEq F] {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} (channel : RawChannel F) :
@@ -586,15 +572,15 @@ lemma partialBalancedChannel_of_balancedChannel [DecidableEq F] {ens : Ensemble 
 
 /--
 "Table soundness" means that we can prove the spec for each table,
-assuming constraints and the partial balance assumption.
+assuming constraints and channel balance.
 This is just Soundness, except for per-table soundness implying global soundness.
 -/
 @[circuit_norm]
-def TableSoundness [DecidableEq F] (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
+def TableSoundness [DecidableEq F] (ens : Ensemble F PublicIO) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →
-    witness.PartialBalancedChannels finished →
+    witness.BalancedChannels →
     ∀ table ∈ witness.allTables, table.Spec
 
 @[circuit_norm]
@@ -610,9 +596,14 @@ Main result of this section:
 `SoundChannels` (an easily checkable property) implies
 `TableSoundness`, a complex ensemble-level soundness statement.
 -/
-theorem tableSoundness_of_soundChannels [DecidableEq F] {ens : Ensemble F PublicIO} {finished : List (RawChannel F)} :
-    ens.SoundChannels finished → ens.TableSoundness finished := by
-  intro soundChannels witness assumptions constraints partial_balance table h_table
+theorem tableSoundness_of_soundChannels [DecidableEq F] {ens : Ensemble F PublicIO} :
+  (∃ finished : List (RawChannel F), finished ⊆ ens.channels ∧ ens.SoundChannels finished) →
+    ens.TableSoundness := by
+  intro ⟨ finished, finished_subset, soundChannels ⟩ witness assumptions constraints balance table h_table
+  have partial_balance : ∀ channel ∈ finished, PartialBalancedChannel witness channel := by
+    intro channel h_channel
+    apply partialBalancedChannel_of_balancedChannel
+    exact balance _ <| finished_subset h_channel
   apply spec_and_guarantees_of_soundChannels ?soundChannels ?assumptions ?constraints
     partial_balance table h_table |>.left
   <;> (simp only [circuit_norm]; assumption)
@@ -656,31 +647,26 @@ def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F
 
 theorem soundness_of_tableSoundness_and_specConsistency [DecidableEq F] (ens : Ensemble F PublicIO)
   (Assumptions Spec : PublicIO F → Prop) :
-  (∃ finished : List (RawChannel F), finished ⊆ ens.channels ∧ ens.TableSoundness finished) →
-    ens.AssumptionsConsistency Assumptions →
-    ens.SpecConsistency Spec →
+  ens.TableSoundness →
+  ens.AssumptionsConsistency Assumptions →
+  ens.SpecConsistency Spec →
     ens.Soundness Assumptions Spec := by
   simp only [Soundness, TableSoundness, AssumptionsConsistency, SpecConsistency, Statement,
     forall_exists_index, and_imp]
-  intro finished finished_subset table_soundness assumptions_consistency spec_consistency
+  intro table_soundness assumptions_consistency spec_consistency
     publicInput assumptions witness publicInput_eq constraints balance
-  have assumptions' : Assumptions witness.publicInput := by
-    simpa [publicInput_eq] using assumptions
-  rw [← publicInput_eq]
-  have table_assumptions := assumptions_consistency witness assumptions'
-  have table_soundness := table_soundness witness table_assumptions constraints ?partialBalance
-  apply spec_consistency witness table_soundness
-  intro channel h_channel
-  apply partialBalancedChannel_of_balancedChannel
-  exact (balance channel (finished_subset h_channel))
+  simp only [← publicInput_eq] at *
+  apply spec_consistency witness
+  apply table_soundness witness ?assumptions constraints balance
+  exact assumptions_consistency witness assumptions
 
 /-- Empty ensemble satisfies SoundChannels -/
 theorem empty_soundChannels [DecidableEq F] : (empty F PublicIO).SoundChannels [] := by
   simp only [circuit_norm]
 
 /-- Empty ensemble satisfies TableSoundness -/
-theorem empty_tableSoundness [DecidableEq F] : (empty F PublicIO).TableSoundness [] :=
-  tableSoundness_of_soundChannels empty_soundChannels
+theorem empty_tableSoundness [DecidableEq F] : (empty F PublicIO).TableSoundness :=
+  tableSoundness_of_soundChannels ⟨ [], List.Subset.refl [], empty_soundChannels ⟩
 
 /-- Takes verifier and spec from the second ensemble -/
 def merge (ens1 ens2 : Ensemble F PublicIO) : Ensemble F PublicIO :=
@@ -977,8 +963,9 @@ def toFormal (soundEns : SoundEnsemble F PublicIO)
   soundness := by
     apply soundEns.soundness_of_tableSoundness_and_specConsistency
       Assumptions Spec ?_ assumptionsConsistency specConsistency
+    apply soundEns.tableSoundness_of_soundChannels
     use soundEns.finished, soundEns.finished_subset
-    exact soundEns.tableSoundness_of_soundChannels soundEns.soundChannels
+    exact soundEns.soundChannels
 end SoundEnsemble
 
 /-

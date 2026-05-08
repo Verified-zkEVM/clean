@@ -39,11 +39,27 @@ def EnsembleWitness.verifierTable {ens : Ensemble F PublicIO} (witness : Ensembl
   data := witness.data
   uniform_width := by simp
 
-def Ensemble.verifierTable (ens : Ensemble F PublicIO) : Component F :=
+namespace Ensemble
+def verifierTable (ens : Ensemble F PublicIO) : Component F :=
   ⟨ ens.verifier ⟩
 
-def Ensemble.allTables (ens : Ensemble F PublicIO) : List (Component F) :=
+def allTables (ens : Ensemble F PublicIO) : List (Component F) :=
   ens.verifierTable :: ens.tables
+
+def empty (F : Type) [Field F] (PublicIO : TypeMap) [ProvableType PublicIO] :
+  Ensemble F PublicIO where
+    tables := []
+    channels := []
+
+@[circuit_norm] lemma empty_tables :
+  (empty F PublicIO).tables = [] := rfl
+@[circuit_norm] lemma empty_channels :
+  (empty F PublicIO).channels = [] := rfl
+@[circuit_norm] lemma empty_verifier :
+  (empty F PublicIO).verifier = .empty F PublicIO := rfl
+@[circuit_norm] lemma empty_allTables :
+  (empty F PublicIO).allTables = [⟨ .empty F PublicIO ⟩] := rfl
+end Ensemble
 
 namespace EnsembleWitness
 variable {ens : Ensemble F PublicIO}
