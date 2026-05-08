@@ -59,11 +59,6 @@ lemma partialBalancedChannel_of_balancedInteractions [DecidableEq F] {tables : T
   use []
   simp [balanced]
 
-@[circuit_norm]
-lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
-    l₁.flatMap f ⊆ l₂ ↔ ∀ a ∈ l₁, f a ⊆ l₂ := by
-  grind
-
 -- TODO deduplicate and add to Basic
 attribute [circuit_norm] forall_eq_or_imp List.mem_flatMap List.mem_map exists_exists_and_eq_and
   not_exists not_and List.Subset.refl List.subset_append_of_subset_left List.subset_append_of_subset_right
@@ -570,19 +565,6 @@ lemma partialBalancedChannel_of_balancedChannel [DecidableEq F] {ens : Ensemble 
   use []
   simp_all [EnsembleWitness.BalancedChannel]
 
-/--
-"Table soundness" means that we can prove the spec for each table,
-assuming constraints and channel balance.
-This is just Soundness, except for per-table soundness implying global soundness.
--/
-@[circuit_norm]
-def TableSoundness [DecidableEq F] (ens : Ensemble F PublicIO) : Prop :=
-  ∀ (witness : EnsembleWitness ens),
-    witness.Assumptions →
-    witness.Constraints →
-    witness.BalancedChannels →
-    ∀ table ∈ witness.allTables, table.Spec
-
 @[circuit_norm]
 abbrev SoundChannels [DecidableEq F] (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
   _root_.SoundChannels ens.allTables finished
@@ -608,58 +590,6 @@ theorem tableSoundness_of_soundChannels [DecidableEq F] {ens : Ensemble F Public
     partial_balance table h_table |>.left
   <;> (simp only [circuit_norm]; assumption)
 
-def channelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
-  ens.allTables.flatMap (·.circuit.channelsWithGuarantees)
-
-def channelsWithRequirements (ens : Ensemble F PublicIO) : List (RawChannel F) :=
-  ens.allTables.flatMap (·.circuit.channelsWithRequirements)
-
-lemma channelsWithGuarantees_eq_verifier_append (ens : Ensemble F PublicIO) :
-  ens.channelsWithGuarantees = ens.verifier.channelsWithGuarantees ++ ens.tables.flatMap (·.circuit.channelsWithGuarantees) := by
-  simp [channelsWithGuarantees, allTables, verifierTable]
-
-lemma channelsWithRequirements_eq_verifier_append (ens : Ensemble F PublicIO) :
-  ens.channelsWithRequirements = ens.verifier.channelsWithRequirements ++ ens.tables.flatMap (·.circuit.channelsWithRequirements) := by
-  simp [channelsWithRequirements, allTables, verifierTable]
-
-@[circuit_norm]
-lemma channelsWithGuarantees_subset_iff {ens : Ensemble F PublicIO} {finished : List (RawChannel F)} :
-  ens.channelsWithGuarantees ⊆ finished ↔
-    ∀ tables ∈ ens.allTables, tables.circuit.channelsWithGuarantees ⊆ finished := by
-  simp [circuit_norm, channelsWithGuarantees]
-
-/-- specs on all tables + verifier spec imply ensemble spec -/
-def SpecConsistency (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : Prop :=
-  ∀ (witness : EnsembleWitness ens),
-    -- TODO maybe we could add balanced channels + channel reqs / grts here as well, to enable you to prove
-    -- something at the global level from the max interaction length, like we do below for fibonacci
-    -- where we prove the counter does not overflow.
-    -- but it's awkward that the public input is not clearly related to the channel, only via the verifier circuit.
-    -- which shows that "circuit" probably isn't the best way to model the verifier.
-    (∀ table ∈ witness.allTables, table.Spec) →
-    Spec witness.publicInput
-
-/-- Ensemble-level assumptions imply the per-table assumptions and verifier assumptions -/
-def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F → Prop) : Prop :=
-  ∀ (witness : EnsembleWitness ens),
-    Assumptions witness.publicInput →
-    witness.Assumptions
-
-theorem soundness_of_tableSoundness_and_specConsistency [DecidableEq F] (ens : Ensemble F PublicIO)
-  (Assumptions Spec : PublicIO F → Prop) :
-  ens.TableSoundness →
-  ens.AssumptionsConsistency Assumptions →
-  ens.SpecConsistency Spec →
-    ens.Soundness Assumptions Spec := by
-  simp only [Soundness, TableSoundness, AssumptionsConsistency, SpecConsistency, Statement,
-    forall_exists_index, and_imp]
-  intro table_soundness assumptions_consistency spec_consistency
-    publicInput assumptions witness publicInput_eq constraints balance
-  simp only [← publicInput_eq] at *
-  apply spec_consistency witness
-  apply table_soundness witness ?assumptions constraints balance
-  exact assumptions_consistency witness assumptions
-
 /-- Empty ensemble satisfies SoundChannels -/
 theorem empty_soundChannels [DecidableEq F] : (empty F PublicIO).SoundChannels [] := by
   simp only [circuit_norm]
@@ -667,111 +597,6 @@ theorem empty_soundChannels [DecidableEq F] : (empty F PublicIO).SoundChannels [
 /-- Empty ensemble satisfies TableSoundness -/
 theorem empty_tableSoundness [DecidableEq F] : (empty F PublicIO).TableSoundness :=
   tableSoundness_of_soundChannels ⟨ [], List.Subset.refl [], empty_soundChannels ⟩
-
-/-- Takes verifier and spec from the second ensemble -/
-def merge (ens1 ens2 : Ensemble F PublicIO) : Ensemble F PublicIO :=
-  { ens2 with
-    tables := ens2.tables ++ ens1.tables,
-    channels := ens2.channels ++ ens1.channels }
-
-@[circuit_norm] lemma merge_tables (ens1 ens2 : Ensemble F PublicIO) :
-  (ens1.merge ens2).tables = ens2.tables ++ ens1.tables := rfl
-@[circuit_norm] lemma merge_verifierTable (ens1 ens2 : Ensemble F PublicIO) :
-  (ens1.merge ens2).verifierTable = ens2.verifierTable := rfl
-
-lemma mergeEnsemble_witness (ens1 ens2 : Ensemble F PublicIO)
-  (witness : EnsembleWitness (ens1.merge ens2)) :
-    ∃ (witness1 : EnsembleWitness ens1) (witness2 : EnsembleWitness ens2),
-      witness.tables = witness2.tables ++ witness1.tables ∧
-      witness1.tables = witness.tables.drop ens2.tables.length ∧
-      witness2.tables = witness.tables.take ens2.tables.length ∧
-      witness1.publicInput = witness.publicInput ∧
-      witness2.publicInput = witness.publicInput ∧
-      witness1.data = witness.data ∧
-      witness2.data = witness.data := by
-  have h_len : (ens1.merge ens2).tables.length = ens2.tables.length + ens1.tables.length := by
-    simp [merge]
-  have h_witlen : witness.tables.length = ens2.tables.length + ens1.tables.length := by
-    simp [←witness.same_length, merge]
-  let witness1 : EnsembleWitness ens1 := {
-    tables := witness.tables.drop ens2.tables.length,
-    publicInput := witness.publicInput,
-    data := witness.data,
-    same_length := by simp [List.length_drop, h_witlen],
-    same_circuits := by
-      intro i hi
-      have : ens2.tables.length + i < (ens1.merge ens2).tables.length := by linarith
-      simp [← witness.same_circuits _ this, merge]
-    same_data := by
-      intro table h_table
-      apply witness.same_data
-      apply List.mem_of_mem_drop h_table
-  }
-  let witness2 : EnsembleWitness ens2 := {
-    tables := witness.tables.take ens2.tables.length,
-    publicInput := witness.publicInput,
-    data := witness.data,
-    same_length := by simp [List.length_take, h_witlen],
-    same_circuits := by
-      intro i hi
-      have : i < (ens1.merge ens2).tables.length := by linarith
-      rw [List.getElem_take, ← witness.same_circuits _ this]
-      simp [merge, hi]
-    same_data := by
-      intro table h_table
-      apply witness.same_data
-      apply List.mem_of_mem_take h_table
-  }
-  use witness1, witness2
-  simp [witness1, witness2]
-
-def addTable (ens : Ensemble F PublicIO) (table : Component F) : Ensemble F PublicIO :=
-  { ens with tables := table :: ens.tables }
-
-@[circuit_norm] lemma addTable_tables (ens : Ensemble F PublicIO) (table : Component F) :
-  (ens.addTable table).tables = table :: ens.tables := rfl
-@[circuit_norm] lemma addTable_verifierTable (ens : Ensemble F PublicIO) (table : Component F) :
-  (ens.addTable table).verifierTable = ens.verifierTable := rfl
-@[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F) :
-  (ens.addTable table).verifier = ens.verifier := rfl
-
-lemma addTable_witness (ens : Ensemble F PublicIO) (table : Component F)
-  (witness : EnsembleWitness (ens.addTable table)) :
-    ∃ (witness' : EnsembleWitness ens) (tableWitness : Table F),
-      witness.tables = tableWitness :: witness'.tables ∧
-      witness.publicInput = witness'.publicInput ∧
-      witness.data = witness'.data ∧
-      table = tableWitness.component ∧
-      witness.data = tableWitness.data := by
-  have h_len : (ens.addTable table).tables.length = ens.tables.length + 1 := by
-    simp [addTable]
-  have h_witlen : witness.tables.length = ens.tables.length + 1 := by
-    simp [←witness.same_length, addTable]
-  let witness' : EnsembleWitness ens := {
-    tables := witness.tables.tail,
-    publicInput := witness.publicInput,
-    data := witness.data,
-    same_length := by simp only [List.length_tail]; omega,
-    same_circuits := by
-      intro i hi
-      rw [List.getElem_tail, ← witness.same_circuits]
-      simp [addTable]
-      simp [addTable, hi]
-    same_data := by
-      intro table h_table
-      apply witness.same_data
-      apply List.mem_of_mem_tail h_table
-  }
-  have h_wit_len_pos : 0 < witness.tables.length := by simp [h_witlen]
-  have h_wit_ne_nil : witness.tables ≠ [] := List.ne_nil_of_length_pos h_wit_len_pos
-  have h_lt : 0 < (ens.addTable table).tables.length := by simp [addTable]
-  let tableWitness : Table F := witness.tables.head h_wit_ne_nil
-  use witness', tableWitness
-  rw [witness.tables.cons_head_tail]
-  simp only [tableWitness, List.head_eq_getElem]
-  rw [← witness.same_circuits _ h_lt]
-  have : witness.tables[0] ∈ witness.tables := by simp
-  simp [addTable, witness', witness.same_data _ this]
 
 -- adding one table to a SoundChannels ensemble preserves SoundChannels under some
 -- easy-to-prove assumptions on what channels the new table uses
