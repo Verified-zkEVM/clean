@@ -80,12 +80,12 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
   data : ProverData F
   publicInput : PublicIO F
   same_length : ens.tables.length = tables.length
-  same_circuits : ∀ i (hi : i < ens.tables.length), ens.tables[i] = tables[i].abstract
+  same_circuits : ∀ i (hi : i < ens.tables.length), ens.tables[i] = tables[i].component
   same_data : ∀ table ∈ tables, table.data = data
 
 /-- it's convenient to define a `Table` for the verifier, to treat them in a unified way -/
 def EnsembleWitness.verifierTable {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Table F where
-  abstract := ⟨ ens.verifier ⟩
+  component := ⟨ ens.verifier ⟩
   width := size PublicIO
   -- it's important that this has one row, which contains the input,
   -- since we want to "run" the verifier once to produce interactions,
@@ -140,32 +140,32 @@ lemma forall_mem_allTables_iff (witness : EnsembleWitness ens)
     motive witness.verifierTable ∧ (∀ table ∈ witness.tables, motive table) := by
   simp [allTables]
 
-@[circuit_norm] lemma verifierTable_abstract (witness : EnsembleWitness ens) :
-  witness.verifierTable.abstract = ens.verifierTable := rfl
+@[circuit_norm] lemma verifierTable_component (witness : EnsembleWitness ens) :
+  witness.verifierTable.component = ens.verifierTable := rfl
 @[circuit_norm] lemma verifierTable_table (witness : EnsembleWitness ens) :
   witness.verifierTable.table = [witness.publicInput |> toElements |>.toArray] := rfl
 
 @[circuit_norm]
-lemma tables_map_abstract (witness : EnsembleWitness ens) :
-    witness.tables.map (·.abstract) = ens.tables := by
+lemma tables_map_component (witness : EnsembleWitness ens) :
+    witness.tables.map (·.component) = ens.tables := by
   apply List.ext_getElem
   · simp [witness.same_length]
   intro i hi hi'
   simp [witness.same_circuits i hi']
 
 @[circuit_norm]
-lemma allTables_map_abstract (witness : EnsembleWitness ens) :
-    witness.allTables.map (·.abstract) = ens.allTables := by
+lemma allTables_map_component (witness : EnsembleWitness ens) :
+    witness.allTables.map (·.component) = ens.allTables := by
   simp only [circuit_norm, allTables, Ensemble.allTables]
 
-lemma mem_tables_abstract_of_mem_tables {witness : EnsembleWitness ens} {table : Table F} :
-    table ∈ witness.tables → table.abstract ∈ ens.tables := by
-  rw [← witness.tables_map_abstract]
+lemma mem_tables_component_of_mem_tables {witness : EnsembleWitness ens} {table : Table F} :
+    table ∈ witness.tables → table.component ∈ ens.tables := by
+  rw [← witness.tables_map_component]
   grind
 
-lemma mem_allTables_abstract_of_mem_allTables {witness : EnsembleWitness ens} {table : Table F} :
-    table ∈ witness.allTables → table.abstract ∈ ens.allTables := by
-  rw [← witness.allTables_map_abstract]
+lemma mem_allTables_component_of_mem_allTables {witness : EnsembleWitness ens} {table : Table F} :
+    table ∈ witness.allTables → table.component ∈ ens.allTables := by
+  rw [← witness.allTables_map_component]
   grind
 
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
@@ -614,7 +614,7 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt [DecidableEq F]
   {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
   {channel : RawChannel F} :
   PartialBalancedChannel (.cons table tables same_data) channel →
-  OrderedChannelLt channel tables.abstracts [table.abstract] →
+  OrderedChannelLt channel tables.components [table.component] →
     PartialBalancedChannel tables channel := by
   rintro ⟨ extraInteractions, balanced, same_channel, extra_reqs_or_no_grts ⟩ not_in_reqs_or
   use table.interactionsWith channel ++ extraInteractions
@@ -644,7 +644,7 @@ lemma partialBalancedChannel_of_cons_of_orderedChannel [DecidableEq F]
   {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
   {channel : RawChannel F} :
   PartialBalancedChannel (tables.cons table same_data) channel →
-  OrderedChannel channel (table.abstract :: tables.abstracts) →
+  OrderedChannel channel (table.component :: tables.components) →
     PartialBalancedChannel tables channel := by
   intro partial_balance ordered_channel
   apply partialBalancedChannel_of_cons_of_orderedChannelLt same_data partial_balance
@@ -659,7 +659,7 @@ lemma guarantees_of_requirements_cons [DecidableEq F]
   {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
   -- and a channel that is consistent, ordered on the new table, and partially balanced on the combined tables
   {channel : RawChannel F} [channel.Consistent] :
-  OrderedChannelRefl channel table.abstract →
+  OrderedChannelRefl channel table.component →
   PartialBalancedChannel (tables.cons table same_data) channel →
   -- the channel requirements on the old tables imply guarantees on the new table
   (∀ table ∈ tables.tables, table.ChannelRequirements channel) →
@@ -778,7 +778,7 @@ lemma guarantees_of_requirements_append [DecidableEq F]
   -- and a channel that is consistent, _doesn't add requirements_ on the new tables,
   -- and is partially balanced on the combined tables
   {channel : RawChannel F} [channel.Consistent] :
-  (∀ table ∈ ts.tables, channel ∉ table.abstract.circuit.channelsWithRequirements) →
+  (∀ table ∈ ts.tables, channel ∉ table.component.circuit.channelsWithRequirements) →
   PartialBalancedChannel (ts.append ss same_data) channel →
   -- the channel requirements on the old tables imply guarantees on the new tables
   (∀ table ∈ ss.tables, table.ChannelRequirements channel) →
@@ -806,7 +806,7 @@ lemma guarantees_of_requirements_append [DecidableEq F]
 lemma iff_guarantees_of_constraints {table : Table F} {finished : List (RawChannel F)} :
   table.Assumptions →
   table.Constraints →
-  table.abstract.circuit.channelsWithGuarantees ⊆ finished →
+  table.component.circuit.channelsWithGuarantees ⊆ finished →
   ((table.Spec ∧ ∀ channel ∈ finished, table.ChannelGuarantees channel ∧ table.ChannelRequirements channel) ↔
     ∀ channel ∈ finished, table.ChannelGuarantees channel) := by
   intro assumptions constraints subset_finished
@@ -849,7 +849,7 @@ def SoundChannels [DecidableEq F] (tables : List (Component F)) (finished : List
 
 /-- `SoundChannels` lets us prove a soundness theorem. -/
 theorem spec_and_guarantees_of_soundChannels [DecidableEq F] {witness : Tables F} {finished : List (RawChannel F)} :
-  SoundChannels (witness.tables.map (·.abstract)) finished →
+  SoundChannels (witness.tables.map (·.component)) finished →
   -- constraints + partial balance
   witness.Assumptions →
   witness.Constraints →
@@ -877,7 +877,7 @@ theorem spec_and_guarantees_of_soundChannels [DecidableEq F] {witness : Tables F
   -- the rest is just applying `guarantees_of_requirements_cons`
   intro channel h_channel
   have : channel.Consistent := consistent_channels _ h_channel
-  have orderedChannelRefl : OrderedChannelRefl channel table.abstract := by
+  have orderedChannelRefl : OrderedChannelRefl channel table.component := by
     simp only [circuit_norm, ordered_channels channel h_channel]
   apply guarantees_of_requirements_cons same_data
     orderedChannelRefl (partial_balance channel h_channel)
@@ -1119,7 +1119,7 @@ lemma addTable_witness (ens : Ensemble F PublicIO) (table : Component F)
       witness.tables = tableWitness :: witness'.tables ∧
       witness.publicInput = witness'.publicInput ∧
       witness.data = witness'.data ∧
-      table = tableWitness.abstract ∧
+      table = tableWitness.component ∧
       witness.data = tableWitness.data := by
   have h_len : (ens.addTable table).tables.length = ens.tables.length + 1 := by
     simp [addTable]
@@ -1780,7 +1780,7 @@ namespace Air.Flat.Table
 noncomputable def interactionssWith (table : Table F)
     (channel : RawChannel F) : List (List (Interaction F)) :=
   table.table.map fun row =>
-    table.abstract.operations.interactionValuesWith channel (table.environment row)
+    table.component.operations.interactionValuesWith channel (table.environment row)
 
 end Air.Flat.Table
 
@@ -1885,10 +1885,10 @@ variable [DecidableEq F] {vm : VmTables F PublicIO}
 open EnsembleWitness
 
 noncomputable def rowPull (witness : VmWitness vm) {table} (_ : table ∈ witness.allTables) (row : Array F) : vm.Message F :=
-  eval (table.environment row) (vm.pull (witness.mem_allTables_abstract_of_mem_allTables ‹_›))
+  eval (table.environment row) (vm.pull (witness.mem_allTables_component_of_mem_allTables ‹_›))
 
 noncomputable def rowPush (witness : VmWitness vm) {table} (_ : table ∈ witness.allTables) (row : Array F) : vm.Message F :=
-  eval (table.environment row) (vm.push (witness.mem_allTables_abstract_of_mem_allTables ‹_›))
+  eval (table.environment row) (vm.push (witness.mem_allTables_component_of_mem_allTables ‹_›))
 
 noncomputable def verifierPull (witness : VmWitness vm) : vm.Message F :=
   eval (Environment.fromInput witness.publicInput witness.data) (vm.pull Ensemble.mem_allTables_verifierTable)
@@ -1898,15 +1898,15 @@ noncomputable def verifierPush (witness : VmWitness vm) : vm.Message F :=
 
 lemma interactionValuesWith_eq (witness : VmWitness vm)
     {table} (_ : table ∈ witness.allTables) (row : Array F) :
-  table.abstract.operations.interactionValuesWith vm.channel.toRaw (table.environment row) = [
+  table.component.operations.interactionValuesWith vm.channel.toRaw (table.environment row) = [
     vm.channel.pulledValue (witness.rowPull ‹_› row),
     vm.channel.pushedValue (witness.rowPush ‹_› row) ] := by
-  simp only [circuit_norm, vm.interactionsWith_eq (witness.mem_allTables_abstract_of_mem_allTables ‹_›),
+  simp only [circuit_norm, vm.interactionsWith_eq (witness.mem_allTables_component_of_mem_allTables ‹_›),
     rowPull, rowPush, AbstractInteraction.eval, ProvableType.toElements_eval]
 
 lemma interactionValuesWith_length (witness : VmWitness vm)
     {table} (_ : table ∈ witness.allTables) (row : Array F) :
-  (table.abstract.operations.interactionValuesWith vm.channel.toRaw (table.environment row)).length = 2 := by
+  (table.component.operations.interactionValuesWith vm.channel.toRaw (table.environment row)).length = 2 := by
   simp [witness.interactionValuesWith_eq ‹_› row]
 
 noncomputable def pulls (witness : VmWitness vm) : List (Interaction F) :=
@@ -1976,7 +1976,7 @@ lemma interactions_eq_pulls_pushes (witness : VmWitness vm) :
 lemma mem_zip_pulls_pushes_iff (witness : VmWitness vm) (pull push : Interaction F) :
   (pull, push) ∈ List.zip witness.pulls witness.pushes ↔
     ∃ table ∈ witness.allTables, ∃ row ∈ table.table,
-      table.abstract.operations.interactionValuesWith vm.channel.toRaw (table.environment row) = [pull, push] := by
+      table.component.operations.interactionValuesWith vm.channel.toRaw (table.environment row) = [pull, push] := by
   trans [pull, push] ∈ (List.zip witness.pulls witness.pushes).map (fun ⟨pull, push⟩ => [pull, push])
   · simp
   simp [← interactionss_eq_pulls_pushes, Table.interactionssWith]
@@ -2014,8 +2014,8 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
   -- and for every row, vm channel guarantees imply vm channel requirements
   -- (this will come from constraints + soundness of the existing ensemble)
   (∀ table ∈ witness.allTables, ∀ row ∈ table.table,
-    table.abstract.operations.ChannelGuarantees vm.channel.toRaw (table.environment row) →
-    table.abstract.operations.ChannelRequirements vm.channel.toRaw (table.environment row)) →
+    table.component.operations.ChannelGuarantees vm.channel.toRaw (table.environment row) →
+    table.component.operations.ChannelRequirements vm.channel.toRaw (table.environment row)) →
   -- vm channel verifier requirements imply vm channel verifier guarantees
   witness.verifierTable.ChannelRequirements vm.channel.toRaw →
     witness.verifierTable.ChannelGuarantees vm.channel.toRaw := by
@@ -2184,8 +2184,8 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     simp only [List.flatMap_eq_nil_iff]
     intro table mem_table
     apply Table.interactionsWith_nil_of_channel_not_mem
-    apply not_mem_vm_channel table.abstract
-    exact EnsembleWitness.mem_tables_abstract_of_mem_tables mem_table
+    apply not_mem_vm_channel table.component
+    exact EnsembleWitness.mem_tables_component_of_mem_tables mem_table
   -- this already lets us supply the balance condition
   have vm_balance := balance vmChannel (by simp [vmChannel, Ensemble.addVm])
   simp only [circuit_norm, vmInteractions_eq] at vm_balance
@@ -2199,8 +2199,8 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     simp only [circuit_norm, EnsembleWitness.allTables]
     use grts_subset.1
     intro table h_table
-    apply grts_subset.2 table.abstract
-    apply EnsembleWitness.mem_tables_abstract_of_mem_tables h_table
+    apply grts_subset.2 table.component
+    apply EnsembleWitness.mem_tables_component_of_mem_tables h_table
   replace reqs_disjoint : ∀ channel ∈ finished, ∀ table ∈ vmWitness.allTables,
       channel ∉ table.channelsWithRequirements := by
     intro channel channel_mem
@@ -2208,7 +2208,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     use (reqs_disjoint channel channel_mem).1
     intro table table_mem
     apply (reqs_disjoint channel channel_mem).2
-    apply EnsembleWitness.mem_tables_abstract_of_mem_tables table_mem
+    apply EnsembleWitness.mem_tables_component_of_mem_tables table_mem
   -- specialize constraints and assumptions to both old and vm ensemble
   have constraints' : witness'.Constraints := by
     simp only [EnsembleWitness.Constraints, allTables_split, List.mem_append] at constraints ⊢
@@ -2316,11 +2316,11 @@ def addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicIO) (vm : VmTab
     simp only [tables_split, List.mem_append, or_imp, forall_and, Table.Assumptions]
     constructor
     · intro table h_table row h_row
-      apply vm.tables_assumptions_trivial table.abstract ?_
-      exact EnsembleWitness.mem_tables_abstract_of_mem_tables h_table
+      apply vm.tables_assumptions_trivial table.component ?_
+      exact EnsembleWitness.mem_tables_component_of_mem_tables h_table
     · intro table h_table row h_row
-      apply ens.table_assumptions_trivial table.abstract ?_
-      exact EnsembleWitness.mem_tables_abstract_of_mem_tables h_table
+      apply ens.table_assumptions_trivial table.component ?_
+      exact EnsembleWitness.mem_tables_component_of_mem_tables h_table
   soundVmChannel := ens.ensemble.addVm_soundVmChannel_of_soundChannels
     ens.soundChannels ens.finished_consistent ens.finished_subset ens.verifier_empty vm ne_mem_vm_channel
     grts_subset_finished reqs_disjoint_finished
