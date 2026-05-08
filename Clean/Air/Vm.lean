@@ -1,10 +1,12 @@
 import Clean.Air.FlatEnsemble
 import Clean.Air.OrderedChannel
 
-variable {F : Type} [Field F]
+variable {F : Type} [Field F] [DecidableEq F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-
+## VM ensembles
+
 VM-like ensembles have a "main channel" that stores the VM state, which we'll call a _VM channel_.
 One or more tables pull from, then push to, this channel in their row circuit; thereby performing one VM transition.
 
@@ -27,16 +29,16 @@ start and end points.
 Thus, assuming the _input satisfies the requirements_ (a very sensible assumption), we can conclude that
 the _output satisfies the guarantees_. The latter can usually be engineered to be exactly the statement we actually care about.
 
-The main proof idea is captured by the following definitions, culminating in
-`guarantees_of_requirements_of_requirements_of_guarantees`,
+The main proof idea is captured by `guarantees_of_requirements_of_requirements_of_guarantees` in `Balance.lean`,
 a theorem which states the VM interaction situation in a rather abstract setting.
 
-Below that, we introduce the `VmTables` structure (capturing basic assumptions we put on a VM definition) as well as the
+Here, we introduce the `VmTables` structure (capturing basic assumptions we put on a VM definition) as well as the
 `SoundVmChannel` class (capturing what we mean with soundness for a VM), and then go on to prove our main theorem,
 `addVm_soundVmChannel_of_soundChannels`, which shows soundness for a VM added on top of a `SoundChannels` ensemble.
 -/
 
 namespace Air.Flat
+
 structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
   channel : Channel F Message
@@ -63,14 +65,22 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
       Operations.ConstraintsHold env (verifier.main input_var |>.operations offset) →
       Operations.ChannelRequirements channel env (verifier.main input_var |>.operations offset)
 
-instance [DecidableEq F] (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
+instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
+
+def VmTables.toEnsemble (vm : VmTables F PublicIO) : Ensemble F PublicIO where
+  channels := [vm.channel.toRaw]
+  tables := vm.tables
+  verifier := vm.verifier
+  verifier_length_zero := vm.verifier_length_zero
+
+abbrev VmWitness (vm : VmTables F PublicIO) := EnsembleWitness vm.toEnsemble
 
 /--
 Soundness for a VM ensemble is simple:
 - the ensemble spec is just the verifier spec
 - the verifier spec can be proven from constraints + balance for all tables/channels
 -/
-def Ensemble.SoundVmChannel [DecidableEq F] (ens : Ensemble F PublicIO) : Prop :=
+def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →
@@ -113,7 +123,7 @@ def toFormal (F : Type) [Field F] [DecidableEq F] (ens : SoundVmEnsemble F Publi
     apply extraAssumptionsConsistency witness.publicInput witness.data extra_assumptions
     exact EnsembleWitness.mem_tables_component_of_mem_tables h_table
 
-variable [DecidableEq F] {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : PublicIO F → ProverData F → Prop}
+variable {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : PublicIO F → ProverData F → Prop}
   {eac : ∀ publicInput data, ExtraAssumptions publicInput data →
     ∀ table ∈ ens.tables, ∀ input data, table.circuit.Assumptions input data}
 
@@ -127,24 +137,16 @@ variable [DecidableEq F] {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : 
     ∀ data, ens.ensemble.verifier.Assumptions publicInput data ∧ ExtraAssumptions publicInput data := by
   simp only [toFormal, circuit_norm]
 end SoundVmEnsemble
-
-lemma Component.interactionsWith_of_exposedChannels {table : Component F} {channel : RawChannel F}
-  {interactions : List (AbstractInteraction F)}
-  (h_exposed : ⟨ channel, interactions ⟩ ∈ table.exposedChannels) :
-    table.operations.interactionsWith channel = interactions := by
-  rw [Component.interactionsWith_eq]
-  simp only [circuit_norm, Component.exposedChannels] at *
-  convert table.circuit.interactionsWith_eq_of_mem_exposedChannels _ _ _ h_exposed
 end Air.Flat
 
 def List.flattenPairs {α : Type} (pairs : List (α × α)) : List α :=
   pairs.map (fun (a, b) => [a, b]) |>.flatten
 
-lemma flattenPairs_cons {α : Type} (a b : α) (pairs : List (α × α)) :
+lemma List.flattenPairs_cons {α : Type} (a b : α) (pairs : List (α × α)) :
     List.flattenPairs ((a, b) :: pairs) = [a, b] ++ List.flattenPairs pairs := by
   simp [List.flattenPairs]
 
-lemma zip_flattenPairs_perm {α : Type} {as bs : List α} :
+lemma List.zip_flattenPairs_perm {α : Type} {as bs : List α} :
     bs.length = as.length → List.Perm (List.zip as bs).flattenPairs (as ++ bs) := by
   open List in
   suffices ∀ n, as.length = n → bs.length = n →
@@ -163,7 +165,7 @@ lemma zip_flattenPairs_perm {α : Type} {as bs : List α} :
 /-- Instead of first map-flattening on the inside, then on the outside,
 we can map to a 3D array, then flatten the outside, and only then the inside.
 Good if you want to preserve the inner structure. -/
-lemma flatMap_flatMap {α β γ : Type*} (l : List γ) (g : γ → List α) (f : γ → α → List β) :
+lemma List.flatMap_flatMap {α β γ : Type*} (l : List γ) (g : γ → List α) (f : γ → α → List β) :
   l.flatMap (fun x => (g x).flatMap (f x)) = (l.map (fun x => (g x).map (f x))).flatten.flatten := by
   induction l with
   | nil => simp
@@ -171,23 +173,7 @@ lemma flatMap_flatMap {α β γ : Type*} (l : List γ) (g : γ → List α) (f :
     simp [ih]
     rfl
 
-namespace Air.Flat
-namespace Table
-noncomputable def interactionssWith (table : Table F)
-    (channel : RawChannel F) : List (List (Interaction F)) :=
-  table.table.map fun row =>
-    table.component.operations.interactionValuesWith channel (table.environment row)
-end Table
-
-/-- Ensemble interactions preserving the per-row structure until the final flatten. -/
-lemma EnsembleWitness.flatMap_interactionsWith_eq_flatten {ens : Ensemble F PublicIO}
-  (witness : EnsembleWitness ens) {channel : RawChannel F} :
-  witness.interactionsWith channel =
-    (witness.allTables.flatMap (·.interactionssWith channel)).flatten := by
-  simp only [EnsembleWitness.interactionsWith, Table.interactionsWith, Table.interactionssWith]
-  rw [flatMap_flatMap, List.flatMap_def]
-
-lemma zip_flatten_flatten {α : Type} (as bs : List (List (α)))
+lemma List.zip_flatten_flatten {α : Type} (as bs : List (List (α)))
   (same_lengths : as.length = bs.length ∧ (∀ i (hi : i < as.length) (hi' : i < bs.length), as[i].length = bs[i].length)) :
     List.zip as.flatten bs.flatten = ((as.zip bs).map (fun (t, s) => t.zip s)).flatten := by
   revert same_lengths
@@ -214,21 +200,26 @@ lemma zip_flatten_flatten {α : Type} (as bs : List (List (α)))
     specialize ih as bs alen blen same_length_succ
     rw [ih]
 
-def VmTables.toEnsemble [DecidableEq F] (vm : VmTables F PublicIO) : Ensemble F PublicIO where
-  channels := [vm.channel.toRaw]
-  tables := vm.tables
-  verifier := vm.verifier
-  verifier_length_zero := vm.verifier_length_zero
-
-abbrev VmWitness [DecidableEq F] (vm : VmTables F PublicIO) := EnsembleWitness vm.toEnsemble
+namespace Air.Flat
+omit [DecidableEq F] in
+/-- Ensemble interactions preserving the per-row structure until the final flatten. -/
+lemma EnsembleWitness.flatMap_interactionsWith_eq_flatten {ens : Ensemble F PublicIO}
+  (witness : EnsembleWitness ens) {channel : RawChannel F} :
+  witness.interactionsWith channel =
+    (witness.allTables.flatMap (·.interactionssWith channel)).flatten := by
+  simp only [EnsembleWitness.interactionsWith, Table.interactionsWith, Table.interactionssWith]
+  rw [List.flatMap_flatMap, List.flatMap_def]
 
 namespace VmTables
-variable [DecidableEq F] {vm : VmTables F PublicIO}
+variable {vm : VmTables F PublicIO}
 
-@[circuit_norm] lemma toEnsemble_tables (vm : VmTables F PublicIO) : vm.toEnsemble.tables = vm.tables := rfl
-@[circuit_norm] lemma toEnsemble_verifier (vm : VmTables F PublicIO) : vm.toEnsemble.verifier = vm.verifier := rfl
+@[circuit_norm] lemma toEnsemble_tables (vm : VmTables F PublicIO) :
+  vm.toEnsemble.tables = vm.tables := rfl
+@[circuit_norm] lemma toEnsemble_verifier (vm : VmTables F PublicIO) :
+  vm.toEnsemble.verifier = vm.verifier := rfl
 
-@[circuit_norm] abbrev allTables (vm : VmTables F PublicIO) : List (Component F) := vm.toEnsemble.allTables
+@[circuit_norm] abbrev allTables (vm : VmTables F PublicIO) : List (Component F) :=
+  vm.toEnsemble.allTables
 
 theorem allTables_channel (vm : VmTables F PublicIO) : ∀ table ∈ vm.allTables,
   ∃ m1 m2, ⟨ vm.channel, [(vm.channel.pulled m1).toRaw, (vm.channel.pushed m2).toRaw] ⟩ ∈
@@ -241,7 +232,8 @@ theorem allTables_channel (vm : VmTables F PublicIO) : ∀ table ∈ vm.allTable
   · simp only [circuit_norm]
     exact vm.tables_channel table table_mem
 
-noncomputable def interactionPair (vm : VmTables F PublicIO) (table : Component F) (table_mem : table ∈ vm.allTables) :
+noncomputable def interactionPair (vm : VmTables F PublicIO) (table : Component F)
+  (table_mem : table ∈ vm.allTables) :
     Var vm.Message F × Var vm.Message F :=
   let h := vm.allTables_channel table table_mem
   ⟨ h.choose, h.choose_spec.choose ⟩
@@ -274,7 +266,7 @@ lemma verifierInteractionsWith_eq {vm : VmTables F PublicIO} :
 end VmTables
 
 namespace VmWitness
-variable [DecidableEq F] {vm : VmTables F PublicIO}
+variable {vm : VmTables F PublicIO}
 open EnsembleWitness
 
 noncomputable def rowPull (witness : VmWitness vm) {table} (_ : table ∈ witness.allTables) (row : Array F) : vm.Message F :=
@@ -352,7 +344,7 @@ lemma interactionss_eq_pulls_pushes (witness : VmWitness vm) :
   witness.allTables.flatMap (·.interactionssWith vm.channel.toRaw) =
     (List.zip witness.pulls witness.pushes).map (fun ⟨pull, push⟩ => [pull, push]) := by
   simp only [pulls, pushes, List.flatMap_def]
-  rw [zip_flatten_flatten _ _ (by simp), List.map_flatten]
+  rw [List.zip_flatten_flatten _ _ (by simp), List.map_flatten]
   simp only [List.zip_map', List.map_map]
   rw [← List.pmap_eq_map (fun _ _ => trivial), List.pmap_eq_map_attach]
   congr
@@ -417,7 +409,7 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
   replace balance : BalancedInteractions (witness.pulls ++ witness.pushes) := by
     rw [witness.interactions_eq_pulls_pushes] at balance
     apply balancedInteractions_of_perm balance
-    apply zip_flattenPairs_perm <| witness.pushes_length ▸ witness.pulls_length.symm
+    apply List.zip_flattenPairs_perm <| witness.pushes_length ▸ witness.pulls_length.symm
   -- we fill in the conditions on pulls and pushes in `guarantees_of_requirements_of_requirements_of_guarantees`
   let n := witness.steps + 1
   have : witness.pulls.length = n := by simp [witness.pulls_length, n]
@@ -460,7 +452,6 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
 end VmWitness
 
 namespace Ensemble
-variable [DecidableEq F]
 
 def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) : Ensemble F PublicIO where
   channels := vm.channel :: ens.channels
@@ -687,7 +678,6 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
 end Ensemble
 
 namespace SoundEnsemble
-variable [DecidableEq F]
 
 def addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicIO) (vm : VmTables F PublicIO)
     (ne_mem_vm_channel : ∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels

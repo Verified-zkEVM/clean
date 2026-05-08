@@ -77,6 +77,14 @@ lemma interactionsWith_eq {channel : RawChannel F} :
 lemma interactionsValues_eq : component.operations.interactionValues env = component.rowOperations.interactionValues env := by
   simp only [Operations.interactionValues, interactions_eq]
 
+lemma interactionsWith_of_exposedChannels {table : Component F} {channel : RawChannel F}
+  {interactions : List (AbstractInteraction F)}
+  (h_exposed : ⟨ channel, interactions ⟩ ∈ table.exposedChannels) :
+    table.operations.interactionsWith channel = interactions := by
+  rw [Component.interactionsWith_eq]
+  simp only [circuit_norm, Component.exposedChannels] at *
+  convert table.circuit.interactionsWith_eq_of_mem_exposedChannels _ _ _ h_exposed
+
 lemma constraintsHold_iff (env : Environment F) :
     component.operations.ConstraintsHold env ↔ component.rowOperations.ConstraintsHold env := by
   simp only [circuit_norm, lookups_eq, constraints_eq]
@@ -203,13 +211,17 @@ noncomputable def interactionsWith (table : Table F) (channel : RawChannel F) : 
   table.table.flatMap fun row =>
     table.component.operations.interactionValuesWith channel (table.environment row)
 
-open Classical in
-lemma interactionsWith_eq_filter :
+open Classical in lemma interactionsWith_eq_filter :
     table.interactionsWith channel = table.interactions.filter (·.channel = channel) := by
   simp only [interactionsWith, interactions, List.filter_flatMap]
   congr
   funext row
   rw [Operations.interactionValuesWith_eq_filter]
+
+noncomputable def interactionssWith (table : Table F)
+    (channel : RawChannel F) : List (List (Interaction F)) :=
+  table.table.map fun row =>
+    table.component.operations.interactionValuesWith channel (table.environment row)
 
 lemma channel_eq_of_mem_interactionsWith {i : Interaction F} :
     i ∈ table.interactionsWith channel → i.channel = channel := by
