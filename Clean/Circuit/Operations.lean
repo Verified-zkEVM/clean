@@ -1112,7 +1112,8 @@ def ChannelsLawful (ops : Operations F)
   (∀ channel ∈ ops.shallowChannels,
     channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements) ∧
 
-  -- Exposed channel data agrees with the actual interactions in the circuit.
+  -- Exposed channel interactions agree with the actual interactions in the circuit.
+  -- TODO this is unfriendly to composition
   (∀ exposed ∈ exposedChannels,
     ops.interactionsWith exposed.channel = exposed.interactions) ∧
 
