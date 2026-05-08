@@ -1,66 +1,72 @@
 import Clean.Air.Circuit
 
+namespace Air.Flat
 variable {F : Type} [Field F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
-structure AbstractTable (F : Type) [Field F] where
+/--
+A flat AIR component: one circuit whose constraints are checked independently on each row.
+There are no direct adjacent-row constraints; communication with other rows/components is
+expressed by channel interactions.
+-/
+structure Component (F : Type) [Field F] where
   {Input : TypeMap} {Output : TypeMap}
   [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
   circuit : GeneralFormalCircuit F Input Output
 
-instance (t: AbstractTable F) : ProvableType t.Input := t.provableInput
-instance (t: AbstractTable F) : ProvableType t.Output := t.provableOutput
+instance (t: Component F) : ProvableType t.Input := t.provableInput
+instance (t: Component F) : ProvableType t.Output := t.provableOutput
 
-namespace AbstractTable
-def operations (table : AbstractTable F) : Operations F :=
+namespace Component
+def operations (table : Component F) : Operations F :=
   table.circuit.instantiate.operations 0
 
-def width (table : AbstractTable F) : ℕ := table.circuit.size
+def width (table : Component F) : ℕ := table.circuit.size
 
 @[circuit_norm]
-abbrev rowOffset (table : AbstractTable F) : ℕ := size table.Input
+abbrev rowOffset (table : Component F) : ℕ := size table.Input
 @[circuit_norm]
-abbrev rowInputVar (table : AbstractTable F): Var table.Input F :=
+abbrev rowInputVar (table : Component F): Var table.Input F :=
   varFromOffset table.Input 0
 
 /-- first `size Input` elements of the environment are the input -/
 @[circuit_norm]
-def rowInput (table : AbstractTable F) (row : Environment F) : table.Input F :=
+def rowInput (table : Component F) (row : Environment F) : table.Input F :=
   valueFromOffset table.Input 0 row
 
 /-- output is whatever the circuit computes on the row input -/
 @[circuit_norm]
-def rowOutput (table : AbstractTable F) (row : Environment F) : table.Output F :=
+def rowOutput (table : Component F) (row : Environment F) : table.Output F :=
   let outputVar := (table.circuit table.rowInputVar).output table.rowOffset
   eval row outputVar
 
 @[circuit_norm]
-def rowOperations (table : AbstractTable F) : Operations F :=
+def rowOperations (table : Component F) : Operations F :=
   table.circuit.main (varFromOffset table.Input 0) |>.operations (size table.Input)
 
-def Spec (table : AbstractTable F) (row : Environment F) : Prop :=
+def Spec (table : Component F) (row : Environment F) : Prop :=
   table.circuit.Spec (table.rowInput row) (table.rowOutput row) row.data
 
-def Assumptions (table : AbstractTable F) (row : Environment F) : Prop :=
+def Assumptions (table : Component F) (row : Environment F) : Prop :=
   table.circuit.Assumptions (table.rowInput row) row.data
 
-abbrev exposedChannels (table : AbstractTable F) : List (ExposedChannel F) :=
+abbrev exposedChannels (table : Component F) : List (ExposedChannel F) :=
   table.circuit.exposedChannels table.rowInputVar table.rowOffset
 
-variable {table : AbstractTable F} {env : Environment F}
+variable {table : Component F} {env : Environment F}
 
 lemma constraints_eq : table.operations.constraints = table.rowOperations.constraints := by
-  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, AbstractTable.operations,
+  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
     GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit, Operations.toNested_toFlat]
 
 lemma lookups_eq : table.operations.lookups = table.rowOperations.lookups := by
-  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, AbstractTable.operations,
+  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
     GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit, Operations.toNested_toFlat]
 
 lemma interactions_eq : table.operations.interactions = table.rowOperations.interactions := by
-  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, AbstractTable.operations,
+  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
     GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit, Operations.toNested_toFlat]
 
@@ -104,7 +110,7 @@ lemma inChannelsOrGuarantees (env : Environment F) :
   convert h _ _ env
 
 -- this is the circuit's soundness theorem, stated in "instantiated" form
-theorem weakSoundness {table : AbstractTable F} {env : Environment F} :
+theorem weakSoundness {table : Component F} {env : Environment F} :
     table.Assumptions env →
     table.operations.ConstraintsHold env →
     table.operations.FullGuarantees env →
@@ -117,24 +123,25 @@ theorem weakSoundness {table : AbstractTable F} {env : Environment F} :
     simpa only [Assumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset] using h_assumptions
   convert table.circuit.original_full_soundness _ _ _ h_assumptions' h_constraints h_guarantees
   simp only [rowInput, inputVar, eval_varFromOffset_valueFromOffset]
-end AbstractTable
+end Component
 
-structure TableWitness (F : Type) [Field F] where
-  abstract : AbstractTable F
+/-- Concrete rows and prover data for one flat AIR component. -/
+structure Table (F : Type) [Field F] where
+  abstract : Component F
   width : ℕ
   table : List (Array F)
   data : ProverData F
   uniform_width : ∀ row ∈ table, row.size = width
 
-namespace TableWitness
-variable {witness :TableWitness F} {channel : RawChannel F}
+namespace Table
+variable {witness :Table F} {channel : RawChannel F}
 
-abbrev length (t : TableWitness F) : ℕ := t.table.length
+abbrev length (t : Table F) : ℕ := t.table.length
 
-def environment (witness : TableWitness F) (row : Array F) :=
+def environment (witness : Table F) (row : Array F) :=
   Environment.fromArray row witness.data
 
-theorem ext_iff {witness1 witness2 : TableWitness F} :
+theorem ext_iff {witness1 witness2 : Table F} :
     witness1 = witness2 ↔
     witness1.abstract = witness2.abstract ∧
     witness1.width = witness2.width ∧
@@ -145,54 +152,54 @@ theorem ext_iff {witness1 witness2 : TableWitness F} :
   simp only [mk.injEq]
 
 @[circuit_norm]
-def channelsWithGuarantees (witness : TableWitness F) : List (RawChannel F) :=
+def channelsWithGuarantees (witness : Table F) : List (RawChannel F) :=
   witness.abstract.circuit.channelsWithGuarantees
 
 @[circuit_norm]
-def channelsWithRequirements (witness : TableWitness F) : List (RawChannel F) :=
+def channelsWithRequirements (witness : Table F) : List (RawChannel F) :=
   witness.abstract.circuit.channelsWithRequirements
 
-def Constraints (witness : TableWitness F) : Prop :=
+def Constraints (witness : Table F) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.operations.ConstraintsHold (witness.environment row)
 
-def Assumptions (witness : TableWitness F) : Prop :=
+def Assumptions (witness : Table F) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.Assumptions (witness.environment row)
 
-def Guarantees (witness : TableWitness F) : Prop :=
+def Guarantees (witness : Table F) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.operations.FullGuarantees (witness.environment row)
 
-def ChannelGuarantees (witness : TableWitness F) (channel : RawChannel F) : Prop :=
+def ChannelGuarantees (witness : Table F) (channel : RawChannel F) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.operations.ChannelGuarantees channel (witness.environment row)
 
-def InChannelsOrGuarantees (witness : TableWitness F) (channels : List (RawChannel F)) : Prop :=
+def InChannelsOrGuarantees (witness : Table F) (channels : List (RawChannel F)) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.operations.InChannelsOrGuaranteesFull channels (witness.environment row)
 
-def Requirements (witness : TableWitness F) : Prop :=
+def Requirements (witness : Table F) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.operations.FullRequirements (witness.environment row)
 
-def ChannelRequirements (witness : TableWitness F) (channel : RawChannel F) : Prop :=
+def ChannelRequirements (witness : Table F) (channel : RawChannel F) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.operations.ChannelRequirements channel (witness.environment row)
 
-def InChannelsOrRequirements (witness : TableWitness F) (channels : List (RawChannel F)) : Prop :=
+def InChannelsOrRequirements (witness : Table F) (channels : List (RawChannel F)) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.operations.InChannelsOrRequirementsFull channels (witness.environment row)
 
-def Spec (witness : TableWitness F) : Prop :=
+def Spec (witness : Table F) : Prop :=
   ∀ row ∈ witness.table,
     witness.abstract.Spec (witness.environment row)
 
-def interactions (witness : TableWitness F) : List (Interaction F) :=
+def interactions (witness : Table F) : List (Interaction F) :=
   witness.table.flatMap fun row =>
     witness.abstract.operations.interactionValues (witness.environment row)
 
-noncomputable def interactionsWith (witness : TableWitness F) (channel : RawChannel F) : List (Interaction F) :=
+noncomputable def interactionsWith (witness : Table F) (channel : RawChannel F) : List (Interaction F) :=
   witness.table.flatMap fun row =>
     witness.abstract.operations.interactionValuesWith channel (witness.environment row)
 
@@ -214,7 +221,7 @@ lemma channel_eq_of_mem_interactionsWith {i : Interaction F} :
   rw [←heq]
   apply Operations.channel_eq_of_mem_interactionsWith hi_abs
 
-lemma forall_interactions_iff (witness : TableWitness F) (motive : Interaction F → Prop) :
+lemma forall_interactions_iff (witness : Table F) (motive : Interaction F → Prop) :
     (∀ i ∈ witness.interactions, motive i) ↔
     ∀ row ∈ witness.table, ∀ i ∈ witness.abstract.operations.interactions,
       motive (i.eval (witness.environment row)) := by
@@ -228,7 +235,7 @@ lemma forall_interactions_iff (witness : TableWitness F) (motive : Interaction F
     rw [← h_eq]
     exact h row h_row i' hi'
 
-lemma forall_interactionsWith_iff (witness : TableWitness F) (channel : RawChannel F)
+lemma forall_interactionsWith_iff (witness : Table F) (channel : RawChannel F)
   (motive : Interaction F → Prop) :
     (∀ i ∈ witness.interactionsWith channel, motive i) ↔
     ∀ row ∈ witness.table, ∀ i ∈ witness.abstract.operations.interactions,
@@ -250,64 +257,64 @@ lemma interactionsWith_nil_of_channel_not_mem :
     decide_eq_true_eq, forall_interactions_iff, not_forall, not_not, forall_exists_index]
   intro table table_mem i i_mem channel_eq
   symm at channel_eq; subst channel_eq
-  simp only [AbstractTable.interactions_eq] at i_mem
+  simp only [Component.interactions_eq] at i_mem
   apply witness.abstract.circuit.channels_subset
   simp only [Operations.channels, List.mem_map]
   exists i
 
-lemma guarantees_iff_forall (witness : TableWitness F) :
+lemma guarantees_iff_forall (witness : Table F) :
     witness.Guarantees ↔
     ∀ i ∈ witness.interactions, i.Guarantees witness.data := by
-  simp only [TableWitness.Guarantees, circuit_norm, forall_interactions_iff]
+  simp only [Table.Guarantees, circuit_norm, forall_interactions_iff]
   rfl
 
-lemma channelGuarantees_iff_forall (witness : TableWitness F) (channel : RawChannel F) :
+lemma channelGuarantees_iff_forall (witness : Table F) (channel : RawChannel F) :
     witness.ChannelGuarantees channel ↔
     ∀ i ∈ witness.interactionsWith channel, i.Guarantees witness.data := by
-  simp only [TableWitness.ChannelGuarantees, circuit_norm, forall_interactionsWith_iff]
+  simp only [Table.ChannelGuarantees, circuit_norm, forall_interactionsWith_iff]
   rfl
 
-lemma guarantees_iff_channelGuarantees (witness : TableWitness F) :
+lemma guarantees_iff_channelGuarantees (witness : Table F) :
     witness.Guarantees ↔
     ∀ channel ∈ witness.channelsWithGuarantees, witness.ChannelGuarantees channel := by
-  simp only [TableWitness.Guarantees, TableWitness.ChannelGuarantees, channelsWithGuarantees]
-  simp only [AbstractTable.guarantees_iff, AbstractTable.channelGuarantees_iff, AbstractTable.rowOperations]
+  simp only [Table.Guarantees, Table.ChannelGuarantees, channelsWithGuarantees]
+  simp only [Component.guarantees_iff, Component.channelGuarantees_iff, Component.rowOperations]
   simp only [GeneralFormalCircuit.guarantees_iff']
   constructor <;> simp_all
 
-lemma channelGuarantees_of_requirements (witness : TableWitness F) {channel : RawChannel F} :
+lemma channelGuarantees_of_requirements (witness : Table F) {channel : RawChannel F} :
     witness.Guarantees → witness.ChannelGuarantees channel := by
-  simp_all [TableWitness.Guarantees, TableWitness.ChannelGuarantees, circuit_norm]
+  simp_all [Table.Guarantees, Table.ChannelGuarantees, circuit_norm]
 
-lemma requirements_iff_forall (witness : TableWitness F) :
+lemma requirements_iff_forall (witness : Table F) :
     witness.Requirements ↔
     ∀ i ∈ witness.interactions, i.Requirements witness.data := by
-  simp only [TableWitness.Requirements, circuit_norm, forall_interactions_iff]
+  simp only [Table.Requirements, circuit_norm, forall_interactions_iff]
   rfl
 
-lemma channelRequirements_iff_forall (witness : TableWitness F) (channel : RawChannel F) :
+lemma channelRequirements_iff_forall (witness : Table F) (channel : RawChannel F) :
     witness.ChannelRequirements channel ↔
     ∀ i ∈ witness.interactionsWith channel, i.Requirements witness.data := by
-  simp only [TableWitness.ChannelRequirements, circuit_norm, forall_interactionsWith_iff]
+  simp only [Table.ChannelRequirements, circuit_norm, forall_interactionsWith_iff]
   rfl
 
-lemma requirements_iff_channelRequirements (witness : TableWitness F) :
+lemma requirements_iff_channelRequirements (witness : Table F) :
     witness.Requirements ↔
     ∀ channel ∈ witness.channelsWithRequirements, witness.ChannelRequirements channel := by
-  simp only [TableWitness.Requirements, TableWitness.ChannelRequirements, channelsWithRequirements]
-  simp only [AbstractTable.requirements_iff, AbstractTable.channelRequirements_iff, AbstractTable.rowOperations]
+  simp only [Table.Requirements, Table.ChannelRequirements, channelsWithRequirements]
+  simp only [Component.requirements_iff, Component.channelRequirements_iff, Component.rowOperations]
   simp only [GeneralFormalCircuit.requirements_iff']
   constructor <;> simp_all
 
-lemma channelRequirements_of_requirements (witness : TableWitness F) {channel : RawChannel F} :
+lemma channelRequirements_of_requirements (witness : Table F) {channel : RawChannel F} :
     witness.Requirements → witness.ChannelRequirements channel := by
-  simp_all [TableWitness.Requirements, TableWitness.ChannelRequirements, circuit_norm]
+  simp_all [Table.Requirements, Table.ChannelRequirements, circuit_norm]
 
-lemma inChannelsOrRequirements (witness : TableWitness F) :
+lemma inChannelsOrRequirements (witness : Table F) :
     witness.InChannelsOrRequirements witness.channelsWithRequirements := by
-  simp [InChannelsOrRequirements, channelsWithRequirements, AbstractTable.inChannelsOrRequirements]
+  simp [InChannelsOrRequirements, channelsWithRequirements, Component.inChannelsOrRequirements]
 
-lemma requirements_of_not_mem (witness : TableWitness F) {channel : RawChannel F} :
+lemma requirements_of_not_mem (witness : Table F) {channel : RawChannel F} :
     channel ∉ witness.channelsWithRequirements → witness.ChannelRequirements channel := by
   intro h_not_mem
   have h_in_or_req := witness.inChannelsOrRequirements
@@ -318,11 +325,11 @@ lemma requirements_of_not_mem (witness : TableWitness F) {channel : RawChannel F
   assumption
   assumption
 
-lemma inChannelsOrGuarantees (witness : TableWitness F) :
+lemma inChannelsOrGuarantees (witness : Table F) :
     witness.InChannelsOrGuarantees witness.channelsWithGuarantees := by
-  simp [InChannelsOrGuarantees, channelsWithGuarantees, AbstractTable.inChannelsOrGuarantees]
+  simp [InChannelsOrGuarantees, channelsWithGuarantees, Component.inChannelsOrGuarantees]
 
-lemma guarantees_of_not_mem (witness : TableWitness F) {channel : RawChannel F} :
+lemma guarantees_of_not_mem (witness : Table F) {channel : RawChannel F} :
     channel ∉ witness.channelsWithGuarantees → witness.ChannelGuarantees channel := by
   intro h_not_mem
   have h_in_or_guar := witness.inChannelsOrGuarantees
@@ -334,11 +341,11 @@ lemma guarantees_of_not_mem (witness : TableWitness F) {channel : RawChannel F} 
   assumption
 
 /-- Circuit soundness, lifted to full table level --/
-theorem weakSoundness {witness : TableWitness F} :
+theorem weakSoundness {witness : Table F} :
     witness.Assumptions → witness.Constraints → witness.Guarantees →
     witness.Spec ∧ witness.Requirements := by
-  simp_all [TableWitness.Constraints, TableWitness.Guarantees, TableWitness.Spec,
-    TableWitness.Requirements, TableWitness.Assumptions, AbstractTable.weakSoundness]
+  simp_all [Table.Constraints, Table.Guarantees, Table.Spec,
+    Table.Requirements, Table.Assumptions, Component.weakSoundness]
 
 /--
 If we know constraints and _some_ of the guarantees unconditionally, we can remove them from the per-row assumptions.
@@ -346,7 +353,7 @@ If we know constraints and _some_ of the guarantees unconditionally, we can remo
 This lemma is tailored to VM-like channels where there remains a single channel that we need to
 prove guarantees for.
 -/
-lemma requirements_of_partial_guarantees_of_constraints {witness : TableWitness F}
+lemma requirements_of_partial_guarantees_of_constraints {witness : Table F}
   {finished : List (RawChannel F)} {unfinished : RawChannel F} :
   witness.Assumptions →
   witness.Constraints →
@@ -364,42 +371,42 @@ lemma requirements_of_partial_guarantees_of_constraints {witness : TableWitness 
     exact this i hi
   suffices witness.abstract.operations.FullGuarantees env from
     witness.abstract.weakSoundness (assumptions row h_row) (constraints row h_row) this |>.right
-  simp only [AbstractTable.guarantees_iff, AbstractTable.rowOperations]
+  simp only [Component.guarantees_iff, Component.rowOperations]
   rw [GeneralFormalCircuit.guarantees_iff']
   intro channel channel_mem
   show witness.abstract.rowOperations.ChannelGuarantees channel env
-  rw [← AbstractTable.channelGuarantees_iff]
+  rw [← Component.channelGuarantees_iff]
   replace channel_mem := subset channel_mem
   simp at channel_mem
   rcases channel_mem with rfl | channel_mem
   · exact channel_grts
   · exact finished_grts _ channel_mem
-end TableWitness
+end Table
 
-/-- Light-weight package of multiple table witnesses -/
-structure TablesWitness (F : Type) [Field F] where
-  tables : List (TableWitness F)
+/-- Light-weight package of multiple flat AIR tables sharing one prover data object. -/
+structure Tables (F : Type) [Field F] where
+  tables : List (Table F)
   data : ProverData F
   same_data : ∀ table ∈ tables, table.data = data
 
-namespace TablesWitness
-def cons (table : TableWitness F) (witness : TablesWitness F) (same_data : table.data = witness.data) : TablesWitness F where
+namespace Tables
+def cons (table : Table F) (witness : Tables F) (same_data : table.data = witness.data) : Tables F where
   tables := table :: witness.tables
   data := witness.data
   same_data := by
     simp [same_data]
     apply witness.same_data
 
-@[circuit_norm] lemma cons_tables {table : TableWitness F} {witness : TablesWitness F} (same_data : table.data = witness.data) :
+@[circuit_norm] lemma cons_tables {table : Table F} {witness : Tables F} (same_data : table.data = witness.data) :
   (cons table witness same_data).tables = table :: witness.tables := rfl
 
-@[circuit_norm] lemma cons_data {table : TableWitness F} {witness : TablesWitness F} (same_data : table.data = witness.data) :
+@[circuit_norm] lemma cons_data {table : Table F} {witness : Tables F} (same_data : table.data = witness.data) :
   (cons table witness same_data).data = witness.data := rfl
 
-def induct {motive : TablesWitness F → Sort*}
+def induct {motive : Tables F → Sort*}
   (nil : ∀ data, motive ⟨ [], data, by simp ⟩)
   (cons : ∀ table witness same_data, motive witness → motive (cons table witness same_data))
-    (table : TablesWitness F) : motive table := by
+    (table : Tables F) : motive table := by
   rcases table with ⟨ tables, data, same_data ⟩
   induction tables with
   | nil => exact nil data
@@ -408,13 +415,13 @@ def induct {motive : TablesWitness F → Sort*}
       intro table h_table
       apply same_data
       simp [h_table]
-    let witness : TablesWitness F := ⟨ tables, data, same_data' ⟩
+    let witness : Tables F := ⟨ tables, data, same_data' ⟩
     have same_data_table : table.data = witness.data := by
       simp [witness, same_data]
     apply cons table witness same_data_table
     exact ih same_data'
 
-def append (witness1 witness2 : TablesWitness F) (same_data : witness1.data = witness2.data) : TablesWitness F where
+def append (witness1 witness2 : Tables F) (same_data : witness1.data = witness2.data) : Tables F where
   tables := witness1.tables ++ witness2.tables
   data := witness1.data
   same_data := by
@@ -424,42 +431,44 @@ def append (witness1 witness2 : TablesWitness F) (same_data : witness1.data = wi
     rw [same_data]
     apply witness2.same_data
 
-@[circuit_norm] lemma append_tables {witness1 witness2 : TablesWitness F} (same_data : witness1.data = witness2.data) :
+@[circuit_norm] lemma append_tables {witness1 witness2 : Tables F} (same_data : witness1.data = witness2.data) :
   (append witness1 witness2 same_data).tables = witness1.tables ++ witness2.tables := rfl
 
-@[circuit_norm] lemma append_data {witness1 witness2 : TablesWitness F} (same_data : witness1.data = witness2.data) :
+@[circuit_norm] lemma append_data {witness1 witness2 : Tables F} (same_data : witness1.data = witness2.data) :
   (append witness1 witness2 same_data).data = witness1.data := rfl
 
-@[circuit_norm] lemma cons_append {table : TableWitness F} {witness1 witness2 : TablesWitness F}
+@[circuit_norm] lemma cons_append {table : Table F} {witness1 witness2 : Tables F}
   (same_data1 : table.data = witness1.data) (same_data2 : witness1.data = witness2.data) :
   (cons table witness1 same_data1).append witness2 same_data2 =
     cons table (append witness1 witness2 same_data2) same_data1 := rfl
 
 @[circuit_norm]
-abbrev abstracts (witness : TablesWitness F) : List (AbstractTable F) :=
+abbrev abstracts (witness : Tables F) : List (Component F) :=
   witness.tables.map (·.abstract)
 
-instance : Coe (TablesWitness F) (List (TableWitness F)) where
+instance : Coe (Tables F) (List (Table F)) where
   coe witness := witness.tables
 
-abbrev Constraints (witness : TablesWitness F) : Prop :=
+abbrev Constraints (witness : Tables F) : Prop :=
   ∀ table ∈ witness.tables, table.Constraints
 
-abbrev Assumptions (witness : TablesWitness F) : Prop :=
+abbrev Assumptions (witness : Tables F) : Prop :=
   ∀ table ∈ witness.tables, table.Assumptions
 
-noncomputable abbrev interactionsWith (witness : TablesWitness F) (channel : RawChannel F) : List (Interaction F) :=
+noncomputable abbrev interactionsWith (witness : Tables F) (channel : RawChannel F) : List (Interaction F) :=
   witness.tables.flatMap (·.interactionsWith channel)
 
-@[circuit_norm] lemma interactionsWith_cons {table : TableWitness F} {witness : TablesWitness F}
+@[circuit_norm] lemma interactionsWith_cons {table : Table F} {witness : Tables F}
   (same_data : table.data = witness.data) {channel : RawChannel F} :
   interactionsWith (cons table witness same_data) channel =
     table.interactionsWith channel ++ interactionsWith witness channel := by
-  simp [interactionsWith, TableWitness.interactionsWith, circuit_norm]
+  simp [interactionsWith, Table.interactionsWith, circuit_norm]
 
-@[circuit_norm] lemma interactionsWith_append {witness1 witness2 : TablesWitness F}
+@[circuit_norm] lemma interactionsWith_append {witness1 witness2 : Tables F}
   (same_data : witness1.data = witness2.data) {channel : RawChannel F} :
   interactionsWith (append witness1 witness2 same_data) channel =
     interactionsWith witness1 channel ++ interactionsWith witness2 channel := by
-  simp [interactionsWith, TableWitness.interactionsWith, circuit_norm]
-end TablesWitness
+  simp [interactionsWith, Table.interactionsWith, circuit_norm]
+end Tables
+
+end Air.Flat
