@@ -37,7 +37,7 @@ lemma rhoPi_loop (state : Vector ℕ 25) :
   simp [Specs.Keccak256.rhoPi, rhoPiConstants, rhoPiIndices, rhoPiShifts]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
+  circuit_proof_start [Rotation64.circuit, Rotation64.elaborated]
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -47,7 +47,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [KeccakState.Normalized] at h_assumptions
   simp only [h_input, h_assumptions, circuit_norm,
-    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated] at h_holds ⊢
+    Rotation64.Assumptions, Rotation64.Spec] at h_holds
+
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by

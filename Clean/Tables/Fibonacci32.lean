@@ -131,7 +131,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : ProverEnvironme
   simp only [table_norm, circuit_norm, recursiveRelation,
     assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
-  simp only [table_norm, circuit_norm, Nat.reduceAdd, zero_add] at h_add
+  simp only [table_norm, circuit_norm, Nat.reduceAdd] at h_add
   simp only [circuit_norm] at hcurr_x hcurr_y hnext_x hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
@@ -169,7 +169,7 @@ lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
   and_intros <;> rfl
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
-  Circuit.ConstraintsHold.Soundness (F := F p) (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
+  ConstraintsHold.Soundness (F := F p) (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env

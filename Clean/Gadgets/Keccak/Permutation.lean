@@ -31,6 +31,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
+  channelsLawful := by simp only [main, circuit_norm, KeccakRound.circuit]
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
@@ -41,22 +42,18 @@ lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
   simp [List.finRange]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro n env initial_state_var initial_state h_input h_assumptions h_holds
+  circuit_proof_start [KeccakRound.circuit, KeccakRound.elaborated,
+    KeccakRound.Spec, KeccakRound.Assumptions]
 
   -- simplify
-  simp only [circuit_norm] at h_input
-  simp only [main, circuit_norm, Spec,
-    KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
-  simp only [h_input] at h_holds
   obtain ⟨ h_init, h_succ ⟩ := h_holds
   specialize h_init h_assumptions
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar (p:=p) n i)
+  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar (p:=p) i₀ i)
 
   change (state 0).Normalized ∧
-    (state 0).value = keccakRound initial_state.value roundConstants[0]
+    (state 0).value = keccakRound input.value roundConstants[0]
   at h_init
 
   change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized → (state (i + 1)).Normalized ∧
@@ -66,7 +63,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- inductive proof
   have h_inductive (i : ℕ) (hi : i < 24) :
     (state i).Normalized ∧ (state i).value =
-      Fin.foldl (i + 1) (fun state j => keccakRound state roundConstants[j.val]) initial_state.value := by
+      Fin.foldl (i + 1) (fun state j => keccakRound state roundConstants[j.val]) input.value := by
     induction i with
     | zero => simp [Fin.foldl_succ, h_init]
     | succ i ih =>
@@ -81,14 +78,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   exact h
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro n env initial_state_var h_env initial_state h_input h_assumptions
+  circuit_proof_start [KeccakRound.circuit, KeccakRound.elaborated,
+    KeccakRound.Spec, KeccakRound.Assumptions]
 
   -- simplify
-  dsimp only [Assumptions] at h_assumptions
-  simp only [circuit_norm] at h_input h_assumptions
-  simp only [main, h_input, h_assumptions, circuit_norm, KeccakRound.circuit,
-    KeccakRound.elaborated, KeccakRound.Spec,
-    KeccakRound.Assumptions] at h_env ⊢
+  simp only [h_assumptions, circuit_norm] at h_env ⊢
 
   obtain ⟨ h_init, h_succ ⟩ := h_env
   replace h_init := h_init.left
@@ -97,7 +91,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i hi
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env.toEnvironment (stateVar (p:=p) n i)
+  let state (i : ℕ) : KeccakState (F p) := eval env.toEnvironment (stateVar (p:=p) i₀ i)
 
   change (state 0).Normalized at h_init
 

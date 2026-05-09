@@ -103,7 +103,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         -- When s = 0
         rw [h0]
         simp only [mul_zero, circuit_norm]
-        norm_num
       | inr h1 =>
         -- When s = 1
         rw [h1]

@@ -65,20 +65,17 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   repeat assumption
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
-  cases x; cases y
+  circuit_proof_start [And8.circuit, And8.elaborated, And8.Assumptions, And8.Spec]
+  cases input_x; cases input_y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
-  simp only [circuit_norm, explicit_provable_type, Vector.mapRange,
-    main, Assumptions, And8.circuit, And8.Assumptions, And8.Spec,
-    U64.Normalized] at h_assumptions h_holds h_input ⊢
+  simp only [circuit_norm, explicit_provable_type, U64.Normalized]
+    at h_assumptions h_holds h_input ⊢
   simp_all
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
-  cases x; cases y
-  simp only [circuit_norm, explicit_provable_type,
-    main, Assumptions, And8.circuit, And8.Assumptions,
-    U64.Normalized] at h_assumptions h_input ⊢
+  circuit_proof_start [And8.circuit, And8.elaborated, And8.Assumptions, And8.Spec]
+  cases input_x; cases input_y
+  simp only [circuit_norm, explicit_provable_type, U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
 def circuit : FormalCircuit (F p) Inputs U64 where

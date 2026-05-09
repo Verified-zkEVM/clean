@@ -39,11 +39,19 @@ instance : ToJson (Lookup F) where
     ("entry", toJson l.entry.toArray),
   ]
 
+instance : ToJson (AbstractInteraction F) where
+  toJson i := Json.mkObj [
+    ("channel", toJson i.channel.name),
+    ("multiplicity", toJson i.mult),
+    ("message", toJson i.msg.toArray)
+  ]
+
 instance : ToJson (FlatOperation F) where
   toJson
-    | FlatOperation.witness m _ => Json.mkObj [("witness", toJson m)]
-    | FlatOperation.assert e => Json.mkObj [("assert", toJson e)]
-    | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
+    | .witness m _ => Json.mkObj [("witness", toJson m)]
+    | .assert e => Json.mkObj [("assert", toJson e)]
+    | .lookup l => Json.mkObj [("lookup", toJson l)]
+    | .interact i => Json.mkObj [("interact", toJson i)]
 
 def NestedOperations.listToJson : List (NestedOperations F) → Array Json
   | [] => #[]
@@ -63,10 +71,11 @@ instance : ToJson (NestedOperations F) where
 
 instance : ToJson (Operation F) where
   toJson
-    | Operation.witness m _ => Json.mkObj [("witness", toJson m)]
-    | Operation.assert e => Json.mkObj [("assert", toJson e)]
-    | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
-    | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops.toFlat)]
+    | .witness m _ => Json.mkObj [("witness", toJson m)]
+    | .assert e => Json.mkObj [("assert", toJson e)]
+    | .lookup l => Json.mkObj [("lookup", toJson l)]
+    | .subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops.toFlat)]
+    | .interact i => Json.mkObj [("interact", toJson i)]
 
 instance : ToJson (Operations F) where
   toJson ops := toJson ops.toList

@@ -22,6 +22,16 @@ class ExplicitCircuit (circuit : Circuit F α) where
   /-- same condition as in `ElaboratedCircuit`: subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ n : ℕ, (circuit.operations n).SubcircuitsConsistent n := by
     intro _; and_intros <;> try first | ac_rfl | trivial
+  /-- channel metadata explicitly collected from the circuit structure -/
+  channelsWithGuarantees : ℕ → List (RawChannel F)
+  channelsWithRequirements : ℕ → List (RawChannel F)
+  channelsLawful : ∀ n : ℕ, (circuit.operations n).ChannelsLawful
+      (channelsWithGuarantees n) (channelsWithRequirements n) [] := by
+    intro n
+    try rw [operations_eq n]
+    try dsimp only [channelsWithGuarantees, channelsWithRequirements, operations]
+    simp [circuit_norm]
+    all_goals try first | ac_rfl | trivial | tauto
 
 /-- family of explicit circuits -/
 class ExplicitCircuits (circuit : α → Circuit F β) where
@@ -33,6 +43,16 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
   operations_eq : ∀ (a : α) (n : ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
   subcircuitsConsistent : ∀ (a : α) (n : ℕ), ((circuit a).operations n).SubcircuitsConsistent n := by
     intro _ _; and_intros <;> try first | ac_rfl | trivial
+  /-- channel metadata explicitly collected from the circuit structure -/
+  channelsWithGuarantees : α → ℕ → List (RawChannel F)
+  channelsWithRequirements : α → ℕ → List (RawChannel F)
+  channelsLawful : ∀ (a : α) (n : ℕ), ((circuit a).operations n).ChannelsLawful
+      (channelsWithGuarantees a n) (channelsWithRequirements a n) [] := by
+    intro a n
+    try rw [operations_eq a n]
+    try dsimp only [channelsWithGuarantees, channelsWithRequirements, operations]
+    simp [Operations.ChannelsLawful, circuit_norm]
+    all_goals try first | ac_rfl | trivial | tauto
 
 -- move between family and single explicit circuit
 
@@ -45,6 +65,9 @@ instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
   localLength_eq a n := (explicit a).localLength_eq n
   operations_eq a n := (explicit a).operations_eq n
   subcircuitsConsistent a n := (explicit a).subcircuitsConsistent n
+  channelsWithGuarantees a n := (explicit a).channelsWithGuarantees n
+  channelsWithRequirements a n := (explicit a).channelsWithRequirements n
+  channelsLawful a n := (explicit a).channelsLawful n
 
 instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
     [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
@@ -55,6 +78,9 @@ instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
   localLength_eq n := localLength_eq a n
   operations_eq n := operations_eq a n
   subcircuitsConsistent n := subcircuitsConsistent a n
+  channelsWithGuarantees n := channelsWithGuarantees circuit a n
+  channelsWithRequirements n := channelsWithRequirements circuit a n
+  channelsLawful n := channelsLawful a n
 
 instance ExplicitCircuits.from_concrete_provable_input {α : TypeMap} [ProvableType α] {β : Type}
     {circuit : Var α F → Circuit F β} [explicit : ExplicitCircuits circuit] :
@@ -66,17 +92,24 @@ instance ExplicitCircuits.from_concrete_provable_input {α : TypeMap} [ProvableT
   localLength_eq input n := explicit.localLength_eq input n
   operations_eq input n := explicit.operations_eq input n
   subcircuitsConsistent input n := explicit.subcircuitsConsistent input n
+  channelsWithGuarantees input n := explicit.channelsWithGuarantees input n
+  channelsWithRequirements input n := explicit.channelsWithRequirements input n
+  channelsLawful input n := explicit.channelsLawful input n
 
 -- `pure` is an explicit circuit
 instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
   output _ := a
   localLength _ := 0
   operations _ := []
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
 
 instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a => pure (f a) : α → Circuit F β) where
   output a _ := f a
   localLength _ _ := 0
   operations _ _ := []
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := []
 
 -- `bind` of two explicit circuits yields an explicit circuit
 instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
@@ -93,12 +126,25 @@ instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     let a := output f n
     operations f n ++ operations (g a) (n + localLength f n)
 
+  channelsWithGuarantees n :=
+    let a := output f n
+    channelsWithGuarantees f n ++ channelsWithGuarantees (g a) (n + localLength f n)
+
+  channelsWithRequirements n :=
+    let a := output f n
+    channelsWithRequirements f n ++ channelsWithRequirements (g a) (n + localLength f n)
+
   output_eq n := by rw [Circuit.bind_output_eq, output_eq, output_eq, localLength_eq]
   localLength_eq n := by rw [Circuit.bind_localLength_eq, localLength_eq, output_eq, localLength_eq]
   operations_eq n := by rw [Circuit.bind_operations_eq, operations_eq, output_eq, localLength_eq, operations_eq]
   subcircuitsConsistent n := by
     rw [Operations.SubcircuitsConsistent, Circuit.bind_forAll]
     exact ⟨ f_explicit.subcircuitsConsistent .., (g_explicit _).subcircuitsConsistent .. ⟩
+  channelsLawful n := by
+    rw [Circuit.bind_operations_eq, output_eq, localLength_eq]
+    apply Operations.channelsLawful_append_of_channelsLawful
+    · exact f_explicit.channelsLawful n
+    · exact (g_explicit (output f n)).channelsLawful (n + localLength f n)
 
 -- `map` of an explicit circuit yields an explicit circuit
 instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
@@ -106,6 +152,8 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   output n := output g n |> f
   localLength n := localLength g n
   operations n := operations g n
+  channelsWithGuarantees n := channelsWithGuarantees g n
+  channelsWithRequirements n := channelsWithRequirements g n
 
   output_eq n := by rw [Circuit.map_output_eq, output_eq]
   localLength_eq n := by rw [Circuit.map_localLength_eq, localLength_eq]
@@ -113,6 +161,9 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   subcircuitsConsistent n := by
     rw [Circuit.map_operations_eq]
     exact g_explicit.subcircuitsConsistent n
+  channelsLawful n := by
+    rw [Circuit.map_operations_eq]
+    exact g_explicit.channelsLawful n
 
 -- basic operations are explicit circuits
 
@@ -120,16 +171,22 @@ instance : ExplicitCircuits (F:=F) witnessVar where
   output _ n := ⟨ n ⟩
   localLength _ _ := 1
   operations c n := [.witness 1 fun env => #v[c env]]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := []
 
 instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
   localLength _ := k
   operations n := [.witness k c]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
 
 instance {α : TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
   output _ n := varFromOffset α n
   localLength _ _ := size α
   operations c n := [.witness (size α) (toElements ∘ c)]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := []
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
@@ -152,39 +209,84 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       snd_cast (by rw [inst.var_eq])]
     rfl
 
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := []
+
   subcircuitsConsistent c n := by
     simp only [circuit_norm]
     rw [inst.witness_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
     reduce
     trivial
+  channelsLawful c n := by
+    simp only [circuit_norm]
+    rw [inst.witness_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+      snd_cast (by rw [inst.var_eq])]
+    simp [circuit_norm]
 
 instance : ExplicitCircuits (F:=F) assertZero where
   output _ _ := ()
   localLength _ _ := 0
   operations e n := [.assert e]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := []
 
 instance {e : Var field F} : ExplicitCircuit (assertZero e) where
   output _ := ()
   localLength _ := 0
   operations _ := [.assert e]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
 
 instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F:=F) (lookup table) where
   output _ _ := ()
   localLength _ _ := 0
   operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := []
+
+instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
+    {mult : Expression F} :
+    ExplicitCircuits (F:=F) (channel.emit mult) where
+  output _ _ := ()
+  localLength _ _ := 0
+  operations msg _ := [.interact (channel.emitted mult msg).toRaw]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := [channel.toRaw]
+
+instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
+    ExplicitCircuits (F:=F) (channel.pull) where
+  output _ _ := ()
+  localLength _ _ := 0
+  operations msg _ := [.interact (channel.pulled msg).toRaw]
+  channelsWithGuarantees _ _ := [channel.toRaw]
+  channelsWithRequirements _ _ := []
+
+instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
+    ExplicitCircuits (F:=F) (channel.push) where
+  output _ _ := ()
+  localLength _ _ := 0
+  operations msg _ := [.interact (channel.pushed msg).toRaw]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := [channel.toRaw]
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     ExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n
   localLength _ := circuit.localLength input
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by simp [circuit_norm]
 
 instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     ExplicitCircuit (assertion circuit input) where
   output n := ()
   localLength _ := circuit.localLength input
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by simp [circuit_norm]
 
 syntax "infer_explicit_circuit" : tactic
 
@@ -195,6 +297,7 @@ macro_rules
     repeat (
       try intros
       first
+        | infer_instance
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
       repeat infer_instance
@@ -236,7 +339,9 @@ example :
 end
 
 attribute [explicit_circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.operations ExplicitCircuit.output
+  ExplicitCircuit.channelsWithGuarantees ExplicitCircuit.channelsWithRequirements
 attribute [explicit_circuit_norm] ExplicitCircuits.localLength ExplicitCircuits.operations ExplicitCircuits.output
+  ExplicitCircuits.channelsWithGuarantees ExplicitCircuits.channelsWithRequirements
 attribute [explicit_circuit_norm] ExplicitCircuits.to_single ExplicitCircuits.from_single
 attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
 attribute [explicit_circuit_norm] size

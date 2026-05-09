@@ -65,6 +65,10 @@ instance : CoeOut (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.
 instance {α} : Coe (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 
+@[circuit_norm] abbrev Environment.fromArray [Field F] (row : Array F) (data : ProverData F) : Environment F where
+  get j := row[j]?.getD 0
+  data
+
 namespace Expression
 variable [Field F]
 

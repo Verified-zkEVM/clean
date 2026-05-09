@@ -43,7 +43,8 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   output _inputs i0 := output off i0
 
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  circuit_proof_start [Rotation32Bits.circuit, Rotation32Bits.elaborated]
+  circuit_proof_start [Rotation32Bits.circuit, Rotation32Bits.elaborated,
+    Rotation32Bytes.circuit, Rotation32Bytes.elaborated]
 
   -- abstract away intermediate U32
   let byte_offset : Fin 4 := ⟨ offset.val / 8, by omega ⟩
@@ -51,8 +52,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   set byte_rotated := eval env
     ((Rotation32Bytes.circuit byte_offset).output input_var i₀)
 
-  simp only [Rotation32Bytes.circuit, Rotation32Bytes.elaborated,
-    Rotation32Bytes.Assumptions, Rotation32Bytes.Spec, add_zero,
+  simp only [Rotation32Bytes.Assumptions, Rotation32Bytes.Spec,
     Rotation32Bits.Assumptions, Rotation32Bits.Spec, output] at h_holds ⊢
   set y : U32 (F p) := eval env (Rotation32Bits.output (p:=p) ⟨ offset.val % 8, by omega ⟩ i₀)
   simp_all only [forall_const, and_true]

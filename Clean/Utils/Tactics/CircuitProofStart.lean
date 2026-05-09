@@ -90,7 +90,8 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   **Supported goal types**: This tactic works on `Soundness`, `Completeness`,
   `FormalAssertion.Soundness`, `FormalAssertion.Completeness`,
-  `GeneralFormalCircuit.Soundness`, or `GeneralFormalCircuit.Completeness` goals.
+  `GeneralFormalCircuit.Soundness`, `GeneralFormalCircuit.Completeness`,
+  `GeneralFormalCircuit.WithHint.Soundness`, `GeneralFormalCircuit.WithHint.Completeness`.
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`

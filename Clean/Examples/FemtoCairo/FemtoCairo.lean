@@ -72,6 +72,7 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
 def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := decodeInstructionMain
   localLength _ := 8
+  channelsLawful := by simp only [decodeInstructionMain, Gadgets.toBits, circuit_norm]
 
   ProverAssumptions
   | instruction, _, _ => instruction.val < 256
@@ -629,7 +630,7 @@ def femtoCairoStepSoundness
 
     split at c_decode
     case h_2 =>
-      -- impossible, decodeInstructionCircuit ensures that
+      -- impossible, decodeInstruction.circuit ensures that
       -- instruction decode is always successful
       contradiction
     case h_1 instr_type mode1 mode2 mode3 h_eq_decode =>
@@ -733,6 +734,9 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   Spec := femtoCairoStepSpec program
   soundness := femtoCairoStepSoundness program h_programSize
   completeness := femtoCairoStepCompleteness program h_programSize
+  channelsLawful := by
+    simp only [femtoCairoStepElaboratedCircuit, fetchInstruction, decodeInstruction,
+      readFromMemory, nextState, circuit_norm, seval]
 
 /--
   The femtoCairo table, which defines the step relation for the femtoCairo VM.

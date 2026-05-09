@@ -3,9 +3,9 @@ This file provides the built-in `assertEquals` gadget, which works for any prova
 and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
 import Clean.Circuit.Loops
+import Clean.Circuit.Explicit
 
 variable {F : Type} [Field F]
-open Circuit (ConstraintsHold)
 
 namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
@@ -18,7 +18,8 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   exact h_holds ⟨i, hi⟩
 
 theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
-    (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
+    (∀ x ∈ xs, x.eval env = 0) →
+    ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
@@ -49,6 +50,8 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     intro offset env input_var input h_input _ h_holds
     replace h_holds := allZero.soundness h_holds
     simp only at h_holds
+    constructor; swap
+    · simp only [main, circuit_norm]
 
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := input_var
@@ -170,3 +173,20 @@ syntax "let " ident " : " term " <== " term : doElem
 macro_rules
   | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assignEq $e)
   | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assignEq $e)
+
+-- `ExplicitCircuit` integration
+
+instance {F : Type} [Field F] {x y : Expression F} :
+  ExplicitCircuit (Expression.assertEquals x y) := inferInstance
+
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] {x y : α (Expression F)} :
+    ExplicitCircuit (assertEquals x y) := inferInstanceAs <|
+  ExplicitCircuit (Gadgets.Equality.circuit α (x, y))
+
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] {x y : α (Expression F)} :
+    ExplicitCircuit (HasAssertEq.assert_eq x y) :=
+  inferInstanceAs (ExplicitCircuit (assertEquals x y))
+
+instance {F : Type} [Field F] {x y : Expression F} :
+    ExplicitCircuit (HasAssertEq.assert_eq x y) :=
+  inferInstanceAs (ExplicitCircuit (Expression.assertEquals x y))

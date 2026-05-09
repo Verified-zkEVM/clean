@@ -52,8 +52,9 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     apply congrArg U32.fromLimbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
   subcircuitsConsistent _ _ := by
-    simp +arith only [circuit_norm, main,
-      ByteDecomposition.circuit, ByteDecomposition.elaborated]
+    simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
+  channelsLawful := by
+    simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
   circuit_proof_start [ByteDecomposition.circuit, ByteDecomposition.elaborated,

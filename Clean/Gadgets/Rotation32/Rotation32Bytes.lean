@@ -40,6 +40,8 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   subcircuitsConsistent x i0 := by
     simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+  channelsLawful := by
+    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 
   output_eq := by
     intros
@@ -60,10 +62,10 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (
   dsimp only [Assumptions, U32.Normalized] at as
   obtain ⟨ h0, h1, h2, h3 ⟩ := as
 
-  simp [circuit_norm, Spec, U32.value, -Nat.reducePow]
+  simp [circuit_norm, main, Spec, U32.value, -Nat.reducePow]
   constructor
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
-  · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
+  · fin_cases off <;> simp_all [circuit_norm, explicit_provable_type]
 
 theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _

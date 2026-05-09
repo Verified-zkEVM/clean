@@ -174,10 +174,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [main, circuit_norm]
     rfl
 
-  subcircuitsConsistent := by
-    intro input offset
-    simp only [main, circuit_norm]
-
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1]
