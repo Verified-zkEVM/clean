@@ -192,7 +192,7 @@ designed to be used for proving soundness by adding one table after another.
 def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawChannel F) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
   ∃ extraInteractions : List (Interaction F),
-    -- the total of known + unknown interactions is balanced for each "finished" channel
+    -- the total of known + unknown interactions is balanced
     BalancedInteractions (tables.interactionsWith channel ++ extraInteractions) ∧
     -- the extra interactions are with the same channel.
     (∀ i ∈ extraInteractions, i.channel = channel) ∧

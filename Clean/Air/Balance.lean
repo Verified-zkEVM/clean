@@ -152,7 +152,7 @@ instance (channel : Channel F Message) : Normal channel.toRaw where
     simp [Channel.toRaw]
 
 /-- Normal channels are consistent, thanks to `exists_push_of_pull` -/
-theorem normalChannel_consistent (channel : RawChannel F) [channel.Normal] :
+theorem consistent_of_normal (channel : RawChannel F) [channel.Normal] :
     channel.Consistent := by
   constructor
   intro interactions data balance reqs a a_mem
@@ -175,7 +175,7 @@ theorem normalChannel_consistent (channel : RawChannel F) [channel.Normal] :
   convert b_reqs
 
 instance (channel : RawChannel F) [channel.Normal] : channel.Consistent :=
-  normalChannel_consistent channel
+  consistent_of_normal channel
 end RawChannel
 
 /-
@@ -236,10 +236,6 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
   (pulls_mult : ∀ a ∈ pulls, a.mult = -1) (pushes_mult : ∀ b ∈ pushes, b.mult = 1) :
     (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →
     ∀ (i : ℕ) (hi: i < n), pushes[i].Requirements data → pulls[i].Guarantees data := by
-  -- the intuition for this proof is that when the requirements for a push hold unconditionally, we
-  -- can "follow implications around the cycle" to show that _all_ the guarantees/requirements must hold
-  -- (within that cycle, which contains both the push and its corresponding pull).
-  -- but we avoid explicitly reasoning about cycles by using a clever inductive argument.
   intro constraints
   induction n generalizing pulls pushes with
   | zero => intro i hi; nomatch hi
