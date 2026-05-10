@@ -251,9 +251,8 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
-
-abbrev fibonacciFormalEnsemble := fibonacciEnsemble.toFormal (F p) (fun _ _ => True) (by
-  simp [circuit_norm, fibonacciEnsemble, fibonacciVm, add8, pushBytes, fib8])
+  |>.toFormal _ (fun _ _ => True)
+    (by simp [circuit_norm, fibonacciVm, add8, pushBytes, fib8])
 
 /--
 Fibonacci soundness, concretely: if someone gives you a proof of the ensemble statement,
@@ -274,10 +273,10 @@ And idea could be to define a "global state" per channel, and define how every i
 Then let the guarantees/requirements access that state (the guarantees _before_ and the requiremtns _after_ the interaction).
 -/
 theorem fibonacci_soundness : ∀ (n x y : F p),
-  fibonacciEnsemble.Statement (n, x, y) →
+  fibonacciEnsemble.ensemble.Statement (n, x, y) →
     ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
   intro n x y statement
-  convert fibonacciFormalEnsemble.soundness (n, x, y) ?assumptions statement
+  convert fibonacciEnsemble.soundness (n, x, y) ?assumptions statement
   · simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
     tauto
   · simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
