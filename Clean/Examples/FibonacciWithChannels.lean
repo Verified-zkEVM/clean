@@ -194,9 +194,6 @@ example (input : Var fieldTriple (F p)) :
     ExplicitCircuit (fib8.main input) := by
   infer_explicit_circuit
 
--- additional circuits that pull/push remaining channel interactions
--- these really wouldn't have to be circuits, need to find a better place for tying together channels
-
 -- completing Fibonacci channel with input and output
 def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
   main | (n, x, y) => do
@@ -284,6 +281,27 @@ theorem fibonacci_soundness : ∀ (n x y : F p),
   · simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
     tauto
   · simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
+
+/-
+Fun fact! We can prove end-to-end soundness of a component that proves `False`
+-/
+def FalseChannel : Channel (F p) unit where
+  name := "false"
+  Guarantees _ _ := False
+
+def falseCircuit : GeneralFormalCircuit (F p) unit unit where
+  main _ := FalseChannel.pull ()
+  Spec _ _ _ := False
+  ProverAssumptions _ _ _ := False
+  localLength _ := 0
+  channelsWithGuarantees := [ FalseChannel.toRaw ]
+  soundness := by circuit_proof_start [FalseChannel]
+  completeness := by circuit_proof_start [FalseChannel]
+
+def falseEnsemble := SoundEnsemble.empty (F p) unit
+  |>.addFinishedChannel FalseChannel.toRaw
+  |>.addTable ⟨ falseCircuit ⟩
+    (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])
 
 -- everything below is a remainder of the original AI slop proof of fibonacci soundness
 -- TODO port non-overflow proof to the general case and remove

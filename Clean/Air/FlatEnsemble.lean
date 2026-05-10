@@ -278,6 +278,12 @@ lemma verifierAssumptions_iff_verifierTable_assumptions {witness : EnsembleWitne
   simp only [circuit_norm, Table.Assumptions,
     Ensemble.verifierTable, Component.Assumptions]
 
+lemma verifierSpec_iff_verifierTable_spec {witness : EnsembleWitness ens} :
+  ens.VerifierSpec witness.publicInput witness.data ↔
+    witness.verifierTable.Spec := by
+  simp only [Ensemble.VerifierSpec, Table.Spec]
+  simp only [circuit_norm, Ensemble.verifierTable, Component.Spec]
+
 lemma verifierGuarantees_iff_verifierTable_guarantees {witness : EnsembleWitness ens} :
   ens.VerifierGuarantees witness.publicInput witness.data ↔
     witness.verifierTable.Guarantees := by
