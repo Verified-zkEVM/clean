@@ -134,6 +134,12 @@ where
 /// The verifier doesn't need to know the table contents — only the lookup
 /// constraints are verified.  The trace has `data_width` data columns followed
 /// by a multiplicity column (total width = `data_width + 1`).
+///
+/// This represents the prover table as a committed relation of tuples. It does
+/// not encode richer Lean `Table.Contains` predicates, such as "column 0 is a
+/// row address and the row at that address must contain this tuple". Such
+/// dynamic table semantics need to be extracted as additional AIR/component
+/// constraints rather than inferred by this generic lookup table AIR.
 #[derive(Clone)]
 pub struct ProverTableAir<F> {
     pub name: String,

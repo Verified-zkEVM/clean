@@ -5,6 +5,20 @@ import Clean.Utils.Primes
 
 namespace Examples.FemtoCairo.Plonky3Helpers
 
+/-
+  These helpers are intentionally a FemtoCairo-specific bridge for the current
+  Plonky3 backend tests. They export the main table constraints and trace, but
+  table materialization is still hardcoded to the `"program"` preprocessed table
+  and `"memory"` prover table below.
+
+  In particular, dynamic prover tables are emitted as raw tuple tables. The JSON
+  bridge does not export arbitrary Lean `Table.Contains` semantics. For example,
+  FemtoCairo's `MemoryTable.Contains` interprets the address as a row index, but
+  the current Plonky3 prover-table bridge only checks tuple membership in the
+  committed table. Rich dynamic table semantics should be represented as their
+  own extracted components, e.g. via the channel / Flat.Component framework.
+-/
+
 /-- Write FemtoCairo circuit JSON (constraints + preprocessed program table + prover table metadata)
     to a file. Computes `num_columns` from the provable type size and maximum auxiliary columns. -/
 def generateCircuitJson {S : Type → Type} [ProvableType S]

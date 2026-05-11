@@ -8,6 +8,12 @@ use p3_matrix::Matrix;
 use crate::common::setup;
 use crate::lean_runner::run_lean_script;
 
+// This adapter mirrors the current FemtoCairo JSON shape, not a general Clean
+// table extraction format. It assumes exactly one preprocessed `"program"` table
+// and one prover-supplied `"memory"` table. The prover table is interpreted by
+// the Plonky3 backend as tuple membership only; custom Lean `Table.Contains`
+// semantics are not exported by this bridge.
+
 pub fn run_lean_scripts(
     circuit_lean_file: &str,
     circuit_output: &str,
