@@ -6,6 +6,7 @@ Assignment of cells is handled in the background, which simplifies reasoning abo
 
 Thus far, only the common `k=2` case is handled.
 -/
+import Clean.Circuit.Extensions
 import Clean.Table.Theorems
 import Clean.Gadgets.Equality
 
@@ -92,7 +93,17 @@ for any given public `input` and `ouput`.
 def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint 2 (ProvablePair State Input) F Unit := do
   let (acc, x) ← readCurrRow
   let output ← table.step acc x
-  let (output', _) ← getNextRow
+  let output' : Var State F ← modifyGet fun ctx =>
+    let circuit : Circuit F Unit := do
+      let _state : Var State F ← witness fun env => eval env output
+      let _input : Var Input F ← witnessAny Input
+    let (_, ops) := circuit ctx.offset
+    let ctx' : TableContext 2 (ProvablePair State Input) F := {
+      inputSize := ctx.inputSize,
+      circuit := ctx.circuit ++ ops,
+      assignment := ctx.assignment.pushRow 1
+    }
+    (varFromOffset State ctx.offset, ctx')
   -- TODO make this more efficient by assigning variables as long as they don't come from the input
   output' === output
 
@@ -196,7 +207,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     simp only [ih2, and_self, and_true]
     clear ih1 ih2
     set env' := windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
-    simp only [table_norm, circuit_norm, inductiveConstraint, zero_add, Nat.add_zero] at constraints
+    simp only [table_norm, circuit_norm, witnessAny, inductiveConstraint, zero_add, Nat.add_zero] at constraints
     obtain ⟨ main_constraints, return_eq ⟩ := constraints
     have h_env' : env' = windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
     simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm, zero_add, Nat.add_zero] at h_env'
@@ -312,6 +323,6 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
-      table_assignment_norm, circuit_norm, CellAssignment.assignmentFromCircuit_offset]
+      table_assignment_norm, circuit_norm, witnessAny, CellAssignment.assignmentFromCircuit_offset]
 
 end InductiveTable

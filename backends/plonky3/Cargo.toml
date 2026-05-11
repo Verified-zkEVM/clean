@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-itertools = "0.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
@@ -18,13 +17,9 @@ p3-commit = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-dft = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-field = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-fri = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
-p3-keccak = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
-p3-lookup = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-matrix = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-symmetric = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-uni-stark = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
-p3-maybe-rayon = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-util = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
-p3-poseidon2 = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 rand = "0.10"

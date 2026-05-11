@@ -15,9 +15,9 @@ use crate::{AirInfo, CleanAirInstance, StarkGenericConfig, Val};
 #[instrument(skip_all)]
 pub fn prove<SC>(
     config: &SC,
-    air_infos: &Vec<AirInfo<Val<SC>>>,
+    air_infos: &[AirInfo<Val<SC>>],
     traces: &[RowMajorMatrix<Val<SC>>],
-    public_values: &Vec<Val<SC>>,
+    public_values: &[Val<SC>],
 ) -> BatchProof<SC>
 where
     SC: StarkGenericConfig,
@@ -58,7 +58,7 @@ where
         .map(|((air_info, trace), lookups)| StarkInstance {
             air: &air_info.air,
             trace: trace.clone(),
-            public_values: public_values.clone(),
+            public_values: public_values.to_vec(),
             lookups: lookups.clone(),
         })
         .collect();

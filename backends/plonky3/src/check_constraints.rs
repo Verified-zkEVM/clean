@@ -1,5 +1,4 @@
 use alloc::vec;
-use alloc::vec::Vec;
 
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues};
 use p3_field::Field;
@@ -25,7 +24,7 @@ pub(crate) fn check_constraints<F, A>(
     air: &A,
     main: &RowMajorMatrix<F>,
     preprocessed: &RowMajorMatrix<F>,
-    public_values: &Vec<F>,
+    public_values: &[F],
 ) where
     F: Field,
     A: for<'a> Air<DebugConstraintBuilder<'a, F>>,

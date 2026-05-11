@@ -11,9 +11,9 @@ use p3_uni_stark::VerificationError;
 #[instrument(skip_all)]
 pub fn verify<SC>(
     config: &SC,
-    air_infos: &Vec<AirInfo<Val<SC>>>,
+    air_infos: &[AirInfo<Val<SC>>],
     proof: &BatchProof<SC>,
-    public_values: &Vec<Val<SC>>,
+    public_values: &[Val<SC>],
 ) -> Result<(), VerificationError<PcsError<SC>>>
 where
     SC: StarkGenericConfig,
@@ -41,7 +41,7 @@ where
         air_infos.iter().map(|ai| ai.air.clone()).collect();
 
     let per_instance_pvs: Vec<Vec<Val<SC>>> =
-        air_infos.iter().map(|_| public_values.clone()).collect();
+        air_infos.iter().map(|_| public_values.to_vec()).collect();
 
     verify_batch(config, &airs, proof, &per_instance_pvs, &common)
 }

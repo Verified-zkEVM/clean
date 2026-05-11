@@ -32,6 +32,10 @@ where
     preprocessed: Option<RowMajorMatrix<F>>,
     /// Maps each LookupRowScope to its preprocessed column index
     scope_to_prep_col: BTreeMap<LookupRowScope, usize>,
+    /// Maximum number of lookup inputs per Lookup object.
+    /// Groups exceeding this are split into multiple chunks,
+    /// reducing LogUp constraint degree at the cost of more auxiliary columns.
+    max_chunk_size: usize,
 }
 
 impl<F: Field> BaseAir<F> for MainAir<F> {
@@ -131,6 +135,7 @@ where
             SymbolicAirBuilder::<AB::F>::new(prep_width, self.width, 0, 0, 0);
         let symbolic_main = AirBuilder::main(&symbolic_builder);
         let symbolic_main_local = symbolic_main.row_slice(0).unwrap();
+        let symbolic_main_next = symbolic_main.row_slice(1).unwrap();
 
         let ops_with_assignments = self.clean_ops.lookup_ops_with_assignments();
 
@@ -144,7 +149,11 @@ where
         for (lookup_op, assignment, scope) in &ops_with_assignments {
             let load_var = |var_idx: usize| -> p3_uni_stark::SymbolicVariable<AB::F> {
                 let var = &assignment.vars[var_idx];
-                symbolic_main_local[var.column]
+                match var.row {
+                    0 => symbolic_main_local[var.column],
+                    1 => symbolic_main_next[var.column],
+                    _ => panic!("Invalid row index in lookup variable: {}", var.row),
+                }
             };
             let load_pi = |_pi_idx: usize| -> SymbolicExpression<AB::F> {
                 panic!("Pi not supported in lookups")
@@ -175,12 +184,18 @@ where
                 .push(input);
         }
 
-        // Create one Lookup per (table, scope) group
+        // Create Lookup objects, chunking large groups to reduce constraint degree
         let mut lookups = Vec::new();
         let mut scopes = Vec::new();
         for ((table_name, scope), inputs) in lookups_by_key {
-            lookups.push(Air::<AB>::register_lookup(self, Kind::Global(table_name), &inputs));
-            scopes.push(scope);
+            for chunk in inputs.chunks(self.max_chunk_size) {
+                lookups.push(Air::<AB>::register_lookup(
+                    self,
+                    Kind::Global(table_name.clone()),
+                    chunk,
+                ));
+                scopes.push(scope);
+            }
         }
         self.lookup_row_scopes = scopes;
 
@@ -198,6 +213,12 @@ impl<F: Field> MainAir<F> {
     /// Create a new MainAir instance from JSON content and trace data
     pub fn new(json_content: &str, width: usize, trace_height: usize) -> Self {
         let clean_ops = CleanOps::from_json(json_content);
+        Self::build(clean_ops, width, trace_height)
+    }
+
+    /// Create a new MainAir instance from a `serde_json::Value` and trace data
+    pub fn from_value(value: serde_json::Value, width: usize, trace_height: usize) -> Self {
+        let clean_ops = CleanOps::from_value(value);
         Self::build(clean_ops, width, trace_height)
     }
 
@@ -224,6 +245,7 @@ impl<F: Field> MainAir<F> {
             lookup_row_scopes: Vec::new(),
             preprocessed,
             scope_to_prep_col,
+            max_chunk_size: 3, // keeps LogUp degree ≤ 4, matching default log_blowup=2
         }
     }
 
@@ -246,6 +268,15 @@ impl<F: Field> MainAir<F> {
             }
         }
         Some(RowMajorMatrix::new(data, num_cols))
+    }
+
+    /// Set the maximum number of lookup inputs per Lookup object.
+    /// Groups exceeding this are split into multiple chunks,
+    /// reducing LogUp constraint degree at the cost of more auxiliary columns.
+    pub fn with_max_chunk_size(mut self, max_chunk_size: usize) -> Self {
+        assert!(max_chunk_size >= 1, "max_chunk_size must be at least 1");
+        self.max_chunk_size = max_chunk_size;
+        self
     }
 
     /// Get reference to the clean operations
@@ -288,7 +319,7 @@ impl<F: Field> MainAir<F> {
 }
 
 /// Helper function to parse initial trace data from JSON
-pub fn parse_init_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) -> Vec<Vec<F>> {
+pub fn parse_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) -> Vec<Vec<F>> {
     // First parse the JSON as a Vec<Vec<u64>>
     let raw_data: Vec<Vec<u64>> = serde_json::from_str(json_content).expect("Failed to parse JSON");
 
@@ -299,6 +330,18 @@ pub fn parse_init_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) 
         .collect();
 
     raw_data
+}
+
+/// Parse trace JSON and return a flat `RowMajorMatrix`.
+///
+/// This is a convenience wrapper around [`parse_trace`] that flattens the
+/// row vectors into the `RowMajorMatrix` format expected by the prover.
+pub fn parse_trace_matrix<F: Field + PrimeCharacteristicRing>(
+    json_content: &str,
+) -> RowMajorMatrix<F> {
+    let trace_rows = parse_trace::<F>(json_content);
+    let width = trace_rows[0].len();
+    RowMajorMatrix::new(trace_rows.into_iter().flatten().collect(), width)
 }
 
 /// Enum wrapper to handle multiple AIR types in the same vector
