@@ -84,8 +84,6 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
   -- TODO make coercion work without .toRaw
   channelsWithGuarantees := [ BytesChannel.toRaw ]
   channelsWithRequirements := [ Add8Channel.toRaw ]
-  -- TODO feels weird to put the entire spec in the completeness assumptions
-  -- can we get something from the channel interactions??
   ProverAssumptions
   | { x, y, z, m }, _, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
@@ -116,8 +114,6 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
 example (input : Var Add8Inputs (F p)) :
     ExplicitCircuit (add8.main input) := by
   infer_explicit_circuit
-
--- define valid Fibonacci state transitions
 
 def fibonacci : ℕ → (ℕ × ℕ)
   | 0 => (0, 1)
