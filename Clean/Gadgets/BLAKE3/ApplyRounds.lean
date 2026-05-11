@@ -28,76 +28,36 @@ The spec follows the pattern from the applyRounds function:
 - Permute the message
 -/
 def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
-  main := fun input => do
+  main input := do
     let state ← subcircuit Round.circuit input
     let permuted_message ← subcircuit Permute.circuit input.message
     return ⟨state, permuted_message⟩
-  localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
-  localLength_eq := by
-    intro input offset
-    simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
-    rfl
-  output := fun input offset =>
+
+  localLength input := Round.circuit.localLength input + Permute.circuit.localLength input.message
+  output input offset :=
     let state_out := Round.circuit.output input offset
     let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
     ⟨state_out, msg_out⟩
-  output_eq := by
-    intro input offset
-    simp only [Circuit.bind_def, Circuit.output, circuit_norm]
 
   Assumptions := Round.Assumptions
-  Spec := fun input output =>
+  Spec input output :=
     let state' := round input.state.value (BLAKE3State.value input.message)
     output.state.value = state' ∧
     output.state.Normalized ∧
     BLAKE3State.value output.message = permute (BLAKE3State.value input.message) ∧
     BLAKE3State.Normalized output.message
+
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
-    simp only [Round.Assumptions] at h_assumptions
-    decompose_provable_struct
-    simp only [circuit_norm] at h_holds
-    simp only [Round.circuit] at h_holds
-    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
-    simp only [circuit_norm, h_eval] at h_holds
+    circuit_proof_start [Round.circuit, Permute.circuit,
+      Round.Assumptions, Permute.Assumptions, Round.Spec, Permute.Spec]
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     specialize h_holds1 h_assumptions
-    simp only [Permute.circuit, Permute.Assumptions] at h_holds2
-    rcases h_assumptions with ⟨ asm1, asm2 ⟩
-    -- h_holds2 requires the message to be normalized
-    specialize h_holds2 asm2
-
-    -- Now we need to show the spec holds for the output
-    simp only
-    rw [ProvableStruct.eval_eq_eval]
-    simp only [ProvableStruct.eval]
-    simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
-
-    constructor
-    · exact h_holds1.1
-    constructor
-    · exact h_holds1.2
-    · exact h_holds2
-
+    specialize h_holds2 h_assumptions.right
+    exact ⟨ h_holds1.1, h_holds1.2, h_holds2 ⟩
   completeness := by
-    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-    simp only [Round.Assumptions] at h_assumptions
-    decompose_provable_struct
-    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
-
-    -- Unpack what we have
-    simp only [circuit_norm] at h_env_uses_witnesses ⊢
-    obtain ⟨h_round_uses, h_permute_uses⟩ := h_env_uses_witnesses
-
-    constructor
-    · simp only [Round.circuit, h_eval]
-      exact h_assumptions
-
-    · -- Show Permute assumptions hold (message is normalized)
-      rcases h_assumptions with ⟨_, h_msg_norm⟩
-      dsimp only [Permute.circuit, Permute.Assumptions]
-      simp only [h_eval]
-      exact h_msg_norm
+    circuit_proof_start [Round.circuit, Permute.circuit,
+      Round.Assumptions, Permute.Assumptions]
+    exact ⟨ h_assumptions, h_assumptions.right ⟩
 
 /--
 Combines two roundWithPermute operations using the concat combinator.
@@ -376,8 +336,8 @@ lemma applyRounds_eq_applySevenRounds
   simp only [applyRounds, applySevenRounds]
 
 lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
-    x < 256^4 ->
-    (eval env (U32.decomposeNatExpr x)).value = x := by
+    x < 256^4 →
+    (eval env (U32.decomposeNatExpr (p:=p) x)).value = x := by
   intro h
   simp only [U32.decomposeNatExpr, circuit_norm]
   exact U32.value_of_decomposedNat_of_small x h
@@ -466,17 +426,18 @@ lemma initial_state_and_messages_are_normalized
     (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
-  set state_vec := initializeStateVector input_var
+  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
+  simp only [circuit_norm] at *
   provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var_chaining_value[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var.chaining_value[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 ⟨ i, h_i ⟩
 
   -- Show the state is normalized
-  have h_state_normalized : (eval env state_vec).Normalized := by
+  have h_state_normalized : BLAKE3State.Normalized (eval env state_vec) := by
     simp only [BLAKE3State.Normalized, state_vec, initializeStateVector, eval_vector]
     intro i
     fin_cases i
@@ -495,7 +456,7 @@ lemma initial_state_and_messages_are_normalized
     exact h_normalized.2.1 i
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
+  circuit_proof_start [sevenRoundsApplyStyle]
 
   -- Equations for counter values
   have h_counter_low_eq : input_counter_low.value % 4294967296 = input_counter_low.value := by
@@ -515,7 +476,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
-    apply initial_state_and_messages_are_normalized
+    apply initial_state_and_messages_are_normalized env
     · simp only [circuit_norm, h_input]
       rfl
     · simp only [Assumptions]
@@ -527,15 +488,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- h_spec tells us that sevenRoundsApplyStyle.Spec holds for the inputs and output
   -- We need to unpack what this means and relate it to our Spec
 
-  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal,
-             FormalCircuit.concat] at h_spec
+  simp only [FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat] at h_spec
 
   -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
   simp only [SevenRoundsSpec] at h_spec
 
   obtain ⟨h_value, h_normalized⟩ := h_spec
 
-  constructor
+  and_intros
   · -- Show out.value = applyRounds ...
     -- Use our lemma to express applyRounds in terms of applySevenRounds
     rw [applyRounds_eq_applySevenRounds]
@@ -548,15 +508,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         clear h_value
         simp only [initializeStateVector, h_input, eval_vector, circuit_norm, getElem_eval_vector]
         simp [circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
-
   · -- Show out.Normalized
     exact h_normalized
+  · left; trivial
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
 
   -- Use the helper lemma to prove normalization
-  apply initial_state_and_messages_are_normalized env
+  apply initial_state_and_messages_are_normalized (p := p) env
   · simp only [h_input, circuit_norm]
     rfl
   · simp only [Assumptions]

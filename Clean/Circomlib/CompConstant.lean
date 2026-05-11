@@ -95,15 +95,13 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   let out <== bits[127]
   return out
 
-set_option maxRecDepth 2000 in
 def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field where
   main := main c
-  localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
-  localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
-  subcircuitsConsistent input n := by
+  localLength _ := 127 + 1 + 135 + 1
+  output _ i0 := varFromOffset field (i0 + 127 + 1 + 135)
+  output_eq := by
+    intro offset
     simp only [circuit_norm, main, Num2Bits.circuit]
-    and_intros <;> ac_rfl
-
   Assumptions input :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
 
@@ -225,7 +223,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [circuit_norm, Vector.getElem_ofFn] at h_parts_i
       show (Vector.mapRange 127 fun j => env.get (i₀ + j))[i.val] = _
       simp only [Vector.getElem_mapRange, h_parts_i]
-      simp only [apply_ite (Expression.eval env)]
+      simp only [apply_ite (Expression.eval env.toEnvironment)]
       simp only [circuit_norm]
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega

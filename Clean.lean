@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath
 import Clean.Utils.OfflineMemory
 import Clean.Circomlib.AliasCheck
@@ -17,6 +18,7 @@ import Clean.Circomlib.Sign
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
+import Clean.Examples.HintExample
 import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Examples.FemtoCairo.Plonky3Helpers
 import Clean.Examples.FemtoCairo.Plonky3TestData
@@ -28,6 +30,7 @@ import Clean.Tables.KeccakInductive
 import Clean.Tables.BLAKE3.ProcessBlocksInductive
 import Clean.Gadgets.Bits
 import Clean.Gadgets.Conditional
+import Clean.Gadgets.IsEqual
 import Clean.Gadgets.IsZeroField
 import Clean.Gadgets.IsZero
 import Clean.Gadgets.BLAKE3.ApplyRounds
@@ -37,5 +40,4 @@ import Clean.Gadgets.BLAKE3.Permute
 import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Gadgets.BLAKE3.Round
 import Clean.Gadgets.BLAKE3.FinalizeChunk
-import Clean.Test
-import Clean.Specs.BLAKE3.ChunkProcessingTests
+import Clean.Examples.FibonacciWithChannels

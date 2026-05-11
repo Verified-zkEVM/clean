@@ -134,7 +134,7 @@ lemma sum_pow_two_fin (k : ℕ) :
   | zero => simp
   | succ n ih =>
     rw [Fin.sum_univ_castSucc]
-    simp only [Fin.coe_castSucc, Fin.val_last]
+    simp only [Fin.val_castSucc, Fin.val_last]
     rw [ih]
     ring_nf
     omega

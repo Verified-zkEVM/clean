@@ -38,19 +38,18 @@ lemma thetaC_loop (state : Vector ℕ 25) :
   rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+  circuit_proof_start [Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec]
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [main, thetaC_loop, circuit_norm, eval_vector, KeccakState.value, Xor64.circuit]
+  simp only [thetaC_loop, circuit_norm, eval_vector, KeccakState.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [circuit_norm, h_input,
-    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_holds
+  simp only [circuit_norm, h_input] at h_holds
   simp only [Nat.reduceAdd] at h_holds
-  have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].Normalized :=
-    fun hi => state_norm ⟨ _, hi ⟩
+  have state_norm : ∀ {i : ℕ} (hi : i < 25), input[i].Normalized :=
+    fun hi => h_assumptions ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
 
   intro i

@@ -3,9 +3,9 @@ This file provides the built-in `assertEquals` gadget, which works for any prova
 and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
 import Clean.Circuit.Loops
+import Clean.Circuit.Explicit
 
 variable {F : Type} [Field F]
-open Circuit (ConstraintsHold)
 
 namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
@@ -17,16 +17,17 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
-theorem allZero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
+theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
+    (∀ x ∈ xs, x.eval env = 0) →
+    ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality
-def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circuit F Unit := do
+def main {M : TypeMap} [ProvableType M] (input : Var M F × Var M F) : Circuit F Unit := do
   let (x, y) := input
-  let diffs := (toVars x).zip (toVars y) |>.map (fun (xi, yi) => xi - yi)
+  let diffs := (toElements (M:=M) x).zip (toElements y) |>.map (fun (xi, yi) => xi - yi)
   .forEach diffs assertZero
 
 @[reducible]
@@ -49,18 +50,20 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     intro offset env input_var input h_input _ h_holds
     replace h_holds := allZero.soundness h_holds
     simp only at h_holds
+    constructor; swap
+    · simp only [main, circuit_norm]
 
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := input_var
     simp only [circuit_norm, Prod.mk.injEq] at h_input
     obtain ⟨ hx, hy ⟩ := h_input
     rw [←hx, ←hy]
-    simp only [eval]
+    simp only [CircuitType.eval_expression, ProvableType.eval]
     congr 1
     ext i hi
     simp only [Vector.getElem_map]
 
-    rw [toVars, toVars, ←Vector.forall_getElem] at h_holds
+    rw [←Vector.forall_getElem] at h_holds
     specialize h_holds i hi
     rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
     simp only [Expression.eval] at h_holds
@@ -79,10 +82,11 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     rw [←hx, ←hy] at h_spec
     clear hx hy
     apply_fun toElements at h_spec
-    simp only [eval, ProvableType.toElements_fromElements, toVars] at h_spec
+    simp only [CircuitType.eval_expression, ProvableType.eval,
+      ProvableType.toElements_fromElements] at h_spec
     rw [Vector.ext_iff] at h_spec
 
-    rw [toVars, toVars, ←Vector.forall_getElem]
+    rw [←Vector.forall_getElem]
     intro i hi
     specialize h_spec i hi
     simp only [Vector.getElem_map] at h_spec
@@ -94,21 +98,21 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
 @[circuit_norm ↓]
 lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elaborated = elaborated α := rfl
 
--- rewrite soundness/completeness directly
+-- rewrite spec/proverAssumptions/proverSpec directly
 
 @[circuit_norm]
-theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
+theorem spec (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).Spec env = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
+theorem proverAssumptions (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).ProverAssumptions env = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
+theorem proverSpec (α : TypeMap) [ProvableType α] (n : ℕ) (env : ProverEnvironment F) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).ProverSpec env = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
 
 end Equality
@@ -169,3 +173,20 @@ syntax "let " ident " : " term " <== " term : doElem
 macro_rules
   | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assignEq $e)
   | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assignEq $e)
+
+-- `ExplicitCircuit` integration
+
+instance {F : Type} [Field F] {x y : Expression F} :
+  ExplicitCircuit (Expression.assertEquals x y) := inferInstance
+
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] {x y : α (Expression F)} :
+    ExplicitCircuit (assertEquals x y) := inferInstanceAs <|
+  ExplicitCircuit (Gadgets.Equality.circuit α (x, y))
+
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] {x y : α (Expression F)} :
+    ExplicitCircuit (HasAssertEq.assert_eq x y) :=
+  inferInstanceAs (ExplicitCircuit (assertEquals x y))
+
+instance {F : Type} [Field F] {x y : Expression F} :
+    ExplicitCircuit (HasAssertEq.assert_eq x y) :=
+  inferInstanceAs (ExplicitCircuit (Expression.assertEquals x y))

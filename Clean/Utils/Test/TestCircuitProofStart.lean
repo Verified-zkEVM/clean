@@ -94,7 +94,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   -- Note: provable_struct_simp eliminates input and h_input by substituting eval env input_var
   -- Check that these names exist by using them
   have : ℕ := i₀
-  have : Environment F := env
+  have : ProverEnvironment F := env
   have : Input (Expression F) := input_var
   have : env.UsesLocalWitnessesCompleteness i₀ (circuit.main input_var i₀).2 := h_env
   -- After provable_struct_simp, we work with eval env input_var instead of input
@@ -120,7 +120,7 @@ def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
 
 def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
+  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq _ _ := rfl }
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
@@ -144,20 +144,20 @@ def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
 
 def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
+  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq _ _ := rfl }
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Should unfold nested references
   -- Check that Assumptions was unfolded to reveal TestAssumptions
-  guard_hyp h_assumptions : TestAssumptions input ∧ TestAssumptions input
+  guard_hyp h_assumptions : TestAssumptions input
   sorry
 end UnfoldTest2
 
 namespace UnfoldTest3
 -- Test that elaborated definition is unfolded
 def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
+  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq _ _ := rfl }
 
 def elaborated : ElaboratedCircuit (F p) unit unit :=
   testCircuit
@@ -169,7 +169,12 @@ example : Soundness (F p) elaborated TestAssumptions TestSpec := by
   circuit_proof_start
   -- elaborated should be unfolded to testCircuit
   -- Check that h_holds now refers to testCircuit.main, not elaborated.main
-  guard_hyp h_holds : ConstraintsHold.Soundness env (testCircuit.main input_var i₀).2
+  guard_hyp h_holds : Operations.forAllNoOffset {
+    assert e := env e = 0
+    lookup l := l.Soundness env
+    interact i := i.Guarantees env
+    subcircuit s := s.Assumptions env → s.Spec env
+  } (testCircuit.main input_var i₀).2
   sorry
 end UnfoldTest3
 

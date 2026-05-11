@@ -141,7 +141,7 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
       try
         -- Generate field-based names for the struct variable
         let altVarNames ← generateStructFieldNames fvarId
-        
+
         -- Use cases tactic on the variable with custom names
         let casesResult ← currentGoal.cases fvarId #[altVarNames]
 
@@ -169,7 +169,7 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   2. appear in field projections in the goal
 
   Note:
-  - The new variables introduced by decomposition are named based on the original 
+  - The new variables introduced by decomposition are named based on the original
     variable name and the structure field names. For example, if `input` has fields
     `x`, `y`, and `z`, the decomposed variables will be `input_x`, `input_y`, `input_z`.
   - This tactic only performs one level of decomposition. For nested structures,

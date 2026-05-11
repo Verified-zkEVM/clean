@@ -1,9 +1,9 @@
-/- This file contains experimental additions to the Circuit DSL -/
+/- This file contains miscellaneous additions and helpers on top of the Circuit DSL -/
 import Clean.Circuit.Subcircuit
 
-variable {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+variable {F : Type} [Field F] {M : TypeMap} [ProvableType M]
 
-instance {α : TypeMap} [ProvableType α] : Inhabited (Circuit F (Var α F)) where
+instance {M : TypeMap} [ProvableType M] : Inhabited (Circuit F (Var M F)) where
   default := witness default
 
 def copyToVar (x : Expression F) : Circuit F (Variable F) := do
@@ -18,16 +18,33 @@ def toVar : Expression F → Circuit F (Variable F)
 -- these could be used if you want to witness _any_ value and don't care which
 -- (typically useless, because in completeness proofs you will often have to prove some assumption about the value)
 
+@[circuit_norm]
 def getOffset : Circuit F ℕ := fun n => (n, [])
 
-def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
+def valueFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) (env : Environment F) : M F :=
   fromElements <| .mapRange _ fun i => env.get (offset + i)
 
-def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
-  let offset ← getOffset
-  witness (computeValueFromOffset α offset)
+theorem eval_varFromOffset_valueFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) (env : Environment F) :
+    Eval.eval env (varFromOffset (F:=F) M offset) = valueFromOffset M offset env := by
+  rw [ProvableType.eval_varFromOffset, valueFromOffset]
 
-theorem ProvableType.witnessAny.localWitnesses (n : ℕ) (env : Environment F) :
-    env.UsesLocalWitnessesCompleteness n (ProvableType.witnessAny α |>.operations n) ↔ True := by
-  simp only [circuit_norm, getOffset, ProvableType.witnessAny, computeValueFromOffset,
+def witnessAny (M: TypeMap) [ProvableType M] : Circuit F (Var M F) := do
+  let offset ← getOffset
+  witness fun env => valueFromOffset M offset env
+
+theorem witnessAny_localWitnesses (n : ℕ) (env : ProverEnvironment F) :
+    env.UsesLocalWitnessesCompleteness n (witnessAny M |>.operations n) ↔ True := by
+  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
     ProvableType.toElements_fromElements]
+
+@[circuit_norm]
+theorem witnessAny_output {n : ℕ} :
+    (witnessAny (F:=F) M |>.output n) = varFromOffset M n  := by
+  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
+    ProvableType.toElements_fromElements]
+
+@[circuit_norm]
+theorem witnessAny_interactionsWith {n : ℕ} {channel : RawChannel F} :
+    (witnessAny M |>.operations n).interactionsWith channel = [] := by
+  simp [circuit_norm, witnessAny, valueFromOffset, ProvableType.toElements_fromElements,
+    Operations.interactionsWith]

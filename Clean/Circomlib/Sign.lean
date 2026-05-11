@@ -14,12 +14,12 @@ We generalize this to work with any prime field by using (p-1)/2.
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
-omit [Fact (Nat.Prime p)] in
+omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 253)] in
 lemma hppre_half_254 : ((p - 1) / 2 < 2^254) := by
   calc
     _ ≤ p - 1 := by grind
     p - 1 ≤ p := by grind
-    _ < _ := by linarith [‹Fact (p < 2^254)›.elim]
+    _ < _ := ‹Fact (p < 2^254)›.elim
 
 namespace Sign
 /-
@@ -46,6 +46,7 @@ def main (input : Vector (Expression (F p)) 254) :=
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength input := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).localLength input
+  output := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).output
 
   Assumptions input :=
     -- Input should be binary representation of a field element
@@ -57,7 +58,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     output = if Utils.Bits.fromBits (input.map ZMod.val) > (p - 1) / 2 then 1 else 0
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [CompConstant.circuit]
     -- Proof follows easily from the fact that Sign is a
     -- specialization of CompConstant
     exact h_holds h_assumptions

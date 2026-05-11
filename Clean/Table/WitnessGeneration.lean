@@ -34,7 +34,7 @@ def buildAuxMap (as : CellAssignment W S) : Std.HashMap ℕ ℕ := Id.run do
   - According to `CellAssignment` for input cells, the input columns are assigned to
   the corresponding columns in the trace row.
 -/
-def generateNextRowWithData (tc : TableConstraint W S F Unit) (cur_row : Array F)
+def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F)
     (data : ProverData F) : Array F :=
   let ctx := (tc .empty).2
   let assignment := ctx.assignment
@@ -54,7 +54,9 @@ def generateNextRowWithData (tc : TableConstraint W S F Unit) (cur_row : Array F
             next_row[aux_map[i]!]!
         else panic! s!"Invalid variable index {i} in environment"
 
-      let wit := compute ⟨ env, data ⟩
+    -- evaluate the witness generators
+      let provEnv : ProverEnvironment F := { get := env, data, hint _ _ := #[] }
+      let wit := compute provEnv
 
       let next_row := if h : idx < assignment.offset then
         let var := assignment.vars[idx]
@@ -65,13 +67,9 @@ def generateNextRowWithData (tc : TableConstraint W S F Unit) (cur_row : Array F
 
       (idx + 1, next_row)
     )
-    (0, next_row)
+    (ctx.inputSize, next_row)
 
   next_row
-
-/-- Like `generateNextRowWithData` but without prover data (uses `fun _ _ => #[]`). -/
-def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F) : Array F :=
-  generateNextRowWithData tc cur_row (fun _ _ => #[])
 
 /--
   Generates a trace of length n, starting from the given row.
@@ -92,7 +90,7 @@ def witnessesWithData
   let mut current := cur_row
 
   for _ in [: n-1] do
-    let next := generateNextRowWithData tc current data
+    let next := generateNextRow tc current data
     trace := trace.push next
     current := next
   trace

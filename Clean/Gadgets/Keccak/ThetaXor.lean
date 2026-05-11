@@ -37,16 +37,16 @@ lemma thetaXor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
   simp [Specs.Keccak256.thetaXor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
+  circuit_proof_start [Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec]
+  obtain ⟨state_norm, d_norm⟩ := h_assumptions
 
   -- rewrite goal
   apply KeccakState.normalized_value_ext
-  simp only [main, circuit_norm, thetaXor_loop, Xor64.circuit, eval_vector,
-    KeccakState.value, KeccakRow.value]
+  simp only [circuit_norm, thetaXor_loop, eval_vector, KeccakState.value, KeccakRow.value]
 
   -- simplify constraints
-  simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
-  simp only [circuit_norm, main, h_input, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_holds
+  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
+  simp only [circuit_norm, h_input] at h_holds
 
   -- use assumptions, prove goal
   intro i

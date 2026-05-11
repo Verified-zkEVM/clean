@@ -60,6 +60,13 @@ theorem pure_def {α} (a : α) : (pure a : Circuit F α) = fun _ => (a, []) := r
 theorem map_def {α β} (f : α → β) (circuit : Circuit F α) :
   f <$> circuit = fun n => let (a, ops) := circuit n; (f a, ops) := rfl
 
+@[circuit_norm]
+theorem seqRight_def {α β} (f : Circuit F α) (g : Circuit F β) :
+  f *> g = fun n =>
+    let (_, ops) := f n
+    let (b, ops') := g (n + Operations.localLength ops)
+    (b, ops ++ ops') := rfl
+
 -- normalize `bind` to `>>=`
 @[circuit_norm]
 theorem bind_normalize {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
@@ -82,27 +89,27 @@ def localLength (circuit : Circuit F α) (offset := 0) : ℕ :=
 
 /-- Create a new variable. -/
 @[circuit_norm]
-def witnessVar (compute : Environment F → F) : Circuit F (Variable F) :=
+def witnessVar (compute : ProverEnvironment F → F) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
     (var, [.witness 1 fun env => #v[compute env]])
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witnessField (compute : Environment F → F) := do
+def witnessField (compute : ProverEnvironment F → F) := do
   let v ← witnessVar compute
   return var v
 
 /-- Create a vector of variables. -/
 @[circuit_norm]
-def witnessVars (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
+def witnessVars (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
     (vars, [.witness m compute])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
-def witnessVector (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
+def witnessVector (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     let vars := varFromOffset (fields m) offset
     (vars, [.witness m compute])
@@ -119,64 +126,37 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 
 end Circuit
 
+/-- Emit an interaction to the channel -/
+@[circuit_norm]
+def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ mult, msg, false ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
+def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ -1, msg, true ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
+def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
+  ((), [.interact interaction.toRaw])
+
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
-def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
+def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : ProverEnvironment F → α F) :
+    Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
     let var := varFromOffset α offset
     (var, [.witness (size α) (fun env => compute env |> toElements)])
 
 @[circuit_norm]
 def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
-    (compute : Environment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
+    (compute : ProverEnvironment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
   ProvableType.witness (α:=ProvableVector α m) compute
-
-namespace Circuit
-
--- formal concepts of soundness and completeness of a circuit
-
-/--
-What it means that "constraints hold" on a sequence of operations.
-- For assertions, the expression must evaluate to 0
-- For lookups, the evaluated entry must be in the table
-- For subcircuits, the constraints must hold on the subcircuit's flat operations
--/
-@[circuit_norm]
-def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
-  | [] => True
-  | .witness _ _ :: ops => ConstraintsHold eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
-  | .lookup l :: ops =>
-    l.Contains eval ∧ ConstraintsHold eval ops
-  | .subcircuit s :: ops =>
-    ConstraintsHoldFlat eval s.ops.toFlat ∧ ConstraintsHold eval ops
-
-/--
-Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
--/
-@[circuit_norm]
-def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Prop
-  | [] => True
-  | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
-  | .lookup l :: ops =>
-    l.Soundness eval ∧ ConstraintsHold.Soundness eval ops
-  | .subcircuit s :: ops =>
-    s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
-
-/--
-Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
--/
-@[circuit_norm]
-def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) → Prop
-  | [] => True
-  | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
-  | .lookup l :: ops =>
-    l.Completeness eval ∧ ConstraintsHold.Completeness eval ops
-  | .subcircuit s :: ops =>
-    s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
-end Circuit
 
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
@@ -185,27 +165,42 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.UsesLocalWitnesses (env : Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
+def ProverEnvironment.UsesLocalWitnesses (env : ProverEnvironment F) (offset : ℕ) (ops : Operations F) : Prop :=
   ops.forAllFlat offset { witness n _ compute := env.ExtendsVector (compute env) n }
 
 /--
 Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
 -/
 @[circuit_norm]
-def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : ℕ) : List (Operation F) → Prop
+def ProverEnvironment.UsesLocalWitnessesCompleteness (env : ProverEnvironment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
   | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
-  | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
+  | .interact _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
+  | .subcircuit s :: ops => s.ProverSpec env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
-def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
+def ProverEnvironment.UsesLocalWitnessesFlat (env : ProverEnvironment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
   FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute env) n } ops
 
 section
-open Circuit (ConstraintsHold)
-variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+variable {Input Output : TypeMap}
+
+/--
+Channel lawfulness for an elaborated circuit.
+
+This bundles the structural facts that connect the circuit's actual operations to its
+declared channel interface.
+-/
+@[circuit_norm]
+def ElaboratedCircuit.ChannelsLawful [CircuitType Input] [CircuitType Output]
+    (main : Var Input F → Circuit F (Var Output F))
+    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F))
+    (exposedChannels : Var Input F → ℕ → List (ExposedChannel F)) : Prop :=
+  ∀ input_var offset,
+    ((main input_var).operations offset).ChannelsLawful
+      channelsWithGuarantees channelsWithRequirements (exposedChannels input_var offset)
 
 /-
 Common base type for circuits that are to be used in formal proofs.
@@ -213,7 +208,7 @@ Common base type for circuits that are to be used in formal proofs.
 It contains the main circuit plus some of its properties in elaborated form, to make it
 faster to reason about them in proofs.
 -/
-class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output] where
+class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitType Input] [CircuitType Output] where
   name : String := "anonymous"
   main : Var Input F → Circuit F (Var Output F)
 
@@ -238,13 +233,33 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableT
       try first | ac_rfl | trivial
     )
 
+  /-- expose the channel guarantees and requirements, for end-to-end proofs -/
+  channelsWithGuarantees : List (RawChannel F) := []
+  channelsWithRequirements : List (RawChannel F) := []
+
+  /-- optionally, you can expose the interactions with any channel in full detail -/
+  exposedChannels (_ : Var Input F) (n : ℕ) : List (ExposedChannel F) := []
+
+  channelsLawful : ElaboratedCircuit.ChannelsLawful main
+      channelsWithGuarantees channelsWithRequirements exposedChannels := by
+    -- TODO this tactic would be more effective if it would unfold all channel declarations/uses.
+    dsimp only [ElaboratedCircuit.ChannelsLawful]
+    try dsimp only [main]
+    simp only [circuit_norm, seval]
+    try first | ac_rfl | trivial | tauto
+
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
+  ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
+  ElaboratedCircuit.exposedChannels
+
+section
+variable [ProvableType Input] [ProvableType Output]
 
 @[circuit_norm]
 def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
-  -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  -- for all environments that determine witness assignments
+  ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
@@ -252,13 +267,14 @@ def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output
+  Spec input output ∧
+  Operations.Requirements env (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
 def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) :=
-  -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
+  -- for all prover environments which use the default witness generators for local variables
+  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ input : Input F, eval env input_var = input →
@@ -300,21 +316,22 @@ structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMa
 @[circuit_norm]
 def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
-  -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  -- for all environments that determine witness assignments
+  ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input
-  Spec input
+  Spec input ∧
+  Operations.Requirements env (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
 def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
-  -- for all environments which _use the default witness generators for local variables_
-  ∀ offset, ∀ env, ∀ input_var : Var Input F,
+  -- for all prover environments which use the default witness generators for local variables
+  ∀ offset, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions AND the spec
   ∀ input : Input F, eval env input_var = input →
@@ -350,35 +367,42 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
 
 @[circuit_norm]
 def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → ProverData F → Prop)
     (Spec : Input F → Output F → ProverData F → Prop) :=
-  -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
-  -- for all inputs
+  -- for all environments that determine witness assignments
+  ∀ offset : ℕ, ∀ env : Environment F,
+  -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  Assumptions input env.data →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output env.data
+  Spec input output env.data ∧
+  Operations.Requirements env (circuit.main input_var |>.operations offset)
 
 @[circuit_norm]
-def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → ProverData F → Prop) :=
-  -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
+def GeneralFormalCircuit.Completeness (F : Type) [Field F]
+    (circuit : ElaboratedCircuit F Input Output)
+    (ProverAssumptions : Input F → ProverData F → ProverHint F → Prop)
+    (ProverSpec : Input F → Output F → ProverHint F → Prop) :=
+  -- for all prover environments which use the default witness generators for local variables
+  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input env.data →
+  ProverAssumptions input env.data env.hint →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
+  -- and, if given, the prover spec holds
+  ProverSpec input (eval env (circuit.output input_var offset)) env.hint
 
 /--
 `GeneralFormalCircuit` is the most general model of formal circuits, needed in cases where the circuit is a
 _mix_ of "assertion-like" and "function-like". It allows you flexibility in specifying separate statements
 to be proved in the soundness and completeness proofs, by
-- only using the `Spec` in the soundness statement
-- only using the `Assumptions` in the completeness statement
+- only using the `Assumptions` and `Spec` in the soundness statement
+- having separate `ProverAssumptions` and `ProverSpec` for the completeness statement
 i.e. the two statements are not "coupled".
 
 For example, take the `toBits n` circuit, which outputs the `n`-bit decomposition of the input.
@@ -390,10 +414,165 @@ add the range assumption to the soundness statement, thus making the circuit har
 -/
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → ProverData F → Prop -- the statement to be assumed for completeness
-  Spec : Input F → Output F → ProverData F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
-  soundness : GeneralFormalCircuit.Soundness F elaborated Spec
-  completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
+  /-- the statement to be assumed for soundness -/
+  Assumptions : Input F → ProverData F → Prop := fun _ _ => True
+  /-- the statement to be proved for soundness. -/
+  Spec : Input F → Output F → ProverData F → Prop
+
+  /-- the statement to be assumed for completeness -/
+  ProverAssumptions : Input F → ProverData F → ProverHint F → Prop := fun _ _ _ => True
+  /-- auxiliary statement to be proved for completeness, alongside the constraints -/
+  ProverSpec : Input F → Output F → ProverHint F → Prop := fun _ _ _ => True
+
+  soundness : GeneralFormalCircuit.Soundness F elaborated Assumptions Spec
+  completeness : GeneralFormalCircuit.Completeness F elaborated ProverAssumptions ProverSpec
+
+@[circuit_norm]
+def GeneralFormalCircuit.WithHint.Soundness (F : Type) [Field F]
+    [CircuitType Input] [CircuitType Output]
+    (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Value Input F → ProverData F → Prop)
+    (Spec : Value Input F → Value Output F → ProverData F → Prop) :=
+  -- for all environments that determine witness assignments
+  ∀ offset : ℕ, ∀ env : Environment F,
+  -- for all inputs that satisfy the assumptions (verifier view — hints erased)
+  ∀ input_var : Var Input F, ∀ input : Value Input F,
+  eval env input_var = input →
+  Assumptions input env.data →
+  -- if the constraints hold
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  -- the spec holds on the input and output
+  let output := eval env (circuit.output input_var offset)
+  Spec input output env.data ∧
+  Operations.Requirements env (circuit.main input_var |>.operations offset)
+
+@[circuit_norm]
+def GeneralFormalCircuit.WithHint.Completeness (F : Type) [Field F]
+    [CircuitType Input] [CircuitType Output]
+    (circuit : ElaboratedCircuit F Input Output)
+    (ProverAssumptions : ProverValue Input F → ProverData F → ProverHint F → Prop)
+    (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) :=
+  -- for all prover environments which use the default witness generators for local variables
+  ∀ offset : ℕ, ∀ env : ProverEnvironment F, ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  -- for all inputs that satisfy the "honest prover" assumptions (prover view — hints visible)
+  ∀ input : ProverValue Input F, eval env input_var = input →
+  ProverAssumptions input env.data env.hint →
+  -- the constraints hold
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset) ∧
+  -- and, if given, the prover spec holds
+  ProverSpec input (eval env (circuit.output input_var offset)) env.hint
+
+/--
+Hint-aware variant of `GeneralFormalCircuit` for schemas whose prover and
+verifier views differ.
+-/
+structure GeneralFormalCircuit.WithHint (F : Type) (Input Output : TypeMap) [Field F]
+  [CircuitType Input] [CircuitType Output]
+    extends elaborated : ElaboratedCircuit F Input Output where
+  /-- the statement to be assumed for soundness (verifier view — hints erased) -/
+  Assumptions : Value Input F → ProverData F → Prop := fun _ _ => True
+  /-- the statement to be proved for soundness (verifier view). -/
+  Spec : Value Input F → Value Output F → ProverData F → Prop
+
+  /-- the statement to be assumed for completeness (prover view — hints visible) -/
+  ProverAssumptions : ProverValue Input F → ProverData F → ProverHint F → Prop := fun _ _ _ => True
+  /-- auxiliary statement to be proved for completeness, alongside the constraints (prover view) -/
+  ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
+
+  soundness : GeneralFormalCircuit.WithHint.Soundness F elaborated Assumptions Spec
+  completeness : GeneralFormalCircuit.WithHint.Completeness F elaborated ProverAssumptions ProverSpec
+
+@[circuit_norm]
+def GeneralFormalCircuit.toWithHint {F : Type} [Field F] {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output) :
+    GeneralFormalCircuit.WithHint F Input Output where
+  elaborated := circuit.elaborated
+  Assumptions input data := circuit.Assumptions input data
+  Spec input output data := circuit.Spec input output data
+  ProverAssumptions input data hint := circuit.ProverAssumptions input data hint
+  ProverSpec input output hint := circuit.ProverSpec input output hint
+  soundness := by
+    simpa only [GeneralFormalCircuit.WithHint.Soundness,
+      CircuitType.eval_verifier, CircuitType.value_of_provableType]
+      using circuit.soundness
+  completeness := by
+    simpa only [GeneralFormalCircuit.WithHint.Completeness,
+      CircuitType.eval_prover, CircuitType.proverValue_of_provableType]
+      using circuit.completeness
+
+@[circuit_norm]
+def GeneralFormalCircuit.channels (circuit : GeneralFormalCircuit F Input Output) :=
+  circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
+
+@[circuit_norm]
+def GeneralFormalCircuit.WithHint.channels
+    [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) :=
+  circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
+end
+
+namespace ElaboratedCircuit
+variable [CircuitType Input] [CircuitType Output]
+
+-- named projections of ChannelsLawful fields
+
+theorem subcircuitChannelsWithGuarantees_subset_channelsWithGuarantees
+  (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset,
+    ((circuit.main input_var).operations offset).subcircuitChannelsWithGuarantees ⊆
+      circuit.channelsWithGuarantees := by
+  intro input_var offset
+  exact (circuit.channelsLawful input_var offset).1
+
+theorem inChannelsOrGuarantees_channelsWithGuarantees
+  (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset env,
+    ((circuit.main input_var).operations offset).InChannelsOrGuarantees
+      circuit.channelsWithGuarantees env := by
+  intro input_var offset env
+  exact (circuit.channelsLawful input_var offset).2.1 env
+
+theorem subcircuitChannelsWithRequirements_subset_channelsWithRequirements
+    (circuit : ElaboratedCircuit F Input Output) :
+    ∀ input_var offset,
+      ((circuit.main input_var).operations offset).subcircuitChannelsWithRequirements ⊆
+        circuit.channelsWithRequirements := by
+  intro input_var offset
+  exact (circuit.channelsLawful input_var offset).2.2.1
+
+theorem inChannelsOrRequirements_channelsWithRequirements
+  (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset env,
+    ((circuit.main input_var).operations offset).InChannelsOrRequirements
+      circuit.channelsWithRequirements env := by
+  intro input_var offset env
+  exact (circuit.channelsLawful input_var offset).2.2.2.1 env
+
+theorem mem_channelsWithGuarantees_or_mem_channelsWithRequirements_of_mem_shallowChannels
+  (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset,
+    let ops := (circuit.main input_var).operations offset
+    ∀ channel ∈ ops.shallowChannels,
+      channel ∈ circuit.channelsWithGuarantees ∨ channel ∈ circuit.channelsWithRequirements :=
+  fun input_var offset => (circuit.channelsLawful input_var offset).2.2.2.2.1
+
+theorem interactionsWith_eq_of_mem_exposedChannels (circuit : ElaboratedCircuit F Input Output) :
+  ∀ input_var offset,
+    let ops := (circuit.main input_var).operations offset
+    ∀ exposed ∈ circuit.exposedChannels input_var offset,
+      ops.interactionsWith exposed.channel = exposed.interactions :=
+  fun input_var offset => (circuit.channelsLawful input_var offset).2.2.2.2.2.1
+
+theorem subcircuitChannelsLawful (circuit : ElaboratedCircuit F Input Output) :
+    ∀ input offset, ((circuit.main input).operations offset).SubcircuitChannelsLawful :=
+  fun input offset => (circuit.channelsLawful input offset).2.2.2.2.2.2
+
+@[circuit_norm]
+def channels (circuit : ElaboratedCircuit F Input Output) :=
+  circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
+end ElaboratedCircuit
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
@@ -401,9 +580,9 @@ export Circuit (witnessVar witnessField witnessVars witnessVector assertZero loo
 -- general `witness` method
 
 class Witnessable (F : Type) [Field F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
-  witness : ((Environment F) → value F) → Circuit F (var F)
+  witness : (ProverEnvironment F → value F) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
-  witness_eq (compute : Environment F → value F) :
+  witness_eq (compute : ProverEnvironment F → value F) :
     witness compute = var_eq ▸ ProvableType.witness compute := by intros; rfl
 
 export Witnessable (witness)
@@ -423,34 +602,35 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 
 -- witness generation
 
-def Environment.fromList (witnesses : List F) : Environment F where
+/-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/
+def ProverEnvironment.fromList (witnesses : List F) (hint : ProverHint F) : ProverEnvironment F where
   get i := witnesses[i]?.getD 0
   data _ _ := #[]
+  hint
 
-def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with
-  | .witness _ compute => (compute (.fromList acc)).toList
+def FlatOperation.dynamicWitness (hint : ProverHint F) (op : FlatOperation F) (acc : List F) : List F := match op with
+  | .witness _ compute => (compute (.fromList acc hint)).toList
   | .assert _ => []
   | .lookup _ => []
+  | .interact _ => []
 
-def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
-  ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
-    acc ++ op.dynamicWitness acc
-  ) init
+def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) : List F :=
+  ops.foldl (fun acc op => acc ++ op.dynamicWitness hint acc) init
 
-def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (init : List F) : Environment F :=
-  .fromList (FlatOperation.dynamicWitnesses ops init)
+def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) :=
+  ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
 
-def Environment.AgreesBelow (n : ℕ) (env env' : Environment F) :=
+def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
   ∀ i < n, env.get i = env'.get i
 
-def Environment.OnlyAccessedBelow (n : ℕ) (f : Environment F → α) :=
+def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) :=
   ∀ env env', env.AgreesBelow n env' → f env = f env'
 
 /--
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
+def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
   ops.forAllFlat n { witness n _ compute := env.AgreesBelow n env' → compute env = compute env' }
 
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
@@ -460,23 +640,25 @@ def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
 that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
 -/
-def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : Environment F :=
-  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
+def Circuit.proverEnvironment (circuit : Circuit F α) (hint : ProverHint F) (init : List F := []) : ProverEnvironment F :=
+  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat hint init) hint
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
 
-def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (Environment F → F) (localLength l)
+def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (ProverEnvironment F → F) (localLength l)
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .interact _ :: ops => witnessGenerators ops
 
-def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
+def Operations.witnessGenerators : (ops : Operations F) → Vector (ProverEnvironment F → F) ops.localLength
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .interact _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops.toFlat) ++ witnessGenerators ops
 
 -- statements about constant length or output
@@ -524,6 +706,9 @@ end Circuit
 
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies implies_true forall_const gt_iff_lt
+  not_true_eq_false ne_eq false_implies and_false false_and
+  and_self or_self or_true or_false true_or false_or
+  Bool.false_eq_true Bool.true_eq_false
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form
@@ -537,7 +722,7 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
-  Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.toArray_push Array.toList_push List.append_assoc
   Vector.eq_mk Vector.mk_eq
 
 -- `getElem` lemmas should be tried before expanding Vectors/Lists
@@ -564,4 +749,24 @@ attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
-attribute [circuit_norm] neg_mul one_mul add_zero
+attribute [circuit_norm] neg_mul one_mul add_zero zero_add
+
+attribute [circuit_norm] List.append_nil
+
+-- simp lemmas useful to unfold subcircuit channels
+
+attribute [circuit_norm] List.nil_subset List.subset_cons_of_subset List.Subset.refl
+attribute [circuit_norm] List.Forall List.flatten_cons List.flatten_nil List.Sublist.refl
+attribute [circuit_norm] List.mem_cons List.mem_nil_iff List.mem_append List.mem_ofFn
+
+@[circuit_norm]
+lemma List.ofFn_singleton_flatten {α : Type} {m : ℕ} (f : Fin m → α) :
+    (List.ofFn fun i : Fin m => [f i]).flatten = List.ofFn f := by
+  induction m <;> simp_all
+
+@[circuit_norm]
+lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
+    (List.ofFn fun _ : Fin m => ([] : List α)).flatten = [] := by
+  simp
+
+attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false

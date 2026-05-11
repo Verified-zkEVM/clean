@@ -12,7 +12,7 @@ variable {F : Type} [Field F] [DecidableEq F]
 Main circuit that checks if a field element is zero.
 Returns 1 if the input is 0, otherwise returns 0.
 -/
-def main (x : Var field F) : Circuit F (Var field F) := do
+def main (x : Expression F) : Circuit F (Expression F) := do
   -- When x ≠ 0, we need x_inv such that x * x_inv = 1
   -- When x = 0, x_inv can be anything (we use 0)
   let xInv ← witness fun env =>
@@ -33,17 +33,10 @@ def Spec (x : F) (output : F) : Prop :=
   output = if x = 0 then 1 else 0
 
 theorem soundness : Soundness F elaborated Assumptions (Spec (F:=F)) := by
-  circuit_proof_start
-  split
-  · rename_i h_input
-    simp only [h_input] at *
-    norm_num at *
-    assumption
-  · aesop
+  circuit_proof_all
 
 theorem completeness : Completeness F elaborated Assumptions := by
-  circuit_proof_start
-  aesop
+  circuit_proof_all
 
 def circuit : FormalCircuit F field field := {
   elaborated with Assumptions, Spec := Spec (F:=F), soundness, completeness

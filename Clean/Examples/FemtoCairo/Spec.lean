@@ -27,7 +27,7 @@ def decodeInstruction (instr : (F p)) : Option (ℕ × ℕ × ℕ × ℕ) :=
   Safe memory access function. Returns `some value` if the address is within bounds,
   otherwise returns `none`.
 -/
-def memoryAccess {n : ℕ} [NeZero n] (memory : Fin n → F p) (addr : F p) : Option (F p) :=
+def memoryAccess {n : ℕ} (memory : Fin n → F p) (addr : F p) : Option (F p) :=
   if h : addr.val < n then
     some (memory ⟨addr.val, h⟩)
   else
@@ -37,7 +37,7 @@ def memoryAccess {n : ℕ} [NeZero n] (memory : Fin n → F p) (addr : F p) : Op
   Fetch an instruction from the program memory at the given program counter (pc).
 -/
 def fetchInstruction
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {programSize : ℕ} (program : Fin programSize → (F p))
     (pc : (F p)) : Option (RawInstruction (F p)) := do
   let type ← memoryAccess program pc
   let op1 ← memoryAccess program (pc + 1)
@@ -51,7 +51,7 @@ def fetchInstruction
   - mode: addressing mode (0=double, 1=ap-relative, 2=fp-relative, 3=immediate)
 -/
 def dataMemoryAccess
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    {memorySize : ℕ} (memory : Fin memorySize → (F p))
     (addr : (F p)) (mode : ℕ) (ap : F p) (fp : F p) : Option (F p) :=
   match mode with
   | 0 => do
@@ -59,7 +59,7 @@ def dataMemoryAccess
       memoryAccess memory addr'
   | 1 => memoryAccess memory (ap + addr)
   | 2 => memoryAccess memory (fp + addr)
-  | _ => addr
+  | _ => some addr
 
 /--
   Compute the next state of the femtoCairo machine based on the current state and instruction
@@ -99,8 +99,8 @@ def computeNextState
   if all individual transitions are valid.
 -/
 def femtoCairoMachineTransition
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    {programSize : ℕ} (program : Fin programSize → (F p))
+    {memorySize : ℕ} (memory : Fin memorySize → (F p))
     (state : State (F p)) : Option (State (F p)) := do
   -- fetch instruction
   let { rawInstrType, op1, op2, op3 } ← fetchInstruction program state.pc
@@ -122,8 +122,8 @@ def femtoCairoMachineTransition
   transition execution completed successfully, otherwise returns None.
 -/
 def femtoCairoMachineBoundedExecution
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    {programSize : ℕ} (program : Fin programSize → (F p))
+    {memorySize : ℕ} (memory : Fin memorySize → (F p))
     (state : Option (State (F p))) (steps : Nat) :
     Option (State (F p)) := match steps with
   | 0 => state

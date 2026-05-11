@@ -16,7 +16,7 @@ Main circuit that checks if all elements of a ProvableType are zero.
 Returns 1 if all elementts are 0, otherwise returns 0.
 -/
 def main (input : Var M F) : Circuit F (Var field F) := do
-  let elemVars := toVars input
+  let elemVars := toElements (M:=M) input
   -- Use foldlRange to multiply all IsZero results together
   -- Start with 1, and for each element, multiply by its IsZero result
   let result ← Circuit.foldlRange (size M) (1 : Expression F) fun acc i => do
@@ -31,6 +31,8 @@ instance elaborated : ElaboratedCircuit F M field where
     simp +arith [circuit_norm, main, IsZeroField.circuit]
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
+  channelsLawful := by
+    simp only [circuit_norm, main, IsZeroField.circuit, IsZeroField.elaborated]
 
 def Assumptions (_ : M F) : Prop := True
 
@@ -56,7 +58,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
   simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
   induction n generalizing i₀
-  · simp only [id_eq, Fin.getElem_fin, Fin.foldl_zero, Expression.eval]
+  · simp only [Fin.getElem_fin, Fin.foldl_zero, Expression.eval]
     simp only [not_lt_zero', IsEmpty.forall_iff, implies_true, ↓reduceIte]
   · rename_i pre h_ih
     simp only [Fin.foldl_succ_last, Expression.eval]
@@ -69,8 +71,8 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     specialize h_ih h_eval_pre (i₀:=i₀)
     simp only [vars_pre, vals_pre] at *
     simp only [Fin.getElem_fin,
-      Vector.getElem_cast, forall_const, id_eq] at h_ih
-    simp only [id_eq, Fin.getElem_fin, Fin.coe_castSucc, Fin.val_last]
+      Vector.getElem_cast, forall_const] at h_ih
+    simp only [Fin.getElem_fin, Fin.val_castSucc, Fin.val_last]
     specialize h_ih (by
       intro i
       specialize h_isZero i.castSucc
@@ -97,10 +99,10 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       apply False.elim
       apply h_last
       aesop
-    · aesop
+    · next h_ex h_all => exfalso; exact h_ex (fun i hi => h_all i (by omega))
 
 theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
-  circuit_proof_start
+  circuit_proof_start [IsZeroField.circuit, IsZeroField.elaborated, IsZeroField.Assumptions]
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
     arg 1
@@ -109,7 +111,10 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assump
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff <;> assumption
+  apply foldl_isZero_eq_one_iff
+  · assumption
+  · intro i _
+    exact h_holds i
 
 theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
