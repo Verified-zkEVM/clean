@@ -1,4 +1,8 @@
 mod common;
+#[path = "helpers/femtocairo.rs"]
+mod femtocairo_helpers;
+#[path = "helpers/lean_runner.rs"]
+mod lean_runner;
 
 /// End-to-end test for FemtoCairo: circuit and trace exported from Lean,
 /// with a preprocessed program table and a prover-supplied memory table.
@@ -8,14 +12,14 @@ mod common;
 /// Tables: program (preprocessed, 64x2), memory (prover-supplied, 16x2).
 #[test]
 fn test_femtocairo_e2e() {
-    let (circuit_json, trace_json) = common::run_lean_scripts(
+    let (circuit_json, trace_json) = femtocairo_helpers::run_lean_scripts(
         "FemtoCairoCircuitGen.lean",
         "output/femtocairo_circuit.json",
         "FemtoCairoTraceGen.lean",
         "output/femtocairo_trace.json",
     );
 
-    common::prove_and_verify_from_json(&circuit_json, &trace_json);
+    femtocairo_helpers::prove_and_verify_from_json(&circuit_json, &trace_json);
 }
 
 /// End-to-end FemtoCairo test with memory-reading instructions.
@@ -26,12 +30,12 @@ fn test_femtocairo_e2e() {
 /// Tables: program (preprocessed, 32x2), memory (prover-supplied, 8x2).
 #[test]
 fn test_femtocairo_memory_e2e() {
-    let (circuit_json, trace_json) = common::run_lean_scripts(
+    let (circuit_json, trace_json) = femtocairo_helpers::run_lean_scripts(
         "FemtoCairoMemoryCircuitGen.lean",
         "output/femtocairo_memory_circuit.json",
         "FemtoCairoMemoryTraceGen.lean",
         "output/femtocairo_memory_trace.json",
     );
 
-    common::prove_and_verify_from_json(&circuit_json, &trace_json);
+    femtocairo_helpers::prove_and_verify_from_json(&circuit_json, &trace_json);
 }

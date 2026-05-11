@@ -43,7 +43,7 @@ jobs:
       - name: Run plonky3 tests
         working-directory: backends/plonky3
         run: |
-          cargo test --release -- --nocapture test_clean_fib
+          cargo test --release -- --nocapture test_lean_circuit_end_to_end
           cargo test test_tampered_multiplicity
           cargo test --release test_tampered_multiplicity
           cargo test --release -- --nocapture test_femtocairo
