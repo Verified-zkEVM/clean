@@ -52,7 +52,7 @@ def not32 (a : Var (fields 32) (F p)) : Var (fields 32) (F p) :=
 
 /-- Rotate right by `k` bits (mod 32): z[i] = a[(i + k) mod 32]. -/
 def rotr32 (k : Fin 32) (a : Var (fields 32) (F p)) : Var (fields 32) (F p) :=
-  Vector.ofFn fun (i : Fin 32) => a[i + k]
+  a.rotate k
 
 /-- Shift right by `k` bits: z[i] = a[i + k] if i + k < 32, else 0. -/
 def shr32 (k : Fin 32) (a : Var (fields 32) (F p)) : Var (fields 32) (F p) :=
