@@ -41,3 +41,16 @@ import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Gadgets.BLAKE3.Round
 import Clean.Gadgets.BLAKE3.FinalizeChunk
 import Clean.Examples.FibonacciWithChannels
+import Clean.Gadgets.SHA256.BitwiseOps
+import Clean.Gadgets.SHA256.Xor32
+import Clean.Gadgets.SHA256.And32
+import Clean.Gadgets.SHA256.Ch32
+import Clean.Gadgets.SHA256.Maj32
+import Clean.Gadgets.SHA256.Add32
+import Clean.Gadgets.SHA256.UpperSigma0
+import Clean.Gadgets.SHA256.UpperSigma1
+import Clean.Gadgets.SHA256.LowerSigma0
+import Clean.Gadgets.SHA256.LowerSigma1
+import Clean.Gadgets.SHA256.SHA256Round
+import Clean.Gadgets.SHA256.SHA256Schedule
+import Clean.Gadgets.SHA256.SHA256Compress
