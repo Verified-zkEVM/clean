@@ -2,7 +2,7 @@ import Clean.Gadgets.SHA256.BitwiseOps
 import Clean.Specs.SHA256
 
 section
-variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+variable {p : ℕ} [Fact p.Prime]
 
 namespace Gadgets.SHA256
 
@@ -105,7 +105,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
 
 /-- For boolean field elements a, b, c: the field expression t + c*(a+b-2t) where t=a*b
     has val equal to the bitwise Nat majority of a.val, b.val, c.val -/
-private lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+private lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
     {a b c : F p} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
     (a * b + c * (a + b - 2 * (a * b))).val = (a.val &&& b.val) ^^^ (a.val &&& c.val) ^^^ (b.val &&& c.val) := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>

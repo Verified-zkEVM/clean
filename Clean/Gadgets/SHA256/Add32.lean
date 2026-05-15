@@ -1,7 +1,7 @@
 import Clean.Gadgets.SHA256.BitwiseOps
 
 section
-variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+variable {p : ℕ} [Fact p.Prime]
 
 namespace Gadgets.SHA256
 
@@ -93,6 +93,7 @@ private lemma valueBits_lt_two_pow (bits : Vector (F p) 32) (h : Normalized bits
   · simp [h0, ZMod.val_zero]
   · simp [h1, ZMod.val_one]
 
+omit [Fact (Nat.Prime p)] in
 /-- The natural-number sum from fromBits equals valueBits -/
 private lemma fromBits_map_val_eq_valueBits (bits : Vector (F p) 32) :
     Utils.Bits.fromBits (bits.map ZMod.val) = valueBits bits := by
