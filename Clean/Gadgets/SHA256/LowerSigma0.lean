@@ -41,7 +41,7 @@ def Spec (x : fields 32 (F p)) (z : fields 32 (F p)) : Prop :=
 
 /-! ## Helper lemmas (adapted from Xor32) -/
 
-private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
+lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
     ∑ i : Fin n, f i * 2^i.val < 2^n := by
   induction n with
   | zero => simp
@@ -54,7 +54,7 @@ private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i
     have h2 : 2^m + 2^m = 2^(m+1) := by ring
     omega
 
-private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
+lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
     Nat.testBit (∑ i : Fin n, f i * 2^i.val) k.val = decide (f k = 1) := by
   induction n with
   | zero => exact k.elim0
@@ -75,7 +75,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
       have hklast : k = Fin.last m := Fin.ext hkeq; subst hklast
       rcases hf (Fin.last m) with h | h <;> simp [h, fm]
 
-private lemma bool_finsum_xor_eq (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1)
+lemma bool_finsum_xor_eq (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1)
     (hg : ∀ i, g i = 0 ∨ g i = 1) :
     ∑ i : Fin n, (f i ^^^ g i) * 2^i.val
     = (∑ i : Fin n, f i * 2^i.val) ^^^ (∑ i : Fin n, g i * 2^i.val) := by
@@ -96,7 +96,7 @@ private lemma bool_finsum_xor_eq (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f 
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le (Nat.xor_lt_two_pow hfS hgS) pow_le)]
 
 /-- valueBits of a normalized vector is < 2^32 -/
-private lemma valueBits_lt_two_pow (x : fields 32 (F p)) (hx : Normalized x) :
+lemma valueBits_lt_two_pow (x : fields 32 (F p)) (hx : Normalized x) :
     valueBits x < 2^32 :=
   sum_bool_lt_two_pow 32 (fun i => (x[i] : F p).val) (fun i => by
     show (x[i] : F p).val ≤ 1
@@ -105,7 +105,7 @@ private lemma valueBits_lt_two_pow (x : fields 32 (F p)) (hx : Normalized x) :
     · rw [h, ZMod.val_one])
 
 /-- Modular reduction of a boolean-weighted sum equals the sum of its lower `j` terms. -/
-private lemma sum_mod_two_pow (j : ℕ) {n : ℕ} (f : Fin n → ℕ)
+lemma sum_mod_two_pow (j : ℕ) {n : ℕ} (f : Fin n → ℕ)
     (hf : ∀ i, f i = 0 ∨ f i = 1) :
     (∑ i : Fin n, f i * 2^i.val) % 2^j =
     ∑ i : Fin n, (if i.val < j then f i else 0) * 2^i.val := by
@@ -133,13 +133,13 @@ private lemma sum_mod_two_pow (j : ℕ) {n : ℕ} (f : Fin n → ℕ)
 
 /-! ## valueBits identities for rotr32 / shr32 (at vector level) -/
 omit [Fact (Nat.Prime p)] in
-private lemma valueBits_eq_fromBits (x : fields 32 (F p)) :
+lemma valueBits_eq_fromBits (x : fields 32 (F p)) :
     valueBits x = Utils.Bits.fromBits (x.map ZMod.val) := by
   simp only [valueBits, Utils.Bits.fromBits, Fin.foldl_to_sum]
   congr 1; ext (i : Fin 32); rw [Vector.getElem_map]; rfl
 
 /-- `valueBits` of a rotated bit-vector equals `rotRight32` of the original `valueBits`. -/
-private lemma valueBits_rotate (x : fields 32 (F p)) (hx : Normalized x) (k : ℕ) :
+lemma valueBits_rotate (x : fields 32 (F p)) (hx : Normalized x) (k : ℕ) :
     valueBits (x.rotate k) = rotRight32 (valueBits x) k := by
   set bits : Vector ℕ 32 := x.map ZMod.val with hbits_def
   have hbits_bool : ∀ (i : ℕ) (hi : i < 32), bits[i] = 0 ∨ bits[i] = 1 := by
@@ -175,7 +175,7 @@ private lemma valueBits_rotate (x : fields 32 (F p)) (hx : Normalized x) (k : �
       Utils.Bits.toBits_fromBits bits hbits_bool]
 
 /-- Sum form: `∑ x[(i+k).val].val * 2^i = rotRight32 (valueBits x) k.val`. -/
-private lemma valueBits_rotr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) :
+lemma valueBits_rotr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) :
     ∑ i : Fin 32, (x[(i + k).val] : F p).val * 2^i.val = rotRight32 (valueBits x) k.val := by
   rw [← valueBits_rotate x hx k.val]
   -- LHS sum = valueBits (x.rotate k.val) by definition (modulo Fin add ↔ Nat mod)
@@ -188,7 +188,7 @@ private lemma valueBits_rotr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Norma
 
 /-! ## eval helpers for rotr32 / shr32 -/
 
-private lemma eval_rotr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
+lemma eval_rotr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
     (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (rotr32 k input_var)[i.val] = input[(i + k).val] := by
@@ -198,7 +198,7 @@ private lemma eval_rotr32 (env : Environment (F p)) (input_var : fields 32 (Expr
   rw [Vector.getElem_map]
   congr 1
 
-private lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) :
+lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) :
     ∑ i : Fin 32,
       ((if h : i.val + k.val < 32 then (x[i.val + k.val]'h : F p) else 0) : F p).val * 2^i.val
     = valueBits x / 2^k.val := by
@@ -238,7 +238,7 @@ private lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normal
 
 /-! ## eval helpers for rotr32 / shr32 -/
 
-private lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
+lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
     (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (shr32 k input_var)[i.val] =
@@ -248,7 +248,7 @@ private lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expre
   · next h => rw [Vector.getElem_map]
   · rfl
 
-private lemma shr_isbool (k : ℕ) (input : fields 32 (F p)) (ha : Normalized input) (i : Fin 32) :
+lemma shr_isbool (k : ℕ) (input : fields 32 (F p)) (ha : Normalized input) (i : Fin 32) :
     (if h : i.val + k < 32 then input[i.val + k]'h else (0 : F p)) = 0 ∨
     (if h : i.val + k < 32 then input[i.val + k]'h else (0 : F p)) = 1 := by
   split
