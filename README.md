@@ -57,9 +57,9 @@ The following is a rough, longer-term roadmap for clean. Note that some of the b
 
 Reach out [on TG](https://t.me/clean_zk) if you are looking for long-term contribution opportunities and you are interested in any of these!
 
-- More general lookups + VM-like table ensembles
-  - currently worked on by [zkSecurity](https://zksecurity.xyz/) https://github.com/Verified-zkEVM/clean/issues/252
-  - subproject: support in plonky3 backend
+- ✅ More general lookups + VM-like table ensembles
+  - main refactor merged as https://github.com/Verified-zkEVM/clean/pull/328
+  - subproject (TODO): support in plonky3 backend
 - Polish plonky3 backend, generate constraint evaluation Rust code
   - currently worked on by [zkSecurity](https://zksecurity.xyz/) https://github.com/Verified-zkEVM/clean/pull/192
 - clean documentation
