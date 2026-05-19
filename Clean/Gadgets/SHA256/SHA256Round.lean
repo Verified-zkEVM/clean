@@ -134,31 +134,26 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   have s_newa := c_newa s_t1.2 s_t2.2; clear c_newa
   have s_newe := c_newe h_d s_t1.2; clear c_newe
   refine ⟨?_, ?_⟩
-  · -- vector equality: out.map valueBits = sha256Round-spec
-    -- Pre-collect the value-bit chain for new_a and new_e to avoid keeping the big s_X around
-    -- during goal manipulation.
+  · -- Vector equality: out.map valueBits = sha256Round-spec
+    -- Compose the eight element-wise equations: v_newa / v_newe from the Add32 subcircuits
+    -- (after chaining in the upstream values) and h_eval for the pass-through positions.
     have v_newa := s_newa.1
     have v_newe := s_newe.1
     rw [s_t1.1, s_t12.1, s_t11.1, s_t10.1, s_sig1.1, s_ch.1, s_t2.1, s_sig0.1, s_maj.1] at v_newa
     rw [s_t1.1, s_t12.1, s_t11.1, s_t10.1, s_sig1.1, s_ch.1] at v_newe
     clear s_sig1 s_ch s_t10 s_t11 s_t12 s_t1 s_sig0 s_maj s_t2 s_newa s_newe
-    ext k hk
-    rw [Vector.getElem_map, ← getElem_eval_vector, CircuitType.eval_var_fields]
-    -- TODO: still need to discharge the 8 element-wise equations. We have:
-    -- * `v_newa`/`v_newe` with LHS now in `Vector.mapRange` form (small) and RHS in spec form,
-    -- * goal element form is also small (`Vector.mapRange`/`input_var_state[k]`).
-    -- The offsets agree up to `omega`, but bridging them in the `exact`/`convert` step still
-    -- hits whnf budget. Probably needs a tailored offset-normalization lemma + Vector.ext.
-    simp [Specs.SHA256.sha256Round]
-    match k, hk with
-    | 0, _ => sorry
-    | 1, _ => sorry
-    | 2, _ => sorry
-    | 3, _ => sorry
-    | 4, _ => sorry
-    | 5, _ => sorry
-    | 6, _ => sorry
-    | 7, _ => sorry
+    have e (i : ℕ) (hi : i < 8) :
+        valueBits (Vector.map (Expression.eval env) input_var_state[i]) = valueBits input_state[i] :=
+      congrArg valueBits (h_eval i hi)
+    -- Reduce `(a + b) % 2^32` to `_root_.add32 a b` in v_newa/v_newe so they match the spec literal.
+    simp only [show ∀ a b : ℕ, (a + b) % 2 ^ 32 = _root_.add32 a b from fun _ _ => rfl] at v_newa v_newe
+    -- Push the outer `Vector.map valueBits ∘ eval env` inside the literal #v[...] and unfold the
+    -- spec, so both sides become explicit 8-element vectors with matching slot shapes.
+    simp only [eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
+      circuit_norm]
+    simp only [Specs.SHA256.sha256Round, Vector.getElem_map]
+    rw [v_newa, v_newe, e 0 (by omega), e 1 (by omega), e 2 (by omega),
+      e 4 (by omega), e 5 (by omega), e 6 (by omega)]
   · -- Normalized for each position
     intro i
     fin_cases i
