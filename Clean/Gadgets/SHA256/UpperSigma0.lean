@@ -32,7 +32,9 @@ def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) where
   main := main
   localLength _ := 64
+  output _ i0 := varFromOffset (fields 32) (i0 + 32)
   localLength_eq _ _ := by simp [circuit_norm, main, upperSigma0, xor32]
+  output_eq _ _ := by simp +arith [circuit_norm, main, upperSigma0, xor32]
   subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, upperSigma0, xor32]
   channelsLawful := by intro x n; simp [circuit_norm, main, upperSigma0, xor32]
 

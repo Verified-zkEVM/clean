@@ -57,7 +57,9 @@ set_option maxHeartbeats 800000 in
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
   main := main
   localLength _ := 33
+  output _ i0 := varFromOffset (fields 32) i0
   localLength_eq _ _ := by simp [circuit_norm, main, add32, evalBitsNat]
+  output_eq _ _ := by dsimp only [main, add32, circuit_norm]
   subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, add32, evalBitsNat]
   channelsLawful := by intro x n; simp [circuit_norm, main, add32, evalBitsNat]
 
