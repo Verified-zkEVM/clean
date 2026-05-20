@@ -62,13 +62,9 @@ def messageSchedule (block : Vector ℕ 16) : Vector ℕ 64 :=
     if h : i.val < 16 then block.get ⟨i.val, h⟩ else 0
   Fin.foldl 48 (fun w (i : Fin 48) =>
     let j := i.val + 16
+    let wj := add32 (add32 (lowerSigma1 w[j - 2])  w[j - 7])
+                    (add32 (lowerSigma0 w[j - 15]) w[j - 16])
     have hj   : j     < 64 := by omega
-    have hj2  : j - 2  < 64 := by omega
-    have hj7  : j - 7  < 64 := by omega
-    have hj15 : j - 15 < 64 := by omega
-    have hj16 : j - 16 < 64 := by omega
-    let wj := add32 (add32 (lowerSigma1 (w.get ⟨j - 2,  hj2 ⟩))  (w.get ⟨j - 7,  hj7 ⟩))
-                    (add32 (lowerSigma0 (w.get ⟨j - 15, hj15⟩)) (w.get ⟨j - 16, hj16⟩))
     w.set (⟨j, hj⟩ : Fin 64) wj) init
 
 -- Apply 64 rounds of SHA-256 to the state using the message schedule
@@ -88,12 +84,9 @@ def bytesToWord32BE (b0 b1 b2 b3 : ℕ) : ℕ :=
 -- Parse 64 bytes into a block of 16 big-endian 32-bit words
 def bytesToBlock (bytes : Vector ℕ 64) : Vector ℕ 16 :=
   Vector.mapFinRange 16 fun (i : Fin 16) =>
-    have h0 : 4 * i.val     < 64 := by omega
-    have h1 : 4 * i.val + 1 < 64 := by omega
-    have h2 : 4 * i.val + 2 < 64 := by omega
-    have h3 : 4 * i.val + 3 < 64 := by omega
-    bytesToWord32BE (bytes.get ⟨4 * i.val,     h0⟩) (bytes.get ⟨4 * i.val + 1, h1⟩)
-                    (bytes.get ⟨4 * i.val + 2, h2⟩) (bytes.get ⟨4 * i.val + 3, h3⟩)
+    bytesToWord32BE bytes[4 * i.val] bytes[4 * i.val + 1]
+      bytes[4 * i.val + 2] bytes[4 * i.val + 3]
+
 
 -- SHA-256 padding (FIPS 180-4):
 --   append 0x80, then zeros until message length ≡ 56 (mod 64) bytes,
