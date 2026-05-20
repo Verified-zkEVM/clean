@@ -33,7 +33,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   xor32 input.a input.b
 
-set_option maxHeartbeats 800000 in
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
   main := main
   localLength _ := 32

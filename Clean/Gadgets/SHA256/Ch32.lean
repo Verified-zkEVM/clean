@@ -37,7 +37,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   ch32 input.e input.f input.g
 
-set_option maxHeartbeats 800000 in
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
   main := main
   localLength _ := 32
@@ -170,7 +169,6 @@ private lemma spec_of_constraint
   rw [Ch_def, he_eq, hf_eq, hg_eq, h1]
   exact key'
 
-set_option maxHeartbeats 1600000 in
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start [ch32]
   obtain ⟨he, hf, hg⟩ := h_assumptions

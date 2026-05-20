@@ -50,7 +50,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   maj32 input.a input.b input.c
 
-set_option maxHeartbeats 800000 in
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
   main := main
   localLength _ := 64
@@ -210,7 +209,6 @@ private lemma spec_of_constraint
   rw [Maj_def, ha_eq, hb_eq, hc_eq, h_z_eq]
   exact key'.symm
 
-set_option maxHeartbeats 800000 in
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start [maj32]
   obtain ⟨ha, hb, hc⟩ := h_assumptions
