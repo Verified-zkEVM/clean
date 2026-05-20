@@ -159,7 +159,7 @@ private lemma normalized_of_bool_holds (env : Environment (F p)) (i₀ : ℕ)
   exact isbool_of_bool_constraint hi
 
 omit h_large in
--- evalBitsNat env a = valueBits a when the variables evaluate to a
+/-- evalBitsNat env a = valueBits a when the variables evaluate to a -/
 private lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
     (a_var : Var (fields 32) (F p)) (a : fields 32 (F p))
     (h : Vector.map (Expression.eval env.toEnvironment) a_var = a) :
@@ -170,12 +170,12 @@ private lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
   intro i _
   simp [Vector.getElem_map]
 
--- Helper: testBit equals div/mod expression
+/-- testBit equals div/mod expression -/
 private lemma testBit_ite_eq (n i : ℕ) : (if n.testBit i = true then 1 else 0 : ℕ) = n / 2^i % 2 := by
   simp only [Nat.testBit, Nat.shiftRight_eq_div_pow, Nat.one_and_eq_mod_two]
   rcases Nat.mod_two_eq_zero_or_one (n / 2^i) with h | h <;> rw [h] <;> rfl
 
--- Bit decomposition: ∑ i, (n / 2^i % 2) * 2^i = n for n < 2^32
+/-- Bit decomposition: ∑ i, (n / 2^i % 2) * 2^i = n for n < 2^32 -/
 private lemma bit_decomp_sum (n : ℕ) (h_n_lt : n < 2^32) :
     ∑ i : Fin 32, n / 2^i.val % 2 * 2^i.val = n := by
   conv_rhs => rw [← Utils.Bits.fromBits_toBits h_n_lt]
@@ -186,7 +186,7 @@ private lemma bit_decomp_sum (n : ℕ) (h_n_lt : n < 2^32) :
   rw [Vector.getElem_mapRange, testBit_ite_eq]
 
 omit h_large in
--- For n < 2^32 and 2^32 < p, fieldFromBits of the bit decomposition vector equals (n : F p)
+/-- For n < 2^32 and 2^32 < p, fieldFromBits of the bit decomposition vector equals (n : F p) -/
 private lemma fieldFromBits_bit_decomp (n : ℕ) (h_n_lt : n < 2^32) (hp32 : (2:ℕ)^32 < p) :
     Utils.Bits.fieldFromBits (Vector.ofFn fun i : Fin 32 => ((n / 2^i.val % 2 : ℕ) : F p)) =
     ((n : ℕ) : F p) := by

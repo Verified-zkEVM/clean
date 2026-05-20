@@ -439,6 +439,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · -- Requirements: scheduleStep's channelsWithRequirements is empty (only R1CS subcircuits).
     intro i
     simp [scheduleStep, circuit_norm, LowerSigma0.circuit, LowerSigma1.circuit, Add32.circuit]
+
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
   unfold messageSchedule at h_env ⊢

@@ -236,8 +236,6 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le
           (Nat.lt_of_le_of_lt (Nat.div_le_self _ _) hval_lt) pow_le)]
 
-/-! ## eval helpers for rotr32 / shr32 -/
-
 lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
     (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
     (k : Fin 32) (i : Fin 32) :

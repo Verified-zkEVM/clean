@@ -87,7 +87,6 @@ def bytesToBlock (bytes : Vector ℕ 64) : Vector ℕ 16 :=
     bytesToWord32BE bytes[4 * i.val] bytes[4 * i.val + 1]
       bytes[4 * i.val + 2] bytes[4 * i.val + 3]
 
-
 -- SHA-256 padding (FIPS 180-4):
 --   append 0x80, then zeros until message length ≡ 56 (mod 64) bytes,
 --   then the original bit length as a big-endian 64-bit integer
@@ -114,14 +113,6 @@ namespace Specs.SHA256.Tests
 
 -- SHA-256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 -- SHA-256("abc") = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
-
--- #eval sha256 []
--- expected: #v[0xe3b0c442, 0x98fc1c14, 0x9afbf4c8, 0x996fb924,
---              0x27ae41e4, 0x649b934c, 0xa495991b, 0x7852b855]
-
--- #eval sha256 [0x61, 0x62, 0x63]
--- expected: #v[0xba7816bf, 0x8f01cfea, 0x414140de, 0x5dae2223,
---              0xb00361a3, 0x96177a9c, 0xb410ff61, 0xf20015ad]
 
 example : sha256 [] = #v[
   0xe3b0c442, 0x98fc1c14, 0x9afbf4c8, 0x996fb924,
