@@ -882,6 +882,32 @@ lemma foldlRange.output_eq :
   congr! 6
   rw [constant.localLength_eq (_, _)]
 
+/--
+Variant of `foldlRange.output_eq` for bodies whose output is independent of their
+input pair (`ConstantOutput`). Mirrors `foldl.output_eq`: the output collapses to a
+single application of `body` at the last index, eliminating the residual `Fin.foldl`.
+Users must supply the `ConstantOutput` proof explicitly because `foldlRange`, unlike
+`foldl`, does not bundle it in its definition.
+-/
+lemma foldlRange.output_eq_of_constantOutput [NeZero m]
+    (h_const_out : ConstantOutput fun (t : β × Fin m) => body t.1 t.2) :
+  (foldlRange m init body constant).output n =
+    (body default ⟨m - 1, Nat.pred_lt (NeZero.ne m)⟩).output
+      (n + (m - 1) * (body default default).localLength) := by
+  rw [foldlRange, FoldlM.output_eq (constant:=constant)]
+  unfold FoldlM.prod
+  rw [constant.localLength_eq (default, default) 0]
+  set k := constant.localLength
+  have hm1 : m - 1 < m := Nat.pred_lt (NeZero.ne m)
+  simp only [Vector.getElem_finRange, Fin.eta]
+  -- Convert the RHS body argument ⟨m-1, _⟩ to default via h_const_out.
+  rw [h_const_out (default, ⟨m - 1, hm1⟩) _]
+  -- Convert each LHS body application to use default default via h_const_out.
+  conv => lhs; lhs; intro acc i; rw [h_const_out (acc, _)]
+  rcases m with _ | m
+  · nomatch hm1
+  simp only [Fin.foldl_const, Fin.val_last, add_tsub_cancel_right]
+
 lemma foldlRange.operations_eq :
   (foldlRange m init body constant).operations n =
     (List.ofFn fun i =>
