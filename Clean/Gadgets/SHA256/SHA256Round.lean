@@ -6,7 +6,7 @@ import Clean.Gadgets.SHA256.UpperSigma1
 import Clean.Specs.SHA256
 
 section
-variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+variable {p : ℕ} [Fact p.Prime]
 
 namespace Gadgets.SHA256
 
