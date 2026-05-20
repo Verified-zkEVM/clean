@@ -1,7 +1,7 @@
 import Clean.Gadgets.SHA256.BitwiseOps
 
 section
-variable {p : ℕ} [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime] [h_large : Fact (p > 2^33)]
 
 namespace Gadgets.SHA256
 
@@ -53,7 +53,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   add32 input.a input.b
 
-set_option maxHeartbeats 800000 in
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
   main := main
   localLength _ := 33
@@ -86,6 +85,7 @@ private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i
     have h2 : 2^m + 2^m = 2^(m+1) := by ring
     omega
 
+omit h_large in
 /-- valueBits of normalized bits is < 2^32 -/
 private lemma valueBits_lt_two_pow (bits : Vector (F p) 32) (h : Normalized bits) :
     valueBits bits < 2^32 := by
@@ -95,7 +95,7 @@ private lemma valueBits_lt_two_pow (bits : Vector (F p) 32) (h : Normalized bits
   · simp [h0, ZMod.val_zero]
   · simp [h1, ZMod.val_one]
 
-omit [Fact (Nat.Prime p)] in
+omit [Fact (Nat.Prime p)] h_large in
 /-- The natural-number sum from fromBits equals valueBits -/
 private lemma fromBits_map_val_eq_valueBits (bits : Vector (F p) 32) :
     Utils.Bits.fromBits (bits.map ZMod.val) = valueBits bits := by
@@ -106,12 +106,14 @@ private lemma fromBits_map_val_eq_valueBits (bits : Vector (F p) 32) :
   rw [Vector.getElem_map]
   rfl
 
+omit h_large in
 /-- fieldFromBits bits = (valueBits bits : F p) -/
 private lemma fieldFromBits_eq_valueBits (bits : Vector (F p) 32) :
     Utils.Bits.fieldFromBits bits = (valueBits bits : F p) := by
   unfold Utils.Bits.fieldFromBits
   rw [fromBits_map_val_eq_valueBits]
 
+omit h_large in
 /-- fromBitsExpr evaluated at concrete inputs = (valueBits bits : F p) -/
 private lemma fromBitsExpr_eval_normalized (env : Environment (F p))
     (bits_var : Var (fields 32) (F p)) (bits : Vector (F p) 32)
@@ -121,6 +123,7 @@ private lemma fromBitsExpr_eval_normalized (env : Environment (F p))
   simp only [Utils.Bits.fieldFromBits_eval]
   rw [h_eval, fieldFromBits_eq_valueBits]
 
+omit h_large in
 /-- For normalized bits with p > 2^32, (fromBitsExpr bits_var).val = valueBits bits -/
 private lemma fromBitsExpr_val_eq (env : Environment (F p))
     (bits_var : Var (fields 32) (F p)) (bits : Vector (F p) 32)
@@ -130,6 +133,7 @@ private lemma fromBitsExpr_val_eq (env : Environment (F p))
   rw [fromBitsExpr_eval_normalized env bits_var bits h_eval]
   exact ZMod.val_natCast_of_lt (by linarith [valueBits_lt_two_pow bits h_norm])
 
+omit h_large in
 /-- The z output variable vector evaluates to env.get at the witness offsets -/
 private lemma z_var_eval (env : Environment (F p)) (i₀ : ℕ) :
     Vector.map (Expression.eval env)
@@ -137,10 +141,12 @@ private lemma z_var_eval (env : Environment (F p)) (i₀ : ℕ) :
     = Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
   ext i; simp [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
 
+omit h_large in
 /-- IsBool from boolean constraint x * (x + -1) = 0 -/
 private lemma isbool_of_bool_constraint {x : F p} (h : x * (x + -1) = 0) : IsBool x := by
   rwa [show x + -1 = x - 1 by ring, ← IsBool.iff_mul_sub_one] at h
 
+omit h_large in
 /-- Normalized z from boolean constraints -/
 private lemma normalized_of_bool_holds (env : Environment (F p)) (i₀ : ℕ)
     (h : ∀ i : Fin 32, env.get (i₀ + i.val) * (env.get (i₀ + i.val) + -1) = 0) :
@@ -152,8 +158,8 @@ private lemma normalized_of_bool_holds (env : Environment (F p)) (i₀ : ℕ)
   rw [h_get]
   exact isbool_of_bool_constraint hi
 
+omit h_large in
 -- evalBitsNat env a = valueBits a when the variables evaluate to a
-set_option maxHeartbeats 1600000 in
 private lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
     (a_var : Var (fields 32) (F p)) (a : fields 32 (F p))
     (h : Vector.map (Expression.eval env.toEnvironment) a_var = a) :
@@ -170,7 +176,6 @@ private lemma testBit_ite_eq (n i : ℕ) : (if n.testBit i = true then 1 else 0 
   rcases Nat.mod_two_eq_zero_or_one (n / 2^i) with h | h <;> rw [h] <;> rfl
 
 -- Bit decomposition: ∑ i, (n / 2^i % 2) * 2^i = n for n < 2^32
-set_option maxHeartbeats 4000000 in
 private lemma bit_decomp_sum (n : ℕ) (h_n_lt : n < 2^32) :
     ∑ i : Fin 32, n / 2^i.val % 2 * 2^i.val = n := by
   conv_rhs => rw [← Utils.Bits.fromBits_toBits h_n_lt]
@@ -180,8 +185,8 @@ private lemma bit_decomp_sum (n : ℕ) (h_n_lt : n < 2^32) :
   intro i _
   rw [Vector.getElem_mapRange, testBit_ite_eq]
 
+omit h_large in
 -- For n < 2^32 and 2^32 < p, fieldFromBits of the bit decomposition vector equals (n : F p)
-set_option maxHeartbeats 1600000 in
 private lemma fieldFromBits_bit_decomp (n : ℕ) (h_n_lt : n < 2^32) (hp32 : (2:ℕ)^32 < p) :
     Utils.Bits.fieldFromBits (Vector.ofFn fun i : Fin 32 => ((n / 2^i.val % 2 : ℕ) : F p)) =
     ((n : ℕ) : F p) := by
@@ -210,8 +215,7 @@ private lemma fieldFromBits_bit_decomp (n : ℕ) (h_n_lt : n < 2^32) (hp32 : (2:
 Soundness requires p > 2^33 so the field linear constraint can be lifted to ℕ.
 -/
 
-set_option maxHeartbeats 1600000 in
-theorem soundness [h_large : Fact (p > 2^33)] : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start [add32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
@@ -301,8 +305,7 @@ theorem soundness [h_large : Fact (p > 2^33)] : Soundness (F p) elaborated Assum
 ## Completeness
 -/
 
-set_option maxHeartbeats 1600000 in
-theorem completeness [h_large : Fact (p > 2^33)] : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start [add32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
