@@ -104,15 +104,9 @@ private def valSchedule (input_block : Vector ℕ 16) : ℕ → Vector ℕ 64
   | k + 1 =>
     if h : k < 48 then
       let prev := valSchedule input_block k
-      have hj2  : k + 16 - 2  < 64 := by omega
-      have hj7  : k + 16 - 7  < 64 := by omega
-      have hj15 : k + 16 - 15 < 64 := by omega
-      have hj16 : k + 16 - 16 < 64 := by omega
       let wj := _root_.add32
-        (_root_.add32 (Specs.SHA256.lowerSigma1 (prev.get ⟨k + 16 - 2,  hj2 ⟩))
-               (prev.get ⟨k + 16 - 7,  hj7 ⟩))
-        (_root_.add32 (Specs.SHA256.lowerSigma0 (prev.get ⟨k + 16 - 15, hj15⟩))
-               (prev.get ⟨k + 16 - 16, hj16⟩))
+        (_root_.add32 (Specs.SHA256.lowerSigma1 prev[k + 16 - 2]) prev[k + 16 - 7])
+        (_root_.add32 (Specs.SHA256.lowerSigma0 prev[k + 16 - 15]) prev[k + 16 - 16])
       prev.set (k + 16) wj (by omega)
     else
       valSchedule input_block k
@@ -127,32 +121,19 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
   set body : Vector ℕ 64 → ℕ → Vector ℕ 64 := fun w n =>
     if h : n < 48 then
       have hj   : n + 16     < 64 := by omega
-      have hj2  : n + 16 - 2  < 64 := by omega
-      have hj7  : n + 16 - 7  < 64 := by omega
-      have hj15 : n + 16 - 15 < 64 := by omega
-      have hj16 : n + 16 - 16 < 64 := by omega
       let wj := _root_.add32
-        (_root_.add32 (Specs.SHA256.lowerSigma1 (w.get ⟨n + 16 - 2,  hj2 ⟩))
-                      (w.get ⟨n + 16 - 7,  hj7 ⟩))
-        (_root_.add32 (Specs.SHA256.lowerSigma0 (w.get ⟨n + 16 - 15, hj15⟩))
-                      (w.get ⟨n + 16 - 16, hj16⟩))
+        (_root_.add32 (Specs.SHA256.lowerSigma1 w[n + 16 - 2]) w[n + 16 - 7])
+        (_root_.add32 (Specs.SHA256.lowerSigma0 w[n + 16 - 15]) w[n + 16 - 16])
       w.set (n + 16) wj hj
     else w with hbody_def
   set init : Vector ℕ 64 :=
     Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block.get ⟨i.val, h⟩ else 0
   -- Rephrase RHS bodies in terms of `body`.
   have hspec : Fin.foldl 48 (fun w (i : Fin 48) =>
-      let j := i.val + 16
-      have hj   : j     < 64 := by have := i.isLt; omega
-      have hj2  : j - 2  < 64 := by omega
-      have hj7  : j - 7  < 64 := by omega
-      have hj15 : j - 15 < 64 := by omega
-      have hj16 : j - 16 < 64 := by omega
-      let wj := _root_.add32 (_root_.add32 (Specs.SHA256.lowerSigma1 (w.get ⟨j - 2,  hj2 ⟩))
-                             (w.get ⟨j - 7,  hj7 ⟩))
-                      (_root_.add32 (Specs.SHA256.lowerSigma0 (w.get ⟨j - 15, hj15⟩))
-                             (w.get ⟨j - 16, hj16⟩))
-      w.set (⟨j, hj⟩ : Fin 64) wj) init =
+      w.set (i.val + 16)
+        (_root_.add32 (_root_.add32 (Specs.SHA256.lowerSigma1 w[i.val + 16 - 2]) w[i.val + 16 - 7])
+          (_root_.add32 (Specs.SHA256.lowerSigma0 w[i.val + 16 - 15]) w[i.val + 16 - 16]))
+        (by have := i.isLt; omega)) init =
       Fin.foldl 48 (fun w (i : Fin 48) => body w i.val) init := by
     congr 1; funext w i
     have hi : i.val < 48 := i.isLt
@@ -409,14 +390,6 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
         -- Both sides should be `(sig1 + x-7 + sig0 + x-16) % 2^32` after unfolding add32.
         show _ = (_root_.add32 (_root_.add32 _ _) (_root_.add32 _ _) : ℕ)
         unfold _root_.add32
-        rw [show (Vector.get _ ⟨k+16-2, _⟩ : ℕ) =
-              (valSchedule (Vector.map valueBits input) k)[k+16-2]'(by omega) from rfl,
-            show (Vector.get _ ⟨k+16-7, _⟩ : ℕ) =
-              (valSchedule (Vector.map valueBits input) k)[k+16-7]'(by omega) from rfl,
-            show (Vector.get _ ⟨k+16-15, _⟩ : ℕ) =
-              (valSchedule (Vector.map valueBits input) k)[k+16-15]'(by omega) from rfl,
-            show (Vector.get _ ⟨k+16-16, _⟩ : ℕ) =
-              (valSchedule (Vector.map valueBits input) k)[k+16-16]'(by omega) from rfl]
         -- Reduce to nat-mod equality.
         omega
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]

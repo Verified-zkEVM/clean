@@ -34,27 +34,9 @@ structure Inputs (F : Type) where
   schedule : SHA256Schedule F
 deriving ProvableStruct
 
-/-- One round of compression, parameterised by the schedule and round index. -/
-private def roundStep (schedule : Var SHA256Schedule (F p))
-    (s : Var SHA256State (F p)) (i : Fin 64) :
-    Circuit (F p) (Var SHA256State (F p)) :=
-  SHA256Round.circuit ⟨s, constWord32 Specs.SHA256.K[i].toNat, schedule[i]⟩
-
-@[circuit_norm]
-private lemma roundStep_localLength (schedule : Var SHA256Schedule (F p))
-    (s : Var SHA256State (F p)) (i : Fin 64) (n : ℕ) :
-    (roundStep schedule s i).localLength n = 455 := by
-  simp [roundStep, circuit_norm, SHA256Round.circuit, SHA256Round.elaborated]
-
-private instance constantLengthRoundStep (schedule : Var SHA256Schedule (F p)) :
-    Circuit.ConstantLength
-      (fun (x : Var SHA256State (F p) × Fin 64) => roundStep schedule x.1 x.2) where
-  localLength := 455
-  localLength_eq _ _ := roundStep_localLength _ _ _ _
-
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) :=
-  Circuit.foldlRange 64 input.state (roundStep input.schedule)
-    (constantLengthRoundStep input.schedule)
+  Circuit.foldlRange 64 input.state (fun s i =>
+    SHA256Round.circuit ⟨s, constWord32 Specs.SHA256.K[i].toNat, input.schedule[i]⟩)
 
 /-- The variable-level state after `k` rounds. Used as the explicit `output` for the
     SHA256Rounds elaborated instance, mirroring how Keccak Permutation provides `stateVar`. -/
@@ -73,7 +55,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
   localLength _ := 64 * 455
   output input i₀ := stateVar i₀ input.state 64
   localLength_eq _ _ := by
-    simp +arith [circuit_norm, main, roundStep, SHA256Round.circuit]
+    simp +arith [circuit_norm, main, SHA256Round.circuit]
   output_eq input i₀ := by
     -- Goal: (main input).output i₀ = stateVar i₀ input.state 64
     -- Both sides describe the variable state after 64 rounds; prove by induction.
@@ -108,10 +90,10 @@ instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
                  Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 422 + i_1 },
                  acc[4], acc[5], acc[6]]) input.state from rfl, ih]
   subcircuitsConsistent _ _ := by
-    simp +arith [circuit_norm, main, roundStep, SHA256Round.circuit]
+    simp +arith [circuit_norm, main, SHA256Round.circuit]
   channelsLawful := by
     intro _ _
-    simp +arith [circuit_norm, main, roundStep, SHA256Round.circuit]
+    simp +arith [circuit_norm, main, SHA256Round.circuit]
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 8, Normalized input.state[i]) ∧
@@ -152,28 +134,25 @@ private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256St
                Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 422 + i_1 },
                acc[4], acc[5], acc[6]]) input_var_state from rfl, ih]
 
-/-- `Circuit.FoldlM.foldlAcc` at index `⟨k, h⟩ : Fin 64` equals `stateVar i₀ input_var_state k`. -/
+/-- `Circuit.FoldlM.foldlAcc` at index `⟨k, h⟩ : Fin 64` equals `stateVar i₀ input_var_state k`.
+
+    Uses `SHA256State (Expression (F p))` for the accumulator type (not the
+    `Var SHA256State (F p)` alias) so the lemma's pattern matches `h_holds`
+    syntactically — `rw` can't see through the alias. -/
 private lemma foldlAcc_eq_stateVar (i₀ : ℕ)
-    (input_var_state : Var SHA256State (F p)) (input_var_schedule : Var SHA256Schedule (F p))
+    (input_var_state : SHA256State (Expression (F p)))
+    (input_var_schedule : SHA256Schedule (Expression (F p)))
     (k : ℕ) (h : k < 64) :
-    Circuit.FoldlM.foldlAcc i₀ (Vector.finRange 64)
-      (roundStep input_var_schedule) input_var_state ⟨k, h⟩ =
+    Circuit.FoldlM.foldlAcc (β := SHA256State (Expression (F p)))
+      i₀ (Vector.finRange 64)
+      (fun s (i : Fin 64) => subcircuit SHA256Round.circuit
+        { state := s,
+          k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
+          w := input_var_schedule[i.val]'i.isLt })
+      input_var_state ⟨k, h⟩ =
         stateVar i₀ input_var_state k := by
   simp only [Circuit.FoldlM.foldlAcc, Vector.getElem_finRange]
-  rw [show Fin.foldl k
-        (fun acc (i : Fin k) =>
-          (roundStep input_var_schedule acc ⟨i.val, by have := i.isLt; omega⟩).output
-            (i₀ + i.val *
-              (roundStep input_var_schedule acc ⟨i.val, by have := i.isLt; omega⟩).localLength))
-            input_var_state =
-      Fin.foldl k
-        (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
-          #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
-             acc[0], acc[1], acc[2],
-             Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 422 + i_1 },
-             acc[4], acc[5], acc[6]]) input_var_state from ?_]
-  · exact fin_foldl_eq_stateVar _ _ _
-  · congr 1
+  exact fin_foldl_eq_stateVar _ _ _
 
 omit [Fact (p > 2 ^ 33)] in
 /-- Helper: `constWord32 n` evaluated is always normalized (bits are 0 or 1). -/
@@ -274,8 +253,7 @@ private lemma sha256Compress_eq_valStateAfterRound
     simp [Fin.val_last]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [roundStep, SHA256Round.circuit, SHA256Round.elaborated,
-    SHA256Round.Spec, SHA256Round.Assumptions]
+  circuit_proof_start [SHA256Round.Spec, SHA256Round.Assumptions]
   obtain ⟨h_state_norm, h_sched_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_schedule⟩ := h_input
   rw [sha256Compress_eq_valStateAfterRound]
@@ -303,6 +281,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       obtain ⟨ih_val, ih_norm⟩ := ih hk'
       specialize h_holds ⟨k, hk''⟩
       rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_holds
+      simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
+        SHA256Round.Spec, SHA256Round.Assumptions] at h_holds
       have h2 : Normalized (Vector.map (Expression.eval env)
           (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) := normalized_constWord32 env _
       have h3 : Normalized (Vector.map (Expression.eval env) input_var_schedule[k]) := by
@@ -314,13 +294,13 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       -- via `getElem_eval_vector`.
       have h_spec := h_holds ⟨by
         intro i
-        rw [← getElem_eval_vector]
-        exact ih_norm i.val i.isLt, h2, h3⟩
+        have h := ih_norm i.val i.isLt
+        rw [getElem_eval_vector] at h
+        exact h, h2, h3⟩
       obtain ⟨h_value, h_norm⟩ := h_spec
       rw [stateVar, valStateAfterRound, dif_pos hk'']
       refine ⟨?_, ?_⟩
       · -- Value equality: h_value gives the LHS = sha256Round (...)
-        simp only at h_value
         rw [h_value, ih_val,
           valueBits_constWord32_of_lt env Specs.SHA256.K[k].toNat_lt,
           show Vector.map (Expression.eval env) input_var_schedule[k]
@@ -333,17 +313,17 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         -- h_norm gives Normalized (eval env <new state>)[↑i_1] for i_1 : Fin 8.
         -- We need Normalized (eval env <new state>[j]'hj).
         rw [getElem_eval_vector]
-        simp only at h_norm
         exact h_norm ⟨j, hj⟩
   obtain ⟨h_val_64, h_norm_64⟩ := h_inv 64 (le_refl 64)
-  refine ⟨h_val_64, ?_⟩
-  intro i
-  rw [← getElem_eval_vector]
-  exact h_norm_64 i.val i.isLt
+  refine ⟨⟨h_val_64, ?_⟩, ?_⟩
+  · intro i
+    rw [← getElem_eval_vector]
+    exact h_norm_64 i.val i.isLt
+  · intro _
+    left; rfl
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [roundStep, SHA256Round.circuit, SHA256Round.elaborated,
-    SHA256Round.Spec, SHA256Round.Assumptions]
+  circuit_proof_start [SHA256Round.Spec, SHA256Round.Assumptions]
   obtain ⟨h_state_norm, h_sched_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_schedule⟩ := h_input
   -- Inductive invariant: at every round k, the state going in is normalized.
@@ -364,6 +344,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       have hk'' : k < 64 := by omega
       specialize h_env ⟨k, hk''⟩
       rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_env
+      simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
+        SHA256Round.Spec, SHA256Round.Assumptions] at h_env
       have h2 : Normalized (Vector.map (Expression.eval env.toEnvironment)
           (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) := normalized_constWord32 _ _
       have h3 : Normalized (Vector.map (Expression.eval env.toEnvironment) input_var_schedule[k]) := by
@@ -374,11 +356,11 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
         exact h_sched_norm ⟨k, hk''⟩
       have h_spec := h_env ⟨by
         intro i
-        rw [← getElem_eval_vector]
-        exact ih hk' i.val i.isLt, h2, h3⟩
+        have h := ih hk' i.val i.isLt
+        rw [getElem_eval_vector] at h
+        exact h, h2, h3⟩
       obtain ⟨_, h_norm⟩ := h_spec
       intro j hj
-      simp only at h_norm
       rw [stateVar]
       rw [getElem_eval_vector]
       exact h_norm ⟨j, hj⟩
