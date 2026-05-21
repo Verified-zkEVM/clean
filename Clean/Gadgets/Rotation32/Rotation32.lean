@@ -37,12 +37,11 @@ def output (offset : Fin 32) (i0 : ℕ) : U32 (Expression (F p)) :=
 
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.localLength
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.output
-def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
-  main := main off
+instance elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 (main off) where
   localLength _ := 8
   output _inputs i0 := output off i0
 
-theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 32) : Soundness (F p) (main offset) Assumptions (Spec offset) := by
   circuit_proof_start [Rotation32Bits.circuit, Rotation32Bits.elaborated,
     Rotation32Bytes.circuit, Rotation32Bytes.elaborated]
 
@@ -61,17 +60,16 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   rw [rotRight32_composition _ _ _ (U32.value_lt_of_normalized h_assumptions),
     Nat.div_add_mod']
 
-theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 32) : Completeness (F p) (main offset) Assumptions := by
   circuit_proof_all [Rotation32Bits.circuit, Rotation32Bits.elaborated,
     Rotation32Bits.Assumptions, Rotation32Bytes.circuit,
     Rotation32Bytes.Assumptions, Rotation32Bytes.Spec]
 
-def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 := {
-  elaborated offset with
+def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 where
+  main := main offset
   Assumptions
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-}
 
 end Gadgets.Rotation32
