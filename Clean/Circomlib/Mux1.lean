@@ -60,8 +60,6 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
-  localLength _ := n
-
   Assumptions input :=
     let ⟨c, s⟩ := input
     IsBool s
@@ -159,17 +157,6 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
-  localLength _ := 1
-  localLength_eq := by
-    intro input offset
-    simp only [main, circuit_norm]
-    -- The goal is about MultiMux1.circuit's localLength with n=1
-    -- which is defined as n = 1
-    rfl
-  subcircuitsConsistent := by
-    intro input offset
-    simp only [main, circuit_norm]
-
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s
@@ -186,10 +173,8 @@ def circuit : FormalCircuit (F p) Inputs field where
     clear h_input
     simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
-    rw [h_subcircuit_sound]
-    -- Now we need to show the RHS equals our spec
-    -- First, simplify the evaluation of the vector
-    simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
+    simpa only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero,
+      circuit_norm, Nat.add_zero] using h_subcircuit_sound
 
   completeness := by
     simp only [circuit_norm, main]
