@@ -38,8 +38,7 @@ def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
   U64.fromLimbs (.ofFn fun ⟨i,_⟩ =>
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
-def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
-  main := main off
+instance elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 (main off) where
   localLength _ := 16
   output _ i0 := output off i0
   localLength_eq _ i0 := by
@@ -53,7 +52,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   channelsLawful := by
     simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (main offset) Assumptions (Spec offset) := by
   circuit_proof_start [ByteDecomposition.circuit, ByteDecomposition.elaborated,
     ByteDecomposition.Assumptions, ByteDecomposition.Spec]
 
@@ -103,7 +102,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   rw [←U64.vals_valueNat, ←U64.vals_valueNat, h_rot_vector']
   exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (main offset) Assumptions := by
   circuit_proof_start [ByteDecomposition.circuit, ByteDecomposition.elaborated,
     ByteDecomposition.Assumptions, ByteDecomposition.Spec]
 
@@ -112,7 +111,8 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   simp_all only [U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
-  elaborated offset with
+  main := main offset
+  elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
   soundness := soundness offset
