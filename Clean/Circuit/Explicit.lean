@@ -98,10 +98,6 @@ def ExplicitCircuits.fromSingle {circuit : α → Circuit F β}
   channelsWithRequirements a n := (explicit a).channelsWithRequirements n
   channelsLawful a n := (explicit a).channelsLawful n
 
-instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
-    [explicit : ∀ a, ExplicitCircuit (circuit a)] : ExplicitCircuits circuit :=
-  ExplicitCircuits.fromSingle explicit
-
 instance ExplicitCircuits.toSingle (circuit : α → Circuit F β) (a : α)
     [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
   output n := output circuit a n
