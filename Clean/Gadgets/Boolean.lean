@@ -201,6 +201,7 @@ Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 @[circuit_norm]
 def assertBool : FormalAssertion (F p) field where
   main (x : Expression (F p)) := assertZero (x * (x - 1))
+  elaborated := { localLength _ := 0, output _ _ := () }
   Assumptions _ := True
   Spec (x : F p) := IsBool x
 
