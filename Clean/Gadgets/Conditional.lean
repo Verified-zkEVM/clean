@@ -55,13 +55,11 @@ Specification: Output is selected based on selector value using if-then-else.
 def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
   output = if input.selector = 1 then input.ifTrue else input.ifFalse
 
-instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M main where
-  localLength _ := 0
-  output
-  | { selector, ifTrue, ifFalse }, _ => output selector ifTrue ifFalse
+instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M main := by
+  infer_elaborated_circuit
 
 theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumptions Spec := by
-  circuit_proof_start [output]
+  circuit_proof_start
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩

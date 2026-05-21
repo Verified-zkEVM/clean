@@ -14,18 +14,23 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
 namespace FormalCircuitBase
 variable [CircuitType Input] [CircuitType Output]
 
+@[circuit_norm, explicit_circuit_norm]
 abbrev output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) : Var Output F :=
   self.elaborated.output input offset
 
+@[circuit_norm, explicit_circuit_norm]
 abbrev localLength (self : FormalCircuitBase F Input Output) (input : Var Input F) : ℕ :=
   self.elaborated.localLength input
 
+@[circuit_norm, explicit_circuit_norm]
 abbrev channelsWithGuarantees (self : FormalCircuitBase F Input Output) : List (RawChannel F) :=
   self.elaborated.channelsWithGuarantees
 
+@[circuit_norm, explicit_circuit_norm]
 abbrev channelsWithRequirements (self : FormalCircuitBase F Input Output) : List (RawChannel F) :=
   self.elaborated.channelsWithRequirements
 
+@[circuit_norm, explicit_circuit_norm]
 abbrev exposedChannels (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) : List (ExposedChannel F) :=
   self.elaborated.exposedChannels input offset
 

@@ -51,8 +51,6 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main
   Assumptions
   Spec
-  localLength _ := 2
-  output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
 
   soundness := by
     -- introductions

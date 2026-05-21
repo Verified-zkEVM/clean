@@ -13,9 +13,6 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
     let { z, .. } ← Addition8FullCarry.circuit inputs
     return z
 
-  localLength _ := 2
-  output _ i0 := var ⟨i0⟩
-
   Assumptions := fun { x, y, carryIn } =>
     x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
@@ -42,9 +39,6 @@ Returns the sum.
 def circuit : FormalCircuit (F p) Inputs field where
   main := fun { x, y } =>
     Addition8Full.circuit { x, y, carryIn := 0 }
-
-  localLength _ := 2
-  output _ i0 := var ⟨i0⟩
 
   Assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 

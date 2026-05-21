@@ -63,6 +63,7 @@ class ExplicitCircuits.IsElaborated (circuit : α → Circuit F β) (explicit : 
   channelsWithRequirements_eq : ∀ (a a' : α) (n m : ℕ),
     explicit.channelsWithRequirements a n = explicit.channelsWithRequirements a' m := by intros; rfl
 
+@[circuit_norm, explicit_circuit_norm]
 def ExplicitCircuits.toElaborated {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
   (circuit : Var Input F → Circuit F (Var Output F))
@@ -82,16 +83,9 @@ def ExplicitCircuits.toElaborated {Input Output : TypeMap}
     rw [explicit_elaborated.channelsWithGuarantees_eq]
     rw [explicit_elaborated.channelsWithRequirements_eq]
 
-instance ExplicitCircuits.to_elaborated {Input Output : TypeMap}
-  [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
-  (circuit : Var Input F → Circuit F (Var Output F))
-  [explicit : ExplicitCircuits circuit] [explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit] :
-    ElaboratedCircuit F Input Output circuit :=
-  ExplicitCircuits.toElaborated circuit explicit explicit_elaborated
-
 -- move between family and single explicit circuit
 
-instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
+def ExplicitCircuits.fromSingle {circuit : α → Circuit F β}
     (explicit : ∀ a, ExplicitCircuit (circuit a)) : ExplicitCircuits circuit where
   output a n := (explicit a).output n
   localLength a n := (explicit a).localLength n
@@ -104,7 +98,7 @@ instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
   channelsWithRequirements a n := (explicit a).channelsWithRequirements n
   channelsLawful a n := (explicit a).channelsLawful n
 
-instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
+instance ExplicitCircuits.toSingle (circuit : α → Circuit F β) (a : α)
     [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
   output n := output circuit a n
   localLength n := explicit.localLength a n
@@ -117,19 +111,9 @@ instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
   channelsWithRequirements n := channelsWithRequirements circuit a n
   channelsLawful n := channelsLawful a n
 
-instance ExplicitCircuits.from_concrete_provable_input {α : TypeMap} [ProvableType α] {β : Type}
-    {circuit : Var α F → Circuit F β} [explicit : ExplicitCircuits circuit] :
-    ExplicitCircuits (fun input : α (Expression F) => circuit input) where
-  output input n := explicit.output input n
-  localLength input n := explicit.localLength input n
-  operations input n := explicit.operations input n
-  output_eq input n := explicit.output_eq input n
-  localLength_eq input n := explicit.localLength_eq input n
-  operations_eq input n := explicit.operations_eq input n
-  subcircuitsConsistent input n := explicit.subcircuitsConsistent input n
-  channelsWithGuarantees input n := explicit.channelsWithGuarantees input n
-  channelsWithRequirements input n := explicit.channelsWithRequirements input n
-  channelsLawful input n := explicit.channelsLawful input n
+instance ExplicitCircuits.fromProvableInputOutput {α β : TypeMap} [ProvableType α] [ProvableType β]
+  {circuit : Var α F → Circuit F (Var β F)} [explicit : ExplicitCircuits circuit] :
+  ExplicitCircuits (circuit : α (Expression F) → Circuit F (β (Expression F))) := explicit
 
 -- `pure` is an explicit circuit
 instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
@@ -266,13 +250,6 @@ instance : ExplicitCircuits (F:=F) assertZero where
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := []
 
-instance {e : Var field F} : ExplicitCircuit (assertZero e) where
-  output _ := ()
-  localLength _ := 0
-  operations _ := [.assert e]
-  channelsWithGuarantees _ := []
-  channelsWithRequirements _ := []
-
 instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F:=F) (lookup table) where
   output _ _ := ()
   localLength _ _ := 0
@@ -305,6 +282,14 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := [channel.toRaw]
 
+attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.operations ExplicitCircuit.output
+  ExplicitCircuit.channelsWithGuarantees ExplicitCircuit.channelsWithRequirements
+attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.localLength ExplicitCircuits.operations ExplicitCircuits.output
+  ExplicitCircuits.channelsWithGuarantees ExplicitCircuits.channelsWithRequirements
+attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.toSingle ExplicitCircuits.fromSingle
+attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
+attribute [explicit_circuit_norm] size
+
 syntax "infer_explicit_circuit" : tactic
 
 macro_rules
@@ -318,24 +303,30 @@ macro_rules
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
       repeat infer_instance
-    )))
+    )
+    done))
 
 syntax "infer_explicit_circuits" : tactic
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
-    apply ExplicitCircuits.from_single (by infer_explicit_circuit)))
+    -- unfold head. TODO is there a better way?
+    try conv => congr; whnf
+    apply ExplicitCircuits.fromSingle
+    intro a
+    infer_explicit_circuit
+    ))
+
+-- TODO this is needed because `conv => congr; whnf` creates terms involving `Eq.mpr`
+attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 syntax "infer_elaborated_circuit" : tactic
 
 macro_rules
   | `(tactic|infer_elaborated_circuit) => `(tactic|(
-    refine ExplicitCircuits.toElaborated _ ?explicit ?explicit_elaborated
+    refine ExplicitCircuits.toElaborated _ ?explicit ?elaborated
     · infer_explicit_circuits
-    · exact @ExplicitCircuits.IsElaborated.mk _ _ _ _ _ ?explicit
-        (by intros; rfl)
-        (by intros; rfl)
-        (by intros; rfl)
+    · exact ExplicitCircuits.IsElaborated.mk
   ))
 
 -- this tactic is pretty good at inferring explicit circuits!
@@ -366,6 +357,7 @@ example :
 
   ExplicitCircuits add := by infer_explicit_circuits
 
+-- elaborated
 example :
   let add (x : Expression F) := do
     let y : Expression F ← witness fun _ => 1
@@ -374,12 +366,18 @@ example :
     return z
 
   ElaboratedCircuit F field field add := by infer_elaborated_circuit
-end
 
-attribute [explicit_circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.operations ExplicitCircuit.output
-  ExplicitCircuit.channelsWithGuarantees ExplicitCircuit.channelsWithRequirements
-attribute [explicit_circuit_norm] ExplicitCircuits.localLength ExplicitCircuits.operations ExplicitCircuits.output
-  ExplicitCircuits.channelsWithGuarantees ExplicitCircuits.channelsWithRequirements
-attribute [explicit_circuit_norm] ExplicitCircuits.to_single ExplicitCircuits.from_single
-attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
-attribute [explicit_circuit_norm] size
+-- needed for the output type
+instance : ExplicitCircuits (F:=F) (β := Var unit F) assertZero :=
+  inferInstanceAs (ExplicitCircuits (F:=F) assertZero)
+
+example : ElaboratedCircuit F field unit (fun x ↦ assertZero (x * (x - 1))) := by
+  infer_elaborated_circuit
+
+-- works with circuits hidden behind definitions
+private def assertBool (x : Expression F) := do
+  assertZero (x * (x - 1))
+
+example : ElaboratedCircuit F field unit assertBool := by infer_elaborated_circuit
+
+end
