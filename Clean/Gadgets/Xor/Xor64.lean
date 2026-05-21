@@ -46,9 +46,8 @@ def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs U64 main where
-  localLength _ := 8
-  output _ i0 := varFromOffset U64 i0
+instance elaborated : ElaboratedCircuit (F p) Inputs U64 main := by
+  infer_elaborated_circuit
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}

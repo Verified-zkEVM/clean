@@ -23,8 +23,8 @@ def main (x : Expression F) : Circuit F (Expression F) := do
 
   return isZero
 
-instance elaborated : ElaboratedCircuit F field field main where
-  localLength _ := 2  -- 2 witnesses: isZero and x_inv
+instance elaborated : ElaboratedCircuit F field field main := by
+  infer_elaborated_circuit
 
 def Assumptions (_ : F) : Prop := True
 

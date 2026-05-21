@@ -38,9 +38,8 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs U32 main where
-  localLength _ := 4
-  output _ i0 := varFromOffset U32 i0
+instance elaborated : ElaboratedCircuit (F p) Inputs U32 main := by
+  infer_elaborated_circuit
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u32 {x y z : U32 (F p)}

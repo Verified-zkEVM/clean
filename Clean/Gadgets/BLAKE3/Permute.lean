@@ -9,9 +9,8 @@ open Specs.BLAKE3 (msgPermutation permute)
 def main (state : Var BLAKE3State (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   return Vector.ofFn (fun i => state[msgPermutation[i]])
 
-instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State main where
-  localLength _ := 0
-  output state i0 := Vector.ofFn (fun i => state[msgPermutation[i]])
+instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State main := by
+  infer_elaborated_circuit
 
 def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 
