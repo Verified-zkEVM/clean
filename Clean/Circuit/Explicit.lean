@@ -393,12 +393,12 @@ macro_rules
     · exact ExplicitCircuits.IsElaborated.mk
   ))
 
-elab_rules : tactic
-  | `(tactic|infer_elaborated_circuit_with $data:term) => do
-  -- TODO basically we want to replace this with
-  -- `ElaboratedCircuit.withData (by infer_elaborated_circuit) $data`
-  -- using the auto-tactic for the last argument
-  sorry
+macro_rules
+  | `(tactic|infer_elaborated_circuit_with $data:term) => `(tactic|(
+    refine ElaboratedCircuit.withData (by infer_elaborated_circuit) $data ?data_eq
+    simp only [circuit_norm]
+    try grind
+  ))
 
 -- this tactic is pretty good at inferring explicit circuits!
 section
