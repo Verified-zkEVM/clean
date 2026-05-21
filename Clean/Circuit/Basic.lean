@@ -378,6 +378,45 @@ example :
     assertZero (x + y - z)
     pure z
   ConstantLength add := by infer_constant_length
+
+-- basic simp lemmas
+
+theorem pure_operations_eq (a : α) (n : ℕ) :
+  (pure a : Circuit F α).operations n = [] := rfl
+
+theorem bind_operations_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+  (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
+
+theorem map_operations_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
+  (g <$> f).operations n = f.operations n := rfl
+
+theorem pure_localLength_eq (a : α) (n : ℕ) :
+  (pure a : Circuit F α).localLength n = 0 := rfl
+
+theorem bind_localLength_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+    (f >>= g).localLength n = f.localLength n + (g (f.output n)).localLength (n + f.localLength n) := by
+  show (f.operations n ++ (g _).operations _).localLength = _
+  rw [Operations.append_localLength]
+
+theorem map_localLength_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
+  (g <$> f).localLength n = f.localLength n := rfl
+
+theorem pure_output_eq (a : α) (n : ℕ) :
+  (pure a : Circuit F α).output n = a := rfl
+
+theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+  (f >>= g).output n = (g (f.output n)).output (n + f.localLength n) := rfl
+
+theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
+  (g <$> f).output n = g (f.output n) := rfl
+
+@[circuit_norm]
+theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} {prop : Condition F} :
+  ((f >>= g).operations n).forAll n prop ↔
+    (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.localLength n)).forAll (n + f.localLength n)) prop := by
+  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
+  rw [h_ops, Operations.forAll_append, add_comm n]
+
 end Circuit
 
 -- `circuit_norm` attributes
@@ -448,45 +487,3 @@ lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
   simp
 
 attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false
-
-namespace Circuit
-
-theorem pure_operations_eq (a : α) (n : ℕ) :
-  (pure a : Circuit F α).operations n = [] := rfl
-
-theorem bind_operations_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
-
-theorem map_operations_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
-  (g <$> f).operations n = f.operations n := rfl
-
-theorem pure_localLength_eq (a : α) (n : ℕ) :
-  (pure a : Circuit F α).localLength n = 0 := rfl
-
-theorem bind_localLength_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-    (f >>= g).localLength n = f.localLength n + (g (f.output n)).localLength (n + f.localLength n) := by
-  show (f.operations n ++ (g _).operations _).localLength = _
-  rw [Operations.append_localLength]
-
-theorem map_localLength_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
-  (g <$> f).localLength n = f.localLength n := rfl
-
-theorem pure_output_eq (a : α) (n : ℕ) :
-  (pure a : Circuit F α).output n = a := rfl
-
-theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).output n = (g (f.output n)).output (n + f.localLength n) := rfl
-
-theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
-  (g <$> f).output n = g (f.output n) := rfl
-
-variable {prop : Condition F}
-
-@[circuit_norm]
-theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
-  ((f >>= g).operations n).forAll n prop ↔
-    (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.localLength n)).forAll (n + f.localLength n)) prop := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
-  rw [h_ops, Operations.forAll_append, add_comm n]
-
-end Circuit
