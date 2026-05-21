@@ -749,6 +749,26 @@ instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {inpu
   channelsWithRequirements _ := circuit.channelsWithRequirements
   subcircuitsConsistent n := by simp [circuit_norm]
 
+instance {β α: TypeMap} [ProvableType α] [ProvableType β]
+    {circuit : GeneralFormalCircuit F β α} {input} :
+    ExplicitCircuit (subcircuitWithAssertion circuit input) where
+  output n := circuit.output input n
+  localLength _ := circuit.localLength input
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by simp [circuit_norm]
+
+instance {β α: TypeMap} [CircuitType α] [CircuitType β]
+    {circuit : GeneralFormalCircuit.WithHint F β α} {input} :
+    ExplicitCircuit (subcircuitWithHintAssertion circuit input) where
+  output n := circuit.output input n
+  localLength _ := circuit.localLength input
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by simp [circuit_norm]
+
 -- simplification lemmas for FlatOperations.interactions (toSubcircuit ..).ops.toFlat
 
 theorem FormalCircuit.toSubcircuit_interactions (circuit : FormalCircuit F Input Output) :

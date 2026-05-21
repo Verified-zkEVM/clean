@@ -51,13 +51,9 @@ def instantiateConst (circuit : GeneralFormalCircuit F Input unit) (input : Inpu
 def instantiateConst_toFormal (circuit : GeneralFormalCircuit F Input unit) (input : Input F) :
     GeneralFormalCircuit F unit unit where
   main _ := circuit.instantiateConst input
-  localLength _ := circuit.localLength (const input)
-  output _ _ := ()
   Assumptions _ := circuit.Assumptions input
   ProverAssumptions _ := circuit.ProverAssumptions input
   Spec _ _ := circuit.Spec input ()
-  channelsWithGuarantees := circuit.channelsWithGuarantees
-  channelsWithRequirements := circuit.channelsWithRequirements
   soundness := by circuit_proof_all
   completeness := by circuit_proof_all
 
@@ -75,8 +71,6 @@ lemma size_eq (circuit : GeneralFormalCircuit F Input Output) :
 def empty (F : Type) [Field F] (Input : TypeMap) [ProvableType Input] :
     GeneralFormalCircuit F Input unit where
   main _ := return
-  localLength _ := 0
-  output _ _ := ()
   Assumptions | _, _ => True
   ProverAssumptions | _, _, _ => True
   Spec _ _ _ := True

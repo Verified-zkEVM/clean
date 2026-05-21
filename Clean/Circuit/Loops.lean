@@ -748,6 +748,132 @@ lemma mapFinRange.usesLocalWitnesses :
     ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body 0).localLength) (body i |>.operations (n + i*(body 0).localLength)) := by
   simp only [mapFinRange, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
+theorem Operations.channelsLawful_flatten_of_forall {m : ℕ}
+    {ops : Fin m → Operations F}
+    {channelsWithGuarantees channelsWithRequirements : Fin m → List (RawChannel F)} :
+    (∀ i, (ops i).ChannelsLawful (channelsWithGuarantees i) (channelsWithRequirements i) []) →
+    Operations.ChannelsLawful (List.ofFn ops).flatten
+      (List.ofFn channelsWithGuarantees).flatten
+      (List.ofFn channelsWithRequirements).flatten [] := by
+  intro h
+  induction m with
+  | zero => simp [Operations.channelsLawful_nil]
+  | succ m ih =>
+    rw [List.ofFn_succ, List.ofFn_succ, List.ofFn_succ]
+    rw [List.flatten_cons, List.flatten_cons, List.flatten_cons]
+    apply Operations.channelsLawful_append_of_channelsLawful
+    · exact h 0
+    · apply ih
+      intro i
+      exact h i.succ
+
+instance ExplicitCircuit.from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} : ExplicitCircuit (forEach xs body constant) where
+  output _ := ()
+  localLength _ := m * constant.localLength
+  operations n := (List.ofFn fun (i : Fin m) =>
+    (body xs[i.val]).operations (n + i * constant.localLength)).flatten
+  channelsWithGuarantees n := (List.ofFn fun (i : Fin m) =>
+    ExplicitCircuit.channelsWithGuarantees (body xs[i.val]) (n + i * constant.localLength)).flatten
+  channelsWithRequirements n := (List.ofFn fun (i : Fin m) =>
+    ExplicitCircuit.channelsWithRequirements (body xs[i.val]) (n + i * constant.localLength)).flatten
+  output_eq n := Circuit.forEach.output_eq
+  localLength_eq n := by
+    simp only [forEach]
+    rw [ForM.localLength_eq]
+  operations_eq n := by
+    unfold forEach
+    rw [ForM.operations_eq]
+  subcircuitsConsistent n := by
+    unfold forEach
+    rw [ForM.operations_eq, Operations.SubcircuitsConsistent]
+    rw [forAll_flatten xs (circuit:=body) constant]
+    intro i
+    exact (explicit xs[i.val]).subcircuitsConsistent (n + i * constant.localLength)
+  channelsLawful n := by
+    unfold forEach
+    rw [ForM.operations_eq]
+    apply Operations.channelsLawful_flatten_of_forall
+    intro i
+    convert (explicit xs[i.val]).channelsLawful (n + i * constant.localLength) using 1
+
+instance ExplicitCircuit.from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} : ExplicitCircuit (map xs body constant) where
+  output n := xs.mapIdx fun i x => (body x).output (n + i * constant.localLength)
+  localLength _ := m * constant.localLength
+  operations n := (List.ofFn fun (i : Fin m) =>
+    (body xs[i.val]).operations (n + i * constant.localLength)).flatten
+  channelsWithGuarantees n := (List.ofFn fun (i : Fin m) =>
+    ExplicitCircuit.channelsWithGuarantees (body xs[i.val]) (n + i * constant.localLength)).flatten
+  channelsWithRequirements n := (List.ofFn fun (i : Fin m) =>
+    ExplicitCircuit.channelsWithRequirements (body xs[i.val]) (n + i * constant.localLength)).flatten
+  output_eq n := by
+    unfold map
+    rw [MapM.output_eq]
+  localLength_eq n := by
+    unfold map
+    rw [MapM.localLength_eq]
+  operations_eq n := by
+    unfold map
+    rw [MapM.operations_eq]
+  subcircuitsConsistent n := by
+    unfold map
+    rw [MapM.operations_eq, Operations.SubcircuitsConsistent]
+    rw [forAll_flatten xs (circuit:=body) constant]
+    intro i
+    exact (explicit xs[i.val]).subcircuitsConsistent (n + i * constant.localLength)
+  channelsLawful n := by
+    unfold map
+    rw [MapM.operations_eq]
+    apply Operations.channelsLawful_flatten_of_forall
+    intro i
+    convert (explicit xs[i.val]).channelsLawful (n + i * constant.localLength) using 1
+
+instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
+    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {constant : ConstantLength body} : ExplicitCircuit (mapFinRange m body constant) where
+  output n := (Vector.finRange m).mapIdx fun i x => (body x).output (n + i * constant.localLength)
+  localLength _ := m * constant.localLength
+  operations n := (List.ofFn fun (i : Fin m) =>
+    (body i).operations (n + i * constant.localLength)).flatten
+  channelsWithGuarantees n := (List.ofFn fun (i : Fin m) =>
+    ExplicitCircuit.channelsWithGuarantees (body i) (n + i * constant.localLength)).flatten
+  channelsWithRequirements n := (List.ofFn fun (i : Fin m) =>
+    ExplicitCircuit.channelsWithRequirements (body i) (n + i * constant.localLength)).flatten
+  output_eq n := by
+    rw [mapFinRange, Vector.mapFinRangeM, MapM.output_eq]
+  localLength_eq n := by
+    rw [mapFinRange, Vector.mapFinRangeM, MapM.localLength_eq]
+  operations_eq n := by
+    rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq]
+    simp only [Vector.getElem_finRange]
+  subcircuitsConsistent n := by
+    rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq, Operations.SubcircuitsConsistent]
+    simp only [Vector.getElem_finRange]
+    rw [forAll_flatten_abstract (circuit:=body) constant]
+    intro i
+    exact (explicit i).subcircuitsConsistent (n + i * constant.localLength)
+  channelsLawful n := by
+    rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq]
+    simp only [Vector.getElem_finRange]
+    apply Operations.channelsLawful_flatten_of_forall
+    intro i
+    convert (explicit i).channelsLawful (n + i * constant.localLength) using 1
+
+instance ExplicitCircuits.from_forEach_family {m : ℕ} [Inhabited α]
+    {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} :
+    ExplicitCircuits (fun xs : Vector α m => forEach xs body constant) :=
+  ExplicitCircuits.fromSingle fun _ => inferInstance
+
+instance ExplicitCircuits.from_map_family {m : ℕ} [Inhabited α]
+    {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} :
+    ExplicitCircuits (fun xs : Vector α m => map xs body constant) :=
+  ExplicitCircuits.fromSingle fun _ => inferInstance
+
 end mapFinRange
 
 section foldl

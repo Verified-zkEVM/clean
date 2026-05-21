@@ -56,8 +56,8 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
 
 /-- From an `ExplicitCircuit`, we can usually derive an `ElaboratedCircuit` -/
 class ExplicitCircuits.IsElaborated (circuit : α → Circuit F β) (explicit : ExplicitCircuits circuit) where
-  localLength_eq : ∀ (a a' : α) (n m : ℕ),
-    explicit.localLength a n = explicit.localLength a' m := by intros; rfl
+  localLength_eq : ∀ (a : α) (n m : ℕ),
+    explicit.localLength a n = explicit.localLength a m := by intros; rfl
   channelsWithGuarantees_eq : ∀ (a a' : α) (n m : ℕ),
     explicit.channelsWithGuarantees a n = explicit.channelsWithGuarantees a' m := by intros; rfl
   channelsWithRequirements_eq : ∀ (a a' : α) (n m : ℕ),
@@ -73,7 +73,7 @@ def ExplicitCircuits.toElaborated {Input Output : TypeMap}
   localLength a := explicit.localLength a 0
   output a n := explicit.output a n
   localLength_eq a n := by
-    rw [explicit.localLength_eq, explicit_elaborated.localLength_eq]
+    rw [explicit.localLength_eq, explicit_elaborated.localLength_eq a n 0]
   output_eq a n := explicit.output_eq a n
   subcircuitsConsistent a n := explicit.subcircuitsConsistent a n
   channelsWithGuarantees := explicit.channelsWithGuarantees default 0
@@ -195,6 +195,13 @@ instance : ExplicitCircuits (F:=F) witnessVar where
 
 instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
+  localLength _ := k
+  operations n := [.witness k c]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
+
+instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVector k c) where
+  output n := varFromOffset (fields k) n
   localLength _ := k
   operations n := [.witness k c]
   channelsWithGuarantees _ := []
