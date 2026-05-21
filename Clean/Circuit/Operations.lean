@@ -1240,4 +1240,43 @@ lemma forall_interactionsWith_iff {channel : RawChannel F} {ops : Operations F}
 @[circuit_norm] lemma channels_toFlat {ops : Operations F} :
     FlatOperation.channels ops.toFlat = ops.channels := by
   simp [channels, FlatOperation.channels, interactions_toFlat]
+
+@[circuit_norm]
+theorem append_localLength {a b: Operations F} :
+    (a ++ b).localLength = a.localLength + b.localLength := by
+  induction a using induct with
+  | empty => ac_rfl
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
+    simp_all +arith [localLength]
+
+@[circuit_norm]
+theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
+
+@[circuit_norm]
+theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operations F} :
+  forAll offset condition (as ++ bs) ↔
+    forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
+  induction as using induct generalizing offset with
+  | empty => simp [forAll_empty, localLength]
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
+    simp +arith only [List.cons_append, forAll, localLength, ih, and_assoc]
+
+theorem localLength_cons {a : Operation F} {as : Operations F} :
+    localLength (a :: as) = a.localLength + as.localLength := by
+  cases a <;> simp_all [localLength, Operation.localLength]
+
+theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : ProverEnvironment F) :
+  localWitnesses env (op :: ops) =
+    (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
+  cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
+  all_goals (try (rw [Vector.empty_append]; simp))
+
+
+
+@[circuit_norm]
+theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} {ops : Operations F} :
+  forAll offset condition (op :: ops) ↔
+    condition.apply offset op ∧ forAll (op.localLength + offset) condition ops := by
+  cases op <;> simp [forAll, Operation.localLength, Condition.apply]
+
 end Operations

@@ -368,6 +368,7 @@ macro_rules
     apply ConstantLength.fromConstantLength
     try simp only [circuit_norm]
     try intros
+    try trivial
     try ac_rfl))
 
 example :
@@ -447,29 +448,7 @@ lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
   simp
 
 attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false
-namespace Operations
 
-@[circuit_norm]
-theorem append_localLength {a b: Operations F} :
-    (a ++ b).localLength = a.localLength + b.localLength := by
-  induction a using induct with
-  | empty => ac_rfl
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
-    simp_all +arith [localLength]
-
-@[circuit_norm]
-theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
-
-@[circuit_norm]
-theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operations F} :
-  forAll offset condition (as ++ bs) ↔
-    forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
-  induction as using induct generalizing offset with
-  | empty => simp [forAll_empty, localLength]
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
-    simp +arith only [List.cons_append, forAll, localLength, ih, and_assoc]
-
-end Operations
 
 namespace Circuit
 

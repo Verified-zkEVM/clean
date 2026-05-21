@@ -9,31 +9,6 @@ import Clean.Circuit.Provable
 
 variable {F : Type} [Field F] {α β : Type}
 
-namespace Operations
-
-
-theorem localLength_cons {a : Operation F} {as : Operations F} :
-    localLength (a :: as) = a.localLength + as.localLength := by
-  cases a <;> simp_all [localLength, Operation.localLength]
-
-theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : ProverEnvironment F) :
-  localWitnesses env (op :: ops) =
-    (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
-  cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
-  all_goals (try (rw [Vector.empty_append]; simp))
-
-
-
-@[circuit_norm]
-theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} {ops : Operations F} :
-  forAll offset condition (op :: ops) ↔
-    condition.apply offset op ∧ forAll (op.localLength + offset) condition ops := by
-  cases op <;> simp [forAll, Operation.localLength, Condition.apply]
-
-
-
-end Operations
-
 namespace Circuit
 
 
