@@ -399,35 +399,14 @@ instance [CircuitType α] [CircuitType β] :
     CoeFun (GeneralFormalCircuit.WithHint F β α) (fun _ => Var β F → Circuit F (Var α F)) where
   coe circuit input := subcircuitWithHintAssertion circuit input
 
-namespace Circuit
-variable {α β: TypeMap} [ProvableType α] [ProvableType β]
-
-/-- The local length of a subcircuit is derived from the original formal circuit -/
-lemma subcircuit_localLength_eq (circuit : FormalCircuit F β α) (input : Var β F) (offset : ℕ) :
-  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
-
-lemma assertion_localLength_eq (circuit : FormalAssertion F β) (input : Var β F) (offset : ℕ) :
-  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
-
-lemma subcircuitWithAssertion_localLength_eq
-    (circuit : GeneralFormalCircuit F β α) (input : Var β F) (offset : ℕ) :
-    (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
-
-omit [ProvableType α] [ProvableType β] in
-lemma subcircuitWithHintAssertion_localLength_eq [CircuitType α] [CircuitType β]
-    (circuit : GeneralFormalCircuit.WithHint F β α) (input : Var β F) (offset : ℕ) :
-    (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
-
-end Circuit
-
 -- subcircuit composability for `ComputableWitnesses`
 
-namespace ElaboratedCircuit
+namespace FormalCircuitBase
 /--
 For formal circuits, to prove `ComputableWitnesses`, we assume that the input
 only contains variables below the current offset `n`.
  -/
-def ComputableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
+def ComputableWitnesses' (circuit : FormalCircuitBase F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F),
     ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) →
       (circuit.main input).ComputableWitnesses n
@@ -436,7 +415,7 @@ def ComputableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
 This reformulation of `ComputableWitnesses'` is easier to prove in a formal circuit,
 because we have all necessary assumptions at each circuit operation step.
  -/
-def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
+def ComputableWitnesses (circuit : FormalCircuitBase F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F) (env env' : ProverEnvironment F),
   circuit.main input |>.operations n |>.forAllFlat n {
     witness n _ compute :=
@@ -445,7 +424,7 @@ def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
 /--
 `ComputableWitnesses` is stronger than `ComputableWitnesses'` (so it's fine to only prove the former).
 -/
-lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
+lemma computableWitnesses_implies {circuit : FormalCircuitBase F β α} :
     circuit.ComputableWitnesses → circuit.ComputableWitnesses' := by
   simp only [ComputableWitnesses, ComputableWitnesses']
   intro h_computable n input input_only_accesses_n env env'
@@ -473,13 +452,13 @@ Composability for `ComputableWitnesses`: If
 then we can conclude that the subcircuit, evaluated at this particular input,
 satisfies `ComputableWitnesses` in the original sense.
 -/
-theorem compose_computableWitnesses (circuit : ElaboratedCircuit F β α) (input : Var β F) (n : ℕ) :
+theorem compose_computableWitnesses (circuit : FormalCircuitBase F β α) (input : Var β F) (n : ℕ) :
   ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) ∧ circuit.ComputableWitnesses →
     (circuit.main input).ComputableWitnesses n := by
   intro ⟨ h_input, h_computable ⟩
-  apply ElaboratedCircuit.computableWitnesses_implies h_computable
+  apply FormalCircuitBase.computableWitnesses_implies h_computable
   exact h_input
-end ElaboratedCircuit
+end FormalCircuitBase
 
 theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
     (input : Var β F) (n : ℕ) :
@@ -688,15 +667,15 @@ theorem FormalCircuit.toSubcircuit_channelsLawful
   · intro env
     simp only [FormalCircuit.toSubcircuit]
     rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
-    exact circuit.elaborated.in_channels_or_guarantees_full input_var n env
+    exact circuit.in_channels_or_guarantees_full input_var n env
   constructor
   · intro env
     simp only [FormalCircuit.toSubcircuit]
     rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-    exact circuit.elaborated.in_channels_or_requirements_full input_var n env
+    exact circuit.in_channels_or_requirements_full input_var n env
   · simp only [FormalCircuit.toSubcircuit]
     rw [Operations.toNested_toFlat, Operations.channels_toFlat]
-    exact circuit.elaborated.channels_subset input_var n
+    exact circuit.channels_subset input_var n
 
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_channelsLawful
@@ -706,15 +685,15 @@ theorem FormalAssertion.toSubcircuit_channelsLawful
   · intro env
     simp only [FormalAssertion.toSubcircuit]
     rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
-    exact circuit.elaborated.in_channels_or_guarantees_full input_var n env
+    exact circuit.in_channels_or_guarantees_full input_var n env
   constructor
   · intro env
     simp only [FormalAssertion.toSubcircuit]
     rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-    exact circuit.elaborated.in_channels_or_requirements_full input_var n env
+    exact circuit.in_channels_or_requirements_full input_var n env
   · simp only [FormalAssertion.toSubcircuit]
     rw [Operations.toNested_toFlat, Operations.channels_toFlat]
-    exact circuit.elaborated.channels_subset input_var n
+    exact circuit.channels_subset input_var n
 
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful
@@ -740,7 +719,7 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful
     set ops := (circuit.main input_var).operations n
     trans ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
     · apply Operations.channels_subset
-      exact circuit.elaborated.subcircuitChannelsLawful input_var n
+      exact circuit.subcircuitChannelsLawful input_var n
     · simp_all only [List.append_assoc, List.append_subset, List.subset_append_of_subset_left,
         List.subset_append_of_subset_right, and_self, and_true]
       simp only [List.subset_def, List.mem_append]

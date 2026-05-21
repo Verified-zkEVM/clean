@@ -633,7 +633,7 @@ by assuming it within `GeneralFormalCircuit.Spec`.
 @[circuit_norm]
 def FormalCircuit.isGeneralFormalCircuit
     (orig : FormalCircuit F Input Output) : GeneralFormalCircuit F Input Output where
-  elaborated := orig.elaborated
+  base := orig.base
   Assumptions i _ := orig.Assumptions i
   Spec i o _ := orig.Spec i o
   ProverAssumptions i _ _ := orig.Assumptions i
@@ -652,7 +652,7 @@ by putting it within `GeneralFormalCircuit.Assumption`.
 @[circuit_norm]
 def FormalAssertion.isGeneralFormalCircuit
     (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit where
-  elaborated := orig.elaborated
+  base := orig.base
   Assumptions i _ := orig.Assumptions i
   Spec i _ _ := orig.Spec i
   ProverAssumptions i _ _ := orig.Assumptions i ∧ orig.Spec i
@@ -663,11 +663,11 @@ def FormalAssertion.isGeneralFormalCircuit
     intro offset env input_var h_env input h_input h_assumptions
     exact ⟨orig.completeness offset env input_var h_env input h_input h_assumptions.1 h_assumptions.2, trivial⟩
 
-namespace ElaboratedCircuit
+namespace FormalCircuitBase
 omit [ProvableType Output] [ProvableType Input] in
 theorem in_channels_or_guarantees_full
   [CircuitType Input] [CircuitType Output]
-  (circuit : ElaboratedCircuit F Input Output)
+  (circuit : FormalCircuitBase F Input Output)
   (input_var : Var Input F) (n : ℕ) (env : Environment F) :
     circuit.main input_var |>.operations n
     |>.InChannelsOrGuaranteesFull circuit.channelsWithGuarantees env := by
@@ -689,7 +689,7 @@ theorem in_channels_or_guarantees_full
 omit [ProvableType Output] [ProvableType Input] in
 theorem in_channels_or_requirements_full
   [CircuitType Input] [CircuitType Output]
-  (circuit : ElaboratedCircuit F Input Output)
+  (circuit : FormalCircuitBase F Input Output)
   (input_var : Var Input F) (n : ℕ) (env : Environment F) :
     circuit.main input_var |>.operations n
     |>.InChannelsOrRequirementsFull circuit.channelsWithRequirements env := by
@@ -707,43 +707,7 @@ theorem in_channels_or_requirements_full
   rw [FlatOperation.inChannelsOrRequirements_iff_forall_mem] at h_requirements_iff
   specialize h_requirements_iff i i_mem
   tauto
-end ElaboratedCircuit
-
-namespace GeneralFormalCircuit.WithHint
-omit [ProvableType Output] [ProvableType Input] in
-theorem in_channels_or_guarantees_full
-  [CircuitType Input] [CircuitType Output]
-  (circuit : GeneralFormalCircuit.WithHint F Input Output)
-  (input_var : Var Input F) (n : ℕ) (env : Environment F) :
-    circuit.main input_var |>.operations n
-    |>.InChannelsOrGuaranteesFull circuit.channelsWithGuarantees env := by
-  exact circuit.elaborated.in_channels_or_guarantees_full input_var n env
-
-omit [ProvableType Output] [ProvableType Input] in
-theorem in_channels_or_requirements_full
-  [CircuitType Input] [CircuitType Output]
-  (circuit : GeneralFormalCircuit.WithHint F Input Output)
-  (input_var : Var Input F) (n : ℕ) (env : Environment F) :
-    circuit.main input_var |>.operations n
-    |>.InChannelsOrRequirementsFull circuit.channelsWithRequirements env := by
-  exact circuit.elaborated.in_channels_or_requirements_full input_var n env
-end GeneralFormalCircuit.WithHint
-
-namespace GeneralFormalCircuit
-theorem in_channels_or_guarantees_full
-  (circuit : GeneralFormalCircuit F Input Output)
-  (input_var : Var Input F) (n : ℕ) (env : Environment F) :
-    circuit.main input_var |>.operations n
-    |>.InChannelsOrGuaranteesFull circuit.channelsWithGuarantees env := by
-  exact circuit.toWithHint.in_channels_or_guarantees_full input_var n env
-
-theorem in_channels_or_requirements_full
-  (circuit : GeneralFormalCircuit F Input Output)
-  (input_var : Var Input F) (n : ℕ) (env : Environment F) :
-    circuit.main input_var |>.operations n
-    |>.InChannelsOrRequirementsFull circuit.channelsWithRequirements env := by
-  exact circuit.toWithHint.in_channels_or_requirements_full input_var n env
-end GeneralFormalCircuit
+end FormalCircuitBase
 
 theorem Operations.guarantees_of_not_mem (ops : Operations F)
   (channels : List (RawChannel F)) (env : Environment F) :
@@ -841,9 +805,9 @@ theorem Operations.channels_subset {ops : Operations F} :
   · right; use n, s
 
 omit [ProvableType Output] [ProvableType Input] in
-theorem ElaboratedCircuit.channels_subset
+theorem FormalCircuitBase.channels_subset
   [CircuitType Input] [CircuitType Output]
-  (circuit : ElaboratedCircuit F Input Output) (input_var : Var Input F) (n : ℕ) :
+  (circuit : FormalCircuitBase F Input Output) (input_var : Var Input F) (n : ℕ) :
     ((circuit.main input_var).operations n).channels ⊆ circuit.channels := by
   have shallowChannels_subset := circuit.mem_channelsWithGuarantees_or_mem_channelsWithRequirements_of_mem_shallowChannels input_var n
   have channelsWithGuarantees_subset := circuit.subcircuitChannelsWithGuarantees_subset_channelsWithGuarantees input_var n
@@ -857,10 +821,4 @@ theorem ElaboratedCircuit.channels_subset
     List.subset_append_of_subset_right, and_self, and_true]
   simp only [List.subset_def, List.mem_append]
   tauto
-
-theorem GeneralFormalCircuit.channels_subset
-  (circuit : GeneralFormalCircuit F Input Output) (input_var : Var Input F) (n : ℕ) :
-    ((circuit.main input_var).operations n).channels ⊆ circuit.channels := by
-  exact circuit.elaborated.channels_subset input_var n
-
 end

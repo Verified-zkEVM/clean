@@ -31,8 +31,7 @@ def main {M : TypeMap} [ProvableType M] (input : Var M F × Var M F) : Circuit F
   .forEach diffs assertZero
 
 @[reducible]
-instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
-  main
+instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit main where
   localLength _ := 0
   output _ _ := ()
 
@@ -41,7 +40,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
 
 @[simps! (attr := circuit_norm) (config := {isSimp := false})]
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
-  Assumptions _ := True
+  main
 
   Spec : α F × α F → Prop
   | (x, y) => x = y
