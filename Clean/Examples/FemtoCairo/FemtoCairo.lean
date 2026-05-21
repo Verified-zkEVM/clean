@@ -64,20 +64,14 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
     }
   }
 
-/--
-  Circuit that decodes a femtoCairo instruction into a one-hot representation.
-  It returns a `DecodedInstruction` struct containing the decoded fields.
-  This circuit is not satisfiable if the input instruction is not correctly encoded.
--/
-def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
-  main := decodeInstructionMain
+@[reducible]
+instance : ElaboratedCircuit (F p) field DecodedInstruction (decodeInstructionMain) := by
+  infer_elaborated_circuit_with {
+    output input i := (decodeInstructionMain input).output i
+  }
 
-  ProverAssumptions
-  | instruction, _, _ => instruction.val < 256
-
-  Spec
-  | instruction, output, _ =>
-    match Spec.decodeInstruction instruction with
+def decodeInstructionSpec (instruction : F p) (output : DecodedInstruction (F p)) (_ : ProverData (F p)) : Prop :=
+  match Spec.decodeInstruction instruction with
     | some (instr_type, mode1, mode2, mode3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
       output.mode1.val = mode1 ∧ output.mode1.isEncodedCorrectly ∧
@@ -85,44 +79,59 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
       output.mode3.val = mode3 ∧ output.mode3.isEncodedCorrectly
     | none => False -- impossible, constraints ensure that input < 256
 
-  soundness := by
-    circuit_proof_start [decodeInstructionMain]
-    dsimp only [explicit_circuit_norm, Gadgets.toBits, Gadgets.ToBits.elaborated] at h_holds ⊢
-    simp only [circuit_norm] at h_holds
-    obtain ⟨ h_range_check, h_eq ⟩ := h_holds
-    have h_range_check' : ¬ 256 ≤ input.val := by linarith
-    simp only [Spec.decodeInstruction, h_range_check', ↓reduceIte]
-    simp only [circuit_norm, explicit_provable_type]
-    set bits := fieldToBits 8 input with h_bits_def
-    rw [Vector.ext_iff] at h_eq
-    simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval] at h_eq
-    have h_bits_eval0 := h_eq 0 (by norm_num)
-    rw [add_zero] at h_bits_eval0
-    simp only [h_bits_eval0, h_eq, Nat.reduceLT]
-    have h_bits_are_binary := fieldToBits_bits (x := input) (n := 8)
-    rw [← h_bits_def] at h_bits_are_binary
-    clear h_eq h_range_check h_range_check' h_bits_eval0 h_input h_bits_def
-    have h_bits0 := h_bits_are_binary 0 (by norm_num)
-    have h_bits1 := h_bits_are_binary 1 (by norm_num)
-    have h_bits2 := h_bits_are_binary 2 (by norm_num)
-    have h_bits3 := h_bits_are_binary 3 (by norm_num)
-    have h_bits4 := h_bits_are_binary 4 (by norm_num)
-    have h_bits5 := h_bits_are_binary 5 (by norm_num)
-    have h_bits6 := h_bits_are_binary 6 (by norm_num)
-    have h_bits7 := h_bits_are_binary 7 (by norm_num)
-    and_intros
-    · rcases h_bits0 <;> rcases h_bits1 <;> simp_all [DecodedInstructionType.val, ZMod.val_one]
-    · rcases h_bits0 <;> rcases h_bits1 <;> simp_all [DecodedInstructionType.isEncodedCorrectly]
-    · rcases h_bits2 <;> rcases h_bits3 <;> simp_all [DecodedAddressingMode.val, ZMod.val_one]
-    · rcases h_bits2 <;> rcases h_bits3 <;> simp_all [DecodedAddressingMode.isEncodedCorrectly]
-    · rcases h_bits4 <;> rcases h_bits5 <;> simp_all [DecodedAddressingMode.val, ZMod.val_one]
-    · rcases h_bits4 <;> rcases h_bits5 <;> simp_all [DecodedAddressingMode.isEncodedCorrectly]
-    · rcases h_bits6 <;> rcases h_bits7 <;> simp_all [DecodedAddressingMode.val, ZMod.val_one]
-    · rcases h_bits6 <;> rcases h_bits7 <;> simp_all [DecodedAddressingMode.isEncodedCorrectly]
+theorem decodeInstructionSoundness : GeneralFormalCircuit.Soundness (F p) (Input := field)
+    decodeInstructionMain (fun _ _ => True) decodeInstructionSpec := by
+  circuit_proof_start [decodeInstructionMain, decodeInstructionSpec]
+  dsimp only [explicit_circuit_norm, Gadgets.toBits, Gadgets.ToBits.elaborated] at h_holds ⊢
+  simp only [circuit_norm] at h_holds
+  obtain ⟨ h_range_check, h_eq ⟩ := h_holds
+  have h_range_check' : ¬ 256 ≤ input.val := by linarith
+  simp only [Spec.decodeInstruction, h_range_check', ↓reduceIte]
+  simp only [circuit_norm, explicit_provable_type]
+  set bits := fieldToBits 8 input with h_bits_def
+  rw [Vector.ext_iff] at h_eq
+  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval] at h_eq
+  have h_bits_eval0 := h_eq 0 (by norm_num)
+  rw [add_zero] at h_bits_eval0
+  simp only [h_bits_eval0, h_eq, Nat.reduceLT]
+  have h_bits_are_binary := fieldToBits_bits (x := input) (n := 8)
+  rw [← h_bits_def] at h_bits_are_binary
+  clear h_eq h_range_check h_range_check' h_bits_eval0 h_input h_bits_def
+  have h_bits0 := h_bits_are_binary 0 (by norm_num)
+  have h_bits1 := h_bits_are_binary 1 (by norm_num)
+  have h_bits2 := h_bits_are_binary 2 (by norm_num)
+  have h_bits3 := h_bits_are_binary 3 (by norm_num)
+  have h_bits4 := h_bits_are_binary 4 (by norm_num)
+  have h_bits5 := h_bits_are_binary 5 (by norm_num)
+  have h_bits6 := h_bits_are_binary 6 (by norm_num)
+  have h_bits7 := h_bits_are_binary 7 (by norm_num)
+  and_intros
+  · rcases h_bits0 <;> rcases h_bits1 <;> simp_all [DecodedInstructionType.val, ZMod.val_one]
+  · rcases h_bits0 <;> rcases h_bits1 <;> simp_all [DecodedInstructionType.isEncodedCorrectly]
+  · rcases h_bits2 <;> rcases h_bits3 <;> simp_all [DecodedAddressingMode.val, ZMod.val_one]
+  · rcases h_bits2 <;> rcases h_bits3 <;> simp_all [DecodedAddressingMode.isEncodedCorrectly]
+  · rcases h_bits4 <;> rcases h_bits5 <;> simp_all [DecodedAddressingMode.val, ZMod.val_one]
+  · rcases h_bits4 <;> rcases h_bits5 <;> simp_all [DecodedAddressingMode.isEncodedCorrectly]
+  · rcases h_bits6 <;> rcases h_bits7 <;> simp_all [DecodedAddressingMode.val, ZMod.val_one]
+  · rcases h_bits6 <;> rcases h_bits7 <;> simp_all [DecodedAddressingMode.isEncodedCorrectly]
+
+/--
+  Circuit that decodes a femtoCairo instruction into a one-hot representation.
+  It returns a `DecodedInstruction` struct containing the decoded fields.
+  This circuit is not satisfiable if the input instruction is not correctly encoded.
+-/
+def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
+  main := decodeInstructionMain
+  Spec := decodeInstructionSpec
+  soundness := decodeInstructionSoundness
+
+  ProverAssumptions
+  | instruction, _, _ => instruction.val < 256
 
   completeness := by
-    stop
-    circuit_proof_all [Gadgets.toBits, decodeInstructionMain]
+    circuit_proof_start [decodeInstructionMain]
+    dsimp only [explicit_circuit_norm, Gadgets.toBits, Gadgets.ToBits.elaborated] at h_env ⊢
+    simp_all
 
 /--
   Circuit that fetches a femtoCairo instruction from a read-only program memory,
@@ -603,7 +612,8 @@ def femtoCairoStepSoundness
     : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepMain program h_programSize) (fun _ _ => True)
       (femtoCairoStepSpec program) := by
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepMain,
-    Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory, nextState, decodeInstruction]
+    Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory, nextState,
+    decodeInstruction, decodeInstructionSpec]
 
   obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
   obtain ⟨pc, ap, fp⟩ := input
@@ -682,6 +692,7 @@ def femtoCairoStepSoundness
               contradiction
             case h_1 next_state h_eq_next =>
               rw [h_eq_next, ←c_next]
+              simp
               sorry
 
 def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
