@@ -1,4 +1,4 @@
-import Clean.Circuit.Basic
+import Clean.Circuit.Formal
 import Clean.Circuit.Theorems
 
 variable {F : Type} [Field F]
@@ -730,6 +730,24 @@ theorem GeneralFormalCircuit.toSubcircuit_channelsLawful
     (circuit : GeneralFormalCircuit F Input Output) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
   exact GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful circuit.toWithHint input_var
+
+instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
+    ExplicitCircuit (subcircuit circuit input) where
+  output n := circuit.output input n
+  localLength _ := circuit.localLength input
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by simp [circuit_norm]
+
+instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
+    ExplicitCircuit (assertion circuit input) where
+  output n := ()
+  localLength _ := circuit.localLength input
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by simp [circuit_norm]
 
 -- simplification lemmas for FlatOperations.interactions (toSubcircuit ..).ops.toFlat
 

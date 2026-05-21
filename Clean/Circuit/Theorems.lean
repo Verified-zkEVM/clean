@@ -4,80 +4,12 @@ This file contains theorems that immediately follow from the definitions in `Cir
 For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
-import Clean.Circuit.Basic
+import Clean.Circuit.Formal
 import Clean.Circuit.Provable
 
 variable {F : Type} [Field F] {α β : Type}
 
-namespace Operations
-@[circuit_norm]
-theorem append_localLength {a b: Operations F} :
-    (a ++ b).localLength = a.localLength + b.localLength := by
-  induction a using induct with
-  | empty => ac_rfl
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
-    simp_all +arith [localLength]
-
-theorem localLength_cons {a : Operation F} {as : Operations F} :
-    localLength (a :: as) = a.localLength + as.localLength := by
-  cases a <;> simp_all [localLength, Operation.localLength]
-
-theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : ProverEnvironment F) :
-  localWitnesses env (op :: ops) =
-    (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
-  cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
-  all_goals (try (rw [Vector.empty_append]; simp))
-
-@[circuit_norm]
-theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
-
-@[circuit_norm]
-theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} {ops : Operations F} :
-  forAll offset condition (op :: ops) ↔
-    condition.apply offset op ∧ forAll (op.localLength + offset) condition ops := by
-  cases op <;> simp [forAll, Operation.localLength, Condition.apply]
-
-@[circuit_norm]
-theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operations F} :
-  forAll offset condition (as ++ bs) ↔
-    forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
-  induction as using induct generalizing offset with
-  | empty => simp [forAll_empty, localLength]
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
-    simp +arith only [List.cons_append, forAll, localLength, ih, and_assoc]
-
-end Operations
-
 namespace Circuit
-
-theorem pure_operations_eq (a : α) (n : ℕ) :
-  (pure a : Circuit F α).operations n = [] := rfl
-
-theorem bind_operations_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
-
-theorem map_operations_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
-  (g <$> f).operations n = f.operations n := rfl
-
-theorem pure_localLength_eq (a : α) (n : ℕ) :
-  (pure a : Circuit F α).localLength n = 0 := rfl
-
-theorem bind_localLength_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-    (f >>= g).localLength n = f.localLength n + (g (f.output n)).localLength (n + f.localLength n) := by
-  show (f.operations n ++ (g _).operations _).localLength = _
-  rw [Operations.append_localLength]
-
-theorem map_localLength_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
-  (g <$> f).localLength n = f.localLength n := rfl
-
-theorem pure_output_eq (a : α) (n : ℕ) :
-  (pure a : Circuit F α).output n = a := rfl
-
-theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).output n = (g (f.output n)).output (n + f.localLength n) := rfl
-
-theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
-  (g <$> f).output n = g (f.output n) := rfl
 
 /-- Extensionality theorem -/
 theorem ext_iff {f g : Circuit F α} :
@@ -406,13 +338,6 @@ namespace Circuit
 -- more theorems about forAll
 
 variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F} {env_p : ProverEnvironment F}
-
-@[circuit_norm]
-theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
-  ((f >>= g).operations n).forAll n prop ↔
-    (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.localLength n)).forAll (n + f.localLength n)) prop := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
-  rw [h_ops, Operations.forAll_append, add_comm n]
 
 @[circuit_norm]
 theorem bind_forAllNoOffset {f : Circuit F α} {g : α → Circuit F β} {prop : ConditionNoOffset F} :

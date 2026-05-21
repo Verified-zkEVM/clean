@@ -5,7 +5,7 @@ using the `infer_explicit_circuit(s)` tactic.
 This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
-import Clean.Circuit.Subcircuit
+import Clean.Circuit.Basic
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where
@@ -304,24 +304,6 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   operations msg _ := [.interact (channel.pushed msg).toRaw]
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := [channel.toRaw]
-
-instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
-    ExplicitCircuit (subcircuit circuit input) where
-  output n := circuit.output input n
-  localLength _ := circuit.localLength input
-  operations n := [.subcircuit (circuit.toSubcircuit n input)]
-  channelsWithGuarantees _ := circuit.channelsWithGuarantees
-  channelsWithRequirements _ := circuit.channelsWithRequirements
-  subcircuitsConsistent n := by simp [circuit_norm]
-
-instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
-    ExplicitCircuit (assertion circuit input) where
-  output n := ()
-  localLength _ := circuit.localLength input
-  operations n := [.subcircuit (circuit.toSubcircuit n input)]
-  channelsWithGuarantees _ := circuit.channelsWithGuarantees
-  channelsWithRequirements _ := circuit.channelsWithRequirements
-  subcircuitsConsistent n := by simp [circuit_norm]
 
 syntax "infer_explicit_circuit" : tactic
 
