@@ -84,6 +84,14 @@ def ExplicitCircuits.toElaborated {Input Output : TypeMap}
     rw [explicit_elaborated.channelsWithRequirements_eq]
 
 @[circuit_norm, explicit_circuit_norm]
+def ElaboratedCircuit.fromExplicit {Input Output : TypeMap}
+  [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+  {circuit : Var Input F → Circuit F (Var Output F)}
+  (explicit : ExplicitCircuits circuit)
+  (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) :
+    ElaboratedCircuit F Input Output circuit := explicit.toElaborated _ explicit_elaborated
+
+@[circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.withData {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output]
   (circuit : Var Input F → Circuit F (Var Output F))
