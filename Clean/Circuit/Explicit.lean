@@ -55,7 +55,7 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
     all_goals try first | ac_rfl | trivial | tauto
 
 /-- From an `ExplicitCircuit`, we can usually derive an `ElaboratedCircuit` -/
-class ExplicitCircuits.IsElaborated (circuit : α → Circuit F β) [explicit : ExplicitCircuits circuit] where
+class ExplicitCircuits.IsElaborated (circuit : α → Circuit F β) (explicit : ExplicitCircuits circuit) where
   localLength_eq : ∀ (a a' : α) (n m : ℕ),
     explicit.localLength a n = explicit.localLength a' m := by intros; rfl
   channelsWithGuarantees_eq : ∀ (a a' : α) (n m : ℕ),
@@ -63,10 +63,11 @@ class ExplicitCircuits.IsElaborated (circuit : α → Circuit F β) [explicit : 
   channelsWithRequirements_eq : ∀ (a a' : α) (n m : ℕ),
     explicit.channelsWithRequirements a n = explicit.channelsWithRequirements a' m := by intros; rfl
 
-instance ExplicitCircuits.to_elaborated {Input Output : TypeMap}
+def ExplicitCircuits.toElaborated {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
   (circuit : Var Input F → Circuit F (Var Output F))
-  [explicit : ExplicitCircuits circuit] [explicit_elaborated : ExplicitCircuits.IsElaborated circuit] :
+  (explicit : ExplicitCircuits circuit)
+  (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) :
     ElaboratedCircuit F Input Output circuit where
   localLength a := explicit.localLength a 0
   output a n := explicit.output a n
@@ -80,6 +81,13 @@ instance ExplicitCircuits.to_elaborated {Input Output : TypeMap}
     convert explicit.channelsLawful a n using 1
     rw [explicit_elaborated.channelsWithGuarantees_eq]
     rw [explicit_elaborated.channelsWithRequirements_eq]
+
+instance ExplicitCircuits.to_elaborated {Input Output : TypeMap}
+  [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+  (circuit : Var Input F → Circuit F (Var Output F))
+  [explicit : ExplicitCircuits circuit] [explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit] :
+    ElaboratedCircuit F Input Output circuit :=
+  ExplicitCircuits.toElaborated circuit explicit explicit_elaborated
 
 -- move between family and single explicit circuit
 
@@ -336,6 +344,18 @@ macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
     apply ExplicitCircuits.from_single (by infer_explicit_circuit)))
 
+syntax "infer_elaborated_circuit" : tactic
+
+macro_rules
+  | `(tactic|infer_elaborated_circuit) => `(tactic|(
+    refine ExplicitCircuits.toElaborated _ ?explicit ?explicit_elaborated
+    · infer_explicit_circuits
+    · exact @ExplicitCircuits.IsElaborated.mk _ _ _ _ _ ?explicit
+        (by intros; rfl)
+        (by intros; rfl)
+        (by intros; rfl)
+  ))
+
 -- this tactic is pretty good at inferring explicit circuits!
 section
 
@@ -363,6 +383,15 @@ example :
     return z
 
   ExplicitCircuits add := by infer_explicit_circuits
+
+example :
+  let add (x : Expression F) := do
+    let y : Expression F ← witness fun _ => 1
+    let z ← witness fun eval => eval (x + y)
+    assertZero (x + y - z)
+    return z
+
+  ElaboratedCircuit F field field add := by infer_elaborated_circuit
 end
 
 attribute [explicit_circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.operations ExplicitCircuit.output
