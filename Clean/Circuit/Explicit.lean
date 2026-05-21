@@ -84,49 +84,41 @@ def ExplicitCircuits.toElaborated {Input Output : TypeMap}
     rw [explicit_elaborated.channelsWithRequirements_eq]
 
 @[circuit_norm, explicit_circuit_norm]
-def ExplicitCircuits.toElaboratedWith {Input Output : TypeMap}
-  [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+def ElaboratedCircuit.withData {Input Output : TypeMap}
+  [CircuitType Input] [CircuitType Output]
   (circuit : Var Input F → Circuit F (Var Output F))
-  (explicit : ExplicitCircuits circuit)
-  (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit)
+  (derived : ElaboratedCircuit F Input Output circuit)
   (localLength : Var Input F → ℕ)
   (output : Var Input F → ℕ → Var Output F)
   (channelsWithGuarantees : List (RawChannel F))
-  (localLength_eq : ∀ a n, explicit.localLength a n = localLength a)
-  (output_eq : ∀ a n, explicit.output a n = output a n)
-  (channelsWithGuarantees_subset : explicit.channelsWithGuarantees default 0 ⊆ channelsWithGuarantees) :
+  (localLength_eq : ∀ a, derived.localLength a = localLength a)
+  (output_eq : ∀ a n, derived.output a n = output a n)
+  (channelsWithGuarantees_subset : derived.channelsWithGuarantees ⊆ channelsWithGuarantees) :
     ElaboratedCircuit F Input Output circuit where
   localLength := localLength
   output := output
   localLength_eq a n := by
-    rw [explicit.localLength_eq, localLength_eq]
+    rw [derived.localLength_eq, localLength_eq]
   output_eq a n := by
-    rw [explicit.output_eq, output_eq]
-  subcircuitsConsistent a n := explicit.subcircuitsConsistent a n
+    rw [derived.output_eq, output_eq]
+  subcircuitsConsistent := derived.subcircuitsConsistent
   channelsWithGuarantees := channelsWithGuarantees
-  channelsWithRequirements := explicit.channelsWithRequirements default 0
+  channelsWithRequirements := derived.channelsWithRequirements
+  exposedChannels := derived.exposedChannels
   channelsLawful a n := by
-    have h_lawful := explicit.channelsLawful a n
-    have h_g_subset : explicit.channelsWithGuarantees a n ⊆ channelsWithGuarantees := by
-      rw [explicit_elaborated.channelsWithGuarantees_eq a default n 0]
-      exact channelsWithGuarantees_subset
-    have h_r_eq : explicit.channelsWithRequirements a n = explicit.channelsWithRequirements default 0 := by
-      rw [explicit_elaborated.channelsWithRequirements_eq a default n 0]
+    have h_lawful := derived.channelsLawful a n
     dsimp only [Operations.ChannelsLawful] at h_lawful ⊢
     obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_exposed, h_sub⟩ := h_lawful
     and_intros
-    · exact List.Subset.trans h_g_sub h_g_subset
+    · exact List.Subset.trans h_g_sub channelsWithGuarantees_subset
     · intro env
-      exact (h_g env).mono h_g_subset
-    · rw [←h_r_eq]
-      exact h_r_sub
-    · intro env
-      rw [←h_r_eq]
-      exact h_r env
+      exact (h_g env).mono channelsWithGuarantees_subset
+    · exact h_r_sub
+    · exact h_r
     · intro channel h_mem
       rcases h_shallow channel h_mem with h_channel | h_channel
-      · exact Or.inl (h_g_subset h_channel)
-      · exact Or.inr (by rwa [←h_r_eq])
+      · exact Or.inl (channelsWithGuarantees_subset h_channel)
+      · exact Or.inr h_channel
     · exact h_exposed
     · exact h_sub
 
@@ -377,6 +369,9 @@ attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with_output" term : tactic
 syntax "infer_elaborated_circuit_with_data" "[" term "," term "," term "]" : tactic
+syntax "infer_elaborated_circuit_with" "{" ident ":=" term "}" : tactic
+syntax "infer_elaborated_circuit_with" "{" ident ":=" term "," ident ":=" term "}" : tactic
+syntax "infer_elaborated_circuit_with" "{" ident ":=" term "," ident ":=" term "," ident ":=" term "}" : tactic
 
 macro_rules
   | `(tactic|infer_elaborated_circuit) => `(tactic|(
@@ -387,29 +382,68 @@ macro_rules
 
 elab_rules : tactic
   | `(tactic|infer_elaborated_circuit_with_data [$ll:term, $out:term, $chg:term]) => do
+    let target ← Lean.Elab.Tactic.getMainTarget
+    let target ← Lean.Meta.whnf target
+    let args := target.getAppArgs
+    if target.getAppFn.constName? != some ``ElaboratedCircuit || args.size < 7 then
+      Lean.Elab.throwUnsupportedSyntax
+    let F ← Lean.Elab.Term.exprToSyntax args[0]!
+    let Input ← Lean.Elab.Term.exprToSyntax args[1]!
+    let Output ← Lean.Elab.Term.exprToSyntax args[2]!
+    let circuit ← Lean.Elab.Term.exprToSyntax args[6]!
     Lean.Elab.Tactic.evalTactic (← `(tactic|(
-      refine ExplicitCircuits.toElaboratedWith _ ?explicit ?elaborated $ll $out $chg ?localLength_eq ?output_eq ?channelsWithGuarantees_subset
-      · infer_explicit_circuits
-      · exact ExplicitCircuits.IsElaborated.mk
-      · intros
-        first | simp only [explicit_circuit_norm, circuit_norm] | rfl
-      · intros
-        first | simp only [explicit_circuit_norm, circuit_norm] | rfl
-      · first | simp only [explicit_circuit_norm, circuit_norm, List.subset_def] | intro x h; simpa [explicit_circuit_norm, circuit_norm] using h
+      let derived : ElaboratedCircuit $F $Input $Output $circuit := by infer_elaborated_circuit
+      refine ElaboratedCircuit.withData (F := $F) (Input := $Input) (Output := $Output) (circuit := $circuit)
+        derived $ll $out $chg ?localLength_eq ?output_eq ?channelsWithGuarantees_subset
+      · intro a
+        change derived.localLength a = _
+        first | dsimp [ElaboratedCircuit.localLength, ElaboratedCircuit.output, ElaboratedCircuit.channelsWithGuarantees, ExplicitCircuits.toElaborated, ExplicitCircuits.fromSingle]; simp [explicit_circuit_norm, circuit_norm] | rfl
+      · intros a n
+        change derived.output a n = _
+        first | dsimp [ElaboratedCircuit.localLength, ElaboratedCircuit.output, ElaboratedCircuit.channelsWithGuarantees, ExplicitCircuits.toElaborated, ExplicitCircuits.fromSingle]; simp [explicit_circuit_norm, circuit_norm] | rfl
+      · change derived.channelsWithGuarantees ⊆ _
+        first | dsimp [ElaboratedCircuit.channelsWithGuarantees, ExplicitCircuits.toElaborated, ExplicitCircuits.fromSingle]; simp [explicit_circuit_norm, circuit_norm, List.subset_def] | intro x h; simpa [ExplicitCircuits.toElaborated, ExplicitCircuits.fromSingle, explicit_circuit_norm, circuit_norm] using h
     )))
   | `(tactic|infer_elaborated_circuit_with_output $out:term) => do
+    let target ← Lean.Elab.Tactic.getMainTarget
+    let target ← Lean.Meta.whnf target
+    let args := target.getAppArgs
+    if target.getAppFn.constName? != some ``ElaboratedCircuit || args.size < 7 then
+      Lean.Elab.throwUnsupportedSyntax
+    let F ← Lean.Elab.Term.exprToSyntax args[0]!
+    let Input ← Lean.Elab.Term.exprToSyntax args[1]!
+    let Output ← Lean.Elab.Term.exprToSyntax args[2]!
+    let circuit ← Lean.Elab.Term.exprToSyntax args[6]!
     Lean.Elab.Tactic.evalTactic (← `(tactic|(
-      refine ExplicitCircuits.toElaboratedWith _ ?explicit ?elaborated
-        (fun a => ExplicitCircuits.localLength _ a 0) $out (ExplicitCircuits.channelsWithGuarantees _ default 0)
+      let derived : ElaboratedCircuit $F $Input $Output $circuit := by infer_elaborated_circuit
+      refine ElaboratedCircuit.withData (F := $F) (Input := $Input) (Output := $Output) (circuit := $circuit)
+        derived derived.localLength $out derived.channelsWithGuarantees
         ?localLength_eq ?output_eq ?channelsWithGuarantees_subset
-      · infer_explicit_circuits
-      · exact ExplicitCircuits.IsElaborated.mk
-      · intros
-        rw [ExplicitCircuits.IsElaborated.localLength_eq]
-      · intros
-        first | simp only [explicit_circuit_norm, circuit_norm] | rfl
-      · exact List.Subset.refl _
+      · intro a
+        change derived.localLength a = derived.localLength a
+        rfl
+      · intros a n
+        change derived.output a n = _
+        first | dsimp [ElaboratedCircuit.localLength, ElaboratedCircuit.output, ElaboratedCircuit.channelsWithGuarantees, ExplicitCircuits.toElaborated, ExplicitCircuits.fromSingle]; simp [explicit_circuit_norm, circuit_norm] | rfl
+      · change derived.channelsWithGuarantees ⊆ derived.channelsWithGuarantees
+        exact List.Subset.refl _
     )))
+  | `(tactic|infer_elaborated_circuit_with { $field:ident := $out:term }) => do
+    unless field.getId == `output do
+      Lean.Elab.throwUnsupportedSyntax
+    Lean.Elab.Tactic.evalTactic (← `(tactic|infer_elaborated_circuit_with_output $out))
+  | `(tactic|infer_elaborated_circuit_with { $field₁:ident := $value₁:term, $field₂:ident := $value₂:term }) => do
+    if field₁.getId == `output && field₂.getId == `localLength then
+      Lean.Elab.Tactic.evalTactic (← `(tactic|infer_elaborated_circuit_with_data [$value₂, $value₁, ElaboratedCircuit.channelsWithGuarantees _]))
+    else if field₁.getId == `localLength && field₂.getId == `output then
+      Lean.Elab.Tactic.evalTactic (← `(tactic|infer_elaborated_circuit_with_data [$value₁, $value₂, ElaboratedCircuit.channelsWithGuarantees _]))
+    else
+      Lean.Elab.throwUnsupportedSyntax
+  | `(tactic|infer_elaborated_circuit_with { $field₁:ident := $value₁:term, $field₂:ident := $value₂:term, $field₃:ident := $value₃:term }) => do
+    if field₁.getId == `localLength && field₂.getId == `output && field₃.getId == `channelsWithGuarantees then
+      Lean.Elab.Tactic.evalTactic (← `(tactic|infer_elaborated_circuit_with_data [$value₁, $value₂, $value₃]))
+    else
+      Lean.Elab.throwUnsupportedSyntax
 
 -- this tactic is pretty good at inferring explicit circuits!
 section
