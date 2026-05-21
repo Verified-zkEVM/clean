@@ -1,5 +1,5 @@
 import Lean
-import Clean.Circuit.Basic
+import Clean.Circuit.Formal
 import Clean.Utils.Tactics.ProvableStructSimp
 
 open Lean Elab Tactic Meta
