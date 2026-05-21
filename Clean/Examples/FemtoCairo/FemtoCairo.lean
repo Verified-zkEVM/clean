@@ -86,11 +86,9 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
     | none => False -- impossible, constraints ensure that input < 256
 
   soundness := by
-    -- TODO need to improve toBits output repr
     circuit_proof_start [decodeInstructionMain]
-    stop
-    simp only [circuit_norm, Gadgets.toBits] at h_holds
-    dsimp only [explicit_circuit_norm, Gadgets.toBits]
+    dsimp only [explicit_circuit_norm, Gadgets.toBits, Gadgets.ToBits.elaborated] at h_holds ⊢
+    simp only [circuit_norm] at h_holds
     obtain ⟨ h_range_check, h_eq ⟩ := h_holds
     have h_range_check' : ¬ 256 ≤ input.val := by linarith
     simp only [Spec.decodeInstruction, h_range_check', ↓reduceIte]
