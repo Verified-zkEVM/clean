@@ -24,18 +24,20 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 
 -- #eval! main (p:=p_babybear) default |>.localLength
 -- #eval! main (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
   localLength _ := 400
   output _ i0 := Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 8)
 
-  localLength_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit]
+  localLength_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, And.And64.circuit, And.And64.elaborated, And.And8.circuit, And.And8.elaborated, Not.circuit]
   subcircuitsConsistent state i0 := by
     simp only [main, circuit_norm]
     intro i
     and_intros <;> ac_rfl
-  output_eq state i0 := by simp [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  output_eq state i0 := by simp [main, circuit_norm, Xor64.circuit, Xor64.elaborated, And.And64.circuit, And.And64.elaborated, And.And8.circuit, And.And8.elaborated, Not.circuit,
     Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
+  channelsLawful := by
+    simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, And.And64.circuit, And.And64.elaborated, And.And8.circuit, And.And8.elaborated, Not.circuit]
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
@@ -43,8 +45,8 @@ lemma chi_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [ Xor64.circuit, And.And64.circuit, Not.circuit,
+theorem soundness : Soundness (F p) main Assumptions Spec := by
+  circuit_proof_start [ Xor64.circuit, And.And64.circuit, And.And8.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec]
 
   -- simplify goal
@@ -58,13 +60,18 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   simp_all
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [Xor64.circuit, And.And64.circuit, Not.circuit,
+theorem completeness : Completeness (F p) main Assumptions := by
+  circuit_proof_start [Xor64.circuit, And.And64.circuit, And.And8.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec,
     KeccakState.Normalized]
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp_all
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) KeccakState KeccakState where
+  main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
 end Gadgets.Keccak256.Chi

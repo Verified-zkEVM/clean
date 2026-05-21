@@ -71,6 +71,7 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
+@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
   infer_elaborated_circuit
 
@@ -133,6 +134,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
 def circuit : FormalCircuit (F p) Inputs field :=
-  { main, Assumptions, Spec, soundness, completeness }
+  { main, elaborated, Assumptions, Spec, soundness, completeness }
 
 end Gadgets.And.And8

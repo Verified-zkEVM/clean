@@ -46,6 +46,7 @@ def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
+@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 main := by
   infer_elaborated_circuit
 
