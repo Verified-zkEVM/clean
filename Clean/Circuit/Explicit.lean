@@ -83,6 +83,53 @@ def ExplicitCircuits.toElaborated {Input Output : TypeMap}
     rw [explicit_elaborated.channelsWithGuarantees_eq]
     rw [explicit_elaborated.channelsWithRequirements_eq]
 
+@[circuit_norm, explicit_circuit_norm]
+def ExplicitCircuits.toElaboratedWith {Input Output : TypeMap}
+  [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+  (circuit : Var Input F → Circuit F (Var Output F))
+  (explicit : ExplicitCircuits circuit)
+  (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit)
+  (localLength : Var Input F → ℕ)
+  (output : Var Input F → ℕ → Var Output F)
+  (channelsWithGuarantees : List (RawChannel F))
+  (localLength_eq : ∀ a n, explicit.localLength a n = localLength a)
+  (output_eq : ∀ a n, explicit.output a n = output a n)
+  (channelsWithGuarantees_subset : explicit.channelsWithGuarantees default 0 ⊆ channelsWithGuarantees) :
+    ElaboratedCircuit F Input Output circuit where
+  localLength := localLength
+  output := output
+  localLength_eq a n := by
+    rw [explicit.localLength_eq, localLength_eq]
+  output_eq a n := by
+    rw [explicit.output_eq, output_eq]
+  subcircuitsConsistent a n := explicit.subcircuitsConsistent a n
+  channelsWithGuarantees := channelsWithGuarantees
+  channelsWithRequirements := explicit.channelsWithRequirements default 0
+  channelsLawful a n := by
+    have h_lawful := explicit.channelsLawful a n
+    have h_g_subset : explicit.channelsWithGuarantees a n ⊆ channelsWithGuarantees := by
+      rw [explicit_elaborated.channelsWithGuarantees_eq a default n 0]
+      exact channelsWithGuarantees_subset
+    have h_r_eq : explicit.channelsWithRequirements a n = explicit.channelsWithRequirements default 0 := by
+      rw [explicit_elaborated.channelsWithRequirements_eq a default n 0]
+    dsimp only [Operations.ChannelsLawful] at h_lawful ⊢
+    obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_exposed, h_sub⟩ := h_lawful
+    and_intros
+    · exact List.Subset.trans h_g_sub h_g_subset
+    · intro env
+      exact (h_g env).mono h_g_subset
+    · rw [←h_r_eq]
+      exact h_r_sub
+    · intro env
+      rw [←h_r_eq]
+      exact h_r env
+    · intro channel h_mem
+      rcases h_shallow channel h_mem with h_channel | h_channel
+      · exact Or.inl (h_g_subset h_channel)
+      · exact Or.inr (by rwa [←h_r_eq])
+    · exact h_exposed
+    · exact h_sub
+
 -- move between family and single explicit circuit
 
 def ExplicitCircuits.fromSingle {circuit : α → Circuit F β}
@@ -328,6 +375,8 @@ macro_rules
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 syntax "infer_elaborated_circuit" : tactic
+syntax "infer_elaborated_circuit_with_output" term : tactic
+syntax "infer_elaborated_circuit_with_data" "[" term "," term "," term "]" : tactic
 
 macro_rules
   | `(tactic|infer_elaborated_circuit) => `(tactic|(
@@ -335,6 +384,32 @@ macro_rules
     · infer_explicit_circuits
     · exact ExplicitCircuits.IsElaborated.mk
   ))
+
+elab_rules : tactic
+  | `(tactic|infer_elaborated_circuit_with_data [$ll:term, $out:term, $chg:term]) => do
+    Lean.Elab.Tactic.evalTactic (← `(tactic|(
+      refine ExplicitCircuits.toElaboratedWith _ ?explicit ?elaborated $ll $out $chg ?localLength_eq ?output_eq ?channelsWithGuarantees_subset
+      · infer_explicit_circuits
+      · exact ExplicitCircuits.IsElaborated.mk
+      · intros
+        first | simp only [explicit_circuit_norm, circuit_norm] | rfl
+      · intros
+        first | simp only [explicit_circuit_norm, circuit_norm] | rfl
+      · first | simp only [explicit_circuit_norm, circuit_norm, List.subset_def] | intro x h; simpa [explicit_circuit_norm, circuit_norm] using h
+    )))
+  | `(tactic|infer_elaborated_circuit_with_output $out:term) => do
+    Lean.Elab.Tactic.evalTactic (← `(tactic|(
+      refine ExplicitCircuits.toElaboratedWith _ ?explicit ?elaborated
+        (fun a => ExplicitCircuits.localLength _ a 0) $out (ExplicitCircuits.channelsWithGuarantees _ default 0)
+        ?localLength_eq ?output_eq ?channelsWithGuarantees_subset
+      · infer_explicit_circuits
+      · exact ExplicitCircuits.IsElaborated.mk
+      · intros
+        rw [ExplicitCircuits.IsElaborated.localLength_eq]
+      · intros
+        first | simp only [explicit_circuit_norm, circuit_norm] | rfl
+      · exact List.Subset.refl _
+    )))
 
 -- this tactic is pretty good at inferring explicit circuits!
 section
