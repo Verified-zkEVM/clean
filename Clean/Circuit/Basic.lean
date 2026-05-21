@@ -449,7 +449,6 @@ lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
 
 attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false
 
-
 namespace Circuit
 
 theorem pure_operations_eq (a : α) (n : ℕ) :

@@ -1271,8 +1271,6 @@ theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : Prove
   cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
   all_goals (try (rw [Vector.empty_append]; simp))
 
-
-
 @[circuit_norm]
 theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} {ops : Operations F} :
   forAll offset condition (op :: ops) ↔

@@ -11,8 +11,6 @@ variable {F : Type} [Field F] {α β : Type}
 
 namespace Circuit
 
-
-
 /-- Extensionality theorem -/
 theorem ext_iff {f g : Circuit F α} :
   (f = g) ↔ (∀ n, (f.output n = g.output n) ∧ (f.operations n = g.operations n)) := by
@@ -340,8 +338,6 @@ namespace Circuit
 -- more theorems about forAll
 
 variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F} {env_p : ProverEnvironment F}
-
-
 
 @[circuit_norm]
 theorem bind_forAllNoOffset {f : Circuit F α} {g : α → Circuit F β} {prop : ConditionNoOffset F} :
