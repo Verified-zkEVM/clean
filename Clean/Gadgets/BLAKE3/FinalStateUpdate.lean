@@ -42,6 +42,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 
 -- #eval main (p:=p_babybear) default |>.local_length
 -- #eval main (p:=p_babybear) default |>.output
+@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main where
   localLength _ := 64
   output inputs i0 := #v[

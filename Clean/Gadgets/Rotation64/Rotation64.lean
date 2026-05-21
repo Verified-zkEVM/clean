@@ -38,6 +38,7 @@ def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
 
 -- #eval! (main (p:=p_babybear) 0) default |>.localLength
 -- #eval! (main (p:=p_babybear) 0) default |>.output
+@[reducible]
 instance elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 (main off) where
   localLength _ := 16
   output _ i0 := output off i0

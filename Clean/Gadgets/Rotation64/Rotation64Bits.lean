@@ -38,6 +38,7 @@ def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
   U64.fromLimbs (.ofFn fun ⟨i,_⟩ =>
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
+@[reducible]
 instance elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 (main off) where
   localLength _ := 16
   output _ i0 := output off i0
