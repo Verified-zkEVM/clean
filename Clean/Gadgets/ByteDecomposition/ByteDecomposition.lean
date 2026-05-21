@@ -120,7 +120,6 @@ theorem completeness (offset : Fin 8) : Completeness (Input:=field) (Output:=Out
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   main := main offset
-  elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
   soundness := soundness offset
