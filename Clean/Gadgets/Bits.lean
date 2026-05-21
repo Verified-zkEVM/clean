@@ -22,8 +22,7 @@ def main (n : ℕ) (x : Expression (F p)) := do
 instance (n : ℕ) : ElaboratedCircuit (F p) field (fields n) (main n) := .withData (by infer_elaborated_circuit) {
   localLength _ := n
   output _ i := varFromOffset (fields n) i
-} <| by
-  simp only [circuit_norm, mul_zero]
+}
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 

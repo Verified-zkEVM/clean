@@ -107,9 +107,9 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
     (∀ a n, derived.output a n = data.output a n) ∧
     (derived.channelsWithGuarantees ⊆ data.channelsWithGuarantees) := by
       and_intros
-      · intro a; rfl
+      · intro a; ac_rfl
       · intro a n; rfl
-      · simp only [circuit_norm]; grind) :
+      · try simp only [circuit_norm]; try grind; done) :
     ElaboratedCircuit F Input Output circuit where
   localLength := data.localLength
   output := data.output
