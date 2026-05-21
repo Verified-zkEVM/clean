@@ -31,8 +31,7 @@ def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
-  main
+instance elaborated : ElaboratedCircuit (F p) Inputs U64 main where
   localLength _ := 8
   output _ i := varFromOffset U64 i
 
@@ -64,7 +63,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   repeat rw [and_xor_sum]
   repeat assumption
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [And8.circuit, And8.elaborated, And8.Assumptions, And8.Spec]
   cases input_x; cases input_y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
@@ -72,13 +71,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     at h_assumptions h_holds h_input ⊢
   simp_all
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [And8.circuit, And8.elaborated, And8.Assumptions, And8.Spec]
   cases input_x; cases input_y
   simp only [circuit_norm, explicit_provable_type, U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
 def circuit : FormalCircuit (F p) Inputs U64 where
+  main
+  elaborated
   Assumptions
   Spec
   soundness
