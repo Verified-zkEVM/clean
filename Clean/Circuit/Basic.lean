@@ -351,6 +351,7 @@ class ConstantLength (circuit : α → Circuit F β) where
   localLength : ℕ
   localLength_eq : ∀ (a : α) (n : ℕ), (circuit a).localLength n = localLength
 
+@[circuit_norm]
 def ConstantLength.fromConstantLength {circuit : α → Circuit F β} [Inhabited α]
     (h : ∀ (a : α) n, (circuit a).localLength n = (circuit default).localLength 0) : ConstantLength circuit where
   localLength := (circuit default).localLength 0
