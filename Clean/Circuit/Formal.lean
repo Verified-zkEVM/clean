@@ -9,7 +9,10 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
     [Field F] [CircuitType Input] [CircuitType Output] where
   name : String := "anonymous"
   main : Var Input F → Circuit F (Var Output F)
-  elaborated : ElaboratedCircuit F Input Output main := by first | infer_instance | infer_elaborated_circuit
+  elaborated : ElaboratedCircuit F Input Output main := by
+    first | infer_instance | infer_elaborated_circuit
+
+attribute [circuit_norm] FormalCircuitBase.elaborated
 
 namespace FormalCircuitBase
 variable [CircuitType Input] [CircuitType Output]
