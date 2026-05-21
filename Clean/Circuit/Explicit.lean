@@ -395,9 +395,7 @@ macro_rules
 
 macro_rules
   | `(tactic|infer_elaborated_circuit_with $data:term) => `(tactic|(
-    refine ElaboratedCircuit.withData (by infer_elaborated_circuit) $data ?data_eq
-    simp only [circuit_norm]
-    try grind
+    exact ElaboratedCircuit.withData (by infer_elaborated_circuit) $data
   ))
 
 -- this tactic is pretty good at inferring explicit circuits!
