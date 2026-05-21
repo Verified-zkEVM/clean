@@ -23,6 +23,7 @@ def main (x : Expression F) : Circuit F (Expression F) := do
 
   return isZero
 
+@[reducible]
 instance elaborated : ElaboratedCircuit F field field main := by
   infer_elaborated_circuit
 
