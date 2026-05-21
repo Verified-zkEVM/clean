@@ -54,6 +54,33 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
     simp [Operations.ChannelsLawful, circuit_norm]
     all_goals try first | ac_rfl | trivial | tauto
 
+/-- From an `ExplicitCircuit`, we can usually derive an `ElaboratedCircuit` -/
+class ExplicitCircuits.IsElaborated (circuit : α → Circuit F β) [explicit : ExplicitCircuits circuit] where
+  localLength_eq : ∀ (a a' : α) (n m : ℕ),
+    explicit.localLength a n = explicit.localLength a' m := by intros; rfl
+  channelsWithGuarantees_eq : ∀ (a a' : α) (n m : ℕ),
+    explicit.channelsWithGuarantees a n = explicit.channelsWithGuarantees a' m := by intros; rfl
+  channelsWithRequirements_eq : ∀ (a a' : α) (n m : ℕ),
+    explicit.channelsWithRequirements a n = explicit.channelsWithRequirements a' m := by intros; rfl
+
+instance ExplicitCircuits.to_elaborated {Input Output : TypeMap}
+  [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+  (circuit : Var Input F → Circuit F (Var Output F))
+  [explicit : ExplicitCircuits circuit] [explicit_elaborated : ExplicitCircuits.IsElaborated circuit] :
+    ElaboratedCircuit F Input Output circuit where
+  localLength a := explicit.localLength a 0
+  output a n := explicit.output a n
+  localLength_eq a n := by
+    rw [explicit.localLength_eq, explicit_elaborated.localLength_eq]
+  output_eq a n := explicit.output_eq a n
+  subcircuitsConsistent a n := explicit.subcircuitsConsistent a n
+  channelsWithGuarantees := explicit.channelsWithGuarantees default 0
+  channelsWithRequirements := explicit.channelsWithRequirements default 0
+  channelsLawful a n := by
+    convert explicit.channelsLawful a n using 1
+    rw [explicit_elaborated.channelsWithGuarantees_eq]
+    rw [explicit_elaborated.channelsWithRequirements_eq]
+
 -- move between family and single explicit circuit
 
 instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
