@@ -385,6 +385,7 @@ attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with" term : tactic
+syntax "infer_elaborated_circuit_with" term " using " term : tactic
 
 macro_rules
   | `(tactic|infer_elaborated_circuit) => `(tactic|(
@@ -394,6 +395,9 @@ macro_rules
   ))
 
 macro_rules
+  | `(tactic|infer_elaborated_circuit_with $data:term using $data_eq:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by infer_elaborated_circuit) $data $data_eq
+  ))
   | `(tactic|infer_elaborated_circuit_with $data:term) => `(tactic|(
     exact ElaboratedCircuit.withData (by infer_elaborated_circuit) $data
   ))
