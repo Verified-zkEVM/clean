@@ -6,7 +6,6 @@ This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
 import Clean.Circuit.Basic
-import Clean.Circuit.Theorems
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where
