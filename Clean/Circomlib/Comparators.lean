@@ -211,14 +211,7 @@ def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F
 
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
-  elaborated := {
-    localLength _ := n + 2
-    localLength_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit, Num2Bits.arbitraryBitLengthCircuit]
-    output _ i := var ⟨ i + n + 1 ⟩
-    output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit, Num2Bits.arbitraryBitLengthCircuit]
-    subcircuitsConsistent := by simp +arith [circuit_norm, main, Num2Bits.circuit, Num2Bits.arbitraryBitLengthCircuit]
-    channelsLawful := by simp only [circuit_norm, main, Num2Bits.circuit, Num2Bits.arbitraryBitLengthCircuit]
-  }
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val ≤ 2^n
 
@@ -278,6 +271,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have h2 := h_holds.left.right
 
     rw [add_assoc] at hout
+    rw [← hout]
     rw [← hout] at h3
     rw [h3]
     --simp the goal basic math
@@ -322,6 +316,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have h1 := h_holds.left.left
 
     rw [add_assoc] at hout
+    rw [← hout]
     rw [← hout] at h3
     rw [h3]
     --simp the goal basic math
@@ -414,7 +409,7 @@ template LessEqThan(n) {
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (x, y + 1)
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
@@ -484,7 +479,7 @@ template GreaterThan(n) {
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x)
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
@@ -523,7 +518,7 @@ template GreaterEqThan(n) {
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x + 1)
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
