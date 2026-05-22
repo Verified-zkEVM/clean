@@ -770,6 +770,7 @@ theorem Operations.channelsLawful_flatten_of_forall {m : ℕ}
       intro i
       exact h i.succ
 
+@[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
     {constant : ConstantLength body} : ExplicitCircuit (forEach xs body constant) where
@@ -801,6 +802,7 @@ instance ExplicitCircuit.from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m
     intro i
     convert (explicit xs[i.val]).channelsLawful (n + i * (body default).localLength) using 1
 
+@[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
     {constant : ConstantLength body} : ExplicitCircuit (map xs body constant) where
@@ -833,6 +835,7 @@ instance ExplicitCircuit.from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α 
     intro i
     convert (explicit xs[i.val]).channelsLawful (n + i * (body default).localLength) using 1
 
+@[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
     {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
     {constant : ConstantLength body} : ExplicitCircuit (mapFinRange m body constant) where
@@ -867,6 +870,7 @@ instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
     apply Operations.channelsLawful_flatten_of_forall
     intro i
     convert (explicit i).channelsLawful (n + i * (body 0).localLength) using 1
+
 
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
@@ -1112,6 +1116,7 @@ lemma foldlRange.usesLocalWitnesses :
       |>.operations (n + i * (body default i).localLength)) := by
   simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
 
+@[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_foldl {m : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
     {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
     {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
@@ -1152,6 +1157,7 @@ instance ExplicitCircuit.from_foldl {m : ℕ} [Inhabited β] [Inhabited α] {xs 
     convert (explicit (FoldlM.foldlAcc n xs body init i) xs[i.val]).channelsLawful
       (n + i * (body default default).localLength) using 1
 
+@[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_foldlRange {m : ℕ} [Inhabited β]
     {body : β → Fin m → Circuit F β} [explicit : ∀ b i, ExplicitCircuit (body b i)] {init : β}
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} :
@@ -1190,6 +1196,7 @@ instance ExplicitCircuits.from_foldl_family {m : ℕ} [Inhabited β] [Inhabited 
     {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} :
     ExplicitCircuits (fun xs : Vector α m => foldl xs init body const_out constant) :=
   ExplicitCircuits.fromSingle fun _ => inferInstance
+
 
 end foldlRange
 
