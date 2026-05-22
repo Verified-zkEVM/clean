@@ -16,31 +16,37 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :
     let c ← Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
-/--
-Copyable low-heartbeat repro for the current generated dsimp calls.
+/-- This is the explicit proof term inferred by `infer_elaborated_circuit_reduced`. -/
+def explicitManual : ExplicitCircuits (F:=F p) main :=
+  ExplicitCircuits.fromSingle fun _ => Circuit.ExplicitCircuit.from_mapFinRange
 
-Run this file directly with debug output enabled:
-```
-lake env lean -Ddebug.explicitCircuitReduced=true Clean/Gadgets/Keccak/ThetaCDsimpProbe.lean
-```
+/-- Written-out replay of the generated `localLength` normalization steps.
 
-The reduced elaboration currently prints two dsimp passes for `localLength` and two for `output`:
-```
-dsimp only [explicit_circuit_norm, Gadgets.Keccak256.ThetaCDsimpProbe.main,
-  Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit]
-dsimp only [explicit_circuit_norm, Gadgets.Keccak256.ThetaCDsimpProbe.main,
-  Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit, Gadgets.Xor64.main,
-  Witnessable.witness]
-```
-
-The corresponding command is:
-```
-example : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
-  infer_elaborated_circuit_reduced
-```
-It times out with `maxHeartbeats 20000` after those normalization passes, while building/checking
-record proof fields.
+This intentionally stops after replaying the generated dsimp calls: the remaining goal shows what the
+current reduced elaboration tactic is still leaving to the elaborator/kernel.
 -/
-example : True := by trivial
+example (state : Var KeccakState (F p)) :
+    @ExplicitCircuits.localLength (F p) _ _ _ main explicitManual state 0 = 160 := by
+  dsimp only [explicit_circuit_norm, explicitManual, Gadgets.Keccak256.ThetaCDsimpProbe.main,
+    Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit]
+  try dsimp only [explicit_circuit_norm, explicitManual, Gadgets.Keccak256.ThetaCDsimpProbe.main,
+    Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit, Gadgets.Xor64.main,
+    Witnessable.witness]
+  admit
+
+/-- Written-out replay of the generated `output` normalization steps.
+
+This intentionally stops after replaying the generated dsimp calls: the remaining goal shows what the
+current reduced elaboration tactic is still leaving to the elaborator/kernel.
+-/
+example (state : Var KeccakState (F p)) (i0 : ℕ) :
+    @ExplicitCircuits.output (F p) _ _ _ main explicitManual state i0 =
+      Vector.mapFinRange 5 fun i => varFromOffset U64 (i0 + i * 32 + 24) := by
+  dsimp only [explicit_circuit_norm, explicitManual, Gadgets.Keccak256.ThetaCDsimpProbe.main,
+    Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit]
+  try dsimp only [explicit_circuit_norm, explicitManual, Gadgets.Keccak256.ThetaCDsimpProbe.main,
+    Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit, Gadgets.Xor64.main,
+    Witnessable.witness]
+  admit
 
 end Gadgets.Keccak256.ThetaCDsimpProbe

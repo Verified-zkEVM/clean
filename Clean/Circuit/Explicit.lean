@@ -482,6 +482,9 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let explicit ← Lean.Elab.Term.elabTerm (← `(by infer_explicit_circuits)) (some explicitType)
   Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
   let explicit ← instantiateMVars explicit
+  if (← getOptions).getBool `debug.explicitCircuitReduced false then
+    logInfo m!"infer_elaborated_circuit_reduced explicit proof term:
+  {explicit}"
   let varInputType ← mkAppM ``Var #[Input, F]
   let natType := mkConst ``Nat
   let explicitThms ← do
