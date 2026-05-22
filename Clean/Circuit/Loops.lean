@@ -903,24 +903,22 @@ theorem ExplicitCircuit.from_map_loop_channelsWithRequirements {m : ℕ} [Inhabi
       (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithRequirements (body xs[i.val]) (n + i * (body default).localLength)).flatten := rfl
 
 instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
-    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {body : Fin m → Circuit F β} (explicit : ExplicitCircuits body)
     {constant : ConstantLength body} : ExplicitCircuit (mapFinRange m body constant) where
-  output n := (Vector.finRange m).mapIdx fun i x => (body x).output (n + i * (body 0).localLength)
-  localLength _ := m * (body 0).localLength
+  output n := Vector.mapFinRange m fun i => explicit.output i (n + i * (explicit.localLength 0 0))
+  localLength _ := m * explicit.localLength 0 0
   operations n := (List.ofFn fun (i : Fin m) =>
-    (body i).operations (n + i * (body 0).localLength)).flatten
+    explicit.operations i (n + i * (explicit.localLength 0 0))).flatten
   channelsWithGuarantees n := (List.ofFn fun (i : Fin m) =>
-    ExplicitCircuit.channelsWithGuarantees (body i) (n + i * (body 0).localLength)).flatten
+    explicit.channelsWithGuarantees i (n + i * (explicit.localLength 0 0))).flatten
   channelsWithRequirements n := (List.ofFn fun (i : Fin m) =>
-    ExplicitCircuit.channelsWithRequirements (body i) (n + i * (body 0).localLength)).flatten
+    explicit.channelsWithRequirements i (n + i * (explicit.localLength 0 0))).flatten
   output_eq n := by
-    rw [mapFinRange.output_eq]
-    ext i hi
-    rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange]
+    simp only [mapFinRange.output_eq, explicit.output_eq, explicit.localLength_eq]
   localLength_eq n := by
-    rw [mapFinRange.localLength_eq]
+    rw [mapFinRange.localLength_eq, explicit.localLength_eq]
   operations_eq n := by
-    rw [mapFinRange.operations_eq]
+    simp only [mapFinRange.operations_eq, explicit.localLength_eq, explicit.operations_eq]
   subcircuitsConsistent n := by
     rw [mapFinRange.operations_eq, Operations.SubcircuitsConsistent]
     rw [show (List.ofFn fun i : Fin m => (body i).operations (n + ↑i * (body 0).localLength)).flatten =
@@ -930,47 +928,47 @@ instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
       rw [constant.localLength_eq 0 0]]
     rw [forAll_flatten_abstract (circuit:=body) constant]
     intro i
-    exact (explicit i).subcircuitsConsistent (n + i * constant.localLength)
+    apply explicit.subcircuitsConsistent
   channelsLawful n := by
-    rw [mapFinRange.operations_eq]
+    rw [mapFinRange.operations_eq, explicit.localLength_eq]
     apply Operations.channelsLawful_flatten_of_forall
     intro i
-    convert (explicit i).channelsLawful (n + i * (body 0).localLength) using 1
+    apply explicit.channelsLawful
 
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_mapFinRange_output {m : ℕ} [NeZero m]
-    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {body : Fin m → Circuit F β} [explicit : ExplicitCircuits body]
     {constant : ConstantLength body} (n : ℕ) :
-    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).output n =
-      (Vector.finRange m).mapIdx fun i x => (body x).output (n + i * (body 0).localLength) := rfl
+    (ExplicitCircuit.from_mapFinRange explicit (constant:=constant)).output n =
+      Vector.mapFinRange m fun i => explicit.output i (n + i * (explicit.localLength 0 0)) := rfl
 
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_mapFinRange_localLength {m : ℕ} [NeZero m]
-    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {body : Fin m → Circuit F β} [explicit : ExplicitCircuits body]
     {constant : ConstantLength body} (n : ℕ) :
-    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).localLength n =
-      m * (body 0).localLength := rfl
+    (ExplicitCircuit.from_mapFinRange explicit (constant:=constant)).localLength n =
+      m * explicit.localLength 0 0 := rfl
 
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_mapFinRange_operations {m : ℕ} [NeZero m]
-    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {body : Fin m → Circuit F β} [explicit : ExplicitCircuits body]
     {constant : ConstantLength body} (n : ℕ) :
-    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).operations n =
-      (List.ofFn fun (i : Fin m) => (body i).operations (n + i * (body 0).localLength)).flatten := rfl
+    (ExplicitCircuit.from_mapFinRange explicit (constant:=constant)).operations n =
+      (List.ofFn fun (i : Fin m) => explicit.operations i (n + i * (explicit.localLength 0 0))).flatten := rfl
 
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_mapFinRange_channelsWithGuarantees {m : ℕ} [NeZero m]
-    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {body : Fin m → Circuit F β} [explicit : ExplicitCircuits body]
     {constant : ConstantLength body} (n : ℕ) :
-    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).channelsWithGuarantees n =
-      (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithGuarantees (body i) (n + i * (body 0).localLength)).flatten := rfl
+    (ExplicitCircuit.from_mapFinRange explicit (constant:=constant)).channelsWithGuarantees n =
+      (List.ofFn fun (i : Fin m) => explicit.channelsWithGuarantees i (n + i * (explicit.localLength 0 0))).flatten := rfl
 
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_mapFinRange_channelsWithRequirements {m : ℕ} [NeZero m]
-    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {body : Fin m → Circuit F β} [explicit : ExplicitCircuits body]
     {constant : ConstantLength body} (n : ℕ) :
-    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).channelsWithRequirements n =
-      (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithRequirements (body i) (n + i * (body 0).localLength)).flatten := rfl
+    (ExplicitCircuit.from_mapFinRange explicit (constant:=constant)).channelsWithRequirements n =
+      (List.ofFn fun (i : Fin m) => explicit.channelsWithRequirements i (n + i * (explicit.localLength 0 0))).flatten := rfl
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
@@ -988,7 +986,7 @@ macro_rules
       try intros
       first
         | infer_instance
-        | apply Circuit.ExplicitCircuit.from_mapFinRange
+        | apply Circuit.ExplicitCircuit.from_mapFinRange (by infer_explicit_circuits)
         | apply Circuit.ExplicitCircuit.from_foldlRange
         | apply Circuit.ExplicitCircuit.from_forEach
         | apply Circuit.ExplicitCircuit.from_map_loop

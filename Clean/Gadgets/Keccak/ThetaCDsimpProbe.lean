@@ -1,4 +1,4 @@
-import Clean.Circuit.Loops
+import Clean.Circuit
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 
@@ -16,37 +16,23 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :
     let c ← Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
-/-- This is the explicit proof term inferred by `infer_elaborated_circuit_reduced`. -/
-def explicitManual : ExplicitCircuits (F:=F p) main :=
-  ExplicitCircuits.fromSingle fun _ => Circuit.ExplicitCircuit.from_mapFinRange
+def explicit : ExplicitCircuits (F:=F p) main := by infer_explicit_circuits
 
-/-- Written-out replay of the generated `localLength` normalization steps.
+def trueLength : ℕ := 160
 
-This intentionally stops after replaying the generated dsimp calls: the remaining goal shows what the
-current reduced elaboration tactic is still leaving to the elaborator/kernel.
--/
 example (state : Var KeccakState (F p)) :
-    @ExplicitCircuits.localLength (F p) _ _ _ main explicitManual state 0 = 160 := by
-  dsimp only [explicit_circuit_norm, explicitManual, Gadgets.Keccak256.ThetaCDsimpProbe.main,
-    Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit]
-  try dsimp only [explicit_circuit_norm, explicitManual, Gadgets.Keccak256.ThetaCDsimpProbe.main,
-    Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit, Gadgets.Xor64.main,
-    Witnessable.witness]
-  admit
+    @ExplicitCircuits.localLength (F p) _ _ _ main explicit state 0 = trueLength := by
+  dsimp only [explicit_circuit_norm, main, Gadgets.Xor64.circuit, explicit]
+  -- this is nice!
+  simp only [seval]
+  dsimp only [trueLength]
 
-/-- Written-out replay of the generated `output` normalization steps.
+def trueOutput (i0 : ℕ) : Vector (Var U64 (F p)) 5 := .mapFinRange 5 fun i => varFromOffset U64 (i0 + i * 32 + 24)
 
-This intentionally stops after replaying the generated dsimp calls: the remaining goal shows what the
-current reduced elaboration tactic is still leaving to the elaborator/kernel.
--/
 example (state : Var KeccakState (F p)) (i0 : ℕ) :
-    @ExplicitCircuits.output (F p) _ _ _ main explicitManual state i0 =
-      Vector.mapFinRange 5 fun i => varFromOffset U64 (i0 + i * 32 + 24) := by
-  dsimp only [explicit_circuit_norm, explicitManual, Gadgets.Keccak256.ThetaCDsimpProbe.main,
-    Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit]
-  try dsimp only [explicit_circuit_norm, explicitManual, Gadgets.Keccak256.ThetaCDsimpProbe.main,
-    Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit, Gadgets.Xor64.main,
-    Witnessable.witness]
-  admit
+    @ExplicitCircuits.output (F p) _ _ _ main explicit state i0 = trueOutput i0 := by
+  dsimp only [explicit_circuit_norm, main, Gadgets.Xor64.circuit, explicit]
+  simp +arith only
+  simp +arith only [trueOutput]
 
 end Gadgets.Keccak256.ThetaCDsimpProbe
