@@ -82,7 +82,7 @@ def decodeInstructionSpec (instruction : F p) (output : DecodedInstruction (F p)
 theorem decodeInstructionSoundness : GeneralFormalCircuit.Soundness (F p) (Input := field)
     decodeInstructionMain (fun _ _ => True) decodeInstructionSpec := by
   circuit_proof_start [decodeInstructionMain, decodeInstructionSpec]
-  dsimp only [explicit_circuit_norm, Gadgets.toBits, Gadgets.ToBits.elaborated] at h_holds ⊢
+  dsimp only [explicit_circuit_norm, Gadgets.toBits] at h_holds ⊢
   simp only [circuit_norm] at h_holds
   obtain ⟨ h_range_check, h_eq ⟩ := h_holds
   have h_range_check' : ¬ 256 ≤ input.val := by linarith
@@ -130,7 +130,7 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
 
   completeness := by
     circuit_proof_start [decodeInstructionMain]
-    dsimp only [explicit_circuit_norm, Gadgets.toBits, Gadgets.ToBits.elaborated] at h_env ⊢
+    dsimp only [explicit_circuit_norm, Gadgets.toBits] at h_env ⊢
     simp_all
 
 /--
@@ -583,9 +583,10 @@ def femtoCairoStepMain {programSize : ℕ} (program : Fin programSize → (F p))
   -- Compute next state
   nextState { state, decoded, v1, v2, v3 }
 
+@[reducible]
 instance {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
     ElaboratedCircuit (F p) State State (femtoCairoStepMain program h_programSize) := by
-  infer_elaborated_circuit
+  infer_elaborated_circuit_reduced
 
 def femtoCairoStepSpec
     {programSize : ℕ} (program : Fin programSize → (F p))
@@ -613,7 +614,7 @@ def femtoCairoStepSoundness
       (femtoCairoStepSpec program) := by
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepMain,
     Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory, nextState,
-    decodeInstruction, decodeInstructionSpec]
+    decodeInstruction, decodeInstructionSpec, Gadgets.toBits]
 
   obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
   obtain ⟨pc, ap, fp⟩ := input
@@ -692,15 +693,13 @@ def femtoCairoStepSoundness
               contradiction
             case h_1 next_state h_eq_next =>
               rw [h_eq_next, ←c_next]
-              simp
-              sorry
 
 def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
   (h_programSize : programSize < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_programSize)
       (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
-    fetchInstruction, decodeInstruction, readFromMemory, nextState]
+    fetchInstruction, decodeInstruction, readFromMemory, nextState, Gadgets.toBits]
 
   obtain ⟨h_valid_size, h_valid_program, h_memory_completeness, h_transition_isSome⟩ := h_assumptions
 
@@ -730,7 +729,8 @@ def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize �
   simp only [h_eval_pc] at h_fetch_env
   specialize h_fetch_env h_pc_bound
   simp only [h_fetch, circuit_norm, explicit_provable_type, RawInstruction.mk.injEq] at h_fetch_env
-  simp_all
+  simp_all [circuit_norm, decodeInstructionMain, Gadgets.toBits]
+  grind
 
 variable {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
 variable (h_program : ValidProgramSize p programSize ∧ ValidProgram program)
