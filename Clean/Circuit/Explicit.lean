@@ -221,6 +221,11 @@ instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     · exact f_explicit.channelsLawful n
     · exact (g_explicit (output f n)).channelsLawful (n + localLength f n)
 
+instance ExplicitCircuit.from_bind_tc {f : Circuit F α} {g : α → Circuit F β}
+    [f_explicit : ExplicitCircuit f] [g_explicit : ∀ a : α, ExplicitCircuit (g a)] :
+    ExplicitCircuit (f >>= g) :=
+  ExplicitCircuit.from_bind f_explicit g_explicit
+
 -- `map` of an explicit circuit yields an explicit circuit
 instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where

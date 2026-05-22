@@ -868,6 +868,25 @@ instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
     intro i
     convert (explicit i).channelsLawful (n + i * (body 0).localLength) using 1
 
+macro_rules
+  | `(tactic|infer_explicit_circuit) => `(tactic|(
+    try intros
+    try repeat infer_instance
+    repeat (
+      try intros
+      first
+        | infer_instance
+        | apply Circuit.ExplicitCircuit.from_forEach
+        | apply Circuit.ExplicitCircuit.from_map_loop
+        | apply Circuit.ExplicitCircuit.from_mapFinRange
+        | apply Circuit.ExplicitCircuit.from_foldl
+        | apply Circuit.ExplicitCircuit.from_foldlRange
+        | apply Circuit.ExplicitCircuit.from_bind
+        | apply Circuit.ExplicitCircuit.from_map
+      repeat infer_instance
+    )
+    done))
+
 instance ExplicitCircuits.from_forEach_family {m : ℕ} [Inhabited α]
     {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
     {constant : ConstantLength body} :
