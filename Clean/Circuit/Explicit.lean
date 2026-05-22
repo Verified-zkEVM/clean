@@ -549,7 +549,10 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     let mut decls ← collectUnfoldable e #[]
     for i in [:8] do
       if debug then
-        logInfo m!"infer_elaborated_circuit_reduced {label} pass {i}: dsimp only [explicit_circuit_norm, {decls.toList}]"
+        let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
+        let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
+        logInfo m!"infer_elaborated_circuit_reduced {label} pass {i}:
+  dsimp only [{simpArgs}]"
       let ctx ← mkDsimpCtx decls
       let next := (← dsimp current ctx).1
       let decls' ← collectUnfoldable next decls

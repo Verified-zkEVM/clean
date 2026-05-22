@@ -16,32 +16,30 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :
     let c ← Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
-instance explicit : ExplicitCircuits (F:=F p) main := by
-  apply ExplicitCircuits.fromSingle
-  intro state
-  unfold main
-  infer_explicit_circuit
+/--
+Copyable low-heartbeat repro for the current generated dsimp calls.
 
-/-- Manual approximation of the current reduced-elaboration tactic's localLength normalization.
-This is intentionally left as an `example : True`: uncomment the body below to reproduce the fast
-low-heartbeat timeout seen in `ThetaC` reduced elaboration.
+Run this file directly with debug output enabled:
+```
+lake env lean -Ddebug.explicitCircuitReduced=true Clean/Gadgets/Keccak/ThetaCDsimpProbe.lean
+```
 
+The reduced elaboration currently prints two dsimp passes for `localLength` and two for `output`:
 ```
-example (state : Var KeccakState (F p)) :
-    ExplicitCircuits.localLength main state 0 = 160 := by
-  dsimp only [explicit_circuit_norm, explicit, main, Xor64.circuit]
+dsimp only [explicit_circuit_norm, Gadgets.Keccak256.ThetaCDsimpProbe.main,
+  Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit]
+dsimp only [explicit_circuit_norm, Gadgets.Keccak256.ThetaCDsimpProbe.main,
+  Gadgets.Xor64.circuit, instExplicitCircuitVarSubcircuit, Gadgets.Xor64.main,
+  Witnessable.witness]
 ```
--/
-example : True := by trivial
 
-/-- Manual approximation of output normalization.  The analogous command is:
-
+The corresponding command is:
 ```
-example (state : Var KeccakState (F p)) (i0 : ℕ) :
-    ExplicitCircuits.output main state i0 =
-      Vector.mapFinRange 5 fun i => varFromOffset U64 (i0 + i * 32 + 24) := by
-  dsimp only [explicit_circuit_norm, explicit, main, Xor64.circuit]
+example : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
+  infer_elaborated_circuit_reduced
 ```
+It times out with `maxHeartbeats 20000` after those normalization passes, while building/checking
+record proof fields.
 -/
 example : True := by trivial
 
