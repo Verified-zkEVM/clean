@@ -11,6 +11,11 @@ import Mathlib.Lean.Meta.Simp
 
 open Lean Meta Elab Tactic
 
+register_option debug.explicitCircuitReduced : Bool := {
+  defValue := false
+  descr := "trace generated dsimp unfold sets used by infer_elaborated_circuit_reduced"
+}
+
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where
@@ -538,10 +543,13 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       thms ← thms.addDeclToUnfold decl
     Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
       (simpTheorems := #[thms]) congrThms
-  let normalizeExplicit (e : Expr) : MetaM Expr := do
+  let normalizeExplicit (label : String) (e : Expr) : MetaM Expr := do
+    let debug := (← getOptions).getBool `debug.explicitCircuitReduced false
     let mut current := e
     let mut decls ← collectUnfoldable e #[]
-    for _ in [:8] do
+    for i in [:8] do
+      if debug then
+        logInfo m!"infer_elaborated_circuit_reduced {label} pass {i}: dsimp only [explicit_circuit_norm, {decls.toList}]"
       let ctx ← mkDsimpCtx decls
       let next := (← dsimp current ctx).1
       let decls' ← collectUnfoldable next decls
@@ -553,12 +561,12 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let localLengthFun ← withLocalDeclD `input varInputType fun input => do
     let zero := mkNatLit 0
     let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
-    let ll ← normalizeExplicit ll
+    let ll ← normalizeExplicit "localLength" ll
     mkLambdaFVars #[input] ll
   let outputFun ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
-      let out ← normalizeExplicit out
+      let out ← normalizeExplicit "output" out
       mkLambdaFVars #[input, offset] out
   let localLengthEq ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
