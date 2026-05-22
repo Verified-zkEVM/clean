@@ -27,10 +27,8 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   return #v[c0, c1, c2, c3, c4]
 
 @[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main where
-  localLength _ := 120
-  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, Rotation64.circuit, Rotation64.elaborated]
-  channelsLawful := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, Rotation64.circuit, Rotation64.elaborated]
+instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main := by
+  infer_elaborated_circuit_reduced
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 

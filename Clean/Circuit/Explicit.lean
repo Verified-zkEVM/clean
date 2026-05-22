@@ -7,6 +7,7 @@ This could be useful to simplify circuit statements with less user intervention.
 import Clean.Utils.Misc
 import Clean.Circuit.Basic
 import Lean.Elab.Tactic
+import Mathlib.Lean.Meta.Simp
 
 open Lean Meta Elab Tactic
 
@@ -447,16 +448,15 @@ macro_rules
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 /--
-Experimental elaboration tactic that stores reduced `localLength` directly.
+Experimental elaboration tactic that stores reduced `localLength` and `output` directly.
 
-This follows the same explicit-circuit derivation path as `infer_elaborated_circuit`, but reduces the
-open `localLength` projection at tactic elaboration time before constructing the `ElaboratedCircuit`
+This follows the same explicit-circuit derivation path as `infer_elaborated_circuit`, but simplifies
+open metadata projections at tactic elaboration time before constructing the `ElaboratedCircuit`
 record.  The result is cheap metadata for parent circuits: e.g. a loop-derived `localLength` can be
 stored as `fun _ => 16` instead of a large tree of `ExplicitCircuit.from_*` projections.
 
-Output reduction is intentionally not forced here: for realistic gadgets, fully reducing symbolic
-outputs can be much more expensive than reducing length metadata.  Users can still override `output`
-with `ElaboratedCircuit.withData` when a proof-friendly shape is needed.
+The normalization uses the `explicit_circuit_norm` simp set instead of broad kernel reduction.
+This keeps it targeted to projection lemmas and other explicit-circuit metadata rules.
 
 This prototype currently delegates consistency/channel proofs to the inferred `ExplicitCircuits`
 proof and is best suited to circuits whose channel metadata is definitionally empty.
@@ -479,14 +479,23 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let explicit ← instantiateMVars explicit
   let varInputType ← mkAppM ``Var #[Input, F]
   let natType := mkConst ``Nat
+  let explicitThms ← do
+    let some ext ← getSimpExtension? `explicit_circuit_norm
+      | throwError "unknown simp attribute explicit_circuit_norm"
+    ext.getTheorems
+  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    (simpTheorems := #[explicitThms]) (← getSimpCongrTheorems)
+  let normalizeExplicit (e : Expr) : MetaM Expr := do
+    return (← simp e simpCtx).1.expr
   let localLengthFun ← withLocalDeclD `input varInputType fun input => do
     let zero := mkNatLit 0
     let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
-    let ll ← reduce ll (explicitOnly := false) (skipTypes := false) (skipProofs := true)
+    let ll ← normalizeExplicit ll
     mkLambdaFVars #[input] ll
   let outputFun ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
+      let out ← normalizeExplicit out
       mkLambdaFVars #[input, offset] out
   let localLengthEq ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
@@ -536,16 +545,6 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with" term : tactic
 syntax "infer_elaborated_circuit_with" term " using " term : tactic
-syntax "infer_elaborated_circuit_reduced_with" term : tactic
-syntax "infer_elaborated_circuit_reduced_with" term " using " term : tactic
-
-macro_rules
-  | `(tactic|infer_elaborated_circuit_reduced_with $data:term using $data_eq:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data $data_eq
-  ))
-  | `(tactic|infer_elaborated_circuit_reduced_with $data:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data
-  ))
 
 macro_rules
   | `(tactic|infer_elaborated_circuit) => `(tactic|(
