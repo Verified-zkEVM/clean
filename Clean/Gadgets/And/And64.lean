@@ -33,7 +33,7 @@ def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
 
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 main := by
-  infer_elaborated_circuit
+  infer_elaborated_circuit_reduced
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}
@@ -64,7 +64,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   repeat assumption
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start [And8.circuit, And8.elaborated, And8.Assumptions, And8.Spec]
+  circuit_proof_start [And8.circuit, And8.Assumptions, And8.Spec]
   cases input_x; cases input_y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
   simp only [circuit_norm, explicit_provable_type, U64.Normalized]
@@ -72,7 +72,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   simp_all
 
 theorem completeness : Completeness (F p) main Assumptions := by
-  circuit_proof_start [And8.circuit, And8.elaborated, And8.Assumptions, And8.Spec]
+  circuit_proof_start [And8.circuit, And8.Assumptions, And8.Spec]
   cases input_x; cases input_y
   simp only [circuit_norm, explicit_provable_type, U64.Normalized] at h_assumptions h_input ⊢
   simp_all

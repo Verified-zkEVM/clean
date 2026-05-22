@@ -10,12 +10,16 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
   name : String := "anonymous"
   main : Var Input F → Circuit F (Var Output F)
   elaborated : ElaboratedCircuit F Input Output main := by
-    first | infer_instance | infer_elaborated_circuit
+    first | infer_instance | infer_elaborated_circuit_reduced
 
 attribute [circuit_norm] FormalCircuitBase.elaborated
 
 namespace FormalCircuitBase
 variable [CircuitType Input] [CircuitType Output]
+
+-- TODO these annotations are somewhat bad in general settings, because
+-- the resulting expression will now be dependently-typed in `self.main` and it's no longer
+-- as easy to rewrite `self` into something else
 
 @[circuit_norm, explicit_circuit_norm]
 abbrev output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) : Var Output F :=

@@ -227,6 +227,11 @@ theorem map_mapRange {n} {create : ℕ → α} {f : α → β} :
   rw [Vector.ext_iff]
   simp [getElem_mapRange, getElem_map]
 
+theorem mapRange_eq_mapFinRange {n} {create : ℕ → α} :
+    Vector.mapRange n create = Vector.mapFinRange n (fun i => create i.val) := by
+  rw [Vector.ext_iff]
+  simp [getElem_mapRange, getElem_mapFinRange]
+
 theorem zip_mapRange {n} {create1 : ℕ → α} (v : Vector β n) :
     Vector.zip (mapRange n create1) v =
       Vector.mapFinRange n fun i => (create1 i.val, v[i]) := by

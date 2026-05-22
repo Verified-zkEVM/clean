@@ -37,12 +37,8 @@ def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
   IsZero.circuit (fromElements (M:=α) d)
 
 @[reducible]
-instance elaborated : ElaboratedCircuit F (ProvablePair α α) field (main (α:=α)) where
-  localLength _ := 2 * size α
-  localLength_eq _ _ := by
-    simp +arith [circuit_norm, main, IsZero.circuit, IsZero.elaborated]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, IsZero.circuit, IsZero.elaborated]
-  channelsLawful := by simp only [circuit_norm, main, IsZero.circuit, IsZero.elaborated]
+instance elaborated : ElaboratedCircuit F (ProvablePair α α) field (main (α:=α)) := by
+  infer_elaborated_circuit_reduced
 
 def Assumptions (_ : α F × α F) : Prop := True
 

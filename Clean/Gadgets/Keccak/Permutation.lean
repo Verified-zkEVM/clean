@@ -28,10 +28,10 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
   localLength _ := 30912
   output _ i0 := stateVar i0 23
 
-  localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
+  localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
-  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
-  channelsLawful := by simp only [main, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
+  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
+  channelsLawful := by simp only [main, circuit_norm, KeccakRound.circuit]
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
@@ -42,8 +42,7 @@ lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
   simp [List.finRange]
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start [KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions]
+  circuit_proof_start [KeccakRound.circuit, KeccakRound.Spec, KeccakRound.Assumptions]
 
   -- simplify
   obtain ⟨ h_init, h_succ ⟩ := h_holds
@@ -78,8 +77,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   exact h
 
 theorem completeness : Completeness (F p) main Assumptions := by
-  circuit_proof_start [KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions]
+  circuit_proof_start [KeccakRound.circuit, KeccakRound.Spec, KeccakRound.Assumptions]
 
   -- simplify
   simp only [h_assumptions, circuit_norm] at h_env ⊢

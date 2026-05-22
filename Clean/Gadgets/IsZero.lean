@@ -27,11 +27,8 @@ def main (input : Var M F) : Circuit F (Var field F) := do
 @[reducible]
 instance elaborated : ElaboratedCircuit F M field main where
   localLength _ := 2 * size M
-  output input i₀ :=
-    Fin.foldl (size M)
-      (fun acc i => acc * IsZeroField.circuit.output (toElements (M:=M) input)[i]
-        (i₀ + i * IsZeroField.circuit.localLength (toElements (M:=M) input)[i]))
-      1
+  output input i₀ := Fin.foldl (size M)
+    (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
 
   localLength_eq _ _ := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
@@ -125,11 +122,10 @@ theorem completeness : Completeness F (main (M:=M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
 def circuit [DecidableEq (M F)] : FormalCircuit F M field where
-  main := main (M:=M)
-  elaborated := elaborated
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main
+  Assumptions
+  Spec
+  soundness
+  completeness
 
 end Gadgets.IsZero
