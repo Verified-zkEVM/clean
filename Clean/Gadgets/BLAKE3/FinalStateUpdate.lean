@@ -40,32 +40,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 
   return #v[s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 
--- #eval main (p:=p_babybear) default |>.local_length
--- #eval main (p:=p_babybear) default |>.output
-@[reducible]
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main where
-  localLength _ := 64
-  output inputs i0 := #v[
-    varFromOffset U32 (i0 + 0),
-    varFromOffset U32 (i0 + 4),
-    varFromOffset U32 (i0 + 8),
-    varFromOffset U32 (i0 + 12),
-    varFromOffset U32 (i0 + 16),
-    varFromOffset U32 (i0 + 20),
-    varFromOffset U32 (i0 + 24),
-    varFromOffset U32 (i0 + 28),
-    varFromOffset U32 (i0 + 32),
-    varFromOffset U32 (i0 + 36),
-    varFromOffset U32 (i0 + 40),
-    varFromOffset U32 (i0 + 44),
-    varFromOffset U32 (i0 + 48),
-    varFromOffset U32 (i0 + 52),
-    varFromOffset U32 (i0 + 56),
-    varFromOffset U32 (i0 + 60)
-  ]
-
-  localLength_eq _ n := by
-    dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
+  infer_elaborated_circuit_reduced
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, chaining_value } := input
