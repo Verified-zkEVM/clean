@@ -6,6 +6,10 @@ This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
 import Clean.Circuit.Basic
+import Lean.Elab.Tactic
+
+open Lean Meta Elab Tactic
+
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where
@@ -442,9 +446,106 @@ macro_rules
 -- TODO this is needed because `conv => congr; whnf` creates terms involving `Eq.mpr`
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
+/--
+Experimental elaboration tactic that stores reduced `localLength` directly.
+
+This follows the same explicit-circuit derivation path as `infer_elaborated_circuit`, but reduces the
+open `localLength` projection at tactic elaboration time before constructing the `ElaboratedCircuit`
+record.  The result is cheap metadata for parent circuits: e.g. a loop-derived `localLength` can be
+stored as `fun _ => 16` instead of a large tree of `ExplicitCircuit.from_*` projections.
+
+Output reduction is intentionally not forced here: for realistic gadgets, fully reducing symbolic
+outputs can be much more expensive than reducing length metadata.  Users can still override `output`
+with `ElaboratedCircuit.withData` when a proof-friendly shape is needed.
+
+This prototype currently delegates consistency/channel proofs to the inferred `ExplicitCircuits`
+proof and is best suited to circuits whose channel metadata is definitionally empty.
+-/
+elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target ← whnf (← goal.getType)
+  unless target.getAppFn.isConstOf ``ElaboratedCircuit do
+    throwError "target is not an ElaboratedCircuit: {target}"
+  let args := target.getAppArgs
+  if args.size < 7 then
+    throwError "unexpected ElaboratedCircuit target: {target}"
+  let F := args[0]!
+  let Input := args[1]!
+  let Output := args[2]!
+  let main := args[6]!
+  let explicitType ← mkAppM ``ExplicitCircuits #[main]
+  let explicit ← Lean.Elab.Term.elabTerm (← `(by infer_explicit_circuits)) (some explicitType)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let explicit ← instantiateMVars explicit
+  let varInputType ← mkAppM ``Var #[Input, F]
+  let natType := mkConst ``Nat
+  let localLengthFun ← withLocalDeclD `input varInputType fun input => do
+    let zero := mkNatLit 0
+    let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
+    let ll ← reduce ll (explicitOnly := false) (skipTypes := false) (skipProofs := true)
+    mkLambdaFVars #[input] ll
+  let outputFun ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
+      mkLambdaFVars #[input, offset] out
+  let localLengthEq ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let p1 ← mkAppOptM ``ExplicitCircuits.localLength_eq #[none, none, none, none, main, explicit, input, offset]
+      let p1Type ← whnf (← inferType p1)
+      let some (_, _, mid) := p1Type.eq?
+        | throwError "unexpected localLength_eq type: {p1Type}"
+      let rhs := mkApp localLengthFun input
+      let p2Type ← mkEq mid rhs
+      let p2MVar ← mkFreshExprMVar p2Type
+      p2MVar.mvarId!.assign (← mkEqRefl mid)
+      let p ← mkAppM ``Eq.trans #[p1, p2MVar]
+      mkLambdaFVars #[input, offset] p
+  let outputEq ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let p1 ← mkAppOptM ``ExplicitCircuits.output_eq #[none, none, none, none, main, explicit, input, offset]
+      let p1Type ← whnf (← inferType p1)
+      let some (_, _, mid) := p1Type.eq?
+        | throwError "unexpected output_eq type: {p1Type}"
+      let rhs := mkApp2 outputFun input offset
+      let p2Type ← mkEq mid rhs
+      let p2MVar ← mkFreshExprMVar p2Type
+      p2MVar.mvarId!.assign (← mkEqRefl mid)
+      let p ← mkAppM ``Eq.trans #[p1, p2MVar]
+      mkLambdaFVars #[input, offset] p
+  let subProof ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let p ← mkAppOptM ``ExplicitCircuits.subcircuitsConsistent #[none, none, none, none, main, explicit, input, offset]
+      mkLambdaFVars #[input, offset] p
+  let rawChannelType ← mkAppM ``RawChannel #[F]
+  let channels := mkApp (mkConst ``List.nil [levelZero]) rawChannelType
+  let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
+  let exposed ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let nil := mkApp (mkConst ``List.nil [levelZero]) exposedChannelType
+      mkLambdaFVars #[input, offset] nil
+  let channelsLawful ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let p ← mkAppOptM ``ExplicitCircuits.channelsLawful #[none, none, none, none, main, explicit, input, offset]
+      mkLambdaFVars #[input, offset] p
+  let val ← mkAppOptM ``ElaboratedCircuit.mk #[F, Input, Output, none, none, none, main,
+    localLengthFun, localLengthEq, outputFun, outputEq, subProof, channels, channels, exposed,
+    channelsLawful]
+  goal.assign val
+  replaceMainGoal []
+
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with" term : tactic
 syntax "infer_elaborated_circuit_with" term " using " term : tactic
+syntax "infer_elaborated_circuit_reduced_with" term : tactic
+syntax "infer_elaborated_circuit_reduced_with" term " using " term : tactic
+
+macro_rules
+  | `(tactic|infer_elaborated_circuit_reduced_with $data:term using $data_eq:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data $data_eq
+  ))
+  | `(tactic|infer_elaborated_circuit_reduced_with $data:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data
+  ))
 
 macro_rules
   | `(tactic|infer_elaborated_circuit) => `(tactic|(
