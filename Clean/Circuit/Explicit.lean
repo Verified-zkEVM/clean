@@ -483,10 +483,73 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     let some ext ← getSimpExtension? `explicit_circuit_norm
       | throwError "unknown simp attribute explicit_circuit_norm"
     ext.getTheorems
-  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
-    (simpTheorems := #[explicitThms]) (← getSimpCongrTheorems)
+  let congrThms ← getSimpCongrTheorems
+  let rec containsConst (declName : Name) (e : Expr) : Bool :=
+    match e with
+    | .const n _ => n == declName
+    | .app f a => containsConst declName f || containsConst declName a
+    | .lam _ t b _ | .forallE _ t b _ => containsConst declName t || containsConst declName b
+    | .letE _ t v b _ => containsConst declName t || containsConst declName v || containsConst declName b
+    | .mdata _ b => containsConst declName b
+    | .proj _ _ b => containsConst declName b
+    | _ => false
+  let containsConstSuffix (suffix : String) (e : Expr) : Bool := Id.run do
+    let rec go (e : Expr) : Bool :=
+      match e with
+      | .const n _ => n.getString! == suffix
+      | .app f a => go f || go a
+      | .lam _ t b _ | .forallE _ t b _ => go t || go b
+      | .letE _ t v b _ => go t || go v || go b
+      | .mdata _ b => go b
+      | .proj _ _ b => go b
+      | _ => false
+    go e
+  let hasCircuitType (type : Expr) : Bool :=
+    containsConst ``Circuit type || containsConstSuffix "FormalCircuit" type ||
+      containsConstSuffix "FormalAssertion" type || containsConstSuffix "GeneralFormalCircuit" type
+  let isCoreCircuitInfra (declName : Name) : Bool :=
+    let s := declName.toString
+    s.startsWith "Circuit." || s.startsWith "ExplicitCircuit." || s.startsWith "ExplicitCircuits." ||
+      s.startsWith "Operations." || s.startsWith "FormalCircuit" || s == "subcircuit"
+  let isUnfoldable (declName : Name) : MetaM Bool := do
+    if declName == ``ProvableType.varFromOffset || declName == ``ProvableStruct.varFromOffset ||
+        isCoreCircuitInfra declName then
+      return false
+    match (← getEnv).find? declName with
+    | some (.defnInfo info) => return hasCircuitType info.type
+    | some (.opaqueInfo info) => return hasCircuitType info.type
+    | _ => return false
+  let rec collectUnfoldable (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
+    match e with
+    | .const declName _ =>
+        if decls.contains declName || !(← isUnfoldable declName) then
+          return decls
+        else
+          return decls.push declName
+    | .app f a => collectUnfoldable a (← collectUnfoldable f decls)
+    | .lam _ t b _ | .forallE _ t b _ => collectUnfoldable b (← collectUnfoldable t decls)
+    | .letE _ t v b _ => collectUnfoldable b (← collectUnfoldable v (← collectUnfoldable t decls))
+    | .mdata _ b => collectUnfoldable b decls
+    | .proj _ _ b => collectUnfoldable b decls
+    | _ => return decls
+  let mkDsimpCtx (decls : Array Name) : MetaM Simp.Context := do
+    let mut thms := explicitThms
+    for decl in decls do
+      thms ← thms.addDeclToUnfold decl
+    Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+      (simpTheorems := #[thms]) congrThms
   let normalizeExplicit (e : Expr) : MetaM Expr := do
-    return (← simp e simpCtx).1.expr
+    let mut current := e
+    let mut decls ← collectUnfoldable e #[]
+    for _ in [:8] do
+      let ctx ← mkDsimpCtx decls
+      let next := (← dsimp current ctx).1
+      let decls' ← collectUnfoldable next decls
+      if next == current && decls'.size == decls.size then
+        return next
+      current := next
+      decls := decls'
+    return current
   let localLengthFun ← withLocalDeclD `input varInputType fun input => do
     let zero := mkNatLit 0
     let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]

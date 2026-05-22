@@ -15,20 +15,20 @@ instance explicit : ExplicitCircuits circuit32 := by
 instance elaborated : ElaboratedCircuit (F pBabybear) Inputs Outputs circuit32 := by
   infer_elaborated_circuit
 
-instance reducedElaborated : ElaboratedCircuit (F pBabybear) Inputs Outputs circuit32 := by
+def circuit32Reduced input := Gadgets.Addition32Full.main (p:=pBabybear) input
+
+instance reducedElaborated : ElaboratedCircuit (F pBabybear) Inputs Outputs circuit32Reduced := by
   infer_elaborated_circuit_reduced
 
 -- These only unfold the generated elaborated instance. They do not unfold or simplify the explicit
 -- circuit derivation, so they check that the reduced tactic stores the nice metadata directly.
-example : ElaboratedCircuit.localLength (F:=F pBabybear) (Input:=Inputs) (Output:=Outputs) circuit32 default = 8 := by
+example : ElaboratedCircuit.localLength (F:=F pBabybear) (Input:=Inputs) (Output:=Outputs) circuit32Reduced default = 8 := by
   dsimp only [reducedElaborated]
-  rfl
 
-example : ElaboratedCircuit.output (F:=F pBabybear) (Input:=Inputs) (Output:=Outputs) circuit32 default 0 =
+example : ElaboratedCircuit.output (F:=F pBabybear) (Input:=Inputs) (Output:=Outputs) circuit32Reduced default 0 =
   { z := ⟨ varFromOffset field 0, varFromOffset field 2, varFromOffset field 4, varFromOffset field 6 ⟩,
     carryOut := varFromOffset field 7 } := by
   dsimp only [reducedElaborated]
-  rfl
 
 -- #whnf elaborated.localLength default
 -- #whnf elaborated.output default 0
