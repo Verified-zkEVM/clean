@@ -70,12 +70,6 @@ def main (x : Var ProcessBlocksState (F p)) : Circuit (F p) Unit := do
 
 def circuit : FormalAssertion (F p) ProcessBlocksState where
   main
-  localLength_eq := by
-    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-  subcircuitsConsistent := by
-    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-    omega
-  Assumptions _ := True
   Spec x := x.Normalized
 
   soundness := by
@@ -116,11 +110,6 @@ def main (x : Var BlockInput (F p)) : Circuit (F p) Unit := do
 
 def circuit : FormalAssertion (F p) BlockInput where
   main
-  localLength_eq := by
-    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-  subcircuitsConsistent := by
-    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-  Assumptions _ := True
   Spec x := x.Normalized
 
   soundness := by
@@ -285,22 +274,32 @@ private lemma step_process_block (env : Environment (F p))
     · simp_all
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
-  intro _ _ env acc_var x_var acc x _ _ h_eval h_holds spec_previous inputs_short
-  simp only [circuit_norm] at inputs_short
+  intro _ _ env acc_var x_var acc x _ _ h_input h_holds spec_previous inputs_short
+  simp only [circuit_norm, step] at inputs_short spec_previous h_holds ⊢
   specialize spec_previous (by omega)
-  simp only [circuit_norm]
   have input_normalized : x.Normalized := by
-    simp only [circuit_norm, step, BLAKE3BlockInputNormalized.circuit] at h_holds
+    simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at h_holds
     provable_struct_simp
     simp_all
+  provable_struct_simp
+  simp only [h_input] at h_holds spec_previous ⊢
+  simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit, IsZero.circuit,
+    BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3.Compress.circuit, Addition32.circuit,
+    seval] at inputs_short spec_previous h_holds ⊢
+  simp only [IsZero.Assumptions, IsZero.Spec, Addition32.Assumptions, Addition32.Spec,
+    BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec,
+    BLAKE3.ApplyRounds.Assumptions
+  ] at h_holds
   constructor
   · simp_all
   constructor
   · intro input
     rintro (_ | _) <;> simp_all
-  by_cases h_x : x.block_exists = 1
-  · simp only [h_x, decide_true, cond_true]
-    have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
+  by_cases h_x : x_block_exists = 1
+  · simp only [h_x, decide_true, cond_true, circuit_norm] at *
+    have one_op := step_process_block env acc_var x_var
+      ⟨ acc_chaining_value, acc_chunk_counter, acc_blocks_compressed ⟩ ⟨ x_block_exists, x_block_data ⟩
+      (by simp [h_input]) h_x h_holds
       spec_previous.2.2.2.2 input_normalized (by omega)
     simp only [circuit_norm] at one_op
     simp only [one_op]
@@ -310,14 +309,13 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp [spec_previous, processBlocksWords]
   · simp only [h_x, decide_false, cond_false]
     simp only [circuit_norm, step] at h_holds
-    provable_struct_simp
     have x_block_exists_zero : x_block_exists = 0 := by
       simp only [BlockInput.Normalized] at input_normalized
       cases input_normalized.1 with
       | inl _ => assumption
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
-    simp only [Conditional.circuit, h_eval, step, circuit_norm] at h_holds ⊢
+    simp only [Conditional.circuit, h_input, step, circuit_norm] at h_holds ⊢
     simp only [circuit_norm, h_holds, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢
     simp_all only [circuit_norm]

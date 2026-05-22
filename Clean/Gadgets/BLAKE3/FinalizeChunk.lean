@@ -95,8 +95,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
   let final_state ← Compress.circuit compress_input
   return final_state.take 8
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
-  main
+instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) main where
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
 
 def Assumptions (input : Inputs (F p)) : Prop :=
@@ -133,7 +132,7 @@ private lemma eval_bytesToWords (env : Environment (F p))
   simp only [Vector.getElem_map, Vector.getElem_ofFn, U32.eval_of_literal]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
     IsZero.Spec, IsZero.Assumptions,
     Or32.Spec, Or32.Assumptions,
@@ -204,7 +203,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     specialize h_Compress_Normalized ⟨ i, by omega ⟩
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
   apply And.intro
   · trivial
@@ -264,7 +263,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · omega
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
-  elaborated with Assumptions, Spec, soundness, completeness
+  main, elaborated, Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.FinalizeChunk

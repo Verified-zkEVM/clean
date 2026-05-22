@@ -6,6 +6,16 @@ This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
 import Clean.Circuit.Basic
+import Lean.Elab.Tactic
+import Mathlib.Lean.Meta.Simp
+
+open Lean Meta Elab Tactic
+
+register_option debug.explicitCircuitReduced : Bool := {
+  defValue := false
+  descr := "trace generated dsimp unfold sets used by infer_elaborated_circuit_reduced"
+}
+
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where
@@ -442,6 +452,249 @@ macro_rules
 -- TODO this is needed because `conv => congr; whnf` creates terms involving `Eq.mpr`
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
+/--
+Experimental elaboration tactic that stores reduced `localLength` and `output` directly.
+
+This follows the same explicit-circuit derivation path as `infer_elaborated_circuit`, but simplifies
+open metadata projections at tactic elaboration time before constructing the `ElaboratedCircuit`
+record.  The result is cheap metadata for parent circuits: e.g. a loop-derived `localLength` can be
+stored as `fun _ => 16` instead of a large tree of `ExplicitCircuit.from_*` projections.
+
+The normalization uses the `explicit_circuit_norm` simp set instead of broad kernel reduction.
+This keeps it targeted to projection lemmas and other explicit-circuit metadata rules.
+
+This prototype currently delegates consistency/channel proofs to the inferred `ExplicitCircuits`
+proof and is best suited to circuits whose channel metadata is definitionally empty.
+-/
+elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
+  -- We are going to build an `ElaboratedCircuit` record directly.  First inspect the
+  -- current goal and pull the important arguments out of
+  --   ElaboratedCircuit F Input Output main
+  -- so later code can construct the record fields explicitly.
+  let goal ← getMainGoal
+  let target ← whnf (← goal.getType)
+  unless target.getAppFn.isConstOf ``ElaboratedCircuit do
+    throwError "target is not an ElaboratedCircuit: {target}"
+  let args := target.getAppArgs
+  if args.size < 7 then
+    throwError "unexpected ElaboratedCircuit target: {target}"
+  let F := args[0]!
+  let Input := args[1]!
+  let Output := args[2]!
+  let main := args[6]!
+
+  -- Step 1: infer the explicit circuit metadata for `main`, exactly like the
+  -- ordinary `infer_elaborated_circuit` tactic does.  The difference is that we
+  -- keep this proof term around and read its projections below instead of
+  -- returning `ExplicitCircuits.toElaborated` unchanged.
+  let explicitType ← mkAppM ``ExplicitCircuits #[main]
+  let explicit ← Lean.Elab.Term.elabTerm (← `(by infer_explicit_circuits)) (some explicitType)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let explicit ← instantiateMVars explicit
+  if (← getOptions).getBool `debug.explicitCircuitReduced false then
+    logInfo m!"infer_elaborated_circuit_reduced explicit proof term:
+  {explicit}"
+
+  -- Useful object-language types for the lambdas we need to create.
+  let varInputType ← mkAppM ``Var #[Input, F]
+  let natType := mkConst ``Nat
+
+  -- Read the simp theorem database tagged with `[explicit_circuit_norm]`.  These
+  -- are mostly projection lemmas for `ExplicitCircuit.from_*` constructors, for
+  -- example rewriting `(from_bind ...).localLength` to the corresponding explicit
+  -- expression.  We use this as a targeted replacement for expensive `Meta.reduce`.
+  let explicitThms ← do
+    let some ext ← getSimpExtension? `explicit_circuit_norm
+      | throwError "unknown simp attribute explicit_circuit_norm"
+    ext.getTheorems
+  let congrThms ← getSimpCongrTheorems
+
+  -- Syntactic search used by the unfold heuristic below.
+  let rec containsConst (declName : Name) (e : Expr) : Bool :=
+    match e with
+    | .const n _ => n == declName
+    | .app f a => containsConst declName f || containsConst declName a
+    | .lam _ t b _ | .forallE _ t b _ => containsConst declName t || containsConst declName b
+    | .letE _ t v b _ => containsConst declName t || containsConst declName v || containsConst declName b
+    | .mdata _ b => containsConst declName b
+    | .proj _ _ b => containsConst declName b
+    | _ => false
+
+  -- Some circuit-like declarations are not literally named `Circuit`; this helper
+  -- catches local project definitions such as `FormalCircuit` by suffix.
+  let containsConstSuffix (suffix : String) (e : Expr) : Bool := Id.run do
+    let rec go (e : Expr) : Bool :=
+      match e with
+      | .const n _ => n.getString! == suffix
+      | .app f a => go f || go a
+      | .lam _ t b _ | .forallE _ t b _ => go t || go b
+      | .letE _ t v b _ => go t || go v || go b
+      | .mdata _ b => go b
+      | .proj _ _ b => go b
+      | _ => false
+    go e
+
+  -- Decide whether a declaration's *type* mentions circuit infrastructure.  This
+  -- identifies user-level circuit definitions such as `ThetaC.main` or
+  -- `Xor64.circuit`, which often must be unfolded once before projection lemmas
+  -- can fire.
+  let hasCircuitType (type : Expr) : Bool :=
+    containsConst ``Circuit type || containsConstSuffix "FormalCircuit" type ||
+      containsConstSuffix "FormalAssertion" type || containsConstSuffix "GeneralFormalCircuit" type
+
+  -- Do not unfold the core library constructors/projections themselves here.
+  -- Those are handled by `[explicit_circuit_norm]`; unfolding them blindly would
+  -- recreate the large terms that this tactic is trying to avoid.
+  let isCoreCircuitInfra (declName : Name) : Bool :=
+    let s := declName.toString
+    s.startsWith "Circuit." || s.startsWith "ExplicitCircuit." || s.startsWith "ExplicitCircuits." ||
+      s.startsWith "Operations." || s.startsWith "FormalCircuit" || s == "subcircuit"
+
+  -- A declaration is eligible for `dsimp only` if it is a user-facing definition
+  -- whose type looks circuit-like.  We deliberately exclude input-offset helpers:
+  -- unfolding them expands variables rather than circuit structure.
+  let isUnfoldable (declName : Name) : MetaM Bool := do
+    if declName == ``ProvableType.varFromOffset || declName == ``ProvableStruct.varFromOffset ||
+        isCoreCircuitInfra declName then
+      return false
+    match (← getEnv).find? declName with
+    | some (.defnInfo info) => return hasCircuitType info.type
+    | some (.opaqueInfo info) => return hasCircuitType info.type
+    | _ => return false
+
+  -- Collect the user circuit definitions that occur in an expression.  The list is
+  -- fed to `dsimp only`; after each simplification pass we scan again, because
+  -- unfolding one definition may reveal another circuit definition inside it.
+  let rec collectUnfoldable (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
+    match e with
+    | .const declName _ =>
+        if decls.contains declName || !(← isUnfoldable declName) then
+          return decls
+        else
+          return decls.push declName
+    | .app f a => collectUnfoldable a (← collectUnfoldable f decls)
+    | .lam _ t b _ | .forallE _ t b _ => collectUnfoldable b (← collectUnfoldable t decls)
+    | .letE _ t v b _ => collectUnfoldable b (← collectUnfoldable v (← collectUnfoldable t decls))
+    | .mdata _ b => collectUnfoldable b decls
+    | .proj _ _ b => collectUnfoldable b decls
+    | _ => return decls
+
+  -- Build a `dsimp` context from `[explicit_circuit_norm]` plus the particular
+  -- user declarations found in the expression currently being normalized.
+  let mkDsimpCtx (decls : Array Name) : MetaM Simp.Context := do
+    let mut thms := explicitThms
+    for decl in decls do
+      thms ← thms.addDeclToUnfold decl
+    Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+      (simpTheorems := #[thms]) congrThms
+
+  -- Normalize an explicit metadata expression, but only by the targeted rules
+  -- described above.  This is intentionally a small fixed-point loop rather than
+  -- full reduction.  The debug output is copyable Lean syntax, e.g.
+  --   dsimp only [explicit_circuit_norm, Foo.main, Bar.circuit]
+  -- so a failing or slow normalization step can be replayed in a source file.
+  let normalizeExplicit (label : String) (e : Expr) : MetaM Expr := do
+    let debug := (← getOptions).getBool `debug.explicitCircuitReduced false
+    let mut current := e
+    let mut decls ← collectUnfoldable e #[]
+    for i in [:8] do
+      if debug then
+        let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
+        let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
+        logInfo m!"infer_elaborated_circuit_reduced {label} pass {i}:
+  dsimp only [{simpArgs}]"
+      let ctx ← mkDsimpCtx decls
+      let next := (← dsimp current ctx).1
+      let decls' ← collectUnfoldable next decls
+      if next == current && decls'.size == decls.size then
+        return next
+      current := next
+      decls := decls'
+    return current
+
+  -- Store a simplified elaborated `localLength`.  We start from
+  --   explicit.localLength input 0
+  -- because an `ElaboratedCircuit` local length should not depend on the offset.
+  let localLengthFun ← withLocalDeclD `input varInputType fun input => do
+    let zero := mkNatLit 0
+    let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
+    let ll ← normalizeExplicit "localLength" ll
+    mkLambdaFVars #[input] ll
+
+  -- Store a simplified elaborated `output`.  Unlike `localLength`, output is a
+  -- function of both the input variables and the current offset.
+  let outputFun ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
+      let out ← normalizeExplicit "output" out
+      mkLambdaFVars #[input, offset] out
+
+  -- Prove the elaborated local-length equation by composing:
+  --   circuit.localLength offset = explicit.localLength input offset
+  -- with the definitional equality between the normalized stored field and the
+  -- explicit expression at offset 0.  The latter proof is just `rfl`; if the
+  -- normalization changed the expression in a non-definitional way, this assignment
+  -- would fail, which is exactly the safety check we want.
+  let localLengthEq ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let p1 ← mkAppOptM ``ExplicitCircuits.localLength_eq #[none, none, none, none, main, explicit, input, offset]
+      let p1Type ← whnf (← inferType p1)
+      let some (_, _, mid) := p1Type.eq?
+        | throwError "unexpected localLength_eq type: {p1Type}"
+      let rhs := mkApp localLengthFun input
+      let p2Type ← mkEq mid rhs
+      let p2MVar ← mkFreshExprMVar p2Type
+      p2MVar.mvarId!.assign (← mkEqRefl mid)
+      let p ← mkAppM ``Eq.trans #[p1, p2MVar]
+      mkLambdaFVars #[input, offset] p
+
+  -- Same proof pattern for output:
+  --   circuit.output offset = explicit.output input offset = storedOutput input offset.
+  let outputEq ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let p1 ← mkAppOptM ``ExplicitCircuits.output_eq #[none, none, none, none, main, explicit, input, offset]
+      let p1Type ← whnf (← inferType p1)
+      let some (_, _, mid) := p1Type.eq?
+        | throwError "unexpected output_eq type: {p1Type}"
+      let rhs := mkApp2 outputFun input offset
+      let p2Type ← mkEq mid rhs
+      let p2MVar ← mkFreshExprMVar p2Type
+      p2MVar.mvarId!.assign (← mkEqRefl mid)
+      let p ← mkAppM ``Eq.trans #[p1, p2MVar]
+      mkLambdaFVars #[input, offset] p
+
+  -- Consistency proofs are not recomputed.  They are taken directly from the
+  -- inferred explicit metadata, whose operations still match the real circuit.
+  let subProof ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let p ← mkAppOptM ``ExplicitCircuits.subcircuitsConsistent #[none, none, none, none, main, explicit, input, offset]
+      mkLambdaFVars #[input, offset] p
+
+  -- For now the reduced tactic stores empty top-level channel lists.  This is
+  -- enough for current reduced-elaboration experiments where the explicit channel
+  -- proof can close against empty metadata.  If non-empty channels are needed, this
+  -- is the place where we should normalize and store channel projections too.
+  let rawChannelType ← mkAppM ``RawChannel #[F]
+  let channels := mkApp (mkConst ``List.nil [levelZero]) rawChannelType
+  let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
+  let exposed ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let nil := mkApp (mkConst ``List.nil [levelZero]) exposedChannelType
+      mkLambdaFVars #[input, offset] nil
+
+  -- Channel lawfulness is also delegated to the inferred explicit circuit proof.
+  let channelsLawful ← withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let p ← mkAppOptM ``ExplicitCircuits.channelsLawful #[none, none, none, none, main, explicit, input, offset]
+      mkLambdaFVars #[input, offset] p
+
+  -- Assemble the final `ElaboratedCircuit` record using the normalized fields and
+  -- the delegated proofs, then close the user's goal.
+  let val ← mkAppOptM ``ElaboratedCircuit.mk #[F, Input, Output, none, none, none, main,
+    localLengthFun, localLengthEq, outputFun, outputEq, subProof, channels, channels, exposed,
+    channelsLawful]
+  goal.assign val
+  replaceMainGoal []
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with" term : tactic
 syntax "infer_elaborated_circuit_with" term " using " term : tactic

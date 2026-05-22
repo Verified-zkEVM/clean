@@ -51,6 +51,8 @@ def instantiateConst (circuit : GeneralFormalCircuit F Input unit) (input : Inpu
 def instantiateConst_toFormal (circuit : GeneralFormalCircuit F Input unit) (input : Input F) :
     GeneralFormalCircuit F unit unit where
   main _ := circuit.instantiateConst input
+  -- TODO default fails
+  elaborated := by infer_elaborated_circuit
   Assumptions _ := circuit.Assumptions input
   ProverAssumptions _ := circuit.ProverAssumptions input
   Spec _ _ := circuit.Spec input ()
@@ -85,8 +87,8 @@ def empty (F : Type) [Field F] (Input : TypeMap) [ProvableType Input] :
   simp only [circuit_norm, empty]
 
 @[circuit_norm] lemma empty_channelsWithGuarantees :
-  (empty F Input).channelsWithGuarantees = [] := rfl
+  (empty F Input).elaborated.channelsWithGuarantees = [] := rfl
 
 @[circuit_norm] lemma empty_channelsWithRequirements :
-  (empty F Input).channelsWithRequirements = [] := rfl
+  (empty F Input).elaborated.channelsWithRequirements = [] := rfl
 end GeneralFormalCircuit

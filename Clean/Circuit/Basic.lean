@@ -467,7 +467,7 @@ attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
-attribute [circuit_norm] neg_mul one_mul add_zero zero_add
+attribute [circuit_norm] neg_mul one_mul add_zero zero_add Nat.reduceAdd
 
 attribute [circuit_norm] List.append_nil
 

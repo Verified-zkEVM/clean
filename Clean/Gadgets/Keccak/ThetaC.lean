@@ -24,19 +24,10 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
 -- #eval! theta_c (p:=p_babybear) default |>.localLength
+set_option maxHeartbeats 20000 in
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
-  infer_elaborated_circuit_with {
-    output _ i0 := Vector.mapFinRange 5 fun i => varFromOffset U64 (i0 + i * 32 + 24)
-  } using (by
-    and_intros
-    · intro; rfl
-    · intro input i0
-      rw [Vector.ext_iff]
-      intro i hi
-      simp only [circuit_norm, explicit_circuit_norm, Xor64.circuit, Xor64.elaborated,
-        Vector.getElem_mapIdx, Vector.getElem_mapFinRange]
-    · simp only [circuit_norm])
+  infer_elaborated_circuit_reduced
 
 -- rewrite thetaC as a loop
 lemma thetaC_loop (state : Vector ℕ 25) :
@@ -46,7 +37,7 @@ lemma thetaC_loop (state : Vector ℕ 25) :
   rfl
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start [Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec]
+  circuit_proof_start [Xor64.circuit, Xor64.Assumptions, Xor64.Spec]
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
@@ -55,7 +46,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [circuit_norm, h_input] at h_holds
-  simp only [Nat.reduceAdd] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), input[i].Normalized :=
     fun hi => h_assumptions ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds

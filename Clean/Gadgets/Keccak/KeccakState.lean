@@ -72,13 +72,6 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 
 def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
   main block := .forEach block U64.AssertNormalized.circuit
-  elaborated := by
-    refine ExplicitCircuits.toElaborated _ ?explicit ?elaborated
-    · apply ExplicitCircuits.fromSingle
-      intro block
-      change ExplicitCircuit (Circuit.forEach block (fun input => assertion U64.AssertNormalized.circuit input) _)
-      infer_instance
-    · exact ExplicitCircuits.IsElaborated.mk
   Assumptions _ := True
   Spec block := block.Normalized
   soundness := by

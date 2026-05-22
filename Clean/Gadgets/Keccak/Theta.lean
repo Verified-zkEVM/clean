@@ -13,11 +13,8 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   let d ← ThetaD.circuit c
   ThetaXor.circuit ⟨state, d⟩
 
-@[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
-  localLength _ := 480
-  localLength_eq _ _ := by simp only [main, circuit_norm, ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated]
-  channelsLawful := by simp only [main, circuit_norm, ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  infer_elaborated_circuit_reduced
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
@@ -26,21 +23,16 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  simp_all [circuit_norm, Spec, main, Assumptions,
-    ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
-    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
-    ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
+  circuit_proof_all [ThetaC.circuit, ThetaC.Assumptions, ThetaC.Spec,
+    ThetaD.circuit, ThetaD.Assumptions, ThetaD.Spec,
+    ThetaXor.circuit, ThetaXor.Assumptions, ThetaXor.Spec, Specs.Keccak256.theta]
 
 theorem completeness : Completeness (F p) main Assumptions := by
-  simp_all [circuit_norm, main, Assumptions, ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
-    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions, ThetaC.Spec, ThetaD.Spec,
-    ThetaXor.Spec]
+  circuit_proof_all [ThetaC.circuit, ThetaC.Assumptions, ThetaC.Spec,
+    ThetaD.circuit, ThetaD.Assumptions, ThetaD.Spec,
+    ThetaXor.circuit, ThetaXor.Assumptions, ThetaXor.Spec]
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState where
-  main := main
-  elaborated := elaborated
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+def circuit : FormalCircuit (F p) KeccakState KeccakState := {
+  main, Assumptions, Spec, soundness, completeness
+}
 end Gadgets.Keccak256.Theta

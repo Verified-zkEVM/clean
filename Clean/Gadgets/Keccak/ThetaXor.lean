@@ -18,8 +18,10 @@ def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main where
   localLength _ := 200
+  output _ i₀ := .mapFinRange 25 fun i => varFromOffset U64 (i₀ + i.val * 8)
 
   localLength_eq _ n := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated]
+  output_eq _ i := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated]
   subcircuitsConsistent _ i := by simp only [main, circuit_norm]
   channelsLawful := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated]
 

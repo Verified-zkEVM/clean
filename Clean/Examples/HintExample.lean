@@ -27,9 +27,6 @@ def witnessBool : GeneralFormalCircuit.WithHint (F p) (Unconstrained Bool) field
     assertBool b
     return b
 
-  localLength _ := 1
-  output _ i := var ⟨i⟩
-
   Assumptions (_ : Unit) _ := True
   Spec (_ : Unit) (output : F p) _ := IsBool output
 
@@ -61,9 +58,6 @@ def booleanAnd : FormalCircuit (F p) Input field where
     -- Constrain result = x * y (multiplication is AND for booleans)
     z === x * y
     return z
-
-  localLength _ := 1
-  output _ i := var ⟨i⟩
 
   Assumptions | ⟨x, y⟩ => IsBool x ∧ IsBool y
   Spec | ⟨x, y⟩, z => IsBool z ∧ z.val = x.val &&& y.val

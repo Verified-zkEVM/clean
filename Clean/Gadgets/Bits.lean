@@ -75,6 +75,8 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   main x := do
     -- we wrap the toBits circuit but ignore the output
     let _ ← toBits n hn x
+  -- TODO default `_reduced` inference doesn't work here
+  elaborated := by infer_elaborated_circuit
 
   Assumptions _ := True
   Spec (x : F p) := x.val < 2^n
