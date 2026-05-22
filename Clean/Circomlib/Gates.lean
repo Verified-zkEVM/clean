@@ -39,7 +39,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -79,7 +79,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -117,7 +117,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -155,7 +155,7 @@ def main (input : Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) field field where
   main
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions input := IsBool input
   Spec input output :=
@@ -195,7 +195,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -235,7 +235,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  elaborated := by infer_elaborated_circuit
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=

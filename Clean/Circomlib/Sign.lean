@@ -45,8 +45,7 @@ def main (input : Vector (Expression (F p)) 254) :=
 
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
-  localLength input := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).localLength input
-  output := (CompConstant.circuit ((p - 1) / 2) hppre_half_254).output
+  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions input :=
     -- Input should be binary representation of a field element
