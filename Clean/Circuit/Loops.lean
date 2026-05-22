@@ -871,7 +871,6 @@ instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
     intro i
     convert (explicit i).channelsLawful (n + i * (body 0).localLength) using 1
 
-
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
@@ -1196,7 +1195,6 @@ instance ExplicitCircuits.from_foldl_family {m : ℕ} [Inhabited β] [Inhabited 
     {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} :
     ExplicitCircuits (fun xs : Vector α m => foldl xs init body const_out constant) :=
   ExplicitCircuits.fromSingle fun _ => inferInstance
-
 
 end foldlRange
 

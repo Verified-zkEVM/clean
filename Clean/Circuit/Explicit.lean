@@ -228,7 +228,6 @@ instance ExplicitCircuit.from_bind_tc {f : Circuit F α} {g : α → Circuit F �
     ExplicitCircuit (f >>= g) :=
   ExplicitCircuit.from_bind f_explicit g_explicit
 
-
 -- `map` of an explicit circuit yields an explicit circuit
 @[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
@@ -248,7 +247,6 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   channelsLawful n := by
     rw [Circuit.map_operations_eq]
     exact g_explicit.channelsLawful n
-
 
 -- basic operations are explicit circuits
 
