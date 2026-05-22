@@ -770,7 +770,6 @@ theorem Operations.channelsLawful_flatten_of_forall {m : ℕ}
       intro i
       exact h i.succ
 
-@[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
     {constant : ConstantLength body} : ExplicitCircuit (forEach xs body constant) where
@@ -803,6 +802,39 @@ instance ExplicitCircuit.from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m
     convert (explicit xs[i.val]).channelsLawful (n + i * (body default).localLength) using 1
 
 @[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_forEach_output {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_forEach (xs:=xs) (body:=body) (constant:=constant)).output n = () := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_forEach_localLength {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_forEach (xs:=xs) (body:=body) (constant:=constant)).localLength n =
+      m * (body default).localLength := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_forEach_operations {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_forEach (xs:=xs) (body:=body) (constant:=constant)).operations n =
+      (List.ofFn fun (i : Fin m) => (body xs[i.val]).operations (n + i * (body default).localLength)).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_forEach_channelsWithGuarantees {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_forEach (xs:=xs) (body:=body) (constant:=constant)).channelsWithGuarantees n =
+      (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithGuarantees (body xs[i.val]) (n + i * (body default).localLength)).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_forEach_channelsWithRequirements {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F Unit} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_forEach (xs:=xs) (body:=body) (constant:=constant)).channelsWithRequirements n =
+      (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithRequirements (body xs[i.val]) (n + i * (body default).localLength)).flatten := rfl
+
 instance ExplicitCircuit.from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
     {constant : ConstantLength body} : ExplicitCircuit (map xs body constant) where
@@ -836,6 +868,40 @@ instance ExplicitCircuit.from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α 
     convert (explicit xs[i.val]).channelsLawful (n + i * (body default).localLength) using 1
 
 @[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_loop_output {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_map_loop (xs:=xs) (body:=body) (constant:=constant)).output n =
+      xs.mapIdx fun i x => (body x).output (n + i * (body default).localLength) := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_loop_localLength {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_map_loop (xs:=xs) (body:=body) (constant:=constant)).localLength n =
+      m * (body default).localLength := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_loop_operations {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_map_loop (xs:=xs) (body:=body) (constant:=constant)).operations n =
+      (List.ofFn fun (i : Fin m) => (body xs[i.val]).operations (n + i * (body default).localLength)).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_loop_channelsWithGuarantees {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_map_loop (xs:=xs) (body:=body) (constant:=constant)).channelsWithGuarantees n =
+      (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithGuarantees (body xs[i.val]) (n + i * (body default).localLength)).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_loop_channelsWithRequirements {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F β} [explicit : ∀ a, ExplicitCircuit (body a)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_map_loop (xs:=xs) (body:=body) (constant:=constant)).channelsWithRequirements n =
+      (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithRequirements (body xs[i.val]) (n + i * (body default).localLength)).flatten := rfl
+
 instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
     {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
     {constant : ConstantLength body} : ExplicitCircuit (mapFinRange m body constant) where
@@ -870,6 +936,41 @@ instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
     apply Operations.channelsLawful_flatten_of_forall
     intro i
     convert (explicit i).channelsLawful (n + i * (body 0).localLength) using 1
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_mapFinRange_output {m : ℕ} [NeZero m]
+    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).output n =
+      (Vector.finRange m).mapIdx fun i x => (body x).output (n + i * (body 0).localLength) := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_mapFinRange_localLength {m : ℕ} [NeZero m]
+    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).localLength n =
+      m * (body 0).localLength := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_mapFinRange_operations {m : ℕ} [NeZero m]
+    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).operations n =
+      (List.ofFn fun (i : Fin m) => (body i).operations (n + i * (body 0).localLength)).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_mapFinRange_channelsWithGuarantees {m : ℕ} [NeZero m]
+    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).channelsWithGuarantees n =
+      (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithGuarantees (body i) (n + i * (body 0).localLength)).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_mapFinRange_channelsWithRequirements {m : ℕ} [NeZero m]
+    {body : Fin m → Circuit F β} [explicit : ∀ i, ExplicitCircuit (body i)]
+    {constant : ConstantLength body} (n : ℕ) :
+    (ExplicitCircuit.from_mapFinRange (body:=body) (constant:=constant)).channelsWithRequirements n =
+      (List.ofFn fun (i : Fin m) => ExplicitCircuit.channelsWithRequirements (body i) (n + i * (body 0).localLength)).flatten := rfl
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
@@ -1123,8 +1224,7 @@ lemma foldlRange.usesLocalWitnesses :
       |>.operations (n + i * (body default i).localLength)) := by
   simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
 
-@[circuit_norm, explicit_circuit_norm]
-instance ExplicitCircuit.from_foldl {m : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+instance ExplicitCircuit.from_foldl {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
     {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
     {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} :
@@ -1164,8 +1264,7 @@ instance ExplicitCircuit.from_foldl {m : ℕ} [Inhabited β] [Inhabited α] {xs 
     convert (explicit (FoldlM.foldlAcc n xs body init i) xs[i.val]).channelsLawful
       (n + i * (body default default).localLength) using 1
 
-@[circuit_norm, explicit_circuit_norm]
-instance ExplicitCircuit.from_foldlRange {m : ℕ} [Inhabited β]
+instance ExplicitCircuit.from_foldlRange {m : ℕ}
     {body : β → Fin m → Circuit F β} [explicit : ∀ b i, ExplicitCircuit (body b i)] {init : β}
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} :
     ExplicitCircuit (foldlRange m init body constant) where
@@ -1196,6 +1295,55 @@ instance ExplicitCircuit.from_foldlRange {m : ℕ} [Inhabited β]
     intro i
     convert (explicit (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).channelsLawful
       (n + i * (body default i).localLength) using 1
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_foldl_output {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
+    {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
+    {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} (n : ℕ) :
+    (ExplicitCircuit.from_foldl (xs:=xs) (body:=body) (init:=init) (constant:=constant) (const_out:=const_out)).output n =
+      (foldl xs init body const_out constant).output n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_foldl_localLength {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
+    {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
+    {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} (n : ℕ) :
+    (ExplicitCircuit.from_foldl (xs:=xs) (body:=body) (init:=init) (constant:=constant) (const_out:=const_out)).localLength n =
+      m * (body default default).localLength := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_foldl_operations {m : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
+    {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
+    {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} (n : ℕ) :
+    (ExplicitCircuit.from_foldl (xs:=xs) (body:=body) (init:=init) (constant:=constant) (const_out:=const_out)).operations n =
+      (List.ofFn fun (i : Fin m) =>
+        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
+          (n + i * (body default default).localLength)).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_foldlRange_output {m : ℕ}
+    {body : β → Fin m → Circuit F β} [explicit : ∀ b i, ExplicitCircuit (body b i)] {init : β}
+    {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} (n : ℕ) :
+    (ExplicitCircuit.from_foldlRange (body:=body) (init:=init) (constant:=constant)).output n =
+      (foldlRange m init body constant).output n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_foldlRange_localLength {m : ℕ}
+    {body : β → Fin m → Circuit F β} [explicit : ∀ b i, ExplicitCircuit (body b i)] {init : β}
+    {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} (n : ℕ) :
+    (ExplicitCircuit.from_foldlRange (body:=body) (init:=init) (constant:=constant)).localLength n =
+      if h : m > 0 then m * (body default ⟨0, h⟩).localLength else 0 := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_foldlRange_operations {m : ℕ}
+    {body : β → Fin m → Circuit F β} [explicit : ∀ b i, ExplicitCircuit (body b i)] {init : β}
+    {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} (n : ℕ) :
+    (ExplicitCircuit.from_foldlRange (body:=body) (init:=init) (constant:=constant)).operations n =
+      (List.ofFn fun i =>
+        (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
+          (n + i * (body default i).localLength)).flatten := rfl
 
 instance ExplicitCircuits.from_foldl_family {m : ℕ} [Inhabited β] [Inhabited α]
     {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}

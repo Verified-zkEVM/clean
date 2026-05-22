@@ -187,7 +187,6 @@ instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a =>
   channelsWithRequirements _ _ := []
 
 -- `bind` of two explicit circuits yields an explicit circuit
-@[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
@@ -222,14 +221,46 @@ instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     · exact f_explicit.channelsLawful n
     · exact (g_explicit (output f n)).channelsLawful (n + localLength f n)
 
-@[circuit_norm, explicit_circuit_norm]
 instance ExplicitCircuit.from_bind_tc {f : Circuit F α} {g : α → Circuit F β}
     [f_explicit : ExplicitCircuit f] [g_explicit : ∀ a : α, ExplicitCircuit (g a)] :
     ExplicitCircuit (f >>= g) :=
   ExplicitCircuit.from_bind f_explicit g_explicit
 
--- `map` of an explicit circuit yields an explicit circuit
 @[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_bind_output {f : Circuit F α} {g : α → Circuit F β}
+    (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) (n : ℕ) :
+    @ExplicitCircuit.output F _ β (f >>= g) (ExplicitCircuit.from_bind f_explicit g_explicit) n =
+      ExplicitCircuit.output (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_bind_localLength {f : Circuit F α} {g : α → Circuit F β}
+    (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) (n : ℕ) :
+    @ExplicitCircuit.localLength F _ β (f >>= g) (ExplicitCircuit.from_bind f_explicit g_explicit) n =
+      ExplicitCircuit.localLength f n +
+        ExplicitCircuit.localLength (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_bind_operations {f : Circuit F α} {g : α → Circuit F β}
+    (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) (n : ℕ) :
+    @ExplicitCircuit.operations F _ β (f >>= g) (ExplicitCircuit.from_bind f_explicit g_explicit) n =
+      ExplicitCircuit.operations f n ++
+        ExplicitCircuit.operations (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_bind_channelsWithGuarantees {f : Circuit F α} {g : α → Circuit F β}
+    (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) (n : ℕ) :
+    @ExplicitCircuit.channelsWithGuarantees F _ β (f >>= g) (ExplicitCircuit.from_bind f_explicit g_explicit) n =
+      ExplicitCircuit.channelsWithGuarantees f n ++
+        ExplicitCircuit.channelsWithGuarantees (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_bind_channelsWithRequirements {f : Circuit F α} {g : α → Circuit F β}
+    (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) (n : ℕ) :
+    @ExplicitCircuit.channelsWithRequirements F _ β (f >>= g) (ExplicitCircuit.from_bind f_explicit g_explicit) n =
+      ExplicitCircuit.channelsWithRequirements f n ++
+        ExplicitCircuit.channelsWithRequirements (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
+
+-- `map` of an explicit circuit yields an explicit circuit
 instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
@@ -247,6 +278,26 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   channelsLawful n := by
     rw [Circuit.map_operations_eq]
     exact g_explicit.channelsLawful n
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_output {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :
+    @ExplicitCircuit.output F _ β (f <$> g) (ExplicitCircuit.from_map g_explicit) n = f (ExplicitCircuit.output g n) := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_localLength {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :
+    @ExplicitCircuit.localLength F _ β (f <$> g) (ExplicitCircuit.from_map g_explicit) n = ExplicitCircuit.localLength g n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_operations {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :
+    @ExplicitCircuit.operations F _ β (f <$> g) (ExplicitCircuit.from_map g_explicit) n = ExplicitCircuit.operations g n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_channelsWithGuarantees {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :
+    @ExplicitCircuit.channelsWithGuarantees F _ β (f <$> g) (ExplicitCircuit.from_map g_explicit) n = ExplicitCircuit.channelsWithGuarantees g n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_map_channelsWithRequirements {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :
+    @ExplicitCircuit.channelsWithRequirements F _ β (f <$> g) (ExplicitCircuit.from_map g_explicit) n = ExplicitCircuit.channelsWithRequirements g n := rfl
 
 -- basic operations are explicit circuits
 
