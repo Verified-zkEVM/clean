@@ -872,6 +872,14 @@ instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
     convert (explicit i).channelsLawful (n + i * (body 0).localLength) using 1
 
 macro_rules
+  | `(tactic|infer_explicit_circuits) => `(tactic|(
+    apply ExplicitCircuits.fromSingle
+    intro a
+    try unfold main
+    infer_explicit_circuit
+    ))
+
+macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
     try repeat infer_instance

@@ -25,12 +25,18 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
 
 -- #eval! theta_c (p:=p_babybear) default |>.localLength
 @[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main where
-  localLength _ := 160
-  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated]
-  subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
-  channelsLawful := by
-    simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated]
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
+  infer_elaborated_circuit_with {
+    output _ i0 := Vector.mapFinRange 5 fun i => varFromOffset U64 (i0 + i * 32 + 24)
+  } using (by
+    and_intros
+    · intro; rfl
+    · intro input i0
+      rw [Vector.ext_iff]
+      intro i hi
+      simp only [circuit_norm, explicit_circuit_norm, Xor64.circuit, Xor64.elaborated,
+        Vector.getElem_mapIdx, Vector.getElem_mapFinRange]
+    · simp only [circuit_norm])
 
 -- rewrite thetaC as a loop
 lemma thetaC_loop (state : Vector ℕ 25) :
