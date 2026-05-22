@@ -18,12 +18,12 @@ def main (n : ℕ) (x : Expression (F p)) := do
   x === fieldFromBitsExpr bits
   return bits
 
-@[reducible]
-instance (n : ℕ) : ElaboratedCircuit (F p) field (fields n) (main n) := by infer_elaborated_circuit_with {
-  localLength _ := n
-  output _ i := varFromOffset (fields n) i
-} using (by
-  simp only [circuit_norm, mul_zero])
+@[reducible, circuit_norm]
+instance elaborated (n : ℕ) : ElaboratedCircuit (F p) field (fields n) (main n) := by
+  infer_elaborated_circuit_with {
+    localLength _ := n
+    output _ i := varFromOffset (fields n) i
+  }
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
