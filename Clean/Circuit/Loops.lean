@@ -876,13 +876,13 @@ macro_rules
       try intros
       first
         | infer_instance
+        | apply Circuit.ExplicitCircuit.from_mapFinRange
+        | apply Circuit.ExplicitCircuit.from_foldlRange
         | apply Circuit.ExplicitCircuit.from_forEach
         | apply Circuit.ExplicitCircuit.from_map_loop
-        | apply Circuit.ExplicitCircuit.from_mapFinRange
         | apply Circuit.ExplicitCircuit.from_foldl
-        | apply Circuit.ExplicitCircuit.from_foldlRange
-        | apply Circuit.ExplicitCircuit.from_bind
-        | apply Circuit.ExplicitCircuit.from_map
+        | apply ExplicitCircuit.from_bind
+        | apply ExplicitCircuit.from_map
       repeat infer_instance
     )
     done))
