@@ -77,7 +77,7 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
     · apply ExplicitCircuits.fromSingle
       intro block
       change ExplicitCircuit (Circuit.forEach block (fun input => assertion U64.AssertNormalized.circuit input) _)
-      infer_instance
+      infer_explicit_circuit
     · exact ExplicitCircuits.IsElaborated.mk
   Assumptions _ := True
   Spec block := block.Normalized
