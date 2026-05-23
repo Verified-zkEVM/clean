@@ -201,9 +201,15 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
     state.toChunkState = finalState ∧
     state.Normalized
 
+omit [Fact p.Prime] p_large in
+private lemma takeShort8_normalized {v : BLAKE3.BLAKE3State (F p)} (h8 : 8 < 16)
+    (hv : v.Normalized) : ∀ i : Fin 8, (v.takeShort 8 h8)[i].Normalized := by
+  intro i
+  convert hv ⟨i.val, by omega⟩ using 1
+  exact Vector.getElem_takeShort _ 8 h8 i.val i.isLt
+
 -- The block-exists case is handled directly in `soundness` below.
 
-set_option maxHeartbeats 800000 in
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro _ _ env acc_var x_var acc x _ _ h_input h_holds spec_previous inputs_short
   simp only [circuit_norm, step] at inputs_short spec_previous h_holds ⊢
@@ -304,9 +310,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         simp only [Vector.getElem_takeShort]
         rfl
     constructor
-    · intro i
-      convert h_compress_norm ⟨i.val, by omega⟩ using 1
-      exact Vector.getElem_takeShort _ 8 step._proof_2 i.val i.isLt
+    · exact takeShort8_normalized step._proof_2 h_compress_norm
     constructor
     · exact h_state_norm.2.1
     change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
