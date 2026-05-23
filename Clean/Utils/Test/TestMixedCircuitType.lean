@@ -17,13 +17,16 @@ structure Input (F : Type) where
 deriving CircuitType
 
 def circuit : GeneralFormalCircuit.WithHint F Input field where
-  main input := do
-    let inverse ← witness input.inverse
-    input.x * inverse === 1
-    return inverse
-
-  output _ offset := varFromOffset field offset
-  localLength _ := 1
+  base := {
+    main input := do
+      let inverse ← witness input.inverse
+      input.x * inverse === 1
+      return inverse
+    elaborated := {
+      localLength _ := 1
+      output _ offset := varFromOffset field offset
+    }
+  }
 
   Spec input out _ :=
     input.x * out = 1
@@ -52,11 +55,14 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     rwa [h_env]
 
 def parent : GeneralFormalCircuit F field field where
-  main input := do
-    circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
-
-  output _ offset := varFromOffset field offset
-  localLength _ := 1
+  base := {
+    main input := do
+      circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
+    elaborated := {
+      localLength _ := 1
+      output _ offset := varFromOffset field offset
+    }
+  }
 
   Spec input out _ :=
     input * out = 1
