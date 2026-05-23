@@ -729,8 +729,46 @@ def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize �
   simp only [h_eval_pc] at h_fetch_env
   specialize h_fetch_env h_pc_bound
   simp only [h_fetch, circuit_norm, explicit_provable_type, RawInstruction.mk.injEq] at h_fetch_env
-  simp_all [circuit_norm, decodeInstructionMain, Gadgets.toBits]
-  grind
+  obtain ⟨h_rawInstrType, h_op1, h_op2, h_op3⟩ := h_fetch_env
+  specialize h_decode_env (by
+    rw [h_rawInstrType]
+    exact h_instr_bound)
+  simp only [decodeInstructionSpec, h_rawInstrType, h_decode] at h_decode_env
+  obtain ⟨h_instr_type_val, h_instr_type_encoded_correctly, h_mode1_val,
+    h_mode1_encoded_correctly, h_mode2_val, h_mode2_encoded_correctly,
+    h_mode3_val, h_mode3_encoded_correctly⟩ := h_decode_env
+  have h_read1_value := h_read1_env (by
+    exact ⟨h_mode1_encoded_correctly, h_memory_completeness, by
+      rw [h_op1, h_mode1_val]
+      exact Option.isSome_iff_exists.mpr ⟨v1, h_v1⟩⟩) h_mode1_encoded_correctly
+  simp only [h_op1, h_mode1_val, h_v1] at h_read1_value
+  have h_read2_value := h_read2_env (by
+    exact ⟨h_mode2_encoded_correctly, h_memory_completeness, by
+      rw [h_op2, h_mode2_val]
+      exact Option.isSome_iff_exists.mpr ⟨v2, h_v2⟩⟩) h_mode2_encoded_correctly
+  simp only [h_op2, h_mode2_val, h_v2] at h_read2_value
+  have h_read3_value := h_read3_env (by
+    exact ⟨h_mode3_encoded_correctly, h_memory_completeness, by
+      rw [h_op3, h_mode3_val]
+      exact Option.isSome_iff_exists.mpr ⟨v3, h_v3⟩⟩) h_mode3_encoded_correctly
+  simp only [h_op3, h_mode3_val, h_v3] at h_read3_value
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [h_eval_pc]
+    exact h_pc_bound
+  · rw [h_rawInstrType]
+    exact h_instr_bound
+  · exact ⟨h_mode1_encoded_correctly, h_memory_completeness, by
+      rw [h_op1, h_mode1_val]
+      exact Option.isSome_iff_exists.mpr ⟨v1, h_v1⟩⟩
+  · exact ⟨h_mode2_encoded_correctly, h_memory_completeness, by
+      rw [h_op2, h_mode2_val]
+      exact Option.isSome_iff_exists.mpr ⟨v2, h_v2⟩⟩
+  · exact ⟨h_mode3_encoded_correctly, h_memory_completeness, by
+      rw [h_op3, h_mode3_val]
+      exact Option.isSome_iff_exists.mpr ⟨v3, h_v3⟩⟩
+  · exact ⟨h_instr_type_encoded_correctly, by
+      rw [h_instr_type_val, h_read1_value, h_read2_value, h_read3_value]
+      exact h_computeNext⟩
 
 variable {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
 variable (h_program : ValidProgramSize p programSize ∧ ValidProgram program)
