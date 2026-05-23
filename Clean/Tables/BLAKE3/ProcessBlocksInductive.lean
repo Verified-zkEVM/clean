@@ -204,7 +204,6 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
 -- The block-exists case is handled directly in `soundness` below.
 
 set_option maxHeartbeats 800000 in
-set_option linter.unusedSimpArgs false in
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro _ _ env acc_var x_var acc x _ _ h_input h_holds spec_previous inputs_short
   simp only [circuit_norm, step] at inputs_short spec_previous h_holds ⊢
@@ -272,13 +271,11 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       rw [h_add_value_nowrap]
       omega
     constructor
-    · simp only [processBlocksWords, List.map_append, List.foldl_append, List.foldl_cons,
-        List.foldl_nil, processBlockWords, startFlag, blockLen]
+    · simp only [List.map_append, List.foldl_append]
       simp only [processBlocksWords] at h_acc_eq ⊢
       rw [← h_acc_eq]
       simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil,
-        processBlockWords, startFlag, blockLen, ProcessBlocksState.toChunkState,
-        h_compress_value, h_add_value_nowrap, h_iszero]
+        processBlockWords, startFlag, blockLen]
       split
       · rename_i h_blocks_zero
         have h_blocks_zero' : acc_blocks_compressed = { x0 := 0, x1 := 0, x2 := 0, x3 := 0 } :=
@@ -315,14 +312,14 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
     exact h_add_norm
   · simp only [h_x, decide_false, cond_false]
-    simp only [circuit_norm, step] at h_holds
+    simp only [circuit_norm] at h_holds
     have x_block_exists_zero : x_block_exists = 0 := by
       simp only [BlockInput.Normalized] at input_normalized
       cases input_normalized.1 with
       | inl _ => assumption
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
-    simp only [Conditional.circuit, h_input, step, circuit_norm] at h_holds ⊢
+    simp only [circuit_norm] at h_holds ⊢
     simp only [circuit_norm, h_holds, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢
     simp_all only [circuit_norm]
