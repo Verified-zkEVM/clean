@@ -437,13 +437,16 @@ syntax "infer_explicit_circuit" : tactic
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
-    try repeat infer_instance
+    -- Prefer structural decomposition before typeclass search.  Starting with
+    -- `infer_instance` can make typeclass search `whnf` a large circuit body and
+    -- eagerly expand fixed-size `Vector.ofFn` witnesses before `from_bind` has a
+    -- chance to split the circuit into smaller pieces.
     repeat (
       try intros
       first
-        | infer_instance
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
+        | infer_instance
       repeat infer_instance
     )
     done))
