@@ -81,9 +81,6 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- emit to the add8 channel with multiplicity `m`
     Add8Channel.emit m (x, y, z)
 
-  -- TODO default assumes empty channels :/
-  elaborated := by infer_elaborated_circuit
-
   ProverAssumptions
   | { x, y, z, m }, _, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
@@ -297,8 +294,6 @@ def falseCircuit : GeneralFormalCircuit (F p) unit unit where
     return
   Spec _ _ _ := False
   ProverAssumptions _ _ _ := False
-  -- TODO elab doesn't work on `main _ := FalseChannel.pull ()`, why
-  elaborated := by infer_elaborated_circuit
   soundness := by circuit_proof_start [FalseChannel]
   completeness := by circuit_proof_start [FalseChannel]
 

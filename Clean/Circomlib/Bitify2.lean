@@ -212,7 +212,6 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
-  elaborated := by infer_elaborated_circuit
 
   ProverAssumptions input _ _ := input.val < 2^n
 

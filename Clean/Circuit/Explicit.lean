@@ -670,19 +670,45 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       let p ← mkAppOptM ``ExplicitCircuits.subcircuitsConsistent #[none, none, none, none, main, explicit, input, offset]
       mkLambdaFVars #[input, offset] p
 
-  -- For now the reduced tactic stores empty top-level channel lists.  This is
-  -- enough for current reduced-elaboration experiments where the explicit channel
-  -- proof can close against empty metadata.  If non-empty channels are needed, this
-  -- is the place where we should normalize and store channel projections too.
+  -- Store simplified top-level channel metadata too.  The explicit metadata APIs
+  -- expose channel lists as functions of input/offset, but these lists are intended
+  -- to be circuit-level metadata.  As in `ExplicitCircuits.toElaborated`, read them
+  -- at a default input and offset 0, then normalize the resulting projection tree.
+  -- Some hint-only inputs are not inhabited; for those, fall back to empty channel
+  -- lists, which is sufficient as long as their explicit channel metadata is empty.
   let rawChannelType ← mkAppM ``RawChannel #[F]
-  let channels := mkApp (mkConst ``List.nil [levelZero]) rawChannelType
+  let noChannels := mkApp (mkConst ``List.nil [levelZero]) rawChannelType
+  let defaultInput? ← try
+      pure (some (← mkAppOptM ``default #[varInputType, none]))
+    catch _ =>
+      pure none
+  let zero := mkNatLit 0
+  let channelsWithGuarantees ← do
+    match defaultInput? with
+    | some defaultInput =>
+        let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
+          #[none, none, none, none, main, explicit, defaultInput, zero]
+        normalizeExplicit "channelsWithGuarantees" ch
+    | none =>
+        pure noChannels
+  let channelsWithRequirements ← do
+    match defaultInput? with
+    | some defaultInput =>
+        let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
+          #[none, none, none, none, main, explicit, defaultInput, zero]
+        normalizeExplicit "channelsWithRequirements" ch
+    | none =>
+        pure noChannels
   let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
   let exposed ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let nil := mkApp (mkConst ``List.nil [levelZero]) exposedChannelType
       mkLambdaFVars #[input, offset] nil
 
-  -- Channel lawfulness is also delegated to the inferred explicit circuit proof.
+  -- Channel lawfulness is delegated to the inferred explicit circuit proof.  This
+  -- type-checks when the normalized stored channel metadata is definitionally equal
+  -- to the explicit metadata at the current input/offset; for static channel lists,
+  -- the targeted normalization above makes that true without broad reduction.
   let channelsLawful ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p ← mkAppOptM ``ExplicitCircuits.channelsLawful #[none, none, none, none, main, explicit, input, offset]
@@ -691,8 +717,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- Assemble the final `ElaboratedCircuit` record using the normalized fields and
   -- the delegated proofs, then close the user's goal.
   let val ← mkAppOptM ``ElaboratedCircuit.mk #[F, Input, Output, none, none, none, main,
-    localLengthFun, localLengthEq, outputFun, outputEq, subProof, channels, channels, exposed,
-    channelsLawful]
+    localLengthFun, localLengthEq, outputFun, outputEq, subProof, channelsWithGuarantees,
+    channelsWithRequirements, exposed, channelsLawful]
   goal.assign val
   replaceMainGoal []
 syntax "infer_elaborated_circuit" : tactic
