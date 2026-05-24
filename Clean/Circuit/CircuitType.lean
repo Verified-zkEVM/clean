@@ -149,6 +149,9 @@ namespace CircuitType
 instance : VerifierEval F (ProverEnvironment F → Hint) Unit := verifierEval (Unconstrained Hint)
 instance : ProverEval F (ProverEnvironment F → Hint) Hint := proverEval (Unconstrained Hint)
 
+instance [Inhabited Hint] : Inhabited (Var (Unconstrained Hint) F) where
+  default := fun _ => default
+
 @[circuit_norm] lemma eval_unconstrained (env : Environment F) (v : ProverEnvironment F → Hint) :
   eval env v = () := by rfl
 
@@ -188,6 +191,9 @@ instance : VerifierEval F (ProverEnvironment F → HintMap F) Unit :=
   verifierEval (UnconstrainedDep HintMap)
 instance : ProverEval F (ProverEnvironment F → HintMap F) (HintMap F) :=
   proverEval (UnconstrainedDep HintMap)
+
+instance [Inhabited (HintMap F)] : Inhabited (Var (UnconstrainedDep HintMap) F) where
+  default := fun _ => default
 
 @[circuit_norm] lemma eval_unconstrainedDep (env : Environment F)
     (v : ProverEnvironment F → HintMap F) :

@@ -674,34 +674,16 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- expose channel lists as functions of input/offset, but these lists are intended
   -- to be circuit-level metadata.  As in `ExplicitCircuits.toElaborated`, read them
   -- at a default input and offset 0, then normalize the resulting projection tree.
-  -- We `whnf` the input type before synthesizing `default`: for hand-written
-  -- `CircuitType`s such as `Unconstrained Bool`, the unreduced type is
-  -- `Var (Unconstrained Bool) F`, while the reducible normal form is the inhabited
-  -- function type `ProverEnvironment F → Bool`.
-  let rawChannelType ← mkAppM ``RawChannel #[F]
-  let noChannels := mkApp (mkConst ``List.nil [levelZero]) rawChannelType
-  let defaultInputType ← whnf varInputType
-  let defaultInput? ← try
-      pure (some (← mkAppOptM ``default #[defaultInputType, none]))
-    catch _ =>
-      pure none
+  let defaultInput ← mkAppOptM ``default #[varInputType, none]
   let zero := mkNatLit 0
   let channelsWithGuarantees ← do
-    match defaultInput? with
-    | some defaultInput =>
-        let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
-          #[none, none, none, none, main, explicit, defaultInput, zero]
-        normalizeExplicit "channelsWithGuarantees" ch
-    | none =>
-        pure noChannels
+    let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
+      #[none, none, none, none, main, explicit, defaultInput, zero]
+    normalizeExplicit "channelsWithGuarantees" ch
   let channelsWithRequirements ← do
-    match defaultInput? with
-    | some defaultInput =>
-        let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
-          #[none, none, none, none, main, explicit, defaultInput, zero]
-        normalizeExplicit "channelsWithRequirements" ch
-    | none =>
-        pure noChannels
+    let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
+      #[none, none, none, none, main, explicit, defaultInput, zero]
+    normalizeExplicit "channelsWithRequirements" ch
   let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
   let exposed ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
