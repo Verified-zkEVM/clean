@@ -444,6 +444,7 @@ macro_rules
     repeat (
       try intros
       first
+        | apply ExplicitCircuit.from_pure
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
         | infer_instance

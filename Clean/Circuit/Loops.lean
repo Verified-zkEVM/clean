@@ -981,18 +981,21 @@ macro_rules
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
-    try repeat infer_instance
+    -- Prefer structural decomposition before typeclass search.  Eager instance
+    -- search can `whnf` a large continuation and expand fixed-size vector/output
+    -- terms before bind/loop constructors split the circuit.
     repeat (
       try intros
       first
-        | infer_instance
+        | apply ExplicitCircuit.from_pure
+        | apply ExplicitCircuit.from_bind
+        | apply ExplicitCircuit.from_map
         | apply Circuit.ExplicitCircuit.from_mapFinRange (by infer_explicit_circuits)
         | apply Circuit.ExplicitCircuit.from_foldlRange
         | apply Circuit.ExplicitCircuit.from_forEach (by infer_explicit_circuits)
         | apply Circuit.ExplicitCircuit.from_map_loop (by infer_explicit_circuits)
         | apply Circuit.ExplicitCircuit.from_foldl
-        | apply ExplicitCircuit.from_bind
-        | apply ExplicitCircuit.from_map
+        | infer_instance
       repeat infer_instance
     )
     done))
