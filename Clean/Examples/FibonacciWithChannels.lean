@@ -198,16 +198,17 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
     FibonacciChannel.pull (n, x, y)
     FibonacciChannel.push (0, 0, 1)
 
-  elaborated := {
-    localLength _ := 0
-    output _ _ := ()
-    channelsWithGuarantees := [ FibonacciChannel.toRaw ]
-    channelsWithRequirements := [ FibonacciChannel.toRaw ]
-    exposedChannels
-    | (n, x, y), _ =>
-      expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
-    channelsLawful := by simp only [circuit_norm, FibonacciChannel]
-  }
+  elaborated := by
+    infer_elaborated_circuit_reduced_with {
+      channelsWithGuarantees := [ FibonacciChannel.toRaw ]
+      channelsWithRequirements := [ FibonacciChannel.toRaw ]
+      exposedChannels
+      | (n, x, y), _ =>
+        expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
+      exposedChannelsLawful := by
+        simp only [circuit_norm, FibonacciChannel]
+    } using by
+      simp only [circuit_norm, FibonacciChannel]
 
   ProverAssumptions
   | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
