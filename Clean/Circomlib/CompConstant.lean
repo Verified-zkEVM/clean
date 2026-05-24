@@ -97,13 +97,18 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 
 def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field where
   main := main c
-  elaborated := {
-    localLength _ := 127 + 1 + 135 + 1
-    output _ i0 := varFromOffset field (i0 + 127 + 1 + 135)
-    output_eq := by
-      intro offset
-      simp only [circuit_norm, main, Num2Bits.circuit]
-  }
+  elaborated := by
+    infer_elaborated_circuit_reduced_with {
+      localLength _ := 127 + 1 + 135 + 1
+      output _ i0 := varFromOffset field (i0 + 127 + 1 + 135)
+    } using by
+      constructor
+      · intro a; simp only [circuit_norm]
+      constructor
+      · intro a i0; simp only [circuit_norm]
+      constructor
+      · simp only [circuit_norm]
+      · simp only [circuit_norm]
   Assumptions input :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
 
