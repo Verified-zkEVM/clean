@@ -45,7 +45,6 @@ def main (input : Vector (Expression (F p)) 254) :=
 
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
-  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions input :=
     -- Input should be binary representation of a field element

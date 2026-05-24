@@ -36,7 +36,6 @@ def main (input : Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) field field where
   main
-  elaborated := by infer_elaborated_circuit_reduced
 
   Spec input output :=
     output = (if input = 0 then 1 else 0)
@@ -87,7 +86,6 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  elaborated := by infer_elaborated_circuit_reduced
 
   Spec input output :=
     output = (if input.1 = input.2 then 1 else 0)
@@ -144,7 +142,6 @@ def main (inputs : Var Inputs (F p)) := do
 
 def circuit : FormalAssertion (F p) Inputs where
   main
-  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun { enabled, inp } =>
     enabled = 0 ∨ enabled = 1
@@ -211,7 +208,6 @@ def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F
 
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
-  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val ≤ 2^n
 
@@ -409,7 +405,6 @@ template LessEqThan(n) {
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (x, y + 1)
-  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
@@ -479,7 +474,6 @@ template GreaterThan(n) {
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x)
-  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
@@ -518,7 +512,6 @@ template GreaterEqThan(n) {
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x + 1)
-  elaborated := by infer_elaborated_circuit_reduced
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
