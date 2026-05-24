@@ -159,8 +159,6 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
     FormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
   main input := main n ops input
 
-  elaborated := by infer_elaborated_circuit_reduced
-
   Assumptions input :=
     -- All inputs are binary
     ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
