@@ -107,7 +107,11 @@ structure ElaboratedCircuit.Data {Input Output : TypeMap} [CircuitType Input] [C
   output : Var Input F → ℕ → Var Output F := elaborated.output
   channelsWithGuarantees : List (RawChannel F) := elaborated.channelsWithGuarantees
   channelsWithRequirements : List (RawChannel F) := elaborated.channelsWithRequirements
-  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := elaborated.exposedChannels
+  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
+  exposedChannelsLawful : ∀ input offset exposed, exposed ∈ exposedChannels input offset →
+      ((circuit input).operations offset).interactionsWith exposed.channel = exposed.interactions := by
+    intro input offset exposed h_mem
+    cases h_mem
 
 @[circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -118,14 +122,12 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
     (∀ a, derived.localLength a = data.localLength a) ∧
     (∀ a n, derived.output a n = data.output a n) ∧
     (derived.channelsWithGuarantees ⊆ data.channelsWithGuarantees) ∧
-    (derived.channelsWithRequirements ⊆ data.channelsWithRequirements) ∧
-    (∀ a n, derived.exposedChannels a n = data.exposedChannels a n) := by
+    (derived.channelsWithRequirements ⊆ data.channelsWithRequirements) := by
       and_intros
       · intro a; ac_rfl
       · intro a n; rfl
       · try simp only [circuit_norm]; try grind; done
-      · try simp only [circuit_norm]; try grind; done
-      · intro a n; rfl) :
+      · try simp only [circuit_norm]; try grind; done) :
     ElaboratedCircuit F Input Output circuit where
   localLength := data.localLength
   output := data.output
@@ -140,8 +142,7 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
   channelsLawful a n := by
     have h_lawful := derived.channelsLawful a n
     have channelsWithGuarantees_subset := data_eq.2.2.1
-    have channelsWithRequirements_subset := data_eq.2.2.2.1
-    have exposed_eq := data_eq.2.2.2.2 a n
+    have channelsWithRequirements_subset := data_eq.2.2.2
     dsimp only [Operations.ChannelsLawful] at h_lawful ⊢
     obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_exposed, h_sub⟩ := h_lawful
     and_intros
@@ -155,8 +156,7 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
       rcases h_shallow channel h_mem with h_channel | h_channel
       · exact Or.inl (channelsWithGuarantees_subset h_channel)
       · exact Or.inr (channelsWithRequirements_subset h_channel)
-    · rw [← exposed_eq]
-      exact h_exposed
+    · exact data.exposedChannelsLawful a n
     · exact h_sub
 
 -- move between family and single explicit circuit
@@ -719,6 +719,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with" term : tactic
 syntax "infer_elaborated_circuit_with" term " using " term : tactic
+syntax "infer_elaborated_circuit_reduced_with" term : tactic
+syntax "infer_elaborated_circuit_reduced_with" term " using " term : tactic
 
 macro_rules
   | `(tactic|infer_elaborated_circuit) => `(tactic|(
@@ -733,6 +735,12 @@ macro_rules
   ))
   | `(tactic|infer_elaborated_circuit_with $data:term) => `(tactic|(
     exact ElaboratedCircuit.withData (by infer_elaborated_circuit) $data
+  ))
+  | `(tactic|infer_elaborated_circuit_reduced_with $data:term using $data_eq:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data $data_eq
+  ))
+  | `(tactic|infer_elaborated_circuit_reduced_with $data:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data
   ))
 
 -- this tactic is pretty good at inferring explicit circuits!

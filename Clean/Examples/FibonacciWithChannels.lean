@@ -145,19 +145,19 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     FibonacciChannel.push (n + 1, y, z)
 
   -- needed to expose interactions
-  -- TODO support tactic with overrides
-  elaborated := {
-    localLength _ := 1
-    output _ _ := ()
-    channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
-    channelsWithRequirements := [ FibonacciChannel.toRaw ]
-    exposedChannels
-    | (n, x, y), i₀ =>
-      let z := var ⟨ i₀ ⟩
-      expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
-    channelsLawful := by
+  elaborated := by
+    infer_elaborated_circuit_reduced_with {
+      channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
+      channelsWithRequirements := [ FibonacciChannel.toRaw ]
+      exposedChannels
+      | (n, x, y), i₀ =>
+        let z := var ⟨ i₀ ⟩
+        expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
+      exposedChannelsLawful := by
+        simp only [circuit_norm, Add8Channel, FibonacciChannel]
+    } using by
       simp only [circuit_norm, Add8Channel, FibonacciChannel]
-  }
+      grind
 
   ProverAssumptions
   | (n, x, y), _, _ =>
