@@ -738,7 +738,10 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalC
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
   channelsWithGuarantees _ := circuit.channelsWithGuarantees
   channelsWithRequirements _ := circuit.channelsWithRequirements
-  subcircuitsConsistent n := by simp [circuit_norm]
+  subcircuitsConsistent n := by
+    change Operations.SubcircuitsConsistent n [.subcircuit (_)]
+    simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    exact ⟨trivial, trivial⟩
 
 instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     ExplicitCircuit (assertion circuit input) where
@@ -747,7 +750,10 @@ instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {inpu
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
   channelsWithGuarantees _ := circuit.channelsWithGuarantees
   channelsWithRequirements _ := circuit.channelsWithRequirements
-  subcircuitsConsistent n := by simp [circuit_norm]
+  subcircuitsConsistent n := by
+    change Operations.SubcircuitsConsistent n [.subcircuit (_)]
+    simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    exact ⟨trivial, trivial⟩
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β]
     {circuit : GeneralFormalCircuit F β α} {input} :
@@ -757,7 +763,10 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β]
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
   channelsWithGuarantees _ := circuit.channelsWithGuarantees
   channelsWithRequirements _ := circuit.channelsWithRequirements
-  subcircuitsConsistent n := by simp [circuit_norm]
+  subcircuitsConsistent n := by
+    change Operations.SubcircuitsConsistent n [.subcircuit (_)]
+    simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    exact ⟨trivial, trivial⟩
 
 instance {β α: TypeMap} [CircuitType α] [CircuitType β]
     {circuit : GeneralFormalCircuit.WithHint F β α} {input} :
@@ -767,7 +776,10 @@ instance {β α: TypeMap} [CircuitType α] [CircuitType β]
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
   channelsWithGuarantees _ := circuit.channelsWithGuarantees
   channelsWithRequirements _ := circuit.channelsWithRequirements
-  subcircuitsConsistent n := by simp [circuit_norm]
+  subcircuitsConsistent n := by
+    change Operations.SubcircuitsConsistent n [.subcircuit (_)]
+    simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    exact ⟨trivial, trivial⟩
 
 -- simplification lemmas for FlatOperations.interactions (toSubcircuit ..).ops.toFlat
 

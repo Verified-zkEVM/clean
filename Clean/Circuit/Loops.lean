@@ -987,14 +987,14 @@ macro_rules
     repeat (
       try intros
       first
-        | apply ExplicitCircuit.from_pure
+        | apply Circuit.ExplicitCircuit.from_foldl
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
+        | apply ExplicitCircuit.from_pure
         | apply Circuit.ExplicitCircuit.from_mapFinRange (by infer_explicit_circuits)
         | apply Circuit.ExplicitCircuit.from_foldlRange
         | apply Circuit.ExplicitCircuit.from_forEach (by infer_explicit_circuits)
         | apply Circuit.ExplicitCircuit.from_map_loop (by infer_explicit_circuits)
-        | apply Circuit.ExplicitCircuit.from_foldl
         | infer_instance
       repeat infer_instance
     )
