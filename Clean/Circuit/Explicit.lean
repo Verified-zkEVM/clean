@@ -106,6 +106,8 @@ structure ElaboratedCircuit.Data {Input Output : TypeMap} [CircuitType Input] [C
   localLength : Var Input F → ℕ := elaborated.localLength
   output : Var Input F → ℕ → Var Output F := elaborated.output
   channelsWithGuarantees : List (RawChannel F) := elaborated.channelsWithGuarantees
+  channelsWithRequirements : List (RawChannel F) := elaborated.channelsWithRequirements
+  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := elaborated.exposedChannels
 
 @[circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -115,11 +117,15 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
   (data_eq :
     (∀ a, derived.localLength a = data.localLength a) ∧
     (∀ a n, derived.output a n = data.output a n) ∧
-    (derived.channelsWithGuarantees ⊆ data.channelsWithGuarantees) := by
+    (derived.channelsWithGuarantees ⊆ data.channelsWithGuarantees) ∧
+    (derived.channelsWithRequirements ⊆ data.channelsWithRequirements) ∧
+    (∀ a n, derived.exposedChannels a n = data.exposedChannels a n) := by
       and_intros
       · intro a; ac_rfl
       · intro a n; rfl
-      · try simp only [circuit_norm]; try grind; done) :
+      · try simp only [circuit_norm]; try grind; done
+      · try simp only [circuit_norm]; try grind; done
+      · intro a n; rfl) :
     ElaboratedCircuit F Input Output circuit where
   localLength := data.localLength
   output := data.output
@@ -129,24 +135,28 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
     rw [derived.output_eq, data_eq.2.1]
   subcircuitsConsistent := derived.subcircuitsConsistent
   channelsWithGuarantees := data.channelsWithGuarantees
-  channelsWithRequirements := derived.channelsWithRequirements
-  exposedChannels := derived.exposedChannels
+  channelsWithRequirements := data.channelsWithRequirements
+  exposedChannels := data.exposedChannels
   channelsLawful a n := by
     have h_lawful := derived.channelsLawful a n
-    have channelsWithGuarantees_subset := data_eq.2.2
+    have channelsWithGuarantees_subset := data_eq.2.2.1
+    have channelsWithRequirements_subset := data_eq.2.2.2.1
+    have exposed_eq := data_eq.2.2.2.2 a n
     dsimp only [Operations.ChannelsLawful] at h_lawful ⊢
     obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_exposed, h_sub⟩ := h_lawful
     and_intros
     · exact List.Subset.trans h_g_sub channelsWithGuarantees_subset
     · intro env
       exact (h_g env).mono channelsWithGuarantees_subset
-    · exact h_r_sub
-    · exact h_r
+    · exact List.Subset.trans h_r_sub channelsWithRequirements_subset
+    · intro env
+      exact (h_r env).mono channelsWithRequirements_subset
     · intro channel h_mem
       rcases h_shallow channel h_mem with h_channel | h_channel
       · exact Or.inl (channelsWithGuarantees_subset h_channel)
-      · exact Or.inr h_channel
-    · exact h_exposed
+      · exact Or.inr (channelsWithRequirements_subset h_channel)
+    · rw [← exposed_eq]
+      exact h_exposed
     · exact h_sub
 
 -- move between family and single explicit circuit
