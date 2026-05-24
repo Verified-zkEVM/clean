@@ -674,12 +674,15 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- expose channel lists as functions of input/offset, but these lists are intended
   -- to be circuit-level metadata.  As in `ExplicitCircuits.toElaborated`, read them
   -- at a default input and offset 0, then normalize the resulting projection tree.
-  -- Some hint-only inputs are not inhabited; for those, fall back to empty channel
-  -- lists, which is sufficient as long as their explicit channel metadata is empty.
+  -- We `whnf` the input type before synthesizing `default`: for hand-written
+  -- `CircuitType`s such as `Unconstrained Bool`, the unreduced type is
+  -- `Var (Unconstrained Bool) F`, while the reducible normal form is the inhabited
+  -- function type `ProverEnvironment F → Bool`.
   let rawChannelType ← mkAppM ``RawChannel #[F]
   let noChannels := mkApp (mkConst ``List.nil [levelZero]) rawChannelType
+  let defaultInputType ← whnf varInputType
   let defaultInput? ← try
-      pure (some (← mkAppOptM ``default #[varInputType, none]))
+      pure (some (← mkAppOptM ``default #[defaultInputType, none]))
     catch _ =>
       pure none
   let zero := mkNatLit 0
