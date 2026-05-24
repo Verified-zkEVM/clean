@@ -171,7 +171,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   specialize h_Compress (by simp_all)
     (by apply bytesToWords_normalized; simp_all)
     (by linarith)
-    (by simp_all)
+    h_Or32_2.2.1 h_Or32_2.2.2.1 h_Or32_2.2.2.2.1 h_Or32_2.2.2.2.2
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
   have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
   simp only [Vector.map_take, BLAKE3State, eval_vector] at h_compress'
@@ -181,51 +181,47 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     Vector.map_map] at h_compress'
   rw [← Vector.take_eq_extract] at h_compress'
   apply And.intro
-  · apply And.intro
-    · simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
-      List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
-      rw [h_compress']
-      simp only [finalizeChunk]
-      apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
-      have : Vector.map (U32.value ∘ eval env) (bytesToWords input_var_buffer_data) =
-          (Specs.BLAKE3.bytesToWords
-          (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
-        clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress
-        rw [← Vector.map_map, ← eval_vector, eval_bytesToWords]
-        simp only [h_input]
-        simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
-        ext i hi
-        simp only [explicit_provable_type, circuit_norm, Vector.getElem_ofFn, List.getElem_append,
-          List.length_map, Vector.length_toList, Vector.getElem_extract,
-          List.getElem_map, Vector.getElem_toList, List.getElem_replicate, dite_mul, zero_mul]
-        have h_rest := h_assumptions.2.2.2.1
-        congr <;> (
-          split
-          · ac_rfl
-          · simp only [Nat.reducePow, mul_eq_zero, ZMod.val_eq_zero, OfNat.ofNat_ne_zero, or_false]
-            exact h_rest ⟨ _, by omega ⟩ (by simp only; omega))
-      rw [this]
-      congr 1
-      · rw [List.length_map, Vector.length_toList, left_eq_inf]
-        linarith
-      · congr
-        simp only [startFlag, chunkStart]
-        split <;> simp_all [circuit_norm]
-    · rintro ⟨i, h_i⟩
-      simp only [eval_vector]
-      rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
-      conv =>
-        arg 1
-        arg 2
-        change (Vector.take _ 8)[i]'(by omega)
-        rw [Vector.getElem_take]
-      rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
-      simp only [BLAKE3State.Normalized] at h_Compress_Normalized
-      specialize h_Compress_Normalized ⟨ i, by omega ⟩
-      simp only [getElem_eval_vector, h_Compress_Normalized]
-  · simp_all [circuit_norm]
-    right
-    split <;> simp [ZMod.val_one, ZMod.val_zero]
+  · simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
+    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
+    rw [h_compress']
+    simp only [finalizeChunk]
+    apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
+    have : Vector.map (U32.value ∘ eval env) (bytesToWords input_var_buffer_data) =
+        (Specs.BLAKE3.bytesToWords
+        (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
+      clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress
+      rw [← Vector.map_map, ← eval_vector, eval_bytesToWords]
+      simp only [h_input]
+      simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
+      ext i hi
+      simp only [explicit_provable_type, circuit_norm, Vector.getElem_ofFn, List.getElem_append,
+        List.length_map, Vector.length_toList, Vector.getElem_extract,
+        List.getElem_map, Vector.getElem_toList, List.getElem_replicate, dite_mul, zero_mul]
+      have h_rest := h_assumptions.2.2.2.1
+      congr <;> (
+        split
+        · ac_rfl
+        · simp only [Nat.reducePow, mul_eq_zero, ZMod.val_eq_zero, OfNat.ofNat_ne_zero, or_false]
+          exact h_rest ⟨ _, by omega ⟩ (by simp only; omega))
+    rw [this]
+    congr 1
+    · rw [List.length_map, Vector.length_toList, left_eq_inf]
+      linarith
+    · congr
+      simp only [startFlag, chunkStart]
+      split <;> simp_all [circuit_norm]
+  · rintro ⟨i, h_i⟩
+    simp only [eval_vector]
+    rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
+    conv =>
+      arg 1
+      arg 2
+      change (Vector.take _ 8)[i]'(by omega)
+      rw [Vector.getElem_take]
+    rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
+    simp only [BLAKE3State.Normalized] at h_Compress_Normalized
+    specialize h_Compress_Normalized ⟨ i, by omega ⟩
+    simp only [getElem_eval_vector, h_Compress_Normalized]
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
