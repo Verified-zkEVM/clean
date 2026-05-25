@@ -50,15 +50,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   rcases h_holds with ⟨h_holds3, h_holds4⟩
   specialize h_holds3 (by omega)
   specialize h_holds4 (by omega)
-  simp only [Or8.main, circuit_norm] at h_holds1 h_holds2 h_holds3 h_holds4
+  simp only [h_holds1.2, h_holds2.2, h_holds3.2, h_holds4.2] -- use the Normalized conditions
   simp only [h_holds1.1, h_holds2.1, h_holds3.1, h_holds4.1, l_components]
-  constructor
-  · ring_nf
-  · and_intros
-    · simpa [h_holds1.1] using h_holds1.2
-    · simpa [h_holds2.1] using h_holds2.2
-    · simpa [h_holds3.1] using h_holds3.2
-    · simpa [h_holds4.1] using h_holds4.2
+  ring_nf
+  simp
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start

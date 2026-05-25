@@ -29,13 +29,10 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   let state ← G.circuit 3 4 9 14 ⟨state, message[14], message[15]⟩
   return state
 
--- TODO inferring reduced instance times out
--- #eval! main (p:=pBabybear) default |>.localLength
--- #eval! main (p:=pBabybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main where
-  localLength _ := 768
-  localLength_eq input i0 := by
-    simp only [main, circuit_norm, G.circuit, G.elaborated]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
+  infer_elaborated_circuit_reduced_with {
+    output input i0 := main input |>.output i0
+  }
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input

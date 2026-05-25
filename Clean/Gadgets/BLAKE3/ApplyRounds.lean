@@ -29,10 +29,12 @@ The spec follows the pattern from the applyRounds function:
 -/
 def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   main input := do
-    let state ← subcircuit Round.circuit input
-    let permuted_message ← subcircuit Permute.circuit input.message
+    let state ← Round.circuit input
+    let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
 
+  -- TODO autoelab causes proof churn and _with overrides lead to slow soundness simp
+  -- investigate why the latter
   elaborated := {
     localLength input := Round.circuit.localLength input + Permute.circuit.localLength input.message
     output input offset :=

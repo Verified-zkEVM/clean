@@ -15,6 +15,7 @@ def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
   | { state, d } => .mapFinRange 25 fun i =>
     Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
 
+-- TODO autoelab fails probably bc of match
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main where
   localLength _ := 200

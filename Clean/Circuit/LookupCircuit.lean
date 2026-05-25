@@ -73,11 +73,6 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     lookup (circuit.toTable hint) (input, output)
     return output
 
-  elaborated := {
-    localLength n := size β
-    output _ n := varFromOffset β n
-  }
-
   Assumptions := circuit.Assumptions
   Spec := circuit.Spec
 

@@ -66,7 +66,7 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
 
 @[reducible]
 instance : ElaboratedCircuit (F p) field DecodedInstruction (decodeInstructionMain) := by
-  infer_elaborated_circuit_with {
+  infer_elaborated_circuit_reduced_with {
     output input i := (decodeInstructionMain input).output i
   }
 

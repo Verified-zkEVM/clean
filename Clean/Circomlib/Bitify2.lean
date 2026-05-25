@@ -46,15 +46,11 @@ set_option linter.constructorNameAsVariable false
 
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
-  elaborated := {
+  -- TODO default reduced elaboration fails
+  elaborated := by infer_elaborated_circuit_with {
     localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
-    localLength_eq := by simp +arith [circuit_norm, main,
-      Num2Bits.main, AliasCheck.circuit]
-    subcircuitsConsistent := by simp +arith [circuit_norm, main,
-      Num2Bits.main, AliasCheck.circuit]
-    channelsLawful := by
-      simp only [circuit_norm, main, Num2Bits.main, AliasCheck.circuit]
-  }
+    output _ i := varFromOffset (fields 254) i
+  } using (by simp +arith only [circuit_norm, Num2Bits.main, AliasCheck.circuit, reduceDIte])
 
   Spec input bits :=
     bits = fieldToBits 254 input
@@ -129,15 +125,10 @@ set_option linter.constructorNameAsVariable false
 
 def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   main
-  elaborated := {
-    localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
-    localLength_eq := by simp +arith [circuit_norm, main,
-      Bits2Num.main, AliasCheck.circuit]
-    subcircuitsConsistent := by simp +arith [circuit_norm, main,
-      Bits2Num.main, AliasCheck.circuit]
-    channelsLawful := by simp +arith [circuit_norm, main,
-      Bits2Num.main, AliasCheck.circuit]
-  }
+  -- elaborated := by infer_elaborated_circuit_reduced_with {
+  --   localLength _ := 265
+  --   output _ i := varFromOffset field (i + 264)
+  -- } using (by simp +arith only [circuit_norm])
 
   ProverAssumptions (input : fields 254 (F p)) _ _ :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p

@@ -95,6 +95,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
   let final_state ← Compress.circuit compress_input
   return final_state.take 8
 
+-- TODO why no autoelab?
 instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) main where
   localLength _ := 2*4 + (4 + (4 + (5376 + 64)))
   output input i :=

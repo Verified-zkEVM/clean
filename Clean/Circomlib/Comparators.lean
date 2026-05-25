@@ -215,8 +215,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     output = (if x.val < y.val then 1 else 0)
 
   soundness := by
-    circuit_proof_start
-    simp only [circuit_norm, Num2Bits.circuit] at h_holds ⊢
+    circuit_proof_start [Num2Bits.circuit]
     rcases h_assumptions with ⟨hx, hy⟩
     have hx_eval : Expression.eval env input_var.1 = input.1 := by
       simpa using congrArg Prod.fst h_input

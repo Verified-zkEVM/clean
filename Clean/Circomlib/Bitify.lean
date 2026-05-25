@@ -66,11 +66,15 @@ lemma lc_eq {i0} {env} {n : ℕ} :
 
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
+  -- TODO the override makes it MUCH slower compared to the default
+  -- override is nice as it removed if-else expression
   elaborated := by
     infer_elaborated_circuit_reduced_with {
       localLength _ := n
       output _ i := varFromOffset (fields n) i
     } using by
+      -- TODO times out with simple proof here
+      -- simp [circuit_norm, mul_zero]
       constructor
       · intro a
         simp only [circuit_norm]
@@ -121,19 +125,6 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main input := arbitraryBitLengthCircuit n input
-  elaborated := by
-    infer_elaborated_circuit_reduced_with {
-      localLength _ := n
-      output _ i := varFromOffset (fields n) i
-    } using by
-      constructor
-      · intro a
-        simp only [circuit_norm]
-      constructor
-      · intro a i; rfl
-      constructor
-      · simp only [circuit_norm]
-      · simp only [circuit_norm]
 
   ProverAssumptions input _ _ := input.val < 2^n
 
@@ -200,8 +191,6 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
-  elaborated := by
-    infer_elaborated_circuit_reduced
 
   Assumptions input :=
     ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1

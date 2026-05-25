@@ -3,7 +3,6 @@ import Clean.Gadgets.Keccak.RhoPi
 import Clean.Gadgets.Keccak.Chi
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Specs.Keccak256
-import Clean.Circuit.Explicit
 
 namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
@@ -24,19 +23,15 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
+-- overridden so that `Permutation` can keep its nice proof which uses
+-- `Vector.mapRange` instead of `Vector.mapFinRange`.
 @[reducible]
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState (main rc) := by
   infer_elaborated_circuit_reduced_with {
-    output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888)).set 0 (varFromOffset U64 (i0 + 1280))
+    output _ i0 := Vector.mapRange 25 (fun i => varFromOffset U64 (i0 + i*16 + 888))
+      |>.set 0 (varFromOffset U64 (i0 + 1280))
   } using by
-    constructor
-    · intro a; rfl
-    constructor
-    · intro a n
-      simp +arith only [circuit_norm, Vector.mapRange_eq_mapFinRange]
-    constructor
-    · simp only [circuit_norm]
-    · simp only [circuit_norm]
+    simp +arith only [circuit_norm, Vector.mapRange_eq_mapFinRange]
 
 theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc) := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,

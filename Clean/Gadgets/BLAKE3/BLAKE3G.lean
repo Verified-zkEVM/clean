@@ -74,7 +74,8 @@ def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumptions (Spec a b c d) := by
-  circuit_proof_start [output, BLAKE3State.Normalized, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, and_imp,
+  circuit_proof_start [output, BLAKE3State.Normalized, Xor32.circuit, Addition32.circuit,
+    Rotation32.circuit, Rotation32.elaborated, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
 
