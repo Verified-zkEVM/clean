@@ -1190,14 +1190,6 @@ theorem ExplicitCircuit.from_mapFinRange_channelsWithRequirements {m : ℕ} [NeZ
     (ExplicitCircuit.from_mapFinRange explicit (constant:=constant)).channelsWithRequirements n =
       (List.ofFn fun (i : Fin m) => explicit.channelsWithRequirements i (n + i * (explicit.localLength 0 0))).flatten := rfl
 
-macro_rules
-  | `(tactic|infer_explicit_circuits) => `(tactic|(
-    apply ExplicitCircuits.fromSingle
-    intro a
-    try unfold main
-    infer_explicit_circuit
-    ))
-
 syntax "infer_explicit_loop_head" : tactic
 
 elab "infer_explicit_loop_head" : tactic => withMainContext do
