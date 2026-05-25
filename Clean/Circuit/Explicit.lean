@@ -6,6 +6,7 @@ This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
 import Clean.Circuit.Basic
+import Clean.Circuit.ExplicitNoUnfold
 import Lean.Elab.Tactic
 import Mathlib.Lean.Meta.Simp
 
@@ -424,6 +425,9 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := [channel.toRaw]
 
+attribute [explicit_circuit_no_unfold] Circuit.bind witnessVar witnessVars witnessVector ProvableType.witness
+  witness assertZero lookup Channel.emit Channel.pull Channel.push Pure.pure Bind.bind Functor.map
+
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.operations ExplicitCircuit.output
   ExplicitCircuit.channelsWithGuarantees ExplicitCircuit.channelsWithRequirements
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.localLength ExplicitCircuits.operations ExplicitCircuits.output
@@ -452,18 +456,36 @@ macro_rules
     )
     done))
 
+syntax "unfold_explicit_circuits_head" : tactic
 syntax "infer_explicit_circuits" : tactic
+
+elab "unfold_explicit_circuits_head" : tactic => withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  if !target.getAppFn.isConstOf ``ExplicitCircuits || args.size == 0 then
+    throwError "target is not ExplicitCircuits"
+  let family := args[args.size - 1]!
+  let .const declName _ := family.getAppFn
+    | throwError "target family head is not a definition"
+  if (← labelled `explicit_circuit_no_unfold).contains declName then
+    throwError "refusing to unfold explicit-circuit constructor"
+  let some unfolded ← withTransparency TransparencyMode.default <| unfoldDefinition? family
+    | throwError "failed to unfold target family head"
+  try
+    evalTactic (← `(tactic| conv => congr; unfold $(mkIdent declName):ident))
+  catch _ =>
+    let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) unfolded)
+    replaceMainGoal [← (← getMainGoal).change newTarget]
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
-    -- unfold head. TODO is there a better way?
-    try conv => congr; whnf
+    try unfold_explicit_circuits_head
     apply ExplicitCircuits.fromSingle
     intro a
     infer_explicit_circuit
     ))
 
--- TODO this is needed because `conv => congr; whnf` creates terms involving `Eq.mpr`
+-- TODO this was needed because `conv => congr; whnf` created terms involving `Eq.mpr`.
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 /--

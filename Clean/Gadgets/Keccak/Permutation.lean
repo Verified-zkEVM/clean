@@ -31,7 +31,15 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
     localLength _ := 30912
     output _ i0 := stateVar i0 23
   } using by
-    simp only [circuit_norm, stateVar, KeccakRound.circuit]
+    constructor
+    · intro a
+      simp +arith only [circuit_norm, KeccakRound.circuit]
+    constructor
+    · intro a n
+      simp +arith only [circuit_norm, stateVar, KeccakRound.circuit, dif_pos]
+    constructor
+    · simp only [circuit_norm]
+    · simp only [circuit_norm]
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :

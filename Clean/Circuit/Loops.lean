@@ -1155,6 +1155,8 @@ instance ExplicitCircuit.from_mapFinRange {m : ℕ} [NeZero m]
     intro i
     apply explicit.channelsLawful
 
+attribute [explicit_circuit_no_unfold] Circuit.forEach Circuit.map Circuit.mapFinRange Circuit.foldl Circuit.foldlRange
+
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_mapFinRange_output {m : ℕ} [NeZero m]
     {body : Fin m → Circuit F β} [explicit : ExplicitCircuits body]
@@ -1189,45 +1191,6 @@ theorem ExplicitCircuit.from_mapFinRange_channelsWithRequirements {m : ℕ} [NeZ
     {constant : ConstantLength body} (n : ℕ) :
     (ExplicitCircuit.from_mapFinRange explicit (constant:=constant)).channelsWithRequirements n =
       (List.ofFn fun (i : Fin m) => explicit.channelsWithRequirements i (n + i * (explicit.localLength 0 0))).flatten := rfl
-
-syntax "infer_explicit_loop_head" : tactic
-
-elab "infer_explicit_loop_head" : tactic => withMainContext do
-  let target ← getMainTarget
-  let args := target.getAppArgs
-  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.size == 0 then
-    throwError "target is not an ExplicitCircuit"
-  let circuit := args[args.size - 1]!
-  match circuit.getAppFn with
-  | .const ``Circuit.mapFinRange _ =>
-      evalTactic (← `(tactic| apply ExplicitCircuit.from_mapFinRange (by infer_explicit_circuits)))
-  | .const ``Circuit.foldlRange _ =>
-      evalTactic (← `(tactic| apply ExplicitCircuit.from_foldlRange))
-  | .const ``Circuit.forEach _ =>
-      evalTactic (← `(tactic| apply ExplicitCircuit.from_forEach (by infer_explicit_circuits)))
-  | .const ``Circuit.map _ =>
-      evalTactic (← `(tactic| apply ExplicitCircuit.from_map_loop (by infer_explicit_circuits)))
-  | .const ``Circuit.foldl _ =>
-      evalTactic (← `(tactic| apply ExplicitCircuit.from_foldl))
-  | _ => throwError "target circuit is not a loop constructor"
-
-macro_rules
-  | `(tactic|infer_explicit_circuit) => `(tactic|(
-    try intros
-    -- Dispatch to loop constructors only when the circuit head is actually a
-    -- loop.  Otherwise keep the stronger existing bind/map/pure/instance path;
-    -- speculative loop `apply`s can be expensive on large non-loop goals.
-    repeat (
-      try intros
-      first
-        | infer_explicit_loop_head
-        | apply ExplicitCircuit.from_bind
-        | apply ExplicitCircuit.from_map
-        | apply ExplicitCircuit.from_pure
-        | infer_instance
-      repeat infer_instance
-    )
-    done))
 
 instance ExplicitCircuit.from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
@@ -1394,6 +1357,45 @@ theorem ExplicitCircuit.from_foldlRange_operations {m : ℕ} [Inhabited β]
       (List.ofFn fun i =>
         (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
           (n + i * ((explicit default i).localLength 0))).flatten := rfl
+
+syntax "infer_explicit_loop_head" : tactic
+
+elab "infer_explicit_loop_head" : tactic => withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.size == 0 then
+    throwError "target is not an ExplicitCircuit"
+  let circuit := args[args.size - 1]!
+  match circuit.getAppFn with
+  | .const ``Circuit.mapFinRange _ =>
+      evalTactic (← `(tactic| apply ExplicitCircuit.from_mapFinRange (by infer_explicit_circuits)))
+  | .const ``Circuit.foldlRange _ =>
+      evalTactic (← `(tactic| apply ExplicitCircuit.from_foldlRange))
+  | .const ``Circuit.forEach _ =>
+      evalTactic (← `(tactic| apply ExplicitCircuit.from_forEach (by infer_explicit_circuits)))
+  | .const ``Circuit.map _ =>
+      evalTactic (← `(tactic| apply ExplicitCircuit.from_map_loop (by infer_explicit_circuits)))
+  | .const ``Circuit.foldl _ =>
+      evalTactic (← `(tactic| apply ExplicitCircuit.from_foldl))
+  | _ => throwError "target circuit is not a loop constructor"
+
+macro_rules
+  | `(tactic|infer_explicit_circuit) => `(tactic|(
+    try intros
+    -- Dispatch to loop constructors only when the circuit head is actually a
+    -- loop.  Otherwise keep the stronger existing bind/map/pure/instance path;
+    -- speculative loop `apply`s can be expensive on large non-loop goals.
+    repeat (
+      try intros
+      first
+        | infer_explicit_loop_head
+        | apply ExplicitCircuit.from_bind
+        | apply ExplicitCircuit.from_map
+        | apply ExplicitCircuit.from_pure
+        | infer_instance
+      repeat infer_instance
+    )
+    done))
 
 namespace Circuit
 -- a few theorems about loops + interactions
