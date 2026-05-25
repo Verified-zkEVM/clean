@@ -1237,18 +1237,6 @@ macro_rules
     )
     done))
 
-instance ExplicitCircuits.from_forEach_family {m : ℕ} [Inhabited α]
-    {body : α → Circuit F Unit} [explicit : ExplicitCircuits body]
-    {constant : ConstantLength body} :
-    ExplicitCircuits (fun xs : Vector α m => forEach xs body constant) :=
-  ExplicitCircuits.fromSingle fun _ => ExplicitCircuit.from_forEach explicit
-
-instance ExplicitCircuits.from_map_family {m : ℕ} [Inhabited α]
-    {body : α → Circuit F β} [explicit : ExplicitCircuits body]
-    {constant : ConstantLength body} :
-    ExplicitCircuits (fun xs : Vector α m => map xs body constant) :=
-  ExplicitCircuits.fromSingle fun _ => ExplicitCircuit.from_map_loop explicit
-
 instance ExplicitCircuit.from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
     {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
@@ -1414,13 +1402,6 @@ theorem ExplicitCircuit.from_foldlRange_operations {m : ℕ} [Inhabited β]
       (List.ofFn fun i =>
         (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
           (n + i * ((explicit default i).localLength 0))).flatten := rfl
-
-instance ExplicitCircuits.from_foldl_family {m : ℕ} [Inhabited β] [Inhabited α]
-    {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
-    {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
-    {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} :
-    ExplicitCircuits (fun xs : Vector α m => foldl xs init body const_out constant) :=
-  ExplicitCircuits.fromSingle fun _ => inferInstance
 
 namespace Circuit
 -- a few theorems about loops + interactions
