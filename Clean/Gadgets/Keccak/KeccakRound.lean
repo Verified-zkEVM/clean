@@ -23,19 +23,15 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
--- TODO this elaboration is manual so that Permutation can keep its nice proof which uses
+-- overridden so that `Permutation` can keep its nice proof which uses
 -- `Vector.mapRange` instead of `Vector.mapFinRange`.
 @[reducible]
-instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState (main rc) where
-  localLength _ := 1288
-  output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888) ).set 0 (varFromOffset U64 (i0 + 1280))
-
-  localLength_eq _ _ := by simp only [main, circuit_norm, Theta.circuit,
-    RhoPi.circuit, Chi.circuit, Xor64.circuit]
-  output_eq state i0 := by simp +arith only [main, circuit_norm, Theta.circuit,
-    RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange_eq_mapFinRange]
-  channelsLawful := by simp only [main, circuit_norm, Theta.circuit,
-    RhoPi.circuit, Chi.circuit, Xor64.circuit]
+instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState (main rc) := by
+  infer_elaborated_circuit_reduced_with {
+    output _ i0 := Vector.mapRange 25 (fun i => varFromOffset U64 (i0 + i*16 + 888))
+      |>.set 0 (varFromOffset U64 (i0 + 1280))
+  } using by
+    simp +arith only [circuit_norm, Vector.mapRange_eq_mapFinRange]
 
 theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc) := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,

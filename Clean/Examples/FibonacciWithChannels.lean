@@ -43,10 +43,10 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
   main multiplicities := do
     let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
       BytesChannel.emit multiplicities[i] (const i)
-  -- TODO fails because of match
+  -- TODO autoelab fails because of match
   elaborated := {
     localLength _ := 0
-    localLength_eq := by simp +arith only [circuit_norm]
+    localLength_eq := by simp only [circuit_norm]
     output _ _ := ()
     channelsWithRequirements := [ BytesChannel.toRaw ]
   }
@@ -80,9 +80,6 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     x + y - z - carry * 256 === 0
     -- emit to the add8 channel with multiplicity `m`
     Add8Channel.emit m (x, y, z)
-
-  -- TODO default assumes empty channels :/
-  elaborated := by infer_elaborated_circuit
 
   ProverAssumptions
   | { x, y, z, m }, _, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
@@ -148,17 +145,12 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     FibonacciChannel.push (n + 1, y, z)
 
   -- needed to expose interactions
-  -- TODO support tactic with overrides
-  elaborated := {
-    localLength _ := 1
-    output _ _ := ()
-    channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
-    channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  elaborated := by infer_elaborated_circuit_reduced_with {
     exposedChannels
     | (n, x, y), i₀ =>
       let z := var ⟨ i₀ ⟩
       expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
-    channelsLawful := by
+    exposedChannelsLawful := by
       simp only [circuit_norm, Add8Channel, FibonacciChannel]
   }
 
@@ -201,15 +193,12 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
     FibonacciChannel.pull (n, x, y)
     FibonacciChannel.push (0, 0, 1)
 
-  elaborated := {
-    localLength _ := 0
-    output _ _ := ()
-    channelsWithGuarantees := [ FibonacciChannel.toRaw ]
-    channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  elaborated := by infer_elaborated_circuit_reduced_with {
     exposedChannels
     | (n, x, y), _ =>
       expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
-    channelsLawful := by simp only [circuit_norm, FibonacciChannel]
+    exposedChannelsLawful := by
+      simp only [circuit_norm, FibonacciChannel]
   }
 
   ProverAssumptions
@@ -297,8 +286,6 @@ def falseCircuit : GeneralFormalCircuit (F p) unit unit where
     return
   Spec _ _ _ := False
   ProverAssumptions _ _ _ := False
-  -- TODO elab doesn't work on `main _ := FalseChannel.pull ()`, why
-  elaborated := by infer_elaborated_circuit
   soundness := by circuit_proof_start [FalseChannel]
   completeness := by circuit_proof_start [FalseChannel]
 

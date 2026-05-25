@@ -23,15 +23,15 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
 -- NOTE: this linter times out and blows up memory usage
 set_option linter.constructorNameAsVariable false
 
-@[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
-  localLength _ := 30912
-  output _ i0 := stateVar i0 23
-
-  localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
-  subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
-  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
-  channelsLawful := by simp only [main, circuit_norm, KeccakRound.circuit]
+-- TODO reduced tactics time out (timeout at whnf)
+-- instance : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+--   infer_elaborated_circuit_reduced
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  infer_elaborated_circuit_with {
+    localLength _ := 30912
+    output _ i0 := stateVar i0 23
+  } using by
+    simp +arith only [circuit_norm, stateVar, KeccakRound.circuit, dif_pos]
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :

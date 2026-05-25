@@ -36,12 +36,11 @@ def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
 def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
   Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
--- #eval! (main (p:=p_babybear) 0) default |>.localLength
--- #eval! (main (p:=p_babybear) 0) default |>.output
-@[reducible]
-instance elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 (main off) where
+-- TODO using `infer_elaborated_circuit_reduced_with` here causes the ThetaD instance to time out
+-- so it seems the .withData terms don't get reduced efficiently
+@[reducible] instance elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 (main off) where
   localLength _ := 16
-  output _ i0 := output off i0
+  output _inputs i0 := output off i0
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (main offset) Assumptions (Spec offset) := by
   circuit_proof_start [Rotation64Bits.circuit, Rotation64Bits.elaborated,

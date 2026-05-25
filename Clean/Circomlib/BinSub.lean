@@ -275,7 +275,6 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
 def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
   FormalCircuit (F p) (BinSubInput n) (fields n) where
   main input := main n input
-  elaborated := by infer_elaborated_circuit
 
   Assumptions input :=
     -- All inputs are binary

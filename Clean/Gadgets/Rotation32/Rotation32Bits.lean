@@ -40,19 +40,15 @@ def output (offset : Fin 8) (i0 : ℕ) : U32 (Expression (F p)) :=
   U32.fromLimbs (.ofFn fun ⟨i,_⟩ =>
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
-instance elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 (main off) where
-  localLength _ := 8
-  output _inputs i0 := output off i0
-  localLength_eq _ i0 := by
-    simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
-  output_eq _ _ := by
-    simp only [circuit_norm, main, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
+@[reducible] instance elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 (main off) := by
+  infer_elaborated_circuit_reduced_with {
+    localLength _ := 8
+    output _inputs i0 := output off i0
+  } using by
+    simp only [circuit_norm]
+    intro inputs i0
     apply congrArg U32.fromLimbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
-  subcircuitsConsistent _ _ := by
-    simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
-  channelsLawful := by
-    simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (main offset) Assumptions (Spec offset) := by
   circuit_proof_start [ByteDecomposition.circuit, ByteDecomposition.elaborated,

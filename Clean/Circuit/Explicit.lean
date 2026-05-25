@@ -6,6 +6,7 @@ This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
 import Clean.Circuit.Basic
+import Clean.Circuit.ExplicitAttributes
 import Lean.Elab.Tactic
 import Mathlib.Lean.Meta.Simp
 
@@ -106,6 +107,12 @@ structure ElaboratedCircuit.Data {Input Output : TypeMap} [CircuitType Input] [C
   localLength : Var Input F → ℕ := elaborated.localLength
   output : Var Input F → ℕ → Var Output F := elaborated.output
   channelsWithGuarantees : List (RawChannel F) := elaborated.channelsWithGuarantees
+  channelsWithRequirements : List (RawChannel F) := elaborated.channelsWithRequirements
+  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
+  exposedChannelsLawful : ∀ input offset exposed, exposed ∈ exposedChannels input offset →
+      ((circuit input).operations offset).interactionsWith exposed.channel = exposed.interactions := by
+    intro input offset exposed h_mem
+    cases h_mem
 
 @[circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -115,10 +122,12 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
   (data_eq :
     (∀ a, derived.localLength a = data.localLength a) ∧
     (∀ a n, derived.output a n = data.output a n) ∧
-    (derived.channelsWithGuarantees ⊆ data.channelsWithGuarantees) := by
+    (derived.channelsWithGuarantees ⊆ data.channelsWithGuarantees) ∧
+    (derived.channelsWithRequirements ⊆ data.channelsWithRequirements) := by
       and_intros
       · intro a; ac_rfl
       · intro a n; rfl
+      · try simp only [circuit_norm]; try grind; done
       · try simp only [circuit_norm]; try grind; done) :
     ElaboratedCircuit F Input Output circuit where
   localLength := data.localLength
@@ -129,24 +138,26 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
     rw [derived.output_eq, data_eq.2.1]
   subcircuitsConsistent := derived.subcircuitsConsistent
   channelsWithGuarantees := data.channelsWithGuarantees
-  channelsWithRequirements := derived.channelsWithRequirements
-  exposedChannels := derived.exposedChannels
+  channelsWithRequirements := data.channelsWithRequirements
+  exposedChannels := data.exposedChannels
   channelsLawful a n := by
     have h_lawful := derived.channelsLawful a n
-    have channelsWithGuarantees_subset := data_eq.2.2
+    have channelsWithGuarantees_subset := data_eq.2.2.1
+    have channelsWithRequirements_subset := data_eq.2.2.2
     dsimp only [Operations.ChannelsLawful] at h_lawful ⊢
     obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_exposed, h_sub⟩ := h_lawful
     and_intros
     · exact List.Subset.trans h_g_sub channelsWithGuarantees_subset
     · intro env
       exact (h_g env).mono channelsWithGuarantees_subset
-    · exact h_r_sub
-    · exact h_r
+    · exact List.Subset.trans h_r_sub channelsWithRequirements_subset
+    · intro env
+      exact (h_r env).mono channelsWithRequirements_subset
     · intro channel h_mem
       rcases h_shallow channel h_mem with h_channel | h_channel
       · exact Or.inl (channelsWithGuarantees_subset h_channel)
-      · exact Or.inr h_channel
-    · exact h_exposed
+      · exact Or.inr (channelsWithRequirements_subset h_channel)
+    · exact data.exposedChannelsLawful a n
     · exact h_sub
 
 -- move between family and single explicit circuit
@@ -414,6 +425,11 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := [channel.toRaw]
 
+attribute [explicit_circuit_unfold_type] Circuit
+
+attribute [explicit_circuit_no_unfold] Circuit.bind witnessVar witnessVars witnessVector ProvableType.witness
+  witness assertZero lookup Channel.emit Channel.pull Channel.push Pure.pure Bind.bind Functor.map
+
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.operations ExplicitCircuit.output
   ExplicitCircuit.channelsWithGuarantees ExplicitCircuit.channelsWithRequirements
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.localLength ExplicitCircuits.operations ExplicitCircuits.output
@@ -427,29 +443,51 @@ syntax "infer_explicit_circuit" : tactic
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
-    try repeat infer_instance
+    -- Prefer structural decomposition before typeclass search.  Starting with
+    -- `infer_instance` can make typeclass search `whnf` a large circuit body and
+    -- eagerly expand fixed-size `Vector.ofFn` witnesses before `from_bind` has a
+    -- chance to split the circuit into smaller pieces.
     repeat (
       try intros
       first
-        | infer_instance
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
+        | apply ExplicitCircuit.from_pure
+        | infer_instance
       repeat infer_instance
     )
     done))
 
+syntax "unfold_explicit_circuits_head" : tactic
 syntax "infer_explicit_circuits" : tactic
+
+elab "unfold_explicit_circuits_head" : tactic => withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  if !target.getAppFn.isConstOf ``ExplicitCircuits || args.size == 0 then
+    throwError "target is not ExplicitCircuits"
+  let family := args[args.size - 1]!
+  let .const declName _ := family.getAppFn
+    | throwError "target family head is not a definition"
+  if (← labelled `explicit_circuit_no_unfold).contains declName then
+    throwError "refusing to unfold explicit-circuit constructor"
+  let some unfolded ← withTransparency TransparencyMode.default <| unfoldDefinition? family
+    | throwError "failed to unfold target family head"
+  try
+    evalTactic (← `(tactic| conv => congr; unfold $(mkIdent declName):ident))
+  catch _ =>
+    let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) unfolded)
+    replaceMainGoal [← (← getMainGoal).change newTarget]
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
-    -- unfold head. TODO is there a better way?
-    try conv => congr; whnf
+    try unfold_explicit_circuits_head
     apply ExplicitCircuits.fromSingle
     intro a
     infer_explicit_circuit
     ))
 
--- TODO this is needed because `conv => congr; whnf` creates terms involving `Eq.mpr`
+-- Targeted `conv` unfolding in `infer_explicit_circuits` can still introduce `Eq.mpr`/casts.
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 /--
@@ -509,57 +547,31 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     ext.getTheorems
   let congrThms ← getSimpCongrTheorems
 
-  -- Syntactic search used by the unfold heuristic below.
-  let rec containsConst (declName : Name) (e : Expr) : Bool :=
-    match e with
-    | .const n _ => n == declName
-    | .app f a => containsConst declName f || containsConst declName a
-    | .lam _ t b _ | .forallE _ t b _ => containsConst declName t || containsConst declName b
-    | .letE _ t v b _ => containsConst declName t || containsConst declName v || containsConst declName b
-    | .mdata _ b => containsConst declName b
-    | .proj _ _ b => containsConst declName b
-    | _ => false
-
-  -- Some circuit-like declarations are not literally named `Circuit`; this helper
-  -- catches local project definitions such as `FormalCircuit` by suffix.
-  let containsConstSuffix (suffix : String) (e : Expr) : Bool := Id.run do
-    let rec go (e : Expr) : Bool :=
-      match e with
-      | .const n _ => n.getString! == suffix
-      | .app f a => go f || go a
-      | .lam _ t b _ | .forallE _ t b _ => go t || go b
-      | .letE _ t v b _ => go t || go v || go b
-      | .mdata _ b => go b
-      | .proj _ _ b => go b
-      | _ => false
-    go e
-
-  -- Decide whether a declaration's *type* mentions circuit infrastructure.  This
-  -- identifies user-level circuit definitions such as `ThetaC.main` or
-  -- `Xor64.circuit`, which often must be unfolded once before projection lemmas
-  -- can fire.
-  let hasCircuitType (type : Expr) : Bool :=
-    containsConst ``Circuit type || containsConstSuffix "FormalCircuit" type ||
-      containsConstSuffix "FormalAssertion" type || containsConstSuffix "GeneralFormalCircuit" type
-
-  -- Do not unfold the core library constructors/projections themselves here.
-  -- Those are handled by `[explicit_circuit_norm]`; unfolding them blindly would
-  -- recreate the large terms that this tactic is trying to avoid.
-  let isCoreCircuitInfra (declName : Name) : Bool :=
-    let s := declName.toString
-    s.startsWith "Circuit." || s.startsWith "ExplicitCircuit." || s.startsWith "ExplicitCircuits." ||
-      s.startsWith "Operations." || s.startsWith "FormalCircuit" || s == "subcircuit"
-
-  -- A declaration is eligible for `dsimp only` if it is a user-facing definition
-  -- whose type looks circuit-like.  We deliberately exclude input-offset helpers:
-  -- unfolding them expands variables rather than circuit structure.
+  -- A declaration is eligible for `dsimp only` if its result type is one of the
+  -- circuit types tagged with `[explicit_circuit_unfold_type]`, unless the head
+  -- itself is tagged `[explicit_circuit_no_unfold]`.  This unfolds user wrappers
+  -- returning `Circuit`/formal-circuit records without unfolding semantic circuit
+  -- constructors such as `assertZero`, `subcircuit`, or loop constructors.
+  let unfoldTypeHeads ← labelled `explicit_circuit_unfold_type
+  let noUnfoldHeads ← labelled `explicit_circuit_no_unfold
+  let rec resultTypeHead? : Expr → Option Name
+    | .forallE _ _ body _ => resultTypeHead? body
+    | .letE _ _ _ body _ => resultTypeHead? body
+    | .mdata _ body => resultTypeHead? body
+    | type =>
+        match type.getAppFn with
+        | .const n _ => some n
+        | _ => none
+  let hasUnfoldableResultType (type : Expr) : Bool :=
+    match resultTypeHead? type with
+    | some head => unfoldTypeHeads.contains head
+    | none => false
   let isUnfoldable (declName : Name) : MetaM Bool := do
-    if declName == ``ProvableType.varFromOffset || declName == ``ProvableStruct.varFromOffset ||
-        isCoreCircuitInfra declName then
+    if noUnfoldHeads.contains declName then
       return false
     match (← getEnv).find? declName with
-    | some (.defnInfo info) => return hasCircuitType info.type
-    | some (.opaqueInfo info) => return hasCircuitType info.type
+    | some (.defnInfo info) => return hasUnfoldableResultType info.type
+    | some (.opaqueInfo info) => return hasUnfoldableResultType info.type
     | _ => return false
 
   -- Collect the user circuit definitions that occur in an expression.  The list is
@@ -670,19 +682,30 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       let p ← mkAppOptM ``ExplicitCircuits.subcircuitsConsistent #[none, none, none, none, main, explicit, input, offset]
       mkLambdaFVars #[input, offset] p
 
-  -- For now the reduced tactic stores empty top-level channel lists.  This is
-  -- enough for current reduced-elaboration experiments where the explicit channel
-  -- proof can close against empty metadata.  If non-empty channels are needed, this
-  -- is the place where we should normalize and store channel projections too.
-  let rawChannelType ← mkAppM ``RawChannel #[F]
-  let channels := mkApp (mkConst ``List.nil [levelZero]) rawChannelType
+  -- Store simplified top-level channel metadata too.  The explicit metadata APIs
+  -- expose channel lists as functions of input/offset, but these lists are intended
+  -- to be circuit-level metadata.  As in `ExplicitCircuits.toElaborated`, read them
+  -- at a default input and offset 0, then normalize the resulting projection tree.
+  let defaultInput ← mkAppOptM ``default #[varInputType, none]
+  let zero := mkNatLit 0
+  let channelsWithGuarantees ← do
+    let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
+      #[none, none, none, none, main, explicit, defaultInput, zero]
+    normalizeExplicit "channelsWithGuarantees" ch
+  let channelsWithRequirements ← do
+    let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
+      #[none, none, none, none, main, explicit, defaultInput, zero]
+    normalizeExplicit "channelsWithRequirements" ch
   let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
   let exposed ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let nil := mkApp (mkConst ``List.nil [levelZero]) exposedChannelType
       mkLambdaFVars #[input, offset] nil
 
-  -- Channel lawfulness is also delegated to the inferred explicit circuit proof.
+  -- Channel lawfulness is delegated to the inferred explicit circuit proof.  This
+  -- type-checks when the normalized stored channel metadata is definitionally equal
+  -- to the explicit metadata at the current input/offset; for static channel lists,
+  -- the targeted normalization above makes that true without broad reduction.
   let channelsLawful ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p ← mkAppOptM ``ExplicitCircuits.channelsLawful #[none, none, none, none, main, explicit, input, offset]
@@ -691,13 +714,15 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- Assemble the final `ElaboratedCircuit` record using the normalized fields and
   -- the delegated proofs, then close the user's goal.
   let val ← mkAppOptM ``ElaboratedCircuit.mk #[F, Input, Output, none, none, none, main,
-    localLengthFun, localLengthEq, outputFun, outputEq, subProof, channels, channels, exposed,
-    channelsLawful]
+    localLengthFun, localLengthEq, outputFun, outputEq, subProof, channelsWithGuarantees,
+    channelsWithRequirements, exposed, channelsLawful]
   goal.assign val
   replaceMainGoal []
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with" term : tactic
 syntax "infer_elaborated_circuit_with" term " using " term : tactic
+syntax "infer_elaborated_circuit_reduced_with" term : tactic
+syntax "infer_elaborated_circuit_reduced_with" term " using " term : tactic
 
 macro_rules
   | `(tactic|infer_elaborated_circuit) => `(tactic|(
@@ -712,6 +737,12 @@ macro_rules
   ))
   | `(tactic|infer_elaborated_circuit_with $data:term) => `(tactic|(
     exact ElaboratedCircuit.withData (by infer_elaborated_circuit) $data
+  ))
+  | `(tactic|infer_elaborated_circuit_reduced_with $data:term using $data_eq:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data $data_eq
+  ))
+  | `(tactic|infer_elaborated_circuit_reduced_with $data:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data
   ))
 
 -- this tactic is pretty good at inferring explicit circuits!

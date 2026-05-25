@@ -82,8 +82,8 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-instance elaborated : ElaboratedCircuit (F p) Inputs field main where
-  localLength _ := 1
+instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
+  infer_elaborated_circuit_reduced
 
 theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint

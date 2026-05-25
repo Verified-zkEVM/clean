@@ -16,16 +16,19 @@ structure Input (F : Type) where
   inverse : UnconstrainedDep field F
 deriving CircuitType
 
+instance : Inhabited (Var Input F) where
+  default := { x := default, inverse _ := default }
+
 def circuit : GeneralFormalCircuit.WithHint F Input field where
-  base := {
-    main input := do
-      let inverse ← witness input.inverse
-      input.x * inverse === 1
-      return inverse
-    elaborated := {
-      localLength _ := 1
-      output _ offset := varFromOffset field offset
-    }
+  main input := do
+    let inverse ← witness input.inverse
+    input.x * inverse === 1
+    return inverse
+
+  -- TODO autoelab fails, might be because of `===`
+  elaborated := {
+    localLength _ := 1
+    output _ offset := varFromOffset field offset
   }
 
   Spec input out _ :=
@@ -55,14 +58,8 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     rwa [h_env]
 
 def parent : GeneralFormalCircuit F field field where
-  base := {
-    main input := do
-      circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
-    elaborated := {
-      localLength _ := 1
-      output _ offset := varFromOffset field offset
-    }
-  }
+  main input := do
+    circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
 
   Spec input out _ :=
     input * out = 1

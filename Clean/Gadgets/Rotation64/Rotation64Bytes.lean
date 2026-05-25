@@ -34,7 +34,7 @@ def Assumptions (input : U64 (F p)) := input.Normalized
 def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value (offset.val * 8) ∧ y.Normalized
 
-instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 (main off) where
+@[reducible] instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 (main off) where
   localLength _ := 0
   output input i0 :=
     let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input

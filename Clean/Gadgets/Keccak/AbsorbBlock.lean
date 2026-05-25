@@ -23,16 +23,9 @@ def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   -- apply the permutation
   Permutation.circuit state'
 
--- TODO autoelaboration times out
 @[reducible]
-instance elaborated : ElaboratedCircuit (F p) Input KeccakState main where
-  localLength _ := 31048
-  output _ i0 := Permutation.stateVar (i0 + 136) 23
-
-  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  channelsLawful := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
+instance elaborated : ElaboratedCircuit (F p) Input KeccakState main := by
+  infer_elaborated_circuit_reduced
 
 @[reducible] def Assumptions (input : Input (F p)) :=
   input.state.Normalized ∧ input.block.Normalized

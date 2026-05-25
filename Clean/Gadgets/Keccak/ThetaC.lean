@@ -23,8 +23,6 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
--- #eval! theta_c (p:=p_babybear) default |>.localLength
-set_option maxHeartbeats 20000 in
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
   infer_elaborated_circuit_reduced
