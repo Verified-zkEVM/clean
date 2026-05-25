@@ -7,6 +7,9 @@ under `circuit_norm` in every way we need them to.
 -/
 import Clean.Circuit.Subcircuit
 import Clean.Utils.Misc
+import Lean.Elab.Tactic
+
+open Lean Meta Elab Tactic
 
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
@@ -978,23 +981,40 @@ macro_rules
     infer_explicit_circuit
     ))
 
+syntax "infer_explicit_loop_head" : tactic
+
+elab "infer_explicit_loop_head" : tactic => withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.size == 0 then
+    throwError "target is not an ExplicitCircuit"
+  let circuit := args[args.size - 1]!
+  match circuit.getAppFn with
+  | .const ``Circuit.mapFinRange _ =>
+      evalTactic (← `(tactic| apply Circuit.ExplicitCircuit.from_mapFinRange (by infer_explicit_circuits)))
+  | .const ``Circuit.foldlRange _ =>
+      evalTactic (← `(tactic| apply Circuit.ExplicitCircuit.from_foldlRange))
+  | .const ``Circuit.forEach _ =>
+      evalTactic (← `(tactic| apply Circuit.ExplicitCircuit.from_forEach (by infer_explicit_circuits)))
+  | .const ``Circuit.map _ =>
+      evalTactic (← `(tactic| apply Circuit.ExplicitCircuit.from_map_loop (by infer_explicit_circuits)))
+  | .const ``Circuit.foldl _ =>
+      evalTactic (← `(tactic| apply Circuit.ExplicitCircuit.from_foldl))
+  | _ => throwError "target circuit is not a loop constructor"
+
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
-    -- Prefer structural decomposition before typeclass search.  Eager instance
-    -- search can `whnf` a large continuation and expand fixed-size vector/output
-    -- terms before bind/loop constructors split the circuit.
+    -- Dispatch to loop constructors only when the circuit head is actually a
+    -- loop.  Otherwise keep the stronger existing bind/map/pure/instance path;
+    -- speculative loop `apply`s can be expensive on large non-loop goals.
     repeat (
       try intros
       first
-        | apply Circuit.ExplicitCircuit.from_foldl
+        | infer_explicit_loop_head
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
         | apply ExplicitCircuit.from_pure
-        | apply Circuit.ExplicitCircuit.from_mapFinRange (by infer_explicit_circuits)
-        | apply Circuit.ExplicitCircuit.from_foldlRange
-        | apply Circuit.ExplicitCircuit.from_forEach (by infer_explicit_circuits)
-        | apply Circuit.ExplicitCircuit.from_map_loop (by infer_explicit_circuits)
         | infer_instance
       repeat infer_instance
     )
