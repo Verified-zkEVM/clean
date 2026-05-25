@@ -6,7 +6,7 @@ This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
 import Clean.Circuit.Basic
-import Clean.Circuit.ExplicitNoUnfold
+import Clean.Circuit.ExplicitAttributes
 import Lean.Elab.Tactic
 import Mathlib.Lean.Meta.Simp
 
@@ -425,6 +425,8 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := [channel.toRaw]
 
+attribute [explicit_circuit_unfold_type] Circuit
+
 attribute [explicit_circuit_no_unfold] Circuit.bind witnessVar witnessVars witnessVector ProvableType.witness
   witness assertZero lookup Channel.emit Channel.pull Channel.push Pure.pure Bind.bind Functor.map
 
@@ -545,57 +547,31 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     ext.getTheorems
   let congrThms ← getSimpCongrTheorems
 
-  -- Syntactic search used by the unfold heuristic below.
-  let rec containsConst (declName : Name) (e : Expr) : Bool :=
-    match e with
-    | .const n _ => n == declName
-    | .app f a => containsConst declName f || containsConst declName a
-    | .lam _ t b _ | .forallE _ t b _ => containsConst declName t || containsConst declName b
-    | .letE _ t v b _ => containsConst declName t || containsConst declName v || containsConst declName b
-    | .mdata _ b => containsConst declName b
-    | .proj _ _ b => containsConst declName b
-    | _ => false
-
-  -- Some circuit-like declarations are not literally named `Circuit`; this helper
-  -- catches local project definitions such as `FormalCircuit` by suffix.
-  let containsConstSuffix (suffix : String) (e : Expr) : Bool := Id.run do
-    let rec go (e : Expr) : Bool :=
-      match e with
-      | .const n _ => n.getString! == suffix
-      | .app f a => go f || go a
-      | .lam _ t b _ | .forallE _ t b _ => go t || go b
-      | .letE _ t v b _ => go t || go v || go b
-      | .mdata _ b => go b
-      | .proj _ _ b => go b
-      | _ => false
-    go e
-
-  -- Decide whether a declaration's *type* mentions circuit infrastructure.  This
-  -- identifies user-level circuit definitions such as `ThetaC.main` or
-  -- `Xor64.circuit`, which often must be unfolded once before projection lemmas
-  -- can fire.
-  let hasCircuitType (type : Expr) : Bool :=
-    containsConst ``Circuit type || containsConstSuffix "FormalCircuit" type ||
-      containsConstSuffix "FormalAssertion" type || containsConstSuffix "GeneralFormalCircuit" type
-
-  -- Do not unfold the core library constructors/projections themselves here.
-  -- Those are handled by `[explicit_circuit_norm]`; unfolding them blindly would
-  -- recreate the large terms that this tactic is trying to avoid.
-  let isCoreCircuitInfra (declName : Name) : Bool :=
-    let s := declName.toString
-    s.startsWith "Circuit." || s.startsWith "ExplicitCircuit." || s.startsWith "ExplicitCircuits." ||
-      s.startsWith "Operations." || s.startsWith "FormalCircuit" || s == "subcircuit"
-
-  -- A declaration is eligible for `dsimp only` if it is a user-facing definition
-  -- whose type looks circuit-like.  We deliberately exclude input-offset helpers:
-  -- unfolding them expands variables rather than circuit structure.
+  -- A declaration is eligible for `dsimp only` if its result type is one of the
+  -- circuit types tagged with `[explicit_circuit_unfold_type]`, unless the head
+  -- itself is tagged `[explicit_circuit_no_unfold]`.  This unfolds user wrappers
+  -- returning `Circuit`/formal-circuit records without unfolding semantic circuit
+  -- constructors such as `assertZero`, `subcircuit`, or loop constructors.
+  let unfoldTypeHeads ← labelled `explicit_circuit_unfold_type
+  let noUnfoldHeads ← labelled `explicit_circuit_no_unfold
+  let rec resultTypeHead? : Expr → Option Name
+    | .forallE _ _ body _ => resultTypeHead? body
+    | .letE _ _ _ body _ => resultTypeHead? body
+    | .mdata _ body => resultTypeHead? body
+    | type =>
+        match type.getAppFn with
+        | .const n _ => some n
+        | _ => none
+  let hasUnfoldableResultType (type : Expr) : Bool :=
+    match resultTypeHead? type with
+    | some head => unfoldTypeHeads.contains head
+    | none => false
   let isUnfoldable (declName : Name) : MetaM Bool := do
-    if declName == ``ProvableType.varFromOffset || declName == ``ProvableStruct.varFromOffset ||
-        isCoreCircuitInfra declName then
+    if noUnfoldHeads.contains declName then
       return false
     match (← getEnv).find? declName with
-    | some (.defnInfo info) => return hasCircuitType info.type
-    | some (.opaqueInfo info) => return hasCircuitType info.type
+    | some (.defnInfo info) => return hasUnfoldableResultType info.type
+    | some (.opaqueInfo info) => return hasUnfoldableResultType info.type
     | _ => return false
 
   -- Collect the user circuit definitions that occur in an expression.  The list is

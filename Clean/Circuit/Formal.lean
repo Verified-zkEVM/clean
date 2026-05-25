@@ -5,6 +5,7 @@ variable {F : Type} [Field F] {α β : Type} {n : ℕ}
 section
 variable {Input Output : TypeMap}
 
+@[explicit_circuit_unfold_type]
 structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
     [Field F] [CircuitType Input] [CircuitType Output] where
   name : String := "anonymous"
@@ -97,6 +98,7 @@ Note that soundness and completeness, taken together, show that the spec will ho
 This means that, when viewed as a black box, the circuit acts similar to a function. The assumptions act as
 preconditions, and the spec acts as the postcondition.
 -/
+@[explicit_circuit_unfold_type]
 structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends base : FormalCircuitBase F Input Output where
   Assumptions (_ : Input F) : Prop := True
@@ -155,6 +157,7 @@ of the constraints.
 (In the case of `FormalCircuit`, given assumptions, the constraints are always satisfiable and the spec can be
 strictly weaker than the constraints.)
 -/
+@[explicit_circuit_unfold_type]
 structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
     extends base : FormalCircuitBase F Input unit where
   Assumptions (input : Input F) : Prop := True
@@ -210,6 +213,7 @@ this assumption is not needed as the circuit adds that constraint itself. Using 
 add the range assumption to the soundness statement, thus making the circuit hard to use
 (in particular, not usable as a bit range check, because it already _requires_ the bit range assumption).
 -/
+@[explicit_circuit_unfold_type]
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends base : FormalCircuitBase F Input Output where
   /-- the statement to be assumed for soundness -/
@@ -265,6 +269,7 @@ def GeneralFormalCircuit.WithHint.Completeness (F : Type) [Field F]
 Hint-aware variant of `GeneralFormalCircuit` for schemas whose prover and
 verifier views differ.
 -/
+@[explicit_circuit_unfold_type]
 structure GeneralFormalCircuit.WithHint (F : Type) (Input Output : TypeMap) [Field F]
   [CircuitType Input] [CircuitType Output]
     extends base : FormalCircuitBase F Input Output where
