@@ -24,14 +24,14 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
 set_option linter.constructorNameAsVariable false
 
 -- TODO reduced tactics time out (timeout at whnf)
--- instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+-- instance : ElaboratedCircuit (F p) KeccakState KeccakState main := by
 --   infer_elaborated_circuit_reduced
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
   infer_elaborated_circuit_with {
     localLength _ := 30912
     output _ i0 := stateVar i0 23
   } using by
-    simp only [circuit_norm, stateVar, KeccakRound.circuit]
+    simp [circuit_norm, stateVar, KeccakRound.circuit]
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
