@@ -24,7 +24,7 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
 set_option linter.constructorNameAsVariable false
 
 -- TODO reduced tactics time out (timeout at whnf)
--- instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+-- instance : ElaboratedCircuit (F p) KeccakState KeccakState main := by
 --   infer_elaborated_circuit_reduced
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
   infer_elaborated_circuit_with {
