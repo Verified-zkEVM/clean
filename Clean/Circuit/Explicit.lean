@@ -102,6 +102,38 @@ def ElaboratedCircuit.fromExplicit {Input Output : TypeMap}
   (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) :
     ElaboratedCircuit F Input Output circuit := explicit.toElaborated _ explicit_elaborated
 
+theorem ExplicitCircuits.toElaborated_localLength {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (explicit : ExplicitCircuits circuit)
+    (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) (a : Var Input F) :
+    (ExplicitCircuits.toElaborated circuit explicit explicit_elaborated).localLength a =
+      explicit.localLength a 0 := rfl
+
+theorem ExplicitCircuits.toElaborated_output {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (explicit : ExplicitCircuits circuit)
+    (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) (a : Var Input F) (n : ℕ) :
+    (ExplicitCircuits.toElaborated circuit explicit explicit_elaborated).output a n =
+      explicit.output a n := rfl
+
+theorem ExplicitCircuits.toElaborated_channelsWithGuarantees {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (explicit : ExplicitCircuits circuit)
+    (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) :
+    (ExplicitCircuits.toElaborated circuit explicit explicit_elaborated).channelsWithGuarantees =
+      explicit.channelsWithGuarantees default 0 := rfl
+
+theorem ExplicitCircuits.toElaborated_channelsWithRequirements {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (explicit : ExplicitCircuits circuit)
+    (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) :
+    (ExplicitCircuits.toElaborated circuit explicit explicit_elaborated).channelsWithRequirements =
+      explicit.channelsWithRequirements default 0 := rfl
+
 structure ElaboratedCircuit.Data {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     {circuit : Var Input F → Circuit F (Var Output F)} (elaborated : ElaboratedCircuit F Input Output circuit) where
   localLength : Var Input F → ℕ := elaborated.localLength
@@ -159,6 +191,39 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
       · exact Or.inr (channelsWithRequirements_subset h_channel)
     · exact data.exposedChannelsLawful a n
     · exact h_sub
+
+theorem ElaboratedCircuit.withData_localLength {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) (a : Var Input F) :
+    (ElaboratedCircuit.withData derived data data_eq).localLength a = data.localLength a := rfl
+
+theorem ElaboratedCircuit.withData_output {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) (a : Var Input F) (n : ℕ) :
+    (ElaboratedCircuit.withData derived data data_eq).output a n = data.output a n := rfl
+
+theorem ElaboratedCircuit.withData_channelsWithGuarantees {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) :
+    (ElaboratedCircuit.withData derived data data_eq).channelsWithGuarantees = data.channelsWithGuarantees := rfl
+
+theorem ElaboratedCircuit.withData_channelsWithRequirements {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) :
+    (ElaboratedCircuit.withData derived data data_eq).channelsWithRequirements = data.channelsWithRequirements := rfl
+
+theorem ElaboratedCircuit.withData_exposedChannels {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) (a : Var Input F) (n : ℕ) :
+    (ElaboratedCircuit.withData derived data data_eq).exposedChannels a n = data.exposedChannels a n := rfl
 
 -- move between family and single explicit circuit
 
