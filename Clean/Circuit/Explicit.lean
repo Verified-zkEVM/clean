@@ -640,8 +640,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     | _ => return false
 
   -- Collect the user circuit definitions that occur in an expression.  The list is
-  -- fed to `dsimp only`; after each simplification pass we scan again, because
-  -- unfolding one definition may reveal another circuit definition inside it.
+  -- fed to one `dsimp only` call; repeatedly simplifying already-expanded metadata
+  -- is expensive for large loops.
   let rec collectUnfoldable (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
     match e with
     | .const declName _ =>
@@ -666,28 +666,21 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       (simpTheorems := #[thms]) congrThms
 
   -- Normalize an explicit metadata expression, but only by the targeted rules
-  -- described above.  This is intentionally a small fixed-point loop rather than
-  -- full reduction.  The debug output is copyable Lean syntax, e.g.
+  -- described above.  The unfold set is collected from the current expression
+  -- and fed to a single `dsimp` call to avoid repeatedly simplifying
+  -- already-expanded loop metadata.  The debug output is copyable Lean syntax, e.g.
   --   dsimp only [explicit_circuit_norm, Foo.main, Bar.circuit]
   -- so a failing or slow normalization step can be replayed in a source file.
   let normalizeExplicit (label : String) (e : Expr) : MetaM Expr := do
     let debug := (← getOptions).getBool `debug.explicitCircuitReduced false
-    let mut current := e
-    let mut decls ← collectUnfoldable e #[]
-    for i in [:8] do
-      if debug then
-        let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
-        let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
-        logInfo m!"infer_elaborated_circuit_reduced {label} pass {i}:
+    let decls ← collectUnfoldable e #[]
+    if debug then
+      let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
+      let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
+      logInfo m!"infer_elaborated_circuit_reduced {label} pass 0:
   dsimp only [{simpArgs}]"
-      let ctx ← mkDsimpCtx decls
-      let next := (← dsimp current ctx).1
-      let decls' ← collectUnfoldable next decls
-      if next == current && decls'.size == decls.size then
-        return next
-      current := next
-      decls := decls'
-    return current
+    let ctx ← mkDsimpCtx decls
+    return (← dsimp e ctx).1
 
   -- Store a simplified elaborated `localLength`.  We start from
   --   explicit.localLength input 0
@@ -715,7 +708,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let localLengthEq ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p1 ← mkAppOptM ``ExplicitCircuits.localLength_eq #[none, none, none, none, main, explicit, input, offset]
-      let p1Type ← whnf (← inferType p1)
+      let p1Type ← inferType p1
       let some (_, _, mid) := p1Type.eq?
         | throwError "unexpected localLength_eq type: {p1Type}"
       let rhs := mkApp localLengthFun input
@@ -730,7 +723,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let outputEq ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p1 ← mkAppOptM ``ExplicitCircuits.output_eq #[none, none, none, none, main, explicit, input, offset]
-      let p1Type ← whnf (← inferType p1)
+      let p1Type ← inferType p1
       let some (_, _, mid) := p1Type.eq?
         | throwError "unexpected output_eq type: {p1Type}"
       let rhs := mkApp2 outputFun input offset
