@@ -485,7 +485,7 @@ macro_rules
     infer_explicit_circuit
     ))
 
--- TODO this was needed because `conv => congr; whnf` created terms involving `Eq.mpr`.
+-- Targeted `conv` unfolding in `infer_explicit_circuits` can still introduce `Eq.mpr`/casts.
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 /--
