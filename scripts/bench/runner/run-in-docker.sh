@@ -38,9 +38,10 @@ run_benchmark() {
   local repo="$2"
   local sha="$3"
   local checkout="$WORK_DIR/$label/clean"
+  local elan_home="$RUN_DIR/elan-home/$label"
   local xdg_cache="$RUN_DIR/xdg-cache/$label"
 
-  mkdir -p "$xdg_cache"
+  mkdir -p "$elan_home" "$xdg_cache"
   git clone --filter=blob:none "https://github.com/$repo.git" "$checkout"
   git -C "$checkout" fetch --no-tags "https://github.com/$repo.git" "$sha"
   git -C "$checkout" checkout --detach "$sha"
@@ -50,12 +51,22 @@ run_benchmark() {
 
   local toolchain
   toolchain="$(sed -n '1p' "$checkout/lean-toolchain")"
+  local package_cache_key
+  package_cache_key="$(
+    {
+      printf '%s\n' "$toolchain"
+      sha256sum "$checkout/lake-manifest.json"
+    } | sha256sum | cut -d' ' -f1
+  )"
+  local package_cache="$CACHE_DIR/lake-packages/$package_cache_key"
+  mkdir -p "$checkout/.lake" "$package_cache"
+
   docker run --rm \
     --network bridge \
     -e ELAN_HOME=/bench-cache/elan \
     -v "$CACHE_DIR/elan:/bench-cache/elan" \
     "$IMAGE" \
-    elan toolchain install "$toolchain"
+    bash -lc 'elan toolchain install "$1" || elan toolchain list | grep -Fxq "$1"' bash "$toolchain"
 
   docker run --rm \
     --cap-add PERFMON \
@@ -63,10 +74,12 @@ run_benchmark() {
     --security-opt no-new-privileges \
     --network bridge \
     -e XDG_CACHE_HOME=/workspace/xdg-cache \
-    -e ELAN_HOME=/bench-cache/elan \
+    -e ELAN_HOME=/workspace/elan-home \
     -e BENCH_OUTPUT_FILE="/bench-output/$label.jsonl" \
     -v "$checkout:/workspace/clean" \
-    -v "$CACHE_DIR/elan:/bench-cache/elan:ro" \
+    -v "$package_cache:/workspace/clean/.lake/packages" \
+    -v "$elan_home:/workspace/elan-home" \
+    -v "$CACHE_DIR/elan/toolchains:/workspace/elan-home/toolchains:ro" \
     -v "$xdg_cache:/workspace/xdg-cache" \
     -v "$BENCH_OUTPUT_DIR:/bench-output" \
     "${PERF_MOUNTS[@]}" \

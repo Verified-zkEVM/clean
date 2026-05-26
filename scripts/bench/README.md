@@ -49,6 +49,6 @@ The benchmark workflow expects a repo-scoped self-hosted runner with labels:
 self-hosted, linux, x64, clean-bench
 ```
 
-The workflow runs checked-out code inside a Docker container. Persistent Lean toolchain state lives under `/var/lib/clean-bench/cache/elan`, while each baseline/current checkout and writable cache directory uses a per-run workspace that is removed after the benchmark. The persistent Lean toolchain cache is mounted read-only when benchmarked code runs.
+The workflow runs checked-out code inside a Docker container. Persistent Lean toolchain state lives under `/var/lib/clean-bench/cache/elan`, and persistent Lake dependency package caches live under `/var/lib/clean-bench/cache/lake-packages`, keyed by `lean-toolchain` plus `lake-manifest.json`. Each baseline/current checkout and writable non-dependency cache directory uses a per-run workspace that is removed after the benchmark. The persistent Lean toolchain cache is mounted read-only when benchmarked code runs.
 
 The host must provide working userspace `perf` instruction counters. In practice this means configuring the host so `perf stat -e instructions:u -- true` reports a numeric count for the runner environment. The container is run without host networking, without privileged mode, and without the Docker socket mounted.
