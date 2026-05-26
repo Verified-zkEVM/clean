@@ -56,7 +56,6 @@ jobs:
             -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/workflows/bench.yml"
 
       - name: Acknowledge command
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
