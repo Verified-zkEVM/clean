@@ -37,7 +37,7 @@ class ExplicitCircuit (circuit : Circuit F α) where
   channelsWithGuarantees : ℕ → List (RawChannel F)
   channelsWithRequirements : ℕ → List (RawChannel F)
   channelsLawful : ∀ n : ℕ, (circuit.operations n).ChannelsLawful
-      (channelsWithGuarantees n) (channelsWithRequirements n) [] := by
+      (channelsWithGuarantees n) (channelsWithRequirements n) := by
     intro n
     try rw [operations_eq n]
     try dsimp only [channelsWithGuarantees, channelsWithRequirements, operations]
@@ -58,7 +58,7 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
   channelsWithGuarantees : α → ℕ → List (RawChannel F)
   channelsWithRequirements : α → ℕ → List (RawChannel F)
   channelsLawful : ∀ (a : α) (n : ℕ), ((circuit a).operations n).ChannelsLawful
-      (channelsWithGuarantees a n) (channelsWithRequirements a n) [] := by
+      (channelsWithGuarantees a n) (channelsWithRequirements a n) := by
     intro a n
     try rw [operations_eq a n]
     try dsimp only [channelsWithGuarantees, channelsWithRequirements, operations]
@@ -140,11 +140,6 @@ structure ElaboratedCircuit.Data {Input Output : TypeMap} [CircuitType Input] [C
   output : Var Input F → ℕ → Var Output F := elaborated.output
   channelsWithGuarantees : List (RawChannel F) := elaborated.channelsWithGuarantees
   channelsWithRequirements : List (RawChannel F) := elaborated.channelsWithRequirements
-  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
-  exposedChannelsLawful : ∀ input offset exposed, exposed ∈ exposedChannels input offset →
-      ((circuit input).operations offset).interactionsWith exposed.channel = exposed.interactions := by
-    intro input offset exposed h_mem
-    cases h_mem
 
 @[circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -171,13 +166,12 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
   subcircuitsConsistent := derived.subcircuitsConsistent
   channelsWithGuarantees := data.channelsWithGuarantees
   channelsWithRequirements := data.channelsWithRequirements
-  exposedChannels := data.exposedChannels
   channelsLawful a n := by
     have h_lawful := derived.channelsLawful a n
     have channelsWithGuarantees_subset := data_eq.2.2.1
     have channelsWithRequirements_subset := data_eq.2.2.2
     dsimp only [Operations.ChannelsLawful] at h_lawful ⊢
-    obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_exposed, h_sub⟩ := h_lawful
+    obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_sub⟩ := h_lawful
     and_intros
     · exact List.Subset.trans h_g_sub channelsWithGuarantees_subset
     · intro env
@@ -189,7 +183,6 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
       rcases h_shallow channel h_mem with h_channel | h_channel
       · exact Or.inl (channelsWithGuarantees_subset h_channel)
       · exact Or.inr (channelsWithRequirements_subset h_channel)
-    · exact data.exposedChannelsLawful a n
     · exact h_sub
 
 theorem ElaboratedCircuit.withData_localLength {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -217,13 +210,6 @@ theorem ElaboratedCircuit.withData_channelsWithRequirements {Input Output : Type
     (derived : ElaboratedCircuit F Input Output circuit)
     (data : ElaboratedCircuit.Data derived) (data_eq) :
     (ElaboratedCircuit.withData derived data data_eq).channelsWithRequirements = data.channelsWithRequirements := rfl
-
-theorem ElaboratedCircuit.withData_exposedChannels {Input Output : TypeMap}
-    [CircuitType Input] [CircuitType Output]
-    {circuit : Var Input F → Circuit F (Var Output F)}
-    (derived : ElaboratedCircuit F Input Output circuit)
-    (data : ElaboratedCircuit.Data derived) (data_eq) (a : Var Input F) (n : ℕ) :
-    (ElaboratedCircuit.withData derived data data_eq).exposedChannels a n = data.exposedChannels a n := rfl
 
 -- move between family and single explicit circuit
 
@@ -812,11 +798,6 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       let channelsWithRequirementsNormProof ← mkLambdaFVars #[input, offset] proof
       return (channelsWithRequirementsFun, channelsWithRequirementsNormProof)
   let channelsWithRequirements := mkApp2 channelsWithRequirementsFun defaultInput zero
-  let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
-  let exposed ← withLocalDeclD `input varInputType fun input => do
-    withLocalDeclD `offset natType fun offset => do
-      let nil := mkApp (mkConst ``List.nil [levelZero]) exposedChannelType
-      mkLambdaFVars #[input, offset] nil
 
   -- Channel lawfulness is delegated to the inferred explicit circuit proof.  If the
   -- stored channel metadata was simplified propositionally, transport the delegated
@@ -827,12 +808,11 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
         #[F, fieldInst, varInputType, varOutputType, main, explicit, input, offset]
       let pType ← inferType p
       let pArgs := pType.getAppArgs
-      if !pType.getAppFn.isConstOf ``Operations.ChannelsLawful || pArgs.size < 6 then
+      if !pType.getAppFn.isConstOf ``Operations.ChannelsLawful || pArgs.size < 5 then
         throwError "unexpected channelsLawful type: {pType}"
       let ops := pArgs[2]!
       let actualGuarantees := pArgs[3]!
       let actualRequirements := pArgs[4]!
-      let actualExposed := pArgs[5]!
       let rawChannelType := mkApp (mkConst ``RawChannel) F
       let rawChannelListType := mkApp (mkConst ``List [levelZero]) rawChannelType
       let guaranteesProof := mkApp2 channelsWithGuaranteesNormProof input offset
@@ -845,7 +825,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
         #[none, actualGuarantees, currentGuarantees, channelsWithGuarantees, guaranteesProof, guaranteesStoredProof]
       let p ← withLocalDeclD `channelsWithGuarantees rawChannelListType fun normalizedGuarantees => do
         let prop := mkAppN (mkConst ``Operations.ChannelsLawful)
-          #[F, fieldInst, ops, normalizedGuarantees, actualRequirements, actualExposed]
+          #[F, fieldInst, ops, normalizedGuarantees, actualRequirements]
         let motive ← mkLambdaFVars #[normalizedGuarantees] prop
         let propEq ← mkAppM ``congrArg #[motive, guaranteesProof]
         mkEqMP propEq p
@@ -859,7 +839,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
         #[none, actualRequirements, currentRequirements, channelsWithRequirements, requirementsProof, requirementsStoredProof]
       let p ← withLocalDeclD `channelsWithRequirements rawChannelListType fun normalizedRequirements => do
         let prop := mkAppN (mkConst ``Operations.ChannelsLawful)
-          #[F, fieldInst, ops, channelsWithGuarantees, normalizedRequirements, actualExposed]
+          #[F, fieldInst, ops, channelsWithGuarantees, normalizedRequirements]
         let motive ← mkLambdaFVars #[normalizedRequirements] prop
         let propEq ← mkAppM ``congrArg #[motive, requirementsProof]
         mkEqMP propEq p
@@ -869,7 +849,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- the delegated proofs, then close the user's goal.
   let val ← mkAppOptM ``ElaboratedCircuit.mk #[F, Input, Output, none, none, none, main,
     localLengthFun, localLengthEq, outputFun, outputEq, subProof, channelsWithGuarantees,
-    channelsWithRequirements, exposed, channelsLawful]
+    channelsWithRequirements, channelsLawful]
   goal.assign val
   replaceMainGoal []
 
