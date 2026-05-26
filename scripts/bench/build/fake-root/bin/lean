@@ -2,9 +2,11 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 NAME = "build"
@@ -41,6 +43,34 @@ def count_lines(module: str, path: Path) -> None:
     save_result(f"{NAME}/module/{module}//lines", lines)
 
 
+def save_profile_metrics(stderr: str) -> None:
+    save_profile_metrics_from_lines(stderr.splitlines())
+
+
+def save_profile_metrics_from_lines(lines) -> None:
+    for line in lines:
+        line = line.rstrip("\n")
+        match = re.fullmatch(r"\t(.*) ([\d.]+)(m?s)", line)
+        if not match:
+            continue
+        name = match.group(1)
+        seconds = float(match.group(2))
+        if match.group(3) == "ms":
+            seconds = seconds / 1000
+        save_result(f"{NAME}/profile/{name}//wall-clock", seconds, "s")
+
+
+def save_heartbeat_metrics_from_lines(lines, module: str) -> None:
+    heartbeats = 0
+    for line in lines:
+        line = line.rstrip("\n")
+        match = re.fullmatch(r"\[.*\] \[([\d.]+)\].*", line)
+        if not match:
+            continue
+        heartbeats += round(float(match.group(1)))
+    save_result(f"{NAME}/module/{module}//heartbeats", heartbeats, "heartbeats")
+
+
 def run_lean(module: str) -> None:
     _, stderr = measure.main(
         cmd=["lean", "--profile", "-Dprofiler.threshold=9999999", *sys.argv[1:]],
@@ -50,16 +80,65 @@ def run_lean(module: str) -> None:
         append=True,
         capture=True,
     )
+    save_profile_metrics(stderr)
 
-    for line in stderr.splitlines():
-        match = re.fullmatch(r"\t(.*) ([\d.]+)(m?s)", line)
-        if not match:
-            continue
-        name = match.group(1)
-        seconds = float(match.group(2))
-        if match.group(3) == "ms":
-            seconds = seconds / 1000
-        save_result(f"{NAME}/profile/{name}//wall-clock", seconds, "s")
+
+def run_lean_with_heartbeats(module: str) -> None:
+    with tempfile.NamedTemporaryFile() as perf_file, tempfile.NamedTemporaryFile(
+        "w+", encoding="utf-8"
+    ) as stdout_file, tempfile.NamedTemporaryFile("w+", encoding="utf-8") as stderr_file:
+        env = os.environ.copy()
+        env["LC_ALL"] = "C"
+        command = [
+            "perf",
+            "stat",
+            "-j",
+            "-o",
+            perf_file.name,
+            "-e",
+            "instructions:u",
+            "--",
+            "env",
+            f"PATH={env['PATH']}",
+            "lean",
+            "--profile",
+            "-Dprofiler.threshold=9999999",
+            "-Dtrace.profiler=true",
+            "-Dtrace.profiler.useHeartbeats=true",
+            "-Dtrace.profiler.threshold=0",
+            *sys.argv[1:],
+        ]
+        result = subprocess.run(
+            command,
+            env=env,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            encoding="utf-8",
+        )
+
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        if result.returncode != 0:
+            stdout = stdout_file.read()
+            stderr = stderr_file.read()
+            print(stdout, end="", file=sys.stdout)
+            print(stderr, end="", file=sys.stderr)
+            sys.exit(result.returncode)
+
+        perf_file.seek(0)
+        perf = {}
+        for line in perf_file:
+            data = json.loads(line)
+            if data.get("event") == "instructions:u" and "counter-value" in data:
+                perf["instructions:u"] = float(data["counter-value"])
+        if "instructions:u" not in perf:
+            raise SystemExit("perf did not report supported data for event 'instructions:u'")
+
+        save_result(f"{NAME}/module/{module}//instructions", perf["instructions:u"])
+        stderr_file.seek(0)
+        save_profile_metrics_from_lines(stderr_file)
+        stderr_file.seek(0)
+        save_heartbeat_metrics_from_lines(stderr_file, module)
 
 
 def main() -> None:
@@ -78,7 +157,10 @@ def main() -> None:
 
     module = get_module(args.setup)
     count_lines(module, args.lean)
-    run_lean(module)
+    if os.environ.get("BENCH_HEARTBEATS") == "1":
+        run_lean_with_heartbeats(module)
+    else:
+        run_lean(module)
 
 
 if __name__ == "__main__":
