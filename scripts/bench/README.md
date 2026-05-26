@@ -39,7 +39,7 @@ After the benchmark workflows are present on the default branch, maintainers can
 
 The command workflow verifies that the commenter is an owner, member, or collaborator, then dispatches the benchmark workflow for the pull request's exact head commit.
 
-The benchmark workflow expects a self-hosted runner with labels:
+The benchmark workflow expects a repo-scoped self-hosted runner with labels:
 
 ```text
 self-hosted, linux, x64, clean-bench
