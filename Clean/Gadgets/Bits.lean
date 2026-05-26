@@ -18,10 +18,11 @@ def main (n : ℕ) (x : Expression (F p)) := do
   x === fieldFromBitsExpr bits
   return bits
 
+attribute [explicit_circuit_norm] Equality.circuit List.append_nil
+
 @[reducible, circuit_norm]
-instance elaborated (n : ℕ) : ElaboratedCircuit (F p) field (fields n) (main n) := by
+instance elaborated (n : ℕ) : ElaboratedCircuit (F p) field (fields n) (main n) := by?
   infer_elaborated_circuit_reduced_with {
-    localLength _ := n
     output _ i := varFromOffset (fields n) i
   }
 
