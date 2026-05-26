@@ -42,8 +42,8 @@ class Result:
 PERF_METRICS = {
     "task-clock": PerfMetric("task-clock", factor=1e-9, unit="s"),
     "wall-clock": PerfMetric("duration_time", factor=1e-9, unit="s"),
-    "instructions": PerfMetric("instructions"),
-    "cycles": PerfMetric("cycles"),
+    "instructions": PerfMetric("instructions:u"),
+    "cycles": PerfMetric("cycles:u"),
 }
 
 PERF_UNITS = {
@@ -122,10 +122,11 @@ def measure_perf(cmd: list[str], events: set[str], capture: bool) -> MeasureResu
         for line in tmp:
             data = json.loads(line)
             if "event" in data and "counter-value" in data:
-                perf[data["event"]] = PerfResult(
-                    value=float(data["counter-value"]),
-                    unit=data["unit"],
-                )
+                try:
+                    value = float(data["counter-value"])
+                except ValueError:
+                    continue
+                perf[data["event"]] = PerfResult(value=value, unit=data["unit"])
 
         return MeasureResult(
             perf=perf,
@@ -136,10 +137,9 @@ def measure_perf(cmd: list[str], events: set[str], capture: bool) -> MeasureResu
 
 def get_perf_result(perf: PerfResults, metric: str) -> Result:
     info = PERF_METRICS[metric]
-    if info.event in perf:
-        result = perf[info.event]
-    else:
-        result = perf[f"{info.event}:u"]
+    if info.event not in perf:
+        raise SystemExit(f"perf did not report supported data for event {info.event!r}")
+    result = perf[info.event]
     value = result.value * PERF_UNITS.get(result.unit, info.factor)
     return Result(category=metric, value=value, unit=info.unit)
 
