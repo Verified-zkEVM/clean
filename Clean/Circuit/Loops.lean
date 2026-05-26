@@ -1359,44 +1359,43 @@ theorem from_foldlRange_operations {m : ℕ} [Inhabited β]
         (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
           (n + i * ((explicit default i).localLength 0))).flatten := rfl
 
-syntax "infer_explicit_loop_head" : tactic
+private partial def containsExplicitLoopConstructor (e : Expr) : Bool :=
+  let e := e.consumeMData
+  let fn := e.getAppFn
+  (fn.isConstOf ``Circuit.mapFinRange || fn.isConstOf ``Circuit.foldlRange ||
+    fn.isConstOf ``Circuit.forEach || fn.isConstOf ``Circuit.map || fn.isConstOf ``Circuit.foldl) ||
+  e.getAppArgs.any containsExplicitLoopConstructor ||
+  match e with
+  | .lam _ d b _ | .forallE _ d b _ => containsExplicitLoopConstructor d || containsExplicitLoopConstructor b
+  | .letE _ t v b _ => containsExplicitLoopConstructor t || containsExplicitLoopConstructor v || containsExplicitLoopConstructor b
+  | .proj _ _ b => containsExplicitLoopConstructor b
+  | _ => false
 
-elab "infer_explicit_loop_head" : tactic => withMainContext do
+elab_rules : tactic
+  | `(tactic| infer_explicit_loop_head) => withMainContext do
   let target ← getMainTarget
   let args := target.getAppArgs
   if !target.getAppFn.isConstOf ``ExplicitCircuit || args.size == 0 then
     throwError "target is not an ExplicitCircuit"
   let circuit := args[args.size - 1]!
   match circuit.getAppFn with
-  | .const ``Circuit.mapFinRange _ =>
-      evalTactic (← `(tactic| apply from_mapFinRange (by infer_explicit_circuits)))
-  | .const ``Circuit.foldlRange _ =>
-      evalTactic (← `(tactic| apply from_foldlRange))
-  | .const ``Circuit.forEach _ =>
-      evalTactic (← `(tactic| apply from_forEach (by infer_explicit_circuits)))
-  | .const ``Circuit.map _ =>
-      evalTactic (← `(tactic| apply from_map_loop (by infer_explicit_circuits)))
-  | .const ``Circuit.foldl _ =>
-      evalTactic (← `(tactic| apply from_foldl))
+  | .const declName _ =>
+      if declName == ``Circuit.mapFinRange then
+        evalTactic (← `(tactic| apply from_mapFinRange (by apply ExplicitCircuits.fromSingle; intro a; first | exact ExplicitCircuit.from_subcircuit | infer_explicit_circuit_body)))
+      else if declName == ``Circuit.foldlRange then
+        evalTactic (← `(tactic| apply from_foldlRange))
+      else if declName == ``Circuit.forEach then
+        evalTactic (← `(tactic| apply from_forEach (by apply ExplicitCircuits.fromSingle; intro a; first | exact ExplicitCircuit.from_subcircuit | infer_explicit_circuit_body)))
+      else if declName == ``Circuit.map then
+        evalTactic (← `(tactic| apply from_map_loop (by apply ExplicitCircuits.fromSingle; intro a; first | exact ExplicitCircuit.from_subcircuit | infer_explicit_circuit_body)))
+      else if declName == ``Circuit.foldl then
+        evalTactic (← `(tactic| apply from_foldl))
+      else if (← getMatcherInfo? declName).isSome && containsExplicitLoopConstructor circuit then
+        evalTactic (← `(tactic| project_visible_destructuring))
+      else
+        throwError "target circuit is not a loop constructor"
   | _ => throwError "target circuit is not a loop constructor"
 
-macro_rules
-  | `(tactic|infer_explicit_circuit) => `(tactic|(
-    try intros
-    -- Dispatch to loop constructors only when the circuit head is actually a
-    -- loop.  Otherwise keep the stronger existing bind/map/pure/instance path;
-    -- speculative loop `apply`s can be expensive on large non-loop goals.
-    repeat (
-      try intros
-      first
-        | infer_explicit_loop_head
-        | apply from_bind
-        | apply from_map
-        | apply from_pure
-        | infer_instance
-      repeat infer_instance
-    )
-    done))
 end ExplicitCircuit
 
 namespace Circuit

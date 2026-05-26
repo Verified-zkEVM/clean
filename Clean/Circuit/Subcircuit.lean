@@ -745,6 +745,40 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalC
     simp only [Operations.SubcircuitsConsistent, Operations.forAll]
     exact ⟨trivial, trivial⟩
 
+def ExplicitCircuit.from_subcircuit {β α: TypeMap} [ProvableType α] [ProvableType β]
+    {circuit : FormalCircuit F β α} {input} :
+    ExplicitCircuit (subcircuit circuit input) := inferInstance
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_subcircuit_output {β α: TypeMap} [ProvableType α] [ProvableType β]
+    {circuit : FormalCircuit F β α} {input} (n : ℕ) :
+    @ExplicitCircuit.output F _ (Var α F) (subcircuit circuit input)
+      (ExplicitCircuit.from_subcircuit) n = circuit.output input n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_subcircuit_localLength {β α: TypeMap} [ProvableType α] [ProvableType β]
+    {circuit : FormalCircuit F β α} {input} (n : ℕ) :
+    @ExplicitCircuit.localLength F _ (Var α F) (subcircuit circuit input)
+      (ExplicitCircuit.from_subcircuit) n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_subcircuit_operations {β α: TypeMap} [ProvableType α] [ProvableType β]
+    {circuit : FormalCircuit F β α} {input} (n : ℕ) :
+    @ExplicitCircuit.operations F _ (Var α F) (subcircuit circuit input)
+      (ExplicitCircuit.from_subcircuit) n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_subcircuit_channelsWithGuarantees {β α: TypeMap} [ProvableType α] [ProvableType β]
+    {circuit : FormalCircuit F β α} {input} (n : ℕ) :
+    @ExplicitCircuit.channelsWithGuarantees F _ (Var α F) (subcircuit circuit input)
+      (ExplicitCircuit.from_subcircuit) n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem ExplicitCircuit.from_subcircuit_channelsWithRequirements {β α: TypeMap} [ProvableType α] [ProvableType β]
+    {circuit : FormalCircuit F β α} {input} (n : ℕ) :
+    @ExplicitCircuit.channelsWithRequirements F _ (Var α F) (subcircuit circuit input)
+      (ExplicitCircuit.from_subcircuit) n = circuit.channelsWithRequirements := rfl
+
 instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     ExplicitCircuit (assertion circuit input) where
   output n := ()

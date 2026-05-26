@@ -8,6 +8,7 @@ import Clean.Utils.Misc
 import Clean.Circuit.Basic
 import Clean.Circuit.ExplicitAttributes
 import Lean.Elab.Tactic
+import Lean.Meta.Match.MatcherInfo
 import Mathlib.Lean.Meta.Simp
 
 open Lean Meta Elab Tactic
@@ -502,6 +503,124 @@ attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Na
   dite_eq_ite ite_self reduceIte reduceDIte
 
 syntax "infer_explicit_circuit" : tactic
+syntax "infer_explicit_circuit_body" : tactic
+syntax "infer_explicit_loop_head" : tactic
+syntax "cases_visible_destructuring" : tactic
+syntax "project_visible_destructuring" : tactic
+
+private partial def collectMatcherDiscriminants (e : Expr) (result : Array FVarId := #[]) : MetaM (Array FVarId) := do
+  let e := e.consumeMData
+  let mut result := result
+  let fn := e.getAppFn
+  if let .const matcherName _ := fn then
+    if let some info := getMatcherInfoCore? (← getEnv) matcherName then
+      let args := e.getAppArgs
+      let firstDiscr := info.getFirstDiscrPos
+      for discr in args.extract firstDiscr (firstDiscr + info.numDiscrs) do
+        if discr.consumeMData.isFVar then
+          let fvarId := discr.consumeMData.fvarId!
+          if (← getLCtx).find? fvarId |>.isSome then
+            if !result.contains fvarId then
+              result := result.push fvarId
+  for child in e.getAppArgs do
+    result ← collectMatcherDiscriminants child result
+  match e with
+  | .lam _ d b _ | .forallE _ d b _ =>
+      result ← collectMatcherDiscriminants d result
+      collectMatcherDiscriminants b result
+  | .letE _ t v b _ =>
+      result ← collectMatcherDiscriminants t result
+      result ← collectMatcherDiscriminants v result
+      collectMatcherDiscriminants b result
+  | .proj _ _ b => collectMatcherDiscriminants b result
+  | _ => return result
+
+private def getExplicitCircuitTargetCircuit : TacticM Expr := do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.size == 0 then
+    throwError "target is not an ExplicitCircuit"
+  return args[args.size - 1]!
+
+private def caseFirstVisibleDestructuring : TacticM Unit := do
+  let circuit ← getExplicitCircuitTargetCircuit
+  let discrs ← collectMatcherDiscriminants circuit
+  let some fvarId := discrs[0]?
+    | throwError "no local matcher discriminants found"
+  let decl ← fvarId.getDecl
+  evalTactic (← `(tactic| cases $(mkIdent decl.userName):ident <;> simp only))
+
+elab "cases_visible_destructuring" : tactic => withMainContext do
+  caseFirstVisibleDestructuring
+
+private def betaApplyMany (fn : Expr) (args : Array Expr) : Expr :=
+  args.foldl (fun fn arg =>
+    match fn.consumeMData with
+    | .lam _ _ body _ => body.instantiate1 arg
+    | fn => mkApp fn arg) fn
+
+private def projectTopLevelMatcher? (circuit : Expr) : MetaM (Option (FVarId × Expr)) := do
+  let circuit := circuit.consumeMData
+  let .const matcherName _ := circuit.getAppFn | return none
+  let some info := getMatcherInfoCore? (← getEnv) matcherName | return none
+  if info.numDiscrs != 1 || info.numAlts != 1 then
+    return none
+  let args := circuit.getAppArgs
+  let discr := args[info.getFirstDiscrPos]!.consumeMData
+  if !discr.isFVar then
+    return none
+  let discrType ← whnf (← inferType discr)
+  let .const structName _ := discrType.getAppFn | return none
+  if !isStructure (← getEnv) structName then
+    return none
+  let fieldNames := getStructureFieldsFlattened (← getEnv) structName (includeSubobjectFields := false)
+  let alt := args[info.getFirstAltPos]!
+  let mut projections := #[]
+  for i in [:fieldNames.size] do
+    projections := projections.push (mkProj structName i discr)
+  return some (discr.fvarId!, betaApplyMany alt projections)
+
+elab "project_visible_destructuring" : tactic => withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.size == 0 then
+    throwError "target is not an ExplicitCircuit"
+  let circuit := args[args.size - 1]!
+  let some (fvarId, projectedCircuit) ← projectTopLevelMatcher? circuit
+    | throwError "target circuit is not a supported visible matcher"
+  let decl ← fvarId.getDecl
+  let discrIdent := mkIdent decl.userName
+  let mainGoal ← getMainGoal
+
+  let eqMVar ← mkFreshExprMVar (← mkEq circuit projectedCircuit)
+  setGoals [eqMVar.mvarId!]
+  evalTactic (← `(tactic| cases $(discrIdent):ident <;> rfl))
+  let eqProof ← instantiateMVars eqMVar
+
+  let projectedTarget := mkAppN target.getAppFn (args.set! (args.size - 1) projectedCircuit)
+  let projectedMVar ← mkFreshExprMVar projectedTarget
+  setGoals [projectedMVar.mvarId!]
+  evalTactic (← `(tactic| infer_explicit_circuit_body))
+  let projectedProof ← instantiateMVars projectedMVar
+
+  let circuitType ← inferType circuit
+  let targetFamily := mkLambda `c BinderInfo.default circuitType
+    (mkAppN target.getAppFn (args.set! (args.size - 1) (mkBVar 0)))
+  let targetEq ← mkAppM ``congrArg #[targetFamily, (← mkEqSymm eqProof)]
+  mainGoal.assign (← mkEqMP targetEq projectedProof)
+
+private partial def collectConstants (e : Expr) (result : Array Name := #[]) : Array Name :=
+  let e := e.consumeMData
+  let result :=
+    match e.getAppFn with
+    | .const declName _ => if result.contains declName then result else result.push declName
+    | _ => result
+  let result := e.getAppArgs.foldl (fun result arg => collectConstants arg result) result
+  match e with
+  | .lam _ d b _ | .forallE _ d b _ => collectConstants b (collectConstants d result)
+  | .letE _ t v b _ => collectConstants b (collectConstants v (collectConstants t result))
+  | .proj _ _ b => collectConstants b result
+  | _ => result
 
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
@@ -513,10 +632,28 @@ macro_rules
     repeat (
       try intros
       first
+        | infer_explicit_loop_head
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
         | apply ExplicitCircuit.from_pure
         | infer_instance
+      repeat infer_instance
+    )
+    done))
+
+macro_rules
+  | `(tactic|infer_explicit_circuit_body) => `(tactic|(
+    try intros
+    repeat (
+      try intros
+      first
+        | project_visible_destructuring
+        | infer_explicit_loop_head
+        | exact ExplicitCircuit.from_subcircuit
+        | infer_instance
+        | apply ExplicitCircuit.from_bind
+        | apply ExplicitCircuit.from_map
+        | apply ExplicitCircuit.from_pure
       repeat infer_instance
     )
     done))
@@ -530,17 +667,35 @@ elab "unfold_explicit_circuits_head" : tactic => withMainContext do
   if !target.getAppFn.isConstOf ``ExplicitCircuits || args.size == 0 then
     throwError "target is not ExplicitCircuits"
   let family := args[args.size - 1]!
-  let .const declName _ := family.getAppFn
-    | throwError "target family head is not a definition"
-  if (← labelled `explicit_circuit_no_unfold).contains declName then
-    throwError "refusing to unfold explicit-circuit constructor"
-  let some unfolded ← withTransparency TransparencyMode.default <| unfoldDefinition? family
-    | throwError "failed to unfold target family head"
-  try
-    evalTactic (← `(tactic| conv => congr; unfold $(mkIdent declName):ident))
-  catch _ =>
-    let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) unfolded)
-    replaceMainGoal [← (← getMainGoal).change newTarget]
+  match family.getAppFn with
+  | .const declName _ =>
+      if (← labelled `explicit_circuit_no_unfold).contains declName then
+        throwError "refusing to unfold explicit-circuit constructor"
+      let some unfolded ← withTransparency TransparencyMode.default <| unfoldDefinition? family
+        | throwError "failed to unfold target family head"
+      try
+        evalTactic (← `(tactic| conv => congr; unfold $(mkIdent declName):ident))
+      catch _ =>
+        let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) unfolded)
+        replaceMainGoal [← (← getMainGoal).change newTarget]
+  | _ =>
+      -- Projection-shaped heads such as `someCircuit.main` may not have a
+      -- constant as their application head.  First try unfolding constants that
+      -- occur inside the projection (for example the circuit record itself).
+      let mut unfoldedByConv := false
+      for declName in collectConstants family do
+        if !(← labelled `explicit_circuit_no_unfold).contains declName then
+          try
+            evalTactic (← `(tactic| conv => congr; unfold $(mkIdent declName):ident))
+            unfoldedByConv := true
+            break
+          catch _ => pure ()
+      if !unfoldedByConv then
+        let unfolded ← withTransparency TransparencyMode.default <| whnf family
+        if unfolded == family then
+          throwError "target family head is not a definition"
+        let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) unfolded)
+        replaceMainGoal [← (← getMainGoal).change newTarget]
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
