@@ -501,6 +501,7 @@ attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.localLength Exp
   ExplicitCircuits.channelsWithGuarantees ExplicitCircuits.channelsWithRequirements
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.toSingle ExplicitCircuits.fromSingle
 attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
+  ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
 attribute [explicit_circuit_norm] size
 
 syntax "infer_explicit_circuit" : tactic
