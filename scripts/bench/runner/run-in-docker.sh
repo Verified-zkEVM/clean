@@ -66,7 +66,7 @@ run_benchmark() {
   package_cache_key="$(
     {
       printf '%s\n' "$toolchain"
-      sha256sum "$checkout/lake-manifest.json"
+      sha256sum "$checkout/lake-manifest.json" | cut -d' ' -f1
     } | sha256sum | cut -d' ' -f1
   )"
   local package_cache="$CACHE_DIR/lake-packages/$package_cache_key"
