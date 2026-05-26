@@ -1,6 +1,8 @@
 # Build Benchmark
 
-This benchmark removes the local package `.lake/build` directory, runs `lake exe cache get`, then runs `lake build --no-cache` and records build metrics in `measurements.jsonl`.
+This benchmark removes the local `.lake/build` directory, runs `lake exe cache get`, then runs `lake build --no-cache` and records build metrics in `measurements.jsonl`.
+
+It deliberately preserves `.lake/packages`, so dependency source trees and downloaded dependency build artifacts can be reused by the runner cache while the project itself is rebuilt from scratch.
 
 Whole-build metrics:
 
