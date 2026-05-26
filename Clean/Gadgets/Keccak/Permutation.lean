@@ -20,11 +20,10 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
   Vector.mapRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j * 16 + 888))
   |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))
 
--- NOTE: this linter times out and blows up memory usage
-set_option linter.constructorNameAsVariable false
-
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
-  infer_elaborated_circuit_reduced
+  infer_elaborated_circuit_reduced_with {
+    output _ i0 := stateVar i0 23
+  }
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
