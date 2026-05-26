@@ -668,6 +668,20 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
       (simpTheorems := #[thms]) congrThms
 
+  let arithThms ← do
+    let mut thms : SimpTheorems := {}
+    for decl in #[``Nat.add_zero, ``Nat.zero_add, ``Nat.mul_zero, ``Nat.zero_mul,
+        ``Nat.mul_one, ``Nat.one_mul, ``Nat.sub_zero, ``dif_pos, ``dif_neg, ``if_pos, ``if_neg] do
+      thms ← thms.addConst decl
+    pure thms
+  let arithSimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    (simpTheorems := #[arithThms]) congrThms
+  let arithSimprocs ← do
+    let mut simprocs : Simp.SimprocsArray := #[]
+    for decl in #[``Nat.reduceAdd, ``Nat.reduceMul, ``Nat.reduceSub, ``Nat.reduceLT, ``Nat.reduceGT] do
+      simprocs ← simprocs.add decl (post := false)
+    pure simprocs
+
   -- Normalize an explicit metadata expression, but only by the targeted rules
   -- described above.  The unfold set is collected from the current expression
   -- and fed to a single `dsimp` call to avoid repeatedly simplifying
@@ -685,13 +699,24 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     let ctx ← mkDsimpCtx decls
     return (← dsimp e ctx).1
 
+  let normalizeExplicitSimp (label : String) (e : Expr) : MetaM (Expr × Expr) := do
+    let debug := (← getOptions).getBool `debug.explicitCircuitReduced false
+    let e' ← normalizeExplicit label e
+    if debug then
+      logInfo m!"infer_elaborated_circuit_reduced {label} arithmetic simp pass 0"
+    let r ← Lean.Meta.simp e' arithSimpCtx arithSimprocs
+    let proof ← match r.1.proof? with
+      | some proof => pure proof
+      | none => mkEqRefl e'
+    return (r.1.expr, proof)
+
   -- Store a simplified elaborated `localLength`.  We start from
   --   explicit.localLength input 0
   -- because an `ElaboratedCircuit` local length should not depend on the offset.
   let localLengthFun ← withLocalDeclD `input varInputType fun input => do
     let zero := mkNatLit 0
     let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
-    let ll ← normalizeExplicit "localLength" ll
+    let (ll, _) ← normalizeExplicitSimp "localLength" ll
     mkLambdaFVars #[input] ll
 
   -- Store a simplified elaborated `output`.  Unlike `localLength`, output is a
@@ -699,7 +724,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let outputFun ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
-      let out ← normalizeExplicit "output" out
+      let (out, _) ← normalizeExplicitSimp "output" out
       mkLambdaFVars #[input, offset] out
 
   -- Prove the elaborated local-length equation by composing:
@@ -714,11 +739,13 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       let p1Type ← inferType p1
       let some (_, _, mid) := p1Type.eq?
         | throwError "unexpected localLength_eq type: {p1Type}"
+      let zero := mkNatLit 0
+      let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
+      let (_, p2) ← normalizeExplicitSimp "localLength_eq" ll
       let rhs := mkApp localLengthFun input
       let p2Type ← mkEq mid rhs
-      let p2MVar ← mkFreshExprMVar p2Type
-      p2MVar.mvarId!.assign (← mkEqRefl mid)
-      let p ← mkAppM ``Eq.trans #[p1, p2MVar]
+      let p2 ← mkExpectedTypeHint p2 p2Type
+      let p ← mkAppM ``Eq.trans #[p1, p2]
       mkLambdaFVars #[input, offset] p
 
   -- Same proof pattern for output:
@@ -729,11 +756,12 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       let p1Type ← inferType p1
       let some (_, _, mid) := p1Type.eq?
         | throwError "unexpected output_eq type: {p1Type}"
+      let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
+      let (_, p2) ← normalizeExplicitSimp "output_eq" out
       let rhs := mkApp2 outputFun input offset
       let p2Type ← mkEq mid rhs
-      let p2MVar ← mkFreshExprMVar p2Type
-      p2MVar.mvarId!.assign (← mkEqRefl mid)
-      let p ← mkAppM ``Eq.trans #[p1, p2MVar]
+      let p2 ← mkExpectedTypeHint p2 p2Type
+      let p ← mkAppM ``Eq.trans #[p1, p2]
       mkLambdaFVars #[input, offset] p
 
   -- Consistency proofs are not recomputed.  They are taken directly from the
