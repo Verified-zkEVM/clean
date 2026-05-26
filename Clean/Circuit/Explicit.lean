@@ -600,6 +600,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
 
   -- Useful object-language types for the lambdas we need to create.
   let varInputType ← mkAppM ``Var #[Input, F]
+  let varOutputType ← mkAppM ``Var #[Output, F]
+  let fieldInst := args[3]!
   let natType := mkConst ``Nat
 
   -- Read the simp theorem database tagged with `[explicit_circuit_norm]`.  These
@@ -737,7 +739,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- inferred explicit metadata, whose operations still match the real circuit.
   let subProof ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
-      let p ← mkAppOptM ``ExplicitCircuits.subcircuitsConsistent #[none, none, none, none, main, explicit, input, offset]
+      let p := mkAppN (mkConst ``ExplicitCircuits.subcircuitsConsistent)
+        #[F, fieldInst, varInputType, varOutputType, main, explicit, input, offset]
       mkLambdaFVars #[input, offset] p
 
   -- Store simplified top-level channel metadata too.  The explicit metadata APIs
@@ -766,7 +769,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- the targeted normalization above makes that true without broad reduction.
   let channelsLawful ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
-      let p ← mkAppOptM ``ExplicitCircuits.channelsLawful #[none, none, none, none, main, explicit, input, offset]
+      let p := mkAppN (mkConst ``ExplicitCircuits.channelsLawful)
+        #[F, fieldInst, varInputType, varOutputType, main, explicit, input, offset]
       mkLambdaFVars #[input, offset] p
 
   -- Assemble the final `ElaboratedCircuit` record using the normalized fields and
