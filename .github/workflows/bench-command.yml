@@ -15,7 +15,7 @@ jobs:
       actions: write
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write
       statuses: write
 
     steps:
@@ -56,6 +56,7 @@ jobs:
             -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/workflows/bench.yml"
 
       - name: Acknowledge command
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
