@@ -85,4 +85,4 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Expression (F pBabybear)) env (i0 : â
   simp only [ConstraintsHold.Soundness, Operations.forAllNoOffset_append,
     Operations.forAllNoOffset, Gadgets.ByteTable]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions
-  simp only [circuit_norm, Nat.reduceAdd]
+  simp only [circuit_norm]

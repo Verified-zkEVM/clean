@@ -502,7 +502,9 @@ attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.localLength Exp
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.toSingle ExplicitCircuits.fromSingle
 attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
   ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
-attribute [explicit_circuit_norm] size Nat.add_zero List.nil_append
+attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Nat.zero_mul
+  Nat.mul_one Nat.one_mul Nat.sub_zero List.nil_append dif_pos dif_neg if_pos if_neg
+attribute [explicit_circuit_norm_proc] Nat.reduceAdd Nat.reduceMul Nat.reduceSub Nat.reduceLT Nat.reduceGT
 
 syntax "infer_explicit_circuit" : tactic
 
@@ -668,19 +670,12 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
       (simpTheorems := #[thms]) congrThms
 
-  let arithThms ← do
-    let mut thms : SimpTheorems := {}
-    for decl in #[``Nat.add_zero, ``Nat.zero_add, ``Nat.mul_zero, ``Nat.zero_mul,
-        ``Nat.mul_one, ``Nat.one_mul, ``Nat.sub_zero, ``dif_pos, ``dif_neg, ``if_pos, ``if_neg] do
-      thms ← thms.addConst decl
-    pure thms
-  let arithSimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
-    (simpTheorems := #[arithThms]) congrThms
-  let arithSimprocs ← do
-    let mut simprocs : Simp.SimprocsArray := #[]
-    for decl in #[``Nat.reduceAdd, ``Nat.reduceMul, ``Nat.reduceSub, ``Nat.reduceLT, ``Nat.reduceGT] do
-      simprocs ← simprocs.add decl (post := false)
-    pure simprocs
+  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    (simpTheorems := #[explicitThms]) congrThms
+  let simpProcs ← do
+    let some ext ← Simp.getSimprocExtension? `explicit_circuit_norm
+      | throwError "unknown simproc attribute explicit_circuit_norm_proc"
+    pure #[(← ext.getSimprocs)]
 
   -- Normalize an explicit metadata expression, but only by the targeted rules
   -- described above.  The unfold set is collected from the current expression
@@ -703,8 +698,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     let debug := (← getOptions).getBool `debug.explicitCircuitReduced false
     let e' ← normalizeExplicit label e
     if debug then
-      logInfo m!"infer_elaborated_circuit_reduced {label} arithmetic simp pass 0"
-    let r ← Lean.Meta.simp e' arithSimpCtx arithSimprocs
+      logInfo m!"infer_elaborated_circuit_reduced {label} simp pass 0"
+    let r ← Lean.Meta.simp e' simpCtx simpProcs
     let proof ← match r.1.proof? with
       | some proof => pure proof
       | none => mkEqRefl e'
@@ -713,35 +708,38 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- Store a simplified elaborated `localLength`.  We start from
   --   explicit.localLength input 0
   -- because an `ElaboratedCircuit` local length should not depend on the offset.
-  let localLengthFun ← withLocalDeclD `input varInputType fun input => do
+  -- The normalizer also returns a proof from the explicit metadata expression to
+  -- the stored expression; keep it so the field proof does not normalize again.
+  let (localLengthFun, localLengthNormProof) ← withLocalDeclD `input varInputType fun input => do
     let zero := mkNatLit 0
     let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
-    let (ll, _) ← normalizeExplicitSimp "localLength" ll
-    mkLambdaFVars #[input] ll
+    let (ll, proof) ← normalizeExplicitSimp "localLength" ll
+    let localLengthFun ← mkLambdaFVars #[input] ll
+    let localLengthNormProof ← mkLambdaFVars #[input] proof
+    return (localLengthFun, localLengthNormProof)
 
   -- Store a simplified elaborated `output`.  Unlike `localLength`, output is a
-  -- function of both the input variables and the current offset.
-  let outputFun ← withLocalDeclD `input varInputType fun input => do
+  -- function of both the input variables and the current offset.  Again, keep the
+  -- normalization proof for the corresponding `output_eq` field.
+  let (outputFun, outputNormProof) ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
-      let (out, _) ← normalizeExplicitSimp "output" out
-      mkLambdaFVars #[input, offset] out
+      let (out, proof) ← normalizeExplicitSimp "output" out
+      let outputFun ← mkLambdaFVars #[input, offset] out
+      let outputNormProof ← mkLambdaFVars #[input, offset] proof
+      return (outputFun, outputNormProof)
 
   -- Prove the elaborated local-length equation by composing:
   --   circuit.localLength offset = explicit.localLength input offset
-  -- with the definitional equality between the normalized stored field and the
-  -- explicit expression at offset 0.  The latter proof is just `rfl`; if the
-  -- normalization changed the expression in a non-definitional way, this assignment
-  -- would fail, which is exactly the safety check we want.
+  -- with the proof that the explicit metadata expression at offset 0 normalizes to
+  -- the stored field.  The latter proof was produced while constructing the field.
   let localLengthEq ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p1 ← mkAppOptM ``ExplicitCircuits.localLength_eq #[none, none, none, none, main, explicit, input, offset]
       let p1Type ← inferType p1
       let some (_, _, mid) := p1Type.eq?
         | throwError "unexpected localLength_eq type: {p1Type}"
-      let zero := mkNatLit 0
-      let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
-      let (_, p2) ← normalizeExplicitSimp "localLength_eq" ll
+      let p2 := mkApp localLengthNormProof input
       let rhs := mkApp localLengthFun input
       let p2Type ← mkEq mid rhs
       let p2 ← mkExpectedTypeHint p2 p2Type
@@ -756,8 +754,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       let p1Type ← inferType p1
       let some (_, _, mid) := p1Type.eq?
         | throwError "unexpected output_eq type: {p1Type}"
-      let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
-      let (_, p2) ← normalizeExplicitSimp "output_eq" out
+      let p2 := mkApp2 outputNormProof input offset
       let rhs := mkApp2 outputFun input offset
       let p2Type ← mkEq mid rhs
       let p2 ← mkExpectedTypeHint p2 p2Type
