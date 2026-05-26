@@ -49,7 +49,6 @@ example : ExplicitCircuit.output (circuit32 default) 0 =
 example : ExplicitCircuit.channelsWithGuarantees (circuit32 default) 0 = [] := rfl
 example : ExplicitCircuit.channelsWithGuarantees (circuit32 default) 0 = [] := by
   dsimp only [explicit_circuit_norm, explicit, assertBool]
-  simp only [List.append_nil]
 
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..

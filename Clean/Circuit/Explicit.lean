@@ -502,7 +502,7 @@ attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.localLength Exp
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.toSingle ExplicitCircuits.fromSingle
 attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
   ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
-attribute [explicit_circuit_norm] size
+attribute [explicit_circuit_norm] size Nat.add_zero List.nil_append
 
 syntax "infer_explicit_circuit" : tactic
 
