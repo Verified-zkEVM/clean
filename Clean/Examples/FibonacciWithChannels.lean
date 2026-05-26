@@ -43,7 +43,7 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
   main multiplicities := do
     let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
       BytesChannel.emit multiplicities[i] (const i)
-  -- TODO autoelab fails because of match
+  -- TODO AUTOELAB fails because of match
   elaborated := {
     localLength _ := 0
     localLength_eq := by simp only [circuit_norm]

@@ -36,7 +36,7 @@ def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
 def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
   Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
--- TODO using `infer_elaborated_circuit_reduced_with` here causes the ThetaD instance to time out
+-- TODO AUTOELAB using `infer_elaborated_circuit_reduced_with` here causes the ThetaD instance to time out
 -- so it seems the .withData terms don't get reduced efficiently
 @[reducible] instance elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 (main off) where
   localLength _ := 16

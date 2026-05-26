@@ -67,7 +67,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
 
-  -- TODO `reduced` default works ok. but override it makes it MUCH slower
+  -- TODO AUTOELAB `reduced` default works ok. but override it makes it MUCH slower
   -- override is nice as it removes the if-else expression
   -- elaborated := by? infer_elaborated_circuit_reduced
   -- elaborated := by? infer_elaborated_circuit_reduced_with {

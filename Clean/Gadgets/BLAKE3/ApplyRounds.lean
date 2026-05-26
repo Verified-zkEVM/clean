@@ -33,7 +33,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
 
-  -- TODO autoelab causes proof churn and _with overrides lead to slow soundness simp
+  -- TODO AUTOELAB causes proof churn and _with overrides lead to slow soundness simp
   -- investigate why the latter
   elaborated := {
     localLength input := Round.circuit.localLength input + Permute.circuit.localLength input.message
