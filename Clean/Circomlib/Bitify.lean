@@ -67,13 +67,6 @@ lemma lc_eq {i0} {env} {n : ℕ} :
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
 
-  elaborated := by infer_elaborated_circuit_reduced_with {
-    localLength _ := n
-  } using (by
-    -- TODO AUTOELAB we should simp away the if-else in `_reduced`
-    dsimp only [main, explicit_circuit_norm]
-    simp)
-
   ProverAssumptions input _ _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent

@@ -498,6 +498,8 @@ attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Na
   List.append_nil
   List.append_cons List.cons_append
   List.ofFn_nil_flatten List.ofFn_singleton_flatten
+  -- if-else
+  dite_eq_ite ite_self reduceIte reduceDIte
 
 syntax "infer_explicit_circuit" : tactic
 
