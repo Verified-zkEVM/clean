@@ -32,11 +32,16 @@ docker run --rm \
   elan toolchain install "$TOOLCHAIN"
 
 PERF_MOUNTS=()
-if [ -x /usr/bin/perf ]; then
-  PERF_MOUNTS+=(-v /usr/bin/perf:/usr/local/bin/perf:ro)
+HOST_PERF=""
+if [ -x "/usr/lib/linux-tools/$(uname -r)/perf" ]; then
+  HOST_PERF="/usr/lib/linux-tools/$(uname -r)/perf"
+elif [ -x "/usr/lib/linux-tools-$(uname -r | sed 's/-generic$//')/perf" ]; then
+  HOST_PERF="/usr/lib/linux-tools-$(uname -r | sed 's/-generic$//')/perf"
+elif [ -x /usr/bin/perf ]; then
+  HOST_PERF="/usr/bin/perf"
 fi
-if [ -d /usr/lib/linux-tools ]; then
-  PERF_MOUNTS+=(-v /usr/lib/linux-tools:/usr/lib/linux-tools:ro)
+if [ -n "$HOST_PERF" ]; then
+  PERF_MOUNTS+=(-v "$HOST_PERF:/usr/local/bin/perf:ro")
 fi
 
 docker run --rm \
