@@ -18,14 +18,6 @@ def main (n : ℕ) (x : Expression (F p)) := do
   x === fieldFromBitsExpr bits
   return bits
 
-attribute [explicit_circuit_norm] Equality.circuit List.append_nil
-
-@[reducible, circuit_norm]
-instance elaborated (n : ℕ) : ElaboratedCircuit (F p) field (fields n) (main n) := by?
-  infer_elaborated_circuit_reduced_with {
-    output _ i := varFromOffset (fields n) i
-  }
-
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
 def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
@@ -77,11 +69,10 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
     -- we wrap the toBits circuit but ignore the output
     let _ ← toBits n hn x
 
-  Assumptions _ := True
   Spec (x : F p) := x.val < 2^n
 
-  soundness := by simp_all only [circuit_norm, toBits]
-  completeness := by simp_all only [circuit_norm, toBits]
+  soundness := by circuit_proof_all [toBits]
+  completeness := by circuit_proof_all [toBits]
 
 end ToBits
 export ToBits (toBits)

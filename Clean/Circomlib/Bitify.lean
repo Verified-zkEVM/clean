@@ -67,8 +67,15 @@ lemma lc_eq {i0} {env} {n : ℕ} :
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
 
-  -- TODO `reduced` default works override it makes it MUCH slower
-  -- override is nice as it removed if-else expression
+  -- TODO `reduced` default works ok. but override it makes it MUCH slower
+  -- override is nice as it removes the if-else expression
+  -- elaborated := by? infer_elaborated_circuit_reduced
+  -- elaborated := by? infer_elaborated_circuit_reduced_with {
+  --   localLength _ := n
+  --   output _ i := varFromOffset (fields n) i
+  -- } using (
+  --   by simp
+  -- )
   elaborated := {
     localLength _ := n
     localLength_eq := by simp [circuit_norm, main]

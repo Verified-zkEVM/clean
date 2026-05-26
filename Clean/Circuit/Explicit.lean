@@ -502,9 +502,16 @@ attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.localLength Exp
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.toSingle ExplicitCircuits.fromSingle
 attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
   ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
+
+-- simplification of terms coming from `bind` aggregation e.g. 8 + 0 + 1 + ...
 attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Nat.zero_mul
-  Nat.mul_one Nat.one_mul Nat.sub_zero List.nil_append dif_pos dif_neg if_pos if_neg
-attribute [explicit_circuit_norm] Nat.reduceAdd Nat.reduceMul Nat.reduceSub Nat.reduceLT Nat.reduceGT
+  Nat.mul_one Nat.one_mul Nat.sub_zero dif_pos dif_neg if_pos if_neg
+  Nat.reduceAdd Nat.reduceMul Nat.reduceSub Nat.reduceLT Nat.reduceGT
+  -- lists reduction, for channels
+  List.nil_append
+  List.append_nil
+  List.append_cons List.cons_append
+  List.ofFn_nil_flatten List.ofFn_singleton_flatten
 
 syntax "infer_explicit_circuit" : tactic
 
@@ -865,6 +872,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     channelsWithRequirements, exposed, channelsLawful]
   goal.assign val
   replaceMainGoal []
+
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with" term : tactic
 syntax "infer_elaborated_circuit_with" term " using " term : tactic
