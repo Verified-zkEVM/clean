@@ -829,23 +829,33 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       let rawChannelType := mkApp (mkConst ``RawChannel) F
       let rawChannelListType := mkApp (mkConst ``List [levelZero]) rawChannelType
       let guaranteesProof := mkApp2 channelsWithGuaranteesNormProof input offset
-      let guaranteesProofType ← mkEq actualGuarantees channelsWithGuarantees
+      let currentGuarantees := mkApp2 channelsWithGuaranteesFun input offset
+      let guaranteesProofType ← mkEq actualGuarantees currentGuarantees
       let guaranteesProof ← mkExpectedTypeHint guaranteesProof guaranteesProofType
+      let guaranteesStoredType ← mkEq currentGuarantees channelsWithGuarantees
+      let guaranteesStoredProof ← mkExpectedTypeHint (← mkEqRefl channelsWithGuarantees) guaranteesStoredType
+      let guaranteesProof ← mkAppOptM ``Eq.trans
+        #[none, actualGuarantees, currentGuarantees, channelsWithGuarantees, guaranteesProof, guaranteesStoredProof]
       let p ← withLocalDeclD `channelsWithGuarantees rawChannelListType fun normalizedGuarantees => do
         let prop := mkAppN (mkConst ``Operations.ChannelsLawful)
           #[F, fieldInst, ops, normalizedGuarantees, actualRequirements, actualExposed]
         let motive ← mkLambdaFVars #[normalizedGuarantees] prop
         let propEq ← mkAppM ``congrArg #[motive, guaranteesProof]
-        mkEqMPR propEq p
+        mkEqMP propEq p
       let requirementsProof := mkApp2 channelsWithRequirementsNormProof input offset
-      let requirementsProofType ← mkEq actualRequirements channelsWithRequirements
+      let currentRequirements := mkApp2 channelsWithRequirementsFun input offset
+      let requirementsProofType ← mkEq actualRequirements currentRequirements
       let requirementsProof ← mkExpectedTypeHint requirementsProof requirementsProofType
+      let requirementsStoredType ← mkEq currentRequirements channelsWithRequirements
+      let requirementsStoredProof ← mkExpectedTypeHint (← mkEqRefl channelsWithRequirements) requirementsStoredType
+      let requirementsProof ← mkAppOptM ``Eq.trans
+        #[none, actualRequirements, currentRequirements, channelsWithRequirements, requirementsProof, requirementsStoredProof]
       let p ← withLocalDeclD `channelsWithRequirements rawChannelListType fun normalizedRequirements => do
         let prop := mkAppN (mkConst ``Operations.ChannelsLawful)
           #[F, fieldInst, ops, channelsWithGuarantees, normalizedRequirements, actualExposed]
         let motive ← mkLambdaFVars #[normalizedRequirements] prop
         let propEq ← mkAppM ``congrArg #[motive, requirementsProof]
-        mkEqMPR propEq p
+        mkEqMP propEq p
       mkLambdaFVars #[input, offset] p
 
   -- Assemble the final `ElaboratedCircuit` record using the normalized fields and
