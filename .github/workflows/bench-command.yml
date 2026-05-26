@@ -1,0 +1,49 @@
+name: Bench Command
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  dispatch:
+    if: >
+      github.event.issue.pull_request &&
+      (github.event.comment.body == '/bench' || startsWith(github.event.comment.body, '/bench ')) &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Resolve PR head
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          data="$(gh api "repos/${{ github.repository }}/pulls/$PR_NUMBER")"
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "sha=$(jq -r .head.sha <<<"$data")" >> "$GITHUB_OUTPUT"
+          echo "head_repo=$(jq -r .head.repo.full_name <<<"$data")" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch benchmark
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run bench.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f pr="${{ steps.pr.outputs.number }}" \
+            -f sha="${{ steps.pr.outputs.sha }}" \
+            -f head_repo="${{ steps.pr.outputs.head_repo }}"
+
+      - name: Acknowledge command
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ steps.pr.outputs.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "Queued build benchmark for \`${{ steps.pr.outputs.sha }}\`."

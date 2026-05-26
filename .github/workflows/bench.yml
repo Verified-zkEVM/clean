@@ -1,0 +1,79 @@
+name: Bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number to report results to"
+        required: true
+      sha:
+        description: "Exact commit SHA to benchmark"
+        required: true
+      head_repo:
+        description: "owner/repo containing the commit SHA"
+        required: true
+
+jobs:
+  bench:
+    runs-on: [self-hosted, linux, x64, clean-bench]
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+
+    steps:
+      - name: Check out benchmark scripts
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: bench-control
+      - name: Run benchmark in container
+        working-directory: bench-control
+        env:
+          BENCH_PR: ${{ inputs.pr }}
+          BENCH_SHA: ${{ inputs.sha }}
+          BENCH_HEAD_REPO: ${{ inputs.head_repo }}
+          BENCH_REPOSITORY: ${{ github.repository }}
+          BENCH_RUN_ID: ${{ github.run_id }}
+          BENCH_OUTPUT_DIR: ${{ github.workspace }}/bench-output
+        run: scripts/bench/runner/run-in-docker.sh
+      - name: Copy measurements
+        if: always()
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/bench-output/measurements.jsonl" ]; then
+            cp "$GITHUB_WORKSPACE/bench-output/measurements.jsonl" measurements.jsonl
+          fi
+      - name: Render benchmark report
+        if: always() && hashFiles('measurements.jsonl') != ''
+        run: |
+          bench-control/scripts/bench/report.py measurements.jsonl > benchmark-report.md
+          cat benchmark-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment on PR
+        if: always() && hashFiles('benchmark-report.md') != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('benchmark-report.md', 'utf8');
+            const body = [
+              '<!-- clean-build-benchmark -->',
+              '',
+              'Benchmark for `${{ inputs.sha }}`:',
+              '',
+              report,
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ inputs.pr }}'),
+              body,
+            });
+      - name: Upload benchmark measurements
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-measurements
+          path: |
+            measurements.jsonl
+            benchmark-report.md
+          if-no-files-found: warn
