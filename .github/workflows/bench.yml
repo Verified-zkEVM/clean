@@ -21,8 +21,6 @@ jobs:
         run: |
           sudo sysctl -w kernel.perf_event_paranoid=0
           perf stat -e instructions -- true
-      - name: Fetch dependency cache
-        run: lake exe cache get
       - name: Run build benchmark
         run: scripts/bench/build/run
       - name: Render benchmark report
