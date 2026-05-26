@@ -1,0 +1,37 @@
+name: Bench
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1.5.0
+        with:
+          build: false
+          test: false
+          lint: false
+      - name: Enable perf counters
+        run: |
+          sudo sysctl -w kernel.perf_event_paranoid=0
+          perf stat -e instructions -- true
+      - name: Fetch dependency cache
+        run: lake exe cache get
+      - name: Run build benchmark
+        run: scripts/bench/build/run
+      - name: Render benchmark report
+        if: always() && hashFiles('measurements.jsonl') != ''
+        run: scripts/bench/report.py measurements.jsonl >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload benchmark measurements
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-measurements
+          path: measurements.jsonl
+          if-no-files-found: warn
