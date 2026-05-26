@@ -26,8 +26,10 @@ scripts/bench/report.py measurements.jsonl
 Compare a current run against a baseline:
 
 ```bash
-scripts/bench/report.py measurements.jsonl baseline-measurements.jsonl
+scripts/bench/report.py current.jsonl baseline.jsonl
 ```
+
+Comparison reports show the whole-build summary plus the top 10 module instruction regressions, top 10 module instruction improvements, and top 10 longest-running modules.
 
 ## Maintainer-triggered PR benchmarks
 
@@ -37,7 +39,9 @@ After the benchmark workflows are present on the default branch, maintainers can
 /bench
 ```
 
-The command workflow verifies that the commenter is an owner, member, or collaborator, then dispatches the benchmark workflow for the pull request's exact head commit.
+The command workflow verifies that the commenter is an owner, member, or collaborator, then dispatches the benchmark workflow for the pull request's exact base and head commits. The benchmark job runs the base commit first and the pull request commit second on the same runner, then comments on the pull request with a comparison report.
+
+The benchmark scripts themselves are checked out from the default branch and overlaid onto each measured checkout before running. This keeps the reporting machinery stable and lets the baseline commit be measured even when it predates the benchmark suite.
 
 The benchmark workflow expects a repo-scoped self-hosted runner with labels:
 
@@ -45,6 +49,6 @@ The benchmark workflow expects a repo-scoped self-hosted runner with labels:
 self-hosted, linux, x64, clean-bench
 ```
 
-The workflow runs pull request code inside a Docker container. Persistent Lean toolchain state lives under `/var/lib/clean-bench/cache/elan`, while each pull request checkout and writable cache directory uses a per-run workspace that is removed after the benchmark. The persistent Lean toolchain cache is mounted read-only when pull request code runs.
+The workflow runs checked-out code inside a Docker container. Persistent Lean toolchain state lives under `/var/lib/clean-bench/cache/elan`, while each baseline/current checkout and writable cache directory uses a per-run workspace that is removed after the benchmark. The persistent Lean toolchain cache is mounted read-only when benchmarked code runs.
 
 The host must provide working userspace `perf` instruction counters. In practice this means configuring the host so `perf stat -e instructions:u -- true` reports a numeric count for the runner environment. The container is run without host networking, without privileged mode, and without the Docker socket mounted.

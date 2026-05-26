@@ -6,6 +6,9 @@ on:
       pr:
         description: "Pull request number to report results to"
         required: true
+      base_sha:
+        description: "Exact base commit SHA to compare against"
+        required: true
       sha:
         description: "Exact commit SHA to benchmark"
         required: true
@@ -31,6 +34,7 @@ jobs:
         working-directory: bench-control
         env:
           BENCH_PR: ${{ inputs.pr }}
+          BENCH_BASE_SHA: ${{ inputs.base_sha }}
           BENCH_SHA: ${{ inputs.sha }}
           BENCH_HEAD_REPO: ${{ inputs.head_repo }}
           BENCH_REPOSITORY: ${{ github.repository }}
@@ -40,13 +44,20 @@ jobs:
       - name: Copy measurements
         if: always()
         run: |
-          if [ -f "$GITHUB_WORKSPACE/bench-output/measurements.jsonl" ]; then
-            cp "$GITHUB_WORKSPACE/bench-output/measurements.jsonl" measurements.jsonl
+          if [ -f "$GITHUB_WORKSPACE/bench-output/baseline.jsonl" ]; then
+            cp "$GITHUB_WORKSPACE/bench-output/baseline.jsonl" baseline.jsonl
+          fi
+          if [ -f "$GITHUB_WORKSPACE/bench-output/current.jsonl" ]; then
+            cp "$GITHUB_WORKSPACE/bench-output/current.jsonl" current.jsonl
           fi
       - name: Render benchmark report
-        if: always() && hashFiles('measurements.jsonl') != ''
+        if: always() && hashFiles('current.jsonl') != ''
         run: |
-          bench-control/scripts/bench/report.py measurements.jsonl > benchmark-report.md
+          if [ -f baseline.jsonl ]; then
+            bench-control/scripts/bench/report.py current.jsonl baseline.jsonl --limit 10 > benchmark-report.md
+          else
+            bench-control/scripts/bench/report.py current.jsonl --limit 10 > benchmark-report.md
+          fi
           cat benchmark-report.md >> "$GITHUB_STEP_SUMMARY"
       - name: Comment on PR
         if: always() && hashFiles('benchmark-report.md') != ''
@@ -58,7 +69,7 @@ jobs:
             const body = [
               '<!-- clean-build-benchmark -->',
               '',
-              'Benchmark for `${{ inputs.sha }}`:',
+              'Benchmark for `${{ inputs.sha }}` against baseline `${{ inputs.base_sha }}`:',
               '',
               report,
             ].join('\n');
@@ -74,6 +85,7 @@ jobs:
         with:
           name: bench-measurements
           path: |
-            measurements.jsonl
+            baseline.jsonl
+            current.jsonl
             benchmark-report.md
           if-no-files-found: warn
