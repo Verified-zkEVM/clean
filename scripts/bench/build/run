@@ -15,7 +15,7 @@ EOF
 fi
 
 rm -f measurements.jsonl
-lake clean
+rm -rf .lake/build
 lake exe cache get
 
 LAKE_OVERRIDE_LEAN=true LEAN="$(realpath "$BENCH/build/fake-root/bin/lean")" \

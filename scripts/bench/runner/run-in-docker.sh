@@ -16,7 +16,18 @@ CACHE_DIR="$ROOT/cache"
 WORK_DIR="$RUN_DIR/work"
 
 mkdir -p "$CACHE_DIR/elan" "$WORK_DIR" "$BENCH_OUTPUT_DIR"
-trap 'rm -rf "$RUN_DIR"' EXIT
+
+cleanup() {
+  rm -rf "$RUN_DIR" 2>/dev/null && return
+  docker run --rm \
+    --network none \
+    --security-opt no-new-privileges \
+    -v "$RUN_DIR:$RUN_DIR" \
+    "$IMAGE" \
+    rm -rf "$RUN_DIR" >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
 
 docker build -t "$IMAGE" -f scripts/bench/runner/Dockerfile scripts/bench/runner
 

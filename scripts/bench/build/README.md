@@ -1,6 +1,6 @@
 # Build Benchmark
 
-This benchmark runs a clean `lake build --no-cache` and records build metrics in `measurements.jsonl`.
+This benchmark removes the local package `.lake/build` directory, runs `lake exe cache get`, then runs `lake build --no-cache` and records build metrics in `measurements.jsonl`.
 
 Whole-build metrics:
 
