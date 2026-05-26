@@ -780,18 +780,31 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
 
   -- Store simplified top-level channel metadata too.  The explicit metadata APIs
   -- expose channel lists as functions of input/offset, but these lists are intended
-  -- to be circuit-level metadata.  As in `ExplicitCircuits.toElaborated`, read them
-  -- at a default input and offset 0, then normalize the resulting projection tree.
+  -- to be circuit-level metadata.  Normalize them once as functions of input/offset,
+  -- then store their value at a default input and offset 0.  The normalization proofs
+  -- are reused below when transporting the delegated channel-lawfulness proof.
   let defaultInput ← mkAppOptM ``default #[varInputType, none]
   let zero := mkNatLit 0
-  let channelsWithGuarantees ← do
-    let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
-      #[none, none, none, none, main, explicit, defaultInput, zero]
-    pure (← normalizeExplicitSimp "channelsWithGuarantees" ch).1
-  let channelsWithRequirements ← do
-    let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
-      #[none, none, none, none, main, explicit, defaultInput, zero]
-    pure (← normalizeExplicitSimp "channelsWithRequirements" ch).1
+  let (channelsWithGuaranteesFun, channelsWithGuaranteesNormProof) ←
+      withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
+        #[none, none, none, none, main, explicit, input, offset]
+      let (ch, proof) ← normalizeExplicitSimp "channelsWithGuarantees" ch
+      let channelsWithGuaranteesFun ← mkLambdaFVars #[input, offset] ch
+      let channelsWithGuaranteesNormProof ← mkLambdaFVars #[input, offset] proof
+      return (channelsWithGuaranteesFun, channelsWithGuaranteesNormProof)
+  let channelsWithGuarantees := mkApp2 channelsWithGuaranteesFun defaultInput zero
+  let (channelsWithRequirementsFun, channelsWithRequirementsNormProof) ←
+      withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
+        #[none, none, none, none, main, explicit, input, offset]
+      let (ch, proof) ← normalizeExplicitSimp "channelsWithRequirements" ch
+      let channelsWithRequirementsFun ← mkLambdaFVars #[input, offset] ch
+      let channelsWithRequirementsNormProof ← mkLambdaFVars #[input, offset] proof
+      return (channelsWithRequirementsFun, channelsWithRequirementsNormProof)
+  let channelsWithRequirements := mkApp2 channelsWithRequirementsFun defaultInput zero
   let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
   let exposed ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
@@ -815,9 +828,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
       let actualExposed := pArgs[5]!
       let rawChannelType := mkApp (mkConst ``RawChannel) F
       let rawChannelListType := mkApp (mkConst ``List [levelZero]) rawChannelType
-      let guarantees ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
-        #[none, none, none, none, main, explicit, input, offset]
-      let (_, guaranteesProof) ← normalizeExplicitSimp "channelsWithGuarantees_lawful" guarantees
+      let guaranteesProof := mkApp2 channelsWithGuaranteesNormProof input offset
       let guaranteesProofType ← mkEq actualGuarantees channelsWithGuarantees
       let guaranteesProof ← mkExpectedTypeHint guaranteesProof guaranteesProofType
       let p ← withLocalDeclD `channelsWithGuarantees rawChannelListType fun normalizedGuarantees => do
@@ -826,9 +837,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
         let motive ← mkLambdaFVars #[normalizedGuarantees] prop
         let propEq ← mkAppM ``congrArg #[motive, guaranteesProof]
         mkEqMPR propEq p
-      let requirements ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
-        #[none, none, none, none, main, explicit, input, offset]
-      let (_, requirementsProof) ← normalizeExplicitSimp "channelsWithRequirements_lawful" requirements
+      let requirementsProof := mkApp2 channelsWithRequirementsNormProof input offset
       let requirementsProofType ← mkEq actualRequirements channelsWithRequirements
       let requirementsProof ← mkExpectedTypeHint requirementsProof requirementsProofType
       let p ← withLocalDeclD `channelsWithRequirements rawChannelListType fun normalizedRequirements => do
