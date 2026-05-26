@@ -686,7 +686,7 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     (simpTheorems := #[explicitThms]) congrThms
   let simpProcs ← do
     let some ext ← Simp.getSimprocExtension? `explicit_circuit_norm
-      | throwError "unknown simproc attribute explicit_circuit_norm_proc"
+      | throwError "unknown simproc attribute explicit_circuit_norm"
     pure #[(← ext.getSimprocs)]
 
   -- Normalize an explicit metadata expression, but only by the targeted rules
@@ -701,16 +701,13 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     if debug then
       let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
       let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
-      logInfo m!"infer_elaborated_circuit_reduced {label} pass 0:
+      logInfo m!"infer_elaborated_circuit_reduced {label}:
   dsimp only [{simpArgs}]"
     let ctx ← mkDsimpCtx decls
     return (← dsimp e ctx).1
 
   let normalizeExplicitSimp (label : String) (e : Expr) : MetaM (Expr × Expr) := do
-    let debug := (← getOptions).getBool `debug.explicitCircuitReduced false
     let e' ← normalizeExplicit label e
-    if debug then
-      logInfo m!"infer_elaborated_circuit_reduced {label} simp pass 0"
     let r ← Lean.Meta.simp e' simpCtx simpProcs
     let proof ← match r.1.proof? with
       | some proof => pure proof
