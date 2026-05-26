@@ -21,7 +21,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, clean-bench]
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: write
       statuses: write
 
