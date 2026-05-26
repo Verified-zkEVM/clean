@@ -60,10 +60,23 @@ def fmt_int(value: float) -> str:
     return f"{value:,.0f}"
 
 
+def fmt_instructions_bn(value: float) -> str:
+    return f"{value / 1_000_000_000:,.0f}"
+
+
 def fmt_signed_int(value: float | None) -> str:
     if value is None:
         return "new"
     return f"{value:+,.0f}"
+
+
+def fmt_signed_instructions_bn(value: float | None) -> str:
+    if value is None:
+        return "new"
+    rounded = round(value / 1_000_000_000)
+    if rounded == 0:
+        return "0"
+    return f"{rounded:+,}"
 
 
 def fmt_pct(value: float | None) -> str:
@@ -82,6 +95,8 @@ def fmt_bytes(value: float) -> str:
 
 
 def fmt_metric(metric: str, value: float) -> str:
+    if metric.endswith("//instructions"):
+        return fmt_instructions_bn(value)
     if metric.endswith("//wall-clock") or metric.endswith("//task-clock"):
         return fmt_seconds(value)
     if metric.endswith("//maxrss"):
@@ -92,6 +107,8 @@ def fmt_metric(metric: str, value: float) -> str:
 def fmt_delta(metric: str, value: float | None) -> str:
     if value is None:
         return "new"
+    if metric.endswith("//instructions"):
+        return fmt_signed_instructions_bn(value)
     if metric.endswith("//wall-clock") or metric.endswith("//task-clock"):
         return f"{value:+,.2f}s"
     if metric.endswith("//maxrss"):
@@ -102,7 +119,7 @@ def fmt_delta(metric: str, value: float | None) -> str:
 
 def print_summary(current: Measurements, baseline: Measurements | None) -> None:
     metrics = [
-        ("Build instructions", "build//instructions"),
+        ("Build instructions (bn)", "build//instructions"),
         ("Wall time", "build//wall-clock"),
         ("Task clock", "build//task-clock"),
         ("Max RSS", "build//maxrss"),
@@ -161,13 +178,13 @@ def print_module_table(
         print()
         return
 
-    print("| Delta | Delta % | Current | Baseline | Module |")
+    print("| Delta (bn) | Delta % | Current (bn) | Baseline (bn) | Module |")
     print("| ---: | ---: | ---: | ---: | --- |")
     for row in rows:
-        baseline_text = "-" if row.baseline is None else fmt_int(row.baseline)
+        baseline_text = "-" if row.baseline is None else fmt_instructions_bn(row.baseline)
         print(
-            f"| {fmt_signed_int(row.delta)} | {fmt_pct(row.delta_pct)} | "
-            f"{fmt_int(row.current)} | {baseline_text} | `{row.module}` |"
+            f"| {fmt_signed_instructions_bn(row.delta)} | {fmt_pct(row.delta_pct)} | "
+            f"{fmt_instructions_bn(row.current)} | {baseline_text} | `{row.module}` |"
         )
     print()
 
