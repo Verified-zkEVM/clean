@@ -28,3 +28,23 @@ Compare a current run against a baseline:
 ```bash
 scripts/bench/report.py measurements.jsonl baseline-measurements.jsonl
 ```
+
+## Maintainer-triggered PR benchmarks
+
+After the benchmark workflows are present on the default branch, maintainers can comment on a pull request with:
+
+```text
+/bench
+```
+
+The command workflow verifies that the commenter is an owner, member, or collaborator, then dispatches the benchmark workflow for the pull request's exact head commit.
+
+The benchmark workflow expects a self-hosted runner with labels:
+
+```text
+self-hosted, linux, x64, clean-bench
+```
+
+The workflow runs pull request code inside a Docker container. Persistent Lean toolchain state lives under `/var/lib/clean-bench/cache/elan`, while each pull request checkout and writable cache directory uses a per-run workspace that is removed after the benchmark. The persistent Lean toolchain cache is mounted read-only when pull request code runs.
+
+The host must provide working userspace `perf` instruction counters. In practice this means configuring the host so `perf stat -e instructions:u -- true` reports a numeric count for the runner environment. The container is run without host networking, without privileged mode, and without the Docker socket mounted.
