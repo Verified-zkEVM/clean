@@ -559,18 +559,30 @@ macro_rules
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 /--
-Experimental elaboration tactic that stores reduced `localLength` and `output` directly.
+Derive an `ElaboratedCircuit` through `ExplicitCircuits`, but store normalized metadata fields.
 
-This follows the same explicit-circuit derivation path as `infer_elaborated_circuit`, but simplifies
-open metadata projections at tactic elaboration time before constructing the `ElaboratedCircuit`
-record.  The result is cheap metadata for parent circuits: e.g. a loop-derived `localLength` can be
-stored as `fun _ => 16` instead of a large tree of `ExplicitCircuit.from_*` projections.
+Like `infer_elaborated_circuit`, this first runs `infer_explicit_circuits`.  Instead of returning the
+`ExplicitCircuits.toElaborated` wrapper, it reads the explicit metadata projections and normalizes
+selected fields before constructing the final record:
 
-The normalization uses the `explicit_circuit_norm` simp set instead of broad kernel reduction.
-This keeps it targeted to projection lemmas and other explicit-circuit metadata rules.
+* `localLength`
+* `output`
+* `channelsWithGuarantees`
+* `channelsWithRequirements`
 
-This prototype currently delegates consistency/channel proofs to the inferred `ExplicitCircuits`
-proof and is best suited to circuits whose channel metadata is definitionally empty.
+Normalization is deliberately targeted.  It first performs one `dsimp` pass using
+`explicit_circuit_norm` plus unfoldable circuit-family definitions found in the current metadata
+expression.  Then it runs a `simp` pass using the same extensible `explicit_circuit_norm` theorem and
+simproc sets.  This gives users a single place to add safe metadata-normalization rules while
+avoiding broad `Meta.reduce`/`whnf` on large circuits.
+
+The generated `localLength_eq` and `output_eq` proofs reuse the normalization proofs produced while
+constructing the stored fields.  Structural consistency and channel-lawfulness proofs are delegated
+directly to the inferred `ExplicitCircuits` proof using raw projection applications, avoiding
+unnecessary type-directed reduction of the original circuit.
+
+Set `set_option debug.explicitCircuitReduced true` to print the inferred explicit proof term and the
+normalization passes used for each metadata field.
 -/
 elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- We are going to build an `ElaboratedCircuit` record directly.  First inspect the
@@ -778,25 +790,56 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let channelsWithGuarantees ← do
     let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
       #[none, none, none, none, main, explicit, defaultInput, zero]
-    normalizeExplicit "channelsWithGuarantees" ch
+    pure (← normalizeExplicitSimp "channelsWithGuarantees" ch).1
   let channelsWithRequirements ← do
     let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
       #[none, none, none, none, main, explicit, defaultInput, zero]
-    normalizeExplicit "channelsWithRequirements" ch
+    pure (← normalizeExplicitSimp "channelsWithRequirements" ch).1
   let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
   let exposed ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let nil := mkApp (mkConst ``List.nil [levelZero]) exposedChannelType
       mkLambdaFVars #[input, offset] nil
 
-  -- Channel lawfulness is delegated to the inferred explicit circuit proof.  This
-  -- type-checks when the normalized stored channel metadata is definitionally equal
-  -- to the explicit metadata at the current input/offset; for static channel lists,
-  -- the targeted normalization above makes that true without broad reduction.
+  -- Channel lawfulness is delegated to the inferred explicit circuit proof.  If the
+  -- stored channel metadata was simplified propositionally, transport the delegated
+  -- proof across the corresponding channel-list equalities.
   let channelsLawful ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p := mkAppN (mkConst ``ExplicitCircuits.channelsLawful)
         #[F, fieldInst, varInputType, varOutputType, main, explicit, input, offset]
+      let pType ← inferType p
+      let pArgs := pType.getAppArgs
+      if !pType.getAppFn.isConstOf ``Operations.ChannelsLawful || pArgs.size < 6 then
+        throwError "unexpected channelsLawful type: {pType}"
+      let ops := pArgs[2]!
+      let actualGuarantees := pArgs[3]!
+      let actualRequirements := pArgs[4]!
+      let actualExposed := pArgs[5]!
+      let rawChannelType := mkApp (mkConst ``RawChannel) F
+      let rawChannelListType := mkApp (mkConst ``List [levelZero]) rawChannelType
+      let guarantees ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
+        #[none, none, none, none, main, explicit, input, offset]
+      let (_, guaranteesProof) ← normalizeExplicitSimp "channelsWithGuarantees_lawful" guarantees
+      let guaranteesProofType ← mkEq actualGuarantees channelsWithGuarantees
+      let guaranteesProof ← mkExpectedTypeHint guaranteesProof guaranteesProofType
+      let p ← withLocalDeclD `channelsWithGuarantees rawChannelListType fun normalizedGuarantees => do
+        let prop := mkAppN (mkConst ``Operations.ChannelsLawful)
+          #[F, fieldInst, ops, normalizedGuarantees, actualRequirements, actualExposed]
+        let motive ← mkLambdaFVars #[normalizedGuarantees] prop
+        let propEq ← mkAppM ``congrArg #[motive, guaranteesProof]
+        mkEqMPR propEq p
+      let requirements ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
+        #[none, none, none, none, main, explicit, input, offset]
+      let (_, requirementsProof) ← normalizeExplicitSimp "channelsWithRequirements_lawful" requirements
+      let requirementsProofType ← mkEq actualRequirements channelsWithRequirements
+      let requirementsProof ← mkExpectedTypeHint requirementsProof requirementsProofType
+      let p ← withLocalDeclD `channelsWithRequirements rawChannelListType fun normalizedRequirements => do
+        let prop := mkAppN (mkConst ``Operations.ChannelsLawful)
+          #[F, fieldInst, ops, channelsWithGuarantees, normalizedRequirements, actualExposed]
+        let motive ← mkLambdaFVars #[normalizedRequirements] prop
+        let propEq ← mkAppM ``congrArg #[motive, requirementsProof]
+        mkEqMPR propEq p
       mkLambdaFVars #[input, offset] p
 
   -- Assemble the final `ElaboratedCircuit` record using the normalized fields and
