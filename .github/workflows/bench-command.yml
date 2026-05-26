@@ -16,6 +16,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: read
+      statuses: write
 
     steps:
       - name: Resolve PR head
@@ -42,10 +43,23 @@ jobs:
             -f sha="${{ steps.pr.outputs.sha }}" \
             -f head_repo="${{ steps.pr.outputs.head_repo }}"
 
+      - name: Mark benchmark queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/statuses/${{ steps.pr.outputs.sha }}" \
+            -f state=pending \
+            -f context=bench \
+            -f description="Build benchmark queued" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/workflows/bench.yml"
+
       - name: Acknowledge command
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment "${{ steps.pr.outputs.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "Queued build benchmark for \`${{ steps.pr.outputs.sha }}\` against baseline \`${{ steps.pr.outputs.base_sha }}\`."
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/issues/${{ steps.pr.outputs.number }}/comments" \
+            -f body="Queued build benchmark for \`${{ steps.pr.outputs.sha }}\` against baseline \`${{ steps.pr.outputs.base_sha }}\`."
