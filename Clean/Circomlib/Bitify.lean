@@ -67,21 +67,12 @@ lemma lc_eq {i0} {env} {n : ℕ} :
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
 
-  -- TODO AUTOELAB `reduced` default works ok. but override it makes it MUCH slower
-  -- override is nice as it removes the if-else expression
-  -- elaborated := by? infer_elaborated_circuit_reduced
-  -- elaborated := by? infer_elaborated_circuit_reduced_with {
-  --   localLength _ := n
-  --   output _ i := varFromOffset (fields n) i
-  -- } using (
-  --   by simp
-  -- )
-  elaborated := {
+  elaborated := by infer_elaborated_circuit_reduced_with {
     localLength _ := n
-    localLength_eq := by simp [circuit_norm, main]
-    output _ i := varFromOffset (fields n) i
-    subcircuitsConsistent := by simp +arith [circuit_norm, main]
-  }
+  } using (by
+    -- TODO AUTOELAB we should simp away the if-else in `_reduced`
+    dsimp only [main, explicit_circuit_norm]
+    simp)
 
   ProverAssumptions input _ _ := input.val < 2^n
 
