@@ -504,7 +504,7 @@ attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircui
   ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
 attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Nat.zero_mul
   Nat.mul_one Nat.one_mul Nat.sub_zero List.nil_append dif_pos dif_neg if_pos if_neg
-attribute [explicit_circuit_norm_proc] Nat.reduceAdd Nat.reduceMul Nat.reduceSub Nat.reduceLT Nat.reduceGT
+attribute [explicit_circuit_norm] Nat.reduceAdd Nat.reduceMul Nat.reduceSub Nat.reduceLT Nat.reduceGT
 
 syntax "infer_explicit_circuit" : tactic
 
