@@ -733,7 +733,8 @@ theorem GeneralFormalCircuit.toSubcircuit_channelsLawful
 
 attribute [explicit_circuit_no_unfold] subcircuit assertion subcircuitWithAssertion subcircuitWithHintAssertion
 
-instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
+namespace ExplicitCircuit
+instance fromSubcircuit (circuit : FormalCircuit F Input Output) (input : Var Input F) :
     ExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n
   localLength _ := circuit.localLength input
@@ -744,6 +745,28 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalC
     change Operations.SubcircuitsConsistent n [.subcircuit (_)]
     simp only [Operations.SubcircuitsConsistent, Operations.forAll]
     exact ⟨trivial, trivial⟩
+  channelsLawful := by simp [circuit_norm]
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_output {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).output n = circuit.output input n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_localLength {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).localLength n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_operations {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).operations n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_channelsWithGuarantees {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_channelsWithRequirements {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
+end ExplicitCircuit
 
 instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     ExplicitCircuit (assertion circuit input) where

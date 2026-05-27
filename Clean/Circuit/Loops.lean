@@ -1394,6 +1394,7 @@ macro_rules
         | apply from_map
         | apply from_pure
         | infer_instance
+        | apply fromSubcircuit
       repeat infer_instance
     )
     done))
