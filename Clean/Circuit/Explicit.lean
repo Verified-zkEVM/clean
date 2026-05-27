@@ -37,7 +37,7 @@ class ExplicitCircuit (circuit : Circuit F α) where
   channelsWithGuarantees : ℕ → List (RawChannel F)
   channelsWithRequirements : ℕ → List (RawChannel F)
   channelsLawful : ∀ n : ℕ, (circuit.operations n).ChannelsLawful
-      (channelsWithGuarantees n) (channelsWithRequirements n) [] := by
+      (channelsWithGuarantees n) (channelsWithRequirements n) := by
     intro n
     try rw [operations_eq n]
     try dsimp only [channelsWithGuarantees, channelsWithRequirements, operations]
@@ -58,7 +58,7 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
   channelsWithGuarantees : α → ℕ → List (RawChannel F)
   channelsWithRequirements : α → ℕ → List (RawChannel F)
   channelsLawful : ∀ (a : α) (n : ℕ), ((circuit a).operations n).ChannelsLawful
-      (channelsWithGuarantees a n) (channelsWithRequirements a n) [] := by
+      (channelsWithGuarantees a n) (channelsWithRequirements a n) := by
     intro a n
     try rw [operations_eq a n]
     try dsimp only [channelsWithGuarantees, channelsWithRequirements, operations]
@@ -102,17 +102,44 @@ def ElaboratedCircuit.fromExplicit {Input Output : TypeMap}
   (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) :
     ElaboratedCircuit F Input Output circuit := explicit.toElaborated _ explicit_elaborated
 
+theorem ExplicitCircuits.toElaborated_localLength {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (explicit : ExplicitCircuits circuit)
+    (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) (a : Var Input F) :
+    (ExplicitCircuits.toElaborated circuit explicit explicit_elaborated).localLength a =
+      explicit.localLength a 0 := rfl
+
+theorem ExplicitCircuits.toElaborated_output {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (explicit : ExplicitCircuits circuit)
+    (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) (a : Var Input F) (n : ℕ) :
+    (ExplicitCircuits.toElaborated circuit explicit explicit_elaborated).output a n =
+      explicit.output a n := rfl
+
+theorem ExplicitCircuits.toElaborated_channelsWithGuarantees {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (explicit : ExplicitCircuits circuit)
+    (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) :
+    (ExplicitCircuits.toElaborated circuit explicit explicit_elaborated).channelsWithGuarantees =
+      explicit.channelsWithGuarantees default 0 := rfl
+
+theorem ExplicitCircuits.toElaborated_channelsWithRequirements {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (explicit : ExplicitCircuits circuit)
+    (explicit_elaborated : ExplicitCircuits.IsElaborated circuit explicit) :
+    (ExplicitCircuits.toElaborated circuit explicit explicit_elaborated).channelsWithRequirements =
+      explicit.channelsWithRequirements default 0 := rfl
+
 structure ElaboratedCircuit.Data {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     {circuit : Var Input F → Circuit F (Var Output F)} (elaborated : ElaboratedCircuit F Input Output circuit) where
   localLength : Var Input F → ℕ := elaborated.localLength
   output : Var Input F → ℕ → Var Output F := elaborated.output
   channelsWithGuarantees : List (RawChannel F) := elaborated.channelsWithGuarantees
   channelsWithRequirements : List (RawChannel F) := elaborated.channelsWithRequirements
-  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
-  exposedChannelsLawful : ∀ input offset exposed, exposed ∈ exposedChannels input offset →
-      ((circuit input).operations offset).interactionsWith exposed.channel = exposed.interactions := by
-    intro input offset exposed h_mem
-    cases h_mem
 
 @[circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -139,13 +166,12 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
   subcircuitsConsistent := derived.subcircuitsConsistent
   channelsWithGuarantees := data.channelsWithGuarantees
   channelsWithRequirements := data.channelsWithRequirements
-  exposedChannels := data.exposedChannels
   channelsLawful a n := by
     have h_lawful := derived.channelsLawful a n
     have channelsWithGuarantees_subset := data_eq.2.2.1
     have channelsWithRequirements_subset := data_eq.2.2.2
     dsimp only [Operations.ChannelsLawful] at h_lawful ⊢
-    obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_exposed, h_sub⟩ := h_lawful
+    obtain ⟨h_g_sub, h_g, h_r_sub, h_r, h_shallow, h_sub⟩ := h_lawful
     and_intros
     · exact List.Subset.trans h_g_sub channelsWithGuarantees_subset
     · intro env
@@ -157,8 +183,33 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
       rcases h_shallow channel h_mem with h_channel | h_channel
       · exact Or.inl (channelsWithGuarantees_subset h_channel)
       · exact Or.inr (channelsWithRequirements_subset h_channel)
-    · exact data.exposedChannelsLawful a n
     · exact h_sub
+
+theorem ElaboratedCircuit.withData_localLength {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) (a : Var Input F) :
+    (ElaboratedCircuit.withData derived data data_eq).localLength a = data.localLength a := rfl
+
+theorem ElaboratedCircuit.withData_output {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) (a : Var Input F) (n : ℕ) :
+    (ElaboratedCircuit.withData derived data data_eq).output a n = data.output a n := rfl
+
+theorem ElaboratedCircuit.withData_channelsWithGuarantees {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) :
+    (ElaboratedCircuit.withData derived data data_eq).channelsWithGuarantees = data.channelsWithGuarantees := rfl
+
+theorem ElaboratedCircuit.withData_channelsWithRequirements {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    {circuit : Var Input F → Circuit F (Var Output F)}
+    (derived : ElaboratedCircuit F Input Output circuit)
+    (data : ElaboratedCircuit.Data derived) (data_eq) :
+    (ElaboratedCircuit.withData derived data data_eq).channelsWithRequirements = data.channelsWithRequirements := rfl
 
 -- move between family and single explicit circuit
 
@@ -436,7 +487,19 @@ attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.localLength Exp
   ExplicitCircuits.channelsWithGuarantees ExplicitCircuits.channelsWithRequirements
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuits.toSingle ExplicitCircuits.fromSingle
 attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
-attribute [explicit_circuit_norm] size
+  ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
+
+-- simplification of terms coming from `bind` aggregation e.g. 8 + 0 + 1 + ...
+attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Nat.zero_mul
+  Nat.mul_one Nat.one_mul Nat.sub_zero dif_pos dif_neg if_pos if_neg
+  Nat.reduceAdd Nat.reduceMul Nat.reduceSub Nat.reduceLT Nat.reduceGT
+  -- lists reduction, for channels
+  List.nil_append
+  List.append_nil
+  List.append_cons List.cons_append
+  List.ofFn_nil_flatten List.ofFn_singleton_flatten
+  -- if-else
+  dite_eq_ite ite_self reduceIte reduceDIte
 
 syntax "infer_explicit_circuit" : tactic
 
@@ -491,18 +554,30 @@ macro_rules
 attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
 
 /--
-Experimental elaboration tactic that stores reduced `localLength` and `output` directly.
+Derive an `ElaboratedCircuit` through `ExplicitCircuits`, but store normalized metadata fields.
 
-This follows the same explicit-circuit derivation path as `infer_elaborated_circuit`, but simplifies
-open metadata projections at tactic elaboration time before constructing the `ElaboratedCircuit`
-record.  The result is cheap metadata for parent circuits: e.g. a loop-derived `localLength` can be
-stored as `fun _ => 16` instead of a large tree of `ExplicitCircuit.from_*` projections.
+Like `infer_elaborated_circuit`, this first runs `infer_explicit_circuits`.  Instead of returning the
+`ExplicitCircuits.toElaborated` wrapper, it reads the explicit metadata projections and normalizes
+selected fields before constructing the final record:
 
-The normalization uses the `explicit_circuit_norm` simp set instead of broad kernel reduction.
-This keeps it targeted to projection lemmas and other explicit-circuit metadata rules.
+* `localLength`
+* `output`
+* `channelsWithGuarantees`
+* `channelsWithRequirements`
 
-This prototype currently delegates consistency/channel proofs to the inferred `ExplicitCircuits`
-proof and is best suited to circuits whose channel metadata is definitionally empty.
+Normalization is deliberately targeted.  It first performs one `dsimp` pass using
+`explicit_circuit_norm` plus unfoldable circuit-family definitions found in the current metadata
+expression.  Then it runs a `simp` pass using the same extensible `explicit_circuit_norm` theorem and
+simproc sets.  This gives users a single place to add safe metadata-normalization rules while
+avoiding broad `Meta.reduce`/`whnf` on large circuits.
+
+The generated `localLength_eq` and `output_eq` proofs reuse the normalization proofs produced while
+constructing the stored fields.  Structural consistency and channel-lawfulness proofs are delegated
+directly to the inferred `ExplicitCircuits` proof using raw projection applications, avoiding
+unnecessary type-directed reduction of the original circuit.
+
+Set `set_option debug.explicitCircuitReduced true` to print the inferred explicit proof term and the
+normalization passes used for each metadata field.
 -/
 elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   -- We are going to build an `ElaboratedCircuit` record directly.  First inspect the
@@ -535,6 +610,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
 
   -- Useful object-language types for the lambdas we need to create.
   let varInputType ← mkAppM ``Var #[Input, F]
+  let varOutputType ← mkAppM ``Var #[Output, F]
+  let fieldInst := args[3]!
   let natType := mkConst ``Nat
 
   -- Read the simp theorem database tagged with `[explicit_circuit_norm]`.  These
@@ -575,8 +652,8 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     | _ => return false
 
   -- Collect the user circuit definitions that occur in an expression.  The list is
-  -- fed to `dsimp only`; after each simplification pass we scan again, because
-  -- unfolding one definition may reveal another circuit definition inside it.
+  -- fed to one `dsimp only` call; repeatedly simplifying already-expanded metadata
+  -- is expensive for large loops.
   let rec collectUnfoldable (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
     match e with
     | .const declName _ =>
@@ -600,64 +677,77 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
     Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
       (simpTheorems := #[thms]) congrThms
 
+  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    (simpTheorems := #[explicitThms]) congrThms
+  let simpProcs ← do
+    let some ext ← Simp.getSimprocExtension? `explicit_circuit_norm
+      | throwError "unknown simproc attribute explicit_circuit_norm"
+    pure #[(← ext.getSimprocs)]
+
   -- Normalize an explicit metadata expression, but only by the targeted rules
-  -- described above.  This is intentionally a small fixed-point loop rather than
-  -- full reduction.  The debug output is copyable Lean syntax, e.g.
+  -- described above.  The unfold set is collected from the current expression
+  -- and fed to a single `dsimp` call to avoid repeatedly simplifying
+  -- already-expanded loop metadata.  The debug output is copyable Lean syntax, e.g.
   --   dsimp only [explicit_circuit_norm, Foo.main, Bar.circuit]
   -- so a failing or slow normalization step can be replayed in a source file.
   let normalizeExplicit (label : String) (e : Expr) : MetaM Expr := do
     let debug := (← getOptions).getBool `debug.explicitCircuitReduced false
-    let mut current := e
-    let mut decls ← collectUnfoldable e #[]
-    for i in [:8] do
-      if debug then
-        let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
-        let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
-        logInfo m!"infer_elaborated_circuit_reduced {label} pass {i}:
+    let decls ← collectUnfoldable e #[]
+    if debug then
+      let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
+      let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
+      logInfo m!"infer_elaborated_circuit_reduced {label}:
   dsimp only [{simpArgs}]"
-      let ctx ← mkDsimpCtx decls
-      let next := (← dsimp current ctx).1
-      let decls' ← collectUnfoldable next decls
-      if next == current && decls'.size == decls.size then
-        return next
-      current := next
-      decls := decls'
-    return current
+    let ctx ← mkDsimpCtx decls
+    return (← dsimp e ctx).1
+
+  let normalizeExplicitSimp (label : String) (e : Expr) : MetaM (Expr × Expr) := do
+    let e' ← normalizeExplicit label e
+    let r ← Lean.Meta.simp e' simpCtx simpProcs
+    let proof ← match r.1.proof? with
+      | some proof => pure proof
+      | none => mkEqRefl e'
+    return (r.1.expr, proof)
 
   -- Store a simplified elaborated `localLength`.  We start from
   --   explicit.localLength input 0
   -- because an `ElaboratedCircuit` local length should not depend on the offset.
-  let localLengthFun ← withLocalDeclD `input varInputType fun input => do
+  -- The normalizer also returns a proof from the explicit metadata expression to
+  -- the stored expression; keep it so the field proof does not normalize again.
+  let (localLengthFun, localLengthNormProof) ← withLocalDeclD `input varInputType fun input => do
     let zero := mkNatLit 0
     let ll ← mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicit, input, zero]
-    let ll ← normalizeExplicit "localLength" ll
-    mkLambdaFVars #[input] ll
+    let (ll, proof) ← normalizeExplicitSimp "localLength" ll
+    let localLengthFun ← mkLambdaFVars #[input] ll
+    let localLengthNormProof ← mkLambdaFVars #[input] proof
+    return (localLengthFun, localLengthNormProof)
 
   -- Store a simplified elaborated `output`.  Unlike `localLength`, output is a
-  -- function of both the input variables and the current offset.
-  let outputFun ← withLocalDeclD `input varInputType fun input => do
+  -- function of both the input variables and the current offset.  Again, keep the
+  -- normalization proof for the corresponding `output_eq` field.
+  let (outputFun, outputNormProof) ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let out ← mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicit, input, offset]
-      let out ← normalizeExplicit "output" out
-      mkLambdaFVars #[input, offset] out
+      let (out, proof) ← normalizeExplicitSimp "output" out
+      let outputFun ← mkLambdaFVars #[input, offset] out
+      let outputNormProof ← mkLambdaFVars #[input, offset] proof
+      return (outputFun, outputNormProof)
 
   -- Prove the elaborated local-length equation by composing:
   --   circuit.localLength offset = explicit.localLength input offset
-  -- with the definitional equality between the normalized stored field and the
-  -- explicit expression at offset 0.  The latter proof is just `rfl`; if the
-  -- normalization changed the expression in a non-definitional way, this assignment
-  -- would fail, which is exactly the safety check we want.
+  -- with the proof that the explicit metadata expression at offset 0 normalizes to
+  -- the stored field.  The latter proof was produced while constructing the field.
   let localLengthEq ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p1 ← mkAppOptM ``ExplicitCircuits.localLength_eq #[none, none, none, none, main, explicit, input, offset]
-      let p1Type ← whnf (← inferType p1)
+      let p1Type ← inferType p1
       let some (_, _, mid) := p1Type.eq?
         | throwError "unexpected localLength_eq type: {p1Type}"
+      let p2 := mkApp localLengthNormProof input
       let rhs := mkApp localLengthFun input
       let p2Type ← mkEq mid rhs
-      let p2MVar ← mkFreshExprMVar p2Type
-      p2MVar.mvarId!.assign (← mkEqRefl mid)
-      let p ← mkAppM ``Eq.trans #[p1, p2MVar]
+      let p2 ← mkExpectedTypeHint p2 p2Type
+      let p ← mkAppM ``Eq.trans #[p1, p2]
       mkLambdaFVars #[input, offset] p
 
   -- Same proof pattern for output:
@@ -665,59 +755,106 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let outputEq ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p1 ← mkAppOptM ``ExplicitCircuits.output_eq #[none, none, none, none, main, explicit, input, offset]
-      let p1Type ← whnf (← inferType p1)
+      let p1Type ← inferType p1
       let some (_, _, mid) := p1Type.eq?
         | throwError "unexpected output_eq type: {p1Type}"
+      let p2 := mkApp2 outputNormProof input offset
       let rhs := mkApp2 outputFun input offset
       let p2Type ← mkEq mid rhs
-      let p2MVar ← mkFreshExprMVar p2Type
-      p2MVar.mvarId!.assign (← mkEqRefl mid)
-      let p ← mkAppM ``Eq.trans #[p1, p2MVar]
+      let p2 ← mkExpectedTypeHint p2 p2Type
+      let p ← mkAppM ``Eq.trans #[p1, p2]
       mkLambdaFVars #[input, offset] p
 
   -- Consistency proofs are not recomputed.  They are taken directly from the
   -- inferred explicit metadata, whose operations still match the real circuit.
   let subProof ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
-      let p ← mkAppOptM ``ExplicitCircuits.subcircuitsConsistent #[none, none, none, none, main, explicit, input, offset]
+      let p := mkAppN (mkConst ``ExplicitCircuits.subcircuitsConsistent)
+        #[F, fieldInst, varInputType, varOutputType, main, explicit, input, offset]
       mkLambdaFVars #[input, offset] p
 
   -- Store simplified top-level channel metadata too.  The explicit metadata APIs
   -- expose channel lists as functions of input/offset, but these lists are intended
-  -- to be circuit-level metadata.  As in `ExplicitCircuits.toElaborated`, read them
-  -- at a default input and offset 0, then normalize the resulting projection tree.
+  -- to be circuit-level metadata.  Normalize them once as functions of input/offset,
+  -- then store their value at a default input and offset 0.  The normalization proofs
+  -- are reused below when transporting the delegated channel-lawfulness proof.
   let defaultInput ← mkAppOptM ``default #[varInputType, none]
   let zero := mkNatLit 0
-  let channelsWithGuarantees ← do
-    let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
-      #[none, none, none, none, main, explicit, defaultInput, zero]
-    normalizeExplicit "channelsWithGuarantees" ch
-  let channelsWithRequirements ← do
-    let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
-      #[none, none, none, none, main, explicit, defaultInput, zero]
-    normalizeExplicit "channelsWithRequirements" ch
-  let exposedChannelType ← mkAppOptM ``ExposedChannel #[F, none]
-  let exposed ← withLocalDeclD `input varInputType fun input => do
+  let (channelsWithGuaranteesFun, channelsWithGuaranteesNormProof) ←
+      withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
-      let nil := mkApp (mkConst ``List.nil [levelZero]) exposedChannelType
-      mkLambdaFVars #[input, offset] nil
+      let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
+        #[none, none, none, none, main, explicit, input, offset]
+      let (ch, proof) ← normalizeExplicitSimp "channelsWithGuarantees" ch
+      let channelsWithGuaranteesFun ← mkLambdaFVars #[input, offset] ch
+      let channelsWithGuaranteesNormProof ← mkLambdaFVars #[input, offset] proof
+      return (channelsWithGuaranteesFun, channelsWithGuaranteesNormProof)
+  let channelsWithGuarantees := mkApp2 channelsWithGuaranteesFun defaultInput zero
+  let (channelsWithRequirementsFun, channelsWithRequirementsNormProof) ←
+      withLocalDeclD `input varInputType fun input => do
+    withLocalDeclD `offset natType fun offset => do
+      let ch ← mkAppOptM ``ExplicitCircuits.channelsWithRequirements
+        #[none, none, none, none, main, explicit, input, offset]
+      let (ch, proof) ← normalizeExplicitSimp "channelsWithRequirements" ch
+      let channelsWithRequirementsFun ← mkLambdaFVars #[input, offset] ch
+      let channelsWithRequirementsNormProof ← mkLambdaFVars #[input, offset] proof
+      return (channelsWithRequirementsFun, channelsWithRequirementsNormProof)
+  let channelsWithRequirements := mkApp2 channelsWithRequirementsFun defaultInput zero
 
-  -- Channel lawfulness is delegated to the inferred explicit circuit proof.  This
-  -- type-checks when the normalized stored channel metadata is definitionally equal
-  -- to the explicit metadata at the current input/offset; for static channel lists,
-  -- the targeted normalization above makes that true without broad reduction.
+  -- Channel lawfulness is delegated to the inferred explicit circuit proof.  If the
+  -- stored channel metadata was simplified propositionally, transport the delegated
+  -- proof across the corresponding channel-list equalities.
   let channelsLawful ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
-      let p ← mkAppOptM ``ExplicitCircuits.channelsLawful #[none, none, none, none, main, explicit, input, offset]
+      let p := mkAppN (mkConst ``ExplicitCircuits.channelsLawful)
+        #[F, fieldInst, varInputType, varOutputType, main, explicit, input, offset]
+      let pType ← inferType p
+      let pArgs := pType.getAppArgs
+      if !pType.getAppFn.isConstOf ``Operations.ChannelsLawful || pArgs.size < 5 then
+        throwError "unexpected channelsLawful type: {pType}"
+      let ops := pArgs[2]!
+      let actualGuarantees := pArgs[3]!
+      let actualRequirements := pArgs[4]!
+      let rawChannelType := mkApp (mkConst ``RawChannel) F
+      let rawChannelListType := mkApp (mkConst ``List [levelZero]) rawChannelType
+      let guaranteesProof := mkApp2 channelsWithGuaranteesNormProof input offset
+      let currentGuarantees := mkApp2 channelsWithGuaranteesFun input offset
+      let guaranteesProofType ← mkEq actualGuarantees currentGuarantees
+      let guaranteesProof ← mkExpectedTypeHint guaranteesProof guaranteesProofType
+      let guaranteesStoredType ← mkEq currentGuarantees channelsWithGuarantees
+      let guaranteesStoredProof ← mkExpectedTypeHint (← mkEqRefl channelsWithGuarantees) guaranteesStoredType
+      let guaranteesProof ← mkAppOptM ``Eq.trans
+        #[none, actualGuarantees, currentGuarantees, channelsWithGuarantees, guaranteesProof, guaranteesStoredProof]
+      let p ← withLocalDeclD `channelsWithGuarantees rawChannelListType fun normalizedGuarantees => do
+        let prop := mkAppN (mkConst ``Operations.ChannelsLawful)
+          #[F, fieldInst, ops, normalizedGuarantees, actualRequirements]
+        let motive ← mkLambdaFVars #[normalizedGuarantees] prop
+        let propEq ← mkAppM ``congrArg #[motive, guaranteesProof]
+        mkEqMP propEq p
+      let requirementsProof := mkApp2 channelsWithRequirementsNormProof input offset
+      let currentRequirements := mkApp2 channelsWithRequirementsFun input offset
+      let requirementsProofType ← mkEq actualRequirements currentRequirements
+      let requirementsProof ← mkExpectedTypeHint requirementsProof requirementsProofType
+      let requirementsStoredType ← mkEq currentRequirements channelsWithRequirements
+      let requirementsStoredProof ← mkExpectedTypeHint (← mkEqRefl channelsWithRequirements) requirementsStoredType
+      let requirementsProof ← mkAppOptM ``Eq.trans
+        #[none, actualRequirements, currentRequirements, channelsWithRequirements, requirementsProof, requirementsStoredProof]
+      let p ← withLocalDeclD `channelsWithRequirements rawChannelListType fun normalizedRequirements => do
+        let prop := mkAppN (mkConst ``Operations.ChannelsLawful)
+          #[F, fieldInst, ops, channelsWithGuarantees, normalizedRequirements]
+        let motive ← mkLambdaFVars #[normalizedRequirements] prop
+        let propEq ← mkAppM ``congrArg #[motive, requirementsProof]
+        mkEqMP propEq p
       mkLambdaFVars #[input, offset] p
 
   -- Assemble the final `ElaboratedCircuit` record using the normalized fields and
   -- the delegated proofs, then close the user's goal.
   let val ← mkAppOptM ``ElaboratedCircuit.mk #[F, Input, Output, none, none, none, main,
     localLengthFun, localLengthEq, outputFun, outputEq, subProof, channelsWithGuarantees,
-    channelsWithRequirements, exposed, channelsLawful]
+    channelsWithRequirements, channelsLawful]
   goal.assign val
   replaceMainGoal []
+
 syntax "infer_elaborated_circuit" : tactic
 syntax "infer_elaborated_circuit_with" term : tactic
 syntax "infer_elaborated_circuit_with" term " using " term : tactic

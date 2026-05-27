@@ -48,6 +48,12 @@ lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F 
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
   simp only [concat]
 
+@[circuit_norm]
+lemma concat_localLength (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 inp :
+  (c1.concat c2 p0 p1).localLength inp =
+    c1.localLength inp + c2.localLength (c1.output inp 0) := by
+  simp only [concat, circuit_norm]
+
 /--
 Weaken the specification of a FormalCircuit.
 
@@ -93,7 +99,7 @@ lemma weakenSpec_assumptions
 lemma weakenSpec_channelsWithRequirements
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).channelsWithRequirements = c.channelsWithRequirements := by
-  simp only [weakenSpec]
+  simp only [FormalCircuitBase.channelsWithRequirements, weakenSpec]
 end FormalCircuit
 
 namespace GeneralFormalCircuit

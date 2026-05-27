@@ -67,15 +67,6 @@ lemma lc_eq {i0} {env} {n : ℕ} :
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
 
-  -- TODO `reduced` default works override it makes it MUCH slower
-  -- override is nice as it removed if-else expression
-  elaborated := {
-    localLength _ := n
-    localLength_eq := by simp [circuit_norm, main]
-    output _ i := varFromOffset (fields n) i
-    subcircuitsConsistent := by simp +arith [circuit_norm, main]
-  }
-
   ProverAssumptions input _ _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent

@@ -213,6 +213,7 @@ private lemma takeShort8_normalized {v : BLAKE3.BLAKE3State (F p)} (h8 : 8 < 16)
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro _ _ env acc_var x_var acc x _ _ h_input h_holds spec_previous inputs_short
   simp only [circuit_norm, step] at inputs_short spec_previous h_holds ⊢
+  simp only [circuit_norm] at h_input
   specialize spec_previous (by omega)
   have input_normalized : x.Normalized := by
     simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at h_holds
@@ -342,9 +343,9 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_assumptions, h_input ⟩⟩
-    simp only [circuit_norm, step] at ⊢ h_witnesses
+    simp only [circuit_norm, step] at ⊢ h_witnesses h_eval
     provable_struct_simp
-    simp only [h_eval] at ⊢ h_witnesses
+    simp only [circuit_norm, h_eval] at ⊢ h_witnesses
     dsimp only [ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
     constructor

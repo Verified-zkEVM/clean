@@ -33,9 +33,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
 
-  -- TODO autoelab causes proof churn and _with overrides lead to slow soundness simp
-  -- investigate why the latter
-  elaborated := {
+  -- TODO default causes proof churn, fix locally
+  elaborated := by infer_elaborated_circuit_reduced_with {
     localLength input := Round.circuit.localLength input + Permute.circuit.localLength input.message
     output input offset :=
       let state_out := Round.circuit.output input offset
@@ -132,7 +131,7 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2 ⊢
     constructor <;> aesop
-  ) (by aesop)
+  ) (by simp [circuit_norm, twoRoundsWithPermute, roundWithPermute, Round.circuit, Permute.circuit])
 
 /--
 Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -203,7 +202,7 @@ def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2 ⊢
     constructor <;> aesop
-  ) (by aesop)
+  ) (by simp [circuit_norm, twoRoundsWithPermute, roundWithPermute, Round.circuit, Permute.circuit])
 
 /--
 Apply six rounds of BLAKE3 compression, starting from a Round.Inputs state.

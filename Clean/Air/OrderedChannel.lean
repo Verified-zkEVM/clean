@@ -581,11 +581,7 @@ theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO)
     (ens.addTable table).OrderedChannels finished := by
   intro h_sound verifier_empty grts_subset_finished reqs_disjoint_finished channel h_channel
   -- we need to make use of soundness of the original ensemble; that'll give us most of what we need
-  simp only [SoundChannels, _root_.SoundChannels, verifier_empty, addTable_verifierTable,
-    allTables, List.mem_cons, forall_eq_or_imp, addTable_tables, orderedChannel_cons,
-    orderedChannelLt_cons_right, OrderedChannelRefl,
-    verifierTable_input, verifierTable_output, verifierTable_circuit] at h_sound ⊢
-  simp only [circuit_norm] at h_sound ⊢
+  simp only [circuit_norm, verifier_empty, allTables] at h_sound ⊢
   -- proof is a trivial combination of the hypotheses
   simp_all
 
