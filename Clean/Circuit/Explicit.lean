@@ -535,11 +535,8 @@ elab "unfold_explicit_circuits_head" : tactic => withMainContext do
     throwError "refusing to unfold explicit-circuit constructor"
   let some unfolded ← withTransparency TransparencyMode.default <| unfoldDefinition? family
     | throwError "failed to unfold target family head"
-  try
-    evalTactic (← `(tactic| conv => congr; unfold $(mkIdent declName):ident))
-  catch _ =>
-    let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) unfolded)
-    replaceMainGoal [← (← getMainGoal).change newTarget]
+  let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) unfolded)
+  replaceMainGoal [← (← getMainGoal).change newTarget]
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
@@ -550,10 +547,11 @@ macro_rules
     infer_explicit_circuit
     ))
 
--- Targeted `conv` unfolding in `unfold_explicit_circuits_head` introduces `Eq.mpr`/casts.
-attribute [explicit_circuit_norm] eq_mpr_eq_cast cast_eq
+attribute [explicit_circuit_norm]
   -- `simp only` introduces `id`
   id_eq
+  -- not sure why but `Ep.mpr` is introduced somewhere too and this helps
+  eq_mpr_eq_cast cast_eq
 
 /--
 Derive an `ElaboratedCircuit` through `ExplicitCircuits`, but store normalized metadata fields.
