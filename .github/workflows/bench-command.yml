@@ -64,7 +64,7 @@ jobs:
           printf -v body '%s\n\n%s\n\n%s' \
             'Benchmark queued! ⏱️' \
             "We are comparing the PR HEAD against the base: [$compare_url_tail]($compare_url)." \
-            'Expect this to take ~10 minutes to complete.'
+            'Expect this to take ~30 minutes to complete.'
           gh api \
             --method POST \
             "repos/${{ github.repository }}/issues/${{ steps.pr.outputs.number }}/comments" \
