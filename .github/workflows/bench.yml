@@ -21,10 +21,22 @@ jobs:
     runs-on: [self-hosted, linux, x64, clean-bench]
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: write
+      statuses: write
 
     steps:
+      - name: Mark benchmark running
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/statuses/${{ inputs.sha }}" \
+            -f state=pending \
+            -f context=bench \
+            -f description="Build benchmark running" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
       - name: Check out benchmark scripts
         uses: actions/checkout@v4
         with:
@@ -66,10 +78,12 @@ jobs:
           script: |
             const fs = require('fs');
             const report = fs.readFileSync('benchmark-report.md', 'utf8');
+            const compareUrlTail = `${context.repo.owner}/${context.repo.repo}/compare/${{ inputs.base_sha }}..${{ inputs.sha }}`;
+            const compareUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/compare/${{ inputs.base_sha }}..${{ inputs.sha }}`;
             const body = [
               '<!-- clean-build-benchmark -->',
               '',
-              'Benchmark for `${{ inputs.sha }}` against baseline `${{ inputs.base_sha }}`:',
+              `Benchmark completed for [${compareUrlTail}](${compareUrl})! ⏱️`,
               '',
               report,
             ].join('\n');
@@ -89,3 +103,30 @@ jobs:
             current.jsonl
             benchmark-report.md
           if-no-files-found: warn
+      - name: Mark benchmark complete
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          case "$JOB_STATUS" in
+            success)
+              state=success
+              description="Build benchmark completed"
+              ;;
+            cancelled)
+              state=error
+              description="Build benchmark cancelled"
+              ;;
+            *)
+              state=failure
+              description="Build benchmark failed"
+              ;;
+          esac
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/statuses/${{ inputs.sha }}" \
+            -f state="$state" \
+            -f context=bench \
+            -f description="$description" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
