@@ -86,6 +86,10 @@ def fmt_instructions_bn(value: float) -> str:
     return f"{value / 1_000_000_000:,.0f}"
 
 
+def fmt_heartbeats_k(value: float) -> str:
+    return f"{value / 1_000:,.0f}"
+
+
 def fmt_signed_int(value: float | None) -> str:
     if value is None:
         return "new"
@@ -96,6 +100,15 @@ def fmt_signed_instructions_bn(value: float | None) -> str:
     if value is None:
         return "new"
     rounded = round(value / 1_000_000_000)
+    if rounded == 0:
+        return "0"
+    return f"{rounded:+,}"
+
+
+def fmt_signed_heartbeats_k(value: float | None) -> str:
+    if value is None:
+        return "new"
+    rounded = round(value / 1_000)
     if rounded == 0:
         return "0"
     return f"{rounded:+,}"
@@ -120,7 +133,7 @@ def fmt_metric(metric: str, value: float) -> str:
     if metric.endswith("//instructions"):
         return fmt_instructions_bn(value)
     if metric.endswith("//heartbeats"):
-        return fmt_int(value)
+        return fmt_heartbeats_k(value)
     if metric.endswith("//wall-clock") or metric.endswith("//task-clock"):
         return fmt_seconds(value)
     if metric.endswith("//maxrss"):
@@ -134,7 +147,7 @@ def fmt_delta(metric: str, value: float | None) -> str:
     if metric.endswith("//instructions"):
         return fmt_signed_instructions_bn(value)
     if metric.endswith("//heartbeats"):
-        return fmt_signed_int(value)
+        return fmt_signed_heartbeats_k(value)
     if metric.endswith("//wall-clock") or metric.endswith("//task-clock"):
         return f"{value:+,.2f}s"
     if metric.endswith("//maxrss"):
@@ -146,7 +159,7 @@ def fmt_delta(metric: str, value: float | None) -> str:
 def print_summary(current: Measurements, baseline: Measurements | None) -> None:
     metrics = [
         ("Build instructions (bn)", "build//instructions"),
-        ("Build heartbeats", "build//heartbeats"),
+        ("Build heartbeats (k)", "build//heartbeats"),
         ("Wall time", "build//wall-clock"),
         ("Task clock", "build//task-clock"),
         ("Max RSS", "build//maxrss"),
@@ -216,6 +229,8 @@ def print_module_table(
 
     if metric_name == "instructions":
         print("| Delta (bn) | Delta % | Current (bn) | Baseline (bn) | Module |")
+    elif metric_name == "heartbeats":
+        print("| Delta (k) | Delta % | Current (k) | Baseline (k) | Module |")
     else:
         print("| Delta | Delta % | Current | Baseline | Module |")
     print("| ---: | ---: | ---: | ---: | --- |")
@@ -298,7 +313,7 @@ def main() -> None:
     parser.add_argument(
         "--module-metric",
         choices=sorted(MODULE_METRICS),
-        default="instructions",
+        default="heartbeats",
         help="metric to use in the module top lists",
     )
     args = parser.parse_args()
