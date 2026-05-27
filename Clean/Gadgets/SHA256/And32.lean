@@ -32,7 +32,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   and32 input.a input.b
 
-
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b
 
