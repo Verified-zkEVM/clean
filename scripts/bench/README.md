@@ -31,6 +31,12 @@ scripts/bench/report.py current.jsonl baseline.jsonl
 
 Comparison reports show the whole-build summary plus the top 10 module instruction regressions, top 10 module instruction improvements, and top 10 longest-running modules.
 
+When heartbeat measurements are available, render the module tables by heartbeats instead of instructions:
+
+```bash
+scripts/bench/report.py current.jsonl baseline.jsonl --module-metric heartbeats
+```
+
 ## Maintainer-triggered PR benchmarks
 
 After the benchmark workflows are present on the default branch, maintainers can comment on a pull request with:

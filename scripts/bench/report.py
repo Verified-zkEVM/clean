@@ -6,6 +6,17 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+MODULE_METRICS = {
+    "instructions": {
+        "singular": "Instruction",
+        "plural": "Instructions",
+    },
+    "heartbeats": {
+        "singular": "Heartbeat",
+        "plural": "Heartbeats",
+    },
+}
+
 
 @dataclass
 class Measurements:
@@ -44,16 +55,27 @@ def load(path: Path) -> Measurements:
     return Measurements(by_metric=by_metric)
 
 
-def module_metric(module: str) -> str:
-    return f"build/module/{module}//instructions"
+def module_metric(module: str, metric_name: str) -> str:
+    return f"build/module/{module}//{metric_name}"
 
 
-def module_from_metric(metric: str) -> str | None:
+def module_from_metric(metric: str, metric_name: str) -> str | None:
     prefix = "build/module/"
-    suffix = "//instructions"
+    suffix = f"//{metric_name}"
     if not metric.startswith(prefix) or not metric.endswith(suffix):
         return None
     return metric[len(prefix) : -len(suffix)]
+
+
+def build_heartbeats(measurements: Measurements) -> float | None:
+    total = sum(
+        value
+        for metric, value in measurements.by_metric.items()
+        if module_from_metric(metric, "heartbeats") is not None
+    )
+    if total == 0:
+        return None
+    return total
 
 
 def fmt_int(value: float) -> str:
@@ -97,6 +119,8 @@ def fmt_bytes(value: float) -> str:
 def fmt_metric(metric: str, value: float) -> str:
     if metric.endswith("//instructions"):
         return fmt_instructions_bn(value)
+    if metric.endswith("//heartbeats"):
+        return fmt_int(value)
     if metric.endswith("//wall-clock") or metric.endswith("//task-clock"):
         return fmt_seconds(value)
     if metric.endswith("//maxrss"):
@@ -109,6 +133,8 @@ def fmt_delta(metric: str, value: float | None) -> str:
         return "new"
     if metric.endswith("//instructions"):
         return fmt_signed_instructions_bn(value)
+    if metric.endswith("//heartbeats"):
+        return fmt_signed_int(value)
     if metric.endswith("//wall-clock") or metric.endswith("//task-clock"):
         return f"{value:+,.2f}s"
     if metric.endswith("//maxrss"):
@@ -120,6 +146,7 @@ def fmt_delta(metric: str, value: float | None) -> str:
 def print_summary(current: Measurements, baseline: Measurements | None) -> None:
     metrics = [
         ("Build instructions (bn)", "build//instructions"),
+        ("Build heartbeats", "build//heartbeats"),
         ("Wall time", "build//wall-clock"),
         ("Task clock", "build//task-clock"),
         ("Max RSS", "build//maxrss"),
@@ -130,8 +157,12 @@ def print_summary(current: Measurements, baseline: Measurements | None) -> None:
     print("| Metric | Current | Baseline | Delta | Delta % |")
     print("| --- | ---: | ---: | ---: | ---: |")
     for label, metric in metrics:
-        current_value = current.by_metric.get(metric)
-        baseline_value = baseline.by_metric.get(metric) if baseline else None
+        if metric == "build//heartbeats":
+            current_value = build_heartbeats(current)
+            baseline_value = build_heartbeats(baseline) if baseline else None
+        else:
+            current_value = current.by_metric.get(metric)
+            baseline_value = baseline.by_metric.get(metric) if baseline else None
         if current_value is None:
             continue
         delta = None if baseline_value is None else current_value - baseline_value
@@ -145,15 +176,19 @@ def print_summary(current: Measurements, baseline: Measurements | None) -> None:
     print()
 
 
-def get_module_rows(current: Measurements, baseline: Measurements | None) -> list[ModuleRow]:
+def get_module_rows(
+    current: Measurements,
+    baseline: Measurements | None,
+    metric_name: str,
+) -> list[ModuleRow]:
     modules = sorted(
         module
         for metric in current.by_metric
-        if (module := module_from_metric(metric)) is not None
+        if (module := module_from_metric(metric, metric_name)) is not None
     )
     rows = []
     for module in modules:
-        metric = module_metric(module)
+        metric = module_metric(module, metric_name)
         rows.append(
             ModuleRow(
                 module=module,
@@ -169,6 +204,7 @@ def print_module_table(
     rows: Iterable[ModuleRow],
     limit: int,
     empty_message: str,
+    metric_name: str,
 ) -> None:
     rows = list(rows)[:limit]
     print(f"## {title}")
@@ -178,26 +214,37 @@ def print_module_table(
         print()
         return
 
-    print("| Delta (bn) | Delta % | Current (bn) | Baseline (bn) | Module |")
+    if metric_name == "instructions":
+        print("| Delta (bn) | Delta % | Current (bn) | Baseline (bn) | Module |")
+    else:
+        print("| Delta | Delta % | Current | Baseline | Module |")
     print("| ---: | ---: | ---: | ---: | --- |")
     for row in rows:
-        baseline_text = "-" if row.baseline is None else fmt_instructions_bn(row.baseline)
+        metric = module_metric(row.module, metric_name)
+        baseline_text = "-" if row.baseline is None else fmt_metric(metric, row.baseline)
         print(
-            f"| {fmt_signed_instructions_bn(row.delta)} | {fmt_pct(row.delta_pct)} | "
-            f"{fmt_instructions_bn(row.current)} | {baseline_text} | `{row.module}` |"
+            f"| {fmt_delta(metric, row.delta)} | {fmt_pct(row.delta_pct)} | "
+            f"{fmt_metric(metric, row.current)} | {baseline_text} | `{row.module}` |"
         )
     print()
 
 
-def print_modules(current: Measurements, baseline: Measurements | None, limit: int) -> None:
-    rows = get_module_rows(current, baseline)
+def print_modules(
+    current: Measurements,
+    baseline: Measurements | None,
+    limit: int,
+    metric_name: str,
+) -> None:
+    rows = get_module_rows(current, baseline, metric_name)
+    metric_labels = MODULE_METRICS[metric_name]
 
     if baseline is None:
         print_module_table(
-            "Longest-Running Modules By Instructions",
+            f"Longest-Running Modules By {metric_labels['plural']}",
             sorted(rows, key=lambda row: row.current, reverse=True),
             limit,
-            "No module instruction measurements found.",
+            f"No module {metric_labels['singular'].lower()} measurements found.",
+            metric_name,
         )
         return
 
@@ -208,22 +255,25 @@ def print_modules(current: Measurements, baseline: Measurements | None, limit: i
         return row.delta is not None and row.delta < 0
 
     print_module_table(
-        "Top Module Instruction Regressions",
+        f"Top Module {metric_labels['singular']} Regressions",
         sorted(filter(is_regression, rows), key=regression_key, reverse=True),
         limit,
-        "No module instruction regressions found.",
+        f"No module {metric_labels['singular'].lower()} regressions found.",
+        metric_name,
     )
     print_module_table(
-        "Top Module Instruction Improvements",
+        f"Top Module {metric_labels['singular']} Improvements",
         sorted(filter(is_improvement, rows), key=lambda row: row.delta or 0),
         limit,
-        "No module instruction improvements found.",
+        f"No module {metric_labels['singular'].lower()} improvements found.",
+        metric_name,
     )
     print_module_table(
-        "Longest-Running Modules By Instructions",
+        f"Longest-Running Modules By {metric_labels['plural']}",
         sorted(rows, key=lambda row: row.current, reverse=True),
         limit,
-        "No module instruction measurements found.",
+        f"No module {metric_labels['singular'].lower()} measurements found.",
+        metric_name,
     )
 
 
@@ -245,12 +295,18 @@ def main() -> None:
     parser.add_argument("current", type=Path)
     parser.add_argument("baseline", type=Path, nargs="?")
     parser.add_argument("--limit", type=positive_int, default=10)
+    parser.add_argument(
+        "--module-metric",
+        choices=sorted(MODULE_METRICS),
+        default="instructions",
+        help="metric to use in the module top lists",
+    )
     args = parser.parse_args()
 
     current = load(args.current)
     baseline = load(args.baseline) if args.baseline else None
     print_summary(current, baseline)
-    print_modules(current, baseline, args.limit)
+    print_modules(current, baseline, args.limit, args.module_metric)
 
 
 if __name__ == "__main__":
