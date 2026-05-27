@@ -86,6 +86,7 @@ run_benchmark() {
     --network bridge \
     -e XDG_CACHE_HOME=/workspace/xdg-cache \
     -e ELAN_HOME=/workspace/elan-home \
+    -e BENCH_HEARTBEATS="${BENCH_HEARTBEATS:-}" \
     -e BENCH_OUTPUT_FILE="/bench-output/$label.jsonl" \
     -v "$checkout:/workspace/clean" \
     -v "$package_cache:/workspace/clean/.lake/packages" \

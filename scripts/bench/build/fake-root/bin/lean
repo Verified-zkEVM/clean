@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -41,6 +42,23 @@ def count_lines(module: str, path: Path) -> None:
     save_result(f"{NAME}/module/{module}//lines", lines)
 
 
+def save_profile_metrics(stderr: str) -> None:
+    save_profile_metrics_from_lines(stderr.splitlines())
+
+
+def save_profile_metrics_from_lines(lines) -> None:
+    for line in lines:
+        line = line.rstrip("\n")
+        match = re.fullmatch(r"\t(.*) ([\d.]+)(m?s)", line)
+        if not match:
+            continue
+        name = match.group(1)
+        seconds = float(match.group(2))
+        if match.group(3) == "ms":
+            seconds = seconds / 1000
+        save_result(f"{NAME}/profile/{name}//wall-clock", seconds, "s")
+
+
 def run_lean(module: str) -> None:
     _, stderr = measure.main(
         cmd=["lean", "--profile", "-Dprofiler.threshold=9999999", *sys.argv[1:]],
@@ -50,16 +68,32 @@ def run_lean(module: str) -> None:
         append=True,
         capture=True,
     )
+    save_profile_metrics(stderr)
 
-    for line in stderr.splitlines():
-        match = re.fullmatch(r"\t(.*) ([\d.]+)(m?s)", line)
-        if not match:
-            continue
-        name = match.group(1)
-        seconds = float(match.group(2))
-        if match.group(3) == "ms":
-            seconds = seconds / 1000
-        save_result(f"{NAME}/profile/{name}//wall-clock", seconds, "s")
+
+def run_heartbeat_frontend(module: str) -> None:
+    result = subprocess.run(
+        [
+            os.environ.get("BENCH_HEARTBEAT_LEAN", "lean"),
+            "--run",
+            str(BENCH / "build" / "HeartbeatCheck.lean"),
+            *sys.argv[1:],
+        ],
+        capture_output=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        print(result.stdout, end="", file=sys.stdout)
+        print(result.stderr, end="", file=sys.stderr)
+        sys.exit(result.returncode)
+
+    match = re.search(rf"^HEARTBEATS {re.escape(module)} (\d+)$", result.stdout, re.MULTILINE)
+    if not match:
+        print(result.stdout, end="", file=sys.stdout)
+        print(result.stderr, end="", file=sys.stderr)
+        raise SystemExit(f"heartbeat frontend did not report heartbeats for {module}")
+
+    save_result(f"{NAME}/module/{module}//heartbeats", float(match.group(1)), "heartbeats")
 
 
 def main() -> None:
@@ -79,6 +113,8 @@ def main() -> None:
     module = get_module(args.setup)
     count_lines(module, args.lean)
     run_lean(module)
+    if os.environ.get("BENCH_HEARTBEATS") == "1":
+        run_heartbeat_frontend(module)
 
 
 if __name__ == "__main__":
