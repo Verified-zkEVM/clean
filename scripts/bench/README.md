@@ -15,7 +15,7 @@ Run only the build benchmark:
 scripts/bench/build/run
 ```
 
-The build benchmark records whole-build resource metrics and per-module instruction counts. Instruction counts are the preferred regression signal because wall-clock time is noisy on shared CI runners.
+The build benchmark records whole-build resource metrics and per-module instruction counts. When `BENCH_HEARTBEATS=1` is set, it also records deterministic per-module frontend heartbeat counts.
 
 Render a report from one run:
 
@@ -36,6 +36,8 @@ When heartbeat measurements are available, render the module tables by heartbeat
 ```bash
 scripts/bench/report.py current.jsonl baseline.jsonl --module-metric heartbeats
 ```
+
+Set `BENCH_HEARTBEATS=1` when running the benchmark to collect heartbeat measurements.
 
 ## Maintainer-triggered PR benchmarks
 
