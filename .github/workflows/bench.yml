@@ -66,10 +66,12 @@ jobs:
           script: |
             const fs = require('fs');
             const report = fs.readFileSync('benchmark-report.md', 'utf8');
+            const compareUrlTail = `${context.repo.owner}/${context.repo.repo}/compare/${{ inputs.base_sha }}..${{ inputs.sha }}`;
+            const compareUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/compare/${{ inputs.base_sha }}..${{ inputs.sha }}`;
             const body = [
               '<!-- clean-build-benchmark -->',
               '',
-              'Benchmark for `${{ inputs.sha }}` against baseline `${{ inputs.base_sha }}`:',
+              `Benchmark completed for [${compareUrlTail}](${compareUrl})! ⏱️`,
               '',
               report,
             ].join('\n');
