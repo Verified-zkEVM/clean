@@ -106,7 +106,7 @@ def runFrontendWithCommandHeartbeats
   let inputCtx := Parser.mkInputContext input fileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
   let opts := Lean.internal.cmdlineSnapshots.setIfNotSet opts true
-  let opts := Elab.async.setIfNotSet opts true
+  let opts := Elab.async.set opts false
   let (imports, isModule, mainModuleName, package?, importArts, plugins, opts) ←
     if let some setup := setup? then
       setup.dynlibs.forM Lean.loadDynlib
