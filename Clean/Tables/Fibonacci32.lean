@@ -112,9 +112,9 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
       .input ⟨1, 7⟩, .aux 7] := by
   dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit, assignU32]
   simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
-    Vector.mapRange_zero, Vector.mapRange_succ]
+    Vector.mapRange_zero, Vector.mapRange_succ, FormalCircuitBase.localLength]
   simp
-  native_decide
+  rfl
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -168,7 +168,7 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
        .input ⟨0, 7⟩] := by
   dsimp only [table_assignment_norm, circuit_norm, boundary]
   simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
-    Vector.mapRange_zero]
+    FormalCircuitBase.localLength, Vector.mapRange_zero]
   simp
   rfl
 

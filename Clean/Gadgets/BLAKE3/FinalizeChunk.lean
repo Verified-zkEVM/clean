@@ -95,29 +95,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
   let final_state ← Compress.circuit compress_input
   return final_state.take 8
 
--- TODO why no autoelab?
-instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) main where
-  localLength _ := 2*4 + (4 + (4 + (5376 + 64)))
-  output input i :=
-    let isFirstBlock := ElaboratedCircuit.output IsZero.circuit.main input.state.blocks_compressed i
-    let start_flag : Var U32 (F p) := ⟨isFirstBlock * (chunkStart : F p), 0, 0, 0⟩
-    let chunk_end_flag : Var U32 (F p) := ⟨(chunkEnd : F p), 0, 0, 0⟩
-    let or1_input := { x := input.base_flags, y := start_flag }
-    let flags_with_start := ElaboratedCircuit.output Or32.main or1_input (i + 8)
-    let or2_input := { x := flags_with_start, y := chunk_end_flag }
-    let final_flags := ElaboratedCircuit.output Or32.main or2_input
-      (i + 8 + ElaboratedCircuit.localLength Or32.main or1_input)
-    let compress_input : Var ApplyRounds.Inputs (F p) := {
-      chaining_value := input.state.chaining_value
-      block_words := bytesToWords input.buffer_data
-      counter_high := ⟨0, 0, 0, 0⟩
-      counter_low := input.state.chunk_counter
-      block_len := ⟨input.buffer_len, 0, 0, 0⟩
-      flags := final_flags
-    }
-    (ElaboratedCircuit.output Compress.main compress_input
-      (i + 8 + ElaboratedCircuit.localLength Or32.main or1_input +
-        ElaboratedCircuit.localLength Or32.main or2_input)).take 8
+instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) main := by
+  infer_elaborated_circuit_reduced
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧

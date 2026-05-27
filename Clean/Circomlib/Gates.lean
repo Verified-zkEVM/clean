@@ -908,7 +908,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
       · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).1
       · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).2
       · exact mem_nil_or_mem_nil_of_mem_shallowChannels n input_var offset
-      · simp only [circuit_norm]
       · exact subcircuitChannelsLawful n input_var offset
   }
 

@@ -47,16 +47,6 @@ set_option linter.constructorNameAsVariable false
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
 
-  -- TODO default reduced elaboration fails
-  -- and this causes heavy simp work in `soundness`
-  elaborated := by infer_elaborated_circuit_with {
-    localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
-    output _ i := varFromOffset (fields 254) i
-  } using (by
-    simp only [circuit_norm, AliasCheck.circuit]
-    simp
-  )
-
   Spec input bits :=
     bits = fieldToBits 254 input
 

@@ -13,41 +13,67 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
   elaborated : ElaboratedCircuit F Input Output main := by
     first | infer_instance | infer_elaborated_circuit_reduced
 
-attribute [circuit_norm] FormalCircuitBase.elaborated
+  /-- optionally, you can expose the interactions with any channel in full detail -/
+  exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
+  exposedChannels_eq : ∀ input offset,
+    ((main input).operations offset).ExposedChannelsLawful (exposedChannels input offset) := by
+    dsimp only [Operations.ExposedChannelsLawful]
+    try dsimp only [main]
+    simp only [circuit_norm, seval]
+    try first | ac_rfl | trivial | tauto
+
+attribute [circuit_norm] FormalCircuitBase.elaborated FormalCircuitBase.exposedChannels
 
 namespace FormalCircuitBase
 variable [CircuitType Input] [CircuitType Output]
+variable {name : String} {main : Var Input F → Circuit F (Var Output F)}
+  {elaborated : ElaboratedCircuit F Input Output main}
+  {exposedChannels : Var Input F → ℕ → List (ExposedChannel F)}
+  {exposedChannels_eq : ∀ input offset,
+    ((main input).operations offset).ExposedChannelsLawful (exposedChannels input offset)}
 
--- TODO these annotations are somewhat bad in general settings, because
--- the resulting expression will now be dependently-typed in `self.main` and it's no longer
--- as easy to rewrite `self` into something else
-
-@[circuit_norm, explicit_circuit_norm]
-abbrev output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) : Var Output F :=
+@[explicit_circuit_norm]
+def output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) : Var Output F :=
   self.elaborated.output input offset
 
-@[circuit_norm, explicit_circuit_norm]
-abbrev localLength (self : FormalCircuitBase F Input Output) (input : Var Input F) : ℕ :=
+@[circuit_norm]
+lemma output_def (input : Var Input F) (offset : ℕ) :
+  ({name, main, elaborated, exposedChannels, exposedChannels_eq} : FormalCircuitBase F Input Output).output input offset =
+    elaborated.output input offset := rfl
+
+@[explicit_circuit_norm]
+def localLength (self : FormalCircuitBase F Input Output) (input : Var Input F) : ℕ :=
   self.elaborated.localLength input
 
-@[circuit_norm, explicit_circuit_norm]
-abbrev channelsWithGuarantees (self : FormalCircuitBase F Input Output) : List (RawChannel F) :=
+@[circuit_norm]
+lemma localLength_def (input : Var Input F) :
+  ({name, main, elaborated, exposedChannels, exposedChannels_eq} : FormalCircuitBase F Input Output).localLength input =
+    elaborated.localLength input := rfl
+
+@[explicit_circuit_norm]
+def channelsWithGuarantees (self : FormalCircuitBase F Input Output) : List (RawChannel F) :=
   self.elaborated.channelsWithGuarantees
 
-@[circuit_norm, explicit_circuit_norm]
-abbrev channelsWithRequirements (self : FormalCircuitBase F Input Output) : List (RawChannel F) :=
+@[circuit_norm]
+lemma channelsWithGuarantees_def :
+  ({name, main, elaborated, exposedChannels, exposedChannels_eq} : FormalCircuitBase F Input Output).channelsWithGuarantees =
+    elaborated.channelsWithGuarantees := rfl
+
+@[explicit_circuit_norm]
+def channelsWithRequirements (self : FormalCircuitBase F Input Output) : List (RawChannel F) :=
   self.elaborated.channelsWithRequirements
 
-@[circuit_norm, explicit_circuit_norm]
-abbrev exposedChannels (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) : List (ExposedChannel F) :=
-  self.elaborated.exposedChannels input offset
+@[circuit_norm]
+lemma channelsWithRequirements_def :
+  ({name, main, elaborated, exposedChannels, exposedChannels_eq} : FormalCircuitBase F Input Output).channelsWithRequirements =
+    elaborated.channelsWithRequirements := rfl
 
 theorem localLength_eq (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) :
   (self.main input).localLength offset = self.localLength input :=
   self.elaborated.localLength_eq input offset
 
 theorem channelsLawful (self : FormalCircuitBase F Input Output) : ElaboratedCircuit.ChannelsLawful self.main
-    self.channelsWithGuarantees self.channelsWithRequirements self.exposedChannels :=
+    self.channelsWithGuarantees self.channelsWithRequirements :=
   self.elaborated.channelsLawful
 
 theorem subcircuitsConsistent (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) :
@@ -366,11 +392,11 @@ theorem interactionsWith_eq_of_mem_exposedChannels (circuit : FormalCircuitBase 
     let ops := (circuit.main input_var).operations offset
     ∀ exposed ∈ circuit.exposedChannels input_var offset,
       ops.interactionsWith exposed.channel = exposed.interactions :=
-  fun input_var offset => (circuit.channelsLawful input_var offset).2.2.2.2.2.1
+  fun input_var offset => circuit.exposedChannels_eq input_var offset
 
 theorem subcircuitChannelsLawful (circuit : FormalCircuitBase F Input Output) :
     ∀ input offset, ((circuit.main input).operations offset).SubcircuitChannelsLawful :=
-  fun input offset => (circuit.channelsLawful input offset).2.2.2.2.2.2
+  fun input offset => (circuit.channelsLawful input offset).2.2.2.2.2
 
 @[circuit_norm]
 def channels (circuit : FormalCircuitBase F Input Output) :=

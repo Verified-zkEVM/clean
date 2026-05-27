@@ -43,7 +43,7 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
   main multiplicities := do
     let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
       BytesChannel.emit multiplicities[i] (const i)
-  -- TODO autoelab fails because of match
+  -- TODO AUTOELAB fails because of match
   elaborated := {
     localLength _ := 0
     localLength_eq := by simp only [circuit_norm]
@@ -144,15 +144,12 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     -- push the next Fibonacci state
     FibonacciChannel.push (n + 1, y, z)
 
-  -- needed to expose interactions
-  elaborated := by infer_elaborated_circuit_reduced_with {
-    exposedChannels
-    | (n, x, y), i₀ =>
-      let z := var ⟨ i₀ ⟩
-      expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
-    exposedChannelsLawful := by
-      simp only [circuit_norm, Add8Channel, FibonacciChannel]
-  }
+  -- expose interactions
+  exposedChannels
+  | (n, x, y), i₀ =>
+    let z := var ⟨ i₀ ⟩
+    expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
+  exposedChannels_eq := by simp only [circuit_norm, Add8Channel, FibonacciChannel]
 
   ProverAssumptions
   | (n, x, y), _, _ =>
@@ -193,13 +190,9 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
     FibonacciChannel.pull (n, x, y)
     FibonacciChannel.push (0, 0, 1)
 
-  elaborated := by infer_elaborated_circuit_reduced_with {
-    exposedChannels
-    | (n, x, y), _ =>
-      expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
-    exposedChannelsLawful := by
-      simp only [circuit_norm, FibonacciChannel]
-  }
+  exposedChannels
+  | (n, x, y), _ =>
+    expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
 
   ProverAssumptions
   | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val

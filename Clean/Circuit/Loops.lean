@@ -972,10 +972,10 @@ end Circuit
 theorem Operations.channelsLawful_flatten_of_forall {m : ℕ}
     {ops : Fin m → Operations F}
     {channelsWithGuarantees channelsWithRequirements : Fin m → List (RawChannel F)} :
-    (∀ i, (ops i).ChannelsLawful (channelsWithGuarantees i) (channelsWithRequirements i) []) →
+    (∀ i, (ops i).ChannelsLawful (channelsWithGuarantees i) (channelsWithRequirements i)) →
     Operations.ChannelsLawful (List.ofFn ops).flatten
       (List.ofFn channelsWithGuarantees).flatten
-      (List.ofFn channelsWithRequirements).flatten [] := by
+      (List.ofFn channelsWithRequirements).flatten := by
   intro h
   induction m with
   | zero => simp [Operations.channelsLawful_nil]

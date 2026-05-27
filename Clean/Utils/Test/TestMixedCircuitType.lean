@@ -25,7 +25,7 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     input.x * inverse === 1
     return inverse
 
-  -- TODO autoelab fails, might be because of `===`
+  -- TODO AUTOELAB fails, might be because of `===`
   elaborated := {
     localLength _ := 1
     output _ offset := varFromOffset field offset

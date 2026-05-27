@@ -85,8 +85,8 @@ def empty (F : Type) [Field F] (Input : TypeMap) [ProvableType Input] :
   simp only [circuit_norm, empty]
 
 @[circuit_norm] lemma empty_channelsWithGuarantees :
-  (empty F Input).elaborated.channelsWithGuarantees = [] := rfl
+  (empty F Input).channelsWithGuarantees = [] := rfl
 
 @[circuit_norm] lemma empty_channelsWithRequirements :
-  (empty F Input).elaborated.channelsWithRequirements = [] := rfl
+  (empty F Input).channelsWithRequirements = [] := rfl
 end GeneralFormalCircuit

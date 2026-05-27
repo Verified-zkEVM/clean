@@ -25,7 +25,7 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rhoPi state.value
 
--- TODO: the `infer_elaborated_circuit_reduced` tactic can't
+-- TODO AUTOELAB the `infer_elaborated_circuit_reduced` tactic can't
 -- handle the pair argument of the loop / the resulting match statement.
 -- (it doesn't do `cases` or any non-trivial simplification)
 @[reducible]
