@@ -21,17 +21,42 @@ jobs:
     steps:
       - name: Resolve PR head
         id: pr
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          data="$(gh api "repos/${{ github.repository }}/pulls/$PR_NUMBER")"
+          data="$(gh api "repos/${{ github.repository }}/pulls/$PR_NUMBER" 2>gh-api.err)"
+          if [ -z "$data" ] || ! jq -e type >/dev/null <<<"$data"; then
+            echo "Could not resolve PR metadata for #$PR_NUMBER" >&2
+            cat gh-api.err >&2 || true
+            echo "Response bytes: $(printf '%s' "$data" | wc -c)" >&2
+            printf '%s\n' "$data" | head -c 1000 >&2
+            exit 1
+          fi
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "base_sha=$(jq -r .base.sha <<<"$data")" >> "$GITHUB_OUTPUT"
           echo "sha=$(jq -r .head.sha <<<"$data")" >> "$GITHUB_OUTPUT"
           echo "head_repo=$(jq -r .head.repo.full_name <<<"$data")" >> "$GITHUB_OUTPUT"
 
+      - name: Report command failure
+        if: steps.pr.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          printf -v body '%s\n\n%s\n\n%s' \
+            'Benchmark command failed. ⏱️' \
+            "I could not resolve PR metadata from the GitHub API, so no benchmark was queued." \
+            "Workflow run: $run_url"
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            -f body="$body"
+          exit 1
+
       - name: Dispatch benchmark
+        if: steps.pr.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -44,6 +69,7 @@ jobs:
             -f head_repo="${{ steps.pr.outputs.head_repo }}"
 
       - name: Mark benchmark queued
+        if: steps.pr.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -56,6 +82,7 @@ jobs:
             -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/workflows/bench.yml"
 
       - name: Acknowledge command
+        if: steps.pr.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
