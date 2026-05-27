@@ -59,7 +59,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          compare_url_tail="${{ github.repository }}/compare/${{ steps.pr.outputs.base_sha }}..${{ steps.pr.outputs.sha }}"
+          compare_url="${{ github.server_url }}/$compare_url_tail"
+          printf -v body '%s\n\n%s\n\n%s' \
+            'Benchmark queued! ⏱️' \
+            "We are comparing the PR HEAD against the base: [$compare_url_tail]($compare_url)." \
+            'Expect this to take ~10 minutes to complete.'
           gh api \
             --method POST \
             "repos/${{ github.repository }}/issues/${{ steps.pr.outputs.number }}/comments" \
-            -f body="Queued build benchmark for \`${{ steps.pr.outputs.sha }}\` against baseline \`${{ steps.pr.outputs.base_sha }}\`."
+            -f body="$body"
