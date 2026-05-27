@@ -389,12 +389,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
 
--- #eval! main (p:=pBabybear) default |>.localLength
--- #eval! main (p:=pBabybear) default |>.output
+-- TODO AUTOELAB fails with max recursion depth
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main where
   localLength _ := 5376
   localLength_eq input i0 := by
-    simp only [main, circuit_norm, sevenRoundsApplyStyle, sevenRoundsFinal,
+    simp only [main, circuit_norm, id_eq, sevenRoundsApplyStyle, sevenRoundsFinal,
       sixRoundsApplyStyle, sixRoundsWithPermute,
       fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
       FormalCircuit.weakenSpec, FormalCircuit.concat]

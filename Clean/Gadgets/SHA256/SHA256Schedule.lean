@@ -36,7 +36,7 @@ private def scheduleStep (w : Schedule (p := p)) (i : Fin 48) :
   let wj   ← Add32.circuit ⟨sum1, w.get ⟨j - 16, by omega⟩⟩
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
-private instance :
+private def constantLength :
     Circuit.ConstantLength (fun (x : Schedule (p := p) × Fin 48) => scheduleStep x.1 x.2) where
   localLength := 227
   localLength_eq _ _ := by
@@ -51,15 +51,15 @@ private instance :
   let init : Schedule (p := p) := block.append (Vector.replicate 48 zero32)
   -- Expand indices 16..63 one at a time.
   -- Pass ConstantLength explicitly because the default tactic times out on this complex body.
-  Circuit.foldlRange 48 init (fun w i => scheduleStep w i) ⟨227, fun _ _ => by
-    simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]⟩
+  Circuit.foldlRange 48 init (fun w i => scheduleStep w i) constantLength
 
 namespace MessageSchedule
 
 def main (block : Var SHA256Block (F p)) : Circuit (F p) (Var SHA256Schedule (F p)) :=
   messageSchedule block
 
--- TODO AUTOELAB fails with max recursion depth
+-- TODO AUTOELAB fails with max recursion,
+-- or whnf timeout when messageSchedule is not irreducible
 instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule main where
   localLength _ := 48 * 227
   localLength_eq _ _ := by

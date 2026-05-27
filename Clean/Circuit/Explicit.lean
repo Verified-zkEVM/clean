@@ -494,9 +494,8 @@ attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Na
   Nat.mul_one Nat.one_mul Nat.sub_zero dif_pos dif_neg if_pos if_neg
   Nat.reduceAdd Nat.reduceMul Nat.reduceSub Nat.reduceLT Nat.reduceGT
   -- lists reduction, for channels
-  List.nil_append
-  List.append_nil
-  List.append_cons List.cons_append
+  List.nil_append List.append_nil
+  List.cons_append
   List.ofFn_nil_flatten List.ofFn_singleton_flatten
   -- if-else
   dite_eq_ite ite_self reduceIte reduceDIte
@@ -545,13 +544,16 @@ elab "unfold_explicit_circuits_head" : tactic => withMainContext do
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
     try unfold_explicit_circuits_head
+    try simp only
     apply ExplicitCircuits.fromSingle
     intro a
     infer_explicit_circuit
     ))
 
--- Targeted `conv` unfolding in `infer_explicit_circuits` can still introduce `Eq.mpr`/casts.
-attribute [explicit_circuit_norm, circuit_norm] eq_mpr_eq_cast cast_eq
+-- Targeted `conv` unfolding in `unfold_explicit_circuits_head` introduces `Eq.mpr`/casts.
+attribute [explicit_circuit_norm] eq_mpr_eq_cast cast_eq
+  -- `simp only` introduces `id`
+  id_eq
 
 /--
 Derive an `ElaboratedCircuit` through `ExplicitCircuits`, but store normalized metadata fields.

@@ -25,15 +25,8 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rhoPi state.value
 
--- TODO AUTOELAB the `infer_elaborated_circuit_reduced` tactic can't
--- handle the pair argument of the loop / the resulting match statement.
--- (it doesn't do `cases` or any non-trivial simplification)
-@[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
-  localLength _ := 400
-  localLength_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
-  subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
-  channelsLawful := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  infer_elaborated_circuit_reduced
 
 -- recharacterize rhoPi as a loop
 lemma rhoPi_loop (state : Vector ℕ 25) :
