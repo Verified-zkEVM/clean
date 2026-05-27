@@ -524,7 +524,7 @@ macro_rules
         | apply ExplicitCircuit.from_map
         | apply ExplicitCircuit.from_pure
         | infer_instance
-      repeat infer_instance
+      try infer_instance
     )
     done))
 
@@ -928,9 +928,9 @@ example :
 
   ElaboratedCircuit F field field add := by infer_elaborated_circuit
 
--- needed for the output type
-instance : ExplicitCircuits (F:=F) (β := Var unit F) assertZero :=
-  inferInstanceAs (ExplicitCircuits (F:=F) assertZero)
+-- bridge for `Var unit F` output type
+instance {circuit : α → Circuit F (Var unit F)} [inst : ExplicitCircuits (β := Unit) circuit] :
+  ExplicitCircuits circuit := inst
 
 example : ElaboratedCircuit F field unit (fun x ↦ assertZero (x * (x - 1))) := by
   infer_elaborated_circuit

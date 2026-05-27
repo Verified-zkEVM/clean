@@ -1394,8 +1394,9 @@ macro_rules
         | apply from_map
         | apply from_pure
         | infer_instance
+        -- TODO AUTOELAB probably worth adding the other subcircuit types here as well
         | apply fromSubcircuit
-      repeat infer_instance
+      try infer_instance
     )
     done))
 end ExplicitCircuit

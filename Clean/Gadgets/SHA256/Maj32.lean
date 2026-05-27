@@ -49,14 +49,8 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   maj32 input.a input.b input.c
 
--- TODO AUTOELAB fails with whnf timeout
-instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main where
-  localLength _ := 64
-  output _ i0 := varFromOffset (fields 32) (i0 + 32)
-  localLength_eq _ _ := by simp [circuit_norm, main, maj32]
-  output_eq _ _ := by dsimp only [main, maj32, circuit_norm]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, maj32]
-  channelsLawful := by intro x n; simp [circuit_norm, main, maj32]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) _ _ main := by
+  infer_elaborated_circuit_reduced
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b ∧ Normalized input.c
