@@ -394,12 +394,20 @@ instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (w
   channelsWithGuarantees _ := []
   channelsWithRequirements _ := []
 
-instance {α : TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
-  output _ n := varFromOffset α n
-  localLength _ _ := size α
-  operations c n := [.witness (size α) (toElements ∘ c)]
+instance {M : TypeMap} [ProvableType M] : ExplicitCircuits (ProvableType.witness (α:=M) (F:=F)) where
+  localLength _ _ := size M
+  output _ n := varFromOffset M n
+  operations c n := [.witness (size M) (toElements ∘ c)]
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := []
+
+instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDep M) F) :
+    ExplicitCircuit (witness c (self := inferInstanceAs (Witnessable F M (Var M)))) where
+  localLength _ := size M
+  output offset := varFromOffset M offset
+  operations _ := [.witness (size M) (toElements ∘ c)]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where

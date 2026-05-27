@@ -16,6 +16,7 @@ structure Input (F : Type) where
   inverse : UnconstrainedDep field F
 deriving CircuitType
 
+-- TODO automate this in the CircuitType deriver
 instance : Inhabited (Var Input F) where
   default := { x := default, inverse _ := default }
 
@@ -24,12 +25,6 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     let inverse ← witness input.inverse
     input.x * inverse === 1
     return inverse
-
-  -- TODO AUTOELAB fails, might be because of `===`
-  elaborated := {
-    localLength _ := 1
-    output _ offset := varFromOffset field offset
-  }
 
   Spec input out _ :=
     input.x * out = 1
