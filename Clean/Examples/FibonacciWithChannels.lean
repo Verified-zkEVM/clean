@@ -41,8 +41,8 @@ abbrev BytesChannel := Channel.fromStatic (F p) field BytesTable
 -- probably shouldn't be a "circuit" at all
 def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
   main multiplicities := do
-    let _  ← .mapFinRange 256 fun i =>
-      BytesChannel.emit multiplicities[i.val] (const i.val)
+    let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
+      BytesChannel.emit multiplicities[i] (const i)
 
   elaborated := by infer_elaborated_circuit_reduced_with {
     channelsWithRequirements := [ BytesChannel.toRaw ] }
