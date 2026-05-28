@@ -7,6 +7,7 @@ import resource
 import subprocess
 import sys
 import tempfile
+import time
 from argparse import Namespace
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,7 +42,6 @@ class Result:
 
 PERF_METRICS = {
     "task-clock": PerfMetric("task-clock", factor=1e-9, unit="s"),
-    "wall-clock": PerfMetric("duration_time", factor=1e-9, unit="s"),
     "instructions": PerfMetric("instructions:u"),
     "cycles": PerfMetric("cycles:u"),
 }
@@ -55,7 +55,9 @@ RUSAGE_METRICS = {
     "maxrss": RusageMetric("ru_maxrss", factor=1000, unit="B"),
 }
 
-ALL_METRICS = {**PERF_METRICS, **RUSAGE_METRICS}
+WALL_CLOCK_METRICS = {"wall-clock"}
+
+ALL_METRICS = {**PERF_METRICS, **RUSAGE_METRICS, **{name: name for name in WALL_CLOCK_METRICS}}
 DEFAULT_METRICS = {"instructions", "maxrss", "task-clock", "wall-clock"}
 
 
@@ -75,9 +77,10 @@ class MeasureResult:
     stderr: str
 
 
-def resolve_metrics(metrics: set[str]) -> tuple[set[str], set[str]]:
+def resolve_metrics(metrics: set[str]) -> tuple[set[str], set[str], set[str]]:
     perf = set()
     rusage = set()
+    wall_clock = set()
     unknown = set()
 
     for metric in metrics:
@@ -85,13 +88,15 @@ def resolve_metrics(metrics: set[str]) -> tuple[set[str], set[str]]:
             perf.add(metric)
         elif metric in RUSAGE_METRICS:
             rusage.add(metric)
+        elif metric in WALL_CLOCK_METRICS:
+            wall_clock.add(metric)
         else:
             unknown.add(metric)
 
     if unknown:
         raise SystemExit(f"unknown metrics: {', '.join(sorted(unknown))}")
 
-    return perf, rusage
+    return perf, rusage, wall_clock
 
 
 def measure_perf(cmd: list[str], events: set[str], capture: bool) -> MeasureResult:
@@ -135,6 +140,21 @@ def measure_perf(cmd: list[str], events: set[str], capture: bool) -> MeasureResu
         )
 
 
+def measure_subprocess(cmd: list[str], capture: bool) -> MeasureResult:
+    result = subprocess.run(cmd, capture_output=capture, encoding="utf-8")
+    if result.returncode != 0:
+        if capture:
+            print(result.stdout, end="", file=sys.stdout)
+            print(result.stderr, end="", file=sys.stderr)
+        raise SystemExit(result.returncode)
+
+    return MeasureResult(
+        perf={},
+        stdout=result.stdout or "",
+        stderr=result.stderr or "",
+    )
+
+
 def get_perf_result(perf: PerfResults, metric: str) -> Result:
     info = PERF_METRICS[metric]
     if info.event not in perf:
@@ -158,14 +178,20 @@ def main(
     append: bool = True,
     capture: bool = False,
 ) -> tuple[str, str]:
-    perf_metrics, rusage_metrics = resolve_metrics(metrics)
+    perf_metrics, rusage_metrics, wall_clock_metrics = resolve_metrics(metrics)
     perf_events = {PERF_METRICS[metric].event for metric in perf_metrics}
 
-    measured = measure_perf(cmd, perf_events, capture=capture)
+    start = time.perf_counter()
+    if perf_events:
+        measured = measure_perf(cmd, perf_events, capture=capture)
+    else:
+        measured = measure_subprocess(cmd, capture=capture)
+    elapsed = time.perf_counter() - start
     rusage = resource.getrusage(resource.RUSAGE_CHILDREN)
 
     results = [get_perf_result(measured.perf, metric) for metric in perf_metrics]
     results.extend(get_rusage_result(rusage, metric) for metric in rusage_metrics)
+    results.extend(Result(category=metric, value=elapsed, unit="s") for metric in wall_clock_metrics)
 
     with output.open("a" if append else "w", encoding="utf-8") as handle:
         for result in results:

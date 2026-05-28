@@ -3,11 +3,15 @@ set -euo pipefail
 
 BENCH="scripts/bench"
 
-if ! perf stat -e instructions:u -- true >/dev/null 2>&1; then
+metrics=(--default-metrics)
+if [ "${BENCH_HEARTBEATS:-}" = "1" ]; then
+  export BENCH_INSTRUCTIONS=0
+  metrics=(--metric maxrss --metric wall-clock)
+elif ! perf stat -e instructions:u -- true >/dev/null 2>&1; then
   cat >&2 <<'EOF'
 error: perf instruction counters are unavailable.
 
-The build benchmark uses instruction counts as its primary regression signal.
+This benchmark run is configured to record instruction counts.
 Enable perf for this runner, for example by lowering perf_event_paranoid or
 running in an environment with CAP_PERFMON access.
 EOF
@@ -19,5 +23,5 @@ rm -rf .lake/build
 lake exe cache get
 
 LAKE_OVERRIDE_LEAN=true LEAN="$(realpath "$BENCH/build/fake-root/bin/lean")" \
-  "$BENCH/measure.py" --append --topic build --default-metrics -- \
+  "$BENCH/measure.py" --append --topic build "${metrics[@]}" -- \
   lake build --no-cache

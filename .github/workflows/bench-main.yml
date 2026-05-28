@@ -1,0 +1,50 @@
+name: Bench Main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  bench-main:
+    runs-on: [self-hosted, linux, x64, clean-bench]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out benchmark scripts
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: bench-control
+      - name: Run benchmark in container
+        working-directory: bench-control
+        env:
+          BENCH_BASELINE_ONLY: "1"
+          BENCH_SHA: ${{ github.sha }}
+          BENCH_HEAD_REPO: ${{ github.repository }}
+          BENCH_REPOSITORY: ${{ github.repository }}
+          BENCH_RUN_ID: ${{ github.run_id }}
+          BENCH_OUTPUT_DIR: ${{ github.workspace }}/bench-output
+          BENCH_HEARTBEATS: "1"
+        run: scripts/bench/runner/run-in-docker.sh
+      - name: Copy measurements
+        if: always()
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/bench-output/baseline.jsonl" ]; then
+            cp "$GITHUB_WORKSPACE/bench-output/baseline.jsonl" baseline.jsonl
+          fi
+      - name: Render benchmark report
+        if: always() && hashFiles('baseline.jsonl') != ''
+        run: |
+          bench-control/scripts/bench/report.py baseline.jsonl --limit 10 > benchmark-report.md
+          cat benchmark-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload benchmark measurements
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-main-measurements
+          path: |
+            baseline.jsonl
+            benchmark-report.md
+          if-no-files-found: warn

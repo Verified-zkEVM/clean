@@ -11,11 +11,18 @@ Whole-build metrics:
 - `build//task-clock`
 - `build//wall-clock`
 
+Heartbeat-mode runs set `BENCH_HEARTBEATS=1` and skip instruction counters. In that mode, whole-build metrics are limited to:
+
+- `build//maxrss`
+- `build//wall-clock`
+
 Per-module metrics:
 
 - `build/module/<module>//instructions`
 - `build/module/<module>//lines`
 - `build/module/<module>//heartbeats` when `BENCH_HEARTBEATS=1`
+
+Heartbeat-mode runs do not record per-module instruction counts.
 
 Lean profile metrics, summed by downstream consumers when metric names repeat:
 
