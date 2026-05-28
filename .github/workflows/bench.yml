@@ -52,7 +52,6 @@ jobs:
           BENCH_REPOSITORY: ${{ github.repository }}
           BENCH_RUN_ID: ${{ github.run_id }}
           BENCH_OUTPUT_DIR: ${{ github.workspace }}/bench-output
-          BENCH_HEARTBEATS: "1"
         run: scripts/bench/runner/run-in-docker.sh
       - name: Copy measurements
         if: always()
@@ -68,8 +67,10 @@ jobs:
         run: |
           if [ -f baseline.jsonl ]; then
             bench-control/scripts/bench/report.py current.jsonl baseline.jsonl --limit 10 > benchmark-report.md
+            bench-control/scripts/bench/report.py current.jsonl baseline.jsonl --all-modules > benchmark-modules.md
           else
             bench-control/scripts/bench/report.py current.jsonl --limit 10 > benchmark-report.md
+            bench-control/scripts/bench/report.py current.jsonl --all-modules > benchmark-modules.md
           fi
           cat benchmark-report.md >> "$GITHUB_STEP_SUMMARY"
       - name: Comment on PR
@@ -98,11 +99,10 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bench-measurements
+          name: bench-report
           path: |
-            baseline.jsonl
-            current.jsonl
             benchmark-report.md
+            benchmark-modules.md
           if-no-files-found: warn
       - name: Mark benchmark complete
         if: always()
