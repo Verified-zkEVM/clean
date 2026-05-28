@@ -5,14 +5,11 @@ source "$(dirname "$0")/../heartbeat-common.sh"
 
 repo="$(bench_repo_root)"
 heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
+list_modules="$repo/scripts/bench/build/ListModules.lean"
 output="measurements.jsonl"
 
-{
-  [ ! -f Clean.lean ] || printf '%s\n' Clean.lean
-  find Clean -name '*.lean' -print
-} | sort | while IFS= read -r path; do
-  module="${path%.lean}"
-  module="${module//\//.}"
+lake env lean --run "$list_modules" --git Clean | while IFS= read -r module; do
+  path="$(module_path "$module")"
   value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
   lines="$(wc -l < "$path")"
   python3 - "$output" "$module" "$value" "$lines" <<'PY'
