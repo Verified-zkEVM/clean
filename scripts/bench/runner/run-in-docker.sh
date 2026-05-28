@@ -64,6 +64,12 @@ run_benchmark() {
     } | sha256sum | cut -d' ' -f1
   )"
   local package_cache="$CACHE_DIR/lake-packages/$package_cache_key"
+  local build_mount=()
+  if [ "$label" = "baseline" ] && [ "$repo" = "$BENCH_REPOSITORY" ]; then
+    local build_cache="$CACHE_DIR/lake-build/$package_cache_key"
+    mkdir -p "$build_cache"
+    build_mount=(-v "$build_cache:/workspace/clean/.lake/build")
+  fi
   mkdir -p "$checkout/.lake" "$package_cache"
 
   docker run --rm \
@@ -81,6 +87,7 @@ run_benchmark() {
     -e BENCH_OUTPUT_FILE="/bench-output/$label.jsonl" \
     -v "$checkout:/workspace/clean" \
     -v "$package_cache:/workspace/clean/.lake/packages" \
+    "${build_mount[@]}" \
     -v "$elan_home:/workspace/elan-home" \
     -v "$CACHE_DIR/elan/toolchains:/workspace/elan-home/toolchains:ro" \
     -v "$xdg_cache:/workspace/xdg-cache" \
