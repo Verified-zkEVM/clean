@@ -869,6 +869,287 @@ syntax "elaborate_circuit_naive_with" term " using " term : tactic
 syntax "elaborate_circuit_with" term : tactic
 syntax "elaborate_circuit_with" term " using " term : tactic
 
+private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
+    TacticM Unit := withMainContext do
+  let goal ← getMainGoal
+  let target ← whnf (← goal.getType)
+  unless target.getAppFn.isConstOf ``ElaboratedCircuit do
+    throwError "target is not an ElaboratedCircuit: {target}"
+  let args := target.getAppArgs
+  if args.size < 7 then
+    throwError "unexpected ElaboratedCircuit target: {target}"
+  let F := args[0]!
+  let Input := args[1]!
+  let Output := args[2]!
+  let fieldInst := args[3]!
+  let inputCircuitTypeInst := args[4]!
+  let outputCircuitTypeInst := args[5]!
+  let main := args[6]!
+
+  -- Build the base elaborated circuit as a real expression, so the rest of this
+  -- tactic can reuse its generated fields instead of rediscovering them from a
+  -- wrapped `.withData` term.
+  let derived ← Lean.Elab.Term.elabTerm (← `(by elaborate_circuit)) (some target)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let derived ← instantiateMVars derived
+
+  let varInputType ← mkAppM ``Var #[Input, F]
+  let natType := mkConst ``Nat
+
+  let explicitThms ← do
+    let some ext ← getSimpExtension? `explicit_circuit_norm
+      | throwError "unknown simp attribute explicit_circuit_norm"
+    ext.getTheorems
+  let congrThms ← getSimpCongrTheorems
+  let unfoldTypeHeads ← labelled `explicit_circuit_unfold_type
+  let noUnfoldHeads ← labelled `explicit_circuit_no_unfold
+  let rec resultTypeHead? : Expr → Option Name
+    | .forallE _ _ body _ => resultTypeHead? body
+    | .letE _ _ _ body _ => resultTypeHead? body
+    | .mdata _ body => resultTypeHead? body
+    | type =>
+        match type.getAppFn with
+        | .const n _ => some n
+        | _ => none
+  let hasUnfoldableResultType (type : Expr) : Bool :=
+    match resultTypeHead? type with
+    | some head => unfoldTypeHeads.contains head
+    | none => false
+  let isUnfoldable (declName : Name) : MetaM Bool := do
+    if noUnfoldHeads.contains declName then
+      return false
+    match (← getEnv).find? declName with
+    | some (.defnInfo info) => return hasUnfoldableResultType info.type
+    | some (.opaqueInfo info) => return hasUnfoldableResultType info.type
+    | _ => return false
+  let rec collectUnfoldable (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
+    match e with
+    | .const declName _ =>
+        if decls.contains declName || !(← isUnfoldable declName) then
+          return decls
+        else
+          return decls.push declName
+    | .app f a => collectUnfoldable a (← collectUnfoldable f decls)
+    | .lam _ t b _ | .forallE _ t b _ => collectUnfoldable b (← collectUnfoldable t decls)
+    | .letE _ t v b _ => collectUnfoldable b (← collectUnfoldable v (← collectUnfoldable t decls))
+    | .mdata _ b => collectUnfoldable b decls
+    | .proj _ _ b => collectUnfoldable b decls
+    | _ => return decls
+  let mkDsimpCtx (decls : Array Name) : MetaM Simp.Context := do
+    let mut thms := explicitThms
+    for decl in decls do
+      thms ← thms.addDeclToUnfold decl
+    Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+      (simpTheorems := #[thms]) congrThms
+  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    (simpTheorems := #[explicitThms]) congrThms
+  let simpProcs ← do
+    let some ext ← Simp.getSimprocExtension? `explicit_circuit_norm
+      | throwError "unknown simproc attribute explicit_circuit_norm"
+    pure #[(← ext.getSimprocs)]
+  let normalizeWithData (label : String) (e : Expr) : MetaM (Expr × Expr) := do
+    let debug := (← getOptions).getBool `debug.elaborateCircuit false
+    let decls ← collectUnfoldable e #[]
+    if debug then
+      let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
+      let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
+      logInfo m!"elaborate_circuit_with {label}:
+  dsimp only [{simpArgs}]"
+    let ctx ← mkDsimpCtx decls
+    let e' := (← dsimp e ctx).1
+    let r ← Lean.Meta.simp e' simpCtx simpProcs
+    let proof ← match r.1.proof? with
+      | some proof => pure proof
+      | none => mkEqRefl e'
+    return (r.1.expr, proof)
+
+  let mkDataEqType (derived data : Expr) : MetaM Expr := do
+    let localLengthEq ← withLocalDeclD `a varInputType fun a => do
+      let lhs ← mkAppOptM ``ElaboratedCircuit.localLength
+        #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, a]
+      let rhs ← mkAppOptM ``ElaboratedCircuit.Data.localLength
+        #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, data, a]
+      mkForallFVars #[a] (← mkEq lhs rhs)
+    let outputEq ← withLocalDeclD `a varInputType fun a => do
+      withLocalDeclD `n natType fun n => do
+        let lhs ← mkAppOptM ``ElaboratedCircuit.output
+          #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, a, n]
+        let rhs ← mkAppOptM ``ElaboratedCircuit.Data.output
+          #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, data, a, n]
+        mkForallFVars #[a, n] (← mkEq lhs rhs)
+    let guaranteesSubset ← do
+      let lhs ← mkAppOptM ``ElaboratedCircuit.channelsWithGuarantees
+        #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main, derived]
+      let rhs ← mkAppOptM ``ElaboratedCircuit.Data.channelsWithGuarantees
+        #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, data]
+      mkAppM ``HasSubset.Subset #[lhs, rhs]
+    let requirementsSubset ← do
+      let lhs ← mkAppOptM ``ElaboratedCircuit.channelsWithRequirements
+        #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main, derived]
+      let rhs ← mkAppOptM ``ElaboratedCircuit.Data.channelsWithRequirements
+        #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, data]
+      mkAppM ``HasSubset.Subset #[lhs, rhs]
+    pure (mkAnd localLengthEq (mkAnd outputEq (mkAnd guaranteesSubset requirementsSubset)))
+
+  let buildRecord (data withData : Expr) : TacticM Expr := do
+    let (localLengthFun, localLengthNormProof) ← withLocalDeclD `input varInputType fun input => do
+      let ll ← mkAppOptM ``ElaboratedCircuit.Data.localLength
+        #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, none, data, input]
+      let (ll, proof) ← normalizeWithData "localLength" ll
+      let localLengthFun ← mkLambdaFVars #[input] ll
+      let localLengthNormProof ← mkLambdaFVars #[input] proof
+      return (localLengthFun, localLengthNormProof)
+    let (outputFun, outputNormProof) ← withLocalDeclD `input varInputType fun input => do
+      withLocalDeclD `offset natType fun offset => do
+        let out ← mkAppOptM ``ElaboratedCircuit.Data.output
+          #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, none, data, input, offset]
+        let (out, proof) ← normalizeWithData "output" out
+        let outputFun ← mkLambdaFVars #[input, offset] out
+        let outputNormProof ← mkLambdaFVars #[input, offset] proof
+        return (outputFun, outputNormProof)
+    let localLengthEq ← withLocalDeclD `input varInputType fun input => do
+      withLocalDeclD `offset natType fun offset => do
+        let p1 ← mkAppOptM ``ElaboratedCircuit.localLength_eq
+          #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main, withData, input, offset]
+        let p1Type ← inferType p1
+        let some (_, _, mid) := p1Type.eq?
+          | throwError "unexpected localLength_eq type: {p1Type}"
+        let p2 := mkApp localLengthNormProof input
+        let rhs := mkApp localLengthFun input
+        let p2Type ← mkEq mid rhs
+        let p2 ← mkExpectedTypeHint p2 p2Type
+        let p ← mkAppM ``Eq.trans #[p1, p2]
+        mkLambdaFVars #[input, offset] p
+    let outputEq ← withLocalDeclD `input varInputType fun input => do
+      withLocalDeclD `offset natType fun offset => do
+        let p1 ← mkAppOptM ``ElaboratedCircuit.output_eq
+          #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main, withData, input, offset]
+        let p1Type ← inferType p1
+        let some (_, _, mid) := p1Type.eq?
+          | throwError "unexpected output_eq type: {p1Type}"
+        let p2 := mkApp2 outputNormProof input offset
+        let rhs := mkApp2 outputFun input offset
+        let p2Type ← mkEq mid rhs
+        let p2 ← mkExpectedTypeHint p2 p2Type
+        let p ← mkAppM ``Eq.trans #[p1, p2]
+        mkLambdaFVars #[input, offset] p
+    let subProofType ← withLocalDeclD `input varInputType fun input => do
+      withLocalDeclD `offset natType fun offset => do
+        let circuit := mkApp main input
+        let operations ← mkAppOptM ``Circuit.operations #[F, fieldInst, none, circuit, offset]
+        let p ← mkAppOptM ``Operations.SubcircuitsConsistent #[F, fieldInst, offset, operations]
+        mkForallFVars #[input, offset] p
+    let circuitType ← inferType main
+    let generalizedType ← withLocalDeclD `main circuitType fun main' => do
+      let elaboratedType ← mkAppOptM ``ElaboratedCircuit
+        #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main']
+      withLocalDeclD `e elaboratedType fun e => do
+        withLocalDeclD `inp varInputType fun inp => do
+          withLocalDeclD `off natType fun off => do
+            let circuit := mkApp main' inp
+            let operations ← mkAppOptM ``Circuit.operations #[F, fieldInst, none, circuit, off]
+            let p ← mkAppOptM ``Operations.SubcircuitsConsistent #[F, fieldInst, off, operations]
+            mkForallFVars #[main', e, inp, off] p
+    let generalizedValue ← withLocalDeclD `main circuitType fun main' => do
+      let elaboratedType ← mkAppOptM ``ElaboratedCircuit
+        #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main']
+      withLocalDeclD `e elaboratedType fun e => do
+        withLocalDeclD `inp varInputType fun inp => do
+          withLocalDeclD `off natType fun off => do
+            let p ← mkAppOptM ``ElaboratedCircuit.subcircuitsConsistent
+              #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main', e, inp, off]
+            mkLambdaFVars #[main', e, inp, off] p
+    let derivedType ← mkAppOptM ``ElaboratedCircuit
+      #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main]
+    let subProof ← withLocalDeclD `input varInputType fun input => do
+      withLocalDeclD `offset natType fun offset => do
+        let p ← withLetDecl `this generalizedType generalizedValue fun this => do
+          withLetDecl `derived derivedType derived fun derivedLocal => do
+            let p := mkApp4 this main derivedLocal input offset
+            mkLetFVars #[this, derivedLocal] p (usedLetOnly := false)
+        mkLambdaFVars #[input, offset] p
+    let subProof ← mkExpectedTypeHint subProof subProofType
+    let sourceChannelsWithGuarantees ← mkAppOptM ``ElaboratedCircuit.Data.channelsWithGuarantees
+      #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, none, data]
+    let (channelsWithGuarantees, channelsWithGuaranteesNormProof) ←
+      normalizeWithData "channelsWithGuarantees" sourceChannelsWithGuarantees
+    let sourceChannelsWithRequirements ← mkAppOptM ``ElaboratedCircuit.Data.channelsWithRequirements
+      #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, none, data]
+    let (channelsWithRequirements, channelsWithRequirementsNormProof) ←
+      normalizeWithData "channelsWithRequirements" sourceChannelsWithRequirements
+    let channelsLawful ← do
+      let p ← mkAppOptM ``ElaboratedCircuit.channelsLawful
+        #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main, withData]
+      let pType ← inferType p
+      let pArgs := pType.getAppArgs
+      if !pType.getAppFn.isConstOf ``ElaboratedCircuit.ChannelsLawful || pArgs.size < 2 then
+        throwError "unexpected channelsLawful type: {pType}"
+      let actualGuarantees := pArgs[pArgs.size - 2]!
+      let actualRequirements := pArgs[pArgs.size - 1]!
+      let rawChannelType := mkApp (mkConst ``RawChannel) F
+      let rawChannelListType := mkApp (mkConst ``List [levelZero]) rawChannelType
+      let guaranteesProofType ← mkEq actualGuarantees channelsWithGuarantees
+      let guaranteesProof ← mkExpectedTypeHint channelsWithGuaranteesNormProof guaranteesProofType
+      let p ← withLocalDeclD `channelsWithGuarantees rawChannelListType fun normalizedGuarantees => do
+        let prop ← mkAppOptM ``ElaboratedCircuit.ChannelsLawful
+          #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst,
+            main, normalizedGuarantees, actualRequirements]
+        let motive ← mkLambdaFVars #[normalizedGuarantees] prop
+        let propEq ← mkAppM ``congrArg #[motive, guaranteesProof]
+        mkEqMP propEq p
+      let requirementsProofType ← mkEq actualRequirements channelsWithRequirements
+      let requirementsProof ← mkExpectedTypeHint channelsWithRequirementsNormProof requirementsProofType
+      let p ← withLocalDeclD `channelsWithRequirements rawChannelListType fun normalizedRequirements => do
+        let prop ← mkAppOptM ``ElaboratedCircuit.ChannelsLawful
+          #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst,
+            main, channelsWithGuarantees, normalizedRequirements]
+        let motive ← mkLambdaFVars #[normalizedRequirements] prop
+        let propEq ← mkAppM ``congrArg #[motive, requirementsProof]
+        mkEqMP propEq p
+      pure p
+    mkAppOptM ``ElaboratedCircuit.mk #[F, Input, Output, fieldInst, inputCircuitTypeInst,
+      outputCircuitTypeInst, main, localLengthFun, localLengthEq, outputFun, outputEq, subProof,
+      channelsWithGuarantees, channelsWithRequirements, channelsLawful]
+
+  let inlineDataType ← mkAppOptM ``ElaboratedCircuit.Data
+    #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived]
+  let inlineDataVal ← Lean.Elab.Term.elabTerm dataStx (some inlineDataType)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let inlineDataVal ← instantiateMVars inlineDataVal
+  let inlineDataEqVal? ← match dataEqStx? with
+    | some dataEqStx =>
+        let inlineDataEqType ← mkDataEqType derived inlineDataVal
+        let inlineDataEqVal ← Lean.Elab.Term.elabTerm dataEqStx (some inlineDataEqType)
+        Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+        pure (some (← instantiateMVars inlineDataEqVal))
+    | none => pure none
+
+  let val ← withLetDecl `derived target derived fun derived => do
+    let dataType ← mkAppOptM ``ElaboratedCircuit.Data
+      #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived]
+    let dataVal ← mkExpectedTypeHint inlineDataVal dataType
+    match dataEqStx? with
+    | some _dataEqStx =>
+        let dataEqType ← mkDataEqType derived dataVal
+        let some inlineDataEqVal := inlineDataEqVal?
+          | throwError "internal error: missing data_eq proof"
+        let dataEqVal ← mkExpectedTypeHint inlineDataEqVal dataEqType
+        let withData ← mkAppOptM ``ElaboratedCircuit.withData
+          #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, dataVal, dataEqVal]
+        Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+        let withData ← instantiateMVars withData
+            let record ← buildRecord dataVal withData
+        mkLetFVars #[derived] record (usedLetOnly := false)
+    | none =>
+        let withData ← mkAppOptM ``ElaboratedCircuit.withData
+          #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, dataVal, none]
+        Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+        let withData ← instantiateMVars withData
+        let record ← buildRecord dataVal withData
+        mkLetFVars #[derived] record (usedLetOnly := false)
+  goal.assign val
+  replaceMainGoal []
+
 macro_rules
   | `(tactic|elaborate_circuit_naive) => `(tactic|(
     refine ExplicitCircuits.toElaborated _ ?explicit ?elaborated
@@ -883,12 +1164,12 @@ macro_rules
   | `(tactic|elaborate_circuit_naive_with $data:term) => `(tactic|(
     exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data
   ))
-  | `(tactic|elaborate_circuit_with $data:term using $data_eq:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by elaborate_circuit) $data $data_eq
-  ))
-  | `(tactic|elaborate_circuit_with $data:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by elaborate_circuit) $data
-  ))
+
+elab_rules : tactic
+  | `(tactic|elaborate_circuit_with $data:term using $data_eq:term) => do
+      elabElaborateCircuitWith data (some data_eq)
+  | `(tactic|elaborate_circuit_with $data:term) => do
+      elabElaborateCircuitWith data none
 
 -- this tactic is pretty good at inferring explicit circuits!
 section

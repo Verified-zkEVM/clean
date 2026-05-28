@@ -82,6 +82,12 @@ example (x : Expression F) (n : ℕ) :
 instance reducedElaborated : ElaboratedCircuit F field (fields 8) main := by
   elaborate_circuit
 
+example : ElaboratedCircuit F field (fields 8) main := by
+  elaborate_circuit_with {
+    localLength _ := 16
+  } using by
+    simp only [circuit_norm]
+
 /-- The reduced elaboration tactic stores the compact length directly. -/
 example (x : Expression F) :
     ElaboratedCircuit.localLength (F:=F) (Input:=field) (Output:=fields 8) main x = 16 := rfl

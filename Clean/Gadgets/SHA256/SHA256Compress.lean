@@ -246,6 +246,16 @@ instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
 
 #print elaborated
 
+def elaborated_autoelab_test : ElaboratedCircuit (F p) Inputs SHA256State main := by
+  elaborate_circuit_with {
+    output input i₀ := stateVar i₀ input.state 64
+  } using by
+    simp only [circuit_norm]
+    intros
+    apply fin_foldl_eq_stateVar
+
+#print elaborated_autoelab_test
+
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [SHA256Round.Spec, SHA256Round.Assumptions]
   obtain ⟨h_state_norm, h_sched_norm⟩ := h_assumptions
