@@ -561,6 +561,10 @@ attribute [explicit_circuit_norm]
   -- not sure why but `Ep.mpr` is introduced somewhere too and this helps
   eq_mpr_eq_cast cast_eq
 
+syntax "elaborate_circuit_naive" : tactic
+syntax "elaborate_circuit_naive_with" term : tactic
+syntax "elaborate_circuit_naive_with" term " using " term : tactic
+
 /--
 Derive an `ElaboratedCircuit` through `ExplicitCircuits`, but store normalized metadata fields.
 
@@ -863,11 +867,21 @@ elab "elaborate_circuit" : tactic => withMainContext do
   goal.assign val
   replaceMainGoal []
 
-syntax "elaborate_circuit_naive" : tactic
-syntax "elaborate_circuit_naive_with" term : tactic
-syntax "elaborate_circuit_naive_with" term " using " term : tactic
 syntax "elaborate_circuit_with" term : tactic
 syntax "elaborate_circuit_with" term " using " term : tactic
+
+macro_rules
+  | `(tactic|elaborate_circuit_naive) => `(tactic|(
+    refine ExplicitCircuits.toElaborated _ ?explicit ?elaborated
+    · infer_explicit_circuits
+    · exact ExplicitCircuits.IsElaborated.mk
+  ))
+
+macro_rules
+  | `(tactic|elaborate_circuit_naive_with $data:term using $data_eq:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data $data_eq))
+  | `(tactic|elaborate_circuit_naive_with $data:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data))
 
 private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
     TacticM Unit := withMainContext do
@@ -899,18 +913,6 @@ private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option 
 
   let varInputType ← mkAppM ``Var #[Input, F]
   let natType := mkConst ``Nat
-
-  -- The `_with` normalizer is intentionally much smaller than the base tactic's
-  -- normalizer.  Its inputs are already projections from `ElaboratedCircuit.Data`
-  -- or from `(derived.withData data data_eq)`, so reducing with only
-  -- `[explicit_circuit_norm]` is enough to expose the final field expressions.
-  let explicitThms ← do
-    let some ext ← getSimpExtension? `explicit_circuit_norm
-      | throwError "unknown simp attribute explicit_circuit_norm"
-    ext.getTheorems
-  let congrThms ← getSimpCongrTheorems
-  let dsimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
-    (simpTheorems := #[explicitThms]) congrThms
 
   -- Reconstruct the type of the user-supplied `using` proof:
   --   old derived fields = user data fields, plus channel subset obligations.
@@ -962,15 +964,27 @@ private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option 
     return (dataEqType, ← instantiateMVars dataEq)
 
   -- First elaborate the user's `data` and optional `using` proof against the
-  -- inline base result.  This preserves the old ergonomic behavior: existing
-  -- `using by ...` scripts still see the same obligations they saw when `_with`
-  -- expanded directly to `ElaboratedCircuit.withData (by elaborate_circuit) ...`.
+  -- inline base result. This yields the same ergonomic behavior as `.withData`:
+  -- `using by ...` scripts only have to bridge the `elaborate_circuit` result to
+  -- their `data` overrides.
   let inlineDataType ← mkAppOptM ``ElaboratedCircuit.Data
     #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived]
   let inlineDataVal ← Lean.Elab.Term.elabTerm dataStx (some inlineDataType)
   Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
   let inlineDataVal ← instantiateMVars inlineDataVal
   let (_inlineDataEqType, inlineDataEqVal) ← elabDataEq derived inlineDataVal
+
+  -- The `_with` normalizer is intentionally much smaller than the base tactic's
+  -- normalizer.  Its inputs are already projections from `ElaboratedCircuit.Data`
+  -- or from `(derived.withData data data_eq)`, so reducing with only
+  -- `[explicit_circuit_norm]` is enough to expose the final field expressions.
+  let explicitThms ← do
+    let some ext ← getSimpExtension? `explicit_circuit_norm
+      | throwError "unknown simp attribute explicit_circuit_norm"
+    ext.getTheorems
+  let congrThms ← getSimpCongrTheorems
+  let dsimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    (simpTheorems := #[explicitThms]) congrThms
 
   -- This is the core of the tactic: build the ordinary `.withData` expression and
   -- let `dsimp only [explicit_circuit_norm]` reduce its projections to the final
@@ -983,21 +997,6 @@ private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option 
   let val := (← dsimp withData dsimpCtx).1
   goal.assign val
   replaceMainGoal []
-
-macro_rules
-  | `(tactic|elaborate_circuit_naive) => `(tactic|(
-    refine ExplicitCircuits.toElaborated _ ?explicit ?elaborated
-    · infer_explicit_circuits
-    · exact ExplicitCircuits.IsElaborated.mk
-  ))
-
-macro_rules
-  | `(tactic|elaborate_circuit_naive_with $data:term using $data_eq:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data $data_eq
-  ))
-  | `(tactic|elaborate_circuit_naive_with $data:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data
-  ))
 
 elab_rules : tactic
   | `(tactic|elaborate_circuit_with $data:term using $data_eq:term) => do
