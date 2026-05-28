@@ -2,6 +2,7 @@ import Clean.Gadgets.SHA256.SHA256Round
 import Clean.Gadgets.SHA256.SHA256Schedule
 import Clean.Gadgets.SHA256.Add32
 import Clean.Specs.SHA256
+import Mathlib.Util.CountHeartbeats
 
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^33)]
@@ -210,6 +211,7 @@ private lemma sha256Compress_eq_valStateAfterRound
 -- TODO AUTOELAB setting this to reducible blows up soundness proof below,
 -- the signal here is that the term created by `_with` is too complicated
 -- (it keeps the complicated original output term and `(...).withData ...`)
+#count_heartbeats in
 def derived : ElaboratedCircuit (F p) Inputs SHA256State main := by
   elaborate_circuit
 
@@ -246,6 +248,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
 
 #print elaborated
 
+#count_heartbeats in
 def elaborated_autoelab_test : ElaboratedCircuit (F p) Inputs SHA256State main := by
   elaborate_circuit_with {
     output input i₀ := stateVar i₀ input.state 64

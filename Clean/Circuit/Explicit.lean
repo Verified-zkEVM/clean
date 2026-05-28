@@ -871,6 +871,11 @@ syntax "elaborate_circuit_with" term " using " term : tactic
 
 private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
     TacticM Unit := withMainContext do
+  -- The tactic is used in goals of the form
+  --   ElaboratedCircuit F Input Output main
+  -- We unpack the target manually because the rest of the code constructs field
+  -- projections and record constructors with explicit arguments.  This avoids
+  -- leaving Lean to infer expensive arguments in large generated circuits.
   let goal ← getMainGoal
   let target ← whnf (← goal.getType)
   unless target.getAppFn.isConstOf ``ElaboratedCircuit do
@@ -896,73 +901,32 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
   let varInputType ← mkAppM ``Var #[Input, F]
   let natType := mkConst ``Nat
 
+  -- The `_with` normalizer is intentionally much smaller than the base tactic's
+  -- normalizer.  Its inputs are already projections from `ElaboratedCircuit.Data`
+  -- or from `(derived.withData data data_eq)`, so reducing with only
+  -- `[explicit_circuit_norm]` is enough to expose the final field expressions.
   let explicitThms ← do
     let some ext ← getSimpExtension? `explicit_circuit_norm
       | throwError "unknown simp attribute explicit_circuit_norm"
     ext.getTheorems
   let congrThms ← getSimpCongrTheorems
-  let unfoldTypeHeads ← labelled `explicit_circuit_unfold_type
-  let noUnfoldHeads ← labelled `explicit_circuit_no_unfold
-  let rec resultTypeHead? : Expr → Option Name
-    | .forallE _ _ body _ => resultTypeHead? body
-    | .letE _ _ _ body _ => resultTypeHead? body
-    | .mdata _ body => resultTypeHead? body
-    | type =>
-        match type.getAppFn with
-        | .const n _ => some n
-        | _ => none
-  let hasUnfoldableResultType (type : Expr) : Bool :=
-    match resultTypeHead? type with
-    | some head => unfoldTypeHeads.contains head
-    | none => false
-  let isUnfoldable (declName : Name) : MetaM Bool := do
-    if noUnfoldHeads.contains declName then
-      return false
-    match (← getEnv).find? declName with
-    | some (.defnInfo info) => return hasUnfoldableResultType info.type
-    | some (.opaqueInfo info) => return hasUnfoldableResultType info.type
-    | _ => return false
-  let rec collectUnfoldable (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
-    match e with
-    | .const declName _ =>
-        if decls.contains declName || !(← isUnfoldable declName) then
-          return decls
-        else
-          return decls.push declName
-    | .app f a => collectUnfoldable a (← collectUnfoldable f decls)
-    | .lam _ t b _ | .forallE _ t b _ => collectUnfoldable b (← collectUnfoldable t decls)
-    | .letE _ t v b _ => collectUnfoldable b (← collectUnfoldable v (← collectUnfoldable t decls))
-    | .mdata _ b => collectUnfoldable b decls
-    | .proj _ _ b => collectUnfoldable b decls
-    | _ => return decls
-  let mkDsimpCtx (decls : Array Name) : MetaM Simp.Context := do
-    let mut thms := explicitThms
-    for decl in decls do
-      thms ← thms.addDeclToUnfold decl
-    Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
-      (simpTheorems := #[thms]) congrThms
-  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+  let dsimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
     (simpTheorems := #[explicitThms]) congrThms
-  let simpProcs ← do
-    let some ext ← Simp.getSimprocExtension? `explicit_circuit_norm
-      | throwError "unknown simproc attribute explicit_circuit_norm"
-    pure #[(← ext.getSimprocs)]
-  let normalizeWithData (label : String) (e : Expr) : MetaM (Expr × Expr) := do
-    let debug := (← getOptions).getBool `debug.elaborateCircuit false
-    let decls ← collectUnfoldable e #[]
-    if debug then
-      let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
-      let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
-      logInfo m!"elaborate_circuit_with {label}:
-  dsimp only [{simpArgs}]"
-    let ctx ← mkDsimpCtx decls
-    let e' := (← dsimp e ctx).1
-    let r ← Lean.Meta.simp e' simpCtx simpProcs
-    let proof ← match r.1.proof? with
-      | some proof => pure proof
-      | none => mkEqRefl e'
-    return (r.1.expr, proof)
+  -- Normalize a single generated field expression and return both the normalized
+  -- expression and an equality proof from the pre-normalized expression to it.
+  -- The equality proof is threaded into `localLength_eq`, `output_eq`, and the
+  -- channel-law proof so those fields do not need to normalize again.
+  let dsimpExplicitCircuitNorm (e : Expr) : MetaM (Expr × Expr) := do
+    let e' := (← dsimp e dsimpCtx).1
+    return (e', ← mkEqRefl e)
 
+  -- Reconstruct the type of the user-supplied `using` proof:
+  --   old derived fields = user data fields, plus channel subset obligations.
+  -- We need this type twice:
+  -- * once before introducing the final local `derived`, so the user's proof is
+  --   elaborated against essentially the old `_with` goal shape;
+  -- * once after introducing the local `derived`, so the proof can be coerced into
+  --   the type expected by the local `.withData` source used for proof transport.
   let mkDataEqType (derived data : Expr) : MetaM Expr := do
     let localLengthEq ← withLocalDeclD `a varInputType fun a => do
       let lhs ← mkAppOptM ``ElaboratedCircuit.localLength
@@ -991,22 +955,38 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
       mkAppM ``HasSubset.Subset #[lhs, rhs]
     pure (mkAnd localLengthEq (mkAnd outputEq (mkAnd guaranteesSubset requirementsSubset)))
 
+  -- Build the final plain `ElaboratedCircuit.mk`.
+  --
+  -- `data` is used as the source of the stored fields, because those are exactly
+  -- the user overrides/defaults we want to keep in the final printed term.  This
+  -- is cheaper and cleaner than normalizing projections from the full `.withData`
+  -- wrapper.
+  --
+  -- `withData` is still used as the source of proof fields.  Its projections know
+  -- how to combine the base circuit proofs with `data_eq`, and then we transport
+  -- those proofs across the normalization equalities above.
   let buildRecord (data withData : Expr) : TacticM Expr := do
+    -- Stored `localLength`: normalize `data.localLength input`.
     let (localLengthFun, localLengthNormProof) ← withLocalDeclD `input varInputType fun input => do
       let ll ← mkAppOptM ``ElaboratedCircuit.Data.localLength
         #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, none, data, input]
-      let (ll, proof) ← normalizeWithData "localLength" ll
+      let (ll, proof) ← dsimpExplicitCircuitNorm ll
       let localLengthFun ← mkLambdaFVars #[input] ll
       let localLengthNormProof ← mkLambdaFVars #[input] proof
       return (localLengthFun, localLengthNormProof)
+    -- Stored `output`: normalize `data.output input offset`.
     let (outputFun, outputNormProof) ← withLocalDeclD `input varInputType fun input => do
       withLocalDeclD `offset natType fun offset => do
         let out ← mkAppOptM ``ElaboratedCircuit.Data.output
           #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, none, data, input, offset]
-        let (out, proof) ← normalizeWithData "output" out
+        let (out, proof) ← dsimpExplicitCircuitNorm out
         let outputFun ← mkLambdaFVars #[input, offset] out
         let outputNormProof ← mkLambdaFVars #[input, offset] proof
         return (outputFun, outputNormProof)
+    -- Proof for the final `localLength_eq` field:
+    --   main.localLength offset = withData.localLength input = storedLocalLength input
+    -- The first equality is supplied by `.withData`; the second is the normalization
+    -- proof saved while constructing the stored field.
     let localLengthEq ← withLocalDeclD `input varInputType fun input => do
       withLocalDeclD `offset natType fun offset => do
         let p1 ← mkAppOptM ``ElaboratedCircuit.localLength_eq
@@ -1020,6 +1000,7 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
         let p2 ← mkExpectedTypeHint p2 p2Type
         let p ← mkAppM ``Eq.trans #[p1, p2]
         mkLambdaFVars #[input, offset] p
+    -- Same transport pattern for `output_eq`.
     let outputEq ← withLocalDeclD `input varInputType fun input => do
       withLocalDeclD `offset natType fun offset => do
         let p1 ← mkAppOptM ``ElaboratedCircuit.output_eq
@@ -1033,12 +1014,22 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
         let p2 ← mkExpectedTypeHint p2 p2Type
         let p ← mkAppM ``Eq.trans #[p1, p2]
         mkLambdaFVars #[input, offset] p
+    -- The `subcircuitsConsistent` proof is independent of `data` and `data_eq`.
+    -- The target type is built directly from `main input`, rather than by asking
+    -- for `derived.subcircuitsConsistent`, because that projection can force a bad
+    -- `whnf` path in SHA-sized examples.
     let subProofType ← withLocalDeclD `input varInputType fun input => do
       withLocalDeclD `offset natType fun offset => do
         let circuit := mkApp main input
         let operations ← mkAppOptM ``Circuit.operations #[F, fieldInst, none, circuit, offset]
         let p ← mkAppOptM ``Operations.SubcircuitsConsistent #[F, fieldInst, offset, operations]
         mkForallFVars #[input, offset] p
+    -- Generalized proof:
+    --   ∀ main (e : ElaboratedCircuit ... main) inp off, ...
+    -- This mirrors the successful manual SHA proof.  The key is that the projection
+    -- from `e` is checked under a generalized `main`, not under the concrete SHA
+    -- circuit.  The final proof applies this local theorem to the concrete local
+    -- `derived` instance.
     let circuitType ← inferType main
     let generalizedType ← withLocalDeclD `main circuitType fun main' => do
       let elaboratedType ← mkAppOptM ``ElaboratedCircuit
@@ -1061,6 +1052,9 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
             mkLambdaFVars #[main', e, inp, off] p
     let derivedType ← mkAppOptM ``ElaboratedCircuit
       #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main]
+    -- Keep `this` and `derived` as local bindings in the proof term.  This is a bit
+    -- heavier than a direct application, but it avoids the concrete-projection
+    -- timeout that motivated the manual SHA experiment.
     let subProof ← withLocalDeclD `input varInputType fun input => do
       withLocalDeclD `offset natType fun offset => do
         let p ← withLetDecl `this generalizedType generalizedValue fun this => do
@@ -1069,14 +1063,18 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
             mkLetFVars #[this, derivedLocal] p (usedLetOnly := false)
         mkLambdaFVars #[input, offset] p
     let subProof ← mkExpectedTypeHint subProof subProofType
+    -- Store channel metadata from `data`, then transport `.withData.channelsLawful`
+    -- across the two normalization proofs.
     let sourceChannelsWithGuarantees ← mkAppOptM ``ElaboratedCircuit.Data.channelsWithGuarantees
       #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, none, data]
     let (channelsWithGuarantees, channelsWithGuaranteesNormProof) ←
-      normalizeWithData "channelsWithGuarantees" sourceChannelsWithGuarantees
+      dsimpExplicitCircuitNorm sourceChannelsWithGuarantees
     let sourceChannelsWithRequirements ← mkAppOptM ``ElaboratedCircuit.Data.channelsWithRequirements
       #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, none, data]
     let (channelsWithRequirements, channelsWithRequirementsNormProof) ←
-      normalizeWithData "channelsWithRequirements" sourceChannelsWithRequirements
+      dsimpExplicitCircuitNorm sourceChannelsWithRequirements
+    -- `ChannelsLawful` mentions both stored channel lists, so the transport happens
+    -- one argument at a time using `congrArg` and `Eq.mp`.
     let channelsLawful ← do
       let p ← mkAppOptM ``ElaboratedCircuit.channelsLawful
         #[F, Input, Output, fieldInst, inputCircuitTypeInst, outputCircuitTypeInst, main, withData]
@@ -1111,6 +1109,10 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
       outputCircuitTypeInst, main, localLengthFun, localLengthEq, outputFun, outputEq, subProof,
       channelsWithGuarantees, channelsWithRequirements, channelsLawful]
 
+  -- First elaborate the user's `data` and optional `using` proof against the
+  -- inline base result.  This preserves the old ergonomic behavior: existing
+  -- `using by ...` scripts still see the same obligations they saw when `_with`
+  -- expanded directly to `ElaboratedCircuit.withData (by elaborate_circuit) ...`.
   let inlineDataType ← mkAppOptM ``ElaboratedCircuit.Data
     #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived]
   let inlineDataVal ← Lean.Elab.Term.elabTerm dataStx (some inlineDataType)
@@ -1124,6 +1126,9 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
         pure (some (← instantiateMVars inlineDataEqVal))
     | none => pure none
 
+  -- Now introduce a local `derived` binding in the final generated term.  The
+  -- printed SHA result keeps this local base circuit, while the final record itself
+  -- contains only the reduced data fields and proof terms.
   let val ← withLetDecl `derived target derived fun derived => do
     let dataType ← mkAppOptM ``ElaboratedCircuit.Data
       #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived]
@@ -1138,7 +1143,7 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
           #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, dataVal, dataEqVal]
         Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
         let withData ← instantiateMVars withData
-            let record ← buildRecord dataVal withData
+        let record ← buildRecord dataVal withData
         mkLetFVars #[derived] record (usedLetOnly := false)
     | none =>
         let withData ← mkAppOptM ``ElaboratedCircuit.withData
