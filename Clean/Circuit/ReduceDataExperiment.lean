@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Mathlib.Util.CountHeartbeats
 
 namespace ReduceDataExperiment
 
@@ -78,10 +79,12 @@ example (x : Expression F) (n : ℕ) :
       simp only [Small.circuit]
       infer_explicit_circuit : ExplicitCircuit (main x)).localLength n = 16 := rfl
 
+#count_heartbeats in
 @[reducible]
 instance reducedElaborated : ElaboratedCircuit F field (fields 8) main := by
   elaborate_circuit
 
+#count_heartbeats in
 example : ElaboratedCircuit F field (fields 8) main := by
   elaborate_circuit_with {
     localLength _ := 16
