@@ -188,6 +188,12 @@ example : ElaboratedCircuit F field (fields 8) main := by
   elaborate_circuit
 ```
 
+To profile tactic scripts, per-command `#count_heartbeats in` should give fine-grained feedback.
+
+For profiling meta tactics in this codebase, temporary `IO.getNumHeartbeats` logging inside the
+tactic has been checked against `#count_heartbeats` on small declarations and matched the same
+scale closely enough to identify bottlenecks.
+
 To inspect what `simp` is doing, enable tracing around the failing proof:
 
 ```lean
