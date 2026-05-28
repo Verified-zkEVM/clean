@@ -5,17 +5,12 @@ source "$(dirname "$0")/../heartbeat-common.sh"
 
 repo="$(bench_repo_root)"
 heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
+list_modules="$repo/scripts/bench/build/ListModules.lean"
 output="measurements.jsonl"
-build_root=".lake/build/lib/lean"
 
-find "$build_root/Clean" -name '*.olean' -print \
-  | sed -e "s|^$build_root/||" -e 's|\.olean$||' -e 's|/|.|g' \
-  | sort \
-  | while IFS= read -r module; do
+lake env lean --run "$list_modules" --git Clean | while IFS= read -r module; do
   path="$(module_path "$module")"
-  if [ ! -f "$path" ]; then
-    continue
-  fi
+  lake build "+$module:olean"
   value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
   lines="$(wc -l < "$path")"
   python3 - "$output" "$module" "$value" "$lines" <<'PY'
