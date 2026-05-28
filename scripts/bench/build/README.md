@@ -14,6 +14,6 @@ Per-module metrics:
 - `build/module/<module>//lines`
 - `build/module/<module>//heartbeats`
 
-After the build finishes, the benchmark enumerates every `Clean/**/*.lean` module with Lean's module discovery helpers and records heartbeat measurements for each module. This keeps module coverage complete even when Lake reuses cached build artifacts.
+After the build finishes, the benchmark enumerates every built `Clean` module from `.lake/build/lib/lean/Clean/**/*.olean` and records heartbeat measurements for the corresponding source modules. This keeps module coverage aligned with Lake's build graph even when Lake reuses cached build artifacts.
 
 The heartbeat metric reruns Lean's frontend for each successfully built module, re-elaborates each command with Mathlib's heartbeat-counting helper before elaborating it for real, and records the sum of user-facing heartbeat counts.
