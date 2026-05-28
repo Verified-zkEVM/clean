@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(dirname "$0")/../heartbeat-common.sh"
+
+repo="$(bench_repo_root)"
+heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
+output="measurements.jsonl"
+
+{
+  [ ! -f Clean.lean ] || printf '%s\n' Clean.lean
+  find Clean -name '*.lean' -print
+} | sort | while IFS= read -r path; do
+  module="${path%.lean}"
+  module="${module//\//.}"
+  value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
+  lines="$(wc -l < "$path")"
+  python3 - "$output" "$module" "$value" "$lines" <<'PY'
+import json
+import sys
+
+output, module, heartbeats, lines = sys.argv[1:]
+records = [
+    {"metric": f"build/module/{module}//heartbeats", "value": float(heartbeats), "unit": "heartbeats"},
+    {"metric": f"build/module/{module}//lines", "value": float(lines)},
+]
+with open(output, "a", encoding="utf-8") as handle:
+    for record in records:
+        handle.write(json.dumps(record) + "\n")
+PY
+done

@@ -4,9 +4,7 @@ set -euo pipefail
 BENCH="scripts/bench"
 
 rm -f measurements.jsonl
-rm -rf .lake/build
 lake exe cache get
 
-LAKE_OVERRIDE_LEAN=true LEAN="$(realpath "$BENCH/build/fake-root/bin/lean")" \
-  "$BENCH/measure.py" --append --topic build --default-metrics -- \
-  lake build --no-cache
+"$BENCH/measure.py" --append --topic build --default-metrics -- lake build
+"$BENCH/build/heartbeats-all"

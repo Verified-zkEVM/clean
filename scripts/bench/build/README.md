@@ -1,8 +1,8 @@
 # Build Benchmark
 
-This benchmark removes the local `.lake/build` directory, runs `lake exe cache get`, then runs `lake build --no-cache` and records build metrics in `measurements.jsonl`.
+This benchmark runs `lake exe cache get`, then runs `lake build` and records build metrics in `measurements.jsonl`.
 
-It deliberately preserves `.lake/packages`, so dependency source trees and downloaded dependency build artifacts can be reused by the runner cache while the project itself is rebuilt from scratch.
+It preserves `.lake/packages` and does not delete `.lake/build`, so persistent or local worktrees can reuse dependency, downloaded, and project build artifacts.
 
 Whole-build metrics:
 
@@ -14,10 +14,6 @@ Per-module metrics:
 - `build/module/<module>//lines`
 - `build/module/<module>//heartbeats`
 
-Lean profile metrics, summed by downstream consumers when metric names repeat:
-
-- `build/profile/<name>//wall-clock`
-
-The benchmark overrides the Lean executable that Lake uses, so module measurements come from the actual Lake build graph rather than a separate one-file-at-a-time pass.
+After the build finishes, the benchmark enumerates `Clean.lean` and every `Clean/**/*.lean` module and records heartbeat measurements for each module. This keeps module coverage complete even when Lake reuses cached build artifacts.
 
 The heartbeat metric reruns Lean's frontend for each successfully built module, re-elaborates each command with Mathlib's heartbeat-counting helper before elaborating it for real, and records the sum of user-facing heartbeat counts.
