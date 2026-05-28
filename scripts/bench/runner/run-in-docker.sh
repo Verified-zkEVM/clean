@@ -69,6 +69,11 @@ run_benchmark() {
     local build_cache="$CACHE_DIR/lake-build/$package_cache_key"
     mkdir -p "$build_cache"
     build_mount=(-v "$build_cache:/workspace/clean/.lake/build")
+  elif [ "$label" = "current" ]; then
+    local head_repo_key="${BENCH_HEAD_REPO//[^A-Za-z0-9_.-]/__}"
+    local build_cache="$CACHE_DIR/pr-lake-build/$head_repo_key/$BENCH_PR/$package_cache_key"
+    mkdir -p "$build_cache"
+    build_mount=(-v "$build_cache:/workspace/clean/.lake/build")
   fi
   mkdir -p "$checkout/.lake" "$package_cache"
 
