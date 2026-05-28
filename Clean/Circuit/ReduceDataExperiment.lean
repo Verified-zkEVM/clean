@@ -85,7 +85,7 @@ instance reducedElaborated : ElaboratedCircuit F field (fields 8) main := by
   elaborate_circuit
 
 #count_heartbeats in
-example : ElaboratedCircuit F field (fields 8) main := by
+instance reducedElaboratedWith : ElaboratedCircuit F field (fields 8) main := by
   elaborate_circuit_with {
     localLength _ := 16
   } using by
