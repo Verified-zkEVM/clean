@@ -45,6 +45,21 @@ scripts/bench/report.py current.jsonl baseline.jsonl --all-modules
 
 Set `BENCH_HEARTBEATS=1` when running the benchmark to collect heartbeat measurements.
 
+Measure heartbeats for one module in the current working tree:
+
+```bash
+scripts/bench/heartbeats Clean.Gadgets.BLAKE3.ApplyRounds
+```
+
+Compare one module against a baseline revision, defaulting to `main`:
+
+```bash
+scripts/bench/heartbeat-diff Clean.Gadgets.BLAKE3.ApplyRounds
+scripts/bench/heartbeat-diff Clean.Gadgets.BLAKE3.ApplyRounds 6bc9fb25
+```
+
+`heartbeat-diff` reuses a persistent baseline worktree at `.bench-baseline-worktree/`. It checks that worktree out at the requested baseline, runs `lake exe cache get` and `lake build`, then compares the current working tree count against the baseline count.
+
 ## Maintainer-triggered PR benchmarks
 
 After the benchmark workflows are present on the default branch, maintainers can comment on a pull request with:
