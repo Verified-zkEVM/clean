@@ -29,7 +29,6 @@ def main (n r : ℕ) [NeZero n] (inp : Vector (Expression (F p)) n) := do
 def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) where
   main := main n r
 
-  localLength _ := n
 -- Note: here rotate goes to the "left" from the array notation perspective, which
 -- is the "right" from the bit notation perspective (Circom)
   Spec input output := output = input.rotate r

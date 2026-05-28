@@ -29,14 +29,14 @@ private abbrev Schedule := Vector (Var (fields 32) (F p)) 64
 private def scheduleStep (w : Schedule (p := p)) (i : Fin 48) :
     Circuit (F p) (Schedule (p := p)) := do
   let j := i.val + 16
-  let s1   ← subcircuit LowerSigma1.circuit (w.get ⟨j - 2,  by omega⟩)
-  let s0   ← subcircuit LowerSigma0.circuit (w.get ⟨j - 15, by omega⟩)
-  let sum0 ← subcircuit Add32.circuit ⟨s1, w.get ⟨j - 7, by omega⟩⟩
-  let sum1 ← subcircuit Add32.circuit ⟨sum0, s0⟩
-  let wj   ← subcircuit Add32.circuit ⟨sum1, w.get ⟨j - 16, by omega⟩⟩
+  let s1   ← LowerSigma1.circuit (w.get ⟨j - 2,  by omega⟩)
+  let s0   ← LowerSigma0.circuit (w.get ⟨j - 15, by omega⟩)
+  let sum0 ← Add32.circuit ⟨s1, w.get ⟨j - 7, by omega⟩⟩
+  let sum1 ← Add32.circuit ⟨sum0, s0⟩
+  let wj   ← Add32.circuit ⟨sum1, w.get ⟨j - 16, by omega⟩⟩
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
-private instance :
+private def constantLength :
     Circuit.ConstantLength (fun (x : Schedule (p := p) × Fin 48) => scheduleStep x.1 x.2) where
   localLength := 227
   localLength_eq _ _ := by
@@ -51,16 +51,16 @@ private instance :
   let init : Schedule (p := p) := block.append (Vector.replicate 48 zero32)
   -- Expand indices 16..63 one at a time.
   -- Pass ConstantLength explicitly because the default tactic times out on this complex body.
-  Circuit.foldlRange 48 init (fun w i => scheduleStep w i) ⟨227, fun _ _ => by
-    simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]⟩
+  Circuit.foldlRange 48 init (fun w i => scheduleStep w i) constantLength
 
 namespace MessageSchedule
 
 def main (block : Var SHA256Block (F p)) : Circuit (F p) (Var SHA256Schedule (F p)) :=
   messageSchedule block
 
-instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule where
-  main := main
+-- TODO AUTOELAB fails with max recursion,
+-- or whnf timeout when messageSchedule is not irreducible
+instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule main where
   localLength _ := 48 * 227
   localLength_eq _ _ := by
     unfold main messageSchedule
@@ -411,7 +411,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih_norm j hj
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start
   unfold messageSchedule at h_holds ⊢
   simp only [circuit_norm] at h_holds ⊢
@@ -440,7 +440,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i
     simp [scheduleStep, circuit_norm, LowerSigma0.circuit, LowerSigma1.circuit, Add32.circuit]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
   unfold messageSchedule at h_env ⊢
   simp only [circuit_norm] at h_env ⊢
@@ -577,10 +577,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · rw [h_eval_get]; exact ⟨n_sum1, h_norm_m16⟩
 
 def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main; elaborated; Assumptions; Spec; soundness; completeness
 
 end MessageSchedule
 end Gadgets.SHA256

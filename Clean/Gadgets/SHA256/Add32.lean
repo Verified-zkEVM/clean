@@ -53,15 +53,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   add32 input.a input.b
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
-  main := main
-  localLength _ := 33
-  output _ i0 := varFromOffset (fields 32) i0
-  localLength_eq _ _ := by simp [circuit_norm, main, add32, evalBitsNat]
-  output_eq _ _ := by dsimp only [main, add32, circuit_norm]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, add32, evalBitsNat]
-  channelsLawful := by intro x n; simp [circuit_norm, main, add32, evalBitsNat]
-
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b
 
@@ -215,7 +206,10 @@ private lemma fieldFromBits_bit_decomp (n : ℕ) (h_n_lt : n < 2^32) (hp32 : (2:
 Soundness requires p > 2^33 so the field linear constraint can be lifted to ℕ.
 -/
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
+  elaborate_circuit
+
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [add32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
@@ -305,7 +299,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 ## Completeness
 -/
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [add32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
@@ -400,10 +394,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     rw [rearrange, hF, sub_self]
 
 def circuit [Fact (p > 2^33)] : FormalCircuit (F p) Inputs (fields 32) where
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main; elaborated; Assumptions; Spec; soundness; completeness
 
 end Add32
 end Gadgets.SHA256

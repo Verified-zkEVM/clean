@@ -26,26 +26,23 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = (x.value + y.value) % 2^32 ∧ z.Normalized
 
--- def c := main (p:=p_babybear) default
--- #eval c.localLength
--- #eval c.output
-instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
-  main := main
-  localLength _ := 8
-  output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
+instance elaborated : ElaboratedCircuit (F p) Inputs U32 main := by
+  elaborate_circuit
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
   rw [←elaborated.output_eq] -- replace explicit output with internal output, which is derived from the subcircuit
   simp_all [circuit_norm, Spec, main, Addition32Full.circuit,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
-  simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
+  simp_all [circuit_norm, main, Addition32Full.circuit,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
 
 def circuit : FormalCircuit (F p) Inputs U32 where
+  main
+  elaborated
   Assumptions
   Spec
   soundness

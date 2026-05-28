@@ -9,17 +9,15 @@ open Specs.BLAKE3 (msgPermutation permute)
 def main (state : Var BLAKE3State (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   return Vector.ofFn (fun i => state[msgPermutation[i]])
 
-instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State where
-  main := main
-  localLength _ := 0
-  output state i0 := Vector.ofFn (fun i => state[msgPermutation[i]])
+@[reducible] instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State main := by
+  elaborate_circuit
 
 def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 
 def Spec (state : BLAKE3State (F p)) (out : BLAKE3State (F p)) :=
   out.value = permute state.value ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start
   simp only [BLAKE3State.value, Vector.map, ↓Fin.getElem_fin,
     eval_vector, Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,
@@ -35,10 +33,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [BLAKE3State.Normalized] at h_assumptions
     fin_cases i <;> simp only [msgPermutation, h_assumptions]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_all
 
 def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+  { main, elaborated, Assumptions, Spec, soundness, completeness }
 
 end Gadgets.BLAKE3.Permute

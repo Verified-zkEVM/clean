@@ -23,23 +23,23 @@ def main (x : Expression F) : Circuit F (Expression F) := do
 
   return isZero
 
-instance elaborated : ElaboratedCircuit F field field where
-  main
-  localLength _ := 2  -- 2 witnesses: isZero and x_inv
+@[reducible]
+instance elaborated : ElaboratedCircuit F field field main := by
+  elaborate_circuit
 
 def Assumptions (_ : F) : Prop := True
 
 def Spec (x : F) (output : F) : Prop :=
   output = if x = 0 then 1 else 0
 
-theorem soundness : Soundness F elaborated Assumptions (Spec (F:=F)) := by
+theorem soundness : Soundness (Input:=field) (Output:=field) F main Assumptions (Spec (F:=F)) := by
   circuit_proof_all
 
-theorem completeness : Completeness F elaborated Assumptions := by
+theorem completeness : Completeness (Input:=field) (Output:=field) F main Assumptions := by
   circuit_proof_all
 
 def circuit : FormalCircuit F field field := {
-  elaborated with Assumptions, Spec := Spec (F:=F), soundness, completeness
+  main, Assumptions, Spec := Spec (F:=F), soundness, completeness
 }
 
 end Gadgets.IsZeroField

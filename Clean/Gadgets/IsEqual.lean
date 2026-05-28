@@ -36,20 +36,16 @@ def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
   let d := diffs x y
   IsZero.circuit (fromElements (M:=α) d)
 
-instance elaborated : ElaboratedCircuit F (ProvablePair α α) field where
-  main
-  localLength _ := 2 * size α
-  localLength_eq := by
-    simp +arith [circuit_norm, main]
-    intro a b; rfl
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+@[reducible]
+instance elaborated : ElaboratedCircuit F (ProvablePair α α) field (main (α:=α)) := by
+  elaborate_circuit
 
 def Assumptions (_ : α F × α F) : Prop := True
 
 def Spec (input : α F × α F) (output : F) : Prop :=
   output = if input.1 = input.2 then 1 else 0
 
-theorem soundness : Soundness F (elaborated (α := α)) Assumptions Spec := by
+theorem soundness : Soundness (Input:=ProvablePair α α) (Output:=field) F (main (α:=α)) Assumptions Spec := by
   circuit_proof_start [IsZero.circuit, IsZero.elaborated, IsZero.Assumptions, IsZero.Spec]
   rw [h_holds]
   have h_x : eval env input_var.1 = input.1 := congrArg Prod.fst h_input
@@ -86,11 +82,15 @@ theorem soundness : Soundness F (elaborated (α := α)) Assumptions Spec := by
     rw [h_diff i hi, h_zero_elem i hi]
     rw [ProvableType.ext_iff] at h_eq; rw [h_eq i hi]; ring
 
-theorem completeness : Completeness F (elaborated (α := α)) Assumptions := by
+theorem completeness : Completeness (Input:=ProvablePair α α) (Output:=field) F (main (α:=α)) Assumptions := by
   circuit_proof_start [IsZero.circuit, IsZero.elaborated, IsZero.Assumptions]
 
-def circuit : FormalCircuit F (ProvablePair α α) field := {
-  elaborated with Assumptions, Spec, soundness, completeness
-}
+def circuit : FormalCircuit F (ProvablePair α α) field where
+  main := main (α:=α)
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
 
 end Gadgets.IsEqual

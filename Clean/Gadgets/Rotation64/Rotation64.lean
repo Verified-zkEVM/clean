@@ -36,14 +36,12 @@ def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
 def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
   Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
--- #eval! (main (p:=p_babybear) 0) default |>.localLength
--- #eval! (main (p:=p_babybear) 0) default |>.output
-def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
-  main := main off
-  localLength _ := 16
-  output _ i0 := output off i0
+@[reducible] instance elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 (main off) := by
+  elaborate_circuit_with {
+    output _inputs i0 := output off i0
+  }
 
-theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 64) : Soundness (F p) (main offset) Assumptions (Spec offset) := by
   circuit_proof_start [Rotation64Bits.circuit, Rotation64Bits.elaborated,
     Rotation64Bytes.circuit, Rotation64Bytes.elaborated]
 
@@ -62,17 +60,17 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   rw [rotRight64_composition _ _ _ (U64.value_lt_of_normalized h_assumptions),
     Nat.div_add_mod']
 
-theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 64) : Completeness (F p) (main offset) Assumptions := by
   circuit_proof_all [Rotation64Bits.circuit, Rotation64Bits.elaborated,
     Rotation64Bits.Assumptions, Rotation64Bytes.circuit,
     Rotation64Bytes.Assumptions, Rotation64Bytes.Spec]
 
-def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 := {
-  elaborated offset with
+def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
+  main := main offset
+  elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-}
 
 end Gadgets.Rotation64

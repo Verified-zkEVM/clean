@@ -1092,8 +1092,7 @@ Property we require from a circuit that exposes three channel lists:
  -/
 @[circuit_norm]
 def ChannelsLawful (ops : Operations F)
-    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F))
-    (exposedChannels : List (ExposedChannel F)) : Prop :=
+    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F)) : Prop :=
   -- The `channelsWithGuarantees` cover all interactions that add guarantees.
   ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
   (∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env) ∧
@@ -1112,32 +1111,32 @@ def ChannelsLawful (ops : Operations F)
   (∀ channel ∈ ops.shallowChannels,
     channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements) ∧
 
-  -- Exposed channel interactions agree with the actual interactions in the circuit.
-  -- TODO this is unfriendly to composition
-  (∀ exposed ∈ exposedChannels,
-    ops.interactionsWith exposed.channel = exposed.interactions) ∧
-
   -- Every subcircuit used by this circuit exposes lawful channel metadata itself.
   ops.SubcircuitChannelsLawful
 
-theorem channelsLawful_nil : ChannelsLawful ([] : Operations F) [] [] [] := by
+/-- Exposed channel interactions agree with the actual interactions in the circuit. -/
+@[circuit_norm]
+def ExposedChannelsLawful (ops : Operations F) (exposedChannels : List (ExposedChannel F)) : Prop :=
+  (∀ exposed ∈ exposedChannels,
+    ops.interactionsWith exposed.channel = exposed.interactions)
+
+theorem channelsLawful_nil : ChannelsLawful ([] : Operations F) [] [] := by
   simp [ChannelsLawful, InChannelsOrGuarantees, InChannelsOrRequirements, SubcircuitChannelsLawful,
     subcircuitChannelsWithGuarantees, subcircuitChannelsWithRequirements, shallowChannels, subcircuits,
     forAllNoOffset]
 
 theorem channelsLawful_append_of_channelsLawful {ops ops' : Operations F}
     {channelsWithGuarantees channelsWithGuarantees' channelsWithRequirements channelsWithRequirements' :
-      List (RawChannel F)}
-    {exposedChannels exposedChannels' : List (ExposedChannel F)} :
-    ops.ChannelsLawful channelsWithGuarantees channelsWithRequirements exposedChannels →
-    ops'.ChannelsLawful channelsWithGuarantees' channelsWithRequirements' exposedChannels' →
+      List (RawChannel F)} :
+    ops.ChannelsLawful channelsWithGuarantees channelsWithRequirements →
+    ops'.ChannelsLawful channelsWithGuarantees' channelsWithRequirements' →
     (ops ++ ops').ChannelsLawful
       (channelsWithGuarantees ++ channelsWithGuarantees')
-      (channelsWithRequirements ++ channelsWithRequirements') [] := by
+      (channelsWithRequirements ++ channelsWithRequirements') := by
   intro h h'
   dsimp only [ChannelsLawful] at h h' ⊢
-  obtain ⟨h_g_subset, h_g, h_r_subset, h_r, h_shallow, _, h_sub⟩ := h
-  obtain ⟨h_g_subset', h_g', h_r_subset', h_r', h_shallow', _, h_sub'⟩ := h'
+  obtain ⟨h_g_subset, h_g, h_r_subset, h_r, h_shallow, h_sub⟩ := h
+  obtain ⟨h_g_subset', h_g', h_r_subset', h_r', h_shallow', h_sub'⟩ := h'
   have append_subset_append {as bs cs ds : List (RawChannel F)}
       (h_as : as ⊆ cs) (h_bs : bs ⊆ ds) : as ++ bs ⊆ cs ++ ds := by
     intro channel h_channel
@@ -1168,7 +1167,6 @@ theorem channelsLawful_append_of_channelsLawful {ops ops' : Operations F}
     · rcases h_shallow' channel h_channel with h_channel | h_channel
       · exact Or.inl (List.mem_append_right _ h_channel)
       · exact Or.inr (List.mem_append_right _ h_channel)
-  · simp
   · rw [subcircuitChannelsLawful_append]
     exact ⟨h_sub, h_sub'⟩
 
@@ -1240,4 +1238,41 @@ lemma forall_interactionsWith_iff {channel : RawChannel F} {ops : Operations F}
 @[circuit_norm] lemma channels_toFlat {ops : Operations F} :
     FlatOperation.channels ops.toFlat = ops.channels := by
   simp [channels, FlatOperation.channels, interactions_toFlat]
+
+@[circuit_norm]
+theorem append_localLength {a b: Operations F} :
+    (a ++ b).localLength = a.localLength + b.localLength := by
+  induction a using induct with
+  | empty => ac_rfl
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
+    simp_all +arith [localLength]
+
+@[circuit_norm]
+theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
+
+@[circuit_norm]
+theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operations F} :
+  forAll offset condition (as ++ bs) ↔
+    forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
+  induction as using induct generalizing offset with
+  | empty => simp [forAll_empty, localLength]
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>
+    simp +arith only [List.cons_append, forAll, localLength, ih, and_assoc]
+
+theorem localLength_cons {a : Operation F} {as : Operations F} :
+    localLength (a :: as) = a.localLength + as.localLength := by
+  cases a <;> simp_all [localLength, Operation.localLength]
+
+theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : ProverEnvironment F) :
+  localWitnesses env (op :: ops) =
+    (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
+  cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
+  all_goals (try (rw [Vector.empty_append]; simp))
+
+@[circuit_norm]
+theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} {ops : Operations F} :
+  forAll offset condition (op :: ops) ↔
+    condition.apply offset op ∧ forAll (op.localLength + offset) condition ops := by
+  cases op <;> simp [forAll, Operation.localLength, Condition.apply]
+
 end Operations

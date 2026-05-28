@@ -37,15 +37,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   ch32 input.e input.f input.g
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
-  main := main
-  localLength _ := 32
-  output _ i0 := varFromOffset (fields 32) i0
-  localLength_eq _ _ := by simp [circuit_norm, main, ch32]
-  output_eq _ _ := by dsimp only [main, ch32, circuit_norm]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, ch32]
-  channelsLawful := by intro x n; simp [circuit_norm, main, ch32]
-
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.e ∧ Normalized input.f ∧ Normalized input.g
 
@@ -169,7 +160,10 @@ private lemma spec_of_constraint
   rw [Ch_def, he_eq, hf_eq, hg_eq, h1]
   exact key'
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
+  elaborate_circuit
+
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [ch32]
   obtain ⟨he, hf, hg⟩ := h_assumptions
   obtain ⟨h_input_e, h_input_f, h_input_g⟩ := h_input
@@ -194,7 +188,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i; rw [h_z i]; exact h_eq i
   exact spec_of_constraint input_e input_f input_g z he hf hg h_eq'
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [ch32]
   obtain ⟨he, hf, hg⟩ := h_assumptions
   obtain ⟨h_input_e, h_input_f, h_input_g⟩ := h_input
@@ -211,10 +205,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   rw [henv, h_gi i, h_ei i, h_fi i]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main; elaborated; Assumptions; Spec; soundness; completeness
 
 end Ch32
 end Gadgets.SHA256

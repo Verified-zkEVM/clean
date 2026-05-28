@@ -23,12 +23,9 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
--- #eval! theta_c (p:=p_babybear) default |>.localLength
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
-  main
-  localLength _ := 160
-  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
-  subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
+  elaborate_circuit
 
 -- rewrite thetaC as a loop
 lemma thetaC_loop (state : Vector ℕ 25) :
@@ -37,8 +34,8 @@ lemma thetaC_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec]
+theorem soundness : Soundness (F p) main Assumptions Spec := by
+  circuit_proof_start [Xor64.circuit, Xor64.Assumptions, Xor64.Spec]
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
@@ -47,7 +44,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [circuit_norm, h_input] at h_holds
-  simp only [Nat.reduceAdd] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), input[i].Normalized :=
     fun hi => h_assumptions ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
@@ -56,7 +52,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_holds i
   aesop
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm,
@@ -64,7 +60,12 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
-def circuit : FormalCircuit (F p) KeccakState KeccakRow :=
- { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) KeccakState KeccakRow where
+  main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
 
 end Gadgets.Keccak256.ThetaC

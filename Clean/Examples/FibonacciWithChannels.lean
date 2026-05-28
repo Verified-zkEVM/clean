@@ -44,14 +44,11 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
     let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
       BytesChannel.emit multiplicities[i] (const i)
 
-  localLength _ := 0
-  localLength_eq := by simp +arith only [circuit_norm]
-  output _ _ := ()
-  ProverAssumptions _ _ _ := True
+  elaborated := by elaborate_circuit_with {
+    channelsWithRequirements := [ BytesChannel.toRaw ] }
   Spec _ _ _ := True
   soundness := by circuit_proof_start [BytesTable]
   completeness := by circuit_proof_start
-  channelsWithRequirements := [ BytesChannel.toRaw ]
 
 instance Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -79,11 +76,6 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- emit to the add8 channel with multiplicity `m`
     Add8Channel.emit m (x, y, z)
 
-  localLength _ := 1
-  output _ _ := ()
-  -- TODO make coercion work without .toRaw
-  channelsWithGuarantees := [ BytesChannel.toRaw ]
-  channelsWithRequirements := [ Add8Channel.toRaw ]
   ProverAssumptions
   | { x, y, z, m }, _, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
@@ -147,16 +139,12 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     -- push the next Fibonacci state
     FibonacciChannel.push (n + 1, y, z)
 
-  localLength _ := 1
-  output _ _ := ()
-  channelsWithGuarantees := [ Add8Channel.toRaw, FibonacciChannel.toRaw ]
-  channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  -- expose interactions
   exposedChannels
   | (n, x, y), i₀ =>
     let z := var ⟨ i₀ ⟩
     expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
-  channelsLawful := by
-    simp only [circuit_norm, Add8Channel, FibonacciChannel]
+  exposedChannels_eq := by simp only [circuit_norm, Add8Channel, FibonacciChannel]
 
   ProverAssumptions
   | (n, x, y), _, _ =>
@@ -197,14 +185,10 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
     FibonacciChannel.pull (n, x, y)
     FibonacciChannel.push (0, 0, 1)
 
-  localLength _ := 0
-  output _ _ := ()
-  channelsWithGuarantees := [ FibonacciChannel.toRaw ]
-  channelsWithRequirements := [ FibonacciChannel.toRaw ]
   exposedChannels
   | (n, x, y), _ =>
     expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
-  channelsLawful := by simp only [circuit_norm, FibonacciChannel]
+
   ProverAssumptions
   | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   Spec
@@ -285,11 +269,11 @@ def FalseChannel : Channel (F p) unit where
   Guarantees _ _ := False
 
 def falseCircuit : GeneralFormalCircuit (F p) unit unit where
-  main _ := FalseChannel.pull ()
+  main _ := do
+    FalseChannel.pull ()
+    return
   Spec _ _ _ := False
   ProverAssumptions _ _ _ := False
-  localLength _ := 0
-  channelsWithGuarantees := [ FalseChannel.toRaw ]
   soundness := by circuit_proof_start [FalseChannel]
   completeness := by circuit_proof_start [FalseChannel]
 

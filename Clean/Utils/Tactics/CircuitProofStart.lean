@@ -1,5 +1,5 @@
 import Lean
-import Clean.Circuit.Basic
+import Clean.Circuit.Formal
 import Clean.Utils.Tactics.ProvableStructSimp
 
 open Lean Elab Tactic Meta
@@ -129,6 +129,9 @@ elab_rules : tactic
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `ProverSpec):ident] at *))
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `elaborated):ident] at *)) -- sometimes `main` is hidden behind `elaborated`
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `main):ident] at *))
+
+  -- needed because `decompose_provable_struct` would time out on `(ElaboratedCircuit.WithData ...).output` like terms
+  try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.withData, ElaboratedCircuit.output]))) catch _ => pure ()
 
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()

@@ -24,15 +24,20 @@ def main (input : Var M F) : Circuit F (Var field F) := do
     return acc * isZeroElem
   return result
 
-instance elaborated : ElaboratedCircuit F M field where
-  main
+@[reducible]
+instance elaborated : ElaboratedCircuit F M field main where
   localLength _ := 2 * size M
-  localLength_eq := by
+  output input i₀ := Fin.foldl (size M)
+    (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
+
+  localLength_eq _ _ := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
-  subcircuitsConsistent := by
+  output_eq _ _ := by
+    simp +arith [circuit_norm, main, IsZeroField.circuit]
+  subcircuitsConsistent _ _ := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
   channelsLawful := by
-    simp only [circuit_norm, main, IsZeroField.circuit, IsZeroField.elaborated]
+    simp only [circuit_norm, main, IsZeroField.circuit]
 
 def Assumptions (_ : M F) : Prop := True
 
@@ -49,16 +54,15 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) →
         IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
           (Expression.eval (F:=F) env
-            (IsZeroField.circuit.output vars[i]
-              (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
+            (varFromOffset field (i₀ + i * 2 + 1)))) :
     Expression.eval env
       (Fin.foldl n
-        (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))
+        (fun acc i => acc * (varFromOffset field (i₀ + i * 2 + 1) : Var field F))
         1) =
     if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
   simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
   induction n generalizing i₀
-  · simp only [Fin.getElem_fin, Fin.foldl_zero, Expression.eval]
+  · simp only [Fin.foldl_zero, Expression.eval]
     simp only [not_lt_zero', IsEmpty.forall_iff, implies_true, ↓reduceIte]
   · rename_i pre h_ih
     simp only [Fin.foldl_succ_last, Expression.eval]
@@ -70,20 +74,18 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
         vals_pre, vars_pre, h_eval]
     specialize h_ih h_eval_pre (i₀:=i₀)
     simp only [vars_pre, vals_pre] at *
-    simp only [Fin.getElem_fin,
-      Vector.getElem_cast, forall_const] at h_ih
-    simp only [Fin.getElem_fin, Fin.val_castSucc, Fin.val_last]
+    simp only [Vector.getElem_cast, forall_const] at h_ih
+    simp only [Fin.val_castSucc, Fin.val_last]
     specialize h_ih (by
       intro i
       specialize h_isZero i.castSucc
       norm_num at h_isZero ⊢
-      simp only [Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop',
-        h_isZero])
+      simp only [h_isZero])
     simp only [Vector.getElem_take] at h_ih
     rw [h_ih]
     specialize h_isZero (.last pre) trivial
     norm_num at h_isZero ⊢
-    simp only [h_isZero]
+    rw [h_isZero]
     split_ifs <;> try rfl
     · rename_i h_smaller h_last h_all
       apply False.elim
@@ -101,7 +103,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       aesop
     · next h_ex h_all => exfalso; exact h_ex (fun i hi => h_all i (by omega))
 
-theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
+theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Spec := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.elaborated, IsZeroField.Assumptions]
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
@@ -116,11 +118,14 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assump
   · intro i _
     exact h_holds i
 
-theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
+theorem completeness : Completeness F (main (M:=M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
-def circuit [DecidableEq (M F)] : FormalCircuit F M field := {
-  elaborated with Assumptions, Spec, soundness, completeness
-}
+def circuit [DecidableEq (M F)] : FormalCircuit F M field where
+  main
+  Assumptions
+  Spec
+  soundness
+  completeness
 
 end Gadgets.IsZero

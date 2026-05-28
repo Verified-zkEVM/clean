@@ -53,8 +53,7 @@ def output (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (i₀ : �
     |>.set c (⟨var ⟨i₀ + 76⟩, var ⟨i₀ + 78⟩, var ⟨i₀ + 80⟩, var ⟨i₀ + 82⟩⟩) c.is_lt
     |>.set d (Rotation32.output 8 (i₀ + 68)) d.is_lt
 
-instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
-  main := main a b c d
+instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State (main a b c d) where
   localLength _ := 96
   output inputs i0 := output a b c d inputs.state i0
 
@@ -74,8 +73,9 @@ def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, x, y } := input
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
-theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
-  circuit_proof_start [output, BLAKE3State.Normalized, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, and_imp,
+theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumptions (Spec a b c d) := by
+  circuit_proof_start [output, BLAKE3State.Normalized, Xor32.circuit, Addition32.circuit,
+    Rotation32.circuit, Rotation32.elaborated, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
 
@@ -120,10 +120,10 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
       exact c9.right
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
-theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Assumptions := by
+theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_env ⊢
+  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit] at h_env ⊢
   simp only [circuit_norm, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at h_env ⊢
@@ -132,7 +132,7 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d
   simp_all only [forall_const, and_true]
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
-  elaborated := elaborated a b c d
+  main := main a b c d
   Assumptions
   Spec := Spec a b c d
   soundness := soundness a b c d

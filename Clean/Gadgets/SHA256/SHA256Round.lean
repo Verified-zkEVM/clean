@@ -42,19 +42,19 @@ def sha256Round
   let a := state[0]; let b := state[1]; let c := state[2]; let d := state[3]
   let e := state[4]; let f := state[5]; let g := state[6]; let h := state[7]
   -- t1 = h + Σ₁(e) + Ch(e,f,g) + k + w
-  let sig1  ← subcircuit UpperSigma1.circuit e
-  let ch    ← subcircuit Ch32.circuit ⟨e, f, g⟩
-  let t1_0  ← subcircuit Add32.circuit ⟨h, sig1⟩
-  let t1_1  ← subcircuit Add32.circuit ⟨t1_0, ch⟩
-  let t1_2  ← subcircuit Add32.circuit ⟨t1_1, k⟩
-  let t1    ← subcircuit Add32.circuit ⟨t1_2, w⟩
+  let sig1  ← UpperSigma1.circuit e
+  let ch    ← Ch32.circuit ⟨e, f, g⟩
+  let t1_0  ← Add32.circuit ⟨h, sig1⟩
+  let t1_1  ← Add32.circuit ⟨t1_0, ch⟩
+  let t1_2  ← Add32.circuit ⟨t1_1, k⟩
+  let t1    ← Add32.circuit ⟨t1_2, w⟩
   -- t2 = Σ₀(a) + Maj(a,b,c)
-  let sig0  ← subcircuit UpperSigma0.circuit a
-  let maj   ← subcircuit Maj32.circuit ⟨a, b, c⟩
-  let t2    ← subcircuit Add32.circuit ⟨sig0, maj⟩
+  let sig0  ← UpperSigma0.circuit a
+  let maj   ← Maj32.circuit ⟨a, b, c⟩
+  let t2    ← Add32.circuit ⟨sig0, maj⟩
   -- new state
-  let new_a ← subcircuit Add32.circuit ⟨t1, t2⟩
-  let new_e ← subcircuit Add32.circuit ⟨d, t1⟩
+  let new_a ← Add32.circuit ⟨t1, t2⟩
+  let new_e ← Add32.circuit ⟨d, t1⟩
   return #v[new_a, a, b, c, new_e, e, f, g]
 
 namespace SHA256Round
@@ -68,27 +68,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) :=
   sha256Round input.state input.k input.w
 
-instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
-  main := main
-  localLength _ := 455
-  -- Explicit output: new_a/new_e are the output `z` vectors of the corresponding Add32
-  -- subcircuits at their starting offsets; the other six positions are inputs passed through.
-  output input i0 := #v[
-    varFromOffset (fields 32) (i0 + 389),  -- new_a (offset = 64+32+33+33+33+33+64+64+33)
-    input.state[0], input.state[1], input.state[2],
-    varFromOffset (fields 32) (i0 + 422),  -- new_e (= new_a's offset + 33)
-    input.state[4], input.state[5], input.state[6]
-  ]
-  localLength_eq := by intro input offset; simp [circuit_norm, main, sha256Round, Add32.circuit, UpperSigma0.circuit, UpperSigma1.circuit, Ch32.circuit, Maj32.circuit]
-  output_eq := by
-    intro input offset
-    dsimp only [main, sha256Round, circuit_norm,
-      Add32.circuit, Add32.elaborated, UpperSigma0.circuit, UpperSigma0.elaborated,
-      UpperSigma1.circuit, UpperSigma1.elaborated, Ch32.circuit, Ch32.elaborated,
-      Maj32.circuit, Maj32.elaborated, Add32.main, UpperSigma0.main, UpperSigma1.main,
-      Ch32.main, Maj32.main, add32, upperSigma0, upperSigma1, ch32, maj32, xor32]
-  channelsLawful := by intro input offset; simp [circuit_norm, main, sha256Round, Add32.circuit, UpperSigma0.circuit, UpperSigma1.circuit, Ch32.circuit, Maj32.circuit]
-
 def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 8, Normalized input.state[i]) ∧ Normalized input.k ∧ Normalized input.w
 
@@ -97,7 +76,10 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
     Specs.SHA256.sha256Round (input.state.map valueBits) (valueBits input.k) (valueBits input.w)
   ∧ ∀ i : Fin 8, Normalized out[i]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+instance elaborated : ElaboratedCircuit (F p) _ _ main := by
+  elaborate_circuit
+
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [sha256Round, UpperSigma1.circuit, UpperSigma0.circuit,
     Ch32.circuit, Maj32.circuit, Add32.circuit]
   obtain ⟨h_state_norm, h_k_norm, h_w_norm⟩ := h_assumptions
@@ -174,7 +156,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     · convert (h_eval 6 (by omega)).symm ▸ h_g using 1
       rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [sha256Round, UpperSigma1.circuit, UpperSigma0.circuit,
     Ch32.circuit, Maj32.circuit, Add32.circuit]
   obtain ⟨h_state_norm, h_k_norm, h_w_norm⟩ := h_assumptions
@@ -224,10 +206,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · rw [h_eval 3 (by omega)]; exact ⟨h_d, n_t1⟩
 
 def circuit : FormalCircuit (F p) Inputs SHA256State where
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main; elaborated; Assumptions; Spec; soundness; completeness
 
 end SHA256Round
 end Gadgets.SHA256

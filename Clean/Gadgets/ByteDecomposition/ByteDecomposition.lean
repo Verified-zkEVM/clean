@@ -37,15 +37,13 @@ def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
   ∧ (low.val < 2^offset.val ∧ high.val < 2^(8-offset.val))
 
-def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
-  main := main offset
-  localLength _ := 2
-  output _ i0 := varFromOffset Outputs i0
+instance elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs (main offset) := by
+  elaborate_circuit
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (Input:=field) (Output:=Outputs) (F p) (main offset) Assumptions (Spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
-  simp only [circuit_norm, elaborated, main, Spec, ByteTable, h_input] at h_holds ⊢
+  simp only [circuit_norm, main, Spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
 
   obtain ⟨low_lt, high_lt, h_eq⟩ := h_holds
@@ -94,10 +92,10 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   use ⟨ low_eq, high_eq ⟩, h_lt_low
   rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (Input:=field) (Output:=Outputs) (F p) (main offset) Assumptions := by
   rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [circuit_norm] at h_input
-  simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
+  simp only [circuit_norm, main, h_input, ByteTable] at henv ⊢
   simp only [henv]
   have pow_8_nat : 2^8 = 2^(8-offset.val) * 2^offset.val := by simp [←pow_add]
 
@@ -120,7 +118,6 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
     rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
-  elaborated offset with
   main := main offset
   Assumptions
   Spec := Spec offset

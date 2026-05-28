@@ -29,8 +29,7 @@ def maj32 (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)
   -- Witness the majority output
   let z ← witnessVector 32 fun env =>
     Vector.ofFn fun (i : Fin 32) =>
-      let ti := env t[i]
-      env t[i] + env c[i] * (env a[i] + env b[i] - 2 * ti)
+      env t[i] + env c[i] * (env a[i] + env b[i] - 2 * env t[i])
   -- Constraint (1): t[i] = a[i] * b[i]
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (t[i] - a[i] * b[i])
@@ -50,14 +49,8 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   maj32 input.a input.b input.c
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
-  main := main
-  localLength _ := 64
-  output _ i0 := varFromOffset (fields 32) (i0 + 32)
-  localLength_eq _ _ := by simp [circuit_norm, main, maj32]
-  output_eq _ _ := by dsimp only [main, maj32, circuit_norm]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, maj32]
-  channelsLawful := by intro x n; simp [circuit_norm, main, maj32]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) _ _ main := by
+  elaborate_circuit
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b ∧ Normalized input.c
@@ -209,7 +202,7 @@ private lemma spec_of_constraint
   rw [Maj_def, ha_eq, hb_eq, hc_eq, h_z_eq]
   exact key'.symm
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [maj32]
   obtain ⟨ha, hb, hc⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b, h_input_c⟩ := h_input
@@ -248,7 +241,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i; rw [h_z_get i]; exact h_z i
   exact spec_of_constraint input_a input_b input_c z ha hb hc h_eq'
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [maj32]
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have := (h_env.1) i
@@ -259,8 +252,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     rw [this]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
-  Assumptions := Assumptions; Spec := Spec
-  soundness := soundness; completeness := completeness
+  main; elaborated; Assumptions; Spec; soundness; completeness
 
 end Maj32
 end Gadgets.SHA256

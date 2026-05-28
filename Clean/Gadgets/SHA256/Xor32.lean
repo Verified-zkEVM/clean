@@ -33,13 +33,6 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   xor32 input.a input.b
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
-  main := main
-  localLength _ := 32
-  localLength_eq _ _ := by simp [circuit_norm, main, xor32]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, xor32]
-  channelsLawful := by intro x n; simp [circuit_norm, main, xor32]
-
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b
 
@@ -104,7 +97,10 @@ private lemma bool_finsum_xor (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i =
     rw [Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le (Nat.xor_lt_two_pow hfS hgS) pow_le),
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le hfgS pow_le)]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
+  elaborate_circuit
+
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [xor32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
@@ -143,7 +139,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       simp [Vector.getElem_ofFn]
     rw [this]; exact h_norm i
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [xor32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
@@ -163,10 +159,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   rw [henv, hcast, h_ai i, h_bi i]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main; elaborated; Assumptions; Spec; soundness; completeness
 
 end Xor32
 end Gadgets.SHA256

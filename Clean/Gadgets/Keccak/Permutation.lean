@@ -20,18 +20,10 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
   Vector.mapRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j * 16 + 888))
   |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))
 
--- NOTE: this linter times out and blows up memory usage
-set_option linter.constructorNameAsVariable false
-
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main
-  localLength _ := 30912
-  output _ i0 := stateVar i0 23
-
-  localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
-  subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
-  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
-  channelsLawful := by simp only [main, circuit_norm, KeccakRound.circuit]
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  elaborate_circuit_with {
+    output _ i0 := stateVar i0 23
+  }
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
@@ -41,9 +33,8 @@ lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
   rw [← Array.foldl_toList, ← List.foldl_map]
   simp [List.finRange]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions]
+theorem soundness : Soundness (F p) main Assumptions Spec := by
+  circuit_proof_start [KeccakRound.circuit, KeccakRound.Spec, KeccakRound.Assumptions]
 
   -- simplify
   obtain ⟨ h_init, h_succ ⟩ := h_holds
@@ -77,9 +68,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [keccakPermutation, ← fin_foldl_eq_vector_foldl] at h ⊢
   exact h
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions]
+theorem completeness : Completeness (F p) main Assumptions := by
+  circuit_proof_start [KeccakRound.circuit, KeccakRound.Spec, KeccakRound.Assumptions]
 
   -- simplify
   simp only [h_assumptions, circuit_norm] at h_env ⊢
@@ -111,12 +101,14 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       exact h_succ i hi ih
   exact h_norm i (Nat.lt_of_succ_lt hi)
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState := {
-  elaborated with
-  Assumptions, Spec, soundness
+def circuit : FormalCircuit (F p) KeccakState KeccakState where
+  main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]
-}
 
 end Gadgets.Keccak256.Permutation

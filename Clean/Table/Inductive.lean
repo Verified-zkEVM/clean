@@ -127,7 +127,8 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
 
   have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
     have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
-    simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
+    simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm,
+      FormalCircuitBase.localLength] at h_env'
     have hi' : i < size State + size Input := by linarith
     simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get,
       Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
@@ -210,8 +211,9 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     simp only [table_norm, circuit_norm, witnessAny, inductiveConstraint, zero_add, Nat.add_zero] at constraints
     obtain ⟨ main_constraints, return_eq ⟩ := constraints
     have h_env' : env' = windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
-    simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm, zero_add, Nat.add_zero] at h_env'
-    simp only [zero_add, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
+    simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm, zero_add, Nat.add_zero,
+      FormalCircuitBase.localLength] at h_env'
+    simp only [zero_add, Fin.isValue, PNat.val_ofNat, Nat.add_one_sub_one,
       CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars] at h_env'
     set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
     set s := size State
