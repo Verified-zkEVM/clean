@@ -50,7 +50,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   maj32 input.a input.b input.c
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) _ _ main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b ∧ Normalized input.c

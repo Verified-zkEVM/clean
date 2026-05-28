@@ -12,9 +12,9 @@ import Mathlib.Lean.Meta.Simp
 
 open Lean Meta Elab Tactic
 
-register_option debug.explicitCircuitReduced : Bool := {
+register_option debug.elaborateCircuit : Bool := {
   defValue := false
-  descr := "trace generated dsimp unfold sets used by infer_elaborated_circuit_reduced"
+  descr := "trace generated dsimp unfold sets used by elaborate_circuit"
 }
 
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
@@ -564,7 +564,7 @@ attribute [explicit_circuit_norm]
 /--
 Derive an `ElaboratedCircuit` through `ExplicitCircuits`, but store normalized metadata fields.
 
-Like `infer_elaborated_circuit`, this first runs `infer_explicit_circuits`.  Instead of returning the
+Like `elaborate_circuit_naive`, this first runs `infer_explicit_circuits`.  Instead of returning the
 `ExplicitCircuits.toElaborated` wrapper, it reads the explicit metadata projections and normalizes
 selected fields before constructing the final record:
 
@@ -584,10 +584,10 @@ constructing the stored fields.  Structural consistency and channel-lawfulness p
 directly to the inferred `ExplicitCircuits` proof using raw projection applications, avoiding
 unnecessary type-directed reduction of the original circuit.
 
-Set `set_option debug.explicitCircuitReduced true` to print the inferred explicit proof term and the
+Set `set_option debug.elaborateCircuit true` to print the inferred explicit proof term and the
 normalization passes used for each metadata field.
 -/
-elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
+elab "elaborate_circuit" : tactic => withMainContext do
   -- We are going to build an `ElaboratedCircuit` record directly.  First inspect the
   -- current goal and pull the important arguments out of
   --   ElaboratedCircuit F Input Output main
@@ -605,15 +605,15 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   let main := args[6]!
 
   -- Step 1: infer the explicit circuit metadata for `main`, exactly like the
-  -- ordinary `infer_elaborated_circuit` tactic does.  The difference is that we
+  -- ordinary `elaborate_circuit_naive` tactic does.  The difference is that we
   -- keep this proof term around and read its projections below instead of
   -- returning `ExplicitCircuits.toElaborated` unchanged.
   let explicitType ← mkAppM ``ExplicitCircuits #[main]
   let explicit ← Lean.Elab.Term.elabTerm (← `(by infer_explicit_circuits)) (some explicitType)
   Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
   let explicit ← instantiateMVars explicit
-  if (← getOptions).getBool `debug.explicitCircuitReduced false then
-    logInfo m!"infer_elaborated_circuit_reduced explicit proof term:
+  if (← getOptions).getBool `debug.elaborateCircuit false then
+    logInfo m!"elaborate_circuit explicit proof term:
   {explicit}"
 
   -- Useful object-language types for the lambdas we need to create.
@@ -699,12 +699,12 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   --   dsimp only [explicit_circuit_norm, Foo.main, Bar.circuit]
   -- so a failing or slow normalization step can be replayed in a source file.
   let normalizeExplicit (label : String) (e : Expr) : MetaM Expr := do
-    let debug := (← getOptions).getBool `debug.explicitCircuitReduced false
+    let debug := (← getOptions).getBool `debug.elaborateCircuit false
     let decls ← collectUnfoldable e #[]
     if debug then
       let declNames := String.intercalate ", " (decls.toList.map fun decl => toString decl)
       let simpArgs := if declNames.isEmpty then "explicit_circuit_norm" else s!"explicit_circuit_norm, {declNames}"
-      logInfo m!"infer_elaborated_circuit_reduced {label}:
+      logInfo m!"elaborate_circuit {label}:
   dsimp only [{simpArgs}]"
     let ctx ← mkDsimpCtx decls
     return (← dsimp e ctx).1
@@ -863,31 +863,31 @@ elab "infer_elaborated_circuit_reduced" : tactic => withMainContext do
   goal.assign val
   replaceMainGoal []
 
-syntax "infer_elaborated_circuit" : tactic
-syntax "infer_elaborated_circuit_with" term : tactic
-syntax "infer_elaborated_circuit_with" term " using " term : tactic
-syntax "infer_elaborated_circuit_reduced_with" term : tactic
-syntax "infer_elaborated_circuit_reduced_with" term " using " term : tactic
+syntax "elaborate_circuit_naive" : tactic
+syntax "elaborate_circuit_naive_with" term : tactic
+syntax "elaborate_circuit_naive_with" term " using " term : tactic
+syntax "elaborate_circuit_with" term : tactic
+syntax "elaborate_circuit_with" term " using " term : tactic
 
 macro_rules
-  | `(tactic|infer_elaborated_circuit) => `(tactic|(
+  | `(tactic|elaborate_circuit_naive) => `(tactic|(
     refine ExplicitCircuits.toElaborated _ ?explicit ?elaborated
     · infer_explicit_circuits
     · exact ExplicitCircuits.IsElaborated.mk
   ))
 
 macro_rules
-  | `(tactic|infer_elaborated_circuit_with $data:term using $data_eq:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by infer_elaborated_circuit) $data $data_eq
+  | `(tactic|elaborate_circuit_naive_with $data:term using $data_eq:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data $data_eq
   ))
-  | `(tactic|infer_elaborated_circuit_with $data:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by infer_elaborated_circuit) $data
+  | `(tactic|elaborate_circuit_naive_with $data:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data
   ))
-  | `(tactic|infer_elaborated_circuit_reduced_with $data:term using $data_eq:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data $data_eq
+  | `(tactic|elaborate_circuit_with $data:term using $data_eq:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by elaborate_circuit) $data $data_eq
   ))
-  | `(tactic|infer_elaborated_circuit_reduced_with $data:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by infer_elaborated_circuit_reduced) $data
+  | `(tactic|elaborate_circuit_with $data:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by elaborate_circuit) $data
   ))
 
 -- this tactic is pretty good at inferring explicit circuits!
@@ -926,19 +926,19 @@ example :
     assertZero (x + y - z)
     return z
 
-  ElaboratedCircuit F field field add := by infer_elaborated_circuit
+  ElaboratedCircuit F field field add := by elaborate_circuit_naive
 
 -- bridge for `Var unit F` output type
 instance {circuit : α → Circuit F (Var unit F)} [inst : ExplicitCircuits (β := Unit) circuit] :
   ExplicitCircuits circuit := inst
 
 example : ElaboratedCircuit F field unit (fun x ↦ assertZero (x * (x - 1))) := by
-  infer_elaborated_circuit
+  elaborate_circuit_naive
 
 -- works with circuits hidden behind definitions
 private def assertBool (x : Expression F) := do
   assertZero (x * (x - 1))
 
-example : ElaboratedCircuit F field unit assertBool := by infer_elaborated_circuit
+example : ElaboratedCircuit F field unit assertBool := by elaborate_circuit_naive
 
 end

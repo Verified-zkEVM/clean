@@ -38,7 +38,7 @@ def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
 
 @[reducible]
 instance elaborated : ElaboratedCircuit F (ProvablePair α α) field (main (α:=α)) := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (_ : α F × α F) : Prop := True
 

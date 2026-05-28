@@ -32,7 +32,7 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   z.value = x.value ||| y.value ∧ z.Normalized
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Or8.circuit, Or8.Assumptions, Or8.Spec]

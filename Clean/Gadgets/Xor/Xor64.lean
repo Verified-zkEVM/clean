@@ -48,7 +48,7 @@ def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
 
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}

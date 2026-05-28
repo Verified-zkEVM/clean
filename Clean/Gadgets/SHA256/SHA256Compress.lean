@@ -211,7 +211,7 @@ private lemma sha256Compress_eq_valStateAfterRound
 -- the signal here is that the term created by `_with` is too complicated
 -- (it keeps the complicated original output term and `(...).withData ...`)
 instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
-  infer_elaborated_circuit_reduced_with {
+  elaborate_circuit_with {
     output input i₀ := stateVar i₀ input.state 64
   } using by
     simp only [circuit_norm]

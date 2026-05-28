@@ -25,7 +25,7 @@ def main (x : Expression F) : Circuit F (Expression F) := do
 
 @[reducible]
 instance elaborated : ElaboratedCircuit F field field main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (_ : F) : Prop := True
 

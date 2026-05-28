@@ -13,7 +13,7 @@ def main (x : Expression F) : Circuit F (Expression F) := do
 
 @[reducible]
 instance elaborated : ElaboratedCircuit F field field main := by
-  infer_elaborated_circuit
+  elaborate_circuit_naive
 
 def circuit : FormalCircuit F field field where
   main := main
@@ -47,7 +47,7 @@ example (x : Expression F) : ExplicitCircuit (main x) := by
 
 @[reducible]
 instance elaborated : ElaboratedCircuit F field field main := by
-  infer_elaborated_circuit
+  elaborate_circuit_naive
 
 /-- Kernel reduction of the derived projection computes the expected compact length. -/
 example (x : Expression F) :
@@ -80,7 +80,7 @@ example (x : Expression F) (n : ℕ) :
 
 @[reducible]
 instance reducedElaborated : ElaboratedCircuit F field (fields 8) main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 /-- The reduced elaboration tactic stores the compact length directly. -/
 example (x : Expression F) :

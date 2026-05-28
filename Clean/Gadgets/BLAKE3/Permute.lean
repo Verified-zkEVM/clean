@@ -10,7 +10,7 @@ def main (state : Var BLAKE3State (F p)) : Circuit (F p) (Var BLAKE3State (F p))
   return Vector.ofFn (fun i => state[msgPermutation[i]])
 
 @[reducible] instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 

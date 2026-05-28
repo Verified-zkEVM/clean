@@ -27,7 +27,7 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
 -- `Vector.mapRange` instead of `Vector.mapFinRange`.
 @[reducible]
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState (main rc) := by
-  infer_elaborated_circuit_reduced_with {
+  elaborate_circuit_with {
     output _ i0 := Vector.mapRange 25 (fun i => varFromOffset U64 (i0 + i*16 + 888))
       |>.set 0 (varFromOffset U64 (i0 + 1280))
   } using by

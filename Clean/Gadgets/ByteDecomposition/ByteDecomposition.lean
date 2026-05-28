@@ -38,7 +38,7 @@ def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
   ∧ (low.val < 2^offset.val ∧ high.val < 2^(8-offset.val))
 
 instance elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs (main offset) := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 theorem soundness (offset : Fin 8) : Soundness (Input:=field) (Output:=Outputs) (F p) (main offset) Assumptions (Spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds

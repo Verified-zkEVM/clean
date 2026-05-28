@@ -66,7 +66,7 @@ def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var 
 
 @[reducible]
 instance : ElaboratedCircuit (F p) field DecodedInstruction (decodeInstructionMain) := by
-  infer_elaborated_circuit_reduced_with {
+  elaborate_circuit_with {
     output input i := (decodeInstructionMain input).output i
   }
 
@@ -586,7 +586,7 @@ def femtoCairoStepMain {programSize : ℕ} (program : Fin programSize → (F p))
 @[reducible]
 instance {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
     ElaboratedCircuit (F p) State State (femtoCairoStepMain program h_programSize) := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def femtoCairoStepSpec
     {programSize : ℕ} (program : Fin programSize → (F p))

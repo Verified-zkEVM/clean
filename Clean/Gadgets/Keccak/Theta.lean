@@ -14,7 +14,7 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   ThetaXor.circuit ⟨state, d⟩
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 

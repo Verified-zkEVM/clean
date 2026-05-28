@@ -13,12 +13,12 @@ instance explicit : ExplicitCircuits circuit32 := by
   infer_explicit_circuits
 
 instance elaborated : ElaboratedCircuit (F pBabybear) Inputs Outputs circuit32 := by
-  infer_elaborated_circuit
+  elaborate_circuit_naive
 
 def circuit32Reduced input := Gadgets.Addition32Full.main (p:=pBabybear) input
 
 instance reducedElaborated : ElaboratedCircuit (F pBabybear) Inputs Outputs circuit32Reduced := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 -- These only unfold the generated elaborated instance. They do not unfold or simplify the explicit
 -- circuit derivation, so they check that the reduced tactic stores the nice metadata directly.

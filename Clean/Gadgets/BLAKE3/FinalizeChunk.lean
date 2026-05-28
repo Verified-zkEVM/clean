@@ -96,7 +96,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
   return final_state.take 8
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧

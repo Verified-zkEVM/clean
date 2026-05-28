@@ -48,7 +48,7 @@ Elaborated circuit data can be found as follows:
 ```
 -/
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]

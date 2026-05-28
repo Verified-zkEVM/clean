@@ -20,7 +20,7 @@ def main (input : Var ApplyRounds.Inputs (F p)) : Circuit (F p) (Var BLAKE3State
   FinalStateUpdate.circuit ⟨state, input.chaining_value⟩
 
 instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (input : ApplyRounds.Inputs (F p)) : Prop :=
   ApplyRounds.Assumptions input

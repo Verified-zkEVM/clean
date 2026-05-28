@@ -36,7 +36,7 @@ def output (offset : Fin 32) (i0 : ℕ) : U32 (Expression (F p)) :=
   Rotation32Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
 @[reducible] instance elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 (main off) := by
-  infer_elaborated_circuit_reduced_with {
+  elaborate_circuit_with {
     localLength _ := 8
     output _inputs i0 := output off i0
   }

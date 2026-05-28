@@ -21,7 +21,7 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
   |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
-  infer_elaborated_circuit_reduced_with {
+  elaborate_circuit_with {
     output _ i0 := stateVar i0 23
   }
 

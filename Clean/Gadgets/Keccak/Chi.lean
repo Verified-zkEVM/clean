@@ -23,7 +23,7 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :

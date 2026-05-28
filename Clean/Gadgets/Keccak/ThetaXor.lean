@@ -16,7 +16,7 @@ def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
     Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs

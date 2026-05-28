@@ -207,7 +207,7 @@ Soundness requires p > 2^33 so the field linear constraint can be lifted to ℕ.
 -/
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [add32]

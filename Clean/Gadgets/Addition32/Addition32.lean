@@ -27,7 +27,7 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   z.value = (x.value + y.value) % 2^32 ∧ z.Normalized
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h

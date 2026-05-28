@@ -120,7 +120,7 @@ set_option linter.constructorNameAsVariable false
 
 def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   main
-  -- elaborated := by infer_elaborated_circuit_reduced_with {
+  -- elaborated := by elaborate_circuit_with {
   --   localLength _ := 265
   --   output _ i := varFromOffset field (i + 264)
   -- } using (by simp +arith only [circuit_norm])

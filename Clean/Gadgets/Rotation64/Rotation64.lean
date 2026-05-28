@@ -37,7 +37,7 @@ def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
   Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
 @[reducible] instance elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 (main off) := by
-  infer_elaborated_circuit_reduced_with {
+  elaborate_circuit_with {
     output _inputs i0 := output off i0
   }
 

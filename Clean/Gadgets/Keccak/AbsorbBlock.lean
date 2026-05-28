@@ -25,7 +25,7 @@ def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
 
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) Input KeccakState main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 @[reducible] def Assumptions (input : Input (F p)) :=
   input.state.Normalized ∧ input.block.Normalized

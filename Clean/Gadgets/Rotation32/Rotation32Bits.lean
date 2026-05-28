@@ -41,7 +41,7 @@ def output (offset : Fin 8) (i0 : ℕ) : U32 (Expression (F p)) :=
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
 @[reducible] instance elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 (main off) := by
-  infer_elaborated_circuit_reduced_with {
+  elaborate_circuit_with {
     localLength _ := 8
     output _inputs i0 := output off i0
   } using by

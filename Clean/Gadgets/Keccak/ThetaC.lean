@@ -25,7 +25,7 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
 
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 -- rewrite thetaC as a loop
 lemma thetaC_loop (state : Vector ℕ 25) :

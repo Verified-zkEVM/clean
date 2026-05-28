@@ -56,7 +56,7 @@ def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
   output = if input.selector = 1 then input.ifTrue else input.ifFalse
 
 instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumptions Spec := by
   circuit_proof_start

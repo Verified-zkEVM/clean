@@ -11,7 +11,7 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
   name : String := "anonymous"
   main : Var Input F → Circuit F (Var Output F)
   elaborated : ElaboratedCircuit F Input Output main := by
-    first | infer_instance | infer_elaborated_circuit_reduced
+    first | infer_instance | elaborate_circuit
 
   /-- optionally, you can expose the interactions with any channel in full detail -/
   exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []

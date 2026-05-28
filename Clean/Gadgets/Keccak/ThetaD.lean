@@ -28,7 +28,7 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
 
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 

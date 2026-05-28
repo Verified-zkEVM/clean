@@ -34,7 +34,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     return ⟨state, permuted_message⟩
 
   -- TODO default causes proof churn, fix locally
-  elaborated := by infer_elaborated_circuit_reduced_with {
+  elaborated := by elaborate_circuit_with {
     localLength input := Round.circuit.localLength input + Permute.circuit.localLength input.message
     output input offset :=
       let state_out := Round.circuit.output input offset

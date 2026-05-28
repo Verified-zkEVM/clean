@@ -77,7 +77,7 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
   ∧ ∀ i : Fin 8, Normalized out[i]
 
 instance elaborated : ElaboratedCircuit (F p) _ _ main := by
-  infer_elaborated_circuit_reduced
+  elaborate_circuit
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [sha256Round, UpperSigma1.circuit, UpperSigma0.circuit,

@@ -30,7 +30,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   return state
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
-  infer_elaborated_circuit_reduced_with {
+  elaborate_circuit_with {
     output input i0 := main input |>.output i0
   }
 

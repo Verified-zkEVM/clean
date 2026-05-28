@@ -44,7 +44,7 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
     let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
       BytesChannel.emit multiplicities[i] (const i)
 
-  elaborated := by infer_elaborated_circuit_reduced_with {
+  elaborated := by elaborate_circuit_with {
     channelsWithRequirements := [ BytesChannel.toRaw ] }
   Spec _ _ _ := True
   soundness := by circuit_proof_start [BytesTable]
