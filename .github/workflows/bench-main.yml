@@ -38,13 +38,14 @@ jobs:
         if: always() && hashFiles('baseline.jsonl') != ''
         run: |
           bench-control/scripts/bench/report.py baseline.jsonl --limit 10 > benchmark-report.md
+          bench-control/scripts/bench/report.py baseline.jsonl --all-modules > benchmark-modules.md
           cat benchmark-report.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload benchmark measurements
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bench-main-measurements
+          name: bench-main-report
           path: |
-            baseline.jsonl
             benchmark-report.md
+            benchmark-modules.md
           if-no-files-found: warn

@@ -215,11 +215,13 @@ def get_module_rows(
 def print_module_table(
     title: str,
     rows: Iterable[ModuleRow],
-    limit: int,
+    limit: int | None,
     empty_message: str,
     metric_name: str,
 ) -> None:
-    rows = list(rows)[:limit]
+    rows = list(rows)
+    if limit is not None:
+        rows = rows[:limit]
     print(f"## {title}")
     print()
     if not rows:
@@ -292,6 +294,24 @@ def print_modules(
     )
 
 
+def print_all_modules(
+    current: Measurements,
+    baseline: Measurements | None,
+    metric_name: str,
+) -> None:
+    rows = get_module_rows(current, baseline, metric_name)
+    metric_labels = MODULE_METRICS[metric_name]
+    print("# Build Benchmark Module Table")
+    print()
+    print_module_table(
+        f"All Modules By {metric_labels['plural']}",
+        sorted(rows, key=lambda row: row.module),
+        None,
+        f"No module {metric_labels['singular'].lower()} measurements found.",
+        metric_name,
+    )
+
+
 def regression_key(row: ModuleRow) -> float:
     if row.delta is None:
         return row.current
@@ -311,6 +331,11 @@ def main() -> None:
     parser.add_argument("baseline", type=Path, nargs="?")
     parser.add_argument("--limit", type=positive_int, default=10)
     parser.add_argument(
+        "--all-modules",
+        action="store_true",
+        help="render one alphabetically sorted table with every measured module",
+    )
+    parser.add_argument(
         "--module-metric",
         choices=sorted(MODULE_METRICS),
         default="heartbeats",
@@ -320,8 +345,11 @@ def main() -> None:
 
     current = load(args.current)
     baseline = load(args.baseline) if args.baseline else None
-    print_summary(current, baseline)
-    print_modules(current, baseline, args.limit, args.module_metric)
+    if args.all_modules:
+        print_all_modules(current, baseline, args.module_metric)
+    else:
+        print_summary(current, baseline)
+        print_modules(current, baseline, args.limit, args.module_metric)
 
 
 if __name__ == "__main__":
