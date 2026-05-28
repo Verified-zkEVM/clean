@@ -64,6 +64,7 @@ run_benchmark() {
     } | sha256sum | cut -d' ' -f1
   )"
   local package_cache="$CACHE_DIR/lake-packages/$package_cache_key"
+  local mathlib_cache="$CACHE_DIR/mathlib-cache/$package_cache_key"
   local build_mount=()
   if [ "$label" = "baseline" ] && [ "$repo" = "$BENCH_REPOSITORY" ]; then
     local build_cache="$CACHE_DIR/lake-build/$package_cache_key"
@@ -75,7 +76,7 @@ run_benchmark() {
     mkdir -p "$build_cache"
     build_mount=(-v "$build_cache:/workspace/clean/.lake/build")
   fi
-  mkdir -p "$checkout/.lake" "$package_cache"
+  mkdir -p "$checkout/.lake" "$package_cache" "$mathlib_cache"
 
   docker run --rm \
     --network bridge \
@@ -89,9 +90,11 @@ run_benchmark() {
     --network bridge \
     -e XDG_CACHE_HOME=/workspace/xdg-cache \
     -e ELAN_HOME=/workspace/elan-home \
+    -e MATHLIB_CACHE_DIR=/workspace/mathlib-cache \
     -e BENCH_OUTPUT_FILE="/bench-output/$label.jsonl" \
     -v "$checkout:/workspace/clean" \
     -v "$package_cache:/workspace/clean/.lake/packages" \
+    -v "$mathlib_cache:/workspace/mathlib-cache" \
     "${build_mount[@]}" \
     -v "$elan_home:/workspace/elan-home" \
     -v "$CACHE_DIR/elan/toolchains:/workspace/elan-home/toolchains:ro" \
