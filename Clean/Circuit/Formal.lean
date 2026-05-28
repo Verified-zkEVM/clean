@@ -85,7 +85,8 @@ section
 variable [ProvableType Input] [ProvableType Output]
 
 @[circuit_norm]
-def Soundness (F : Type) [Field F] (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+def Soundness (F : Type) [Field F] (main : Var Input F → Circuit F (Var Output F))
+    [elaborated : ElaboratedCircuit F Input Output main]
     (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
   -- for all environments that determine witness assignments
   ∀ offset : ℕ, ∀ env : Environment F,
