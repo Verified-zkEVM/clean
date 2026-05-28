@@ -210,13 +210,41 @@ private lemma sha256Compress_eq_valStateAfterRound
 -- TODO AUTOELAB setting this to reducible blows up soundness proof below,
 -- the signal here is that the term created by `_with` is too complicated
 -- (it keeps the complicated original output term and `(...).withData ...`)
+def derived : ElaboratedCircuit (F p) Inputs SHA256State main := by
+  elaborate_circuit
+
+@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
-  elaborate_circuit_with {
+  let data : ElaboratedCircuit.Data (derived (p:=p)) := {
     output input i₀ := stateVar i₀ input.state 64
-  } using by
-    simp only [circuit_norm]
+  }
+  have data_eq :
+      (∀ a, derived.localLength a = data.localLength a) ∧
+      (∀ a n, derived.output a n = data.output a n) ∧
+      (derived.channelsWithGuarantees ⊆ data.channelsWithGuarantees) ∧
+      (derived.channelsWithRequirements ⊆ data.channelsWithRequirements) := by
+    -- note: this will be provided by the user
+    simp only [derived, data, circuit_norm]
     intros
     apply fin_foldl_eq_stateVar
+  exact {
+    localLength _ := 29120
+    output input i₀ := stateVar i₀ input.state 64
+    channelsWithGuarantees := []
+    channelsWithRequirements := []
+    localLength_eq := (derived.withData data data_eq).localLength_eq
+    output_eq := (derived.withData data data_eq).output_eq
+    subcircuitsConsistent := by
+      suffices ∀ main (e : ElaboratedCircuit (F p) Inputs SHA256State main) inp off,
+        Operations.SubcircuitsConsistent off ((main inp).operations off) from by
+        -- TODO what is a working, explicit version of this proof?
+        have derived : ElaboratedCircuit (F p) Inputs SHA256State main := derived
+        simp_all only [implies_true]
+      exact fun main e => e.subcircuitsConsistent
+    channelsLawful := (derived.withData data data_eq).channelsLawful
+  }
+
+#print elaborated
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [SHA256Round.Spec, SHA256Round.Assumptions]
@@ -401,7 +429,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [MessageSchedule.circuit, MessageSchedule.Spec, MessageSchedule.Assumptions,
     SHA256Rounds.circuit, SHA256Rounds.Spec, SHA256Rounds.Assumptions,
     Add32.circuit, Add32.Spec, Add32.Assumptions]
-  dsimp only [circuit_norm, SHA256Rounds.elaborated] at h_holds ⊢
   obtain ⟨h_state_norm, h_block_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_block⟩ := h_input
   obtain ⟨h_sched, h_rounds, h_add⟩ := h_holds
