@@ -175,3 +175,31 @@ Practical recommendations:
 - In general, avoid non-lean-mcp commands like `lake build <file>` (full dependency rebuild) and `lake env lean <file>` (targeted check without rebuild). Their output is way too large. Use these commands only as a fallback to get maximum information when you feel lost.
 
 Check `doc/proving-guide.md` for more tips especially related to user-facing circuit formalization proofs.
+
+### Debugging
+
+To understand performance of a Lean command, wrap it with `#count_heartbeats` from mathlib:
+
+```lean
+import Mathlib.Util.CountHeartbeats
+
+#count_heartbeats in
+example : ElaboratedCircuit F field (fields 8) main := by
+  elaborate_circuit
+```
+
+To inspect what `simp` is doing, enable tracing around the failing proof:
+
+```lean
+set_option trace.Meta.Tactic.simp true in
+example : P := by
+  simp only [circuit_norm]
+```
+
+For a shorter "what was used" summary, try:
+
+```lean
+set_option trace.Meta.Tactic.simp.rewrite true in
+example : P := by
+  simp only [circuit_norm]
+```
