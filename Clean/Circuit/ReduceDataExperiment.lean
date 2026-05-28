@@ -91,6 +91,12 @@ example : ElaboratedCircuit F field (fields 8) main := by
   } using by
     simp only [circuit_norm]
 
+#count_heartbeats in
+example : ElaboratedCircuit F field (fields 8) main := by
+  elaborate_circuit_with {
+    localLength _ := 16
+  }
+
 /-- The reduced elaboration tactic stores the compact length directly. -/
 example (x : Expression F) :
     ElaboratedCircuit.localLength (F:=F) (Input:=field) (Output:=fields 8) main x = 16 := rfl

@@ -955,6 +955,23 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
       mkAppM ``HasSubset.Subset #[lhs, rhs]
     pure (mkAnd localLengthEq (mkAnd outputEq (mkAnd guaranteesSubset requirementsSubset)))
 
+  let defaultDataEqStx : TacticM (TSyntax `term) :=
+    `(by
+      and_intros
+      · intro a; ac_rfl
+      · intro a n; rfl
+      · try simp only [circuit_norm]; try grind; done
+      · try simp only [circuit_norm]; try grind; done)
+
+  let elabDataEq (derived data : Expr) : TacticM (Expr × Expr) := do
+    let dataEqType ← mkDataEqType derived data
+    let dataEqStx ← match dataEqStx? with
+      | some dataEqStx => pure dataEqStx
+      | none => defaultDataEqStx
+    let dataEq ← Lean.Elab.Term.elabTerm dataEqStx (some dataEqType)
+    Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+    return (dataEqType, ← instantiateMVars dataEq)
+
   -- Build the final plain `ElaboratedCircuit.mk`.
   --
   -- `data` is used as the source of the stored fields, because those are exactly
@@ -1118,13 +1135,7 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
   let inlineDataVal ← Lean.Elab.Term.elabTerm dataStx (some inlineDataType)
   Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
   let inlineDataVal ← instantiateMVars inlineDataVal
-  let inlineDataEqVal? ← match dataEqStx? with
-    | some dataEqStx =>
-        let inlineDataEqType ← mkDataEqType derived inlineDataVal
-        let inlineDataEqVal ← Lean.Elab.Term.elabTerm dataEqStx (some inlineDataEqType)
-        Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
-        pure (some (← instantiateMVars inlineDataEqVal))
-    | none => pure none
+  let (_inlineDataEqType, inlineDataEqVal) ← elabDataEq derived inlineDataVal
 
   -- Now introduce a local `derived` binding in the final generated term.  The
   -- printed SHA result keeps this local base circuit, while the final record itself
@@ -1133,25 +1144,14 @@ private def elabElaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Opt
     let dataType ← mkAppOptM ``ElaboratedCircuit.Data
       #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived]
     let dataVal ← mkExpectedTypeHint inlineDataVal dataType
-    match dataEqStx? with
-    | some _dataEqStx =>
-        let dataEqType ← mkDataEqType derived dataVal
-        let some inlineDataEqVal := inlineDataEqVal?
-          | throwError "internal error: missing data_eq proof"
-        let dataEqVal ← mkExpectedTypeHint inlineDataEqVal dataEqType
-        let withData ← mkAppOptM ``ElaboratedCircuit.withData
-          #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, dataVal, dataEqVal]
-        Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
-        let withData ← instantiateMVars withData
-        let record ← buildRecord dataVal withData
-        mkLetFVars #[derived] record (usedLetOnly := false)
-    | none =>
-        let withData ← mkAppOptM ``ElaboratedCircuit.withData
-          #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, dataVal, none]
-        Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
-        let withData ← instantiateMVars withData
-        let record ← buildRecord dataVal withData
-        mkLetFVars #[derived] record (usedLetOnly := false)
+    let dataEqType ← mkDataEqType derived dataVal
+    let dataEqVal ← mkExpectedTypeHint inlineDataEqVal dataEqType
+    let withData ← mkAppOptM ``ElaboratedCircuit.withData
+      #[F, fieldInst, Input, Output, inputCircuitTypeInst, outputCircuitTypeInst, main, derived, dataVal, dataEqVal]
+    Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+    let withData ← instantiateMVars withData
+    let record ← buildRecord dataVal withData
+    mkLetFVars #[derived] record (usedLetOnly := false)
   goal.assign val
   replaceMainGoal []
 
