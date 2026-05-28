@@ -20,7 +20,7 @@ IMAGE="${BENCH_IMAGE:-clean-bench-runner:latest}"
 RUN_DIR="$ROOT/runs/$BENCH_RUN_ID"
 CACHE_DIR="$ROOT/cache"
 WORK_DIR="$RUN_DIR/work"
-BASELINE_CACHE_DIR="$CACHE_DIR/baselines/heartbeats-v2"
+BASELINE_CACHE_DIR="$CACHE_DIR/baselines"
 
 mkdir -p "$CACHE_DIR/elan" "$BASELINE_CACHE_DIR" "$WORK_DIR" "$BENCH_OUTPUT_DIR"
 
