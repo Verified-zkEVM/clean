@@ -38,22 +38,6 @@ trap cleanup EXIT
 
 docker build -t "$IMAGE" -f scripts/bench/runner/Dockerfile scripts/bench/runner
 
-PERF_ARGS=()
-if [ "${BENCH_HEARTBEATS:-}" != "1" ]; then
-  HOST_PERF=""
-  if [ -x "/usr/lib/linux-tools/$(uname -r)/perf" ]; then
-    HOST_PERF="/usr/lib/linux-tools/$(uname -r)/perf"
-  elif [ -x "/usr/lib/linux-tools-$(uname -r | sed 's/-generic$//')/perf" ]; then
-    HOST_PERF="/usr/lib/linux-tools-$(uname -r | sed 's/-generic$//')/perf"
-  elif [ -x /usr/bin/perf ]; then
-    HOST_PERF="/usr/bin/perf"
-  fi
-  PERF_ARGS+=(--cap-add PERFMON --security-opt seccomp=unconfined)
-  if [ -n "$HOST_PERF" ]; then
-    PERF_ARGS+=(-v "$HOST_PERF:/usr/local/bin/perf:ro")
-  fi
-fi
-
 run_benchmark() {
   local label="$1"
   local repo="$2"
@@ -94,7 +78,6 @@ run_benchmark() {
     --network bridge \
     -e XDG_CACHE_HOME=/workspace/xdg-cache \
     -e ELAN_HOME=/workspace/elan-home \
-    -e BENCH_HEARTBEATS="${BENCH_HEARTBEATS:-}" \
     -e BENCH_OUTPUT_FILE="/bench-output/$label.jsonl" \
     -v "$checkout:/workspace/clean" \
     -v "$package_cache:/workspace/clean/.lake/packages" \
@@ -102,7 +85,6 @@ run_benchmark() {
     -v "$CACHE_DIR/elan/toolchains:/workspace/elan-home/toolchains:ro" \
     -v "$xdg_cache:/workspace/xdg-cache" \
     -v "$BENCH_OUTPUT_DIR:/bench-output" \
-    "${PERF_ARGS[@]}" \
     "$IMAGE" \
     bash -lc 'scripts/bench/build/run && cp measurements.jsonl "$BENCH_OUTPUT_FILE"'
 }

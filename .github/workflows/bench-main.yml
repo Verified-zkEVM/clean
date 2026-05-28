@@ -26,7 +26,6 @@ jobs:
           BENCH_REPOSITORY: ${{ github.repository }}
           BENCH_RUN_ID: ${{ github.run_id }}
           BENCH_OUTPUT_DIR: ${{ github.workspace }}/bench-output
-          BENCH_HEARTBEATS: "1"
         run: scripts/bench/runner/run-in-docker.sh
       - name: Copy measurements
         if: always()

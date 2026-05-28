@@ -13,10 +13,6 @@ REPO = Path()
 BENCH = REPO / "scripts" / "bench"
 OUTFILE = REPO / "measurements.jsonl"
 
-sys.path.append(str(BENCH))
-import measure  # noqa: E402
-
-
 def save_result(metric: str, value: float, unit: str | None = None) -> None:
     data: dict[str, str | float] = {"metric": metric, "value": value}
     if unit is not None:
@@ -61,22 +57,12 @@ def save_profile_metrics_from_lines(lines) -> None:
 
 def run_lean(module: str) -> None:
     cmd = ["lean", "--profile", "-Dprofiler.threshold=9999999", *sys.argv[1:]]
-    if os.environ.get("BENCH_INSTRUCTIONS", "1") == "1":
-        _, stderr = measure.main(
-            cmd=cmd,
-            output=OUTFILE,
-            topics=[f"{NAME}/module/{module}"],
-            metrics={"instructions"},
-            append=True,
-            capture=True,
-        )
-    else:
-        result = subprocess.run(cmd, capture_output=True, encoding="utf-8")
-        if result.returncode != 0:
-            print(result.stdout, end="", file=sys.stdout)
-            print(result.stderr, end="", file=sys.stderr)
-            sys.exit(result.returncode)
-        stderr = result.stderr
+    result = subprocess.run(cmd, capture_output=True, encoding="utf-8")
+    if result.returncode != 0:
+        print(result.stdout, end="", file=sys.stdout)
+        print(result.stderr, end="", file=sys.stderr)
+        sys.exit(result.returncode)
+    stderr = result.stderr
     save_profile_metrics(stderr)
 
 
@@ -122,8 +108,7 @@ def main() -> None:
     module = get_module(args.setup)
     count_lines(module, args.lean)
     run_lean(module)
-    if os.environ.get("BENCH_HEARTBEATS") == "1":
-        run_heartbeat_frontend(module)
+    run_heartbeat_frontend(module)
 
 
 if __name__ == "__main__":

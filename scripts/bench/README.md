@@ -15,7 +15,7 @@ Run only the build benchmark:
 scripts/bench/build/run
 ```
 
-The build benchmark records whole-build resource metrics and per-module instruction counts. When `BENCH_HEARTBEATS=1` is set, it also records deterministic per-module frontend heartbeat counts. The maintainer-triggered PR workflow enables heartbeat collection by default.
+The build benchmark records whole-build resource metrics and deterministic per-module frontend heartbeat counts.
 
 Render a report from one run:
 
@@ -31,19 +31,11 @@ scripts/bench/report.py current.jsonl baseline.jsonl
 
 Comparison reports show the whole-build summary plus the top 10 module heartbeat regressions, top 10 module heartbeat improvements, and top 10 highest-heartbeat modules.
 
-Render the module tables by instructions instead of heartbeats:
-
-```bash
-scripts/bench/report.py current.jsonl baseline.jsonl --module-metric instructions
-```
-
 Render a full alphabetically sorted module table for detailed investigation:
 
 ```bash
 scripts/bench/report.py current.jsonl baseline.jsonl --all-modules
 ```
-
-Set `BENCH_HEARTBEATS=1` when running the benchmark to collect heartbeat measurements.
 
 Measure heartbeats for one module in the current working tree:
 
@@ -82,4 +74,4 @@ The workflow runs checked-out code inside a Docker container. Persistent Lean to
 
 Pushes to `main` run the heartbeat benchmark and store the resulting baseline measurements under `/var/lib/clean-bench/cache/baselines/<sha>.jsonl`. A PR benchmark reuses that file when the requested base SHA has already been measured; otherwise it measures the baseline and stores it for future runs. The PR head is always measured from the requested checkout and is never reused from another SHA or checkout. Workflow artifacts include the summary report and a full alphabetically sorted module table.
 
-Heartbeat benchmark runs do not require `perf`. Manual instruction-count benchmark runs still require working userspace `perf` instruction counters. In practice this means configuring the host so `perf stat -e instructions:u -- true` reports a numeric count for the runner environment. The container is run without host networking, without privileged mode, and without the Docker socket mounted.
+The container is run without host networking, without privileged mode, and without the Docker socket mounted.
