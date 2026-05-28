@@ -2,7 +2,6 @@ import Clean.Gadgets.SHA256.SHA256Round
 import Clean.Gadgets.SHA256.SHA256Schedule
 import Clean.Gadgets.SHA256.Add32
 import Clean.Specs.SHA256
-import Mathlib.Util.CountHeartbeats
 
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^33)]
@@ -208,7 +207,6 @@ private lemma sha256Compress_eq_valStateAfterRound
               (input_schedule[i.val]'(by have := i.isLt; omega))) input_state from rfl, ih]
     simp [Fin.val_last]
 
-#count_heartbeats in
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
   elaborate_circuit_with {
@@ -217,8 +215,6 @@ instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
     simp only [circuit_norm]
     intros
     apply fin_foldl_eq_stateVar
-
-#print elaborated
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [SHA256Round.Spec, SHA256Round.Assumptions]
