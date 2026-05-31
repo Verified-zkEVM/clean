@@ -44,7 +44,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) :=
     SHA256Round.circuit ⟨s, constWord32 Specs.SHA256.K[i].toNat, input.schedule[i]⟩)
 
 /-- The variable-level state after `k` rounds. Used as the explicit `output` for the
-    SHA256Rounds elaborated instance, mirroring how Keccak Permutation provides `stateVar`. -/
+    SHA256Rounds elaborated instance, mirroring how Keccak Permutation provides `stateVar`.
+
+    Offsets track `SHA256Round.elaborated`: round `k` occupies `[i₀ + k*294, …)` (294 =
+    round `localLength`), and within a round the AddMod32 outputs `new_a`/`new_e` sit at
+    `+259`/`+224` (see `SHA256Round.elaborated.output`). If those change, these must too. -/
 def stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) :
     ℕ → Var SHA256State (F p)
   | 0 => input_var_state
@@ -412,6 +416,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) := d
 
 instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
   main := main
+  -- message schedule (48 × 163) + 64 rounds (64 × 294) + 8 Davies-Meyer adds (8 × 33)
   localLength _ := 48 * 163 + 64 * 294 + 8 * 33
   localLength_eq input offset := by
     simp only [main, circuit_norm]; rfl

@@ -21,9 +21,8 @@ R1CS structure (per call):
 Soundness needs `p > 2^35` so the linear constraint lifts from `F p` to `ℕ`
 (`Σ < 8·2^32 = 2^35`).  The 254-bit BN254 scalar field satisfies this with huge margin.
 
-NOTE: this file currently provides the gadget *definition* and its intended `Assumptions`/`Spec`.
-The `FormalCircuit` soundness/completeness proofs are still to be added; nothing depends on this
-gadget yet, so the rest of the SHA-256 development is unaffected.
+This file provides the gadget definition together with its `FormalCircuit` (proved
+soundness and completeness). It is used by the SHA-256 round and message schedule.
 -/
 
 variable {n : ℕ} [hn : Fact (n ≤ 8)]
