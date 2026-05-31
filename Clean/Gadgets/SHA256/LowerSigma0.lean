@@ -15,8 +15,8 @@ namespace Gadgets.SHA256
 
 σ₀(x) = ROTR7(x) XOR ROTR18(x) XOR SHR3(x)
 
-Single carry-save 3-input XOR (`xor3raw`) = 32 witnesses total (the carry bits); the XOR
-result itself is a free linear combination of the inputs and the carry.
+Single-constraint 3-input XOR (`xor3raw`): 32 witnesses, 32 constraints. Each output bit is
+witnessed and pinned by one R1CS constraint (see `CarrySave.lean`, `xor3_unique`).
 -/
 
 /-- σ₀(x) = ROTR7(x) XOR ROTR18(x) XOR SHR3(x) -/
@@ -31,9 +31,9 @@ def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) where
   main := main
   localLength _ := 32
-  localLength_eq _ _ := by simp [circuit_norm, main, lowerSigma0, xor3raw, carrySave]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, lowerSigma0, xor3raw, carrySave]
-  channelsLawful := by intro x n; simp [circuit_norm, main, lowerSigma0, xor3raw, carrySave]
+  localLength_eq _ _ := by simp [circuit_norm, main, lowerSigma0, xor3raw]
+  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, lowerSigma0, xor3raw]
+  channelsLawful := by intro x n; simp [circuit_norm, main, lowerSigma0, xor3raw]
 
 def Assumptions (x : fields 32 (F p)) : Prop := Normalized x
 
@@ -349,8 +349,7 @@ private lemma spec_of_constraint
 variable [Fact (p > 2^35)]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [lowerSigma0, xor3raw, carrySave]
-  obtain ⟨h_q_bool, h_par_bool⟩ := h_holds
+  circuit_proof_start [lowerSigma0, xor3raw]
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
   have h_r7  : ∀ i : Fin 32, Expression.eval env (rotr32 7 input_var)[i.val]  = input[(i + 7).val]  :=
     fun i => eval_rotr32 env input_var input h_input 7 i
@@ -360,25 +359,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       if h : i.val + 3 < 32 then input[i.val + 3]'h else 0 :=
     fun i => eval_shr32 env input_var input h_input 3 i
   set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env)
-      (Vector.ofFn fun i : Fin 32 =>
-        (rotr32 7 input_var)[i.val] + (rotr32 18 input_var)[i.val] + (shr32 3 input_var)[i.val]
-          - 2 * var { index := i₀ + i.val }) with hz_def
-  -- q[i] is boolean
-  have hq : ∀ i : Fin 32, IsBool (env.get (i₀ + i.val)) := by
-    intro i; rw [IsBool.iff_mul_sub_one]; linear_combination h_q_bool i
-  -- parity r7 + r18 + s3 − 2·q is boolean
-  have hpar : ∀ i : Fin 32, IsBool (input[(i + 7).val] + input[(i + 18).val] +
-      (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0) - 2 * env.get (i₀ + i.val)) := by
-    intro i; rw [IsBool.iff_mul_sub_one]
-    have h := h_par_bool i; rw [h_r7 i, h_r18 i, h_s3 i] at h; linear_combination h
-  -- carry equals majority of the three inputs
-  have h_carry : ∀ i : Fin 32, env.get (i₀ + i.val) =
-      input[(i + 7).val] * input[(i + 18).val] +
-        (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0) *
-          (input[(i + 7).val] + input[(i + 18).val] - 2 * (input[(i + 7).val] * input[(i + 18).val])) :=
-    fun i => carry_eq_maj (ha (i + 7)) (ha (i + 18)) (shr_isbool 3 input ha i) (hq i) (hpar i)
-  -- bridge to the nested-XOR form expected by spec_of_constraint
+    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
+      (var {index := i₀ + i} : Expression (F p))) with hz_def
+  have h_zget : ∀ i : Fin 32, z[i] = env.get (i₀ + i.val) := by
+    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 7).val] + input[(i + 18).val] -
         2 * input[(i + 7).val] * input[(i + 18).val])
@@ -387,14 +371,20 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
               2 * input[(i + 7).val] * input[(i + 18).val])
             * (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0) := by
     intro i
-    simp only [z, Vector.getElem_map, Vector.getElem_ofFn, circuit_norm]
-    rw [h_r7 i, h_r18 i, h_s3 i, h_carry i]; ring
+    have hcon : (env.get (i₀ + i.val) + 2 * input[(i + 7).val] + 2 * input[(i + 18).val]
+          + 7 * (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0))
+          * (input[(i + 7).val] + input[(i + 18).val]
+            - 4 * (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0) + 1)
+          - (6 * input[(i + 7).val] + 6 * input[(i + 18).val]
+            - 24 * (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0)) = 0 := by
+      have h := h_holds i; rw [h_r7 i, h_r18 i, h_s3 i] at h; linear_combination h
+    have hxor := xor3_unique (ha (i + 7)) (ha (i + 18)) (shr_isbool 3 input ha i) hcon
+    rw [h_zget i]; linear_combination hxor
   exact spec_of_constraint input z ha h_z
 
 omit [Fact (p > 2^35)] in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [lowerSigma0, xor3raw, carrySave]
-  obtain ⟨h_env_q, -⟩ := h_env
+  circuit_proof_start [lowerSigma0, xor3raw]
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
   have hr7 : ∀ i : Fin 32, Expression.eval env.toEnvironment (rotr32 7 input_var)[i.val] = input[(i + 7).val] :=
     fun i => eval_rotr32 env.toEnvironment input_var input h_input 7 i
@@ -403,18 +393,12 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   have hs3 : ∀ i : Fin 32, Expression.eval env.toEnvironment (shr32 3 input_var)[i.val] =
       if h : i.val + 3 < 32 then input[i.val + 3]'h else 0 :=
     fun i => eval_shr32 env.toEnvironment input_var input h_input 3 i
-  -- The single witness vector is the carry; the boolean constraints are maj/parity boolean.
-  refine ⟨fun i => ?_, fun i => ?_⟩
-  · have hq := h_env_q i
-    simp only [Vector.getElem_ofFn] at hq
-    rw [hq, hr7 i, hr18 i, hs3 i]
-    have hbool := maj_is_bool (ha (i + 7)) (ha (i + 18)) (shr_isbool 3 input ha i)
-    rw [IsBool.iff_mul_sub_one] at hbool; linear_combination hbool
-  · have hq := h_env_q i
-    simp only [Vector.getElem_ofFn] at hq
-    rw [hq, hr7 i, hr18 i, hs3 i]
-    have hbool := parity_is_bool (ha (i + 7)) (ha (i + 18)) (shr_isbool 3 input ha i)
-    rw [IsBool.iff_mul_sub_one] at hbool; linear_combination hbool
+  intro i
+  have henv := h_env i
+  simp only [Vector.getElem_ofFn] at henv
+  rw [hr7 i, hr18 i, hs3 i] at henv
+  rw [hr7 i, hr18 i, hs3 i, henv]
+  linear_combination xor3_complete (ha (i + 7)) (ha (i + 18)) (shr_isbool 3 input ha i)
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   Assumptions := Assumptions; Spec := Spec

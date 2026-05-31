@@ -98,10 +98,81 @@ def carrySave (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (
     assertZero ((a[i] + b[i] + c[i] - 2 * q[i]) * (a[i] + b[i] + c[i] - 2 * q[i] - 1))
   return q
 
-/-- 3-input XOR via carry save: `xor3 a b c = a + b + c − 2·maj(a,b,c)` (the parity). -/
+/-!
+## Single-constraint 3-input XOR
+
+The 3-input XOR (the four SHA-256 Σ/σ functions) admits a *single* R1CS constraint per output
+bit — half the carry-save cost — by directly witnessing the output `o` and imposing
+
+  `(o + 2a + 2b + 7c) · (a + b − 4c + 1) = 6a + 6b − 24c`.
+
+This constraint is linear in `o` with multiplier `a + b − 4c + 1`, which is nonzero for every
+boolean `(a, b, c)` (its values are `±1, ±2, ±3`), so `o` is *uniquely* determined; an 8-way case
+analysis over `a, b, c ∈ {0, 1}` shows that unique root is exactly `a XOR b XOR c`.  (The
+coefficients were found by an exhaustive search over small-integer R1CS encodings: the only
+quadratic surface through the eight `(a, b, c, parity)` points whose `o`-multiplier never vanishes.
+The 3-input *majority* has no such single-constraint encoding — its residual quadratic form has full
+rank — so `carrySave` above is optimal for `Maj`.)  Soundness needs char `∉ {2, 3}`, supplied by
+`p > 2^35`.
+-/
+
+/-- From the single XOR constraint, the witnessed output `o` equals the nested XOR
+    `(a XOR b) XOR c` (in arithmetic form).  Soundness of the single-constraint encoding. -/
+theorem xor3_unique {a b c o : F p} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c)
+    (h : (o + 2 * a + 2 * b + 7 * c) * (a + b - 4 * c + 1) - (6 * a + 6 * b - 24 * c) = 0) :
+    o = a + b - 2 * a * b + c - 2 * (a + b - 2 * a * b) * c := by
+  have ha' : a * (a - 1) = 0 := by rcases ha with h | h <;> rw [h] <;> ring
+  have hb' : b * (b - 1) = 0 := by rcases hb with h | h <;> rw [h] <;> ring
+  have hc' : c * (c - 1) = 0 := by rcases hc with h | h <;> rw [h] <;> ring
+  -- The constraint factors as `(o − parity) · (a + b − 4c + 1)` modulo the boolean relations.
+  have key : (o - (a + b - 2 * a * b + c - 2 * (a + b - 2 * a * b) * c)) * (a + b - 4 * c + 1) = 0 := by
+    linear_combination h + (-4 * b * c + 2 * b + 2 * c - 3) * ha'
+      + (-4 * a * c + 2 * a + 2 * c - 3) * hb' + (16 * a * b - 8 * a - 8 * b + 32) * hc'
+  -- The multiplier is nonzero (its boolean values are `±1, ±2, ±3`).
+  have hp : 2 ^ 35 < p := Fact.out
+  have hval : ∀ k : ℕ, 0 < k → k < p → ((k : ℕ) : F p) ≠ 0 := by
+    intro k hk hkp hcon
+    have := congrArg ZMod.val hcon
+    rw [ZMod.val_natCast_of_lt hkp, ZMod.val_zero] at this; omega
+  have h2 : (2 : F p) ≠ 0 := by have := hval 2 (by norm_num) (by omega); simpa using this
+  have h3 : (3 : F p) ≠ 0 := by have := hval 3 (by norm_num) (by omega); simpa using this
+  have hM : (a + b - 4 * c + 1 : F p) ≠ 0 := by
+    rcases ha with rfl | rfl <;> rcases hb with rfl | rfl <;> rcases hc with rfl | rfl <;>
+      intro hcon <;>
+      first
+        | exact one_ne_zero (by linear_combination hcon)
+        | exact one_ne_zero (by linear_combination -hcon)
+        | exact h2 (by linear_combination hcon)
+        | exact h2 (by linear_combination -hcon)
+        | exact h3 (by linear_combination hcon)
+        | exact h3 (by linear_combination -hcon)
+  rcases mul_eq_zero.mp key with h1 | h1
+  · linear_combination h1
+  · exact absurd h1 hM
+
+omit [Fact (p > 2^35)] in
+/-- The nested-XOR value satisfies the single XOR constraint.  Completeness of the encoding. -/
+theorem xor3_complete {a b c : F p} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
+    ((a + b - 2 * a * b + c - 2 * (a + b - 2 * a * b) * c) + 2 * a + 2 * b + 7 * c)
+        * (a + b - 4 * c + 1) - (6 * a + 6 * b - 24 * c) = 0 := by
+  have ha' : a * (a - 1) = 0 := by rcases ha with h | h <;> rw [h] <;> ring
+  have hb' : b * (b - 1) = 0 := by rcases hb with h | h <;> rw [h] <;> ring
+  have hc' : c * (c - 1) = 0 := by rcases hc with h | h <;> rw [h] <;> ring
+  linear_combination (4 * b * c - 2 * b - 2 * c + 3) * ha'
+    + (4 * a * c - 2 * a - 2 * c + 3) * hb' + (-16 * a * b + 8 * a + 8 * b - 32) * hc'
+
+/-- 3-input XOR via a single R1CS constraint per bit.  Witnesses the output bit `o[i]`
+    (the nested XOR of the inputs) and asserts `(o + 2a + 2b + 7c)(a + b − 4c + 1) = 6a + 6b − 24c`.
+    Cost: 32 witnesses, 32 constraints (half the carry-save constraint count). -/
 def xor3raw (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  let q ← carrySave a b c
-  return Vector.ofFn fun (i : Fin 32) => a[i] + b[i] + c[i] - 2 * q[i]
+  let o ← witnessVector 32 fun env =>
+    Vector.ofFn fun (i : Fin 32) =>
+      let ai := env a[i]; let bi := env b[i]; let ci := env c[i]
+      ai + bi - 2 * ai * bi + ci - 2 * (ai + bi - 2 * ai * bi) * ci
+  Circuit.forEach (Vector.finRange 32) fun i =>
+    assertZero ((o[i] + 2 * a[i] + 2 * b[i] + 7 * c[i]) * (a[i] + b[i] - 4 * c[i] + 1)
+      - (6 * a[i] + 6 * b[i] - 24 * c[i]))
+  return o
 
 end Gadgets.SHA256
 end

@@ -11,7 +11,7 @@ namespace Gadgets.SHA256
 
 σ₁(x) = ROTR17(x) XOR ROTR19(x) XOR SHR10(x)
 
-Single carry-save 3-input XOR (`xor3raw`) = 32 witnesses total.
+Single-constraint 3-input XOR (`xor3raw`): 32 witnesses, 32 constraints.
 
 Mirrors `LowerSigma0` with constants 17, 19, 10 instead of 7, 18, 3.
 Reuses the helper lemmas defined in `LowerSigma0`.
@@ -33,9 +33,9 @@ def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) where
   main := main
   localLength _ := 32
-  localLength_eq _ _ := by simp [circuit_norm, main, lowerSigma1, xor3raw, carrySave]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, lowerSigma1, xor3raw, carrySave]
-  channelsLawful := by intro x n; simp [circuit_norm, main, lowerSigma1, xor3raw, carrySave]
+  localLength_eq _ _ := by simp [circuit_norm, main, lowerSigma1, xor3raw]
+  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, lowerSigma1, xor3raw]
+  channelsLawful := by intro x n; simp [circuit_norm, main, lowerSigma1, xor3raw]
 
 def Assumptions (x : fields 32 (F p)) : Prop := Normalized x
 
@@ -127,8 +127,7 @@ private lemma spec_of_constraint
 variable [Fact (p > 2^35)]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [lowerSigma1, xor3raw, carrySave]
-  obtain ⟨h_q_bool, h_par_bool⟩ := h_holds
+  circuit_proof_start [lowerSigma1, xor3raw]
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
   have h_r17 : ∀ i : Fin 32, Expression.eval env (rotr32 17 input_var)[i.val] = input[(i + 17).val] :=
     fun i => eval_rotr32 env input_var input h_input 17 i
@@ -138,21 +137,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       if h : i.val + 10 < 32 then input[i.val + 10]'h else 0 :=
     fun i => eval_shr32 env input_var input h_input 10 i
   set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env)
-      (Vector.ofFn fun i : Fin 32 =>
-        (rotr32 17 input_var)[i.val] + (rotr32 19 input_var)[i.val] + (shr32 10 input_var)[i.val]
-          - 2 * var { index := i₀ + i.val }) with hz_def
-  have hq : ∀ i : Fin 32, IsBool (env.get (i₀ + i.val)) := by
-    intro i; rw [IsBool.iff_mul_sub_one]; linear_combination h_q_bool i
-  have hpar : ∀ i : Fin 32, IsBool (input[(i + 17).val] + input[(i + 19).val] +
-      (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0) - 2 * env.get (i₀ + i.val)) := by
-    intro i; rw [IsBool.iff_mul_sub_one]
-    have h := h_par_bool i; rw [h_r17 i, h_r19 i, h_s10 i] at h; linear_combination h
-  have h_carry : ∀ i : Fin 32, env.get (i₀ + i.val) =
-      input[(i + 17).val] * input[(i + 19).val] +
-        (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0) *
-          (input[(i + 17).val] + input[(i + 19).val] - 2 * (input[(i + 17).val] * input[(i + 19).val])) :=
-    fun i => carry_eq_maj (ha (i + 17)) (ha (i + 19)) (shr_isbool 10 input ha i) (hq i) (hpar i)
+    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
+      (var {index := i₀ + i} : Expression (F p))) with hz_def
+  have h_zget : ∀ i : Fin 32, z[i] = env.get (i₀ + i.val) := by
+    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 17).val] + input[(i + 19).val] -
         2 * input[(i + 17).val] * input[(i + 19).val])
@@ -161,14 +149,20 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
               2 * input[(i + 17).val] * input[(i + 19).val])
             * (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0) := by
     intro i
-    simp only [z, Vector.getElem_map, Vector.getElem_ofFn, circuit_norm]
-    rw [h_r17 i, h_r19 i, h_s10 i, h_carry i]; ring
+    have hcon : (env.get (i₀ + i.val) + 2 * input[(i + 17).val] + 2 * input[(i + 19).val]
+          + 7 * (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0))
+          * (input[(i + 17).val] + input[(i + 19).val]
+            - 4 * (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0) + 1)
+          - (6 * input[(i + 17).val] + 6 * input[(i + 19).val]
+            - 24 * (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0)) = 0 := by
+      have h := h_holds i; rw [h_r17 i, h_r19 i, h_s10 i] at h; linear_combination h
+    have hxor := xor3_unique (ha (i + 17)) (ha (i + 19)) (shr_isbool 10 input ha i) hcon
+    rw [h_zget i]; linear_combination hxor
   exact spec_of_constraint input z ha h_z
 
 omit [Fact (p > 2^35)] in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [lowerSigma1, xor3raw, carrySave]
-  obtain ⟨h_env_q, -⟩ := h_env
+  circuit_proof_start [lowerSigma1, xor3raw]
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
   have hr17 : ∀ i : Fin 32, Expression.eval env.toEnvironment (rotr32 17 input_var)[i.val] = input[(i + 17).val] :=
     fun i => eval_rotr32 env.toEnvironment input_var input h_input 17 i
@@ -177,17 +171,12 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   have hs10 : ∀ i : Fin 32, Expression.eval env.toEnvironment (shr32 10 input_var)[i.val] =
       if h : i.val + 10 < 32 then input[i.val + 10]'h else 0 :=
     fun i => eval_shr32 env.toEnvironment input_var input h_input 10 i
-  refine ⟨fun i => ?_, fun i => ?_⟩
-  · have hq := h_env_q i
-    simp only [Vector.getElem_ofFn] at hq
-    rw [hq, hr17 i, hr19 i, hs10 i]
-    have hbool := maj_is_bool (ha (i + 17)) (ha (i + 19)) (shr_isbool 10 input ha i)
-    rw [IsBool.iff_mul_sub_one] at hbool; linear_combination hbool
-  · have hq := h_env_q i
-    simp only [Vector.getElem_ofFn] at hq
-    rw [hq, hr17 i, hr19 i, hs10 i]
-    have hbool := parity_is_bool (ha (i + 17)) (ha (i + 19)) (shr_isbool 10 input ha i)
-    rw [IsBool.iff_mul_sub_one] at hbool; linear_combination hbool
+  intro i
+  have henv := h_env i
+  simp only [Vector.getElem_ofFn] at henv
+  rw [hr17 i, hr19 i, hs10 i] at henv
+  rw [hr17 i, hr19 i, hs10 i, henv]
+  linear_combination xor3_complete (ha (i + 17)) (ha (i + 19)) (shr_isbool 10 input ha i)
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   Assumptions := Assumptions; Spec := Spec
