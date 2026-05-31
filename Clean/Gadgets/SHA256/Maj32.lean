@@ -13,19 +13,15 @@ namespace Gadgets.SHA256
 
 Maj(a, b, c) = (a AND b) XOR (a AND c) XOR (b AND c) = maj(a, b, c) bit-wise.
 
-Carry-save arithmetization: witness one bit `q[i]` per position and impose
+Single-constraint arithmetization: witness one bit `o[i]` per position (the majority) and impose
 
-  (1)  q[i] · (q[i] − 1) = 0
-  (2)  (a[i] + b[i] + c[i] − 2·q[i]) · (a[i] + b[i] + c[i] − 2·q[i] − 1) = 0.
+  (o[i] + a[i] + b[i] − 9·c[i] + 3) · (a[i] + b[i] + 6·c[i] − 4) = −12.
 
-By the full-adder identity these two boolean constraints pin `q[i] = maj(a[i], b[i], c[i])`
-(`carry_eq_maj`).  Witnesses 32 variables (the majority output), down from 64.
--/
-
-/-- Majority function via carry save: `q[i] = maj(a[i], b[i], c[i])` is the carry bit of the
-    3-bit sum `a[i] + b[i] + c[i]`.  See `Gadgets.SHA256.carrySave`. -/
+This is linear in `o[i]` with a multiplier that never vanishes on the boolean cube, so it pins
+`o[i] = maj(a[i], b[i], c[i])` uniquely (`maj3_unique`).  Cost: 32 witnesses, 32 constraints —
+one R1CS row per bit, down from the carry-save form's two. -/
 def maj3 (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
-  carrySave a b c
+  maj3raw a b c
 
 namespace Maj32
 
@@ -42,10 +38,10 @@ instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
   main := main
   localLength _ := 32
   output _ i0 := varFromOffset (fields 32) i0
-  localLength_eq _ _ := by simp [circuit_norm, main, maj3, carrySave]
-  output_eq _ _ := by dsimp only [main, maj3, carrySave, circuit_norm]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, maj3, carrySave]
-  channelsLawful := by intro x n; simp [circuit_norm, main, maj3, carrySave]
+  localLength_eq _ _ := by simp [circuit_norm, main, maj3, maj3raw]
+  output_eq _ _ := by dsimp only [main, maj3, maj3raw, circuit_norm]
+  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, maj3, maj3raw]
+  channelsLawful := by intro x n; simp [circuit_norm, main, maj3, maj3raw]
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b ∧ Normalized input.c
@@ -192,7 +188,7 @@ private lemma spec_of_constraint
   exact key'.symm
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [maj3, carrySave]
+  circuit_proof_start [maj3, maj3raw]
   obtain ⟨ha, hb, hc⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b, h_input_c⟩ := h_input
   have h_ai : ∀ i : Fin 32, Expression.eval env input_var_a[i.val] = input_a[i] := by
@@ -207,31 +203,25 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i
     have := Vector.ext_iff.mp h_input_c i i.isLt
     simp [Vector.getElem_map] at this; exact this
-  -- Extract the two boolean constraints from h_holds.
-  obtain ⟨h_q_bool, h_out_bool⟩ := h_holds
   set z : fields 32 (F p) :=
     Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
       (var {index := i₀ + i} : Expression (F p))) with hz_def
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + i.val) := by
     intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
-  -- q[i] is boolean.
-  have hq_bool : ∀ i : Fin 32, IsBool z[i] := by
-    intro i; rw [h_z_get i, IsBool.iff_mul_sub_one]
-    have h := h_q_bool i; linear_combination h
-  -- The parity a[i]+b[i]+c[i]-2·q[i] is boolean.
-  have hout_bool : ∀ i : Fin 32,
-      IsBool (input_a[i] + input_b[i] + input_c[i] - 2 * z[i]) := by
-    intro i; rw [h_z_get i, IsBool.iff_mul_sub_one]
-    have h := h_out_bool i; rw [h_ai i, h_bi i, h_ci i] at h; linear_combination h
-  -- Bridge: the carry equals the majority expression.
+  -- The single Maj constraint at bit `i` pins `z[i]` to the majority expression.
   have h_eq' : ∀ i : Fin 32, z[i] =
-      input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) :=
-    fun i => carry_eq_maj (ha i) (hb i) (hc i) (hq_bool i) (hout_bool i)
+      input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) := by
+    intro i
+    have hcon : (env.get (i₀ + i.val) + input_a[i] + input_b[i] - 9 * input_c[i] + 3)
+          * (input_a[i] + input_b[i] + 6 * input_c[i] - 4) + 12 = 0 := by
+      have h := h_holds i; rw [h_ai i, h_bi i, h_ci i] at h; linear_combination h
+    have hmaj := maj3_unique (ha i) (hb i) (hc i) hcon
+    rw [h_z_get i]; linear_combination hmaj
   exact spec_of_constraint input_a input_b input_c z ha hb hc h_eq'
 
 omit [Fact (p > 2^35)] in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [maj3, carrySave]
+  circuit_proof_start [maj3, maj3raw]
   obtain ⟨ha, hb, hc⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b, h_input_c⟩ := h_input
   have h_ai : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_a[i.val] = input_a[i] := by
@@ -240,17 +230,11 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp [Vector.getElem_map] at this; exact this
   have h_ci : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_c[i.val] = input_c[i] := by
     intro i; have := Vector.ext_iff.mp h_input_c i i.isLt; simp [Vector.getElem_map] at this; exact this
-  refine ⟨fun i => ?_, fun i => ?_⟩
-  · have hq := (h_env.1) i
-    simp only [Vector.getElem_ofFn] at hq
-    rw [hq, h_ai i, h_bi i, h_ci i]
-    have hbool := maj_is_bool (ha i) (hb i) (hc i)
-    rw [IsBool.iff_mul_sub_one] at hbool; linear_combination hbool
-  · have hq := (h_env.1) i
-    simp only [Vector.getElem_ofFn] at hq
-    rw [hq, h_ai i, h_bi i, h_ci i]
-    have hbool := parity_is_bool (ha i) (hb i) (hc i)
-    rw [IsBool.iff_mul_sub_one] at hbool; linear_combination hbool
+  intro i
+  have henv := h_env i
+  simp only [Vector.getElem_ofFn] at henv
+  rw [henv, h_ai i, h_bi i, h_ci i]
+  linear_combination maj3_complete (ha i) (hb i) (hc i)
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   Assumptions := Assumptions; Spec := Spec
