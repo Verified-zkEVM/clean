@@ -1,4 +1,5 @@
 import Clean.Gadgets.SHA256.Add32
+import Clean.Gadgets.SHA256.AddMod32
 import Clean.Gadgets.SHA256.Ch32
 import Clean.Gadgets.SHA256.Maj32
 import Clean.Gadgets.SHA256.UpperSigma0
@@ -10,7 +11,10 @@ variable {p : ℕ} [Fact p.Prime]
 
 namespace Gadgets.SHA256
 
-variable [Fact (p > 2^33)]
+variable [Fact (p > 2^35)]
+
+private instance fact_six_le_eight : Fact ((6 : ℕ) ≤ 8) := ⟨by norm_num⟩
+private instance fact_seven_le_eight : Fact ((7 : ℕ) ≤ 8) := ⟨by norm_num⟩
 
 /-!
 # SHA-256 Round Function
@@ -22,10 +26,9 @@ State convention: `Vector (Var (fields 32) (F p)) 8` holds [a, b, c, d, e, f, g,
 where each word is a 32-bit vector with LSB at index 0.
 
 Witness count per round:
-  upperSigma1 = 64, ch32 = 32, 4×add32 = 4×33 = 132 for t1 chain
-  upperSigma0 = 64, maj32 = 64, add32 = 33 for t2
-  2×add32 = 2×33 = 66 for new_a, new_e
-  Total: 64 + 32 + 132 + 64 + 64 + 33 + 66 = 455
+  upperSigma1 = 64, ch32 = 32, upperSigma0 = 64, maj32 = 64,
+  2 × addMod32 = 2 × 35 = 70
+  Total: 64 + 32 + 64 + 64 + 70 = 294
 -/
 
 /-- One round of SHA-256 compression.
@@ -41,20 +44,14 @@ def sha256Round
     : Circuit (F p) (Vector (Var (fields 32) (F p)) 8) := do
   let a := state[0]; let b := state[1]; let c := state[2]; let d := state[3]
   let e := state[4]; let f := state[5]; let g := state[6]; let h := state[7]
-  -- t1 = h + Σ₁(e) + Ch(e,f,g) + k + w
   let sig1  ← subcircuit UpperSigma1.circuit e
   let ch    ← subcircuit Ch32.circuit ⟨e, f, g⟩
-  let t1_0  ← subcircuit Add32.circuit ⟨h, sig1⟩
-  let t1_1  ← subcircuit Add32.circuit ⟨t1_0, ch⟩
-  let t1_2  ← subcircuit Add32.circuit ⟨t1_1, k⟩
-  let t1    ← subcircuit Add32.circuit ⟨t1_2, w⟩
-  -- t2 = Σ₀(a) + Maj(a,b,c)
   let sig0  ← subcircuit UpperSigma0.circuit a
   let maj   ← subcircuit Maj32.circuit ⟨a, b, c⟩
-  let t2    ← subcircuit Add32.circuit ⟨sig0, maj⟩
-  -- new state
-  let new_a ← subcircuit Add32.circuit ⟨t1, t2⟩
-  let new_e ← subcircuit Add32.circuit ⟨d, t1⟩
+  -- new_e = (d + h + Σ₁(e) + Ch + k + w) mod 2^32
+  let new_e ← AddMod32.circuit (n := 6) #v[d, h, sig1, ch, k, w]
+  -- new_a = (h + Σ₁(e) + Ch + k + w + Σ₀(a) + Maj) mod 2^32
+  let new_a ← AddMod32.circuit (n := 7) #v[h, sig1, ch, k, w, sig0, maj]
   return #v[new_a, a, b, c, new_e, e, f, g]
 
 namespace SHA256Round
@@ -70,24 +67,25 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) :=
 
 instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
   main := main
-  localLength _ := 455
-  -- Explicit output: new_a/new_e are the output `z` vectors of the corresponding Add32
+  localLength _ := 294
+  -- Explicit output: new_a/new_e are the output `z` vectors of the corresponding AddMod32
   -- subcircuits at their starting offsets; the other six positions are inputs passed through.
+  -- Offsets are written additively (matching the subcircuit-length chain) so they unify
+  -- cheaply with the constraint-derived terms in the soundness proof.
   output input i0 := #v[
-    varFromOffset (fields 32) (i0 + 389),  -- new_a (offset = 64+32+33+33+33+33+64+64+33)
+    varFromOffset (fields 32) (i0 + 64 + 32 + 64 + 64 + 35),  -- new_a (offset 259)
     input.state[0], input.state[1], input.state[2],
-    varFromOffset (fields 32) (i0 + 422),  -- new_e (= new_a's offset + 33)
+    varFromOffset (fields 32) (i0 + 64 + 32 + 64 + 64),  -- new_e (offset 224)
     input.state[4], input.state[5], input.state[6]
   ]
-  localLength_eq := by intro input offset; simp [circuit_norm, main, sha256Round, Add32.circuit, UpperSigma0.circuit, UpperSigma1.circuit, Ch32.circuit, Maj32.circuit]
+  localLength_eq := by intro input offset; simp [circuit_norm, main, sha256Round, AddMod32.circuit, AddMod32.elaborated, UpperSigma0.circuit, UpperSigma1.circuit, Ch32.circuit, Maj32.circuit]
   output_eq := by
     intro input offset
-    dsimp only [main, sha256Round, circuit_norm,
-      Add32.circuit, Add32.elaborated, UpperSigma0.circuit, UpperSigma0.elaborated,
+    simp only [circuit_norm, main, sha256Round,
+      AddMod32.circuit, AddMod32.elaborated, UpperSigma0.circuit, UpperSigma0.elaborated,
       UpperSigma1.circuit, UpperSigma1.elaborated, Ch32.circuit, Ch32.elaborated,
-      Maj32.circuit, Maj32.elaborated, Add32.main, UpperSigma0.main, UpperSigma1.main,
-      Ch32.main, Maj32.main, add32, upperSigma0, upperSigma1, ch32, maj32, xor32]
-  channelsLawful := by intro input offset; simp [circuit_norm, main, sha256Round, Add32.circuit, UpperSigma0.circuit, UpperSigma1.circuit, Ch32.circuit, Maj32.circuit]
+      Maj32.circuit, Maj32.elaborated]
+  channelsLawful := by intro input offset; simp [circuit_norm, main, sha256Round, AddMod32.circuit, AddMod32.elaborated, UpperSigma0.circuit, UpperSigma1.circuit, Ch32.circuit, Maj32.circuit]
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 8, Normalized input.state[i]) ∧ Normalized input.k ∧ Normalized input.w
@@ -97,9 +95,201 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
     Specs.SHA256.sha256Round (input.state.map valueBits) (valueBits input.k) (valueBits input.w)
   ∧ ∀ i : Fin 8, Normalized out[i]
 
+/-! ## Flatten lemmas: nested binary `add32` ↔ a single multi-operand modular sum -/
+
+/-- The inner 5-term nested `add32` chain is `ModEq` to the flat sum (`add32`-form). -/
+private lemma chain5_modEq (h s1 ch k w : ℕ) :
+    _root_.add32 (_root_.add32 (_root_.add32 (_root_.add32 h s1) ch) k) w
+      ≡ h + s1 + ch + k + w [MOD 2 ^ 32] := by
+  unfold _root_.add32
+  have e1 : (h + s1) % 2 ^ 32 ≡ h + s1 [MOD 2 ^ 32] := Nat.mod_modEq _ _
+  have e2 : ((h + s1) % 2 ^ 32 + ch) % 2 ^ 32 ≡ h + s1 + ch [MOD 2 ^ 32] :=
+    (Nat.mod_modEq _ _).trans (e1.add_right ch)
+  have e3 : (((h + s1) % 2 ^ 32 + ch) % 2 ^ 32 + k) % 2 ^ 32 ≡ h + s1 + ch + k [MOD 2 ^ 32] :=
+    (Nat.mod_modEq _ _).trans (e2.add_right k)
+  exact (Nat.mod_modEq _ _).trans (e3.add_right w)
+
+/-- new_e: opsValueSum of #v[d,h,Σ₁,Ch,k,w] reduces to the spec's nested add32. -/
+private lemma newe_flatten (d h s1 ch k w : ℕ) :
+    (d + h + s1 + ch + k + w) % 2 ^ 32
+      = _root_.add32 d (_root_.add32 (_root_.add32 (_root_.add32 (_root_.add32 h s1) ch) k) w) := by
+  show (d + h + s1 + ch + k + w) % 2 ^ 32
+      = (d + _root_.add32 (_root_.add32 (_root_.add32 (_root_.add32 h s1) ch) k) w) % 2 ^ 32
+  have key : d + h + s1 + ch + k + w
+      ≡ d + _root_.add32 (_root_.add32 (_root_.add32 (_root_.add32 h s1) ch) k) w [MOD 2 ^ 32] := by
+    have hr : d + h + s1 + ch + k + w = d + (h + s1 + ch + k + w) := by ring
+    rw [hr]
+    exact Nat.ModEq.add_left d (chain5_modEq h s1 ch k w).symm
+  exact key
+
+/-- new_a: opsValueSum of #v[h,Σ₁,Ch,k,w,Σ₀,Maj] reduces to the spec's nested add32. -/
+private lemma newa_flatten (h s1 ch k w s0 maj : ℕ) :
+    (h + s1 + ch + k + w + s0 + maj) % 2 ^ 32
+      = _root_.add32 (_root_.add32 (_root_.add32 (_root_.add32 (_root_.add32 h s1) ch) k) w)
+          (_root_.add32 s0 maj) := by
+  show (h + s1 + ch + k + w + s0 + maj) % 2 ^ 32
+      = (_root_.add32 (_root_.add32 (_root_.add32 (_root_.add32 h s1) ch) k) w
+          + _root_.add32 s0 maj) % 2 ^ 32
+  have hR : _root_.add32 s0 maj ≡ s0 + maj [MOD 2 ^ 32] := Nat.mod_modEq _ _
+  have key : h + s1 + ch + k + w + s0 + maj
+      ≡ _root_.add32 (_root_.add32 (_root_.add32 (_root_.add32 h s1) ch) k) w
+          + _root_.add32 s0 maj [MOD 2 ^ 32] := by
+    have hr : h + s1 + ch + k + w + s0 + maj = (h + s1 + ch + k + w) + (s0 + maj) := by ring
+    rw [hr]
+    exact Nat.ModEq.add (chain5_modEq h s1 ch k w).symm hR.symm
+  exact key
+
+/-! ## Helper lemmas to unfold the explicit n=6 / n=7 operand vectors -/
+
+omit [Fact (p > 2 ^ 35)] in
+/-- Elementwise evaluation of a 6-element variable vector. -/
+private lemma eval_v6 (env : Environment (F p)) (a b c d e f : Var (fields 32) (F p)) :
+    (eval env (#v[a, b, c, d, e, f] : Var (ProvableVector (fields 32) 6) (F p)) :
+      ProvableVector (fields 32) 6 (F p)) =
+      #v[Vector.map (Expression.eval env) a, Vector.map (Expression.eval env) b,
+         Vector.map (Expression.eval env) c, Vector.map (Expression.eval env) d,
+         Vector.map (Expression.eval env) e, Vector.map (Expression.eval env) f] := by
+  rw [eval_vector]
+  ext j hj
+  rcases (by omega : j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 ∨ j = 4 ∨ j = 5) with
+    rfl | rfl | rfl | rfl | rfl | rfl <;>
+    · rename_i hi
+      simp only [Vector.getElem_map, Vector.getElem_mk, List.getElem_toArray,
+        List.getElem_cons_zero, List.getElem_cons_succ]
+      exact (ProvableType.getElem_eval_fields env _ _ hi).symm
+
+omit [Fact (p > 2 ^ 35)] in
+/-- Elementwise evaluation of a 7-element variable vector. -/
+private lemma eval_v7 (env : Environment (F p)) (a b c d e f g : Var (fields 32) (F p)) :
+    (eval env (#v[a, b, c, d, e, f, g] : Var (ProvableVector (fields 32) 7) (F p)) :
+      ProvableVector (fields 32) 7 (F p)) =
+      #v[Vector.map (Expression.eval env) a, Vector.map (Expression.eval env) b,
+         Vector.map (Expression.eval env) c, Vector.map (Expression.eval env) d,
+         Vector.map (Expression.eval env) e, Vector.map (Expression.eval env) f,
+         Vector.map (Expression.eval env) g] := by
+  rw [eval_vector]
+  ext j hj
+  rcases (by omega : j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 ∨ j = 4 ∨ j = 5 ∨ j = 6) with
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+    · rename_i hi
+      simp only [Vector.getElem_map, Vector.getElem_mk, List.getElem_toArray,
+        List.getElem_cons_zero, List.getElem_cons_succ]
+      exact (ProvableType.getElem_eval_fields env _ _ hi).symm
+
+omit [Fact (p > 2 ^ 35)] in
+/-- `AddMod32.Assumptions` of a 6-operand vector unfolds to six `Normalized` facts. -/
+private lemma addMod32_assum6_iff (env : Environment (F p))
+    (a b c d e f : Var (fields 32) (F p)) :
+    (∀ j : Fin 6, Normalized ((eval env (#v[a, b, c, d, e, f] :
+        Var (ProvableVector (fields 32) 6) (F p)) :
+        ProvableVector (fields 32) 6 (F p))[j])) ↔
+      Normalized (Vector.map (Expression.eval env) a) ∧
+      Normalized (Vector.map (Expression.eval env) b) ∧
+      Normalized (Vector.map (Expression.eval env) c) ∧
+      Normalized (Vector.map (Expression.eval env) d) ∧
+      Normalized (Vector.map (Expression.eval env) e) ∧
+      Normalized (Vector.map (Expression.eval env) f) := by
+  rw [eval_v6]
+  constructor
+  · intro h
+    exact ⟨h 0, h 1, h 2, h 3, h 4, h 5⟩
+  · rintro ⟨ha, hb, hc, hd, he, hf⟩ j
+    fin_cases j <;> assumption
+
+omit [Fact (p > 2 ^ 35)] in
+/-- `AddMod32.Assumptions` of a 7-operand vector unfolds to seven `Normalized` facts. -/
+private lemma addMod32_assum7_iff (env : Environment (F p))
+    (a b c d e f g : Var (fields 32) (F p)) :
+    (∀ j : Fin 7, Normalized ((eval env (#v[a, b, c, d, e, f, g] :
+        Var (ProvableVector (fields 32) 7) (F p)) :
+        ProvableVector (fields 32) 7 (F p))[j])) ↔
+      Normalized (Vector.map (Expression.eval env) a) ∧
+      Normalized (Vector.map (Expression.eval env) b) ∧
+      Normalized (Vector.map (Expression.eval env) c) ∧
+      Normalized (Vector.map (Expression.eval env) d) ∧
+      Normalized (Vector.map (Expression.eval env) e) ∧
+      Normalized (Vector.map (Expression.eval env) f) ∧
+      Normalized (Vector.map (Expression.eval env) g) := by
+  rw [eval_v7]
+  constructor
+  · intro h
+    exact ⟨h 0, h 1, h 2, h 3, h 4, h 5, h 6⟩
+  · rintro ⟨ha, hb, hc, hd, he, hf, hg⟩ j
+    fin_cases j <;> assumption
+
+omit [Fact (p > 2 ^ 35)] in
+/-- `opsValueSum` of a 6-operand vector expands to six `valueBits` summands. -/
+private lemma addMod32_opsValueSum6 (env : Environment (F p))
+    (a b c d e f : Var (fields 32) (F p)) :
+    opsValueSum (eval env (#v[a, b, c, d, e, f] :
+        Var (ProvableVector (fields 32) 6) (F p)) :
+        ProvableVector (fields 32) 6 (F p)) =
+      valueBits (Vector.map (Expression.eval env) a) +
+      valueBits (Vector.map (Expression.eval env) b) +
+      valueBits (Vector.map (Expression.eval env) c) +
+      valueBits (Vector.map (Expression.eval env) d) +
+      valueBits (Vector.map (Expression.eval env) e) +
+      valueBits (Vector.map (Expression.eval env) f) := by
+  unfold opsValueSum
+  rw [eval_v6, Fin.sum_univ_six]
+  norm_num [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero,
+    List.getElem_cons_succ]
+
+omit [Fact (p > 2 ^ 35)] in
+/-- `opsValueSum` of a 7-operand vector expands to seven `valueBits` summands. -/
+private lemma addMod32_opsValueSum7 (env : Environment (F p))
+    (a b c d e f g : Var (fields 32) (F p)) :
+    opsValueSum (eval env (#v[a, b, c, d, e, f, g] :
+        Var (ProvableVector (fields 32) 7) (F p)) :
+        ProvableVector (fields 32) 7 (F p)) =
+      valueBits (Vector.map (Expression.eval env) a) +
+      valueBits (Vector.map (Expression.eval env) b) +
+      valueBits (Vector.map (Expression.eval env) c) +
+      valueBits (Vector.map (Expression.eval env) d) +
+      valueBits (Vector.map (Expression.eval env) e) +
+      valueBits (Vector.map (Expression.eval env) f) +
+      valueBits (Vector.map (Expression.eval env) g) := by
+  unfold opsValueSum
+  rw [eval_v7, Fin.sum_univ_seven]
+  norm_num [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero,
+    List.getElem_cons_succ]
+
+omit [Fact (p > 2 ^ 35)] in
+/-- The eight output positions are normalized: pass-throughs come from `hnd` (the input-state
+    words, in mapped form), `new_a`/`new_e` from the two `AddMod32` outputs. Factored out as
+    its own declaration so the `fin_cases` over the (large) output vector gets a fresh
+    heartbeat budget, keeping the main soundness proof within the limit. -/
+private lemma output_normalized (i₀ : ℕ) (env : Environment (F p))
+    (state_var : SHA256State (Expression (F p)))
+    (hnd : ∀ (i : ℕ) (hi : i < 8),
+      Normalized (Vector.map (Expression.eval env) (state_var[i]'hi)))
+    (n_newa : Normalized (Vector.map (Expression.eval env)
+      (varFromOffset (fields 32) (i₀ + 64 + 32 + 64 + 64 + 35))))
+    (n_newe : Normalized (Vector.map (Expression.eval env)
+      (varFromOffset (fields 32) (i₀ + 64 + 32 + 64 + 64)))) :
+    ∀ i : Fin 8, Normalized (eval env
+      (#v[varFromOffset (fields 32) (i₀ + 64 + 32 + 64 + 64 + 35),
+        state_var[0], state_var[1], state_var[2],
+        varFromOffset (fields 32) (i₀ + 64 + 32 + 64 + 64),
+        state_var[4], state_var[5], state_var[6]] :
+        Var SHA256State (F p)))[i] := by
+  intro i
+  fin_cases i <;>
+    simp only [Fin.getElem_fin, eval_vector, Vector.getElem_map, Vector.getElem_mk,
+      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ] <;>
+    rw [CircuitType.eval_var_fields]
+  · exact n_newa
+  · exact hnd 0 (by omega)
+  · exact hnd 1 (by omega)
+  · exact hnd 2 (by omega)
+  · exact n_newe
+  · exact hnd 4 (by omega)
+  · exact hnd 5 (by omega)
+  · exact hnd 6 (by omega)
+
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start [sha256Round, UpperSigma1.circuit, UpperSigma0.circuit,
-    Ch32.circuit, Maj32.circuit, Add32.circuit]
+    Ch32.circuit, Maj32.circuit]
   obtain ⟨h_state_norm, h_k_norm, h_w_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_k, h_input_w⟩ := h_input
   have h_eval (i : ℕ) (hi : i < 8) :
@@ -108,75 +298,66 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [h_input_state] at h
     rw [← CircuitType.eval_var_fields env (input_var_state[i]'hi)]
     exact h
-  simp only [UpperSigma1.Assumptions, UpperSigma0.Assumptions,
-    Ch32.Assumptions, Maj32.Assumptions, Add32.Assumptions,
-    UpperSigma1.Spec, UpperSigma0.Spec,
-    Ch32.Spec, Maj32.Spec, Add32.Spec, h_eval, and_imp] at h_holds
-  obtain ⟨c_sig1, c_ch, c_t10, c_t11, c_t12, c_t1, c_sig0, c_maj, c_t2, c_newa, c_newe⟩ := h_holds
-  have h_a : Normalized input_state[0] := h_state_norm 0
-  have h_b : Normalized input_state[1] := h_state_norm 1
-  have h_c : Normalized input_state[2] := h_state_norm 2
-  have h_d : Normalized input_state[3] := h_state_norm 3
-  have h_e : Normalized input_state[4] := h_state_norm 4
-  have h_f : Normalized input_state[5] := h_state_norm 5
-  have h_g : Normalized input_state[6] := h_state_norm 6
-  have h_h : Normalized input_state[7] := h_state_norm 7
-  -- Chain the spec applications.
-  have s_sig1 := c_sig1 h_e; clear c_sig1
-  have s_ch := c_ch h_e h_f h_g; clear c_ch
-  have s_t10 := c_t10 h_h s_sig1.2; clear c_t10
-  have s_t11 := c_t11 s_t10.2 s_ch.2; clear c_t11
-  have s_t12 := c_t12 s_t11.2 h_k_norm; clear c_t12
-  have s_t1 := c_t1 s_t12.2 h_w_norm; clear c_t1
-  have s_sig0 := c_sig0 h_a; clear c_sig0
-  have s_maj := c_maj h_a h_b h_c; clear c_maj
-  have s_t2 := c_t2 s_sig0.2 s_maj.2; clear c_t2
-  have s_newa := c_newa s_t1.2 s_t2.2; clear c_newa
-  have s_newe := c_newe h_d s_t1.2; clear c_newe
-  refine ⟨?_, ?_⟩
-  · -- Vector equality: out.map valueBits = sha256Round-spec
-    -- Compose the eight element-wise equations: v_newa / v_newe from the Add32 subcircuits
-    -- (after chaining in the upstream values) and h_eval for the pass-through positions.
-    have v_newa := s_newa.1
-    have v_newe := s_newe.1
-    rw [s_t1.1, s_t12.1, s_t11.1, s_t10.1, s_sig1.1, s_ch.1, s_t2.1, s_sig0.1, s_maj.1] at v_newa
-    rw [s_t1.1, s_t12.1, s_t11.1, s_t10.1, s_sig1.1, s_ch.1] at v_newe
-    clear s_sig1 s_ch s_t10 s_t11 s_t12 s_t1 s_sig0 s_maj s_t2 s_newa s_newe
+  -- Normalized facts in the mapped (`Vector.map eval`) form the subcircuit specs expect.
+  have hnd (i : ℕ) (hi : i < 8) :
+      Normalized (Vector.map (Expression.eval env) (input_var_state[i]'hi)) := by
+    rw [h_eval i hi]; exact h_state_norm ⟨i, hi⟩
+  have n_k : Normalized (Vector.map (Expression.eval env) input_var_k) := by
+    rw [h_input_k]; exact h_k_norm
+  have n_w : Normalized (Vector.map (Expression.eval env) input_var_w) := by
+    rw [h_input_w]; exact h_w_norm
+  -- Split the round's constraints into the six subcircuit obligations, unfolding the four cheap
+  -- subcircuits and supplying their assumptions (`hnd` gives each input word as normalized).
+  obtain ⟨c_sig1, c_ch, c_sig0, c_maj, c_newe, c_newa⟩ := h_holds
+  simp only [UpperSigma1.Assumptions, UpperSigma1.Spec] at c_sig1
+  have s_sig1 := c_sig1 (hnd 4 (by omega)); clear c_sig1
+  simp only [Ch32.Assumptions, Ch32.Spec, and_imp] at c_ch
+  have s_ch := c_ch (hnd 4 (by omega)) (hnd 5 (by omega)) (hnd 6 (by omega)); clear c_ch
+  simp only [UpperSigma0.Assumptions, UpperSigma0.Spec] at c_sig0
+  have s_sig0 := c_sig0 (hnd 0 (by omega)); clear c_sig0
+  simp only [Maj32.Assumptions, Maj32.Spec, and_imp] at c_maj
+  have s_maj := c_maj (hnd 0 (by omega)) (hnd 1 (by omega)) (hnd 2 (by omega)); clear c_maj
+  simp only [AddMod32.circuit, AddMod32.Assumptions, AddMod32.Spec, addMod32_assum6_iff] at c_newe
+  obtain ⟨v_newe, n_newe⟩ :=
+    c_newe ⟨hnd 3 (by omega), hnd 7 (by omega), s_sig1.2, s_ch.2, n_k, n_w⟩
+  clear c_newe
+  simp only [AddMod32.circuit, AddMod32.Assumptions, AddMod32.Spec, addMod32_assum7_iff] at c_newa
+  obtain ⟨v_newa, n_newa⟩ :=
+    c_newa ⟨hnd 7 (by omega), s_sig1.2, s_ch.2, n_k, n_w, s_sig0.2, s_maj.2⟩
+  clear c_newa
+  rw [addMod32_opsValueSum6] at v_newe
+  rw [addMod32_opsValueSum7] at v_newa
+  -- Reduce the AddMod32 outputs (`ElaboratedCircuit.output`) to the `varFromOffset`/`mapRange`
+  -- form used by the explicit `output` field, so the `v_newa`/`v_newe` rewrites unify below.
+  simp only [circuit_norm] at v_newe v_newa
+  refine ⟨⟨?_, ?_⟩, Or.inl rfl, Or.inl rfl⟩
+  · clear n_newe n_newa
+    rw [newe_flatten] at v_newe
+    rw [newa_flatten] at v_newa
+    rw [s_sig1.1, s_ch.1] at v_newe
+    rw [s_sig1.1, s_ch.1, s_sig0.1, s_maj.1] at v_newa
+    clear s_sig1 s_ch s_sig0 s_maj
+    -- Move all operand values to the spec's `valueBits input_*` form.
+    have ek : valueBits (Vector.map (Expression.eval env) input_var_k) = valueBits input_k :=
+      congrArg valueBits h_input_k
+    have ew : valueBits (Vector.map (Expression.eval env) input_var_w) = valueBits input_w :=
+      congrArg valueBits h_input_w
     have e (i : ℕ) (hi : i < 8) :
         valueBits (Vector.map (Expression.eval env) input_var_state[i]) = valueBits input_state[i] :=
       congrArg valueBits (h_eval i hi)
-    -- Reduce `(a + b) % 2^32` to `_root_.add32 a b` in v_newa/v_newe so they match the spec literal.
-    simp only [show ∀ a b : ℕ, (a + b) % 2 ^ 32 = _root_.add32 a b from fun _ _ => rfl] at v_newa v_newe
-    -- Push the outer `Vector.map valueBits ∘ eval env` inside the literal #v[...] and unfold the
-    -- spec, so both sides become explicit 8-element vectors with matching slot shapes.
+    simp only [ek, ew, e 0 (by omega), e 1 (by omega), e 2 (by omega), e 3 (by omega),
+      e 4 (by omega), e 5 (by omega), e 6 (by omega), e 7 (by omega)] at v_newe v_newa
     simp only [eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
       circuit_norm]
-    simp only [Specs.SHA256.sha256Round, Vector.getElem_map]
-    rw [v_newa, v_newe, e 0 (by omega), e 1 (by omega), e 2 (by omega),
-      e 4 (by omega), e 5 (by omega), e 6 (by omega)]
-  · -- Normalized for each position
-    intro i
-    fin_cases i
-    · convert s_newa.2 using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 0 (by omega)).symm ▸ h_a using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 1 (by omega)).symm ▸ h_b using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 2 (by omega)).symm ▸ h_c using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert s_newe.2 using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 4 (by omega)).symm ▸ h_e using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 5 (by omega)).symm ▸ h_f using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 6 (by omega)).symm ▸ h_g using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+    simp only [Specs.SHA256.sha256Round, Vector.getElem_map,
+      e 0 (by omega), e 1 (by omega), e 2 (by omega),
+      e 4 (by omega), e 5 (by omega), e 6 (by omega), v_newa, v_newe]
+  · -- Normalized for each output position, via the factored-out lemma (own heartbeat budget).
+    exact output_normalized i₀ env input_var_state hnd n_newa n_newe
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start [sha256Round, UpperSigma1.circuit, UpperSigma0.circuit,
-    Ch32.circuit, Maj32.circuit, Add32.circuit]
+    Ch32.circuit, Maj32.circuit]
   obtain ⟨h_state_norm, h_k_norm, h_w_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_k, h_input_w⟩ := h_input
   have h_eval (i : ℕ) (hi : i < 8) :
@@ -185,43 +366,32 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     rw [h_input_state] at h
     rw [← CircuitType.eval_var_fields env.toEnvironment (input_var_state[i]'hi)]
     exact h
-  have h_a := h_state_norm 0; have h_b := h_state_norm 1
-  have h_c := h_state_norm 2; have h_d := h_state_norm 3
-  have h_e := h_state_norm 4; have h_f := h_state_norm 5
-  have h_g := h_state_norm 6; have h_h := h_state_norm 7
-  -- Spec implications for the subcircuits (after circuit_norm) come paired with
-  -- the assumptions we must supply.
+  have hnd (i : ℕ) (hi : i < 8) :
+      Normalized (Vector.map (Expression.eval env.toEnvironment) (input_var_state[i]'hi)) := by
+    rw [h_eval i hi]; exact h_state_norm ⟨i, hi⟩
+  have n_k : Normalized (Vector.map (Expression.eval env.toEnvironment) input_var_k) := by
+    rw [h_input_k]; exact h_k_norm
+  have n_w : Normalized (Vector.map (Expression.eval env.toEnvironment) input_var_w) := by
+    rw [h_input_w]; exact h_w_norm
+  -- Extract the (Σ₁/Ch/Σ₀/Maj) normalized outputs from the prover constraints.
   simp only [UpperSigma1.Assumptions, UpperSigma0.Assumptions,
-    Ch32.Assumptions, Maj32.Assumptions, Add32.Assumptions,
-    UpperSigma1.Spec, UpperSigma0.Spec,
-    Ch32.Spec, Maj32.Spec, Add32.Spec, and_imp] at h_env ⊢
-  obtain ⟨e_sig1, e_ch, e_t10, e_t11, e_t12, e_t1, e_sig0, e_maj, e_t2, e_newa, e_newe⟩ := h_env
-  rw [h_eval 4 (by omega)] at e_sig1
-  obtain ⟨v_sig1, n_sig1⟩ := e_sig1 h_e
-  rw [h_eval 4 (by omega), h_eval 5 (by omega), h_eval 6 (by omega)] at e_ch
-  obtain ⟨v_ch, n_ch⟩ := e_ch h_e h_f h_g
-  rw [h_eval 7 (by omega)] at e_t10
-  obtain ⟨v_t10, n_t10⟩ := e_t10 h_h n_sig1
-  obtain ⟨v_t11, n_t11⟩ := e_t11 n_t10 n_ch
-  obtain ⟨v_t12, n_t12⟩ := e_t12 n_t11 h_k_norm
-  obtain ⟨_, n_t1⟩ := e_t1 n_t12 h_w_norm
-  rw [h_eval 0 (by omega)] at e_sig0
-  obtain ⟨v_sig0, n_sig0⟩ := e_sig0 h_a
-  rw [h_eval 0 (by omega), h_eval 1 (by omega), h_eval 2 (by omega)] at e_maj
-  obtain ⟨_, n_maj⟩ := e_maj h_a h_b h_c
-  -- Goal: the chain of assumptions for the subcircuits
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rw [h_eval 4 (by omega)]; exact h_e
-  · rw [h_eval 4 (by omega), h_eval 5 (by omega), h_eval 6 (by omega)]; exact ⟨h_e, h_f, h_g⟩
-  · rw [h_eval 7 (by omega)]; exact ⟨h_h, n_sig1⟩
-  · exact ⟨n_t10, n_ch⟩
-  · exact ⟨n_t11, h_k_norm⟩
-  · exact ⟨n_t12, h_w_norm⟩
-  · rw [h_eval 0 (by omega)]; exact h_a
-  · rw [h_eval 0 (by omega), h_eval 1 (by omega), h_eval 2 (by omega)]; exact ⟨h_a, h_b, h_c⟩
-  · exact ⟨n_sig0, n_maj⟩
-  · exact ⟨n_t1, by simp_all⟩
-  · rw [h_eval 3 (by omega)]; exact ⟨h_d, n_t1⟩
+    Ch32.Assumptions, Maj32.Assumptions, UpperSigma1.Spec, UpperSigma0.Spec,
+    Ch32.Spec, Maj32.Spec, and_imp] at h_env
+  obtain ⟨e_sig1, e_ch, e_sig0, e_maj, -, -⟩ := h_env
+  obtain ⟨_, n_sig1⟩ := e_sig1 (hnd 4 (by omega))
+  obtain ⟨_, n_ch⟩ := e_ch (hnd 4 (by omega)) (hnd 5 (by omega)) (hnd 6 (by omega))
+  obtain ⟨_, n_sig0⟩ := e_sig0 (hnd 0 (by omega))
+  obtain ⟨_, n_maj⟩ := e_maj (hnd 0 (by omega)) (hnd 1 (by omega)) (hnd 2 (by omega))
+  -- Provide the assumptions each subcircuit needs (state words / k / w / subcircuit outputs).
+  simp only [UpperSigma1.Assumptions, UpperSigma0.Assumptions,
+    Ch32.Assumptions, Maj32.Assumptions, AddMod32.circuit, AddMod32.Assumptions,
+    addMod32_assum6_iff, addMod32_assum7_iff]
+  exact ⟨hnd 4 (by omega),
+    ⟨hnd 4 (by omega), hnd 5 (by omega), hnd 6 (by omega)⟩,
+    hnd 0 (by omega),
+    ⟨hnd 0 (by omega), hnd 1 (by omega), hnd 2 (by omega)⟩,
+    ⟨hnd 3 (by omega), hnd 7 (by omega), n_sig1, n_ch, n_k, n_w⟩,
+    ⟨hnd 7 (by omega), n_sig1, n_ch, n_k, n_w, n_sig0, n_maj⟩⟩
 
 def circuit : FormalCircuit (F p) Inputs SHA256State where
   Assumptions := Assumptions
