@@ -55,9 +55,15 @@ Current pure-R1CS bit-level implementation, lookups = 0 throughout:
   Σ₀/Σ₁/σ₀/σ₁    witnesses  32   constraints  32
   Maj32          witnesses  32   constraints  32
   SHA256Round    witnesses 198   constraints 200
-  Schedule       witnesses  4752 constraints  4800
+  Schedule       witnesses  4704 constraints  4752
   64 rounds      witnesses 12672 constraints 12800
-  CompressBlock  witnesses 17688 constraints 17872
+  CompressBlock  witnesses 17640 constraints 17824
+
+`AddMod32` uses the minimal carry width `cw` per call: the operand sum is `< n·2^32`, so its
+quotient by `2^32` is `≤ n - 1` and `cw` bits suffice when `n ≤ 2^cw`.  The round adds
+(`n = 6, 7`) need `cw = 3`, but the schedule add (`n = 4`) needs only `cw = 2`, saving one
+carry witness/constraint on each of the 48 schedule steps (`-48` witnesses, `-48` constraints
+versus a uniform 3-bit carry).
 
 Both the four Σ/σ functions (3-input XORs) and `Maj` (3-input majority) use a *single* R1CS
 constraint per output bit.  Rather than the carry-save fold (two boolean asserts per bit), each

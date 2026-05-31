@@ -15,6 +15,10 @@ variable [Fact (p > 2^35)]
 
 private instance fact_six_le_eight : Fact ((6 : ℕ) ≤ 8) := ⟨by norm_num⟩
 private instance fact_seven_le_eight : Fact ((7 : ℕ) ≤ 8) := ⟨by norm_num⟩
+-- Carry-width facts for the two `AddMod32` adds (both use `cw = 3`).
+private instance : Fact ((6 : ℕ) ≤ 2^3) := ⟨by norm_num⟩
+private instance : Fact ((7 : ℕ) ≤ 2^3) := ⟨by norm_num⟩
+private instance : Fact ((2 : ℕ)^3 ≤ 8) := ⟨by norm_num⟩
 
 /-!
 # SHA-256 Round Function
@@ -49,9 +53,9 @@ def sha256Round
   let sig0  ← subcircuit UpperSigma0.circuit a
   let maj   ← subcircuit Maj32.circuit ⟨a, b, c⟩
   -- new_e = (d + h + Σ₁(e) + Ch + k + w) mod 2^32
-  let new_e ← AddMod32.circuit (n := 6) #v[d, h, sig1, ch, k, w]
+  let new_e ← AddMod32.circuit (n := 6) (cw := 3) #v[d, h, sig1, ch, k, w]
   -- new_a = (h + Σ₁(e) + Ch + k + w + Σ₀(a) + Maj) mod 2^32
-  let new_a ← AddMod32.circuit (n := 7) #v[h, sig1, ch, k, w, sig0, maj]
+  let new_a ← AddMod32.circuit (n := 7) (cw := 3) #v[h, sig1, ch, k, w, sig0, maj]
   return #v[new_a, a, b, c, new_e, e, f, g]
 
 namespace SHA256Round
@@ -329,7 +333,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rw [addMod32_opsValueSum7] at v_newa
   -- Reduce the AddMod32 outputs (`ElaboratedCircuit.output`) to the `varFromOffset`/`mapRange`
   -- form used by the explicit `output` field, so the `v_newa`/`v_newe` rewrites unify below.
-  simp only [circuit_norm] at v_newe v_newa
+  simp only [circuit_norm, AddMod32.elaborated] at v_newe v_newa
   refine ⟨⟨?_, ?_⟩, Or.inl rfl, Or.inl rfl⟩
   · clear n_newe n_newa
     rw [newe_flatten] at v_newe

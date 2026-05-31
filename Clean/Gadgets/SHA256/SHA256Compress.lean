@@ -416,13 +416,13 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) := d
 
 instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
   main := main
-  -- message schedule (48 × 99) + 64 rounds (64 × 198) + 8 Davies-Meyer adds (8 × 33)
-  localLength _ := 48 * 99 + 64 * 198 + 8 * 33
+  -- message schedule (48 × 98) + 64 rounds (64 × 198) + 8 Davies-Meyer adds (8 × 33)
+  localLength _ := 48 * 98 + 64 * 198 + 8 * 33
   localLength_eq input offset := by
     simp only [main, circuit_norm]; rfl
   output input i0 :=
     Vector.mapFinRange 8 fun i =>
-      varFromOffset (fields 32) (i0 + 48 * 99 + 64 * 198 + i.val * 33)
+      varFromOffset (fields 32) (i0 + 48 * 98 + 64 * 198 + i.val * 33)
   output_eq input offset := by
     simp only [main, circuit_norm]; rfl
   subcircuitsConsistent input offset := by
@@ -462,7 +462,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     exact h_state_norm i
   have h_state_b : ∀ i : Fin 8,
       Normalized (Vector.map (Expression.eval env)
-        (SHA256Rounds.stateVar (i₀ + 48 * 99) input_var_state 64)[i.val]) := by
+        (SHA256Rounds.stateVar (i₀ + 48 * 98) input_var_state 64)[i.val]) := by
     intro i
     have := h_rounds_norm i
     rw [← getElem_eval_vector, CircuitType.eval_var_fields] at this
@@ -482,7 +482,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [← CircuitType.eval_var_fields, getElem_eval_vector, h_input_state]
   have h_rounds_eq : ∀ i : Fin 8,
       valueBits (Vector.map (Expression.eval env)
-        (SHA256Rounds.stateVar (i₀ + 48 * 99) input_var_state 64)[i.val])
+        (SHA256Rounds.stateVar (i₀ + 48 * 98) input_var_state 64)[i.val])
         = (Specs.SHA256.sha256Compress (input_state.map valueBits)
             (Specs.SHA256.messageSchedule (input_block.map valueBits)))[i.val]'i.isLt := by
     intro i
@@ -494,11 +494,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   have h_index : ∀ (i : ℕ) (hi : i < 8),
       (eval env ((Vector.mapFinRange 8 fun (j : Fin 8) ↦
               Vector.mapRange 32 fun i_1 ↦
-                var { index := i₀ + 48 * 99 + 64 * 198 + j.val * 33 + i_1 }) :
+                var { index := i₀ + 48 * 98 + 64 * 198 + j.val * 33 + i_1 }) :
             Var SHA256State (F p)))[i]'hi
           = Vector.map (Expression.eval env)
               (Vector.mapRange 32 fun i_1 ↦
-                var (F := F p) { index := i₀ + 48 * 99 + 64 * 198 + i * 33 + i_1 }) := by
+                var (F := F p) { index := i₀ + 48 * 98 + 64 * 198 + i * 33 + i_1 }) := by
     intro i hi
     rw [← getElem_eval_vector, CircuitType.eval_var_fields, Vector.getElem_mapFinRange]
   refine ⟨?_, ?_⟩

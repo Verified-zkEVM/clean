@@ -11,21 +11,31 @@ namespace Gadgets.SHA256
 Adds `n ≤ 8` 32-bit words (as `fields 32` bit vectors, LSB first) modulo `2^32` in a single
 range reduction, exploiting that linear combinations are free in R1CS.  Instead of chaining
 binary `add32` (each re-witnessing 32 output bits), we sum the operands as one free linear
-combination and bit-decompose the result once, with a 3-bit carry.
+combination and bit-decompose the result once, with a `cw`-bit carry.
 
 R1CS structure (per call):
-- 32 witnesses for output bits `z[0..31]`, 3 witnesses for carry bits `c[0..2]`
-- 32 + 3 boolean constraints
-- 1  linear constraint: `Σ_j valueBits(op_j) = valueBits(z) + 2^32 · (c0 + 2·c1 + 4·c2)`
+- 32 witnesses for output bits `z[0..31]`, `cw` witnesses for carry bits `c[0..cw-1]`
+- 32 + `cw` boolean constraints
+- 1  linear constraint: `Σ_j valueBits(op_j) = valueBits(z) + 2^32 · Σ_i 2^i · c[i]`
+
+The carry width `cw` need only satisfy `n ≤ 2^cw` (the operand sum is `< n·2^32`, so its
+quotient by `2^32` is `≤ n - 1`).  Callers pick the minimal `cw`: round adds (`n = 6, 7`)
+use `cw = 3`, the schedule add (`n = 4`) uses `cw = 2`.
 
 Soundness needs `p > 2^35` so the linear constraint lifts from `F p` to `ℕ`
-(`Σ < 8·2^32 = 2^35`).  The 254-bit BN254 scalar field satisfies this with huge margin.
+(`Σ < 8·2^32 = 2^35`, using `n ≤ 8` and `2^cw ≤ 8`).  The 254-bit BN254 scalar field
+satisfies this with huge margin.
 
 This file provides the gadget definition together with its `FormalCircuit` (proved
 soundness and completeness). It is used by the SHA-256 round and message schedule.
 -/
 
-variable {n : ℕ} [hn : Fact (n ≤ 8)]
+-- `cw` is the carry width: the number of boolean carry bits.  The operand sum is
+-- `< n · 2^32`, so its quotient by `2^32` is `≤ n - 1`; `cw` bits suffice whenever
+-- `n ≤ 2^cw`.  Round adds (`n = 6, 7`) use `cw = 3`; the schedule add (`n = 4`) uses
+-- `cw = 2`, saving one carry witness/constraint per call.  `2^cw ≤ 8` keeps the
+-- soundness lift within the existing `p > 2^35` bound.
+variable {n cw : ℕ} [NeZero cw] [hn : Fact (n ≤ 8)] [hncw : Fact (n ≤ 2^cw)] [hcw : Fact (2^cw ≤ 8)]
 
 /-- Natural-number value of all operands summed. -/
 def opsValueSum (ops : Vector (fields 32 (F p)) n) : ℕ :=
@@ -35,9 +45,9 @@ def opsValueSum (ops : Vector (fields 32 (F p)) n) : ℕ :=
 def sumExpr (ops : Vector (Var (fields 32) (F p)) n) : Expression (F p) :=
   Fin.foldl n (fun acc (j : Fin n) => acc + fromBitsExpr ops[j]) (0 : Expression (F p))
 
-/-- Carry expression from three boolean bit variables. -/
-def carryExpr (c : Var (fields 3) (F p)) : Expression (F p) :=
-  c[0] + (2 : F p) * c[1] + (4 : F p) * c[2]
+/-- Carry expression from `cw` boolean bit variables: `Σ_i 2^i · c[i]` (LSB first). -/
+def carryExpr (c : Var (fields cw) (F p)) : Expression (F p) :=
+  Utils.Bits.fieldFromBitsExpr c
 
 private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) : ℕ :=
   Finset.univ.sum fun (i : Fin 32) => (env a[i]).val * 2^i.val
@@ -45,29 +55,31 @@ private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F 
 private def sumBitsNat (env : ProverEnvironment (F p)) (ops : Vector (Var (fields 32) (F p)) n) : ℕ :=
   ∑ j : Fin n, evalBitsNat env ops[j]
 
-/-- Add `n` 32-bit words mod `2^32` (single reduction with a 3-bit carry). -/
+/-- Add `n` 32-bit words mod `2^32` (single reduction with a `cw`-bit carry). -/
 def addMod32 (ops : Vector (Var (fields 32) (F p)) n) :
     Circuit (F p) (Var (fields 32) (F p)) := do
   let z ← witnessVector 32 fun env =>
     let s := (sumBitsNat env ops) % 2^32
     Vector.ofFn fun (i : Fin 32) => ((s / 2^i.val % 2 : ℕ) : F p)
-  let c ← witnessVector 3 fun env =>
+  let c ← witnessVector cw fun env =>
     let s := sumBitsNat env ops
-    Vector.ofFn fun (i : Fin 3) => ((s / 2^32 / 2^i.val % 2 : ℕ) : F p)
+    Vector.ofFn fun (i : Fin cw) => ((s / 2^32 / 2^i.val % 2 : ℕ) : F p)
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] * (z[i] - 1))
-  Circuit.forEach (Vector.finRange 3) fun i =>
+  Circuit.forEach (Vector.finRange cw) fun i =>
     assertZero (c[i] * (c[i] - 1))
   assertZero (sumExpr ops - fromBitsExpr z - (2^32 : F p) * carryExpr c)
   return z
 
 namespace AddMod32
 
-instance elaborated : ElaboratedCircuit (F p) (ProvableVector (fields 32) n) (fields 32) where
+-- `cw` (the carry width) is not determined by the input/output types, so this is a plain
+-- `def` rather than an `instance`; `circuit` below wires it in explicitly.
+def elaborated : ElaboratedCircuit (F p) (ProvableVector (fields 32) n) (fields 32) where
   main := addMod32
-  localLength _ := 35
+  localLength _ := 32 + cw
   output _ i0 := varFromOffset (fields 32) i0
-  localLength_eq _ _ := by simp only [circuit_norm, addMod32]
+  localLength_eq _ _ := by simp only [circuit_norm, addMod32, Nat.mul_zero, Nat.add_zero]; rfl
   output_eq _ _ := rfl
   subcircuitsConsistent _ _ := by simp +arith only [circuit_norm, addMod32]
   channelsLawful := by intro x n; simp +arith only [circuit_norm, addMod32]
@@ -268,6 +280,26 @@ private lemma opsValueSum_lt_two_pow35 (ops : ProvableVector (fields 32) n (F p)
   have h_prod_lt : 8 * (2^32 - 1) < 2^35 := by norm_num
   exact lt_of_le_of_lt (le_trans h_sum_le h_prod_le) h_prod_lt
 
+omit h_large hn hcw [NeZero cw] in
+/-- The operand-sum quotient by `2^32` fits in `cw` carry bits (uses `n ≤ 2^cw`). -/
+private lemma opsValueSum_div_lt (ops : ProvableVector (fields 32) n (F p))
+    (h : ∀ j : Fin n, Normalized ops[j]) :
+    opsValueSum ops / 2^32 < 2^cw := by
+  have h_each_le : ∀ j : Fin n, valueBits ops[j] ≤ 2^32 - 1 := fun j => by
+    have hlt := valueBits_lt_two_pow ops[j] (h j); omega
+  have h_sum_le : opsValueSum ops ≤ n * (2^32 - 1) := by
+    unfold opsValueSum
+    calc
+      ∑ j : Fin n, valueBits ops[j] ≤ ∑ _j : Fin n, (2^32 - 1) :=
+        Finset.sum_le_sum (fun j _ => h_each_le j)
+      _ = n * (2^32 - 1) := by simp
+  have h_n_le : n ≤ 2^cw := hncw.elim
+  apply (Nat.div_lt_iff_lt_mul (by norm_num : 0 < 2^32)).mpr
+  have h2 : n * (2^32 - 1) ≤ 2^cw * (2^32 - 1) := Nat.mul_le_mul_right _ h_n_le
+  have h3 : 2^cw * (2^32 - 1) < 2^cw * 2^32 :=
+    mul_lt_mul_of_pos_left (by norm_num) (Nat.two_pow_pos cw)
+  omega
+
 /-- testBit equals div/mod expression. -/
 private lemma testBit_ite_eq (x i : ℕ) : (if x.testBit i = true then 1 else 0 : ℕ) = x / 2^i % 2 := by
   simp only [Nat.testBit, Nat.shiftRight_eq_div_pow, Nat.one_and_eq_mod_two]
@@ -308,33 +340,18 @@ private lemma fieldFromBits_bit_decomp (m x : ℕ) (h_x_lt : x < 2^m) (hp2 : 2 <
     ((x : ℕ) : F p) := by
   rw [fieldFromBits_eq_bitsValue, bitsValue_bit_decomp m x h_x_lt hp2]
 
-omit h_large in
+omit h_large hn hncw hcw [NeZero cw] in
 private lemma carryExpr_eval_bitsValue (env : Environment (F p))
-    (c_var : Var (fields 3) (F p)) (c : fields 3 (F p))
+    (c_var : Var (fields cw) (F p)) (c : fields cw (F p))
     (h_eval : Vector.map (Expression.eval env) c_var = c) :
-    Expression.eval env (carryExpr c_var) = (bitsValue c : F p) := by
-  unfold carryExpr
-  have h0 : Expression.eval env c_var[0] = c[0] := by
-    have h := congrArg (fun v : Vector (F p) 3 => v[0]) h_eval
-    simpa [Vector.getElem_map] using h
-  have h1 : Expression.eval env c_var[1] = c[1] := by
-    have h := congrArg (fun v : Vector (F p) 3 => v[1]) h_eval
-    simpa [Vector.getElem_map] using h
-  have h2 : Expression.eval env c_var[2] = c[2] := by
-    have h := congrArg (fun v : Vector (F p) 3 => v[2]) h_eval
-    simpa [Vector.getElem_map] using h
-  simp only [Expression.eval, h0, h1, h2]
-  unfold bitsValue
-  rw [Fin.sum_univ_three]
-  norm_num
-  repeat rw [ZMod.cast_id]
-  ring
+    Expression.eval env (carryExpr c_var) = (bitsValue c : F p) :=
+  fromBitsExpr_eval_bitsValue env c_var c h_eval
 
-omit h_large in
+omit h_large hn hncw hcw [NeZero cw] in
 private lemma carryExpr_val_eq (env : Environment (F p))
-    (c_var : Var (fields 3) (F p)) (c : fields 3 (F p))
+    (c_var : Var (fields cw) (F p)) (c : fields cw (F p))
     (h_eval : Vector.map (Expression.eval env) c_var = c)
-    (h_norm : ∀ i : Fin 3, c[i] = 0 ∨ c[i] = 1) (hp3 : 2^3 < p) :
+    (h_norm : ∀ i : Fin cw, c[i] = 0 ∨ c[i] = 1) (hpc : 2^cw < p) :
     (Expression.eval env (carryExpr c_var)).val = bitsValue c := by
   rw [carryExpr_eval_bitsValue env c_var c h_eval]
   exact ZMod.val_natCast_of_lt (by linarith [bitsValue_lt_two_pow c h_norm])
@@ -343,39 +360,41 @@ private lemma carryExpr_val_eq (env : Environment (F p))
 ## Soundness
 -/
 
+omit hncw [NeZero cw] in
 private theorem soundness_of_constraints (i₀ : ℕ) (env : Environment (F p))
     (input_var : Var (ProvableVector (fields 32) n) (F p))
     (input : ProvableVector (fields 32) n (F p))
     (h_input : eval env input_var = input)
     (h_assumptions : ∀ j : Fin n, Normalized input[j])
     (h_z_bool : ∀ i : Fin 32, env.get (i₀ + i.val) * (env.get (i₀ + i.val) + -1) = 0)
-    (h_c_bool : ∀ i : Fin 3, env.get (i₀ + 32 + i.val) * (env.get (i₀ + 32 + i.val) + -1) = 0)
+    (h_c_bool : ∀ i : Fin cw, env.get (i₀ + 32 + i.val) * (env.get (i₀ + 32 + i.val) + -1) = 0)
     (h_lin : Expression.eval env (sumExpr input_var) +
       -Expression.eval env (fromBitsExpr
         (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) +
       -((2^32 : F p) * Expression.eval env (carryExpr
-        (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p))))) = 0) :
+        (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p))))) = 0) :
     Spec input (Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val)) := by
   have h_z_norm : Normalized (Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val)) :=
     normalized_of_bool_holds env i₀ h_z_bool
-  have h_c_norm : ∀ i : Fin 3,
-      (Vector.ofFn fun j : Fin 3 => env.get (i₀ + 32 + j.val))[i] = 0 ∨
-      (Vector.ofFn fun j : Fin 3 => env.get (i₀ + 32 + j.val))[i] = 1 :=
+  have h_c_norm : ∀ i : Fin cw,
+      (Vector.ofFn fun j : Fin cw => env.get (i₀ + 32 + j.val))[i] = 0 ∨
+      (Vector.ofFn fun j : Fin cw => env.get (i₀ + 32 + j.val))[i] = 1 :=
     bools_of_bool_holds env (i₀ + 32) h_c_bool
   refine ⟨?_, h_z_norm⟩
   have h_p_large := h_large.elim
+  have h_cw_le : (2:ℕ)^cw ≤ 8 := hcw.elim
   have hp32 : (2:ℕ)^32 < p := by omega
-  have hp3 : (2:ℕ)^3 < p := by omega
+  have hpc : (2:ℕ)^cw < p := by omega
   have hp2 : 2 < p := by omega
   set z : fields 32 (F p) := Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) with hz_def
-  set c : fields 3 (F p) := Vector.ofFn fun i : Fin 3 => env.get (i₀ + 32 + i.val) with hc_def
+  set c : fields cw (F p) := Vector.ofFn fun i : Fin cw => env.get (i₀ + 32 + i.val) with hc_def
   set vz := valueBits z with hvz_def
   set vc := bitsValue c with hvc_def
   have h_ops_lt : opsValueSum input < 2^35 :=
     opsValueSum_lt_two_pow35 input h_assumptions
   have h_ops_lt_p : opsValueSum input < p := by linarith
   have hvz_lt : vz < 2^32 := valueBits_lt_two_pow z (by simpa [z] using h_z_norm)
-  have hvc_lt : vc < 2^3 := bitsValue_lt_two_pow c (by simpa [c] using h_c_norm)
+  have hvc_lt : vc < 2^cw := bitsValue_lt_two_pow c (by simpa [c] using h_c_norm)
   have hvc_le : vc ≤ 7 := by omega
   have h_sum_eval : (Expression.eval env (sumExpr input_var)).val = opsValueSum input := by
     rw [sumExpr_eval_eq env input_var input h_input]
@@ -387,11 +406,11 @@ private theorem soundness_of_constraints (i₀ : ℕ) (env : Environment (F p))
       (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))))).val = vz :=
     fromBitsExpr_val_eq env _ z h_z_eval (by simpa [z] using h_z_norm) hp32
   have h_c_eval : Vector.map (Expression.eval env)
-      (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p))) = c := by
-    exact var_vector_eval env 3 (i₀ + 32)
+      (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p))) = c := by
+    exact var_vector_eval env cw (i₀ + 32)
   have h_fc : (Expression.eval env (carryExpr
-      (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p))))).val = vc :=
-    carryExpr_val_eq env _ c h_c_eval (by simpa [c] using h_c_norm) hp3
+      (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p))))).val = vc :=
+    carryExpr_val_eq env _ c h_c_eval (by simpa [c] using h_c_norm) hpc
   have h_pow32_val : (2^32 : F p).val = 2^32 := by
     have hcast : ((2^32 : ℕ) : F p) = (2^32 : F p) := by push_cast; ring
     rw [← hcast, ZMod.val_natCast_of_lt hp32]
@@ -399,18 +418,18 @@ private theorem soundness_of_constraints (i₀ : ℕ) (env : Environment (F p))
       Expression.eval env (fromBitsExpr
         (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) +
       (2^32 : F p) * Expression.eval env (carryExpr
-        (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p)))) := by
+        (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p)))) := by
     rw [← sub_eq_zero]
     have h_ring : Expression.eval env (sumExpr input_var) -
         (Expression.eval env (fromBitsExpr
           (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) +
         (2^32 : F p) * Expression.eval env (carryExpr
-          (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p))))) =
+          (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p))))) =
         Expression.eval env (sumExpr input_var) +
         -Expression.eval env (fromBitsExpr
           (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) +
         -((2^32 : F p) * Expression.eval env (carryExpr
-          (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p))))) := by ring
+          (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p))))) := by ring
     rw [h_ring]
     exact h_lin
   have h_mul_lt : 2^32 * vc < p := by
@@ -429,7 +448,7 @@ private theorem soundness_of_constraints (i₀ : ℕ) (env : Environment (F p))
   have h_rhs_val : (Expression.eval env (fromBitsExpr
         (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) +
       (2^32 : F p) * Expression.eval env (carryExpr
-        (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p))))).val =
+        (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p))))).val =
       vz + 2^32 * vc := by
     rw [ZMod.val_add, ZMod.val_mul, h_fz, h_pow32_val, h_fc]
     rw [Nat.mod_eq_of_lt h_mul_lt, Nat.mod_eq_of_lt h_total_lt]
@@ -440,8 +459,9 @@ private theorem soundness_of_constraints (i₀ : ℕ) (env : Environment (F p))
   change vz = opsValueSum input % 2^32
   rw [h_nat_eq, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hvz_lt]
 
+omit hncw in
 theorem soundness : Soundness (Input := ProvableVector (fields 32) n) (Output := fields 32)
-    (F p) (elaborated (n:=n)) (Assumptions (n:=n)) (Spec (n:=n)) := by
+    (F p) (elaborated (n:=n) (cw:=cw)) (Assumptions (n:=n)) (Spec (n:=n)) := by
   circuit_proof_start [addMod32]
   obtain ⟨h_z_bool, h_c_bool, h_lin⟩ := h_holds
   rw [var_vector_eval env 32 i₀]
@@ -452,8 +472,9 @@ theorem soundness : Soundness (Input := ProvableVector (fields 32) n) (Output :=
 ## Completeness
 -/
 
+omit hn hcw in
 theorem completeness : Completeness (Input := ProvableVector (fields 32) n) (Output := fields 32)
-    (F p) (elaborated (n:=n)) (Assumptions (n:=n)) := by
+    (F p) (elaborated (n:=n) (cw:=cw)) (Assumptions (n:=n)) := by
   circuit_proof_start [addMod32]
   obtain ⟨h_env_z, h_env_c⟩ := h_env
   obtain ⟨h_env_c, -⟩ := h_env_c
@@ -466,14 +487,9 @@ theorem completeness : Completeness (Input := ProvableVector (fields 32) n) (Out
   have h_p_large := h_large.elim
   have hp32 : (2:ℕ)^32 < p := by omega
   have hp2 : 2 < p := by omega
-  have hS_lt_35 : S < 2^35 := by
-    rw [hS_eq]
-    exact opsValueSum_lt_two_pow35 input h_assumptions
   have h_S_mod_lt : S % 2^32 < 2^32 := Nat.mod_lt _ (by norm_num)
-  have h_div_lt : S / 2^32 < 2^3 := by
-    apply (Nat.div_lt_iff_lt_mul (by norm_num : 0 < 2^32)).mpr
-    have hpow : (2:ℕ)^3 * 2^32 = 2^35 := by norm_num
-    rwa [hpow]
+  have h_div_lt : S / 2^32 < 2^cw := by
+    rw [hS_eq]; exact opsValueSum_div_lt input h_assumptions
   have hS_decomp : S = S % 2^32 + 2^32 * (S / 2^32) := by
     exact (Nat.mod_add_div S (2^32)).symm.trans (by ring)
   refine ⟨fun i => ?_, fun i => ?_, ?_⟩
@@ -508,19 +524,19 @@ theorem completeness : Completeness (Input := ProvableVector (fields 32) n) (Out
       rw [Utils.Bits.fieldFromBits_eval, h_z_eval]
       exact fieldFromBits_bit_decomp 32 (S % 2^32) h_S_mod_lt hp2
     have h_c_eval : Vector.map (Expression.eval env.toEnvironment)
-        (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p))) =
-        Vector.ofFn fun i : Fin 3 => ((S / 2^32 / 2^i.val % 2 : ℕ) : F p) := by
-      rw [var_vector_eval env.toEnvironment 3 (i₀ + 32)]
+        (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p))) =
+        Vector.ofFn fun i : Fin cw => ((S / 2^32 / 2^i.val % 2 : ℕ) : F p) := by
+      rw [var_vector_eval env.toEnvironment cw (i₀ + 32)]
       ext i hi
       simp only [Vector.getElem_ofFn]
       have h := h_env_c ⟨i, hi⟩
       simp only [Vector.getElem_ofFn] at h
       exact h
     have h_fc : Expression.eval env.toEnvironment (carryExpr
-        (Vector.mapRange 3 fun i => (var {index := i₀ + 32 + i} : Expression (F p)))) =
+        (Vector.mapRange cw fun i => (var {index := i₀ + 32 + i} : Expression (F p)))) =
         ((S / 2^32 : ℕ) : F p) := by
       rw [carryExpr_eval_bitsValue env.toEnvironment _ _ h_c_eval]
-      rw [bitsValue_bit_decomp 3 (S / 2^32) h_div_lt hp2]
+      rw [bitsValue_bit_decomp cw (S / 2^32) h_div_lt hp2]
     rw [h_sum_expr, h_fz, h_fc]
     have hnat : opsValueSum input = S % 2^32 + 2^32 * (S / 2^32) := by
       rw [← hS_eq, ← hS_decomp]
@@ -536,11 +552,12 @@ theorem completeness : Completeness (Input := ProvableVector (fields 32) n) (Out
         (((S % 2^32 : ℕ) : F p) + (2^32 : F p) * ((S / 2^32 : ℕ) : F p)) := by ring
     rw [rearrange, hF, sub_self]
 
-def circuit : FormalCircuit (F p) (ProvableVector (fields 32) n) (fields 32) where
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+def circuit : FormalCircuit (F p) (ProvableVector (fields 32) n) (fields 32) :=
+  { elaborated (n:=n) (cw:=cw) with
+    Assumptions := Assumptions
+    Spec := Spec
+    soundness := soundness
+    completeness := completeness }
 
 end AddMod32
 end Gadgets.SHA256
