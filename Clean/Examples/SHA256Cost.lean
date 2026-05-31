@@ -1,6 +1,7 @@
 import Clean.Utils.CostR1CS
 import Clean.Utils.Primes
 import Clean.Gadgets.SHA256.SHA256Compress
+import Clean.Gadgets.SHA256.Xor32
 
 /-!
 # SHA-256 R1CS cost report
@@ -47,15 +48,25 @@ def add32Cost : Cost := costOf Add32.circuit
   + add32Cost + add32Cost + add32Cost + add32Cost)
 
 /-
-Baseline (commit a03752e7), pure-R1CS bit-level implementation, lookups = 0 throughout:
+Current (carry-save Σ/σ/Maj), pure-R1CS bit-level implementation, lookups = 0 throughout:
 
   Add32          witnesses  33   constraints  34
   Xor32 / Ch32   witnesses  32   constraints  32
-  Maj32 / Σ / σ  witnesses  64   constraints  64
-  SHA256Round    witnesses 455   constraints 462
-  Schedule       witnesses 10896 constraints 11040
-  64 rounds      witnesses 29120 constraints 29568
-  CompressBlock  witnesses 40280 constraints 40880
+  Maj32 / Σ / σ  witnesses  32   constraints  64
+  SHA256Round    witnesses 198   constraints 296
+  Schedule       witnesses  4752 constraints  7872
+  64 rounds      witnesses 12672 constraints 18944
+  CompressBlock  witnesses 17688 constraints 27088
+
+Progression of the witness count for a full block:
+  - 40280  original bit-level (commit a03752e7)
+  - 26904  multi-operand AddMod32
+  - 17688  carry-save Σ/σ/Maj (one carry witness per output bit instead of two)
+
+The carry-save fold uses the full-adder identity a+b+c = (a XOR b XOR c) + 2·maj(a,b,c):
+each 3-input XOR (the Σ/σ functions) and the majority are computed with a single witnessed
+carry bit per output bit, halving their witness count. Constraints are unchanged (still two
+boolean asserts per bit). See `Clean/Gadgets/SHA256/CarrySave.lean`.
 -/
 
 end SHA256Cost

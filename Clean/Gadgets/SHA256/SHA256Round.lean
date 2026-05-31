@@ -26,9 +26,9 @@ State convention: `Vector (Var (fields 32) (F p)) 8` holds [a, b, c, d, e, f, g,
 where each word is a 32-bit vector with LSB at index 0.
 
 Witness count per round:
-  upperSigma1 = 64, ch32 = 32, upperSigma0 = 64, maj32 = 64,
+  upperSigma1 = 32, ch32 = 32, upperSigma0 = 32, maj32 = 32,
   2 × addMod32 = 2 × 35 = 70
-  Total: 64 + 32 + 64 + 64 + 70 = 294
+  Total: 32 + 32 + 32 + 32 + 70 = 198
 -/
 
 /-- One round of SHA-256 compression.
@@ -67,15 +67,15 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) :=
 
 instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
   main := main
-  localLength _ := 294
+  localLength _ := 198
   -- Explicit output: new_a/new_e are the output `z` vectors of the corresponding AddMod32
   -- subcircuits at their starting offsets; the other six positions are inputs passed through.
   -- Offsets are written additively (matching the subcircuit-length chain) so they unify
   -- cheaply with the constraint-derived terms in the soundness proof.
   output input i0 := #v[
-    varFromOffset (fields 32) (i0 + 64 + 32 + 64 + 64 + 35),  -- new_a (offset 259)
+    varFromOffset (fields 32) (i0 + 32 + 32 + 32 + 32 + 35),  -- new_a (offset 163)
     input.state[0], input.state[1], input.state[2],
-    varFromOffset (fields 32) (i0 + 64 + 32 + 64 + 64),  -- new_e (offset 224)
+    varFromOffset (fields 32) (i0 + 32 + 32 + 32 + 32),  -- new_e (offset 128)
     input.state[4], input.state[5], input.state[6]
   ]
   localLength_eq := by intro input offset; simp [circuit_norm, main, sha256Round, AddMod32.circuit, AddMod32.elaborated, UpperSigma0.circuit, UpperSigma1.circuit, Ch32.circuit, Maj32.circuit]
@@ -264,13 +264,13 @@ private lemma output_normalized (i₀ : ℕ) (env : Environment (F p))
     (hnd : ∀ (i : ℕ) (hi : i < 8),
       Normalized (Vector.map (Expression.eval env) (state_var[i]'hi)))
     (n_newa : Normalized (Vector.map (Expression.eval env)
-      (varFromOffset (fields 32) (i₀ + 64 + 32 + 64 + 64 + 35))))
+      (varFromOffset (fields 32) (i₀ + 32 + 32 + 32 + 32 + 35))))
     (n_newe : Normalized (Vector.map (Expression.eval env)
-      (varFromOffset (fields 32) (i₀ + 64 + 32 + 64 + 64)))) :
+      (varFromOffset (fields 32) (i₀ + 32 + 32 + 32 + 32)))) :
     ∀ i : Fin 8, Normalized (eval env
-      (#v[varFromOffset (fields 32) (i₀ + 64 + 32 + 64 + 64 + 35),
+      (#v[varFromOffset (fields 32) (i₀ + 32 + 32 + 32 + 32 + 35),
         state_var[0], state_var[1], state_var[2],
-        varFromOffset (fields 32) (i₀ + 64 + 32 + 64 + 64),
+        varFromOffset (fields 32) (i₀ + 32 + 32 + 32 + 32),
         state_var[4], state_var[5], state_var[6]] :
         Var SHA256State (F p)))[i] := by
   intro i

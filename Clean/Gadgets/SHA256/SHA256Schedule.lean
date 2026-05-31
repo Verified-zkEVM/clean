@@ -20,10 +20,10 @@ For i in 16..63:
   w[i] = σ₁(w[i−2]) + w[i−7] + σ₀(w[i−15]) + w[i−16]  (mod 2^32)
 
 Per step, `scheduleStep` creates:
-  - lowerSigma1: 2 × xor32 = 2 × 32 = 64 witness variables
-  - lowerSigma0: 2 × xor32 = 64 witness variables
+  - lowerSigma1: carry-save xor3 = 32 witness variables
+  - lowerSigma0: carry-save xor3 = 32 witness variables
   - 1 × addMod32 (4 operands) = 35 witness variables (32 result bits + 3 carry bits)
-  Total: 64 + 64 + 35 = 163 variables per step.
+  Total: 32 + 32 + 35 = 99 variables per step.
 -/
 
 private abbrev Schedule := Vector (Var (fields 32) (F p)) 64
@@ -40,7 +40,7 @@ private def scheduleStep (w : Schedule (p := p)) (i : Fin 48) :
 
 private instance :
     Circuit.ConstantLength (fun (x : Schedule (p := p) × Fin 48) => scheduleStep x.1 x.2) where
-  localLength := 163
+  localLength := 99
   localLength_eq _ _ := by
     simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit,
       AddMod32.circuit, AddMod32.elaborated]
@@ -54,7 +54,7 @@ private instance :
   let init : Schedule (p := p) := block.append (Vector.replicate 48 zero32)
   -- Expand indices 16..63 one at a time.
   -- Pass ConstantLength explicitly because the default tactic times out on this complex body.
-  Circuit.foldlRange 48 init (fun w i => scheduleStep w i) ⟨163, fun _ _ => by
+  Circuit.foldlRange 48 init (fun w i => scheduleStep w i) ⟨99, fun _ _ => by
     simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit,
       AddMod32.circuit, AddMod32.elaborated]⟩
 
@@ -65,7 +65,7 @@ def main (block : Var SHA256Block (F p)) : Circuit (F p) (Var SHA256Schedule (F 
 
 instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule where
   main := main
-  localLength _ := 48 * 163
+  localLength _ := 48 * 99
   localLength_eq _ _ := by
     unfold main messageSchedule
     simp [circuit_norm, scheduleStep,
@@ -109,6 +109,7 @@ private lemma eval_v4 (env : Environment (F p)) (a b c d : Var (fields 32) (F p)
         List.getElem_cons_zero, List.getElem_cons_succ]
       exact (ProvableType.getElem_eval_fields env _ _ hi).symm
 
+omit [Fact (p > 2 ^ 35)] in
 /-- `AddMod32.Assumptions` of a 4-operand vector unfolds to four `Normalized` facts. -/
 private lemma addMod32_assum_iff (env : Environment (F p))
     (a b c d : Var (fields 32) (F p)) :
@@ -130,6 +131,7 @@ private lemma addMod32_assum_iff (env : Environment (F p))
     · exact hc
     · exact hd
 
+omit [Fact (p > 2 ^ 35)] in
 /-- `opsValueSum` of a 4-operand vector expands to four `valueBits` summands. -/
 private lemma addMod32_opsValueSum (env : Environment (F p))
     (a b c d : Var (fields 32) (F p)) :
@@ -155,7 +157,7 @@ private def varSchedule (i₀ : ℕ) (input_var_block : Var SHA256Block (F p)) :
   | k + 1 =>
     if h : k < 48 then
       (varSchedule i₀ input_var_block k).set
-        (k + 16) (varFromOffset (fields 32) (i₀ + k * 163 + 128)) (by omega)
+        (k + 16) (varFromOffset (fields 32) (i₀ + k * 99 + 64)) (by omega)
     else
       varSchedule i₀ input_var_block k
 
@@ -219,12 +221,12 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
 /-- The output of `scheduleStep w i` at offset `n` is `w.set (i.val + 16) (varFromOffset ...)`. -/
 private lemma scheduleStep_output (w : Schedule (p := p)) (i : Fin 48) (n : ℕ) :
     (scheduleStep w i).output n =
-      w.set (i.val + 16) (varFromOffset (fields 32) (n + 128)) (by omega) := by
+      w.set (i.val + 16) (varFromOffset (fields 32) (n + 64)) (by omega) := by
   simp [scheduleStep, circuit_norm, LowerSigma1.circuit, LowerSigma0.circuit, AddMod32.circuit]
 
-/-- The localLength of `scheduleStep w i` is 163. -/
+/-- The localLength of `scheduleStep w i` is 99. -/
 private lemma scheduleStep_localLength (w : Schedule (p := p)) (i : Fin 48) (n : ℕ) :
-    (scheduleStep w i).localLength n = 163 := by
+    (scheduleStep w i).localLength n = 99 := by
   simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit, AddMod32.circuit]
 
 /-- `Circuit.FoldlM.foldlAcc` at index `⟨k, h⟩ : Fin 48` equals `varSchedule i₀ input_var k`. -/
@@ -261,7 +263,7 @@ private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : Var SHA256
 private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : Var SHA256Block (F p)) :
     Fin.foldl 48
       (fun (acc : Vector (fields 32 (Expression (F p))) (16 + 48)) (i : Fin 48) =>
-        (scheduleStep (show Schedule (p := p) from acc) i (i₀ + i.val * 163)).1)
+        (scheduleStep (show Schedule (p := p) from acc) i (i₀ + i.val * 99)).1)
       (Vector.append input_var_block
         (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))) =
       (show Vector (fields 32 (Expression (F p))) (16 + 48) from
@@ -271,7 +273,7 @@ private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : Var SHA
       Fin.foldl k
         (fun (acc : Vector (fields 32 (Expression (F p))) (16 + 48)) (i : Fin k) =>
           (scheduleStep (show Schedule (p := p) from acc)
-            ⟨i.val, by have := i.isLt; omega⟩ (i₀ + i.val * 163)).1)
+            ⟨i.val, by have := i.isLt; omega⟩ (i₀ + i.val * 99)).1)
         (Vector.append input_var_block
           (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))) =
         (show Vector (fields 32 (Expression (F p))) (16 + 48) from
@@ -290,18 +292,18 @@ private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : Var SHA
           (fun (acc : Vector (fields 32 (Expression (F p))) (16 + 48)) (i : Fin k) =>
             (scheduleStep (show Schedule (p := p) from acc)
               ⟨i.castSucc.val, by have := i.isLt; omega⟩
-              (i₀ + i.castSucc.val * 163)).1)
+              (i₀ + i.castSucc.val * 99)).1)
             _ =
         Fin.foldl k
           (fun (acc : Vector (fields 32 (Expression (F p))) (16 + 48)) (i : Fin k) =>
             (scheduleStep (show Schedule (p := p) from acc)
               ⟨i.val, by have := i.isLt; omega⟩
-              (i₀ + i.val * 163)).1)
+              (i₀ + i.val * 99)).1)
             _ from rfl, ih]
     simp only [Fin.val_last]
     rw [varSchedule, dif_pos hk'']
     -- (scheduleStep w i).output n = (scheduleStep w i n).1
-    change (scheduleStep _ ⟨k, hk''⟩).output (i₀ + k * 163) = _
+    change (scheduleStep _ ⟨k, hk''⟩).output (i₀ + k * 99) = _
     rw [scheduleStep_output]
 
 /-- The soundness inductive invariant. Given the constraints `h_holds` hold for every step,
@@ -319,7 +321,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
         (scheduleStep
           (Circuit.FoldlM.foldlAcc i₀ (Vector.finRange 48) (fun w i ↦ scheduleStep w i)
             (Vector.append input_var (Vector.replicate 48 (Vector.replicate 32 0))) i)
-          i (i₀ + ↑i * 163)).2) :
+          i (i₀ + ↑i * 99)).2) :
     ∀ (k : ℕ) (_ : k ≤ 48),
       (∀ (j : ℕ) (hj : j < 64),
         valueBits (eval env ((varSchedule i₀ input_var k)[j]'hj)) =
@@ -428,7 +430,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
       addMod32_assum_iff, addMod32_opsValueSum] at c_wj
     obtain ⟨v_wj, n_wj⟩ := c_wj ⟨n_sig1, by rw [h_eval_get]; exact h_norm_m7,
       n_sig0, by rw [h_eval_get]; exact h_norm_m16⟩
-    -- `v_wj`/`n_wj` refer to the output, which equals `varFromOffset (i₀+k*163+128)`.
+    -- `v_wj`/`n_wj` refer to the output, which equals `varFromOffset (i₀+k*99+64)`.
     simp only [AddMod32.elaborated] at v_wj n_wj
     -- Now compose values: wj's value should equal valSchedule's k+16 slot.
     refine ⟨?_, ?_⟩
@@ -437,7 +439,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]
-        rw [show (i₀ + k * 163 + 128 : ℕ) = i₀ + k * 163 + 64 + 64 from by ring]
+        rw [show (i₀ + k * 99 + 64 : ℕ) = i₀ + k * 99 + 32 + 32 from by ring]
         rw [CircuitType.eval_var_fields, v_wj]
         rw [v_sig1, v_sig0]
         rw [Vector.getElem_set_self]
@@ -462,7 +464,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]
-        rw [show (i₀ + k * 163 + 128 : ℕ) = i₀ + k * 163 + 64 + 64 from by ring]
+        rw [show (i₀ + k * 99 + 64 : ℕ) = i₀ + k * 99 + 32 + 32 from by ring]
         rw [CircuitType.eval_var_fields]
         exact n_wj
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
@@ -473,7 +475,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   unfold messageSchedule at h_holds ⊢
   simp only [circuit_norm] at h_holds ⊢
   simp only [show ∀ (w : Schedule (p := p)) (i : Fin 48) (n : ℕ),
-    Operations.localLength (scheduleStep w i n).2 = 163 from scheduleStep_localLength]
+    Operations.localLength (scheduleStep w i n).2 = 99 from scheduleStep_localLength]
     at h_holds ⊢
   have h_eq := finFoldl_eq_varSchedule_48 i₀ input_var
   simp only [h_eq]
@@ -502,7 +504,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   unfold messageSchedule at h_env ⊢
   simp only [circuit_norm] at h_env ⊢
   simp only [show ∀ (w : Schedule (p := p)) (i : Fin 48) (n : ℕ),
-    Operations.localLength (scheduleStep w i n).2 = 163 from scheduleStep_localLength]
+    Operations.localLength (scheduleStep w i n).2 = 99 from scheduleStep_localLength]
     at h_env ⊢
   -- Inductive invariant: at every step k, every slot of varSchedule i₀ input_var k is Normalized.
   have h_inv : ∀ (k : ℕ) (_ : k ≤ 48),
@@ -576,7 +578,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]
-        rw [show (i₀ + k * 163 + 128 : ℕ) = i₀ + k * 163 + 64 + 64 from by ring]
+        rw [show (i₀ + k * 99 + 64 : ℕ) = i₀ + k * 99 + 32 + 32 from by ring]
         rw [CircuitType.eval_var_fields]
         exact n_wj
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
