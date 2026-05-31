@@ -47,6 +47,34 @@ def add32Cost : Cost := costOf Add32.circuit
   + add32Cost + add32Cost + add32Cost + add32Cost
   + add32Cost + add32Cost + add32Cost + add32Cost)
 
+/-! ## R1CS-row validator sanity checks
+
+Every `#eval costOf …` above already aborts if any gadget `assert` is not a single
+R1CS row; the following make the validator's behaviour explicit. -/
+
+/-- A demo variable expression. -/
+private def v (n : ℕ) : Expression (F P) := .var ⟨n⟩
+
+-- Valid single rows: the SHA-256 XOR/Maj constraint shape `A * B - C`, a bare
+-- product, a boolean constraint `b·(b−1)`, and a purely affine constraint.
+#eval ("xor-shape  A*B - C", isR1CSRow ((v 0 + 2*v 1 + 7*v 2) * (v 1 - 4*v 2 + 1) - 6*v 1))
+#eval ("product    a*b     ", isR1CSRow (v 0 * v 1))
+#eval ("boolean    b*(b-1) ", isR1CSRow (v 0 * (v 0 - 1)))
+#eval ("affine     2a+b-3  ", isR1CSRow (2*v 0 + v 1 - 3))
+
+-- Rejected: two independent products (rank-2), and degree ≥ 3. These would each
+-- need an auxiliary witness + extra row, so they are not one constraint.
+#eval ("REJECT a*b + c*d    ", isR1CSRow (v 0 * v 1 + v 2 * v 3))  -- expect false
+#eval ("REJECT a*b*c (deg 3)", isR1CSRow (v 0 * v 1 * v 2))        -- expect false
+
+-- Exact-count lock, including `lookups := 0` (pure R1CS). Mirrors `costOf` but
+-- asserts the full triple; aborts on any drift.
+def checkOf {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit (F P) Input Output) (expected : Cost) : Cost :=
+  checkCost (c.main (varFromOffset Input 0)) expected 0
+
+#eval ("Maj32 checked", checkOf Maj32.circuit { witnesses := 32, constraints := 32, lookups := 0 })
+
 /-
 Current pure-R1CS bit-level implementation, lookups = 0 throughout:
 
