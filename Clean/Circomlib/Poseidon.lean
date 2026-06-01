@@ -206,19 +206,17 @@ namespace InitialArk
 def circuit : FormalCircuit F field (fields 2) where
   main input := do
     let state := #v[.const 0, input]
-    let out0 <== state[0] + .const C_t2[0]
-    let out1 <== state[1] + .const C_t2[1]
+    let out0 <== state[0] + Expression.const (C_t2[0] : F)
+    let out1 <== state[1] + Expression.const (C_t2[1] : F)
     return #v[out0, out1]
 
   Spec (input : F) (output : Vector F 2) :=
     output = Specs.Poseidon.ark C_t2 0 #v[0, input]
 
   soundness := by
-    -- TODO AUTOELAB, equality circuit is not properly simplified in the inferred elaboration
     circuit_proof_start
     rw [ark_t2_eq C_t2 0 (by omega)]
     simp_all
-    sorry
   completeness := by
     circuit_proof_all
 
