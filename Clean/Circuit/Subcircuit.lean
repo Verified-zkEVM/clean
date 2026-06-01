@@ -660,6 +660,18 @@ theorem FormalAssertion.toSubcircuit_channelsWithRequirements (circuit : FormalA
   (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := rfl
 
 @[circuit_norm]
+theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsWithGuarantees
+    {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F) :
+  (circuit.toSubcircuit n input_var).channelsWithGuarantees = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm]
+theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsWithRequirements
+    {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F) :
+  (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := rfl
+
+@[circuit_norm]
 theorem FormalCircuit.toSubcircuit_channelsLawful
     (circuit : FormalCircuit F Input Output) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
@@ -734,9 +746,6 @@ theorem GeneralFormalCircuit.toSubcircuit_channelsLawful
 attribute [explicit_circuit_no_unfold] subcircuit assertion subcircuitWithAssertion subcircuitWithHintAssertion
 
 namespace ExplicitCircuit
--- TODO AUTOELAB the other subcircuit types below (`assertion`, `subcircuitWithAssertion`,
--- `subcircuitWithHintAssertion`) are still picked up via `infer_instance`; probably worth
--- tagging them `@[explicit_circuit_constructor]` too so they go through head dispatch.
 @[explicit_circuit_constructor]
 instance fromSubcircuit (circuit : FormalCircuit F Input Output) (input : Var Input F) :
     ExplicitCircuit (subcircuit circuit input) where
@@ -770,11 +779,11 @@ theorem fromSubcircuit_channelsWithGuarantees {circuit : FormalCircuit F Input O
 @[circuit_norm, explicit_circuit_norm]
 theorem fromSubcircuit_channelsWithRequirements {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
     (fromSubcircuit circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
-end ExplicitCircuit
 
-instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
+@[explicit_circuit_constructor]
+instance fromAssertion (circuit : FormalAssertion F Input) (input : Var Input F) :
     ExplicitCircuit (assertion circuit input) where
-  output n := ()
+  output _ := ()
   localLength _ := circuit.localLength input
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
   channelsWithGuarantees _ := circuit.channelsWithGuarantees
@@ -783,9 +792,30 @@ instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {inpu
     change Operations.SubcircuitsConsistent n [.subcircuit (_)]
     simp only [Operations.SubcircuitsConsistent, Operations.forAll]
     exact ⟨trivial, trivial⟩
+  channelsLawful := by simp [circuit_norm]
 
-instance {β α: TypeMap} [ProvableType α] [ProvableType β]
-    {circuit : GeneralFormalCircuit F β α} {input} :
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_output {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).output n = () := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_localLength {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).localLength n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_operations {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).operations n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_channelsWithGuarantees {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_channelsWithRequirements {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
+
+@[explicit_circuit_constructor]
+instance fromSubcircuitWithAssertion (circuit : GeneralFormalCircuit F Input Output) (input : Var Input F) :
     ExplicitCircuit (subcircuitWithAssertion circuit input) where
   output n := circuit.output input n
   localLength _ := circuit.localLength input
@@ -796,9 +826,31 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β]
     change Operations.SubcircuitsConsistent n [.subcircuit (_)]
     simp only [Operations.SubcircuitsConsistent, Operations.forAll]
     exact ⟨trivial, trivial⟩
+  channelsLawful := by simp [circuit_norm]
 
-instance {β α: TypeMap} [CircuitType α] [CircuitType β]
-    {circuit : GeneralFormalCircuit.WithHint F β α} {input} :
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_output {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).output n = circuit.output input n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_localLength {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).localLength n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_operations {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).operations n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_channelsWithGuarantees {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_channelsWithRequirements {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
+
+@[explicit_circuit_constructor]
+instance fromSubcircuitWithHintAssertion {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input : Var Input F) :
     ExplicitCircuit (subcircuitWithHintAssertion circuit input) where
   output n := circuit.output input n
   localLength _ := circuit.localLength input
@@ -809,6 +861,33 @@ instance {β α: TypeMap} [CircuitType α] [CircuitType β]
     change Operations.SubcircuitsConsistent n [.subcircuit (_)]
     simp only [Operations.SubcircuitsConsistent, Operations.forAll]
     exact ⟨trivial, trivial⟩
+  channelsLawful := by simp [circuit_norm]
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_output {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).output n = circuit.output input n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_localLength {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).localLength n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_operations {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).operations n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_channelsWithGuarantees {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_channelsWithRequirements {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
+end ExplicitCircuit
 
 -- simplification lemmas for FlatOperations.interactions (toSubcircuit ..).ops.toFlat
 
