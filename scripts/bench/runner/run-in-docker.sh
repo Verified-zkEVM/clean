@@ -53,8 +53,8 @@ prune_pr_build_caches() {
     return 0
   fi
 
-  find "$root" -mindepth 3 -maxdepth 3 -type d -mtime +"$max_age_days" -prune -exec rm -rf {} +
-  find "$root" -mindepth 1 -type d -empty -delete
+  find "$root" -mindepth 3 -maxdepth 3 -type d -mtime +"$max_age_days" -prune -exec rm -rf {} + || true
+  find "$root" -mindepth 1 -type d -empty -delete || true
 }
 
 run_benchmark() {
