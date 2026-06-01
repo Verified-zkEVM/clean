@@ -1359,9 +1359,15 @@ theorem from_foldlRange_operations {m : ℕ} [Inhabited β]
         (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
           (n + i * ((explicit default i).localLength 0))).flatten := rfl
 
-syntax "infer_explicit_loop_head" : tactic
+syntax "infer_explicit_head" : tactic
 
-elab "infer_explicit_loop_head" : tactic => withMainContext do
+/-- Dispatch on the syntactic head of the circuit so we never *speculatively* `apply`
+the wrong constructor lemma.  `pure`/`>>=`/`<$>` are typeclass-projection applications
+on the `Circuit` monad, so a failing `apply from_bind` on e.g. `pure (bigVector)` unfolds
+both sides to the underlying `Circuit` representation and does a deep higher-order
+unification before failing — quadratic-ish in the returned value.  Looking at the head
+constant first makes each step O(1). -/
+elab "infer_explicit_head" : tactic => withMainContext do
   let target ← getMainTarget
   let args := target.getAppArgs
   if !target.getAppFn.isConstOf ``ExplicitCircuit || args.size == 0 then
@@ -1378,7 +1384,13 @@ elab "infer_explicit_loop_head" : tactic => withMainContext do
       evalTactic (← `(tactic| apply from_map_loop (by infer_explicit_circuits)))
   | .const ``Circuit.foldl _ =>
       evalTactic (← `(tactic| apply from_foldl))
-  | _ => throwError "target circuit is not a loop constructor"
+  | .const ``Bind.bind _ =>
+      evalTactic (← `(tactic| apply from_bind))
+  | .const ``Pure.pure _ =>
+      evalTactic (← `(tactic| apply from_pure))
+  | .const ``Functor.map _ =>
+      evalTactic (← `(tactic| apply from_map))
+  | _ => throwError "target circuit head is not a recognized constructor"
 
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
@@ -1389,7 +1401,9 @@ macro_rules
     repeat (
       try intros
       first
-        | infer_explicit_loop_head
+        -- Cheap O(1) head dispatch for the literal constructors (loops + bind/pure/map).
+        | infer_explicit_head
+        -- Fallback for heads that are user defs unfolding to one of the above.
         | apply from_bind
         | apply from_map
         | apply from_pure
