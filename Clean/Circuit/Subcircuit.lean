@@ -734,6 +734,10 @@ theorem GeneralFormalCircuit.toSubcircuit_channelsLawful
 attribute [explicit_circuit_no_unfold] subcircuit assertion subcircuitWithAssertion subcircuitWithHintAssertion
 
 namespace ExplicitCircuit
+-- TODO AUTOELAB the other subcircuit types below (`assertion`, `subcircuitWithAssertion`,
+-- `subcircuitWithHintAssertion`) are still picked up via `infer_instance`; probably worth
+-- tagging them `@[explicit_circuit_constructor]` too so they go through head dispatch.
+@[explicit_circuit_constructor]
 instance fromSubcircuit (circuit : FormalCircuit F Input Output) (input : Var Input F) :
     ExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n

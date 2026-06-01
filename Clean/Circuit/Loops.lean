@@ -991,6 +991,7 @@ theorem Operations.channelsLawful_flatten_of_forall {m : ℕ}
 namespace ExplicitCircuit
 open Circuit (ConstantLength ConstantOutput forEach map mapFinRange foldl foldlRange)
 
+@[explicit_circuit_constructor]
 instance from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F Unit} (explicit : ExplicitCircuits body)
     {constant : ConstantLength body} : ExplicitCircuit (forEach xs body constant) where
@@ -1056,6 +1057,7 @@ theorem from_forEach_channelsWithRequirements {m : ℕ} [Inhabited α] {xs : Vec
     (from_forEach explicit (xs:=xs) (constant:=constant)).channelsWithRequirements n =
       (List.ofFn fun (i : Fin m) => explicit.channelsWithRequirements xs[i.val] (n + i * (explicit.localLength default 0))).flatten := rfl
 
+@[explicit_circuit_constructor]
 instance from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F β} (explicit : ExplicitCircuits body)
     {constant : ConstantLength body} : ExplicitCircuit (map xs body constant) where
@@ -1123,6 +1125,7 @@ theorem from_map_loop_channelsWithRequirements {m : ℕ} [Inhabited α] {xs : Ve
     (from_map_loop explicit (xs:=xs) (constant:=constant)).channelsWithRequirements n =
       (List.ofFn fun (i : Fin m) => explicit.channelsWithRequirements xs[i.val] (n + i * (explicit.localLength default 0))).flatten := rfl
 
+@[explicit_circuit_constructor]
 instance from_mapFinRange {m : ℕ} [NeZero m]
     {body : Fin m → Circuit F β} (explicit : ExplicitCircuits body)
     {constant : ConstantLength body} : ExplicitCircuit (mapFinRange m body constant) where
@@ -1193,6 +1196,7 @@ theorem from_mapFinRange_channelsWithRequirements {m : ℕ} [NeZero m]
     (from_mapFinRange explicit (constant:=constant)).channelsWithRequirements n =
       (List.ofFn fun (i : Fin m) => explicit.channelsWithRequirements i (n + i * (explicit.localLength 0 0))).flatten := rfl
 
+@[explicit_circuit_constructor]
 instance from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
     {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
@@ -1260,6 +1264,7 @@ instance from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
       (n + i * ((explicit default default).localLength 0)) using 1
     · rw [(explicit default default).localLength_eq]
 
+@[explicit_circuit_constructor]
 instance from_foldlRange {m : ℕ} [Inhabited β]
     {body : β → Fin m → Circuit F β} [explicit : ∀ b i, ExplicitCircuit (body b i)] {init : β}
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} :
@@ -1359,60 +1364,6 @@ theorem from_foldlRange_operations {m : ℕ} [Inhabited β]
         (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
           (n + i * ((explicit default i).localLength 0))).flatten := rfl
 
-syntax "infer_explicit_head" : tactic
-
-/-- Dispatch on the syntactic head of the circuit so we never *speculatively* `apply`
-the wrong constructor lemma.  `pure`/`>>=`/`<$>` are typeclass-projection applications
-on the `Circuit` monad, so a failing `apply from_bind` on e.g. `pure (bigVector)` unfolds
-both sides to the underlying `Circuit` representation and does a deep higher-order
-unification before failing — quadratic-ish in the returned value.  Looking at the head
-constant first makes each step O(1). -/
-elab "infer_explicit_head" : tactic => withMainContext do
-  let target ← getMainTarget
-  let args := target.getAppArgs
-  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.size == 0 then
-    throwError "target is not an ExplicitCircuit"
-  let circuit := args[args.size - 1]!
-  match circuit.getAppFn with
-  | .const ``Circuit.mapFinRange _ =>
-      evalTactic (← `(tactic| apply from_mapFinRange (by infer_explicit_circuits)))
-  | .const ``Circuit.foldlRange _ =>
-      evalTactic (← `(tactic| apply from_foldlRange))
-  | .const ``Circuit.forEach _ =>
-      evalTactic (← `(tactic| apply from_forEach (by infer_explicit_circuits)))
-  | .const ``Circuit.map _ =>
-      evalTactic (← `(tactic| apply from_map_loop (by infer_explicit_circuits)))
-  | .const ``Circuit.foldl _ =>
-      evalTactic (← `(tactic| apply from_foldl))
-  | .const ``Bind.bind _ =>
-      evalTactic (← `(tactic| apply from_bind))
-  | .const ``Pure.pure _ =>
-      evalTactic (← `(tactic| apply from_pure))
-  | .const ``Functor.map _ =>
-      evalTactic (← `(tactic| apply from_map))
-  | _ => throwError "target circuit head is not a recognized constructor"
-
-macro_rules
-  | `(tactic|infer_explicit_circuit) => `(tactic|(
-    try intros
-    -- Dispatch to loop constructors only when the circuit head is actually a
-    -- loop.  Otherwise keep the stronger existing bind/map/pure/instance path;
-    -- speculative loop `apply`s can be expensive on large non-loop goals.
-    repeat (
-      try intros
-      first
-        -- Cheap O(1) head dispatch for the literal constructors (loops + bind/pure/map).
-        | infer_explicit_head
-        -- Fallback for heads that are user defs unfolding to one of the above.
-        | apply from_bind
-        | apply from_map
-        | apply from_pure
-        | infer_instance
-        -- TODO AUTOELAB probably worth adding the other subcircuit types here as well
-        | apply fromSubcircuit
-      try infer_instance
-    )
-    done))
 end ExplicitCircuit
 
 namespace Circuit

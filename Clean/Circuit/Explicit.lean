@@ -244,6 +244,7 @@ instance ExplicitCircuits.fromProvableInputOutput {α β : TypeMap} [ProvableTyp
   ExplicitCircuits (circuit : α (Expression F) → Circuit F (β (Expression F))) := explicit
 
 -- `pure` is an explicit circuit
+@[explicit_circuit_constructor]
 instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
   output _ := a
   localLength _ := 0
@@ -259,6 +260,7 @@ instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a =>
   channelsWithRequirements _ _ := []
 
 -- `bind` of two explicit circuits yields an explicit circuit
+@[explicit_circuit_constructor]
 instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
@@ -333,6 +335,7 @@ theorem ExplicitCircuit.from_bind_channelsWithRequirements {f : Circuit F α} {g
         ExplicitCircuit.channelsWithRequirements (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
 
 -- `map` of an explicit circuit yields an explicit circuit
+@[explicit_circuit_constructor]
 instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
@@ -509,17 +512,54 @@ attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Na
   dite_eq_ite ite_self reduceIte reduceDIte
 
 syntax "infer_explicit_circuit" : tactic
+syntax "infer_explicit_head" : tactic
+syntax "unfold_explicit_circuits_head" : tactic
+syntax "infer_explicit_circuits" : tactic
+
+/--
+Dispatch on the syntactic head of the circuit in an `ExplicitCircuit` goal and apply the
+matching constructor lemma registered with `@[explicit_circuit_constructor]`.
+
+This replaces a chain of speculative `apply from_*`.  That chain is expensive because `pure`,
+`>>=` and `<$>` are typeclass-projection applications on the `Circuit` monad: a failing
+`apply from_bind` on e.g. `pure (bigVector)` unfolds both sides to the underlying `Circuit`
+representation and does a deep higher-order unification whose cost scales with the returned
+value.  Matching on the head constant first makes each step O(1).
+
+Any `ExplicitCircuits` (family) side goals produced by the chosen lemma — e.g. the loop body of
+`from_forEach` — are discharged here with `infer_explicit_circuits`; the remaining
+`ExplicitCircuit` side goals are left for the enclosing `infer_explicit_circuit` loop.
+-/
+elab "infer_explicit_head" : tactic => withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.isEmpty then
+    throwError "target is not an ExplicitCircuit"
+  let some head := args[args.size - 1]!.getAppFn.constName?
+    | throwError "circuit head is not a constant"
+  for lemmaName in (← labelled `explicit_circuit_constructor).toList do
+    let some info := (← getEnv).find? lemmaName | continue
+    let isMatch ← forallTelescopeReducing info.type fun _ concl => do
+      let cargs := concl.getAppArgs
+      if concl.getAppFn.isConstOf ``ExplicitCircuit && !cargs.isEmpty then
+        return cargs[cargs.size - 1]!.getAppFn.constName? == some head
+      else return false
+    if isMatch then
+      evalTactic (← `(tactic| (apply $(mkIdent lemmaName) <;> try infer_explicit_circuits)))
+      return
+  throwError "no explicit_circuit_constructor registered for head {head}"
 
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
-    -- Prefer structural decomposition before typeclass search.  Starting with
-    -- `infer_instance` can make typeclass search `whnf` a large circuit body and
-    -- eagerly expand fixed-size `Vector.ofFn` witnesses before `from_bind` has a
-    -- chance to split the circuit into smaller pieces.
     repeat (
       try intros
       first
+        -- O(1) head dispatch via the `explicit_circuit_constructor` registry.
+        | infer_explicit_head
+        -- Fallback for heads that are user defs unfolding to a core constructor:
+        -- prefer structural decomposition before typeclass search, so it doesn't
+        -- `whnf` a large body and expand fixed-size `Vector.ofFn` witnesses.
         | apply ExplicitCircuit.from_bind
         | apply ExplicitCircuit.from_map
         | apply ExplicitCircuit.from_pure
@@ -527,9 +567,6 @@ macro_rules
       try infer_instance
     )
     done))
-
-syntax "unfold_explicit_circuits_head" : tactic
-syntax "infer_explicit_circuits" : tactic
 
 elab "unfold_explicit_circuits_head" : tactic => withMainContext do
   let target ← getMainTarget
