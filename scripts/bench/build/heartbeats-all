@@ -11,8 +11,8 @@ jobs="${BENCH_HEARTBEAT_JOBS:-}"
 
 if [ -z "$jobs" ]; then
   jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
-  if [ "$jobs" -gt 4 ]; then
-    jobs=4
+  if [ "$jobs" -gt 6 ]; then
+    jobs=6
   fi
 fi
 
