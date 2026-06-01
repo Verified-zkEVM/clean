@@ -123,6 +123,7 @@ theorem completeness : Completeness F (main (M:=M)) Assumptions := by
 
 def circuit [DecidableEq (M F)] : FormalCircuit F M field where
   main
+  elaborated
   Assumptions
   Spec
   soundness

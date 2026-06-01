@@ -110,6 +110,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (main offset) Assumpt
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 where
   main := main offset
+  elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
   soundness := soundness offset

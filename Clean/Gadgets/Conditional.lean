@@ -94,6 +94,7 @@ Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
 @[circuit_norm]
 def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
   main
+  elaborated
   Assumptions
   Spec
   soundness

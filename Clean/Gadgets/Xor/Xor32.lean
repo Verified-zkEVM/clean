@@ -98,6 +98,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs U32 where
   main
+  elaborated
   Assumptions
   Spec
   soundness

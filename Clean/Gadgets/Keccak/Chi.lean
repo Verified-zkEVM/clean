@@ -54,6 +54,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   main
+  elaborated
   Assumptions
   Spec
   soundness

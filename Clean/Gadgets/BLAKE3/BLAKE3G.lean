@@ -133,6 +133,7 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assu
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
+  elaborated := elaborated a b c d
   Assumptions
   Spec := Spec a b c d
   soundness := soundness a b c d

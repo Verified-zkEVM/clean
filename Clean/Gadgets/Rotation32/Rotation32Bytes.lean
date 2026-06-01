@@ -75,6 +75,7 @@ theorem completeness (off : Fin 4) : Completeness (F p) (main off) Assumptions :
 
 def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 where
   main := main off
+  elaborated := elaborated off
   Assumptions
   Spec := Spec off
   soundness := soundness off
