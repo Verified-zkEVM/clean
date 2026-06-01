@@ -57,20 +57,10 @@ measure_module() {
     return 0
   fi
   lines="$(wc -l < "$path")"
-  if ! python3 - "$record" "$module" "$value" "$lines" <<'PY'
-import json
-import sys
-
-output, module, heartbeats, lines = sys.argv[1:]
-records = [
-    {"metric": f"build/module/{module}//heartbeats", "value": float(heartbeats), "unit": "heartbeats"},
-    {"metric": f"build/module/{module}//lines", "value": float(lines)},
-]
-with open(output, "a", encoding="utf-8") as handle:
-    for record in records:
-        handle.write(json.dumps(record) + "\n")
-PY
-  then
+  if ! {
+    printf '{"metric": "build/module/%s//heartbeats", "value": %s, "unit": "heartbeats"}\n' "$module" "$value"
+    printf '{"metric": "build/module/%s//lines", "value": %s}\n' "$module" "$lines"
+  } > "$record"; then
     printf '%s\n' "$module" > "$failure"
     return 0
   fi
