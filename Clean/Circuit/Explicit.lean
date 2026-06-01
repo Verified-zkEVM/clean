@@ -535,7 +535,11 @@ elab "infer_explicit_head" : tactic => withMainContext do
   let args := target.getAppArgs
   if !target.getAppFn.isConstOf ``ExplicitCircuit || args.isEmpty then
     throwError "target is not an ExplicitCircuit"
-  let some head := args[args.size - 1]!.getAppFn.constName?
+  -- Beta-reduce first: after `ExplicitCircuits.fromSingle; intro a` (and loop bodies),
+  -- the circuit is often a redex like `(fun state => Circuit.foldl …) a`, whose `getAppFn`
+  -- is the lambda.  Without this we'd miss the real head (`Circuit.foldl`, `subcircuit`, …)
+  -- and fall through to a speculative `apply from_bind` that unfolds the constructor.
+  let some head := args[args.size - 1]!.headBeta.getAppFn.constName?
     | throwError "circuit head is not a constant"
   for lemmaName in (← labelled `explicit_circuit_constructor).toList do
     let some info := (← getEnv).find? lemmaName | continue
