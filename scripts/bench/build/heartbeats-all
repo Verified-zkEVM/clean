@@ -7,18 +7,43 @@ repo="$(bench_repo_root)"
 heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
 output="measurements.jsonl"
 build_root=".lake/build/lib/lean"
+jobs="${BENCH_HEARTBEAT_JOBS:-}"
+
+if [ -z "$jobs" ]; then
+  jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+  if [ "$jobs" -gt 4 ]; then
+    jobs=4
+  fi
+fi
+
+case "$jobs" in
+  '' | *[!0-9]* | 0)
+    echo "invalid BENCH_HEARTBEAT_JOBS: $jobs" >&2
+    exit 1
+    ;;
+esac
+
+tmpdir="$(mktemp -d)"
+module_list="$tmpdir/modules"
+trap 'rm -rf "$tmpdir"' EXIT
 
 find "$build_root/Clean" -name '*.olean' -print \
   | sed -e "s|^$build_root/||" -e 's|\.olean$||' -e 's|/|.|g' \
-  | sort \
-  | while IFS= read -r module; do
+  | sort > "$module_list"
+
+measure_module() {
+  local module="$1"
+  local path
+  local value
+  local lines
+
   path="$(module_path "$module")"
   if [ ! -f "$path" ]; then
-    continue
+    return 0
   fi
   value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
   lines="$(wc -l < "$path")"
-  python3 - "$output" "$module" "$value" "$lines" <<'PY'
+  python3 - "$tmpdir/$module.jsonl" "$module" "$value" "$lines" <<'PY'
 import json
 import sys
 
@@ -31,4 +56,15 @@ with open(output, "a", encoding="utf-8") as handle:
     for record in records:
         handle.write(json.dumps(record) + "\n")
 PY
-done
+}
+
+export repo heartbeat_check tmpdir
+export -f bench_repo_root module_path measure_heartbeats measure_module
+
+xargs -r -n 1 -P "$jobs" bash -c 'measure_module "$1"' bash < "$module_list"
+
+while IFS= read -r module; do
+  if [ -f "$tmpdir/$module.jsonl" ]; then
+    cat "$tmpdir/$module.jsonl"
+  fi
+done < "$module_list" >> "$output"
