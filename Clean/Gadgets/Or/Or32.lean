@@ -65,7 +65,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   omega
 
 def circuit : FormalCircuit (F p) Inputs U32 :=
-  { main, Assumptions, Spec, soundness, completeness }
+  { main, elaborated, Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Or32
 end

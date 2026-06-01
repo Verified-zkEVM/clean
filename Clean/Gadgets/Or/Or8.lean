@@ -179,6 +179,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   · omega
 
 def circuit : FormalCircuit (F p) Inputs field :=
-  { main, Assumptions, Spec, soundness, completeness }
+  { main, elaborated, Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Or.Or8
