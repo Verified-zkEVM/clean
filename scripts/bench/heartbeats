@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+  echo "usage: scripts/bench/heartbeats <module>" >&2
+  exit 2
+fi
+
+source "$(dirname "$0")/heartbeat-common.sh"
+
+repo="$(bench_repo_root)"
+module="$1"
+heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
+setup="$(module_setup_path "$module")"
+if [ -f "$repo/$setup" ]; then
+  value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check" "$setup")"
+else
+  value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
+fi
+
+echo "$module: $(fmt_int "$value")"
