@@ -13,8 +13,13 @@ module="$1"
 baseline="${2:-main}"
 worktree="$repo/.bench-baseline-worktree"
 heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
+current_setup="$repo/$(module_setup_path "$module")"
 
-current="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
+if [ -f "$current_setup" ]; then
+  current="$(measure_heartbeats "$repo" "$module" "$heartbeat_check" "$(module_setup_path "$module")")"
+else
+  current="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
+fi
 baseline_commit="$(git -C "$repo" rev-parse --verify "$baseline^{commit}")"
 
 if [ -d "$worktree/.git" ] || [ -f "$worktree/.git" ]; then
@@ -32,7 +37,12 @@ fi
 
 baseline_path="$worktree/$(module_path "$module")"
 if [ -f "$baseline_path" ]; then
-  old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check")"
+  baseline_setup="$(module_setup_path "$module")"
+  if [ -f "$worktree/$baseline_setup" ]; then
+    old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check" "$baseline_setup")"
+  else
+    old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check")"
+  fi
   delta=$((current - old))
   delta_text="$(fmt_signed_int "$delta")"
   if [ "$old" -eq 0 ]; then

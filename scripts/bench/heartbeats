@@ -11,6 +11,11 @@ source "$(dirname "$0")/heartbeat-common.sh"
 repo="$(bench_repo_root)"
 module="$1"
 heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
-value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
+setup="$(module_setup_path "$module")"
+if [ -f "$repo/$setup" ]; then
+  value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check" "$setup")"
+else
+  value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
+fi
 
 echo "$module: $(fmt_int "$value")"

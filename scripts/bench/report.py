@@ -131,8 +131,6 @@ def fmt_delta(metric: str, value: float | None) -> str:
 def print_summary(current: Measurements, baseline: Measurements | None) -> None:
     metrics = [
         ("Build heartbeats (k)", "build//heartbeats"),
-        ("Wall time", "build//wall-clock"),
-        ("Max RSS", "build//maxrss"),
     ]
 
     print("# Build Benchmark Report")

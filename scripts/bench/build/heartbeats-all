@@ -34,16 +34,30 @@ find "$build_root/Clean" -name '*.olean' -print \
 measure_module() {
   local module="$1"
   local path
+  local setup
   local value
   local lines
+  local record
+  local failure
 
   path="$(module_path "$module")"
   if [ ! -f "$path" ]; then
     return 0
   fi
-  value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
+  setup="$(module_setup_path "$module")"
+  record="$tmpdir/$module.jsonl"
+  failure="$tmpdir/$module.fail"
+  if [ ! -f "$setup" ]; then
+    echo "setup file not found for $module: $setup" >&2
+    printf '%s\n' "$module" > "$failure"
+    return 0
+  fi
+  if ! value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check" "$setup")"; then
+    printf '%s\n' "$module" > "$failure"
+    return 0
+  fi
   lines="$(wc -l < "$path")"
-  python3 - "$tmpdir/$module.jsonl" "$module" "$value" "$lines" <<'PY'
+  if ! python3 - "$record" "$module" "$value" "$lines" <<'PY'
 import json
 import sys
 
@@ -56,15 +70,33 @@ with open(output, "a", encoding="utf-8") as handle:
     for record in records:
         handle.write(json.dumps(record) + "\n")
 PY
+  then
+    printf '%s\n' "$module" > "$failure"
+    return 0
+  fi
 }
 
 export repo heartbeat_check tmpdir
-export -f bench_repo_root module_path measure_heartbeats measure_module
+export -f bench_repo_root module_path module_setup_path measure_heartbeats measure_module
 
 xargs -r -n 1 -P "$jobs" bash -c 'measure_module "$1"' bash < "$module_list"
 
+failed=0
 while IFS= read -r module; do
   if [ -f "$tmpdir/$module.jsonl" ]; then
     cat "$tmpdir/$module.jsonl"
   fi
+  if [ -f "$tmpdir/$module.fail" ]; then
+    failed=1
+  fi
 done < "$module_list" >> "$output"
+
+if [ "$failed" -ne 0 ]; then
+  echo "heartbeat measurement failed for:" >&2
+  while IFS= read -r module; do
+    if [ -f "$tmpdir/$module.fail" ]; then
+      echo "  $module" >&2
+    fi
+  done < "$module_list"
+  exit 1
+fi

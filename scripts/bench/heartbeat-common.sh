@@ -9,6 +9,11 @@ module_path() {
   printf '%s.lean\n' "${module//.//}"
 }
 
+module_setup_path() {
+  local module="$1"
+  printf '.lake/build/ir/%s.setup.json\n' "${module//.//}"
+}
+
 fmt_int() {
   local value="$1"
   awk -v value="$value" '
@@ -38,6 +43,7 @@ measure_heartbeats() {
   local repo="$1"
   local module="$2"
   local heartbeat_check="$3"
+  local setup="${4:-}"
   local path
   path="$(module_path "$module")"
 
@@ -47,7 +53,11 @@ measure_heartbeats() {
   fi
 
   local output
-  if ! output="$(cd "$repo" && lake env lean --run "$heartbeat_check" "$path" 2>&1)"; then
+  local args=("$path")
+  if [ -n "$setup" ]; then
+    args+=("--setup" "$setup")
+  fi
+  if ! output="$(cd "$repo" && lake env lean --run "$heartbeat_check" "${args[@]}" 2>&1)"; then
     printf '%s\n' "$output" >&2
     return 1
   fi

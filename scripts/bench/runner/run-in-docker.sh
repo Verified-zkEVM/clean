@@ -21,8 +21,9 @@ RUN_DIR="$ROOT/runs/$BENCH_RUN_ID"
 CACHE_DIR="$ROOT/cache"
 WORK_DIR="$RUN_DIR/work"
 BASELINE_CACHE_DIR="$CACHE_DIR/baselines"
+LOCK_DIR="$CACHE_DIR/locks"
 
-mkdir -p "$CACHE_DIR/elan" "$BASELINE_CACHE_DIR" "$WORK_DIR" "$BENCH_OUTPUT_DIR"
+mkdir -p "$CACHE_DIR/elan" "$BASELINE_CACHE_DIR" "$LOCK_DIR" "$WORK_DIR" "$BENCH_OUTPUT_DIR"
 
 cleanup() {
   rm -rf "$RUN_DIR" 2>/dev/null && return
@@ -37,6 +38,24 @@ cleanup() {
 trap cleanup EXIT
 
 docker build -t "$IMAGE" -f scripts/bench/runner/Dockerfile scripts/bench/runner
+
+prune_pr_build_caches() {
+  local root="$CACHE_DIR/pr-lake-build"
+  local max_age_days="${BENCH_PR_BUILD_CACHE_MAX_AGE_DAYS:-30}"
+
+  case "$max_age_days" in
+    '' | *[!0-9]*)
+      echo "invalid BENCH_PR_BUILD_CACHE_MAX_AGE_DAYS: $max_age_days" >&2
+      return 1
+      ;;
+  esac
+  if [ "$max_age_days" -eq 0 ] || [ ! -d "$root" ]; then
+    return 0
+  fi
+
+  find "$root" -mindepth 3 -maxdepth 3 -type d -mtime +"$max_age_days" -prune -exec rm -rf {} +
+  find "$root" -mindepth 1 -type d -empty -delete
+}
 
 run_benchmark() {
   local label="$1"
@@ -65,6 +84,7 @@ run_benchmark() {
   )"
   local package_cache="$CACHE_DIR/lake-packages/$package_cache_key"
   local mathlib_cache="$CACHE_DIR/mathlib-cache/$package_cache_key"
+  local lock_file="$LOCK_DIR/$package_cache_key.lock"
   local build_mount=()
   if [ "$label" = "baseline" ] && [ "$repo" = "$BENCH_REPOSITORY" ]; then
     local build_cache="$CACHE_DIR/lake-build/$package_cache_key"
@@ -85,7 +105,7 @@ run_benchmark() {
     "$IMAGE" \
     bash -lc 'elan toolchain install "$1" || elan toolchain list | grep -Fxq "$1"' bash "$toolchain"
 
-  docker run --rm \
+  flock "$lock_file" docker run --rm \
     --security-opt no-new-privileges \
     --network bridge \
     -e XDG_CACHE_HOME=/workspace/xdg-cache \
@@ -101,7 +121,7 @@ run_benchmark() {
     -v "$xdg_cache:/workspace/xdg-cache" \
     -v "$BENCH_OUTPUT_DIR:/bench-output" \
     "$IMAGE" \
-    bash -lc 'scripts/bench/build/run && cp measurements.jsonl "$BENCH_OUTPUT_FILE"'
+    bash -lc 'status=0; scripts/bench/build/run || status=$?; cp measurements.jsonl "$BENCH_OUTPUT_FILE" 2>/dev/null || true; exit "$status"'
 }
 
 baseline_cache_path() {
@@ -127,6 +147,7 @@ store_baseline_cache() {
 if [ "${BENCH_BASELINE_ONLY:-}" = "1" ]; then
   run_benchmark baseline "$BENCH_HEAD_REPO" "$BENCH_SHA"
   store_baseline_cache "$BENCH_SHA" "$BENCH_OUTPUT_DIR/baseline.jsonl"
+  prune_pr_build_caches
   exit 0
 fi
 
@@ -138,3 +159,4 @@ else
   store_baseline_cache "$BENCH_BASE_SHA" "$BENCH_OUTPUT_DIR/baseline.jsonl"
 fi
 run_benchmark current "$BENCH_HEAD_REPO" "$BENCH_SHA"
+prune_pr_build_caches
