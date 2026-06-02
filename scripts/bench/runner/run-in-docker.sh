@@ -23,8 +23,6 @@ WORK_DIR="$RUN_DIR/work"
 BASELINE_CACHE_DIR="$CACHE_DIR/baselines"
 LOCK_DIR="$CACHE_DIR/locks"
 
-mkdir -p "$CACHE_DIR/elan" "$BASELINE_CACHE_DIR" "$LOCK_DIR" "$WORK_DIR" "$BENCH_OUTPUT_DIR"
-
 cleanup() {
   rm -rf "$RUN_DIR" 2>/dev/null && return
   docker run --rm \
@@ -38,6 +36,40 @@ cleanup() {
 trap cleanup EXIT
 
 docker build -t "$IMAGE" -f scripts/bench/runner/Dockerfile scripts/bench/runner
+
+prepare_runner_dirs() {
+  local uid
+  local gid
+  uid="$(id -u)"
+  gid="$(id -g)"
+
+  mkdir -p "$BENCH_OUTPUT_DIR"
+  docker run --rm \
+    --network none \
+    --security-opt no-new-privileges \
+    -v "$ROOT:$ROOT" \
+    "$IMAGE" \
+    bash -lc '
+      set -euo pipefail
+      mkdir -p "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
+      find "$1" -mindepth 1 -maxdepth 4 -type d -exec chown "${10}:${11}" {} +
+      find "$4" -mindepth 1 -maxdepth 1 -type f -exec chown "${10}:${11}" {} +
+      chown "${10}:${11}" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
+    ' bash \
+      "$CACHE_DIR" \
+      "$CACHE_DIR/elan" \
+      "$BASELINE_CACHE_DIR" \
+      "$LOCK_DIR" \
+      "$WORK_DIR" \
+      "$CACHE_DIR/lake-packages" \
+      "$CACHE_DIR/mathlib-cache" \
+      "$CACHE_DIR/lake-build" \
+      "$CACHE_DIR/pr-lake-build" \
+      "$uid" \
+      "$gid"
+}
+
+prepare_runner_dirs
 
 prune_pr_build_caches() {
   local root="$CACHE_DIR/pr-lake-build"
