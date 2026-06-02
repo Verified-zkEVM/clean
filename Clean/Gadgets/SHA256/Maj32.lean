@@ -1,43 +1,27 @@
 import Clean.Gadgets.SHA256.BitwiseOps
+import Clean.Gadgets.SHA256.CarrySave
 import Clean.Specs.SHA256
+import Mathlib.Tactic.LinearCombination
 
 section
-variable {p : ℕ} [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^35)]
 
 namespace Gadgets.SHA256
 
 /-!
 # Majority function Maj(a, b, c) for SHA-256
 
-Maj(a, b, c) = (a AND b) XOR (a AND c) XOR (b AND c).
-Decomposition: let t = a·b; then maj = t + c·(a + b − 2·t).
-Two R1CS constraints per bit:
-  (1)  a·b = t
-  (2)  c·(a + b − 2·t) = z − t
-Witnesses 64 variables: 32 for t, 32 for z.
--/
+Maj(a, b, c) = (a AND b) XOR (a AND c) XOR (b AND c) = maj(a, b, c) bit-wise.
 
-/-- Majority function: Maj(a, b, c) = (a AND b) XOR (a AND c) XOR (b AND c).
-    Decomposition: let t = a·b; then maj = t + c·(a + b − 2·t).
-    Two R1CS constraints per bit:
-      (1)  a·b = t
-      (2)  c·(a + b − 2·t) = z − t -/
-def maj32 (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  -- Witness the intermediate product t[i] = a[i] * b[i]
-  let t ← witnessVector 32 fun env =>
-    Vector.ofFn fun (i : Fin 32) => env a[i] * env b[i]
-  -- Witness the majority output
-  let z ← witnessVector 32 fun env =>
-    Vector.ofFn fun (i : Fin 32) =>
-      let ti := env t[i]
-      env t[i] + env c[i] * (env a[i] + env b[i] - 2 * ti)
-  -- Constraint (1): t[i] = a[i] * b[i]
-  Circuit.forEach (Vector.finRange 32) fun i =>
-    assertZero (t[i] - a[i] * b[i])
-  -- Constraint (2): z[i] = t[i] + c[i] * (a[i] + b[i] - 2 * t[i])
-  Circuit.forEach (Vector.finRange 32) fun i =>
-    assertZero (z[i] - t[i] - c[i] * (a[i] + b[i] - 2 * t[i]))
-  return z
+Single-constraint arithmetization: witness one bit `o[i]` per position (the majority) and impose
+
+  (o[i] + a[i] + b[i] − 9·c[i] + 3) · (a[i] + b[i] + 6·c[i] − 4) = −12.
+
+This is linear in `o[i]` with a multiplier that never vanishes on the boolean cube, so it pins
+`o[i] = maj(a[i], b[i], c[i])` uniquely (`maj3_unique`).  Cost: 32 witnesses, 32 constraints —
+one R1CS row per bit, down from the carry-save form's two. -/
+def maj3 (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
+  maj3raw a b c
 
 namespace Maj32
 
@@ -48,16 +32,16 @@ structure Inputs (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
-  maj32 input.a input.b input.c
+  maj3 input.a input.b input.c
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) where
   main := main
-  localLength _ := 64
-  output _ i0 := varFromOffset (fields 32) (i0 + 32)
-  localLength_eq _ _ := by simp [circuit_norm, main, maj32]
-  output_eq _ _ := by dsimp only [main, maj32, circuit_norm]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, maj32]
-  channelsLawful := by intro x n; simp [circuit_norm, main, maj32]
+  localLength _ := 32
+  output _ i0 := varFromOffset (fields 32) i0
+  localLength_eq _ _ := by simp [circuit_norm, main, maj3, maj3raw]
+  output_eq _ _ := by dsimp only [main, maj3, maj3raw, circuit_norm]
+  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, maj3, maj3raw]
+  channelsLawful := by intro x n; simp [circuit_norm, main, maj3, maj3raw]
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b ∧ Normalized input.c
@@ -112,13 +96,6 @@ private lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>
     norm_num [ha, hb, hc, ZMod.val_zero, ZMod.val_one]
 
-/-- For boolean field elements a, b, c: the field expression t + c*(a+b-2t) where t=a*b
-    is boolean -/
-private lemma maj_is_bool {α : Type*} [Ring α] {a b c : α} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
-    IsBool (a * b + c * (a + b - 2 * (a * b))) := by
-  rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>
-    simp [ha, hb, hc] <;> norm_num <;> first | exact IsBool.zero | exact IsBool.one
-
 private lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
     (hf : ∀ i, f i = 0 ∨ f i = 1) (hg : ∀ i, g i = 0 ∨ g i = 1) (hk : ∀ i, k i = 0 ∨ k i = 1) :
     ((∑ i : Fin n, f i * 2^i.val) &&& (∑ i : Fin n, g i * 2^i.val)) ^^^
@@ -164,6 +141,7 @@ private lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
     rw [Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le hxor_all pow_le),
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le hmajS pow_le)]
 
+omit [Fact (p > 2^35)] in
 /-- Spec holds for any vector `z` whose bits satisfy the per-bit constraint. -/
 private lemma spec_of_constraint
     (input_a input_b input_c z : fields 32 (F p))
@@ -210,7 +188,7 @@ private lemma spec_of_constraint
   exact key'.symm
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [maj32]
+  circuit_proof_start [maj3, maj3raw]
   obtain ⟨ha, hb, hc⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b, h_input_c⟩ := h_input
   have h_ai : ∀ i : Fin 32, Expression.eval env input_var_a[i.val] = input_a[i] := by
@@ -225,38 +203,38 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i
     have := Vector.ext_iff.mp h_input_c i i.isLt
     simp [Vector.getElem_map] at this; exact this
-  -- Extract the two sets of constraints from h_holds
-  obtain ⟨h_holds_t, h_holds_z⟩ := h_holds
-  -- t[i] = a[i] * b[i]
-  have h_t : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] * input_b[i] := by
-    intro i
-    have := h_holds_t i; rw [h_ai i, h_bi i] at this
-    exact sub_eq_zero.mp (by rw [sub_eq_add_neg]; exact this)
-  -- z[i] = t[i] + c[i] * (a[i] + b[i] - 2 * t[i])
-  have h_z : ∀ i : Fin 32, env.get (i₀ + 32 + i.val) =
-      input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) := by
-    intro i
-    have := h_holds_z i; rw [h_t i, h_ai i, h_bi i, h_ci i] at this
-    exact eq_of_sub_eq_zero (by ring_nf; ring_nf at this; exact this)
   set z : fields 32 (F p) :=
     Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + 32 + i} : Expression (F p))) with hz_def
-  have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + 32 + i.val) := by
+      (var {index := i₀ + i} : Expression (F p))) with hz_def
+  have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + i.val) := by
     intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+  -- The single Maj constraint at bit `i` pins `z[i]` to the majority expression.
   have h_eq' : ∀ i : Fin 32, z[i] =
       input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) := by
-    intro i; rw [h_z_get i]; exact h_z i
+    intro i
+    have hcon : (env.get (i₀ + i.val) + input_a[i] + input_b[i] - 9 * input_c[i] + 3)
+          * (input_a[i] + input_b[i] + 6 * input_c[i] - 4) + 12 = 0 := by
+      have h := h_holds i; rw [h_ai i, h_bi i, h_ci i] at h; linear_combination h
+    have hmaj := maj3_unique (ha i) (hb i) (hc i) hcon
+    rw [h_z_get i]; linear_combination hmaj
   exact spec_of_constraint input_a input_b input_c z ha hb hc h_eq'
 
+omit [Fact (p > 2^35)] in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [maj32]
-  refine ⟨fun i => ?_, fun i => ?_⟩
-  · have := (h_env.1) i
-    simp only [Vector.getElem_ofFn] at this
-    rw [this]; ring
-  · have := (h_env.2.1) i
-    simp only [Vector.getElem_ofFn] at this
-    rw [this]; ring
+  circuit_proof_start [maj3, maj3raw]
+  obtain ⟨ha, hb, hc⟩ := h_assumptions
+  obtain ⟨h_input_a, h_input_b, h_input_c⟩ := h_input
+  have h_ai : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_a[i.val] = input_a[i] := by
+    intro i; have := Vector.ext_iff.mp h_input_a i i.isLt; simp [Vector.getElem_map] at this; exact this
+  have h_bi : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_b[i.val] = input_b[i] := by
+    intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp [Vector.getElem_map] at this; exact this
+  have h_ci : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_c[i.val] = input_c[i] := by
+    intro i; have := Vector.ext_iff.mp h_input_c i i.isLt; simp [Vector.getElem_map] at this; exact this
+  intro i
+  have henv := h_env i
+  simp only [Vector.getElem_ofFn] at henv
+  rw [henv, h_ai i, h_bi i, h_ci i]
+  linear_combination maj3_complete (ha i) (hb i) (hc i)
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   Assumptions := Assumptions; Spec := Spec

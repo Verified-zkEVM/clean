@@ -1,4 +1,5 @@
 import Clean.Gadgets.SHA256.LowerSigma0
+import Mathlib.Tactic.LinearCombination
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -10,16 +11,15 @@ namespace Gadgets.SHA256
 
 Σ₀(x) = ROTR2(x) XOR ROTR13(x) XOR ROTR22(x)
 
-Two xor32 calls = 64 witnesses total.
+Single-constraint 3-input XOR (`xor3raw`): 32 witnesses, 32 constraints.
 
 Mirrors `LowerSigma0` but with three rotations (no shift) and constants 2, 13, 22.
 Reuses the helper lemmas defined in `LowerSigma0`.
 -/
 
 /-- Σ₀(x) = ROTR2(x) XOR ROTR13(x) XOR ROTR22(x) -/
-def upperSigma0 (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  let r1 ← xor32 (rotr32 2  x) (rotr32 13 x)
-  xor32 r1 (rotr32 22 x)
+def upperSigma0 (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
+  xor3raw (rotr32 2 x) (rotr32 13 x) (rotr32 22 x)
 
 namespace UpperSigma0
 
@@ -31,12 +31,10 @@ def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
 
 instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) where
   main := main
-  localLength _ := 64
-  output _ i0 := varFromOffset (fields 32) (i0 + 32)
-  localLength_eq _ _ := by simp [circuit_norm, main, upperSigma0, xor32]
-  output_eq _ _ := by simp +arith [circuit_norm, main, upperSigma0, xor32]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, upperSigma0, xor32]
-  channelsLawful := by intro x n; simp [circuit_norm, main, upperSigma0, xor32]
+  localLength _ := 32
+  localLength_eq _ _ := by simp [circuit_norm, main, upperSigma0, xor3raw]
+  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, upperSigma0, xor3raw]
+  channelsLawful := by intro x n; simp [circuit_norm, main, upperSigma0, xor3raw]
 
 def Assumptions (x : fields 32 (F p)) : Prop := Normalized x
 
@@ -119,9 +117,10 @@ private lemma spec_of_constraint
   rw [sigma_def, h_z_eq]
   exact key
 
+variable [Fact (p > 2^35)]
+
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [upperSigma0, xor32]
-  obtain ⟨h_holds1, h_holds2⟩ := h_holds
+  circuit_proof_start [upperSigma0, xor3raw]
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
   have h_r2  : ∀ i : Fin 32, Expression.eval env (rotr32 2 input_var)[i.val]  = input[(i + 2).val]  :=
     fun i => eval_rotr32 env input_var input h_input 2 i
@@ -129,30 +128,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     fun i => eval_rotr32 env input_var input h_input 13 i
   have h_r22 : ∀ i : Fin 32, Expression.eval env (rotr32 22 input_var)[i.val] = input[(i + 22).val] :=
     fun i => eval_rotr32 env input_var input h_input 22 i
-  have h_r1 : ∀ i : Fin 32, env.get (i₀ + i.val) =
-      input[(i + 2).val] + input[(i + 13).val] -
-        2 * input[(i + 2).val] * input[(i + 13).val] := by
-    intro i
-    have h := h_holds1 i; rw [h_r2 i, h_r13 i] at h
-    have key : env.get (i₀ + i.val) -
-        (input[(i + 2).val] + input[(i + 13).val] -
-          2 * input[(i + 2).val] * input[(i + 13).val]) = 0 := by
-      ring_nf; ring_nf at h; exact h
-    exact sub_eq_zero.mp key
-  have h_z_raw : ∀ i : Fin 32, env.get (i₀ + (32 + 32 * 0) + i.val) =
-      env.get (i₀ + i.val) + Expression.eval env (rotr32 22 input_var)[i.val] -
-      2 * env.get (i₀ + i.val) * Expression.eval env (rotr32 22 input_var)[i.val] := by
-    intro i
-    have h := h_holds2 i
-    have key : env.get (i₀ + (32 + 32 * 0) + i.val) -
-        (env.get (i₀ + i.val) + Expression.eval env (rotr32 22 input_var)[i.val] -
-         2 * env.get (i₀ + i.val) * Expression.eval env (rotr32 22 input_var)[i.val]) = 0 := by
-      ring_nf; ring_nf at h; exact h
-    exact sub_eq_zero.mp key
   set z : fields 32 (F p) :=
     Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + (32 + 32 * 0) + i} : Expression (F p))) with hz_def
-  have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
+      (var {index := i₀ + i} : Expression (F p))) with hz_def
+  have h_zget : ∀ i : Fin 32, z[i] = env.get (i₀ + i.val) := by
     intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 2).val] + input[(i + 13).val] -
@@ -162,51 +141,32 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
               2 * input[(i + 2).val] * input[(i + 13).val])
             * input[(i + 22).val] := by
     intro i
-    rw [h_z_get i, h_z_raw i, h_r1 i, h_r22 i]
+    -- The single XOR constraint at bit `i`, with the rotations evaluated to input bits.
+    have hcon : (env.get (i₀ + i.val) + 2 * input[(i + 2).val] + 2 * input[(i + 13).val]
+          + 7 * input[(i + 22).val]) * (input[(i + 2).val] + input[(i + 13).val]
+            - 4 * input[(i + 22).val] + 1)
+          - (6 * input[(i + 2).val] + 6 * input[(i + 13).val] - 24 * input[(i + 22).val]) = 0 := by
+      have h := h_holds i; rw [h_r2 i, h_r13 i, h_r22 i] at h; linear_combination h
+    have hxor := xor3_unique (ha (i + 2)) (ha (i + 13)) (ha (i + 22)) hcon
+    rw [h_zget i]; linear_combination hxor
   exact spec_of_constraint input z ha h_z
 
+omit [Fact (p > 2^35)] in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [upperSigma0, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
-  refine ⟨fun i => ?_, fun i => ?_⟩
-  · have hr2 := eval_rotr32 env.toEnvironment input_var input h_input 2 i
-    have hr13 := eval_rotr32 env.toEnvironment input_var input h_input 13 i
-    have h1 := h_env1 i
-    simp only [Vector.getElem_ofFn] at h1
-    rw [h1, hr2, hr13]
-    have b2 : input[(i + 2).val] = (0 : F p) ∨ input[(i + 2).val] = 1 := h_assumptions (i + 2)
-    have b13 : input[(i + 13).val] = (0 : F p) ∨ input[(i + 13).val] = 1 := h_assumptions (i + 13)
-    have hc : ((input[(i + 2).val].val ^^^ input[(i + 13).val].val : ℕ) : F p) =
-        input[(i + 2).val] + input[(i + 13).val] -
-          2 * input[(i + 2).val] * input[(i + 13).val] := by
-      rw [← IsBool.xor_eq_val_xor b2 b13, ZMod.natCast_val]
-      exact ZMod.cast_id p _
-    rw [hc]; ring
-  · have hr2 := eval_rotr32 env.toEnvironment input_var input h_input 2 i
-    have hr13 := eval_rotr32 env.toEnvironment input_var input h_input 13 i
-    have hr22 := eval_rotr32 env.toEnvironment input_var input h_input 22 i
-    have h1 := h_env1 i
-    have h2 := h_env2 i
-    simp only [Vector.getElem_ofFn, mul_zero, zero_add] at h2
-    simp only [Vector.getElem_ofFn] at h1
-    rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr2, hr13, hr22]
-    have b2 : input[(i + 2).val] = (0 : F p) ∨ input[(i + 2).val] = 1 := h_assumptions (i + 2)
-    have b13 : input[(i + 13).val] = (0 : F p) ∨ input[(i + 13).val] = 1 := h_assumptions (i + 13)
-    have b22 : input[(i + 22).val] = (0 : F p) ∨ input[(i + 22).val] = 1 := h_assumptions (i + 22)
-    set r2 : F p := input[(i + 2).val]
-    set r13 : F p := input[(i + 13).val]
-    set r22 : F p := input[(i + 22).val]
-    have hxor1 : ((r2.val ^^^ r13.val : ℕ) : F p) = r2 + r13 - 2 * r2 * r13 := by
-      rw [← IsBool.xor_eq_val_xor b2 b13, ZMod.natCast_val]
-      exact ZMod.cast_id p _
-    have hxor1_bool : IsBool (((r2.val ^^^ r13.val : ℕ) : F p)) := by
-      rw [hxor1]; exact IsBool.xor_is_bool b2 b13
-    have hxor3 : (((((r2.val ^^^ r13.val : ℕ) : F p).val ^^^ r22.val) : ℕ) : F p) =
-        ((r2.val ^^^ r13.val : ℕ) : F p) + r22 -
-          2 * ((r2.val ^^^ r13.val : ℕ) : F p) * r22 := by
-      rw [← IsBool.xor_eq_val_xor hxor1_bool b22, ZMod.natCast_val]
-      exact ZMod.cast_id p _
-    rw [hxor3, hxor1]; ring
+  circuit_proof_start [upperSigma0, xor3raw]
+  have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
+  have hr2 : ∀ i : Fin 32, Expression.eval env.toEnvironment (rotr32 2 input_var)[i.val] = input[(i + 2).val] :=
+    fun i => eval_rotr32 env.toEnvironment input_var input h_input 2 i
+  have hr13 : ∀ i : Fin 32, Expression.eval env.toEnvironment (rotr32 13 input_var)[i.val] = input[(i + 13).val] :=
+    fun i => eval_rotr32 env.toEnvironment input_var input h_input 13 i
+  have hr22 : ∀ i : Fin 32, Expression.eval env.toEnvironment (rotr32 22 input_var)[i.val] = input[(i + 22).val] :=
+    fun i => eval_rotr32 env.toEnvironment input_var input h_input 22 i
+  intro i
+  have henv := h_env i
+  simp only [Vector.getElem_ofFn] at henv
+  rw [hr2 i, hr13 i, hr22 i] at henv
+  rw [hr2 i, hr13 i, hr22 i, henv]
+  linear_combination xor3_complete (ha (i + 2)) (ha (i + 13)) (ha (i + 22))
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   Assumptions := Assumptions
