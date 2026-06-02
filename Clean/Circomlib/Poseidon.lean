@@ -397,19 +397,8 @@ def envState (env : Environment F) (input : Vector F 2)
   if k = 0 then input
   else #v[env.get (n + (k - 1) * 6 + 4), env.get (n + (k - 1) * 6 + 5)]
 
--- TODO AUTOELAB
-instance elaborated : ElaboratedCircuit F (fields 2) (fields 2) main where
-  localLength _ := 336
-  localLength_eq := by
-    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit,
-      PartialRoundOpt_t2.elaborated]
-  output _ i := #v[varFromOffset field (i + 334), varFromOffset field (i + 335)]
-  output_eq := by
-    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit,
-      PartialRoundOpt_t2.elaborated]
-  subcircuitsConsistent := by
-    simp only [circuit_norm, main, PartialRoundOpt_t2.circuit,
-      PartialRoundOpt_t2.elaborated]
+instance elaborated : ElaboratedCircuit F (fields 2) (fields 2) main := by
+  elaborate_circuit
 
 theorem soundness : Soundness F (Input := fields 2) (Output := fields 2) main Assumptions Spec := by
   circuit_proof_start [PartialRoundOpt_t2.circuit, PartialRoundOpt_t2.elaborated,

@@ -549,7 +549,16 @@ elab "infer_explicit_head" : tactic => withMainContext do
         return cargs[cargs.size - 1]!.getAppFn.constName? == some head
       else return false
     if isMatch then
-      evalTactic (← `(tactic| (apply $(mkIdent lemmaName) <;> try infer_explicit_circuits)))
+      -- Apply with `allowSynthFailures` so a recursive *instance* argument that TC fails to
+      -- synthesize — notably `from_foldl`'s `[explicit : ∀ b a, ExplicitCircuit (body b a)]`
+      -- for some subcircuit bodies (FullRound/PartialRound, but oddly not KeccakRound) — is
+      -- left as a goal for the enclosing `infer_explicit_circuit` loop to discharge
+      -- (`intro … ; infer_explicit_head`), instead of failing the whole `apply` and falling
+      -- back to `from_bind`, which unfolds the loop into an N-deep bind chain.
+      let lemmaExpr ← Lean.Meta.mkConstWithFreshMVarLevels lemmaName
+      let newGoals ← (← getMainGoal).apply lemmaExpr { allowSynthFailures := true }
+      replaceMainGoal newGoals
+      evalTactic (← `(tactic| all_goals try infer_explicit_circuits))
       return
   throwError "no explicit_circuit_constructor registered for head {head}"
 
