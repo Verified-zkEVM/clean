@@ -47,26 +47,27 @@ prepare_runner_dirs() {
   docker run --rm \
     --network none \
     --security-opt no-new-privileges \
+    -e HOST_UID="$uid" \
+    -e HOST_GID="$gid" \
     -v "$ROOT:$ROOT" \
     "$IMAGE" \
     bash -lc '
       set -euo pipefail
-      mkdir -p "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
-      find "$1" -mindepth 1 -maxdepth 4 -type d -exec chown "${10}:${11}" {} +
-      find "$4" -mindepth 1 -maxdepth 1 -type f -exec chown "${10}:${11}" {} +
-      chown "${10}:${11}" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
+      mkdir -p "$@"
+      find "$1" -mindepth 1 -maxdepth 4 -type d -exec chown "$HOST_UID:$HOST_GID" {} +
+      find "$4" -mindepth 1 -maxdepth 1 -type f -exec chown "$HOST_UID:$HOST_GID" {} +
+      chown "$HOST_UID:$HOST_GID" "$@"
     ' bash \
       "$CACHE_DIR" \
       "$CACHE_DIR/elan" \
       "$BASELINE_CACHE_DIR" \
       "$LOCK_DIR" \
+      "$RUN_DIR" \
       "$WORK_DIR" \
       "$CACHE_DIR/lake-packages" \
       "$CACHE_DIR/mathlib-cache" \
       "$CACHE_DIR/lake-build" \
-      "$CACHE_DIR/pr-lake-build" \
-      "$uid" \
-      "$gid"
+      "$CACHE_DIR/pr-lake-build"
 }
 
 prepare_runner_dirs
