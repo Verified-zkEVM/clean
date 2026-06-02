@@ -32,7 +32,7 @@ fi
 (
   cd "$worktree"
   lake exe cache get
-  lake build
+  lake build "$module"
 )
 
 baseline_path="$worktree/$(module_path "$module")"
