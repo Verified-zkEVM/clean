@@ -17,7 +17,13 @@ jobs:
         with:
           ref: main
           path: bench-control
+      - name: Clear benchmark outputs
+        run: |
+          rm -f baseline.jsonl benchmark-report.md benchmark-modules.md
+          rm -rf "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}"
+          mkdir -p "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}"
       - name: Run benchmark in container
+        id: benchmark
         working-directory: bench-control
         env:
           BENCH_BASELINE_ONLY: "1"
@@ -25,16 +31,16 @@ jobs:
           BENCH_HEAD_REPO: ${{ github.repository }}
           BENCH_REPOSITORY: ${{ github.repository }}
           BENCH_RUN_ID: ${{ github.run_id }}
-          BENCH_OUTPUT_DIR: ${{ github.workspace }}/bench-output
+          BENCH_OUTPUT_DIR: ${{ github.workspace }}/bench-output/${{ github.run_id }}
         run: scripts/bench/runner/run-in-docker.sh
       - name: Copy measurements
         if: always()
         run: |
-          if [ -f "$GITHUB_WORKSPACE/bench-output/baseline.jsonl" ]; then
-            cp "$GITHUB_WORKSPACE/bench-output/baseline.jsonl" baseline.jsonl
+          if [ -f "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}/baseline.jsonl" ]; then
+            cp "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}/baseline.jsonl" baseline.jsonl
           fi
       - name: Render benchmark report
-        if: always() && hashFiles('baseline.jsonl') != ''
+        if: steps.benchmark.outcome == 'success' && hashFiles('baseline.jsonl') != ''
         run: |
           bench-control/scripts/bench/report.py baseline.jsonl --limit 10 > benchmark-report.md
           bench-control/scripts/bench/report.py baseline.jsonl --all-modules > benchmark-modules.md
