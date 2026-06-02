@@ -526,9 +526,10 @@ This replaces a chain of speculative `apply from_*`.  That chain is expensive be
 representation and does a deep higher-order unification whose cost scales with the returned
 value.  Matching on the head constant first makes each step O(1).
 
-Any `ExplicitCircuits` (family) side goals produced by the chosen lemma — e.g. the loop body of
-`from_forEach` — are discharged here with `infer_explicit_circuits`; the remaining
-`ExplicitCircuit` side goals are left for the enclosing `infer_explicit_circuit` loop.
+Every constructor's side goals — a loop body's `∀ …, ExplicitCircuit (body …)` (all loop
+constructors take their body-explicitness as a regular explicit pi argument) or the sub-circuit
+goals of `from_bind` — are left for the enclosing `infer_explicit_circuit` loop, which discharges
+them uniformly via `intros; infer_explicit_head`.  No side tactic is run here.
 -/
 elab "infer_explicit_head" : tactic => withMainContext do
   let target ← getMainTarget
@@ -549,16 +550,9 @@ elab "infer_explicit_head" : tactic => withMainContext do
         return cargs[cargs.size - 1]!.getAppFn.constName? == some head
       else return false
     if isMatch then
-      -- Apply with `allowSynthFailures` so a recursive *instance* argument that TC fails to
-      -- synthesize — notably `from_foldl`'s `[explicit : ∀ b a, ExplicitCircuit (body b a)]`
-      -- for some subcircuit bodies (FullRound/PartialRound, but oddly not KeccakRound) — is
-      -- left as a goal for the enclosing `infer_explicit_circuit` loop to discharge
-      -- (`intro … ; infer_explicit_head`), instead of failing the whole `apply` and falling
-      -- back to `from_bind`, which unfolds the loop into an N-deep bind chain.
-      let lemmaExpr ← Lean.Meta.mkConstWithFreshMVarLevels lemmaName
-      let newGoals ← (← getMainGoal).apply lemmaExpr { allowSynthFailures := true }
-      replaceMainGoal newGoals
-      evalTactic (← `(tactic| all_goals try infer_explicit_circuits))
+      -- Just apply the constructor; its subgoals (loop-body pi, `from_bind` parts) are left for
+      -- the enclosing `infer_explicit_circuit` loop to discharge.
+      evalTactic (← `(tactic| apply $(mkIdent lemmaName)))
       return
   throwError "no explicit_circuit_constructor registered for head {head}"
 
