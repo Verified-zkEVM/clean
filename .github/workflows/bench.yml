@@ -42,7 +42,13 @@ jobs:
         with:
           ref: main
           path: bench-control
+      - name: Clear benchmark outputs
+        run: |
+          rm -f baseline.jsonl current.jsonl benchmark-report.md benchmark-modules.md
+          rm -rf "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}"
+          mkdir -p "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}"
       - name: Run benchmark in container
+        id: benchmark
         working-directory: bench-control
         env:
           BENCH_PR: ${{ inputs.pr }}
@@ -51,29 +57,30 @@ jobs:
           BENCH_HEAD_REPO: ${{ inputs.head_repo }}
           BENCH_REPOSITORY: ${{ github.repository }}
           BENCH_RUN_ID: ${{ github.run_id }}
-          BENCH_OUTPUT_DIR: ${{ github.workspace }}/bench-output
-          BENCH_HEARTBEATS: "1"
+          BENCH_OUTPUT_DIR: ${{ github.workspace }}/bench-output/${{ github.run_id }}
         run: scripts/bench/runner/run-in-docker.sh
       - name: Copy measurements
         if: always()
         run: |
-          if [ -f "$GITHUB_WORKSPACE/bench-output/baseline.jsonl" ]; then
-            cp "$GITHUB_WORKSPACE/bench-output/baseline.jsonl" baseline.jsonl
+          if [ -f "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}/baseline.jsonl" ]; then
+            cp "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}/baseline.jsonl" baseline.jsonl
           fi
-          if [ -f "$GITHUB_WORKSPACE/bench-output/current.jsonl" ]; then
-            cp "$GITHUB_WORKSPACE/bench-output/current.jsonl" current.jsonl
+          if [ -f "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}/current.jsonl" ]; then
+            cp "$GITHUB_WORKSPACE/bench-output/${{ github.run_id }}/current.jsonl" current.jsonl
           fi
       - name: Render benchmark report
-        if: always() && hashFiles('current.jsonl') != ''
+        if: steps.benchmark.outcome == 'success' && hashFiles('current.jsonl') != ''
         run: |
           if [ -f baseline.jsonl ]; then
             bench-control/scripts/bench/report.py current.jsonl baseline.jsonl --limit 10 > benchmark-report.md
+            bench-control/scripts/bench/report.py current.jsonl baseline.jsonl --all-modules > benchmark-modules.md
           else
             bench-control/scripts/bench/report.py current.jsonl --limit 10 > benchmark-report.md
+            bench-control/scripts/bench/report.py current.jsonl --all-modules > benchmark-modules.md
           fi
           cat benchmark-report.md >> "$GITHUB_STEP_SUMMARY"
       - name: Comment on PR
-        if: always() && hashFiles('benchmark-report.md') != ''
+        if: steps.benchmark.outcome == 'success' && hashFiles('benchmark-report.md') != ''
         uses: actions/github-script@v7
         with:
           script: |
@@ -98,11 +105,10 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bench-measurements
+          name: bench-report
           path: |
-            baseline.jsonl
-            current.jsonl
             benchmark-report.md
+            benchmark-modules.md
           if-no-files-found: warn
       - name: Mark benchmark complete
         if: always()

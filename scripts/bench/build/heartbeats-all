@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(dirname "$0")/../heartbeat-common.sh"
+
+repo="$(bench_repo_root)"
+heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
+output="measurements.jsonl"
+build_root=".lake/build/lib/lean"
+jobs="${BENCH_HEARTBEAT_JOBS:-}"
+
+if [ -z "$jobs" ]; then
+  jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+  if [ "$jobs" -gt 6 ]; then
+    jobs=6
+  fi
+fi
+
+case "$jobs" in
+  '' | *[!0-9]* | 0)
+    echo "invalid BENCH_HEARTBEAT_JOBS: $jobs" >&2
+    exit 1
+    ;;
+esac
+
+tmpdir="$(mktemp -d)"
+module_list="$tmpdir/modules"
+trap 'rm -rf "$tmpdir"' EXIT
+
+find "$build_root/Clean" -name '*.olean' -print \
+  | sed -e "s|^$build_root/||" -e 's|\.olean$||' -e 's|/|.|g' \
+  | sort > "$module_list"
+
+measure_module() {
+  local module="$1"
+  local path
+  local setup
+  local value
+  local lines
+  local record
+  local failure
+
+  path="$(module_path "$module")"
+  if [ ! -f "$path" ]; then
+    return 0
+  fi
+  setup="$(module_setup_path "$module")"
+  record="$tmpdir/$module.jsonl"
+  failure="$tmpdir/$module.fail"
+  if [ ! -f "$setup" ]; then
+    echo "setup file not found for $module: $setup" >&2
+    printf '%s\n' "$module" > "$failure"
+    return 0
+  fi
+  if ! value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check" "$setup")"; then
+    printf '%s\n' "$module" > "$failure"
+    return 0
+  fi
+  lines="$(wc -l < "$path")"
+  if ! {
+    printf '{"metric": "build/module/%s//heartbeats", "value": %s, "unit": "heartbeats"}\n' "$module" "$value"
+    printf '{"metric": "build/module/%s//lines", "value": %s}\n' "$module" "$lines"
+  } > "$record"; then
+    printf '%s\n' "$module" > "$failure"
+    return 0
+  fi
+}
+
+export repo heartbeat_check tmpdir
+export -f bench_repo_root module_path module_setup_path measure_heartbeats measure_module
+
+xargs -r -n 1 -P "$jobs" bash -c 'measure_module "$1"' bash < "$module_list"
+
+failed=0
+while IFS= read -r module; do
+  if [ -f "$tmpdir/$module.jsonl" ]; then
+    cat "$tmpdir/$module.jsonl"
+  fi
+  if [ -f "$tmpdir/$module.fail" ]; then
+    failed=1
+  fi
+done < "$module_list" >> "$output"
+
+if [ "$failed" -ne 0 ]; then
+  echo "heartbeat measurement failed for:" >&2
+  while IFS= read -r module; do
+    if [ -f "$tmpdir/$module.fail" ]; then
+      echo "  $module" >&2
+    fi
+  done < "$module_list"
+  exit 1
+fi

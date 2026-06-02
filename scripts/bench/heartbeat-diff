@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: scripts/bench/heartbeat-diff <module> [baseline-ref]" >&2
+  exit 2
+fi
+
+source "$(dirname "$0")/heartbeat-common.sh"
+
+repo="$(bench_repo_root)"
+module="$1"
+baseline="${2:-main}"
+worktree="$repo/.bench-baseline-worktree"
+heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
+current_setup="$repo/$(module_setup_path "$module")"
+
+if [ -f "$current_setup" ]; then
+  current="$(measure_heartbeats "$repo" "$module" "$heartbeat_check" "$(module_setup_path "$module")")"
+else
+  current="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
+fi
+baseline_commit="$(git -C "$repo" rev-parse --verify "$baseline^{commit}")"
+
+if [ -d "$worktree/.git" ] || [ -f "$worktree/.git" ]; then
+  git -C "$worktree" fetch --all --prune
+  git -C "$worktree" checkout --detach "$baseline_commit"
+else
+  git -C "$repo" worktree add --detach "$worktree" "$baseline_commit"
+fi
+
+(
+  cd "$worktree"
+  lake exe cache get
+  lake build
+)
+
+baseline_path="$worktree/$(module_path "$module")"
+if [ -f "$baseline_path" ]; then
+  baseline_setup="$(module_setup_path "$module")"
+  if [ -f "$worktree/$baseline_setup" ]; then
+    old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check" "$baseline_setup")"
+  else
+    old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check")"
+  fi
+  delta=$((current - old))
+  delta_text="$(fmt_signed_int "$delta")"
+  if [ "$old" -eq 0 ]; then
+    pct="-"
+  else
+    pct="$(awk -v delta="$delta" -v old="$old" 'BEGIN { printf "%+.2f%%", delta / old * 100 }')"
+  fi
+else
+  old=""
+  delta_text="new"
+  pct="-"
+fi
+
+echo "Module: $module"
+if [ -z "$old" ]; then
+  echo "Baseline $baseline (${baseline_commit:0:12}): -"
+else
+  echo "Baseline $baseline (${baseline_commit:0:12}): $(fmt_int "$old")"
+fi
+echo "Current working tree: $(fmt_int "$current")"
+echo "Delta: $delta_text"
+echo "Delta %: $pct"
