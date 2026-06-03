@@ -516,32 +516,30 @@ syntax "infer_explicit_head" : tactic
 syntax "unfold_explicit_circuits_head" : tactic
 syntax "infer_explicit_circuits" : tactic
 
-/--
-Dispatch on the syntactic head of the circuit in an `ExplicitCircuit` goal and apply the
-matching constructor lemma registered with `@[explicit_circuit_constructor]`.
+/-- The head of `type`, looking through `∀`/`let`/`mdata`. -/
+private def resultTypeHead? : Expr → Option Name
+  | .forallE _ _ body _ => resultTypeHead? body
+  | .letE _ _ _ body _ => resultTypeHead? body
+  | .mdata _ body => resultTypeHead? body
+  | type => match type.getAppFn with
+    | .const n _ => some n
+    | _ => none
 
-This replaces a chain of speculative `apply from_*`.  That chain is expensive because `pure`,
-`>>=` and `<$>` are typeclass-projection applications on the `Circuit` monad: a failing
-`apply from_bind` on e.g. `pure (bigVector)` unfolds both sides to the underlying `Circuit`
-representation and does a deep higher-order unification whose cost scales with the returned
-value.  Matching on the head constant first makes each step O(1).
+/-- A declaration is an *unfoldable circuit wrapper* when it is a definition (not tagged
+`[explicit_circuit_no_unfold]`) whose result-type head is tagged `[explicit_circuit_unfold_type]`
+(e.g. `Circuit`). -/
+def isUnfoldableCircuitDecl (declName : Name) : MetaM Bool := do
+  if (← labelled `explicit_circuit_no_unfold).contains declName then return false
+  let unfoldTypeHeads ← labelled `explicit_circuit_unfold_type
+  let ok (type : Expr) : Bool := (resultTypeHead? type).any unfoldTypeHeads.contains
+  match (← getEnv).find? declName with
+  | some (.defnInfo info) => return ok info.type
+  | some (.opaqueInfo info) => return ok info.type
+  | _ => return false
 
-Every constructor's side goals — a loop body's `∀ …, ExplicitCircuit (body …)` (all loop
-constructors take their body-explicitness as a regular explicit pi argument) or the sub-circuit
-goals of `from_bind` — are left for the enclosing `infer_explicit_circuit` loop, which discharges
-them uniformly via `intros; infer_explicit_head`.  No side tactic is run here.
--/
-elab "infer_explicit_head" : tactic => withMainContext do
-  let target ← getMainTarget
-  let args := target.getAppArgs
-  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.isEmpty then
-    throwError "target is not an ExplicitCircuit"
-  -- Beta-reduce first: after `ExplicitCircuits.fromSingle; intro a` (and loop bodies),
-  -- the circuit is often a redex like `(fun state => Circuit.foldl …) a`, whose `getAppFn`
-  -- is the lambda.  Without this we'd miss the real head (`Circuit.foldl`, `subcircuit`, …)
-  -- and fall through to a speculative `apply from_bind` that unfolds the constructor.
-  let some head := args[args.size - 1]!.headBeta.getAppFn.constName?
-    | throwError "circuit head is not a constant"
+/-- The `@[explicit_circuit_constructor]` lemma whose conclusion `ExplicitCircuit <c>` keys on
+`head` (the head constant of `<c>`), if any. -/
+def explicitConstructorFor? (head : Name) : MetaM (Option Name) := do
   for lemmaName in (← labelled `explicit_circuit_constructor).toList do
     let some info := (← getEnv).find? lemmaName | continue
     let isMatch ← forallTelescopeReducing info.type fun _ concl => do
@@ -549,12 +547,51 @@ elab "infer_explicit_head" : tactic => withMainContext do
       if concl.getAppFn.isConstOf ``ExplicitCircuit && !cargs.isEmpty then
         return cargs[cargs.size - 1]!.getAppFn.constName? == some head
       else return false
-    if isMatch then
-      -- Just apply the constructor; its subgoals (loop-body pi, `from_bind` parts) are left for
-      -- the enclosing `infer_explicit_circuit` loop to discharge.
-      evalTactic (← `(tactic| apply $(mkIdent lemmaName)))
-      return
-  throwError "no explicit_circuit_constructor registered for head {head}"
+    if isMatch then return some lemmaName
+  return none
+
+/--
+Dispatch on the circuit's head constant in an `ExplicitCircuit` goal and `apply` the matching
+`@[explicit_circuit_constructor]` lemma — O(1) per step, versus speculatively trying each `from_*`
+(a failing `apply from_bind` does a deep unification whose cost scales with the circuit).
+
+If the head is an unfoldable circuit wrapper instead, unfold it one step, `change` to the exposed
+(defeq) form, and dispatch its head.
+Bounded and non-recursive: a wrapper hiding a wrapper falls through to the caller's `apply from_bind`.
+Side goals (loop bodies, `from_bind` parts) are left for the enclosing `infer_explicit_circuit` loop.
+-/
+def inferExplicitHead : TacticM Unit := withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  if !target.getAppFn.isConstOf ``ExplicitCircuit || args.isEmpty then
+    throwError "target is not an ExplicitCircuit"
+  -- Beta-reduce first: after `ExplicitCircuits.fromSingle; intro a` (and loop bodies),
+  -- the circuit is often a redex like `(fun state => Circuit.foldl …) a`, whose `getAppFn`
+  -- is the lambda.  Without this we'd miss the real head (`Circuit.foldl`, `subcircuit`, …).
+  let circuit := args[args.size - 1]!.headBeta
+  let some head := circuit.getAppFn.constName?
+    | throwError "circuit head is not a constant"
+  -- If `head` is an unfoldable circuit wrapper, unfold it once and `change` the goal to the exposed
+  -- form so we dispatch the real head. `whnfCore` sees through `let`s/`match`es on the input but does
+  -- no delta, so a loop constructor `def` stays folded (not unrolled).
+  let head ←
+    if ← isUnfoldableCircuitDecl head then
+      match ← withTransparency .default <| unfoldDefinition? circuit with
+      | none => pure head
+      | some unfolded =>
+        let exposed ← whnfCore unfolded
+        match exposed.getAppFn.constName? with
+        | none => pure head
+        | some exposedHead =>
+          let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) exposed)
+          replaceMainGoal [← (← getMainGoal).change newTarget (checkDefEq := false)]
+          pure exposedHead
+    else pure head
+  let some lemmaName ← explicitConstructorFor? head
+    | throwError "no explicit_circuit_constructor registered for head {head}"
+  evalTactic (← `(tactic| apply $(mkIdent lemmaName)))
+
+elab "infer_explicit_head" : tactic => inferExplicitHead
 
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
