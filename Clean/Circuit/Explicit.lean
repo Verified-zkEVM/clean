@@ -646,6 +646,19 @@ syntax "elaborate_circuit_naive" : tactic
 syntax "elaborate_circuit_naive_with" term : tactic
 syntax "elaborate_circuit_naive_with" term " using " term : tactic
 
+macro_rules
+  | `(tactic|elaborate_circuit_naive) => `(tactic|(
+    refine ExplicitCircuits.toElaborated _ ?explicit ?elaborated
+    · infer_explicit_circuits
+    · exact ExplicitCircuits.IsElaborated.mk
+  ))
+
+macro_rules
+  | `(tactic|elaborate_circuit_naive_with $data:term using $data_eq:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data $data_eq))
+  | `(tactic|elaborate_circuit_naive_with $data:term) => `(tactic|(
+    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data))
+
 /--
 Derive an `ElaboratedCircuit` through `ExplicitCircuits`, but store normalized metadata fields.
 
@@ -957,19 +970,6 @@ elab "elaborate_circuit" : tactic => withMainContext do
 
 syntax "elaborate_circuit_with" term : tactic
 syntax "elaborate_circuit_with" term " using " term : tactic
-
-macro_rules
-  | `(tactic|elaborate_circuit_naive) => `(tactic|(
-    refine ExplicitCircuits.toElaborated _ ?explicit ?elaborated
-    · infer_explicit_circuits
-    · exact ExplicitCircuits.IsElaborated.mk
-  ))
-
-macro_rules
-  | `(tactic|elaborate_circuit_naive_with $data:term using $data_eq:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data $data_eq))
-  | `(tactic|elaborate_circuit_naive_with $data:term) => `(tactic|(
-    exact ElaboratedCircuit.withData (by elaborate_circuit_naive) $data))
 
 private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
     TacticM Unit := withMainContext do
