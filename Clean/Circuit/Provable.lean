@@ -83,14 +83,10 @@ def const (x : M F) : M (Expression F) :=
   fromElements (values.map .const)
 
 instance [Field F] : Inhabited (M F) where
-  default :=
-    let zeros := Vector.fill (size M) 0
-    fromElements zeros
+  default := fromElements default
 
 instance [Field F] : Inhabited (M (Expression F)) where
-  default :=
-    let zeros := Vector.fill (size M) 0
-    fromElements (zeros.map .const)
+  default := fromElements default
 
 -- TODO this should be simply called `var`, analogous to `const`
 @[explicit_provable_type]

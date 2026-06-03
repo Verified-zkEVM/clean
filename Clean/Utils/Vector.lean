@@ -257,9 +257,6 @@ theorem getElem_fill {n} {a : α} {i : ℕ} {hi : i < n} :
   | zero => nomatch hi
   | succ => simp_all [fill, getElem_push]
 
-instance [Inhabited α] {n : ℕ} : Inhabited (Vector α n) where
-  default := fill n default
-
 -- two complementary theorems about `Vector.take` and `Vector.drop` on appended vectors
 theorem cast_take_append_of_eq_length {v : Vector α n} {w : Vector α m} :
     (v ++ w |>.take n |>.cast Nat.min_add_right_self) = v := by
