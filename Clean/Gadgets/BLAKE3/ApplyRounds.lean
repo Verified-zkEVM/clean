@@ -389,15 +389,16 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
 
--- TODO AUTOELAB fails with max recursion depth
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main where
-  localLength _ := 5376
-  localLength_eq input i0 := by
-    simp only [main, circuit_norm, id_eq, sevenRoundsApplyStyle, sevenRoundsFinal,
-      sixRoundsApplyStyle, sixRoundsWithPermute,
-      fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
-      FormalCircuit.weakenSpec, FormalCircuit.concat]
-    simp only [Round.circuit, Permute.circuit, circuit_norm]
+-- TODO AUTOELAB the generated instance without here is not fully reduced, it contains
+-- nested definitions like `sevenRoundsFinal` which we have to unfold in the soundness
+-- proof, which makes the proof much more brittle and expensive. See https://github.com/Verified-zkEVM/clean/issues/394
+-- that said -- full unfolding is also kind of bad for outputs here because it's a long chain of `Round.main ...`
+-- that's why we override the output.
+instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
+  elaborate_circuit_with {
+    output input i₀ := main input |>.output i₀
+  } using by
+    simp only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
