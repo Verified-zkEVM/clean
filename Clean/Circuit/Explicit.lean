@@ -527,11 +527,17 @@ private def resultTypeHead? : Expr → Option Name
 
 /-- A declaration is an *unfoldable circuit wrapper* when it is a definition (not tagged
 `[explicit_circuit_no_unfold]`) whose result-type head is tagged `[explicit_circuit_unfold_type]`
-(e.g. `Circuit`). -/
-def isUnfoldableCircuitDecl (declName : Name) : MetaM Bool := do
-  if (← labelled `explicit_circuit_no_unfold).contains declName then return false
-  let unfoldTypeHeads ← labelled `explicit_circuit_unfold_type
-  let ok (type : Expr) : Bool := (resultTypeHead? type).any unfoldTypeHeads.contains
+(e.g. `Circuit`).  Pass `noUnfold?`/`unfoldType?` to reuse already-read label sets — e.g. when calling
+this per `Expr` node — instead of re-reading them on every call. -/
+def isUnfoldableCircuitDecl (declName : Name)
+    (noUnfold? : Option (Array Name) := none) (unfoldType? : Option (Array Name) := none) :
+    MetaM Bool := do
+  let noUnfold ← match noUnfold? with
+    | some s => pure s | none => labelled `explicit_circuit_no_unfold
+  if noUnfold.contains declName then return false
+  let unfoldType ← match unfoldType? with
+    | some s => pure s | none => labelled `explicit_circuit_unfold_type
+  let ok (type : Expr) : Bool := (resultTypeHead? type).any unfoldType.contains
   match (← getEnv).find? declName with
   | some (.defnInfo info) => return ok info.type
   | some (.opaqueInfo info) => return ok info.type
@@ -549,6 +555,20 @@ def explicitConstructorFor? (head : Name) : MetaM (Option Name) := do
       else return false
     if isMatch then return some lemmaName
   return none
+
+/-- If the head of `circuit` (the goal's last argument, application `target`/`args`) is an unfoldable
+circuit wrapper, unfold it one step, `whnfCore` (no delta, so a loop `def` stays folded; sees through
+`let`s/`match`es), `change` to the (defeq) reduced form, and return it — else `none`, no change.
+Shared by `inferExplicitHead` and `unfold_explicit_circuits_head`. -/
+def unfoldCircuitWrapperHead (target : Expr) (args : Array Expr) (circuit : Expr) :
+    TacticM (Option Expr) := do
+  let some head := circuit.getAppFn.constName? | return none
+  unless ← isUnfoldableCircuitDecl head do return none
+  let some unfolded ← withTransparency .default <| unfoldDefinition? circuit | return none
+  let exposed ← whnfCore unfolded
+  let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) exposed)
+  replaceMainGoal [← (← getMainGoal).change newTarget (checkDefEq := false)]
+  return some exposed
 
 /--
 Dispatch on the circuit's head constant in an `ExplicitCircuit` goal and `apply` the matching
@@ -571,22 +591,9 @@ def inferExplicitHead : TacticM Unit := withMainContext do
   let circuit := args[args.size - 1]!.headBeta
   let some head := circuit.getAppFn.constName?
     | throwError "circuit head is not a constant"
-  -- If `head` is an unfoldable circuit wrapper, unfold it once and `change` the goal to the exposed
-  -- form so we dispatch the real head. `whnfCore` sees through `let`s/`match`es on the input but does
-  -- no delta, so a loop constructor `def` stays folded (not unrolled).
-  let head ←
-    if ← isUnfoldableCircuitDecl head then
-      match ← withTransparency .default <| unfoldDefinition? circuit with
-      | none => pure head
-      | some unfolded =>
-        let exposed ← whnfCore unfolded
-        match exposed.getAppFn.constName? with
-        | none => pure head
-        | some exposedHead =>
-          let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) exposed)
-          replaceMainGoal [← (← getMainGoal).change newTarget (checkDefEq := false)]
-          pure exposedHead
-    else pure head
+  -- If `head` is an unfoldable wrapper, unfold once (changing the goal to the exposed form) and
+  -- dispatch the exposed head; otherwise dispatch `head` directly.
+  let head := ((← unfoldCircuitWrapperHead target args circuit).bind (·.getAppFn.constName?)).getD head
   let some lemmaName ← explicitConstructorFor? head
     | throwError "no explicit_circuit_constructor registered for head {head}"
   evalTactic (← `(tactic| apply $(mkIdent lemmaName)))
@@ -615,17 +622,10 @@ macro_rules
 elab "unfold_explicit_circuits_head" : tactic => withMainContext do
   let target ← getMainTarget
   let args := target.getAppArgs
-  if !target.getAppFn.isConstOf ``ExplicitCircuits || args.size == 0 then
+  if !target.getAppFn.isConstOf ``ExplicitCircuits || args.isEmpty then
     throwError "target is not ExplicitCircuits"
-  let family := args[args.size - 1]!
-  let .const declName _ := family.getAppFn
-    | throwError "target family head is not a definition"
-  if (← labelled `explicit_circuit_no_unfold).contains declName then
-    throwError "refusing to unfold explicit-circuit constructor"
-  let some unfolded ← withTransparency TransparencyMode.default <| unfoldDefinition? family
-    | throwError "failed to unfold target family head"
-  let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) unfolded)
-  replaceMainGoal [← (← getMainGoal).change newTarget]
+  if (← unfoldCircuitWrapperHead target args args[args.size - 1]!).isNone then
+    throwError "failed to unfold target family head"
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
@@ -731,32 +731,10 @@ elab "elaborate_circuit" : tactic => withMainContext do
     ext.getTheorems
   let congrThms ← getSimpCongrTheorems
 
-  -- A declaration is eligible for `dsimp only` if its result type is one of the
-  -- circuit types tagged with `[explicit_circuit_unfold_type]`, unless the head
-  -- itself is tagged `[explicit_circuit_no_unfold]`.  This unfolds user wrappers
-  -- returning `Circuit`/formal-circuit records without unfolding semantic circuit
-  -- constructors such as `assertZero`, `subcircuit`, or loop constructors.
+  -- Read the unfold-eligibility label sets once and pass them to `isUnfoldableCircuitDecl` below:
+  -- `collectUnfoldable` checks it per `Expr` node, so we avoid re-reading the attributes each time.
   let unfoldTypeHeads ← labelled `explicit_circuit_unfold_type
   let noUnfoldHeads ← labelled `explicit_circuit_no_unfold
-  let rec resultTypeHead? : Expr → Option Name
-    | .forallE _ _ body _ => resultTypeHead? body
-    | .letE _ _ _ body _ => resultTypeHead? body
-    | .mdata _ body => resultTypeHead? body
-    | type =>
-        match type.getAppFn with
-        | .const n _ => some n
-        | _ => none
-  let hasUnfoldableResultType (type : Expr) : Bool :=
-    match resultTypeHead? type with
-    | some head => unfoldTypeHeads.contains head
-    | none => false
-  let isUnfoldable (declName : Name) : MetaM Bool := do
-    if noUnfoldHeads.contains declName then
-      return false
-    match (← getEnv).find? declName with
-    | some (.defnInfo info) => return hasUnfoldableResultType info.type
-    | some (.opaqueInfo info) => return hasUnfoldableResultType info.type
-    | _ => return false
 
   -- Collect the user circuit definitions that occur in an expression.  The list is
   -- fed to one `dsimp only` call; repeatedly simplifying already-expanded metadata
@@ -764,7 +742,8 @@ elab "elaborate_circuit" : tactic => withMainContext do
   let rec collectUnfoldable (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
     match e with
     | .const declName _ =>
-        if decls.contains declName || !(← isUnfoldable declName) then
+        if decls.contains declName ||
+            !(← isUnfoldableCircuitDecl declName (some noUnfoldHeads) (some unfoldTypeHeads)) then
           return decls
         else
           return decls.push declName
