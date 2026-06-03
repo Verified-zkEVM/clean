@@ -396,9 +396,15 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 -- that's why we override the output.
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
   elaborate_circuit_with {
+    localLength _ := 5376
     output input i₀ := main input |>.output i₀
+    channelsWithRequirements := []
+    channelsWithGuarantees := []
   } using by
     simp only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
+    simp only [circuit_norm, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, FormalCircuit.weakenSpec,
+      sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
+      Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, initializeStateVector, id_eq]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
