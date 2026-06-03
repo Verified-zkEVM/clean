@@ -23,7 +23,6 @@ Per step, `scheduleStep` creates:
   Total: 64 + 64 + 99 = 227 variables per step.
 -/
 
-
 /-- One step of the message schedule: compute w[j] for j = i.val + 16. -/
 private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
