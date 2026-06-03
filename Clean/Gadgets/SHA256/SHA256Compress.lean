@@ -408,7 +408,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     exact this
   -- Bridge: Vector.map valueBits of evaluated message schedule = Specs.SHA256.messageSchedule
   have h_sched_map :
-      Vector.map valueBits (eval env (MessageSchedule.main input_var_block i₀).1)
+      Vector.map valueBits (eval env (MessageSchedule.varSchedule i₀ input_var_block 48))
         = Specs.SHA256.messageSchedule (Vector.map valueBits input_block) := by
     ext j hj
     simp only [Vector.getElem_map]

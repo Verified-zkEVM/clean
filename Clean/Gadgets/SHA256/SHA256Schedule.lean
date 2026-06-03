@@ -57,41 +57,6 @@ namespace MessageSchedule
 def main (block : SHA256Block (Expression (F p))) : Circuit (F p) (SHA256Schedule (Expression (F p))) :=
   messageSchedule block
 
--- EXPERIMENT: making `elaborate_circuit` work on this wrapped-loop circuit.
--- Stepping through `infer_explicit_circuits` by hand (it expands to:
---   try unfold_explicit_circuits_head; try simp only; apply fromSingle; intro a; infer_explicit_circuit
--- where infer_explicit_circuit = repeat (first | infer_explicit_head | apply from_bind | …)).
---
--- The wrapper `messageSchedule` hides the `foldlRange`, so plain dispatch falls to `apply from_bind`
--- which whnf-unrolls the 48-iteration loop (max recursion / whnf timeout). So we unfold the wrapper
--- first, then dispatch the loop constructor:
-example : ExplicitCircuits (main (p:=p)) := by
-  unfold_explicit_circuits_head        -- main → fun block => messageSchedule block
-  apply ExplicitCircuits.fromSingle
-  intro a
-  unfold messageSchedule
-  dsimp only                           -- zeta the `let zero32/init` to expose the `foldlRange` head
-  apply ExplicitCircuit.from_foldlRange
-  intro b i
-  sorry  -- body: ExplicitCircuit (scheduleStep b i) — the per-step subcircuit dispatch
-
--- TODO AUTOELAB: see the experiment above. For now, hand-crafted:
-instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule main where
-  localLength _ := 48 * 227
-  localLength_eq _ _ := by
-    unfold main messageSchedule
-    simp [circuit_norm, scheduleStep,
-      LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
-  subcircuitsConsistent _ _ := by
-    unfold main messageSchedule
-    simp +arith [circuit_norm, scheduleStep,
-      LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
-  channelsLawful := by
-    intro block i0
-    unfold main messageSchedule
-    simp [circuit_norm, scheduleStep,
-      LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
-
 def Assumptions (block : SHA256Block (F p)) : Prop :=
   ∀ i : Fin 16, Normalized block[i]
 
@@ -102,7 +67,7 @@ def Spec (block : SHA256Block (F p)) (sched : SHA256Schedule (F p)) : Prop :=
 
 /-- Variable-level schedule after `k` expansion steps. Used as the explicit description
     of the foldlRange accumulator, mirroring `SHA256Rounds.stateVar`. -/
-private def varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) :
+def varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) :
     ℕ → SHA256Schedule (Expression (F p))
   | 0 =>
     Vector.append input_var_block
@@ -421,13 +386,19 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih_norm j hj
 
+instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule main := by
+  elaborate_circuit_with {
+    output input i₀ := varSchedule i₀ input 48
+  } using by
+    simp only [circuit_norm, ← finFoldl_eq_varSchedule_48]
+    intros
+    congr
+
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [messageSchedule]
   simp only [show ∀ (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ),
     Operations.localLength (scheduleStep w i n).2 = 227 from scheduleStep_localLength]
     at h_holds ⊢
-  have h_eq := finFoldl_eq_varSchedule_48 i₀ input_var
-  simp only [h_eq]
   -- Use the inductive invariant at k = 48.
   have h_invk :=
     soundness_inv i₀ input_var env input h_input h_assumptions h_holds 48 (le_refl 48)
