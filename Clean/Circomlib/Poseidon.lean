@@ -459,10 +459,18 @@ theorem soundness : Soundness F (Input := field) (Output := field) (elaborated :
     ApplyPartialRoundsOpt.Spec, ApplyPartialRoundsOpt.Assumptions,
     Specs.PoseidonOptimized.fullRoundOpt_t2, ark_zero_t2_eq,
     Specs.PoseidonOptimized.poseidon1Opt] at h_holds ⊢
-  -- TODO AUTOELAB
-  stop
-  -- get rid of the [0] in the output
-  apply congrArg (fun v => v[0]) (a₁ := #v[env.get (i₀ + 400), env.get (i₀ + 401)])
+  -- TODO is there a prettier way to do this? used to be the elegant:
+  -- apply congrArg (fun v => v[0]) (a₁ := #v[env.get (i₀ + 400), env.get (i₀ + 401)])
+  suffices #v[env.get (i₀ + 400), env.get (i₀ + 401)] =
+    (Specs.Poseidon.mix M_t2
+      (Specs.Poseidon.sboxFull
+        (Specs.PoseidonOptimized.fullRoundsOpt_t2 C_t2 M_t2 3 66
+          (Specs.PoseidonOptimized.partialRoundsOpt_t2 C_t2 S_t2 56 10 0
+            (Specs.Poseidon.mix P_t2
+              (Specs.Poseidon.ark C_t2 8
+                (Specs.Poseidon.sboxFull
+                  (Specs.PoseidonOptimized.fullRoundsOpt_t2 C_t2 M_t2 3 2 (Specs.Poseidon.ark C_t2 0 #v[0, input])))))
+            Specs.PoseidonOptimized.poseidon1Opt._proof_4)))) by simp [← this]
   simp_all
 
 theorem completeness : Completeness F (Input := field) (Output := field) main (fun _ => True) := by
