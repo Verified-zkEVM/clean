@@ -368,23 +368,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) := d
   Circuit.mapFinRange 8 fun (i : Fin 8) =>
     Add32.circuit ⟨input.state[i], state'[i]⟩
 
--- TODO AUTOELAB fails with whnf timeout
-instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main where
-  localLength _ := 48 * 227 + 64 * 455 + 8 * 33
-  localLength_eq input offset := by
-    simp only [main, circuit_norm, MessageSchedule.circuit,
-      SHA256Rounds.circuit, SHA256Rounds.elaborated, Add32.circuit]
-  output input i0 :=
-    Vector.mapFinRange 8 fun i =>
-      varFromOffset (fields 32) (i0 + 48 * 227 + 64 * 455 + i.val * 33)
-  output_eq input offset := by
-    simp only [main, circuit_norm, MessageSchedule.circuit,
-      SHA256Rounds.circuit, SHA256Rounds.elaborated, Add32.circuit]
-  subcircuitsConsistent input offset := by
-    simp +arith only [main, circuit_norm]
-  channelsLawful := by
-    simp only [main, circuit_norm, MessageSchedule.circuit,
-      SHA256Rounds.circuit, SHA256Rounds.elaborated, Add32.circuit]
+instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
+  elaborate_circuit
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 8, Normalized input.state[i]) ∧
