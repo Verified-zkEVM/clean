@@ -53,17 +53,10 @@ def output (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (i₀ : �
     |>.set c (⟨var ⟨i₀ + 76⟩, var ⟨i₀ + 78⟩, var ⟨i₀ + 80⟩, var ⟨i₀ + 82⟩⟩) c.is_lt
     |>.set d (Rotation32.output 8 (i₀ + 68)) d.is_lt
 
-instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State (main a b c d) where
-  localLength _ := 96
-  output inputs i0 := output a b c d inputs.state i0
-
-  localLength_eq _ n := by
-    dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
-  output_eq _ _ := by
-    dsimp only [main, output, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
-  subcircuitsConsistent _ _ := by
-    simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
-    ring_nf; trivial
+instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State (main a b c d) := by
+  elaborate_circuit_with {
+    output inputs i0 := output a b c d inputs.state i0
+  }
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, x, y } := input

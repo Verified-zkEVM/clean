@@ -31,12 +31,8 @@ def main (input : Var M F × Var M F) : Circuit F Unit := do
   .forEach diffs assertZero
 
 @[reducible]
-instance elaborated (M : TypeMap) [ProvableType M] : ElaboratedCircuit F (ProvablePair M M) unit main where
-  localLength _ := 0
-  output _ _ := ()
-
-  localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
-  subcircuitsConsistent n := by simp only [main, circuit_norm]
+instance elaborated (M : TypeMap) [ProvableType M] : ElaboratedCircuit F (ProvablePair M M) unit main := by
+  elaborate_circuit
 
 @[simps! (attr := circuit_norm) (config := {isSimp := false})]
 def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M) where

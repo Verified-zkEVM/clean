@@ -25,19 +25,12 @@ def main (input : Var M F) : Circuit F (Var field F) := do
   return result
 
 @[reducible]
-instance elaborated : ElaboratedCircuit F M field main where
-  localLength _ := 2 * size M
-  output input i₀ := Fin.foldl (size M)
-    (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
-
-  localLength_eq _ _ := by
-    simp +arith [circuit_norm, main, IsZeroField.circuit]
-  output_eq _ _ := by
-    simp +arith [circuit_norm, main, IsZeroField.circuit]
-  subcircuitsConsistent _ _ := by
-    simp +arith [circuit_norm, main, IsZeroField.circuit]
-  channelsLawful := by
-    simp only [circuit_norm, main, IsZeroField.circuit]
+instance elaborated : ElaboratedCircuit F M field main := by
+  elaborate_circuit_with {
+    localLength _ := 2 * size M
+    output input i₀ := Fin.foldl (size M)
+      (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
+  } using by simp +arith [circuit_norm]
 
 def Assumptions (_ : M F) : Prop := True
 
