@@ -81,12 +81,6 @@ def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
-  localLength _ := n + 1
-  localLength_eq := by
-    intro input offset
-    simp only [main, circuit_norm]
-    omega
-
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1] ∧ IsBool s[2]
@@ -189,12 +183,6 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
-  localLength _ := 2
-  localLength_eq := by
-    intro input offset
-    simp only [main, circuit_norm]
-    rfl
-
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1] ∧ IsBool s[2]
@@ -217,11 +205,8 @@ def circuit : FormalCircuit (F p) Inputs field where
     clear input h_input
     simp only [MultiMux3.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
-    rw [h_subcircuit_sound]
-    -- Now we need to show the RHS equals our spec
-    -- First, simplify the evaluation of the vector
-    simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray,
-               List.getElem_cons_zero, circuit_norm]
+    simpa only [eval_vector, Vector.getElem_mk, List.getElem_toArray,
+      List.getElem_cons_zero, circuit_norm, Nat.add_zero] using h_subcircuit_sound
 
   completeness := by
     simp only [circuit_norm, main]

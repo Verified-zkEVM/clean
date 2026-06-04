@@ -27,13 +27,6 @@ namespace LowerSigma0
 def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   lowerSigma0 x
 
-instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) where
-  main := main
-  localLength _ := 64
-  localLength_eq _ _ := by simp [circuit_norm, main, lowerSigma0, xor32]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, lowerSigma0, xor32]
-  channelsLawful := by intro x n; simp [circuit_norm, main, lowerSigma0, xor32]
-
 def Assumptions (x : fields 32 (F p)) : Prop := Normalized x
 
 def Spec (x : fields 32 (F p)) (z : fields 32 (F p)) : Prop :=
@@ -345,7 +338,10 @@ private lemma spec_of_constraint
 
 /-! ## Soundness / Completeness -/
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) main := by
+  elaborate_circuit
+
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [lowerSigma0, xor32]
   obtain ⟨h_holds1, h_holds2⟩ := h_holds
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
@@ -395,7 +391,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [h_z_get i, h_z_raw i, h_r1 i, h_s3 i]
   exact spec_of_constraint input z ha h_z
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [lowerSigma0, xor32]
   obtain ⟨h_env1, h_env2, -⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
@@ -446,8 +442,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     rw [hxor3, hxor1]; ring
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
-  Assumptions := Assumptions; Spec := Spec
-  soundness := soundness; completeness := completeness
+  main; elaborated; Assumptions; Spec; soundness; completeness
 
 end LowerSigma0
 end Gadgets.SHA256

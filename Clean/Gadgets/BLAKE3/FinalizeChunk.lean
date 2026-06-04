@@ -95,9 +95,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
   let final_state ← Compress.circuit compress_input
   return final_state.take 8
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
-  main
-  localLength input := 2*4 + (4 + (4 + (5376 + 64)))
+instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) main := by
+  elaborate_circuit
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧
@@ -133,7 +132,7 @@ private lemma eval_bytesToWords (env : Environment (F p))
   simp only [Vector.getElem_map, Vector.getElem_ofFn, U32.eval_of_literal]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
     IsZero.Spec, IsZero.Assumptions,
     Or32.Spec, Or32.Assumptions,
@@ -152,7 +151,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_Compress (by simp_all)
     (by apply bytesToWords_normalized; simp_all)
     (by linarith)
-    (by simp_all)
+    h_Or32_2.2.1 h_Or32_2.2.2.1 h_Or32_2.2.2.2.1 h_Or32_2.2.2.2.2
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
   have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
   simp only [Vector.map_take, BLAKE3State, eval_vector] at h_compress'
@@ -161,7 +160,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero,
     Vector.map_map] at h_compress'
   rw [← Vector.take_eq_extract] at h_compress'
-  constructor
+  apply And.intro
   · simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
     List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
     rw [h_compress']
@@ -204,7 +203,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     specialize h_Compress_Normalized ⟨ i, by omega ⟩
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
   apply And.intro
   · trivial
@@ -216,7 +215,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     apply And.intro
     · aesop
     · simp only [circuit_norm]
-      simp only [h_iszero]
+      simp only [IsZero.circuit]
+      rw [h_iszero]
       split
       · norm_num
         simp only [circuit_norm]
@@ -227,7 +227,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     simp only [Or32.circuit, Or32.Assumptions]
     apply And.intro
     · aesop
-    · simp only [h_iszero]
+    · simp only [IsZero.circuit]
+      rw [h_iszero]
       norm_num
       split
       · simp only [circuit_norm]
@@ -256,15 +257,21 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   )
   simp only [Or32.circuit, Or32.Spec] at h_or2
   simp only [circuit_norm, ProcessBlocksState.Normalized] at h_assumptions
-  simp only [circuit_norm, h_or2, h_assumptions]
-  clear h_or2 h_or h_env
+  simp only [circuit_norm, h_assumptions]
+  clear h_or h_env
   constructor
   · apply bytesToWords_normalized
     simp_all
-  · omega
+  · constructor
+    · norm_num
+    · constructor
+      · constructor
+        · omega
+        · norm_num
+      · exact h_or2.2
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
-  elaborated with Assumptions, Spec, soundness, completeness
+  main, elaborated, Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.FinalizeChunk

@@ -12,9 +12,11 @@ repo="$(bench_repo_root)"
 module="$1"
 baseline="${2:-main}"
 worktree="$repo/.bench-baseline-worktree"
+lock="$repo/.bench-baseline-worktree.lock"
 heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
 current_setup="$repo/$(module_setup_path "$module")"
 
+echo "Measuring current $module..." >&2
 if [ -f "$current_setup" ]; then
   current="$(measure_heartbeats "$repo" "$module" "$heartbeat_check" "$(module_setup_path "$module")")"
 else
@@ -22,39 +24,47 @@ else
 fi
 baseline_commit="$(git -C "$repo" rev-parse --verify "$baseline^{commit}")"
 
-if [ -d "$worktree/.git" ] || [ -f "$worktree/.git" ]; then
-  git -C "$worktree" fetch --all --prune
-  git -C "$worktree" checkout --detach "$baseline_commit"
-else
-  git -C "$repo" worktree add --detach "$worktree" "$baseline_commit"
-fi
+{
+  echo "Waiting for baseline worktree lock..." >&2
+  flock 9
 
-(
-  cd "$worktree"
-  lake exe cache get
-  lake build
-)
-
-baseline_path="$worktree/$(module_path "$module")"
-if [ -f "$baseline_path" ]; then
-  baseline_setup="$(module_setup_path "$module")"
-  if [ -f "$worktree/$baseline_setup" ]; then
-    old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check" "$baseline_setup")"
+  echo "Preparing baseline $baseline (${baseline_commit:0:12})..." >&2
+  if [ -d "$worktree/.git" ] || [ -f "$worktree/.git" ]; then
+    git -C "$worktree" fetch --all --prune
+    git -C "$worktree" checkout --detach "$baseline_commit"
   else
-    old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check")"
+    git -C "$repo" worktree add --detach "$worktree" "$baseline_commit"
   fi
-  delta=$((current - old))
-  delta_text="$(fmt_signed_int "$delta")"
-  if [ "$old" -eq 0 ]; then
+
+  (
+    cd "$worktree"
+    echo "Building baseline target $module..." >&2
+    lake exe cache get
+    lake build "$module"
+  )
+
+  baseline_path="$worktree/$(module_path "$module")"
+  if [ -f "$baseline_path" ]; then
+    echo "Measuring baseline $module..." >&2
+    baseline_setup="$(module_setup_path "$module")"
+    if [ -f "$worktree/$baseline_setup" ]; then
+      old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check" "$baseline_setup")"
+    else
+      old="$(measure_heartbeats "$worktree" "$module" "$heartbeat_check")"
+    fi
+    delta=$((current - old))
+    delta_text="$(fmt_signed_int "$delta")"
+    if [ "$old" -eq 0 ]; then
+      pct="-"
+    else
+      pct="$(awk -v delta="$delta" -v old="$old" 'BEGIN { printf "%+.2f%%", delta / old * 100 }')"
+    fi
+  else
+    old=""
+    delta_text="new"
     pct="-"
-  else
-    pct="$(awk -v delta="$delta" -v old="$old" 'BEGIN { printf "%+.2f%%", delta / old * 100 }')"
   fi
-else
-  old=""
-  delta_text="new"
-  pct="-"
-fi
+} 9>"$lock"
 
 echo "Module: $module"
 if [ -z "$old" ]; then

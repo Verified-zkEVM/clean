@@ -8,6 +8,7 @@ Here, we prove soundness and completeness using the _original_ statements.
 
 This ensures that the `FormalCircuit` and `FormalAssertion` definitions are not accidentally weaker than they should be.
 -/
+import Clean.Circuit.Formal
 import Clean.Circuit.Theorems
 
 variable {F : Type} [Field F]

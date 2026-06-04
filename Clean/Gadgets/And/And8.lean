@@ -71,12 +71,11 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-instance elaborated : ElaboratedCircuit (F p) Inputs field where
-  main
-  localLength _ := 1
-  output _ i := var ⟨i⟩
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
+  elaborate_circuit
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -106,7 +105,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
   exact two_and
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -135,6 +134,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
 def circuit : FormalCircuit (F p) Inputs field :=
-  { Assumptions, Spec, soundness, completeness }
+  { main, elaborated, Assumptions, Spec, soundness, completeness }
 
 end Gadgets.And.And8

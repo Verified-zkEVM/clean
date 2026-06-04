@@ -46,10 +46,9 @@ def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
-  main := main
-  localLength _ := 8
-  output _ i0 := varFromOffset U64 i0
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) Inputs U64 main := by
+  elaborate_circuit
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}
@@ -78,7 +77,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, xor_mul_two_pow]
   ac_rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [ByteXorTable]
   rcases input_x with ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
   rcases input_y with ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩
@@ -95,7 +94,7 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env input_var h_env input h_input as
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
@@ -106,6 +105,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp_all [xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U64 where
+  main
+  elaborated
   Assumptions
   Spec
   soundness

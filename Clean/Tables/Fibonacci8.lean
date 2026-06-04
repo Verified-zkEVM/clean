@@ -144,9 +144,8 @@ def formalFibTable : FormalTable (F p) RowType := {
           copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
         refine ⟨?_, ?_, ?_, ?_⟩
         all_goals simp only [Vector.toList_mk, List.getElem_set, ite_true,
-          Vector.toList_append, Vector.mapFinRange_zero, Vector.mapFinRange_succ,
-          Vector.mapRange_zero, Vector.mapRange_succ, Vector.toList_push,
-          List.nil_append, List.append_assoc]
+          Vector.mapFinRange_zero, Vector.mapFinRange_succ,
+          Vector.mapRange_zero, Vector.mapRange_succ]
         · simp only [dif_pos (by omega : 0 < 5)]; rfl
         · simp only [dif_pos (by omega : 1 < 5)]; rfl
         · simp only [dif_pos (by omega : 2 < 5)]; rfl

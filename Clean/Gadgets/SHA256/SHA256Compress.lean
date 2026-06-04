@@ -50,51 +50,6 @@ def stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) :
        Vector.mapRange 32 fun j => var { index := i₀ + k * 455 + 422 + j },
        prev[4], prev[5], prev[6]]
 
-instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
-  main := main
-  localLength _ := 64 * 455
-  output input i₀ := stateVar i₀ input.state 64
-  localLength_eq _ _ := by
-    simp +arith [circuit_norm, main, SHA256Round.circuit]
-  output_eq input i₀ := by
-    -- Goal: (main input).output i₀ = stateVar i₀ input.state 64
-    -- Both sides describe the variable state after 64 rounds; prove by induction.
-    simp only [main, circuit_norm]
-    -- LHS becomes `Fin.foldl 64 var_body input.state`; RHS is `stateVar i₀ input.state 64`.
-    -- These are equal by induction on the iteration count.
-    suffices h : ∀ k,
-        Fin.foldl k
-          (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
-            #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
-               acc[0], acc[1], acc[2],
-               Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 422 + i_1 },
-               acc[4], acc[5], acc[6]]) input.state = stateVar i₀ input.state k by
-      exact h 64
-    intro k
-    induction k with
-    | zero => simp [stateVar, Fin.foldl_zero]
-    | succ k ih =>
-      rw [Fin.foldl_succ_last]
-      simp only [Fin.val_last]
-      rw [stateVar]
-      rw [show Fin.foldl k
-          (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
-            #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.castSucc.val * 455 + 389 + i_1 },
-               acc[0], acc[1], acc[2],
-               Vector.mapRange 32 fun i_1 => var { index := i₀ + i.castSucc.val * 455 + 422 + i_1 },
-               acc[4], acc[5], acc[6]]) input.state =
-          Fin.foldl k
-            (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
-              #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
-                 acc[0], acc[1], acc[2],
-                 Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 422 + i_1 },
-                 acc[4], acc[5], acc[6]]) input.state from rfl, ih]
-  subcircuitsConsistent _ _ := by
-    simp +arith [circuit_norm, main, SHA256Round.circuit]
-  channelsLawful := by
-    intro _ _
-    simp +arith [circuit_norm, main, SHA256Round.circuit]
-
 def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 8, Normalized input.state[i]) ∧
   (∀ i : Fin 64, Normalized input.schedule[i])
@@ -252,7 +207,16 @@ private lemma sha256Compress_eq_valStateAfterRound
               (input_schedule[i.val]'(by have := i.isLt; omega))) input_state from rfl, ih]
     simp [Fin.val_last]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
+  elaborate_circuit_with {
+    output input i₀ := stateVar i₀ input.state 64
+  } using by
+    simp only [circuit_norm]
+    intros
+    apply fin_foldl_eq_stateVar
+
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [SHA256Round.Spec, SHA256Round.Assumptions]
   obtain ⟨h_state_norm, h_sched_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_schedule⟩ := h_input
@@ -322,7 +286,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · intro _
     left; rfl
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [SHA256Round.Spec, SHA256Round.Assumptions]
   obtain ⟨h_state_norm, h_sched_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_schedule⟩ := h_input
@@ -381,8 +345,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     exact h_sched_norm i
 
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
-  elaborated with
-  Assumptions, Spec, soundness
+  main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
 }
 
@@ -400,27 +363,13 @@ structure Inputs (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) := do
-  let w ← subcircuit MessageSchedule.circuit input.block
-  let state' ← subcircuit SHA256Rounds.circuit ⟨input.state, w⟩
+  let w ← MessageSchedule.circuit input.block
+  let state' ← SHA256Rounds.circuit ⟨input.state, w⟩
   Circuit.mapFinRange 8 fun (i : Fin 8) =>
     Add32.circuit ⟨input.state[i], state'[i]⟩
 
-instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State where
-  main := main
-  localLength _ := 48 * 227 + 64 * 455 + 8 * 33
-  localLength_eq input offset := by
-    simp only [main, circuit_norm]; rfl
-  output input i0 :=
-    Vector.mapFinRange 8 fun i =>
-      varFromOffset (fields 32) (i0 + 48 * 227 + 64 * 455 + i.val * 33)
-  output_eq input offset := by
-    simp only [main, circuit_norm]; rfl
-  subcircuitsConsistent input offset := by
-    simp +arith [main, circuit_norm]
-  channelsLawful := by
-    intro input offset
-    simp +arith [main, circuit_norm]
-    and_intros <;> rfl
+instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
+  elaborate_circuit
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 8, Normalized input.state[i]) ∧
@@ -431,7 +380,7 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
     Specs.SHA256.compressBlock (input.state.map valueBits) (input.block.map valueBits)
   ∧ ∀ i : Fin 8, Normalized out[i]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [MessageSchedule.circuit, MessageSchedule.Spec, MessageSchedule.Assumptions,
     SHA256Rounds.circuit, SHA256Rounds.Spec, SHA256Rounds.Assumptions,
     Add32.circuit, Add32.Spec, Add32.Assumptions]
@@ -459,7 +408,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     exact this
   -- Bridge: Vector.map valueBits of evaluated message schedule = Specs.SHA256.messageSchedule
   have h_sched_map :
-      Vector.map valueBits (eval env (MessageSchedule.main input_var_block i₀).1)
+      Vector.map valueBits (eval env (MessageSchedule.varSchedule i₀ input_var_block 48))
         = Specs.SHA256.messageSchedule (Vector.map valueBits input_block) := by
     ext j hj
     simp only [Vector.getElem_map]
@@ -491,26 +440,17 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
                 var (F := F p) { index := i₀ + 48 * 227 + 64 * 455 + i * 33 + i_1 }) := by
     intro i hi
     rw [← getElem_eval_vector, CircuitType.eval_var_fields, Vector.getElem_mapFinRange]
-  refine ⟨?_, ?_⟩
-  · -- Value equality
-    simp only [Specs.SHA256.compressBlock]
-    ext i hi
-    have ⟨h_val, _⟩ := h_add ⟨i, hi⟩ ⟨h_state_a ⟨i, hi⟩, h_state_b ⟨i, hi⟩⟩
-    simp only at h_val
-    rw [Vector.getElem_map, h_index i hi, h_val,
-        h_val_eq ⟨i, hi⟩, h_rounds_eq ⟨i, hi⟩,
-        Vector.getElem_mapFinRange]
-    have h_bridge : (Vector.map valueBits input_state)[(⟨i, hi⟩ : Fin 8)]
-        = valueBits (input_state[i]'hi) := Vector.getElem_map valueBits hi
-    rw [h_bridge]
-    rfl
-  · -- Normalization
-    intro i
-    have ⟨_, h_n⟩ := h_add i ⟨h_state_a i, h_state_b i⟩
-    rw [h_index i.val i.isLt]
-    exact h_n
+  simp_all only [implies_true, and_self, forall_const, and_true]
+  -- Value equality
+  simp only [Specs.SHA256.compressBlock]
+  ext i hi
+  have ⟨h_val, _⟩ := h_add ⟨i, hi⟩
+  simp only at h_val
+  rw [Vector.getElem_map, h_index i hi, h_val,
+      Vector.getElem_mapFinRange]
+  simp only [_root_.add32, circuit_norm]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [MessageSchedule.circuit, MessageSchedule.Spec, MessageSchedule.Assumptions,
     SHA256Rounds.circuit, SHA256Rounds.Spec, SHA256Rounds.Assumptions,
     Add32.circuit, Add32.Spec, Add32.Assumptions]
@@ -534,8 +474,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     exact this
 
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
-  elaborated with
-  Assumptions, Spec, soundness
+  main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
 }
 

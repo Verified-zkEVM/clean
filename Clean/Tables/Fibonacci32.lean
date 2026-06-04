@@ -86,6 +86,23 @@ def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) (_ : ProverData (F p)
 
 variable {α : Type}
 
+private instance {W : ℕ+} {S : Type → Type} [ProvableType S] : DecidableEq (CellOffset W S) := by
+  intro a b
+  cases a
+  cases b
+  simp
+  infer_instance
+
+private instance {W : ℕ+} {S : Type → Type} [ProvableType S] : DecidableEq (Cell W S) := by
+  intro a b
+  cases a <;> cases b
+  · simp only [Cell.input.injEq]
+    infer_instance
+  · exact isFalse (by intro h; cases h)
+  · exact isFalse (by intro h; cases h)
+  · simp only [Cell.aux.injEq]
+    infer_instance
+
 -- assignment copied from eval:
 -- #eval! (recursive_relation (p:=p_babybear)).finalAssignment.vars
 lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
@@ -95,8 +112,9 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
       .input ⟨1, 7⟩, .aux 7] := by
   dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit, assignU32]
   simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
-    Vector.mapRange_zero, Vector.mapRange_succ]
+    Vector.mapRange_zero, Vector.mapRange_succ, FormalCircuitBase.localLength]
   simp
+  rfl
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -131,7 +149,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : ProverEnvironme
   simp only [table_norm, circuit_norm, recursiveRelation,
     assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
-  simp only [table_norm, circuit_norm, Nat.reduceAdd] at h_add
+  try simp only [table_norm, circuit_norm, Nat.reduceAdd] at h_add
   simp only [circuit_norm] at hcurr_x hcurr_y hnext_x hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
@@ -150,8 +168,9 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
        .input ⟨0, 7⟩] := by
   dsimp only [table_assignment_norm, circuit_norm, boundary]
   simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
-    Vector.mapRange_zero]
+    FormalCircuitBase.localLength, Vector.mapRange_zero]
   simp
+  rfl
 
 omit p_large_enough in
 lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :

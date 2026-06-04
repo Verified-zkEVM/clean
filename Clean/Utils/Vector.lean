@@ -227,6 +227,11 @@ theorem map_mapRange {n} {create : ℕ → α} {f : α → β} :
   rw [Vector.ext_iff]
   simp [getElem_mapRange, getElem_map]
 
+theorem mapRange_eq_mapFinRange {n} {create : ℕ → α} :
+    Vector.mapRange n create = Vector.mapFinRange n (fun i => create i.val) := by
+  rw [Vector.ext_iff]
+  simp [getElem_mapRange, getElem_mapFinRange]
+
 theorem zip_mapRange {n} {create1 : ℕ → α} (v : Vector β n) :
     Vector.zip (mapRange n create1) v =
       Vector.mapFinRange n fun i => (create1 i.val, v[i]) := by
@@ -251,9 +256,6 @@ theorem getElem_fill {n} {a : α} {i : ℕ} {hi : i < n} :
   induction n with
   | zero => nomatch hi
   | succ => simp_all [fill, getElem_push]
-
-instance [Inhabited α] {n : ℕ} : Inhabited (Vector α n) where
-  default := fill n default
 
 -- two complementary theorems about `Vector.take` and `Vector.drop` on appended vectors
 theorem cast_take_append_of_eq_length {v : Vector α n} {w : Vector α m} :

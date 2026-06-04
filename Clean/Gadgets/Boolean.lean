@@ -26,7 +26,8 @@ theorem lt_two {α : Type*} [Zero α] [One α] [Preorder α] [OfNat α 2]
   · rw [h1']; exact h1
 
 /-- x is boolean iff x * (x - 1) = 0 -/
-theorem iff_mul_sub_one {α : Type*} [Ring α] [NoZeroDivisors α] {x : α} :
+@[grind =]
+theorem iff_mul_sub_one {F : Type} [Field F] {x : F} :
     IsBool x ↔ x * (x - 1) = 0 := by
   rw [mul_eq_zero, sub_eq_zero, IsBool]
 
@@ -175,11 +176,20 @@ theorem not_eq_val_not {a : F p} (ha : IsBool a) :
   rcases ha with ha | ha <;> rw [ha] <;> ring_nf <;> simp [ZMod.val_one]
 
 end BinaryOps
-
 end IsBool
 
 section
 variable {p : ℕ} [Fact p.Prime]
+
+/--
+Asserts that x is boolean by adding the constraint x * (x - 1) = 0
+-/
+@[circuit_norm]
+def assertBool : FormalAssertion (F p) field where
+  main x := assertZero (x * (x - 1))
+  Spec x := IsBool x
+  soundness := by circuit_proof_all
+  completeness := by circuit_proof_all
 
 inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
@@ -194,18 +204,4 @@ def var (b : Boolean (F p)) := Expression.var b.1
 
 instance : Coe (Boolean (F p)) (Expression (F p)) where
   coe x := x.var
-
-/--
-Asserts that x is boolean by adding the constraint x * (x - 1) = 0
--/
-@[circuit_norm]
-def assertBool : FormalAssertion (F p) field where
-  main (x : Expression (F p)) := assertZero (x * (x - 1))
-  Assumptions _ := True
-  Spec (x : F p) := IsBool x
-
-  soundness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
-  completeness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
 end Boolean
-
-export Boolean (assertBool)

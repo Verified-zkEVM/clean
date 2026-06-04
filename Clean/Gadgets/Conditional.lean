@@ -55,14 +55,11 @@ Specification: Output is selected based on selector value using if-then-else.
 def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
   output = if input.selector = 1 then input.ifTrue else input.ifFalse
 
-instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
-  main
-  localLength _ := 0
-  output
-  | { selector, ifTrue, ifFalse }, _ => output selector ifTrue ifFalse
+instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M main := by
+  elaborate_circuit
 
-theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
-  circuit_proof_start [output]
+theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumptions Spec := by
+  circuit_proof_start
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
@@ -88,7 +85,7 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
     simp only [if_true]
     ring_nf
 
-theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by
+theorem completeness [DecidableEq F] : Completeness F (Input := Inputs M) main Assumptions := by
   circuit_proof_start
 
 /--
@@ -96,7 +93,8 @@ Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
 -/
 @[circuit_norm]
 def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
-  elaborated := elaborated
+  main
+  elaborated
   Assumptions
   Spec
   soundness

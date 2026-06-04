@@ -1,4 +1,4 @@
-import Clean.Circuit.Basic
+import Clean.Circuit.Formal
 import Clean.Circuit.Theorems
 
 variable {F : Type} [Field F]
@@ -399,35 +399,14 @@ instance [CircuitType α] [CircuitType β] :
     CoeFun (GeneralFormalCircuit.WithHint F β α) (fun _ => Var β F → Circuit F (Var α F)) where
   coe circuit input := subcircuitWithHintAssertion circuit input
 
-namespace Circuit
-variable {α β: TypeMap} [ProvableType α] [ProvableType β]
-
-/-- The local length of a subcircuit is derived from the original formal circuit -/
-lemma subcircuit_localLength_eq (circuit : FormalCircuit F β α) (input : Var β F) (offset : ℕ) :
-  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
-
-lemma assertion_localLength_eq (circuit : FormalAssertion F β) (input : Var β F) (offset : ℕ) :
-  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
-
-lemma subcircuitWithAssertion_localLength_eq
-    (circuit : GeneralFormalCircuit F β α) (input : Var β F) (offset : ℕ) :
-    (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
-
-omit [ProvableType α] [ProvableType β] in
-lemma subcircuitWithHintAssertion_localLength_eq [CircuitType α] [CircuitType β]
-    (circuit : GeneralFormalCircuit.WithHint F β α) (input : Var β F) (offset : ℕ) :
-    (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
-
-end Circuit
-
 -- subcircuit composability for `ComputableWitnesses`
 
-namespace ElaboratedCircuit
+namespace FormalCircuitBase
 /--
 For formal circuits, to prove `ComputableWitnesses`, we assume that the input
 only contains variables below the current offset `n`.
  -/
-def ComputableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
+def ComputableWitnesses' (circuit : FormalCircuitBase F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F),
     ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) →
       (circuit.main input).ComputableWitnesses n
@@ -436,7 +415,7 @@ def ComputableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
 This reformulation of `ComputableWitnesses'` is easier to prove in a formal circuit,
 because we have all necessary assumptions at each circuit operation step.
  -/
-def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
+def ComputableWitnesses (circuit : FormalCircuitBase F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F) (env env' : ProverEnvironment F),
   circuit.main input |>.operations n |>.forAllFlat n {
     witness n _ compute :=
@@ -445,7 +424,7 @@ def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
 /--
 `ComputableWitnesses` is stronger than `ComputableWitnesses'` (so it's fine to only prove the former).
 -/
-lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
+lemma computableWitnesses_implies {circuit : FormalCircuitBase F β α} :
     circuit.ComputableWitnesses → circuit.ComputableWitnesses' := by
   simp only [ComputableWitnesses, ComputableWitnesses']
   intro h_computable n input input_only_accesses_n env env'
@@ -473,13 +452,13 @@ Composability for `ComputableWitnesses`: If
 then we can conclude that the subcircuit, evaluated at this particular input,
 satisfies `ComputableWitnesses` in the original sense.
 -/
-theorem compose_computableWitnesses (circuit : ElaboratedCircuit F β α) (input : Var β F) (n : ℕ) :
+theorem compose_computableWitnesses (circuit : FormalCircuitBase F β α) (input : Var β F) (n : ℕ) :
   ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) ∧ circuit.ComputableWitnesses →
     (circuit.main input).ComputableWitnesses n := by
   intro ⟨ h_input, h_computable ⟩
-  apply ElaboratedCircuit.computableWitnesses_implies h_computable
+  apply FormalCircuitBase.computableWitnesses_implies h_computable
   exact h_input
-end ElaboratedCircuit
+end FormalCircuitBase
 
 theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
     (input : Var β F) (n : ℕ) :
@@ -681,6 +660,18 @@ theorem FormalAssertion.toSubcircuit_channelsWithRequirements (circuit : FormalA
   (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := rfl
 
 @[circuit_norm]
+theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsWithGuarantees
+    {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F) :
+  (circuit.toSubcircuit n input_var).channelsWithGuarantees = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm]
+theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsWithRequirements
+    {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F) :
+  (circuit.toSubcircuit n input_var).channelsWithRequirements = circuit.channelsWithRequirements := rfl
+
+@[circuit_norm]
 theorem FormalCircuit.toSubcircuit_channelsLawful
     (circuit : FormalCircuit F Input Output) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
@@ -688,15 +679,15 @@ theorem FormalCircuit.toSubcircuit_channelsLawful
   · intro env
     simp only [FormalCircuit.toSubcircuit]
     rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
-    exact circuit.elaborated.in_channels_or_guarantees_full input_var n env
+    exact circuit.in_channels_or_guarantees_full input_var n env
   constructor
   · intro env
     simp only [FormalCircuit.toSubcircuit]
     rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-    exact circuit.elaborated.in_channels_or_requirements_full input_var n env
+    exact circuit.in_channels_or_requirements_full input_var n env
   · simp only [FormalCircuit.toSubcircuit]
     rw [Operations.toNested_toFlat, Operations.channels_toFlat]
-    exact circuit.elaborated.channels_subset input_var n
+    exact circuit.channels_subset input_var n
 
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_channelsLawful
@@ -706,15 +697,15 @@ theorem FormalAssertion.toSubcircuit_channelsLawful
   · intro env
     simp only [FormalAssertion.toSubcircuit]
     rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
-    exact circuit.elaborated.in_channels_or_guarantees_full input_var n env
+    exact circuit.in_channels_or_guarantees_full input_var n env
   constructor
   · intro env
     simp only [FormalAssertion.toSubcircuit]
     rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-    exact circuit.elaborated.in_channels_or_requirements_full input_var n env
+    exact circuit.in_channels_or_requirements_full input_var n env
   · simp only [FormalAssertion.toSubcircuit]
     rw [Operations.toNested_toFlat, Operations.channels_toFlat]
-    exact circuit.elaborated.channels_subset input_var n
+    exact circuit.channels_subset input_var n
 
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful
@@ -740,7 +731,7 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful
     set ops := (circuit.main input_var).operations n
     trans ops.shallowChannels ++ ops.subcircuitChannelsWithGuarantees ++ ops.subcircuitChannelsWithRequirements
     · apply Operations.channels_subset
-      exact circuit.elaborated.subcircuitChannelsLawful input_var n
+      exact circuit.subcircuitChannelsLawful input_var n
     · simp_all only [List.append_assoc, List.append_subset, List.subset_append_of_subset_left,
         List.subset_append_of_subset_right, and_self, and_true]
       simp only [List.subset_def, List.mem_append]
@@ -751,6 +742,152 @@ theorem GeneralFormalCircuit.toSubcircuit_channelsLawful
     (circuit : GeneralFormalCircuit F Input Output) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
   exact GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful circuit.toWithHint input_var
+
+attribute [explicit_circuit_no_unfold] subcircuit assertion subcircuitWithAssertion subcircuitWithHintAssertion
+
+namespace ExplicitCircuit
+@[explicit_circuit_constructor]
+instance fromSubcircuit (circuit : FormalCircuit F Input Output) (input : Var Input F) :
+    ExplicitCircuit (subcircuit circuit input) where
+  output n := circuit.output input n
+  localLength _ := circuit.localLength input
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by
+    change Operations.SubcircuitsConsistent n [.subcircuit (_)]
+    simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    exact ⟨trivial, trivial⟩
+  channelsLawful := by simp [circuit_norm]
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_output {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).output n = circuit.output input n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_localLength {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).localLength n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_operations {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).operations n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_channelsWithGuarantees {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuit_channelsWithRequirements {circuit : FormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuit circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
+
+@[explicit_circuit_constructor]
+instance fromAssertion (circuit : FormalAssertion F Input) (input : Var Input F) :
+    ExplicitCircuit (assertion circuit input) where
+  output _ := ()
+  localLength _ := circuit.localLength input
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by
+    change Operations.SubcircuitsConsistent n [.subcircuit (_)]
+    simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    exact ⟨trivial, trivial⟩
+  channelsLawful := by simp [circuit_norm]
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_output {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).output n = () := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_localLength {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).localLength n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_operations {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).operations n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_channelsWithGuarantees {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromAssertion_channelsWithRequirements {circuit : FormalAssertion F Input} {input} {n : ℕ} :
+    (fromAssertion circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
+
+@[explicit_circuit_constructor]
+instance fromSubcircuitWithAssertion (circuit : GeneralFormalCircuit F Input Output) (input : Var Input F) :
+    ExplicitCircuit (subcircuitWithAssertion circuit input) where
+  output n := circuit.output input n
+  localLength _ := circuit.localLength input
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by
+    change Operations.SubcircuitsConsistent n [.subcircuit (_)]
+    simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    exact ⟨trivial, trivial⟩
+  channelsLawful := by simp [circuit_norm]
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_output {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).output n = circuit.output input n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_localLength {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).localLength n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_operations {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).operations n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_channelsWithGuarantees {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithAssertion_channelsWithRequirements {circuit : GeneralFormalCircuit F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithAssertion circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
+
+@[explicit_circuit_constructor]
+instance fromSubcircuitWithHintAssertion {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input : Var Input F) :
+    ExplicitCircuit (subcircuitWithHintAssertion circuit input) where
+  output n := circuit.output input n
+  localLength _ := circuit.localLength input
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
+  channelsWithGuarantees _ := circuit.channelsWithGuarantees
+  channelsWithRequirements _ := circuit.channelsWithRequirements
+  subcircuitsConsistent n := by
+    change Operations.SubcircuitsConsistent n [.subcircuit (_)]
+    simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    exact ⟨trivial, trivial⟩
+  channelsLawful := by simp [circuit_norm]
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_output {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).output n = circuit.output input n := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_localLength {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).localLength n = circuit.localLength input := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_operations {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).operations n = [.subcircuit (circuit.toSubcircuit n input)] := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_channelsWithGuarantees {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem fromSubcircuitWithHintAssertion_channelsWithRequirements {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {circuit : GeneralFormalCircuit.WithHint F Input Output} {input} {n : ℕ} :
+    (fromSubcircuitWithHintAssertion circuit input).channelsWithRequirements n = circuit.channelsWithRequirements := rfl
+end ExplicitCircuit
 
 -- simplification lemmas for FlatOperations.interactions (toSubcircuit ..).ops.toFlat
 

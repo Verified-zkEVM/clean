@@ -31,11 +31,10 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ||| y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
-  main
-  localLength _ := 4
+instance elaborated : ElaboratedCircuit (F p) Inputs U32 main := by
+  elaborate_circuit
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Or8.circuit, Or8.Assumptions, Or8.Spec]
 
   have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
@@ -56,7 +55,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   ring_nf
   simp
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
   rcases input_x
   rcases input_y
@@ -66,7 +65,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   omega
 
 def circuit : FormalCircuit (F p) Inputs U32 :=
-  { Assumptions, Spec, soundness, completeness }
+  { main, elaborated, Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Or32
 end

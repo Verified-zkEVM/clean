@@ -29,15 +29,6 @@ open LowerSigma0 (sum_bool_lt_two_pow testBit_binary_sum bool_finsum_xor_eq
 def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   upperSigma0 x
 
-instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) where
-  main := main
-  localLength _ := 64
-  output _ i0 := varFromOffset (fields 32) (i0 + 32)
-  localLength_eq _ _ := by simp [circuit_norm, main, upperSigma0, xor32]
-  output_eq _ _ := by simp +arith [circuit_norm, main, upperSigma0, xor32]
-  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main, upperSigma0, xor32]
-  channelsLawful := by intro x n; simp [circuit_norm, main, upperSigma0, xor32]
-
 def Assumptions (x : fields 32 (F p)) : Prop := Normalized x
 
 def Spec (x : fields 32 (F p)) (z : fields 32 (F p)) : Prop :=
@@ -119,7 +110,10 @@ private lemma spec_of_constraint
   rw [sigma_def, h_z_eq]
   exact key
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) main := by
+  elaborate_circuit
+
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [upperSigma0, xor32]
   obtain ⟨h_holds1, h_holds2⟩ := h_holds
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
@@ -165,7 +159,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [h_z_get i, h_z_raw i, h_r1 i, h_r22 i]
   exact spec_of_constraint input z ha h_z
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [upperSigma0, xor32]
   obtain ⟨h_env1, h_env2, -⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
@@ -209,10 +203,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     rw [hxor3, hxor1]; ring
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main; elaborated; Assumptions; Spec; soundness; completeness
 
 end UpperSigma0
 end Gadgets.SHA256

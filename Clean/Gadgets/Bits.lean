@@ -22,12 +22,6 @@ def main (n : ℕ) (x : Expression (F p)) := do
 
 def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
-  localLength _ := n
-  output _ i := varFromOffset (fields n) i
-
-  localLength_eq _ _ := by simp only [main, circuit_norm]; ac_rfl
-  subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
-    -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
   ProverAssumptions (x : F p) _ _ := x.val < 2^n
 
@@ -75,13 +69,10 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
     -- we wrap the toBits circuit but ignore the output
     let _ ← toBits n hn x
 
-  localLength _ := n
-
-  Assumptions _ := True
   Spec (x : F p) := x.val < 2^n
 
-  soundness := by simp_all only [circuit_norm, toBits]
-  completeness := by simp_all only [circuit_norm, toBits]
+  soundness := by circuit_proof_all [toBits]
+  completeness := by circuit_proof_all [toBits]
 
 end ToBits
 export ToBits (toBits)

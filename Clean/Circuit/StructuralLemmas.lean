@@ -6,6 +6,9 @@ variable {F : Type} [Field F]
   {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
 
 namespace FormalCircuit
+instance (circuit : FormalCircuit F Input Output) : ElaboratedCircuit F Input Output circuit.main :=
+  circuit.elaborated
+
 /--
 Concatenate two FormalCircuits into a single FormalCircuit.
 
@@ -24,18 +27,10 @@ def concat
     (h_localLength_stable : ∀ mid mid', circuit2.localLength mid = circuit2.localLength mid') :
       FormalCircuit F Input Output where
   main := (circuit1 · >>= circuit2)
-  localLength input := circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
-  localLength_eq := by
-    intro input offset
-    simp only [circuit_norm]
-    -- We need to show that circuit2.localLength at different offsets is the same
-    -- This requires that circuit2.localLength is stable (doesn't depend on its input)
-    congr 1
-    apply h_localLength_stable
-  output input offset :=
-    circuit2.output (circuit1.output input offset) (offset + circuit1.localLength input)
-  channelsWithGuarantees := circuit1.channelsWithGuarantees ++ circuit2.channelsWithGuarantees
-  channelsWithRequirements := circuit1.channelsWithRequirements ++ circuit2.channelsWithRequirements
+  elaborated := .fromExplicit (by infer_explicit_circuits) <| by
+    constructor <;> simp [explicit_circuit_norm]
+    · intro a n m
+      apply h_localLength_stable
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
   soundness := by
@@ -49,6 +44,12 @@ def concat
 lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
   simp only [concat]
+
+@[circuit_norm]
+lemma concat_localLength (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 inp :
+  (c1.concat c2 p0 p1).localLength inp =
+    c1.localLength inp + c2.localLength (c1.output inp 0) := by
+  simp only [concat, circuit_norm, id_eq]
 
 /--
 Weaken the specification of a FormalCircuit.
@@ -69,7 +70,8 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
       circuit.Assumptions input →
       circuit.Spec input output →
       WeakerSpec input output) :
-    FormalCircuit F Input Output := {
+    FormalCircuit F Input Output where
+  main := circuit.main
   elaborated := circuit.elaborated
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
@@ -83,7 +85,6 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
     -- Completeness is preserved since we use the same elaborated circuit
     -- and the same assumptions
     exact circuit.completeness
-}
 
 @[circuit_norm]
 lemma weakenSpec_assumptions
@@ -95,7 +96,7 @@ lemma weakenSpec_assumptions
 lemma weakenSpec_channelsWithRequirements
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).channelsWithRequirements = c.channelsWithRequirements := by
-  simp only [weakenSpec]
+  simp only [FormalCircuitBase.channelsWithRequirements, weakenSpec]
 end FormalCircuit
 
 namespace GeneralFormalCircuit
@@ -107,7 +108,8 @@ def weakenSpec (circuit : GeneralFormalCircuit F Input Output)
     (h_spec_implication : ∀ input output data,
       circuit.Spec input output data → WeakerSpec input output data) :
     GeneralFormalCircuit F Input Output where
-  __ := circuit.elaborated
+  main := circuit.main
+  elaborated := circuit.elaborated
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   ProverAssumptions := circuit.ProverAssumptions

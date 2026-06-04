@@ -159,22 +159,6 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
     FormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
   main input := main n ops input
 
-  localLength _ := nbits ((2^n - 1) * ops)
-  localLength_eq := by
-    intros
-    simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit]
-
-  output _ i := varFromOffset (fields (nbits ((2^n - 1) * ops))) i
-
-  output_eq := by
-    intros input offset
-    simp only [circuit_norm, main]
-    -- The output of the main circuit is the output of Num2Bits
-    simp only [Num2Bits.arbitraryBitLengthCircuit]
-    rfl
-
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
-
   Assumptions input :=
     -- All inputs are binary
     ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]

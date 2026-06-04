@@ -26,8 +26,7 @@ def Assumptions (input : U32 (F p)) := input.Normalized
 def Spec (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value (offset.val * 8) ∧ y.Normalized
 
-instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
-  main := main off
+@[reducible] instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 (main off) where
   localLength _ := 0
   output input i0 :=
     let ⟨x0, x1, x2, x3⟩ := input
@@ -52,7 +51,7 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
+theorem soundness (off : Fin 4) : Soundness (F p) (main off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs as h
 
   simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_inputs
@@ -67,20 +66,19 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, explicit_provable_type]
 
-theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumptions := by
+theorem completeness (off : Fin 4) : Completeness (F p) (main off) Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
   fin_cases off
   repeat
     intro Assumptions
     simp [main, circuit_norm]
 
-def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 := {
-  elaborated off with
+def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 where
   main := main off
+  elaborated := elaborated off
   Assumptions
   Spec := Spec off
   soundness := soundness off
   completeness := completeness off
-}
 
 end Gadgets.Rotation32Bytes

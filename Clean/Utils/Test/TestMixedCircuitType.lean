@@ -16,14 +16,15 @@ structure Input (F : Type) where
   inverse : UnconstrainedDep field F
 deriving CircuitType
 
+-- TODO automate this in the CircuitType deriver
+instance : Inhabited (Var Input F) where
+  default := { x := default, inverse _ := default }
+
 def circuit : GeneralFormalCircuit.WithHint F Input field where
   main input := do
     let inverse ← witness input.inverse
     input.x * inverse === 1
     return inverse
-
-  output _ offset := varFromOffset field offset
-  localLength _ := 1
 
   Spec input out _ :=
     input.x * out = 1
@@ -54,9 +55,6 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
 def parent : GeneralFormalCircuit F field field where
   main input := do
     circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
-
-  output _ offset := varFromOffset field offset
-  localLength _ := 1
 
   Spec input out _ :=
     input * out = 1

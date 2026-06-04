@@ -12,6 +12,7 @@ repo="$(bench_repo_root)"
 module="$1"
 heartbeat_check="$repo/scripts/bench/build/HeartbeatCheck.lean"
 setup="$(module_setup_path "$module")"
+echo "Measuring $module..." >&2
 if [ -f "$repo/$setup" ]; then
   value="$(measure_heartbeats "$repo" "$module" "$heartbeat_check" "$setup")"
 else

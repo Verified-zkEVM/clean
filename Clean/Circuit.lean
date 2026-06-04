@@ -1,3 +1,4 @@
+import Clean.Circuit.Formal
 import Clean.Circuit.Foundations
 import Clean.Circuit.LookupCircuit
 import Clean.Circuit.Explicit

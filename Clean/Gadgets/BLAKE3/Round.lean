@@ -29,13 +29,10 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   let state ← G.circuit 3 4 9 14 ⟨state, message[14], message[15]⟩
   return state
 
--- #eval! main (p:=pBabybear) default |>.localLength
--- #eval! main (p:=pBabybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
-  main := main
-  localLength _ := 768
-  localLength_eq input i0 := by
-    simp only [main, circuit_norm, G.circuit, G.elaborated]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
+  elaborate_circuit_with {
+    output input i0 := main input |>.output i0
+  }
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input
@@ -45,7 +42,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, message } := input
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [G.circuit, G.elaborated]
   obtain ⟨h_state, h_message⟩ := h_assumptions
   simp only [G.Assumptions, G.Spec, h_input, getElem_eval_vector, and_imp] at h_holds
@@ -75,7 +72,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp [Specs.BLAKE3.round, roundConstants]
   exact c8
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [G.circuit, G.Assumptions, G.Spec, ProverEnvironment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true]
   obtain ⟨h_state, h_message⟩ := h_assumptions
@@ -97,7 +94,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [h_state, h_message, and_self]
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  elaborated with Assumptions, Spec, soundness, completeness
+  main, elaborated, Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.Round

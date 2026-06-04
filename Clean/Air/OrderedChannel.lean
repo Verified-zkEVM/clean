@@ -581,7 +581,7 @@ theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO)
     (ens.addTable table).OrderedChannels finished := by
   intro h_sound verifier_empty grts_subset_finished reqs_disjoint_finished channel h_channel
   -- we need to make use of soundness of the original ensemble; that'll give us most of what we need
-  simp only [circuit_norm, allTables, verifier_empty] at h_sound ⊢
+  simp only [circuit_norm, verifier_empty, allTables] at h_sound ⊢
   -- proof is a trivial combination of the hypotheses
   simp_all
 
@@ -595,7 +595,7 @@ theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
     -- the merged ensemble with the new table satisfies OrderedChannels!
     (ens1.merge ens2).OrderedChannels finished := by
   intro h_sound verifier_empty reqs_disjoint_finished channel h_channel
-  simp only [circuit_norm, allTables, verifier_empty] at h_sound ⊢
+  simp only [circuit_norm, allTables] at h_sound ⊢
   simp only [channelsWithRequirements_eq_verifier_append, circuit_norm] at reqs_disjoint_finished
   simp_all only [not_false_eq_true, or_true, true_and, and_true]
   constructor

@@ -39,9 +39,6 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -81,9 +78,6 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -121,9 +115,6 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -161,9 +152,6 @@ def main (input : Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) field field where
   main
-  localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input
   Spec input output :=
@@ -203,9 +191,6 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -245,9 +230,6 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  localLength _ := 1
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
   Spec input output :=
@@ -914,19 +896,20 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
-  localLength _ := n - 1
-  localLength_eq := localLength_eq n
-  subcircuitsConsistent := subcircuitsConsistent n
-  channelsLawful := by
-    intro input_var offset
-    and_intros
-    · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).1
-    · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).2
-    · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).1
-    · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).2
-    · exact mem_nil_or_mem_nil_of_mem_shallowChannels n input_var offset
-    · simp only [circuit_norm]
-    · exact subcircuitChannelsLawful n input_var offset
+  elaborated := {
+    localLength _ := n - 1
+    localLength_eq := localLength_eq n
+    subcircuitsConsistent := subcircuitsConsistent n
+    channelsLawful := by
+      intro input_var offset
+      and_intros
+      · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).1
+      · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).2
+      · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).1
+      · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).2
+      · exact mem_nil_or_mem_nil_of_mem_shallowChannels n input_var offset
+      · exact subcircuitChannelsLawful n input_var offset
+  }
 
   Assumptions := Assumptions n
   Spec := Spec n
