@@ -37,7 +37,7 @@ def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
   IsZero.circuit (fromElements (M:=α) d)
 
 @[reducible]
-instance elaborated : ElaboratedCircuit F (ProvablePair α α) field (main (α:=α)) := by
+instance elaborated : ElaboratedCircuit F (ProvablePair α α) field main := by
   elaborate_circuit
 
 def Assumptions (_ : α F × α F) : Prop := True
@@ -86,11 +86,11 @@ theorem completeness : Completeness (Input:=ProvablePair α α) (Output:=field) 
   circuit_proof_start [IsZero.circuit, IsZero.elaborated, IsZero.Assumptions]
 
 def circuit : FormalCircuit F (ProvablePair α α) field where
-  main := main (α:=α)
-  elaborated := elaborated
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
 
 end Gadgets.IsEqual

@@ -53,7 +53,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
         (fun acc i => acc * (varFromOffset field (i₀ + i * 2 + 1) : Var field F))
         1) =
     if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
-  simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
+  simp only [IsZeroField.circuit] at h_isZero
   induction n generalizing i₀
   · simp only [Fin.foldl_zero, Expression.eval]
     simp only [not_lt_zero', IsEmpty.forall_iff, implies_true, ↓reduceIte]
@@ -97,7 +97,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     · next h_ex h_all => exfalso; exact h_ex (fun i hi => h_all i (by omega))
 
 theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Spec := by
-  circuit_proof_start [IsZeroField.circuit, IsZeroField.elaborated, IsZeroField.Assumptions]
+  circuit_proof_start [IsZeroField.circuit]
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
     arg 1
@@ -112,7 +112,7 @@ theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Sp
     exact h_holds i
 
 theorem completeness : Completeness F (main (M:=M)) Assumptions := by
-  circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
+  circuit_proof_start [IsZeroField.circuit]
 
 def circuit [DecidableEq (M F)] : FormalCircuit F M field where
   main

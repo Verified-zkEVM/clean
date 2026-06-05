@@ -5,41 +5,25 @@ import Clean.Utils.Field
 import Clean.Utils.Tactics
 
 namespace Gadgets.IsZeroField
-
 variable {F : Type} [Field F] [DecidableEq F]
 
 /--
-Main circuit that checks if a field element is zero.
 Returns 1 if the input is 0, otherwise returns 0.
 -/
-def main (x : Expression F) : Circuit F (Expression F) := do
-  -- When x ≠ 0, we need x_inv such that x * x_inv = 1
-  -- When x = 0, x_inv can be anything (we use 0)
-  let xInv ← witness fun env =>
-    if x.eval env = 0 then 0 else (x.eval env : F)⁻¹
+def circuit : FormalCircuit F field field where
+  main (x : Expression F) := do
+    let z ← witness fun env =>
+      if env x ≠ 0 then (env x)⁻¹ else 0
+     -- if x = 0 then b = 1
+    let b <== 1 - x * z
+      -- if x ≠ 0 then b = 0
+    b * x === 0
+    return b
 
-  let isZero <== 1 - x*xInv -- If x is zero, isZero is one
-  isZero * x === 0  -- If x is not zero, isZero is zero
+  Spec (x : F) (b : F) :=
+    b = (if x = 0 then 1 else 0)
 
-  return isZero
-
-@[reducible]
-instance elaborated : ElaboratedCircuit F field field main := by
-  elaborate_circuit
-
-def Assumptions (_ : F) : Prop := True
-
-def Spec (x : F) (output : F) : Prop :=
-  output = if x = 0 then 1 else 0
-
-theorem soundness : Soundness (Input:=field) (Output:=field) F main Assumptions (Spec (F:=F)) := by
-  circuit_proof_all
-
-theorem completeness : Completeness (Input:=field) (Output:=field) F main Assumptions := by
-  circuit_proof_all
-
-def circuit : FormalCircuit F field field := {
-  main, Assumptions, Spec := Spec (F:=F), soundness, completeness
-}
+  soundness := by circuit_proof_all
+  completeness := by circuit_proof_all
 
 end Gadgets.IsZeroField
