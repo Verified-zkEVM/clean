@@ -10,7 +10,8 @@ Prove e2e soundness and completeness of the table ensemble.
 -/
 import Clean.Air.Vm
 import Clean.Gadgets.Addition8.Theorems
-open ByteUtils (mod256 floorDiv256)
+open ByteUtils (mod256)
+open FieldUtils (mod floorDiv)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)
 
 open Air.Flat
@@ -35,7 +36,7 @@ def BytesTable : StaticLookupChannel (F p) field where
       rw [← h_eq]
       apply ByteUtils.fromByte_lt
 
-abbrev BytesChannel := Channel.fromStatic (F p) field BytesTable
+abbrev BytesChannel : Channel (F p) field := .fromStatic _ _ BytesTable
 
 -- bytes "circuit" that just pushes all bytes
 -- probably shouldn't be a "circuit" at all
@@ -63,16 +64,17 @@ structure Add8Inputs F where
   m : F -- multiplicity
 deriving ProvableStruct
 
+/-- Proves x + y = z (mod 256) -/
 def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
   main | { x, y, z, m } => do
     -- range-check z using the bytes channel
     -- (x and y are guaranteed to be range-checked from earlier interactions)
     BytesChannel.pull z
     -- witness the output carry
-    let carry ← witness fun eval => floorDiv256 (eval (x + y))
+    let carry ← witness fun env => floorDiv (env (x + y)) 256
     assertBool carry
     -- assert correctness
-    x + y - z - carry * 256 === 0
+    x + y === z + carry * 256
     -- emit to the add8 channel with multiplicity `m`
     Add8Channel.emit m (x, y, z)
 
@@ -98,10 +100,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
       apply FieldUtils.ext
       rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
       linarith [hx, hy, ‹Fact (p > 512)›.elim]
-    refine ⟨ hz, ?_⟩
-    refine ⟨ ?_, ?_ ⟩
-    · simpa [floorDiv256, h_env] using add_completeness_bool
-    · simpa [h_input_z, floorDiv256, h_env] using add_completeness_add
+    grind
 
 example (input : Var Add8Inputs (F p)) :
     ExplicitCircuit (add8.main input) := by
