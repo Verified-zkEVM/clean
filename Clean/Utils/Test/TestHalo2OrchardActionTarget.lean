@@ -3,13 +3,25 @@ import Clean.Halo2.Debug
 namespace Halo2.Tests
 
 /-- The exact target for the full Orchard action circuit CS is checked into the
-repo and available to Lean. This test is intentionally not the final equality
-claim; it guards that the large fixture is loaded while the builder is completed. -/
+repo and available to Lean. -/
 theorem orchardActionRustFixture_loaded :
     Halo2.Fixtures.RustPinnedCS.orchardAction.length > 0 := by
   native_decide
 
-/-- The current builder has begun constructing the full action CS. The final
+/-- The current Lean-side pinned CS candidate matches the Rust fixture on the
+basic top-level dimensions of the pinned constraint system. -/
+theorem orchardActionPinnedCS_topLevelCounts :
+    let cs := Halo2.Orchard.Action.orchardActionPinnedCS
+    cs.numFixedColumns = 29 ∧
+    cs.numAdviceColumns = 10 ∧
+    cs.numInstanceColumns = 1 ∧
+    cs.numSelectors = 56 ∧
+    cs.fixedQueries.length = 29 ∧
+    cs.instanceQueries.length = 1 ∧
+    cs.permutation.columns.length = 15 := by
+  native_decide
+
+/-- The current builder renders a non-empty Halo2-style pinned CS. The final
 version of this theorem should be strengthened to equality with the Rust fixture. -/
 theorem orchardActionBuilder_renders_nonempty :
     (Halo2.Pinned.Debug.constraintSystem Halo2.Orchard.Action.orchardActionPinnedCS).length > 0 := by
