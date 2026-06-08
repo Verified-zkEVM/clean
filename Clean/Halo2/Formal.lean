@@ -220,6 +220,17 @@ theorem lookup_satisfied {F : Type} [Ring F] {lookup : List F → List F → Pro
         (table.map (Pinned.Expression.eval trace row)) :=
   Iff.rfl
 
+/-- Operation satisfaction is monotone in the lookup relation. -/
+theorem satisfied_mono_lookup {F : Type} [Ring F]
+    {lookup lookup' : List F → List F → Prop} {trace : Trace F} {op : Operation}
+    (hLookup : ∀ inputs table, lookup inputs table → lookup' inputs table)
+    (h : op.Satisfied lookup trace) : op.Satisfied lookup' trace := by
+  cases op with
+  | gate row expr => simpa [Satisfied] using h
+  | wire left right => simpa [Satisfied] using h
+  | fixed cell value => simpa [Satisfied] using h
+  | lookup row inputs table => exact hLookup _ _ h
+
 end Operation
 
 /-- A gadget/region-local Halo2 operation.  Rows are relative to the start of the
@@ -443,6 +454,14 @@ theorem lookup_circuit_satisfied {F : Type} [Ring F] {lookupRel : List F → Lis
     simp [lookup] at hop
     subst op
     simpa using h
+
+/-- Circuit satisfaction is monotone in the lookup relation. -/
+theorem satisfied_mono_lookup {F : Type} [Ring F]
+    {lookup lookup' : List F → List F → Prop} {trace : Trace F} {c : Circuit}
+    (hLookup : ∀ inputs table, lookup inputs table → lookup' inputs table)
+    (h : c.Satisfied lookup trace) : c.Satisfied lookup' trace := by
+  intro op hop
+  exact Operation.satisfied_mono_lookup hLookup (h op hop)
 
 /-- Create gate operations by checking every gate at every row. -/
 def gatesFromConstraintSystem (cs : ConstraintSystem) (numRows : Nat) : Circuit :=
