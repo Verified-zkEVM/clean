@@ -312,6 +312,69 @@ def configure (cols : Orchard.EccColumns) (startAdvice witnessAdvice fixedYq : N
 end Halo2.Orchard.Sinsemilla
 
 
+namespace Halo2.Orchard.Merkle
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+
+/-- Skeleton of `MerkleChip::configure`: decomposition check selector. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let (q, b) := b.selector
+  let (cur, b) := a b cols 0
+  let (next, b) := a b cols 1
+  b.createGate [Expression.selector q * (cur - next)]
+
+end Halo2.Orchard.Merkle
+
+namespace Halo2.Orchard.CommitIvk
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+
+/-- Skeleton of `CommitIvkChip::configure`. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let (q, b) := b.selector
+  let (ak, b) := a b cols 0
+  let (nk, b) := a b cols 0 1
+  let (pieceA, b) := a b cols 1
+  let (pieceC, b) := a b cols 1 1
+  b.createGate [Expression.selector q * (ak + nk - pieceA - pieceC)]
+
+end Halo2.Orchard.CommitIvk
+
+namespace Halo2.Orchard.NoteCommit
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+
+private def oneGate (cols : Orchard.EccColumns) (b : Builder) (nameIdx : Nat) : Builder :=
+  let (q, b) := b.selector
+  let (x, b) := a b cols (nameIdx % 10)
+  let (y, b) := a b cols ((nameIdx + 1) % 10)
+  b.createGate [Expression.selector q * (x - y)]
+
+/-- Skeleton of `NoteCommitChip::configure`, allocating the family of message
+piece/input/canonicity selectors used by Orchard. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let b := oneGate cols b 0  -- MessagePiece b
+  let b := oneGate cols b 1  -- MessagePiece d
+  let b := oneGate cols b 2  -- MessagePiece e
+  let b := oneGate cols b 3  -- MessagePiece g
+  let b := oneGate cols b 4  -- MessagePiece h
+  let b := oneGate cols b 5  -- input g_d
+  let b := oneGate cols b 6  -- input pk_d
+  let b := oneGate cols b 7  -- input value
+  let b := oneGate cols b 8  -- input rho
+  let b := oneGate cols b 9  -- input psi
+  let b := oneGate cols b 10 -- y canonicity
+  b
+
+end Halo2.Orchard.NoteCommit
+
+
 namespace Halo2.Orchard.Action
 
 open Halo2.Pinned
@@ -378,6 +441,11 @@ def orchardActionCS : ConstraintSystem :=
   let b := Halo2.Orchard.Poseidon.configure cols b
   let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b
   let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b
+  let b := Halo2.Orchard.Merkle.configure cols b
+  let b := Halo2.Orchard.Merkle.configure cols b
+  let b := Halo2.Orchard.CommitIvk.configure cols b
+  let b := Halo2.Orchard.NoteCommit.configure cols b
+  let b := Halo2.Orchard.NoteCommit.configure cols b
   let b := b.ensureNumSelectors 56
   b.cs
 
