@@ -151,6 +151,34 @@ def Satisfied {F : Type} [Ring F]
     (c : Circuit) (lookup : List F → List F → Prop) (trace : Trace F) : Prop :=
   ∀ op ∈ c.operations, op.Satisfied lookup trace
 
+@[simp]
+theorem empty_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} :
+    ({ operations := [] } : Circuit).Satisfied lookup trace := by
+  intro op h
+  cases h
+
+theorem append_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {c d : Circuit} :
+    (c ++ d).Satisfied lookup trace ↔ c.Satisfied lookup trace ∧ d.Satisfied lookup trace := by
+  constructor
+  · intro h
+    constructor
+    · intro op hop
+      apply h op
+      change op ∈ c.operations ++ d.operations
+      exact List.mem_append_left d.operations hop
+    · intro op hop
+      apply h op
+      change op ∈ c.operations ++ d.operations
+      exact List.mem_append_right c.operations hop
+  · intro h op hop
+    rcases h with ⟨hc, hd⟩
+    change op ∈ c.operations ++ d.operations at hop
+    rcases List.mem_append.mp hop with hopLeft | hopRight
+    · exact hc op hopLeft
+    · exact hd op hopRight
+
 /-- Create gate operations by checking every gate at every row. -/
 def gatesFromConstraintSystem (cs : ConstraintSystem) (numRows : Nat) : Circuit :=
   { operations := List.flatten ((List.range numRows).map fun row =>
