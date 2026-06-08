@@ -188,6 +188,24 @@ theorem append_satisfied {F : Type} [Ring F] {lookup : List F → List F → Pro
     · exact hd op hopRight
 
 @[simp]
+theorem push_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {c : Circuit} {op : Operation} :
+    (c.push op).Satisfied lookup trace ↔ c.Satisfied lookup trace ∧ op.Satisfied lookup trace := by
+  constructor
+  · intro h
+    constructor
+    · intro op' hop'
+      exact h op' (by simp [push, hop'])
+    · exact h op (by simp [push])
+  · intro h op' hop'
+    rcases h with ⟨hc, hop⟩
+    simp [push] at hop'
+    rcases hop' with hop' | hop'
+    · exact hc op' hop'
+    · subst op'
+      exact hop
+
+@[simp]
 theorem gate_circuit_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
     {trace : Trace F} {row : Nat} {expr : Pinned.Expression} :
     (gate row expr).Satisfied lookup trace ↔ expr.eval trace row = 0 := by
