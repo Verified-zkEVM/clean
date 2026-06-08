@@ -70,6 +70,10 @@ inductive Operation where
 
 namespace Operation
 
+/-- Clean-style alias for a Halo2 custom-gate assertion at a concrete row. -/
+def assert (row : Nat) (expr : Pinned.Expression) : Operation :=
+  .gate row expr
+
 /-- Semantic satisfaction of one Halo2 operation. -/
 def Satisfied {F : Type} [Ring F]
     (lookup : List F → List F → Prop) (trace : Trace F) : Operation → Prop
@@ -126,6 +130,10 @@ def push (c : Circuit) (op : Operation) : Circuit :=
 /-- A one-operation custom-gate circuit. -/
 def gate (row : Nat) (expr : Pinned.Expression) : Circuit :=
   { operations := [Operation.gate row expr] }
+
+/-- Clean-style name for a one-operation Halo2 assertion circuit. -/
+def assertZero (row : Nat) (expr : Pinned.Expression) : Circuit :=
+  gate row expr
 
 /-- A one-operation wire/copy-constraint circuit. -/
 def wire (left right : Synthesis.Cell) : Circuit :=

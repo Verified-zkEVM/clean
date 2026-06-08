@@ -33,12 +33,12 @@ private def zeroGate : Pinned.Expression :=
 
 /-- A minimal custom-gate `FormalCircuit`: advice cell `(0,0)` must be zero. -/
 def zeroGateFormalCircuit : FormalCircuit Int :=
-  { circuit := Circuit.gate 0 zeroGate
+  { circuit := Circuit.assertZero 0 zeroGate
     Spec := fun trace => trace.advice 0 0 = 0
     soundness := by
       intro trace _ h
       simpa [Circuit.Satisfied, Operation.Satisfied, zeroGate, Pinned.Expression.eval] using
-        h (Operation.gate 0 zeroGate) (by simp [Circuit.gate]) }
+        h (Operation.gate 0 zeroGate) (by simp [Circuit.assertZero, Circuit.gate]) }
 
 theorem zeroGateFormalCircuit_sound {trace : Trace Int}
     (h : zeroGateFormalCircuit.circuit.Satisfied zeroGateFormalCircuit.lookup trace) :
@@ -52,14 +52,14 @@ private def boolGate : Pinned.Expression :=
 /-- A small nontrivial example: the Halo2 custom gate `x * (1 - x) = 0`
 soundly enforces a Boolean value over `Int`. -/
 def boolGateFormalCircuit : FormalCircuit Int :=
-  { circuit := Circuit.gate 0 boolGate
+  { circuit := Circuit.assertZero 0 boolGate
     Assumptions := fun trace => trace.constant "one" = 1
     Spec := fun trace => trace.advice 0 0 = 0 ∨ trace.advice 0 0 = 1
     soundness := by
       intro trace hOne h
       have hGate : Pinned.Expression.eval trace 0 boolGate = 0 := by
         simpa [Circuit.Satisfied, Operation.Satisfied] using
-          h (Operation.gate 0 boolGate) (by simp [Circuit.gate])
+          h (Operation.gate 0 boolGate) (by simp [Circuit.assertZero, Circuit.gate])
       dsimp [boolGate, Pinned.Expression.eval] at hGate
       rw [hOne] at hGate
       rcases Int.mul_eq_zero.mp hGate with h0 | h1
