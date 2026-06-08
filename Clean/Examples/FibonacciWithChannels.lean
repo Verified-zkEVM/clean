@@ -86,7 +86,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     circuit_proof_start [BytesTable, Add8Channel]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
-    intro hm hx hy
+    intro hm hm0 hx hy
     have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
   completeness := by
@@ -280,3 +280,24 @@ def falseEnsemble := SoundEnsemble.empty (F p) unit
   |>.addFinishedChannel FalseChannel.toRaw
   |>.addTable ⟨ falseCircuit ⟩
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])
+
+/--
+Zero multiplicity disables both sides of an interaction. This circuit uses a channel whose
+guarantee is `False`, so it would be impossible to prove if either disabled interaction still
+created an obligation or assumption.
+-/
+def disabledFalseCircuit : GeneralFormalCircuit (F p) unit unit where
+  main _ := do
+    FalseChannel.pullIf 0 ()
+    FalseChannel.pushIf 0 ()
+    return
+  elaborated := by elaborate_circuit_with {
+    channelsWithGuarantees := [FalseChannel.toRaw]
+    channelsWithRequirements := [FalseChannel.toRaw] }
+  Spec _ _ _ := True
+  ProverAssumptions _ _ _ := True
+  soundness := by circuit_proof_start [FalseChannel]
+  completeness := by circuit_proof_start [FalseChannel]
+
+example : ExplicitCircuit ((disabledFalseCircuit (p:=p)).main ()) := by
+  infer_explicit_circuit

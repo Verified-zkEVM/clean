@@ -140,9 +140,21 @@ def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
+def Channel.pullIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (gate : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ -gate, msg, true ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
   let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
+def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (gate : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ gate, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 /-- Create a new variable of an arbitrary "provable type". -/
@@ -461,8 +473,15 @@ attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 -- simplify `vector[i]` (which occurs in ProvableType definitions) and similar
 attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
+@[circuit_norm]
+lemma zero_ne_neg_one {F : Type} [Field F] : (0 : F) ≠ -1 := by
+  intro h
+  apply zero_ne_one (α:=F)
+  rw [← neg_zero, h, neg_neg]
+
 -- simplify constraint expressions and +0 indices
-attribute [circuit_norm] neg_mul one_mul add_zero zero_add Nat.reduceAdd
+attribute [circuit_norm] neg_mul one_mul add_zero zero_add neg_zero neg_eq_zero one_ne_zero zero_ne_one
+  Nat.reduceAdd
 
 attribute [circuit_norm] List.append_nil
 

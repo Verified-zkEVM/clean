@@ -37,6 +37,7 @@ def toRaw (channel : Channel F Message) : RawChannel F where
     mult = -1 → channel.Guarantees (fromElements message) data
   Requirements mult message data :=
     mult ≠ -1 →
+    mult ≠ 0 →
     channel.Guarantees (fromElements message) data
 
 instance : CoeOut (Channel F Message) (RawChannel F) where
@@ -62,8 +63,8 @@ lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
     size Message = size Message2 ∧
     ((fun mult message data ↦ mult = (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
       fun mult message data ↦ mult = (-1 : F) → channel2.Guarantees (fromElements message) data) ∧
-    (fun mult message data ↦ mult ≠ (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
-      fun mult message data ↦ mult ≠ (-1 : F) → channel2.Guarantees (fromElements message) data := by
+    (fun mult message data ↦ mult ≠ (-1 : F) → mult ≠ 0 → channel1.Guarantees (fromElements message) data) ≍
+      fun mult message data ↦ mult ≠ (-1 : F) → mult ≠ 0 → channel2.Guarantees (fromElements message) data := by
   simp only [toRaw, RawChannel.mk.injEq]
 end Channel
 
@@ -129,6 +130,11 @@ lemma emitted_assumeGuarantees (mult : Expression F) (msg : Message (Expression 
 def pulled {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := -1, msg, assumeGuarantees := true }
 
+/-- Conditional pull. When `gate = 1`, this is a pull; when `gate = 0`, it is disabled. -/
+def pullIf {channel : Channel F Message} (gate : Expression F) (msg : Message (Expression F)) :
+    ChannelInteraction channel :=
+  { mult := -gate, msg, assumeGuarantees := true }
+
 @[circuit_norm] lemma pulled_def (msg : Message (Expression F)) :
   ({ mult := -1, msg, assumeGuarantees := true } : ChannelInteraction channel) = pulled msg := rfl
 @[circuit_norm] lemma pulled_mult (msg : Message (Expression F)) :
@@ -138,9 +144,25 @@ def pulled {channel : Channel F Message} (msg : Message (Expression F)) : Channe
 @[circuit_norm] lemma pulled_assumeGuarantees (msg : Message (Expression F)) :
   (pulled msg : ChannelInteraction channel).assumeGuarantees = true := rfl
 
+@[circuit_norm] lemma pullIf_def (gate : Expression F) (msg : Message (Expression F)) :
+  ({ mult := -gate, msg, assumeGuarantees := true } : ChannelInteraction channel) = pullIf gate msg := rfl
+@[circuit_norm] lemma pulled_eq_pullIf_one (msg : Message (Expression F)) :
+  (pulled msg : ChannelInteraction channel) = pullIf 1 msg := rfl
+@[circuit_norm] lemma pullIf_mult (gate : Expression F) (msg : Message (Expression F)) :
+  (pullIf gate msg : ChannelInteraction channel).mult = -gate := rfl
+@[circuit_norm] lemma pullIf_msg (gate : Expression F) (msg : Message (Expression F)) :
+  (pullIf gate msg : ChannelInteraction channel).msg = msg := rfl
+@[circuit_norm] lemma pullIf_assumeGuarantees (gate : Expression F) (msg : Message (Expression F)) :
+  (pullIf gate msg : ChannelInteraction channel).assumeGuarantees = true := rfl
+
 /-- Convenience alias for interaction with multiplicity `1`. -/
 def pushed {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := 1, msg, assumeGuarantees := false }
+
+/-- Conditional push. When `gate = 1`, this is a push; when `gate = 0`, it is disabled. -/
+def pushIf {channel : Channel F Message} (gate : Expression F) (msg : Message (Expression F)) :
+    ChannelInteraction channel :=
+  { mult := gate, msg, assumeGuarantees := false }
 
 @[circuit_norm] lemma pushed_def (msg : Message (Expression F)) :
   ({ mult := 1, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushed msg := rfl
@@ -152,6 +174,17 @@ def pushed {channel : Channel F Message} (msg : Message (Expression F)) : Channe
   (pushed msg : ChannelInteraction channel).msg = msg := rfl
 @[circuit_norm] lemma pushed_assumeGuarantees (msg : Message (Expression F)) :
   (pushed msg : ChannelInteraction channel).assumeGuarantees = false := rfl
+
+omit [Field F] in @[circuit_norm] lemma pushIf_def (gate : Expression F) (msg : Message (Expression F)) :
+  ({ mult := gate, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushIf gate msg := rfl
+@[circuit_norm] lemma pushed_eq_pushIf_one (msg : Message (Expression F)) :
+  (pushed msg : ChannelInteraction channel) = pushIf 1 msg := rfl
+omit [Field F] in @[circuit_norm] lemma pushIf_mult (gate : Expression F) (msg : Message (Expression F)) :
+  (pushIf gate msg : ChannelInteraction channel).mult = gate := rfl
+omit [Field F] in @[circuit_norm] lemma pushIf_msg (gate : Expression F) (msg : Message (Expression F)) :
+  (pushIf gate msg : ChannelInteraction channel).msg = msg := rfl
+omit [Field F] in @[circuit_norm] lemma pushIf_assumeGuarantees (gate : Expression F) (msg : Message (Expression F)) :
+  (pushIf gate msg : ChannelInteraction channel).assumeGuarantees = false := rfl
 
 @[circuit_norm] def Channel.emitted (channel : Channel F Message) mult msg :=
   _root_.emitted (channel := channel) mult msg
@@ -179,7 +212,8 @@ def Guarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
 
 @[circuit_norm]
 def Requirements (i : ChannelInteraction channel) (env : Environment F) : Prop :=
-  Expression.eval env i.mult ≠ -1 → channel.Guarantees (eval env i.msg) env.data
+  Expression.eval env i.mult ≠ -1 → Expression.eval env i.mult ≠ 0 →
+    channel.Guarantees (eval env i.msg) env.data
 end ChannelInteraction
 
 namespace AbstractInteraction
@@ -278,6 +312,22 @@ def pushedValue (channel : Channel F Message) (msg : Message F) : Interaction F 
   same_size := by simp [Channel.toRaw]
   assumeGuarantees := false
 
+@[circuit_norm]
+def pullIfValue (channel : Channel F Message) (gate : F) (msg : Message F) : Interaction F where
+  channel := channel.toRaw
+  mult := -gate
+  msg := (toElements msg).toArray
+  same_size := by simp [Channel.toRaw]
+  assumeGuarantees := true
+
+@[circuit_norm]
+def pushIfValue (channel : Channel F Message) (gate : F) (msg : Message F) : Interaction F where
+  channel := channel.toRaw
+  mult := gate
+  msg := (toElements msg).toArray
+  same_size := by simp [Channel.toRaw]
+  assumeGuarantees := false
+
 lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pulled msg).toRaw.eval env = channel.pulledValue (eval env msg) := by
   simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
@@ -288,6 +338,26 @@ lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {
 
 lemma eval_pushed {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pushed msg).toRaw.eval env = channel.pushedValue (eval env msg) := by
+  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
+  simp only [and_true, true_and]
+  congr
+  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
+  rfl
+
+lemma eval_pullIf {channel : Channel F Message} {gate : Expression F}
+    {msg : Message (Expression F)} {env : Environment F} :
+     (pullIf (channel:=channel) gate msg).toRaw.eval env = channel.pullIfValue (env gate) (eval env msg) := by
+  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
+  simp only [and_true, true_and]
+  constructor
+  · exact (neg_eq_neg_one_mul (env gate)).symm
+  · apply congrArg Vector.toArray
+    rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
+    rfl
+
+lemma eval_pushIf {channel : Channel F Message} {gate : Expression F}
+    {msg : Message (Expression F)} {env : Environment F} :
+     (pushIf (channel:=channel) gate msg).toRaw.eval env = channel.pushIfValue (env gate) (eval env msg) := by
   simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
   simp only [and_true, true_and]
   congr

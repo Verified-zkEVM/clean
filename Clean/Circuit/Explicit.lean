@@ -479,6 +479,15 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   channelsWithGuarantees _ _ := [channel.toRaw]
   channelsWithRequirements _ _ := []
 
+instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
+    {gate : Expression F} :
+    ExplicitCircuits (F:=F) (channel.pullIf gate) where
+  output _ _ := ()
+  localLength _ _ := 0
+  operations msg _ := [.interact (pullIf (channel:=channel) gate msg).toRaw]
+  channelsWithGuarantees _ _ := [channel.toRaw]
+  channelsWithRequirements _ _ := [channel.toRaw]
+
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
     ExplicitCircuits (F:=F) (channel.push) where
   output _ _ := ()
@@ -487,10 +496,20 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := [channel.toRaw]
 
+instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
+    {gate : Expression F} :
+    ExplicitCircuits (F:=F) (channel.pushIf gate) where
+  output _ _ := ()
+  localLength _ _ := 0
+  operations msg _ := [.interact (pushIf (channel:=channel) gate msg).toRaw]
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := [channel.toRaw]
+
 attribute [explicit_circuit_unfold_type] Circuit
 
 attribute [explicit_circuit_no_unfold] Circuit.bind witnessVar witnessVars witnessVector ProvableType.witness
-  witness assertZero lookup Channel.emit Channel.pull Channel.push Pure.pure Bind.bind Functor.map
+  witness assertZero lookup Channel.emit Channel.pull Channel.push Channel.pullIf Channel.pushIf
+  Pure.pure Bind.bind Functor.map
 
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.operations ExplicitCircuit.output
   ExplicitCircuit.channelsWithGuarantees ExplicitCircuit.channelsWithRequirements
