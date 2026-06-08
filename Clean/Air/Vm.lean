@@ -53,32 +53,19 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
   verifier_length_zero : ∀ pi, (verifier pi).localLength 0 = 0 := by
     simp only [circuit_norm]
 
-  step : Component F → VmStep Message F
-  verifierStep : VmStep Message F
-
   tables_channel : ∀ table ∈ tables,
-    let step := step table
-    ⟨ channel,
-      [(pullIf (channel:=channel) step.enabled step.pull).toRaw,
-        (pushIf (channel:=channel) step.enabled step.push).toRaw] ⟩ ∈ table.exposedChannels
+    ∃ step : VmStep Message F,
+      ⟨ channel,
+        [(pullIf (channel:=channel) step.enabled step.pull).toRaw,
+          (pushIf (channel:=channel) step.enabled step.push).toRaw] ⟩ ∈ table.exposedChannels ∧
+      ∀ env,
+        table.Assumptions env →
+        Operations.ConstraintsHold env table.operations →
+          env step.enabled = 0 ∨ env step.enabled = 1
 
   -- the verifier pulls and pushes to the channel, and doesn't push anything else
-  verifier_channel :
-    ⟨ channel,
-      [(pullIf (channel:=channel) verifierStep.enabled verifierStep.pull).toRaw,
-        (pushIf (channel:=channel) verifierStep.enabled verifierStep.push).toRaw] ⟩ ∈
+  verifier_channel : ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
     verifier.exposedChannels (varFromOffset PublicIO 0) (size PublicIO)
-
-  -- VM gates must be boolean. This is what lets the abstract balance theorem
-  -- view a row as either an active pull/push pair or disabled padding.
-  tables_enabled_boolean : ∀ table ∈ tables, ∀ env,
-    table.Assumptions env →
-    Operations.ConstraintsHold env table.operations →
-      env (step table).enabled = 0 ∨ env (step table).enabled = 1
-
-  verifier_enabled_one : ∀ env,
-    Operations.ConstraintsHold env (verifier.main (varFromOffset PublicIO 0) |>.operations (size PublicIO)) →
-      env verifierStep.enabled = 1
 
   -- verifier requirements follow _unconditionally_ from constraints (without relying on guarantees)
   -- essentially a modified soundness theorem for the verifier
@@ -252,10 +239,50 @@ variable {vm : VmTables F PublicIO}
 @[circuit_norm] abbrev allTables (vm : VmTables F PublicIO) : List (Component F) :=
   vm.toEnsemble.allTables
 
+noncomputable def step (vm : VmTables F PublicIO) (table : Component F)
+    (table_mem : table ∈ vm.tables) : VmStep vm.Message F :=
+  (vm.tables_channel table table_mem).choose
+
+theorem tables_channel' (vm : VmTables F PublicIO) {table} (table_mem : table ∈ vm.tables) :
+  let step := vm.step table table_mem
+  ⟨ vm.channel,
+    [(pullIf (channel:=vm.channel) step.enabled step.pull).toRaw,
+      (pushIf (channel:=vm.channel) step.enabled step.push).toRaw] ⟩ ∈ table.exposedChannels :=
+  (vm.tables_channel table table_mem).choose_spec.1
+
+theorem tables_enabled_boolean (vm : VmTables F PublicIO) {table} (table_mem : table ∈ vm.tables) :
+    ∀ env,
+      table.Assumptions env →
+      Operations.ConstraintsHold env table.operations →
+        env (vm.step table table_mem).enabled = 0 ∨ env (vm.step table table_mem).enabled = 1 :=
+  (vm.tables_channel table table_mem).choose_spec.2
+
+noncomputable def verifierPull (vm : VmTables F PublicIO) : Var vm.Message F :=
+  vm.verifier_channel.choose
+
+noncomputable def verifierPush (vm : VmTables F PublicIO) : Var vm.Message F :=
+  vm.verifier_channel.choose_spec.choose
+
+theorem verifier_channel' (vm : VmTables F PublicIO) :
+  ⟨ vm.channel,
+    [(vm.channel.pulled vm.verifierPull).toRaw,
+      (vm.channel.pushed vm.verifierPush).toRaw] ⟩ ∈
+    vm.verifier.exposedChannels (varFromOffset PublicIO 0) (size PublicIO) :=
+  vm.verifier_channel.choose_spec.choose_spec
+
+noncomputable def verifierStep (vm : VmTables F PublicIO) : VmStep vm.Message F where
+  enabled := 1
+  pull := vm.verifierPull
+  push := vm.verifierPush
+
 noncomputable def stepOfAllTables (vm : VmTables F PublicIO) (table : Component F)
     (_ : table ∈ vm.allTables) : VmStep vm.Message F := by
   classical
-  exact if table = vm.toEnsemble.verifierTable then vm.verifierStep else vm.step table
+  exact if h : table = vm.toEnsemble.verifierTable then vm.verifierStep else
+    vm.step table (by
+      have h_mem := ‹table ∈ vm.allTables›
+      simp only [allTables, toEnsemble, Ensemble.allTables, List.mem_cons] at h_mem
+      exact h_mem.resolve_left h)
 
 theorem allTables_channel (vm : VmTables F PublicIO) : ∀ (table) (table_mem : table ∈ vm.allTables),
   let step := vm.stepOfAllTables table table_mem
@@ -267,13 +294,13 @@ theorem allTables_channel (vm : VmTables F PublicIO) : ∀ (table) (table_mem : 
   simp only [circuit_norm, Ensemble.allTables] at table_mem ⊢
   rcases table_mem with rfl | table_mem
   · simp only [circuit_norm, stepOfAllTables]
-    exact vm.verifier_channel
+    exact vm.verifier_channel'
   · by_cases h : table = vm.toEnsemble.verifierTable
     · subst table
       simp only [circuit_norm, stepOfAllTables]
-      exact vm.verifier_channel
+      exact vm.verifier_channel'
     · simp only [circuit_norm, stepOfAllTables, h]
-      exact vm.tables_channel table table_mem
+      exact vm.tables_channel' table_mem
 
 /-- Concrete version of VmTables.allTables_channel -/
 lemma allTables_channel' (vm : VmTables F PublicIO) {table} (_ : table ∈ vm.allTables) :
@@ -317,13 +344,13 @@ noncomputable def rowPush (witness : VmWitness vm) {table} (_ : table ∈ witnes
   eval (table.environment row)
     (vm.stepOfAllTables table.component (witness.mem_allTables_component_of_mem_allTables ‹_›)).push
 
-def verifierEnabled (witness : VmWitness vm) : F :=
+noncomputable def verifierEnabled (witness : VmWitness vm) : F :=
   (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.enabled
 
-def verifierPull (witness : VmWitness vm) : vm.Message F :=
+noncomputable def verifierPull (witness : VmWitness vm) : vm.Message F :=
   eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.pull
 
-def verifierPush (witness : VmWitness vm) : vm.Message F :=
+noncomputable def verifierPush (witness : VmWitness vm) : vm.Message F :=
   eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.push
 
 lemma interactionValuesWith_eq (witness : VmWitness vm)
@@ -520,11 +547,10 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
     table.component.operations.ChannelRequirements vm.channel.toRaw (table.environment row)) →
   (∀ (table) (table_mem : table ∈ witness.allTables), ∀ row ∈ table.table,
     witness.rowEnabled table_mem row = 0 ∨ witness.rowEnabled table_mem row = 1) →
-  witness.verifierEnabled = 1 →
   -- vm channel verifier requirements imply vm channel verifier guarantees
   witness.verifierTable.ChannelRequirements vm.channel.toRaw →
     witness.verifierTable.ChannelGuarantees vm.channel.toRaw := by
-  intro balance constraints row_enabled_boolean verifier_enabled_one
+  intro balance constraints row_enabled_boolean
   -- prove balance of pulls + pushes
   replace balance : BalancedInteractions (witness.pulls ++ witness.pushes) := by
     rw [witness.interactions_eq_pulls_pushes] at balance
@@ -562,7 +588,8 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
   -- to get the conclusion about the verifier, we specialize to index 0
   have verifier_enabled_one' :
       Expression.eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.enabled = 1 := by
-    simpa [verifierEnabled] using verifier_enabled_one
+    change Expression.eval (Environment.fromInput witness.publicInput witness.data) (Expression.const (1 : F)) = 1
+    rfl
   have active_length_pos : 0 < (activePulls witness.pulls witness.pushes).length := by
     simp [activePulls, pulls, pushes, interactionPairs, allTables, circuit_norm,
       rowEnabled, VmTables.stepOfAllTables, verifier_enabled_one']
@@ -817,36 +844,19 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     classical
     by_cases h_verifier : table.component = vm.toEnsemble.verifierTable
     · right
-      have h_constraints : Operations.ConstraintsHold (table.environment row)
-          (vm.verifier.main (varFromOffset PublicIO 0) |>.operations (size PublicIO)) := by
-        have hc := (Component.constraintsHold_iff (component:=table.component)
-          (env:=table.environment row)).mp (vm_constraints table table_mem row row_mem)
-        rw [h_verifier] at hc
-        simpa [Component.rowOperations, VmTables.toEnsemble, Ensemble.verifierTable] using hc
-      have h_enabled := vm.verifier_enabled_one (table.environment row) h_constraints
-      simpa [VmWitness.rowEnabled, VmTables.stepOfAllTables, h_verifier] using h_enabled
+      simp [VmWitness.rowEnabled, VmTables.stepOfAllTables, h_verifier, VmTables.verifierStep,
+        Expression.eval]
     · have h_component_mem : table.component ∈ vm.tables := by
         have := vmWitness.mem_allTables_component_of_mem_allTables table_mem
         simp only [VmTables.toEnsemble, Ensemble.allTables, List.mem_cons] at this
         rcases this with h | h
         · contradiction
         · exact h
-      have h_enabled := vm.tables_enabled_boolean table.component h_component_mem
+      have h_enabled := vm.tables_enabled_boolean h_component_mem
         (table.environment row) (vm_assumptions table table_mem row row_mem)
         (vm_constraints table table_mem row row_mem)
       simpa [VmWitness.rowEnabled, VmTables.stepOfAllTables, h_verifier] using h_enabled
-  have verifier_enabled_one : vmWitness.verifierEnabled = 1 := by
-    apply vm.verifier_enabled_one
-    have hc_table : Operations.ConstraintsHold
-        (vmWitness.verifierTable.environment (toElements vmWitness.publicInput).toArray)
-        vmWitness.verifierTable.component.operations :=
-      vm_constraints _ vmWitness.mem_allTables_verifierTable _
-        (by simp [EnsembleWitness.verifierTable])
-    have hc := (Component.constraintsHold_iff (component:=vmWitness.verifierTable.component)
-      (env:=vmWitness.verifierTable.environment (toElements vmWitness.publicInput).toArray)).mp hc_table
-    simpa [Component.rowOperations, VmTables.toEnsemble, Ensemble.verifierTable,
-      EnsembleWitness.verifierTable_environment] using hc
-  specialize verifier_guarantees row_enabled_boolean verifier_enabled_one
+  specialize verifier_guarantees row_enabled_boolean
   -- massage the conclusion so it matches that of `verifier_guarantees`.
   -- mainly, we need to use (again) that all guarantees apart from the VM channel are satisfied
   rw [EnsembleWitness.verifierGuarantees_iff_verifierTable_guarantees, ← verifierTable_eq,

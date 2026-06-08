@@ -235,44 +235,28 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   tables := [⟨ fib8 ⟩]
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
-  step _ :=
-    let input := varFromOffset Fib8Input 0
-    let z := var ⟨ size Fib8Input ⟩
-    { enabled := input.enabled, pull := (input.n, input.x, input.y), push := (input.n + 1, input.y, z) }
-  verifierStep :=
-    let input := varFromOffset fieldTriple 0
-    { enabled := 1, pull := input, push := (0, 0, 1) }
   tables_channel := by
     intro table table_mem
     simp only [List.mem_singleton] at table_mem
     subst table
-    change
-      { channel := FibonacciChannel.toRaw,
-        interactions :=
-          [(pullIf (channel:=FibonacciChannel) (varFromOffset Fib8Input 0).enabled
-              ((varFromOffset Fib8Input 0).n, (varFromOffset Fib8Input 0).x,
-                (varFromOffset Fib8Input 0).y)).toRaw,
-            (pushIf (channel:=FibonacciChannel) (varFromOffset Fib8Input 0).enabled
-              ((varFromOffset Fib8Input 0).n + 1, (varFromOffset Fib8Input 0).y,
-                var ⟨ size Fib8Input ⟩)).toRaw] } ∈
-        fib8.exposedChannels (varFromOffset Fib8Input 0) (size Fib8Input)
-    simp [circuit_norm, fib8]
-  verifier_channel := by simp [circuit_norm, fibonacciVerifier]
-  tables_enabled_boolean := by
-    intro table table_mem env h_assumptions h_constraints
-    simp only [List.mem_singleton] at table_mem
-    subst table
-    rw [Component.constraintsHold_iff] at h_constraints
-    simp [Component.rowOperations, fib8, circuit_norm] at h_constraints
-    rcases h_constraints with h_zero | h_one
-    · left
-      exact h_zero
-    · right
-      rw [← sub_eq_add_neg] at h_one
-      exact sub_eq_zero.mp h_one
-  verifier_enabled_one := by
-    intro env h_constraints
-    simp [circuit_norm]
+    let input := varFromOffset (F:=F p) Fib8Input 0
+    let z : Expression (F p) := var ⟨ (⟨ fib8 ⟩ : Component (F p)).rowOffset ⟩
+    refine ⟨ { enabled := input.enabled, pull := (input.n, input.x, input.y), push := (input.n + 1, input.y, z) },
+      ?_, ?_ ⟩
+    · simp [circuit_norm, fib8, input, z, Component.exposedChannels, Component.rowOffset]
+    · intro env _h_assumptions h_constraints
+      rw [Component.constraintsHold_iff] at h_constraints
+      simp only [Operations.ConstraintsHold, Component.rowOperations, Circuit.operations, fib8] at h_constraints
+      have h_bool : env (input.enabled * (input.enabled - 1)) = 0 := h_constraints.1 _ (by
+        simp [circuit_norm, input])
+      simp [circuit_norm] at h_bool
+      rcases h_bool with h_zero | h_one
+      · exact Or.inl h_zero
+      · right
+        rw [← sub_eq_add_neg] at h_one
+        exact sub_eq_zero.mp h_one
+  verifier_channel := by
+    simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
