@@ -632,10 +632,10 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
     change Expression.eval (Environment.fromInput witness.publicInput witness.data) (Expression.const (1 : F)) = 1
     rfl
   have active_length_pos : 0 < (activePulls witness.pulls).length := by
-    simp [activePulls, pulls, interactionPairs, allTables, circuit_norm,
+    simp [activePulls, activeInteractions, pulls, interactionPairs, allTables, circuit_norm,
       rowEnabled, VmTables.stepOfAllTables, verifier_enabled_one']
   specialize grts_of_reqs reqs_of_grts 0 active_length_pos
-  simp [activePulls, activePushes, pulls, pushes, interactionPairs, allTables, circuit_norm,
+  simp [activePulls, activePushes, activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
     rowEnabled, VmTables.stepOfAllTables,
     verifier_enabled_one'] at grts_of_reqs
   have active_push_length_pos : 0 < (activePushes witness.pushes).length := by
@@ -653,12 +653,12 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
           (i:=(pushIf (channel:=vm.channel) vm.verifierStep.enabled vm.verifierStep.push).toRaw)
           (env:=env)).mpr hreqs.2.1
     have hpull_grt := grts_of_reqs (by
-      simpa [activePushes, pulls, pushes, interactionPairs, allTables, circuit_norm,
+      simpa [activePushes, activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
         rowEnabled, rowPush, VmTables.stepOfAllTables, verifier_enabled_one', env,
         Channel.eval_pushIf] using hpush_eval)
     have hpull_eval :
         ((pullIf (channel:=vm.channel) vm.verifierStep.enabled vm.verifierStep.pull).toRaw.eval env).Guarantees env.data := by
-      simpa [activePulls, pulls, pushes, interactionPairs, allTables, circuit_norm,
+      simpa [activePulls, activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
         rowEnabled, rowPull, VmTables.stepOfAllTables, verifier_enabled_one', env,
         Channel.eval_pullIf] using hpull_grt
     exact AbstractInteraction.eval_guarantees.mp hpull_eval

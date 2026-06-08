@@ -293,11 +293,14 @@ lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ}
       rw [← ih (Nat.lt_of_succ_lt_succ hi)]
       ring
 
-def activePulls (pulls : List (Interaction F)) : List (Interaction F) :=
-  pulls.filter (fun pull => pull.mult ≠ 0)
+def activeInteractions (interactions : List (Interaction F)) : List (Interaction F) :=
+  interactions.filter (fun i => i.mult ≠ 0)
 
-def activePushes (pushes : List (Interaction F)) : List (Interaction F) :=
-  pushes.filter (fun push => push.mult ≠ 0)
+abbrev activePulls : List (Interaction F) → List (Interaction F) :=
+  activeInteractions
+
+abbrev activePushes : List (Interaction F) → List (Interaction F) :=
+  activeInteractions
 
 lemma activePulls_length_eq_activePushes_length {pulls pushes : List (Interaction F)}
     (h_len : pulls.length = pushes.length)
@@ -306,7 +309,7 @@ lemma activePulls_length_eq_activePushes_length {pulls pushes : List (Interactio
     (activePulls pulls).length = (activePushes pushes).length := by
   induction pulls generalizing pushes with
   | nil =>
-    cases pushes <;> simp [activePulls, activePushes] at h_len ⊢
+    cases pushes <;> simp [activePulls, activePushes, activeInteractions] at h_len ⊢
   | cons pull pulls ih =>
     cases pushes with
     | nil => simp at h_len
@@ -319,76 +322,11 @@ lemma activePulls_length_eq_activePushes_length {pulls pushes : List (Interactio
       have ih' := ih h_len h_pair_tail
       by_cases h : pull.mult = 0
       · have h_push : push.mult = 0 := (h_pair 0 (by simp) (by simp)).mp h
-        simpa [activePulls, activePushes, h, h_push] using ih'
+        simpa [activePulls, activePushes, activeInteractions, h, h_push] using ih'
       · have h_push : push.mult ≠ 0 := by
           intro h_push
           exact h ((h_pair 0 (by simp) (by simp)).mpr h_push)
-        simpa [activePulls, activePushes, h, h_push] using congrArg Nat.succ ih'
-
-lemma activePulls_length_le_left (pulls : List (Interaction F)) :
-    (activePulls pulls).length ≤ pulls.length := by
-  induction pulls with
-  | nil => simp [activePulls]
-  | cons pull pulls ih =>
-    by_cases h : pull.mult = 0
-    · simp [activePulls, h]
-      simpa [activePulls] using ih.trans (Nat.le_succ _)
-    · simp [activePulls, h]
-      simpa [activePulls] using ih
-
-lemma activePushes_length_le_left (pushes : List (Interaction F)) :
-    (activePushes pushes).length ≤ pushes.length := by
-  induction pushes with
-  | nil => simp [activePushes]
-  | cons push pushes ih =>
-    by_cases h : push.mult = 0
-    · simp [activePushes, h]
-      simpa [activePushes] using ih.trans (Nat.le_succ _)
-    · simp [activePushes, h]
-      simpa [activePushes] using ih
-
-lemma activePulls_mult {pulls : List (Interaction F)}
-    (h : ∀ pull ∈ pulls, pull.mult = -1 ∨ pull.mult = 0) :
-    ∀ pull ∈ activePulls pulls, pull.mult = -1 := by
-  intro pull h_mem
-  simp only [activePulls, List.mem_filter] at h_mem
-  rcases h_mem with ⟨ h_mem, h_ne_zero ⟩
-  have h_ne_zero' : pull.mult ≠ 0 := by simpa using h_ne_zero
-  rcases h pull h_mem with h_mult | h_mult
-  · exact h_mult
-  · contradiction
-
-lemma activePushes_mult {pushes : List (Interaction F)}
-    (h_pushes : ∀ push ∈ pushes, push.mult = 1 ∨ push.mult = 0) :
-    ∀ push ∈ activePushes pushes, push.mult = 1 := by
-  intro push h_mem
-  simp only [activePushes, List.mem_filter] at h_mem
-  rcases h_mem with ⟨ h_mem, h_ne_zero ⟩
-  have h_ne_zero' : push.mult ≠ 0 := by simpa using h_ne_zero
-  rcases h_pushes push h_mem with h_mult | h_mult
-  · exact h_mult
-  · contradiction
-
-lemma activePulls_channel {channel : RawChannel F} {pulls : List (Interaction F)}
-    (h : ∀ pull ∈ pulls, pull.channel = channel) :
-    ∀ pull ∈ activePulls pulls, pull.channel = channel := by
-  intro pull h_mem
-  simp only [activePulls, List.mem_filter] at h_mem
-  exact h pull h_mem.1
-
-lemma activePushes_channel {channel : RawChannel F} {pushes : List (Interaction F)}
-    (h : ∀ push ∈ pushes, push.channel = channel) :
-    ∀ push ∈ activePushes pushes, push.channel = channel := by
-  intro push h_mem
-  simp only [activePushes, List.mem_filter] at h_mem
-  exact h push h_mem.1
-
-lemma activePushes_assumeRequirements {pushes : List (Interaction F)}
-    (h : ∀ push ∈ pushes, push.assumeGuarantees = false) :
-    ∀ push ∈ activePushes pushes, push.assumeGuarantees = false := by
-  intro push h_mem
-  simp only [activePushes, List.mem_filter] at h_mem
-  exact h push h_mem.1
+        simpa [activePulls, activePushes, activeInteractions, h, h_push] using congrArg Nat.succ ih'
 
 lemma activePair_mem_zip {pulls pushes : List (Interaction F)}
     (h_len : pulls.length = pushes.length)
@@ -399,7 +337,7 @@ lemma activePair_mem_zip {pulls pushes : List (Interaction F)}
       (activePushes pushes)[i]'(activePulls_length_eq_activePushes_length h_len h_pair ▸ hi))
       ∈ pulls.zip pushes := by
   induction pulls generalizing pushes i with
-  | nil => simp [activePulls] at hi
+  | nil => simp [activePulls, activeInteractions] at hi
   | cons pull pulls ih =>
     cases pushes with
     | nil => simp at h_len
@@ -411,22 +349,26 @@ lemma activePair_mem_zip {pulls pushes : List (Interaction F)}
         exact h_pair (i + 1) (by simpa) (by simpa)
       by_cases h_zero : pull.mult = 0
       · have h_push_zero : push.mult = 0 := (h_pair 0 (by simp) (by simp)).mp h_zero
-        simp [activePulls, activePushes, h_zero, h_push_zero] at hi ⊢
-        have hi' : i < (activePulls pulls).length := by simpa [activePulls] using hi
-        exact Or.inr (by simpa [activePulls, activePushes] using ih h_len h_pair_tail i hi')
+        simp [activePulls, activePushes, activeInteractions, h_zero, h_push_zero] at hi ⊢
+        have hi' : i < (activePulls pulls).length := by
+          simpa [activePulls, activeInteractions] using hi
+        exact Or.inr (by
+          simpa [activePulls, activePushes, activeInteractions] using ih h_len h_pair_tail i hi')
       · cases i with
         | zero =>
           have h_push_ne_zero : push.mult ≠ 0 := by
             intro h_push_zero
             exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
-          simp [activePulls, activePushes, h_zero, h_push_ne_zero]
+          simp [activePulls, activePushes, activeInteractions, h_zero, h_push_ne_zero]
         | succ i =>
           have h_push_ne_zero : push.mult ≠ 0 := by
             intro h_push_zero
             exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
-          simp [activePulls, activePushes, h_zero, h_push_ne_zero] at hi ⊢
-          have hi' : i < (activePulls pulls).length := by simpa [activePulls] using hi
-          exact Or.inr (by simpa [activePulls, activePushes] using ih h_len h_pair_tail i hi')
+          simp [activePulls, activePushes, activeInteractions, h_zero, h_push_ne_zero] at hi ⊢
+          have hi' : i < (activePulls pulls).length := by
+            simpa [activePulls, activeInteractions] using hi
+          exact Or.inr (by
+            simpa [activePulls, activePushes, activeInteractions] using ih h_len h_pair_tail i hi')
 
 lemma balanceOf_active_append_eq {pulls pushes : List (Interaction F)} {msg : Array F}
     (h_len : pulls.length = pushes.length)
@@ -436,7 +378,7 @@ lemma balanceOf_active_append_eq {pulls pushes : List (Interaction F)} {msg : Ar
       balanceOf (pulls ++ pushes) msg := by
   induction pulls generalizing pushes with
   | nil =>
-    cases pushes <;> simp [activePulls, activePushes, balanceOf] at h_len ⊢
+    cases pushes <;> simp [activePulls, activePushes, activeInteractions, balanceOf] at h_len ⊢
   | cons pull pulls ih =>
     cases pushes with
     | nil => simp at h_len
@@ -449,13 +391,13 @@ lemma balanceOf_active_append_eq {pulls pushes : List (Interaction F)} {msg : Ar
       have ih' := ih h_len h_pair_tail
       by_cases h_zero : pull.mult = 0
       · have h_push_zero : push.mult = 0 := (h_pair 0 (by simp) (by simp)).mp h_zero
-        simp [activePulls, activePushes, h_zero, h_push_zero, balanceOf_append,
+        simp [activePulls, activePushes, activeInteractions, h_zero, h_push_zero, balanceOf_append,
           balanceOf_cons] at ih' ⊢
         exact ih'
       · have h_push_ne_zero : push.mult ≠ 0 := by
           intro h_push_zero
           exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
-        simp [activePulls, activePushes, h_zero, h_push_ne_zero, balanceOf_append,
+        simp [activePulls, activePushes, activeInteractions, h_zero, h_push_ne_zero, balanceOf_append,
           balanceOf_cons] at ih' ⊢
         ring_nf at ih' ⊢
         exact congrArg (fun x => x + if push.msg = msg then push.mult else 0) ih'
@@ -469,8 +411,10 @@ lemma balancedInteractions_active_append {pulls pushes : List (Interaction F)}
   constructor
   · rcases balance.1 with h_lt | h_char
     · left
-      have h_len_pulls : (activePulls pulls).length ≤ pulls.length :=
-        activePulls_length_le_left pulls
+      have h_len_pulls : (activePulls pulls).length ≤ pulls.length := by
+        rw [activePulls, activeInteractions]
+        have h := pulls.length_eq_length_filter_add (fun i => i.mult ≠ 0)
+        omega
       have h_len_pushes : (activePushes pushes).length ≤ pushes.length := by
         rw [← activePulls_length_eq_activePushes_length h_len h_pair, ← h_len]
         exact h_len_pulls
@@ -665,15 +609,31 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees_gated [Fact (ri
     simpa [activePulls', activePushes'] using
       balancedInteractions_active_append balance len_pulls_pushes pair_zero
   have active_pulls_channel : ∀ a ∈ activePulls', a.channel = channel := by
-    simpa [activePulls'] using activePulls_channel pulls_channel
+    intro a ha
+    simp only [activePulls', activeInteractions, List.mem_filter] at ha
+    exact pulls_channel a ha.1
   have active_pushes_channel : ∀ b ∈ activePushes', b.channel = channel := by
-    simpa [activePushes'] using activePushes_channel pushes_channel
+    intro b hb
+    simp only [activePushes', activeInteractions, List.mem_filter] at hb
+    exact pushes_channel b hb.1
   have active_pulls_mult : ∀ a ∈ activePulls', a.mult = -1 := by
-    simpa [activePulls'] using activePulls_mult pulls_mult
+    intro a ha
+    simp only [activePulls', activeInteractions, List.mem_filter] at ha
+    have a_mult_ne_zero : a.mult ≠ 0 := by simpa using ha.2
+    rcases pulls_mult a ha.1 with h_mult | h_mult
+    · exact h_mult
+    · contradiction
   have active_pushes_mult : ∀ b ∈ activePushes', b.mult = 1 := by
-    simpa [activePushes'] using activePushes_mult pushes_mult
+    intro b hb
+    simp only [activePushes', activeInteractions, List.mem_filter] at hb
+    have b_mult_ne_zero : b.mult ≠ 0 := by simpa using hb.2
+    rcases pushes_mult b hb.1 with h_mult | h_mult
+    · exact h_mult
+    · contradiction
   have active_pushes_assumeRequirements : ∀ b ∈ activePushes', b.assumeGuarantees = false := by
-    simpa [activePushes'] using activePushes_assumeRequirements pushes_assumeRequirements
+    intro b hb
+    simp only [activePushes', activeInteractions, List.mem_filter] at hb
+    exact pushes_assumeRequirements b hb.1
   have active_len : activePulls'.length = activePushes'.length := by
     simpa [activePulls', activePushes'] using
       activePulls_length_eq_activePushes_length len_pulls_pushes pair_zero
