@@ -125,10 +125,11 @@ def Builder.queryInstance (b : Builder) (col : Column) (rot : Rotation) : Expres
       let idx := b.cs.instanceQueries.length
       (.instance idx col.index rot, { b with cs.instanceQueries := b.cs.instanceQueries ++ [q] })
 
-/-- Halo2 simple selectors are fixed columns and count toward `num_selectors`. -/
-def Builder.selector (b : Builder) : Column × Builder :=
-  let (col, b) := b.fixedColumn
-  (col, { b with cs.numSelectors := b.cs.numSelectors + 1 })
+/-- Halo2 selectors are virtual during configuration. They become fixed columns
+when selector compression runs during keygen. -/
+def Builder.selector (b : Builder) : Nat × Builder :=
+  let index := b.cs.numSelectors
+  (index, { b with cs.numSelectors := index + 1 })
 
 def Builder.enableEquality (b : Builder) (col : Column) : Builder :=
   let b :=

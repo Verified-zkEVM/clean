@@ -35,7 +35,7 @@ structure EccColumns where
   lagrangeCoeffs : Array Pinned.Column
   constants : Pinned.Column
   tableIdx : Pinned.Column
-  selectors : Array Pinned.Column
+  selectors : Array Nat
 
 private def allocManyAdvice : Nat → Builder → Array Pinned.Column × Builder
   | 0, b => (#[], b)
@@ -51,7 +51,7 @@ private def allocManyFixed : Nat → Builder → Array Pinned.Column × Builder
       let (cs, b) := allocManyFixed n b
       (#[c] ++ cs, b)
 
-private def allocManySelectors : Nat → Builder → Array Pinned.Column × Builder
+private def allocManySelectors : Nat → Builder → Array Nat × Builder
   | 0, b => (#[], b)
   | n+1, b =>
       let (c, b) := b.selector
@@ -67,7 +67,7 @@ private def queryF (b : Builder) (cols : EccColumns) (i : Nat) (rot : Int := 0) 
   b.queryFixed (arrayGetD cols.lagrangeCoeffs i) (.rot rot)
 
 private def querySelector (b : Builder) (cols : EccColumns) (i : Nat) : Expression × Builder :=
-  b.queryFixed (arrayGetD cols.selectors i) (.rot 0)
+  (.selector cols.selectors[i]!, b)
 
 private def selected (q : Expression) (e : Expression) : Expression := q * e
 
@@ -79,7 +79,7 @@ def configureColumns (b : Builder) : EccColumns × Builder :=
   let (constants, b) := b.fixedColumn
   let b := b.enableConstant constants
   let (tableIdx, b) := b.fixedColumn
-  let (selectors, b) := allocManySelectors 20 b
+  let (selectors, b) := allocManySelectors 56 b
   ({ advices, lagrangeCoeffs, constants, tableIdx, selectors }, b)
 
 /-- First range-check table gate created by `LookupRangeCheckConfig::configure`.
@@ -117,3 +117,65 @@ def orchardValueCommitCS : ConstraintSystem :=
   b.cs
 
 end Halo2.Orchard
+
+namespace Halo2.Orchard.Action
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) :=
+  Orchard.queryA b cols i r
+
+private def sel (b : Builder) (cols : Orchard.EccColumns) (i : Nat) :=
+  Orchard.querySelector b cols i
+
+/-- The top-level Orchard action gate from `orchard/src/circuit.rs`. -/
+def configureOrchardGate (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let (q, b) := sel b cols 0
+  let (vOld, b) := a b cols 0
+  let (vNew, b) := a b cols 1
+  let (magnitude, b) := a b cols 2
+  let (sign, b) := a b cols 3
+  let (root, b) := a b cols 4
+  let (anchor, b) := a b cols 5
+  let (enableSpends, b) := a b cols 6
+  let (enableOutputs, b) := a b cols 7
+  let one := Expression.constant FieldConst.one
+  b.createGate [
+    q * (vOld - vNew - magnitude * sign),
+    q * (vOld * (root - anchor)),
+    q * (vOld * (one - enableSpends)),
+    q * (vNew * (one - enableOutputs))
+  ]
+
+/-- The tiny field-addition chip used by Orchard. -/
+def configureAddChip (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let (q, b) := sel b cols 1
+  let (aa, b) := a b cols 7
+  let (bb, b) := a b cols 8
+  let (cc, b) := a b cols 6
+  b.createGate [q * (aa + bb - cc)]
+
+/-- Allocate the public input column and top-level Orchard columns in the same
+order as the Rust circuit. -/
+def configureActionColumns (b : Builder) : Orchard.EccColumns × Builder :=
+  let (cols, b) := Orchard.configureColumns b
+  -- Rust allocates the instance column after lookup table columns and before
+  -- enabling advice equality. Our column counts are independent, but the
+  -- permutation order is important; ensure instance equality is first.
+  let cs := { b.cs with
+    numInstanceColumns := 1
+    instanceQueries := [(Pinned.Column.instanceCol 0, Rotation.rot 0)] }
+  (cols, { b with cs := cs })
+
+/-- Current Lean-side full Orchard action CS builder. This function is meant to
+mirror `Circuit::configure`; subchip ports are filled in incrementally. -/
+def orchardActionCS : ConstraintSystem :=
+  let b : Builder := {}
+  let (cols, b) := configureActionColumns b
+  let b := configureOrchardGate cols b
+  let b := configureAddChip cols b
+  let b := Orchard.configureRangeCheck cols b
+  let b := Orchard.configureEccChip cols b
+  b.cs
+
+end Halo2.Orchard.Action
