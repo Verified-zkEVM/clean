@@ -134,6 +134,29 @@ theorem localPush_satisfaction_example {trace : Trace Int}
       localBoolCell.eval trace = trace.constant "one" := by
   simpa using h
 
+private def localWireLeft : LocalCell :=
+  LocalCell.advice 0 1
+
+private def localWireRight : LocalCell :=
+  LocalCell.advice 1 3
+
+/-- A copy-constraint-sensitive reusable gadget: the spec follows from a local
+wire operation, not from lowering the wire to an ordinary equality gate. -/
+def wireFormalGadget : FormalGadget Int :=
+  { circuit := LocalCircuit.wire localWireLeft localWireRight
+    Spec := fun trace => localWireLeft.eval trace = localWireRight.eval trace
+    soundness := by
+      intro trace _ h
+      simpa using h }
+
+/-- Placing the wire gadget shifts both local cells into global cells. -/
+theorem placedWireFormalGadget_sound {trace : Trace Int}
+    (h : (wireFormalGadget.circuit.place 5).Satisfied wireFormalGadget.lookup trace) :
+    trace.advice 0 6 = trace.advice 1 8 := by
+  have hSpec := wireFormalGadget.sound_placed 5 trivial h
+  simpa [localWireLeft, localWireRight, LocalCell.eval, LocalCell.advice, Trace.relative,
+    Pinned.Column.advice] using hSpec
+
 /-- Lookup arguments are first-class operations whose relation is supplied by the
 formal trace semantics. -/
 theorem lookupOperation_sound {trace : Trace Int} {relation : List Int → List Int → Prop}
