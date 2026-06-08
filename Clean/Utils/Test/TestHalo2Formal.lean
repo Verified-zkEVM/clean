@@ -123,6 +123,15 @@ def configuredWireFormalCircuit : FormalCircuit Int :=
         simp
       simpa [Operation.Satisfied] using h (Operation.wire leftCell rightCell) hmem)
 
+private def csWithGate : ConstraintSystem :=
+  { gates := [zeroGate] }
+
+/-- Gate metadata expands to one proof-facing gate operation per checked row. -/
+theorem fromConstraintSystem_expands_gates_by_row :
+    (Circuit.fromConstraintSystem csWithGate 2).operations =
+      [Operation.gate 0 zeroGate, Operation.gate 1 zeroGate] := by
+  native_decide
+
 private def csWithLookup : ConstraintSystem :=
   { lookups := [{ inputExpressions := [.advice 0 0 (.rot 0)], tableExpressions := [.fixed 0 0 (.rot 0)] }] }
 
