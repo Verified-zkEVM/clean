@@ -42,6 +42,12 @@ def relative (t : Trace F) (baseRow : Int) : Trace F where
   instanceValue column row := t.instanceValue column (baseRow + row)
   constant := t.constant
 
+@[simp]
+theorem relative_relative (t : Trace F) (outer inner : Int) :
+    (t.relative outer).relative inner = t.relative (outer + inner) := by
+  cases t
+  simp [relative, Int.add_assoc]
+
 end Trace
 
 /-- A cell addressed relative to the start of a gadget/region. -/
