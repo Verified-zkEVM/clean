@@ -209,6 +209,24 @@ theorem fixedOperation_sound {trace : Trace Int}
   simpa [Circuit.Satisfied, Operation.Satisfied] using
     h (Operation.fixed leftCell "one") (by simp [Circuit.fixed])
 
+private def localFixedCell : LocalCell :=
+  LocalCell.fixed 0 2
+
+/-- Fixed assignments can also be proven about locally and then placed. -/
+def fixedFormalGadget : FormalGadget Int :=
+  { circuit := LocalCircuit.fixed localFixedCell "one"
+    Spec := fun trace => localFixedCell.eval trace = trace.constant "one"
+    soundness := by
+      intro trace _ h
+      simpa using h }
+
+/-- Placed local fixed assignments read the shifted fixed column. -/
+theorem placedFixedFormalGadget_sound {trace : Trace Int}
+    (h : (fixedFormalGadget.circuit.place 5).Satisfied fixedFormalGadget.lookup trace) :
+    trace.fixed 0 7 = trace.constant "one" := by
+  have hSpec := fixedFormalGadget.sound_placed 5 trivial h
+  simpa [localFixedCell, LocalCell.eval, LocalCell.fixed, Trace.relative, Pinned.Column.fixed] using hSpec
+
 /-- `Circuit.push` composes constraints in the same proof style as Clean circuits. -/
 theorem push_satisfaction_example {trace : Trace Int}
     (h : (Circuit.wire leftCell rightCell).push (Operation.fixed leftCell "one") |>.Satisfied
