@@ -68,6 +68,15 @@ def instanceCol (column row : Nat) : LocalCell :=
 def place (baseRow : Nat) (cell : LocalCell) : Synthesis.Cell :=
   { column := cell.column, row := baseRow + cell.row }
 
+/-- Use a local cell as an expression inside a gate at local row `gateRow`.
+The resulting expression uses a Halo2 rotation from the gate row to the cell row. -/
+def expr (cell : LocalCell) (gateRow : Nat) (query : Nat := 0) : Pinned.Expression :=
+  let rotation : Int := cell.row - gateRow
+  match cell.column.columnType with
+  | ColumnKind.Advice => .advice query cell.column.index (.rot rotation)
+  | ColumnKind.Fixed => .fixed query cell.column.index (.rot rotation)
+  | ColumnKind.Instance => .instance query cell.column.index (.rot rotation)
+
 /-- Evaluate a local cell in a relative trace. -/
 def eval {F : Type} (trace : Trace F) (cell : LocalCell) : F :=
   match cell.column.columnType with
@@ -127,6 +136,19 @@ theorem eval_relative {F : Type} [Ring F] (trace : Trace F) (baseRow row : Int)
     rfl
 
 end Pinned.Expression
+
+namespace LocalCell
+
+@[simp]
+theorem expr_eval_same_row {F : Type} [Ring F] (trace : Trace F) (cell : LocalCell) :
+    (cell.expr cell.row).eval trace cell.row = cell.eval trace := by
+  cases cell with
+  | mk column row =>
+    cases column with
+    | mk index columnType =>
+      cases columnType <;> simp [expr, eval, Pinned.Expression.eval]
+
+end LocalCell
 
 /-- Halo2 operations, with Clean-like naming but Halo2-native structure. -/
 inductive Operation where

@@ -76,19 +76,23 @@ theorem boolGateFormalCircuit_sound {trace : Trace Int}
 private def localBoolCell : LocalCell :=
   LocalCell.advice 0 0
 
+private def localBoolGate : Pinned.Expression :=
+  let x : Pinned.Expression := localBoolCell.expr 0
+  x * (.constant "one" - x)
+
 /-- The same Boolean proof as a reusable local gadget: the spec names a local
 cell, not an absolute global Plonk row. -/
 def boolGateFormalGadget : FormalGadget Int :=
-  { circuit := LocalCircuit.assertZero 0 boolGate
+  { circuit := LocalCircuit.assertZero 0 localBoolGate
     Assumptions := fun trace => trace.constant "one" = 1
     Spec := fun trace => localBoolCell.eval trace = 0 ∨ localBoolCell.eval trace = 1
     soundness := by
       intro trace hOne h
-      have hGate : Pinned.Expression.eval trace 0 boolGate = 0 := by
+      have hGate : Pinned.Expression.eval trace 0 localBoolGate = 0 := by
         simpa [LocalCircuit.Satisfied, LocalOperation.Satisfied] using
-          h (LocalOperation.gate 0 boolGate) (by simp [LocalCircuit.assertZero])
-      dsimp [boolGate, Pinned.Expression.eval, localBoolCell, LocalCell.eval, LocalCell.advice,
-        Pinned.Column.advice] at hGate ⊢
+          h (LocalOperation.gate 0 localBoolGate) (by simp [LocalCircuit.assertZero])
+      dsimp [localBoolGate, Pinned.Expression.eval, localBoolCell, LocalCell.expr, LocalCell.eval,
+        LocalCell.advice, Pinned.Column.advice] at hGate ⊢
       rw [hOne] at hGate
       rcases Int.mul_eq_zero.mp hGate with h0 | h1
       · exact Or.inl h0
@@ -106,8 +110,8 @@ theorem placedBoolGateFormalGadget_sound {trace : Trace Int}
 
 /-- Local circuits place relative rows into absolute rows only at the boundary. -/
 theorem localCircuit_place_shifts_rows :
-    (LocalCircuit.assertZero 2 boolGate |>.place 5).operations =
-      [Operation.gate 7 boolGate] := by
+    (LocalCircuit.assertZero 2 localBoolGate |>.place 5).operations =
+      [Operation.gate 7 localBoolGate] := by
   native_decide
 
 /-- Local copy constraints are also placed as first-class global wire operations. -/
