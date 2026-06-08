@@ -508,7 +508,7 @@ lemma mem_zip_pulls_pushes_iff (witness : VmWitness vm) (pull push : Interaction
   simp [← interactionss_eq_pulls_pushes, Table.interactionssWith]
 
 lemma rowEnabled_boolean_of_wellformed {witness : VmWitness vm}
-    (wellformed : RawChannel.InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw)) :
+    (wellformed : InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw)) :
     ∀ (table : Table F) (table_mem : table ∈ witness.allTables), ∀ row ∈ table.table,
       witness.rowEnabled table_mem row = 0 ∨ witness.rowEnabled table_mem row = 1 := by
   intro table table_mem row row_mem
@@ -522,7 +522,7 @@ lemma rowEnabled_boolean_of_wellformed {witness : VmWitness vm}
     exact List.mem_map.mpr ⟨ (pull, push), pair_mem, rfl ⟩
   have pull_mem_interactions : pull ∈ witness.interactionsWith vm.channel.toRaw := by
     rw [witness.interactions_eq_pulls_pushes]
-    apply (List.zip_flattenPairs_perm (witness.pushes_length ▸ witness.pulls_length.symm)).mem_iff.mpr
+    apply (List.zip_flattenPairs_perm ((witness.pushes_length).trans witness.pulls_length.symm)).mem_iff.mpr
     exact List.mem_append_left witness.pushes pull_mem_pulls
   have h_mult := wellformed pull pull_mem_interactions (by rfl)
   rcases h_mult with h_neg_one | h_zero
@@ -578,7 +578,7 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
   [Fact (ringChar F ≠ 2)] (witness : VmWitness vm) :
   -- if the vm interactions with the vm channel are balanced
   BalancedInteractions (witness.interactionsWith vm.channel.toRaw) →
-  RawChannel.InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw) →
+  InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw) →
   -- and for every row, vm channel guarantees imply vm channel requirements
   -- (this will come from constraints + soundness of the existing ensemble)
   (∀ table ∈ witness.allTables, ∀ row ∈ table.table,
@@ -603,12 +603,15 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
     witness.pushes_assumeRequirements
     witness.pair_zero
   -- it remains to prove the (grts → reqs) assumption. this is a reformulation of our `constraints`
-  have reqs_of_grts : (∀ i (hi : i < (activePulls witness.pulls witness.pushes).length),
-      (activePulls witness.pulls witness.pushes)[i].Guarantees witness.data →
-        ((activePushes witness.pulls witness.pushes)[i]'(activePulls_length_eq_activePushes_length witness.pulls witness.pushes ▸ hi)).Requirements witness.data) := by
+  have reqs_of_grts : (∀ i (hi : i < (activePulls witness.pulls).length),
+      (activePulls witness.pulls)[i].Guarantees witness.data →
+        ((activePushes witness.pushes)[i]'(
+          activePulls_length_eq_activePushes_length
+            ((witness.pulls_length).trans witness.pushes_length.symm) witness.pair_zero ▸ hi)).Requirements witness.data) := by
     suffices ∀ pair ∈ (witness.pulls.zip witness.pushes), pair.1.Guarantees witness.data → pair.2.Requirements witness.data by
       intro i hi
-      exact this _ (activePair_mem_zip i hi)
+      exact this _ (activePair_mem_zip
+        ((witness.pulls_length).trans witness.pushes_length.symm) witness.pair_zero i hi)
     intro (pull, push) pair_mem
     simp only
     have ⟨ mem_pull, mem_push ⟩ := List.of_mem_zip pair_mem
@@ -628,15 +631,16 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
       Expression.eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.enabled = 1 := by
     change Expression.eval (Environment.fromInput witness.publicInput witness.data) (Expression.const (1 : F)) = 1
     rfl
-  have active_length_pos : 0 < (activePulls witness.pulls witness.pushes).length := by
-    simp [activePulls, pulls, pushes, interactionPairs, allTables, circuit_norm,
+  have active_length_pos : 0 < (activePulls witness.pulls).length := by
+    simp [activePulls, pulls, interactionPairs, allTables, circuit_norm,
       rowEnabled, VmTables.stepOfAllTables, verifier_enabled_one']
   specialize grts_of_reqs reqs_of_grts 0 active_length_pos
   simp [activePulls, activePushes, pulls, pushes, interactionPairs, allTables, circuit_norm,
     rowEnabled, VmTables.stepOfAllTables,
     verifier_enabled_one'] at grts_of_reqs
-  have active_push_length_pos : 0 < (activePushes witness.pulls witness.pushes).length := by
-    rwa [← activePulls_length_eq_activePushes_length witness.pulls witness.pushes]
+  have active_push_length_pos : 0 < (activePushes witness.pushes).length := by
+    rwa [← activePulls_length_eq_activePushes_length
+      ((witness.pulls_length).trans witness.pushes_length.symm) witness.pair_zero]
   simp only [Table.ChannelGuarantees, Table.ChannelRequirements, circuit_norm]
   simp only [← Operations.forall_interactionsWith_iff, vm.verifierInteractionsWith_eq]
   intro hreqs

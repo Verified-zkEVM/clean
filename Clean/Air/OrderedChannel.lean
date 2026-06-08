@@ -195,7 +195,7 @@ def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawCha
       -- the total of known + unknown interactions is balanced
       BalancedInteractions (tables.interactionsWith channel ++ extraInteractions) ∧
       -- guarantee-side interactions are either active pulls or disabled padding
-      RawChannel.InteractionsWellFormed (tables.interactionsWith channel ++ extraInteractions) ∧
+      InteractionsWellFormed (tables.interactionsWith channel ++ extraInteractions) ∧
       -- the extra interactions are with the same channel.
       (∀ i ∈ extraInteractions, i.channel = channel) ∧
     -- additionally, we _assume_ that either the requirements on future interactions hold unconditionally,
@@ -208,7 +208,7 @@ def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawCha
 /-- Partial balance is trivially weaker than balance -/
 lemma partialBalancedChannel_of_balancedInteractions [DecidableEq F] {tables : Tables F} {channel : RawChannel F} :
     BalancedInteractions (tables.interactionsWith channel) →
-    RawChannel.InteractionsWellFormed (tables.interactionsWith channel) →
+    InteractionsWellFormed (tables.interactionsWith channel) →
     PartialBalancedChannel tables channel := by
   intro balanced wellformed
   use []
@@ -332,7 +332,7 @@ lemma partialBalancedChannel_of_sublist [DecidableEq F] {subtables tables : Tabl
   by_cases subtables_empty : subtables.tables = []
   · simp [subtables_empty, circuit_norm, PartialBalancedChannel, Tables.interactionsWith]
     use []
-    simp [BalancedInteractions, balanceOf, RawChannel.InteractionsWellFormed]
+    simp [BalancedInteractions, balanceOf, InteractionsWellFormed]
     by_cases h : ringChar F = 0
     · exact Or.inr h
     · exact Or.inl (Nat.pos_of_ne_zero h)
