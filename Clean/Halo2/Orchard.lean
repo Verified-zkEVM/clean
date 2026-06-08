@@ -563,6 +563,50 @@ def selectorActivationMatrix : List (List Bool) :=
 
 end Halo2.Orchard.Action
 
+namespace Halo2.Orchard.ActionSynthesisM
+
+open Halo2.Synthesis
+
+/-- Monadic synthesis of the top-level Orchard action gate region, in the style
+of Halo2's `Layouter::assign_region`. -/
+def orchardGate (cols : Orchard.EccColumns) : SynthesizeM Unit := do
+  SynthesizeM.assignRegion "Orchard circuit checks" do
+    RegionM.enableSelector 0 0
+    discard <| RegionM.assignAdvice cols.advices[0]! 0
+    discard <| RegionM.assignAdvice cols.advices[1]! 0
+    discard <| RegionM.assignAdvice cols.advices[2]! 0
+    discard <| RegionM.assignAdvice cols.advices[3]! 0
+    discard <| RegionM.assignAdvice cols.advices[4]! 0
+    discard <| RegionM.assignAdvice cols.advices[5]! 0
+    discard <| RegionM.assignAdvice cols.advices[6]! 0
+    discard <| RegionM.assignAdvice cols.advices[7]! 0
+
+/-- Monadic synthesis of one AddChip region. -/
+def addChip (cols : Orchard.EccColumns) : SynthesizeM Unit := do
+  SynthesizeM.assignRegion "c = a + b" do
+    RegionM.enableSelector 1 0
+    let a ← RegionM.assignAdvice cols.advices[7]! 0
+    let b ← RegionM.assignAdvice cols.advices[8]! 0
+    discard <| RegionM.assignAdvice cols.advices[6]! 0
+    RegionM.constrainEqual a b
+
+/-- Monadic synthesis of the 10-bit range table. -/
+def rangeTable (cols : Orchard.EccColumns) : SynthesizeM Unit := do
+  SynthesizeM.assignTable <| (List.range (2^10)).map fun i => (cols.tableIdx, i, s!"{i}")
+
+/-- Monadic full-action synthesis skeleton. -/
+def synthesize (cols : Orchard.EccColumns) : SynthesizeM Unit := do
+  rangeTable cols
+  orchardGate cols
+  addChip cols
+  for i in List.range 18 do
+    modify (Layout.enableSelectorAtCurrentRow (5 + i))
+  for i in List.range 33 do
+    modify (Layout.enableSelectorAtCurrentRow (23 + i))
+
+end Halo2.Orchard.ActionSynthesisM
+
+
 namespace Halo2.Orchard.Action
 
 open Halo2.Synthesis
@@ -590,8 +634,8 @@ instance : PlonkCircuit Circuit where
     let b := Halo2.Orchard.NoteCommit.configure cols b
     set (b.ensureNumSelectors 56)
     pure cols
-  synthesize _ config := do
-    set (Halo2.Orchard.ActionSynthesis.synthesize config)
+  synthesize _ config :=
+    Halo2.Orchard.ActionSynthesisM.synthesize config
 
 /-- Idiomatic Halo2-like circuit object for the current Orchard action skeleton. -/
 def plonkCircuit : ConfiguredCircuit EccColumns :=
