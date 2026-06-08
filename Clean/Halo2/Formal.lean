@@ -140,13 +140,16 @@ end Pinned.Expression
 namespace LocalCell
 
 @[simp]
-theorem expr_eval_same_row {F : Type} [Ring F] (trace : Trace F) (cell : LocalCell) :
-    (cell.expr cell.row).eval trace cell.row = cell.eval trace := by
+theorem expr_eval_at_gate_row {F : Type} [Ring F] (trace : Trace F)
+    (cell : LocalCell) (gateRow : Nat) :
+    (cell.expr gateRow).eval trace gateRow = cell.eval trace := by
   cases cell with
   | mk column row =>
     cases column with
     | mk index columnType =>
-      cases columnType <;> simp [expr, eval, Pinned.Expression.eval]
+      have hRow : (gateRow : Int) + ((row : Int) - (gateRow : Int)) = row := by
+        omega
+      cases columnType <;> simp [expr, eval, Pinned.Expression.eval, hRow]
 
 end LocalCell
 

@@ -80,6 +80,11 @@ private def localBoolGate : Pinned.Expression :=
   let x : Pinned.Expression := localBoolCell.expr 0
   x * (.constant "one" - x)
 
+/-- Local cell expressions compute Halo2 rotations from the local gate row. -/
+theorem localCell_expr_uses_relative_rotation :
+    (LocalCell.advice 0 3).expr 1 = .advice 0 0 (.rot 2) := by
+  native_decide
+
 /-- The same Boolean proof as a reusable local gadget: the spec names a local
 cell, not an absolute global Plonk row. -/
 def boolGateFormalGadget : FormalGadget Int :=
