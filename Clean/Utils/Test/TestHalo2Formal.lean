@@ -117,6 +117,14 @@ theorem localWire_place_shifts_cells :
         { column := Pinned.Column.advice 1, row := 8 }] := by
   native_decide
 
+/-- Local circuit composition has the same proof ergonomics as global circuits. -/
+theorem localPush_satisfaction_example {trace : Trace Int}
+    (h : (LocalCircuit.wire localBoolCell localBoolCell).push
+      (LocalOperation.fixed localBoolCell "one") |>.Satisfied (fun _ _ => True) trace) :
+    localBoolCell.eval trace = localBoolCell.eval trace ∧
+      localBoolCell.eval trace = trace.constant "one" := by
+  simpa using h
+
 /-- Lookup arguments are first-class operations whose relation is supplied by the
 formal trace semantics. -/
 theorem lookupOperation_sound {trace : Trace Int} {relation : List Int → List Int → Prop}

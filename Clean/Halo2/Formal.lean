@@ -493,6 +493,74 @@ theorem append_satisfied {F : Type} [Ring F] {lookup : List F → List F → Pro
     · exact hc op hopLeft
     · exact hd op hopRight
 
+@[simp]
+theorem push_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {c : LocalCircuit} {op : LocalOperation} :
+    (c.push op).Satisfied lookup trace ↔ c.Satisfied lookup trace ∧ op.Satisfied lookup trace := by
+  constructor
+  · intro h
+    constructor
+    · intro op' hop'
+      exact h op' (by simp [push, hop'])
+    · exact h op (by simp [push])
+  · intro h op' hop'
+    rcases h with ⟨hc, hop⟩
+    simp [push] at hop'
+    rcases hop' with hop' | hop'
+    · exact hc op' hop'
+    · subst op'
+      exact hop
+
+@[simp]
+theorem assertZero_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {row : Nat} {expr : Pinned.Expression} :
+    (assertZero row expr).Satisfied lookup trace ↔ expr.eval trace row = 0 := by
+  constructor
+  · intro h
+    simpa [assertZero] using h (LocalOperation.gate row expr) (by simp [assertZero])
+  · intro h op hop
+    simp [assertZero] at hop
+    subst op
+    simpa [LocalOperation.Satisfied] using h
+
+@[simp]
+theorem wire_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {left right : LocalCell} :
+    (wire left right).Satisfied lookup trace ↔ left.eval trace = right.eval trace := by
+  constructor
+  · intro h
+    simpa [wire] using h (LocalOperation.wire left right) (by simp [wire])
+  · intro h op hop
+    simp [wire] at hop
+    subst op
+    simpa [LocalOperation.Satisfied] using h
+
+@[simp]
+theorem fixed_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {cell : LocalCell} {value : String} :
+    (fixed cell value).Satisfied lookup trace ↔ cell.eval trace = trace.constant value := by
+  constructor
+  · intro h
+    simpa [fixed] using h (LocalOperation.fixed cell value) (by simp [fixed])
+  · intro h op hop
+    simp [fixed] at hop
+    subst op
+    simpa [LocalOperation.Satisfied] using h
+
+@[simp]
+theorem lookup_satisfied {F : Type} [Ring F] {lookupRel : List F → List F → Prop}
+    {trace : Trace F} {row : Nat} {inputs table : List Pinned.Expression} :
+    (lookup row inputs table).Satisfied lookupRel trace ↔
+      lookupRel (inputs.map (Pinned.Expression.eval trace row))
+        (table.map (Pinned.Expression.eval trace row)) := by
+  constructor
+  · intro h
+    simpa [lookup] using h (LocalOperation.lookup row inputs table) (by simp [lookup])
+  · intro h op hop
+    simp [lookup] at hop
+    subst op
+    simpa [LocalOperation.Satisfied] using h
+
 end LocalCircuit
 
 /-- Soundness statement for a Halo2 circuit: under assumptions, satisfying the
