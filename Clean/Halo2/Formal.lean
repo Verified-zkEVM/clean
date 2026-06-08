@@ -52,6 +52,18 @@ structure LocalCell where
 
 namespace LocalCell
 
+/-- Local advice cell constructor. -/
+def advice (column row : Nat) : LocalCell :=
+  { column := Pinned.Column.advice column, row }
+
+/-- Local fixed cell constructor. -/
+def fixed (column row : Nat) : LocalCell :=
+  { column := Pinned.Column.fixed column, row }
+
+/-- Local instance cell constructor. -/
+def instanceCol (column row : Nat) : LocalCell :=
+  { column := Pinned.Column.instanceCol column, row }
+
 /-- Place a local cell at an absolute row in the global Plonk trace. -/
 def place (baseRow : Nat) (cell : LocalCell) : Synthesis.Cell :=
   { column := cell.column, row := baseRow + cell.row }

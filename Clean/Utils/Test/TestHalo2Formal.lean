@@ -74,7 +74,7 @@ theorem boolGateFormalCircuit_sound {trace : Trace Int}
   boolGateFormalCircuit.sound hOne h
 
 private def localBoolCell : LocalCell :=
-  { column := Pinned.Column.advice 0, row := 0 }
+  LocalCell.advice 0 0
 
 /-- The same Boolean proof as a reusable local gadget: the spec names a local
 cell, not an absolute global Plonk row. -/
@@ -87,7 +87,8 @@ def boolGateFormalGadget : FormalGadget Int :=
       have hGate : Pinned.Expression.eval trace 0 boolGate = 0 := by
         simpa [LocalCircuit.Satisfied, LocalOperation.Satisfied] using
           h (LocalOperation.gate 0 boolGate) (by simp [LocalCircuit.assertZero])
-      dsimp [boolGate, Pinned.Expression.eval, localBoolCell, LocalCell.eval, Pinned.Column.advice] at hGate ⊢
+      dsimp [boolGate, Pinned.Expression.eval, localBoolCell, LocalCell.eval, LocalCell.advice,
+        Pinned.Column.advice] at hGate ⊢
       rw [hOne] at hGate
       rcases Int.mul_eq_zero.mp hGate with h0 | h1
       · exact Or.inl h0
@@ -111,8 +112,7 @@ theorem localCircuit_place_shifts_rows :
 
 /-- Local copy constraints are also placed as first-class global wire operations. -/
 theorem localWire_place_shifts_cells :
-    (LocalCircuit.wire { column := Pinned.Column.advice 0, row := 1 }
-        { column := Pinned.Column.advice 1, row := 3 } |>.place 5).operations =
+    (LocalCircuit.wire (LocalCell.advice 0 1) (LocalCell.advice 1 3) |>.place 5).operations =
       [Operation.wire { column := Pinned.Column.advice 0, row := 6 }
         { column := Pinned.Column.advice 1, row := 8 }] := by
   native_decide
