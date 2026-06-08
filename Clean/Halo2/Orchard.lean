@@ -155,6 +155,82 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
 end Halo2.Orchard.LookupRangeCheck
 
 
+namespace Halo2.Orchard.EccAllocated
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) :=
+  Orchard.queryA b cols i r
+
+/-- Allocate selectors in the same order as `EccChip::configure` and create the
+first ECC gates. Later gates in this namespace are being filled out following
+`halo2_gadgets/src/ecc/chip`. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  -- witness_point::Config::configure
+  let (qPoint, b) := b.selector
+  let (qPointNonId, b) := b.selector
+  let (x0, b) := a b cols 0
+  let (y0, b) := a b cols 1
+  let curve := y0*y0 - x0*x0*x0 - Expression.constant FieldConst.pallasB
+  let b := b.createGate [Expression.selector qPoint * x0 * curve, Expression.selector qPoint * y0 * curve]
+  let b := b.createGate [Expression.selector qPointNonId * curve]
+  -- add_incomplete::Config::configure
+  let (qAddIncomplete, b) := b.selector
+  let (xp, b) := a b cols 0
+  let (yp, b) := a b cols 1
+  let (xq, b) := a b cols 2
+  let (yq, b) := a b cols 3
+  let (xr, b) := a b cols 2 1
+  let (yr, b) := a b cols 3 1
+  let poly1 := (xr + xq + xp) * (xp - xq) * (xp - xq) - (yp - yq) * (yp - yq)
+  let poly2 := (yr + yq) * (xp - xq) - (yp - yq) * (xq - xr)
+  let b := b.createGate [Expression.selector qAddIncomplete * poly1, Expression.selector qAddIncomplete * poly2]
+  -- add::Config::configure
+  let (qAdd, b) := b.selector
+  let (lambda, b) := a b cols 4
+  let (alpha, b) := a b cols 5
+  let (beta, b) := a b cols 6
+  let (gamma, b) := a b cols 7
+  let (delta, b) := a b cols 8
+  let one := Expression.constant FieldConst.one
+  let two := Expression.constant FieldConst.two
+  let three := Expression.constant FieldConst.three
+  let xqMinusXp := xq - xp
+  let xpMinusXr := xp - xr
+  let yqPlusYp := yq + yp
+  let ifAlpha := xqMinusXp * alpha
+  let ifBeta := xp * beta
+  let ifGamma := xq * gamma
+  let ifDelta := yqPlusYp * delta
+  let polyAdd1 := xqMinusXp * (xqMinusXp * lambda - (yq - yp))
+  let polyAdd2 := (one - ifAlpha) * (two * yp * lambda - three * xp * xp)
+  let polyAdd3 := lambda * lambda - xp - xq - xr
+  let polyAdd4 := lambda * xpMinusXr - yp - yr
+  let b := b.createGate [
+    Expression.selector qAdd * polyAdd1,
+    Expression.selector qAdd * polyAdd2,
+    Expression.selector qAdd * polyAdd3,
+    Expression.selector qAdd * polyAdd4,
+    Expression.selector qAdd * (ifAlpha * (one - ifAlpha)),
+    Expression.selector qAdd * (ifBeta * (one - ifBeta)),
+    Expression.selector qAdd * (ifGamma * (one - ifGamma)),
+    Expression.selector qAdd * (ifDelta * (one - ifDelta))]
+  -- variable-base scalar mul selectors: hi(3), lo(3), complete, overflow, lsb
+  let (_, b) := b.selector; let (_, b) := b.selector; let (_, b) := b.selector
+  let (_, b) := b.selector; let (_, b) := b.selector; let (_, b) := b.selector
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  -- fixed-base shared running sum, full-width, short, base-field selectors
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  b
+
+end Halo2.Orchard.EccAllocated
+
+
 namespace Halo2.Orchard.Action
 
 open Halo2.Pinned
@@ -217,7 +293,7 @@ def orchardActionCS : ConstraintSystem :=
   let b := configureOrchardGate cols b
   let b := configureAddChip cols b
   let b := Halo2.Orchard.LookupRangeCheck.configure cols b
-  let b := Orchard.configureEccChipAt 5 cols b
+  let b := Halo2.Orchard.EccAllocated.configure cols b
   let b := b.ensureNumSelectors 56
   b.cs
 
