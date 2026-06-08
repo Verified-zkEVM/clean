@@ -85,6 +85,11 @@ theorem localCell_expr_uses_relative_rotation :
     (LocalCell.advice 0 3).expr 1 = .advice 0 0 (.rot 2) := by
   native_decide
 
+/-- Local cell expressions support previous-row references too. -/
+theorem localCell_expr_uses_negative_relative_rotation :
+    (LocalCell.advice 0 1).expr 3 = .advice 0 0 (.rot (-2)) := by
+  native_decide
+
 /-- The same Boolean proof as a reusable local gadget: the spec names a local
 cell, not an absolute global Plonk row. -/
 def boolGateFormalGadget : FormalGadget Int :=
