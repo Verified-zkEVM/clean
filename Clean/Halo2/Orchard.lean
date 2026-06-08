@@ -154,7 +154,6 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
 
 end Halo2.Orchard.LookupRangeCheck
 
-
 namespace Halo2.Orchard.EccAllocated
 
 open Halo2.Pinned
@@ -229,7 +228,6 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
   b
 
 end Halo2.Orchard.EccAllocated
-
 
 namespace Halo2.Orchard.Poseidon
 
@@ -311,7 +309,6 @@ def configure (cols : Orchard.EccColumns) (startAdvice witnessAdvice fixedYq : N
 
 end Halo2.Orchard.Sinsemilla
 
-
 namespace Halo2.Orchard.Merkle
 
 open Halo2.Pinned
@@ -373,7 +370,6 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
   b
 
 end Halo2.Orchard.NoteCommit
-
 
 namespace Halo2.Orchard.Action
 
