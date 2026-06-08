@@ -80,6 +80,32 @@ def Satisfied {F : Type} [Ring F]
       lookup (inputs.map (Pinned.Expression.eval trace row))
         (table.map (Pinned.Expression.eval trace row))
 
+@[simp]
+theorem gate_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {row : Nat} {expr : Pinned.Expression} :
+    Operation.Satisfied lookup trace (.gate row expr) ↔ expr.eval trace row = 0 :=
+  Iff.rfl
+
+@[simp]
+theorem wire_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {left right : Synthesis.Cell} :
+    Operation.Satisfied lookup trace (.wire left right) ↔ trace.evalCell left = trace.evalCell right :=
+  Iff.rfl
+
+@[simp]
+theorem fixed_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {cell : Synthesis.Cell} {value : String} :
+    Operation.Satisfied lookup trace (.fixed cell value) ↔ trace.evalCell cell = trace.constant value :=
+  Iff.rfl
+
+@[simp]
+theorem lookup_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {row : Nat} {inputs table : List Pinned.Expression} :
+    Operation.Satisfied lookup trace (.lookup row inputs table) ↔
+      lookup (inputs.map (Pinned.Expression.eval trace row))
+        (table.map (Pinned.Expression.eval trace row)) :=
+  Iff.rfl
+
 end Operation
 
 /-- A Halo2 circuit as a list of proof-facing operations.  This intentionally
