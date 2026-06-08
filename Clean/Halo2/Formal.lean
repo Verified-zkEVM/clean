@@ -469,9 +469,13 @@ instance : EmptyCollection LocalCircuit where
 def push (c : LocalCircuit) (op : LocalOperation) : LocalCircuit :=
   { c with operations := c.operations ++ [op] }
 
-/-- A one-operation local custom-gate assertion. -/
-def assertZero (row : Nat) (expr : Pinned.Expression) : LocalCircuit :=
+/-- A one-operation local custom-gate circuit. -/
+def gate (row : Nat) (expr : Pinned.Expression) : LocalCircuit :=
   { operations := [LocalOperation.gate row expr] }
+
+/-- Clean-style name for a one-operation local custom-gate assertion. -/
+def assertZero (row : Nat) (expr : Pinned.Expression) : LocalCircuit :=
+  gate row expr
 
 /-- A one-operation local wire/copy constraint. -/
 def wire (left right : LocalCell) : LocalCircuit :=
@@ -553,16 +557,22 @@ theorem push_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
       exact hop
 
 @[simp]
+theorem gate_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {row : Nat} {expr : Pinned.Expression} :
+    (gate row expr).Satisfied lookup trace ↔ expr.eval trace row = 0 := by
+  constructor
+  · intro h
+    simpa [gate] using h (LocalOperation.gate row expr) (by simp [gate])
+  · intro h op hop
+    simp [gate] at hop
+    subst op
+    simpa [LocalOperation.Satisfied] using h
+
+@[simp]
 theorem assertZero_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
     {trace : Trace F} {row : Nat} {expr : Pinned.Expression} :
     (assertZero row expr).Satisfied lookup trace ↔ expr.eval trace row = 0 := by
-  constructor
-  · intro h
-    simpa [assertZero] using h (LocalOperation.gate row expr) (by simp [assertZero])
-  · intro h op hop
-    simp [assertZero] at hop
-    subst op
-    simpa [LocalOperation.Satisfied] using h
+  simp [assertZero]
 
 @[simp]
 theorem wire_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
