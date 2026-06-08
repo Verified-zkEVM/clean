@@ -45,6 +45,34 @@ theorem zeroGateFormalCircuit_sound {trace : Trace Int}
     zeroGateFormalCircuit.Spec trace :=
   zeroGateFormalCircuit.sound trivial h
 
+private def boolGate : Pinned.Expression :=
+  let x : Pinned.Expression := .advice 0 0 (.rot 0)
+  x * (.constant "one" - x)
+
+/-- A small nontrivial example: the Halo2 custom gate `x * (1 - x) = 0`
+soundly enforces a Boolean value over `Int`. -/
+def boolGateFormalCircuit : FormalCircuit Int :=
+  { circuit := Circuit.gate 0 boolGate
+    Assumptions := fun trace => trace.constant "one" = 1
+    Spec := fun trace => trace.advice 0 0 = 0 ∨ trace.advice 0 0 = 1
+    soundness := by
+      intro trace hOne h
+      have hGate : Pinned.Expression.eval trace 0 boolGate = 0 := by
+        simpa [Circuit.Satisfied, Operation.Satisfied] using
+          h (Operation.gate 0 boolGate) (by simp [Circuit.gate])
+      dsimp [boolGate, Pinned.Expression.eval] at hGate
+      rw [hOne] at hGate
+      rcases Int.mul_eq_zero.mp hGate with h0 | h1
+      · exact Or.inl h0
+      · right
+        omega }
+
+theorem boolGateFormalCircuit_sound {trace : Trace Int}
+    (hOne : trace.constant "one" = 1)
+    (h : boolGateFormalCircuit.circuit.Satisfied boolGateFormalCircuit.lookup trace) :
+    boolGateFormalCircuit.Spec trace :=
+  boolGateFormalCircuit.sound hOne h
+
 /-- Lookup arguments are first-class operations whose relation is supplied by the
 formal trace semantics. -/
 theorem lookupOperation_sound {trace : Trace Int} {relation : List Int → List Int → Prop}
