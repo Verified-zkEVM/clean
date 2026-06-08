@@ -28,6 +28,7 @@ def eight := "0x0000000000000000000000000000000000000000000000000000000000000008
 def twoInv := "0x2000000000000000000000000000000011234c7e04a67c8dcc96987680000001"
 def twoPow124 := "0x0000000000000000000000000000000010000000000000000000000000000000"
 def sixtyFour := "0x0000000000000000000000000000000000000000000000000000000000000040"
+def scalarT := "0x00000000000000000000000000000000224698fc0994a8dd8c46eb2100000001"
 
 def pallasB := "0x0000000000000000000000000000000000000000000000000000000000000005"
 
@@ -310,11 +311,14 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
   let b := b.createGate [
     Expression.selector qMulComplete * completeBool,
     Expression.selector qMulComplete * completeYSwitch]
-  let (_, b) := a b cols 6 (-1)
+  let (overflowZ0, b) := a b cols 6 (-1)
   let (_, b) := a b cols 6 1
   let (overflowK254, b) := a b cols 7 (-1)
   let overflowSCheck := loLambda1Cur - (loXACur + overflowK254 * (Expression.constant FieldConst.twoPow124 * Expression.constant FieldConst.sixtyFour))
-  let b := b.createGate [Expression.selector qMulOverflow * overflowSCheck]
+  let overflowRecovery := overflowZ0 - loXACur - Expression.constant FieldConst.scalarT
+  let b := b.createGate [
+    Expression.selector qMulOverflow * overflowSCheck,
+    Expression.selector qMulOverflow * overflowRecovery]
   -- fixed-base shared running sum, full-width, short, base-field selectors
   let (_, b) := b.selector
   let (_, b) := b.selector
