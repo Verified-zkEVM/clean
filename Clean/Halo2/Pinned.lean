@@ -187,8 +187,7 @@ partial def Expression.replaceSelectors (replacement : Nat → Expression) : Exp
 
 private def productFactors : List Expression → Expression
   | [] => .constant "0x0000000000000000000000000000000000000000000000000000000000000001"
-  | [x] => x
-  | x :: xs => x * productFactors xs
+  | x :: xs => xs.foldl (fun acc e => acc * e) x
 
 /-- The polynomial used by Halo2 selector compression for a selector assigned to
 `assignedRoot` in a combination column whose possible nonzero roots are

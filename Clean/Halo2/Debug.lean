@@ -49,7 +49,7 @@ where
     indent n ++ "}"
   ]
   rotationInline (n : Nat) : Rotation → String
-    | .rot i => lines ["Rotation(", s!"{indent (n+4)}{i},", s!"{indent n})"]
+    | .rot i => lines ["Rotation(", s!"{indent (n+4)}{i},", s!"{indent n}),"]
   binary (n : Nat) (name : String) (a b : Expression) : String := lines [
     s!"{indent n}{name}(",
     expr (n+4) a ++ ",",
