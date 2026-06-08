@@ -187,6 +187,62 @@ theorem append_satisfied {F : Type} [Ring F] {lookup : List F → List F → Pro
     · exact hc op hopLeft
     · exact hd op hopRight
 
+@[simp]
+theorem gate_circuit_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {row : Nat} {expr : Pinned.Expression} :
+    (gate row expr).Satisfied lookup trace ↔ expr.eval trace row = 0 := by
+  constructor
+  · intro h
+    simpa [gate] using h (Operation.gate row expr) (by simp [gate])
+  · intro h op hop
+    simp [gate] at hop
+    subst op
+    simpa using h
+
+@[simp]
+theorem assertZero_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {row : Nat} {expr : Pinned.Expression} :
+    (assertZero row expr).Satisfied lookup trace ↔ expr.eval trace row = 0 := by
+  simp [assertZero]
+
+@[simp]
+theorem wire_circuit_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {left right : Synthesis.Cell} :
+    (wire left right).Satisfied lookup trace ↔ trace.evalCell left = trace.evalCell right := by
+  constructor
+  · intro h
+    simpa [wire] using h (Operation.wire left right) (by simp [wire])
+  · intro h op hop
+    simp [wire] at hop
+    subst op
+    simpa using h
+
+@[simp]
+theorem fixed_circuit_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {cell : Synthesis.Cell} {value : String} :
+    (fixed cell value).Satisfied lookup trace ↔ trace.evalCell cell = trace.constant value := by
+  constructor
+  · intro h
+    simpa [fixed] using h (Operation.fixed cell value) (by simp [fixed])
+  · intro h op hop
+    simp [fixed] at hop
+    subst op
+    simpa using h
+
+@[simp]
+theorem lookup_circuit_satisfied {F : Type} [Ring F] {lookupRel : List F → List F → Prop}
+    {trace : Trace F} {row : Nat} {inputs table : List Pinned.Expression} :
+    (lookup row inputs table).Satisfied lookupRel trace ↔
+      lookupRel (inputs.map (Pinned.Expression.eval trace row))
+        (table.map (Pinned.Expression.eval trace row)) := by
+  constructor
+  · intro h
+    simpa [lookup] using h (Operation.lookup row inputs table) (by simp [lookup])
+  · intro h op hop
+    simp [lookup] at hop
+    subst op
+    simpa using h
+
 /-- Create gate operations by checking every gate at every row. -/
 def gatesFromConstraintSystem (cs : ConstraintSystem) (numRows : Nat) : Circuit :=
   { operations := List.flatten ((List.range numRows).map fun row =>
