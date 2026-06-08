@@ -1,4 +1,4 @@
-import Clean.Halo2.Fixtures.RustPinnedCS
+import Clean.Halo2.Pinned
 
 namespace Halo2.Pinned.Debug
 

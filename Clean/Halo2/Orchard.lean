@@ -1,4 +1,4 @@
-import Clean.Halo2.Pinned
+import Clean.Halo2.Synthesis
 
 /-!
 # Orchard Halo2 circuit construction in Lean
@@ -475,5 +475,90 @@ def compressSelectors (cs : ConstraintSystem) : ConstraintSystem :=
 being strengthened toward exact equality with the Rust fixture. -/
 def orchardActionPinnedCS : ConstraintSystem :=
   compressSelectors orchardActionCS
+
+end Halo2.Orchard.Action
+
+namespace Halo2.Orchard.ActionSynthesis
+
+open Halo2.Pinned
+open Halo2.Synthesis
+
+private def assign (col : Pinned.Column) (row : Nat) (r : RegionState) : AssignedCell × RegionState :=
+  r.assignAdvice col row
+
+private def enable (selector : Nat) (row : Nat) (r : RegionState) : RegionState :=
+  r.enableSelector selector row
+
+/-- Synthesize the top-level Orchard action gate region. -/
+def synthesizeOrchardGate (cols : Orchard.EccColumns) (l : Layout) : Layout :=
+  let (_, l) := l.assignRegion "Orchard circuit checks" fun r =>
+    let r := enable 0 0 r
+    let (_, r) := assign cols.advices[0]! 0 r
+    let (_, r) := assign cols.advices[1]! 0 r
+    let (_, r) := assign cols.advices[2]! 0 r
+    let (_, r) := assign cols.advices[3]! 0 r
+    let (_, r) := assign cols.advices[4]! 0 r
+    let (_, r) := assign cols.advices[5]! 0 r
+    let (_, r) := assign cols.advices[6]! 0 r
+    let (_, r) := assign cols.advices[7]! 0 r
+    ((), r)
+  l
+
+/-- Synthesize one addition-chip use. -/
+def synthesizeAdd (cols : Orchard.EccColumns) (l : Layout) : Layout :=
+  let (_, l) := l.assignRegion "c = a + b" fun r =>
+    let r := enable 1 0 r
+    let (a, r) := assign cols.advices[7]! 0 r
+    let (b, r) := assign cols.advices[8]! 0 r
+    let (_, r) := assign cols.advices[6]! 0 r
+    let r := r.constrainEqual a b
+    ((), r)
+  l
+
+/-- Synthesize the range-check table used by Orchard/Halo2. -/
+def synthesizeRangeTable (cols : Orchard.EccColumns) (l : Layout) : Layout :=
+  let assignments := (List.range (2^10)).map fun i => (cols.tableIdx, i, s!"{i}")
+  l.assignTable assignments
+
+/-- Synthesize representative ECC selector activations. This is enough for the
+selector-compression layer to see the ECC gate families as live while we port the
+exact row layout. -/
+def synthesizeEcc (l : Layout) : Layout :=
+  (List.range 18).foldl (fun l i => l.enableSelectorAtCurrentRow (5 + i)) l
+
+/-- Synthesize representative Poseidon/Sinsemilla/Merkle/CommitIvk/NoteCommit
+regions. Each family uses the same selector ids as the configure skeleton. -/
+def synthesizeRemainingFamilies (l : Layout) : Layout :=
+  (List.range 33).foldl (fun l i => l.enableSelectorAtCurrentRow (23 + i)) l
+
+/-- Current full-action synthesis skeleton. It records selector activations,
+table/fixed assignments, and copy constraints in a Halo2-like layout. -/
+def synthesize (cols : Orchard.EccColumns) : Layout :=
+  let l : Layout := {}
+  let l := synthesizeRangeTable cols l
+  let l := synthesizeOrchardGate cols l
+  let l := synthesizeAdd cols l
+  let l := synthesizeEcc l
+  let l := synthesizeRemainingFamilies l
+  l
+
+end Halo2.Orchard.ActionSynthesis
+
+namespace Halo2.Orchard.Action
+
+open Halo2.Synthesis
+
+/-- Configure and synthesize the current Orchard action skeleton as a single
+Halo2-like circuit object. -/
+def configuredCircuit : ConfiguredCircuit EccColumns :=
+  let b : Halo2.Pinned.Builder := {}
+  let (cols, b) := configureActionColumns b
+  let cs := compressSelectors (let b := configureOrchardGate cols b; let b := configureAddChip cols b; let b := Halo2.Orchard.LookupRangeCheck.configure cols b; let b := Halo2.Orchard.EccAllocated.configure cols b; let b := Halo2.Orchard.Poseidon.configure cols b; let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b; let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b; let b := Halo2.Orchard.Merkle.configure cols b; let b := Halo2.Orchard.Merkle.configure cols b; let b := Halo2.Orchard.CommitIvk.configure cols b; let b := Halo2.Orchard.NoteCommit.configure cols b; let b := Halo2.Orchard.NoteCommit.configure cols b; (b.ensureNumSelectors 56).cs)
+  { config := cols, cs := cs, synthesize := Halo2.Orchard.ActionSynthesis.synthesize }
+
+/-- Selector activation matrix produced by the current synthesis skeleton. -/
+def selectorActivationMatrix : List (List Bool) :=
+  let layout := configuredCircuit.synthesize configuredCircuit.config
+  selectorActivationTable configuredCircuit.cs.numSelectors (max 1 (activationRows layout.selectorActivations)) layout.selectorActivations
 
 end Halo2.Orchard.Action
