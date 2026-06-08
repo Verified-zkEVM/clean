@@ -607,6 +607,34 @@ def synthesize (cols : Orchard.EccColumns) : SynthesizeM Unit := do
 end Halo2.Orchard.ActionSynthesisM
 
 
+namespace Halo2.Orchard.ActionConfigureM
+
+open Halo2.Synthesis
+
+/-- Monadic wrapper around the current Orchard action configuration pipeline.
+This makes the port look like Halo2's `Circuit::configure`: allocate columns,
+configure each chip, and leave the resulting constraint system in builder state. -/
+def configure : ConfigureM Orchard.EccColumns := do
+  let b ← get
+  let (cols, b) := Orchard.Action.configureActionColumns b
+  let b := Orchard.Action.configureOrchardGate cols b
+  let b := Orchard.Action.configureAddChip cols b
+  let b := Halo2.Orchard.LookupRangeCheck.configure cols b
+  let b := Halo2.Orchard.EccAllocated.configure cols b
+  let b := Halo2.Orchard.Poseidon.configure cols b
+  let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b
+  let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b
+  let b := Halo2.Orchard.Merkle.configure cols b
+  let b := Halo2.Orchard.Merkle.configure cols b
+  let b := Halo2.Orchard.CommitIvk.configure cols b
+  let b := Halo2.Orchard.NoteCommit.configure cols b
+  let b := Halo2.Orchard.NoteCommit.configure cols b
+  set (b.ensureNumSelectors 56)
+  pure cols
+
+end Halo2.Orchard.ActionConfigureM
+
+
 namespace Halo2.Orchard.Action
 
 open Halo2.Synthesis
@@ -617,23 +645,7 @@ deriving Repr, DecidableEq, BEq
 
 instance : PlonkCircuit Circuit where
   Config := EccColumns
-  configure _ := do
-    let b ← get
-    let (cols, b) := configureActionColumns b
-    let b := configureOrchardGate cols b
-    let b := configureAddChip cols b
-    let b := Halo2.Orchard.LookupRangeCheck.configure cols b
-    let b := Halo2.Orchard.EccAllocated.configure cols b
-    let b := Halo2.Orchard.Poseidon.configure cols b
-    let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b
-    let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b
-    let b := Halo2.Orchard.Merkle.configure cols b
-    let b := Halo2.Orchard.Merkle.configure cols b
-    let b := Halo2.Orchard.CommitIvk.configure cols b
-    let b := Halo2.Orchard.NoteCommit.configure cols b
-    let b := Halo2.Orchard.NoteCommit.configure cols b
-    set (b.ensureNumSelectors 56)
-    pure cols
+  configure _ := Halo2.Orchard.ActionConfigureM.configure
   synthesize _ config :=
     Halo2.Orchard.ActionSynthesisM.synthesize config
 
