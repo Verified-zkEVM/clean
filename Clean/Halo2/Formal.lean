@@ -105,6 +105,10 @@ theorem eval_relative {F : Type} (trace : Trace F) (baseRow : Nat) (cell : Local
 
 end LocalCell
 
+/-- A trace viewed relative to a gadget/region.  This is definitionally the same
+assignment type as `Trace`; the alias marks APIs where rows are local. -/
+abbrev LocalTrace (F : Type) := Trace F
+
 namespace Pinned.Expression
 
 /-- Evaluate a pinned Halo2 expression at a particular base row.  Query indices
@@ -687,8 +691,8 @@ def Soundness {F : Type} [Ring F] (circuit : Circuit) (lookup : List F → List 
 /-- Soundness statement for a reusable local gadget.  The trace passed to
 `Assumptions` and `Spec` is relative to the gadget's region. -/
 def GadgetSoundness {F : Type} [Ring F] (circuit : LocalCircuit)
-    (lookup : List F → List F → Prop) (Assumptions Spec : Trace F → Prop) : Prop :=
-  ∀ {trace : Trace F}, Assumptions trace → circuit.Satisfied lookup trace → Spec trace
+    (lookup : List F → List F → Prop) (Assumptions Spec : LocalTrace F → Prop) : Prop :=
+  ∀ {trace : LocalTrace F}, Assumptions trace → circuit.Satisfied lookup trace → Spec trace
 
 /-- A proof-carrying local Halo2 gadget.  This is the scalable API for reusable
 gadgets: proofs talk about local rows and local cells; placement into the global
@@ -697,14 +701,14 @@ structure FormalGadget (F : Type) [Ring F] where
   name : String := "anonymous"
   circuit : LocalCircuit
   lookup : List F → List F → Prop := fun _ _ => True
-  Assumptions : Trace F → Prop := fun _ => True
-  Spec : Trace F → Prop
+  Assumptions : LocalTrace F → Prop := fun _ => True
+  Spec : LocalTrace F → Prop
   soundness : GadgetSoundness circuit lookup Assumptions Spec
 
 namespace FormalGadget
 
 /-- Use the local soundness proof packaged in a `FormalGadget`. -/
-theorem sound {F : Type} [Ring F] (g : FormalGadget F) {trace : Trace F}
+theorem sound {F : Type} [Ring F] (g : FormalGadget F) {trace : LocalTrace F}
     (hAssumptions : g.Assumptions trace)
     (h : g.circuit.Satisfied g.lookup trace) : g.Spec trace :=
   g.soundness hAssumptions h
