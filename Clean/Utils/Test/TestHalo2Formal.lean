@@ -73,6 +73,50 @@ theorem boolGateFormalCircuit_sound {trace : Trace Int}
     boolGateFormalCircuit.Spec trace :=
   boolGateFormalCircuit.sound hOne h
 
+private def localBoolCell : LocalCell :=
+  { column := Pinned.Column.advice 0, row := 0 }
+
+/-- The same Boolean proof as a reusable local gadget: the spec names a local
+cell, not an absolute global Plonk row. -/
+def boolGateFormalGadget : FormalGadget Int :=
+  { circuit := LocalCircuit.assertZero 0 boolGate
+    Assumptions := fun trace => trace.constant "one" = 1
+    Spec := fun trace => localBoolCell.eval trace = 0 ∨ localBoolCell.eval trace = 1
+    soundness := by
+      intro trace hOne h
+      have hGate : Pinned.Expression.eval trace 0 boolGate = 0 := by
+        simpa [LocalCircuit.Satisfied, LocalOperation.Satisfied] using
+          h (LocalOperation.gate 0 boolGate) (by simp [LocalCircuit.assertZero])
+      dsimp [boolGate, Pinned.Expression.eval, localBoolCell, LocalCell.eval, Pinned.Column.advice] at hGate ⊢
+      rw [hOne] at hGate
+      rcases Int.mul_eq_zero.mp hGate with h0 | h1
+      · exact Or.inl h0
+      · right
+        omega }
+
+/-- Placing a local gadget shifts rows; the reusable proof does not change. -/
+theorem placedBoolGateFormalGadget_sound {trace : Trace Int}
+    (hOne : trace.constant "one" = 1)
+    (h : (boolGateFormalGadget.place 5).circuit.Satisfied
+      (boolGateFormalGadget.place 5).lookup trace) :
+    trace.advice 0 5 = 0 ∨ trace.advice 0 5 = 1 := by
+  have hSpec := (boolGateFormalGadget.place 5).sound hOne h
+  simpa [FormalGadget.place, localBoolCell, LocalCell.eval, Trace.relative] using hSpec
+
+/-- Local circuits place relative rows into absolute rows only at the boundary. -/
+theorem localCircuit_place_shifts_rows :
+    (LocalCircuit.assertZero 2 boolGate |>.place 5).operations =
+      [Operation.gate 7 boolGate] := by
+  native_decide
+
+/-- Local copy constraints are also placed as first-class global wire operations. -/
+theorem localWire_place_shifts_cells :
+    (LocalCircuit.wire { column := Pinned.Column.advice 0, row := 1 }
+        { column := Pinned.Column.advice 1, row := 3 } |>.place 5).operations =
+      [Operation.wire { column := Pinned.Column.advice 0, row := 6 }
+        { column := Pinned.Column.advice 1, row := 8 }] := by
+  native_decide
+
 /-- Lookup arguments are first-class operations whose relation is supplied by the
 formal trace semantics. -/
 theorem lookupOperation_sound {trace : Trace Int} {relation : List Int → List Int → Prop}

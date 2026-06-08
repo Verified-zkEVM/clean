@@ -34,7 +34,45 @@ def evalCell (t : Trace F) (cell : Synthesis.Cell) : F :=
   | ColumnKind.Fixed => t.fixed cell.column.index cell.row
   | ColumnKind.Instance => t.instanceValue cell.column.index cell.row
 
+/-- View a global trace from a region starting at `baseRow`.  Gadget specs can
+use this relative view and avoid mentioning global Plonk row numbers. -/
+def relative (t : Trace F) (baseRow : Int) : Trace F where
+  advice column row := t.advice column (baseRow + row)
+  fixed column row := t.fixed column (baseRow + row)
+  instanceValue column row := t.instanceValue column (baseRow + row)
+  constant := t.constant
+
 end Trace
+
+/-- A cell addressed relative to the start of a gadget/region. -/
+structure LocalCell where
+  column : Pinned.Column
+  row : Nat
+  deriving Repr, DecidableEq, BEq
+
+namespace LocalCell
+
+/-- Place a local cell at an absolute row in the global Plonk trace. -/
+def place (baseRow : Nat) (cell : LocalCell) : Synthesis.Cell :=
+  { column := cell.column, row := baseRow + cell.row }
+
+/-- Evaluate a local cell in a relative trace. -/
+def eval {F : Type} (trace : Trace F) (cell : LocalCell) : F :=
+  match cell.column.columnType with
+  | ColumnKind.Advice => trace.advice cell.column.index cell.row
+  | ColumnKind.Fixed => trace.fixed cell.column.index cell.row
+  | ColumnKind.Instance => trace.instanceValue cell.column.index cell.row
+
+@[simp]
+theorem eval_relative {F : Type} (trace : Trace F) (baseRow : Nat) (cell : LocalCell) :
+    cell.eval (trace.relative baseRow) = trace.evalCell (cell.place baseRow) := by
+  cases cell with
+  | mk column row =>
+    cases column with
+    | mk columnType index =>
+      cases columnType <;> rfl
+
+end LocalCell
 
 namespace Pinned.Expression
 
@@ -50,6 +88,31 @@ def eval {F : Type} [Ring F] (trace : Trace F) (row : Int) : Expression → F
   | .sum a b => eval trace row a + eval trace row b
   | .product a b => eval trace row a * eval trace row b
   | .scaled e c => eval trace row e * trace.constant c
+
+@[simp]
+theorem eval_relative {F : Type} [Ring F] (trace : Trace F) (baseRow row : Int)
+    (expr : Expression) :
+    expr.eval (trace.relative baseRow) row = expr.eval trace (baseRow + row) := by
+  induction expr generalizing row with
+  | constant c => rfl
+  | selector i => rfl
+  | fixed query column rotation =>
+    cases rotation
+    simp [eval, Trace.relative, Int.add_assoc]
+  | advice query column rotation =>
+    cases rotation
+    simp [eval, Trace.relative, Int.add_assoc]
+  | «instance» query column rotation =>
+    cases rotation
+    simp [eval, Trace.relative, Int.add_assoc]
+  | negated e ih => simp [eval, ih]
+  | sum a b iha ihb => simp [eval, iha, ihb]
+  | product a b iha ihb => simp [eval, iha, ihb]
+  | scaled e c ih =>
+    change eval (trace.relative baseRow) row e * (trace.relative baseRow).constant c =
+      eval trace (baseRow + row) e * trace.constant c
+    rw [ih row]
+    rfl
 
 end Pinned.Expression
 
@@ -111,6 +174,64 @@ theorem lookup_satisfied {F : Type} [Ring F] {lookup : List F → List F → Pro
   Iff.rfl
 
 end Operation
+
+/-- A gadget/region-local Halo2 operation.  Rows are relative to the start of the
+region, so gadget authors do not need to know the operation's final global row. -/
+inductive LocalOperation where
+  | gate : Nat → Pinned.Expression → LocalOperation
+  | wire : LocalCell → LocalCell → LocalOperation
+  | fixed : LocalCell → String → LocalOperation
+  | lookup : Nat → List Pinned.Expression → List Pinned.Expression → LocalOperation
+  deriving Repr, DecidableEq, BEq
+
+namespace LocalOperation
+
+/-- Place a local operation at an absolute base row. -/
+def place (baseRow : Nat) : LocalOperation → Operation
+  | .gate row expr => .gate (baseRow + row) expr
+  | .wire left right => .wire (left.place baseRow) (right.place baseRow)
+  | .fixed cell value => .fixed (cell.place baseRow) value
+  | .lookup row inputs table => .lookup (baseRow + row) inputs table
+
+/-- Satisfaction of a local operation against a relative trace. -/
+def Satisfied {F : Type} [Ring F]
+    (lookup : List F → List F → Prop) (trace : Trace F) : LocalOperation → Prop
+  | .gate row expr => expr.eval trace row = 0
+  | .wire left right => left.eval trace = right.eval trace
+  | .fixed cell value => cell.eval trace = trace.constant value
+  | .lookup row inputs table =>
+      lookup (inputs.map (Pinned.Expression.eval trace row))
+        (table.map (Pinned.Expression.eval trace row))
+
+@[simp]
+theorem place_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {baseRow : Nat} {op : LocalOperation} :
+    (op.place baseRow).Satisfied lookup trace ↔
+      op.Satisfied lookup (trace.relative baseRow) := by
+  cases op with
+  | gate row expr =>
+    simp [place, Satisfied, Pinned.Expression.eval_relative, Nat.cast_add]
+  | wire left right =>
+    simp [place, Satisfied]
+  | fixed cell value =>
+    simp [place, Satisfied]
+    change trace.evalCell (cell.place baseRow) = trace.constant value ↔
+      trace.evalCell (cell.place baseRow) = trace.constant value
+    rfl
+  | lookup row inputs table =>
+    have hInputs : inputs.map (Pinned.Expression.eval (trace.relative baseRow) row) =
+        inputs.map (Pinned.Expression.eval trace (baseRow + row)) := by
+      apply List.map_congr_left
+      intro expr _
+      simp [Pinned.Expression.eval_relative]
+    have hTable : table.map (Pinned.Expression.eval (trace.relative baseRow) row) =
+        table.map (Pinned.Expression.eval trace (baseRow + row)) := by
+      apply List.map_congr_left
+      intro expr _
+      simp [Pinned.Expression.eval_relative]
+    simp [place, Satisfied, hInputs, hTable, Nat.cast_add]
+
+end LocalOperation
 
 /-- A Halo2 circuit as a list of proof-facing operations.  This intentionally
 resembles Clean's `Circuit`, but its operations are Halo2-native. -/
@@ -292,11 +413,120 @@ def fromConfigured {Config : Type} (c : Synthesis.ConfiguredCircuit Config) : Ci
 
 end Circuit
 
+/-- A gadget-local Halo2 circuit.  This is the API shape intended for reusable
+gadgets: operations mention rows relative to a region, not absolute Plonk rows. -/
+structure LocalCircuit where
+  operations : List LocalOperation := []
+deriving Repr, DecidableEq, BEq
+
+namespace LocalCircuit
+
+instance : EmptyCollection LocalCircuit where
+  emptyCollection := {}
+
+/-- Append one local operation. -/
+def push (c : LocalCircuit) (op : LocalOperation) : LocalCircuit :=
+  { c with operations := c.operations ++ [op] }
+
+/-- A one-operation local custom-gate assertion. -/
+def assertZero (row : Nat) (expr : Pinned.Expression) : LocalCircuit :=
+  { operations := [LocalOperation.gate row expr] }
+
+/-- A one-operation local wire/copy constraint. -/
+def wire (left right : LocalCell) : LocalCircuit :=
+  { operations := [LocalOperation.wire left right] }
+
+/-- A one-operation local fixed assignment. -/
+def fixed (cell : LocalCell) (value : String) : LocalCircuit :=
+  { operations := [LocalOperation.fixed cell value] }
+
+/-- A one-operation local lookup. -/
+def lookup (row : Nat) (inputs table : List Pinned.Expression) : LocalCircuit :=
+  { operations := [LocalOperation.lookup row inputs table] }
+
+/-- Append local circuits. -/
+def append (c d : LocalCircuit) : LocalCircuit :=
+  { operations := c.operations ++ d.operations }
+
+instance : Append LocalCircuit where
+  append := append
+
+/-- Place a local circuit at an absolute base row. -/
+def place (baseRow : Nat) (c : LocalCircuit) : Circuit :=
+  { operations := c.operations.map (LocalOperation.place baseRow) }
+
+/-- Semantic satisfaction of a local circuit against a relative trace. -/
+def Satisfied {F : Type} [Ring F]
+    (c : LocalCircuit) (lookup : List F → List F → Prop) (trace : Trace F) : Prop :=
+  ∀ op ∈ c.operations, op.Satisfied lookup trace
+
+@[simp]
+theorem place_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {baseRow : Nat} {c : LocalCircuit} :
+    (c.place baseRow).Satisfied lookup trace ↔
+      c.Satisfied lookup (trace.relative baseRow) := by
+  constructor
+  · intro h op hop
+    have hPlaced : LocalOperation.place baseRow op ∈ (c.place baseRow).operations := by
+      exact List.mem_map.mpr ⟨op, hop, rfl⟩
+    simpa using h (LocalOperation.place baseRow op) hPlaced
+  · intro h op hop
+    simp [place] at hop
+    rcases hop with ⟨localOp, hLocal, rfl⟩
+    simpa using h localOp hLocal
+
+/-- Local circuit satisfaction composes under append. -/
+theorem append_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
+    {trace : Trace F} {c d : LocalCircuit} :
+    (c ++ d).Satisfied lookup trace ↔ c.Satisfied lookup trace ∧ d.Satisfied lookup trace := by
+  constructor
+  · intro h
+    constructor
+    · intro op hop
+      exact h op (List.mem_append_left d.operations hop)
+    · intro op hop
+      exact h op (List.mem_append_right c.operations hop)
+  · intro h op hop
+    rcases h with ⟨hc, hd⟩
+    change op ∈ c.operations ++ d.operations at hop
+    rcases List.mem_append.mp hop with hopLeft | hopRight
+    · exact hc op hopLeft
+    · exact hd op hopRight
+
+end LocalCircuit
+
 /-- Soundness statement for a Halo2 circuit: under assumptions, satisfying the
 Halo2-native operations implies the Lean-level spec. -/
 def Soundness {F : Type} [Ring F] (circuit : Circuit) (lookup : List F → List F → Prop)
     (Assumptions Spec : Trace F → Prop) : Prop :=
   ∀ {trace : Trace F}, Assumptions trace → circuit.Satisfied lookup trace → Spec trace
+
+/-- Soundness statement for a reusable local gadget.  The trace passed to
+`Assumptions` and `Spec` is relative to the gadget's region. -/
+def GadgetSoundness {F : Type} [Ring F] (circuit : LocalCircuit)
+    (lookup : List F → List F → Prop) (Assumptions Spec : Trace F → Prop) : Prop :=
+  ∀ {trace : Trace F}, Assumptions trace → circuit.Satisfied lookup trace → Spec trace
+
+/-- A proof-carrying local Halo2 gadget.  This is the scalable API for reusable
+gadgets: proofs talk about local rows and local cells; placement into the global
+Plonk trace is a separate operation. -/
+structure FormalGadget (F : Type) [Ring F] where
+  name : String := "anonymous"
+  circuit : LocalCircuit
+  lookup : List F → List F → Prop := fun _ _ => True
+  Assumptions : Trace F → Prop := fun _ => True
+  Spec : Trace F → Prop
+  soundness : GadgetSoundness circuit lookup Assumptions Spec
+
+namespace FormalGadget
+
+/-- Use the local soundness proof packaged in a `FormalGadget`. -/
+theorem sound {F : Type} [Ring F] (g : FormalGadget F) {trace : Trace F}
+    (hAssumptions : g.Assumptions trace)
+    (h : g.circuit.Satisfied g.lookup trace) : g.Spec trace :=
+  g.soundness hAssumptions h
+
+end FormalGadget
 
 /-- A proof-carrying Halo2 circuit, mirroring Clean's `FormalCircuit` idea:
 `circuit` is the Halo2 arithmetization, `Assumptions` are preconditions on the
@@ -332,5 +562,22 @@ theorem sound {F : Type} [Ring F] (c : FormalCircuit F) {trace : Trace F}
   c.soundness hAssumptions h
 
 end FormalCircuit
+
+namespace FormalGadget
+
+/-- Place a local gadget at an absolute base row to obtain a global
+`FormalCircuit`.  The resulting global spec is phrased over the relative view of
+the global trace at that base row. -/
+def place {F : Type} [Ring F] (g : FormalGadget F) (baseRow : Nat) : FormalCircuit F :=
+  { name := g.name
+    circuit := g.circuit.place baseRow
+    lookup := g.lookup
+    Assumptions := fun trace => g.Assumptions (trace.relative baseRow)
+    Spec := fun trace => g.Spec (trace.relative baseRow)
+    soundness := by
+      intro trace hAssumptions hSatisfied
+      exact g.sound hAssumptions (LocalCircuit.place_satisfied.mp hSatisfied) }
+
+end FormalGadget
 
 end Halo2
