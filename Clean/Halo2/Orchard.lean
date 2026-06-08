@@ -316,9 +316,11 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
   let (overflowK254, b) := a b cols 7 (-1)
   let overflowSCheck := loLambda1Cur - (loXACur + overflowK254 * (Expression.constant FieldConst.twoPow124 * Expression.constant FieldConst.sixtyFour))
   let overflowRecovery := overflowZ0 - loXACur - Expression.constant FieldConst.scalarT
+  let overflowLoZero := overflowK254 * (loZCur - Expression.constant FieldConst.twoPow124)
   let b := b.createGate [
     Expression.selector qMulOverflow * overflowSCheck,
-    Expression.selector qMulOverflow * overflowRecovery]
+    Expression.selector qMulOverflow * overflowRecovery,
+    Expression.selector qMulOverflow * overflowLoZero]
   -- fixed-base shared running sum, full-width, short, base-field selectors
   let (_, b) := b.selector
   let (_, b) := b.selector
