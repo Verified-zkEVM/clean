@@ -142,7 +142,7 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
   let tableExpr := (b.queryFixed tableIdx (.rot 0)).1
   let b := (b.queryFixed tableIdx (.rot 0)).2
   let one := Expression.constant FieldConst.one
-  let runningSumWord := zCur - zNext * Expression.constant twoPow10
+  let runningSumWord := zCur - Expression.scale zNext twoPow10
   let runningSumLookup := qRunningE * runningSumWord
   let shortLookup := (one - qRunningE) * zCur
   let b := b.lookup { inputExpressions := [qLookupE * (runningSumLookup + shortLookup)], tableExpressions := [tableExpr] }
@@ -150,7 +150,7 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
   let (word, b) := b.queryAdvice runningSum (.rot (-1))
   let (shiftedWord, b) := b.queryAdvice runningSum (.rot 0)
   let (invTwoPowS, b) := b.queryAdvice runningSum (.rot 1)
-  b.createGate [qBitshiftE * (word * Expression.constant twoPow10 * invTwoPowS - shiftedWord)]
+  b.createGate [qBitshiftE * (Expression.scale word twoPow10 * invTwoPowS - shiftedWord)]
 
 end Halo2.Orchard.LookupRangeCheck
 
@@ -464,6 +464,12 @@ virtual selectors to the fixed selector columns visible in the pinned CS. -/
 def compressSelectors (cs : ConstraintSystem) : ConstraintSystem :=
   let replacement : Nat → Expression := fun
     | 0 => compressedSelector 18 18 6 1
+    | 1 => compressedSelector 18 18 6 2
+    | 4 => compressedSelector 18 18 6 3
+    | 5 => compressedSelector 19 19 4 1
+    | 6 => compressedSelector 19 19 4 2
+    | 7 => compressedSelector 19 19 4 3
+    | 8 => compressedSelector 19 19 4 4
     | i => .selector i
   let cs := cs.replaceSelectors replacement
   { cs with
