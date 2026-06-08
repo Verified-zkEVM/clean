@@ -54,14 +54,10 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
     simp only [circuit_norm]
 
   tables_channel : ∀ table ∈ tables,
-    ∃ step : VmStep Message F,
+    ∃ enabled : Expression F, ∃ pull push : Var Message F,
       ⟨ channel,
-        [(pullIf (channel:=channel) step.enabled step.pull).toRaw,
-          (pushIf (channel:=channel) step.enabled step.push).toRaw] ⟩ ∈ table.exposedChannels ∧
-      ∀ env,
-        table.Assumptions env →
-        Operations.ConstraintsHold env table.operations →
-          env step.enabled = 0 ∨ env step.enabled = 1
+        [(pullIf (channel:=channel) enabled pull).toRaw,
+          (pushIf (channel:=channel) enabled push).toRaw] ⟩ ∈ table.exposedChannels
 
   -- the verifier pulls and pushes to the channel, and doesn't push anything else
   verifier_channel : ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
@@ -240,22 +236,17 @@ variable {vm : VmTables F PublicIO}
   vm.toEnsemble.allTables
 
 noncomputable def step (vm : VmTables F PublicIO) (table : Component F)
-    (table_mem : table ∈ vm.tables) : VmStep vm.Message F :=
-  (vm.tables_channel table table_mem).choose
+    (table_mem : table ∈ vm.tables) : VmStep vm.Message F where
+  enabled := (vm.tables_channel table table_mem).choose
+  pull := (vm.tables_channel table table_mem).choose_spec.choose
+  push := (vm.tables_channel table table_mem).choose_spec.choose_spec.choose
 
 theorem tables_channel' (vm : VmTables F PublicIO) {table} (table_mem : table ∈ vm.tables) :
   let step := vm.step table table_mem
   ⟨ vm.channel,
     [(pullIf (channel:=vm.channel) step.enabled step.pull).toRaw,
       (pushIf (channel:=vm.channel) step.enabled step.push).toRaw] ⟩ ∈ table.exposedChannels :=
-  (vm.tables_channel table table_mem).choose_spec.1
-
-theorem tables_enabled_boolean (vm : VmTables F PublicIO) {table} (table_mem : table ∈ vm.tables) :
-    ∀ env,
-      table.Assumptions env →
-      Operations.ConstraintsHold env table.operations →
-        env (vm.step table table_mem).enabled = 0 ∨ env (vm.step table table_mem).enabled = 1 :=
-  (vm.tables_channel table table_mem).choose_spec.2
+  (vm.tables_channel table table_mem).choose_spec.choose_spec.choose_spec
 
 noncomputable def verifierPull (vm : VmTables F PublicIO) : Var vm.Message F :=
   vm.verifier_channel.choose
@@ -495,6 +486,32 @@ lemma mem_zip_pulls_pushes_iff (witness : VmWitness vm) (pull push : Interaction
   · simp
   simp [← interactionss_eq_pulls_pushes, Table.interactionssWith]
 
+lemma rowEnabled_boolean_of_wellformed {witness : VmWitness vm}
+    (wellformed : vm.channel.toRaw.InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw)) :
+    ∀ (table : Table F) (table_mem : table ∈ witness.allTables), ∀ row ∈ table.table,
+      witness.rowEnabled table_mem row = 0 ∨ witness.rowEnabled table_mem row = 1 := by
+  intro table table_mem row row_mem
+  let pull := vm.channel.pullIfValue (witness.rowEnabled table_mem row) (witness.rowPull table_mem row)
+  let push := vm.channel.pushIfValue (witness.rowEnabled table_mem row) (witness.rowPush table_mem row)
+  have pair_mem : (pull, push) ∈ witness.interactionPairs := by
+    simp only [interactionPairs, List.mem_flatMap, List.mem_attach, true_and, List.mem_map]
+    refine ⟨ ⟨ table, table_mem ⟩, row, row_mem, ?_ ⟩
+    simp [pull, push]
+  have pull_mem_pulls : pull ∈ witness.pulls := by
+    exact List.mem_map.mpr ⟨ (pull, push), pair_mem, rfl ⟩
+  have pull_mem_interactions : pull ∈ witness.interactionsWith vm.channel.toRaw := by
+    rw [witness.interactions_eq_pulls_pushes]
+    apply (List.zip_flattenPairs_perm (witness.pushes_length ▸ witness.pulls_length.symm)).mem_iff.mpr
+    exact List.mem_append_left witness.pushes pull_mem_pulls
+  have h_mult := wellformed pull pull_mem_interactions (by rfl) (by rfl)
+  rcases h_mult with h_neg_one | h_zero
+  · right
+    have h := congrArg Neg.neg h_neg_one
+    simpa [pull, Channel.pullIfValue] using h
+  · left
+    have h := congrArg Neg.neg h_zero
+    simpa [pull, Channel.pullIfValue] using h
+
 lemma pull_requirements (witness : VmWitness vm)
     (row_enabled_boolean : ∀ (table) (table_mem : table ∈ witness.allTables), ∀ row ∈ table.table,
       witness.rowEnabled table_mem row = 0 ∨ witness.rowEnabled table_mem row = 1) :
@@ -540,17 +557,17 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
   [Fact (ringChar F ≠ 2)] (witness : VmWitness vm) :
   -- if the vm interactions with the vm channel are balanced
   BalancedInteractions (witness.interactionsWith vm.channel.toRaw) →
+  vm.channel.toRaw.InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw) →
   -- and for every row, vm channel guarantees imply vm channel requirements
   -- (this will come from constraints + soundness of the existing ensemble)
   (∀ table ∈ witness.allTables, ∀ row ∈ table.table,
     table.component.operations.ChannelGuarantees vm.channel.toRaw (table.environment row) →
     table.component.operations.ChannelRequirements vm.channel.toRaw (table.environment row)) →
-  (∀ (table) (table_mem : table ∈ witness.allTables), ∀ row ∈ table.table,
-    witness.rowEnabled table_mem row = 0 ∨ witness.rowEnabled table_mem row = 1) →
   -- vm channel verifier requirements imply vm channel verifier guarantees
   witness.verifierTable.ChannelRequirements vm.channel.toRaw →
     witness.verifierTable.ChannelGuarantees vm.channel.toRaw := by
-  intro balance constraints row_enabled_boolean
+  intro balance wellformed constraints
+  have row_enabled_boolean := witness.rowEnabled_boolean_of_wellformed wellformed
   -- prove balance of pulls + pushes
   replace balance : BalancedInteractions (witness.pulls ++ witness.pushes) := by
     rw [witness.interactions_eq_pulls_pushes] at balance
@@ -752,7 +769,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   have vm_balance := balance vmChannel (by simp [vmChannel, Ensemble.addVm])
   simp only [circuit_norm, vmInteractions_eq] at vm_balance
   have verifier_guarantees := vmWitness
-    |>.verifier_guarantees_of_requirements_of_requirements_of_guarantees vm_balance.1
+    |>.verifier_guarantees_of_requirements_of_requirements_of_guarantees vm_balance.1 vm_balance.2
   -- next, we work on instantiating `requirements_of_partial_guarantees_of_constraints`
   -- which will give us exactly the second hypothesis of `verifier_guarantees`
   -- first, unify channel subset assumptions to all tables
@@ -837,26 +854,6 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     (vm_assumptions table h_table) (vm_constraints table h_table)
     (grts_subset_all table h_table) (finished_grts table h_table)
   specialize verifier_guarantees reqs_of_grts
-  have row_enabled_boolean :
-      ∀ (table : Table F) (table_mem : table ∈ vmWitness.allTables), ∀ row ∈ table.table,
-        vmWitness.rowEnabled table_mem row = 0 ∨ vmWitness.rowEnabled table_mem row = 1 := by
-    intro table table_mem row row_mem
-    classical
-    by_cases h_verifier : table.component = vm.toEnsemble.verifierTable
-    · right
-      simp [VmWitness.rowEnabled, VmTables.stepOfAllTables, h_verifier, VmTables.verifierStep,
-        Expression.eval]
-    · have h_component_mem : table.component ∈ vm.tables := by
-        have := vmWitness.mem_allTables_component_of_mem_allTables table_mem
-        simp only [VmTables.toEnsemble, Ensemble.allTables, List.mem_cons] at this
-        rcases this with h | h
-        · contradiction
-        · exact h
-      have h_enabled := vm.tables_enabled_boolean h_component_mem
-        (table.environment row) (vm_assumptions table table_mem row row_mem)
-        (vm_constraints table table_mem row row_mem)
-      simpa [VmWitness.rowEnabled, VmTables.stepOfAllTables, h_verifier] using h_enabled
-  specialize verifier_guarantees row_enabled_boolean
   -- massage the conclusion so it matches that of `verifier_guarantees`.
   -- mainly, we need to use (again) that all guarantees apart from the VM channel are satisfied
   rw [EnsembleWitness.verifierGuarantees_iff_verifierTable_guarantees, ← verifierTable_eq,

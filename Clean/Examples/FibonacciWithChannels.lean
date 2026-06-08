@@ -195,38 +195,6 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
       rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
       linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
-def fib8Step : VmStep fieldTriple (F p) :=
-  let input := varFromOffset (F:=F p) Fib8Input 0
-  { enabled := input.enabled
-    pull := (input.n, input.x, input.y)
-    push := (input.n + 1, input.y, var ⟨ size Fib8Input ⟩) }
-
-@[circuit_norm]
-lemma fib8Step_enabled_boolean (env : Environment (F p)) :
-    Operations.ConstraintsHold env (⟨ fib8 ⟩ : Component (F p)).operations →
-      env fib8Step.enabled = 0 ∨ env fib8Step.enabled = 1 := by
-  intro h_constraints
-  let input := varFromOffset (F:=F p) Fib8Input 0
-  rw [Component.constraintsHold_iff] at h_constraints
-  simp only [Operations.ConstraintsHold, Component.rowOperations, Circuit.operations, fib8] at h_constraints
-  have h_bool : env (input.enabled * (input.enabled - 1)) = 0 := h_constraints.1 _ (by
-    simp [circuit_norm, input])
-  simp [circuit_norm] at h_bool
-  rcases h_bool with h_zero | h_one
-  · exact Or.inl h_zero
-  · right
-    rw [← sub_eq_add_neg] at h_one
-    simpa [fib8Step, input] using sub_eq_zero.mp h_one
-
-@[circuit_norm]
-lemma fib8Step_table_enabled_boolean :
-    ∀ env,
-      (⟨ fib8 ⟩ : Component (F p)).Assumptions env →
-      Operations.ConstraintsHold env (⟨ fib8 ⟩ : Component (F p)).operations →
-        env fib8Step.enabled = 0 ∨ env fib8Step.enabled = 1 := by
-  intro env _ h_constraints
-  exact fib8Step_enabled_boolean env h_constraints
-
 example (input : Var Fib8Input (F p)) :
     ExplicitCircuit (fib8.main input) := by
   infer_explicit_circuit
@@ -271,8 +239,9 @@ def fibonacciVm : VmTables (F p) fieldTriple where
     intro table table_mem
     simp only [List.mem_singleton] at table_mem
     subst table
-    refine ⟨ fib8Step, ?_, fib8Step_table_enabled_boolean ⟩
-    simp [circuit_norm, fib8, fib8Step, Component.exposedChannels, Component.rowOffset]
+    let input := varFromOffset (F:=F p) Fib8Input 0
+    refine ⟨ input.enabled, (input.n, input.x, input.y), (input.n + 1, input.y, var ⟨ size Fib8Input ⟩), ?_ ⟩
+    simp [circuit_norm, fib8, input, Component.exposedChannels, Component.rowOffset]
   verifier_channel := by
     simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
