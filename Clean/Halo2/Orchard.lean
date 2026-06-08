@@ -562,3 +562,43 @@ def selectorActivationMatrix : List (List Bool) :=
   selectorActivationTable configuredCircuit.cs.numSelectors (max 1 (activationRows layout.selectorActivations)) layout.selectorActivations
 
 end Halo2.Orchard.Action
+
+namespace Halo2.Orchard.Action
+
+open Halo2.Synthesis
+
+structure Circuit where
+  version : String := "FixedPostNu6_2"
+deriving Repr, DecidableEq, BEq
+
+instance : PlonkCircuit Circuit where
+  Config := EccColumns
+  configure _ := do
+    let b ← get
+    let (cols, b) := configureActionColumns b
+    let b := configureOrchardGate cols b
+    let b := configureAddChip cols b
+    let b := Halo2.Orchard.LookupRangeCheck.configure cols b
+    let b := Halo2.Orchard.EccAllocated.configure cols b
+    let b := Halo2.Orchard.Poseidon.configure cols b
+    let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b
+    let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b
+    let b := Halo2.Orchard.Merkle.configure cols b
+    let b := Halo2.Orchard.Merkle.configure cols b
+    let b := Halo2.Orchard.CommitIvk.configure cols b
+    let b := Halo2.Orchard.NoteCommit.configure cols b
+    let b := Halo2.Orchard.NoteCommit.configure cols b
+    set (b.ensureNumSelectors 56)
+    pure cols
+  synthesize _ config := do
+    set (Halo2.Orchard.ActionSynthesis.synthesize config)
+
+/-- Idiomatic Halo2-like circuit object for the current Orchard action skeleton. -/
+def plonkCircuit : ConfiguredCircuit EccColumns :=
+  PlonkCircuit.configured ({ } : Circuit)
+
+/-- The CS produced through the `PlonkCircuit` interface, with selector compression applied. -/
+def plonkCircuitPinnedCS : Halo2.Pinned.ConstraintSystem :=
+  compressSelectors plonkCircuit.cs
+
+end Halo2.Orchard.Action

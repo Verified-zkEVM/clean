@@ -118,3 +118,100 @@ def activationRows (activations : List (Nat × Nat)) : Nat :=
   activations.foldl (fun acc (_, row) => max acc (row + 1)) 0
 
 end Halo2.Synthesis
+
+namespace Halo2.Synthesis
+
+abbrev ConfigureM := StateM Halo2.Pinned.Builder
+abbrev SynthesizeM := StateM Layout
+abbrev RegionM := StateM RegionState
+
+namespace ConfigureM
+
+def adviceColumn : ConfigureM Halo2.Pinned.Column := do
+  let b ← get
+  let (c, b) := b.adviceColumn
+  set b
+  pure c
+
+def fixedColumn : ConfigureM Halo2.Pinned.Column := do
+  let b ← get
+  let (c, b) := b.fixedColumn
+  set b
+  pure c
+
+def instanceColumn : ConfigureM Halo2.Pinned.Column := do
+  let b ← get
+  let (c, b) := b.instanceColumn
+  set b
+  pure c
+
+def selector : ConfigureM Nat := do
+  let b ← get
+  let (s, b) := b.selector
+  set b
+  pure s
+
+def complexSelector : ConfigureM Nat := do
+  let b ← get
+  let (s, b) := b.complexSelector
+  set b
+  pure s
+
+def modifyBuilder (f : Halo2.Pinned.Builder → Halo2.Pinned.Builder) : ConfigureM Unit := do
+  modify f
+
+def createGate (polys : List Halo2.Pinned.Expression) : ConfigureM Unit :=
+  modifyBuilder (·.createGate polys)
+
+def lookup (arg : Halo2.Pinned.LookupArgument) : ConfigureM Unit :=
+  modifyBuilder (·.lookup arg)
+
+end ConfigureM
+
+namespace RegionM
+
+def enableSelector (selector row : Nat) : RegionM Unit :=
+  modify (RegionState.enableSelector selector row)
+
+def assignAdvice (column : Halo2.Pinned.Column) (row : Nat) : RegionM AssignedCell := do
+  let r ← get
+  let (cell, r) := r.assignAdvice column row
+  set r
+  pure cell
+
+def assignFixed (column : Halo2.Pinned.Column) (row : Nat) (value : String) : RegionM Unit :=
+  modify (RegionState.assignFixed column row value)
+
+def constrainEqual (a b : AssignedCell) : RegionM Unit :=
+  modify (RegionState.constrainEqual a b)
+
+end RegionM
+
+namespace SynthesizeM
+
+def assignRegion {α : Type} (name : String) (body : RegionM α) : SynthesizeM α := do
+  let l ← get
+  let (a, l) := l.assignRegion name body.run
+  set l
+  pure a
+
+def assignTable (assignments : List (Halo2.Pinned.Column × Nat × String)) : SynthesizeM Unit :=
+  modify (Layout.assignTable assignments)
+
+end SynthesizeM
+
+/-- Halo2-like circuit interface: `configure` produces a config and pinned-CS
+builder state; `synthesize` lays out a configured circuit. -/
+class PlonkCircuit (C : Type) where
+  Config : Type
+  configure : C → ConfigureM Config
+  synthesize : C → Config → SynthesizeM Unit
+
+def PlonkCircuit.configured {C : Type} [PlonkCircuit C] (c : C) : ConfiguredCircuit (PlonkCircuit.Config C) :=
+  let (config, builder) := (PlonkCircuit.configure c).run {}
+  let synthesize := fun config =>
+    let (_, layout) := (PlonkCircuit.synthesize c config).run {}
+    layout
+  { config, cs := builder.cs, synthesize }
+
+end Halo2.Synthesis
