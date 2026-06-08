@@ -110,6 +110,11 @@ theorem fromConfigured_keeps_copy_constraint_as_wire :
     (Circuit.fromConfigured configuredWithWire).operations = [Operation.wire leftCell rightCell] := by
   native_decide
 
+/-- Layout row accounting includes copy-constraint endpoints, not just selector activations. -/
+theorem configuredWithWire_layout_rows :
+    (configuredWithWire.synthesize configuredWithWire.config).usedRows = 8 := by
+  native_decide
+
 /-- A configured circuit can be packaged directly as a `FormalCircuit`; proofs are
 against `Circuit.fromConfigured`, not against a lowered ordinary Clean circuit. -/
 def configuredWireFormalCircuit : FormalCircuit Int :=
