@@ -128,6 +128,13 @@ theorem localCircuit_place_shifts_rows :
       [Operation.gate 7 localBoolGate] := by
   native_decide
 
+/-- Satisfaction of a placed local circuit is satisfaction of the local circuit in
+the relative trace. -/
+theorem localCircuit_place_satisfaction_example {trace : Trace Int}
+    (h : (LocalCircuit.assertZero 0 localBoolGate |>.place 5).Satisfied (fun _ _ => True) trace) :
+    (LocalCircuit.assertZero 0 localBoolGate).Satisfied (fun _ _ => True) (trace.relative 5) := by
+  exact LocalCircuit.place_satisfied.mp h
+
 /-- Local copy constraints are also placed as first-class global wire operations. -/
 theorem localWire_place_shifts_cells :
     (LocalCircuit.wire (LocalCell.advice 0 1) (LocalCell.advice 1 3) |>.place 5).operations =
