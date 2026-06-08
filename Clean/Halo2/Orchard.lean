@@ -463,7 +463,7 @@ circuit. This function is where the Lean builder connects configuration-time
 virtual selectors to the fixed selector columns visible in the pinned CS. -/
 def compressSelectors (cs : ConstraintSystem) : ConstraintSystem :=
   let replacement : Nat → Expression := fun
-    | 0 => compressedSelector 18 18 7 1
+    | 0 => compressedSelector 18 18 6 1
     | i => .selector i
   let cs := cs.replaceSelectors replacement
   { cs with
