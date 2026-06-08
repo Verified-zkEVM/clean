@@ -198,6 +198,10 @@ inductive LocalOperation where
 
 namespace LocalOperation
 
+/-- Clean-style alias for a local custom-gate assertion. -/
+def assert (row : Nat) (expr : Pinned.Expression) : LocalOperation :=
+  .gate row expr
+
 /-- Place a local operation at an absolute base row. -/
 def place (baseRow : Nat) : LocalOperation → Operation
   | .gate row expr => .gate (baseRow + row) expr
