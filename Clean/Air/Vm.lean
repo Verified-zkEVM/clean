@@ -508,7 +508,7 @@ lemma mem_zip_pulls_pushes_iff (witness : VmWitness vm) (pull push : Interaction
   simp [← interactionss_eq_pulls_pushes, Table.interactionssWith]
 
 lemma rowEnabled_boolean_of_wellformed {witness : VmWitness vm}
-    (wellformed : vm.channel.toRaw.InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw)) :
+    (wellformed : RawChannel.InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw)) :
     ∀ (table : Table F) (table_mem : table ∈ witness.allTables), ∀ row ∈ table.table,
       witness.rowEnabled table_mem row = 0 ∨ witness.rowEnabled table_mem row = 1 := by
   intro table table_mem row row_mem
@@ -524,7 +524,7 @@ lemma rowEnabled_boolean_of_wellformed {witness : VmWitness vm}
     rw [witness.interactions_eq_pulls_pushes]
     apply (List.zip_flattenPairs_perm (witness.pushes_length ▸ witness.pulls_length.symm)).mem_iff.mpr
     exact List.mem_append_left witness.pushes pull_mem_pulls
-  have h_mult := wellformed pull pull_mem_interactions (by rfl) (by rfl)
+  have h_mult := wellformed pull pull_mem_interactions (by rfl)
   rcases h_mult with h_neg_one | h_zero
   · right
     have h := congrArg Neg.neg h_neg_one
@@ -578,7 +578,7 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
   [Fact (ringChar F ≠ 2)] (witness : VmWitness vm) :
   -- if the vm interactions with the vm channel are balanced
   BalancedInteractions (witness.interactionsWith vm.channel.toRaw) →
-  vm.channel.toRaw.InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw) →
+  RawChannel.InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw) →
   -- and for every row, vm channel guarantees imply vm channel requirements
   -- (this will come from constraints + soundness of the existing ensemble)
   (∀ table ∈ witness.allTables, ∀ row ∈ table.table,

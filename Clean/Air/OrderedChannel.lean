@@ -195,7 +195,7 @@ def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawCha
       -- the total of known + unknown interactions is balanced
       BalancedInteractions (tables.interactionsWith channel ++ extraInteractions) ∧
       -- guarantee-side interactions are either active pulls or disabled padding
-      channel.InteractionsWellFormed (tables.interactionsWith channel ++ extraInteractions) ∧
+      RawChannel.InteractionsWellFormed (tables.interactionsWith channel ++ extraInteractions) ∧
       -- the extra interactions are with the same channel.
       (∀ i ∈ extraInteractions, i.channel = channel) ∧
     -- additionally, we _assume_ that either the requirements on future interactions hold unconditionally,
@@ -208,7 +208,7 @@ def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawCha
 /-- Partial balance is trivially weaker than balance -/
 lemma partialBalancedChannel_of_balancedInteractions [DecidableEq F] {tables : Tables F} {channel : RawChannel F} :
     BalancedInteractions (tables.interactionsWith channel) →
-    channel.InteractionsWellFormed (tables.interactionsWith channel) →
+    RawChannel.InteractionsWellFormed (tables.interactionsWith channel) →
     PartialBalancedChannel tables channel := by
   intro balanced wellformed
   use []
