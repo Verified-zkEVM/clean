@@ -234,6 +234,15 @@ theorem appendFormalGadget_sound {trace : Trace Int}
     fixedFormalGadget.Spec trace ∧ wireFormalGadget.Spec trace := by
   exact (fixedFormalGadget.append wireFormalGadget).sound ⟨trivial, trivial⟩ h
 
+/-- Composed gadgets can be placed as a unit and still prove shifted specs. -/
+theorem placedAppendFormalGadget_sound {trace : Trace Int}
+    (h : ((fixedFormalGadget.append wireFormalGadget).circuit.place 5).Satisfied
+      (fixedFormalGadget.append wireFormalGadget).lookup trace) :
+    trace.fixed 0 7 = trace.constant "one" ∧ trace.advice 0 6 = trace.advice 1 8 := by
+  have hSpec := (fixedFormalGadget.append wireFormalGadget).sound_placed 5 ⟨trivial, trivial⟩ h
+  simpa [localFixedCell, localWireLeft, localWireRight, LocalCell.eval, LocalCell.fixed,
+    LocalCell.advice, Trace.relative, Pinned.Column.fixed, Pinned.Column.advice] using hSpec
+
 /-- `Circuit.push` composes constraints in the same proof style as Clean circuits. -/
 theorem push_satisfaction_example {trace : Trace Int}
     (h : (Circuit.wire leftCell rightCell).push (Operation.fixed leftCell "one") |>.Satisfied
