@@ -8,6 +8,10 @@ Clean's core vocabulary (`Operation`, `Circuit`, `FormalCircuit`) while keeping
 Halo2's row/column arithmetization explicit: cells are addressed by columns and
 rows, gates are evaluated at rows with rotations, and copy constraints are first
 class operations rather than being erased into ordinary equality assertions.
+
+The lowest-level `Circuit` is absolute, matching the placed Plonk trace.  Reusable
+gadgets should instead use `LocalCircuit` / `FormalGadget`, whose rows are
+relative to a region and are shifted to absolute rows only by placement.
 -/
 
 namespace Halo2
