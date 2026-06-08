@@ -37,3 +37,14 @@ theorem orchardPlonkCircuit_synthesizes :
   native_decide
 
 end Halo2.Tests
+
+namespace Halo2.Tests
+
+/-- Synthesis provides well-formed selector-compression input for the idiomatic
+Orchard action circuit. -/
+theorem orchardPlonkCircuit_selectorCompressionInput_wellFormed :
+    let input := Halo2.Orchard.Action.plonkCircuit.selectorCompressionInput
+    input.kinds.length = input.activations.length := by
+  native_decide
+
+end Halo2.Tests

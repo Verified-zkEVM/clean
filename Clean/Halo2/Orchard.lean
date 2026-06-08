@@ -554,7 +554,7 @@ def configuredCircuit : ConfiguredCircuit EccColumns :=
   let b : Halo2.Pinned.Builder := {}
   let (cols, b) := configureActionColumns b
   let cs := compressSelectors (let b := configureOrchardGate cols b; let b := configureAddChip cols b; let b := Halo2.Orchard.LookupRangeCheck.configure cols b; let b := Halo2.Orchard.EccAllocated.configure cols b; let b := Halo2.Orchard.Poseidon.configure cols b; let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b; let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b; let b := Halo2.Orchard.Merkle.configure cols b; let b := Halo2.Orchard.Merkle.configure cols b; let b := Halo2.Orchard.CommitIvk.configure cols b; let b := Halo2.Orchard.NoteCommit.configure cols b; let b := Halo2.Orchard.NoteCommit.configure cols b; (b.ensureNumSelectors 56).cs)
-  { config := cols, cs := cs, synthesize := Halo2.Orchard.ActionSynthesis.synthesize }
+  { config := cols, cs := cs, selectorKinds := b.selectorKinds, synthesize := Halo2.Orchard.ActionSynthesis.synthesize }
 
 /-- Selector activation matrix produced by the current synthesis skeleton. -/
 def selectorActivationMatrix : List (List Bool) :=

@@ -163,7 +163,12 @@ def Builder.lookup (b : Builder) (args : LookupArgument) : Builder :=
   { b with cs.lookups := b.cs.lookups ++ [args] }
 
 def Builder.ensureNumSelectors (b : Builder) (n : Nat) : Builder :=
-  if b.cs.numSelectors < n then { b with cs.numSelectors := n } else b
+  if b.cs.numSelectors < n then
+    let missing := n - b.cs.numSelectors
+    { b with
+      cs.numSelectors := n
+      selectorKinds := b.selectorKinds ++ List.replicate missing SelectorKind.simple }
+  else b
 
 end Halo2.Pinned
 
