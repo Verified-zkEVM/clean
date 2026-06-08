@@ -44,3 +44,4 @@ import Clean.Examples.FibonacciWithChannels
 import Clean.Gadgets.SHA256.SHA256Compress
 import Clean.Halo2.Ecc
 import Clean.Halo2.Orchard
+import Clean.Halo2.Fixtures.RustPinnedCS
