@@ -191,11 +191,13 @@ designed to be used for proving soundness by adding one table after another.
 -/
 def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawChannel F) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
-  ∃ extraInteractions : List (Interaction F),
-    -- the total of known + unknown interactions is balanced
-    BalancedInteractions (tables.interactionsWith channel ++ extraInteractions) ∧
-    -- the extra interactions are with the same channel.
-    (∀ i ∈ extraInteractions, i.channel = channel) ∧
+    ∃ extraInteractions : List (Interaction F),
+      -- the total of known + unknown interactions is balanced
+      BalancedInteractions (tables.interactionsWith channel ++ extraInteractions) ∧
+      -- guarantee-side interactions are either active pulls or disabled padding
+      channel.InteractionsWellFormed (tables.interactionsWith channel ++ extraInteractions) ∧
+      -- the extra interactions are with the same channel.
+      (∀ i ∈ extraInteractions, i.channel = channel) ∧
     -- additionally, we _assume_ that either the requirements on future interactions hold unconditionally,
     -- or that known interactions do not assume guarantees on the same channel.
     -- this restricts the order in which tables can be added. essentially, it requires that the `extraTables`
@@ -205,10 +207,12 @@ def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawCha
 
 /-- Partial balance is trivially weaker than balance -/
 lemma partialBalancedChannel_of_balancedInteractions [DecidableEq F] {tables : Tables F} {channel : RawChannel F} :
-    BalancedInteractions (tables.interactionsWith channel) → PartialBalancedChannel tables channel := by
-  intro balanced
+    BalancedInteractions (tables.interactionsWith channel) →
+    channel.InteractionsWellFormed (tables.interactionsWith channel) →
+    PartialBalancedChannel tables channel := by
+  intro balanced wellformed
   use []
-  simp [balanced]
+  simp [balanced, wellformed]
 
 /--
 For ordered channels, we can always instantiate partial balance at an initial sublist.
@@ -219,12 +223,15 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt [DecidableEq F]
   PartialBalancedChannel (.cons table tables same_data) channel →
   OrderedChannelLt channel tables.components [table.component] →
     PartialBalancedChannel tables channel := by
-  rintro ⟨ extraInteractions, balanced, same_channel, extra_reqs_or_no_grts ⟩ not_in_reqs_or
+  rintro ⟨ extraInteractions, balanced, wellformed, same_channel, extra_reqs_or_no_grts ⟩ not_in_reqs_or
   use table.interactionsWith channel ++ extraInteractions
   simp only [circuit_norm] at *
   simp [or_imp] at ⊢ not_in_reqs_or extra_reqs_or_no_grts
   constructor
   · apply balancedInteractions_of_perm balanced
+    grw [List.perm_append_comm_assoc]
+  constructor
+  · apply wellformed.of_perm
     grw [List.perm_append_comm_assoc]
   constructor
   · intro a
@@ -279,7 +286,7 @@ lemma guarantees_of_requirements_cons [DecidableEq F]
   · exact table.guarantees_of_not_mem grts
   replace reqs := table.requirements_of_not_mem reqs
   -- there's a special case to discard where the guarantees are trivially satisfied
-  rcases partial_balance with ⟨ extraInteractions, balanced, same_channel, grts | extra_reqs ⟩
+  rcases partial_balance with ⟨ extraInteractions, balanced, wellformed, same_channel, grts | extra_reqs ⟩
   · simp only [circuit_norm] at grts
     exact table.guarantees_of_not_mem grts.left
   -- now, to prove this table's channel guarantees, we show guarantees on _all_ channel interactions (that we know are balanced)
@@ -309,7 +316,7 @@ lemma guarantees_of_requirements_cons [DecidableEq F]
     · exact ⟨ same_channel i h_mem_extra, extra_reqs i h_mem_extra ⟩
   -- consistent channels goes from requirements to guarantees
   -- uses `consistent_channels` and `partial_balance`
-  apply ‹channel.Consistent›.consistent channelInteractions tables.data balanced all_reqs
+  apply ‹channel.Consistent›.consistent channelInteractions tables.data balanced wellformed all_reqs
 
 /--
 Partial balance can be specialized to a sublist (= part of a permutation),
@@ -320,13 +327,15 @@ lemma partialBalancedChannel_of_sublist [DecidableEq F] {subtables tables : Tabl
   (∃ otherTables, tables.tables.Perm (subtables.tables ++ otherTables) ∧
     ∀ table ∈ otherTables, channel ∉ table.channelsWithRequirements) →
     PartialBalancedChannel subtables channel := by
-  rintro ⟨ extraInteractions, balanced, same_channel, no_grts_or_extra_reqs ⟩ subset_tables
+  rintro ⟨ extraInteractions, balanced, wellformed, same_channel, no_grts_or_extra_reqs ⟩ subset_tables
   obtain ⟨ otherTables, perm, otherReqs ⟩ := subset_tables
   by_cases subtables_empty : subtables.tables = []
   · simp [subtables_empty, circuit_norm, PartialBalancedChannel, Tables.interactionsWith]
     use []
-    simp [BalancedInteractions, balanceOf]
-    omega
+    simp [BalancedInteractions, balanceOf, RawChannel.InteractionsWellFormed]
+    by_cases h : ringChar F = 0
+    · exact Or.inr h
+    · exact Or.inl (Nat.pos_of_ne_zero h)
   have subtables_subset : subtables.tables ⊆ tables.tables := by
     have p := perm.symm.subset
     simp_all
@@ -341,6 +350,11 @@ lemma partialBalancedChannel_of_sublist [DecidableEq F] {subtables tables : Tabl
   constructor; swap
   -- TODO this half is surprisingly long/annoying, maybe missing helper lemmas
   · simp [circuit_norm, or_imp]
+    constructor
+    · apply wellformed.of_perm
+      simp only [Tables.interactionsWith]
+      grw [← List.append_assoc, List.perm_append_right_iff, ← List.flatMap_append, perm.flatMap]
+      exact fun _ _ => List.Perm.refl _
     constructor
     · intro i
       use fun _ _ => Table.channel_eq_of_mem_interactionsWith

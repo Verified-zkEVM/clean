@@ -177,6 +177,8 @@ def pushIf {channel : Channel F Message} (gate : Expression F) (msg : Message (E
 
 omit [Field F] in @[circuit_norm] lemma pushIf_def (gate : Expression F) (msg : Message (Expression F)) :
   ({ mult := gate, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushIf gate msg := rfl
+omit [Field F] in @[circuit_norm] lemma emitted_eq_pushIf (gate : Expression F) (msg : Message (Expression F)) :
+  (emitted gate msg : ChannelInteraction channel) = pushIf gate msg := rfl
 @[circuit_norm] lemma pushed_eq_pushIf_one (msg : Message (Expression F)) :
   (pushed msg : ChannelInteraction channel) = pushIf 1 msg := rfl
 omit [Field F] in @[circuit_norm] lemma pushIf_mult (gate : Expression F) (msg : Message (Expression F)) :
@@ -212,8 +214,8 @@ def Guarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
 
 @[circuit_norm]
 def Requirements (i : ChannelInteraction channel) (env : Environment F) : Prop :=
-  Expression.eval env i.mult ≠ -1 → Expression.eval env i.mult ≠ 0 →
-    channel.Guarantees (eval env i.msg) env.data
+  i.assumeGuarantees = false → Expression.eval env i.mult ≠ -1 → Expression.eval env i.mult ≠ 0 →
+      channel.Guarantees (eval env i.msg) env.data
 end ChannelInteraction
 
 namespace AbstractInteraction
@@ -221,7 +223,7 @@ def Guarantees (i : AbstractInteraction F) (env : Environment F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees (env i.mult) (i.msg.map env) env.data
 
 def Requirements (i : AbstractInteraction F) (env : Environment F) : Prop :=
-  i.channel.Requirements (env i.mult) (i.msg.map env) env.data
+  i.assumeGuarantees = false → i.channel.Requirements (env i.mult) (i.msg.map env) env.data
 end AbstractInteraction
 
 namespace ChannelInteraction
@@ -267,7 +269,7 @@ def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees i.mult i.msgVector data
 
 def Requirements (i : Interaction F) (data : ProverData F) : Prop :=
-  i.channel.Requirements i.mult i.msgVector data
+  i.assumeGuarantees = false → i.channel.Requirements i.mult i.msgVector data
 end Interaction
 
 namespace AbstractInteraction
@@ -293,6 +295,7 @@ lemma eval_requirements {i : AbstractInteraction F} {env : Environment F} :
     (i.eval env).Requirements env.data ↔ i.Requirements env := by
   simp only [Interaction.Requirements, AbstractInteraction.eval, AbstractInteraction.Requirements]
   rfl
+
 end AbstractInteraction
 
 namespace Channel

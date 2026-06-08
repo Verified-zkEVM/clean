@@ -486,7 +486,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   localLength _ _ := 0
   operations msg _ := [.interact (pullIf (channel:=channel) gate msg).toRaw]
   channelsWithGuarantees _ _ := [channel.toRaw]
-  channelsWithRequirements _ _ := [channel.toRaw]
+  channelsWithRequirements _ _ := []
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
     ExplicitCircuits (F:=F) (channel.push) where
