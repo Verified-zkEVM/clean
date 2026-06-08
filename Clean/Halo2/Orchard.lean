@@ -612,7 +612,6 @@ def synthesize (cols : Orchard.EccColumns) : SynthesizeM Unit := do
 
 end Halo2.Orchard.ActionSynthesisM
 
-
 namespace Halo2.Orchard.ActionConfigureM
 
 open Halo2.Synthesis
@@ -639,7 +638,6 @@ def configure : ConfigureM Orchard.EccColumns := do
   pure cols
 
 end Halo2.Orchard.ActionConfigureM
-
 
 namespace Halo2.Orchard.Action
 
