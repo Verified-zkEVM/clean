@@ -526,6 +526,22 @@ theorem place_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop
     rcases hop with ⟨localOp, hLocal, rfl⟩
     simpa using h localOp hLocal
 
+@[simp]
+theorem place_append (baseRow : Nat) (c d : LocalCircuit) :
+    (c ++ d).place baseRow = c.place baseRow ++ d.place baseRow := by
+  change ({ operations := (c.operations ++ d.operations).map (LocalOperation.place baseRow) } : Circuit) =
+    ({ operations := c.operations.map (LocalOperation.place baseRow) ++
+      d.operations.map (LocalOperation.place baseRow) } : Circuit)
+  simp [List.map_append]
+
+@[simp]
+theorem place_push (baseRow : Nat) (c : LocalCircuit) (op : LocalOperation) :
+    (c.push op).place baseRow = (c.place baseRow).push (op.place baseRow) := by
+  change { operations := (c.operations ++ [op]).map (LocalOperation.place baseRow) } =
+    ({ operations := c.operations.map (LocalOperation.place baseRow) } : Circuit).push
+      (op.place baseRow)
+  simp [Circuit.push, List.map_append]
+
 /-- Local circuit satisfaction composes under append. -/
 theorem append_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop}
     {trace : Trace F} {c d : LocalCircuit} :
