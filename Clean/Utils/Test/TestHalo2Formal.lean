@@ -227,6 +227,13 @@ theorem placedFixedFormalGadget_sound {trace : Trace Int}
   have hSpec := fixedFormalGadget.sound_placed 5 trivial h
   simpa [localFixedCell, LocalCell.eval, LocalCell.fixed, Trace.relative, Pinned.Column.fixed] using hSpec
 
+/-- `FormalGadget.append` combines local circuits and proves both local specs. -/
+theorem appendFormalGadget_sound {trace : Trace Int}
+    (h : (fixedFormalGadget.append wireFormalGadget).circuit.Satisfied
+      (fixedFormalGadget.append wireFormalGadget).lookup trace) :
+    fixedFormalGadget.Spec trace ∧ wireFormalGadget.Spec trace := by
+  exact (fixedFormalGadget.append wireFormalGadget).sound ⟨trivial, trivial⟩ h
+
 /-- `Circuit.push` composes constraints in the same proof style as Clean circuits. -/
 theorem push_satisfaction_example {trace : Trace Int}
     (h : (Circuit.wire leftCell rightCell).push (Operation.fixed leftCell "one") |>.Satisfied

@@ -282,6 +282,17 @@ theorem place_satisfied {F : Type} [Ring F] {lookup : List F → List F → Prop
       simp [Pinned.Expression.eval_relative]
     simp [place, Satisfied, hInputs, hTable, Nat.cast_add]
 
+/-- Local operation satisfaction is monotone in the lookup relation. -/
+theorem satisfied_mono_lookup {F : Type} [Ring F]
+    {lookup lookup' : List F → List F → Prop} {trace : Trace F} {op : LocalOperation}
+    (hLookup : ∀ inputs table, lookup inputs table → lookup' inputs table)
+    (h : op.Satisfied lookup trace) : op.Satisfied lookup' trace := by
+  cases op with
+  | gate row expr => simpa [Satisfied] using h
+  | wire left right => simpa [Satisfied] using h
+  | fixed cell value => simpa [Satisfied] using h
+  | lookup row inputs table => exact hLookup _ _ h
+
 end LocalOperation
 
 /-- A Halo2 circuit as a list of proof-facing operations.  This intentionally
@@ -638,6 +649,14 @@ theorem lookup_satisfied {F : Type} [Ring F] {lookupRel : List F → List F → 
     subst op
     simpa [LocalOperation.Satisfied] using h
 
+/-- Local circuit satisfaction is monotone in the lookup relation. -/
+theorem satisfied_mono_lookup {F : Type} [Ring F]
+    {lookup lookup' : List F → List F → Prop} {trace : Trace F} {c : LocalCircuit}
+    (hLookup : ∀ inputs table, lookup inputs table → lookup' inputs table)
+    (h : c.Satisfied lookup trace) : c.Satisfied lookup' trace := by
+  intro op hop
+  exact LocalOperation.satisfied_mono_lookup hLookup (h op hop)
+
 end LocalCircuit
 
 /-- Soundness statement for a Halo2 circuit: under assumptions, satisfying the
@@ -670,6 +689,25 @@ theorem sound {F : Type} [Ring F] (g : FormalGadget F) {trace : Trace F}
     (hAssumptions : g.Assumptions trace)
     (h : g.circuit.Satisfied g.lookup trace) : g.Spec trace :=
   g.soundness hAssumptions h
+
+/-- Compose two local gadgets that use the same lookup interpretation.  The
+composed gadget has the appended local circuit and proves both specs. -/
+def append {F : Type} [Ring F] (left right : FormalGadget F) : FormalGadget F :=
+  { name := left.name ++ " ++ " ++ right.name
+    circuit := left.circuit ++ right.circuit
+    lookup := fun inputs table => left.lookup inputs table ∧ right.lookup inputs table
+    Assumptions := fun trace => left.Assumptions trace ∧ right.Assumptions trace
+    Spec := fun trace => left.Spec trace ∧ right.Spec trace
+    soundness := by
+      intro trace hAssumptions hSatisfied
+      rcases hAssumptions with ⟨hLeftAssumptions, hRightAssumptions⟩
+      have hParts := LocalCircuit.append_satisfied.mp hSatisfied
+      have hLeftSatisfied : left.circuit.Satisfied left.lookup trace :=
+        LocalCircuit.satisfied_mono_lookup (fun _ _ h => h.left) hParts.left
+      have hRightSatisfied : right.circuit.Satisfied right.lookup trace :=
+        LocalCircuit.satisfied_mono_lookup (fun _ _ h => h.right) hParts.right
+      exact ⟨left.sound hLeftAssumptions hLeftSatisfied,
+        right.sound hRightAssumptions hRightSatisfied⟩ }
 
 end FormalGadget
 
