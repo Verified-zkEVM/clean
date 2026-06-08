@@ -231,6 +231,87 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
 end Halo2.Orchard.EccAllocated
 
 
+namespace Halo2.Orchard.Poseidon
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+private def f (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryF b cols i r
+
+/-- Skeleton of `Pow5Chip::configure` for the Orchard Poseidon instance. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let state := #[6,7,8]
+  let b := state.foldl (fun b i => b.enableEquality cols.advices[i]!) b
+  let b := b.enableEquality cols.lagrangeCoeffs[5]!
+  let b := b.enableEquality cols.lagrangeCoeffs[6]!
+  let b := b.enableEquality cols.lagrangeCoeffs[7]!
+  let (sFull, b) := b.selector
+  let (sPartial, b) := b.selector
+  let (sPadAndAdd, b) := b.selector
+  let (s0, b) := a b cols 6
+  let (s1, b) := a b cols 7
+  let (s2, b) := a b cols 8
+  let (n0, b) := a b cols 6 1
+  let (n1, b) := a b cols 7 1
+  let (n2, b) := a b cols 8 1
+  let (rc0, b) := f b cols 2
+  let (rc1, b) := f b cols 3
+  let (rc2, b) := f b cols 4
+  let pow5 (x : Expression) := let x2 := x*x; x2*x2*x
+  let b := b.createGate [
+    Expression.selector sFull * (pow5 (s0 + rc0) - n0),
+    Expression.selector sFull * (pow5 (s1 + rc1) - n1),
+    Expression.selector sFull * (pow5 (s2 + rc2) - n2)]
+  let (mid, b) := a b cols 5
+  let b := b.createGate [Expression.selector sPartial * (pow5 (s0 + rc0) - mid)]
+  let (p0, b) := a b cols 6 (-1)
+  let (p1, b) := a b cols 7 (-1)
+  let (p2, b) := a b cols 8 (-1)
+  b.createGate [
+    Expression.selector sPadAndAdd * (p0 + s0 - n0),
+    Expression.selector sPadAndAdd * (p1 + s1 - n1),
+    Expression.selector sPadAndAdd * (p2 - n2)]
+
+end Halo2.Orchard.Poseidon
+
+namespace Halo2.Orchard.Sinsemilla
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+
+/-- Skeleton of one `SinsemillaChip::configure` call. It allocates the same
+selector/fixed-column shape and representative constraints. -/
+def configure (cols : Orchard.EccColumns) (startAdvice witnessAdvice fixedYq : Nat)
+    (b : Builder) : Builder :=
+  let adviceIdxs := (List.range 5).map (fun i => startAdvice + i)
+  let b := adviceIdxs.foldl (fun b i => b.enableEquality cols.advices[i]!) b
+  let b := b.enableEquality cols.advices[witnessAdvice]!
+  let (qS1, b) := b.complexSelector
+  let (qS2Col, b) := b.fixedColumn
+  let (qS4, b) := b.selector
+  let (xA, b) := a b cols startAdvice
+  let (xP, b) := a b cols (startAdvice+1)
+  let (_, b) := a b cols (startAdvice+2)
+  let (l1, b) := a b cols (startAdvice+3)
+  let (l2, b) := a b cols (startAdvice+4)
+  let (l1n, b) := a b cols (startAdvice+3) 1
+  let (xAn, b) := a b cols startAdvice 1
+  let (qS2, b) := b.queryFixed qS2Col (.rot 0)
+  let qS3 := qS2 * (qS2 - Expression.constant FieldConst.one)
+  let xr := l1*l1 - xA - xP
+  let yA := (l1 + l2) * (xA - xr)
+  let (fixedY, b) := b.queryFixed cols.lagrangeCoeffs[fixedYq]! (.rot 0)
+  let b := b.createGate [Expression.selector qS4 * (fixedY * Expression.constant FieldConst.two - yA)]
+  let yAn := (l1n + l2) * (xAn - xr)
+  b.createGate [
+    Expression.selector qS1 * (l2*l2 - (xAn + xr + xA)),
+    Expression.selector qS1 * (l2 * Expression.constant FieldConst.four * (xA - xAn) -
+      (yA * Expression.constant FieldConst.two + (Expression.constant FieldConst.two - qS3) * yAn))]
+
+end Halo2.Orchard.Sinsemilla
+
+
 namespace Halo2.Orchard.Action
 
 open Halo2.Pinned
@@ -294,6 +375,9 @@ def orchardActionCS : ConstraintSystem :=
   let b := configureAddChip cols b
   let b := Halo2.Orchard.LookupRangeCheck.configure cols b
   let b := Halo2.Orchard.EccAllocated.configure cols b
+  let b := Halo2.Orchard.Poseidon.configure cols b
+  let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b
+  let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b
   let b := b.ensureNumSelectors 56
   b.cs
 
