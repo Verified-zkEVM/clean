@@ -202,18 +202,32 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
   let ifGamma := xq * gamma
   let ifDelta := yqPlusYp * delta
   let polyAdd1 := xqMinusXp * (xqMinusXp * lambda - (yq - yp))
-  let polyAdd2 := (one - ifAlpha) * (two * yp * lambda - three * xp * xp)
-  let polyAdd3 := lambda * lambda - xp - xq - xr
-  let polyAdd4 := lambda * xpMinusXr - yp - yr
+  let polyAdd2 := (one - ifAlpha) * (two * yp * lambda - three * (xp * xp))
+  let nonexceptionalXR := lambda * lambda - xp - xq - xr
+  let nonexceptionalYR := lambda * xpMinusXr - yp - yr
+  let polyAdd3a := xp * xq * xqMinusXp * nonexceptionalXR
+  let polyAdd3b := xp * xq * xqMinusXp * nonexceptionalYR
+  let polyAdd3c := xp * xq * yqPlusYp * nonexceptionalXR
+  let polyAdd3d := xp * xq * yqPlusYp * nonexceptionalYR
+  let polyAdd4a := (one - ifBeta) * (xr - xq)
+  let polyAdd4b := (one - ifBeta) * (yr - yq)
+  let polyAdd5a := (one - ifGamma) * (xr - xp)
+  let polyAdd5b := (one - ifGamma) * (yr - yp)
+  let polyAdd6a := (one - ifAlpha - ifDelta) * xr
+  let polyAdd6b := (one - ifAlpha - ifDelta) * yr
   let b := b.createGate [
     Expression.selector qAdd * polyAdd1,
     Expression.selector qAdd * polyAdd2,
-    Expression.selector qAdd * polyAdd3,
-    Expression.selector qAdd * polyAdd4,
-    Expression.selector qAdd * (ifAlpha * (one - ifAlpha)),
-    Expression.selector qAdd * (ifBeta * (one - ifBeta)),
-    Expression.selector qAdd * (ifGamma * (one - ifGamma)),
-    Expression.selector qAdd * (ifDelta * (one - ifDelta))]
+    Expression.selector qAdd * polyAdd3a,
+    Expression.selector qAdd * polyAdd3b,
+    Expression.selector qAdd * polyAdd3c,
+    Expression.selector qAdd * polyAdd3d,
+    Expression.selector qAdd * polyAdd4a,
+    Expression.selector qAdd * polyAdd4b,
+    Expression.selector qAdd * polyAdd5a,
+    Expression.selector qAdd * polyAdd5b,
+    Expression.selector qAdd * polyAdd6a,
+    Expression.selector qAdd * polyAdd6b]
   -- variable-base scalar mul selectors: hi(3), lo(3), complete, overflow, lsb
   let (_, b) := b.selector; let (_, b) := b.selector; let (_, b) := b.selector
   let (_, b) := b.selector; let (_, b) := b.selector; let (_, b) := b.selector
@@ -461,17 +475,19 @@ private def targetPermutationColumns : List Pinned.Column :=
 /-- Current model of the selector-compression phase for the Orchard action
 circuit. This function is where the Lean builder connects configuration-time
 virtual selectors to the fixed selector columns visible in the pinned CS. -/
+private def selectorCompressionPlan : SelectorCompressionPlan :=
+  { selectors := [
+      { selector := 0, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 1 },
+      { selector := 1, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 2 },
+      { selector := 4, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 3 },
+      { selector := 5, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 1 },
+      { selector := 6, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 2 },
+      { selector := 7, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 3 },
+      { selector := 8, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 4 },
+      { selector := 22, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 4 } ] }
+
 def compressSelectors (cs : ConstraintSystem) : ConstraintSystem :=
-  let replacement : Nat → Expression := fun
-    | 0 => compressedSelector 18 18 6 1
-    | 1 => compressedSelector 18 18 6 2
-    | 4 => compressedSelector 18 18 6 3
-    | 5 => compressedSelector 19 19 4 1
-    | 6 => compressedSelector 19 19 4 2
-    | 7 => compressedSelector 19 19 4 3
-    | 8 => compressedSelector 19 19 4 4
-    | i => .selector i
-  let cs := cs.replaceSelectors replacement
+  let cs := selectorCompressionPlan.apply cs
   { cs with
     numFixedColumns := 29
     fixedQueries := targetFixedQueries

@@ -35,8 +35,8 @@ namespace Halo2.Tests
 /-- The Lean-rendered pinned CS now matches the Rust fixture through the complete
 compressed top-level Orchard gate prefix. -/
 theorem orchardActionPinnedCS_prefix_matches_rust :
-    ((Halo2.Pinned.Debug.constraintSystem Halo2.Orchard.Action.plonkCircuitPinnedCS).take 65000 ==
-      Halo2.Fixtures.RustPinnedCS.orchardAction.take 65000) = true := by
+    ((Halo2.Pinned.Debug.constraintSystem Halo2.Orchard.Action.plonkCircuitPinnedCS).take 118000 ==
+      Halo2.Fixtures.RustPinnedCS.orchardAction.take 118000) = true := by
   native_decide
 
 end Halo2.Tests

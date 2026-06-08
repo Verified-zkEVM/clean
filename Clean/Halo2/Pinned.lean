@@ -219,4 +219,30 @@ def ConstraintSystem.replaceSelectors (cs : ConstraintSystem) (replacement : Nat
       inputExpressions := l.inputExpressions.map (Expression.replaceSelectors replacement)
       tableExpressions := l.tableExpressions.map (Expression.replaceSelectors replacement) } }
 
+/-- One virtual selector assigned to one root in one fixed selector-compression column. -/
+structure CompressedSelector where
+  selector : Nat
+  queryIndex : Nat
+  columnIndex : Nat
+  combinationLen : Nat
+  assignedRoot : Nat
+deriving Repr, DecidableEq, BEq
+
+/-- Metadata for replacing virtual selectors by Halo2 compressed fixed-column expressions. -/
+structure SelectorCompressionPlan where
+  selectors : List CompressedSelector := []
+deriving Repr, DecidableEq, BEq
+
+namespace SelectorCompressionPlan
+
+def replacement (plan : SelectorCompressionPlan) (selector : Nat) : Expression :=
+  match plan.selectors.find? (fun c => c.selector = selector) with
+  | some c => compressedSelector c.queryIndex c.columnIndex c.combinationLen c.assignedRoot
+  | none => .selector selector
+
+def apply (plan : SelectorCompressionPlan) (cs : ConstraintSystem) : ConstraintSystem :=
+  cs.replaceSelectors plan.replacement
+
+end SelectorCompressionPlan
+
 end Halo2.Pinned
