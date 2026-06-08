@@ -126,6 +126,13 @@ theorem localWire_place_shifts_cells :
         { column := Pinned.Column.advice 1, row := 8 }] := by
   native_decide
 
+/-- Local placement commutes with local append. -/
+theorem localCircuit_place_append_example :
+    ((LocalCircuit.wire localBoolCell localBoolCell ++ LocalCircuit.assertZero 0 localBoolGate).place 4).operations =
+      ((LocalCircuit.wire localBoolCell localBoolCell).place 4 ++
+        (LocalCircuit.assertZero 0 localBoolGate).place 4).operations := by
+  simp
+
 /-- Local circuit composition has the same proof ergonomics as global circuits. -/
 theorem localPush_satisfaction_example {trace : Trace Int}
     (h : (LocalCircuit.wire localBoolCell localBoolCell).push
