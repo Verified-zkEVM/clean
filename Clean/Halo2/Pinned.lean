@@ -243,6 +243,22 @@ def replacement (plan : SelectorCompressionPlan) (selector : Nat) : Expression :
 def apply (plan : SelectorCompressionPlan) (cs : ConstraintSystem) : ConstraintSystem :=
   cs.replaceSelectors plan.replacement
 
+private def noDuplicateSelectorsAux (seen : List Nat) : List CompressedSelector → Bool
+  | [] => true
+  | c :: cs =>
+      if seen.contains c.selector then false
+      else noDuplicateSelectorsAux (c.selector :: seen) cs
+
+def noDuplicateSelectors (plan : SelectorCompressionPlan) : Bool :=
+  noDuplicateSelectorsAux [] plan.selectors
+
+def rootsInRange (plan : SelectorCompressionPlan) : Bool :=
+  plan.selectors.all fun c => 0 < c.assignedRoot && c.assignedRoot <= c.combinationLen
+
+/-- Boolean well-formedness check for selector-compression metadata. -/
+def wellFormed (plan : SelectorCompressionPlan) : Bool :=
+  plan.noDuplicateSelectors && plan.rootsInRange
+
 end SelectorCompressionPlan
 
 end Halo2.Pinned

@@ -486,6 +486,9 @@ private def selectorCompressionPlan : SelectorCompressionPlan :=
       { selector := 8, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 4 },
       { selector := 22, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 4 } ] }
 
+theorem selectorCompressionPlan_wellFormed : selectorCompressionPlan.wellFormed = true := by
+  native_decide
+
 def compressSelectors (cs : ConstraintSystem) : ConstraintSystem :=
   let cs := selectorCompressionPlan.apply cs
   { cs with
