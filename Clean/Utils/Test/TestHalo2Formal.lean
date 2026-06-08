@@ -90,6 +90,11 @@ theorem localCell_expr_uses_negative_relative_rotation :
     (LocalCell.advice 0 1).expr 3 = .advice 0 0 (.rot (-2)) := by
   native_decide
 
+/-- Evaluating a local-cell expression at its gate row reads the local cell. -/
+theorem localCell_expr_eval_at_gate_row {trace : Trace Int} :
+    ((LocalCell.advice 0 1).expr 3).eval trace 3 = (LocalCell.advice 0 1).eval trace := by
+  exact LocalCell.expr_eval_at_gate_row trace (LocalCell.advice 0 1) 3
+
 /-- The same Boolean proof as a reusable local gadget: the spec names a local
 cell, not an absolute global Plonk row. -/
 def boolGateFormalGadget : FormalGadget Int :=
