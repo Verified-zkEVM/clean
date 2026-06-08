@@ -478,6 +478,8 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
   operations msg _ := [.interact (channel.pulled msg).toRaw]
   channelsWithGuarantees _ _ := [channel.toRaw]
   channelsWithRequirements _ _ := []
+  channelsLawful msg n := by
+    simp [Operations.ChannelsLawful, circuit_norm]
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
     ExplicitCircuits (F:=F) (channel.push) where

@@ -12,7 +12,7 @@ def copyToVar (x : Expression F) : Circuit F (Variable F) := do
   return x'
 
 def toVar : Expression F → Circuit F (Variable F)
-  | var v => pure v
+  | .var v => pure v
   | x => copyToVar x
 
 -- these could be used if you want to witness _any_ value and don't care which

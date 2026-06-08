@@ -537,7 +537,7 @@ theorem varFromOffset_fields {F} (offset : ℕ) :
 @[circuit_norm ↓]
 theorem eval_fieldPair (env : Environment F) (t : fieldPair (Expression F)) :
     Eval.eval env t = (Expression.eval env t.1, Expression.eval env t.2):= by
-  simp [circuit_norm, explicit_provable_type]
+  with_unfolding_all rfl
 
 @[circuit_norm] lemma eval_fieldPair_prover (env : ProverEnvironment F) (t : fieldPair (Expression F)) :
     Eval.eval env t = (Expression.eval env t.1, Expression.eval env t.2) := by
@@ -628,7 +628,7 @@ theorem eval_varFromOffset (env : Environment F) (offset : ℕ) :
   congr
   rw [Vector.ext_iff]
   intro i hi
-  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval, Expression.var]
 
 theorem eval_varFromOffset_prover {α : TypeMap} [ProvableType α] (env : ProverEnvironment F) (offset : ℕ) :
     (Eval.eval env (varFromOffset α offset : α (Expression F)) : α F) =
@@ -957,18 +957,70 @@ instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression
   hSub (a : Expression F) (b : Expression F) := a - b
 
 instance : HMul (field (Expression F)) (Expression F) (Expression F) where
-  hMul (x : Expression F) y := x * y
+  hMul (x : Expression F) y := (x * y : Expression F)
 instance : HMul (Expression F) (field (Expression F)) (Expression F) where
-  hMul x (y : Expression F) := x * y
+  hMul x (y : Expression F) := (x * y : Expression F)
 instance : HMul F (field (Expression F)) (field (Expression F)) where
-  hMul x y : Expression F := x * y
+  hMul x y : Expression F :=
+    ExpressionWithLocation.mul (ExpressionWithLocation.const x : Expression F) (y : Expression F)
 instance : HMul (field (Expression F)) F (field (Expression F)) where
-  hMul x y : Expression F := x * y
+  hMul x y : Expression F :=
+    ExpressionWithLocation.mul (x : Expression F) (ExpressionWithLocation.const y : Expression F)
 instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hMul (a : Expression F) (b : Expression F) := a * b
+  hMul (a : Expression F) (b : Expression F) := (a * b : Expression F)
 
 instance {n : ℕ} [OfNat F n] : OfNat (field F) n where
   ofNat : F := OfNat.ofNat n
+
+@[circuit_norm]
+lemma eval_field_one (env : Environment F) :
+    Expression.eval env (1 : field (Expression F)) = (1 : field F) := by
+  exact Expression.eval_one env
+
+@[circuit_norm]
+lemma eval_field_add (env : Environment F) (x y : field (Expression F)) :
+    Expression.eval env (x + y) = Expression.eval env x + Expression.eval env y := by
+  exact Expression.eval_add_op env x y
+
+@[circuit_norm]
+lemma eval_field_add_expr (env : Environment F) (x : field (Expression F)) (y : Expression F) :
+    Expression.eval env (x + y) = Expression.eval env x + Expression.eval env y := by
+  exact Expression.eval_add_op env x y
+
+@[circuit_norm]
+lemma eval_expr_add_field (env : Environment F) (x : Expression F) (y : field (Expression F)) :
+    Expression.eval env (x + y) = Expression.eval env x + Expression.eval env y := by
+  exact Expression.eval_add_op env x y
+
+@[circuit_norm]
+lemma eval_field_sub (env : Environment F) (x y : field (Expression F)) :
+    Expression.eval env (x - y) = Expression.eval env x - Expression.eval env y := by
+  exact Expression.eval_sub_op env x y
+
+@[circuit_norm]
+lemma eval_field_sub_expr (env : Environment F) (x : field (Expression F)) (y : Expression F) :
+    Expression.eval env (x - y) = Expression.eval env x - Expression.eval env y := by
+  exact Expression.eval_sub_op env x y
+
+@[circuit_norm]
+lemma eval_expr_sub_field (env : Environment F) (x : Expression F) (y : field (Expression F)) :
+    Expression.eval env (x - y) = Expression.eval env x - Expression.eval env y := by
+  exact Expression.eval_sub_op env x y
+
+@[circuit_norm]
+lemma eval_field_mul (env : Environment F) (x y : field (Expression F)) :
+    Expression.eval env (x * y) = Expression.eval env x * Expression.eval env y := by
+  exact Expression.eval_mul_op env x y
+
+@[circuit_norm]
+lemma eval_field_mul_expr (env : Environment F) (x : field (Expression F)) (y : Expression F) :
+    Expression.eval env (x * y) = Expression.eval env x * Expression.eval env y := by
+  exact Expression.eval_mul_op env x y
+
+@[circuit_norm]
+lemma eval_expr_mul_field (env : Environment F) (x : Expression F) (y : field (Expression F)) :
+    Expression.eval env (x * y) = Expression.eval env x * Expression.eval env y := by
+  exact Expression.eval_mul_op env x y
 
 instance [Coe ℕ F] : Coe ℕ (field F) where
   coe n : F := n
@@ -999,6 +1051,10 @@ instance : HSub (Expression F) (Var field F) (Expression F) := inferInstanceAs (
 instance : HSub (Var field F) (Expression F) (Expression F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
 instance : HMul (Expression F) (Var field F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
 instance : HMul (Var field F) (Expression F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
+instance : HMul (Var field F) (ExpressionWithLocation F ℕ) (Expression F) where
+  hMul x y := ExpressionWithLocation.mul (x : Expression F) (y : Expression F)
+instance : HMul (ExpressionWithLocation F ℕ) (Var field F) (Expression F) where
+  hMul x y := ExpressionWithLocation.mul (x : Expression F) (y : Expression F)
 instance : HDiv (Var field F) F (Expression F) := inferInstanceAs (HDiv (Expression F) F (Expression F))
 instance : HDiv (Var field F) ℕ (Expression F) := inferInstanceAs (HDiv (Expression F) ℕ (Expression F))
 

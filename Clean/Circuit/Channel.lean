@@ -280,17 +280,11 @@ def pushedValue (channel : Channel F Message) (msg : Message F) : Interaction F 
 
 lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pulled msg).toRaw.eval env = channel.pulledValue (eval env msg) := by
-  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
-  simp only [mul_one, and_true, true_and]
-  congr
-  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
-  rfl
+  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq, true_and, and_true]
+  rw [ProvableType.toElements_eval]
 
 lemma eval_pushed {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pushed msg).toRaw.eval env = channel.pushedValue (eval env msg) := by
-  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
-  simp only [and_true, true_and]
-  congr
-  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
-  rfl
+  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq, true_and, and_true]
+  rw [ProvableType.toElements_eval]
 end Channel
