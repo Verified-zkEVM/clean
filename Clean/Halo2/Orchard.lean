@@ -25,6 +25,7 @@ def three := "0x0000000000000000000000000000000000000000000000000000000000000003
 def four := "0x0000000000000000000000000000000000000000000000000000000000000004"
 def five := "0x0000000000000000000000000000000000000000000000000000000000000005"
 def eight := "0x0000000000000000000000000000000000000000000000000000000000000008"
+def twoInv := "0x2000000000000000000000000000000011234c7e04a67c8dcc96987680000001"
 
 def pallasB := "0x0000000000000000000000000000000000000000000000000000000000000005"
 
@@ -229,11 +230,84 @@ def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
     Expression.selector qAdd * polyAdd6a,
     Expression.selector qAdd * polyAdd6b]
   -- variable-base scalar mul selectors: hi(3), lo(3), complete, overflow, lsb
-  let (_, b) := b.selector; let (_, b) := b.selector; let (_, b) := b.selector
-  let (_, b) := b.selector; let (_, b) := b.selector; let (_, b) := b.selector
+  let (qMulHi1, b) := b.selector; let (qMulHi2, b) := b.selector; let (qMulHi3, b) := b.selector
+  let (qMulLo1, b) := b.selector; let (qMulLo2, b) := b.selector; let (qMulLo3, b) := b.selector
+  let (qMulComplete, b) := b.selector
   let (_, b) := b.selector
   let (_, b) := b.selector
-  let (_, b) := b.selector
+  let (hiLambda1Cur, b) := a b cols 4
+  let (hiXANext, b) := a b cols 3 1
+  let (hiLambda1Next, b) := a b cols 4 1
+  let (hiLambda2Next, b) := a b cols 5 1
+  let (hiXPNext, b) := a b cols 0 1
+  let hiXRNext := hiLambda1Next * hiLambda1Next - hiXANext - hiXPNext
+  let hiYANext := Expression.scale ((hiLambda1Next + hiLambda2Next) * (hiXANext - hiXRNext)) FieldConst.twoInv
+  let b := b.createGate [Expression.selector qMulHi1 * (hiLambda1Cur - hiYANext)]
+  let (hiYPCur, b) := a b cols 1
+  let (hiYPNext, b) := a b cols 1 1
+  let (hiZCur, b) := a b cols 9
+  let (hiZPrev, b) := a b cols 9 (-1)
+  let hiK := hiZCur - Expression.scale hiZPrev FieldConst.two
+  let (hiXACur, b) := a b cols 3
+  let (hiLambda2Cur, b) := a b cols 5
+  let hiXRCur := hiLambda1Cur * hiLambda1Cur - hiXACur - x0
+  let hiYACur := Expression.scale ((hiLambda1Cur + hiLambda2Cur) * (hiXACur - hiXRCur)) FieldConst.twoInv
+  let hiGradient1 := hiLambda1Cur * (hiXACur - x0) - hiYACur + (Expression.scale hiK FieldConst.two - Expression.constant FieldConst.one) * hiYPCur
+  let hiSecantLine := hiLambda2Cur * hiLambda2Cur - hiXANext - hiXRCur - hiXACur
+  let hiGradient2 := hiLambda2Cur * (hiXACur - hiXANext) - hiYACur - hiYANext
+  let b := b.createGate [
+    Expression.selector qMulHi2 * (x0 - hiXPNext),
+    Expression.selector qMulHi2 * (hiYPCur - hiYPNext),
+    Expression.selector qMulHi2 * (hiK * (Expression.constant FieldConst.one - hiK)),
+    Expression.selector qMulHi2 * hiGradient1,
+    Expression.selector qMulHi2 * hiSecantLine,
+    Expression.selector qMulHi2 * hiGradient2]
+  let hiGradient2Final := hiLambda2Cur * (hiXACur - hiXANext) - hiYACur - hiLambda1Next
+  let b := b.createGate [
+    Expression.selector qMulHi3 * (hiK * (Expression.constant FieldConst.one - hiK)),
+    Expression.selector qMulHi3 * hiGradient1,
+    Expression.selector qMulHi3 * hiSecantLine,
+    Expression.selector qMulHi3 * hiGradient2Final]
+  let (loLambda1Cur, b) := a b cols 8
+  let (loXANext, b) := a b cols 7 1
+  let (loLambda1Next, b) := a b cols 8 1
+  let (loLambda2Next, b) := a b cols 2 1
+  let loXRNext := loLambda1Next * loLambda1Next - loXANext - hiXPNext
+  let loYANext := Expression.scale ((loLambda1Next + loLambda2Next) * (loXANext - loXRNext)) FieldConst.twoInv
+  let b := b.createGate [Expression.selector qMulLo1 * (loLambda1Cur - loYANext)]
+  let (loZCur, b) := a b cols 6
+  let (loZPrev, b) := a b cols 6 (-1)
+  let loK := loZCur - Expression.scale loZPrev FieldConst.two
+  let (loXACur, b) := a b cols 7
+  let (loLambda2Cur, b) := a b cols 2
+  let loXRCur := loLambda1Cur * loLambda1Cur - loXACur - x0
+  let loYACur := Expression.scale ((loLambda1Cur + loLambda2Cur) * (loXACur - loXRCur)) FieldConst.twoInv
+  let loGradient1 := loLambda1Cur * (loXACur - x0) - loYACur + (Expression.scale loK FieldConst.two - Expression.constant FieldConst.one) * hiYPCur
+  let loSecantLine := loLambda2Cur * loLambda2Cur - loXANext - loXRCur - loXACur
+  let loGradient2 := loLambda2Cur * (loXACur - loXANext) - loYACur - loYANext
+  let b := b.createGate [
+    Expression.selector qMulLo2 * (x0 - hiXPNext),
+    Expression.selector qMulLo2 * (hiYPCur - hiYPNext),
+    Expression.selector qMulLo2 * (loK * (Expression.constant FieldConst.one - loK)),
+    Expression.selector qMulLo2 * loGradient1,
+    Expression.selector qMulLo2 * loSecantLine,
+    Expression.selector qMulLo2 * loGradient2]
+  let loGradient2Final := loLambda2Cur * (loXACur - loXANext) - loYACur - loLambda1Next
+  let b := b.createGate [
+    Expression.selector qMulLo3 * (loK * (Expression.constant FieldConst.one - loK)),
+    Expression.selector qMulLo3 * loGradient1,
+    Expression.selector qMulLo3 * loSecantLine,
+    Expression.selector qMulLo3 * loGradient2Final]
+  let (completeZNext, b) := a b cols 9 1
+  let (completeYPPrev, b) := a b cols 1 (-1)
+  let completeK := completeZNext - Expression.constant FieldConst.two * hiZPrev
+  let completeBaseY := hiZCur
+  let completeBool := completeK * (Expression.constant FieldConst.one - completeK)
+  let completeYSwitch := completeK * (completeBaseY - completeYPPrev) +
+    (Expression.constant FieldConst.one - completeK) * (completeBaseY + completeYPPrev)
+  let b := b.createGate [
+    Expression.selector qMulComplete * completeBool,
+    Expression.selector qMulComplete * completeYSwitch]
   -- fixed-base shared running sum, full-width, short, base-field selectors
   let (_, b) := b.selector
   let (_, b) := b.selector
@@ -484,7 +558,13 @@ private def selectorCompressionPlan : SelectorCompressionPlan :=
       { selector := 6, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 2 },
       { selector := 7, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 3 },
       { selector := 8, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 4 },
-      { selector := 22, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 4 } ] }
+      { selector := 9, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 4 },
+      { selector := 10, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 5 },
+      { selector := 11, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 6 },
+      { selector := 12, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 1 },
+      { selector := 13, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 2 },
+      { selector := 14, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 3 },
+      { selector := 15, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 4 } ] }
 
 theorem selectorCompressionPlan_wellFormed : selectorCompressionPlan.wellFormed = true := by
   native_decide
