@@ -156,21 +156,32 @@ def fromConfigured {Config : Type} (c : Synthesis.ConfiguredCircuit Config) : Ci
 
 end Circuit
 
+/-- Soundness statement for a Halo2 circuit: under assumptions, satisfying the
+Halo2-native operations implies the Lean-level spec. -/
+def Soundness {F : Type} [Ring F] (circuit : Circuit) (lookup : List F → List F → Prop)
+    (Assumptions Spec : Trace F → Prop) : Prop :=
+  ∀ {trace : Trace F}, Assumptions trace → circuit.Satisfied lookup trace → Spec trace
+
 /-- A proof-carrying Halo2 circuit, mirroring Clean's `FormalCircuit` idea:
-`circuit` is the Halo2 arithmetization, `Spec` is a Lean predicate over traces,
-and `soundness` is the proof that satisfying the Halo2 operations implies the spec. -/
+`circuit` is the Halo2 arithmetization, `Assumptions` are preconditions on the
+trace, `Spec` is a Lean predicate over traces, and `soundness` proves that
+satisfying the Halo2 operations implies the spec.  Unlike Clean's ordinary
+`FormalCircuit`, this intentionally does not package completeness yet: Daira's
+plan only needs knowledge soundness at this layer. -/
 structure FormalCircuit (F : Type) [Ring F] where
   circuit : Circuit
   lookup : List F → List F → Prop := fun _ _ => True
+  Assumptions : Trace F → Prop := fun _ => True
   Spec : Trace F → Prop
-  soundness : ∀ {trace : Trace F}, circuit.Satisfied lookup trace → Spec trace
+  soundness : Soundness circuit lookup Assumptions Spec
 
 namespace FormalCircuit
 
 /-- Use the soundness proof packaged in a `FormalCircuit`. -/
 theorem sound {F : Type} [Ring F] (c : FormalCircuit F) {trace : Trace F}
+    (hAssumptions : c.Assumptions trace)
     (h : c.circuit.Satisfied c.lookup trace) : c.Spec trace :=
-  c.soundness h
+  c.soundness hAssumptions h
 
 end FormalCircuit
 

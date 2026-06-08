@@ -18,14 +18,14 @@ def wireFormalCircuit : FormalCircuit Int :=
   { circuit := Circuit.wire leftCell rightCell
     Spec := fun trace => trace.evalCell leftCell = trace.evalCell rightCell
     soundness := by
-      intro trace h
+      intro trace _ h
       simpa [Circuit.Satisfied, Operation.Satisfied] using
         h (Operation.wire leftCell rightCell) (by simp [Circuit.wire]) }
 
 theorem wireFormalCircuit_sound {trace : Trace Int}
     (h : wireFormalCircuit.circuit.Satisfied wireFormalCircuit.lookup trace) :
     wireFormalCircuit.Spec trace :=
-  wireFormalCircuit.sound h
+  wireFormalCircuit.sound trivial h
 
 private def zeroGate : Pinned.Expression :=
   .advice 0 0 (.rot 0)
@@ -35,14 +35,14 @@ def zeroGateFormalCircuit : FormalCircuit Int :=
   { circuit := Circuit.gate 0 zeroGate
     Spec := fun trace => trace.advice 0 0 = 0
     soundness := by
-      intro trace h
+      intro trace _ h
       simpa [Circuit.Satisfied, Operation.Satisfied, zeroGate, Pinned.Expression.eval] using
         h (Operation.gate 0 zeroGate) (by simp [Circuit.gate]) }
 
 theorem zeroGateFormalCircuit_sound {trace : Trace Int}
     (h : zeroGateFormalCircuit.circuit.Satisfied zeroGateFormalCircuit.lookup trace) :
     zeroGateFormalCircuit.Spec trace :=
-  zeroGateFormalCircuit.sound h
+  zeroGateFormalCircuit.sound trivial h
 
 /-- Lookup arguments are first-class operations whose relation is supplied by the
 formal trace semantics. -/
