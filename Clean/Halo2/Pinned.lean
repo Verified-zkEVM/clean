@@ -149,7 +149,8 @@ def Builder.enableEquality (b : Builder) (col : Column) : Builder :=
     | .Advice => (b.queryAdvice col (.rot 0)).2
     | .Fixed => (b.queryFixed col (.rot 0)).2
     | .Instance => (b.queryInstance col (.rot 0)).2
-  { b with cs.permutation.columns := b.cs.permutation.columns ++ [col] }
+  if b.cs.permutation.columns.contains col then b else
+    { b with cs.permutation.columns := b.cs.permutation.columns ++ [col] }
 
 def Builder.enableConstant (b : Builder) (col : Column) : Builder :=
   let b := if b.cs.constants.contains col then b else { b with cs.constants := b.cs.constants ++ [col] }
@@ -160,5 +161,8 @@ def Builder.createGate (b : Builder) (polys : List Expression) : Builder :=
 
 def Builder.lookup (b : Builder) (args : LookupArgument) : Builder :=
   { b with cs.lookups := b.cs.lookups ++ [args] }
+
+def Builder.ensureNumSelectors (b : Builder) (n : Nat) : Builder :=
+  if b.cs.numSelectors < n then { b with cs.numSelectors := n } else b
 
 end Halo2.Pinned

@@ -93,12 +93,12 @@ def configureRangeCheck (cols : EccColumns) (b : Builder) : Builder :=
 /-- A first direct transcription of `EccChip::configure`'s custom gates.  This is
 incomplete, but unlike the previous scaffold it is generated from circuit-style
 configuration code and uses Halo2 query allocation. -/
-def configureEccChip (cols : EccColumns) (b : Builder) : Builder :=
-  let (qWitness, b) := querySelector b cols 0
+def configureEccChipAt (selectorOffset : Nat) (cols : EccColumns) (b : Builder) : Builder :=
+  let (qWitness, b) := querySelector b cols selectorOffset
   let (x, b) := queryA b cols 0
   let (y, b) := queryA b cols 1
   let b := b.createGate [selected qWitness (y*y - x*x*x - .constant FieldConst.pallasB)]
-  let (qAdd, b) := querySelector b cols 1
+  let (qAdd, b) := querySelector b cols (selectorOffset + 1)
   let (x0, b) := queryA b cols 0
   let (y0, b) := queryA b cols 1
   let (x1, b) := queryA b cols 2
@@ -106,6 +106,9 @@ def configureEccChip (cols : EccColumns) (b : Builder) : Builder :=
   let (lambda, b) := queryA b cols 4
   let polySlope := (y1 - y0) - lambda * (x1 - x0)
   b.createGate [selected qAdd polySlope]
+
+def configureEccChip (cols : EccColumns) (b : Builder) : Builder :=
+  configureEccChipAt 0 cols b
 
 /-- Construct the pinned constraint-system portion for the Orchard value-commitment
 VK test from idiomatic Halo2 configuration steps. -/
@@ -117,6 +120,40 @@ def orchardValueCommitCS : ConstraintSystem :=
   b.cs
 
 end Halo2.Orchard
+
+namespace Halo2.Orchard.LookupRangeCheck
+
+open Halo2.Pinned
+
+private def twoPow10 := "0x0000000000000000000000000000000000000000000000000000000000000400"
+
+/-- Port of `LookupRangeCheckConfig::<_, 10>::configure`. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let runningSum := cols.advices[9]!
+  let tableIdx := cols.tableIdx
+  let b := b.enableEquality runningSum
+  let (qLookup, b) := b.complexSelector
+  let (qRunning, b) := b.complexSelector
+  let (qBitshift, b) := b.selector
+  let (qLookupE, b) := (.selector qLookup, b)
+  let (qRunningE, b) := (.selector qRunning, b)
+  let (zCur, b) := b.queryAdvice runningSum (.rot 0)
+  let (zNext, b) := b.queryAdvice runningSum (.rot 1)
+  let tableExpr := (b.queryFixed tableIdx (.rot 0)).1
+  let b := (b.queryFixed tableIdx (.rot 0)).2
+  let one := Expression.constant FieldConst.one
+  let runningSumWord := zCur - zNext * Expression.constant twoPow10
+  let runningSumLookup := qRunningE * runningSumWord
+  let shortLookup := (one - qRunningE) * zCur
+  let b := b.lookup { inputExpressions := [qLookupE * (runningSumLookup + shortLookup)], tableExpressions := [tableExpr] }
+  let qBitshiftE := Expression.selector qBitshift
+  let (word, b) := b.queryAdvice runningSum (.rot (-1))
+  let (shiftedWord, b) := b.queryAdvice runningSum (.rot 0)
+  let (invTwoPowS, b) := b.queryAdvice runningSum (.rot 1)
+  b.createGate [qBitshiftE * (word * Expression.constant twoPow10 * invTwoPowS - shiftedWord)]
+
+end Halo2.Orchard.LookupRangeCheck
+
 
 namespace Halo2.Orchard.Action
 
@@ -158,14 +195,19 @@ def configureAddChip (cols : Orchard.EccColumns) (b : Builder) : Builder :=
 /-- Allocate the public input column and top-level Orchard columns in the same
 order as the Rust circuit. -/
 def configureActionColumns (b : Builder) : Orchard.EccColumns × Builder :=
-  let (cols, b) := Orchard.configureColumns b
-  -- Rust allocates the instance column after lookup table columns and before
-  -- enabling advice equality. Our column counts are independent, but the
-  -- permutation order is important; ensure instance equality is first.
-  let cs := { b.cs with
-    numInstanceColumns := 1
-    instanceQueries := [(Pinned.Column.instanceCol 0, Rotation.rot 0)] }
-  (cols, { b with cs := cs })
+  let (advices, b) := Orchard.allocManyAdvice 10 b
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  let (tableIdx, b) := b.fixedColumn
+  let (_lookupX, b) := b.fixedColumn
+  let (_lookupY, b) := b.fixedColumn
+  let (_primary, b) := b.instanceColumn
+  let b := b.enableEquality (Pinned.Column.instanceCol 0)
+  let b := advices.foldl (fun b col => b.enableEquality col) b
+  let (lagrangeCoeffs, b) := Orchard.allocManyFixed 8 b
+  let b := b.enableConstant lagrangeCoeffs[0]!
+  let selectors := (List.range 56).toArray
+  ({ advices, lagrangeCoeffs, constants := lagrangeCoeffs[0]!, tableIdx, selectors }, b)
 
 /-- Current Lean-side full Orchard action CS builder. This function is meant to
 mirror `Circuit::configure`; subchip ports are filled in incrementally. -/
@@ -174,41 +216,9 @@ def orchardActionCS : ConstraintSystem :=
   let (cols, b) := configureActionColumns b
   let b := configureOrchardGate cols b
   let b := configureAddChip cols b
-  let b := Orchard.configureRangeCheck cols b
-  let b := Orchard.configureEccChip cols b
+  let b := Halo2.Orchard.LookupRangeCheck.configure cols b
+  let b := Orchard.configureEccChipAt 5 cols b
+  let b := b.ensureNumSelectors 56
   b.cs
 
 end Halo2.Orchard.Action
-
-namespace Halo2.Orchard.LookupRangeCheck
-
-open Halo2.Pinned
-
-private def twoPow10 := "0x0000000000000000000000000000000000000000000000000000000000000400"
-
-/-- Port of `LookupRangeCheckConfig::<_, 10>::configure`. -/
-def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
-  let runningSum := cols.advices[9]!
-  let tableIdx := cols.tableIdx
-  let b := b.enableEquality runningSum
-  let (qLookup, b) := b.complexSelector
-  let (qRunning, b) := b.complexSelector
-  let (qBitshift, b) := b.selector
-  let (qLookupE, b) := (.selector qLookup, b)
-  let (qRunningE, b) := (.selector qRunning, b)
-  let (zCur, b) := b.queryAdvice runningSum (.rot 0)
-  let (zNext, b) := b.queryAdvice runningSum (.rot 1)
-  let tableExpr := (b.queryFixed tableIdx (.rot 0)).1
-  let b := (b.queryFixed tableIdx (.rot 0)).2
-  let one := Expression.constant FieldConst.one
-  let runningSumWord := zCur - zNext * Expression.constant twoPow10
-  let runningSumLookup := qRunningE * runningSumWord
-  let shortLookup := (one - qRunningE) * zCur
-  let b := b.lookup { inputExpressions := [qLookupE * (runningSumLookup + shortLookup)], tableExpressions := [tableExpr] }
-  let qBitshiftE := Expression.selector qBitshift
-  let (word, b) := b.queryAdvice runningSum (.rot (-1))
-  let (shiftedWord, b) := b.queryAdvice runningSum (.rot 0)
-  let (invTwoPowS, b) := b.queryAdvice runningSum (.rot 1)
-  b.createGate [qBitshiftE * (word * Expression.constant twoPow10 * invTwoPowS - shiftedWord)]
-
-end Halo2.Orchard.LookupRangeCheck
