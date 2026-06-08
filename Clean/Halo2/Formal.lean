@@ -213,7 +213,7 @@ def wires (copies : List (Synthesis.Cell × Synthesis.Cell)) : Circuit :=
 visible from configuration and synthesis/layout metadata. -/
 def fromConfigured {Config : Type} (c : Synthesis.ConfiguredCircuit Config) : Circuit :=
   let layout := c.synthesize c.config
-  let rows := max 1 (Synthesis.activationRows layout.selectorActivations)
+  let rows := max 1 (max (Synthesis.activationRows layout.selectorActivations) layout.usedRows)
   fromConstraintSystem c.cs rows ++ fixedAssignments layout.fixedAssignments ++ wires layout.copyConstraints
 
 end Circuit
