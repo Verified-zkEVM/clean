@@ -603,10 +603,10 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
     witness.pushes_assumeRequirements
     witness.pair_zero
   -- it remains to prove the (grts → reqs) assumption. this is a reformulation of our `constraints`
-  have reqs_of_grts : (∀ i (hi : i < (activePulls witness.pulls).length),
-      (activePulls witness.pulls)[i].Guarantees witness.data →
-        ((activePushes witness.pushes)[i]'(
-          activePulls_length_eq_activePushes_length
+  have reqs_of_grts : (∀ i (hi : i < (activeInteractions witness.pulls).length),
+      (activeInteractions witness.pulls)[i].Guarantees witness.data →
+        ((activeInteractions witness.pushes)[i]'(
+          activeInteractions_length_eq
             ((witness.pulls_length).trans witness.pushes_length.symm) witness.pair_zero ▸ hi)).Requirements witness.data) := by
     suffices ∀ pair ∈ (witness.pulls.zip witness.pushes), pair.1.Guarantees witness.data → pair.2.Requirements witness.data by
       intro i hi
@@ -631,15 +631,15 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
       Expression.eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.enabled = 1 := by
     change Expression.eval (Environment.fromInput witness.publicInput witness.data) (Expression.const (1 : F)) = 1
     rfl
-  have active_length_pos : 0 < (activePulls witness.pulls).length := by
-    simp [activePulls, activeInteractions, pulls, interactionPairs, allTables, circuit_norm,
+  have active_length_pos : 0 < (activeInteractions witness.pulls).length := by
+    simp [activeInteractions, pulls, interactionPairs, allTables, circuit_norm,
       rowEnabled, VmTables.stepOfAllTables, verifier_enabled_one']
   specialize grts_of_reqs reqs_of_grts 0 active_length_pos
-  simp [activePulls, activePushes, activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
+  simp [activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
     rowEnabled, VmTables.stepOfAllTables,
     verifier_enabled_one'] at grts_of_reqs
-  have active_push_length_pos : 0 < (activePushes witness.pushes).length := by
-    rwa [← activePulls_length_eq_activePushes_length
+  have active_push_length_pos : 0 < (activeInteractions witness.pushes).length := by
+    rwa [← activeInteractions_length_eq
       ((witness.pulls_length).trans witness.pushes_length.symm) witness.pair_zero]
   simp only [Table.ChannelGuarantees, Table.ChannelRequirements, circuit_norm]
   simp only [← Operations.forall_interactionsWith_iff, vm.verifierInteractionsWith_eq]
@@ -653,12 +653,12 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
           (i:=(pushIf (channel:=vm.channel) vm.verifierStep.enabled vm.verifierStep.push).toRaw)
           (env:=env)).mpr hreqs.2.1
     have hpull_grt := grts_of_reqs (by
-      simpa [activePushes, activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
+      simpa [activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
         rowEnabled, rowPush, VmTables.stepOfAllTables, verifier_enabled_one', env,
         Channel.eval_pushIf] using hpush_eval)
     have hpull_eval :
         ((pullIf (channel:=vm.channel) vm.verifierStep.enabled vm.verifierStep.pull).toRaw.eval env).Guarantees env.data := by
-      simpa [activePulls, activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
+      simpa [activeInteractions, pulls, pushes, interactionPairs, allTables, circuit_norm,
         rowEnabled, rowPull, VmTables.stepOfAllTables, verifier_enabled_one', env,
         Channel.eval_pullIf] using hpull_grt
     exact AbstractInteraction.eval_guarantees.mp hpull_eval
