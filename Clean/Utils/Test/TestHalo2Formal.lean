@@ -1,4 +1,5 @@
 import Clean.Halo2.Formal
+import Clean.Halo2.Orchard
 
 namespace Halo2.Tests
 
@@ -80,6 +81,15 @@ private def csWithLookup : ConstraintSystem :=
 theorem fromConstraintSystem_keeps_lookup_operation :
     (Circuit.fromConstraintSystem csWithLookup 1).operations =
       [Operation.lookup 0 [.advice 0 0 (.rot 0)] [.fixed 0 0 (.rot 0)]] := by
+  native_decide
+
+/-- The current Orchard synthesis layer feeds the proof-facing DSL: the AddChip
+copy constraint appears as a Halo2-native `wire` operation. -/
+theorem orchardFormalCircuit_contains_synthesis_wire :
+    (Circuit.fromConfigured Halo2.Orchard.Action.plonkCircuit).operations.any
+      (fun op => op == Operation.wire
+        { column := Pinned.Column.advice 7, row := 1 }
+        { column := Pinned.Column.advice 8, row := 1 }) = true := by
   native_decide
 
 end Halo2.Tests
