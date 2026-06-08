@@ -47,3 +47,4 @@ import Clean.Halo2.Orchard
 import Clean.Halo2.Fixtures.RustPinnedCS
 import Clean.Halo2.Debug
 import Clean.Halo2.Synthesis
+import Clean.Halo2.Formal

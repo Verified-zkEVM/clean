@@ -9,3 +9,4 @@ import Clean.Utils.Test.TestHalo2EccVK
 import Clean.Utils.Test.TestHalo2OrchardCS
 import Clean.Utils.Test.TestHalo2OrchardActionTarget
 import Clean.Utils.Test.TestHalo2Synthesis
+import Clean.Utils.Test.TestHalo2Formal
