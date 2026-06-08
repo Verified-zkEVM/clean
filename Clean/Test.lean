@@ -6,3 +6,4 @@ import Clean.Utils.Test.TestSimplifyProvableStructEval
 import Clean.Utils.Test.TestCircuitStructDeriving
 import Clean.Utils.Test.TestMixedCircuitType
 import Clean.Utils.Test.TestHalo2EccVK
+import Clean.Utils.Test.TestHalo2OrchardCS
