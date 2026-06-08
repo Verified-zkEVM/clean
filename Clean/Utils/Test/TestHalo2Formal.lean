@@ -99,8 +99,7 @@ def boolGateFormalGadget : FormalGadget Int :=
     soundness := by
       intro trace hOne h
       have hGate : Pinned.Expression.eval trace 0 localBoolGate = 0 := by
-        simpa [LocalCircuit.Satisfied, LocalOperation.Satisfied] using
-          h (LocalOperation.gate 0 localBoolGate) (by simp [LocalCircuit.assertZero, LocalCircuit.gate])
+        simpa using h
       dsimp [localBoolGate, Pinned.Expression.eval, localBoolCell, LocalCell.expr, LocalCell.eval,
         LocalCell.advice, Pinned.Column.advice] at hGate ⊢
       rw [hOne] at hGate
