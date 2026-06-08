@@ -53,7 +53,7 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
   verifier_length_zero : ∀ pi, (verifier pi).localLength 0 = 0 := by
     simp only [circuit_norm]
 
-  tables_channel : ∀ table ∈ tables,
+  tables_channel : tables.Forall fun table =>
     ∃ enabled : Expression F, ∃ pull push : Var Message F,
       ⟨ channel,
         [(pullIf (channel:=channel) enabled pull).toRaw,
@@ -235,18 +235,39 @@ variable {vm : VmTables F PublicIO}
 @[circuit_norm] abbrev allTables (vm : VmTables F PublicIO) : List (Component F) :=
   vm.toEnsemble.allTables
 
+private theorem list_forall_mem {α : Type*} {P : α → Prop} :
+    ∀ {xs : List α}, xs.Forall P → ∀ {x}, x ∈ xs → P x
+  | [], _, _, h => by cases h
+  | head :: [], h_forall, _, h_mem => by
+      simp only [List.mem_singleton] at h_mem
+      subst h_mem
+      simpa [List.Forall] using h_forall
+  | head :: next :: tail, h_forall, _, h_mem => by
+      change P head ∧ (next :: tail).Forall P at h_forall
+      simp only [List.mem_cons] at h_mem
+      rcases h_mem with rfl | h_mem
+      · exact h_forall.1
+      · exact list_forall_mem h_forall.2 (by simpa [List.mem_cons] using h_mem)
+
+theorem tables_channel_of_mem (vm : VmTables F PublicIO) {table} (table_mem : table ∈ vm.tables) :
+    ∃ enabled : Expression F, ∃ pull push : Var vm.Message F,
+      ⟨ vm.channel,
+        [(pullIf (channel:=vm.channel) enabled pull).toRaw,
+          (pushIf (channel:=vm.channel) enabled push).toRaw] ⟩ ∈ table.exposedChannels := by
+  exact list_forall_mem vm.tables_channel table_mem
+
 noncomputable def step (vm : VmTables F PublicIO) (table : Component F)
     (table_mem : table ∈ vm.tables) : VmStep vm.Message F where
-  enabled := (vm.tables_channel table table_mem).choose
-  pull := (vm.tables_channel table table_mem).choose_spec.choose
-  push := (vm.tables_channel table table_mem).choose_spec.choose_spec.choose
+  enabled := (vm.tables_channel_of_mem table_mem).choose
+  pull := (vm.tables_channel_of_mem table_mem).choose_spec.choose
+  push := (vm.tables_channel_of_mem table_mem).choose_spec.choose_spec.choose
 
 theorem tables_channel' (vm : VmTables F PublicIO) {table} (table_mem : table ∈ vm.tables) :
   let step := vm.step table table_mem
   ⟨ vm.channel,
     [(pullIf (channel:=vm.channel) step.enabled step.pull).toRaw,
       (pushIf (channel:=vm.channel) step.enabled step.push).toRaw] ⟩ ∈ table.exposedChannels :=
-  (vm.tables_channel table table_mem).choose_spec.choose_spec.choose_spec
+  (vm.tables_channel_of_mem table_mem).choose_spec.choose_spec.choose_spec
 
 noncomputable def verifierPull (vm : VmTables F PublicIO) : Var vm.Message F :=
   vm.verifier_channel.choose

@@ -236,9 +236,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by
-    intro table table_mem
-    simp only [List.mem_singleton] at table_mem
-    subst table
+    simp only [List.Forall]
     let input := varFromOffset (F:=F p) Fib8Input 0
     refine ⟨ input.enabled, (input.n, input.x, input.y), (input.n + 1, input.y, var ⟨ size Fib8Input ⟩), ?_ ⟩
     simp [circuit_norm, fib8, input, Component.exposedChannels, Component.rowOffset]
