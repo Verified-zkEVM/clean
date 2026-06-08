@@ -101,8 +101,8 @@ theorem placedBoolGateFormalGadget_sound {trace : Trace Int}
     (h : (boolGateFormalGadget.place 5).circuit.Satisfied
       (boolGateFormalGadget.place 5).lookup trace) :
     trace.advice 0 5 = 0 ∨ trace.advice 0 5 = 1 := by
-  have hSpec := (boolGateFormalGadget.place 5).sound hOne h
-  simpa [FormalGadget.place, localBoolCell, LocalCell.eval, Trace.relative] using hSpec
+  have hSpec := boolGateFormalGadget.sound_placed 5 hOne h
+  simpa [localBoolCell, LocalCell.eval, LocalCell.advice, Trace.relative, Pinned.Column.advice] using hSpec
 
 /-- Local circuits place relative rows into absolute rows only at the boundary. -/
 theorem localCircuit_place_shifts_rows :

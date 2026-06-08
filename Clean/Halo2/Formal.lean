@@ -662,6 +662,13 @@ def place {F : Type} [Ring F] (g : FormalGadget F) (baseRow : Nat) : FormalCircu
       intro trace hAssumptions hSatisfied
       exact g.sound hAssumptions (LocalCircuit.place_satisfied.mp hSatisfied) }
 
+/-- Direct use form of placed-gadget soundness. -/
+theorem sound_placed {F : Type} [Ring F] (g : FormalGadget F) (baseRow : Nat)
+    {trace : Trace F} (hAssumptions : g.Assumptions (trace.relative baseRow))
+    (h : (g.circuit.place baseRow).Satisfied g.lookup trace) :
+    g.Spec (trace.relative baseRow) :=
+  g.sound hAssumptions (LocalCircuit.place_satisfied.mp h)
+
 end FormalGadget
 
 end Halo2
