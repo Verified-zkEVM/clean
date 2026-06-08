@@ -102,6 +102,19 @@ theorem fromConfigured_keeps_copy_constraint_as_wire :
     (Circuit.fromConfigured configuredWithWire).operations = [Operation.wire leftCell rightCell] := by
   native_decide
 
+/-- A configured circuit can be packaged directly as a `FormalCircuit`; proofs are
+against `Circuit.fromConfigured`, not against a lowered ordinary Clean circuit. -/
+def configuredWireFormalCircuit : FormalCircuit Int :=
+  FormalCircuit.fromConfigured "configured wire" configuredWithWire (fun _ _ => True) (fun _ => True)
+    (fun trace => trace.evalCell leftCell = trace.evalCell rightCell)
+    (by
+      intro trace _ h
+      have hmem : Operation.wire leftCell rightCell ∈
+          (Circuit.fromConfigured configuredWithWire).operations := by
+        rw [fromConfigured_keeps_copy_constraint_as_wire]
+        simp
+      simpa [Operation.Satisfied] using h (Operation.wire leftCell rightCell) hmem)
+
 private def csWithLookup : ConstraintSystem :=
   { lookups := [{ inputExpressions := [.advice 0 0 (.rot 0)], tableExpressions := [.fixed 0 0 (.rot 0)] }] }
 

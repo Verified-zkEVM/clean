@@ -296,6 +296,17 @@ structure FormalCircuit (F : Type) [Ring F] where
 
 namespace FormalCircuit
 
+/-- Package a configured/synthesized Halo2 circuit as a proof-carrying
+`FormalCircuit`.  This is the intended bridge from the Halo2-like configure /
+synthesize API to Clean-style formal reasoning. -/
+def fromConfigured {F Config : Type} [Ring F] (name : String)
+    (configured : Synthesis.ConfiguredCircuit Config)
+    (lookup : List F → List F → Prop)
+    (Assumptions Spec : Trace F → Prop)
+    (soundness : Soundness (Circuit.fromConfigured configured) lookup Assumptions Spec) :
+    FormalCircuit F :=
+  { name, circuit := Circuit.fromConfigured configured, lookup, Assumptions, Spec, soundness }
+
 /-- Use the soundness proof packaged in a `FormalCircuit`. -/
 theorem sound {F : Type} [Ring F] (c : FormalCircuit F) {trace : Trace F}
     (hAssumptions : c.Assumptions trace)
