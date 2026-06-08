@@ -239,3 +239,26 @@ def SelectorCompressionInput.WellFormed (input : SelectorCompressionInput) : Pro
   input.kinds.length = input.activations.length
 
 end Halo2.Synthesis
+
+namespace Halo2.Synthesis
+
+/-- A simple, layout-driven selector compression strategy: allocate one fixed
+selector column per selector that appears in synthesis. This is not Halo2's
+optimized compression, but it is useful for validating the synthesize/configure
+interface before replacing it by the exact greedy compressor. -/
+def ConfiguredCircuit.compressSelectorsOnePerColumn {Config : Type}
+    (c : ConfiguredCircuit Config) (firstColumn firstQuery : Nat) : Halo2.Pinned.ConstraintSystem :=
+  let input := c.selectorCompressionInput
+  let replacement : Nat → Halo2.Pinned.Expression := fun selector =>
+    if selector < input.activations.length then
+      .fixed (firstQuery + selector) (firstColumn + selector) (.rot 0)
+    else
+      .selector selector
+  let cs := c.cs.replaceSelectors replacement
+  let selectorQueries := (List.range c.cs.numSelectors).map fun i =>
+    (Halo2.Pinned.Column.fixed (firstColumn + i), Halo2.Pinned.Rotation.rot 0)
+  { cs with
+    numFixedColumns := max cs.numFixedColumns (firstColumn + c.cs.numSelectors)
+    fixedQueries := cs.fixedQueries ++ selectorQueries }
+
+end Halo2.Synthesis

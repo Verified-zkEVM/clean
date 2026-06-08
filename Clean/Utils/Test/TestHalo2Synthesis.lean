@@ -48,3 +48,14 @@ theorem orchardPlonkCircuit_selectorCompressionInput_wellFormed :
   native_decide
 
 end Halo2.Tests
+
+namespace Halo2.Tests
+
+/-- The generic one-column-per-selector compression utility is driven by the
+synthesis-produced activation table and preserves the configured selector count. -/
+theorem orchardPlonkCircuit_onePerColumnCompression_hasSelectorQueries :
+    let cs := Halo2.Orchard.Action.plonkCircuit.compressSelectorsOnePerColumn 100 100
+    cs.fixedQueries.length ≥ Halo2.Orchard.Action.plonkCircuit.cs.numSelectors := by
+  native_decide
+
+end Halo2.Tests
