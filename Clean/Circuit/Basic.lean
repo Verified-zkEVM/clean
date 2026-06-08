@@ -1,4 +1,5 @@
 import Clean.Circuit.Operations
+import Clean.Utils.Field
 import Mathlib.Control.Monad.Writer
 
 variable {F : Type} [Field F] {α β : Type} {n : ℕ}
@@ -472,12 +473,6 @@ attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 
 -- simplify `vector[i]` (which occurs in ProvableType definitions) and similar
 attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
-
-@[circuit_norm]
-lemma zero_ne_neg_one {F : Type} [Field F] : (0 : F) ≠ -1 := by
-  intro h
-  apply zero_ne_one (α:=F)
-  rw [← neg_zero, h, neg_neg]
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero zero_add neg_zero neg_eq_zero one_ne_zero zero_ne_one

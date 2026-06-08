@@ -12,6 +12,12 @@ instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
 
 instance {p : ℕ} : DecidableEq (F p) := ZMod.decidableEq p
 
+@[circuit_norm]
+lemma zero_ne_neg_one {F : Type} [Field F] : (0 : F) ≠ -1 := by
+  intro h
+  apply zero_ne_one (α:=F)
+  rw [← neg_zero, h, neg_neg]
+
 namespace FieldUtils
 variable {p : ℕ} [p_prime: Fact p.Prime]
 
