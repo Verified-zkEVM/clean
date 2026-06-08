@@ -167,6 +167,30 @@ theorem lookupOperation_sound {trace : Trace Int} {relation : List Int → List 
     h (Operation.lookup 0 [.advice 0 0 (.rot 0)] [.fixed 0 0 (.rot 0)])
       (by simp [Circuit.lookup])
 
+private def localLookupInput : LocalCell :=
+  LocalCell.advice 0 0
+
+private def localLookupTable : LocalCell :=
+  LocalCell.fixed 0 0
+
+/-- A local lookup gadget keeps lookup semantics as a supplied relation. -/
+def lookupFormalGadget (relation : List Int → List Int → Prop) : FormalGadget Int :=
+  { circuit := LocalCircuit.lookup 0 [localLookupInput.expr 0] [localLookupTable.expr 0]
+    lookup := relation
+    Spec := fun trace => relation [localLookupInput.eval trace] [localLookupTable.eval trace]
+    soundness := by
+      intro trace _ h
+      simpa using h }
+
+/-- Placing a local lookup gadget shifts both queried cells before applying the relation. -/
+theorem placedLookupFormalGadget_sound {trace : Trace Int} {relation : List Int → List Int → Prop}
+    (h : ((lookupFormalGadget relation).circuit.place 9).Satisfied
+      (lookupFormalGadget relation).lookup trace) :
+    relation [trace.advice 0 9] [trace.fixed 0 9] := by
+  have hSpec := (lookupFormalGadget relation).sound_placed 9 trivial h
+  simpa [localLookupInput, localLookupTable, LocalCell.eval, LocalCell.advice, LocalCell.fixed,
+    Trace.relative, Pinned.Column.advice, Pinned.Column.fixed] using hSpec
+
 /-- Fixed assignments are also first-class operations in the proof-facing DSL. -/
 theorem fixedOperation_sound {trace : Trace Int}
     (h : (Circuit.fixed leftCell "one").Satisfied (fun _ _ => True) trace) :
