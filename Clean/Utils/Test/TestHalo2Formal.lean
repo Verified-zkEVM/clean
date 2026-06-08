@@ -90,6 +90,14 @@ theorem fixedOperation_sound {trace : Trace Int}
   simpa [Circuit.Satisfied, Operation.Satisfied] using
     h (Operation.fixed leftCell "one") (by simp [Circuit.fixed])
 
+/-- `Circuit.push` composes constraints in the same proof style as Clean circuits. -/
+theorem push_satisfaction_example {trace : Trace Int}
+    (h : (Circuit.wire leftCell rightCell).push (Operation.fixed leftCell "one") |>.Satisfied
+      (fun _ _ => True) trace) :
+    trace.evalCell leftCell = trace.evalCell rightCell ∧
+      trace.evalCell leftCell = trace.constant "one" := by
+  simpa using h
+
 private def configuredWithWire : Synthesis.ConfiguredCircuit Unit :=
   { config := ()
     cs := {}
