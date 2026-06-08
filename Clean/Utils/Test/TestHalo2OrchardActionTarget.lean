@@ -1,4 +1,5 @@
 import Clean.Halo2.Debug
+import Clean.Halo2.Fixtures.RustPinnedCS
 
 namespace Halo2.Tests
 
