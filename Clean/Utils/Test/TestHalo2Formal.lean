@@ -44,6 +44,16 @@ theorem zeroGateFormalCircuit_sound {trace : Trace Int}
     zeroGateFormalCircuit.Spec trace :=
   zeroGateFormalCircuit.sound h
 
+/-- Lookup arguments are first-class operations whose relation is supplied by the
+formal trace semantics. -/
+theorem lookupOperation_sound {trace : Trace Int} {relation : List Int → List Int → Prop}
+    (h : (Circuit.lookup 0 [.advice 0 0 (.rot 0)] [.fixed 0 0 (.rot 0)]).Satisfied
+      relation trace) :
+    relation [trace.advice 0 0] [trace.fixed 0 0] := by
+  simpa [Circuit.Satisfied, Operation.Satisfied, Circuit.lookup, Pinned.Expression.eval] using
+    h (Operation.lookup 0 [.advice 0 0 (.rot 0)] [.fixed 0 0 (.rot 0)])
+      (by simp [Circuit.lookup])
+
 /-- Fixed assignments are also first-class operations in the proof-facing DSL. -/
 theorem fixedOperation_sound {trace : Trace Int}
     (h : (Circuit.fixed leftCell "one").Satisfied (fun _ _ => True) trace) :
@@ -61,6 +71,15 @@ private def configuredWithWire : Synthesis.ConfiguredCircuit Unit :=
 constraints as `Operation.wire`; it does not erase them into custom gates. -/
 theorem fromConfigured_keeps_copy_constraint_as_wire :
     (Circuit.fromConfigured configuredWithWire).operations = [Operation.wire leftCell rightCell] := by
+  native_decide
+
+private def csWithLookup : ConstraintSystem :=
+  { lookups := [{ inputExpressions := [.advice 0 0 (.rot 0)], tableExpressions := [.fixed 0 0 (.rot 0)] }] }
+
+/-- Pinned lookup arguments become proof-facing `Operation.lookup`s, not opaque metadata. -/
+theorem fromConstraintSystem_keeps_lookup_operation :
+    (Circuit.fromConstraintSystem csWithLookup 1).operations =
+      [Operation.lookup 0 [.advice 0 0 (.rot 0)] [.fixed 0 0 (.rot 0)]] := by
   native_decide
 
 end Halo2.Tests

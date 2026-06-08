@@ -130,6 +130,15 @@ def gatesFromConstraintSystem (cs : ConstraintSystem) (numRows : Nat) : Circuit 
   { operations := List.flatten ((List.range numRows).map fun row =>
       cs.gates.map (fun gate => Operation.gate row gate)) }
 
+/-- Create lookup operations by checking every lookup argument at every row. -/
+def lookupsFromConstraintSystem (cs : ConstraintSystem) (numRows : Nat) : Circuit :=
+  { operations := List.flatten ((List.range numRows).map fun row =>
+      cs.lookups.map (fun lookup => Operation.lookup row lookup.inputExpressions lookup.tableExpressions)) }
+
+/-- Proof-facing operations generated directly from pinned constraint-system metadata. -/
+def fromConstraintSystem (cs : ConstraintSystem) (numRows : Nat) : Circuit :=
+  gatesFromConstraintSystem cs numRows ++ lookupsFromConstraintSystem cs numRows
+
 /-- Fixed assignments as proof-facing operations. -/
 def fixedAssignments (assignments : List (Synthesis.Cell × String)) : Circuit :=
   { operations := assignments.map (fun (cell, value) => Operation.fixed cell value) }
@@ -143,7 +152,7 @@ visible from configuration and synthesis/layout metadata. -/
 def fromConfigured {Config : Type} (c : Synthesis.ConfiguredCircuit Config) : Circuit :=
   let layout := c.synthesize c.config
   let rows := max 1 (Synthesis.activationRows layout.selectorActivations)
-  gatesFromConstraintSystem c.cs rows ++ fixedAssignments layout.fixedAssignments ++ wires layout.copyConstraints
+  fromConstraintSystem c.cs rows ++ fixedAssignments layout.fixedAssignments ++ wires layout.copyConstraints
 
 end Circuit
 
