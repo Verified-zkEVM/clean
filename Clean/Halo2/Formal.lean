@@ -231,6 +231,7 @@ satisfying the Halo2 operations implies the spec.  Unlike Clean's ordinary
 `FormalCircuit`, this intentionally does not package completeness yet: Daira's
 plan only needs knowledge soundness at this layer. -/
 structure FormalCircuit (F : Type) [Ring F] where
+  name : String := "anonymous"
   circuit : Circuit
   lookup : List F → List F → Prop := fun _ _ => True
   Assumptions : Trace F → Prop := fun _ => True
