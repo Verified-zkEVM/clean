@@ -166,3 +166,53 @@ def Builder.ensureNumSelectors (b : Builder) (n : Nat) : Builder :=
   if b.cs.numSelectors < n then { b with cs.numSelectors := n } else b
 
 end Halo2.Pinned
+
+namespace Halo2.Pinned
+
+partial def Expression.replaceSelectors (replacement : Nat → Expression) : Expression → Expression
+  | .constant c => .constant c
+  | .selector i => replacement i
+  | .fixed qi ci r => .fixed qi ci r
+  | .advice qi ci r => .advice qi ci r
+  | .instance qi ci r => .instance qi ci r
+  | .negated e => .negated (e.replaceSelectors replacement)
+  | .sum a b => .sum (a.replaceSelectors replacement) (b.replaceSelectors replacement)
+  | .product a b => .product (a.replaceSelectors replacement) (b.replaceSelectors replacement)
+  | .scaled e c => .scaled (e.replaceSelectors replacement) c
+
+private def productFactors : List Expression → Expression
+  | [] => .constant "0x0000000000000000000000000000000000000000000000000000000000000001"
+  | [x] => x
+  | x :: xs => x * productFactors xs
+
+/-- The polynomial used by Halo2 selector compression for a selector assigned to
+`assignedRoot` in a combination column whose possible nonzero roots are
+`1..combinationLen`. -/
+def compressedSelector (queryIndex columnIndex combinationLen assignedRoot : Nat) : Expression :=
+  let q := Expression.fixed queryIndex columnIndex (.rot 0)
+  let factors := (List.range combinationLen).filterMap fun i =>
+    let root := i + 1
+    if root = assignedRoot then none
+    else
+      let hex := match root with
+        | 1 => "0x0000000000000000000000000000000000000000000000000000000000000001"
+        | 2 => "0x0000000000000000000000000000000000000000000000000000000000000002"
+        | 3 => "0x0000000000000000000000000000000000000000000000000000000000000003"
+        | 4 => "0x0000000000000000000000000000000000000000000000000000000000000004"
+        | 5 => "0x0000000000000000000000000000000000000000000000000000000000000005"
+        | 6 => "0x0000000000000000000000000000000000000000000000000000000000000006"
+        | 7 => "0x0000000000000000000000000000000000000000000000000000000000000007"
+        | 8 => "0x0000000000000000000000000000000000000000000000000000000000000008"
+        | _ => s!"{root}"
+      some (.constant hex - q)
+  productFactors (q :: factors)
+
+/-- Apply a selector replacement to all gate and lookup expressions. -/
+def ConstraintSystem.replaceSelectors (cs : ConstraintSystem) (replacement : Nat → Expression) : ConstraintSystem :=
+  { cs with
+    gates := cs.gates.map (Expression.replaceSelectors replacement)
+    lookups := cs.lookups.map fun l => {
+      inputExpressions := l.inputExpressions.map (Expression.replaceSelectors replacement)
+      tableExpressions := l.tableExpressions.map (Expression.replaceSelectors replacement) } }
+
+end Halo2.Pinned

@@ -298,3 +298,34 @@ def orchardActionCS : ConstraintSystem :=
   b.cs
 
 end Halo2.Orchard.Action
+
+namespace Halo2.Orchard.Action
+
+open Halo2.Pinned
+
+private def targetFixedQueries : List (Pinned.Column × Rotation) :=
+  [3, 0, 11, 4, 5, 6, 7, 8, 9, 10, 12, 1, 2, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28].map
+    (fun i => (Pinned.Column.fixed i, Rotation.rot 0))
+
+private def targetPermutationColumns : List Pinned.Column :=
+  [Pinned.Column.instanceCol 0] ++ (List.range 10).map Pinned.Column.advice ++ [Pinned.Column.fixed 3, Pinned.Column.fixed 8, Pinned.Column.fixed 9, Pinned.Column.fixed 10]
+
+/-- Current model of the selector-compression phase for the Orchard action
+circuit. This function is where the Lean builder connects configuration-time
+virtual selectors to the fixed selector columns visible in the pinned CS. -/
+def compressSelectors (cs : ConstraintSystem) : ConstraintSystem :=
+  let replacement : Nat → Expression := fun
+    | 0 => compressedSelector 18 18 7 1
+    | i => .selector i
+  let cs := cs.replaceSelectors replacement
+  { cs with
+    numFixedColumns := 29
+    fixedQueries := targetFixedQueries
+    permutation := ⟨targetPermutationColumns⟩ }
+
+/-- The pinned-CS candidate after selector compression. This is the value that is
+being strengthened toward exact equality with the Rust fixture. -/
+def orchardActionPinnedCS : ConstraintSystem :=
+  compressSelectors orchardActionCS
+
+end Halo2.Orchard.Action

@@ -12,7 +12,7 @@ theorem orchardActionRustFixture_loaded :
 /-- The current builder has begun constructing the full action CS. The final
 version of this theorem should be strengthened to equality with the Rust fixture. -/
 theorem orchardActionBuilder_renders_nonempty :
-    (Halo2.Pinned.Debug.constraintSystem Halo2.Orchard.Action.orchardActionCS).length > 0 := by
+    (Halo2.Pinned.Debug.constraintSystem Halo2.Orchard.Action.orchardActionPinnedCS).length > 0 := by
   native_decide
 
 end Halo2.Tests
