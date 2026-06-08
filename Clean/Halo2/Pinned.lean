@@ -83,8 +83,14 @@ structure ConstraintSystem where
 deriving Repr, DecidableEq, BEq
 
 /-- Builder state, including Halo2's query-index allocation order. -/
+inductive SelectorKind where
+  | simple
+  | complex
+deriving Repr, DecidableEq, BEq
+
 structure Builder where
   cs : ConstraintSystem := {}
+  selectorKinds : List SelectorKind := []
 
 def Builder.adviceColumn (b : Builder) : Column × Builder :=
   let col := Column.advice b.cs.numAdviceColumns
@@ -129,7 +135,13 @@ def Builder.queryInstance (b : Builder) (col : Column) (rot : Rotation) : Expres
 when selector compression runs during keygen. -/
 def Builder.selector (b : Builder) : Nat × Builder :=
   let index := b.cs.numSelectors
-  (index, { b with cs.numSelectors := index + 1 })
+  let cs := { b.cs with numSelectors := index + 1 }
+  (index, { b with cs := cs, selectorKinds := b.selectorKinds ++ [.simple] })
+
+def Builder.complexSelector (b : Builder) : Nat × Builder :=
+  let index := b.cs.numSelectors
+  let cs := { b.cs with numSelectors := index + 1 }
+  (index, { b with cs := cs, selectorKinds := b.selectorKinds ++ [.complex] })
 
 def Builder.enableEquality (b : Builder) (col : Column) : Builder :=
   let b :=

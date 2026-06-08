@@ -179,3 +179,36 @@ def orchardActionCS : ConstraintSystem :=
   b.cs
 
 end Halo2.Orchard.Action
+
+namespace Halo2.Orchard.LookupRangeCheck
+
+open Halo2.Pinned
+
+private def twoPow10 := "0x0000000000000000000000000000000000000000000000000000000000000400"
+
+/-- Port of `LookupRangeCheckConfig::<_, 10>::configure`. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let runningSum := cols.advices[9]!
+  let tableIdx := cols.tableIdx
+  let b := b.enableEquality runningSum
+  let (qLookup, b) := b.complexSelector
+  let (qRunning, b) := b.complexSelector
+  let (qBitshift, b) := b.selector
+  let (qLookupE, b) := (.selector qLookup, b)
+  let (qRunningE, b) := (.selector qRunning, b)
+  let (zCur, b) := b.queryAdvice runningSum (.rot 0)
+  let (zNext, b) := b.queryAdvice runningSum (.rot 1)
+  let tableExpr := (b.queryFixed tableIdx (.rot 0)).1
+  let b := (b.queryFixed tableIdx (.rot 0)).2
+  let one := Expression.constant FieldConst.one
+  let runningSumWord := zCur - zNext * Expression.constant twoPow10
+  let runningSumLookup := qRunningE * runningSumWord
+  let shortLookup := (one - qRunningE) * zCur
+  let b := b.lookup { inputExpressions := [qLookupE * (runningSumLookup + shortLookup)], tableExpressions := [tableExpr] }
+  let qBitshiftE := Expression.selector qBitshift
+  let (word, b) := b.queryAdvice runningSum (.rot (-1))
+  let (shiftedWord, b) := b.queryAdvice runningSum (.rot 0)
+  let (invTwoPowS, b) := b.queryAdvice runningSum (.rot 1)
+  b.createGate [qBitshiftE * (word * Expression.constant twoPow10 * invTwoPowS - shiftedWord)]
+
+end Halo2.Orchard.LookupRangeCheck
