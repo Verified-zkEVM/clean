@@ -17,7 +17,7 @@ namespace Examples.WitnessLibrary
 -- First 30 Circomlib formal circuits/assertions from sorted file order.
 -- Current out-of-the-box result: 8 compile successfully, 22 are TODO-commented below.
 
--- TODO: failed to synthesize an instance during witness compilation.
+-- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
 -- compile_witness (Circomlib.AliasCheck.circuit (p:=pBabybear)) => aliasCheckWitness
 
 -- TODO: generated witness declaration still has free variables.
@@ -29,14 +29,14 @@ compile_witness (Circomlib.Num2Bits.arbitraryBitLengthCircuit (p:=pBabybear) 4) 
 compile_witness (Circomlib.Num2Bits.circuit (p:=pBabybear) 4 (by native_decide)) => num2Bits4Witness
 -- TODO: generated witness declaration still has free variables.
 -- compile_witness (Circomlib.Bits2Num.circuit (p:=pBabybear) 4) => bits2Num4Witness
--- TODO: failed to synthesize an instance during witness compilation.
+-- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
 -- compile_witness (Circomlib.Num2Bits_strict.circuit (p:=pBabybear)) => num2BitsStrictWitness
--- TODO: failed to synthesize an instance during witness compilation.
+-- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
 -- compile_witness (Circomlib.Bits2Num_strict.circuit (p:=pBabybear)) => bits2NumStrictWitness
 -- TODO: failed to synthesize an instance during witness compilation.
 -- compile_witness (Circomlib.Num2BitsNeg.circuit (p:=pBabybear) 4 (by native_decide)) => num2BitsNeg4Witness
 
--- TODO: failed to synthesize an instance during witness compilation.
+-- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
 -- compile_witness (Circomlib.CompConstant.circuit (p:=pBabybear) 3 (by native_decide)) => compConstant3Witness
 
 -- TODO: generated witness declaration still has free variables.

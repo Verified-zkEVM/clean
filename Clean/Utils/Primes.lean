@@ -9,6 +9,7 @@ instance primeBabybear : Fact (pBabybear.Prime) := by native_decide
 instance primeMersenne : Fact (pMersenne.Prime) := by native_decide
 
 instance : Fact (pBabybear > 512) := by native_decide
+instance : Fact (pBabybear < 2^254) := by native_decide
 instance : Fact (pBabybear > 2^16 + 2^8) := by native_decide
 instance : Fact (pMersenne > 512) := by native_decide
 
