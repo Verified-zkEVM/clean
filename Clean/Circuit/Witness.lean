@@ -18,13 +18,33 @@ open Lean Meta Elab Command
 namespace Circuit.Witness
 
 attribute [explicit_circuit_norm] Expression.eval
+attribute [explicit_circuit_norm] CircuitType.eval_expr CircuitType.eval_expr_prover
+attribute [explicit_circuit_norm] CircuitType.eval_var_field CircuitType.eval_var_field_prover
+attribute [explicit_circuit_norm] CircuitType.eval_fields_dispatch CircuitType.eval_fields_dispatch_prover
+attribute [explicit_circuit_norm] ProvableType.eval_fieldPair ProvableType.eval_fieldPair_prover
+attribute [explicit_circuit_norm] ProvableStruct.eval_eq_eval ProvableStruct.eval_eq_eval_prover
 attribute [explicit_circuit_norm] valueFromOffset ProvableType.varFromOffset
 attribute [explicit_circuit_norm] Function.comp_apply
 attribute [explicit_circuit_norm] ProvableType.toElements_fromElements ProvableType.fromElements_toElements
+attribute [explicit_circuit_norm] ProvableStruct.components ProvableStruct.combinedSize
+  ProvableStruct.combinedSize'
+attribute [explicit_circuit_norm] List.map_cons List.map_nil List.sum_cons List.sum_nil
+attribute [explicit_circuit_norm] Array.emptyWithCapacity Array.toList_empty Array.toList_push
+  List.concat_eq_append List.nil_append List.append_nil List.cons_append
+attribute [explicit_circuit_norm] Vector.getElem_map Vector.getElem_mapRange Vector.getElem_cast
+  Vector.getElem_push Vector.getElem_set
 attribute [explicit_circuit_norm] Nat.cast_zero Nat.cast_one
 attribute [explicit_circuit_norm] add_zero zero_add
 attribute [explicit_circuit_norm] Nat.succ_eq_add_one
 attribute [explicit_circuit_norm] Circuit.localLength Operation.localLength Operations.localLength
+
+@[explicit_circuit_norm]
+theorem toElements_fields {F : Type} {n : ℕ} (x : fields n F) :
+    @toElements (fields n) (inferInstance : ProvableType (fields n)) F x = x := rfl
+
+@[explicit_circuit_norm]
+theorem fromElements_fields {F : Type} {n : ℕ} (x : Vector F n) :
+    @fromElements (fields n) (inferInstance : ProvableType (fields n)) F x = x := rfl
 
 @[explicit_circuit_norm]
 lemma field_fromElements_mapRange_one {F : Type} (f : ℕ → F) :
@@ -282,6 +302,62 @@ def mkVectorGet (F body m : Expr) (i : Nat) : TermElabM Expr := do
   Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
   instantiateMVars value
 
+def mkVectorGetElem (elemType body m : Expr) (i : Nat) : TermElabM Expr := do
+  let idx := mkNatLit i
+  let expected ← mkAppM ``LT.lt #[idx, m]
+  let proof ← Lean.Elab.Term.elabTerm (← `(by get_elem_tactic)) (some expected)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let proof ← instantiateMVars proof
+  let vectorType ← inferType body
+  let valid ←
+    withLocalDeclD `xs vectorType fun xs => do
+    withLocalDeclD `i (mkConst ``Nat) fun i => do
+      let body ← mkAppM ``LT.lt #[i, m]
+      mkLambdaFVars #[xs, i] body
+  let value ← mkAppOptM ``GetElem.getElem
+    #[some vectorType, some (mkConst ``Nat), some elemType, some valid, none,
+      some body, some idx, some proof]
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  instantiateMVars value
+
+mutual
+
+partial def listLength? (xs : Expr) : MetaM (Option Nat) := do
+  let xs ← whnf xs
+  let xs := stripMData xs
+  if xs.isAppOfArity ``List.nil 1 then
+    return some 0
+  else if xs.getAppFn.isConstOf ``List.cons then
+    let args := xs.getAppArgs
+    if args.size == 3 then
+      return (· + 1) <$> (← listLength? args[2]!)
+    else
+      return none
+  else if xs.getAppFn.isConstOf ``List.concat then
+    let args := xs.getAppArgs
+    if args.size == 3 then
+      return (· + 1) <$> (← listLength? args[1]!)
+    else
+      return none
+  else if xs.getAppFn.isConstOf ``List.append then
+    let args := xs.getAppArgs
+    if args.size == 3 then
+      match ← listLength? args[1]!, ← listLength? args[2]! with
+      | some left, some right => return some (left + right)
+      | _, _ => return none
+    else
+      return none
+  else if xs.getAppFn.isConstOf ``Array.toList then
+    let args := xs.getAppArgs
+    if args.size == 2 then
+      let array ← whnf args[1]!
+      let array := stripMData array
+      if array.getAppFn.isConstOf ``Array.emptyWithCapacity then
+        return some 0
+    return none
+  else
+    return none
+
 partial def nthListElement? (xs : Expr) (i : Nat) : MetaM (Option Expr) := do
   let xs ← whnf xs
   let xs := stripMData xs
@@ -294,10 +370,40 @@ partial def nthListElement? (xs : Expr) (i : Nat) : MetaM (Option Expr) := do
         nthListElement? args[2]! (i - 1)
     else
       return none
+  else if xs.getAppFn.isConstOf ``List.concat then
+    let args := xs.getAppArgs
+    if args.size == 3 then
+      match ← listLength? args[1]! with
+      | some prefixLen =>
+          if i < prefixLen then
+            nthListElement? args[1]! i
+          else if i == prefixLen then
+            return some args[2]!
+          else
+            return none
+      | none => return none
+    else
+      return none
+  else if xs.getAppFn.isConstOf ``List.append then
+    let args := xs.getAppArgs
+    if args.size == 3 then
+      match ← listLength? args[1]! with
+      | some prefixLen =>
+          if i < prefixLen then
+            nthListElement? args[1]! i
+          else
+            nthListElement? args[2]! (i - prefixLen)
+      | none => return none
+    else
+      return none
   else
     return none
 
+end
+
 def nthArrayLiteralElement? (xs : Expr) (i : Nat) : MetaM (Option Expr) := do
+  let xs ← whnf xs
+  let xs ← normalizeExplicitCircuitExpr xs
   let xs ← whnf xs
   let xs := stripMData xs
   if xs.getAppFn.isConstOf ``Array.mk then
@@ -315,7 +421,17 @@ def nthArrayLiteralElement? (xs : Expr) (i : Nat) : MetaM (Option Expr) := do
   else
     return none
 
-def compileVectorElement (F body : Expr) (i : Nat) : MetaM Expr := do
+partial def compileVectorElement (F body : Expr) (i : Nat) : TermElabM Expr := do
+  let raw := stripMData body
+  if raw.getAppFn.isConstOf ``Vector.mapRange then
+    let args := raw.getAppArgs
+    if args.size == 3 then
+      return ← normalizeExplicitCircuitExpr (mkApp args[2]! (mkNatLit i))
+  if raw.getAppFn.isConstOf ``Vector.map then
+    let args := raw.getAppArgs
+    if args.size == 5 then
+      let elem ← compileVectorElement args[0]! args[4]! i
+      return ← normalizeExplicitCircuitExpr (mkApp args[3]! elem)
   let body ← withTransparency .all <| whnf body
   let body ← normalizeExplicitCircuitExpr body
   let body ← withTransparency .all <| whnf body
@@ -325,25 +441,42 @@ def compileVectorElement (F body : Expr) (i : Nat) : MetaM Expr := do
     if args.size == 4 then
       if let some elem ← nthArrayLiteralElement? args[2]! i then
         return elem
+      let array ← withTransparency .all <| whnf args[2]!
+      let array := stripMData array
+      if array.getAppFn.isConstOf ``Array.map then
+        let mapArgs := array.getAppArgs
+        if mapArgs.size == 4 then
+          let source ← withTransparency .all <| whnf mapArgs[3]!
+          let source := stripMData source
+          if source.getAppFn.isConstOf ``Vector.toArray then
+            let sourceArgs := source.getAppArgs
+            if sourceArgs.size == 3 then
+              let elem ← compileVectorElement mapArgs[0]! sourceArgs[2]! i
+              return ← normalizeExplicitCircuitExpr (mkApp mapArgs[2]! elem)
+      return ← mkVectorGetElem args[0]! body args[1]! i
   if body.getAppFn.isConstOf ``Vector.mapRange then
     let args := body.getAppArgs
     if args.size == 3 then
       return ← normalizeExplicitCircuitExpr (mkApp args[2]! (mkNatLit i))
+  if body.getAppFn.isConstOf ``Vector.map then
+    let args := body.getAppArgs
+    if args.size == 5 then
+      let elem ← mkVectorGetElem args[0]! args[4]! args[2]! i
+      return ← normalizeExplicitCircuitExpr (mkApp args[3]! elem)
   mkVectorGetD F body i
 
-def canCompileVectorElementsDirect (body : Expr) (len : Nat) : MetaM Bool := do
+partial def canCompileVectorElementsDirect (body : Expr) (_len : Nat) : MetaM Bool := do
   let body ← withTransparency .all <| whnf body
   let body ← normalizeExplicitCircuitExpr body
   let body ← withTransparency .all <| whnf body
   let body := stripMData body
   if body.getAppFn.isConstOf ``Vector.mapRange then
     return true
+  if body.getAppFn.isConstOf ``Vector.map then
+    return true
   if body.getAppFn.isConstOf ``Vector.mk then
     let args := body.getAppArgs
     if args.size == 4 then
-      for i in [0:len] do
-        if (← nthArrayLiteralElement? args[2]! i).isNone then
-          return false
       return true
   return false
 
@@ -368,6 +501,7 @@ def mkUpdatedBoundProof (endIdx current idx value _next setProof oldProof : Expr
 
 partial def compileWitnessSetters (F callback m : Expr) (state : CompileState) (current : Expr)
     (k : Expr → CompileState → TermElabM Expr) : TermElabM Expr := do
+  let m ← normalizeExplicitCircuitExpr m
   let some len ← getNatValue? m
     | throwError "witness compiler cannot generate setters for non-static witness length:{indentExpr m}"
   let readState := { state with witnesses := current }

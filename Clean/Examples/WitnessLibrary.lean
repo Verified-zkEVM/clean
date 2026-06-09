@@ -21,7 +21,7 @@ instance : Fact (pBN254 < 2^254) := ⟨by sorry⟩
 instance : Fact (pBN254 > 2^253) := ⟨by sorry⟩
 
 -- First 30 Circomlib formal circuits/assertions from sorted file order.
--- Current out-of-the-box result: 14 compile successfully, 16 are TODO-commented below.
+-- Current out-of-the-box result: 15 compile successfully, 15 are TODO-commented below.
 
 -- TODO: compiling this over BN254 times out in `whnf`.
 -- compile_witness (Circomlib.AliasCheck.circuit (p:=pBN254)) => aliasCheckWitness
@@ -65,11 +65,10 @@ compile_witness (Circomlib.NOR.circuit (p:=pBabybear)) => norWitness
 
 -- TODO: deterministic timeout in witness compilation.
 -- compile_witness (Circomlib.MultiMux1.circuit (p:=pBabybear) 4) => multiMux1_4Witness
--- TODO: witness compiler cannot generate setters for non-static witness length.
--- compile_witness (Circomlib.Mux1.circuit (p:=pBabybear)) => mux1Witness
+compile_witness (Circomlib.Mux1.circuit (p:=pBabybear)) => mux1Witness
 -- TODO: deterministic timeout in witness compilation.
 -- compile_witness (Circomlib.MultiMux2.circuit (p:=pBabybear) 4) => multiMux2_4Witness
--- TODO: witness compiler cannot generate setters for non-static witness length.
+-- TODO: deterministic timeout in witness compilation.
 -- compile_witness (Circomlib.Mux2.circuit (p:=pBabybear)) => mux2Witness
 -- TODO: deterministic timeout in witness compilation.
 -- compile_witness (Circomlib.MultiMux3.circuit (p:=pBabybear) 4) => multiMux3_4Witness
