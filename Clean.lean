@@ -18,6 +18,7 @@ import Clean.Circomlib.Sign
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
+import Clean.Examples.Witness
 import Clean.Examples.HintExample
 import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Examples.FemtoCairo.Plonky3Helpers

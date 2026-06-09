@@ -543,6 +543,63 @@ def isUnfoldableCircuitDecl (declName : Name)
   | some (.opaqueInfo info) => return ok info.type
   | _ => return false
 
+/-- Collect user circuit definitions that are eligible for explicit-circuit unfolding. -/
+partial def collectUnfoldableCircuitDecls (e : Expr) (decls : Array Name := #[]) :
+    MetaM (Array Name) := do
+  let unfoldTypeHeads ← labelled `explicit_circuit_unfold_type
+  let noUnfoldHeads ← labelled `explicit_circuit_no_unfold
+  let rec go (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
+    match e with
+    | .const declName _ =>
+        if decls.contains declName ||
+            !(← isUnfoldableCircuitDecl declName (some noUnfoldHeads) (some unfoldTypeHeads)) then
+          return decls
+        else
+          return decls.push declName
+    | .app f a => go a (← go f decls)
+    | .lam _ t b _ | .forallE _ t b _ => go b (← go t decls)
+    | .letE _ t v b _ => go b (← go v (← go t decls))
+    | .mdata _ b => go b decls
+    | .proj _ _ b => go b decls
+    | _ => return decls
+  go e decls
+
+/-- Build the targeted dsimp context used by `elaborate_circuit` for explicit metadata. -/
+def mkExplicitCircuitDsimpContext (decls : Array Name := #[]) :
+    MetaM Simp.Context := do
+  let some ext ← getSimpExtension? `explicit_circuit_norm
+    | throwError "unknown simp attribute explicit_circuit_norm"
+  let mut thms ← ext.getTheorems
+  for decl in decls do
+    thms ← thms.addDeclToUnfold decl
+  let congrThms ← getSimpCongrTheorems
+  Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    (simpTheorems := #[thms]) congrThms
+
+/-- Build the targeted simp context and simprocs used by `elaborate_circuit`. -/
+def mkExplicitCircuitSimpContext :
+    MetaM (Simp.Context × Simp.SimprocsArray) := do
+  let some ext ← getSimpExtension? `explicit_circuit_norm
+    | throwError "unknown simp attribute explicit_circuit_norm"
+  let explicitThms ← ext.getTheorems
+  let congrThms ← getSimpCongrTheorems
+  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    (simpTheorems := #[explicitThms]) congrThms
+  let some procExt ← Simp.getSimprocExtension? `explicit_circuit_norm
+    | throwError "unknown simproc attribute explicit_circuit_norm"
+  return (simpCtx, #[(← procExt.getSimprocs)])
+
+/--
+Normalize an explicit-circuit metadata expression with the same targeted two-stage
+pipeline used by `elaborate_circuit`.
+-/
+def normalizeExplicitCircuitExpr (e : Expr) (decls : Array Name := #[]) :
+    MetaM Expr := do
+  let dsimpCtx ← mkExplicitCircuitDsimpContext decls
+  let e := (← dsimp e dsimpCtx).1
+  let (simpCtx, simpProcs) ← mkExplicitCircuitSimpContext
+  return (← Lean.Meta.simp e simpCtx simpProcs).1.expr
+
 /-- The `@[explicit_circuit_constructor]` lemma whose conclusion `ExplicitCircuit <c>` keys on
 `head` (the head constant of `<c>`), if any. -/
 def explicitConstructorFor? (head : Name) : MetaM (Option Name) := do
