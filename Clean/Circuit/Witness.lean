@@ -1,5 +1,10 @@
 import Clean.Circuit.Extensions
 
+register_option debug.compileWitness : Bool := {
+  defValue := false
+  descr := "print normalized operations and generated declarations from compile_witness"
+}
+
 @[circuit_norm]
 def FormalCircuitBase.instantiate {F : Type} [Field F] {Input Output : TypeMap}
     [ProvableType Input] [CircuitType Output]
@@ -192,6 +197,24 @@ def mkVectorGetD (F body : Expr) (i : Nat) : MetaM Expr := do
   let zero ← mkAppOptM ``OfNat.ofNat #[some F, some (mkRawNatLit 0), none]
   mkAppOptM ``Vector.getD #[some F, none, body, some (mkNatLit i), zero]
 
+def mkVectorGet (F body m : Expr) (i : Nat) : TermElabM Expr := do
+  let idx := mkNatLit i
+  let expected ← mkAppM ``LT.lt #[idx, m]
+  let proof ← Lean.Elab.Term.elabTerm (← `(by get_elem_tactic)) (some expected)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let proof ← instantiateMVars proof
+  let vectorType ← inferType body
+  let valid ←
+    withLocalDeclD `xs vectorType fun xs => do
+    withLocalDeclD `i (mkConst ``Nat) fun i => do
+      let body ← mkAppM ``LT.lt #[i, m]
+      mkLambdaFVars #[xs, i] body
+  let value ← mkAppOptM ``GetElem.getElem
+    #[some vectorType, some (mkConst ``Nat), some F, some valid, none,
+      some body, some idx, some proof]
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  instantiateMVars value
+
 partial def nthListElement? (xs : Expr) (i : Nat) : MetaM (Option Expr) := do
   let xs ← whnf xs
   let xs := stripMData xs
@@ -241,6 +264,22 @@ def compileVectorElement (F body : Expr) (i : Nat) : MetaM Expr := do
       return ← normalizeExplicitCircuitExpr (mkApp args[2]! (mkNatLit i))
   mkVectorGetD F body i
 
+def canCompileVectorElementsDirect (body : Expr) (len : Nat) : MetaM Bool := do
+  let body ← withTransparency .all <| whnf body
+  let body ← normalizeExplicitCircuitExpr body
+  let body ← withTransparency .all <| whnf body
+  let body := stripMData body
+  if body.getAppFn.isConstOf ``Vector.mapRange then
+    return true
+  if body.getAppFn.isConstOf ``Vector.mk then
+    let args := body.getAppArgs
+    if args.size == 4 then
+      for i in [0:len] do
+        if (← nthArrayLiteralElement? args[2]! i).isNone then
+          return false
+      return true
+  return false
+
 def mkCheckedArraySet (state : CompileState) (current idx value : Expr) : TermElabM (Expr × Option Expr) := do
   if state.bound?.isSome then
     let proof ← mkGetElemProof idx current
@@ -264,12 +303,14 @@ partial def compileWitnessSetters (F callback m : Expr) (state : CompileState) (
     (k : Expr → CompileState → TermElabM Expr) : TermElabM Expr := do
   let some len ← getNatValue? m
     | throwError "witness compiler cannot generate setters for non-static witness length:{indentExpr m}"
-  let rec loop (i : Nat) (state : CompileState) (current : Expr) : TermElabM Expr := do
+  let readState := { state with witnesses := current }
+  let body ← inlineWitnessCallbackBody callback readState
+  let direct ← canCompileVectorElementsDirect body len
+  let rec loop (body : Expr) (readState : CompileState) (i : Nat) (state : CompileState)
+      (current : Expr) : TermElabM Expr := do
     if i == len then
       k current state
     else
-      let readState := { state with witnesses := current }
-      let body ← inlineWitnessCallbackBody callback readState
       let value ← compileVectorElement F body i
       let value ← normalizeExplicitCircuitExpr value
       let value ← compileExpr F readState value
@@ -283,13 +324,42 @@ partial def compileWitnessSetters (F callback m : Expr) (state : CompileState) (
             let endIdx ← mkAppM ``HAdd.hAdd #[state.offset, localLength]
             let boundProof ← mkUpdatedBoundProof endIdx current idx value next setProof oldBound
             withLetDecl `h boundType boundProof fun h => do
-              let body ← loop (i + 1)
+              let body ← loop body readState (i + 1)
                 { state with witnesses := next, bound? := some h, nextWitness := state.nextWitness + 1 } next
               mkLetFVars #[next, h] body
         | _, _, _ =>
-            let body ← loop (i + 1) { state with witnesses := next, nextWitness := state.nextWitness + 1 } next
+            let body ← loop body readState (i + 1)
+              { state with witnesses := next, nextWitness := state.nextWitness + 1 } next
             mkLetFVars #[next] body
-  loop 0 state current
+  if direct then
+    loop body readState 0 state current
+  else
+    let body ← compileExpr F readState body
+    let body ← normalizeExplicitCircuitExpr body
+    withLetDecl `witnessValues (← inferType body) body fun witnessValues => do
+      let rec loopBound (i : Nat) (state : CompileState) (current : Expr) : TermElabM Expr := do
+        if i == len then
+          k current state
+        else
+          let value ← mkVectorGet F witnessValues m i
+          let idx ← mkWriteIndex state.offset state.nextWitness 0
+          let (assigned, setProof?) ← mkCheckedArraySet state current idx value
+          withLetDecl `witnesses (← inferType assigned) assigned fun next => do
+            match state.localLength?, state.bound?, setProof? with
+            | some localLength, some oldBound, some setProof =>
+                let boundType ← mkBoundType state.offset localLength next
+                let endIdx ← mkAppM ``HAdd.hAdd #[state.offset, localLength]
+                let boundProof ← mkUpdatedBoundProof endIdx current idx value next setProof oldBound
+                withLetDecl `h boundType boundProof fun h => do
+                  let body ← loopBound (i + 1)
+                    { state with witnesses := next, bound? := some h, nextWitness := state.nextWitness + 1 } next
+                  mkLetFVars #[next, h] body
+            | _, _, _ =>
+                let body ← loopBound (i + 1)
+                  { state with witnesses := next, nextWitness := state.nextWitness + 1 } next
+                mkLetFVars #[next] body
+      let result ← loopBound 0 state current
+      mkLetFVars #[witnessValues] result
 
 def explicitCircuitDataOf (circuit offset : Expr) : TermElabM (Expr × Expr × Expr) := do
   let explicitType ← mkAppM ``ExplicitCircuit #[circuit]
@@ -529,12 +599,13 @@ elab_rules : command
         withLocalDeclD `witnesses (← mkAppM ``Array #[target.F]) fun witnesses => do
           let state : CompileState := { offset, env, witnesses }
           let (msgs, _) ← compileOperations target.F ops state
-          logInfo m!"normalized operations:{indentExpr ops}"
-          if msgs.isEmpty then
-            logInfo "no witness operations found"
-          else
-            for msg in msgs do
-              logInfo msg
+          if (← getOptions).getBool `debug.compileWitness false then
+            logInfo m!"normalized operations:{indentExpr ops}"
+            if msgs.isEmpty then
+              logInfo "no witness operations found"
+            else
+              for msg in msgs do
+                logInfo msg
 
   | `(compile_witness $circuitStx:term => $declIdent:ident) => do
       let rawName := declIdent.getId.eraseMacroScopes
@@ -563,7 +634,8 @@ elab_rules : command
               return (type, value)
         let type ← instantiateMVars type
         let value ← instantiateMVars value
-        logInfo m!"generated witness declaration before checking:\n\ndef {declName} :{indentExpr type} :={indentExpr value}"
+        if (← getOptions).getBool `debug.compileWitness false then
+          logInfo m!"generated witness declaration before checking:\n\ndef {declName} :{indentExpr type} :={indentExpr value}"
         if type.hasFVar || value.hasFVar then
           let typeFVar := type.find? (·.isFVar)
           let valueFVar := value.find? (·.isFVar)

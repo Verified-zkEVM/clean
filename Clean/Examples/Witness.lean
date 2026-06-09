@@ -4,6 +4,8 @@ import Clean.Utils.Primes
 
 namespace Examples.Witness
 
+-- set_option debug.compileWitness true
+
 def oneWitness : Circuit Rat (Expression Rat) := do
   let x ← witnessField fun _ => 7
   return x
@@ -26,7 +28,6 @@ def vectorWitness : Circuit Rat (Vector (Expression Rat) 3) := do
 
 compile_witness vectorWitness => vectorWitnessCompiled
 
-
 def formalBaseWitness : FormalCircuitBase Rat field field where
   main x := do
     let y ← witnessField fun env => env x + 1
@@ -48,7 +49,6 @@ def assertBoolWithReturn : FormalAssertion (F pBabybear) field where
   Spec x := IsBool x
   soundness := by circuit_proof_all
   completeness := by circuit_proof_all
-
 
 example : ∀ a : Expression (F pBabybear) × Expression (F pBabybear),
   ExplicitCircuit (Circomlib.AND.circuit.main a) := by infer_explicit_circuit
