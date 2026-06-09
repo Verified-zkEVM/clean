@@ -54,6 +54,7 @@ structure VirtualCellsState (F : Type) where
   queriedSelectors : Array Selector := #[]
   queriedCells : Array VirtualCell := #[]
   constraints : Array (Constraint F) := #[]
+  registeredInputs : Option (Array (Expression F)) := none
 
 def VirtualCells (F : Type) (α : Type) := VirtualCellsState F → α × VirtualCellsState F
 
@@ -117,6 +118,7 @@ structure Gate (F : Type) where
   constraints : Array (Constraint F)
   queriedSelectors : Array Selector
   queriedCells : Array VirtualCell
+  registeredInputs : Option (Array (Expression F)) := none
 
 structure Lookup (F : Type) where
   name : String
@@ -203,6 +205,7 @@ def createGateRaw {F : Type}
       constraints
       queriedSelectors := cells.queriedSelectors
       queriedCells := cells.queriedCells
+      registeredInputs := cells.registeredInputs
     }
   })
 
@@ -218,6 +221,7 @@ def createGate {F : Type}
       constraints := cells.constraints
       queriedSelectors := cells.queriedSelectors
       queriedCells := cells.queriedCells
+      registeredInputs := cells.registeredInputs
     }
   })
 
