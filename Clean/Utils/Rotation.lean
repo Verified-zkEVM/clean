@@ -52,7 +52,7 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     let offset_bv := (offset % 64).toUInt64
     have h_sat : offset_bv < 64 → offset_bv > 0 →
         (x_bv % 1<<<offset_bv) <<< (64 - offset_bv) = x_bv <<< (64 - offset_bv) := by
-      bv_decide
+      bv_decide (config := { timeout := 60 })
 
     have offset_bv_lt : offset_bv < 64 := by
       simp only [offset_bv]
