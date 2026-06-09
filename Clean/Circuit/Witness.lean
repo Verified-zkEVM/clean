@@ -690,15 +690,16 @@ elab_rules : command
             let (ops, localLength) ← target.dataOf offset
             let boundType ← mkBoundType offset localLength witnesses
             withLocalDeclD `h boundType fun h => do
-            let envType ← mkAppM ``ProverEnvironment #[target.F]
-            withLocalDeclD `env envType fun env => do
-              let state : CompileState := {
-                offset, env, witnesses, localLength? := some localLength, bound? := some h
-              }
-              let body ← compileOperationsToArray target.F ops state witnesses fun current _ => return current
-              let value ← mkLambdaFVars #[offset, witnesses, h] body
-              let type ← mkForallFVars #[offset, witnesses, h] arrType
-              return (type, value)
+              let envType ← mkAppM ``ProverEnvironment #[target.F]
+              withLocalDeclD `env envType fun env => do
+                let state : CompileState := {
+                  offset, env, witnesses, localLength? := some localLength, bound? := some h
+                }
+                let body ← compileOperationsToArray target.F ops state witnesses fun current _ =>
+                  return current
+                let value ← mkLambdaFVars #[offset, witnesses, h] body
+                let type ← mkForallFVars #[offset, witnesses, h] arrType
+                return (type, value)
         let type ← instantiateMVars type
         let value ← instantiateMVars value
         if (← getOptions).getBool `debug.compileWitness false then
