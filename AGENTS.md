@@ -131,6 +131,7 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 - Assumptions capture preconditions (e.g., value ranges)
 - Follow Mathlib naming conventions
 - Never modify maxHeartbeats
+- Keep core library files sorry-free. Temporary or example-only sorries are acceptable only in example/test files when explicitly intended.
 
 ## Key Files to Understand
 

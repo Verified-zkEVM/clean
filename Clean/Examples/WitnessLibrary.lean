@@ -14,11 +14,17 @@ import Clean.Utils.Primes
 
 namespace Examples.WitnessLibrary
 
+def pBN254 := 21888242871839275222246405745257275088548364400416034343698204186575808495617
+
+instance primeBN254 : Fact (pBN254.Prime) := ⟨by sorry⟩
+instance : Fact (pBN254 < 2^254) := by native_decide
+instance : Fact (pBN254 > 2^253) := by native_decide
+
 -- First 30 Circomlib formal circuits/assertions from sorted file order.
 -- Current out-of-the-box result: 13 compile successfully, 17 are TODO-commented below.
 
--- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
--- compile_witness (Circomlib.AliasCheck.circuit (p:=pBabybear)) => aliasCheckWitness
+-- TODO: compiling this over BN254 times out in `whnf`.
+-- compile_witness (Circomlib.AliasCheck.circuit (p:=pBN254)) => aliasCheckWitness
 
 -- TODO: generated witness declaration still has free variables.
 -- compile_witness (Circomlib.BinSub.circuit (p:=pBabybear) 2 (by native_decide)) => binSub2Witness
@@ -29,15 +35,15 @@ compile_witness (Circomlib.Num2Bits.arbitraryBitLengthCircuit (p:=pBabybear) 4) 
 compile_witness (Circomlib.Num2Bits.circuit (p:=pBabybear) 4 (by native_decide)) => num2Bits4Witness
 -- TODO: generated witness declaration still has free variables.
 -- compile_witness (Circomlib.Bits2Num.circuit (p:=pBabybear) 4) => bits2Num4Witness
--- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
--- compile_witness (Circomlib.Num2Bits_strict.circuit (p:=pBabybear)) => num2BitsStrictWitness
--- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
--- compile_witness (Circomlib.Bits2Num_strict.circuit (p:=pBabybear)) => bits2NumStrictWitness
+-- TODO: compiling this over BN254 times out in `whnf`.
+-- compile_witness (Circomlib.Num2Bits_strict.circuit (p:=pBN254)) => num2BitsStrictWitness
+-- TODO: compiling this over BN254 times out in `whnf`.
+-- compile_witness (Circomlib.Bits2Num_strict.circuit (p:=pBN254)) => bits2NumStrictWitness
 -- TODO: failed to synthesize an instance during witness compilation.
 -- compile_witness (Circomlib.Num2BitsNeg.circuit (p:=pBabybear) 4 (by native_decide)) => num2BitsNeg4Witness
 
--- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
--- compile_witness (Circomlib.CompConstant.circuit (p:=pBabybear) 3 (by native_decide)) => compConstant3Witness
+-- TODO: compiling this over BN254 times out in `whnf`.
+-- compile_witness (Circomlib.CompConstant.circuit (p:=pBN254) 3 (by native_decide)) => compConstant3Witness
 
 compile_witness (Circomlib.IsZero.circuit (p:=pBabybear)) => isZeroWitness
 compile_witness (Circomlib.IsEqual.circuit (p:=pBabybear)) => isEqualWitness
