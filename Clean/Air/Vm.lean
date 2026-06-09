@@ -57,7 +57,9 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
     ∃ enabled : Expression F, ∃ pull push : Var Message F,
       ⟨ channel,
         [(pullIf (channel:=channel) enabled pull).toRaw,
-          (pushIf (channel:=channel) enabled push).toRaw] ⟩ ∈ table.exposedChannels
+          (pushIf (channel:=channel) enabled push).toRaw] ⟩ ∈ table.exposedChannels ∧
+      ∀ env, table.operations.ConstraintsHold env →
+        Expression.eval env enabled = 0 ∨ Expression.eval env enabled = 1
 
   -- the verifier pulls and pushes to the channel, and doesn't push anything else
   verifier_channel : ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
@@ -253,7 +255,9 @@ theorem tables_channel_of_mem (vm : VmTables F PublicIO) {table} (table_mem : ta
     ∃ enabled : Expression F, ∃ pull push : Var vm.Message F,
       ⟨ vm.channel,
         [(pullIf (channel:=vm.channel) enabled pull).toRaw,
-          (pushIf (channel:=vm.channel) enabled push).toRaw] ⟩ ∈ table.exposedChannels := by
+          (pushIf (channel:=vm.channel) enabled push).toRaw] ⟩ ∈ table.exposedChannels ∧
+      ∀ env, table.operations.ConstraintsHold env →
+        Expression.eval env enabled = 0 ∨ Expression.eval env enabled = 1 := by
   exact list_forall_mem vm.tables_channel table_mem
 
 noncomputable def step (vm : VmTables F PublicIO) (table : Component F)
@@ -267,7 +271,13 @@ theorem tables_channel' (vm : VmTables F PublicIO) {table} (table_mem : table �
   ⟨ vm.channel,
     [(pullIf (channel:=vm.channel) step.enabled step.pull).toRaw,
       (pushIf (channel:=vm.channel) step.enabled step.push).toRaw] ⟩ ∈ table.exposedChannels :=
-  (vm.tables_channel_of_mem table_mem).choose_spec.choose_spec.choose_spec
+  (vm.tables_channel_of_mem table_mem).choose_spec.choose_spec.choose_spec.left
+
+theorem tables_enabled_boolean (vm : VmTables F PublicIO) {table} (table_mem : table ∈ vm.tables) :
+    ∀ env, table.operations.ConstraintsHold env →
+      Expression.eval env (vm.step table table_mem).enabled = 0 ∨
+        Expression.eval env (vm.step table table_mem).enabled = 1 :=
+  (vm.tables_channel_of_mem table_mem).choose_spec.choose_spec.choose_spec.right
 
 noncomputable def verifierPull (vm : VmTables F PublicIO) : Var vm.Message F :=
   vm.verifier_channel.choose
@@ -507,31 +517,23 @@ lemma mem_zip_pulls_pushes_iff (witness : VmWitness vm) (pull push : Interaction
   · simp
   simp [← interactionss_eq_pulls_pushes, Table.interactionssWith]
 
-lemma rowEnabled_boolean_of_wellformed {witness : VmWitness vm}
-    (wellformed : InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw)) :
+lemma rowEnabled_boolean_of_constraints {witness : VmWitness vm}
+    (constraints : witness.Constraints) :
     ∀ (table : Table F) (table_mem : table ∈ witness.allTables), ∀ row ∈ table.table,
       witness.rowEnabled table_mem row = 0 ∨ witness.rowEnabled table_mem row = 1 := by
   intro table table_mem row row_mem
-  let pull := vm.channel.pullIfValue (witness.rowEnabled table_mem row) (witness.rowPull table_mem row)
-  let push := vm.channel.pushIfValue (witness.rowEnabled table_mem row) (witness.rowPush table_mem row)
-  have pair_mem : (pull, push) ∈ witness.interactionPairs := by
-    simp only [interactionPairs, List.mem_flatMap, List.mem_attach, true_and, List.mem_map]
-    refine ⟨ ⟨ table, table_mem ⟩, row, row_mem, ?_ ⟩
-    simp [pull, push]
-  have pull_mem_pulls : pull ∈ witness.pulls := by
-    exact List.mem_map.mpr ⟨ (pull, push), pair_mem, rfl ⟩
-  have pull_mem_interactions : pull ∈ witness.interactionsWith vm.channel.toRaw := by
-    rw [witness.interactions_eq_pulls_pushes]
-    apply (List.zip_flattenPairs_perm ((witness.pushes_length).trans witness.pulls_length.symm)).mem_iff.mpr
-    exact List.mem_append_left witness.pushes pull_mem_pulls
-  have h_mult := wellformed pull pull_mem_interactions (by rfl)
-  rcases h_mult with h_neg_one | h_zero
+  classical
+  by_cases h_verifier : table.component = vm.toEnsemble.verifierTable
   · right
-    have h := congrArg Neg.neg h_neg_one
-    simpa [pull, Channel.pullIfValue] using h
-  · left
-    have h := congrArg Neg.neg h_zero
-    simpa [pull, Channel.pullIfValue] using h
+    simp [rowEnabled, VmTables.stepOfAllTables, h_verifier, VmTables.verifierStep]
+    rfl
+  · have table_mem_components : table.component ∈ vm.tables := by
+      have h_mem := witness.mem_allTables_component_of_mem_allTables table_mem
+      simp only [VmTables.toEnsemble, Ensemble.allTables, List.mem_cons] at h_mem
+      exact h_mem.resolve_left h_verifier
+    have h_constraints := constraints table table_mem row row_mem
+    simpa [rowEnabled, VmTables.stepOfAllTables, h_verifier] using
+      vm.tables_enabled_boolean table_mem_components (table.environment row) h_constraints
 
 lemma pull_requirements (witness : VmWitness vm)
     (row_enabled_boolean : ∀ (table) (table_mem : table ∈ witness.allTables), ∀ row ∈ table.table,
@@ -578,7 +580,7 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
   [Fact (ringChar F ≠ 2)] (witness : VmWitness vm) :
   -- if the vm interactions with the vm channel are balanced
   BalancedInteractions (witness.interactionsWith vm.channel.toRaw) →
-  InteractionsWellFormed (witness.interactionsWith vm.channel.toRaw) →
+  witness.Constraints →
   -- and for every row, vm channel guarantees imply vm channel requirements
   -- (this will come from constraints + soundness of the existing ensemble)
   (∀ table ∈ witness.allTables, ∀ row ∈ table.table,
@@ -587,8 +589,8 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
   -- vm channel verifier requirements imply vm channel verifier guarantees
   witness.verifierTable.ChannelRequirements vm.channel.toRaw →
     witness.verifierTable.ChannelGuarantees vm.channel.toRaw := by
-  intro balance wellformed constraints
-  have row_enabled_boolean := witness.rowEnabled_boolean_of_wellformed wellformed
+  intro balance witness_constraints constraints
+  have row_enabled_boolean := witness.rowEnabled_boolean_of_constraints witness_constraints
   -- prove balance of pulls + pushes
   replace balance : BalancedInteractions (witness.pulls ++ witness.pushes) := by
     rw [witness.interactions_eq_pulls_pushes] at balance
@@ -793,8 +795,6 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   -- this already lets us supply the balance condition
   have vm_balance := balance vmChannel (by simp [vmChannel, Ensemble.addVm])
   simp only [circuit_norm, vmInteractions_eq] at vm_balance
-  have verifier_guarantees := vmWitness
-    |>.verifier_guarantees_of_requirements_of_requirements_of_guarantees vm_balance.1 vm_balance.2
   -- next, we work on instantiating `requirements_of_partial_guarantees_of_constraints`
   -- which will give us exactly the second hypothesis of `verifier_guarantees`
   -- first, unify channel subset assumptions to all tables
@@ -824,6 +824,8 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     simp only [EnsembleWitness.Constraints, allTables_split, List.mem_append] at constraints ⊢
     intro table table_mem
     exact constraints table (.inl table_mem)
+  have verifier_guarantees := vmWitness
+    |>.verifier_guarantees_of_requirements_of_requirements_of_guarantees vm_balance.1 vm_constraints
   have assumptions' : witness'.Assumptions := by
     simp only [EnsembleWitness.Assumptions, allTables_split, List.mem_append] at assumptions ⊢
     simp only [EnsembleWitness.forall_mem_allTables_iff]
