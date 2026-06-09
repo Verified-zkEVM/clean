@@ -17,13 +17,15 @@ namespace Examples.WitnessLibrary
 opaque pBN254 : ℕ := 21888242871839275222246405745257275088548364400416034343698204186575808495617
 
 instance primeBN254 : Fact (pBN254.Prime) := ⟨by sorry⟩
-instance : Fact (pBN254 < 2^254) := ⟨by sorry⟩
-instance : Fact (pBN254 > 2^253) := ⟨by sorry⟩
+instance : Fact (pBN254 < 2^254) := by sorry
+instance : Fact (pBN254 > 2^253) := by sorry
+
+set_option debug.compileWitness true
 
 -- First 30 Circomlib formal circuits/assertions from sorted file order.
 -- Current out-of-the-box result: 15 compile successfully, 15 are TODO-commented below.
 
--- TODO: compiling this over BN254 times out in `whnf`.
+-- TODO: witness normalization for this alias-checking shape times out in `whnf`.
 -- compile_witness (Circomlib.AliasCheck.circuit (p:=pBN254)) => aliasCheckWitness
 
 -- TODO: compiling this times out in `whnf`.
@@ -34,14 +36,14 @@ instance : Fact (pBN254 > 2^253) := ⟨by sorry⟩
 compile_witness (Circomlib.Num2Bits.arbitraryBitLengthCircuit (p:=pBabybear) 4) => num2BitsArbitrary4Witness
 compile_witness (Circomlib.Num2Bits.circuit (p:=pBabybear) 4 (by native_decide)) => num2Bits4Witness
 compile_witness (Circomlib.Bits2Num.circuit (p:=pBabybear) 4) => bits2Num4Witness
--- TODO: compiling this over BN254 times out in `whnf`.
+-- TODO: witness normalization for this strict bitify shape times out in `whnf`.
 -- compile_witness (Circomlib.Num2Bits_strict.circuit (p:=pBN254)) => num2BitsStrictWitness
--- TODO: compiling this over BN254 times out in `whnf`.
+-- TODO: witness normalization for this strict bitify shape times out in `whnf`.
 -- compile_witness (Circomlib.Bits2Num_strict.circuit (p:=pBN254)) => bits2NumStrictWitness
 -- TODO: failed to prove array index bounds through nested bit-decomposition assertions.
 -- compile_witness (Circomlib.Num2BitsNeg.circuit (p:=pBabybear) 4 (by native_decide)) => num2BitsNeg4Witness
 
--- TODO: compiling this over BN254 times out in `whnf`.
+-- TODO: witness normalization for this constant-comparison shape times out in `whnf`.
 -- compile_witness (Circomlib.CompConstant.circuit (p:=pBN254) 3 (by native_decide)) => compConstant3Witness
 
 compile_witness (Circomlib.IsZero.circuit (p:=pBabybear)) => isZeroWitness

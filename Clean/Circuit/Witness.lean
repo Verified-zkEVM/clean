@@ -421,6 +421,9 @@ def nthArrayLiteralElement? (xs : Expr) (i : Nat) : MetaM (Option Expr) := do
   else
     return none
 
+def isExpressionEvalFunction (f : Expr) : Bool :=
+  (stripMData f).getAppFn.isConstOf ``Expression.eval
+
 partial def compileVectorElement (F body : Expr) (i : Nat) : TermElabM Expr := do
   let raw := stripMData body
   if raw.getAppFn.isConstOf ``Vector.mapRange then
@@ -466,6 +469,14 @@ partial def compileVectorElement (F body : Expr) (i : Nat) : TermElabM Expr := d
   mkVectorGetD F body i
 
 partial def canCompileVectorElementsDirect (body : Expr) (_len : Nat) : MetaM Bool := do
+  let raw := stripMData body
+  if raw.getAppFn.isConstOf ``Vector.mapRange then
+    return true
+  if raw.getAppFn.isConstOf ``Vector.map then
+    let args := raw.getAppArgs
+    if args.size == 5 then
+      return isExpressionEvalFunction args[3]!
+    return false
   let body ← withTransparency .all <| whnf body
   let body ← normalizeExplicitCircuitExpr body
   let body ← withTransparency .all <| whnf body
@@ -473,10 +484,16 @@ partial def canCompileVectorElementsDirect (body : Expr) (_len : Nat) : MetaM Bo
   if body.getAppFn.isConstOf ``Vector.mapRange then
     return true
   if body.getAppFn.isConstOf ``Vector.map then
-    return true
+    let args := body.getAppArgs
+    if args.size == 5 then
+      return isExpressionEvalFunction args[3]!
+    return false
   if body.getAppFn.isConstOf ``Vector.mk then
     let args := body.getAppArgs
     if args.size == 4 then
+      for i in [0:_len] do
+        if (← nthArrayLiteralElement? args[2]! i).isNone then
+          return false
       return true
   return false
 
