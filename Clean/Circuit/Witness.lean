@@ -23,6 +23,7 @@ attribute [explicit_circuit_norm] Function.comp_apply
 attribute [explicit_circuit_norm] ProvableType.toElements_fromElements ProvableType.fromElements_toElements
 attribute [explicit_circuit_norm] Nat.cast_zero Nat.cast_one
 attribute [explicit_circuit_norm] add_zero zero_add
+attribute [explicit_circuit_norm] Nat.succ_eq_add_one
 attribute [explicit_circuit_norm] Circuit.localLength Operation.localLength Operations.localLength
 
 @[explicit_circuit_norm]
@@ -114,9 +115,14 @@ def mkBoundType (offset localLength witnesses : Expr) : MetaM Expr := do
 def mkGetElemProof (idx witnesses : Expr) : TermElabM Expr := do
   let size ← mkArraySize witnesses
   let expected ← mkAppM ``LT.lt #[idx, size]
-  let proof ← Lean.Elab.Term.elabTerm (← `(by get_elem_tactic)) (some expected)
-  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
-  instantiateMVars proof
+  let mkProof (stx : Term) : TermElabM Expr := do
+    let proof ← Lean.Elab.Term.elabTerm stx (some expected)
+    Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+    instantiateMVars proof
+  try
+    mkProof (← `(by get_elem_tactic))
+  catch _ =>
+    mkProof (← `(by omega))
 
 def mkWitnessGet (F : Expr) (state : CompileState) (idx : Expr) : TermElabM Expr := do
   if state.bound?.isSome then
@@ -137,14 +143,73 @@ def mkWitnessGet (F : Expr) (state : CompileState) (idx : Expr) : TermElabM Expr
     let zero ← mkAppOptM ``OfNat.ofNat #[some F, some (mkRawNatLit 0), none]
     mkAppM ``Array.getD #[state.witnesses, idx, zero]
 
+partial def normalizeNatIndex (idx : Expr) : MetaM Expr := do
+  let idx ← withTransparency .all <| whnf idx
+  let idx ← normalizeExplicitCircuitExpr idx
+  let idx ← withTransparency .all <| whnf idx
+  let idx := stripMData idx
+  if idx.getAppFn.isConstOf ``Nat.succ then
+    let args := idx.getAppArgs
+    if args.size == 1 then
+      return ← mkAppM ``HAdd.hAdd #[← normalizeNatIndex args[0]!, mkNatLit 1]
+  if idx.getAppFn.isConstOf ``Nat.add then
+    let args := idx.getAppArgs
+    if args.size == 2 then
+      let lhs ← normalizeNatIndex args[0]!
+      let rhs ← normalizeNatIndex args[1]!
+      if let some 0 ← getNatValue? rhs then
+        return lhs
+      if let some 0 ← getNatValue? lhs then
+        return rhs
+      return ← mkAppM ``HAdd.hAdd #[lhs, rhs]
+  return idx
+
 def isStateEnvironment (state : CompileState) (env : Expr) : MetaM Bool := do
   if (← isDefEq env state.env) then
     return true
   let proverEnv ← mkAppM ``ProverEnvironment.toEnvironment #[state.env]
   isDefEq env proverEnv
 
+mutual
+
+partial def compileExpressionEval (F : Expr) (state : CompileState) (expr : Expr) : TermElabM Expr := do
+  let expr ← withTransparency .all <| whnf expr
+  let expr ← normalizeExplicitCircuitExpr expr
+  let expr ← withTransparency .all <| whnf expr
+  let expr := stripMData expr
+  if expr.getAppFn.isConstOf ``Expression.var then
+    let args := expr.getAppArgs
+    if args.size >= 2 then
+      let idx ← mkAppM ``Variable.index #[args[1]!]
+      let idx ← normalizeNatIndex idx
+      return ← mkWitnessGet F state idx
+  if expr.getAppFn.isConstOf ``Expression.const then
+    let args := expr.getAppArgs
+    if args.size >= 2 then
+      return ← compileExpr F state args[1]!
+  if expr.getAppFn.isConstOf ``Expression.add then
+    let args := expr.getAppArgs
+    if args.size >= 3 then
+      let lhs ← compileExpressionEval F state args[1]!
+      let rhs ← compileExpressionEval F state args[2]!
+      return ← mkAppM ``HAdd.hAdd #[lhs, rhs]
+  if expr.getAppFn.isConstOf ``Expression.mul then
+    let args := expr.getAppArgs
+    if args.size >= 3 then
+      let lhs ← compileExpressionEval F state args[1]!
+      let rhs ← compileExpressionEval F state args[2]!
+      return ← mkAppM ``HMul.hMul #[lhs, rhs]
+  throwError "witness compiler cannot compile expression evaluation:{indentExpr expr}"
+
 partial def compileExpr (F : Expr) (state : CompileState) (e : Expr) : TermElabM Expr := do
   let e := stripMData e
+  if e.getAppFn.isConstOf ``Expression.eval then
+    let args := e.getAppArgs
+    if args.size >= 4 then
+      let env := args[2]!
+      let expr := args[3]!
+      if (← isStateEnvironment state env) then
+        return ← compileExpressionEval F state expr
   if e.getAppFn.isConstOf ``Environment.get then
     let args := e.getAppArgs
     if args.size >= 3 then
@@ -174,6 +239,8 @@ partial def compileExpr (F : Expr) (state : CompileState) (e : Expr) : TermElabM
   | .proj n i b =>
       return .proj n i (← compileExpr F state b)
   | e => return e
+
+end
 
 def inlineWitnessCallbackBody (callback : Expr) (state : CompileState) : MetaM Expr := do
   normalizeExplicitCircuitExpr (mkApp callback state.env)

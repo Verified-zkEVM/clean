@@ -15,7 +15,7 @@ import Clean.Utils.Primes
 namespace Examples.WitnessLibrary
 
 -- First 30 Circomlib formal circuits/assertions from sorted file order.
--- Current out-of-the-box result: 8 compile successfully, 22 are TODO-commented below.
+-- Current out-of-the-box result: 13 compile successfully, 17 are TODO-commented below.
 
 -- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
 -- compile_witness (Circomlib.AliasCheck.circuit (p:=pBabybear)) => aliasCheckWitness
@@ -39,20 +39,15 @@ compile_witness (Circomlib.Num2Bits.circuit (p:=pBabybear) 4 (by native_decide))
 -- TODO: pBabybear does not satisfy the circuit's `Fact (p > 2^253)` requirement.
 -- compile_witness (Circomlib.CompConstant.circuit (p:=pBabybear) 3 (by native_decide)) => compConstant3Witness
 
--- TODO: generated witness declaration still has free variables.
--- compile_witness (Circomlib.IsZero.circuit (p:=pBabybear)) => isZeroWitness
--- TODO: generated witness declaration still has free variables.
--- compile_witness (Circomlib.IsEqual.circuit (p:=pBabybear)) => isEqualWitness
--- TODO: witness compiler does not yet support this witness shape.
+compile_witness (Circomlib.IsZero.circuit (p:=pBabybear)) => isZeroWitness
+compile_witness (Circomlib.IsEqual.circuit (p:=pBabybear)) => isEqualWitness
+-- TODO: witness compiler cannot generate setters for non-static witness length.
 -- compile_witness (Circomlib.ForceEqualIfEnabled.circuit (p:=pBabybear)) => forceEqualIfEnabledWitness
 -- TODO: failed to prove an array index bound through the Num2Bits subcircuit.
 -- compile_witness (Circomlib.LessThan.circuit (p:=pBabybear) 4 (by native_decide)) => lessThan4Witness
--- TODO: generated witness declaration still has free variables.
--- compile_witness (Circomlib.LessEqThan.circuit (p:=pBabybear) 4 (by native_decide)) => lessEqThan4Witness
--- TODO: generated witness declaration still has free variables.
--- compile_witness (Circomlib.GreaterThan.circuit (p:=pBabybear) 4 (by native_decide)) => greaterThan4Witness
--- TODO: generated witness declaration still has free variables.
--- compile_witness (Circomlib.GreaterEqThan.circuit (p:=pBabybear) 4 (by native_decide)) => greaterEqThan4Witness
+compile_witness (Circomlib.LessEqThan.circuit (p:=pBabybear) 4 (by native_decide)) => lessEqThan4Witness
+compile_witness (Circomlib.GreaterThan.circuit (p:=pBabybear) 4 (by native_decide)) => greaterThan4Witness
+compile_witness (Circomlib.GreaterEqThan.circuit (p:=pBabybear) 4 (by native_decide)) => greaterEqThan4Witness
 
 compile_witness (Circomlib.XOR.circuit (p:=pBabybear)) => xorWitness
 compile_witness (Circomlib.AND.circuit (p:=pBabybear)) => andWitness
