@@ -4,14 +4,6 @@ Miscellaneous utility lemmas/methods that don't fit anywhere else.
 import Mathlib.Data.Fin.Basic
 variable {α : Type}
 
-theorem funext_heq {α α' β : Type} (h : α = α') {f : α → β} {g : α' → β} :
-    (∀ x : α, f x = g (cast h x)) → HEq f g := by
-  subst h
-  intro hfg
-  apply heq_of_eq
-  funext x
-  exact hfg x
-
 theorem cast_apply {α β β' : Type} (h : β = β') (f : α → β) (x : α) :
     (cast (h ▸ rfl) f : α → β') x = cast (h ▸ rfl) (f x) := by
   subst h; rfl
