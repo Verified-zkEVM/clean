@@ -1,12 +1,90 @@
-import Clean.Circuit.Explicit
+import Clean.Circuit.Extensions
+
+@[circuit_norm]
+def FormalCircuitBase.instantiate {F : Type} [Field F] {Input Output : TypeMap}
+    [ProvableType Input] [CircuitType Output]
+    (circuit : FormalCircuitBase F Input Output) : Circuit F Unit := do
+  let input ← witnessAny Input
+  let _ ← circuit.main input
+  return ()
 
 open Lean Meta Elab Command
 
 namespace Circuit.Witness
 
 attribute [explicit_circuit_norm] Expression.eval
+attribute [explicit_circuit_norm] valueFromOffset ProvableType.varFromOffset
+attribute [explicit_circuit_norm] Function.comp_apply
+attribute [explicit_circuit_norm] ProvableType.toElements_fromElements ProvableType.fromElements_toElements
 attribute [explicit_circuit_norm] Nat.cast_zero Nat.cast_one
 attribute [explicit_circuit_norm] add_zero zero_add
+attribute [explicit_circuit_norm] Circuit.localLength Operation.localLength Operations.localLength
+
+@[explicit_circuit_norm]
+lemma field_fromElements_mapRange_one {F : Type} (f : ℕ → F) :
+    (fromElements (M:=field) (Vector.mapRange 1 f) : F) = f 0 := by
+  change (Vector.mapRange 1 f)[0] = f 0
+  rw [Vector.getElem_mapRange]
+
+@[explicit_circuit_norm]
+lemma vector_mapRange_one_field_match {F : Type} (f : ℕ → F) :
+    (match Vector.mapRange 1 f with
+     | Vector.mk { toList := [x] } _ => x) = f 0 := by
+  change (Vector.mapRange 1 f)[0] = f 0
+  rw [Vector.getElem_mapRange]
+
+@[explicit_circuit_norm]
+lemma fieldPair_fromElements_mapRange_one {F : Type} (f : ℕ → F) :
+    (fromElements (M:=fieldPair) (Vector.mapRange 2 f) : F × F).1 = f 0 := by
+  change (Vector.mapRange 2 f)[0] = f 0
+  rw [Vector.getElem_mapRange]
+
+@[explicit_circuit_norm]
+lemma fieldPair_fromElements_mapRange_two {F : Type} (f : ℕ → F) :
+    (fromElements (M:=fieldPair) (Vector.mapRange 2 f) : F × F).2 = f 1 := by
+  change (Vector.mapRange 2 f)[1] = f 1
+  rw [Vector.getElem_mapRange]
+
+@[explicit_circuit_norm]
+lemma fieldTriple_fromElements_mapRange_one {F : Type} (f : ℕ → F) :
+    (fromElements (M:=fieldTriple) (Vector.mapRange 3 f) : F × F × F).1 = f 0 := by
+  change (Vector.mapRange 3 f)[0] = f 0
+  rw [Vector.getElem_mapRange]
+
+@[explicit_circuit_norm]
+lemma fieldTriple_fromElements_mapRange_two {F : Type} (f : ℕ → F) :
+    (fromElements (M:=fieldTriple) (Vector.mapRange 3 f) : F × F × F).2.1 = f 1 := by
+  change (Vector.mapRange 3 f)[1] = f 1
+  rw [Vector.getElem_mapRange]
+
+@[explicit_circuit_norm]
+lemma fieldTriple_fromElements_mapRange_three {F : Type} (f : ℕ → F) :
+    (fromElements (M:=fieldTriple) (Vector.mapRange 3 f) : F × F × F).2.2 = f 2 := by
+  change (Vector.mapRange 3 f)[2] = f 2
+  rw [Vector.getElem_mapRange]
+
+@[explicit_circuit_constructor]
+instance ExplicitCircuit.from_getOffset {F : Type} [Field F] : ExplicitCircuit (getOffset (F:=F)) where
+  output n := n
+  localLength _ := 0
+  operations _ := []
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
+
+@[explicit_circuit_constructor]
+instance ExplicitCircuit.from_witnessAny {F : Type} [Field F] {M : TypeMap} [ProvableType M] :
+    ExplicitCircuit (witnessAny (F:=F) M) where
+  output n := varFromOffset M n
+  localLength _ := size M
+  operations n := [.witness (size M) (fun env => toElements (valueFromOffset M n env))]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
+  output_eq n := by simp only [witnessAny_output]
+  localLength_eq n := by
+    simp [Circuit.localLength, Circuit.bind_def, witnessAny, getOffset,
+      ProvableType.witness, Operations.localLength]
+  operations_eq n := by
+    simp [Circuit.operations, Circuit.bind_def, witnessAny, getOffset, ProvableType.witness]
 
 structure CompileState where
   offset : Expr
@@ -148,7 +226,9 @@ def nthArrayLiteralElement? (xs : Expr) (i : Nat) : MetaM (Option Expr) := do
     return none
 
 def compileVectorElement (F body : Expr) (i : Nat) : MetaM Expr := do
-  let body ← whnf body
+  let body ← withTransparency .all <| whnf body
+  let body ← normalizeExplicitCircuitExpr body
+  let body ← withTransparency .all <| whnf body
   let body := stripMData body
   if body.getAppFn.isConstOf ``Vector.mk then
     let args := body.getAppArgs
@@ -211,6 +291,101 @@ partial def compileWitnessSetters (F callback m : Expr) (state : CompileState) (
             mkLetFVars #[next] body
   loop 0 state current
 
+def explicitCircuitDataOf (circuit offset : Expr) : TermElabM (Expr × Expr × Expr) := do
+  let explicitType ← mkAppM ``ExplicitCircuit #[circuit]
+  let explicit ← Lean.Elab.Term.elabTerm (← `(by infer_explicit_circuit)) (some explicitType)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let explicit ← instantiateMVars explicit
+  let decls ← collectUnfoldableCircuitDecls explicit (← collectUnfoldableCircuitDecls circuit)
+  let dsimpCtx ← mkExplicitCircuitDsimpContext decls
+  let explicitMetadata := (← dsimp explicit dsimpCtx).1
+  let localLength ← mkAppOptM ``ExplicitCircuit.localLength #[none, none, none, circuit, explicitMetadata, offset]
+  let localLength ← normalizeExplicitCircuitExpr localLength decls
+  let ops ← mkAppOptM ``ExplicitCircuit.operations #[none, none, none, circuit, explicitMetadata, offset]
+  let ops ← normalizeExplicitCircuitExpr ops decls
+  return (ops, explicitMetadata, localLength)
+
+def explicitOperationsOf (circuit offset : Expr) : TermElabM (Expr × Expr) := do
+  let (ops, metadata, _) ← explicitCircuitDataOf circuit offset
+  return (ops, metadata)
+
+structure WitnessTarget where
+  F : Expr
+  dataOf : Expr → TermElabM (Expr × Expr)
+
+def circuitWitnessTarget (circuit F : Expr) : WitnessTarget where
+  F := F
+  dataOf offset := do
+    let (ops, _, localLength) ← explicitCircuitDataOf circuit offset
+    return (ops, localLength)
+
+def normalizedCircuitOperationsOf (circuit offset : Expr) (extraDeclSeed? : Option Expr := none) : TermElabM Expr := do
+  let ops ← mkAppOptM ``Circuit.operations #[none, none, none, circuit, offset]
+  let ops ← withTransparency .all <| whnf ops
+  let decls ←
+    match extraDeclSeed? with
+    | some seed => collectUnfoldableCircuitDecls circuit (← collectUnfoldableCircuitDecls seed)
+    | none => collectUnfoldableCircuitDecls circuit
+  let decls ← collectUnfoldableCircuitDecls ops decls
+  normalizeExplicitCircuitExpr ops decls
+
+def normalizedCircuitLocalLengthOf (circuit offset : Expr) (extraDeclSeed? : Option Expr := none) :
+    TermElabM Expr := do
+  let localLength ← mkAppOptM ``Circuit.localLength #[none, none, none, circuit, offset]
+  let localLength ← withTransparency .all <| whnf localLength
+  let decls ←
+    match extraDeclSeed? with
+    | some seed => collectUnfoldableCircuitDecls circuit (← collectUnfoldableCircuitDecls seed)
+    | none => collectUnfoldableCircuitDecls circuit
+  let decls ← collectUnfoldableCircuitDecls localLength decls
+  normalizeExplicitCircuitExpr localLength decls
+
+def formalCircuitBaseOperations (base input offset : Expr) : TermElabM Expr := do
+  let main ← mkAppM ``FormalCircuitBase.main #[base, input]
+  normalizedCircuitOperationsOf main offset (some base)
+
+def formalCircuitBaseLocalLength (base input offset : Expr) : TermElabM Expr := do
+  let main ← mkAppM ``FormalCircuitBase.main #[base, input]
+  normalizedCircuitLocalLengthOf main offset (some base)
+
+def formalCircuitBaseWitnessTarget (base F Input : Expr) : WitnessTarget where
+  F := F
+  dataOf offset := do
+    let inputCircuit ← mkAppOptM ``witnessAny #[some F, none, some Input, none]
+    let (inputOps, _, inputLocalLength) ← explicitCircuitDataOf inputCircuit offset
+    let inputVar ← mkAppOptM ``varFromOffset #[some F, some Input, none, some offset]
+    let mainOffset ← mkAppM ``HAdd.hAdd #[offset, inputLocalLength]
+    let mainOps ← formalCircuitBaseOperations base inputVar mainOffset
+    let mainLocalLength ← formalCircuitBaseLocalLength base inputVar mainOffset
+    let ops ← mkAppM ``List.append #[inputOps, mainOps]
+    let ops ← normalizeExplicitCircuitExpr ops
+    let localLength ← mkAppM ``HAdd.hAdd #[inputLocalLength, mainLocalLength]
+    let localLength ← normalizeExplicitCircuitExpr localLength
+    return (ops, localLength)
+
+def subcircuitOperations (s : Expr) : TermElabM Expr := do
+  let s := stripMData s
+  let args := s.getAppArgs
+  if args.size < 3 then
+    throwError "unexpected subcircuit expression:{indentExpr s}"
+  let circuit := args[args.size - 3]!
+  let offset := args[args.size - 2]!
+  let input := args[args.size - 1]!
+  if s.getAppFn.isConstOf ``FormalCircuit.toSubcircuit then
+    let base ← mkAppM ``FormalCircuit.base #[circuit]
+    formalCircuitBaseOperations base input offset
+  else if s.getAppFn.isConstOf ``FormalAssertion.toSubcircuit then
+    let base ← mkAppM ``FormalAssertion.base #[circuit]
+    formalCircuitBaseOperations base input offset
+  else if s.getAppFn.isConstOf ``GeneralFormalCircuit.toSubcircuit then
+    let base ← mkAppM ``GeneralFormalCircuit.base #[circuit]
+    formalCircuitBaseOperations base input offset
+  else if s.getAppFn.isConstOf ``GeneralFormalCircuit.WithHint.toSubcircuit then
+    let base ← mkAppM ``GeneralFormalCircuit.WithHint.base #[circuit]
+    formalCircuitBaseOperations base input offset
+  else
+    throwError "witness compiler only supports formal-circuit subcircuits, got:{indentExpr s}"
+
 partial def compileOperations (F ops : Expr) (state : CompileState) :
     TermElabM (Array MessageData × CompileState) := do
   let ops ← whnf ops
@@ -252,7 +427,9 @@ where
         op.getAppFn.isConstOf ``Operation.interact then
       return (#[], state)
     if op.getAppFn.isConstOf ``Operation.subcircuit then
-      throwError "subcircuit witness compilation is not implemented yet:{indentExpr op}"
+      let args := op.getAppArgs
+      let ops ← subcircuitOperations args[3]!
+      return ← compileOperations F ops state
     throwError "witness compiler does not yet understand operation:{indentExpr op}"
 
 partial def compileOperationsToArray (F ops : Expr) (state : CompileState) (current : Expr)
@@ -291,45 +468,67 @@ where
         op.getAppFn.isConstOf ``Operation.interact then
       k current state
     else if op.getAppFn.isConstOf ``Operation.subcircuit then
-      throwError "subcircuit witness compilation is not implemented yet:{indentExpr op}"
+      let args := op.getAppArgs
+      let ops ← subcircuitOperations args[3]!
+      compileOperationsToArray F ops state current k
     else
       throwError "witness compiler does not yet understand operation:{indentExpr op}"
 
-def explicitCircuitDataOf (circuit offset : Expr) : TermElabM (Expr × Expr × Expr) := do
-  let explicitType ← mkAppM ``ExplicitCircuit #[circuit]
-  let explicit ← Lean.Elab.Term.elabTerm (← `(by infer_explicit_circuit)) (some explicitType)
-  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
-  let explicit ← instantiateMVars explicit
-  let decls ← collectUnfoldableCircuitDecls explicit (← collectUnfoldableCircuitDecls circuit)
-  let dsimpCtx ← mkExplicitCircuitDsimpContext decls
-  let explicitMetadata := (← dsimp explicit dsimpCtx).1
-  let localLength ← mkAppOptM ``ExplicitCircuit.localLength #[none, none, none, circuit, explicitMetadata, offset]
-  let localLength ← normalizeExplicitCircuitExpr localLength decls
-  let ops ← mkAppOptM ``ExplicitCircuit.operations #[none, none, none, circuit, explicitMetadata, offset]
-  let ops ← normalizeExplicitCircuitExpr ops decls
-  return (ops, explicitMetadata, localLength)
+def circuitField? (type : Expr) : MetaM (Option Expr) := do
+  let type ← instantiateMVars type
+  if type.getAppFn.isConstOf ``Circuit then
+    return type.getAppArgs[0]?
+  return none
 
-def explicitOperationsOf (circuit offset : Expr) : TermElabM (Expr × Expr) := do
-  let (ops, metadata, _) ← explicitCircuitDataOf circuit offset
-  return (ops, metadata)
+def formalBaseInput? (base : Expr) : TermElabM (Option (Expr × Expr)) := do
+  let baseType ← instantiateMVars (← inferType base)
+  if baseType.getAppFn.isConstOf ``FormalCircuitBase then
+    let args := baseType.getAppArgs
+    if args.size >= 3 then
+      return some (args[0]!, args[1]!)
+  return none
+
+def elabWitnessTarget (circuitStx : TSyntax `term) : TermElabM WitnessTarget := do
+  let circuit ← Lean.Elab.Term.elabTerm circuitStx none
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let circuit ← instantiateMVars circuit
+  let circuitType ← inferType circuit
+  if let some F ← circuitField? circuitType then
+    return circuitWitnessTarget circuit F
+  let circuitType ← instantiateMVars circuitType
+  let typeFn := circuitType.getAppFn
+
+  let base? ←
+    if typeFn.isConstOf ``FormalCircuitBase then
+      pure (some circuit)
+    else if typeFn.isConstOf ``FormalCircuit then
+      some <$> mkAppM ``FormalCircuit.base #[circuit]
+    else if typeFn.isConstOf ``FormalAssertion then
+      some <$> mkAppM ``FormalAssertion.base #[circuit]
+    else if typeFn.isConstOf ``GeneralFormalCircuit then
+      some <$> mkAppM ``GeneralFormalCircuit.base #[circuit]
+    else if typeFn.isConstOf ``GeneralFormalCircuit.WithHint then
+      some <$> mkAppM ``GeneralFormalCircuit.WithHint.base #[circuit]
+    else
+      pure none
+  if let some base := base? then
+    if let some (F, Input) ← formalBaseInput? base then
+      return formalCircuitBaseWitnessTarget base F Input
+
+  throwError "expected a Circuit term or supported formal circuit, got type:{indentExpr circuitType}"
 
 syntax "#compile_witness " term : command
 syntax "compile_witness " term " => " ident : command
 
 elab_rules : command
   | `(#compile_witness $circuitStx:term) => runTermElabM fun _ => do
-      let circuit ← Lean.Elab.Term.elabTerm circuitStx none
-      Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
-      let circuit ← instantiateMVars circuit
-      let circuitType ← inferType circuit
-      let some F := circuitType.getAppArgs[0]?
-        | throwError "expected a Circuit term, got type:{indentExpr circuitType}"
+      let target ← elabWitnessTarget circuitStx
       withLocalDeclD `offset (mkConst ``Nat) fun offset => do
-        let (ops, _) ← explicitOperationsOf circuit offset
-        withLocalDeclD `env (← mkAppM ``ProverEnvironment #[F]) fun env => do
-        withLocalDeclD `witnesses (← mkAppM ``Array #[F]) fun witnesses => do
+        let (ops, _) ← target.dataOf offset
+        withLocalDeclD `env (← mkAppM ``ProverEnvironment #[target.F]) fun env => do
+        withLocalDeclD `witnesses (← mkAppM ``Array #[target.F]) fun witnesses => do
           let state : CompileState := { offset, env, witnesses }
-          let (msgs, _) ← compileOperations F ops state
+          let (msgs, _) ← compileOperations target.F ops state
           logInfo m!"normalized operations:{indentExpr ops}"
           if msgs.isEmpty then
             logInfo "no witness operations found"
@@ -345,25 +544,20 @@ elab_rules : command
         | .str .anonymous s => .str ns s
         | _ => rawName
       runTermElabM fun _ => do
-        let circuit ← Lean.Elab.Term.elabTerm circuitStx none
-        Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
-        let circuit ← instantiateMVars circuit
-        let circuitType ← inferType circuit
-        let some F := circuitType.getAppArgs[0]?
-          | throwError "expected a Circuit term, got type:{indentExpr circuitType}"
-        let arrType ← mkAppM ``Array #[F]
+        let target ← elabWitnessTarget circuitStx
+        let arrType ← mkAppM ``Array #[target.F]
         let (type, value) ←
           withLocalDeclD `offset (mkConst ``Nat) fun offset => do
           withLocalDeclD `witnesses arrType fun witnesses => do
-            let (ops, _, localLength) ← explicitCircuitDataOf circuit offset
+            let (ops, localLength) ← target.dataOf offset
             let boundType ← mkBoundType offset localLength witnesses
             withLocalDeclD `h boundType fun h => do
-            let envType ← mkAppM ``ProverEnvironment #[F]
+            let envType ← mkAppM ``ProverEnvironment #[target.F]
             withLocalDeclD `env envType fun env => do
               let state : CompileState := {
                 offset, env, witnesses, localLength? := some localLength, bound? := some h
               }
-              let body ← compileOperationsToArray F ops state witnesses fun current _ => return current
+              let body ← compileOperationsToArray target.F ops state witnesses fun current _ => return current
               let value ← mkLambdaFVars #[offset, witnesses, h] body
               let type ← mkForallFVars #[offset, witnesses, h] arrType
               return (type, value)
