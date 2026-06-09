@@ -1,3 +1,4 @@
+import Batteries.Data.Fin.Fold
 import Clean.Gadgets.Keccak.KeccakRound
 import Clean.Specs.Keccak256
 
