@@ -55,16 +55,16 @@ structure Row (F : Type) where
   doubleAndAdd : DoubleAndAddRow F
 deriving ProvableStruct
 
-def poly (row : Row F) : F :=
+def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   2 * row.yQ - DoubleAndAdd.yA row.doubleAndAdd
 
-def Spec (row : Row F) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   DoubleAndAdd.yA row.doubleAndAdd = 2 * row.yQ
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (2 * row.yQ - DoubleAndAdd.yA row.doubleAndAdd)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -92,31 +92,29 @@ detail outside this approximation.
 -/
 namespace InitWiring
 
-variable {R : Type} [Zero R] [Add R] [Sub R] [Mul R] [OfNat R 2]
-
 structure Row (F : Type) where
   qX : F
   qY : F
   init : InitialYQ.Row F
 deriving ProvableStruct
 
-def xCheck (row : Row R) : R :=
+def xCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.init.doubleAndAdd.xA - row.qX
 
-def yCheck (row : Row R) : R :=
+def yCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.init.yQ - row.qY
 
-def Spec (row : Row F) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   InitialYQ.Spec row.init ∧
     row.init.doubleAndAdd.xA = row.qX ∧
     row.init.yQ = row.qY
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   InitialYQ.circuit row.init
   assertZero (xCheck row)
   assertZero (yCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
