@@ -115,5 +115,80 @@ def circuit : FormalAssertion F Row where
 
 end Gate
 
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/merkle/chip.rs`
+- `Decomposition check`
+
+This ports the MerkleCRH decomposition gate that connects the three Sinsemilla message
+pieces `a`, `b`, `c` to `(l, left, right)`.
+-/
+
+namespace Merkle
+
+structure DecompositionRow (F : Type) where
+  aWhole : F
+  bWhole : F
+  cWhole : F
+  leftNode : F
+  rightNode : F
+  z1A : F
+  z1B : F
+  b1 : F
+  b2 : F
+  lWhole : F
+deriving ProvableStruct
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+  [OfNat R (2 ^ 5)] [OfNat R (2 ^ 10)] [OfNat R (2 ^ 240)]
+
+def twoPow5 : R := OfNat.ofNat (2 ^ 5)
+
+def twoPow10 : R := OfNat.ofNat (2 ^ 10)
+
+def twoPow240 : R := OfNat.ofNat (2 ^ 240)
+
+def a0 (row : DecompositionRow R) : R :=
+  row.aWhole - row.z1A * twoPow10
+
+def b1B2Check (row : DecompositionRow R) : R :=
+  row.z1B - (row.b1 + row.b2 * twoPow5)
+
+def b0 (row : DecompositionRow R) : R :=
+  row.bWhole - row.z1B * twoPow10
+
+def leftCheck (row : DecompositionRow R) : R :=
+  let reconstructed := row.z1A + (b0 row + row.b1 * twoPow10) * twoPow240
+  reconstructed - row.leftNode
+
+def rightCheck (row : DecompositionRow R) : R :=
+  row.b2 + row.cWhole * twoPow5 - row.rightNode
+
+def constraints (row : DecompositionRow R) : Prop :=
+  a0 row - row.lWhole = 0 ∧
+  leftCheck row = 0 ∧
+  rightCheck row = 0 ∧
+  b1B2Check row = 0
+
+def main (row : Var DecompositionRow F) : Circuit F Unit := do
+  assertZero (a0 row - row.lWhole)
+  assertZero (leftCheck row)
+  assertZero (rightCheck row)
+  assertZero (b1B2Check row)
+
+def circuit : FormalAssertion F DecompositionRow where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, a0, leftCheck, rightCheck, b1B2Check,
+      b0, twoPow5, twoPow10, twoPow240]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, a0, leftCheck, rightCheck, b1B2Check,
+      b0, twoPow5, twoPow10, twoPow240]
+    simp_all [sub_eq_add_neg]
+
+end Merkle
+
 end Sinsemilla
 end Orchard
