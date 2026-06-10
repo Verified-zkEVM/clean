@@ -161,7 +161,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      computed action outputs `cv_net`, `nf_old`, and `rk` are connected from
      `Orchard.Gadget.ValueCommitment.circuit`, `Orchard.Gadget.Nullifier.circuit`,
      and `Orchard.Gadget.SpendAuth.circuit` into the action row by
-     `Orchard.ActionComputedWiring.circuit`.
+     `Orchard.ActionComputedWiring.circuit`. The final Merkle path-step output is
+     connected to the action `root` consumed by the Orchard checks in
+     `Orchard.ActionMerkleWiring.circuit`.
      `note_commit.rs` gates `NoteCommit MessagePiece b`,
      `d`, `e`, `g`, `h`, `NoteCommit input g_d`, `NoteCommit input pk_d`,
      `NoteCommit input rho`, `NoteCommit input psi`, `NoteCommit input value`, and

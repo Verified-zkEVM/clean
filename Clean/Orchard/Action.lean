@@ -1,6 +1,7 @@
 import Clean.Circuit
 import Clean.Orchard.Gadget
 import Clean.Orchard.NoteCommit
+import Clean.Orchard.Sinsemilla
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -387,4 +388,86 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end ActionNoteCommitWiring
+
+/-!
+Action wiring with the Merkle path root.
+
+Reference:
+`orchard@0.14.0/src/circuit.rs`
+- `Merkle path validity check`
+- final `Orchard circuit checks`
+
+`MerklePath::calculate_root` repeats the Merkle path-step gadget and returns the final
+node as `root`. This assertion connects one final `PathStep` output to the action row's
+`root`; repeating `Sinsemilla.Merkle.PathStep.circuit` outside this assertion models the
+whole path.
+-/
+namespace ActionMerkleWiring
+
+variable {F : Type} [Field F]
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+  [OfNat R (2 ^ 5)] [OfNat R (2 ^ 10)] [OfNat R (2 ^ 240)]
+
+structure Row (F : Type) where
+  action : ActionWiring.Row F
+  finalStep : Sinsemilla.Merkle.PathStep.Row F
+deriving ProvableStruct
+
+def rootCheck (row : Row R) : R :=
+  row.finalStep.nextNode - row.action.root
+
+def constraints (row : Row R) : Prop :=
+  ActionWiring.constraints row.action ∧
+    Sinsemilla.Merkle.PathStep.constraints row.finalStep ∧
+    rootCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  ActionWiring.main row.action
+  Sinsemilla.Merkle.PathStep.main row.finalStep
+  assertZero (rootCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, rootCheck,
+      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
+      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
+      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
+      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
+      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
+      Sinsemilla.Merkle.PathStep.main, Sinsemilla.Merkle.PathStep.constraints,
+      Sinsemilla.Merkle.PathStep.leftCheck, Sinsemilla.Merkle.PathStep.rightCheck,
+      Sinsemilla.Merkle.PathStep.layerLeftCheck, Sinsemilla.Merkle.PathStep.layerRightCheck,
+      Sinsemilla.Merkle.PathStep.nextCheck, Sinsemilla.Merkle.PathStep.ternary,
+      Sinsemilla.Merkle.PathStep.boolPoly, Sinsemilla.Merkle.Wiring.constraints,
+      Sinsemilla.Merkle.Wiring.hashCheck, Sinsemilla.Merkle.constraints,
+      Sinsemilla.Merkle.a0, Sinsemilla.Merkle.leftCheck, Sinsemilla.Merkle.rightCheck,
+      Sinsemilla.Merkle.b1B2Check, Sinsemilla.Merkle.b0, Sinsemilla.Merkle.twoPow5,
+      Sinsemilla.Merkle.twoPow10, Sinsemilla.Merkle.twoPow240]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, rootCheck,
+      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
+      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
+      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
+      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
+      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
+      Sinsemilla.Merkle.PathStep.main, Sinsemilla.Merkle.PathStep.constraints,
+      Sinsemilla.Merkle.PathStep.leftCheck, Sinsemilla.Merkle.PathStep.rightCheck,
+      Sinsemilla.Merkle.PathStep.layerLeftCheck, Sinsemilla.Merkle.PathStep.layerRightCheck,
+      Sinsemilla.Merkle.PathStep.nextCheck, Sinsemilla.Merkle.PathStep.ternary,
+      Sinsemilla.Merkle.PathStep.boolPoly, Sinsemilla.Merkle.Wiring.constraints,
+      Sinsemilla.Merkle.Wiring.hashCheck, Sinsemilla.Merkle.constraints,
+      Sinsemilla.Merkle.a0, Sinsemilla.Merkle.leftCheck, Sinsemilla.Merkle.rightCheck,
+      Sinsemilla.Merkle.b1B2Check, Sinsemilla.Merkle.b0, Sinsemilla.Merkle.twoPow5,
+      Sinsemilla.Merkle.twoPow10, Sinsemilla.Merkle.twoPow240]
+    simp_all [sub_eq_add_neg]
+
+end ActionMerkleWiring
 end Orchard
