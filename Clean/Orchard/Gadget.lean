@@ -308,7 +308,7 @@ def hashOutputCheck (row : Row R) : R :=
 def Spec (row : Row R) : Prop :=
   Poseidon.Hash2.Spec row.hash ∧
     Nullifier.Spec row.nullifier ∧
-    hashOutputCheck row = 0
+    row.hash.hash = row.nullifier.poseidonHash
 
 def main (row : Var Row F) : Circuit F Unit := do
   Poseidon.Hash2.circuit row.hash
@@ -322,12 +322,12 @@ def circuit : FormalAssertion F Row where
     circuit_proof_start [main, Spec, hashOutputCheck, Poseidon.Hash2.circuit,
       Poseidon.Hash2.Spec, Nullifier.circuit, Nullifier.Spec]
     rcases h_holds with ⟨hHash, hNullifier, hOutput⟩
-    exact ⟨hHash, hNullifier, by simpa [sub_eq_add_neg] using hOutput⟩
+    exact ⟨hHash, hNullifier, sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOutput)⟩
   completeness := by
     circuit_proof_start [main, Spec, hashOutputCheck, Poseidon.Hash2.circuit,
       Poseidon.Hash2.Spec, Nullifier.circuit, Nullifier.Spec]
     rcases h_spec with ⟨hHash, hNullifier, hOutput⟩
-    exact ⟨hHash, hNullifier, by simpa [sub_eq_add_neg] using hOutput⟩
+    exact ⟨hHash, hNullifier, by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOutput⟩
 
 namespace Entry
 
@@ -401,7 +401,7 @@ def hashOutputCheck (row : Row R) : R :=
 def Spec (row : Row R) : Prop :=
   Poseidon.Hash2PermutationBoundary.Spec row.boundary ∧
     Nullifier.Spec row.nullifier ∧
-    hashOutputCheck row = 0
+    row.boundary.hash.hash = row.nullifier.poseidonHash
 
 def main (row : Var Row F) : Circuit F Unit := do
   Poseidon.Hash2PermutationBoundary.circuit row.boundary
@@ -416,13 +416,13 @@ def circuit : FormalAssertion F Row where
       Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
       Nullifier.circuit, Nullifier.Spec]
     rcases h_holds with ⟨hBoundary, hNullifier, hOutput⟩
-    exact ⟨hBoundary, hNullifier, by simpa [sub_eq_add_neg] using hOutput⟩
+    exact ⟨hBoundary, hNullifier, sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOutput)⟩
   completeness := by
     circuit_proof_start [main, Spec, hashOutputCheck,
       Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
       Nullifier.circuit, Nullifier.Spec]
     rcases h_spec with ⟨hBoundary, hNullifier, hOutput⟩
-    exact ⟨hBoundary, hNullifier, by simpa [sub_eq_add_neg] using hOutput⟩
+    exact ⟨hBoundary, hNullifier, by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOutput⟩
 
 namespace Entry
 
