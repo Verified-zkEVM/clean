@@ -24,6 +24,7 @@ namespace Ecc
 variable {F : Type} [Field F]
 
 abbrev PallasBaseField := CompElliptic.Fields.Pasta.PallasBaseField
+abbrev PallasScalarField := CompElliptic.Fields.Pasta.PallasScalarField
 
 def pallasB : F := 5
 
@@ -55,6 +56,57 @@ def isIdentityEncoding (point : Point F) : Prop :=
 
 def isPointOrIdentity (point : Point F) : Prop :=
   isIdentityEncoding point ∨ onCurve point
+
+def pointCoords (point : Point F) : F × F :=
+  (point.x, point.y)
+
+def pallasScalarMulCoords (scalar : ℕ) (base : Point PallasBaseField) :
+    PallasBaseField × PallasBaseField :=
+  CompElliptic.CurveForms.ShortWeierstrass.smul
+    CompElliptic.Curves.Pasta.Pallas.a scalar (pointCoords base)
+
+def IsPallasScalarMul
+    (scalar : ℕ) (base product : Point PallasBaseField) : Prop :=
+  pointCoords product = pallasScalarMulCoords scalar base
+
+theorem pallasValid_of_isPointOrIdentity {point : Point PallasBaseField}
+    (h : isPointOrIdentity point) :
+    CompElliptic.CurveForms.ShortWeierstrass.Valid
+      CompElliptic.Curves.Pasta.Pallas.a
+      CompElliptic.Curves.Pasta.Pallas.b
+      (pointCoords point) := by
+  rcases point with ⟨x, y⟩
+  rcases h with hIdentity | hCurve
+  · exact Or.inr (by simp [pointCoords, isIdentityEncoding] at hIdentity ⊢; exact hIdentity)
+  · left
+    unfold pointCoords CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+      CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
+    unfold onCurve curveEquation pallasB at hCurve
+    rw [pow_two]
+    linear_combination hCurve
+
+def pallasSWPoint (point : Point PallasBaseField)
+    (h : isPointOrIdentity point) :
+    CompElliptic.CurveForms.ShortWeierstrass.SWPoint
+      CompElliptic.Curves.Pasta.Pallas.curve where
+  x := point.x
+  y := point.y
+  onCurve := by
+    simpa [CompElliptic.Curves.Pasta.Pallas.curve, pointCoords]
+      using pallasValid_of_isPointOrIdentity (point := point) h
+
+theorem pallasScalarMulCoords_eq_groupAction
+    (scalar : ℕ) {base : Point PallasBaseField}
+    (hbase : isPointOrIdentity base) :
+    (((scalar • pallasSWPoint base hbase).x),
+      ((scalar • pallasSWPoint base hbase).y)) =
+      pallasScalarMulCoords scalar base := by
+  simpa [pallasSWPoint, pallasScalarMulCoords, pointCoords,
+    CompElliptic.Curves.Pasta.Pallas.curve]
+    using
+      (CompElliptic.CurveForms.ShortWeierstrass.coords_nsmul
+        (E := CompElliptic.Curves.Pasta.Pallas.curve)
+        scalar (pallasSWPoint base hbase))
 
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
@@ -103,9 +155,6 @@ theorem pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero {point : Point PallasBaseF
   · exact hx hIdentity.1
   · subst hy
     exact pallasNoCurvePointWithYZero x hCurve
-
-def pointCoords (point : Point F) : F × F :=
-  (point.x, point.y)
 
 namespace PointOrIdentity
 
