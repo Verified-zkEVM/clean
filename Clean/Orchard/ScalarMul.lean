@@ -526,6 +526,11 @@ def onCurve (row : CoordsRow R) : R :=
 def coordsConstraints (row : CoordsRow R) : Prop :=
   xCheck row = 0 ∧ yCheck row = 0 ∧ onCurve row = 0
 
+def coordsSpec (row : CoordsRow R) : Prop :=
+  row.xP = interpolatedX row ∧
+    row.u * row.u = row.yP + row.z ∧
+    row.yP * row.yP = row.xP * row.xP * row.xP + 5
+
 def coordsMain (row : Var CoordsRow F) : Circuit F Unit := do
   assertZero (xCheck row)
   assertZero (yCheck row)
@@ -535,15 +540,21 @@ namespace Coords
 
 def circuit : FormalAssertion F CoordsRow where
   main := coordsMain
-  Spec := coordsConstraints
+  Spec := coordsSpec
   soundness := by
-    circuit_proof_start [coordsMain, coordsConstraints, xCheck, yCheck, onCurve,
+    circuit_proof_start [coordsMain, coordsSpec, coordsConstraints, xCheck, yCheck, onCurve,
       interpolatedX]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hx, hy, hCurve⟩
+    exact ⟨(sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hx)).symm,
+      by linear_combination hy,
+      by linear_combination hCurve⟩
   completeness := by
-    circuit_proof_start [coordsMain, coordsConstraints, xCheck, yCheck, onCurve,
+    circuit_proof_start [coordsMain, coordsSpec, coordsConstraints, xCheck, yCheck, onCurve,
       interpolatedX]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hx, hy, hCurve⟩
+    exact ⟨by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hx.symm,
+      by linear_combination hy,
+      by linear_combination hCurve⟩
 
 end Coords
 
@@ -563,20 +574,25 @@ def coordsRow (row : Row R) : CoordsRow R :=
 def constraints (row : Row R) : Prop :=
   coordsConstraints (coordsRow row)
 
+def Spec (row : Row R) : Prop :=
+  coordsSpec (coordsRow row)
+
 def main (row : Var Row F) : Circuit F Unit := do
-  coordsMain { row.toCoordsRow with window := word row }
+  Coords.circuit { row.toCoordsRow with window := word row }
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, coordsRow, coordsMain, coordsConstraints,
+    circuit_proof_start [main, Spec, constraints, coordsRow, Coords.circuit, coordsMain,
+      coordsSpec, coordsConstraints,
       word, xCheck, yCheck, onCurve, interpolatedX]
-    simp_all [sub_eq_add_neg]
+    simpa [sub_eq_add_neg] using h_holds
   completeness := by
-    circuit_proof_start [main, constraints, coordsRow, coordsMain, coordsConstraints,
+    circuit_proof_start [main, Spec, constraints, coordsRow, Coords.circuit, coordsMain,
+      coordsSpec, coordsConstraints,
       word, xCheck, yCheck, onCurve, interpolatedX]
-    simp_all [sub_eq_add_neg]
+    simpa [sub_eq_add_neg] using h_spec
 
 end RunningSumCoords
 
