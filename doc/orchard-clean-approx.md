@@ -97,6 +97,11 @@ Bottom-up implementation order currently inferred from those tagged sources:
    `halo2_gadgets/src/ecc/chip/mul*.rs`
    - Depends on ECC addition, conditional selection/swap, running sums, range checks, and
      fixed-base lookup tables.
+   - Status: variable-base `LSB check`, variable-base complete-bit scalar
+     decomposition, and the short fixed-base final sign gate are ported as
+     `Orchard.ScalarMul.VarBaseLSB.circuit`,
+     `Orchard.ScalarMul.VarBaseCompleteBit.circuit`, and
+     `Orchard.ScalarMul.FixedShort.circuit`.
 6. Sinsemilla:
    `halo2_gadgets/src/sinsemilla/chip.rs`,
    `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`,
