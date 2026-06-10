@@ -176,9 +176,9 @@ def extractCheck (row : Row R) : R :=
   row.nfPointX - row.nf
 
 def Spec (row : Row R) : Prop :=
-  scalarCheck row = 0 ∧
+  row.scalar = row.poseidonHash + row.psi ∧
     Ecc.CompleteAdd.Spec (addRow row) ∧
-    extractCheck row = 0
+    row.nf = row.nfPointX
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (scalarCheck row)
@@ -191,11 +191,13 @@ def circuit : FormalAssertion F Row where
   soundness := by
     circuit_proof_start [main, Spec, scalarCheck, extractCheck, addRow,
       Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hScalar, hAdd, hExtract⟩
+    exact ⟨by linear_combination -hScalar, hAdd, by linear_combination -hExtract⟩
   completeness := by
     circuit_proof_start [main, Spec, scalarCheck, extractCheck, addRow,
       Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hScalar, hAdd, hExtract⟩
+    exact ⟨by linear_combination -hScalar, hAdd, by linear_combination -hExtract⟩
 
 namespace Entry
 
@@ -320,16 +322,12 @@ def circuit : FormalAssertion F Row where
     circuit_proof_start [main, Spec, hashOutputCheck, Poseidon.Hash2.circuit,
       Poseidon.Hash2.Spec, Nullifier.circuit, Nullifier.Spec]
     rcases h_holds with ⟨hHash, hNullifier, hOutput⟩
-    rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
-    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
-    simp_all [Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
+    exact ⟨hHash, hNullifier, by simpa [sub_eq_add_neg] using hOutput⟩
   completeness := by
     circuit_proof_start [main, Spec, hashOutputCheck, Poseidon.Hash2.circuit,
       Poseidon.Hash2.Spec, Nullifier.circuit, Nullifier.Spec]
     rcases h_spec with ⟨hHash, hNullifier, hOutput⟩
-    rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
-    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
-    simp_all [Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
+    exact ⟨hHash, hNullifier, by simpa [sub_eq_add_neg] using hOutput⟩
 
 namespace Entry
 
@@ -418,19 +416,13 @@ def circuit : FormalAssertion F Row where
       Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
       Nullifier.circuit, Nullifier.Spec]
     rcases h_holds with ⟨hBoundary, hNullifier, hOutput⟩
-    rcases hBoundary with ⟨hHash, hBoundary0, hBoundary1, hBoundary2, hBoundaryOutput⟩
-    rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
-    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
-    simp_all [Poseidon.Hash2.Spec, Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
+    exact ⟨hBoundary, hNullifier, by simpa [sub_eq_add_neg] using hOutput⟩
   completeness := by
     circuit_proof_start [main, Spec, hashOutputCheck,
       Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
       Nullifier.circuit, Nullifier.Spec]
     rcases h_spec with ⟨hBoundary, hNullifier, hOutput⟩
-    rcases hBoundary with ⟨hHash, hBoundary0, hBoundary1, hBoundary2, hBoundaryOutput⟩
-    rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
-    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
-    simp_all [Poseidon.Hash2.Spec, Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
+    exact ⟨hBoundary, hNullifier, by simpa [sub_eq_add_neg] using hOutput⟩
 
 namespace Entry
 
