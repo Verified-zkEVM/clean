@@ -124,7 +124,13 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.Poseidon.PadAndAdd.circuit`. Fixed-column constants are explicit row
      values in this approximation. The `ConstantLength<2>` hash wiring used by
      Orchard nullifiers, from initial state through absorb and squeezed state word 0,
-     is ported as `Orchard.Poseidon.Hash2.circuit`.
+     is ported as `Orchard.Poseidon.Hash2.circuit`. The `P128Pow5T3` permutation row
+     schedule is represented by reusable endpoint-copy assertions
+     `Orchard.Poseidon.Permutation.InitialToFull.circuit`,
+     `FullToFull.circuit`, `FullToPartial.circuit`, `PartialToPartial.circuit`,
+     `PartialToFull.circuit`, and `FullToOutput.circuit`; the hash-to-permutation
+     endpoint copy wiring is ported as
+     `Orchard.Poseidon.Hash2PermutationBoundary.circuit`.
 7. Sinsemilla:
    `halo2_gadgets/src/sinsemilla/chip.rs`,
    `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`,

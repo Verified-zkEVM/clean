@@ -227,6 +227,478 @@ def circuit : FormalAssertion F Row where
 end PadAndAdd
 
 /-!
+Poseidon permutation row schedule.
+
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/poseidon/pow5.rs`
+- `Pow5Chip::permute`
+- `Pow5State::full_round`
+- `Pow5State::partial_round`
+
+For `P128Pow5T3`, the source uses `R_F = 8` and `R_P = 56`. The Halo2 chip assigns
+four full-round rows, twenty-eight rows each packing two partial rounds, and four final
+full-round rows. The individual row assertions above record the round arithmetic. The
+formal assertion below records the copied state between adjacent rows and the permutation
+endpoints; fixed constants and matrix entries remain explicit row values.
+-/
+namespace Permutation
+
+structure State (F : Type) where
+  s0 : F
+  s1 : F
+  s2 : F
+deriving ProvableStruct
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+
+structure FullRows (F : Type) where
+  r0 : FullRound.Row F
+  r1 : FullRound.Row F
+  r2 : FullRound.Row F
+  r3 : FullRound.Row F
+deriving ProvableStruct
+
+structure PartialRows (F : Type) where
+  r0 : PartialRounds.Row F
+  r1 : PartialRounds.Row F
+  r2 : PartialRounds.Row F
+  r3 : PartialRounds.Row F
+  r4 : PartialRounds.Row F
+  r5 : PartialRounds.Row F
+  r6 : PartialRounds.Row F
+  r7 : PartialRounds.Row F
+  r8 : PartialRounds.Row F
+  r9 : PartialRounds.Row F
+  r10 : PartialRounds.Row F
+  r11 : PartialRounds.Row F
+  r12 : PartialRounds.Row F
+  r13 : PartialRounds.Row F
+  r14 : PartialRounds.Row F
+  r15 : PartialRounds.Row F
+  r16 : PartialRounds.Row F
+  r17 : PartialRounds.Row F
+  r18 : PartialRounds.Row F
+  r19 : PartialRounds.Row F
+  r20 : PartialRounds.Row F
+  r21 : PartialRounds.Row F
+  r22 : PartialRounds.Row F
+  r23 : PartialRounds.Row F
+  r24 : PartialRounds.Row F
+  r25 : PartialRounds.Row F
+  r26 : PartialRounds.Row F
+  r27 : PartialRounds.Row F
+deriving ProvableStruct
+
+structure Row (F : Type) where
+  initial : State F
+  firstFull : FullRows F
+  partialRows : PartialRows F
+  lastFull : FullRows F
+  output : State F
+deriving ProvableStruct
+
+def fullCur (row : FullRound.Row R) : State R where
+  s0 := row.cur0
+  s1 := row.cur1
+  s2 := row.cur2
+
+def fullNext (row : FullRound.Row R) : State R where
+  s0 := row.next0
+  s1 := row.next1
+  s2 := row.next2
+
+def partialCur (row : PartialRounds.Row R) : State R where
+  s0 := row.cur0
+  s1 := row.cur1
+  s2 := row.cur2
+
+def partialNext (row : PartialRounds.Row R) : State R where
+  s0 := row.next0
+  s1 := row.next1
+  s2 := row.next2
+
+def state0Check (a b : State R) : R := a.s0 - b.s0
+def state1Check (a b : State R) : R := a.s1 - b.s1
+def state2Check (a b : State R) : R := a.s2 - b.s2
+
+def stateEq (a b : State R) : Prop :=
+  state0Check a b = 0 ∧ state1Check a b = 0 ∧ state2Check a b = 0
+
+def assertStateEq (a b : State (Expression F)) : Circuit F Unit := do
+  assertZero (state0Check a b)
+  assertZero (state1Check a b)
+  assertZero (state2Check a b)
+
+def fullConstraints (rows : FullRows R) : Prop :=
+  FullRound.constraints rows.r0 ∧
+    FullRound.constraints rows.r1 ∧
+    FullRound.constraints rows.r2 ∧
+    FullRound.constraints rows.r3
+
+def partialConstraints (rows : PartialRows R) : Prop :=
+  PartialRounds.constraints rows.r0 ∧
+    PartialRounds.constraints rows.r1 ∧
+    PartialRounds.constraints rows.r2 ∧
+    PartialRounds.constraints rows.r3 ∧
+    PartialRounds.constraints rows.r4 ∧
+    PartialRounds.constraints rows.r5 ∧
+    PartialRounds.constraints rows.r6 ∧
+    PartialRounds.constraints rows.r7 ∧
+    PartialRounds.constraints rows.r8 ∧
+    PartialRounds.constraints rows.r9 ∧
+    PartialRounds.constraints rows.r10 ∧
+    PartialRounds.constraints rows.r11 ∧
+    PartialRounds.constraints rows.r12 ∧
+    PartialRounds.constraints rows.r13 ∧
+    PartialRounds.constraints rows.r14 ∧
+    PartialRounds.constraints rows.r15 ∧
+    PartialRounds.constraints rows.r16 ∧
+    PartialRounds.constraints rows.r17 ∧
+    PartialRounds.constraints rows.r18 ∧
+    PartialRounds.constraints rows.r19 ∧
+    PartialRounds.constraints rows.r20 ∧
+    PartialRounds.constraints rows.r21 ∧
+    PartialRounds.constraints rows.r22 ∧
+    PartialRounds.constraints rows.r23 ∧
+    PartialRounds.constraints rows.r24 ∧
+    PartialRounds.constraints rows.r25 ∧
+    PartialRounds.constraints rows.r26 ∧
+    PartialRounds.constraints rows.r27
+
+def fullLinks (rows : FullRows R) : Prop :=
+  stateEq (fullNext rows.r0) (fullCur rows.r1) ∧
+    stateEq (fullNext rows.r1) (fullCur rows.r2) ∧
+    stateEq (fullNext rows.r2) (fullCur rows.r3)
+
+def partialLinks (rows : PartialRows R) : Prop :=
+  stateEq (partialNext rows.r0) (partialCur rows.r1) ∧
+    stateEq (partialNext rows.r1) (partialCur rows.r2) ∧
+    stateEq (partialNext rows.r2) (partialCur rows.r3) ∧
+    stateEq (partialNext rows.r3) (partialCur rows.r4) ∧
+    stateEq (partialNext rows.r4) (partialCur rows.r5) ∧
+    stateEq (partialNext rows.r5) (partialCur rows.r6) ∧
+    stateEq (partialNext rows.r6) (partialCur rows.r7) ∧
+    stateEq (partialNext rows.r7) (partialCur rows.r8) ∧
+    stateEq (partialNext rows.r8) (partialCur rows.r9) ∧
+    stateEq (partialNext rows.r9) (partialCur rows.r10) ∧
+    stateEq (partialNext rows.r10) (partialCur rows.r11) ∧
+    stateEq (partialNext rows.r11) (partialCur rows.r12) ∧
+    stateEq (partialNext rows.r12) (partialCur rows.r13) ∧
+    stateEq (partialNext rows.r13) (partialCur rows.r14) ∧
+    stateEq (partialNext rows.r14) (partialCur rows.r15) ∧
+    stateEq (partialNext rows.r15) (partialCur rows.r16) ∧
+    stateEq (partialNext rows.r16) (partialCur rows.r17) ∧
+    stateEq (partialNext rows.r17) (partialCur rows.r18) ∧
+    stateEq (partialNext rows.r18) (partialCur rows.r19) ∧
+    stateEq (partialNext rows.r19) (partialCur rows.r20) ∧
+    stateEq (partialNext rows.r20) (partialCur rows.r21) ∧
+    stateEq (partialNext rows.r21) (partialCur rows.r22) ∧
+    stateEq (partialNext rows.r22) (partialCur rows.r23) ∧
+    stateEq (partialNext rows.r23) (partialCur rows.r24) ∧
+    stateEq (partialNext rows.r24) (partialCur rows.r25) ∧
+    stateEq (partialNext rows.r25) (partialCur rows.r26) ∧
+    stateEq (partialNext rows.r26) (partialCur rows.r27)
+
+def constraints (row : Row R) : Prop :=
+  fullConstraints row.firstFull ∧
+    partialConstraints row.partialRows ∧
+    fullConstraints row.lastFull ∧
+    stateEq row.initial (fullCur row.firstFull.r0) ∧
+    fullLinks row.firstFull ∧
+    stateEq (fullNext row.firstFull.r3) (partialCur row.partialRows.r0) ∧
+    partialLinks row.partialRows ∧
+    stateEq (partialNext row.partialRows.r27) (fullCur row.lastFull.r0) ∧
+    fullLinks row.lastFull ∧
+    stateEq (fullNext row.lastFull.r3) row.output
+
+def wiringConstraints (row : Row R) : Prop :=
+  stateEq row.initial (fullCur row.firstFull.r0) ∧
+    fullLinks row.firstFull ∧
+    stateEq (fullNext row.firstFull.r3) (partialCur row.partialRows.r0) ∧
+    partialLinks row.partialRows ∧
+    stateEq (partialNext row.partialRows.r27) (fullCur row.lastFull.r0) ∧
+    fullLinks row.lastFull ∧
+    stateEq (fullNext row.lastFull.r3) row.output
+
+def main (row : Var Row F) : Circuit F Unit := do
+  FullRound.main row.firstFull.r0
+  FullRound.main row.firstFull.r1
+  FullRound.main row.firstFull.r2
+  FullRound.main row.firstFull.r3
+  PartialRounds.main row.partialRows.r0
+  PartialRounds.main row.partialRows.r1
+  PartialRounds.main row.partialRows.r2
+  PartialRounds.main row.partialRows.r3
+  PartialRounds.main row.partialRows.r4
+  PartialRounds.main row.partialRows.r5
+  PartialRounds.main row.partialRows.r6
+  PartialRounds.main row.partialRows.r7
+  PartialRounds.main row.partialRows.r8
+  PartialRounds.main row.partialRows.r9
+  PartialRounds.main row.partialRows.r10
+  PartialRounds.main row.partialRows.r11
+  PartialRounds.main row.partialRows.r12
+  PartialRounds.main row.partialRows.r13
+  PartialRounds.main row.partialRows.r14
+  PartialRounds.main row.partialRows.r15
+  PartialRounds.main row.partialRows.r16
+  PartialRounds.main row.partialRows.r17
+  PartialRounds.main row.partialRows.r18
+  PartialRounds.main row.partialRows.r19
+  PartialRounds.main row.partialRows.r20
+  PartialRounds.main row.partialRows.r21
+  PartialRounds.main row.partialRows.r22
+  PartialRounds.main row.partialRows.r23
+  PartialRounds.main row.partialRows.r24
+  PartialRounds.main row.partialRows.r25
+  PartialRounds.main row.partialRows.r26
+  PartialRounds.main row.partialRows.r27
+  FullRound.main row.lastFull.r0
+  FullRound.main row.lastFull.r1
+  FullRound.main row.lastFull.r2
+  FullRound.main row.lastFull.r3
+  assertStateEq row.initial (fullCur row.firstFull.r0)
+  assertStateEq (fullNext row.firstFull.r0) (fullCur row.firstFull.r1)
+  assertStateEq (fullNext row.firstFull.r1) (fullCur row.firstFull.r2)
+  assertStateEq (fullNext row.firstFull.r2) (fullCur row.firstFull.r3)
+  assertStateEq (fullNext row.firstFull.r3) (partialCur row.partialRows.r0)
+  assertStateEq (partialNext row.partialRows.r0) (partialCur row.partialRows.r1)
+  assertStateEq (partialNext row.partialRows.r1) (partialCur row.partialRows.r2)
+  assertStateEq (partialNext row.partialRows.r2) (partialCur row.partialRows.r3)
+  assertStateEq (partialNext row.partialRows.r3) (partialCur row.partialRows.r4)
+  assertStateEq (partialNext row.partialRows.r4) (partialCur row.partialRows.r5)
+  assertStateEq (partialNext row.partialRows.r5) (partialCur row.partialRows.r6)
+  assertStateEq (partialNext row.partialRows.r6) (partialCur row.partialRows.r7)
+  assertStateEq (partialNext row.partialRows.r7) (partialCur row.partialRows.r8)
+  assertStateEq (partialNext row.partialRows.r8) (partialCur row.partialRows.r9)
+  assertStateEq (partialNext row.partialRows.r9) (partialCur row.partialRows.r10)
+  assertStateEq (partialNext row.partialRows.r10) (partialCur row.partialRows.r11)
+  assertStateEq (partialNext row.partialRows.r11) (partialCur row.partialRows.r12)
+  assertStateEq (partialNext row.partialRows.r12) (partialCur row.partialRows.r13)
+  assertStateEq (partialNext row.partialRows.r13) (partialCur row.partialRows.r14)
+  assertStateEq (partialNext row.partialRows.r14) (partialCur row.partialRows.r15)
+  assertStateEq (partialNext row.partialRows.r15) (partialCur row.partialRows.r16)
+  assertStateEq (partialNext row.partialRows.r16) (partialCur row.partialRows.r17)
+  assertStateEq (partialNext row.partialRows.r17) (partialCur row.partialRows.r18)
+  assertStateEq (partialNext row.partialRows.r18) (partialCur row.partialRows.r19)
+  assertStateEq (partialNext row.partialRows.r19) (partialCur row.partialRows.r20)
+  assertStateEq (partialNext row.partialRows.r20) (partialCur row.partialRows.r21)
+  assertStateEq (partialNext row.partialRows.r21) (partialCur row.partialRows.r22)
+  assertStateEq (partialNext row.partialRows.r22) (partialCur row.partialRows.r23)
+  assertStateEq (partialNext row.partialRows.r23) (partialCur row.partialRows.r24)
+  assertStateEq (partialNext row.partialRows.r24) (partialCur row.partialRows.r25)
+  assertStateEq (partialNext row.partialRows.r25) (partialCur row.partialRows.r26)
+  assertStateEq (partialNext row.partialRows.r26) (partialCur row.partialRows.r27)
+  assertStateEq (partialNext row.partialRows.r27) (fullCur row.lastFull.r0)
+  assertStateEq (fullNext row.lastFull.r0) (fullCur row.lastFull.r1)
+  assertStateEq (fullNext row.lastFull.r1) (fullCur row.lastFull.r2)
+  assertStateEq (fullNext row.lastFull.r2) (fullCur row.lastFull.r3)
+  assertStateEq (fullNext row.lastFull.r3) row.output
+
+def wiringMain (row : Var Row F) : Circuit F Unit := do
+  assertStateEq row.initial (fullCur row.firstFull.r0)
+  assertStateEq (fullNext row.firstFull.r0) (fullCur row.firstFull.r1)
+  assertStateEq (fullNext row.firstFull.r1) (fullCur row.firstFull.r2)
+  assertStateEq (fullNext row.firstFull.r2) (fullCur row.firstFull.r3)
+  assertStateEq (fullNext row.firstFull.r3) (partialCur row.partialRows.r0)
+  assertStateEq (partialNext row.partialRows.r0) (partialCur row.partialRows.r1)
+  assertStateEq (partialNext row.partialRows.r1) (partialCur row.partialRows.r2)
+  assertStateEq (partialNext row.partialRows.r2) (partialCur row.partialRows.r3)
+  assertStateEq (partialNext row.partialRows.r3) (partialCur row.partialRows.r4)
+  assertStateEq (partialNext row.partialRows.r4) (partialCur row.partialRows.r5)
+  assertStateEq (partialNext row.partialRows.r5) (partialCur row.partialRows.r6)
+  assertStateEq (partialNext row.partialRows.r6) (partialCur row.partialRows.r7)
+  assertStateEq (partialNext row.partialRows.r7) (partialCur row.partialRows.r8)
+  assertStateEq (partialNext row.partialRows.r8) (partialCur row.partialRows.r9)
+  assertStateEq (partialNext row.partialRows.r9) (partialCur row.partialRows.r10)
+  assertStateEq (partialNext row.partialRows.r10) (partialCur row.partialRows.r11)
+  assertStateEq (partialNext row.partialRows.r11) (partialCur row.partialRows.r12)
+  assertStateEq (partialNext row.partialRows.r12) (partialCur row.partialRows.r13)
+  assertStateEq (partialNext row.partialRows.r13) (partialCur row.partialRows.r14)
+  assertStateEq (partialNext row.partialRows.r14) (partialCur row.partialRows.r15)
+  assertStateEq (partialNext row.partialRows.r15) (partialCur row.partialRows.r16)
+  assertStateEq (partialNext row.partialRows.r16) (partialCur row.partialRows.r17)
+  assertStateEq (partialNext row.partialRows.r17) (partialCur row.partialRows.r18)
+  assertStateEq (partialNext row.partialRows.r18) (partialCur row.partialRows.r19)
+  assertStateEq (partialNext row.partialRows.r19) (partialCur row.partialRows.r20)
+  assertStateEq (partialNext row.partialRows.r20) (partialCur row.partialRows.r21)
+  assertStateEq (partialNext row.partialRows.r21) (partialCur row.partialRows.r22)
+  assertStateEq (partialNext row.partialRows.r22) (partialCur row.partialRows.r23)
+  assertStateEq (partialNext row.partialRows.r23) (partialCur row.partialRows.r24)
+  assertStateEq (partialNext row.partialRows.r24) (partialCur row.partialRows.r25)
+  assertStateEq (partialNext row.partialRows.r25) (partialCur row.partialRows.r26)
+  assertStateEq (partialNext row.partialRows.r26) (partialCur row.partialRows.r27)
+  assertStateEq (partialNext row.partialRows.r27) (fullCur row.lastFull.r0)
+  assertStateEq (fullNext row.lastFull.r0) (fullCur row.lastFull.r1)
+  assertStateEq (fullNext row.lastFull.r1) (fullCur row.lastFull.r2)
+  assertStateEq (fullNext row.lastFull.r2) (fullCur row.lastFull.r3)
+  assertStateEq (fullNext row.lastFull.r3) row.output
+
+namespace InitialToFull
+
+structure Row (F : Type) where
+  initial : State F
+  first : FullRound.Row F
+deriving ProvableStruct
+
+def constraints (row : Row R) : Prop :=
+  stateEq row.initial (fullCur row.first)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertStateEq row.initial (fullCur row.first)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullCur]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullCur]
+    simp_all [sub_eq_add_neg]
+
+end InitialToFull
+
+namespace FullToFull
+
+structure Row (F : Type) where
+  prev : FullRound.Row F
+  next : FullRound.Row F
+deriving ProvableStruct
+
+def constraints (row : Row R) : Prop :=
+  stateEq (fullNext row.prev) (fullCur row.next)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertStateEq (fullNext row.prev) (fullCur row.next)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullCur, fullNext]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullCur, fullNext]
+    simp_all [sub_eq_add_neg]
+
+end FullToFull
+
+namespace FullToPartial
+
+structure Row (F : Type) where
+  prev : FullRound.Row F
+  next : PartialRounds.Row F
+deriving ProvableStruct
+
+def constraints (row : Row R) : Prop :=
+  stateEq (fullNext row.prev) (partialCur row.next)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertStateEq (fullNext row.prev) (partialCur row.next)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullNext, partialCur]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullNext, partialCur]
+    simp_all [sub_eq_add_neg]
+
+end FullToPartial
+
+namespace PartialToPartial
+
+structure Row (F : Type) where
+  prev : PartialRounds.Row F
+  next : PartialRounds.Row F
+deriving ProvableStruct
+
+def constraints (row : Row R) : Prop :=
+  stateEq (partialNext row.prev) (partialCur row.next)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertStateEq (partialNext row.prev) (partialCur row.next)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, partialCur, partialNext]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, partialCur, partialNext]
+    simp_all [sub_eq_add_neg]
+
+end PartialToPartial
+
+namespace PartialToFull
+
+structure Row (F : Type) where
+  prev : PartialRounds.Row F
+  next : FullRound.Row F
+deriving ProvableStruct
+
+def constraints (row : Row R) : Prop :=
+  stateEq (partialNext row.prev) (fullCur row.next)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertStateEq (partialNext row.prev) (fullCur row.next)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullCur, partialNext]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullCur, partialNext]
+    simp_all [sub_eq_add_neg]
+
+end PartialToFull
+
+namespace FullToOutput
+
+structure Row (F : Type) where
+  last : FullRound.Row F
+  output : State F
+deriving ProvableStruct
+
+def constraints (row : Row R) : Prop :=
+  stateEq (fullNext row.last) row.output
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertStateEq (fullNext row.last) row.output
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullNext]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+      state1Check, state2Check, fullNext]
+    simp_all [sub_eq_add_neg]
+
+end FullToOutput
+
+end Permutation
+
+/-!
 Two-input Poseidon hash wiring used by Orchard nullifiers.
 
 References:
@@ -324,6 +796,88 @@ def circuit : FormalAssertion F Row where
       simpa [sub_eq_add_neg] using h
 
 end Hash2
+
+/-!
+Boundary wiring between the two-input hash gadget and a Poseidon permutation schedule.
+
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/poseidon.rs`
+- `poseidon_sponge`
+- `Hash::hash`
+
+After absorption, the source permutes the whole width-3 state and squeezes state word 0.
+This assertion connects `Hash2.circuit` to explicit permutation endpoint states. The
+round rows and row-to-row schedule copies are represented by `Permutation.*` assertions.
+-/
+namespace Hash2PermutationBoundary
+
+structure Row (F : Type) where
+  hash : Hash2.Row F
+  permutationInput : Permutation.State F
+  permutationOutput : Permutation.State F
+deriving ProvableStruct
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+
+def input0Check (row : Row R) : R :=
+  row.hash.absorbed.output0 - row.permutationInput.s0
+
+def input1Check (row : Row R) : R :=
+  row.hash.absorbed.output1 - row.permutationInput.s1
+
+def input2Check (row : Row R) : R :=
+  row.hash.absorbed.output2 - row.permutationInput.s2
+
+def outputCheck (row : Row R) : R :=
+  row.permutationOutput.s0 - row.hash.permuted0
+
+def constraints (row : Row R) : Prop :=
+  Hash2.constraints row.hash ∧
+    input0Check row = 0 ∧
+    input1Check row = 0 ∧
+    input2Check row = 0 ∧
+    outputCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  Hash2.main row.hash
+  assertZero (input0Check row)
+  assertZero (input1Check row)
+  assertZero (input2Check row)
+  assertZero (outputCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, input0Check, input1Check, input2Check,
+      outputCheck, Hash2.main, Hash2.constraints, Hash2.initial0Check,
+      Hash2.initial1Check, Hash2.capacityCheck, Hash2.input0Check, Hash2.input1Check,
+      Hash2.hashCheck, PadAndAdd.output0Check, PadAndAdd.output1Check,
+      PadAndAdd.capacityCheck]
+    simp_all [sub_eq_add_neg]
+    constructor
+    · have h := h_holds.1
+      rw [h_holds.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+    · have h := h_holds.2.1
+      rw [h_holds.2.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+  completeness := by
+    circuit_proof_start [main, constraints, input0Check, input1Check, input2Check,
+      outputCheck, Hash2.main, Hash2.constraints, Hash2.initial0Check,
+      Hash2.initial1Check, Hash2.capacityCheck, Hash2.input0Check, Hash2.input1Check,
+      Hash2.hashCheck, PadAndAdd.output0Check, PadAndAdd.output1Check,
+      PadAndAdd.capacityCheck]
+    simp_all [sub_eq_add_neg]
+    constructor
+    · have h := h_spec.1.1
+      rw [h_spec.1.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+    · have h := h_spec.1.2.1
+      rw [h_spec.1.2.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+
+end Hash2PermutationBoundary
 
 end Poseidon
 end Orchard
