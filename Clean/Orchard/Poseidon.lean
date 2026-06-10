@@ -31,6 +31,9 @@ def pow5 (x : R) : R :=
   let x2 := x * x
   x2 * x2 * x
 
+private theorem eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : b = a := by
+  exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
+
 namespace FullRound
 
 structure Row (F : Type) where
@@ -210,6 +213,12 @@ def next1Check (row : Row R) : R :=
 def next2Check (row : Row R) : R :=
   mid2 row + row.rcB2 - nextInv2 row
 
+def Spec (row : Row R) : Prop :=
+  row.mid0Sbox = pow5 (row.cur0 + row.rcA0) ∧
+    nextInv0 row = pow5 (mid0 row + row.rcB0) ∧
+    nextInv1 row = mid1 row + row.rcB1 ∧
+    nextInv2 row = mid2 row + row.rcB2
+
 def constraints (row : Row R) : Prop :=
   mid0Check row = 0 ∧
     next0Check row = 0 ∧
@@ -224,15 +233,24 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, mid0Check, next0Check, next1Check,
+    circuit_proof_start [main, Spec, mid0Check, next0Check, next1Check,
       next2Check, mid0, mid1, mid2, nextInv0, nextInv1, nextInv2, pow5]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hmid, h0, h1, h2⟩
+    constructor
+    · exact eq_of_add_neg_eq_zero hmid
+    constructor
+    · exact eq_of_add_neg_eq_zero h0
+    constructor
+    · exact eq_of_add_neg_eq_zero h1
+    · exact eq_of_add_neg_eq_zero h2
   completeness := by
-    circuit_proof_start [main, constraints, mid0Check, next0Check, next1Check,
+    circuit_proof_start [main, Spec, mid0Check, next0Check, next1Check,
       next2Check, mid0, mid1, mid2, nextInv0, nextInv1, nextInv2, pow5]
-    simp_all [sub_eq_add_neg]
+    simp_all
+    ring_nf
+    simp
 
 end PartialRounds
 
