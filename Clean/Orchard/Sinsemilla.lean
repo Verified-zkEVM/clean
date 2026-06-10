@@ -454,44 +454,44 @@ structure DecompositionRow (F : Type) where
   lWhole : F
 deriving ProvableStruct
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-  [OfNat R (2 ^ 5)] [OfNat R (2 ^ 10)] [OfNat R (2 ^ 240)]
+def twoPow5 {K : Type} [OfNat K (2 ^ 5)] : K := OfNat.ofNat (2 ^ 5)
 
-def twoPow5 : R := OfNat.ofNat (2 ^ 5)
+def twoPow10 {K : Type} [OfNat K (2 ^ 10)] : K := OfNat.ofNat (2 ^ 10)
 
-def twoPow10 : R := OfNat.ofNat (2 ^ 10)
+def twoPow240 {K : Type} [OfNat K (2 ^ 240)] : K := OfNat.ofNat (2 ^ 240)
 
-def twoPow240 : R := OfNat.ofNat (2 ^ 240)
-
-def a0 (row : DecompositionRow R) : R :=
+def a0 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 10)] (row : DecompositionRow K) : K :=
   row.aWhole - row.z1A * twoPow10
 
-def b1B2Check (row : DecompositionRow R) : R :=
+def b1B2Check {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 5)]
+    (row : DecompositionRow K) : K :=
   row.z1B - (row.b1 + row.b2 * twoPow5)
 
-def b0 (row : DecompositionRow R) : R :=
+def b0 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 10)] (row : DecompositionRow K) : K :=
   row.bWhole - row.z1B * twoPow10
 
-def leftCheck (row : DecompositionRow R) : R :=
+def leftCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 10)]
+    [OfNat K (2 ^ 240)] (row : DecompositionRow K) : K :=
   let reconstructed := row.z1A + (b0 row + row.b1 * twoPow10) * twoPow240
   reconstructed - row.leftNode
 
-def rightCheck (row : DecompositionRow R) : R :=
+def rightCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 5)]
+    (row : DecompositionRow K) : K :=
   row.b2 + row.cWhole * twoPow5 - row.rightNode
 
-def Spec (row : DecompositionRow R) : Prop :=
+def Spec (row : DecompositionRow Ecc.PallasBaseField) : Prop :=
   row.lWhole = a0 row ∧
   row.leftNode = row.z1A + (b0 row + row.b1 * twoPow10) * twoPow240 ∧
   row.rightNode = row.b2 + row.cWhole * twoPow5 ∧
   row.z1B = row.b1 + row.b2 * twoPow5
 
-def main (row : Var DecompositionRow F) : Circuit F Unit := do
+def main (row : Var DecompositionRow Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (a0 row - row.lWhole)
   assertZero (leftCheck row)
   assertZero (rightCheck row)
   assertZero (b1B2Check row)
 
-def circuit : FormalAssertion F DecompositionRow where
+def circuit : FormalAssertion Ecc.PallasBaseField DecompositionRow where
   main
   Spec := Spec
   soundness := by
@@ -544,17 +544,17 @@ structure Row (F : Type) where
   hash : F
 deriving ProvableStruct
 
-def hashCheck (row : Row R) : R :=
+def hashCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.computedHash - row.hash
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Merkle.Spec row.decomposition ∧ row.hash = row.computedHash
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Merkle.circuit row.decomposition
   assertZero (hashCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -596,31 +596,29 @@ structure Row (F : Type) where
   nextNode : F
 deriving ProvableStruct
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-  [OfNat R (2 ^ 5)] [OfNat R (2 ^ 10)] [OfNat R (2 ^ 240)]
-
-def boolPoly (x : R) : R :=
+def boolPoly {K : Type} [One K] [Sub K] [Mul K] (x : K) : K :=
   x * (x - 1)
 
-def ternary (choice ifTrue ifFalse : R) : R :=
+def ternary {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K]
+    (choice ifTrue ifFalse : K) : K :=
   choice * ifTrue + (1 - choice) * ifFalse
 
-def leftCheck (row : Row R) : R :=
+def leftCheck {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   row.left - ternary row.posBit row.sibling row.node
 
-def rightCheck (row : Row R) : R :=
+def rightCheck {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   row.right - ternary row.posBit row.node row.sibling
 
-def layerLeftCheck (row : Row R) : R :=
+def layerLeftCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.layer.decomposition.leftNode - row.left
 
-def layerRightCheck (row : Row R) : R :=
+def layerRightCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.layer.decomposition.rightNode - row.right
 
-def nextCheck (row : Row R) : R :=
+def nextCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.layer.hash - row.nextNode
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   (row.posBit = 0 ∨ row.posBit = 1) ∧
     row.left = ternary row.posBit row.sibling row.node ∧
     row.right = ternary row.posBit row.node row.sibling ∧
@@ -629,7 +627,7 @@ def Spec (row : Row R) : Prop :=
     row.layer.decomposition.rightNode = row.right ∧
     row.nextNode = row.layer.hash
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (boolPoly row.posBit)
   assertZero (leftCheck row)
   assertZero (rightCheck row)
@@ -638,7 +636,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (layerRightCheck row)
   assertZero (nextCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by

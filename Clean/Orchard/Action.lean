@@ -540,30 +540,25 @@ whole path.
 -/
 namespace ActionMerkleWiring
 
-variable {F : Type} [Field F]
-
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-  [OfNat R (2 ^ 5)] [OfNat R (2 ^ 10)] [OfNat R (2 ^ 240)]
-
 structure Row (F : Type) where
   action : ActionWiring.Row F
   finalStep : Sinsemilla.Merkle.PathStep.Row F
 deriving ProvableStruct
 
-def rootCheck (row : Row R) : R :=
+def rootCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.finalStep.nextNode - row.action.root
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   ActionWiring.Spec row.action ∧
     Sinsemilla.Merkle.PathStep.Spec row.finalStep ∧
     row.finalStep.nextNode = row.action.root
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
   Sinsemilla.Merkle.PathStep.circuit row.finalStep
   assertZero (rootCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
