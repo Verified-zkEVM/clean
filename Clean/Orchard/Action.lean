@@ -464,6 +464,11 @@ namespace ActionNoteCommitWiring
 variable {F : Type} [Field F]
 
 variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+  [OfNat R 2] [OfNat R 4] [OfNat R 16] [OfNat R 32] [OfNat R 64]
+  [OfNat R 256] [OfNat R 512] [OfNat R 1024]
+  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 249)]
+  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)] [OfNat R 288230376151711744]
+  [OfNat R 45560315531419706090280762371685220353]
 
 structure Row (F : Type) where
   action : ActionWiring.Row F
@@ -482,12 +487,16 @@ def newCmxCheck (row : Row R) : R :=
 
 def Spec (row : Row R) : Prop :=
   ActionWiring.Spec row.action ∧
+    NoteCommit.Wiring.Spec row.oldNoteCommit ∧
+    NoteCommit.Wiring.Spec row.newNoteCommit ∧
     row.oldNoteCommit.cmX = row.action.derivedCmOldX ∧
     row.oldNoteCommit.cmY = row.action.derivedCmOldY ∧
     row.newNoteCommit.cmX = row.action.cmxNew
 
 def main (row : Var Row F) : Circuit F Unit := do
   ActionWiring.circuit row.action
+  NoteCommit.Wiring.circuit row.oldNoteCommit
+  NoteCommit.Wiring.circuit row.newNoteCommit
   assertZero (oldCmXCheck row)
   assertZero (oldCmYCheck row)
   assertZero (newCmxCheck row)
@@ -497,17 +506,19 @@ def circuit : FormalAssertion F Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, oldCmXCheck, oldCmYCheck, newCmxCheck,
-      ActionWiring.circuit, ActionWiring.Spec]
-    rcases h_holds with ⟨hAction, hOldX, hOldY, hNewCmx⟩
-    exact ⟨hAction,
+      ActionWiring.circuit, ActionWiring.Spec,
+      NoteCommit.Wiring.circuit, NoteCommit.Wiring.Spec]
+    rcases h_holds with ⟨hAction, hOldNoteCommit, hNewNoteCommit, hOldX, hOldY, hNewCmx⟩
+    exact ⟨hAction, hOldNoteCommit, hNewNoteCommit,
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOldX),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOldY),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNewCmx)⟩
   completeness := by
     circuit_proof_start [main, Spec, oldCmXCheck, oldCmYCheck, newCmxCheck,
-      ActionWiring.circuit, ActionWiring.Spec]
-    rcases h_spec with ⟨hAction, hOldX, hOldY, hNewCmx⟩
-    exact ⟨hAction,
+      ActionWiring.circuit, ActionWiring.Spec,
+      NoteCommit.Wiring.circuit, NoteCommit.Wiring.Spec]
+    rcases h_spec with ⟨hAction, hOldNoteCommit, hNewNoteCommit, hOldX, hOldY, hNewCmx⟩
+    exact ⟨hAction, hOldNoteCommit, hNewNoteCommit,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOldX,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOldY,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hNewCmx⟩
