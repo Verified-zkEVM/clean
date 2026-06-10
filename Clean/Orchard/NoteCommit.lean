@@ -275,13 +275,6 @@ def decomposition (row : Row R) : R :=
 def aPrimeCheck (row : Row R) : R :=
   row.a + OfNat.ofNat (2 ^ 130) - tP - row.aPrime
 
-def constraints (row : Row R) : Prop :=
-  decomposition row = 0 ∧
-    aPrimeCheck row = 0 ∧
-    row.b1 * row.b0 = 0 ∧
-    row.b1 * row.z13A = 0 ∧
-    row.b1 * row.z13APrime = 0
-
 def Spec (row : Row R) : Prop :=
   row.gdX = row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) ∧
     row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - tP ∧
@@ -300,13 +293,13 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, decomposition, aPrimeCheck, tP]
+    circuit_proof_start [main, Spec, decomposition, aPrimeCheck, tP]
     rcases h_holds with ⟨hdec, hprime, hb0, hz13, hz13p⟩
     exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
       mul_eq_zero.mp hb0, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, decomposition, aPrimeCheck, tP]
+    circuit_proof_start [main, Spec, decomposition, aPrimeCheck, tP]
     rcases h_spec with ⟨hdec, hprime, hb0, hz13, hz13p⟩
     constructor
     · rw [hdec]
@@ -339,12 +332,6 @@ def decomposition (row : Row R) : R :=
 def b3CPrimeCheck (row : Row R) : R :=
   row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - tP - row.b3CPrime
 
-def constraints (row : Row R) : Prop :=
-  decomposition row = 0 ∧
-    b3CPrimeCheck row = 0 ∧
-    row.d0 * row.z13C = 0 ∧
-    row.d0 * row.z14B3CPrime = 0
-
 def Spec (row : Row R) : Prop :=
   row.pkdX = row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) ∧
     row.b3CPrime = row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - tP ∧
@@ -361,13 +348,13 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, decomposition, b3CPrimeCheck, tP]
+    circuit_proof_start [main, Spec, decomposition, b3CPrimeCheck, tP]
     rcases h_holds with ⟨hdec, hprime, hz13, hz14⟩
     exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
       mul_eq_zero.mp hz13, mul_eq_zero.mp hz14⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, decomposition, b3CPrimeCheck, tP]
+    circuit_proof_start [main, Spec, decomposition, b3CPrimeCheck, tP]
     rcases h_spec with ⟨hdec, hprime, hz13, hz14⟩
     constructor
     · rw [hdec]
@@ -433,12 +420,6 @@ def decomposition (row : Row R) : R :=
 def e1FPrimeCheck (row : Row R) : R :=
   row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - tP - row.e1FPrime
 
-def constraints (row : Row R) : Prop :=
-  decomposition row = 0 ∧
-    e1FPrimeCheck row = 0 ∧
-    row.g0 * row.z13F = 0 ∧
-    row.g0 * row.z14E1FPrime = 0
-
 def Spec (row : Row R) : Prop :=
   row.rho = row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) ∧
     row.e1FPrime = row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - tP ∧
@@ -455,13 +436,13 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, decomposition, e1FPrimeCheck, tP]
+    circuit_proof_start [main, Spec, decomposition, e1FPrimeCheck, tP]
     rcases h_holds with ⟨hdec, hprime, hz13, hz14⟩
     exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
       mul_eq_zero.mp hz13, mul_eq_zero.mp hz14⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, decomposition, e1FPrimeCheck, tP]
+    circuit_proof_start [main, Spec, decomposition, e1FPrimeCheck, tP]
     rcases h_spec with ⟨hdec, hprime, hz13, hz14⟩
     constructor
     · rw [hdec]
@@ -496,13 +477,6 @@ def decomposition (row : Row R) : R :=
 def g1G2PrimeCheck (row : Row R) : R :=
   row.g1 + row.g2 * 512 + OfNat.ofNat (2 ^ 130) - tP - row.g1G2Prime
 
-def constraints (row : Row R) : Prop :=
-  decomposition row = 0 ∧
-    g1G2PrimeCheck row = 0 ∧
-    row.h1 * row.h0 = 0 ∧
-    row.h1 * row.z13G = 0 ∧
-    row.h1 * row.z13G1G2Prime = 0
-
 def Spec (row : Row R) : Prop :=
   row.psi = row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
     row.h1 * OfNat.ofNat (2 ^ 254) ∧
@@ -522,13 +496,13 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, decomposition, g1G2PrimeCheck, tP]
+    circuit_proof_start [main, Spec, decomposition, g1G2PrimeCheck, tP]
     rcases h_holds with ⟨hdec, hprime, hh0, hz13, hz13p⟩
     exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
       mul_eq_zero.mp hh0, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, decomposition, g1G2PrimeCheck, tP]
+    circuit_proof_start [main, Spec, decomposition, g1G2PrimeCheck, tP]
     rcases h_spec with ⟨hdec, hprime, hh0, hz13, hz13p⟩
     constructor
     · rw [hdec]
@@ -568,15 +542,6 @@ def yCheck (row : Row R) : R :=
 def jPrimeCheck (row : Row R) : R :=
   row.j + OfNat.ofNat (2 ^ 130) - tP - row.jPrime
 
-def constraints (row : Row R) : Prop :=
-  boolPoly row.k3 = 0 ∧
-    jCheck row = 0 ∧
-    yCheck row = 0 ∧
-    jPrimeCheck row = 0 ∧
-    row.k3 * row.k2 = 0 ∧
-    row.k3 * row.z13J = 0 ∧
-    row.k3 * row.z13JPrime = 0
-
 def Spec (row : Row R) : Prop :=
   IsBool row.k3 ∧
     row.j = row.lsb + row.k0 * 2 + row.z1J * 1024 ∧
@@ -600,14 +565,14 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, jCheck, yCheck, jPrimeCheck, tP]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, jCheck, yCheck, jPrimeCheck, tP]
     rcases h_holds with ⟨hk3, hj, hy, hp, hk2, hz13, hz13p⟩
     exact ⟨isBool_of_boolPoly_eq_zero (by simpa [boolPoly, sub_eq_add_neg] using hk3),
       left_eq_of_add_neg_eq_zero hj, left_eq_of_add_neg_eq_zero hy,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hp).symm,
       mul_eq_zero.mp hk2, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, jCheck, yCheck, jPrimeCheck, tP]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, jCheck, yCheck, jPrimeCheck, tP]
     rcases h_spec with ⟨hk3, hj, hy, hp, hk2, hz13, hz13p⟩
     constructor
     · simpa [boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hk3
