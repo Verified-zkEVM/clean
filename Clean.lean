@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard
 import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath
 import Clean.Utils.OfflineMemory
