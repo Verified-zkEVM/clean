@@ -52,6 +52,9 @@ private theorem isBool_of_boolPoly_eq_zero {x : F} (h : boolPoly x = 0) : IsBool
 private theorem boolPoly_eq_zero_of_isBool {x : F} (h : IsBool x) : boolPoly x = 0 := by
   rcases h with h | h <;> rw [h] <;> simp [boolPoly]
 
+private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
+  rcases h with h | h <;> rw [h] <;> simp
+
 private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
   sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
 
@@ -291,6 +294,13 @@ def constraints (row : Row R) : Prop :=
     row.b1 * row.z13A = 0 ∧
     row.b1 * row.z13APrime = 0
 
+def Spec (row : Row R) : Prop :=
+  row.gdX = row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) ∧
+    row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - tP ∧
+    (row.b1 = 0 ∨ row.b0 = 0) ∧
+    (row.b1 = 0 ∨ row.z13A = 0) ∧
+    (row.b1 = 0 ∨ row.z13APrime = 0)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (decomposition row)
   assertZero (aPrimeCheck row)
@@ -300,13 +310,23 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, decomposition, aPrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, decomposition, aPrimeCheck, tP]
+    rcases h_holds with ⟨hdec, hprime, hb0, hz13, hz13p⟩
+    exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
+      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
+      mul_eq_zero.mp hb0, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, constraints, decomposition, aPrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, decomposition, aPrimeCheck, tP]
+    rcases h_spec with ⟨hdec, hprime, hb0, hz13, hz13p⟩
+    constructor
+    · rw [hdec]
+      ring
+    constructor
+    · rw [hprime]
+      ring
+    exact ⟨mul_eq_zero_of_or hb0, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
 
 end GdCanonicity
 
@@ -337,6 +357,12 @@ def constraints (row : Row R) : Prop :=
     row.d0 * row.z13C = 0 ∧
     row.d0 * row.z14B3CPrime = 0
 
+def Spec (row : Row R) : Prop :=
+  row.pkdX = row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) ∧
+    row.b3CPrime = row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - tP ∧
+    (row.d0 = 0 ∨ row.z13C = 0) ∧
+    (row.d0 = 0 ∨ row.z14B3CPrime = 0)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (decomposition row)
   assertZero (b3CPrimeCheck row)
@@ -345,13 +371,23 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, decomposition, b3CPrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, decomposition, b3CPrimeCheck, tP]
+    rcases h_holds with ⟨hdec, hprime, hz13, hz14⟩
+    exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
+      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
+      mul_eq_zero.mp hz13, mul_eq_zero.mp hz14⟩
   completeness := by
-    circuit_proof_start [main, constraints, decomposition, b3CPrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, decomposition, b3CPrimeCheck, tP]
+    rcases h_spec with ⟨hdec, hprime, hz13, hz14⟩
+    constructor
+    · rw [hdec]
+      ring
+    constructor
+    · rw [hprime]
+      ring
+    exact ⟨mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz14⟩
 
 end PkdCanonicity
 
@@ -369,18 +405,22 @@ deriving ProvableStruct
 def valueCheck (row : Row R) : R :=
   row.d2 + row.d3 * 256 + row.e0 * 288230376151711744 - row.value
 
+def Spec (row : Row R) : Prop :=
+  row.value = row.d2 + row.d3 * 256 + row.e0 * 288230376151711744
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (valueCheck row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec row := valueCheck row = 0
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, valueCheck]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, valueCheck]
+    exact (left_eq_of_add_neg_eq_zero h_holds).symm
   completeness := by
-    circuit_proof_start [main, valueCheck]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, valueCheck]
+    rw [h_spec]
+    ring
 
 end ValueCanonicity
 
@@ -411,6 +451,12 @@ def constraints (row : Row R) : Prop :=
     row.g0 * row.z13F = 0 ∧
     row.g0 * row.z14E1FPrime = 0
 
+def Spec (row : Row R) : Prop :=
+  row.rho = row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) ∧
+    row.e1FPrime = row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - tP ∧
+    (row.g0 = 0 ∨ row.z13F = 0) ∧
+    (row.g0 = 0 ∨ row.z14E1FPrime = 0)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (decomposition row)
   assertZero (e1FPrimeCheck row)
@@ -419,13 +465,23 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, decomposition, e1FPrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, decomposition, e1FPrimeCheck, tP]
+    rcases h_holds with ⟨hdec, hprime, hz13, hz14⟩
+    exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
+      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
+      mul_eq_zero.mp hz13, mul_eq_zero.mp hz14⟩
   completeness := by
-    circuit_proof_start [main, constraints, decomposition, e1FPrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, decomposition, e1FPrimeCheck, tP]
+    rcases h_spec with ⟨hdec, hprime, hz13, hz14⟩
+    constructor
+    · rw [hdec]
+      ring
+    constructor
+    · rw [hprime]
+      ring
+    exact ⟨mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz14⟩
 
 end RhoCanonicity
 
@@ -459,6 +515,14 @@ def constraints (row : Row R) : Prop :=
     row.h1 * row.z13G = 0 ∧
     row.h1 * row.z13G1G2Prime = 0
 
+def Spec (row : Row R) : Prop :=
+  row.psi = row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
+    row.h1 * OfNat.ofNat (2 ^ 254) ∧
+    row.g1G2Prime = row.g1 + row.g2 * 512 + OfNat.ofNat (2 ^ 130) - tP ∧
+    (row.h1 = 0 ∨ row.h0 = 0) ∧
+    (row.h1 = 0 ∨ row.z13G = 0) ∧
+    (row.h1 = 0 ∨ row.z13G1G2Prime = 0)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (decomposition row)
   assertZero (g1G2PrimeCheck row)
@@ -468,13 +532,23 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, decomposition, g1G2PrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, decomposition, g1G2PrimeCheck, tP]
+    rcases h_holds with ⟨hdec, hprime, hh0, hz13, hz13p⟩
+    exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
+      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
+      mul_eq_zero.mp hh0, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, constraints, decomposition, g1G2PrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, decomposition, g1G2PrimeCheck, tP]
+    rcases h_spec with ⟨hdec, hprime, hh0, hz13, hz13p⟩
+    constructor
+    · rw [hdec]
+      ring
+    constructor
+    · rw [hprime]
+      ring
+    exact ⟨mul_eq_zero_of_or hh0, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
 
 end PsiCanonicity
 
@@ -515,6 +589,16 @@ def constraints (row : Row R) : Prop :=
     row.k3 * row.z13J = 0 ∧
     row.k3 * row.z13JPrime = 0
 
+def Spec (row : Row R) : Prop :=
+  IsBool row.k3 ∧
+    row.j = row.lsb + row.k0 * 2 + row.z1J * 1024 ∧
+    row.y = row.j + row.k2 * OfNat.ofNat (2 ^ 250) +
+      row.k3 * OfNat.ofNat (2 ^ 254) ∧
+    row.jPrime = row.j + OfNat.ofNat (2 ^ 130) - tP ∧
+    (row.k3 = 0 ∨ row.k2 = 0) ∧
+    (row.k3 = 0 ∨ row.z13J = 0) ∧
+    (row.k3 = 0 ∨ row.z13JPrime = 0)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (boolPoly row.k3)
   assertZero (jCheck row)
@@ -526,13 +610,29 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, boolPoly, jCheck, yCheck, jPrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, jCheck, yCheck, jPrimeCheck, tP]
+    rcases h_holds with ⟨hk3, hj, hy, hp, hk2, hz13, hz13p⟩
+    exact ⟨isBool_of_boolPoly_eq_zero (by simpa [boolPoly, sub_eq_add_neg] using hk3),
+      left_eq_of_add_neg_eq_zero hj, left_eq_of_add_neg_eq_zero hy,
+      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hp).symm,
+      mul_eq_zero.mp hk2, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, constraints, boolPoly, jCheck, yCheck, jPrimeCheck, tP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, jCheck, yCheck, jPrimeCheck, tP]
+    rcases h_spec with ⟨hk3, hj, hy, hp, hk2, hz13, hz13p⟩
+    constructor
+    · simpa [boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hk3
+    constructor
+    · rw [hj]
+      ring
+    constructor
+    · rw [hy]
+      ring
+    constructor
+    · rw [hp]
+      ring
+    exact ⟨mul_eq_zero_of_or hk2, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
 
 end YCanonicity
 
