@@ -602,24 +602,57 @@ def rangeCheck (row : CoordsRow R) : R :=
   row.window * (1 - row.window) * (2 - row.window) * (3 - row.window) *
     (4 - row.window) * (5 - row.window) * (6 - row.window) * (7 - row.window)
 
-def constraints (row : CoordsRow R) : Prop :=
-  coordsConstraints row ∧ rangeCheck row = 0
+def IsWindow (window : R) : Prop :=
+  window = 0 ∨ window = 1 ∨ window = 2 ∨ window = 3 ∨
+    window = 4 ∨ window = 5 ∨ window = 6 ∨ window = 7
+
+def Spec (row : CoordsRow R) : Prop :=
+  coordsSpec row ∧ IsWindow row.window
 
 def main (row : Var CoordsRow F) : Circuit F Unit := do
-  coordsMain row
+  Coords.circuit row
   assertZero (rangeCheck row)
 
 def circuit : FormalAssertion F CoordsRow where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, coordsMain, coordsConstraints, rangeCheck,
-      xCheck, yCheck, onCurve, interpolatedX]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, IsWindow, Coords.circuit, coordsMain, coordsSpec,
+      coordsConstraints, rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
+    constructor
+    · simpa [sub_eq_add_neg] using h_holds.1
+    · have hRange := h_holds.2
+      rcases mul_eq_zero.mp hRange with hPrefix | h7
+      · rcases mul_eq_zero.mp hPrefix with hPrefix | h6
+        · rcases mul_eq_zero.mp hPrefix with hPrefix | h5
+          · rcases mul_eq_zero.mp hPrefix with hPrefix | h4
+            · rcases mul_eq_zero.mp hPrefix with hPrefix | h3
+              · rcases mul_eq_zero.mp hPrefix with hPrefix | h2
+                · rcases mul_eq_zero.mp hPrefix with h0 | h1
+                  · exact Or.inl h0
+                  · exact Or.inr (Or.inl (by linear_combination -h1))
+                · exact Or.inr (Or.inr (Or.inl (by linear_combination -h2)))
+              · exact Or.inr (Or.inr (Or.inr (Or.inl (by linear_combination -h3))))
+            · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl (by linear_combination -h4)))))
+          · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl (by linear_combination -h5))))))
+        · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl (by
+            linear_combination -h6)))))))
+      · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (by
+          linear_combination -h7)))))))
   completeness := by
-    circuit_proof_start [main, constraints, coordsMain, coordsConstraints, rangeCheck,
-      xCheck, yCheck, onCurve, interpolatedX]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, IsWindow, Coords.circuit, coordsMain, coordsSpec,
+      coordsConstraints, rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
+    constructor
+    · simpa [sub_eq_add_neg] using h_spec.1
+    · rcases h_spec.2 with h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7
+      · simp [h0]
+      · simp [h1]
+      · simp [h2]
+      · simp [h3]
+      · simp [h4]
+      · simp [h5]
+      · simp [h6]
+      · simp [h7]
 
 end FullWidth
 
