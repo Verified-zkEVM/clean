@@ -206,8 +206,10 @@ def output1Check (row : Row R) : R :=
 def capacityCheck (row : Row R) : R :=
   row.initial2 - row.output2
 
-def constraints (row : Row R) : Prop :=
-  output0Check row = 0 ∧ output1Check row = 0 ∧ capacityCheck row = 0
+def Spec (row : Row R) : Prop :=
+  row.output0 = row.initial0 + row.input0 ∧
+    row.output1 = row.initial1 + row.input1 ∧
+    row.output2 = row.initial2
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (output0Check row)
@@ -216,13 +218,25 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, output0Check, output1Check, capacityCheck]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, output0Check, output1Check, capacityCheck]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    constructor
+    · have h0' : input_initial0 + input_input0 - input_output0 = 0 := by
+        simp_all [sub_eq_add_neg]
+      exact (sub_eq_zero.mp h0').symm
+    constructor
+    · have h1' : input_initial1 + input_input1 - input_output1 = 0 := by
+        simp_all [sub_eq_add_neg]
+      exact (sub_eq_zero.mp h1').symm
+    · have h2' : input_initial2 - input_output2 = 0 := by
+        simp_all [sub_eq_add_neg]
+      exact (sub_eq_zero.mp h2').symm
   completeness := by
-    circuit_proof_start [main, constraints, output0Check, output1Check, capacityCheck]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, output0Check, output1Check, capacityCheck]
+    simp_all
+    constructor <;> ring
 
 end PadAndAdd
 
