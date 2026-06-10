@@ -459,6 +459,16 @@ theorem outputValue_eq_swAdd_pallas {input : AddInputs PallasBaseField}
         (0 : PallasBaseField) (pointCoords input.p) (pointCoords input.q) :=
   outputValue_eq_swAdd_of_pointOrIdentity pallasNoCurvePointWithXZero hp hq
 
+theorem pallas_two_ne_zero : (2 : PallasBaseField) ≠ 0 := by
+  decide
+
+theorem pallas_add_self_ne_zero {y : PallasBaseField} (hy : y ≠ 0) :
+    y + y ≠ 0 := by
+  intro h
+  have hmul : (2 : PallasBaseField) * y = 0 := by
+    linear_combination h
+  exact hy ((mul_eq_zero.mp hmul).resolve_left pallas_two_ne_zero)
+
 theorem pallas_y_eq_or_neg_of_same_x {p q : Point PallasBaseField}
     (hp : isPointOrIdentity p) (hq : isPointOrIdentity q)
     (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
