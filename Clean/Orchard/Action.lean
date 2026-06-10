@@ -55,48 +55,11 @@ def spendEnabled (row : Row R) : R :=
 def outputEnabled (row : Row R) : R :=
   row.vNew * (1 - row.enableOutputs)
 
-def constraints (row : Row R) : Prop :=
-  valueNet row = 0 ∧
-    merklePathValidity row = 0 ∧
-    spendEnabled row = 0 ∧
-    outputEnabled row = 0
-
 def Spec (row : Row R) : Prop :=
   row.vOld = row.vNew + row.magnitude * row.sign ∧
     (row.vOld = 0 ∨ row.root = row.anchor) ∧
     (row.vOld = 0 ∨ row.enableSpends = 1) ∧
     (row.vNew = 0 ∨ row.enableOutputs = 1)
-
-theorem spec_of_constraints {row : Row F} (h : constraints row) : Spec row := by
-  rcases row with ⟨vOld, vNew, magnitude, sign, root, anchor, enableSpends, enableOutputs⟩
-  unfold constraints valueNet merklePathValidity spendEnabled outputEnabled at h
-  unfold Spec
-  rcases h with ⟨hValue, hRoot, hSpend, hOutput⟩
-  constructor
-  · apply sub_eq_zero.mp
-    ring_nf at hValue ⊢
-    exact hValue
-  constructor
-  · exact (mul_eq_zero.mp hRoot).imp_right fun h => sub_eq_zero.mp h
-  constructor
-  · exact (mul_eq_zero.mp hSpend).imp_right fun h =>
-      (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
-  exact (mul_eq_zero.mp hOutput).imp_right fun h =>
-    (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
-
-theorem constraints_of_spec {row : Row F} (h : Spec row) : constraints row := by
-  rcases row with ⟨vOld, vNew, magnitude, sign, root, anchor, enableSpends, enableOutputs⟩
-  unfold Spec at h
-  unfold constraints valueNet merklePathValidity spendEnabled outputEnabled
-  rcases h with ⟨hValue, hRoot, hSpend, hOutput⟩
-  constructor
-  · rw [hValue]
-    ring
-  constructor
-  · exact mul_eq_zero_of_or (hRoot.imp_right fun h => by rw [h]; ring)
-  constructor
-  · exact mul_eq_zero_of_or (hSpend.imp_right fun h => by rw [h]; ring)
-  exact mul_eq_zero_of_or (hOutput.imp_right fun h => by rw [h]; ring)
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (valueNet row)
@@ -108,8 +71,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, valueNet, merklePathValidity,
-      spendEnabled, outputEnabled]
+    circuit_proof_start [main, Spec, valueNet, merklePathValidity, spendEnabled, outputEnabled]
     rcases h_holds with ⟨hValue, hRoot, hSpend, hOutput⟩
     constructor
     · apply sub_eq_zero.mp
@@ -123,8 +85,7 @@ def circuit : FormalAssertion F Row where
     exact (mul_eq_zero.mp hOutput).imp_right fun h =>
       (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
   completeness := by
-    circuit_proof_start [main, Spec, constraints, valueNet, merklePathValidity,
-      spendEnabled, outputEnabled]
+    circuit_proof_start [main, Spec, valueNet, merklePathValidity, spendEnabled, outputEnabled]
     rcases h_spec with ⟨hValue, hRoot, hSpend, hOutput⟩
     constructor
     · rw [hValue]
@@ -214,20 +175,6 @@ def cmOldXCheck (row : Row R) : R := row.derivedCmOldX - row.cmOldX
 def cmOldYCheck (row : Row R) : R := row.derivedCmOldY - row.cmOldY
 def cmxCheck (row : Row R) : R := row.cmxNew - row.publicCmx
 
-def constraints (row : Row R) : Prop :=
-  ActionChecks.constraints (checksRow row) ∧
-    cvNetXCheck row = 0 ∧
-    cvNetYCheck row = 0 ∧
-    nfOldCheck row = 0 ∧
-    rhoNewCheck row = 0 ∧
-    rkXCheck row = 0 ∧
-    rkYCheck row = 0 ∧
-    pkDOldXCheck row = 0 ∧
-    pkDOldYCheck row = 0 ∧
-    cmOldXCheck row = 0 ∧
-    cmOldYCheck row = 0 ∧
-    cmxCheck row = 0
-
 def Spec (row : Row R) : Prop :=
   ActionChecks.Spec (checksRow row) ∧
     row.cvNetX = row.publicCvNetX ∧
@@ -241,22 +188,6 @@ def Spec (row : Row R) : Prop :=
     row.derivedCmOldX = row.cmOldX ∧
     row.derivedCmOldY = row.cmOldY ∧
     row.cmxNew = row.publicCmx
-
-theorem spec_of_constraints {row : Row F} (h : constraints row) : Spec row := by
-  rcases h with
-    ⟨hChecks, hCvX, hCvY, hNf, hRho, hRkX, hRkY, hPkDX, hPkDY, hCmX, hCmY, hCmx⟩
-  exact ⟨ActionChecks.spec_of_constraints hChecks,
-    sub_eq_zero.mp hCvX, sub_eq_zero.mp hCvY, sub_eq_zero.mp hNf, sub_eq_zero.mp hRho,
-    sub_eq_zero.mp hRkX, sub_eq_zero.mp hRkY, sub_eq_zero.mp hPkDX, sub_eq_zero.mp hPkDY,
-    sub_eq_zero.mp hCmX, sub_eq_zero.mp hCmY, sub_eq_zero.mp hCmx⟩
-
-theorem constraints_of_spec {row : Row F} (h : Spec row) : constraints row := by
-  rcases h with
-    ⟨hChecks, hCvX, hCvY, hNf, hRho, hRkX, hRkY, hPkDX, hPkDY, hCmX, hCmY, hCmx⟩
-  exact ⟨ActionChecks.constraints_of_spec hChecks,
-    sub_eq_zero.mpr hCvX, sub_eq_zero.mpr hCvY, sub_eq_zero.mpr hNf, sub_eq_zero.mpr hRho,
-    sub_eq_zero.mpr hRkX, sub_eq_zero.mpr hRkY, sub_eq_zero.mpr hPkDX, sub_eq_zero.mpr hPkDY,
-    sub_eq_zero.mpr hCmX, sub_eq_zero.mpr hCmY, sub_eq_zero.mpr hCmx⟩
 
 def main (row : Var Row F) : Circuit F Unit := do
   ActionChecks.circuit (checksRow row)
@@ -276,11 +207,9 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, checksRow, ActionChecks.circuit,
-      ActionChecks.Spec, ActionChecks.constraints, ActionChecks.valueNet, ActionChecks.merklePathValidity,
-      ActionChecks.spendEnabled, ActionChecks.outputEnabled, cvNetXCheck, cvNetYCheck,
-      nfOldCheck, rhoNewCheck, rkXCheck, rkYCheck, pkDOldXCheck, pkDOldYCheck,
-      cmOldXCheck, cmOldYCheck, cmxCheck]
+    circuit_proof_start [main, Spec, checksRow, ActionChecks.circuit, ActionChecks.Spec,
+      cvNetXCheck, cvNetYCheck, nfOldCheck, rhoNewCheck, rkXCheck, rkYCheck,
+      pkDOldXCheck, pkDOldYCheck, cmOldXCheck, cmOldYCheck, cmxCheck]
     rcases h_holds with
       ⟨hChecks, hCvX, hCvY, hNf, hRho, hRkX, hRkY, hPkDX, hPkDY, hCmX, hCmY, hCmx⟩
     change ActionChecks.Spec
@@ -300,11 +229,9 @@ def circuit : FormalAssertion F Row where
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hCmY),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hCmx)⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, checksRow, ActionChecks.circuit,
-      ActionChecks.Spec, ActionChecks.constraints, ActionChecks.valueNet, ActionChecks.merklePathValidity,
-      ActionChecks.spendEnabled, ActionChecks.outputEnabled, cvNetXCheck, cvNetYCheck,
-      nfOldCheck, rhoNewCheck, rkXCheck, rkYCheck, pkDOldXCheck, pkDOldYCheck,
-      cmOldXCheck, cmOldYCheck, cmxCheck]
+    circuit_proof_start [main, Spec, checksRow, ActionChecks.circuit, ActionChecks.Spec,
+      cvNetXCheck, cvNetYCheck, nfOldCheck, rhoNewCheck, rkXCheck, rkYCheck,
+      pkDOldXCheck, pkDOldYCheck, cmOldXCheck, cmOldYCheck, cmxCheck]
     rcases h_spec with
       ⟨hChecks, hCvX, hCvY, hNf, hRho, hRkX, hRkY, hPkDX, hPkDY, hCmX, hCmY, hCmx⟩
     change ActionChecks.Spec
