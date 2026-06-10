@@ -236,19 +236,19 @@ def constraints (row : Row R) : Prop :=
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (xPCheck row)
   assertZero (yPCheck row)
-  Loop.main row.toRow
+  Loop.circuit row.toRow
 
 def circuit : FormalAssertion F Row where
   main
   Spec := constraints
   soundness := by
-    circuit_proof_start [main, constraints, xPCheck, yPCheck, Loop.main,
+    circuit_proof_start [main, constraints, xPCheck, yPCheck, Loop.circuit,
       Loop.constraints, NoteCommit.boolPoly, Loop.bit, Loop.gradient1,
       Loop.secantLine, Loop.gradient2, yADouble, Sinsemilla.DoubleAndAdd.yA,
       Sinsemilla.DoubleAndAdd.xR]
     simp_all [sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, xPCheck, yPCheck, Loop.main,
+    circuit_proof_start [main, constraints, xPCheck, yPCheck, Loop.circuit,
       Loop.constraints, NoteCommit.boolPoly, Loop.bit, Loop.gradient1,
       Loop.secantLine, Loop.gradient2, yADouble, Sinsemilla.DoubleAndAdd.yA,
       Sinsemilla.DoubleAndAdd.xR]
