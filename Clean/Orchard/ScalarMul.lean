@@ -184,6 +184,9 @@ end VarBaseLSB
 
 namespace VarBaseCompleteBit
 
+variable [DecidableEq F]
+variable [Field R] [DecidableEq R]
+
 structure Row (F : Type) where
   zPrev : F
   zNext : F
@@ -200,10 +203,16 @@ def ySwitch (row : Row R) : R :=
 def constraints (row : Row R) : Prop :=
   NoteCommit.boolPoly (bit row) = 0 ∧ ySwitch row = 0
 
+def SelectedCompleteBitPoint (row : Row R) : Prop :=
+  ∀ x : R,
+    (bit row = 0 →
+      (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.baseY)) ∧
+      (bit row = 1 →
+        (x, row.yP) =
+          CompElliptic.CurveForms.ShortWeierstrass.smul 0 1 (x, row.baseY))
+
 def Spec (row : Row R) : Prop :=
-  IsBool (bit row) ∧
-    (bit row = 0 → row.baseY + row.yP = 0) ∧
-    (bit row = 1 → row.baseY = row.yP)
+  IsBool (bit row) ∧ SelectedCompleteBitPoint row
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
@@ -213,35 +222,56 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bit, ySwitch]
+    circuit_proof_start [main, Spec, constraints, SelectedCompleteBitPoint,
+      NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg,
+      CompElliptic.CurveForms.ShortWeierstrass.smul,
+      CompElliptic.CurveForms.ShortWeierstrass.add]
     rcases h_holds with ⟨hBool, hSwitch⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
     constructor
     · exact isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool)
-    constructor
-    · intro hBit
-      have hSwitch' := hSwitch
-      simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP] at hSwitch'
-      linear_combination hSwitch' + (2 * input_yP) * hBit
-    · intro hBit
-      have hSwitch' := hSwitch
-      simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP] at hSwitch'
-      apply eq_of_sub_eq_zero
-      linear_combination hSwitch' + (2 * input_yP) * hBit
+    · intro x
+      constructor
+      · intro hBit
+        apply Prod.ext
+        · rfl
+        · have hSwitch' := hSwitch
+          simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP] at hSwitch'
+          linear_combination hSwitch' + (2 * input_yP) * hBit
+      · intro hBit
+        apply Prod.ext
+        · rfl
+        · have hSwitch' := hSwitch
+          simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP] at hSwitch'
+          have hBitNorm : input_zNext + -(2 * input_zPrev) = 1 := by
+            linear_combination hBit
+          have hCoeff : 1 + (2 * input_zPrev + -input_zNext) = 0 := by
+            linear_combination -hBitNorm
+          have hDiff : input_baseY + -input_yP = 0 := by
+            linear_combination hSwitch' - (input_baseY + -input_yP) * hBitNorm -
+              (input_baseY + input_yP) * hCoeff
+          linear_combination -hDiff
   completeness := by
-    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bit, ySwitch]
-    rcases h_spec with ⟨hBool, hZero, hOne⟩
+    circuit_proof_start [main, Spec, constraints, SelectedCompleteBitPoint,
+      NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg,
+      CompElliptic.CurveForms.ShortWeierstrass.smul,
+      CompElliptic.CurveForms.ShortWeierstrass.add]
+    rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
     constructor
     · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool
     · rcases hBool with hBit | hBit
       · exact by
-          have hy := hZero hBit
+          have hPoint := (hSelect 0).1 hBit
+          have hy := congrArg Prod.snd hPoint
+          simp at hy
           simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP, hy]
           left
           simpa [sub_eq_add_neg] using hBit
       · exact by
-          have hy := hOne hBit
+          have hPoint := (hSelect 0).2 hBit
+          have hy := congrArg Prod.snd hPoint
+          simp at hy
           simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP, hy]
           left
           linear_combination -hBit
