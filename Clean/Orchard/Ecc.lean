@@ -221,5 +221,146 @@ def circuit : FormalCircuit F AddInputs Point where
 
 end IncompleteAdd
 
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add.rs`
+- `complete addition`
+
+This ports the complete-addition custom gate as a row assertion over the copied input
+points, output point, and auxiliary advice values `lambda`, `alpha`, `beta`, `gamma`, and
+`delta`. The Rust assignment logic computes these auxiliaries by case-splitting on
+exceptional point-addition cases; higher-level Clean circuits can witness them and call
+this assertion.
+-/
+
+structure CompleteAddRow (F : Type) where
+  p : Point F
+  q : Point F
+  r : Point F
+  lambda : F
+  alpha : F
+  beta : F
+  gamma : F
+  delta : F
+deriving ProvableStruct
+
+namespace CompleteAdd
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
+
+def xQMinusXP (row : CompleteAddRow R) : R :=
+  row.q.x - row.p.x
+
+def xPMinusXR (row : CompleteAddRow R) : R :=
+  row.p.x - row.r.x
+
+def yQPlusYP (row : CompleteAddRow R) : R :=
+  row.q.y + row.p.y
+
+def ifAlpha (row : CompleteAddRow R) : R :=
+  xQMinusXP row * row.alpha
+
+def ifBeta (row : CompleteAddRow R) : R :=
+  row.p.x * row.beta
+
+def ifGamma (row : CompleteAddRow R) : R :=
+  row.q.x * row.gamma
+
+def ifDelta (row : CompleteAddRow R) : R :=
+  yQPlusYP row * row.delta
+
+def nonexceptionalXR (row : CompleteAddRow R) : R :=
+  row.lambda * row.lambda - row.p.x - row.q.x - row.r.x
+
+def nonexceptionalYR (row : CompleteAddRow R) : R :=
+  row.lambda * xPMinusXR row - row.p.y - row.r.y
+
+def poly1 (row : CompleteAddRow R) : R :=
+  let incomplete := xQMinusXP row * row.lambda - (row.q.y - row.p.y)
+  xQMinusXP row * incomplete
+
+def poly2 (row : CompleteAddRow R) : R :=
+  (1 - ifAlpha row) * (2 * row.p.y * row.lambda - 3 * row.p.x * row.p.x)
+
+def poly3a (row : CompleteAddRow R) : R :=
+  row.p.x * row.q.x * xQMinusXP row * nonexceptionalXR row
+
+def poly3b (row : CompleteAddRow R) : R :=
+  row.p.x * row.q.x * xQMinusXP row * nonexceptionalYR row
+
+def poly3c (row : CompleteAddRow R) : R :=
+  row.p.x * row.q.x * yQPlusYP row * nonexceptionalXR row
+
+def poly3d (row : CompleteAddRow R) : R :=
+  row.p.x * row.q.x * yQPlusYP row * nonexceptionalYR row
+
+def poly4a (row : CompleteAddRow R) : R :=
+  (1 - ifBeta row) * (row.r.x - row.q.x)
+
+def poly4b (row : CompleteAddRow R) : R :=
+  (1 - ifBeta row) * (row.r.y - row.q.y)
+
+def poly5a (row : CompleteAddRow R) : R :=
+  (1 - ifGamma row) * (row.r.x - row.p.x)
+
+def poly5b (row : CompleteAddRow R) : R :=
+  (1 - ifGamma row) * (row.r.y - row.p.y)
+
+def poly6a (row : CompleteAddRow R) : R :=
+  (1 - ifAlpha row - ifDelta row) * row.r.x
+
+def poly6b (row : CompleteAddRow R) : R :=
+  (1 - ifAlpha row - ifDelta row) * row.r.y
+
+def constraints (row : CompleteAddRow R) : Prop :=
+  poly1 row = 0 ∧
+  poly2 row = 0 ∧
+  poly3a row = 0 ∧
+  poly3b row = 0 ∧
+  poly3c row = 0 ∧
+  poly3d row = 0 ∧
+  poly4a row = 0 ∧
+  poly4b row = 0 ∧
+  poly5a row = 0 ∧
+  poly5b row = 0 ∧
+  poly6a row = 0 ∧
+  poly6b row = 0
+
+def main (row : Var CompleteAddRow F) : Circuit F Unit := do
+  assertZero (poly1 row)
+  assertZero (poly2 row)
+  assertZero (poly3a row)
+  assertZero (poly3b row)
+  assertZero (poly3c row)
+  assertZero (poly3d row)
+  assertZero (poly4a row)
+  assertZero (poly4b row)
+  assertZero (poly5a row)
+  assertZero (poly5b row)
+  assertZero (poly6a row)
+  assertZero (poly6b row)
+
+def circuit : FormalAssertion F CompleteAddRow where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, poly1, poly2, poly3a, poly3b, poly3c, poly3d,
+      poly4a, poly4b, poly5a, poly5b, poly6a, poly6b, nonexceptionalXR, nonexceptionalYR,
+      ifAlpha, ifBeta, ifGamma, ifDelta, xQMinusXP, xPMinusXR, yQPlusYP]
+    rcases input_p with ⟨px, py⟩
+    rcases input_q with ⟨qx, qy⟩
+    rcases input_r with ⟨rx, ry⟩
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, poly1, poly2, poly3a, poly3b, poly3c, poly3d,
+      poly4a, poly4b, poly5a, poly5b, poly6a, poly6b, nonexceptionalXR, nonexceptionalYR,
+      ifAlpha, ifBeta, ifGamma, ifDelta, xQMinusXP, xPMinusXR, yQPlusYP]
+    rcases input_p with ⟨px, py⟩
+    rcases input_q with ⟨qx, qy⟩
+    rcases input_r with ⟨rx, ry⟩
+    simp_all [sub_eq_add_neg]
+
+end CompleteAdd
+
 end Ecc
 end Orchard

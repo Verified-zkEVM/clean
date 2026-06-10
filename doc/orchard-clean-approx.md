@@ -84,7 +84,7 @@ Bottom-up implementation order currently inferred from those tagged sources:
    `halo2_gadgets/src/ecc/chip/add.rs`
    - Depends on non-identity point assertions.
    - Status: incomplete addition is ported as `IncompleteAdd.circuit`; complete
-     addition is not yet ported.
+     addition custom-gate constraints are ported as `CompleteAdd.circuit`.
 4. Running sums and range checks:
    `halo2_gadgets/src/utilities/decompose_running_sum.rs`,
    `halo2_gadgets/src/utilities/lookup_range_check.rs`
