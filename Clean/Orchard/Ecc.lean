@@ -810,8 +810,30 @@ def main (input : Var AddInputs PallasBaseField) :
     Circuit PallasBaseField (Var Point PallasBaseField) := do
   PointOrIdentity.circuit input.p
   PointOrIdentity.circuit input.q
-  let row ← ProvableType.witness (α := CompleteAddRow) fun env =>
-    rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)
+  let xR ← witnessField fun env =>
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)).r.x
+  let yR ← witnessField fun env =>
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)).r.y
+  let lambda ← witnessField fun env =>
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)).lambda
+  let alpha ← witnessField fun env =>
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)).alpha
+  let beta ← witnessField fun env =>
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)).beta
+  let gamma ← witnessField fun env =>
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)).gamma
+  let delta ← witnessField fun env =>
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)).delta
+  let row : Var CompleteAddRow PallasBaseField := {
+    p := input.p
+    q := input.q
+    r := { x := xR, y := yR }
+    lambda
+    alpha
+    beta
+    gamma
+    delta
+  }
   CompleteAdd.circuit row
   return row.r
 
@@ -829,12 +851,43 @@ instance elaborated : ElaboratedCircuit PallasBaseField AddInputs Point main := 
 theorem soundness : Soundness PallasBaseField main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
     isPointOrIdentity, CompleteAdd.circuit, CompleteAdd.Spec, spec_eq_swAdd_pallas]
-  sorry
+  rcases h_holds with ⟨hp, hq, hrow⟩
+  let row : CompleteAddRow PallasBaseField := {
+    p := input_p
+    q := input_q
+    r := { x := env.get i₀, y := env.get (i₀ + 1) }
+    lambda := env.get (i₀ + 1 + 1)
+    alpha := env.get (i₀ + 1 + 1 + 1)
+    beta := env.get (i₀ + 1 + 1 + 1 + 1)
+    gamma := env.get (i₀ + 1 + 1 + 1 + 1 + 1)
+    delta := env.get (i₀ + 1 + 1 + 1 + 1 + 1 + 1)
+  }
+  exact spec_eq_swAdd_pallas (row := row) hp hq hrow
 
 theorem completeness : Completeness PallasBaseField main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
     isPointOrIdentity, CompleteAdd.circuit, CompleteAdd.Spec, rowValue_spec_pallas]
-  sorry
+  rcases h_assumptions with ⟨hp, hq⟩
+  refine ⟨hp, hq, ?_⟩
+  let row : CompleteAddRow PallasBaseField := {
+    p := input_p
+    q := input_q
+    r := { x := env.get i₀, y := env.get (i₀ + 1) }
+    lambda := env.get (i₀ + 1 + 1)
+    alpha := env.get (i₀ + 1 + 1 + 1)
+    beta := env.get (i₀ + 1 + 1 + 1 + 1)
+    gamma := env.get (i₀ + 1 + 1 + 1 + 1 + 1)
+    delta := env.get (i₀ + 1 + 1 + 1 + 1 + 1 + 1)
+  }
+  let expected := rowValue ({ p := input_p, q := input_q } : AddInputs PallasBaseField)
+  have hrowEq : row = expected := by
+    dsimp [row, expected]
+    rcases h_env with ⟨hx, hy, hlambda, halpha, hbeta, hgamma, hdelta⟩
+    rw [hx, hy, hlambda, halpha, hbeta, hgamma, hdelta]
+    rfl
+  change CompleteAdd.Spec row
+  rw [hrowEq]
+  exact rowValue_spec_pallas (input := { p := input_p, q := input_q }) hp hq
 
 def circuit : FormalCircuit PallasBaseField AddInputs Point where
   main
