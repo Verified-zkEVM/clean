@@ -153,4 +153,6 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.NoteCommit.Wiring.circuit`; the Sinsemilla commitment result remains an
      explicit row value rather than a guessed hash implementation.
      `commit_ivk.rs` gate
-     `CommitIvk canonicity check` is ported as `Orchard.CommitIvk.circuit`.
+     `CommitIvk canonicity check` is ported as `Orchard.CommitIvk.circuit`; the
+     source-level `gadgets::commit_ivk` gate assignment and returned `ivk` wiring is
+     ported as `Orchard.CommitIvk.Wiring.circuit`.
