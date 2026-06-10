@@ -106,3 +106,4 @@ Bottom-up implementation order currently inferred from those tagged sources:
    `orchard/src/circuit/gadget/add_chip.rs`
    - Depends on Sinsemilla, ECC fixed-base/variable-base multiplication, and Orchard-specific
      decomposition/canonicity gates.
+   - Status: `gadget/add_chip.rs` is ported as `Orchard.Utilities.AddChip.circuit`.

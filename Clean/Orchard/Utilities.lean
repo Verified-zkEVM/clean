@@ -108,5 +108,51 @@ def circuit [DecidableEq F] : FormalCircuit F CondSwapInputs CondSwapOutput wher
 
 end CondSwap
 
+/-!
+Reference:
+`orchard@0.14.0/src/circuit/gadget/add_chip.rs`
+- `Field element addition: c = a + b`
+
+This is the small Orchard-specific addition chip used where the Rust circuit wants a
+copy-constrained field addition result.
+-/
+
+namespace AddChip
+
+def main (input : Var fieldPair F) : Circuit F (Var field F) := do
+  let (a, b) := input
+  let c ← witnessField fun env => env a + env b
+  assertZero (a + b - c)
+  return c
+
+def Spec (input : fieldPair F) (output : F) : Prop :=
+  output = input.1 + input.2
+
+instance elaborated : ElaboratedCircuit F fieldPair field main := by
+  elaborate_circuit
+
+theorem soundness : Soundness F main (fun _ => True) Spec := by
+  circuit_proof_start [main, Spec]
+  rcases input with ⟨a, b⟩
+  simp only [Prod.mk.injEq] at h_input
+  rcases h_input with ⟨ha, hb⟩
+  rw [← ha, ← hb]
+  exact (eq_of_add_neg_eq_zero h_holds).symm
+
+theorem completeness : Completeness F main (fun _ => True) := by
+  circuit_proof_start [main, Spec]
+  rw [h_env]
+  ring
+
+def circuit : FormalCircuit F fieldPair field where
+  main
+  elaborated
+  Assumptions := fun _ => True
+  Spec
+  soundness
+  completeness
+
+end AddChip
+
 end Utilities
 end Orchard
