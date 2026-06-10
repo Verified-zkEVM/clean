@@ -327,12 +327,6 @@ def secantLine (row : Row R) : R :=
 def gradient2 (row : Row R) : R :=
   2 * row.cur.lambda2 * (row.cur.xA - row.xANext) - yADouble row.cur - row.yANextDouble
 
-def constraints (row : Row R) : Prop :=
-  NoteCommit.boolPoly (bit row) = 0 ∧
-    gradient1 row = 0 ∧
-    secantLine row = 0 ∧
-    gradient2 row = 0
-
 def Spec (row : Row R) : Prop :=
   IsBool (bit row) ∧
     2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) +
@@ -352,7 +346,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bit, gradient1,
+    circuit_proof_start [main, Spec, NoteCommit.boolPoly, bit, gradient1,
       secantLine, gradient2, yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
     rcases h_holds with ⟨hBool, hGradient1, hSecant, hGradient2⟩
     exact ⟨isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool),
@@ -360,7 +354,7 @@ def circuit : FormalAssertion F Row where
       by linear_combination hSecant,
       by linear_combination hGradient2⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bit, gradient1,
+    circuit_proof_start [main, Spec, NoteCommit.boolPoly, bit, gradient1,
       secantLine, gradient2, yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
     rcases h_spec with ⟨hBool, hGradient1, hSecant, hGradient2⟩
     exact ⟨by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool,
@@ -441,13 +435,6 @@ def sMinusLo130Check (row : Row R) : R :=
 def canonicity (row : Row R) : R :=
   (1 - row.k254) * (1 - row.z130 * row.eta) * row.sMinusLo130
 
-def constraints (row : Row R) : Prop :=
-  sCheck row = 0 ∧
-    recovery row = 0 ∧
-    loZero row = 0 ∧
-    sMinusLo130Check row = 0 ∧
-    canonicity row = 0
-
 def Spec (row : Row R) : Prop :=
   row.s = row.alpha + row.k254 * OfNat.ofNat (2 ^ 130) ∧
     row.z0 = row.alpha + tQ ∧
@@ -466,7 +453,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, sCheck, recovery, loZero,
+    circuit_proof_start [main, Spec, sCheck, recovery, loZero,
       sMinusLo130Check, canonicity, tQ]
     rcases h_holds with ⟨hS, hRecovery, hLoZero, hSMinusLo130, hCanonicity⟩
     refine ⟨?_, ?_, ?_, ?_, ?_⟩
@@ -485,7 +472,7 @@ def circuit : FormalAssertion F Row where
         · exact Or.inr (Or.inl (by linear_combination -hEta))
       · exact Or.inr (Or.inr hRest)
   completeness := by
-    circuit_proof_start [main, Spec, constraints, sCheck, recovery, loZero,
+    circuit_proof_start [main, Spec, sCheck, recovery, loZero,
       sMinusLo130Check, canonicity, tQ]
     rcases h_spec with ⟨hS, hRecovery, hLoZero, hSMinusLo130, hCanonicity⟩
     refine ⟨?_, ?_, ?_, ?_, ?_⟩
@@ -730,16 +717,6 @@ def Spec (row : Row R) : Prop :=
   IsAlpha1 row.alpha1 ∧ IsBool row.alpha2 ∧ DecomposesBaseFieldElem row ∧
     CanonicalHighBit row
 
-def constraints (row : Row R) : Prop :=
-  row.alpha2 * row.alpha1 = 0 ∧
-    row.alpha2 * alpha0Hi120 row = 0 ∧
-    row.alpha2 * NoteCommit.boolPoly (a43 row) = 0 ∧
-    row.alpha2 * row.z13Alpha0Prime = 0 ∧
-    alpha1RangeCheck row = 0 ∧
-    NoteCommit.boolPoly row.alpha2 = 0 ∧
-    z84AlphaCheck row = 0 ∧
-    alpha0PrimeCheck row = 0
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (row.alpha2 * row.alpha1)
   assertZero (row.alpha2 * alpha0Hi120 row)
@@ -754,7 +731,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsAlpha1, DecomposesBaseFieldElem,
+    circuit_proof_start [main, Spec, IsAlpha1, DecomposesBaseFieldElem,
       CanonicalHighBit, alpha0, alpha1RangeCheck, z84AlphaCheck, alpha0PrimeCheck,
       alpha0Hi120, a43, NoteCommit.boolPoly, NoteCommit.tP]
     rcases h_holds with ⟨hAlpha21, hAlpha2Hi, hAlpha2A43, hAlpha2Z13, hAlpha1Range,
@@ -789,7 +766,7 @@ def circuit : FormalAssertion F Row where
       · rw [hAlpha2] at hAlpha2Z13
         simpa using hAlpha2Z13
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsAlpha1, DecomposesBaseFieldElem,
+    circuit_proof_start [main, Spec, IsAlpha1, DecomposesBaseFieldElem,
       CanonicalHighBit, alpha0, alpha1RangeCheck, z84AlphaCheck, alpha0PrimeCheck,
       alpha0Hi120, a43, NoteCommit.boolPoly, NoteCommit.tP]
     rcases h_spec with ⟨hAlpha1, hAlpha2, ⟨hZ84, hAlpha0Prime⟩, hCanon⟩
@@ -873,12 +850,6 @@ def SignedPointSelection (row : Row R) : Prop :=
 def Spec (row : Row R) : Prop :=
   IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointSelection row
 
-def constraints (row : Row R) : Prop :=
-  NoteCommit.boolPoly row.lastWindow = 0 ∧
-    signCheck row = 0 ∧
-    yCheck row = 0 ∧
-    negationCheck row = 0
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (NoteCommit.boolPoly row.lastWindow)
   assertZero (signCheck row)
@@ -889,7 +860,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsSign, SignedPointSelection,
+    circuit_proof_start [main, Spec, IsSign, SignedPointSelection,
       CompElliptic.CurveForms.ShortWeierstrass.neg, NoteCommit.boolPoly, signCheck, yCheck,
       negationCheck]
     rcases h_holds with ⟨hLastWindow, hSign, _hY, hNegation⟩
@@ -916,7 +887,7 @@ def circuit : FormalAssertion F Row where
         · rw [hSignedY, hNeg]
           simp
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsSign, SignedPointSelection,
+    circuit_proof_start [main, Spec, IsSign, SignedPointSelection,
       CompElliptic.CurveForms.ShortWeierstrass.neg, NoteCommit.boolPoly, signCheck, yCheck,
       negationCheck]
     rcases h_spec with ⟨hLastWindow, hSign, hPoint⟩
