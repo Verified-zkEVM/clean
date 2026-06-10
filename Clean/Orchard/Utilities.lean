@@ -187,8 +187,43 @@ def rangeCheckPoly (range : ℕ) (word : F) : F :=
 def word (windowNumBits : ℕ) (step : Step F) : F :=
   step.zCur - twoPowWindow windowNumBits * step.zNext
 
+def InRange (range : ℕ) (word : F) : Prop :=
+  word = 0 ∨ ∃ i, i ∈ rangeCheckValues (F := F) range ∧ word = i
+
 def Spec (windowNumBits : ℕ) (step : Step F) : Prop :=
-  rangeCheckPoly (2 ^ windowNumBits) (word windowNumBits step) = 0
+  InRange (2 ^ windowNumBits) (word windowNumBits step)
+
+private theorem rangeCheckFoldl_eq_zero_iff
+    (xs : List F) (word acc : F) :
+    xs.foldl (fun acc i => acc * (i - word)) acc = 0 ↔
+      acc = 0 ∨ ∃ i, i ∈ xs ∧ word = i := by
+  induction xs generalizing acc with
+  | nil =>
+      simp
+  | cons i xs ih =>
+      simp only [List.foldl_cons, List.mem_cons]
+      rw [ih (acc * (i - word))]
+      constructor
+      · intro h
+        rcases h with hprod | hmem
+        · rcases mul_eq_zero.mp hprod with hacc | hi
+          · exact Or.inl hacc
+          · exact Or.inr ⟨i, Or.inl rfl, (sub_eq_zero.mp hi).symm⟩
+        · rcases hmem with ⟨j, hj, hword⟩
+          exact Or.inr ⟨j, Or.inr hj, hword⟩
+      · intro h
+        rcases h with hacc | hmem
+        · exact Or.inl (by rw [hacc]; simp)
+        · rcases hmem with ⟨j, hj, hword⟩
+          rcases hj with hj | hj
+          · subst j
+            exact Or.inl (by rw [hj]; ring)
+          · exact Or.inr ⟨j, hj, hword⟩
+
+theorem rangeCheckPoly_eq_zero_iff (range : ℕ) (word : F) :
+    rangeCheckPoly range word = 0 ↔ InRange range word := by
+  unfold rangeCheckPoly InRange
+  exact rangeCheckFoldl_eq_zero_iff (rangeCheckValues range) word word
 
 def rangeCheckPolyExpr (range : ℕ) (word : Expression F) : Expression F :=
   rangeCheckValues (F := F) range |>.foldl (fun acc i => acc * (Expression.const i - word)) word
@@ -221,7 +256,8 @@ def circuit (windowNumBits : ℕ) : FormalAssertion F Step where
   main := main windowNumBits
   Spec := Spec windowNumBits
   soundness := by
-    circuit_proof_start [main, Spec, word, rangeCheckPoly, rangeCheckPolyExpr, twoPowWindow]
+    circuit_proof_start [main, Spec, word, rangeCheckPoly, rangeCheckPolyExpr, twoPowWindow,
+      InRange]
     change Expression.eval env
         (rangeCheckPolyExpr (2 ^ windowNumBits)
           (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)) = 0 at h_holds
@@ -243,9 +279,11 @@ def circuit (windowNumBits : ℕ) : FormalAssertion F Step where
       simp only [Expression.eval, hzCur, hzNext, twoPowWindow]
       ring
     rw [hword] at h_holds
-    simpa [word, rangeCheckPoly, twoPowWindow] using h_holds
+    exact (rangeCheckPoly_eq_zero_iff (2 ^ windowNumBits)
+      (input_zCur - twoPowWindow windowNumBits * input_zNext)).mp h_holds
   completeness := by
-    circuit_proof_start [main, Spec, word, rangeCheckPoly, rangeCheckPolyExpr, twoPowWindow]
+    circuit_proof_start [main, Spec, word, rangeCheckPoly, rangeCheckPolyExpr, twoPowWindow,
+      InRange]
     change Expression.eval env.toEnvironment
         (rangeCheckPolyExpr (2 ^ windowNumBits)
           (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)) = 0
@@ -267,7 +305,8 @@ def circuit (windowNumBits : ℕ) : FormalAssertion F Step where
       simp only [Expression.eval, hzCur, hzNext, twoPowWindow]
       ring
     rw [hword]
-    simpa [word, rangeCheckPoly, twoPowWindow] using h_spec
+    exact (rangeCheckPoly_eq_zero_iff (2 ^ windowNumBits)
+      (input_zCur - twoPowWindow windowNumBits * input_zNext)).mpr h_spec
 
 end RunningSum
 
@@ -328,7 +367,7 @@ values.
 -/
 
 def shortRangeSpec (numBits : ℕ) (input : ShortRangeCheck F) : Prop :=
-  RunningSum.rangeCheckPoly (2 ^ numBits) input.word = 0
+  RunningSum.InRange (2 ^ numBits) input.word
 
 def shortRangeMain (numBits : ℕ) (input : Var ShortRangeCheck F) : Circuit F Unit := do
   assertZero (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input.word)
@@ -338,20 +377,20 @@ def shortRangeCircuit (numBits : ℕ) : FormalAssertion F ShortRangeCheck where
   Spec := shortRangeSpec numBits
   soundness := by
     circuit_proof_start [shortRangeMain, shortRangeSpec, RunningSum.rangeCheckPoly,
-      RunningSum.rangeCheckPolyExpr]
+      RunningSum.rangeCheckPolyExpr, RunningSum.InRange]
     change Expression.eval env
         (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input_var_word) = 0 at h_holds
     rw [RunningSum.eval_rangeCheckPolyExpr] at h_holds
     rw [h_input] at h_holds
-    exact h_holds
+    exact (RunningSum.rangeCheckPoly_eq_zero_iff (2 ^ numBits) input_word).mp h_holds
   completeness := by
     circuit_proof_start [shortRangeMain, shortRangeSpec, RunningSum.rangeCheckPoly,
-      RunningSum.rangeCheckPolyExpr]
+      RunningSum.rangeCheckPolyExpr, RunningSum.InRange]
     change Expression.eval env.toEnvironment
         (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input_var_word) = 0
     rw [RunningSum.eval_rangeCheckPolyExpr]
     rw [h_input]
-    exact h_spec
+    exact (RunningSum.rangeCheckPoly_eq_zero_iff (2 ^ numBits) input_word).mpr h_spec
 
 end LookupRangeCheck
 
