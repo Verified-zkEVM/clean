@@ -108,11 +108,32 @@ def OrchardSpec
     Ecc.IsOrchardFixedBaseMul .valueCommitR blindScalar (blindProduct row) ∧
     Spec row
 
+def OrchardCommitmentRelation
+    (row : Row Ecc.PallasBaseField) (valueScalar blindScalar : ℕ) : Prop :=
+  Ecc.pointCoords (output row) =
+    CompElliptic.CurveForms.ShortWeierstrass.add
+      (0 : Ecc.PallasBaseField)
+      (Ecc.pallasScalarMulCoords valueScalar (Ecc.fixedBasePoint .valueCommitV))
+      (Ecc.pallasScalarMulCoords blindScalar (Ecc.fixedBasePoint .valueCommitR))
+
 theorem spec_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
     (h : OrchardSpec row valueScalar blindScalar) :
     Spec row :=
   h.2.2
+
+theorem commitmentRelation_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar) :
+    OrchardCommitmentRelation row valueScalar blindScalar := by
+  rcases h with ⟨hValue, hBlind, hSpec⟩
+  change Ecc.pointCoords (valueProduct row) =
+    Ecc.pallasScalarMulCoords valueScalar (Ecc.fixedBasePoint .valueCommitV) at hValue
+  change Ecc.pointCoords (blindProduct row) =
+    Ecc.pallasScalarMulCoords blindScalar (Ecc.fixedBasePoint .valueCommitR) at hBlind
+  dsimp [OrchardCommitmentRelation, Spec, valueProduct, blindProduct, addInput] at hValue hBlind hSpec ⊢
+  rw [hValue, hBlind] at hSpec
+  exact hSpec
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
@@ -274,11 +295,33 @@ def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
   Ecc.IsOrchardFixedBaseMul .nullifierK scalar (product row) ∧
     Spec row
 
+def OrchardNullifierRelation (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
+  row.scalar = row.poseidonHash + row.psi ∧
+    Ecc.pointCoords (output row) =
+      CompElliptic.CurveForms.ShortWeierstrass.add
+        (0 : Ecc.PallasBaseField)
+        (Ecc.pointCoords (cmPoint row))
+        (Ecc.pallasScalarMulCoords scalar (Ecc.fixedBasePoint .nullifierK)) ∧
+    row.nf = row.nfPointX
+
 theorem spec_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {scalar : ℕ}
     (h : OrchardSpec row scalar) :
     Spec row :=
   h.2
+
+theorem nullifierRelation_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    (h : OrchardSpec row scalar) :
+    OrchardNullifierRelation row scalar := by
+  rcases h with ⟨hProduct, hSpec⟩
+  change Ecc.pointCoords (product row) =
+    Ecc.pallasScalarMulCoords scalar (Ecc.fixedBasePoint .nullifierK) at hProduct
+  rcases hSpec with ⟨hScalar, hAdd, hExtract⟩
+  refine ⟨hScalar, ?_, hExtract⟩
+  dsimp [product, cmPoint, addInput] at hProduct hAdd ⊢
+  rw [hProduct] at hAdd
+  exact hAdd
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
@@ -644,11 +687,29 @@ def OrchardSpec (row : Row Ecc.PallasBaseField) (alpha : ℕ) : Prop :=
   Ecc.IsOrchardFixedBaseMul .spendAuthG alpha (alphaProduct row) ∧
     Spec row
 
+def OrchardSpendAuthRelation (row : Row Ecc.PallasBaseField) (alpha : ℕ) : Prop :=
+  Ecc.pointCoords (output row) =
+    CompElliptic.CurveForms.ShortWeierstrass.add
+      (0 : Ecc.PallasBaseField)
+      (Ecc.pallasScalarMulCoords alpha (Ecc.fixedBasePoint .spendAuthG))
+      (Ecc.pointCoords (akPoint row))
+
 theorem spec_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {alpha : ℕ}
     (h : OrchardSpec row alpha) :
     Spec row :=
   h.2
+
+theorem spendAuthRelation_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {alpha : ℕ}
+    (h : OrchardSpec row alpha) :
+    OrchardSpendAuthRelation row alpha := by
+  rcases h with ⟨hProduct, hSpec⟩
+  change Ecc.pointCoords (alphaProduct row) =
+    Ecc.pallasScalarMulCoords alpha (Ecc.fixedBasePoint .spendAuthG) at hProduct
+  dsimp [OrchardSpendAuthRelation, Spec, alphaProduct, akPoint, addInput] at hProduct hSpec ⊢
+  rw [hProduct] at hSpec
+  exact hSpec
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)

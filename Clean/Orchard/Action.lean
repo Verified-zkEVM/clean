@@ -398,6 +398,30 @@ theorem spec_of_orchardSpec
     Gadget.SpendAuth.Entry.spec_of_orchardSpec h.2.2.2.1,
     h.2.2.2.2⟩
 
+theorem valueCommitmentRelation_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Gadget.ValueCommitment.Entry.OrchardCommitmentRelation
+      row.valueCommitment valueScalar blindScalar :=
+  Gadget.ValueCommitment.Entry.commitmentRelation_of_orchardSpec h.2.1
+
+theorem nullifierRelation_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Gadget.Nullifier.Entry.OrchardNullifierRelation
+      row.nullifier.nullifier nullifierScalar :=
+  Gadget.Nullifier.Entry.nullifierRelation_of_orchardSpec h.2.2.1.2.1
+
+theorem spendAuthRelation_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Gadget.SpendAuth.Entry.OrchardSpendAuthRelation
+      row.spendAuth spendAuthScalar :=
+  Gadget.SpendAuth.Entry.spendAuthRelation_of_orchardSpec h.2.2.2.1
+
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Gadget.ValueCommitment.Entry.Assumptions row.valueCommitment ∧
     Gadget.NullifierWithPoseidonBoundary.Entry.Assumptions row.nullifier ∧
