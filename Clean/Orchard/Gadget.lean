@@ -30,8 +30,6 @@ variable {F : Type} [Field F]
 
 namespace ValueCommitment
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   valueProductX : F
   valueProductY : F
@@ -46,7 +44,7 @@ structure Row (F : Type) where
   delta : F
 deriving ProvableStruct
 
-def addRow (row : Row R) : Ecc.CompleteAddRow R where
+def addRow {K : Type} (row : Row K) : Ecc.CompleteAddRow K where
   p := { x := row.valueProductX, y := row.valueProductY }
   q := { x := row.blindProductX, y := row.blindProductY }
   r := { x := row.cvX, y := row.cvY }
@@ -56,13 +54,13 @@ def addRow (row : Row R) : Ecc.CompleteAddRow R where
   gamma := row.gamma
   delta := row.delta
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Spec (addRow row)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Ecc.CompleteAdd.circuit (addRow row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -139,8 +137,6 @@ end ValueCommitment
 
 namespace Nullifier
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   poseidonHash : F
   psi : F
@@ -159,7 +155,7 @@ structure Row (F : Type) where
   delta : F
 deriving ProvableStruct
 
-def addRow (row : Row R) : Ecc.CompleteAddRow R where
+def addRow {K : Type} (row : Row K) : Ecc.CompleteAddRow K where
   p := { x := row.cmX, y := row.cmY }
   q := { x := row.productX, y := row.productY }
   r := { x := row.nfPointX, y := row.nfPointY }
@@ -169,23 +165,23 @@ def addRow (row : Row R) : Ecc.CompleteAddRow R where
   gamma := row.gamma
   delta := row.delta
 
-def scalarCheck (row : Row R) : R :=
+def scalarCheck {K : Type} [Add K] [Sub K] (row : Row K) : K :=
   row.poseidonHash + row.psi - row.scalar
 
-def extractCheck (row : Row R) : R :=
+def extractCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.nfPointX - row.nf
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.scalar = row.poseidonHash + row.psi ∧
     Ecc.CompleteAdd.Spec (addRow row) ∧
     row.nf = row.nfPointX
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (scalarCheck row)
   Ecc.CompleteAdd.circuit (addRow row)
   assertZero (extractCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -295,27 +291,25 @@ round arithmetic separately.
 -/
 namespace NullifierWithHash
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   hash : Poseidon.Hash2.Row F
   nullifier : Nullifier.Row F
 deriving ProvableStruct
 
-def hashOutputCheck (row : Row R) : R :=
+def hashOutputCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.hash.hash - row.nullifier.poseidonHash
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Poseidon.Hash2.Spec row.hash ∧
     Nullifier.Spec row.nullifier ∧
     row.hash.hash = row.nullifier.poseidonHash
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Poseidon.Hash2.circuit row.hash
   Nullifier.circuit row.nullifier
   assertZero (hashOutputCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -388,27 +382,25 @@ used by `PoseidonHash::hash`.
 -/
 namespace NullifierWithPoseidonBoundary
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   boundary : Poseidon.Hash2PermutationBoundary.Row F
   nullifier : Nullifier.Row F
 deriving ProvableStruct
 
-def hashOutputCheck (row : Row R) : R :=
+def hashOutputCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.boundary.hash.hash - row.nullifier.poseidonHash
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Poseidon.Hash2PermutationBoundary.Spec row.boundary ∧
     Nullifier.Spec row.nullifier ∧
     row.boundary.hash.hash = row.nullifier.poseidonHash
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Poseidon.Hash2PermutationBoundary.circuit row.boundary
   Nullifier.circuit row.nullifier
   assertZero (hashOutputCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -484,8 +476,6 @@ product and `ak_P` to `rk`.
 -/
 namespace SpendAuth
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   alphaProductX : F
   alphaProductY : F
@@ -500,7 +490,7 @@ structure Row (F : Type) where
   delta : F
 deriving ProvableStruct
 
-def addRow (row : Row R) : Ecc.CompleteAddRow R where
+def addRow {K : Type} (row : Row K) : Ecc.CompleteAddRow K where
   p := { x := row.alphaProductX, y := row.alphaProductY }
   q := { x := row.akX, y := row.akY }
   r := { x := row.rkX, y := row.rkY }
@@ -510,13 +500,13 @@ def addRow (row : Row R) : Ecc.CompleteAddRow R where
   gamma := row.gamma
   delta := row.delta
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Spec (addRow row)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Ecc.CompleteAdd.circuit (addRow row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
