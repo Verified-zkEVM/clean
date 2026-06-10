@@ -542,9 +542,6 @@ def yCheck (row : CoordsRow R) : R :=
 def onCurve (row : CoordsRow R) : R :=
   row.yP * row.yP - row.xP * row.xP * row.xP - 5
 
-def coordsConstraints (row : CoordsRow R) : Prop :=
-  xCheck row = 0 ∧ yCheck row = 0 ∧ onCurve row = 0
-
 def coordsSpec (row : CoordsRow R) : Prop :=
   row.xP = interpolatedX row ∧
     row.u * row.u = row.yP + row.z ∧
@@ -561,15 +558,13 @@ def circuit : FormalAssertion F CoordsRow where
   main := coordsMain
   Spec := coordsSpec
   soundness := by
-    circuit_proof_start [coordsMain, coordsSpec, coordsConstraints, xCheck, yCheck, onCurve,
-      interpolatedX]
+    circuit_proof_start [coordsMain, coordsSpec, xCheck, yCheck, onCurve, interpolatedX]
     rcases h_holds with ⟨hx, hy, hCurve⟩
     exact ⟨(sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hx)).symm,
       by linear_combination hy,
       by linear_combination hCurve⟩
   completeness := by
-    circuit_proof_start [coordsMain, coordsSpec, coordsConstraints, xCheck, yCheck, onCurve,
-      interpolatedX]
+    circuit_proof_start [coordsMain, coordsSpec, xCheck, yCheck, onCurve, interpolatedX]
     rcases h_spec with ⟨hx, hy, hCurve⟩
     exact ⟨by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hx.symm,
       by linear_combination hy,
@@ -630,7 +625,7 @@ def circuit : FormalAssertion F CoordsRow where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, IsWindow, Coords.circuit, coordsMain, coordsSpec,
-      coordsConstraints, rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
+      rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
     constructor
     · simpa [sub_eq_add_neg] using h_holds.1
     · have hRange := h_holds.2
@@ -653,7 +648,7 @@ def circuit : FormalAssertion F CoordsRow where
           linear_combination -h7)))))))
   completeness := by
     circuit_proof_start [main, Spec, IsWindow, Coords.circuit, coordsMain, coordsSpec,
-      coordsConstraints, rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
+      rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
     constructor
     · simpa [sub_eq_add_neg] using h_spec.1
     · rcases h_spec.2 with h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7
