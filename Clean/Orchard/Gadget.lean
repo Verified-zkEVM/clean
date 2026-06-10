@@ -102,6 +102,18 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
       (Ecc.pointCoords (addInput row).p)
       (Ecc.pointCoords (addInput row).q)
 
+def OrchardSpec
+    (row : Row Ecc.PallasBaseField) (valueScalar blindScalar : ℕ) : Prop :=
+  Ecc.IsOrchardFixedBaseMul .valueCommitV valueScalar (valueProduct row) ∧
+    Ecc.IsOrchardFixedBaseMul .valueCommitR blindScalar (blindProduct row) ∧
+    Spec row
+
+theorem spec_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar) :
+    Spec row :=
+  h.2.2
+
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
 
@@ -258,6 +270,16 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
         (Ecc.pointCoords (addInput row).q) ∧
     row.nf = row.nfPointX
 
+def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
+  Ecc.IsOrchardFixedBaseMul .nullifierK scalar (product row) ∧
+    Spec row
+
+theorem spec_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    (h : OrchardSpec row scalar) :
+    Spec row :=
+  h.2
+
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
 
@@ -386,6 +408,17 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     Nullifier.Entry.Spec row.nullifier ∧
     row.hash.hash = row.nullifier.poseidonHash
 
+def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
+  Poseidon.Hash2.Spec row.hash ∧
+    Nullifier.Entry.OrchardSpec row.nullifier scalar ∧
+    row.hash.hash = row.nullifier.poseidonHash
+
+theorem spec_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    (h : OrchardSpec row scalar) :
+    Spec row :=
+  ⟨h.1, Nullifier.Entry.spec_of_orchardSpec h.2.1, h.2.2⟩
+
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Nullifier.Entry.Assumptions row.nullifier
 
@@ -478,6 +511,17 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Poseidon.Hash2PermutationBoundary.Spec row.boundary ∧
     Nullifier.Entry.Spec row.nullifier ∧
     row.boundary.hash.hash = row.nullifier.poseidonHash
+
+def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
+  Poseidon.Hash2PermutationBoundary.Spec row.boundary ∧
+    Nullifier.Entry.OrchardSpec row.nullifier scalar ∧
+    row.boundary.hash.hash = row.nullifier.poseidonHash
+
+theorem spec_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    (h : OrchardSpec row scalar) :
+    Spec row :=
+  ⟨h.1, Nullifier.Entry.spec_of_orchardSpec h.2.1, h.2.2⟩
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Nullifier.Entry.Assumptions row.nullifier
@@ -595,6 +639,16 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
       (0 : Ecc.PallasBaseField)
       (Ecc.pointCoords (addInput row).p)
       (Ecc.pointCoords (addInput row).q)
+
+def OrchardSpec (row : Row Ecc.PallasBaseField) (alpha : ℕ) : Prop :=
+  Ecc.IsOrchardFixedBaseMul .spendAuthG alpha (alphaProduct row) ∧
+    Spec row
+
+theorem spec_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {alpha : ℕ}
+    (h : OrchardSpec row alpha) :
+    Spec row :=
+  h.2
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
