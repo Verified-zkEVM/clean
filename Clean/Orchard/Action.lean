@@ -300,11 +300,11 @@ def Spec (row : Row R) : Prop :=
     Gadget.ValueCommitment.Spec row.valueCommitment ∧
     Gadget.Nullifier.Spec row.nullifier ∧
     Gadget.SpendAuth.Spec row.spendAuth ∧
-    cvXCheck row = 0 ∧
-    cvYCheck row = 0 ∧
-    nfCheck row = 0 ∧
-    rkXCheck row = 0 ∧
-    rkYCheck row = 0
+    row.valueCommitment.cvX = row.action.cvNetX ∧
+    row.valueCommitment.cvY = row.action.cvNetY ∧
+    row.nullifier.nf = row.action.nfOld ∧
+    row.spendAuth.rkX = row.action.rkX ∧
+    row.spendAuth.rkY = row.action.rkY
 
 def main (row : Var Row F) : Circuit F Unit := do
   ActionWiring.circuit row.action
@@ -328,11 +328,11 @@ def circuit : FormalAssertion F Row where
       Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec]
     rcases h_holds with ⟨hAction, hValue, hNullifier, hSpendAuth, hCvX, hCvY, hNf, hRkX, hRkY⟩
     exact ⟨hAction, hValue, hNullifier, hSpendAuth,
-      by simpa [sub_eq_add_neg] using hCvX,
-      by simpa [sub_eq_add_neg] using hCvY,
-      by simpa [sub_eq_add_neg] using hNf,
-      by simpa [sub_eq_add_neg] using hRkX,
-      by simpa [sub_eq_add_neg] using hRkY⟩
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hCvX),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hCvY),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNf),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hRkX),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hRkY)⟩
   completeness := by
     circuit_proof_start [main, Spec, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
       ActionWiring.circuit, ActionWiring.Spec,
@@ -341,11 +341,11 @@ def circuit : FormalAssertion F Row where
       Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec]
     rcases h_spec with ⟨hAction, hValue, hNullifier, hSpendAuth, hCvX, hCvY, hNf, hRkX, hRkY⟩
     exact ⟨hAction, hValue, hNullifier, hSpendAuth,
-      by simpa [sub_eq_add_neg] using hCvX,
-      by simpa [sub_eq_add_neg] using hCvY,
-      by simpa [sub_eq_add_neg] using hNf,
-      by simpa [sub_eq_add_neg] using hRkX,
-      by simpa [sub_eq_add_neg] using hRkY⟩
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hCvX,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hCvY,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hNf,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hRkX,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hRkY⟩
 
 namespace Entry
 
