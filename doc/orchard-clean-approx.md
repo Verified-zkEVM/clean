@@ -89,6 +89,8 @@ Bottom-up implementation order currently inferred from those tagged sources:
    `halo2_gadgets/src/utilities/decompose_running_sum.rs`,
    `halo2_gadgets/src/utilities/lookup_range_check.rs`
    - Depends on the Sinsemilla window size constants and generator-table lookup semantics.
+   - Status: the short running-sum row range-check gate from
+     `decompose_running_sum.rs` is ported as `Orchard.Utilities.RunningSum.circuit`.
 5. Fixed-base and variable-base scalar multiplication:
    `halo2_gadgets/src/ecc/chip/mul*.rs`
    - Depends on ECC addition, conditional selection/swap, running sums, range checks, and
