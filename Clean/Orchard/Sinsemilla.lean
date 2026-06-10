@@ -216,13 +216,13 @@ def constraints (row : Row R) : Prop :=
   Ecc.CompleteAdd.constraints (addRow row)
 
 def main (row : Var Row F) : Circuit F Unit := do
-  Ecc.CompleteAdd.main (addRow row)
+  Ecc.CompleteAdd.circuit (addRow row)
 
 def circuit : FormalAssertion F Row where
   main
   Spec := constraints
   soundness := by
-    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.main,
+    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.circuit,
       Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
       Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
       Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
@@ -234,7 +234,7 @@ def circuit : FormalAssertion F Row where
       Ecc.CompleteAdd.yQPlusYP]
     simp_all [sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.main,
+    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.circuit,
       Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
       Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
       Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
@@ -264,15 +264,15 @@ def constraints (row : Row R) : Prop :=
   Commit.constraints row.commit ∧ extractCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  Commit.main row.commit
+  Commit.circuit row.commit
   assertZero (extractCheck row)
 
 def circuit : FormalAssertion F Row where
   main
   Spec := constraints
   soundness := by
-    circuit_proof_start [main, constraints, extractCheck, Commit.main,
-      Commit.constraints, Commit.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+    circuit_proof_start [main, constraints, extractCheck, Commit.circuit,
+      Commit.constraints, Commit.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
       Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
       Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
       Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
@@ -283,8 +283,8 @@ def circuit : FormalAssertion F Row where
       Ecc.CompleteAdd.yQPlusYP]
     simp_all [sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, extractCheck, Commit.main,
-      Commit.constraints, Commit.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+    circuit_proof_start [main, constraints, extractCheck, Commit.circuit,
+      Commit.constraints, Commit.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
       Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
       Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
       Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
@@ -399,22 +399,19 @@ def constraints (row : Row R) : Prop :=
   Merkle.constraints row.decomposition ∧ hashCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  assertZero (Merkle.a0 row.decomposition - row.decomposition.lWhole)
-  assertZero (Merkle.leftCheck row.decomposition)
-  assertZero (Merkle.rightCheck row.decomposition)
-  assertZero (Merkle.b1B2Check row.decomposition)
+  Merkle.circuit row.decomposition
   assertZero (hashCheck row)
 
 def circuit : FormalAssertion F Row where
   main
   Spec := constraints
   soundness := by
-    circuit_proof_start [main, constraints, hashCheck, Merkle.constraints, Merkle.a0,
+    circuit_proof_start [main, constraints, hashCheck, Merkle.circuit, Merkle.constraints, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
     simp_all [sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, hashCheck, Merkle.constraints, Merkle.a0,
+    circuit_proof_start [main, constraints, hashCheck, Merkle.circuit, Merkle.constraints, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
     simp_all [sub_eq_add_neg]
@@ -481,11 +478,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (boolPoly row.posBit)
   assertZero (leftCheck row)
   assertZero (rightCheck row)
-  assertZero (Merkle.a0 row.layer.decomposition - row.layer.decomposition.lWhole)
-  assertZero (Merkle.leftCheck row.layer.decomposition)
-  assertZero (Merkle.rightCheck row.layer.decomposition)
-  assertZero (Merkle.b1B2Check row.layer.decomposition)
-  assertZero (Wiring.hashCheck row.layer)
+  Wiring.circuit row.layer
   assertZero (layerLeftCheck row)
   assertZero (layerRightCheck row)
   assertZero (nextCheck row)
@@ -496,14 +489,14 @@ def circuit : FormalAssertion F Row where
   soundness := by
     circuit_proof_start [main, constraints, leftCheck, rightCheck, layerLeftCheck,
       layerRightCheck, nextCheck, ternary, boolPoly,
-      Wiring.constraints, Wiring.hashCheck, Merkle.constraints, Merkle.a0,
+      Wiring.circuit, Wiring.constraints, Wiring.hashCheck, Merkle.circuit, Merkle.constraints, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
     simp_all [sub_eq_add_neg]
   completeness := by
     circuit_proof_start [main, constraints, leftCheck, rightCheck, layerLeftCheck,
       layerRightCheck, nextCheck, ternary, boolPoly,
-      Wiring.constraints, Wiring.hashCheck, Merkle.constraints, Merkle.a0,
+      Wiring.circuit, Wiring.constraints, Wiring.hashCheck, Merkle.circuit, Merkle.constraints, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
     simp_all [sub_eq_add_neg]
