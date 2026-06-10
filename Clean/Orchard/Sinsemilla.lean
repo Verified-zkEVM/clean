@@ -251,36 +251,33 @@ def addRow (row : Row R) : Ecc.CompleteAddRow R where
 def constraints (row : Row R) : Prop :=
   Ecc.CompleteAdd.constraints (addRow row)
 
+def Spec (row : Row R) : Prop :=
+  Ecc.CompleteAdd.Spec (addRow row)
+
 def main (row : Var Row F) : Circuit F Unit := do
   Ecc.CompleteAdd.circuit (addRow row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
-      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
-      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
-      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
-      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit,
+      Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine, Ecc.CompleteAdd.tangentLine,
+      Ecc.CompleteAdd.nonexceptionalResult, Ecc.CompleteAdd.leftIdentityResult,
+      Ecc.CompleteAdd.rightIdentityResult, Ecc.CompleteAdd.inverseResult,
+      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
+      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
       Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    exact h_holds
   completeness := by
-    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
-      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
-      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
-      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
-      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit,
+      Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine, Ecc.CompleteAdd.tangentLine,
+      Ecc.CompleteAdd.nonexceptionalResult, Ecc.CompleteAdd.leftIdentityResult,
+      Ecc.CompleteAdd.rightIdentityResult, Ecc.CompleteAdd.inverseResult,
+      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
+      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
       Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    exact h_spec
 
 end Commit
 
@@ -299,37 +296,41 @@ def extractCheck (row : Row R) : R :=
 def constraints (row : Row R) : Prop :=
   Commit.constraints row.commit ∧ extractCheck row = 0
 
+def Spec (row : Row R) : Prop :=
+  Commit.Spec row.commit ∧ row.extracted = row.commit.commitmentX
+
 def main (row : Var Row F) : Circuit F Unit := do
   Commit.circuit row.commit
   assertZero (extractCheck row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, extractCheck, Commit.circuit,
-      Commit.constraints, Commit.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
-      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
-      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
-      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
-      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
-      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
+    circuit_proof_start [main, Spec, extractCheck, Commit.circuit, Commit.Spec,
+      Commit.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec,
+      Ecc.CompleteAdd.slopeLine, Ecc.CompleteAdd.tangentLine,
+      Ecc.CompleteAdd.nonexceptionalResult, Ecc.CompleteAdd.leftIdentityResult,
+      Ecc.CompleteAdd.rightIdentityResult, Ecc.CompleteAdd.inverseResult,
       Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
       Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
       Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hCommit, hExtract⟩
+    exact ⟨hCommit, (left_eq_of_add_neg_eq_zero hExtract).symm⟩
   completeness := by
-    circuit_proof_start [main, constraints, extractCheck, Commit.circuit,
-      Commit.constraints, Commit.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
-      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
-      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
-      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
-      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
-      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
+    circuit_proof_start [main, Spec, extractCheck, Commit.circuit, Commit.Spec,
+      Commit.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec,
+      Ecc.CompleteAdd.slopeLine, Ecc.CompleteAdd.tangentLine,
+      Ecc.CompleteAdd.nonexceptionalResult, Ecc.CompleteAdd.leftIdentityResult,
+      Ecc.CompleteAdd.rightIdentityResult, Ecc.CompleteAdd.inverseResult,
       Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
       Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
       Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hCommit, hExtract⟩
+    constructor
+    · exact hCommit
+    · rw [hExtract]
+      ring
 
 end ShortCommit
 
