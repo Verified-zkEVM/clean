@@ -91,6 +91,8 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Depends on the Sinsemilla window size constants and generator-table lookup semantics.
    - Status: the short running-sum row range-check gate from
      `decompose_running_sum.rs` is ported as `Orchard.Utilities.RunningSum.circuit`.
+     The short lookup bitshift gate from `lookup_range_check.rs` is ported as
+     `Orchard.Utilities.LookupRangeCheck.circuit`.
 5. Fixed-base and variable-base scalar multiplication:
    `halo2_gadgets/src/ecc/chip/mul*.rs`
    - Depends on ECC addition, conditional selection/swap, running sums, range checks, and

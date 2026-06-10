@@ -271,5 +271,44 @@ def circuit (windowNumBits : ℕ) : FormalAssertion F Step where
 
 end RunningSum
 
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/lookup_range_check.rs`
+- `Short lookup bitshift`
+
+This custom gate is shared by both lookup range-check configurations. It checks the
+assignment used by short range checks:
+`shifted_word = word * 2^K * inv_two_pow_s`.
+-/
+
+namespace LookupRangeCheck
+
+structure ShortLookupBitshift (F : Type) where
+  word : F
+  shiftedWord : F
+  invTwoPowS : F
+deriving ProvableStruct
+
+def twoPowK (k : ℕ) : F :=
+  (2 ^ k : ℕ)
+
+def poly (k : ℕ) (input : ShortLookupBitshift F) : F :=
+  input.word * twoPowK k * input.invTwoPowS - input.shiftedWord
+
+def main (k : ℕ) (input : Var ShortLookupBitshift F) : Circuit F Unit := do
+  assertZero (input.word * (twoPowK k : F) * input.invTwoPowS - input.shiftedWord)
+
+def circuit (k : ℕ) : FormalAssertion F ShortLookupBitshift where
+  main := main k
+  Spec input := poly k input = 0
+  soundness := by
+    circuit_proof_start [main, poly, twoPowK]
+    simpa [sub_eq_add_neg] using h_holds
+  completeness := by
+    circuit_proof_start [main, poly, twoPowK]
+    simpa [sub_eq_add_neg] using h_spec
+
+end LookupRangeCheck
+
 end Utilities
 end Orchard
