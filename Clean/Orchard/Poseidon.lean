@@ -851,6 +851,42 @@ def circuit : FormalAssertion F FullRows where
 
 end FullRowsBlock
 
+namespace InitialFullBlock
+
+structure Row (F : Type) where
+  initial : State F
+  firstFull : FullRows F
+deriving ProvableStruct
+
+def Spec (row : Row R) : Prop :=
+  fullSpec row.firstFull ∧
+    stateEq row.initial (fullCur row.firstFull.r0) ∧
+    fullLinks row.firstFull
+
+def main (row : Var Row F) : Circuit F Unit := do
+  InitialToFull.circuit { initial := row.initial, first := row.firstFull.r0 }
+  FullRowsBlock.circuit row.firstFull
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec,
+      InitialToFull.circuit, InitialToFull.Spec,
+      FullRowsBlock.circuit, FullRowsBlock.Spec,
+      fullSpec, fullLinks, stateEq, stateSame, fullCur]
+    rcases h_holds with ⟨hInitial, hFull⟩
+    exact ⟨hFull.1, stateEq_of_stateSame hInitial, hFull.2⟩
+  completeness := by
+    circuit_proof_start [main, Spec,
+      InitialToFull.circuit, InitialToFull.Spec,
+      FullRowsBlock.circuit, FullRowsBlock.Spec,
+      fullSpec, fullLinks, stateEq, stateSame, fullCur]
+    rcases h_spec with ⟨hFull, hInitial, hLinks⟩
+    exact ⟨stateSame_of_stateEq hInitial, ⟨hFull, hLinks⟩⟩
+
+end InitialFullBlock
+
 end Permutation
 
 /-!
