@@ -10,7 +10,10 @@ Clean approximations of Orchard `NoteCommit` arithmetic gates.
 Reference:
 `orchard@0.14.0/src/circuit/note_commit.rs`
 - `NoteCommit MessagePiece b`
+- `NoteCommit MessagePiece d`
 - `NoteCommit MessagePiece e`
+- `NoteCommit MessagePiece g`
+- `NoteCommit MessagePiece h`
 - `NoteCommit input value`
 
 These assertions model the enabled Halo2 custom-gate polynomials, not selector,
@@ -64,6 +67,41 @@ def circuit : FormalAssertion F Row where
 
 end DecomposeB
 
+namespace DecomposeD
+
+variable [OfNat R 2] [OfNat R 4] [OfNat R 1024]
+
+structure Row (F : Type) where
+  d : F
+  d0 : F
+  d1 : F
+  d2 : F
+  d3 : F
+deriving ProvableStruct
+
+def decomposition (row : Row R) : R :=
+  row.d - (row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024)
+
+def constraints (row : Row R) : Prop :=
+  boolPoly row.d0 = 0 ∧ boolPoly row.d1 = 0 ∧ decomposition row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (boolPoly row.d0)
+  assertZero (boolPoly row.d1)
+  assertZero (decomposition row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, boolPoly, decomposition]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, boolPoly, decomposition]
+    simp_all [sub_eq_add_neg]
+
+end DecomposeD
+
 namespace DecomposeE
 
 variable [OfNat R 64]
@@ -91,6 +129,71 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end DecomposeE
+
+namespace DecomposeG
+
+variable [OfNat R 2] [OfNat R 1024]
+
+structure Row (F : Type) where
+  g : F
+  g0 : F
+  g1 : F
+  g2 : F
+deriving ProvableStruct
+
+def decomposition (row : Row R) : R :=
+  row.g - (row.g0 + row.g1 * 2 + row.g2 * 1024)
+
+def constraints (row : Row R) : Prop :=
+  boolPoly row.g0 = 0 ∧ decomposition row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (boolPoly row.g0)
+  assertZero (decomposition row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, boolPoly, decomposition]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, boolPoly, decomposition]
+    simp_all [sub_eq_add_neg]
+
+end DecomposeG
+
+namespace DecomposeH
+
+variable [OfNat R 32]
+
+structure Row (F : Type) where
+  h : F
+  h0 : F
+  h1 : F
+deriving ProvableStruct
+
+def decomposition (row : Row R) : R :=
+  row.h - (row.h0 + row.h1 * 32)
+
+def constraints (row : Row R) : Prop :=
+  boolPoly row.h1 = 0 ∧ decomposition row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (boolPoly row.h1)
+  assertZero (decomposition row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, boolPoly, decomposition]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, boolPoly, decomposition]
+    simp_all [sub_eq_add_neg]
+
+end DecomposeH
 
 namespace ValueCanonicity
 
