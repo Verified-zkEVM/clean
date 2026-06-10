@@ -276,8 +276,9 @@ deriving ProvableStruct
 def ivkCheck (row : Row R) : R :=
   row.shortCommit.extracted - row.wiring.computedIvk
 
-def constraints (row : Row R) : Prop :=
-  Sinsemilla.ShortCommit.constraints row.shortCommit ∧ ivkCheck row = 0
+def Spec (row : Row R) : Prop :=
+  Sinsemilla.ShortCommit.Spec row.shortCommit ∧
+    row.shortCommit.extracted = row.wiring.computedIvk
 
 def main (row : Var Row F) : Circuit F Unit := do
   Sinsemilla.ShortCommit.circuit row.shortCommit
@@ -285,35 +286,15 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, ivkCheck,
-      Sinsemilla.ShortCommit.circuit, Sinsemilla.ShortCommit.constraints,
-      Sinsemilla.ShortCommit.extractCheck, Sinsemilla.Commit.circuit,
-      Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
-      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
-      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
-      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
-      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, ivkCheck, Sinsemilla.ShortCommit.circuit]
+    rcases h_holds with ⟨hShort, hIvk⟩
+    exact ⟨hShort, sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hIvk)⟩
   completeness := by
-    circuit_proof_start [main, constraints, ivkCheck,
-      Sinsemilla.ShortCommit.circuit, Sinsemilla.ShortCommit.constraints,
-      Sinsemilla.ShortCommit.extractCheck, Sinsemilla.Commit.circuit,
-      Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
-      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
-      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
-      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
-      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, ivkCheck, Sinsemilla.ShortCommit.circuit]
+    rcases h_spec with ⟨hShort, hIvk⟩
+    exact ⟨hShort, by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hIvk⟩
 
 end WiringWithShortCommit
 
