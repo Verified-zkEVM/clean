@@ -69,9 +69,37 @@ def pallasScalarMulCoords (scalar : ℕ) (base : Point PallasBaseField) :
   CompElliptic.CurveForms.ShortWeierstrass.smul
     CompElliptic.Curves.Pasta.Pallas.a scalar (pointCoords base)
 
+inductive OrchardFixedBaseId where
+  | valueCommitV
+  | valueCommitR
+  | nullifierK
+  | spendAuthG
+deriving DecidableEq
+
+/- Coordinates copied from Orchard 0.14.0 fixed-base generators in
+`orchard/src/constants/fixed_bases/{value_commit_v,value_commit_r,nullifier_k,spend_auth_g}.rs`.
+-/
+def fixedBasePoint : OrchardFixedBaseId → Point PallasBaseField
+  | .valueCommitV =>
+      { x := 21457208314186520936880902219424053485005045883401337627148481900742711001959,
+        y := 20379375922573002911833717643813254676246486412159279022689151936901102105230 }
+  | .valueCommitR =>
+      { x := 3597772235883004661259329170144280297379687592370687591147658848249887611537,
+        y := 16317546749781193797530044795837656238506071957562073482938086095508632426954 }
+  | .nullifierK =>
+      { x := 17144890976040313974462754624161095328261290075490099718273142830262355741301,
+        y := 9661337292872073193100428608853316471968232023361741282759000480983323509196 }
+  | .spendAuthG =>
+      { x := 25027635063850382358429654596649554085117301901282348152423547104939793041763,
+        y := 12128007492603938773365931378340937928001494939630793217712875072231079427017 }
+
 def IsPallasScalarMul
     (scalar : ℕ) (base product : Point PallasBaseField) : Prop :=
   pointCoords product = pallasScalarMulCoords scalar base
+
+def IsOrchardFixedBaseMul
+    (baseId : OrchardFixedBaseId) (scalar : ℕ) (product : Point PallasBaseField) : Prop :=
+  IsPallasScalarMul scalar (fixedBasePoint baseId) product
 
 theorem pallasValid_of_isPointOrIdentity {point : Point PallasBaseField}
     (h : isPointOrIdentity point) :
