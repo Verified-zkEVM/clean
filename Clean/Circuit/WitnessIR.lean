@@ -1,5 +1,6 @@
 import Clean.Circuit.Expression
 import Clean.Utils.Field
+import Clean.Utils.FiniteField
 import Clean.Utils.Vector
 
 /-!
@@ -38,7 +39,8 @@ PR #401 lessons — or an append.
 - B.1 env reads ............ `FExpr.expr` (embeds `Expression F`), `FExpr.envGet`
 - B.2 field arithmetic ..... `FExpr.add/mul/const` (+ `sub/neg` smart constructors)
 - B.3 field inversion ...... `FExpr.inv`
-- B.4 val/cast round trip .. `NExpr.val`, `FExpr.ofNat`
+- B.4 val/cast round trip .. `NExpr.val`, `FExpr.ofNat` (via `FiniteField.val`/`fromNat`,
+                             so the bridge is also correct on binary fields)
 - B.5 Nat-domain ops ....... `NExpr.add/mul/div/mod/land/lor/lxor/shiftL/shiftR`
                              (`2^k` = `shiftL 1 k`, `testBit i` = `shiftR · i % 2`)
 - B.6 vector construction .. `VExpr.lit/mapRange/append` (`set`/`rotate` from the
@@ -54,12 +56,15 @@ PR #401 lessons — or an append.
 
 ## Open design questions (for review)
 
-1. **`FieldToNat` ripple.** Evaluating `NExpr.val` needs `F → ℕ`, which a generic
-   `[Field F]` doesn't provide (callbacks using `.val` only exist at `F p` today).
-   `eval` therefore requires `[FieldToNat F]` and `[DecidableEq F]`. In phase 2 these
-   constraints propagate to everything in core that applies witness callbacks
-   (`UsesLocalWitnesses`, `dynamicWitnesses`, ...). Alternatives: bundle them into the
-   `Field F` assumption Clean already threads everywhere, or accept the extra variables.
+1. **(resolved)** Evaluating `NExpr.val` needs `F → ℕ`. We use the existing
+   `FiniteField` class (issue #154), whose canonical `val : F → ℕ` embedding is designed
+   to cover both prime fields (`ZMod.val`) and binary fields `GF(2^n)`. `eval` requires
+   only `[FiniteField F]`: field equality in `BExpr.feq` is decided via `val` using
+   `val_injective`, so no separate `[DecidableEq F]` is needed. The class gained a
+   `fromNat` inverse of `val` (= `Nat.cast` on prime fields) so that the Nat→F bridge
+   is also meaningful on binary fields, where `Nat.cast` collapses mod 2. Phase 2 threads
+   `FiniteField` through the witgen-touching parts of core — fine per review, since
+   Clean only ever targets finite fields and `FiniteField` was meant for gadgets anyway.
 2. **One index binder.** `NExpr.idx` refers to the innermost enclosing `VExpr.mapRange`;
    nesting shadows. No surveyed gadget nests mapRanges inside a single callback. If that
    changes, `idx` generalizes to de Bruijn levels.
@@ -77,19 +82,6 @@ variable {F : Type}
 
 namespace Witgen
 
-/-- Field-to-Nat conversion used by the IR's `NExpr.val` bridge. Instances exist for
-prime fields (`ZMod.val`); generic fields have no canonical conversion, so `eval`
-requires this class. -/
-class FieldToNat (F : Type) where
-  toNat : F → ℕ
-
-instance instFieldToNatF {p : ℕ} : FieldToNat (_root_.F p) := ⟨ZMod.val⟩
-
-instance instFieldToNatZMod {p : ℕ} : FieldToNat (ZMod p) := ⟨ZMod.val⟩
-
-@[circuit_norm]
-theorem FieldToNat.toNat_F {p : ℕ} (x : _root_.F p) : FieldToNat.toNat x = ZMod.val x := rfl
-
 mutual
 
 /-- Field-sorted witness expressions. -/
@@ -106,7 +98,9 @@ inductive FExpr (F : Type) where
   | mul (x y : FExpr F)
   /-- Field inverse, with `0⁻¹ = 0` (the `IsZeroField` witness). -/
   | inv (x : FExpr F)
-  /-- Cast from the Nat sort (`(n : ℕ) : F`). -/
+  /-- Cast from the Nat sort via `FiniteField.fromNat` (the inverse of `val`;
+  equals `Nat.cast` on prime fields, but interprets binary digits as coefficients
+  on binary fields, where `Nat.cast` would collapse via the characteristic). -/
   | ofNat (n : NExpr F)
   | ite (c : BExpr F) (t e : FExpr F)
   /-- Read a constant table at a computed index, 0 if out of range
@@ -167,7 +161,7 @@ structure Ctx (F : Type) where
   idx : ℕ := 0
 
 section Eval
-variable [Field F] [DecidableEq F] [FieldToNat F]
+variable [FiniteField F]
 
 mutual
 
@@ -183,7 +177,7 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .add x y => x.eval ctx + y.eval ctx
   | .mul x y => x.eval ctx * y.eval ctx
   | .inv x => (x.eval ctx)⁻¹
-  | .ofNat n => (n.eval ctx : F)
+  | .ofNat n => FiniteField.fromNat (n.eval ctx)
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
   | .arrGet xs i => xs[i.eval ctx]?.getD 0
   | .dataGet key n row col =>
@@ -194,7 +188,7 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
 @[circuit_norm]
 def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
   | .const n => n
-  | .val x => FieldToNat.toNat (x.eval ctx)
+  | .val x => FiniteField.val (x.eval ctx)
   | .idx => ctx.idx
   | .localVar i =>
     match ctx.locals[i]? with
@@ -213,7 +207,7 @@ def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
 
 @[circuit_norm]
 def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
-  | .feq x y => x.eval ctx = y.eval ctx
+  | .feq x y => FiniteField.val (x.eval ctx) = FiniteField.val (y.eval ctx)
   | .lt x y => x.eval ctx < y.eval ctx
   | .not b => !b.eval ctx
 
@@ -236,7 +230,7 @@ def VExpr.length : VExpr F → ℕ
   | .append a b => a.length + b.length
 
 @[circuit_norm]
-def VExpr.eval [Field F] [DecidableEq F] [FieldToNat F] (ctx : Ctx F) :
+def VExpr.eval [FiniteField F] (ctx : Ctx F) :
     (v : VExpr F) → Vector F v.length
   | .lit es => ⟨(es.map (FExpr.eval ctx)).toArray, by simp [VExpr.length]⟩
   | .mapRange n body => .mapRange n fun i => body.eval { ctx with idx := i }
@@ -250,7 +244,7 @@ inductive Step (F : Type) where
 
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
 @[circuit_norm]
-def evalSteps [Field F] [DecidableEq F] [FieldToNat F] (env : ProverEnvironment F)
+def evalSteps [FiniteField F] (env : ProverEnvironment F)
     (steps : List (Step F)) : Array (F ⊕ ℕ) :=
   steps.foldl (init := #[]) fun locals step =>
     match step with
@@ -266,14 +260,14 @@ inductive WitgenIR (F : Type) (m : ℕ) where
   | prog (steps : List (Step F)) (out : VExpr F) (length_eq : out.length = m)
 
 @[circuit_norm]
-def WitgenIR.eval {m : ℕ} [Field F] [DecidableEq F] [FieldToNat F] :
+def WitgenIR.eval {m : ℕ} [FiniteField F] :
     WitgenIR F m → ProverEnvironment F → Vector F m
   | .native f => f
   | .prog steps out length_eq => fun env =>
     .cast length_eq (out.eval { env, locals := evalSteps env steps })
 
 @[circuit_norm]
-theorem WitgenIR.eval_native {m : ℕ} [Field F] [DecidableEq F] [FieldToNat F]
+theorem WitgenIR.eval_native {m : ℕ} [FiniteField F]
     (f : ProverEnvironment F → Vector F m) : (WitgenIR.native f).eval = f := rfl
 
 /-!
@@ -286,18 +280,23 @@ ports (phase 5) will carry the proofs.
 -/
 
 section Examples
-variable [Field F] [DecidableEq F] [FieldToNat F]
+variable [FiniteField F]
+
+/-- Deciding field equality via the `ℕ` embedding agrees with propositional equality. -/
+theorem val_eq_zero_iff (x : F) : FiniteField.val x = 0 ↔ x = 0 := by
+  rw [← FiniteField.val_zero (F := F)]
+  exact FiniteField.ext_iff.symm
 
 /-- `IsZeroField` witness: `fun env => if env x ≠ 0 then (env x)⁻¹ else 0`. -/
 def isZeroWitness (x : Expression F) : WitgenIR F 1 :=
   .prog [] (.lit [.ite (.feq (.expr x) (.const 0)) (.const 0) (.inv (.expr x))]) rfl
 
-example (x : Expression F) (env : ProverEnvironment F) :
+example [DecidableEq F] (x : Expression F) (env : ProverEnvironment F) :
     (isZeroWitness x).eval env = #v[if x.eval env.toEnvironment ≠ 0
       then (x.eval env.toEnvironment)⁻¹ else 0] := by
   ext i hi
   simp [isZeroWitness, WitgenIR.eval, VExpr.eval, FExpr.eval, BExpr.eval,
-    evalSteps, Vector.cast]
+    evalSteps, Vector.cast, ← FiniteField.ext_iff, ite_not]
 
 /-- One byte of the Keccak `Xor64` witness: `((env x).val ^^^ (env y).val : F)`. -/
 def xorByteWitness (x y : Expression F) : WitgenIR F 1 :=
@@ -305,7 +304,8 @@ def xorByteWitness (x y : Expression F) : WitgenIR F 1 :=
 
 example (x y : Expression F) (env : ProverEnvironment F) :
     (xorByteWitness x y).eval env
-      = #v[((FieldToNat.toNat (x.eval env.toEnvironment) ^^^ FieldToNat.toNat (y.eval env.toEnvironment) : ℕ) : F)] := by
+      = #v[FiniteField.fromNat
+        (FiniteField.val (x.eval env.toEnvironment) ^^^ FiniteField.val (y.eval env.toEnvironment))] := by
   ext i hi
   simp [xorByteWitness, WitgenIR.eval, VExpr.eval, FExpr.eval, NExpr.eval,
     evalSteps, Vector.cast]
