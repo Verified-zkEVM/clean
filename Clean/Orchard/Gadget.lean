@@ -85,6 +85,12 @@ def addInput {K : Type} (row : Row K) : Ecc.AddInputs K where
   p := { x := row.valueProductX, y := row.valueProductY }
   q := { x := row.blindProductX, y := row.blindProductY }
 
+def valueProduct {K : Type} (row : Row K) : Ecc.Point K :=
+  (addInput row).p
+
+def blindProduct {K : Type} (row : Row K) : Ecc.Point K :=
+  (addInput row).q
+
 def output {K : Type} (row : Row K) : Ecc.Point K where
   x := row.cvX
   y := row.cvY
@@ -98,6 +104,25 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
+
+theorem assumptions_of_product_valid {row : Row Ecc.PallasBaseField}
+    (hValue : Ecc.isPointOrIdentity (valueProduct row))
+    (hBlind : Ecc.isPointOrIdentity (blindProduct row)) :
+    Assumptions row :=
+  ⟨hValue, hBlind⟩
+
+theorem assumptions_of_scalar_mul_products
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar : ℕ}
+    {valueBase blindBase : Ecc.Point Ecc.PallasBaseField}
+    (hValueBase : Ecc.isPointOrIdentity valueBase)
+    (hBlindBase : Ecc.isPointOrIdentity blindBase)
+    (hValueMul : Ecc.IsPallasScalarMul valueScalar valueBase (valueProduct row))
+    (hBlindMul : Ecc.IsPallasScalarMul blindScalar blindBase (blindProduct row)) :
+    Assumptions row :=
+  assumptions_of_product_valid
+    (Ecc.isPallasScalarMul_isPointOrIdentity hValueBase hValueMul)
+    (Ecc.isPallasScalarMul_isPointOrIdentity hBlindBase hBlindMul)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   let cv ← Ecc.CompleteAdd.Entry.circuit (addInput row)
@@ -214,6 +239,12 @@ def addInput {K : Type} (row : Row K) : Ecc.AddInputs K where
   p := { x := row.cmX, y := row.cmY }
   q := { x := row.productX, y := row.productY }
 
+def cmPoint {K : Type} (row : Row K) : Ecc.Point K :=
+  (addInput row).p
+
+def product {K : Type} (row : Row K) : Ecc.Point K :=
+  (addInput row).q
+
 def output {K : Type} (row : Row K) : Ecc.Point K where
   x := row.nfPointX
   y := row.nfPointY
@@ -229,6 +260,23 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
+
+theorem assumptions_of_product_valid {row : Row Ecc.PallasBaseField}
+    (hCm : Ecc.isPointOrIdentity (cmPoint row))
+    (hProduct : Ecc.isPointOrIdentity (product row)) :
+    Assumptions row :=
+  ⟨hCm, hProduct⟩
+
+theorem assumptions_of_scalar_mul_product
+    {row : Row Ecc.PallasBaseField}
+    {scalar : ℕ}
+    {base : Ecc.Point Ecc.PallasBaseField}
+    (hCm : Ecc.isPointOrIdentity (cmPoint row))
+    (hBase : Ecc.isPointOrIdentity base)
+    (hProduct : Ecc.IsPallasScalarMul scalar base (product row)) :
+    Assumptions row :=
+  assumptions_of_product_valid hCm
+    (Ecc.isPallasScalarMul_isPointOrIdentity hBase hProduct)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (row.poseidonHash + row.psi - row.scalar)
@@ -531,6 +579,12 @@ def addInput {K : Type} (row : Row K) : Ecc.AddInputs K where
   p := { x := row.alphaProductX, y := row.alphaProductY }
   q := { x := row.akX, y := row.akY }
 
+def alphaProduct {K : Type} (row : Row K) : Ecc.Point K :=
+  (addInput row).p
+
+def akPoint {K : Type} (row : Row K) : Ecc.Point K :=
+  (addInput row).q
+
 def output {K : Type} (row : Row K) : Ecc.Point K where
   x := row.rkX
   y := row.rkY
@@ -544,6 +598,24 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
+
+theorem assumptions_of_product_valid {row : Row Ecc.PallasBaseField}
+    (hAlphaProduct : Ecc.isPointOrIdentity (alphaProduct row))
+    (hAk : Ecc.isPointOrIdentity (akPoint row)) :
+    Assumptions row :=
+  ⟨hAlphaProduct, hAk⟩
+
+theorem assumptions_of_scalar_mul_product
+    {row : Row Ecc.PallasBaseField}
+    {scalar : ℕ}
+    {base : Ecc.Point Ecc.PallasBaseField}
+    (hBase : Ecc.isPointOrIdentity base)
+    (hProduct : Ecc.IsPallasScalarMul scalar base (alphaProduct row))
+    (hAk : Ecc.isPointOrIdentity (akPoint row)) :
+    Assumptions row :=
+  assumptions_of_product_valid
+    (Ecc.isPallasScalarMul_isPointOrIdentity hBase hProduct)
+    hAk
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   let rk ← Ecc.CompleteAdd.Entry.circuit (addInput row)
