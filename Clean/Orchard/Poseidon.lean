@@ -226,5 +226,104 @@ def circuit : FormalAssertion F Row where
 
 end PadAndAdd
 
+/-!
+Two-input Poseidon hash wiring used by Orchard nullifiers.
+
+References:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/poseidon.rs`
+- `Hash::init`
+- `Hash::hash`
+
+`halo2@halo2_poseidon-0.5.0/src/lib.rs`
+- `ConstantLength<2>::initial_capacity_element`
+- `ConstantLength<2>::padding`
+
+For Orchard's `P128Pow5T3` nullifier hash, the width is 3 and the rate is 2. The
+constant-length domain initializes state words 0 and 1 to zero, state word 2 to the
+domain capacity element, absorbs exactly `nk` and `rho`, appends no padding, permutes,
+and squeezes state word 0. The permutation result is represented by explicit row values;
+the Pow5 gate rows above model the round arithmetic separately.
+-/
+namespace Hash2
+
+structure Row (F : Type) where
+  nk : F
+  rho : F
+  capacity : F
+  absorbed : PadAndAdd.Row F
+  permuted0 : F
+  hash : F
+deriving ProvableStruct
+
+def initial0Check (row : Row R) : R :=
+  row.absorbed.initial0
+
+def initial1Check (row : Row R) : R :=
+  row.absorbed.initial1
+
+def capacityCheck (row : Row R) : R :=
+  row.absorbed.initial2 - row.capacity
+
+def input0Check (row : Row R) : R :=
+  row.absorbed.input0 - row.nk
+
+def input1Check (row : Row R) : R :=
+  row.absorbed.input1 - row.rho
+
+def hashCheck (row : Row R) : R :=
+  row.permuted0 - row.hash
+
+def constraints (row : Row R) : Prop :=
+  PadAndAdd.output0Check row.absorbed = 0 ∧
+    PadAndAdd.output1Check row.absorbed = 0 ∧
+    PadAndAdd.capacityCheck row.absorbed = 0 ∧
+    initial0Check row = 0 ∧
+    initial1Check row = 0 ∧
+    capacityCheck row = 0 ∧
+    input0Check row = 0 ∧
+    input1Check row = 0 ∧
+    hashCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (PadAndAdd.output0Check row.absorbed)
+  assertZero (PadAndAdd.output1Check row.absorbed)
+  assertZero (PadAndAdd.capacityCheck row.absorbed)
+  assertZero (initial0Check row)
+  assertZero (initial1Check row)
+  assertZero (capacityCheck row)
+  assertZero (input0Check row)
+  assertZero (input1Check row)
+  assertZero (hashCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, initial0Check, initial1Check,
+      capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.output0Check,
+      PadAndAdd.output1Check, PadAndAdd.capacityCheck]
+    simp_all [sub_eq_add_neg]
+    constructor
+    · have h := h_holds.1
+      rw [h_holds.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+    · have h := h_holds.2.1
+      rw [h_holds.2.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+  completeness := by
+    circuit_proof_start [main, constraints, initial0Check, initial1Check,
+      capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.output0Check,
+      PadAndAdd.output1Check, PadAndAdd.capacityCheck]
+    simp_all [sub_eq_add_neg]
+    constructor
+    · have h := h_spec.1
+      rw [h_spec.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+    · have h := h_spec.2.1
+      rw [h_spec.2.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+
+end Hash2
+
 end Poseidon
 end Orchard

@@ -122,7 +122,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.Poseidon.FullRound.circuit`,
      `Orchard.Poseidon.PartialRounds.circuit`, and
      `Orchard.Poseidon.PadAndAdd.circuit`. Fixed-column constants are explicit row
-     values in this approximation.
+     values in this approximation. The `ConstantLength<2>` hash wiring used by
+     Orchard nullifiers, from initial state through absorb and squeezed state word 0,
+     is ported as `Orchard.Poseidon.Hash2.circuit`.
 7. Sinsemilla:
    `halo2_gadgets/src/sinsemilla/chip.rs`,
    `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`,
