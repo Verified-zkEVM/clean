@@ -58,14 +58,26 @@ def s0 (row : Row R) : R := pow5 (row.cur0 + row.rcA0)
 def s1 (row : Row R) : R := pow5 (row.cur1 + row.rcA1)
 def s2 (row : Row R) : R := pow5 (row.cur2 + row.rcA2)
 
+def output0 (row : Row R) : R :=
+  s0 row * row.m00 + s1 row * row.m01 + s2 row * row.m02
+
+def output1 (row : Row R) : R :=
+  s0 row * row.m10 + s1 row * row.m11 + s2 row * row.m12
+
+def output2 (row : Row R) : R :=
+  s0 row * row.m20 + s1 row * row.m21 + s2 row * row.m22
+
 def next0Check (row : Row R) : R :=
-  s0 row * row.m00 + s1 row * row.m01 + s2 row * row.m02 - row.next0
+  output0 row - row.next0
 
 def next1Check (row : Row R) : R :=
-  s0 row * row.m10 + s1 row * row.m11 + s2 row * row.m12 - row.next1
+  output1 row - row.next1
 
 def next2Check (row : Row R) : R :=
-  s0 row * row.m20 + s1 row * row.m21 + s2 row * row.m22 - row.next2
+  output2 row - row.next2
+
+def Spec (row : Row R) : Prop :=
+  row.next0 = output0 row ∧ row.next1 = output1 row ∧ row.next2 = output2 row
 
 def constraints (row : Row R) : Prop :=
   next0Check row = 0 ∧ next1Check row = 0 ∧ next2Check row = 0
@@ -77,15 +89,55 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, next0Check, next1Check, next2Check,
-      s0, s1, s2, pow5]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, next0Check, next1Check, next2Check,
+      output0, output1, output2, s0, s1, s2, pow5]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    constructor
+    · have h0' :
+          (input_cur0 + input_rcA0) * (input_cur0 + input_rcA0) *
+                  ((input_cur0 + input_rcA0) * (input_cur0 + input_rcA0)) *
+                (input_cur0 + input_rcA0) * input_m00 +
+              (input_cur1 + input_rcA1) * (input_cur1 + input_rcA1) *
+                  ((input_cur1 + input_rcA1) * (input_cur1 + input_rcA1)) *
+                (input_cur1 + input_rcA1) * input_m01 +
+              (input_cur2 + input_rcA2) * (input_cur2 + input_rcA2) *
+                  ((input_cur2 + input_rcA2) * (input_cur2 + input_rcA2)) *
+                (input_cur2 + input_rcA2) * input_m02 - input_next0 = 0 := by
+        simp_all [sub_eq_add_neg]
+      exact (sub_eq_zero.mp h0').symm
+    constructor
+    · have h1' :
+          (input_cur0 + input_rcA0) * (input_cur0 + input_rcA0) *
+                  ((input_cur0 + input_rcA0) * (input_cur0 + input_rcA0)) *
+                (input_cur0 + input_rcA0) * input_m10 +
+              (input_cur1 + input_rcA1) * (input_cur1 + input_rcA1) *
+                  ((input_cur1 + input_rcA1) * (input_cur1 + input_rcA1)) *
+                (input_cur1 + input_rcA1) * input_m11 +
+              (input_cur2 + input_rcA2) * (input_cur2 + input_rcA2) *
+                  ((input_cur2 + input_rcA2) * (input_cur2 + input_rcA2)) *
+                (input_cur2 + input_rcA2) * input_m12 - input_next1 = 0 := by
+        simp_all [sub_eq_add_neg]
+      exact (sub_eq_zero.mp h1').symm
+    · have h2' :
+          (input_cur0 + input_rcA0) * (input_cur0 + input_rcA0) *
+                  ((input_cur0 + input_rcA0) * (input_cur0 + input_rcA0)) *
+                (input_cur0 + input_rcA0) * input_m20 +
+              (input_cur1 + input_rcA1) * (input_cur1 + input_rcA1) *
+                  ((input_cur1 + input_rcA1) * (input_cur1 + input_rcA1)) *
+                (input_cur1 + input_rcA1) * input_m21 +
+              (input_cur2 + input_rcA2) * (input_cur2 + input_rcA2) *
+                  ((input_cur2 + input_rcA2) * (input_cur2 + input_rcA2)) *
+                (input_cur2 + input_rcA2) * input_m22 - input_next2 = 0 := by
+        simp_all [sub_eq_add_neg]
+      exact (sub_eq_zero.mp h2').symm
   completeness := by
-    circuit_proof_start [main, constraints, next0Check, next1Check, next2Check,
-      s0, s1, s2, pow5]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, next0Check, next1Check, next2Check,
+      output0, output1, output2, s0, s1, s2, pow5]
+    simp_all
+    ring_nf
+    simp
 
 end FullRound
 
