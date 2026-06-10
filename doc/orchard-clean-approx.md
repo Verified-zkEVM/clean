@@ -134,7 +134,8 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Status: `gadget/add_chip.rs` is ported as `Orchard.Utilities.AddChip.circuit`.
      The `gadget.rs` source-level wiring for `value_commit_orchard` and
      `derive_nullifier` is ported as `Orchard.Gadget.ValueCommitment.circuit`
-     and `Orchard.Gadget.Nullifier.circuit`.
+     and `Orchard.Gadget.Nullifier.circuit`. The `circuit.rs` spend-authority wiring
+     `rk = [alpha] SpendAuthG + ak_P` is ported as `Orchard.Gadget.SpendAuth.circuit`.
      The four `Orchard circuit checks` constraints from `circuit.rs` are ported as
      `Orchard.ActionChecks.circuit`; the surrounding source-level action wiring from
      `Circuit::synthesize` is ported as `Orchard.ActionWiring.circuit`.

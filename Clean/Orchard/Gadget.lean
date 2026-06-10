@@ -13,6 +13,9 @@ References:
 - `value_commit_orchard`
 - `derive_nullifier`
 
+`orchard@0.14.0/src/circuit.rs`
+- `Spend authority`
+
 These assertions model how the Rust circuit connects outputs from fixed-base
 multiplication, Poseidon, the field-addition chip, and complete point addition. They do
 not model those sub-gadgets internally; their outputs and complete-addition auxiliary
@@ -165,6 +168,82 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end Nullifier
+
+/-!
+Spend-authority wiring.
+
+Reference:
+`orchard@0.14.0/src/circuit.rs`
+- `Spend authority`
+
+The source computes `alpha_commitment = [alpha] SpendAuthG`, then
+`rk = alpha_commitment + ak_P`, and constrains `rk` to public inputs. The fixed-base
+product is explicit here; this assertion models the complete-addition wiring from that
+product and `ak_P` to `rk`.
+-/
+namespace SpendAuth
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
+
+structure Row (F : Type) where
+  alphaProductX : F
+  alphaProductY : F
+  akX : F
+  akY : F
+  rkX : F
+  rkY : F
+  lambda : F
+  alpha : F
+  beta : F
+  gamma : F
+  delta : F
+deriving ProvableStruct
+
+def addRow (row : Row R) : Ecc.CompleteAddRow R where
+  p := { x := row.alphaProductX, y := row.alphaProductY }
+  q := { x := row.akX, y := row.akY }
+  r := { x := row.rkX, y := row.rkY }
+  lambda := row.lambda
+  alpha := row.alpha
+  beta := row.beta
+  gamma := row.gamma
+  delta := row.delta
+
+def constraints (row : Row R) : Prop :=
+  Ecc.CompleteAdd.constraints (addRow row)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  Ecc.CompleteAdd.main (addRow row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.main,
+      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
+      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
+      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
+      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
+      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.main,
+      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
+      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
+      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
+      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
+      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+
+end SpendAuth
 
 end Gadget
 end Orchard
