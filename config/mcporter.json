@@ -2,7 +2,12 @@
   "mcpServers": {
     "lean-lsp": {
       "command": "uvx",
-      "args": ["lean-lsp-mcp"]
+      "args": [
+        "lean-lsp-mcp"
+      ],
+      "env": {
+        "PATH": "/root/.elan/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
     }
   }
 }
