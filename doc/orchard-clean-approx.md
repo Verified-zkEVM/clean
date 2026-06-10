@@ -243,6 +243,24 @@ Consequences for Orchard gadgets:
   currently records copy edges around `ivk` and `derived_pk_d_old`, but not the
   variable-base scalar multiplication API.
 
+Complete-add modelling note:
+
+- The Rust complete-add row is not intended to accept arbitrary field pairs. The public
+  `EccInstructions::add` API receives `EccPoint`s, whose coordinates are expected to come
+  from witness-point assertions, constants, scalar multiplication outputs, or previous ECC
+  outputs.
+- The row assignment branches on `x = 0` as the identity case. That is only a semantic group
+  operation when the curve model knows that no non-identity Pallas point has `x = 0`.
+  CompElliptic proves this as `Pallas.no_onCurve_x_zero` from `5` being a quadratic
+  non-residue in the Pallas base field. Clean now has a generic
+  `Orchard.Ecc.NoCurvePointWithXZero` assumption bridge, but the concrete CompElliptic
+  Pasta field/curve facts still need to be imported or vendored before the complete-add API
+  wrapper can discharge that assumption concretely.
+- Therefore the missing Clean entry point should assume or prove valid point encodings for
+  both inputs, compose the complete-add row internally, and specify CompElliptic
+  short-Weierstrass addition. Downstream gadgets should not treat the row-level
+  `CompleteAdd.circuit` alone as this API.
+
 ## Sinsemilla and Orchard wrapper conformance audit
 
 The same custom-gate versus entry-point split appears in the Sinsemilla and Orchard

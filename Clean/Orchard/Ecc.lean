@@ -53,6 +53,23 @@ def isIdentityEncoding (point : Point F) : Prop :=
 def isPointOrIdentity (point : Point F) : Prop :=
   isIdentityEncoding point ∨ onCurve point
 
+def NoCurvePointWithXZero : Prop :=
+  ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
+
+theorem xZeroImpliesIdentity_of_pointOrIdentity
+    (hNoXZero : NoCurvePointWithXZero (F := F)) {point : Point F}
+    (hPoint : isPointOrIdentity point) :
+    point.x = 0 → point.y = 0 := by
+  rcases point with ⟨x, y⟩
+  intro hx
+  rcases hPoint with hIdentity | hCurve
+  · exact hIdentity.2
+  · by_contra hy
+    exact hNoXZero y (by
+      change x = 0 at hx
+      rw [hx] at hCurve
+      exact hCurve)
+
 def pointCoords (point : Point F) : F × F :=
   (point.x, point.y)
 
@@ -410,6 +427,17 @@ theorem outputValue_eq_swAdd {input : AddInputs F}
       · have hx' : ¬ qx = px := fun h => hx h.symm
         simp [hx, hx']
         constructor <;> ring
+
+theorem outputValue_eq_swAdd_of_pointOrIdentity {input : AddInputs F}
+    (hNoXZero : NoCurvePointWithXZero (F := F))
+    (hp : isPointOrIdentity input.p)
+    (hq : isPointOrIdentity input.q) :
+    pointCoords (outputValue input) =
+      CompElliptic.CurveForms.ShortWeierstrass.add
+        (0 : F) (pointCoords input.p) (pointCoords input.q) :=
+  outputValue_eq_swAdd
+    (xZeroImpliesIdentity_of_pointOrIdentity hNoXZero hp)
+    (xZeroImpliesIdentity_of_pointOrIdentity hNoXZero hq)
 
 end ValueModel
 
