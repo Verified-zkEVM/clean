@@ -167,7 +167,7 @@ def constraints (row : Row R) : Prop :=
     cmxCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  ActionChecks.main (checksRow row)
+  ActionChecks.circuit (checksRow row)
   assertZero (cvNetXCheck row)
   assertZero (cvNetYCheck row)
   assertZero (nfOldCheck row)
@@ -184,14 +184,14 @@ def circuit : FormalAssertion F Row where
   main
   Spec := constraints
   soundness := by
-    circuit_proof_start [main, constraints, checksRow, ActionChecks.main,
+    circuit_proof_start [main, constraints, checksRow, ActionChecks.circuit,
       ActionChecks.constraints, ActionChecks.valueNet, ActionChecks.merklePathValidity,
       ActionChecks.spendEnabled, ActionChecks.outputEnabled, cvNetXCheck, cvNetYCheck,
       nfOldCheck, rhoNewCheck, rkXCheck, rkYCheck, pkDOldXCheck, pkDOldYCheck,
       cmOldXCheck, cmOldYCheck, cmxCheck]
     simp_all [sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, checksRow, ActionChecks.main,
+    circuit_proof_start [main, constraints, checksRow, ActionChecks.circuit,
       ActionChecks.constraints, ActionChecks.valueNet, ActionChecks.merklePathValidity,
       ActionChecks.spendEnabled, ActionChecks.outputEnabled, cvNetXCheck, cvNetYCheck,
       nfOldCheck, rhoNewCheck, rkXCheck, rkYCheck, pkDOldXCheck, pkDOldYCheck,
@@ -254,10 +254,10 @@ def constraints (row : Row R) : Prop :=
     rkYCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  ActionWiring.main row.action
-  Gadget.ValueCommitment.main row.valueCommitment
-  Gadget.Nullifier.main row.nullifier
-  Gadget.SpendAuth.main row.spendAuth
+  ActionWiring.circuit row.action
+  Gadget.ValueCommitment.circuit row.valueCommitment
+  Gadget.Nullifier.circuit row.nullifier
+  Gadget.SpendAuth.circuit row.spendAuth
   assertZero (cvXCheck row)
   assertZero (cvYCheck row)
   assertZero (nfCheck row)
@@ -269,18 +269,18 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
-      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
       ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
       ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
       ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
       ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
-      Gadget.ValueCommitment.main, Gadget.ValueCommitment.constraints,
-      Gadget.ValueCommitment.addRow, Gadget.Nullifier.main, Gadget.Nullifier.constraints,
+      Gadget.ValueCommitment.circuit, Gadget.ValueCommitment.constraints,
+      Gadget.ValueCommitment.addRow, Gadget.Nullifier.circuit, Gadget.Nullifier.constraints,
       Gadget.Nullifier.scalarCheck, Gadget.Nullifier.extractCheck, Gadget.Nullifier.addRow,
-      Gadget.SpendAuth.main, Gadget.SpendAuth.constraints,
-      Gadget.SpendAuth.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+      Gadget.SpendAuth.circuit, Gadget.SpendAuth.constraints,
+      Gadget.SpendAuth.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
       Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
       Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
       Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
@@ -292,18 +292,18 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
   completeness := by
     circuit_proof_start [main, constraints, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
-      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
       ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
       ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
       ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
       ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
-      Gadget.ValueCommitment.main, Gadget.ValueCommitment.constraints,
-      Gadget.ValueCommitment.addRow, Gadget.Nullifier.main, Gadget.Nullifier.constraints,
+      Gadget.ValueCommitment.circuit, Gadget.ValueCommitment.constraints,
+      Gadget.ValueCommitment.addRow, Gadget.Nullifier.circuit, Gadget.Nullifier.constraints,
       Gadget.Nullifier.scalarCheck, Gadget.Nullifier.extractCheck, Gadget.Nullifier.addRow,
-      Gadget.SpendAuth.main, Gadget.SpendAuth.constraints,
-      Gadget.SpendAuth.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+      Gadget.SpendAuth.circuit, Gadget.SpendAuth.constraints,
+      Gadget.SpendAuth.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
       Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
       Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
       Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
@@ -359,7 +359,7 @@ def constraints (row : Row R) : Prop :=
     newCmxCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  ActionWiring.main row.action
+  ActionWiring.circuit row.action
   assertZero (oldCmXCheck row)
   assertZero (oldCmYCheck row)
   assertZero (newCmxCheck row)
@@ -369,8 +369,8 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, oldCmXCheck, oldCmYCheck, newCmxCheck,
-      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
       ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
       ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
@@ -379,8 +379,8 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
   completeness := by
     circuit_proof_start [main, constraints, oldCmXCheck, oldCmYCheck, newCmxCheck,
-      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
       ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
       ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
@@ -424,8 +424,8 @@ def constraints (row : Row R) : Prop :=
     rootCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  ActionWiring.main row.action
-  Sinsemilla.Merkle.PathStep.main row.finalStep
+  ActionWiring.circuit row.action
+  Sinsemilla.Merkle.PathStep.circuit row.finalStep
   assertZero (rootCheck row)
 
 def circuit : FormalAssertion F Row where
@@ -433,14 +433,14 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, rootCheck,
-      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
       ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
       ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
       ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
       ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
-      Sinsemilla.Merkle.PathStep.main, Sinsemilla.Merkle.PathStep.constraints,
+      Sinsemilla.Merkle.PathStep.circuit, Sinsemilla.Merkle.PathStep.constraints,
       Sinsemilla.Merkle.PathStep.leftCheck, Sinsemilla.Merkle.PathStep.rightCheck,
       Sinsemilla.Merkle.PathStep.layerLeftCheck, Sinsemilla.Merkle.PathStep.layerRightCheck,
       Sinsemilla.Merkle.PathStep.nextCheck, Sinsemilla.Merkle.PathStep.ternary,
@@ -452,14 +452,14 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
   completeness := by
     circuit_proof_start [main, constraints, rootCheck,
-      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
       ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
       ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
       ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
       ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
-      Sinsemilla.Merkle.PathStep.main, Sinsemilla.Merkle.PathStep.constraints,
+      Sinsemilla.Merkle.PathStep.circuit, Sinsemilla.Merkle.PathStep.constraints,
       Sinsemilla.Merkle.PathStep.leftCheck, Sinsemilla.Merkle.PathStep.rightCheck,
       Sinsemilla.Merkle.PathStep.layerLeftCheck, Sinsemilla.Merkle.PathStep.layerRightCheck,
       Sinsemilla.Merkle.PathStep.nextCheck, Sinsemilla.Merkle.PathStep.ternary,
@@ -521,7 +521,7 @@ def constraints (row : Row R) : Prop :=
     pkDYCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  ActionWiring.main row.action
+  ActionWiring.circuit row.action
   assertZero (akCheck row)
   assertZero (ivkScalarCheck row)
   assertZero (pkDXCheck row)
@@ -532,8 +532,8 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
-      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
       ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
       ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
@@ -542,8 +542,8 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
   completeness := by
     circuit_proof_start [main, constraints, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
-      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
       ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
       ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
