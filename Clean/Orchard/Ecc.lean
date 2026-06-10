@@ -768,6 +768,68 @@ def circuit : FormalAssertion F CompleteAddRow where
       · exact Or.inl (by linear_combination -hflag)
       · exact Or.inr (h6 hflag).2
 
+section EntryPoint
+
+theorem rowValue_spec_pallas {input : AddInputs PallasBaseField}
+    (_hp : isPointOrIdentity input.p) (_hq : isPointOrIdentity input.q) :
+    Spec (rowValue input) := by
+  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
+  unfold Spec rowValue outputValue lambdaValue slopeLine tangentLine nonexceptionalResult
+    leftIdentityResult rightIdentityResult inverseResult ifAlpha ifBeta ifGamma ifDelta
+    xQMinusXP xPMinusXR yQPlusYP
+  split_ifs <;> simp_all [sub_eq_add_neg] <;>
+    try field_simp [sub_eq_add_neg] <;>
+    try ring
+
+namespace Entry
+
+def main (input : Var AddInputs PallasBaseField) :
+    Circuit PallasBaseField (Var Point PallasBaseField) := do
+  PointOrIdentity.circuit input.p
+  PointOrIdentity.circuit input.q
+  let row ← ProvableType.witness (α := CompleteAddRow) fun env =>
+    rowValue ({ p := eval env input.p, q := eval env input.q } : AddInputs PallasBaseField)
+  CompleteAdd.circuit row
+  return row.r
+
+def Assumptions (input : AddInputs PallasBaseField) : Prop :=
+  isPointOrIdentity input.p ∧ isPointOrIdentity input.q
+
+def Spec (input : AddInputs PallasBaseField) (output : Point PallasBaseField) : Prop :=
+  pointCoords output =
+    CompElliptic.CurveForms.ShortWeierstrass.add
+      (0 : PallasBaseField) (pointCoords input.p) (pointCoords input.q)
+
+instance elaborated : ElaboratedCircuit PallasBaseField AddInputs Point main := by
+  elaborate_circuit
+
+theorem soundness : Soundness PallasBaseField main Assumptions Spec := by
+  circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
+    isPointOrIdentity, CompleteAdd.circuit, CompleteAdd.Spec]
+  rcases h_holds with ⟨hp, hq, hrow⟩
+  rcases input_p with ⟨px, py⟩
+  rcases input_q with ⟨qx, qy⟩
+  simp_all [pointCoords, CompleteAdd.outputValue_eq_swAdd_pallas]
+
+theorem completeness : Completeness PallasBaseField main Assumptions := by
+  circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
+    isPointOrIdentity, CompleteAdd.circuit, CompleteAdd.Spec, rowValue_spec_pallas]
+  rcases input_p with ⟨px, py⟩
+  rcases input_q with ⟨qx, qy⟩
+  simp_all [rowValue_spec_pallas]
+
+def circuit : FormalCircuit PallasBaseField AddInputs Point where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end Entry
+
+end EntryPoint
+
 end CompleteAdd
 
 end Ecc
