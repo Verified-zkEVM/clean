@@ -276,6 +276,67 @@ def circuit : FormalAssertion F Row where
       Ecc.CompleteAdd.yQPlusYP]
     exact h_spec
 
+namespace Entry
+
+structure Row (F : Type) where
+  hashX : F
+  hashY : F
+  blindX : F
+  blindY : F
+  commitmentX : F
+  commitmentY : F
+deriving ProvableStruct
+
+def addInput {K : Type} (row : Row K) : Ecc.AddInputs K where
+  p := { x := row.hashX, y := row.hashY }
+  q := { x := row.blindX, y := row.blindY }
+
+def output {K : Type} (row : Row K) : Ecc.Point K where
+  x := row.commitmentX
+  y := row.commitmentY
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.CompleteAdd.Entry.Spec (addInput row) (output row)
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.CompleteAdd.Entry.Assumptions (addInput row)
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  let commitment ← Ecc.CompleteAdd.Entry.circuit (addInput row)
+  assertZero (commitment.x - row.commitmentX)
+  assertZero (commitment.y - row.commitmentY)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, addInput, output, Assumptions,
+      Ecc.CompleteAdd.Entry.circuit, Ecc.CompleteAdd.Entry.Spec]
+    rcases h_holds with ⟨hAdd, hX, hY⟩
+    have hx : env.get i₀ = input_commitmentX := by linear_combination hX
+    have hy : env.get (i₀ + 1) = input_commitmentY := by linear_combination hY
+    have hAdd' := hAdd h_assumptions
+    rw [← hAdd']
+    simp [Ecc.pointCoords, hx, hy]
+  completeness := by
+    circuit_proof_start [main, Spec, addInput, output, Assumptions,
+      Ecc.CompleteAdd.Entry.circuit, Ecc.CompleteAdd.Entry.Spec,
+      Ecc.CompleteAdd.Entry.Assumptions]
+    constructor
+    · exact h_assumptions
+    · have hAdd := h_env h_assumptions
+      have hPoint : Ecc.pointCoords { x := env.get i₀, y := env.get (i₀ + 1) } =
+          Ecc.pointCoords { x := input_commitmentX, y := input_commitmentY } :=
+        hAdd.trans h_spec.symm
+      constructor
+      · have hx := congrArg Prod.fst hPoint
+        simpa [Ecc.pointCoords, sub_eq_add_neg] using sub_eq_zero.mpr hx
+      · have hy := congrArg Prod.snd hPoint
+        simpa [Ecc.pointCoords, sub_eq_add_neg] using sub_eq_zero.mpr hy
+
+end Entry
+
 end Commit
 
 namespace ShortCommit
@@ -325,6 +386,45 @@ def circuit : FormalAssertion F Row where
     · exact hCommit
     · rw [hExtract]
       ring
+
+namespace Entry
+
+structure Row (F : Type) where
+  commit : Commit.Entry.Row F
+  extracted : F
+deriving ProvableStruct
+
+def extractCheck {K : Type} [Sub K] (row : Row K) : K :=
+  row.commit.commitmentX - row.extracted
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  Commit.Entry.Spec row.commit ∧ row.extracted = row.commit.commitmentX
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Commit.Entry.Assumptions row.commit
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  Commit.Entry.circuit row.commit
+  assertZero (extractCheck row)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, extractCheck, Assumptions,
+      Commit.Entry.circuit, Commit.Entry.Spec]
+    rcases h_holds with ⟨hCommit, hExtract⟩
+    exact ⟨hCommit h_assumptions,
+      (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hExtract)).symm⟩
+  completeness := by
+    circuit_proof_start [main, Spec, extractCheck, Assumptions,
+      Commit.Entry.circuit, Commit.Entry.Spec, Commit.Entry.Assumptions]
+    rcases h_spec with ⟨hCommit, hExtract⟩
+    exact ⟨⟨h_assumptions, hCommit⟩,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hExtract.symm⟩
+
+end Entry
 
 end ShortCommit
 
