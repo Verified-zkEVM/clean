@@ -81,9 +81,6 @@ def Spec (row : Row R) : Prop :=
   IsBool row.b2 ∧
   row.b = row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64
 
-def constraints (row : Row R) : Prop :=
-  boolPoly row.b1 = 0 ∧ boolPoly row.b2 = 0 ∧ decomposition row = 0
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (boolPoly row.b1)
   assertZero (boolPoly row.b2)
@@ -93,13 +90,13 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, decomposition]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, decomposition]
     rcases h_holds with ⟨hb1, hb2, hdec⟩
     exact ⟨isBool_of_boolPoly_eq_zero (by simpa [boolPoly, sub_eq_add_neg] using hb1),
       isBool_of_boolPoly_eq_zero (by simpa [boolPoly, sub_eq_add_neg] using hb2),
       left_eq_of_add_neg_eq_zero hdec⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, decomposition]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, decomposition]
     rcases h_spec with ⟨hb1, hb2, hdec⟩
     exact ⟨by simpa [boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hb1,
       by simpa [boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hb2,
@@ -127,9 +124,6 @@ def Spec (row : Row R) : Prop :=
   IsBool row.d1 ∧
   row.d = row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024
 
-def constraints (row : Row R) : Prop :=
-  boolPoly row.d0 = 0 ∧ boolPoly row.d1 = 0 ∧ decomposition row = 0
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (boolPoly row.d0)
   assertZero (boolPoly row.d1)
@@ -139,13 +133,13 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, decomposition]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, decomposition]
     rcases h_holds with ⟨hd0, hd1, hdec⟩
     exact ⟨isBool_of_boolPoly_eq_zero (by simpa [boolPoly, sub_eq_add_neg] using hd0),
       isBool_of_boolPoly_eq_zero (by simpa [boolPoly, sub_eq_add_neg] using hd1),
       left_eq_of_add_neg_eq_zero hdec⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, decomposition]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, decomposition]
     rcases h_spec with ⟨hd0, hd1, hdec⟩
     exact ⟨by simpa [boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hd0,
       by simpa [boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hd1,
@@ -203,9 +197,6 @@ def Spec (row : Row R) : Prop :=
   IsBool row.g0 ∧
   row.g = row.g0 + row.g1 * 2 + row.g2 * 1024
 
-def constraints (row : Row R) : Prop :=
-  boolPoly row.g0 = 0 ∧ decomposition row = 0
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (boolPoly row.g0)
   assertZero (decomposition row)
@@ -214,12 +205,12 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, decomposition]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, decomposition]
     rcases h_holds with ⟨hg0, hdec⟩
     exact ⟨isBool_of_boolPoly_eq_zero (by simpa [boolPoly, sub_eq_add_neg] using hg0),
       left_eq_of_add_neg_eq_zero hdec⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, decomposition]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, decomposition]
     rcases h_spec with ⟨hg0, hdec⟩
     exact ⟨by simpa [boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hg0,
       by rw [hdec]; ring⟩
@@ -243,9 +234,6 @@ def Spec (row : Row R) : Prop :=
   IsBool row.h1 ∧
   row.h = row.h0 + row.h1 * 32
 
-def constraints (row : Row R) : Prop :=
-  boolPoly row.h1 = 0 ∧ decomposition row = 0
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (boolPoly row.h1)
   assertZero (decomposition row)
@@ -254,12 +242,12 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, decomposition]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, decomposition]
     rcases h_holds with ⟨hh1, hdec⟩
     exact ⟨isBool_of_boolPoly_eq_zero (by simpa [boolPoly, sub_eq_add_neg] using hh1),
       left_eq_of_add_neg_eq_zero hdec⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsBool, boolPoly, decomposition]
+    circuit_proof_start [main, Spec, IsBool, boolPoly, decomposition]
     rcases h_spec with ⟨hh1, hdec⟩
     exact ⟨by simpa [boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hh1,
       by rw [hdec]; ring⟩
