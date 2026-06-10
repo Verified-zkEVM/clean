@@ -26,6 +26,12 @@ variable {F : Type} [Field F]
 
 variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
 
+private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
+  rcases h with h | h <;> rw [h] <;> simp
+
+private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
+  sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
+
 structure Row (F : Type) where
   vOld : F
   vNew : F
@@ -55,6 +61,43 @@ def constraints (row : Row R) : Prop :=
     spendEnabled row = 0 ∧
     outputEnabled row = 0
 
+def Spec (row : Row R) : Prop :=
+  row.vOld = row.vNew + row.magnitude * row.sign ∧
+    (row.vOld = 0 ∨ row.root = row.anchor) ∧
+    (row.vOld = 0 ∨ row.enableSpends = 1) ∧
+    (row.vNew = 0 ∨ row.enableOutputs = 1)
+
+theorem spec_of_constraints {row : Row F} (h : constraints row) : Spec row := by
+  rcases row with ⟨vOld, vNew, magnitude, sign, root, anchor, enableSpends, enableOutputs⟩
+  unfold constraints valueNet merklePathValidity spendEnabled outputEnabled at h
+  unfold Spec
+  rcases h with ⟨hValue, hRoot, hSpend, hOutput⟩
+  constructor
+  · apply sub_eq_zero.mp
+    ring_nf at hValue ⊢
+    exact hValue
+  constructor
+  · exact (mul_eq_zero.mp hRoot).imp_right fun h => sub_eq_zero.mp h
+  constructor
+  · exact (mul_eq_zero.mp hSpend).imp_right fun h =>
+      (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
+  exact (mul_eq_zero.mp hOutput).imp_right fun h =>
+    (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
+
+theorem constraints_of_spec {row : Row F} (h : Spec row) : constraints row := by
+  rcases row with ⟨vOld, vNew, magnitude, sign, root, anchor, enableSpends, enableOutputs⟩
+  unfold Spec at h
+  unfold constraints valueNet merklePathValidity spendEnabled outputEnabled
+  rcases h with ⟨hValue, hRoot, hSpend, hOutput⟩
+  constructor
+  · rw [hValue]
+    ring
+  constructor
+  · exact mul_eq_zero_of_or (hRoot.imp_right fun h => by rw [h]; ring)
+  constructor
+  · exact mul_eq_zero_of_or (hSpend.imp_right fun h => by rw [h]; ring)
+  exact mul_eq_zero_of_or (hOutput.imp_right fun h => by rw [h]; ring)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (valueNet row)
   assertZero (merklePathValidity row)
@@ -63,15 +106,34 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, valueNet, merklePathValidity,
+    circuit_proof_start [main, Spec, constraints, valueNet, merklePathValidity,
       spendEnabled, outputEnabled]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hValue, hRoot, hSpend, hOutput⟩
+    constructor
+    · apply sub_eq_zero.mp
+      ring_nf at hValue ⊢
+      exact hValue
+    constructor
+    · exact (mul_eq_zero.mp hRoot).imp_right fun h => left_eq_of_add_neg_eq_zero h
+    constructor
+    · exact (mul_eq_zero.mp hSpend).imp_right fun h =>
+        (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
+    exact (mul_eq_zero.mp hOutput).imp_right fun h =>
+      (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
   completeness := by
-    circuit_proof_start [main, constraints, valueNet, merklePathValidity,
+    circuit_proof_start [main, Spec, constraints, valueNet, merklePathValidity,
       spendEnabled, outputEnabled]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hValue, hRoot, hSpend, hOutput⟩
+    constructor
+    · rw [hValue]
+      ring
+    constructor
+    · exact mul_eq_zero_of_or (hRoot.imp_right fun h => by rw [h]; ring)
+    constructor
+    · exact mul_eq_zero_of_or (hSpend.imp_right fun h => by rw [h]; ring)
+    exact mul_eq_zero_of_or (hOutput.imp_right fun h => by rw [h]; ring)
 
 end ActionChecks
 
@@ -185,18 +247,52 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, checksRow, ActionChecks.circuit,
-      ActionChecks.constraints, ActionChecks.valueNet, ActionChecks.merklePathValidity,
+      ActionChecks.Spec, ActionChecks.constraints, ActionChecks.valueNet, ActionChecks.merklePathValidity,
       ActionChecks.spendEnabled, ActionChecks.outputEnabled, cvNetXCheck, cvNetYCheck,
       nfOldCheck, rhoNewCheck, rkXCheck, rkYCheck, pkDOldXCheck, pkDOldYCheck,
       cmOldXCheck, cmOldYCheck, cmxCheck]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with
+      ⟨hChecks, hCvX, hCvY, hNf, hRho, hRkX, hRkY, hPkDX, hPkDY, hCmX, hCmY, hCmx⟩
+    change ActionChecks.Spec
+      { vOld := input_vOld, vNew := input_vNew, magnitude := input_magnitude,
+        sign := input_sign, root := input_root, anchor := input_anchor,
+        enableSpends := input_enableSpends, enableOutputs := input_enableOutputs } at hChecks
+    exact ⟨ActionChecks.constraints_of_spec hChecks,
+      by simpa [sub_eq_add_neg] using hCvX,
+      by simpa [sub_eq_add_neg] using hCvY,
+      by simpa [sub_eq_add_neg] using hNf,
+      by simpa [sub_eq_add_neg] using hRho,
+      by simpa [sub_eq_add_neg] using hRkX,
+      by simpa [sub_eq_add_neg] using hRkY,
+      by simpa [sub_eq_add_neg] using hPkDX,
+      by simpa [sub_eq_add_neg] using hPkDY,
+      by simpa [sub_eq_add_neg] using hCmX,
+      by simpa [sub_eq_add_neg] using hCmY,
+      by simpa [sub_eq_add_neg] using hCmx⟩
   completeness := by
     circuit_proof_start [main, constraints, checksRow, ActionChecks.circuit,
-      ActionChecks.constraints, ActionChecks.valueNet, ActionChecks.merklePathValidity,
+      ActionChecks.Spec, ActionChecks.constraints, ActionChecks.valueNet, ActionChecks.merklePathValidity,
       ActionChecks.spendEnabled, ActionChecks.outputEnabled, cvNetXCheck, cvNetYCheck,
       nfOldCheck, rhoNewCheck, rkXCheck, rkYCheck, pkDOldXCheck, pkDOldYCheck,
       cmOldXCheck, cmOldYCheck, cmxCheck]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with
+      ⟨hChecks, hCvX, hCvY, hNf, hRho, hRkX, hRkY, hPkDX, hPkDY, hCmX, hCmY, hCmx⟩
+    change ActionChecks.constraints
+      { vOld := input_vOld, vNew := input_vNew, magnitude := input_magnitude,
+        sign := input_sign, root := input_root, anchor := input_anchor,
+        enableSpends := input_enableSpends, enableOutputs := input_enableOutputs } at hChecks
+    exact ⟨ActionChecks.spec_of_constraints hChecks,
+      by simpa [sub_eq_add_neg] using hCvX,
+      by simpa [sub_eq_add_neg] using hCvY,
+      by simpa [sub_eq_add_neg] using hNf,
+      by simpa [sub_eq_add_neg] using hRho,
+      by simpa [sub_eq_add_neg] using hRkX,
+      by simpa [sub_eq_add_neg] using hRkY,
+      by simpa [sub_eq_add_neg] using hPkDX,
+      by simpa [sub_eq_add_neg] using hPkDY,
+      by simpa [sub_eq_add_neg] using hCmX,
+      by simpa [sub_eq_add_neg] using hCmY,
+      by simpa [sub_eq_add_neg] using hCmx⟩
 
 end ActionWiring
 
