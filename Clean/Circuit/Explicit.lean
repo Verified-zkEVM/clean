@@ -426,7 +426,6 @@ instance {m : ℕ} {code : WitgenIR F m} :
     ExplicitCircuit (witnessIR (value := (Vector · m)) (var := fun F => Vector (Expression F) m) code) :=
   inferInstanceAs (ExplicitCircuit (witnessVector m code))
 
-
 instance : ExplicitCircuits (F:=F) witnessVarNative where
   output _ n := ⟨ n ⟩
   localLength _ _ := 1

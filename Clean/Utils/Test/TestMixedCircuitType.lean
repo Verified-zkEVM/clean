@@ -22,7 +22,7 @@ instance : Inhabited (Var Input F) where
 
 def circuit : GeneralFormalCircuit.WithHint F Input field where
   main input := do
-    let inverse ← witness input.inverse
+    let inverse ← witnessNative input.inverse
     input.x * inverse === 1
     return inverse
 
