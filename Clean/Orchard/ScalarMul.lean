@@ -244,20 +244,23 @@ deriving ProvableStruct
 def poly (row : Row R) : R :=
   2 * row.yAWitnessed - yADouble row.next
 
+def Spec (row : Row R) : Prop :=
+  2 * row.yAWitnessed = yADouble row.next
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (poly row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec row := poly row = 0
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, poly, yADouble, Sinsemilla.DoubleAndAdd.yA,
+    circuit_proof_start [main, Spec, poly, yADouble, Sinsemilla.DoubleAndAdd.yA,
       Sinsemilla.DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    exact sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h_holds)
   completeness := by
-    circuit_proof_start [main, poly, yADouble, Sinsemilla.DoubleAndAdd.yA,
+    circuit_proof_start [main, Spec, poly, yADouble, Sinsemilla.DoubleAndAdd.yA,
       Sinsemilla.DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    exact by simpa [sub_eq_add_neg] using sub_eq_zero.mpr h_spec
 
 end Init
 
