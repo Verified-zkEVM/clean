@@ -596,6 +596,14 @@ def pkDXCheck {K : Type} [Sub K] (row : Row K) : K :=
 def pkDYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.derivedPkDY - row.action.derivedPkDOldY
 
+def derivedPkD {K : Type} (row : Row K) : Ecc.Point K where
+  x := row.derivedPkDX
+  y := row.derivedPkDY
+
+def pkDOld {K : Type} (row : Row K) : Ecc.Point K where
+  x := row.action.pkDOldX
+  y := row.action.pkDOldY
+
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   ActionWiring.Spec row.action ∧
     Gadget.SpendAuth.Spec row.spendAuth ∧
@@ -604,6 +612,37 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     row.commitIvk.ivk = row.ivkScalar ∧
     row.derivedPkDX = row.action.derivedPkDOldX ∧
     row.derivedPkDY = row.action.derivedPkDOldY
+
+theorem pkDOld_eq_derivedPkD_of_spec {row : Row Ecc.PallasBaseField}
+    (hSpec : Spec row) :
+    pkDOld row = derivedPkD row := by
+  rcases hSpec with ⟨hAction, _, _, _, _, hDerivedX, hDerivedY⟩
+  rcases hAction with
+    ⟨_, _, _, _, _, _, _, hPkDX, hPkDY, _, _, _⟩
+  apply congrArg₂ Ecc.Point.mk
+  · exact hPkDX.symm.trans hDerivedX.symm
+  · exact hPkDY.symm.trans hDerivedY.symm
+
+theorem pkDOld_scalar_mul_of_derived_scalar_mul
+    {row : Row Ecc.PallasBaseField}
+    {scalar : ℕ}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (hSpec : Spec row)
+    (hMul : Ecc.IsPallasScalarMul scalar gdOld (derivedPkD row)) :
+    Ecc.IsPallasScalarMul scalar gdOld (pkDOld row) := by
+  rw [pkDOld_eq_derivedPkD_of_spec hSpec]
+  exact hMul
+
+theorem pkDOld_isPointOrIdentity_of_derived_scalar_mul
+    {row : Row Ecc.PallasBaseField}
+    {scalar : ℕ}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (hSpec : Spec row)
+    (hGdOld : Ecc.isPointOrIdentity gdOld)
+    (hMul : Ecc.IsPallasScalarMul scalar gdOld (derivedPkD row)) :
+    Ecc.isPointOrIdentity (pkDOld row) :=
+  Ecc.isPallasScalarMul_isPointOrIdentity hGdOld
+    (pkDOld_scalar_mul_of_derived_scalar_mul hSpec hMul)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
