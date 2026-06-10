@@ -208,8 +208,7 @@ def SelectedCompleteBitPoint (row : Row R) : Prop :=
     (bit row = 0 →
       (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.baseY)) ∧
       (bit row = 1 →
-        (x, row.yP) =
-          CompElliptic.CurveForms.ShortWeierstrass.smul 0 1 (x, row.baseY))
+        (x, row.yP) = (x, row.baseY))
 
 def Spec (row : Row R) : Prop :=
   IsBool (bit row) ∧ SelectedCompleteBitPoint row
@@ -223,9 +222,7 @@ def circuit : FormalAssertion F Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, constraints, SelectedCompleteBitPoint,
-      NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg,
-      CompElliptic.CurveForms.ShortWeierstrass.smul,
-      CompElliptic.CurveForms.ShortWeierstrass.add]
+      NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_holds with ⟨hBool, hSwitch⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
     constructor
@@ -253,9 +250,7 @@ def circuit : FormalAssertion F Row where
           linear_combination -hDiff
   completeness := by
     circuit_proof_start [main, Spec, constraints, SelectedCompleteBitPoint,
-      NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg,
-      CompElliptic.CurveForms.ShortWeierstrass.smul,
-      CompElliptic.CurveForms.ShortWeierstrass.add]
+      NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
     constructor
@@ -894,15 +889,14 @@ def negationCheck (row : Row R) : R :=
 def IsSign (sign : R) : Prop :=
   sign = 1 ∨ sign = 0 - 1
 
-def SignedScalarMulBySign (row : Row R) : Prop :=
+def SignedPointSelection (row : Row R) : Prop :=
   ∀ x : R,
-    (row.sign = 1 →
-      (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.smul 0 1 (x, row.yA)) ∧
+    (row.sign = 1 → (x, row.yP) = (x, row.yA)) ∧
       (row.sign = 0 - 1 →
         (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.yA))
 
 def Spec (row : Row R) : Prop :=
-  IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedScalarMulBySign row
+  IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointSelection row
 
 def constraints (row : Row R) : Prop :=
   NoteCommit.boolPoly row.lastWindow = 0 ∧
@@ -920,9 +914,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsSign, SignedScalarMulBySign,
-      CompElliptic.CurveForms.ShortWeierstrass.smul,
-      CompElliptic.CurveForms.ShortWeierstrass.add,
+    circuit_proof_start [main, Spec, constraints, IsSign, SignedPointSelection,
       CompElliptic.CurveForms.ShortWeierstrass.neg, NoteCommit.boolPoly, signCheck, yCheck,
       negationCheck]
     rcases h_holds with ⟨hLastWindow, hSign, _hY, hNegation⟩
@@ -949,9 +941,7 @@ def circuit : FormalAssertion F Row where
         · rw [hSignedY, hNeg]
           simp
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsSign, SignedScalarMulBySign,
-      CompElliptic.CurveForms.ShortWeierstrass.smul,
-      CompElliptic.CurveForms.ShortWeierstrass.add,
+    circuit_proof_start [main, Spec, constraints, IsSign, SignedPointSelection,
       CompElliptic.CurveForms.ShortWeierstrass.neg, NoteCommit.boolPoly, signCheck, yCheck,
       negationCheck]
     rcases h_spec with ⟨hLastWindow, hSign, hPoint⟩
