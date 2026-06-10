@@ -749,6 +749,12 @@ def yCheck (row : Row R) : R :=
 def negationCheck (row : Row R) : R :=
   row.sign * row.yP - row.yA
 
+def IsSign (sign : R) : Prop :=
+  sign = 1 ∨ sign = 0 - 1
+
+def Spec (row : Row R) : Prop :=
+  IsBool row.lastWindow ∧ IsSign row.sign ∧ row.yA = row.sign * row.yP
+
 def constraints (row : Row R) : Prop :=
   NoteCommit.boolPoly row.lastWindow = 0 ∧
     signCheck row = 0 ∧
@@ -763,15 +769,35 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, signCheck, yCheck,
+    circuit_proof_start [main, Spec, constraints, IsSign, NoteCommit.boolPoly, signCheck, yCheck,
       negationCheck]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hLastWindow, hSign, _hY, hNegation⟩
+    refine ⟨?_, ?_, ?_⟩
+    · exact isBool_of_boolPoly_eq_zero (by
+        simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hLastWindow)
+    · have hmul : (input_sign - 1) * (input_sign + 1) = 0 := by
+        linear_combination hSign
+      rcases mul_eq_zero.mp hmul with hPos | hNeg
+      · exact Or.inl (sub_eq_zero.mp hPos)
+      · exact Or.inr (by linear_combination hNeg)
+    · exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNegation)).symm
   completeness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, signCheck, yCheck,
+    circuit_proof_start [main, Spec, constraints, IsSign, NoteCommit.boolPoly, signCheck, yCheck,
       negationCheck]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hLastWindow, hSign, hSignedY⟩
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using
+        boolPoly_eq_zero_of_isBool hLastWindow
+    · rcases hSign with hSign | hSign <;> rw [hSign] <;> ring
+    · rcases hSign with hSign | hSign
+      · rw [hSignedY, hSign]
+        ring
+      · rw [hSignedY, hSign]
+        ring
+    · rw [hSignedY]
+      ring
 
 end FixedShort
 
