@@ -68,6 +68,16 @@ theorem pallasNoCurvePointWithXZero : NoCurvePointWithXZero (F := PallasBaseFiel
   rw [pow_two]
   linear_combination h
 
+theorem pallasNoCurvePointWithYZero (x : PallasBaseField) :
+    ¬ onCurve ({ x, y := 0 } : Point PallasBaseField) := by
+  intro h
+  apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_y_zero x
+  unfold CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
+  unfold onCurve curveEquation pallasB at h
+  rw [pow_two]
+  linear_combination h
+
 theorem xZeroImpliesIdentity_of_pointOrIdentity
     (hNoXZero : NoCurvePointWithXZero (F := F)) {point : Point F}
     (hPoint : isPointOrIdentity point) :
@@ -81,6 +91,18 @@ theorem xZeroImpliesIdentity_of_pointOrIdentity
       change x = 0 at hx
       rw [hx] at hCurve
       exact hCurve)
+
+theorem pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero {point : Point PallasBaseField}
+    (hPoint : isPointOrIdentity point) (hx : point.x ≠ 0) :
+    point.y ≠ 0 := by
+  intro hy
+  rcases point with ⟨x, y⟩
+  change x ≠ 0 at hx
+  change y = 0 at hy
+  rcases hPoint with hIdentity | hCurve
+  · exact hx hIdentity.1
+  · subst hy
+    exact pallasNoCurvePointWithYZero x hCurve
 
 def pointCoords (point : Point F) : F × F :=
   (point.x, point.y)

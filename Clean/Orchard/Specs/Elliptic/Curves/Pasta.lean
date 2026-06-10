@@ -6,6 +6,7 @@ Authors: Daira-Emma Hopwood
 -/
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
 import Clean.Orchard.Specs.Elliptic.Fields.Pasta
+import Mathlib.FieldTheory.Finite.Basic
 import Mathlib.NumberTheory.LegendreSymbol.Basic
 
 /-!
@@ -65,6 +66,36 @@ theorem no_onCurve_x_zero (y : PallasBaseField) : ¬ OnCurve a b (0, y) := by
   intro h
   have h' : y ^ 2 = 5 := by simpa [OnCurve, a, b] using h
   exact five_not_isSquare ⟨y, by rw [← h', pow_two]⟩
+
+/-- `-5` is not a cube in the Pallas base field, so `y = 0` is impossible for a curve point. -/
+theorem neg_five_not_isCube : ¬ ∃ x : PallasBaseField, x ^ 3 = -(5 : PallasBaseField) := by
+  rintro ⟨x, hx⟩
+  have hx0 : x ≠ 0 := by
+    intro hzero
+    have hneg : (-(5 : PallasBaseField)) = 0 := by
+      rw [← hx, hzero]
+      norm_num
+    exact (by decide : (-(5 : PallasBaseField)) ≠ 0) hneg
+  have hfermat : x ^ (PALLAS_BASE_CARD - 1) = 1 := by
+    simpa [ZMod.card] using FiniteField.pow_card_sub_one_eq_one x hx0
+  have hpow : (-(5 : PallasBaseField)) ^ ((PALLAS_BASE_CARD - 1) / 3) = 1 := by
+    rw [← hx, ← pow_mul]
+    have hm : 3 * ((PALLAS_BASE_CARD - 1) / 3) = PALLAS_BASE_CARD - 1 := by
+      native_decide
+    rw [hm]
+    exact hfermat
+  have hnon : (-(5 : PallasBaseField)) ^ ((PALLAS_BASE_CARD - 1) / 3) ≠ 1 := by
+    native_decide
+  exact hnon hpow
+
+/-- No point on the Pallas curve has `y`-coordinate `0`. -/
+theorem no_onCurve_y_zero (x : PallasBaseField) : ¬ OnCurve a b (x, 0) := by
+  intro h
+  have hsum : x ^ 3 + 5 = 0 := by
+    simpa [OnCurve, a, b] using h.symm
+  have h' : x ^ 3 = -(5 : PallasBaseField) := by
+    linear_combination hsum
+  exact neg_five_not_isCube ⟨x, h'⟩
 
 -- `(-1, 2)` is on the curve: `2² = 4 = (-1)³ + 5`.
 example : OnCurve a b G := by native_decide
