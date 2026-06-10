@@ -420,6 +420,101 @@ def circuit : FormalAssertion F Row where
       by simpa [sub_eq_add_neg] using hRkX,
       by simpa [sub_eq_add_neg] using hRkY⟩
 
+namespace Entry
+
+structure Row (F : Type) where
+  action : ActionWiring.Row F
+  valueCommitment : Gadget.ValueCommitment.Entry.Row F
+  nullifier : Gadget.NullifierWithPoseidonBoundary.Entry.Row F
+  spendAuth : Gadget.SpendAuth.Entry.Row F
+deriving ProvableStruct
+
+def cvXCheck (row : Row R) : R :=
+  row.valueCommitment.cvX - row.action.cvNetX
+
+def cvYCheck (row : Row R) : R :=
+  row.valueCommitment.cvY - row.action.cvNetY
+
+def nfCheck (row : Row R) : R :=
+  row.nullifier.nullifier.nf - row.action.nfOld
+
+def rkXCheck (row : Row R) : R :=
+  row.spendAuth.rkX - row.action.rkX
+
+def rkYCheck (row : Row R) : R :=
+  row.spendAuth.rkY - row.action.rkY
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  ActionWiring.Spec row.action ∧
+    Gadget.ValueCommitment.Entry.Spec row.valueCommitment ∧
+    Gadget.NullifierWithPoseidonBoundary.Entry.Spec row.nullifier ∧
+    Gadget.SpendAuth.Entry.Spec row.spendAuth ∧
+    row.valueCommitment.cvX = row.action.cvNetX ∧
+    row.valueCommitment.cvY = row.action.cvNetY ∧
+    row.nullifier.nullifier.nf = row.action.nfOld ∧
+    row.spendAuth.rkX = row.action.rkX ∧
+    row.spendAuth.rkY = row.action.rkY
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Gadget.ValueCommitment.Entry.Assumptions row.valueCommitment ∧
+    Gadget.NullifierWithPoseidonBoundary.Entry.Assumptions row.nullifier ∧
+    Gadget.SpendAuth.Entry.Assumptions row.spendAuth
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  ActionWiring.circuit row.action
+  Gadget.ValueCommitment.Entry.circuit row.valueCommitment
+  Gadget.NullifierWithPoseidonBoundary.Entry.circuit row.nullifier
+  Gadget.SpendAuth.Entry.circuit row.spendAuth
+  assertZero (cvXCheck row)
+  assertZero (cvYCheck row)
+  assertZero (nfCheck row)
+  assertZero (rkXCheck row)
+  assertZero (rkYCheck row)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, Assumptions, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
+      ActionWiring.circuit, ActionWiring.Spec,
+      Gadget.ValueCommitment.Entry.circuit, Gadget.ValueCommitment.Entry.Spec,
+      Gadget.NullifierWithPoseidonBoundary.Entry.circuit,
+      Gadget.NullifierWithPoseidonBoundary.Entry.Spec,
+      Gadget.SpendAuth.Entry.circuit, Gadget.SpendAuth.Entry.Spec]
+    rcases h_assumptions with ⟨hValueAssumptions, hNullifierAssumptions, hSpendAssumptions⟩
+    rcases h_holds with
+      ⟨hAction, hValue, hNullifier, hSpendAuth, hCvX, hCvY, hNf, hRkX, hRkY⟩
+    exact ⟨hAction, hValue hValueAssumptions, hNullifier hNullifierAssumptions,
+      hSpendAuth hSpendAssumptions,
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hCvX),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hCvY),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNf),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hRkX),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hRkY)⟩
+  completeness := by
+    circuit_proof_start [main, Spec, Assumptions, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
+      ActionWiring.circuit, ActionWiring.Spec,
+      Gadget.ValueCommitment.Entry.circuit, Gadget.ValueCommitment.Entry.Spec,
+      Gadget.ValueCommitment.Entry.Assumptions,
+      Gadget.NullifierWithPoseidonBoundary.Entry.circuit,
+      Gadget.NullifierWithPoseidonBoundary.Entry.Spec,
+      Gadget.NullifierWithPoseidonBoundary.Entry.Assumptions,
+      Gadget.SpendAuth.Entry.circuit, Gadget.SpendAuth.Entry.Spec,
+      Gadget.SpendAuth.Entry.Assumptions]
+    rcases h_assumptions with ⟨hValueAssumptions, hNullifierAssumptions, hSpendAssumptions⟩
+    rcases h_spec with
+      ⟨hAction, hValue, hNullifier, hSpendAuth, hCvX, hCvY, hNf, hRkX, hRkY⟩
+    exact ⟨hAction, ⟨hValueAssumptions, hValue⟩, ⟨hNullifierAssumptions, hNullifier⟩,
+      ⟨hSpendAssumptions, hSpendAuth⟩,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hCvX,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hCvY,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hNf,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hRkX,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hRkY⟩
+
+end Entry
+
 end ActionComputedWiring
 
 /-!
