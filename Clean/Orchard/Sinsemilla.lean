@@ -119,6 +119,7 @@ end Gate
 Reference:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/merkle/chip.rs`
 - `Decomposition check`
+- `MerkleInstructions::hash_layer`
 
 This ports the MerkleCRH decomposition gate that connects the three Sinsemilla message
 pieces `a`, `b`, `c` to `(l, left, right)`.
@@ -187,6 +188,56 @@ def circuit : FormalAssertion F DecompositionRow where
     circuit_proof_start [main, constraints, a0, leftCheck, rightCheck, b1B2Check,
       b0, twoPow5, twoPow10, twoPow240]
     simp_all [sub_eq_add_neg]
+
+/-!
+`hash_layer` source-level wiring.
+
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/merkle/chip.rs`
+- `MerkleInstructions::hash_layer`
+
+The Rust gadget builds message pieces `a`, `b`, and `c`, calls
+`SinsemillaChip::hash_to_point`, extracts the x-coordinate, and assigns the
+decomposition row above from the message pieces, running-sum endpoints, and short
+subpieces. The variable-length `hash_to_point` loop is represented by an explicit
+`computedHash` row value.
+-/
+namespace Wiring
+
+structure Row (F : Type) where
+  decomposition : DecompositionRow F
+  computedHash : F
+  hash : F
+deriving ProvableStruct
+
+def hashCheck (row : Row R) : R :=
+  row.computedHash - row.hash
+
+def constraints (row : Row R) : Prop :=
+  Merkle.constraints row.decomposition ∧ hashCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (Merkle.a0 row.decomposition - row.decomposition.lWhole)
+  assertZero (Merkle.leftCheck row.decomposition)
+  assertZero (Merkle.rightCheck row.decomposition)
+  assertZero (Merkle.b1B2Check row.decomposition)
+  assertZero (hashCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, hashCheck, Merkle.constraints, Merkle.a0,
+      Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
+      Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, hashCheck, Merkle.constraints, Merkle.a0,
+      Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
+      Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
+    simp_all [sub_eq_add_neg]
+
+end Wiring
 
 end Merkle
 

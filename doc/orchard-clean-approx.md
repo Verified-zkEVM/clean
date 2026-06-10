@@ -120,7 +120,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Status: `Initial y_Q` and `Sinsemilla gate` arithmetic constraints from
      `chip.rs` are ported as `Orchard.Sinsemilla.InitialYQ.circuit` and
      `Orchard.Sinsemilla.Gate.circuit`. The MerkleCRH decomposition gate from
-     `merkle/chip.rs` is ported as `Orchard.Sinsemilla.Merkle.circuit`.
+     `merkle/chip.rs` is ported as `Orchard.Sinsemilla.Merkle.circuit`; the
+     fixed three-piece `MerkleInstructions::hash_layer` assignment and extracted hash
+     wiring is ported as `Orchard.Sinsemilla.Merkle.Wiring.circuit`.
 7. Orchard custom gates and composition:
    `orchard/src/circuit.rs`,
    `orchard/src/circuit/commit_ivk.rs`,
