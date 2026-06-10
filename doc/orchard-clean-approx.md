@@ -114,6 +114,13 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.ScalarMul.FixedBase.FullWidth.circuit`,
      `Orchard.ScalarMul.FixedBase.BaseFieldCanonicity.circuit`, and
      `Orchard.ScalarMul.FixedShort.circuit`.
+   - Semantic-spec gap: these are still row-level gate assertions, not composed scalar
+     multiplication circuits. The higher Orchard gadgets need wrappers whose input/output
+     surface contains the scalar, base point, and product point together, so their specs can
+     state relations such as `product = [scalar] base`. In particular,
+     `value_commit_orchard`, `derive_nullifier`, spend authority, and address integrity
+     must not claim scalar-multiplication semantics merely from explicit product
+     coordinates; those product coordinates need to come from scalar-mul child circuits.
 6. Poseidon:
    `halo2_gadgets/src/poseidon/pow5.rs`
    - Depends on fixed round constants and MDS matrices supplied by the Poseidon spec.
