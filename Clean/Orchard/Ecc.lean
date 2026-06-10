@@ -184,7 +184,7 @@ def Assumptions (input : AddInputs F) : Prop :=
   input.p.x ≠ input.q.x
 
 def Spec (input : AddInputs F) (output : Point F) : Prop :=
-  constraints input output
+  output = outputValue input
 
 instance elaborated : ElaboratedCircuit F AddInputs Point main := by
   elaborate_circuit
@@ -198,11 +198,50 @@ theorem outputValue_constraints {input : AddInputs F} (hx : input.p.x ≠ input.
     exact (sub_eq_zero.mp h).symm
   constructor <;> field_simp [hden] <;> ring
 
+theorem constraints_eq_outputValue {input : AddInputs F} {output : Point F}
+    (hx : input.p.x ≠ input.q.x) (h : constraints input output) :
+    output = outputValue input := by
+  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
+  rcases output with ⟨rx, ry⟩
+  unfold constraints poly1 poly2 at h
+  unfold outputValue lambda
+  have hden : qx - px ≠ 0 := by
+    intro hden
+    apply hx
+    exact (sub_eq_zero.mp hden).symm
+  have hden' : px - qx ≠ 0 := by
+    intro hden'
+    apply hx
+    exact sub_eq_zero.mp hden'
+  rcases h with ⟨h1, h2⟩
+  simp at h1 h2
+  rw [Point.mk.injEq]
+  simp
+  have hxout :
+      rx = (qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx := by
+    apply sub_eq_zero.mp
+    field_simp [hden, hden']
+    ring_nf at h1 ⊢
+    exact h1
+  constructor
+  · exact hxout
+  · rw [← hxout]
+    apply sub_eq_zero.mp
+    field_simp [hden, hden']
+    ring_nf at h2 ⊢
+    have h2neg := congrArg Neg.neg h2
+    ring_nf at h2neg
+    ring_nf
+    exact h2neg
+
 theorem soundness : Soundness F main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, constraints, poly1, poly2]
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
-  simp_all [sub_eq_add_neg]
+  have hc : constraints { p := { x := px, y := py }, q := { x := qx, y := qy } }
+      { x := env.get i₀, y := env.get (i₀ + 1) } := by
+    simp_all [constraints, poly1, poly2, sub_eq_add_neg]
+  exact constraints_eq_outputValue h_assumptions hc
 
 theorem completeness : Completeness F main Assumptions := by
   circuit_proof_start [main, Assumptions, outputValue, lambda, constraints, poly1, poly2]

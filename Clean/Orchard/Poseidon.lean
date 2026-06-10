@@ -839,7 +839,7 @@ def constraints (row : Row R) : Prop :=
     outputCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  Hash2.main row.hash
+  Hash2.circuit row.hash
   assertZero (input0Check row)
   assertZero (input1Check row)
   assertZero (input2Check row)
@@ -850,21 +850,21 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, input0Check, input1Check, input2Check,
-      outputCheck, Hash2.main, Hash2.constraints, Hash2.initial0Check,
+      outputCheck, Hash2.circuit, Hash2.constraints, Hash2.initial0Check,
       Hash2.initial1Check, Hash2.capacityCheck, Hash2.input0Check, Hash2.input1Check,
       Hash2.hashCheck, PadAndAdd.output0Check, PadAndAdd.output1Check,
       PadAndAdd.capacityCheck]
     simp_all [sub_eq_add_neg]
     constructor
-    · have h := h_holds.1
-      rw [h_holds.2.2.2.1] at h
+    · have h := h_holds.1.1
+      rw [h_holds.1.2.2.2.1] at h
       simpa [sub_eq_add_neg] using h
-    · have h := h_holds.2.1
-      rw [h_holds.2.2.2.2.1] at h
+    · have h := h_holds.1.2.1
+      rw [h_holds.1.2.2.2.2.1] at h
       simpa [sub_eq_add_neg] using h
   completeness := by
     circuit_proof_start [main, constraints, input0Check, input1Check, input2Check,
-      outputCheck, Hash2.main, Hash2.constraints, Hash2.initial0Check,
+      outputCheck, Hash2.circuit, Hash2.constraints, Hash2.initial0Check,
       Hash2.initial1Check, Hash2.capacityCheck, Hash2.input0Check, Hash2.input1Check,
       Hash2.hashCheck, PadAndAdd.output0Check, PadAndAdd.output1Check,
       PadAndAdd.capacityCheck]
