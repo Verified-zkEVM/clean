@@ -35,12 +35,10 @@ namespace NoteCommit
 
 variable {F : Type} [Field F]
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-
-def boolPoly (x : R) : R :=
+def boolPoly {K : Type} [One K] [Sub K] [Mul K] (x : K) : K :=
   x * (x - 1)
 
-def IsBool (x : R) : Prop :=
+def IsBool {K : Type} [Zero K] [One K] (x : K) : Prop :=
   x = 0 ∨ x = 1
 
 private theorem isBool_of_boolPoly_eq_zero {x : F} (h : boolPoly x = 0) : IsBool x := by
@@ -58,7 +56,7 @@ private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 :=
 private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
   sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
 
-def tP [OfNat R 45560315531419706090280762371685220353] : R :=
+def tP {K : Type} [OfNat K 45560315531419706090280762371685220353] : K :=
   OfNat.ofNat 45560315531419706090280762371685220353
 
 namespace DecomposeB
