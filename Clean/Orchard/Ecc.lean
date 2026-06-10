@@ -118,6 +118,53 @@ theorem pallasScalarMulCoords_one (base : Point PallasBaseField) :
     CompElliptic.CurveForms.ShortWeierstrass.smul,
     CompElliptic.CurveForms.ShortWeierstrass.zero_add]
 
+theorem isPointOrIdentity_of_pallasValid {point : Point PallasBaseField}
+    (h :
+      CompElliptic.CurveForms.ShortWeierstrass.Valid
+        CompElliptic.Curves.Pasta.Pallas.a
+        CompElliptic.Curves.Pasta.Pallas.b
+        (pointCoords point)) :
+    isPointOrIdentity point := by
+  rcases point with ⟨x, y⟩
+  rcases h with hCurve | hIdentity
+  · exact Or.inr (by
+      unfold pointCoords CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+        CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b at hCurve
+      unfold onCurve curveEquation pallasB
+      ring_nf at hCurve ⊢
+      linear_combination hCurve)
+  · exact Or.inl (by
+      simp [pointCoords, isIdentityEncoding] at hIdentity ⊢
+      exact hIdentity)
+
+theorem pallasScalarMulCoords_valid
+    (scalar : ℕ) {base : Point PallasBaseField}
+    (hbase : isPointOrIdentity base) :
+    CompElliptic.CurveForms.ShortWeierstrass.Valid
+      CompElliptic.Curves.Pasta.Pallas.a
+      CompElliptic.Curves.Pasta.Pallas.b
+      (pallasScalarMulCoords scalar base) := by
+  haveI :=
+    CompElliptic.CurveForms.ShortWeierstrass.instIsElliptic
+      CompElliptic.Curves.Pasta.Pallas.curve
+  simpa [pallasScalarMulCoords]
+    using
+      (CompElliptic.CurveForms.ShortWeierstrass.valid_smul
+        (a := CompElliptic.Curves.Pasta.Pallas.curve.A)
+        (b := CompElliptic.Curves.Pasta.Pallas.curve.B)
+        (p := pointCoords base)
+        (pallasValid_of_isPointOrIdentity (point := base) hbase)
+        scalar)
+
+theorem pallasScalarMulCoords_isPointOrIdentity
+    (scalar : ℕ) {base product : Point PallasBaseField}
+    (hbase : isPointOrIdentity base)
+    (hproduct : pointCoords product = pallasScalarMulCoords scalar base) :
+    isPointOrIdentity product := by
+  apply isPointOrIdentity_of_pallasValid
+  rw [hproduct]
+  exact pallasScalarMulCoords_valid scalar hbase
+
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
 
