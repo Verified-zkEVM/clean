@@ -219,7 +219,7 @@ values and returns a clean result.
 
 | Rust source API | Rust semantics | Current Clean equivalent | Status |
 | --- | --- | --- | --- |
-| `EccInstructions::add` in `halo2_gadgets/src/ecc/chip.rs`, implemented by `add::Config::assign_region` in `ecc/chip/add.rs` | Complete affine addition. Inputs are two `EccPoint`s, auxiliaries `lambda`, `alpha`, `beta`, `gamma`, `delta` and the output point are witnessed internally, and the API returns `P + Q`, including identity and inverse cases. | `Orchard.Ecc.CompleteAdd.circuit` | Missing entry-point circuit. The Clean object is only a row assertion over explicit `p`, `q`, `r`, and auxiliary fields. It does not witness the output or state `r = P + Q` as the API-level contract. |
+| `EccInstructions::add` in `halo2_gadgets/src/ecc/chip.rs`, implemented by `add::Config::assign_region` in `ecc/chip/add.rs` | Complete affine addition. Inputs are two `EccPoint`s, auxiliaries `lambda`, `alpha`, `beta`, `gamma`, `delta` and the output point are witnessed internally, and the API returns `P + Q`, including identity and inverse cases. | `Orchard.Ecc.CompleteAdd.Entry.circuit` over `PallasBaseField`; row assertion remains `Orchard.Ecc.CompleteAdd.circuit` | Present. The entry circuit witnesses the output point and auxiliary row values, composes the complete-add row assertion internally, and specifies CompElliptic short-Weierstrass addition over Pallas. |
 | `EccInstructions::add_incomplete`, implemented by `add_incomplete::Config::assign_region` | Incomplete non-identity addition. Inputs are non-identity points with exceptional cases rejected; output is witnessed and returned. | `Orchard.Ecc.IncompleteAdd.circuit` | Present as a `FormalCircuit` with input/output point surface and semantic short-Weierstrass addition spec. |
 | `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by `ecc/chip/mul.rs::Config::assign` | Variable-base scalar multiplication `[scalar] base`, including scalar decomposition, complete and incomplete additions, LSB correction, and overflow check. | Row assertions in `Orchard.ScalarMul.VarBase*` plus copy edges in `Orchard.ActionAddressWiring` | Missing entry-point circuit. Clean does not yet have a composed variable-base scalar-mul circuit whose surface contains scalar, base, and product with spec `product = [scalar] base`. |
 | `FixedPoint::mul`, implemented by `ecc/chip/mul_fixed/full_width.rs` | Full-width fixed-base scalar multiplication `[scalar] B`. Used by Orchard for `ValueCommitR`, `SpendAuthG`, Sinsemilla blinding factors, note commitments, and `CommitIvk`. | Row assertions in `Orchard.ScalarMul.FixedBase.*`; higher gadgets accept product coordinates | Missing entry-point circuit. Clean currently does not connect a scalar and fixed-base identifier to the returned product. |
@@ -254,10 +254,10 @@ Complete-add modelling note:
   CompElliptic proves this as `Pallas.no_onCurve_x_zero` from `5` being a quadratic
   non-residue in the Pallas base field; the relevant Pasta field and curve facts are now
   vendored under `Clean.Orchard.Specs.Elliptic`.
-- Therefore the missing Clean entry point should assume or prove valid point encodings for
-  both inputs, compose the complete-add row internally, and specify CompElliptic
-  short-Weierstrass addition. Downstream gadgets should not treat the row-level
-  `CompleteAdd.circuit` alone as this API.
+- Therefore the Clean entry point assumes or proves valid point encodings for both inputs,
+  composes the complete-add row internally, and specifies CompElliptic short-Weierstrass
+  addition. Downstream gadgets should use `CompleteAdd.Entry.circuit` when they need the
+  API-level addition relation, not the row-level `CompleteAdd.circuit` alone.
 
 ## Sinsemilla and Orchard wrapper conformance audit
 

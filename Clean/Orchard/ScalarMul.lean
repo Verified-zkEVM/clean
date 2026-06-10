@@ -100,8 +100,7 @@ def SelectedCorrectionPoint (row : Row R) : Prop :=
     (row.xP, row.yP) =
       CompElliptic.CurveForms.ShortWeierstrass.neg (row.baseX, row.baseY)) ∧
     (lsb row = 1 →
-      (row.xP, row.yP) =
-        CompElliptic.CurveForms.ShortWeierstrass.smul 0 0 (row.baseX, row.baseY))
+      (row.xP, row.yP) = (0, 0))
 
 def Spec (row : Row R) : Prop :=
   IsBool (lsb row) ∧ SelectedCorrectionPoint row
@@ -116,8 +115,7 @@ def circuit : FormalAssertion F Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, constraints, SelectedCorrectionPoint, NoteCommit.boolPoly,
-      lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg,
-      CompElliptic.CurveForms.ShortWeierstrass.smul]
+      lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_holds with ⟨hBool, hX, hY⟩
     rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
     constructor
@@ -142,8 +140,7 @@ def circuit : FormalAssertion F Row where
         linear_combination hY' + input_baseY * hBit
   completeness := by
     circuit_proof_start [main, Spec, constraints, SelectedCorrectionPoint, NoteCommit.boolPoly,
-      lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg,
-      CompElliptic.CurveForms.ShortWeierstrass.smul]
+      lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
     constructor
