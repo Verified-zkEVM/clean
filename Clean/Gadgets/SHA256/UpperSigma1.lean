@@ -166,7 +166,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · have hr6 := eval_rotr32 env.toEnvironment input_var input h_input 6 i
     have hr11 := eval_rotr32 env.toEnvironment input_var input h_input 11 i
     have h1 := h_env1 i
-    simp only [Vector.getElem_ofFn] at h1
+    simp only [circuit_norm, Vector.getElem_ofFn] at h1
     rw [h1, hr6, hr11]
     have b6 : input[(i + 6).val] = (0 : F p) ∨ input[(i + 6).val] = 1 := h_assumptions (i + 6)
     have b11 : input[(i + 11).val] = (0 : F p) ∨ input[(i + 11).val] = 1 := h_assumptions (i + 11)
@@ -181,8 +181,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hr25 := eval_rotr32 env.toEnvironment input_var input h_input 25 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [Vector.getElem_ofFn, mul_zero, zero_add] at h2
-    simp only [Vector.getElem_ofFn] at h1
+    simp only [circuit_norm, Vector.getElem_ofFn, mul_zero, zero_add] at h2
+    simp only [circuit_norm, Vector.getElem_ofFn] at h1
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr6, hr11, hr25]
     have b6 : input[(i + 6).val] = (0 : F p) ∨ input[(i + 6).val] = 1 := h_assumptions (i + 6)
     have b11 : input[(i + 11).val] = (0 : F p) ∨ input[(i + 11).val] = 1 := h_assumptions (i + 11)
