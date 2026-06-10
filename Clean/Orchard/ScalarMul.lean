@@ -292,6 +292,15 @@ def constraints (row : Row R) : Prop :=
     secantLine row = 0 ∧
     gradient2 row = 0
 
+def Spec (row : Row R) : Prop :=
+  IsBool (bit row) ∧
+    2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) +
+        2 * ((bit row * 2 - 1) * row.yPCur) = yADouble row.cur ∧
+    row.cur.lambda2 * row.cur.lambda2 =
+        row.xANext + Sinsemilla.DoubleAndAdd.xR row.cur + row.cur.xA ∧
+    2 * row.cur.lambda2 * (row.cur.xA - row.xANext) =
+        yADouble row.cur + row.yANextDouble
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
   assertZero (gradient1 row)
@@ -300,15 +309,23 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, bit, gradient1,
+    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bit, gradient1,
       secantLine, gradient2, yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hBool, hGradient1, hSecant, hGradient2⟩
+    exact ⟨isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool),
+      by linear_combination hGradient1,
+      by linear_combination hSecant,
+      by linear_combination hGradient2⟩
   completeness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, bit, gradient1,
+    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bit, gradient1,
       secantLine, gradient2, yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hBool, hGradient1, hSecant, hGradient2⟩
+    exact ⟨by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool,
+      by linear_combination hGradient1,
+      by linear_combination hSecant,
+      by linear_combination hGradient2⟩
 
 end Loop
 
@@ -328,6 +345,9 @@ def yPCheck (row : Row R) : R :=
 def constraints (row : Row R) : Prop :=
   xPCheck row = 0 ∧ yPCheck row = 0 ∧ Loop.constraints row.toRow
 
+def Spec (row : Row R) : Prop :=
+  row.cur.xP = row.xPNext ∧ row.yPCur = row.yPNext ∧ Loop.Spec row.toRow
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (xPCheck row)
   assertZero (yPCheck row)
@@ -335,19 +355,25 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, xPCheck, yPCheck, Loop.circuit,
-      Loop.constraints, NoteCommit.boolPoly, Loop.bit, Loop.gradient1,
+    circuit_proof_start [main, Spec, constraints, xPCheck, yPCheck, Loop.circuit,
+      Loop.Spec, Loop.constraints, NoteCommit.boolPoly, Loop.bit, Loop.gradient1,
       Loop.secantLine, Loop.gradient2, yADouble, Sinsemilla.DoubleAndAdd.yA,
       Sinsemilla.DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hxP, hyP, hLoop⟩
+    exact ⟨sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hxP),
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hyP),
+      hLoop⟩
   completeness := by
-    circuit_proof_start [main, constraints, xPCheck, yPCheck, Loop.circuit,
-      Loop.constraints, NoteCommit.boolPoly, Loop.bit, Loop.gradient1,
+    circuit_proof_start [main, Spec, constraints, xPCheck, yPCheck, Loop.circuit,
+      Loop.Spec, Loop.constraints, NoteCommit.boolPoly, Loop.bit, Loop.gradient1,
       Loop.secantLine, Loop.gradient2, yADouble, Sinsemilla.DoubleAndAdd.yA,
       Sinsemilla.DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hxP, hyP, hLoop⟩
+    exact ⟨by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hxP,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hyP,
+      hLoop⟩
 
 end MainLoop
 
