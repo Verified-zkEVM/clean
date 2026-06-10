@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Orchard.Ecc
+import Clean.Orchard.Poseidon
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -168,6 +169,106 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end Nullifier
+
+/-!
+Nullifier wiring including the two-input Poseidon hash.
+
+Reference:
+`orchard@0.14.0/src/circuit/gadget.rs`
+- `derive_nullifier`
+
+This strengthens `Nullifier.circuit` with the source edge
+`hash = PoseidonHash(nk, rho)`. The Poseidon permutation result is still explicit in
+`Poseidon.Hash2.Row`; the Pow5 gate assertions in `Clean.Orchard.Poseidon` model the
+round arithmetic separately.
+-/
+namespace NullifierWithHash
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
+
+structure Row (F : Type) where
+  hash : Poseidon.Hash2.Row F
+  nullifier : Nullifier.Row F
+deriving ProvableStruct
+
+def hashOutputCheck (row : Row R) : R :=
+  row.hash.hash - row.nullifier.poseidonHash
+
+def constraints (row : Row R) : Prop :=
+  Poseidon.Hash2.constraints row.hash ∧
+    Nullifier.constraints row.nullifier ∧
+    hashOutputCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (Poseidon.PadAndAdd.output0Check row.hash.absorbed)
+  assertZero (Poseidon.PadAndAdd.output1Check row.hash.absorbed)
+  assertZero (Poseidon.PadAndAdd.capacityCheck row.hash.absorbed)
+  assertZero (Poseidon.Hash2.initial0Check row.hash)
+  assertZero (Poseidon.Hash2.initial1Check row.hash)
+  assertZero (Poseidon.Hash2.capacityCheck row.hash)
+  assertZero (Poseidon.Hash2.input0Check row.hash)
+  assertZero (Poseidon.Hash2.input1Check row.hash)
+  assertZero (Poseidon.Hash2.hashCheck row.hash)
+  assertZero (Nullifier.scalarCheck row.nullifier)
+  Ecc.CompleteAdd.main (Nullifier.addRow row.nullifier)
+  assertZero (Nullifier.extractCheck row.nullifier)
+  assertZero (hashOutputCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, hashOutputCheck, Poseidon.Hash2.constraints,
+      Poseidon.Hash2.initial0Check, Poseidon.Hash2.initial1Check,
+      Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
+      Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck,
+      Poseidon.PadAndAdd.output0Check, Poseidon.PadAndAdd.output1Check,
+      Poseidon.PadAndAdd.capacityCheck, Nullifier.constraints, Nullifier.scalarCheck,
+      Nullifier.extractCheck, Nullifier.addRow, Ecc.CompleteAdd.main,
+      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
+      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
+      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
+      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
+      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+    constructor
+    · have h := h_holds.1
+      rw [h_holds.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+    · have h := h_holds.2.1
+      rw [h_holds.2.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+  completeness := by
+    circuit_proof_start [main, constraints, hashOutputCheck, Poseidon.Hash2.constraints,
+      Poseidon.Hash2.initial0Check, Poseidon.Hash2.initial1Check,
+      Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
+      Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck,
+      Poseidon.PadAndAdd.output0Check, Poseidon.PadAndAdd.output1Check,
+      Poseidon.PadAndAdd.capacityCheck, Nullifier.constraints, Nullifier.scalarCheck,
+      Nullifier.extractCheck, Nullifier.addRow, Ecc.CompleteAdd.main,
+      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
+      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
+      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
+      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
+      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+    constructor
+    · have h := h_spec.1.1
+      rw [h_spec.1.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+    · have h := h_spec.1.2.1
+      rw [h_spec.1.2.2.2.2.1] at h
+      simpa [sub_eq_add_neg] using h
+
+end NullifierWithHash
 
 /-!
 Spend-authority wiring.
