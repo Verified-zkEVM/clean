@@ -923,6 +923,43 @@ def circuit : FormalAssertion F Row where
 
 end FinalFullBlock
 
+namespace PartialPairBlock
+
+structure Row (F : Type) where
+  prev : PartialRounds.Row F
+  next : PartialRounds.Row F
+deriving ProvableStruct
+
+def Spec (row : Row R) : Prop :=
+  PartialRounds.Spec row.prev ∧
+    PartialRounds.Spec row.next ∧
+    stateEq (partialNext row.prev) (partialCur row.next)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  PartialRounds.circuit row.prev
+  PartialRounds.circuit row.next
+  PartialToPartial.circuit { prev := row.prev, next := row.next }
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec,
+      PartialRounds.circuit, PartialRounds.Spec,
+      PartialToPartial.circuit, PartialToPartial.Spec,
+      stateSame, stateEq, partialCur, partialNext]
+    rcases h_holds with ⟨hPrev, hNext, hLink⟩
+    exact ⟨hPrev, hNext, stateEq_of_stateSame hLink⟩
+  completeness := by
+    circuit_proof_start [main, Spec,
+      PartialRounds.circuit, PartialRounds.Spec,
+      PartialToPartial.circuit, PartialToPartial.Spec,
+      stateSame, stateEq, partialCur, partialNext]
+    rcases h_spec with ⟨hPrev, hNext, hLink⟩
+    exact ⟨hPrev, hNext, stateSame_of_stateEq hLink⟩
+
+end PartialPairBlock
+
 end Permutation
 
 /-!
