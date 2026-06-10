@@ -177,5 +177,70 @@ def circuit : FormalAssertion F Row where
 
 end Wiring
 
+/-!
+Incoming-viewing-key commitment output connected to Sinsemilla short-commit arithmetic.
+
+Reference:
+`orchard@0.14.0/src/circuit/commit_ivk.rs`
+- `gadgets::commit_ivk`
+
+The Rust gadget constructs the `CommitIvk` message/canonicity gate, calls
+`CommitDomain::short_commit`, and returns the extracted x-coordinate as `ivk`.
+`Wiring.circuit` records the canonicity-gate wiring. This assertion connects its
+explicit `computedIvk` output to the `Sinsemilla.ShortCommit.circuit` extracted value.
+-/
+namespace WiringWithShortCommit
+
+variable [OfNat R 2] [OfNat R 3]
+
+structure Row (F : Type) where
+  wiring : Wiring.Row F
+  shortCommit : Sinsemilla.ShortCommit.Row F
+deriving ProvableStruct
+
+def ivkCheck (row : Row R) : R :=
+  row.shortCommit.extracted - row.wiring.computedIvk
+
+def constraints (row : Row R) : Prop :=
+  Sinsemilla.ShortCommit.constraints row.shortCommit ∧ ivkCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  Sinsemilla.ShortCommit.main row.shortCommit
+  assertZero (ivkCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, ivkCheck,
+      Sinsemilla.ShortCommit.main, Sinsemilla.ShortCommit.constraints,
+      Sinsemilla.ShortCommit.extractCheck, Sinsemilla.Commit.main,
+      Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
+      Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
+      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
+      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
+      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
+      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, ivkCheck,
+      Sinsemilla.ShortCommit.main, Sinsemilla.ShortCommit.constraints,
+      Sinsemilla.ShortCommit.extractCheck, Sinsemilla.Commit.main,
+      Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
+      Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
+      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
+      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
+      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
+      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+
+end WiringWithShortCommit
+
 end CommitIvk
 end Orchard

@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard.Ecc
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -169,6 +170,132 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end Gate
+
+/-!
+Sinsemilla commitment output wiring.
+
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla.rs`
+- `CommitDomain::commit`
+- `CommitDomain::short_commit`
+
+The source computes a hash point `M`, a fixed-base blinding factor `[r] R`, and then
+returns `M + [r] R`. `short_commit` extracts the x-coordinate from that commitment. The
+hash point and blinding factor are explicit row values here; their internal arithmetic is
+represented by the lower-level Sinsemilla and fixed-base scalar-multiplication assertions.
+-/
+namespace Commit
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
+
+structure Row (F : Type) where
+  hashX : F
+  hashY : F
+  blindX : F
+  blindY : F
+  commitmentX : F
+  commitmentY : F
+  lambda : F
+  alpha : F
+  beta : F
+  gamma : F
+  delta : F
+deriving ProvableStruct
+
+def addRow (row : Row R) : Ecc.CompleteAddRow R where
+  p := { x := row.hashX, y := row.hashY }
+  q := { x := row.blindX, y := row.blindY }
+  r := { x := row.commitmentX, y := row.commitmentY }
+  lambda := row.lambda
+  alpha := row.alpha
+  beta := row.beta
+  gamma := row.gamma
+  delta := row.delta
+
+def constraints (row : Row R) : Prop :=
+  Ecc.CompleteAdd.constraints (addRow row)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  Ecc.CompleteAdd.main (addRow row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.main,
+      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
+      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
+      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
+      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
+      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.main,
+      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
+      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
+      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
+      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
+      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+
+end Commit
+
+namespace ShortCommit
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
+
+structure Row (F : Type) where
+  commit : Commit.Row F
+  extracted : F
+deriving ProvableStruct
+
+def extractCheck (row : Row R) : R :=
+  row.commit.commitmentX - row.extracted
+
+def constraints (row : Row R) : Prop :=
+  Commit.constraints row.commit ∧ extractCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  Commit.main row.commit
+  assertZero (extractCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, extractCheck, Commit.main,
+      Commit.constraints, Commit.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
+      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
+      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
+      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
+      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
+      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
+      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, extractCheck, Commit.main,
+      Commit.constraints, Commit.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
+      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
+      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
+      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
+      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
+      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
+      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+
+end ShortCommit
 
 /-!
 Reference:

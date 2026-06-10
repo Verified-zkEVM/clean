@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard.Sinsemilla
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -668,6 +669,73 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end Wiring
+
+/-!
+Note-commitment output connected to Sinsemilla commitment arithmetic.
+
+Reference:
+`orchard@0.14.0/src/circuit/note_commit.rs`
+- `gadgets::note_commit`
+
+`gadgets::note_commit` builds the message/decomposition rows, calls
+`CommitDomain::commit`, and uses the returned point as the computed note commitment.
+`Wiring.circuit` records the message-piece and canonicity wiring. This assertion connects
+its explicit `computedCm*` outputs to the `Sinsemilla.Commit.circuit` output point.
+-/
+namespace WiringWithCommit
+
+variable [OfNat R 2] [OfNat R 3]
+
+structure Row (F : Type) where
+  note : Wiring.Row F
+  commit : Sinsemilla.Commit.Row F
+deriving ProvableStruct
+
+def cmXCheck (row : Row R) : R :=
+  row.commit.commitmentX - row.note.computedCmX
+
+def cmYCheck (row : Row R) : R :=
+  row.commit.commitmentY - row.note.computedCmY
+
+def constraints (row : Row R) : Prop :=
+  Sinsemilla.Commit.constraints row.commit ∧
+    cmXCheck row = 0 ∧
+    cmYCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  Sinsemilla.Commit.main row.commit
+  assertZero (cmXCheck row)
+  assertZero (cmYCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, cmXCheck, cmYCheck,
+      Sinsemilla.Commit.main, Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
+      Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
+      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
+      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
+      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
+      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, cmXCheck, cmYCheck,
+      Sinsemilla.Commit.main, Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
+      Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
+      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
+      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
+      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
+      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
+      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
+      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
+      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+
+end WiringWithCommit
 
 end NoteCommit
 end Orchard

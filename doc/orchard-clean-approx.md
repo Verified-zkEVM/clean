@@ -140,7 +140,10 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `chip.rs` are ported as `Orchard.Sinsemilla.InitialYQ.circuit` and
      `Orchard.Sinsemilla.Gate.circuit`. The public/private `hash_to_point`
      initialization copy wiring around `Initial y_Q` is ported as
-     `Orchard.Sinsemilla.InitWiring.circuit`. The MerkleCRH decomposition gate from
+     `Orchard.Sinsemilla.InitWiring.circuit`. `CommitDomain::commit` and
+     `CommitDomain::short_commit` output wiring are ported as
+     `Orchard.Sinsemilla.Commit.circuit` and `Orchard.Sinsemilla.ShortCommit.circuit`.
+     The MerkleCRH decomposition gate from
      `merkle/chip.rs` is ported as `Orchard.Sinsemilla.Merkle.circuit`; the
      fixed three-piece `MerkleInstructions::hash_layer` assignment and extracted hash
      wiring is ported as `Orchard.Sinsemilla.Merkle.Wiring.circuit`. One layer of
@@ -184,15 +187,18 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.NoteCommit.ValueCanonicity.circuit`, plus
      `Orchard.NoteCommit.YCanonicity.circuit`. The source-level
      `gadgets::note_commit` assignment and copy wiring is ported as
-     `Orchard.NoteCommit.Wiring.circuit`; the Sinsemilla commitment result remains an
-     explicit row value rather than a guessed hash implementation. The old
+     `Orchard.NoteCommit.Wiring.circuit`; its explicit computed commitment output is
+     connected to `Orchard.Sinsemilla.Commit.circuit` by
+     `Orchard.NoteCommit.WiringWithCommit.circuit`. The old
      `derived_cm_old = cm_old` action edge and new `cmx = ExtractP(cm_new)` public edge
      are connected to `Orchard.ActionWiring.circuit` by
      `Orchard.ActionNoteCommitWiring.circuit`.
      `commit_ivk.rs` gate
      `CommitIvk canonicity check` is ported as `Orchard.CommitIvk.circuit`; the
      source-level `gadgets::commit_ivk` gate assignment and returned `ivk` wiring is
-     ported as `Orchard.CommitIvk.Wiring.circuit`. The action-level address-integrity
+     ported as `Orchard.CommitIvk.Wiring.circuit`, and its explicit computed `ivk`
+     output is connected to `Orchard.Sinsemilla.ShortCommit.circuit` by
+     `Orchard.CommitIvk.WiringWithShortCommit.circuit`. The action-level address-integrity
      copy edges from `ak` into `commit_ivk`, from `ivk` into the variable-base scalar
      input, and from the explicit `[ivk] g_d_old` result into `derived_pk_d_old` are
      recorded by `Orchard.ActionAddressWiring.circuit`.
