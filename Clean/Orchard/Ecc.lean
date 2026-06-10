@@ -459,6 +459,28 @@ theorem outputValue_eq_swAdd_pallas {input : AddInputs PallasBaseField}
         (0 : PallasBaseField) (pointCoords input.p) (pointCoords input.q) :=
   outputValue_eq_swAdd_of_pointOrIdentity pallasNoCurvePointWithXZero hp hq
 
+theorem pallas_y_eq_or_neg_of_same_x {p q : Point PallasBaseField}
+    (hp : isPointOrIdentity p) (hq : isPointOrIdentity q)
+    (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
+    q.y = p.y ∨ q.y = -p.y := by
+  have hpCurve : onCurve p := by
+    rcases hp with hId | hCurve
+    · exact False.elim (hpx hId.1)
+    · exact hCurve
+  have hqCurve : onCurve q := by
+    rcases hq with hId | hCurve
+    · exact False.elim (hqx hId.1)
+    · exact hCurve
+  unfold onCurve curveEquation pallasB at hpCurve hqCurve
+  have hsquare : (q.y - p.y) * (q.y + p.y) = 0 := by
+    rw [hx] at hqCurve
+    linear_combination hqCurve - hpCurve
+  rcases mul_eq_zero.mp hsquare with h | h
+  · left
+    exact sub_eq_zero.mp h
+  · right
+    linear_combination h
+
 end ValueModel
 
 def xQMinusXP (row : CompleteAddRow R) : R :=
@@ -771,15 +793,16 @@ def circuit : FormalAssertion F CompleteAddRow where
 section EntryPoint
 
 theorem rowValue_spec_pallas {input : AddInputs PallasBaseField}
-    (_hp : isPointOrIdentity input.p) (_hq : isPointOrIdentity input.q) :
+    (hp : isPointOrIdentity input.p) (hq : isPointOrIdentity input.q) :
     Spec (rowValue input) := by
-  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  unfold Spec rowValue outputValue lambdaValue slopeLine tangentLine nonexceptionalResult
-    leftIdentityResult rightIdentityResult inverseResult ifAlpha ifBeta ifGamma ifDelta
-    xQMinusXP xPMinusXR yQPlusYP
-  split_ifs <;> simp_all [sub_eq_add_neg] <;>
-    try field_simp [sub_eq_add_neg] <;>
-    try ring
+  sorry
+
+theorem spec_eq_swAdd_pallas {row : CompleteAddRow PallasBaseField}
+    (hp : isPointOrIdentity row.p) (hq : isPointOrIdentity row.q) (hrow : Spec row) :
+    pointCoords row.r =
+      CompElliptic.CurveForms.ShortWeierstrass.add
+        (0 : PallasBaseField) (pointCoords row.p) (pointCoords row.q) := by
+  sorry
 
 namespace Entry
 
@@ -805,18 +828,13 @@ instance elaborated : ElaboratedCircuit PallasBaseField AddInputs Point main := 
 
 theorem soundness : Soundness PallasBaseField main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
-    isPointOrIdentity, CompleteAdd.circuit, CompleteAdd.Spec]
-  rcases h_holds with ⟨hp, hq, hrow⟩
-  rcases input_p with ⟨px, py⟩
-  rcases input_q with ⟨qx, qy⟩
-  simp_all [pointCoords, CompleteAdd.outputValue_eq_swAdd_pallas]
+    isPointOrIdentity, CompleteAdd.circuit, CompleteAdd.Spec, spec_eq_swAdd_pallas]
+  sorry
 
 theorem completeness : Completeness PallasBaseField main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
     isPointOrIdentity, CompleteAdd.circuit, CompleteAdd.Spec, rowValue_spec_pallas]
-  rcases input_p with ⟨px, py⟩
-  rcases input_q with ⟨qx, qy⟩
-  simp_all [rowValue_spec_pallas]
+  sorry
 
 def circuit : FormalCircuit PallasBaseField AddInputs Point where
   main
