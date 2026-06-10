@@ -102,6 +102,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
    `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`,
    `halo2_gadgets/src/sinsemilla/merkle*.rs`
    - Depends on generator-table lookup, range checks, ECC addition, and conditional swap.
+   - Status: `Initial y_Q` and `Sinsemilla gate` arithmetic constraints from
+     `chip.rs` are ported as `Orchard.Sinsemilla.InitialYQ.circuit` and
+     `Orchard.Sinsemilla.Gate.circuit`.
 7. Orchard custom gates and composition:
    `orchard/src/circuit.rs`,
    `orchard/src/circuit/commit_ivk.rs`,
