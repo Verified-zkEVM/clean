@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Orchard.Gadget
+import Clean.Orchard.NoteCommit
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -312,4 +313,78 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end ActionComputedWiring
+
+/-!
+Action wiring with old and new note commitment outputs.
+
+Reference:
+`orchard@0.14.0/src/circuit.rs`
+- `Old note commitment integrity`
+- `New note commitment integrity`
+- final public-input/action wiring in `Circuit::synthesize`
+
+This assertion connects `gadgets::note_commit` output cells to the action row: the old
+derived commitment is constrained to the witnessed `cm_old`, and the new commitment's
+extracted x-coordinate supplies the public `cmx`. The internal note-commitment gates are
+kept in `NoteCommit.Wiring.circuit`, so this assertion only records the action-level copy
+constraints.
+-/
+namespace ActionNoteCommitWiring
+
+variable {F : Type} [Field F]
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+
+structure Row (F : Type) where
+  action : ActionWiring.Row F
+  oldNoteCommit : NoteCommit.Wiring.Row F
+  newNoteCommit : NoteCommit.Wiring.Row F
+deriving ProvableStruct
+
+def oldCmXCheck (row : Row R) : R :=
+  row.oldNoteCommit.cmX - row.action.derivedCmOldX
+
+def oldCmYCheck (row : Row R) : R :=
+  row.oldNoteCommit.cmY - row.action.derivedCmOldY
+
+def newCmxCheck (row : Row R) : R :=
+  row.newNoteCommit.cmX - row.action.cmxNew
+
+def constraints (row : Row R) : Prop :=
+  ActionWiring.constraints row.action ∧
+    oldCmXCheck row = 0 ∧
+    oldCmYCheck row = 0 ∧
+    newCmxCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  ActionWiring.main row.action
+  assertZero (oldCmXCheck row)
+  assertZero (oldCmYCheck row)
+  assertZero (newCmxCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, oldCmXCheck, oldCmYCheck, newCmxCheck,
+      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
+      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
+      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
+      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
+      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, oldCmXCheck, oldCmYCheck, newCmxCheck,
+      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
+      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
+      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
+      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
+      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck]
+    simp_all [sub_eq_add_neg]
+
+end ActionNoteCommitWiring
 end Orchard
