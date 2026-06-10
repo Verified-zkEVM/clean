@@ -137,42 +137,41 @@ end InitWiring
 
 namespace Gate
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 4]
-
 structure Row (F : Type) where
   qS2 : F
   cur : DoubleAndAddRow F
   next : DoubleAndAddRow F
 deriving ProvableStruct
 
-def qS3 (row : Row R) : R :=
+def qS3 {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
   row.qS2 * (row.qS2 - 1)
 
-def secantLine (row : Row R) : R :=
+def secantLine {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   row.cur.lambda2 * row.cur.lambda2 -
     (row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA)
 
-def yLhs (row : Row R) : R :=
+def yLhs {K : Type} [Sub K] [Mul K] [OfNat K 4] (row : Row K) : K :=
   4 * row.cur.lambda2 * (row.cur.xA - row.next.xA)
 
-def yRhs (row : Row R) : R :=
+def yRhs {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   2 * DoubleAndAdd.yA row.cur +
     (2 - qS3 row) * DoubleAndAdd.yA row.next +
     qS3 row * 2 * row.next.lambda1
 
-def yCheck (row : Row R) : R :=
+def yCheck {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 4]
+    (row : Row K) : K :=
   yLhs row - yRhs row
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.cur.lambda2 * row.cur.lambda2 =
     row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA ∧
   yLhs row = yRhs row
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (secantLine row)
   assertZero (yCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
