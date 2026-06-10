@@ -289,6 +289,10 @@ structure ShortLookupBitshift (F : Type) where
   invTwoPowS : F
 deriving ProvableStruct
 
+structure ShortRangeCheck (F : Type) where
+  word : F
+deriving ProvableStruct
+
 def twoPowK (k : ℕ) : F :=
   (2 ^ k : ℕ)
 
@@ -307,6 +311,43 @@ def circuit (k : ℕ) : FormalAssertion F ShortLookupBitshift where
   completeness := by
     circuit_proof_start [main, poly, twoPowK]
     simpa [sub_eq_add_neg] using h_spec
+
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/lookup_range_check.rs`
+- `LookupRangeCheck4_5BConfig::short_range_check`
+- combined lookup tagged with 4- and 5-bit table rows
+
+The Halo2 source enforces the short 4- and 5-bit cases with a tagged lookup table. This
+Clean approximation models the same range membership as a polynomial over the allowed
+values.
+-/
+
+def shortRangeSpec (numBits : ℕ) (input : ShortRangeCheck F) : Prop :=
+  RunningSum.rangeCheckPoly (2 ^ numBits) input.word = 0
+
+def shortRangeMain (numBits : ℕ) (input : Var ShortRangeCheck F) : Circuit F Unit := do
+  assertZero (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input.word)
+
+def shortRangeCircuit (numBits : ℕ) : FormalAssertion F ShortRangeCheck where
+  main := shortRangeMain numBits
+  Spec := shortRangeSpec numBits
+  soundness := by
+    circuit_proof_start [shortRangeMain, shortRangeSpec, RunningSum.rangeCheckPoly,
+      RunningSum.rangeCheckPolyExpr]
+    change Expression.eval env
+        (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input_var_word) = 0 at h_holds
+    rw [RunningSum.eval_rangeCheckPolyExpr] at h_holds
+    rw [h_input] at h_holds
+    exact h_holds
+  completeness := by
+    circuit_proof_start [shortRangeMain, shortRangeSpec, RunningSum.rangeCheckPoly,
+      RunningSum.rangeCheckPolyExpr]
+    change Expression.eval env.toEnvironment
+        (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input_var_word) = 0
+    rw [RunningSum.eval_rangeCheckPolyExpr]
+    rw [h_input]
+    exact h_spec
 
 end LookupRangeCheck
 
