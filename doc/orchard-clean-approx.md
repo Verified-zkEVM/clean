@@ -209,3 +209,36 @@ Bottom-up implementation order currently inferred from those tagged sources:
      copy edges from `ak` into `commit_ivk`, from `ivk` into the variable-base scalar
      input, and from the explicit `[ivk] g_d_old` result into `derived_pk_d_old` are
      recorded by `Orchard.ActionAddressWiring.circuit`.
+
+## Entry-point API audit against Halo2/Orchard
+
+The source-map above distinguishes custom-gate rows from the public chip/gadget APIs.
+The next bottom-up repairs should close the gaps where Clean currently has only the row
+assertion but the Rust source exposes a higher-level entry point that witnesses auxiliary
+values and returns a clean result.
+
+| Rust source API | Rust semantics | Current Clean equivalent | Status |
+| --- | --- | --- | --- |
+| `EccInstructions::add` in `halo2_gadgets/src/ecc/chip.rs`, implemented by `add::Config::assign_region` in `ecc/chip/add.rs` | Complete affine addition. Inputs are two `EccPoint`s, auxiliaries `lambda`, `alpha`, `beta`, `gamma`, `delta` and the output point are witnessed internally, and the API returns `P + Q`, including identity and inverse cases. | `Orchard.Ecc.CompleteAdd.circuit` | Missing entry-point circuit. The Clean object is only a row assertion over explicit `p`, `q`, `r`, and auxiliary fields. It does not witness the output or state `r = P + Q` as the API-level contract. |
+| `EccInstructions::add_incomplete`, implemented by `add_incomplete::Config::assign_region` | Incomplete non-identity addition. Inputs are non-identity points with exceptional cases rejected; output is witnessed and returned. | `Orchard.Ecc.IncompleteAdd.circuit` | Present as a `FormalCircuit` with input/output point surface and semantic short-Weierstrass addition spec. |
+| `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by `ecc/chip/mul.rs::Config::assign` | Variable-base scalar multiplication `[scalar] base`, including scalar decomposition, complete and incomplete additions, LSB correction, and overflow check. | Row assertions in `Orchard.ScalarMul.VarBase*` plus copy edges in `Orchard.ActionAddressWiring` | Missing entry-point circuit. Clean does not yet have a composed variable-base scalar-mul circuit whose surface contains scalar, base, and product with spec `product = [scalar] base`. |
+| `FixedPoint::mul`, implemented by `ecc/chip/mul_fixed/full_width.rs` | Full-width fixed-base scalar multiplication `[scalar] B`. Used by Orchard for `ValueCommitR`, `SpendAuthG`, Sinsemilla blinding factors, note commitments, and `CommitIvk`. | Row assertions in `Orchard.ScalarMul.FixedBase.*`; higher gadgets accept product coordinates | Missing entry-point circuit. Clean currently does not connect a scalar and fixed-base identifier to the returned product. |
+| `FixedPointShort::mul`, implemented by `ecc/chip/mul_fixed/short.rs` | Signed short fixed-base scalar multiplication `[sign * magnitude] B`, including magnitude decomposition and final conditional negation. Used by `ValueCommitV`. | `Orchard.ScalarMul.FixedShort.circuit` plus other row assertions | Missing entry-point circuit. The final-row sign semantics are present, but not the composed short fixed-base multiplication API. |
+| `FixedPointBaseField::mul`, implemented by `ecc/chip/mul_fixed/base_field_elem.rs` | Fixed-base scalar multiplication by a base-field element. Used by `derive_nullifier` for `[poseidon_hash(nk, rho) + psi] NullifierK`. | Row assertions in `Orchard.ScalarMul.FixedBase.*`; `Orchard.Gadget.Nullifier` accepts `productX/productY` | Missing entry-point circuit. Clean does not yet prove the nullifier product is the scalar multiplication result. |
+
+Consequences for Orchard gadgets:
+
+- `value_commit_orchard` in `orchard/src/circuit/gadget.rs` is
+  `[v] ValueCommitV + [rcv] ValueCommitR`. `Orchard.Gadget.ValueCommitment.circuit`
+  currently models only the final complete-add row over explicit products.
+- `derive_nullifier` in `orchard/src/circuit/gadget.rs` is
+  `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`.
+  `Orchard.Gadget.Nullifier.circuit` currently models the scalar field addition, final
+  complete-add row, and extraction edge, but not the fixed-base scalar multiplication.
+- Spend authority in `orchard/src/circuit.rs` is
+  `[alpha] SpendAuthG + ak_P`. `Orchard.Gadget.SpendAuth.circuit` currently models only
+  the final complete-add row over an explicit `[alpha] SpendAuthG` product.
+- Address integrity in `orchard/src/circuit.rs` computes
+  `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`. `Orchard.ActionAddressWiring`
+  currently records copy edges around `ivk` and `derived_pk_d_old`, but not the
+  variable-base scalar multiplication API.
