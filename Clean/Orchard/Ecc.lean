@@ -101,6 +101,16 @@ def IsOrchardFixedBaseMul
     (baseId : OrchardFixedBaseId) (scalar : ℕ) (product : Point PallasBaseField) : Prop :=
   IsPallasScalarMul scalar (fixedBasePoint baseId) product
 
+theorem fixedBasePoint_onCurve (baseId : OrchardFixedBaseId) :
+    onCurve (fixedBasePoint baseId) := by
+  rcases baseId <;>
+    unfold onCurve curveEquation fixedBasePoint pallasB <;>
+    native_decide
+
+theorem fixedBasePoint_isPointOrIdentity (baseId : OrchardFixedBaseId) :
+    isPointOrIdentity (fixedBasePoint baseId) :=
+  Or.inr (fixedBasePoint_onCurve baseId)
+
 theorem pallasValid_of_isPointOrIdentity {point : Point PallasBaseField}
     (h : isPointOrIdentity point) :
     CompElliptic.CurveForms.ShortWeierstrass.Valid
@@ -251,6 +261,12 @@ theorem isOrchardFixedBaseMul_one_iff
     IsOrchardFixedBaseMul baseId 1 product ↔ product = fixedBasePoint baseId := by
   simpa [IsOrchardFixedBaseMul] using
     (isPallasScalarMul_one_iff (base := fixedBasePoint baseId) (product := product))
+
+theorem isOrchardFixedBaseMul_isPointOrIdentity
+    {baseId : OrchardFixedBaseId} {scalar : ℕ} {product : Point PallasBaseField}
+    (hmul : IsOrchardFixedBaseMul baseId scalar product) :
+    isPointOrIdentity product :=
+  isPallasScalarMul_isPointOrIdentity (fixedBasePoint_isPointOrIdentity baseId) hmul
 
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
