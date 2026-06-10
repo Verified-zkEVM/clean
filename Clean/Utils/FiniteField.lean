@@ -96,3 +96,12 @@ instance {p : ℕ} [Fact p.Prime] : FiniteField (F p) where
 /-- On prime fields, `val` is just `ZMod.val`. -/
 @[simp, circuit_norm] theorem FiniteField.val_F {p : ℕ} [Fact p.Prime] (x : F p) :
     FiniteField.val x = ZMod.val x := rfl
+
+/-- `ZMod.val` injectivity as a simp lemma on prime fields (the `ZMod.val` counterpart
+of `val_inj`, needed because `val_F` rewrites `FiniteField.val` away first).
+Not in `circuit_norm`: it would rewrite legitimate `ZMod.val` Nat-reasoning; pass it
+locally where IR `feq` conditions must become propositional equality. -/
+theorem FiniteField.val_inj_F {p : ℕ} [Fact p.Prime] (x y : F p) :
+    ZMod.val x = ZMod.val y ↔ x = y := by
+  rw [← FiniteField.val_F, ← FiniteField.val_F]
+  exact FiniteField.val_inj

@@ -105,10 +105,17 @@ need no porting):
 Also in this phase: decidable `ComputableWitnesses` for structured IR (syntactic
 read-below-offset check), replacing semantic side-condition proofs where possible.
 
-Port pattern observed (IsZeroField, And8, Xor64, Xor32): the circuit change is a
-1:1 transliteration of the callback into IR; proofs survive untouched except where
-they used the *default* simp set on witness residue (`simpa using h_env 0`-style) —
-those need `circuit_norm` (which carries the IR eval lemmas) added to the simp call.
+Port pattern observed: the circuit change is a 1:1 transliteration of the callback
+into IR; proofs survive untouched except for two local fix classes:
+1. proof steps that used the *default* simp set on witness residue need `circuit_norm`
+   (which carries the IR eval lemmas) added to the simp call;
+2. proofs matching proof-carrying normal forms (`natToField`-based `mod256`/`floorDiv`/
+   `mod`, or `fieldToBits`) bridge to the Nat-cast/shift forms via dedicated lemmas
+   (`FieldUtils.mod_eq_natCast`/`floorDiv_eq_natCast`, `Utils.Bits.getElem_fieldToBits`).
+Special case (FemtoCairo nextState): IR conditionals are *data* until per-element
+extraction reduces them, so ite-resolution moves from the quantified `h_env` to the
+extraction sites, using `FiniteField.val_inj_F` (deliberately NOT in circuit_norm —
+it would rewrite legitimate `ZMod.val` Nat-reasoning) plus the per-case facts.
 
 
 Acceptance: the seven target families (Keccak, SHA256, FemtoCairo,
@@ -136,10 +143,9 @@ witness paths; proofs intact; green. This is the basis on which the PR is judged
 - [x] Phase 2 — core integration
 - [x] Phase 3 — reference interpreter + equivalence proof (`Clean/Circuit/WitnessGeneration.lean`)
 - [x] Phase 4 — authoring surface (witnessField/witnessVector/ProvableType.witness + ofFExpr(s)/ofExprs; <== emits IR)
-- [ ] Phase 5 — gadget ports (done: IsZeroField, And8, Xor64, Xor32, Poseidon (via `<==`),
-  SHA256 leaves (And32/Ch32/Maj32/Xor32/Add32), Bits, Bitify, Bitify2, BinSub, Or8,
-  Addition8FullCarry, ByteDecomposition, Comparators, FibonacciWithChannels,
-  AddOperations, Table/Inductive, U64/U32.witness; remaining: FemtoCairo (stress test);
-  HintExample stays witnessNative by design — it is the genuine hint-closure case)
+- [x] Phase 5 — gadget ports: ALL witness sites in the library are structured IR.
+  The single `witnessNative` holdout is HintExample, by design (the genuine
+  hint-closure case). FemtoCairo (the stress test) exercises `arrGet` (program
+  fetch), the `dataGet` memory intrinsic, and conditionals-into-structs.
 - [ ] Phase 6 — exportability checker + serializer
 - [ ] Phase 7 — cleanup
