@@ -152,16 +152,21 @@ def secantLine (row : Row R) : R :=
   row.cur.lambda2 * row.cur.lambda2 -
     (row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA)
 
-def yCheck (row : Row R) : R :=
-  let lhs := 4 * row.cur.lambda2 * (row.cur.xA - row.next.xA)
-  let rhs :=
-    2 * DoubleAndAdd.yA row.cur +
-      (2 - qS3 row) * DoubleAndAdd.yA row.next +
-      qS3 row * 2 * row.next.lambda1
-  lhs - rhs
+def yLhs (row : Row R) : R :=
+  4 * row.cur.lambda2 * (row.cur.xA - row.next.xA)
 
-def constraints (row : Row R) : Prop :=
-  secantLine row = 0 ∧ yCheck row = 0
+def yRhs (row : Row R) : R :=
+  2 * DoubleAndAdd.yA row.cur +
+    (2 - qS3 row) * DoubleAndAdd.yA row.next +
+    qS3 row * 2 * row.next.lambda1
+
+def yCheck (row : Row R) : R :=
+  yLhs row - yRhs row
+
+def Spec (row : Row R) : Prop :=
+  row.cur.lambda2 * row.cur.lambda2 =
+    row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA ∧
+  yLhs row = yRhs row
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (secantLine row)
@@ -169,15 +174,36 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, secantLine, yCheck, qS3,
+    circuit_proof_start [main, Spec, secantLine, yCheck, yLhs, yRhs, qS3,
       DoubleAndAdd.yA, DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    constructor
+    · have hSec :
+          input_cur_lambda2 * input_cur_lambda2 -
+              (input_next_xA +
+                (input_cur_lambda1 * input_cur_lambda1 - input_cur_xA - input_cur_xP) +
+                input_cur_xA) = 0 := by
+        simp_all [sub_eq_add_neg]
+      exact sub_eq_zero.mp hSec
+    · have hY :
+          4 * input_cur_lambda2 * (input_cur_xA - input_next_xA) -
+              (2 *
+                  ((input_cur_lambda1 + input_cur_lambda2) *
+                    (input_cur_xA -
+                      (input_cur_lambda1 * input_cur_lambda1 - input_cur_xA - input_cur_xP))) +
+                (2 - input_qS2 * (input_qS2 - 1)) *
+                  ((input_next_lambda1 + input_next_lambda2) *
+                    (input_next_xA -
+                      (input_next_lambda1 * input_next_lambda1 - input_next_xA - input_next_xP))) +
+                input_qS2 * (input_qS2 - 1) * 2 * input_next_lambda1) = 0 := by
+        simp_all [sub_eq_add_neg]
+      exact sub_eq_zero.mp hY
   completeness := by
-    circuit_proof_start [main, constraints, secantLine, yCheck, qS3,
+    circuit_proof_start [main, Spec, secantLine, yCheck, yLhs, yRhs, qS3,
       DoubleAndAdd.yA, DoubleAndAdd.xR]
     simp_all [sub_eq_add_neg]
+    constructor <;> ring
 
 end Gate
 
