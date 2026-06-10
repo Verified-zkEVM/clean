@@ -148,5 +148,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.NoteCommit.RhoCanonicity.circuit`,
      `Orchard.NoteCommit.PsiCanonicity.circuit`, and
      `Orchard.NoteCommit.ValueCanonicity.circuit`, plus
-     `Orchard.NoteCommit.YCanonicity.circuit`. `commit_ivk.rs` gate
+     `Orchard.NoteCommit.YCanonicity.circuit`. The source-level
+     `gadgets::note_commit` assignment and copy wiring is ported as
+     `Orchard.NoteCommit.Wiring.circuit`; the Sinsemilla commitment result remains an
+     explicit row value rather than a guessed hash implementation.
+     `commit_ivk.rs` gate
      `CommitIvk canonicity check` is ported as `Orchard.CommitIvk.circuit`.

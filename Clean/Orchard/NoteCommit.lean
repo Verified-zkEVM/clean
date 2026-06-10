@@ -20,11 +20,13 @@ Reference:
 - `NoteCommit input psi`
 - `NoteCommit input value`
 - `y coordinate checks`
+- `gadgets::note_commit`
 
-These assertions model the enabled Halo2 custom-gate polynomials, not selector,
-rotation, column-layout, lookup, or copy-constraint machinery. Range constraints named in
-the Rust comments are provided outside these gates in the source circuit, so they are not
-duplicated here.
+Most assertions model the enabled Halo2 custom-gate polynomials, not selector, rotation,
+column-layout, lookup, or assignment machinery. `Wiring.circuit` additionally models the
+copy constraints and output wiring that `gadgets::note_commit` makes explicit. Range
+constraints named in the Rust comments are provided outside these gates in the source
+circuit, so they are not duplicated here.
 -/
 
 namespace Orchard
@@ -475,6 +477,197 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end YCanonicity
+
+/-!
+`note_commit` source-level wiring.
+
+Reference:
+`orchard@0.14.0/src/circuit/note_commit.rs`
+- `gadgets::note_commit`
+
+This assertion follows the values that the Rust gadget constructs:
+the eight Sinsemilla message pieces `a` through `h`, the running-sum endpoints returned
+by `CommitDomain::commit`, and the cells assigned into the decomposition and canonicity
+custom gates above. The Sinsemilla commitment itself is represented by explicit
+`computedCm*` row values; this file does not invent constraints for the commitment
+algorithm beyond the separately ported Sinsemilla gates.
+-/
+namespace Wiring
+
+variable [OfNat R 2] [OfNat R 4] [OfNat R 16] [OfNat R 32] [OfNat R 64]
+  [OfNat R 256] [OfNat R 512] [OfNat R 1024]
+  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 249)]
+  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)] [OfNat R 288230376151711744]
+  [OfNat R 45560315531419706090280762371685220353]
+
+structure Row (F : Type) where
+  b : DecomposeB.Row F
+  d : DecomposeD.Row F
+  e : DecomposeE.Row F
+  g : DecomposeG.Row F
+  h : DecomposeH.Row F
+  gd : GdCanonicity.Row F
+  pkd : PkdCanonicity.Row F
+  value : ValueCanonicity.Row F
+  rho : RhoCanonicity.Row F
+  psi : PsiCanonicity.Row F
+  gdY : YCanonicity.Row F
+  pkdY : YCanonicity.Row F
+  computedCmX : F
+  computedCmY : F
+  cmX : F
+  cmY : F
+deriving ProvableStruct
+
+def b0Check (row : Row R) : R := row.b.b0 - row.gd.b0
+def b1Check (row : Row R) : R := row.b.b1 - row.gd.b1
+def b2Check (row : Row R) : R := row.b.b2 - row.gdY.lsb
+def b3Check (row : Row R) : R := row.b.b3 - row.pkd.b3
+def d0Check (row : Row R) : R := row.d.d0 - row.pkd.d0
+def d1Check (row : Row R) : R := row.d.d1 - row.pkdY.lsb
+def d2Check (row : Row R) : R := row.d.d2 - row.value.d2
+def z1DCheck (row : Row R) : R := row.d.d3 - row.value.d3
+def e0Check (row : Row R) : R := row.e.e0 - row.value.e0
+def e1Check (row : Row R) : R := row.e.e1 - row.rho.e1
+def g0Check (row : Row R) : R := row.g.g0 - row.rho.g0
+def g1Check (row : Row R) : R := row.g.g1 - row.psi.g1
+def z1GCheck (row : Row R) : R := row.g.g2 - row.psi.g2
+def h0Check (row : Row R) : R := row.h.h0 - row.psi.h0
+def h1Check (row : Row R) : R := row.h.h1 - row.psi.h1
+def cmXCheck (row : Row R) : R := row.computedCmX - row.cmX
+def cmYCheck (row : Row R) : R := row.computedCmY - row.cmY
+
+def constraints (row : Row R) : Prop :=
+  DecomposeB.constraints row.b ∧
+    DecomposeD.constraints row.d ∧
+    DecomposeE.decomposition row.e = 0 ∧
+    DecomposeG.constraints row.g ∧
+    DecomposeH.constraints row.h ∧
+    GdCanonicity.constraints row.gd ∧
+    PkdCanonicity.constraints row.pkd ∧
+    ValueCanonicity.valueCheck row.value = 0 ∧
+    RhoCanonicity.constraints row.rho ∧
+    PsiCanonicity.constraints row.psi ∧
+    YCanonicity.constraints row.gdY ∧
+    YCanonicity.constraints row.pkdY ∧
+    b0Check row = 0 ∧
+    b1Check row = 0 ∧
+    b2Check row = 0 ∧
+    b3Check row = 0 ∧
+    d0Check row = 0 ∧
+    d1Check row = 0 ∧
+    d2Check row = 0 ∧
+    z1DCheck row = 0 ∧
+    e0Check row = 0 ∧
+    e1Check row = 0 ∧
+    g0Check row = 0 ∧
+    g1Check row = 0 ∧
+    z1GCheck row = 0 ∧
+    h0Check row = 0 ∧
+    h1Check row = 0 ∧
+    cmXCheck row = 0 ∧
+    cmYCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (boolPoly row.b.b1)
+  assertZero (boolPoly row.b.b2)
+  assertZero (DecomposeB.decomposition row.b)
+  assertZero (boolPoly row.d.d0)
+  assertZero (boolPoly row.d.d1)
+  assertZero (DecomposeD.decomposition row.d)
+  assertZero (DecomposeE.decomposition row.e)
+  assertZero (boolPoly row.g.g0)
+  assertZero (DecomposeG.decomposition row.g)
+  assertZero (boolPoly row.h.h1)
+  assertZero (DecomposeH.decomposition row.h)
+  assertZero (GdCanonicity.decomposition row.gd)
+  assertZero (GdCanonicity.aPrimeCheck row.gd)
+  assertZero (row.gd.b1 * row.gd.b0)
+  assertZero (row.gd.b1 * row.gd.z13A)
+  assertZero (row.gd.b1 * row.gd.z13APrime)
+  assertZero (PkdCanonicity.decomposition row.pkd)
+  assertZero (PkdCanonicity.b3CPrimeCheck row.pkd)
+  assertZero (row.pkd.d0 * row.pkd.z13C)
+  assertZero (row.pkd.d0 * row.pkd.z14B3CPrime)
+  assertZero (ValueCanonicity.valueCheck row.value)
+  assertZero (RhoCanonicity.decomposition row.rho)
+  assertZero (RhoCanonicity.e1FPrimeCheck row.rho)
+  assertZero (row.rho.g0 * row.rho.z13F)
+  assertZero (row.rho.g0 * row.rho.z14E1FPrime)
+  assertZero (PsiCanonicity.decomposition row.psi)
+  assertZero (PsiCanonicity.g1G2PrimeCheck row.psi)
+  assertZero (row.psi.h1 * row.psi.h0)
+  assertZero (row.psi.h1 * row.psi.z13G)
+  assertZero (row.psi.h1 * row.psi.z13G1G2Prime)
+  assertZero (boolPoly row.gdY.k3)
+  assertZero (YCanonicity.jCheck row.gdY)
+  assertZero (YCanonicity.yCheck row.gdY)
+  assertZero (YCanonicity.jPrimeCheck row.gdY)
+  assertZero (row.gdY.k3 * row.gdY.k2)
+  assertZero (row.gdY.k3 * row.gdY.z13J)
+  assertZero (row.gdY.k3 * row.gdY.z13JPrime)
+  assertZero (boolPoly row.pkdY.k3)
+  assertZero (YCanonicity.jCheck row.pkdY)
+  assertZero (YCanonicity.yCheck row.pkdY)
+  assertZero (YCanonicity.jPrimeCheck row.pkdY)
+  assertZero (row.pkdY.k3 * row.pkdY.k2)
+  assertZero (row.pkdY.k3 * row.pkdY.z13J)
+  assertZero (row.pkdY.k3 * row.pkdY.z13JPrime)
+  assertZero (b0Check row)
+  assertZero (b1Check row)
+  assertZero (b2Check row)
+  assertZero (b3Check row)
+  assertZero (d0Check row)
+  assertZero (d1Check row)
+  assertZero (d2Check row)
+  assertZero (z1DCheck row)
+  assertZero (e0Check row)
+  assertZero (e1Check row)
+  assertZero (g0Check row)
+  assertZero (g1Check row)
+  assertZero (z1GCheck row)
+  assertZero (h0Check row)
+  assertZero (h1Check row)
+  assertZero (cmXCheck row)
+  assertZero (cmYCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, b0Check, b1Check, b2Check, b3Check,
+      d0Check, d1Check, d2Check, z1DCheck, e0Check, e1Check, g0Check, g1Check,
+      z1GCheck, h0Check, h1Check, cmXCheck, cmYCheck, DecomposeB.constraints,
+      DecomposeB.decomposition, DecomposeD.constraints, DecomposeD.decomposition,
+      DecomposeE.decomposition, DecomposeG.constraints, DecomposeG.decomposition,
+      DecomposeH.constraints, DecomposeH.decomposition, GdCanonicity.constraints,
+      GdCanonicity.decomposition, GdCanonicity.aPrimeCheck,
+      PkdCanonicity.constraints, PkdCanonicity.decomposition,
+      PkdCanonicity.b3CPrimeCheck, ValueCanonicity.valueCheck,
+      RhoCanonicity.constraints, RhoCanonicity.decomposition,
+      RhoCanonicity.e1FPrimeCheck, PsiCanonicity.constraints,
+      PsiCanonicity.decomposition, PsiCanonicity.g1G2PrimeCheck,
+      YCanonicity.constraints, YCanonicity.jCheck, YCanonicity.yCheck,
+      YCanonicity.jPrimeCheck, boolPoly, tP]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, b0Check, b1Check, b2Check, b3Check,
+      d0Check, d1Check, d2Check, z1DCheck, e0Check, e1Check, g0Check, g1Check,
+      z1GCheck, h0Check, h1Check, cmXCheck, cmYCheck, DecomposeB.constraints,
+      DecomposeB.decomposition, DecomposeD.constraints, DecomposeD.decomposition,
+      DecomposeE.decomposition, DecomposeG.constraints, DecomposeG.decomposition,
+      DecomposeH.constraints, DecomposeH.decomposition, GdCanonicity.constraints,
+      GdCanonicity.decomposition, GdCanonicity.aPrimeCheck,
+      PkdCanonicity.constraints, PkdCanonicity.decomposition,
+      PkdCanonicity.b3CPrimeCheck, ValueCanonicity.valueCheck,
+      RhoCanonicity.constraints, RhoCanonicity.decomposition,
+      RhoCanonicity.e1FPrimeCheck, PsiCanonicity.constraints,
+      PsiCanonicity.decomposition, PsiCanonicity.g1G2PrimeCheck,
+      YCanonicity.constraints, YCanonicity.jCheck, YCanonicity.yCheck,
+      YCanonicity.jPrimeCheck, boolPoly, tP]
+    simp_all [sub_eq_add_neg]
+
+end Wiring
 
 end NoteCommit
 end Orchard
