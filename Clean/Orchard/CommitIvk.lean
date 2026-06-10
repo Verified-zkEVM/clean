@@ -220,9 +220,6 @@ deriving ProvableStruct
 def ivkCheck (row : Row R) : R :=
   row.computedIvk - row.ivk
 
-def constraints (row : Row R) : Prop :=
-  CommitIvk.constraints row.gate ∧ ivkCheck row = 0
-
 def Spec (row : Row R) : Prop :=
   CommitIvk.Spec row.gate ∧ row.computedIvk = row.ivk
 
@@ -234,18 +231,10 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, ivkCheck, CommitIvk.circuit, CommitIvk.Spec,
-      CommitIvk.constraints,
-      CommitIvk.bDecomposition, CommitIvk.dDecomposition, CommitIvk.akDecomposition,
-      CommitIvk.nkDecomposition, CommitIvk.aPrimeCheck, CommitIvk.b2CPrimeCheck,
-      NoteCommit.boolPoly, NoteCommit.tP]
+    circuit_proof_start [main, Spec, ivkCheck, CommitIvk.circuit, CommitIvk.Spec]
     exact ⟨h_holds.1, left_eq_of_add_neg_eq_zero h_holds.2⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, ivkCheck, CommitIvk.circuit, CommitIvk.Spec,
-      CommitIvk.constraints,
-      CommitIvk.bDecomposition, CommitIvk.dDecomposition, CommitIvk.akDecomposition,
-      CommitIvk.nkDecomposition, CommitIvk.aPrimeCheck, CommitIvk.b2CPrimeCheck,
-      NoteCommit.boolPoly, NoteCommit.tP]
+    circuit_proof_start [main, Spec, ivkCheck, CommitIvk.circuit, CommitIvk.Spec]
     constructor
     · exact h_spec.1
     simpa [sub_eq_add_neg] using sub_eq_zero.mpr h_spec.2
