@@ -126,5 +126,100 @@ def circuit : FormalAssertion F Point where
 
 end NonIdentityPoint
 
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add_incomplete.rs`
+- `incomplete addition`
+
+The Rust assignment rejects exceptional cases where either input is encoded identity or
+`x_p = x_q`. This Clean approximation exposes the nonzero-denominator requirement as an
+assumption and models the two custom-gate polynomial constraints directly.
+-/
+
+structure AddInputs (F : Type) where
+  p : Point F
+  q : Point F
+deriving ProvableStruct
+
+namespace IncompleteAdd
+
+def lambda (input : AddInputs F) : F :=
+  (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
+
+def outputValue (input : AddInputs F) : Point F :=
+  let slope := lambda input
+  let xR := slope * slope - input.p.x - input.q.x
+  let yR := slope * (input.p.x - xR) - input.p.y
+  { x := xR, y := yR }
+
+def poly1 (input : AddInputs F) (output : Point F) : F :=
+  (output.x + input.q.x + input.p.x) *
+      (input.p.x - input.q.x) *
+      (input.p.x - input.q.x) -
+    (input.p.y - input.q.y) * (input.p.y - input.q.y)
+
+def poly2 (input : AddInputs F) (output : Point F) : F :=
+  (output.y + input.q.y) * (input.p.x - input.q.x) -
+    (input.p.y - input.q.y) * (input.q.x - output.x)
+
+def constraints (input : AddInputs F) (output : Point F) : Prop :=
+  poly1 input output = 0 ∧ poly2 input output = 0
+
+def main (input : Var AddInputs F) : Circuit F (Var Point F) := do
+  let xR ← witnessField fun env =>
+    let slope := (env input.q.y - env input.p.y) * (env input.q.x - env input.p.x)⁻¹
+    slope * slope - env input.p.x - env input.q.x
+  let yR ← witnessField fun env =>
+    let slope := (env input.q.y - env input.p.y) * (env input.q.x - env input.p.x)⁻¹
+    let xR := slope * slope - env input.p.x - env input.q.x
+    slope * (env input.p.x - xR) - env input.p.y
+  assertZero ((xR + input.q.x + input.p.x) *
+    (input.p.x - input.q.x) * (input.p.x - input.q.x) -
+    (input.p.y - input.q.y) * (input.p.y - input.q.y))
+  assertZero ((yR + input.q.y) * (input.p.x - input.q.x) -
+    (input.p.y - input.q.y) * (input.q.x - xR))
+  return { x := xR, y := yR }
+
+def Assumptions (input : AddInputs F) : Prop :=
+  input.p.x ≠ input.q.x
+
+def Spec (input : AddInputs F) (output : Point F) : Prop :=
+  constraints input output
+
+instance elaborated : ElaboratedCircuit F AddInputs Point main := by
+  elaborate_circuit
+
+theorem outputValue_constraints {input : AddInputs F} (hx : input.p.x ≠ input.q.x) :
+    constraints input (outputValue input) := by
+  unfold constraints poly1 poly2 outputValue lambda
+  have hden : input.q.x - input.p.x ≠ 0 := by
+    intro h
+    apply hx
+    exact (sub_eq_zero.mp h).symm
+  constructor <;> field_simp [hden] <;> ring
+
+theorem soundness : Soundness F main Assumptions Spec := by
+  circuit_proof_start [main, Assumptions, Spec, constraints, poly1, poly2]
+  rcases input_p with ⟨px, py⟩
+  rcases input_q with ⟨qx, qy⟩
+  simp_all [sub_eq_add_neg]
+
+theorem completeness : Completeness F main Assumptions := by
+  circuit_proof_start [main, Assumptions, outputValue, lambda, constraints, poly1, poly2]
+  have hc := outputValue_constraints (input := { p := input_p, q := input_q }) h_assumptions
+  rcases input_p with ⟨px, py⟩
+  rcases input_q with ⟨qx, qy⟩
+  simp_all [outputValue, lambda, constraints, poly1, poly2, sub_eq_add_neg]
+
+def circuit : FormalCircuit F AddInputs Point where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end IncompleteAdd
+
 end Ecc
 end Orchard
