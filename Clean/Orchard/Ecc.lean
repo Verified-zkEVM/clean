@@ -244,9 +244,6 @@ def poly2 (input : AddInputs F) (output : Point F) : F :=
   (output.y + input.q.y) * (input.p.x - input.q.x) -
     (input.p.y - input.q.y) * (input.q.x - output.x)
 
-def constraints (input : AddInputs F) (output : Point F) : Prop :=
-  poly1 input output = 0 ∧ poly2 input output = 0
-
 def main (input : Var AddInputs F) : Circuit F (Var Point F) := do
   let xR ← witnessField fun env =>
     let slope := (env input.q.y - env input.p.y) * (env input.q.x - env input.p.x)⁻¹
@@ -276,9 +273,9 @@ instance elaborated : ElaboratedCircuit F AddInputs Point main := by
   elaborate_circuit
 
 omit [DecidableEq F] in
-theorem outputValue_constraints {input : AddInputs F} (hx : input.p.x ≠ input.q.x) :
-    constraints input (outputValue input) := by
-  unfold constraints poly1 poly2 outputValue lambda
+theorem outputValue_polys {input : AddInputs F} (hx : input.p.x ≠ input.q.x) :
+    poly1 input (outputValue input) = 0 ∧ poly2 input (outputValue input) = 0 := by
+  unfold poly1 poly2 outputValue lambda
   have hden : input.q.x - input.p.x ≠ 0 := by
     intro h
     apply hx
@@ -286,12 +283,13 @@ theorem outputValue_constraints {input : AddInputs F} (hx : input.p.x ≠ input.
   constructor <;> field_simp [hden] <;> ring
 
 omit [DecidableEq F] in
-theorem constraints_eq_outputValue {input : AddInputs F} {output : Point F}
-    (hx : input.p.x ≠ input.q.x) (h : constraints input output) :
+theorem polys_eq_outputValue {input : AddInputs F} {output : Point F}
+    (hx : input.p.x ≠ input.q.x)
+    (h : poly1 input output = 0 ∧ poly2 input output = 0) :
     output = outputValue input := by
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
   rcases output with ⟨rx, ry⟩
-  unfold constraints poly1 poly2 at h
+  unfold poly1 poly2 at h
   unfold outputValue lambda
   have hden : qx - px ≠ 0 := by
     intro hden
@@ -323,23 +321,26 @@ theorem constraints_eq_outputValue {input : AddInputs F} {output : Point F}
     exact h2neg
 
 theorem soundness : Soundness F main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec, constraints, poly1, poly2]
+  circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
-  have hc : constraints { p := { x := px, y := py }, q := { x := qx, y := qy } }
-      { x := env.get i₀, y := env.get (i₀ + 1) } := by
-    simp_all [constraints, poly1, poly2, sub_eq_add_neg]
-  have hout := constraints_eq_outputValue h_assumptions.2.2 hc
+  have hc :
+      poly1 { p := { x := px, y := py }, q := { x := qx, y := qy } }
+          { x := env.get i₀, y := env.get (i₀ + 1) } = 0 ∧
+        poly2 { p := { x := px, y := py }, q := { x := qx, y := qy } }
+          { x := env.get i₀, y := env.get (i₀ + 1) } = 0 := by
+    simp_all [poly1, poly2, sub_eq_add_neg]
+  have hout := polys_eq_outputValue h_assumptions.2.2 hc
   rw [hout]
   exact outputValue_eq_swAdd h_assumptions.1 h_assumptions.2.1 h_assumptions.2.2
 
 omit [DecidableEq F] in
 theorem completeness : Completeness F main Assumptions := by
-  circuit_proof_start [main, Assumptions, outputValue, lambda, constraints, poly1, poly2]
-  have hc := outputValue_constraints (input := { p := input_p, q := input_q }) h_assumptions.2.2
+  circuit_proof_start [main, Assumptions, outputValue, lambda, poly1, poly2]
+  have hc := outputValue_polys (input := { p := input_p, q := input_q }) h_assumptions.2.2
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
-  simp_all [outputValue, lambda, constraints, poly1, poly2, sub_eq_add_neg]
+  simp_all [outputValue, lambda, poly1, poly2, sub_eq_add_neg]
 
 def circuit : FormalCircuit F AddInputs Point where
   main
@@ -579,20 +580,6 @@ def poly6a (row : CompleteAddRow R) : R :=
 def poly6b (row : CompleteAddRow R) : R :=
   (1 - ifAlpha row - ifDelta row) * row.r.y
 
-def constraints (row : CompleteAddRow R) : Prop :=
-  poly1 row = 0 ∧
-  poly2 row = 0 ∧
-  poly3a row = 0 ∧
-  poly3b row = 0 ∧
-  poly3c row = 0 ∧
-  poly3d row = 0 ∧
-  poly4a row = 0 ∧
-  poly4b row = 0 ∧
-  poly5a row = 0 ∧
-  poly5b row = 0 ∧
-  poly6a row = 0 ∧
-  poly6b row = 0
-
 def slopeLine (row : CompleteAddRow R) : Prop :=
   xQMinusXP row * row.lambda = row.q.y - row.p.y
 
@@ -639,7 +626,7 @@ def circuit : FormalAssertion F CompleteAddRow where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, slopeLine, tangentLine, nonexceptionalResult,
+    circuit_proof_start [main, Spec, slopeLine, tangentLine, nonexceptionalResult,
       leftIdentityResult, rightIdentityResult, inverseResult, poly1, poly2, poly3a, poly3b,
       poly3c, poly3d, poly4a, poly4b, poly5a, poly5b, poly6a, poly6b, nonexceptionalXR,
       nonexceptionalYR, ifAlpha, ifBeta, ifGamma, ifDelta, xQMinusXP, xPMinusXR, yQPlusYP]
@@ -729,7 +716,7 @@ def circuit : FormalAssertion F CompleteAddRow where
           exact False.elim (hne this)
         · exact hy
   completeness := by
-    circuit_proof_start [main, Spec, constraints, slopeLine, tangentLine, nonexceptionalResult,
+    circuit_proof_start [main, Spec, slopeLine, tangentLine, nonexceptionalResult,
       leftIdentityResult, rightIdentityResult, inverseResult, poly1, poly2, poly3a, poly3b,
       poly3c, poly3d, poly4a, poly4b, poly5a, poly5b, poly6a, poly6b, nonexceptionalXR,
       nonexceptionalYR, ifAlpha, ifBeta, ifGamma, ifDelta, xQMinusXP, xPMinusXR, yQPlusYP]
