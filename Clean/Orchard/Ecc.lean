@@ -827,7 +827,154 @@ section EntryPoint
 theorem rowValue_spec_pallas {input : AddInputs PallasBaseField}
     (hp : isPointOrIdentity input.p) (hq : isPointOrIdentity input.q) :
     Spec (rowValue input) := by
-  sorry
+  constructor
+  · intro hxdiff
+    unfold xQMinusXP rowValue at hxdiff
+    unfold rowValue slopeLine xQMinusXP lambdaValue
+    simp at hxdiff ⊢
+    rw [if_neg]
+    · field_simp [hxdiff]
+    · intro hx
+      exact hxdiff (sub_eq_zero.mpr hx)
+  constructor
+  · intro hflag
+    dsimp [rowValue, tangentLine, ifAlpha, xQMinusXP, lambdaValue] at hflag ⊢
+    simp at hflag ⊢
+    by_cases hx : input.q.x = input.p.x
+    · by_cases hpy : input.p.y = 0
+      · have hpx : input.p.x = 0 := by
+          by_contra hpx
+          exact pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx hpy
+        simp [hx, hpy, hpx]
+      · simp [hx, hpy]
+        have hden : (2 : PallasBaseField) * input.p.y ≠ 0 :=
+          mul_ne_zero pallas_two_ne_zero hpy
+        field_simp [hden, pallas_two_ne_zero]
+    · have hcontra : (input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ = 1 := by
+        field_simp [sub_ne_zero.mpr hx]
+      exact False.elim (hflag hcontra)
+  constructor
+  · intro hprod
+    dsimp [rowValue, nonexceptionalResult, outputValue, xPMinusXR, lambdaValue,
+      xQMinusXP] at hprod ⊢
+    simp at hprod ⊢
+    have hpx : input.p.x ≠ 0 := hprod.1.1
+    have hqx : input.q.x ≠ 0 := hprod.1.2
+    have hxdiff : input.q.x - input.p.x ≠ 0 := hprod.2
+    have hx : input.q.x ≠ input.p.x := fun h => hxdiff (sub_eq_zero.mpr h)
+    simp [hpx, hqx, hx]
+  constructor
+  · intro hprod
+    dsimp [rowValue, nonexceptionalResult, outputValue, xPMinusXR, lambdaValue,
+      yQPlusYP] at hprod ⊢
+    simp at hprod ⊢
+    have hpx : input.p.x ≠ 0 := hprod.1.1
+    have hqx : input.q.x ≠ 0 := hprod.1.2
+    have hysum : input.q.y + input.p.y ≠ 0 := hprod.2
+    by_cases hx : input.q.x = input.p.x
+    · have hsame := pallas_y_eq_or_neg_of_same_x hp hq hpx hqx hx
+      rcases hsame with hy | hy
+      · have hnotInv : ¬(input.q.x = input.p.x ∧ input.q.y = -input.p.y) := by
+          intro hinv
+          apply hysum
+          rw [hinv.2]
+          ring
+        have hpy : input.p.y ≠ 0 :=
+          pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx
+        have hnotY : input.q.y ≠ -input.p.y := fun h => hnotInv ⟨hx, h⟩
+        simp [hpx, hx, hnotY, hpy]
+      · exact False.elim (hysum (by rw [hy]; ring))
+    · have hnotInv : ¬(input.q.x = input.p.x ∧ input.q.y = -input.p.y) := by
+        exact fun h => hx h.1
+      simp [hpx, hqx, hx]
+  constructor
+  · intro hflag
+    dsimp [rowValue, leftIdentityResult, ifBeta, outputValue] at hflag ⊢
+    simp at hflag ⊢
+    by_cases hpx : input.p.x = 0
+    · simp [hpx]
+    · have hcontra : input.p.x * input.p.x⁻¹ = 1 := by
+        field_simp [hpx]
+      exact False.elim (hflag hcontra)
+  constructor
+  · intro hflag
+    dsimp [rowValue, rightIdentityResult, ifGamma, outputValue] at hflag ⊢
+    by_cases hpx : input.p.x = 0
+    · have hpy := xZeroImpliesIdentity_of_pointOrIdentity
+        pallasNoCurvePointWithXZero hp hpx
+      by_cases hqx : input.q.x = 0
+      · have hqy := xZeroImpliesIdentity_of_pointOrIdentity
+          pallasNoCurvePointWithXZero hq hqx
+        have hpEq : input.p = ({ x := 0, y := 0 } : Point PallasBaseField) := by
+          rw [Point.mk.injEq]
+          exact ⟨hpx, hpy⟩
+        have hqEq : input.q = ({ x := 0, y := 0 } : Point PallasBaseField) := by
+          rw [Point.mk.injEq]
+          exact ⟨hqx, hqy⟩
+        simp [hpEq, hqEq]
+      · have hcontra : input.q.x * input.q.x⁻¹ = 1 := by
+          field_simp [hqx]
+        exact False.elim (hflag hcontra)
+    · by_cases hqx : input.q.x = 0
+      · simp [hpx, hqx]
+      · have hcontra : input.q.x * input.q.x⁻¹ = 1 := by
+          field_simp [hqx]
+        exact False.elim (hflag hcontra)
+  · intro hflag
+    dsimp [rowValue, inverseResult, ifAlpha, ifDelta, xQMinusXP, yQPlusYP,
+      outputValue] at hflag ⊢
+    simp at hflag ⊢
+    by_cases hpx : input.p.x = 0
+    · have hpy := xZeroImpliesIdentity_of_pointOrIdentity
+          pallasNoCurvePointWithXZero hp hpx
+      by_cases hqx : input.q.x = 0
+      · have hqy := xZeroImpliesIdentity_of_pointOrIdentity
+          pallasNoCurvePointWithXZero hq hqx
+        simp [hpx, hqx, hqy]
+      · have hcontra :
+            ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
+              if input.q.x = input.p.x then
+                (input.q.y + input.p.y) * (input.q.y + input.p.y)⁻¹
+          else 0) = 1 := by
+          simp [hpx, hqx]
+        exact False.elim (hflag hcontra)
+    · by_cases hqx : input.q.x = 0
+      · have hcontra :
+            ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
+              if input.q.x = input.p.x then
+                (input.q.y + input.p.y) * (input.q.y + input.p.y)⁻¹
+          else 0) = 1 := by
+          have hne : ¬ input.q.x = input.p.x := by
+            rw [hqx]
+            exact fun h => hpx h.symm
+          have hne0 : ¬ (0 : PallasBaseField) = input.p.x := fun h => hpx h.symm
+          simp [hpx, hqx, hne0]
+        exact False.elim (hflag hcontra)
+      · by_cases hx : input.q.x = input.p.x
+        · by_cases hy : input.q.y = -input.p.y
+          · simp [hpx, hx, hy]
+          · have hsame := pallas_y_eq_or_neg_of_same_x hp hq hpx hqx hx
+            rcases hsame with hyeq | hyneg
+            · have hysum : input.q.y + input.p.y ≠ 0 := by
+                rw [hyeq]
+                exact pallas_add_self_ne_zero
+                  (pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx)
+              have hcontra :
+                    ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
+                      if input.q.x = input.p.x then
+                        (input.q.y + input.p.y) * (input.q.y + input.p.y)⁻¹
+                      else 0) = 1 := by
+                simp [hx, hysum]
+              exact False.elim (hflag hcontra)
+            · exact False.elim (hy hyneg)
+        · have hcontra :
+              ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
+                if input.q.x = input.p.x then
+                  (input.q.y + input.p.y) * (input.q.y + input.p.y)⁻¹
+                else 0) = 1 := by
+            simp [hx]
+            field_simp [sub_ne_zero.mpr hx]
+          exact False.elim (hflag hcontra)
 
 theorem spec_eq_outputValue_pallas {row : CompleteAddRow PallasBaseField}
     (hp : isPointOrIdentity row.p) (hq : isPointOrIdentity row.q) (hrow : Spec row) :
