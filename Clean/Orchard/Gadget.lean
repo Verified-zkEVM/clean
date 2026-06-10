@@ -137,7 +137,7 @@ def constraints (row : Row R) : Prop :=
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (scalarCheck row)
-  Ecc.CompleteAdd.main (addRow row)
+  Ecc.CompleteAdd.circuit (addRow row)
   assertZero (extractCheck row)
 
 def circuit : FormalAssertion F Row where
@@ -145,7 +145,7 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, scalarCheck, extractCheck, addRow,
-      Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
+      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
       Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
       Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
       Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
@@ -157,7 +157,7 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
   completeness := by
     circuit_proof_start [main, constraints, scalarCheck, extractCheck, addRow,
-      Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
+      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
       Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
       Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
       Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
@@ -209,9 +209,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (Poseidon.Hash2.input0Check row.hash)
   assertZero (Poseidon.Hash2.input1Check row.hash)
   assertZero (Poseidon.Hash2.hashCheck row.hash)
-  assertZero (Nullifier.scalarCheck row.nullifier)
-  Ecc.CompleteAdd.main (Nullifier.addRow row.nullifier)
-  assertZero (Nullifier.extractCheck row.nullifier)
+  Nullifier.circuit row.nullifier
   assertZero (hashOutputCheck row)
 
 def circuit : FormalAssertion F Row where
@@ -223,8 +221,8 @@ def circuit : FormalAssertion F Row where
       Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
       Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck,
       Poseidon.PadAndAdd.output0Check, Poseidon.PadAndAdd.output1Check,
-      Poseidon.PadAndAdd.capacityCheck, Nullifier.constraints, Nullifier.scalarCheck,
-      Nullifier.extractCheck, Nullifier.addRow, Ecc.CompleteAdd.main,
+      Poseidon.PadAndAdd.capacityCheck, Nullifier.circuit, Nullifier.constraints,
+      Nullifier.scalarCheck, Nullifier.extractCheck, Nullifier.addRow, Ecc.CompleteAdd.circuit,
       Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
       Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
       Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
@@ -248,8 +246,8 @@ def circuit : FormalAssertion F Row where
       Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
       Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck,
       Poseidon.PadAndAdd.output0Check, Poseidon.PadAndAdd.output1Check,
-      Poseidon.PadAndAdd.capacityCheck, Nullifier.constraints, Nullifier.scalarCheck,
-      Nullifier.extractCheck, Nullifier.addRow, Ecc.CompleteAdd.main,
+      Poseidon.PadAndAdd.capacityCheck, Nullifier.circuit, Nullifier.constraints,
+      Nullifier.scalarCheck, Nullifier.extractCheck, Nullifier.addRow, Ecc.CompleteAdd.circuit,
       Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
       Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
       Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
@@ -299,8 +297,8 @@ def constraints (row : Row R) : Prop :=
     hashOutputCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  Poseidon.Hash2PermutationBoundary.main row.boundary
-  Nullifier.main row.nullifier
+  Poseidon.Hash2PermutationBoundary.circuit row.boundary
+  Nullifier.circuit row.nullifier
   assertZero (hashOutputCheck row)
 
 def circuit : FormalAssertion F Row where
@@ -308,15 +306,15 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, hashOutputCheck,
-      Poseidon.Hash2PermutationBoundary.main, Poseidon.Hash2PermutationBoundary.constraints,
+      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.constraints,
       Poseidon.Hash2PermutationBoundary.input0Check, Poseidon.Hash2PermutationBoundary.input1Check,
       Poseidon.Hash2PermutationBoundary.input2Check, Poseidon.Hash2PermutationBoundary.outputCheck,
-      Poseidon.Hash2.main, Poseidon.Hash2.constraints, Poseidon.Hash2.initial0Check,
+      Poseidon.Hash2.circuit, Poseidon.Hash2.constraints, Poseidon.Hash2.initial0Check,
       Poseidon.Hash2.initial1Check, Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
       Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck, Poseidon.PadAndAdd.output0Check,
       Poseidon.PadAndAdd.output1Check, Poseidon.PadAndAdd.capacityCheck,
-      Nullifier.main, Nullifier.constraints, Nullifier.scalarCheck, Nullifier.extractCheck,
-      Nullifier.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+      Nullifier.circuit, Nullifier.constraints, Nullifier.scalarCheck, Nullifier.extractCheck,
+      Nullifier.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
       Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
       Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
       Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
@@ -327,23 +325,23 @@ def circuit : FormalAssertion F Row where
       Ecc.CompleteAdd.yQPlusYP]
     simp_all [sub_eq_add_neg]
     constructor
-    · have h := h_holds.1
-      rw [h_holds.2.2.2.1] at h
+    · have h := h_holds.1.1.1
+      rw [h_holds.1.1.2.2.2.1] at h
       simpa [sub_eq_add_neg] using h
-    · have h := h_holds.2.1
-      rw [h_holds.2.2.2.2.1] at h
+    · have h := h_holds.1.1.2.1
+      rw [h_holds.1.1.2.2.2.2.1] at h
       simpa [sub_eq_add_neg] using h
   completeness := by
     circuit_proof_start [main, constraints, hashOutputCheck,
-      Poseidon.Hash2PermutationBoundary.main, Poseidon.Hash2PermutationBoundary.constraints,
+      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.constraints,
       Poseidon.Hash2PermutationBoundary.input0Check, Poseidon.Hash2PermutationBoundary.input1Check,
       Poseidon.Hash2PermutationBoundary.input2Check, Poseidon.Hash2PermutationBoundary.outputCheck,
-      Poseidon.Hash2.main, Poseidon.Hash2.constraints, Poseidon.Hash2.initial0Check,
+      Poseidon.Hash2.circuit, Poseidon.Hash2.constraints, Poseidon.Hash2.initial0Check,
       Poseidon.Hash2.initial1Check, Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
       Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck, Poseidon.PadAndAdd.output0Check,
       Poseidon.PadAndAdd.output1Check, Poseidon.PadAndAdd.capacityCheck,
-      Nullifier.main, Nullifier.constraints, Nullifier.scalarCheck, Nullifier.extractCheck,
-      Nullifier.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+      Nullifier.circuit, Nullifier.constraints, Nullifier.scalarCheck, Nullifier.extractCheck,
+      Nullifier.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
       Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
       Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
       Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
