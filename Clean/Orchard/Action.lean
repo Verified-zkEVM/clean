@@ -207,9 +207,9 @@ Reference:
 - final public-input/action wiring in `Circuit::synthesize`
 
 This assertion connects source-level gadget outputs into `ActionWiring.circuit`:
-`value_commit_orchard` supplies `cv_net`, and spend authority supplies `rk`. Other
-action sub-gadgets remain represented by the explicit fields of `ActionWiring.Row` and
-their lower-level assertions.
+`value_commit_orchard` supplies `cv_net`, the nullifier gadget supplies `nf_old`, and
+spend authority supplies `rk`. Other action sub-gadgets remain represented by the
+explicit fields of `ActionWiring.Row` and their lower-level assertions.
 -/
 namespace ActionComputedWiring
 
@@ -220,6 +220,7 @@ variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat 
 structure Row (F : Type) where
   action : ActionWiring.Row F
   valueCommitment : Gadget.ValueCommitment.Row F
+  nullifier : Gadget.Nullifier.Row F
   spendAuth : Gadget.SpendAuth.Row F
 deriving ProvableStruct
 
@@ -228,6 +229,9 @@ def cvXCheck (row : Row R) : R :=
 
 def cvYCheck (row : Row R) : R :=
   row.valueCommitment.cvY - row.action.cvNetY
+
+def nfCheck (row : Row R) : R :=
+  row.nullifier.nf - row.action.nfOld
 
 def rkXCheck (row : Row R) : R :=
   row.spendAuth.rkX - row.action.rkX
@@ -238,18 +242,22 @@ def rkYCheck (row : Row R) : R :=
 def constraints (row : Row R) : Prop :=
   ActionWiring.constraints row.action ∧
     Gadget.ValueCommitment.constraints row.valueCommitment ∧
+    Gadget.Nullifier.constraints row.nullifier ∧
     Gadget.SpendAuth.constraints row.spendAuth ∧
     cvXCheck row = 0 ∧
     cvYCheck row = 0 ∧
+    nfCheck row = 0 ∧
     rkXCheck row = 0 ∧
     rkYCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
   ActionWiring.main row.action
   Gadget.ValueCommitment.main row.valueCommitment
+  Gadget.Nullifier.main row.nullifier
   Gadget.SpendAuth.main row.spendAuth
   assertZero (cvXCheck row)
   assertZero (cvYCheck row)
+  assertZero (nfCheck row)
   assertZero (rkXCheck row)
   assertZero (rkYCheck row)
 
@@ -257,7 +265,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := constraints
   soundness := by
-    circuit_proof_start [main, constraints, cvXCheck, cvYCheck, rkXCheck, rkYCheck,
+    circuit_proof_start [main, constraints, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
       ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
       ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
@@ -266,7 +274,9 @@ def circuit : FormalAssertion F Row where
       ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
       ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
       Gadget.ValueCommitment.main, Gadget.ValueCommitment.constraints,
-      Gadget.ValueCommitment.addRow, Gadget.SpendAuth.main, Gadget.SpendAuth.constraints,
+      Gadget.ValueCommitment.addRow, Gadget.Nullifier.main, Gadget.Nullifier.constraints,
+      Gadget.Nullifier.scalarCheck, Gadget.Nullifier.extractCheck, Gadget.Nullifier.addRow,
+      Gadget.SpendAuth.main, Gadget.SpendAuth.constraints,
       Gadget.SpendAuth.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
       Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
       Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
@@ -278,7 +288,7 @@ def circuit : FormalAssertion F Row where
       Ecc.CompleteAdd.yQPlusYP]
     simp_all [sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, cvXCheck, cvYCheck, rkXCheck, rkYCheck,
+    circuit_proof_start [main, constraints, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
       ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
       ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
       ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
@@ -287,7 +297,9 @@ def circuit : FormalAssertion F Row where
       ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
       ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
       Gadget.ValueCommitment.main, Gadget.ValueCommitment.constraints,
-      Gadget.ValueCommitment.addRow, Gadget.SpendAuth.main, Gadget.SpendAuth.constraints,
+      Gadget.ValueCommitment.addRow, Gadget.Nullifier.main, Gadget.Nullifier.constraints,
+      Gadget.Nullifier.scalarCheck, Gadget.Nullifier.extractCheck, Gadget.Nullifier.addRow,
+      Gadget.SpendAuth.main, Gadget.SpendAuth.constraints,
       Gadget.SpendAuth.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
       Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
       Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,

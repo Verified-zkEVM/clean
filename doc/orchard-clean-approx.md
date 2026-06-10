@@ -158,9 +158,10 @@ Bottom-up implementation order currently inferred from those tagged sources:
      The four `Orchard circuit checks` constraints from `circuit.rs` are ported as
      `Orchard.ActionChecks.circuit`; the surrounding source-level action wiring from
      `Circuit::synthesize` is ported as `Orchard.ActionWiring.circuit`. The selected
-     computed action outputs `cv_net` and `rk` are connected from
-     `Orchard.Gadget.ValueCommitment.circuit` and `Orchard.Gadget.SpendAuth.circuit`
-     into the action row by `Orchard.ActionComputedWiring.circuit`.
+     computed action outputs `cv_net`, `nf_old`, and `rk` are connected from
+     `Orchard.Gadget.ValueCommitment.circuit`, `Orchard.Gadget.Nullifier.circuit`,
+     and `Orchard.Gadget.SpendAuth.circuit` into the action row by
+     `Orchard.ActionComputedWiring.circuit`.
      `note_commit.rs` gates `NoteCommit MessagePiece b`,
      `d`, `e`, `g`, `h`, `NoteCommit input g_d`, `NoteCommit input pk_d`,
      `NoteCommit input rho`, `NoteCommit input psi`, `NoteCommit input value`, and
