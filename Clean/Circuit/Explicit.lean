@@ -376,6 +376,28 @@ theorem ExplicitCircuit.from_map_channelsWithRequirements {f : α → β} {g : C
 
 -- basic operations are explicit circuits
 
+instance {e : Witgen.FExpr F} : ExplicitCircuit (witnessField e) where
+  output n := var ⟨n⟩
+  localLength _ := 1
+  operations n := [.witness 1 (.ofFExpr e)]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
+
+instance {k : ℕ} {ir : WitgenIR F k} : ExplicitCircuit (witnessVector k ir) where
+  output n := varFromOffset (fields k) n
+  localLength _ := k
+  operations n := [.witness k ir]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
+
+instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} :
+    ExplicitCircuit (ProvableType.witness (α:=M) ir) where
+  localLength _ := size M
+  output n := varFromOffset M n
+  operations n := [.witness (size M) ir]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
+
 instance : ExplicitCircuits (F:=F) witnessVarNative where
   output _ n := ⟨ n ⟩
   localLength _ _ := 1

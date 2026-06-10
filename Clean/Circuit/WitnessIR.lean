@@ -165,7 +165,6 @@ variable [FiniteField F]
 
 mutual
 
-@[circuit_norm]
 def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .expr e => e.eval ctx.env.toEnvironment
   | .envGet i => ctx.env.get (i.eval ctx)
@@ -185,7 +184,6 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .hintGet key n row col =>
     ((ctx.env.hint key n)[row.eval ctx]?.getD (.replicate n 0))[col.val]'col.isLt
 
-@[circuit_norm]
 def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
   | .const n => n
   | .val x => FiniteField.val (x.eval ctx)
@@ -205,7 +203,6 @@ def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
   | .shiftR x y => x.eval ctx >>> y.eval ctx
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
 
-@[circuit_norm]
 def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
   | .feq x y => FiniteField.val (x.eval ctx) = FiniteField.val (y.eval ctx)
   | .lt x y => x.eval ctx < y.eval ctx
@@ -223,13 +220,11 @@ inductive VExpr (F : Type) where
   | append (a b : VExpr F)
 
 /-- Static length of a vector expression. -/
-@[circuit_norm]
 def VExpr.length : VExpr F → ℕ
   | .lit es => es.length
   | .mapRange n _ => n
   | .append a b => a.length + b.length
 
-@[circuit_norm]
 def VExpr.eval [FiniteField F] (ctx : Ctx F) :
     (v : VExpr F) → Vector F v.length
   | .lit es => ⟨(es.map (FExpr.eval ctx)).toArray, by simp [VExpr.length]⟩
@@ -243,7 +238,6 @@ inductive Step (F : Type) where
   | letN (e : NExpr F)
 
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
-@[circuit_norm]
 def evalSteps [FiniteField F] (env : ProverEnvironment F)
     (steps : List (Step F)) : Array (F ⊕ ℕ) :=
   steps.foldl (init := #[]) fun locals step =>
@@ -259,7 +253,6 @@ inductive WitgenIR (F : Type) (m : ℕ) where
   /-- Structured straight-line program: `let`-steps, then a vector output. -/
   | prog (steps : List (Step F)) (out : VExpr F) (length_eq : out.length = m)
 
-@[circuit_norm]
 def WitgenIR.eval {m : ℕ} [FiniteField F] :
     WitgenIR F m → ProverEnvironment F → Vector F m
   | .native f => f
@@ -274,6 +267,48 @@ theorem WitgenIR.eval_native {m : ℕ} [FiniteField F]
 theorem WitgenIR.eval_native_apply {m : ℕ} [FiniteField F]
     (f : ProverEnvironment F → Vector F m) (env : ProverEnvironment F) :
     (WitgenIR.native f).eval env = f env := rfl
+
+/-!
+## Smart constructors
+
+The base building blocks used by the IR-based witness entry points
+(`witnessField`, `witnessVector`, `ProvableType.witness`) and by `<==`.
+Their `eval` lemmas are tagged `circuit_norm` so that IR-built witnesses
+simp-normalize to exactly the same hypothesis shapes as the closures they replace.
+-/
+
+/-- Witness program producing a single scalar from a field-sorted IR expression. -/
+def WitgenIR.ofFExpr (e : FExpr F) : WitgenIR F 1 := .prog [] (.lit [e]) rfl
+
+/-- Witness program copying the values of given circuit expressions (used by `<==`). -/
+def WitgenIR.ofExprs {n : ℕ} (es : Vector (Expression F) n) : WitgenIR F n :=
+  .prog [] (.lit (es.toList.map .expr)) (by simp [VExpr.length])
+
+theorem WitgenIR.eval_ofFExpr [FiniteField F] (e : FExpr F) (env : ProverEnvironment F) :
+    (ofFExpr e).eval env = #v[e.eval { env }] := rfl
+
+theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression F) n)
+    (env : ProverEnvironment F) :
+    (ofExprs es).eval env = es.map (Expression.eval env.toEnvironment) := by
+  ext i hi
+  simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps, Vector.cast]
+
+/-- Shape-exact evaluation for expression-copying scalar witnesses (`<==`):
+produces the same normal form as the closure it replaced. -/
+@[circuit_norm]
+theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
+    (env : ProverEnvironment F) :
+    (ofFExpr (.expr e)).eval env = #v[e.eval env.toEnvironment] := rfl
+
+/-- Elementwise evaluation of expression-copying witnesses, keyed on `getElem` so it
+fires regardless of how the expression vector was built (matches the codebase's
+getElem-first simp discipline). -/
+@[circuit_norm ↓]
+theorem WitgenIR.getElem_eval_ofExprs [FiniteField F] {n : ℕ}
+    (es : Vector (Expression F) n) (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
+    ((ofExprs es).eval env)[i] = es[i].eval env.toEnvironment := by
+  rw [eval_ofExprs]
+  simp
 
 /-!
 ## Expressibility checks

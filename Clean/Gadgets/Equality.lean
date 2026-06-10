@@ -155,15 +155,15 @@ class HasAssignEq (β : Type) (F : outParam Type) [FiniteField F] where
 
 instance : HasAssignEq (Expression F) F where
   assignEq := fun rhs => do
-    let witness ← witnessFieldNative fun env => rhs.eval env
-    witness === rhs
-    return witness
+    let w ← witnessField (.expr rhs)
+    w === rhs
+    return w
 
 instance : HasAssignEq (M (Expression F)) F where
   assignEq := fun rhs => do
-    let witness ← ProvableType.witnessNative fun env => eval env rhs
-    witness === rhs
-    return witness
+    let w ← ProvableType.witness (.ofExprs (toElements rhs))
+    w === rhs
+    return w
 
 instance {n : ℕ} : HasAssignEq (Vector (Expression F) n) F :=
   inferInstanceAs (HasAssignEq (fields n (Expression F)) F)

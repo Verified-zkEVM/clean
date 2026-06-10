@@ -114,6 +114,20 @@ def witnessVectorNative (m : ℕ) (compute : ProverEnvironment F → Vector F m)
     let vars := varFromOffset (fields m) offset
     (vars, [.witness m (.native compute)])
 
+/-- Witness a single field element computed by the given witness-IR expression.
+IR-based counterpart of `witnessFieldNative`; this is the proper entry point. -/
+@[circuit_norm]
+def witnessField (e : Witgen.FExpr F) : Circuit F (Expression F) :=
+  fun (offset : ℕ) =>
+    (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
+
+/-- Witness `m` field elements computed by the given witness-IR program.
+IR-based counterpart of `witnessVectorNative`. -/
+@[circuit_norm]
+def witnessVector (m : ℕ) (ir : WitgenIR F m) : Circuit F (Vector (Expression F) m) :=
+  fun (offset : ℕ) =>
+    (varFromOffset (fields m) offset, [.witness m ir])
+
 /-- Add a constraint. -/
 @[circuit_norm]
 def assertZero (e : Expression F) : Circuit F Unit := fun _ =>
@@ -144,6 +158,24 @@ def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
   let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
   ((), [.interact interaction.toRaw])
+
+/-- Witness a value of a provable type computed by the given witness-IR program
+(producing its `size α` field elements in `toElements` order).
+IR-based counterpart of `ProvableType.witnessNative`. -/
+@[circuit_norm]
+def ProvableType.witness {α : TypeMap} [ProvableType α] (ir : WitgenIR F (size α)) :
+    Circuit F (α (Expression F)) :=
+  fun (offset : ℕ) =>
+    (varFromOffset α offset, [.witness (size α) ir])
+
+/-- Shape-exact evaluation for expression-copying struct witnesses (`<==`):
+produces the same normal form as the closure it replaced. -/
+@[circuit_norm]
+theorem Witgen.WitgenIR.eval_ofExprs_toElements {α : TypeMap} [ProvableType α]
+    (x : α (Expression F)) (env : ProverEnvironment F) :
+    (Witgen.WitgenIR.ofExprs (toElements x)).eval env
+      = toElements (Eval.eval env.toEnvironment x) := by
+  rw [Witgen.WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
@@ -247,7 +279,8 @@ attribute [circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 end
 
-export Circuit (witnessVarNative witnessFieldNative witnessVarsNative witnessVectorNative assertZero lookup)
+export Circuit (witnessField witnessVector
+  witnessVarNative witnessFieldNative witnessVarsNative witnessVectorNative assertZero lookup)
 
 -- general `witness` method
 
