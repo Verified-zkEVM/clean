@@ -405,6 +405,16 @@ def stateEq (a b : State R) : Prop :=
 def stateSame (a b : State R) : Prop :=
   a.s0 = b.s0 ∧ a.s1 = b.s1 ∧ a.s2 = b.s2
 
+theorem stateEq_of_stateSame {a b : State F} (h : stateSame a b) : stateEq a b := by
+  rcases h with ⟨h0, h1, h2⟩
+  exact ⟨by simp [state0Check, h0], by simp [state1Check, h1], by simp [state2Check, h2]⟩
+
+theorem stateSame_of_stateEq {a b : State F} (h : stateEq a b) : stateSame a b := by
+  rcases h with ⟨h0, h1, h2⟩
+  exact ⟨sub_eq_zero.mp (by simpa [state0Check] using h0),
+    sub_eq_zero.mp (by simpa [state1Check] using h1),
+    sub_eq_zero.mp (by simpa [state2Check] using h2)⟩
+
 def assertStateEq (a b : State (Expression F)) : Circuit F Unit := do
   assertZero (state0Check a b)
   assertZero (state1Check a b)
@@ -806,6 +816,40 @@ def circuit : FormalAssertion F Row where
     simp_all
 
 end FullToOutput
+
+namespace FullRowsBlock
+
+def Spec (rows : FullRows R) : Prop :=
+  fullSpec rows ∧ fullLinks rows
+
+def main (rows : Var FullRows F) : Circuit F Unit := do
+  FullRound.circuit rows.r0
+  FullRound.circuit rows.r1
+  FullRound.circuit rows.r2
+  FullRound.circuit rows.r3
+  FullToFull.circuit { prev := rows.r0, next := rows.r1 }
+  FullToFull.circuit { prev := rows.r1, next := rows.r2 }
+  FullToFull.circuit { prev := rows.r2, next := rows.r3 }
+
+def circuit : FormalAssertion F FullRows where
+  main
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, fullSpec, fullLinks,
+      FullRound.circuit, FullRound.Spec, FullToFull.circuit, FullToFull.Spec,
+      stateSame, stateEq, assertStateEq, fullCur, fullNext]
+    rcases h_holds with ⟨h0, h1, h2, h3, h01, h12, h23⟩
+    exact ⟨⟨h0, h1, h2, h3⟩, stateEq_of_stateSame h01,
+      stateEq_of_stateSame h12, stateEq_of_stateSame h23⟩
+  completeness := by
+    circuit_proof_start [main, Spec, fullSpec, fullLinks,
+      FullRound.circuit, FullRound.Spec, FullToFull.circuit, FullToFull.Spec,
+      stateSame, stateEq, assertStateEq, fullCur, fullNext]
+    rcases h_spec with ⟨⟨h0, h1, h2, h3⟩, h01, h12, h23⟩
+    exact ⟨h0, h1, h2, h3, stateSame_of_stateEq h01,
+      stateSame_of_stateEq h12, stateSame_of_stateEq h23⟩
+
+end FullRowsBlock
 
 end Permutation
 
