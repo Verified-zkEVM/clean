@@ -130,6 +130,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Depends on Sinsemilla, ECC fixed-base/variable-base multiplication, and Orchard-specific
      decomposition/canonicity gates.
    - Status: `gadget/add_chip.rs` is ported as `Orchard.Utilities.AddChip.circuit`.
+     The `gadget.rs` source-level wiring for `value_commit_orchard` and
+     `derive_nullifier` is ported as `Orchard.Gadget.ValueCommitment.circuit`
+     and `Orchard.Gadget.Nullifier.circuit`.
      The four `Orchard circuit checks` constraints from `circuit.rs` are ported as
      `Orchard.ActionChecks.circuit`. `note_commit.rs` gates `NoteCommit MessagePiece b`,
      `d`, `e`, `g`, `h`, `NoteCommit input g_d`, `NoteCommit input pk_d`,
