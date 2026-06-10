@@ -249,9 +249,6 @@ end DecomposeH
 
 namespace GdCanonicity
 
-variable [OfNat R (2 ^ 130)] [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   gdX : F
   b0 : F
@@ -262,27 +259,29 @@ structure Row (F : Type) where
   z13APrime : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 250)] [OfNat K (2 ^ 254)]
+    (row : Row K) : K :=
   row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) - row.gdX
 
-def aPrimeCheck (row : Row R) : R :=
+def aPrimeCheck {K : Type} [Add K] [Sub K] [OfNat K (2 ^ 130)]
+    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.a + OfNat.ofNat (2 ^ 130) - tP - row.aPrime
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.gdX = row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) ∧
     row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - tP ∧
     (row.b1 = 0 ∨ row.b0 = 0) ∧
     (row.b1 = 0 ∨ row.z13A = 0) ∧
     (row.b1 = 0 ∨ row.z13APrime = 0)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (decomposition row)
   assertZero (aPrimeCheck row)
   assertZero (row.b1 * row.b0)
   assertZero (row.b1 * row.z13A)
   assertZero (row.b1 * row.z13APrime)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -306,9 +305,6 @@ end GdCanonicity
 
 namespace PkdCanonicity
 
-variable [OfNat R 16] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 254)]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   pkdX : F
   b3 : F
@@ -319,25 +315,27 @@ structure Row (F : Type) where
   z14B3CPrime : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K (2 ^ 254)]
+    (row : Row K) : K :=
   row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) - row.pkdX
 
-def b3CPrimeCheck (row : Row R) : R :=
+def b3CPrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K (2 ^ 140)]
+    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - tP - row.b3CPrime
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.pkdX = row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) ∧
     row.b3CPrime = row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - tP ∧
     (row.d0 = 0 ∨ row.z13C = 0) ∧
     (row.d0 = 0 ∨ row.z14B3CPrime = 0)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (decomposition row)
   assertZero (b3CPrimeCheck row)
   assertZero (row.d0 * row.z13C)
   assertZero (row.d0 * row.z14B3CPrime)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -361,8 +359,6 @@ end PkdCanonicity
 
 namespace ValueCanonicity
 
-variable [OfNat R 256] [OfNat R 288230376151711744]
-
 structure Row (F : Type) where
   value : F
   d2 : F
@@ -370,16 +366,17 @@ structure Row (F : Type) where
   e0 : F
 deriving ProvableStruct
 
-def valueCheck (row : Row R) : R :=
+def valueCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 256] [OfNat K 288230376151711744]
+    (row : Row K) : K :=
   row.d2 + row.d3 * 256 + row.e0 * 288230376151711744 - row.value
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.value = row.d2 + row.d3 * 256 + row.e0 * 288230376151711744
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (valueCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -394,9 +391,6 @@ end ValueCanonicity
 
 namespace RhoCanonicity
 
-variable [OfNat R 16] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 254)]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   rho : F
   e1 : F
@@ -407,25 +401,27 @@ structure Row (F : Type) where
   z14E1FPrime : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K (2 ^ 254)]
+    (row : Row K) : K :=
   row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) - row.rho
 
-def e1FPrimeCheck (row : Row R) : R :=
+def e1FPrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K (2 ^ 140)]
+    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - tP - row.e1FPrime
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.rho = row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) ∧
     row.e1FPrime = row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - tP ∧
     (row.g0 = 0 ∨ row.z13F = 0) ∧
     (row.g0 = 0 ∨ row.z14E1FPrime = 0)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (decomposition row)
   assertZero (e1FPrimeCheck row)
   assertZero (row.g0 * row.z13F)
   assertZero (row.g0 * row.z14E1FPrime)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -449,9 +445,6 @@ end RhoCanonicity
 
 namespace PsiCanonicity
 
-variable [OfNat R 512] [OfNat R (2 ^ 130)] [OfNat R (2 ^ 249)] [OfNat R (2 ^ 254)]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   psi : F
   h0 : F
@@ -463,14 +456,16 @@ structure Row (F : Type) where
   z13G1G2Prime : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 512] [OfNat K (2 ^ 249)]
+    [OfNat K (2 ^ 254)] (row : Row K) : K :=
   row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
     row.h1 * OfNat.ofNat (2 ^ 254) - row.psi
 
-def g1G2PrimeCheck (row : Row R) : R :=
+def g1G2PrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 512] [OfNat K (2 ^ 130)]
+    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.g1 + row.g2 * 512 + OfNat.ofNat (2 ^ 130) - tP - row.g1G2Prime
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.psi = row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
     row.h1 * OfNat.ofNat (2 ^ 254) ∧
     row.g1G2Prime = row.g1 + row.g2 * 512 + OfNat.ofNat (2 ^ 130) - tP ∧
@@ -478,14 +473,14 @@ def Spec (row : Row R) : Prop :=
     (row.h1 = 0 ∨ row.z13G = 0) ∧
     (row.h1 = 0 ∨ row.z13G1G2Prime = 0)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (decomposition row)
   assertZero (g1G2PrimeCheck row)
   assertZero (row.h1 * row.h0)
   assertZero (row.h1 * row.z13G)
   assertZero (row.h1 * row.z13G1G2Prime)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -509,9 +504,6 @@ end PsiCanonicity
 
 namespace YCanonicity
 
-variable [OfNat R 2] [OfNat R 1024] [OfNat R (2 ^ 130)] [OfNat R (2 ^ 250)]
-  [OfNat R (2 ^ 254)] [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   y : F
   lsb : F
@@ -525,17 +517,19 @@ structure Row (F : Type) where
   z13JPrime : F
 deriving ProvableStruct
 
-def jCheck (row : Row R) : R :=
+def jCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 1024] (row : Row K) : K :=
   row.j - (row.lsb + row.k0 * 2 + row.z1J * 1024)
 
-def yCheck (row : Row R) : R :=
+def yCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 250)] [OfNat K (2 ^ 254)]
+    (row : Row K) : K :=
   row.y - (row.j + row.k2 * OfNat.ofNat (2 ^ 250) +
     row.k3 * OfNat.ofNat (2 ^ 254))
 
-def jPrimeCheck (row : Row R) : R :=
+def jPrimeCheck {K : Type} [Add K] [Sub K] [OfNat K (2 ^ 130)]
+    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.j + OfNat.ofNat (2 ^ 130) - tP - row.jPrime
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool row.k3 ∧
     row.j = row.lsb + row.k0 * 2 + row.z1J * 1024 ∧
     row.y = row.j + row.k2 * OfNat.ofNat (2 ^ 250) +
@@ -545,7 +539,7 @@ def Spec (row : Row R) : Prop :=
     (row.k3 = 0 ∨ row.z13J = 0) ∧
     (row.k3 = 0 ∨ row.z13JPrime = 0)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (boolPoly row.k3)
   assertZero (jCheck row)
   assertZero (yCheck row)
@@ -554,7 +548,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (row.k3 * row.z13J)
   assertZero (row.k3 * row.z13JPrime)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
