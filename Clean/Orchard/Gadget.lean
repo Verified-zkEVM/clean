@@ -193,6 +193,82 @@ def circuit : FormalAssertion F Row where
       Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
     simp_all [sub_eq_add_neg]
 
+namespace Entry
+
+structure Row (F : Type) where
+  poseidonHash : F
+  psi : F
+  scalar : F
+  cmX : F
+  cmY : F
+  productX : F
+  productY : F
+  nfPointX : F
+  nfPointY : F
+  nf : F
+deriving ProvableStruct
+
+def addInput {K : Type} (row : Row K) : Ecc.AddInputs K where
+  p := { x := row.cmX, y := row.cmY }
+  q := { x := row.productX, y := row.productY }
+
+def output {K : Type} (row : Row K) : Ecc.Point K where
+  x := row.nfPointX
+  y := row.nfPointY
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  row.scalar = row.poseidonHash + row.psi ∧
+    Ecc.CompleteAdd.Entry.Spec (addInput row) (output row) ∧
+    row.nf = row.nfPointX
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.CompleteAdd.Entry.Assumptions (addInput row)
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  assertZero (row.poseidonHash + row.psi - row.scalar)
+  let nfPoint ← Ecc.CompleteAdd.Entry.circuit (addInput row)
+  assertZero (nfPoint.x - row.nfPointX)
+  assertZero (nfPoint.y - row.nfPointY)
+  assertZero (row.nfPointX - row.nf)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, addInput, output, Assumptions,
+      Ecc.CompleteAdd.Entry.circuit, Ecc.CompleteAdd.Entry.Spec]
+    rcases h_holds with ⟨hScalar, hAdd, hX, hY, hExtract⟩
+    refine ⟨?_, ?_, ?_⟩
+    · linear_combination -hScalar
+    · have hx : env.get i₀ = input_nfPointX := by linear_combination hX
+      have hy : env.get (i₀ + 1) = input_nfPointY := by linear_combination hY
+      have hAdd' := hAdd h_assumptions
+      rw [← hAdd']
+      simp [Ecc.pointCoords, hx, hy]
+    · linear_combination -hExtract
+  completeness := by
+    circuit_proof_start [main, Spec, addInput, output, Assumptions,
+      Ecc.CompleteAdd.Entry.circuit, Ecc.CompleteAdd.Entry.Spec,
+      Ecc.CompleteAdd.Entry.Assumptions]
+    rcases h_spec with ⟨hScalar, hAddSpec, hExtract⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · linear_combination -hScalar
+    · exact h_assumptions
+    · have hAdd := h_env h_assumptions
+      have hPoint : Ecc.pointCoords { x := env.get i₀, y := env.get (i₀ + 1) } =
+          Ecc.pointCoords { x := input_nfPointX, y := input_nfPointY } := hAdd.trans hAddSpec.symm
+      have hx := congrArg Prod.fst hPoint
+      simpa [Ecc.pointCoords, sub_eq_add_neg] using sub_eq_zero.mpr hx
+    · have hAdd := h_env h_assumptions
+      have hPoint : Ecc.pointCoords { x := env.get i₀, y := env.get (i₀ + 1) } =
+          Ecc.pointCoords { x := input_nfPointX, y := input_nfPointY } := hAdd.trans hAddSpec.symm
+      have hy := congrArg Prod.snd hPoint
+      simpa [Ecc.pointCoords, sub_eq_add_neg] using sub_eq_zero.mpr hy
+    · linear_combination -hExtract
+
+end Entry
+
 end Nullifier
 
 /-!
@@ -361,6 +437,66 @@ def circuit : FormalAssertion F Row where
   completeness := by
     circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
     simp_all
+
+namespace Entry
+
+structure Row (F : Type) where
+  alphaProductX : F
+  alphaProductY : F
+  akX : F
+  akY : F
+  rkX : F
+  rkY : F
+deriving ProvableStruct
+
+def addInput {K : Type} (row : Row K) : Ecc.AddInputs K where
+  p := { x := row.alphaProductX, y := row.alphaProductY }
+  q := { x := row.akX, y := row.akY }
+
+def output {K : Type} (row : Row K) : Ecc.Point K where
+  x := row.rkX
+  y := row.rkY
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.CompleteAdd.Entry.Spec (addInput row) (output row)
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.CompleteAdd.Entry.Assumptions (addInput row)
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  let rk ← Ecc.CompleteAdd.Entry.circuit (addInput row)
+  assertZero (rk.x - row.rkX)
+  assertZero (rk.y - row.rkY)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, addInput, output, Assumptions,
+      Ecc.CompleteAdd.Entry.circuit, Ecc.CompleteAdd.Entry.Spec]
+    rcases h_holds with ⟨hAdd, hX, hY⟩
+    have hx : env.get i₀ = input_rkX := by linear_combination hX
+    have hy : env.get (i₀ + 1) = input_rkY := by linear_combination hY
+    have hAdd' := hAdd h_assumptions
+    rw [← hAdd']
+    simp [Ecc.pointCoords, hx, hy]
+  completeness := by
+    circuit_proof_start [main, Spec, addInput, output, Assumptions,
+      Ecc.CompleteAdd.Entry.circuit, Ecc.CompleteAdd.Entry.Spec,
+      Ecc.CompleteAdd.Entry.Assumptions]
+    constructor
+    · exact h_assumptions
+    · have hAdd := h_env h_assumptions
+      have hPoint : Ecc.pointCoords { x := env.get i₀, y := env.get (i₀ + 1) } =
+          Ecc.pointCoords { x := input_rkX, y := input_rkY } := hAdd.trans h_spec.symm
+      constructor
+      · have hx := congrArg Prod.fst hPoint
+        simpa [Ecc.pointCoords, sub_eq_add_neg] using sub_eq_zero.mpr hx
+      · have hy := congrArg Prod.snd hPoint
+        simpa [Ecc.pointCoords, sub_eq_add_neg] using sub_eq_zero.mpr hy
+
+end Entry
 
 end SpendAuth
 

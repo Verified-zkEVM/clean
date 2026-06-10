@@ -167,13 +167,16 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Status: `gadget/add_chip.rs` is ported as `Orchard.Utilities.AddChip.circuit`.
      The `gadget.rs` source-level wiring for `value_commit_orchard` and
      `derive_nullifier` is ported as `Orchard.Gadget.ValueCommitment.circuit`
-     and `Orchard.Gadget.Nullifier.circuit`; a Pallas-specific value-commitment
-     wrapper `Orchard.Gadget.ValueCommitment.Entry.circuit` now uses
-     `Orchard.Ecc.CompleteAdd.Entry.circuit` for the final addition over explicit
+     and `Orchard.Gadget.Nullifier.circuit`; Pallas-specific wrappers
+     `Orchard.Gadget.ValueCommitment.Entry.circuit` and
+     `Orchard.Gadget.Nullifier.Entry.circuit` now use
+     `Orchard.Ecc.CompleteAdd.Entry.circuit` for their final additions over explicit
      fixed-base product points. The `derive_nullifier` edge
      `hash = PoseidonHash(nk, rho)` is connected to the nullifier wiring in
      `Orchard.Gadget.NullifierWithHash.circuit`. The `circuit.rs` spend-authority wiring
-     `rk = [alpha] SpendAuthG + ak_P` is ported as `Orchard.Gadget.SpendAuth.circuit`.
+     `rk = [alpha] SpendAuthG + ak_P` is ported as `Orchard.Gadget.SpendAuth.circuit`,
+     with `Orchard.Gadget.SpendAuth.Entry.circuit` providing the Pallas complete-add
+     entry wrapper over the explicit `[alpha] SpendAuthG` product.
      The four `Orchard circuit checks` constraints from `circuit.rs` are ported as
      `Orchard.ActionChecks.circuit`; the surrounding source-level action wiring from
      `Circuit::synthesize` is ported as `Orchard.ActionWiring.circuit`. The selected
@@ -237,11 +240,13 @@ Consequences for Orchard gadgets:
   points, but the fixed-base products themselves still need scalar-mul entry circuits.
 - `derive_nullifier` in `orchard/src/circuit/gadget.rs` is
   `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`.
-  `Orchard.Gadget.Nullifier.circuit` currently models the scalar field addition, final
-  complete-add row, and extraction edge, but not the fixed-base scalar multiplication.
+  `Orchard.Gadget.Nullifier.Entry.circuit` now models the scalar field addition,
+  final complete-add entry relation, and extraction edge, but not the fixed-base scalar
+  multiplication.
 - Spend authority in `orchard/src/circuit.rs` is
-  `[alpha] SpendAuthG + ak_P`. `Orchard.Gadget.SpendAuth.circuit` currently models only
-  the final complete-add row over an explicit `[alpha] SpendAuthG` product.
+  `[alpha] SpendAuthG + ak_P`. `Orchard.Gadget.SpendAuth.Entry.circuit` now models the
+  final complete-add entry relation over an explicit `[alpha] SpendAuthG` product, but
+  not the fixed-base scalar multiplication.
 - Address integrity in `orchard/src/circuit.rs` computes
   `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`. `Orchard.ActionAddressWiring`
   currently records copy edges around `ivk` and `derived_pk_d_old`, but not the
