@@ -752,8 +752,16 @@ def negationCheck (row : Row R) : R :=
 def IsSign (sign : R) : Prop :=
   sign = 1 ∨ sign = 0 - 1
 
+def shortWeierstrassNeg (point : R × R) : R × R :=
+  (point.1, 0 - point.2)
+
+def SignedPointNegation (row : Row R) : Prop :=
+  ∀ x : R,
+    (row.sign = 1 → (x, row.yP) = (x, row.yA)) ∧
+      (row.sign = 0 - 1 → (x, row.yP) = shortWeierstrassNeg (x, row.yA))
+
 def Spec (row : Row R) : Prop :=
-  IsBool row.lastWindow ∧ IsSign row.sign ∧ row.yA = row.sign * row.yP
+  IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointNegation row
 
 def constraints (row : Row R) : Prop :=
   NoteCommit.boolPoly row.lastWindow = 0 ∧
@@ -771,9 +779,11 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsSign, NoteCommit.boolPoly, signCheck, yCheck,
-      negationCheck]
+    circuit_proof_start [main, Spec, constraints, IsSign, SignedPointNegation,
+      shortWeierstrassNeg, NoteCommit.boolPoly, signCheck, yCheck, negationCheck]
     rcases h_holds with ⟨hLastWindow, hSign, _hY, hNegation⟩
+    have hSignedY : input_yA = input_sign * input_yP :=
+      (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNegation)).symm
     refine ⟨?_, ?_, ?_⟩
     · exact isBool_of_boolPoly_eq_zero (by
         simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hLastWindow)
@@ -782,22 +792,46 @@ def circuit : FormalAssertion F Row where
       rcases mul_eq_zero.mp hmul with hPos | hNeg
       · exact Or.inl (sub_eq_zero.mp hPos)
       · exact Or.inr (by linear_combination hNeg)
-    · exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNegation)).symm
+    · intro x
+      constructor
+      · intro hPos
+        apply Prod.ext
+        · rfl
+        · rw [hSignedY, hPos]
+          ring
+      · intro hNeg
+        apply Prod.ext
+        · rfl
+        · rw [hSignedY, hNeg]
+          ring
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsSign, NoteCommit.boolPoly, signCheck, yCheck,
-      negationCheck]
-    rcases h_spec with ⟨hLastWindow, hSign, hSignedY⟩
+    circuit_proof_start [main, Spec, constraints, IsSign, SignedPointNegation,
+      shortWeierstrassNeg, NoteCommit.boolPoly, signCheck, yCheck, negationCheck]
+    rcases h_spec with ⟨hLastWindow, hSign, hPoint⟩
     refine ⟨?_, ?_, ?_, ?_⟩
     · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using
         boolPoly_eq_zero_of_isBool hLastWindow
     · rcases hSign with hSign | hSign <;> rw [hSign] <;> ring
     · rcases hSign with hSign | hSign
-      · rw [hSignedY, hSign]
+      · have hY := congrArg Prod.snd ((hPoint 0).1 hSign)
+        simp at hY
+        rw [hY]
         ring
-      · rw [hSignedY, hSign]
+      · have hY := congrArg Prod.snd ((hPoint 0).2 hSign)
+        unfold shortWeierstrassNeg at hY
+        simp at hY
+        rw [hY]
         ring
-    · rw [hSignedY]
-      ring
+    · rcases hSign with hSign | hSign
+      · have hY := congrArg Prod.snd ((hPoint 0).1 hSign)
+        simp at hY
+        rw [hSign, hY]
+        ring
+      · have hY := congrArg Prod.snd ((hPoint 0).2 hSign)
+        unfold shortWeierstrassNeg at hY
+        simp at hY
+        rw [hSign, hY]
+        ring
 
 end FixedShort
 
