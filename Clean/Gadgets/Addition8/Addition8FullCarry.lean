@@ -23,11 +23,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
 
   -- witness the result
-  let z ← witnessNative fun eval => mod256 (eval (x + y + carryIn))
+  let z ← witness (((x + y + carryIn).val % 256).toField)
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witnessNative fun eval => floorDiv256 (eval (x + y + carryIn))
+  let carryOut ← witness (((x + y + carryIn).val / 256).toField)
   assertBool carryOut
 
   assertZero (x + y + carryIn - z - carryOut * 256)
@@ -102,18 +102,29 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     have completeness1 : z.val < 256 := by
       rw [hz]
-      apply ByteUtils.mod256_lt
+      have h256 : (x + y + carry_in).val % 256 < 256 := Nat.mod_lt _ (by norm_num)
+      have hp : (512 : ℕ) < p := Fact.out
+      rw [ZMod.val_natCast_of_lt (by omega)]
+      exact h256
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     have carry_in_bound := IsBool.val_lt_two as_carry_in
 
+    -- bridge cast normal forms back to the FieldUtils.mod256 / floorDiv forms used by the lemmas
+    have h_carry_eq : (↑(ZMod.val (x + y + carry_in) / 256) : F p)
+        = FieldUtils.floorDiv (x + y + carry_in) 256 := by
+      rw [FieldUtils.floorDiv]; exact FieldUtils.natToField_eq_natCast _
+    have h_z_eq : (↑(ZMod.val (x + y + carry_in) % 256) : F p)
+        = ByteUtils.mod256 (x + y + carry_in) := by
+      rw [ByteUtils.mod256, FieldUtils.mod]; exact FieldUtils.natToField_eq_natCast _
+
     have completeness2 : IsBool carry_out := by
-      rw [hcarry_out]
+      rw [hcarry_out, h_carry_eq]
       apply Addition8.Theorems.completeness_bool
       repeat assumption
 
     have completeness3 : x + y + carry_in + -z + -(carry_out * 256) = 0 := by
-      rw [hz, hcarry_out]
+      rw [hz, hcarry_out, h_z_eq, h_carry_eq]
       apply Addition8.Theorems.completeness_add
       repeat assumption
 
@@ -126,6 +137,16 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   computableWitnesses n input := by
     simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
       Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
+    intro env env'
+    refine ⟨fun _ h => ?_, fun _ h => ?_⟩
+    · simp_all only [Witgen.WitgenIR.eval_ofFExpr, Witgen.FExpr.eval, Witgen.NExpr.eval]
+      obtain ⟨hx, hy, hc⟩ := h
+      simp only [circuit_norm, hx, hy, hc]
+    · ext i hi
+      obtain rfl : i = 0 := by omega
+      simp_all only [Witgen.WitgenIR.getElem_eval_ofFExprs]
+      obtain ⟨hx, hy, hc⟩ := h
+      simp only [circuit_norm, hx, hy, hc, Witgen.FExpr.eval, Witgen.NExpr.eval]
 }
 
 end Gadgets.Addition8FullCarry

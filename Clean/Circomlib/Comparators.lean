@@ -25,10 +25,8 @@ template IsZero() {
     in*out === 0;
 }
 -/
-def main (input : Expression (F p)) := do
-  let inv ← witnessNative fun env =>
-    let x := input.eval env
-    if x ≠ 0 then x⁻¹ else 0
+def main (input : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+  let inv ← witness (.ite (.feq (.expr input) 0) 0 (.inv (.expr input)))
 
   let out <== -input * inv + 1
   input * out === 0

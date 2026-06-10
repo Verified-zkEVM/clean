@@ -219,8 +219,8 @@ end U64.AssertNormalized
 /--
   Witness a 64-bit unsigned integer.
 -/
-def U64.witness (compute : ProverEnvironment (F p) → U64 (F p)) := do
-  let x ← ProvableType.witnessNative compute
+def U64.witness (value : U64 (Witgen.FExpr (F p))) := do
+  let x ← Witnessable.witness (F := F p) value
   U64.AssertNormalized.circuit x
   return x
 

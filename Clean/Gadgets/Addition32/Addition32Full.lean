@@ -114,11 +114,17 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
-    (hz : z = mod256 (x + y + c_in)) (hc_out : c_out = floorDiv256 (x + y + c_in)) :
+    (hz : z = ↑(ZMod.val (x + y + c_in) % 256))
+    (hc_out : c_out = ↑(ZMod.val (x + y + c_in) / 256)) :
     x.val < 256 → y.val < 256 → IsBool c_in →
     z.val < 256 ∧ IsBool c_out ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
     intro x_byte y_byte hc
+    -- bridge cast normal forms back to mod256 / floorDiv256
+    rw [show (↑(ZMod.val (x + y + c_in) % 256) : F p) = mod256 (x + y + c_in) from by
+      rw [ByteUtils.mod256, FieldUtils.mod]; exact FieldUtils.natToField_eq_natCast _] at hz
+    rw [show (↑(ZMod.val (x + y + c_in) / 256) : F p) = floorDiv256 (x + y + c_in) from by
+      rw [ByteUtils.floorDiv256, FieldUtils.floorDiv]; exact FieldUtils.natToField_eq_natCast _] at hc_out
     have : z.val < 256 := hz ▸ ByteUtils.mod256_lt (x + y + c_in)
     use this
     have carry_lt_2 : c_in.val < 2 := IsBool.val_lt_two hc

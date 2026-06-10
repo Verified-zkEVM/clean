@@ -136,6 +136,10 @@ witness paths; proofs intact; green. This is the basis on which the PR is judged
 - [x] Phase 2 — core integration
 - [x] Phase 3 — reference interpreter + equivalence proof (`Clean/Circuit/WitnessGeneration.lean`)
 - [x] Phase 4 — authoring surface (witnessField/witnessVector/ProvableType.witness + ofFExpr(s)/ofExprs; <== emits IR)
-- [ ] Phase 5 — gadget ports (done: IsZeroField, And8, Xor64, Xor32)
+- [ ] Phase 5 — gadget ports (done: IsZeroField, And8, Xor64, Xor32, Poseidon (via `<==`),
+  SHA256 leaves (And32/Ch32/Maj32/Xor32/Add32), Bits, Bitify, Bitify2, BinSub, Or8,
+  Addition8FullCarry, ByteDecomposition, Comparators, FibonacciWithChannels,
+  AddOperations, Table/Inductive, U64/U32.witness; remaining: FemtoCairo (stress test);
+  HintExample stays witnessNative by design — it is the genuine hint-closure case)
 - [ ] Phase 6 — exportability checker + serializer
 - [ ] Phase 7 — cleanup

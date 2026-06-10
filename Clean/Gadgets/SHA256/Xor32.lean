@@ -16,9 +16,8 @@ Witnesses 32 output bits.
     Per bit: z = a + b − 2·a·b  (correct when a, b ∈ {0, 1}).
     Witnesses 32 output bits. -/
 def xor32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  let z ← witnessVectorNative 32 fun env =>
-    Vector.ofFn fun (i : Fin 32) =>
-      ((env a[i]).val ^^^ (env b[i]).val : F p)
+  let z ← witness (Vector.ofFn fun (i : Fin 32) =>
+    (a[i].val ^^^ b[i].val).toField)
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] - a[i] - b[i] + 2 * a[i] * b[i])
   return z
@@ -149,7 +148,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp [Vector.getElem_map] at this; exact this
   intro i
   have henv := h_env i
-  simp only [Vector.getElem_ofFn] at henv
+  simp only [circuit_norm, Vector.getElem_ofFn] at henv
   rw [h_ai i, h_bi i] at henv
   have hcast : ((input_a[i].val ^^^ input_b[i].val : ℕ) : F p) =
       input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by

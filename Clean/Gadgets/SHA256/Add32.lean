@@ -24,16 +24,31 @@ can distinguish the intended ℕ-level relation from field wraparound.
 private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) : ℕ :=
   Finset.univ.sum fun (i : Fin 32) => (env a[i]).val * 2^i.val
 
+/-- IR expression for the ℕ value of a vector of bit-variables: `Σ a[i].val · 2^i`
+(authoring-time fold; the witness-IR counterpart of `evalBitsNat`). -/
+private def bitsVal (a : Var (fields 32) (F p)) : Witgen.NExpr (F p) :=
+  (List.finRange 32).foldr
+    (fun i acc => a[i.val].val * ((2^i.val : ℕ) : Witgen.NExpr (F p)) + acc) 0
+
+private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) :
+    (bitsVal a).eval { env := env } = evalBitsNat env a := by
+  rw [evalBitsNat, Fin.sum_univ_def, bitsVal, List.sum_eq_foldr, List.foldr_map]
+  generalize List.finRange 32 = l
+  induction l with
+  | nil => rfl
+  | cons i l ih =>
+    simp only [List.foldr_cons, circuit_norm, ih]
+
 /-- Add two 32-bit words mod 2^32.
     Both inputs are assumed to have boolean values in each bit position. -/
 def add32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the lower 32 bits of the sum
-  let z ← witnessVectorNative 32 fun env =>
-    let s := (evalBitsNat env a + evalBitsNat env b) % 2^32
-    Vector.ofFn fun (i : Fin 32) => ((s / 2^i.val % 2 : ℕ) : F p)
+  let z ← witnessIR (value := (Vector · 32)) (.prog
+    [.letN ((bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p)))]
+    (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField)
+    rfl)
   -- Witness the carry-out bit
-  let cout ← witnessFieldNative fun env =>
-    ((( evalBitsNat env a + evalBitsNat env b) / 2^32 % 2 : ℕ) : F p)
+  let cout ← witness ((((bitsVal a + bitsVal b) >>> 32) % 2).toField)
   -- Boolean constraints on output bits
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] * (z[i] - 1))
@@ -305,14 +320,13 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
   obtain ⟨S, hS_def⟩ : ∃ S, S = evalBitsNat env input_var_a + evalBitsNat env input_var_b := ⟨_, rfl⟩
-  simp only [← hS_def] at h_env_z h_env_cout
+  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow, ← hS_def] at h_env_z h_env_cout
   have h_p_large := h_large.elim
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num
   have hp32 : (2:ℕ)^32 < p := by linarith
   refine ⟨fun i => ?_, ?_, ?_⟩
   · -- Boolean constraint for z[i]: z[i] * (z[i] + -1) = 0
     have henv_i := h_env_z i
-    simp only [Vector.getElem_ofFn] at henv_i
     rw [henv_i]
     rcases Nat.mod_two_eq_zero_or_one (S % 2^32 / 2^i.val) with h | h <;>
       rw [h] <;> push_cast <;> ring

@@ -15,9 +15,8 @@ Witnesses 32 output bits.
 /-- Bitwise AND of two 32-bit words.
     Per bit: z = a · b  (correct when a, b ∈ {0, 1}). -/
 def and32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  let z ← witnessVectorNative 32 fun env =>
-    Vector.ofFn fun (i : Fin 32) =>
-      env a[i] * env b[i]
+  let z ← witness (Vector.ofFn fun (i : Fin 32) =>
+    Witgen.FExpr.expr (a[i] * b[i]))
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] - a[i] * b[i])
   return z
@@ -137,7 +136,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [and32]
   intro i
   have := h_env i
-  simp only [Vector.getElem_ofFn] at this
+  simp only [circuit_norm, Vector.getElem_ofFn] at this
   rw [this]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where

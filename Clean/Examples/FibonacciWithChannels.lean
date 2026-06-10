@@ -71,7 +71,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- (x and y are guaranteed to be range-checked from earlier interactions)
     BytesChannel.pull z
     -- witness the output carry
-    let carry ← witnessNative fun env => floorDiv (env (x + y)) 256
+    let carry ← witness (((x + y).val / 256).toField)
     assertBool carry
     -- assert correctness
     x + y === z + carry * 256
@@ -100,6 +100,9 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
       apply FieldUtils.ext
       rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
       linarith [hx, hy, ‹Fact (p > 512)›.elim]
+    rw [show (↑(ZMod.val (input_x + input_y) / 256) : F p)
+          = floorDiv (input_x + input_y) 256 from
+        (FieldUtils.natToField_eq_natCast _).trans rfl] at h_env
     grind
 
 example (input : Var Add8Inputs (F p)) :
@@ -132,7 +135,7 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     -- pull the current Fibonacci state
     FibonacciChannel.pull (n, x, y)
     -- witness the next Fibonacci value
-    let z ← witnessNative fun eval => mod256 (eval (x + y))
+    let z ← witness (((x + y).val % 256).toField)
     -- pull from the Add8 channel to check addition
     Add8Channel.pull (x, y, z)
     -- push the next Fibonacci state
@@ -170,8 +173,11 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     simp only [Prod.mk.injEq] at h_input
     simp_all only [circuit_norm, FibonacciChannel, Add8Channel]
     intro hx hy
-    rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-    linarith [hx, hy, ‹Fact (p > 512)›.elim]
+    have hwrap : ZMod.val (x + y) = ZMod.val x + ZMod.val y :=
+      ZMod.val_add_of_lt (by linarith [hx, hy, ‹Fact (p > 512)›.elim])
+    rw [ZMod.val_natCast_of_lt (by
+      have := Nat.mod_lt (ZMod.val (x + y)) (show 0 < 256 by norm_num)
+      linarith [‹Fact (p > 512)›.elim]), hwrap]
 
 example (input : Var fieldTriple (F p)) :
     ExplicitCircuit (fib8.main input) := by

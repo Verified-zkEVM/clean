@@ -125,6 +125,17 @@ def mod (x : F p) (c : ℕ+) (lt : c < p) : F p :=
 def floorDiv (x : F p) (c : ℕ+) : F p :=
   FieldUtils.natToField (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
+/-- `mod` is just the Nat-cast of `x.val % c` (the normal form produced by
+witness-IR decompositions). -/
+theorem mod_eq_natCast (x : F p) (c : ℕ+) (lt : c < p) :
+    mod x c lt = ((x.val % c : ℕ) : F p) :=
+  (natToField_eq_natCast _).symm
+
+/-- `floorDiv` is just the Nat-cast of `x.val / c`. -/
+theorem floorDiv_eq_natCast (x : F p) (c : ℕ+) :
+    floorDiv x c = ((x.val / c : ℕ) : F p) :=
+  (natToField_eq_natCast _).symm
+
 theorem mod_lt {x : F p} {c : ℕ+} {lt : c < p} : (mod x c lt).val < c := by
   rcases p with _ | p; cases p_ne_zero rfl
   show (x.val % c) < c

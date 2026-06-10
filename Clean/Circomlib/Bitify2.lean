@@ -79,10 +79,11 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     rw [Vector.map_mapRange]
     simp only [Expression.eval]
     have h_bits i (hi : i < 254) : env.get (i0 + i) = 0 ∨ env.get (i0 + i) = 1 := by
-      simp [h_env i hi, fieldToBits_bits]
+      rw [h_env i hi]
+      rcases Nat.mod_two_eq_zero_or_one (ZMod.val input >>> i) with h | h <;> simp [h]
     set bits := Vector.mapRange 254 fun i => env.get (i0 + i)
     have h_eq : bits = fieldToBits 254 input := by
-      ext i hi; simp [bits, circuit_norm, h_env i hi]
+      ext i hi; simp only [bits, Vector.getElem_mapRange, h_env i hi, getElem_fieldToBits]
     have input_lt : input.val < 2^254 := by
       linarith [‹Fact (p < 2^254)›.elim, ZMod.val_lt input]
     use h_bits
@@ -180,8 +181,9 @@ template Num2BitsNeg(n) {
 -/
 def main (n : ℕ) (input : Expression (F p)) := do
   -- Witness the bits of 2^n - input (when n > 0)
-  let out ← witnessVectorNative n fun env =>
-    fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)
+  let diff : Expression (F p) := (2^n : F p) - input
+  let out ← witnessVector n (.prog []
+    (.range n fun i => ((diff.val >>> i) % 2).toField) rfl)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
   let lc1 ← Circuit.foldlRange n 0 fun lc1 i => do
@@ -262,7 +264,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     simp only [h_input, circuit_norm] at h_env ⊢
     by_cases h_n : n = 0
     · rw [h_n] at h_env ⊢
-      simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, ↓reduceIte, IsEmpty.forall_iff, id_eq,
+      simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, IsEmpty.forall_iff, id_eq,
         add_zero, lt_self_iff_false, ↓reduceDIte, true_and, Fin.foldl_zero, mul_one]
       by_cases h_input_zero : input = 0
       · rw [h_input_zero]
@@ -277,9 +279,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
       · intro i
         rw [h_bits]
         simp only [IsBool]
-        apply fieldToBits_bits
+        rcases Nat.mod_two_eq_zero_or_one (ZMod.val ((2 ^ n : F p) + -input) >>> i.val) with h | h <;>
+          rw [h] <;> simp
       · rw [h_eq]
-        simp_all only [Nat.reducePow, gt_iff_lt, ↓reduceIte, id_eq, mul_zero, dite_eq_ite, ite_self,
+        simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self,
           add_zero, ite_mul, one_mul, zero_mul]
         let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
 
@@ -290,40 +293,37 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
         have : ∀ (i: Fin n), Expression.eval env bits_vars[i]! = env.get (i0 + i) := by
           unfold bits_vars
-          simp_all only [not_false_eq_true, Fin.is_lt, getElem!_pos, Fin.getElem_fin]
+          simp_all only [Fin.is_lt, getElem!_pos, Fin.getElem_fin]
           intro i
           rw [← h_bits]
           simp only [Vector.getElem_mapRange, Expression.eval]
 
-        simp_all only [not_false_eq_true, Fin.is_lt, getElem!_pos, Fin.getElem_fin]
+        simp_all only [Fin.is_lt, getElem!_pos, Fin.getElem_fin]
         simp only [fieldFromBits_eval]
 
         by_cases h_iz: input = 0
-        · have h : (ZMod.val (2 ^ n: ZMod p)) = 2 ^ n := by
+        · have hval : (ZMod.val (2 ^ n: ZMod p)) = 2 ^ n := by
             rw [← ZMod.val_natCast_of_lt hn]
             simp only [Nat.cast_pow, Nat.cast_ofNat]
 
-          simp_all only [sub_zero, ↓reduceIte, id_eq, neg_zero, add_zero, add_eq_right]
-          simp only [fieldToBits, toBits, Vector.getElem_map] at this
-          simp_all only [ZMod.val_zero, Nat.ofNat_pos, pow_pos]
-          simp only [Nat.testBit_two_pow, Vector.getElem_mapRange] at this
-
-          have h : ∀ (i : Fin n), n ≠ i.val := by
+          simp_all only [neg_zero, add_zero, ↓reduceIte]
+          have hbit0 : ∀ (i : Fin n), Expression.eval env.toEnvironment bits_vars[i.val] = 0 := by
             intro i
-            symm
-            exact ne_of_lt i.isLt
-          simp only [h] at this
-
-          rw [fieldFromBits_as_sum]
-          simp only [Vector.getElem_map]
-          conv =>
-            lhs
-            congr
-            ext acc k
-            rw [this k]
-            simp only [decide_false, Bool.false_eq_true, ↓reduceIte, Nat.cast_zero, zero_mul,
-              add_zero]
-          apply Fin.fin_foldl_const
+            rw [this i]
+            have hz : (2 ^ n >>> ↑i) % 2 = 0 := by
+              rw [Nat.shiftRight_eq_div_pow, Nat.pow_div (le_of_lt i.isLt) (by norm_num)]
+              rw [← Nat.sub_add_cancel (Nat.one_le_iff_ne_zero.mpr (Nat.sub_ne_zero_of_lt i.isLt)),
+                pow_succ, Nat.mul_mod_left]
+            simp [hz]
+          have hzero : fieldFromBits (Vector.map (fun x ↦ Expression.eval env.toEnvironment x) bits_vars) = 0 := by
+            rw [fieldFromBits_as_sum]
+            simp only [Vector.getElem_map]
+            conv_lhs =>
+              congr
+              ext acc k
+              simp only [hbit0 k, zero_mul, add_zero]
+            apply Fin.fin_foldl_const
+          rw [hzero, zero_add]
         · have h_field_eq : ((2 ^ n - input.val : ℕ) : F p) = (2 ^ n : F p) - (ZMod.cast input : F p) := by
             rw [Nat.cast_sub (Nat.le_of_lt assumption)]
             simp only [Nat.cast_pow, Nat.cast_ofNat]
@@ -334,8 +334,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
             apply fieldFromBits_eq
             intro i
             simp only [Fin.getElem_fin, Vector.getElem_map]
-            rw [this, h_field_eq]
-            rw [ZMod.cast_id]
+            rw [this, h_field_eq, ZMod.cast_id, getElem_fieldToBits, sub_eq_add_neg]
 
           simp_all only [↓reduceIte, id_eq, add_zero]
           rw [← h_1]

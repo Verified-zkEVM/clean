@@ -241,12 +241,13 @@ inductive Step (F : Type) where
   | letN (e : NExpr F)
 
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
+@[circuit_norm]
 def evalSteps [FiniteField F] (env : ProverEnvironment F)
-    (steps : List (Step F)) : Array (F ⊕ ℕ) :=
-  steps.foldl (init := #[]) fun locals step =>
-    match step with
-    | .letF e => locals.push (.inl (e.eval { env, locals }))
-    | .letN e => locals.push (.inr (e.eval { env, locals }))
+    (steps : List (Step F)) (locals : Array (F ⊕ ℕ) := #[]) : Array (F ⊕ ℕ) :=
+  match steps with
+  | [] => locals
+  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals })))
+  | .letN e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals })))
 
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIR (F : Type) (m : ℕ) where
@@ -299,6 +300,36 @@ theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression
     (ofExprs es).eval env = es.map (Expression.eval env.toEnvironment) := by
   ext i hi
   simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps, Vector.cast]
+
+attribute [circuit_norm] Array.getElem?_singleton
+
+/-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term
+(the container's length index is the unreduced `VExpr.length`, so `Vector`-level
+getElem lemmas cannot match). -/
+@[circuit_norm ↓]
+theorem VExpr.getElem_eval_mapRange [FiniteField F] (ctx : Ctx F) (n : ℕ) (body : FExpr F)
+    (i : ℕ) (hi : i < (VExpr.mapRange (F := F) n body).length) :
+    (VExpr.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
+  simp only [VExpr.eval]
+  exact Vector.getElem_mapRange i (by simpa [VExpr.length] using hi)
+
+/-- Elementwise evaluation of literal vector outputs, keyed on the eval term. -/
+@[circuit_norm ↓]
+theorem VExpr.getElem_eval_lit [FiniteField F] (ctx : Ctx F) (es : List (FExpr F))
+    (i : ℕ) (hi : i < (VExpr.lit es).length) :
+    (VExpr.eval ctx (.lit es))[i]
+      = (es[i]'(by simpa [VExpr.length] using hi)).eval ctx := by
+  simp [VExpr.eval, VExpr.length]
+
+/-- Elementwise evaluation of general witness programs, keyed on `getElem`:
+reduces to the output vector expression evaluated with the `let`-steps in scope. -/
+@[circuit_norm ↓]
+theorem WitgenIR.getElem_eval_prog [FiniteField F] {n : ℕ} (steps : List (Step F))
+    (out : VExpr F) (hlen : out.length = n) (env : ProverEnvironment F)
+    (i : ℕ) (hi : i < n) :
+    ((WitgenIR.prog steps out hlen).eval env)[i]
+      = (out.eval { env := env, locals := evalSteps env steps })[i]'(hlen ▸ hi) := by
+  simp [WitgenIR.eval, Vector.getElem_cast]
 
 /-- Scalar witness programs evaluate elementwise to their IR expression. -/
 @[circuit_norm ↓]

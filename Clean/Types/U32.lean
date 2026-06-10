@@ -292,8 +292,8 @@ end U32.AssertNormalized
 /--
   Witness a 32-bit unsigned integer.
 -/
-def U32.witness (compute : ProverEnvironment (F p) → U32 (F p)) := do
-  let x ← ProvableType.witnessNative compute
+def U32.witness (value : U32 (Witgen.FExpr (F p))) := do
+  let x ← Witnessable.witness (F := F p) value
   U32.AssertNormalized.circuit x
   return x
 
