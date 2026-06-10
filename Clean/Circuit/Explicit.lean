@@ -398,15 +398,25 @@ instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} :
   channelsWithGuarantees _ := []
   channelsWithRequirements _ := []
 
-/-- Bridge for scalar `witness` call sites, whose IR argument elaborates at the
-literal length 1 (the family instance is keyed at `size field` and not found). -/
-instance {code : WitgenIR F 1} :
-    ExplicitCircuit (witness (value := field) (var := Expression) code) :=
-  inferInstanceAs (ExplicitCircuit (witnessField code))
+/-- Bridge for scalar `witness` call sites (the family instance is keyed at
+`field (FExpr F)` / `size field`, while call sites elaborate at the literal). -/
+instance {e : Witgen.FExpr F} :
+    ExplicitCircuit (witness (value := field) (var := Expression) e) :=
+  inferInstanceAs (ExplicitCircuit (witnessField (.ofFExpr e)))
 
 /-- Bridge for vector `witness` call sites at literal length `m`. -/
+instance {m : ℕ} {v : Vector (Witgen.FExpr F) m} :
+    ExplicitCircuit (witness (value := (Vector · m)) (var := fun F => Vector (Expression F) m) v) :=
+  inferInstanceAs (ExplicitCircuit (witnessVector m (.ofFExprs v)))
+
+/-- Bridge for scalar `witnessIR` call sites at the literal length 1. -/
+instance {code : WitgenIR F 1} :
+    ExplicitCircuit (witnessIR (value := field) (var := Expression) code) :=
+  inferInstanceAs (ExplicitCircuit (witnessField code))
+
+/-- Bridge for vector `witnessIR` call sites at literal length `m`. -/
 instance {m : ℕ} {code : WitgenIR F m} :
-    ExplicitCircuit (witness (value := (Vector · m)) (var := fun F => Vector (Expression F) m) code) :=
+    ExplicitCircuit (witnessIR (value := (Vector · m)) (var := fun F => Vector (Expression F) m) code) :=
   inferInstanceAs (ExplicitCircuit (witnessVector m code))
 
 
@@ -451,7 +461,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
     rw [inst.witness_def]
-    show _ = inst.var_eq ▸ (ProvableType.witness c).output n
+    show _ = inst.var_eq ▸ (ProvableType.witness (.ofFExprs (toElements c))).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
@@ -461,7 +471,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
-  operations c n := [.witness (size value) c]
+  operations c n := [.witness (size value) (.ofFExprs (toElements c))]
   operations_eq c n := by
     rw [inst.witness_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
@@ -479,6 +489,42 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   channelsLawful c n := by
     simp only [circuit_norm]
     rw [inst.witness_def, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+      snd_cast (by rw [inst.var_eq])]
+    simp [circuit_norm]
+
+instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
+    ExplicitCircuits (witnessIR (F:=F) (value:=value) (var:=var)) where
+  output _ n := inst.var_eq ▸ varFromOffset value n
+  output_eq c n := by
+    rw [inst.witnessIR_def]
+    show _ = inst.var_eq ▸ (ProvableType.witness c).output n
+    rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
+      cast_fst, cast_apply (by rw [inst.var_eq])]
+
+  localLength _ _ := size value
+  localLength_eq c n := by
+    rw [inst.witnessIR_def, Circuit.localLength, eqRec_eq_cast,
+      cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
+    rfl
+
+  operations c n := [.witness (size value) c]
+  operations_eq c n := by
+    rw [inst.witnessIR_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+      snd_cast (by rw [inst.var_eq])]
+    rfl
+
+  channelsWithGuarantees _ _ := []
+  channelsWithRequirements _ _ := []
+
+  subcircuitsConsistent c n := by
+    simp only [circuit_norm]
+    rw [inst.witnessIR_def, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+      snd_cast (by rw [inst.var_eq])]
+    reduce
+    trivial
+  channelsLawful c n := by
+    simp only [circuit_norm]
+    rw [inst.witnessIR_def, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
     simp [circuit_norm]
 

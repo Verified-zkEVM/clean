@@ -19,8 +19,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
   let xorByte (a b : Expression (F p)) : Witgen.FExpr (F p) :=
     (a.val ^^^ b.val).toField
-  let z : Var U32 (F p) ← witness (.ofFExprs #v[
-    xorByte x.x0 y.x0, xorByte x.x1 y.x1, xorByte x.x2 y.x2, xorByte x.x3 y.x3])
+  let z ← witness (U32.mk
+    (xorByte x.x0 y.x0) (xorByte x.x1 y.x1) (xorByte x.x2 y.x2) (xorByte x.x3 y.x3))
 
   lookup ByteXorTable (x.x0, y.x0, z.x0)
   lookup ByteXorTable (x.x1, y.x1, z.x1)

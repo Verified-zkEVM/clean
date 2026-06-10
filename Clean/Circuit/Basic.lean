@@ -285,34 +285,46 @@ export Circuit (witnessField witnessVector
 -- general `witness` method
 
 class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
-  /-- Witness a value computed by a witness-IR program (the proper entry point). -/
-  witness : WitgenIR F (size value) → Circuit F (var F)
+  /-- Witness a value given per-element witness-IR expressions, in the shape of the
+  value type itself (so the type is inferred from the argument, as with the old
+  closure-based API). The main entry point. -/
+  witness : value (Witgen.FExpr F) → Circuit F (var F)
+  /-- Witness a value computed by a general witness-IR program (with `let`-steps and
+  loops, which the per-element form cannot express). Usually needs the result type
+  annotated on the binder. -/
+  witnessIR : WitgenIR F (size value) → Circuit F (var F)
   /-- Witness a value computed by an arbitrary Lean closure (not exportable;
   the migration escape hatch). -/
   witnessNative : (ProverEnvironment F → value F) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
-  witness_def (code : WitgenIR F (size value)) :
-    witness code = var_eq ▸ ProvableType.witness code := by intros; rfl
+  witness_def (xs : value (Witgen.FExpr F)) :
+    witness xs = var_eq ▸ ProvableType.witness (.ofFExprs (toElements xs)) := by intros; rfl
+  witnessIR_def (code : WitgenIR F (size value)) :
+    witnessIR code = var_eq ▸ ProvableType.witness code := by intros; rfl
   witnessNative_eq (compute : ProverEnvironment F → value F) :
     witnessNative compute = var_eq ▸ ProvableType.witnessNative compute := by intros; rfl
 
-export Witnessable (witness witnessNative)
+export Witnessable (witness witnessIR witnessNative)
 
 instance : Witnessable F field Expression where
-  witness := witnessField
+  witness e := witnessField (.ofFExpr e)
+  witnessIR := witnessField
   witnessNative := witnessFieldNative
 
 instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
-  witness := witnessVector m
+  witness v := witnessVector m (.ofFExprs v)
+  witnessIR := witnessVector m
   witnessNative := witnessVectorNative m
 
 instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
-  witness := ProvableType.witness
+  witness xs := ProvableType.witness (.ofFExprs (toElements xs))
+  witnessIR := ProvableType.witness
   witnessNative := ProvableType.witnessNative
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
-  witness := ProvableType.witness
+  witness xs := ProvableType.witness (.ofFExprs (toElements xs))
+  witnessIR := ProvableType.witness
   witnessNative := ProvableVector.witnessNative m
 
 -- witness generation

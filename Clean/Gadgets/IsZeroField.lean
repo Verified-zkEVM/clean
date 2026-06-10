@@ -13,7 +13,7 @@ Returns 1 if the input is 0, otherwise returns 0.
 -/
 def circuit : FormalCircuit F field field where
   main (x : Expression F) := do
-    let z : Expression F ← witness (.ofFExpr (.ite (x =? 0) 0 x⁻¹))
+    let z ← witness (.ite (x =? 0) 0 x⁻¹)
      -- if x = 0 then b = 1
     let b <== 1 - x * z
       -- if x ≠ 0 then b = 0
