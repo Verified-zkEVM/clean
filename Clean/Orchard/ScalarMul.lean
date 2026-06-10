@@ -416,6 +416,13 @@ def constraints (row : Row R) : Prop :=
     sMinusLo130Check row = 0 ∧
     canonicity row = 0
 
+def Spec (row : Row R) : Prop :=
+  row.s = row.alpha + row.k254 * OfNat.ofNat (2 ^ 130) ∧
+    row.z0 = row.alpha + tQ ∧
+    (row.k254 = 0 ∨ row.z130 = OfNat.ofNat (2 ^ 124)) ∧
+    (row.k254 = 0 ∨ row.sMinusLo130 = 0) ∧
+    (row.k254 = 1 ∨ row.z130 * row.eta = 1 ∨ row.sMinusLo130 = 0)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (sCheck row)
   assertZero (recovery row)
@@ -425,15 +432,54 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, sCheck, recovery, loZero,
+    circuit_proof_start [main, Spec, constraints, sCheck, recovery, loZero,
       sMinusLo130Check, canonicity, tQ]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hS, hRecovery, hLoZero, hSMinusLo130, hCanonicity⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · exact sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hS)
+    · apply sub_eq_zero.mp
+      linear_combination hRecovery
+    · rcases mul_eq_zero.mp hLoZero with h | h
+      · exact Or.inl h
+      · exact Or.inr (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h))
+    · rcases mul_eq_zero.mp hSMinusLo130 with h | h
+      · exact Or.inl h
+      · exact Or.inr h
+    · rcases mul_eq_zero.mp hCanonicity with hK | hRest
+      · rcases mul_eq_zero.mp hK with hK | hEta
+        · exact Or.inl (by linear_combination -hK)
+        · exact Or.inr (Or.inl (by linear_combination -hEta))
+      · exact Or.inr (Or.inr hRest)
   completeness := by
-    circuit_proof_start [main, constraints, sCheck, recovery, loZero,
+    circuit_proof_start [main, Spec, constraints, sCheck, recovery, loZero,
       sMinusLo130Check, canonicity, tQ]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hS, hRecovery, hLoZero, hSMinusLo130, hCanonicity⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · exact by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hS
+    · exact by linear_combination hRecovery
+    · exact by
+        rcases hLoZero with h | h
+        · rw [h]
+          simp
+        · rw [h]
+          simp
+    · exact by
+        rcases hSMinusLo130 with h | h
+        · rw [h]
+          simp
+        · rw [h]
+          simp
+    · exact by
+        rcases hCanonicity with hK | hRest
+        · rw [hK]
+          simp
+        · rcases hRest with hEta | hSMinusLo130
+          · rw [hEta]
+            simp
+          · rw [hSMinusLo130]
+            simp
 
 end VarBaseOverflow
 
