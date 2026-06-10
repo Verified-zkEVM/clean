@@ -296,7 +296,11 @@ def output {K : Type} (row : Row K) : Ecc.Point K where
   y := row.commitmentY
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Ecc.CompleteAdd.Entry.Spec (addInput row) (output row)
+  Ecc.pointCoords (output row) =
+    CompElliptic.CurveForms.ShortWeierstrass.add
+      (0 : Ecc.PallasBaseField)
+      (Ecc.pointCoords (addInput row).p)
+      (Ecc.pointCoords (addInput row).q)
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)

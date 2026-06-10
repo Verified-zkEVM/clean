@@ -92,7 +92,11 @@ def output {K : Type} (row : Row K) : Ecc.Point K where
   y := row.cvY
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Ecc.CompleteAdd.Entry.Spec (addInput row) (output row)
+  Ecc.pointCoords (output row) =
+    CompElliptic.CurveForms.ShortWeierstrass.add
+      (0 : Ecc.PallasBaseField)
+      (Ecc.pointCoords (addInput row).p)
+      (Ecc.pointCoords (addInput row).q)
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
@@ -218,7 +222,11 @@ def output {K : Type} (row : Row K) : Ecc.Point K where
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.scalar = row.poseidonHash + row.psi ∧
-    Ecc.CompleteAdd.Entry.Spec (addInput row) (output row) ∧
+    Ecc.pointCoords (output row) =
+      CompElliptic.CurveForms.ShortWeierstrass.add
+        (0 : Ecc.PallasBaseField)
+        (Ecc.pointCoords (addInput row).p)
+        (Ecc.pointCoords (addInput row).q) ∧
     row.nf = row.nfPointX
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
@@ -546,7 +554,11 @@ def output {K : Type} (row : Row K) : Ecc.Point K where
   y := row.rkY
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Ecc.CompleteAdd.Entry.Spec (addInput row) (output row)
+  Ecc.pointCoords (output row) =
+    CompElliptic.CurveForms.ShortWeierstrass.add
+      (0 : Ecc.PallasBaseField)
+      (Ecc.pointCoords (addInput row).p)
+      (Ecc.pointCoords (addInput row).q)
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
