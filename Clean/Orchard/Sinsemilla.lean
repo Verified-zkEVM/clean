@@ -38,12 +38,10 @@ deriving ProvableStruct
 
 namespace DoubleAndAdd
 
-variable {R : Type} [Zero R] [Add R] [Sub R] [Mul R]
-
-def xR (row : DoubleAndAddRow R) : R :=
+def xR {K : Type} [Sub K] [Mul K] (row : DoubleAndAddRow K) : K :=
   row.lambda1 * row.lambda1 - row.xA - row.xP
 
-def yA (row : DoubleAndAddRow R) : R :=
+def yA {K : Type} [Add K] [Sub K] [Mul K] (row : DoubleAndAddRow K) : K :=
   (row.lambda1 + row.lambda2) * (row.xA - xR row)
 
 end DoubleAndAdd
