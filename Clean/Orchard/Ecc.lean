@@ -7,7 +7,7 @@ import Clean.Utils.Tactics
 Clean approximations of the Orchard/Pallas ECC gates.
 
 Reference for the first gadgets:
-`/mnt/data-2tb/zks/audits/zcash-orchard/halo2-halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/witness_point.rs`
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/witness_point.rs`
 - `witness point`
 - `witness non-identity point`
 

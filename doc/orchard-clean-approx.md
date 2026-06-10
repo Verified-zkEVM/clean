@@ -28,10 +28,10 @@ guess.
 
 Reference sources for this branch:
 
-- Orchard: `/mnt/data-2tb/zks/audits/zcash-orchard/orchard-0.14.0`
-- halo2_gadgets: `/mnt/data-2tb/zks/audits/zcash-orchard/halo2-halo2_gadgets-0.5.0/halo2_gadgets`
+- Orchard: `orchard@orchard-0.14.0`
+- halo2_gadgets: `halo2@halo2_gadgets-0.5.0/halo2_gadgets`
 - halo2_proofs, if needed for utility semantics:
-  `/mnt/data-2tb/zks/audits/zcash-orchard/halo2-halo2_gadgets-0.5.0/halo2_proofs`
+  `halo2@halo2_gadgets-0.5.0/halo2_proofs`
 
 If a future agent cannot find the relevant source code, it must stop and ask Gregor instead
 of guessing the implementation.
@@ -42,7 +42,7 @@ of guessing the implementation.
 2. Port simple utilities used pervasively by Orchard, especially range checks and running
    sums, from `halo2_gadgets/src/utilities`.
 3. Port Sinsemilla gates from `halo2_gadgets/src/sinsemilla`.
-4. Port Orchard-specific custom gates from `orchard-0.14.0/src/circuit.rs`,
+4. Port Orchard-specific custom gates from `orchard@orchard-0.14.0/src/circuit.rs`,
    `commit_ivk.rs`, and `note_commit.rs`.
 5. Compose higher-level Orchard pieces: note commitment, value commitment, nullifier,
    spend authorization, and action checks.
