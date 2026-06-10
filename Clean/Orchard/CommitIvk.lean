@@ -250,10 +250,12 @@ def ivkCheck (row : Row R) : R :=
   row.shortCommit.extracted - row.wiring.computedIvk
 
 def Spec (row : Row R) : Prop :=
-  Sinsemilla.ShortCommit.Spec row.shortCommit ∧
+  Wiring.Spec row.wiring ∧
+    Sinsemilla.ShortCommit.Spec row.shortCommit ∧
     row.shortCommit.extracted = row.wiring.computedIvk
 
 def main (row : Var Row F) : Circuit F Unit := do
+  Wiring.circuit row.wiring
   Sinsemilla.ShortCommit.circuit row.shortCommit
   assertZero (ivkCheck row)
 
@@ -261,13 +263,15 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, ivkCheck, Sinsemilla.ShortCommit.circuit]
-    rcases h_holds with ⟨hShort, hIvk⟩
-    exact ⟨hShort, sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hIvk)⟩
+    circuit_proof_start [main, Spec, ivkCheck, Wiring.circuit, Wiring.Spec,
+      Sinsemilla.ShortCommit.circuit]
+    rcases h_holds with ⟨hWiring, hShort, hIvk⟩
+    exact ⟨hWiring, hShort, sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hIvk)⟩
   completeness := by
-    circuit_proof_start [main, Spec, ivkCheck, Sinsemilla.ShortCommit.circuit]
-    rcases h_spec with ⟨hShort, hIvk⟩
-    exact ⟨hShort, by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hIvk⟩
+    circuit_proof_start [main, Spec, ivkCheck, Wiring.circuit, Wiring.Spec,
+      Sinsemilla.ShortCommit.circuit]
+    rcases h_spec with ⟨hWiring, hShort, hIvk⟩
+    exact ⟨hWiring, hShort, by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hIvk⟩
 
 end WiringWithShortCommit
 

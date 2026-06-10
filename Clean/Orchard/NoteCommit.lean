@@ -795,7 +795,11 @@ its explicit `computedCm*` outputs to the `Sinsemilla.Commit.circuit` output poi
 -/
 namespace WiringWithCommit
 
-variable [OfNat R 2] [OfNat R 3]
+variable [OfNat R 2] [OfNat R 3] [OfNat R 4] [OfNat R 16] [OfNat R 32] [OfNat R 64]
+  [OfNat R 256] [OfNat R 512] [OfNat R 1024]
+  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 249)]
+  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)] [OfNat R 288230376151711744]
+  [OfNat R 45560315531419706090280762371685220353]
 
 structure Row (F : Type) where
   note : Wiring.Row F
@@ -809,11 +813,13 @@ def cmYCheck (row : Row R) : R :=
   row.commit.commitmentY - row.note.computedCmY
 
 def Spec (row : Row R) : Prop :=
-  Sinsemilla.Commit.Spec row.commit ∧
+  Wiring.Spec row.note ∧
+    Sinsemilla.Commit.Spec row.commit ∧
     row.commit.commitmentX = row.note.computedCmX ∧
     row.commit.commitmentY = row.note.computedCmY
 
 def main (row : Var Row F) : Circuit F Unit := do
+  Wiring.circuit row.note
   Sinsemilla.Commit.circuit row.commit
   assertZero (cmXCheck row)
   assertZero (cmYCheck row)
@@ -823,6 +829,7 @@ def circuit : FormalAssertion F Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, cmXCheck, cmYCheck,
+      Wiring.circuit, Wiring.Spec,
       Sinsemilla.Commit.circuit, Sinsemilla.Commit.Spec, Sinsemilla.Commit.addRow,
       Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine,
       Ecc.CompleteAdd.tangentLine, Ecc.CompleteAdd.nonexceptionalResult,
@@ -830,10 +837,11 @@ def circuit : FormalAssertion F Row where
       Ecc.CompleteAdd.inverseResult, Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta,
       Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP,
       Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
-    rcases h_holds with ⟨hCommit, hX, hY⟩
-    exact ⟨hCommit, left_eq_of_add_neg_eq_zero hX, left_eq_of_add_neg_eq_zero hY⟩
+    rcases h_holds with ⟨hNote, hCommit, hX, hY⟩
+    exact ⟨hNote, hCommit, left_eq_of_add_neg_eq_zero hX, left_eq_of_add_neg_eq_zero hY⟩
   completeness := by
     circuit_proof_start [main, Spec, cmXCheck, cmYCheck,
+      Wiring.circuit, Wiring.Spec,
       Sinsemilla.Commit.circuit, Sinsemilla.Commit.Spec, Sinsemilla.Commit.addRow,
       Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine,
       Ecc.CompleteAdd.tangentLine, Ecc.CompleteAdd.nonexceptionalResult,
@@ -841,8 +849,8 @@ def circuit : FormalAssertion F Row where
       Ecc.CompleteAdd.inverseResult, Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta,
       Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP,
       Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
-    rcases h_spec with ⟨hCommit, hX, hY⟩
-    exact ⟨hCommit, by rw [hX]; ring, by rw [hY]; ring⟩
+    rcases h_spec with ⟨hNote, hCommit, hX, hY⟩
+    exact ⟨hNote, hCommit, by rw [hX]; ring, by rw [hY]; ring⟩
 
 end WiringWithCommit
 
