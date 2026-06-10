@@ -20,7 +20,7 @@ This captures the shared structure of prime fields and binary fields that circui
 gadgets rely on: the ability to decompose field elements into bits and reason
 about their numeric value.
 -/
-class FiniteField (F : Type) extends Field F, Fintype F where
+class FiniteField (F : Type) extends Field F where
   /-- Canonical embedding of field elements into natural numbers. -/
   val : F → ℕ
   /-- Inverse of `val`: interpret a natural number (below the field size) as a field
@@ -28,12 +28,17 @@ class FiniteField (F : Type) extends Field F, Fintype F where
   binary digits as polynomial coefficients. Note that `Nat.cast` would be wrong there:
   it reduces via the characteristic, collapsing `GF(2^n)` to `{0, 1}`. -/
   fromNat : ℕ → F
+  /-- The number of field elements, as a plain `ℕ`. Deliberately NOT via `Fintype`:
+  the circuit machinery passes `FiniteField` instances everywhere, and materializing
+  a `Fintype`'s `Finset.univ` (2^31 elements for Babybear) at runtime or compile time
+  is fatal (out-of-memory). -/
+  size : ℕ
   /-- Every element's value is less than the field size. -/
-  val_lt : ∀ x : F, val x < Fintype.card F
+  val_lt : ∀ x : F, val x < size
   /-- The embedding is injective (distinct elements have distinct values). -/
   val_injective : Function.Injective val
   /-- `fromNat` inverts `val` on naturals below the field size. -/
-  val_fromNat : ∀ n < Fintype.card F, val (fromNat n) = n
+  val_fromNat : ∀ n < size, val (fromNat n) = n
   /-- Zero maps to zero. -/
   val_zero : val 0 = 0
   /-- One maps to one. -/
@@ -48,7 +53,7 @@ theorem fromNat_val (x : F) : fromNat (val x) = x :=
   val_injective (val_fromNat _ (val_lt x))
 
 /-- The field has at least two elements (derived from `val_lt` and `val_one`). -/
-theorem fieldSize_pos : Fintype.card F > 1 := by
+theorem fieldSize_pos : FiniteField.size F > 1 := by
   have := val_lt (1 : F); rwa [val_one] at this
 
 /-- Two field elements are equal iff their values are equal. -/
@@ -72,18 +77,13 @@ end FiniteField
 instance {p : ℕ} [Fact p.Prime] : FiniteField (F p) where
   val := ZMod.val
   fromNat n := (n : F p)
-  val_lt := by
-    intro x
-    unfold F
-    rw [ZMod.card]
-    exact ZMod.val_lt x
+  size := p
+  val_lt x := ZMod.val_lt x
   val_injective := by
     intro x y h
     exact FieldUtils.ext h
   val_fromNat := by
     intro n hn
-    unfold F at *
-    rw [ZMod.card] at hn
     rw [ZMod.val_natCast, Nat.mod_eq_of_lt hn]
   val_zero := ZMod.val_zero
   val_one := by
