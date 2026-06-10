@@ -3,6 +3,7 @@ import Clean.Orchard.NoteCommit
 import Clean.Orchard.Sinsemilla
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
+import Mathlib.Tactic
 
 /-!
 # Orchard scalar multiplication gates
@@ -53,6 +54,20 @@ def ternary (choice ifTrue ifFalse : R) : R :=
 def tQ [OfNat R 45560315531506369815346746415080538113] : R :=
   OfNat.ofNat 45560315531506369815346746415080538113
 
+def IsBool (x : R) : Prop :=
+  x = 0 ∨ x = 1
+
+private theorem isBool_of_boolPoly_eq_zero {x : F} (h : NoteCommit.boolPoly x = 0) :
+    IsBool x := by
+  unfold NoteCommit.boolPoly at h
+  rcases mul_eq_zero.mp h with h0 | h1
+  · exact Or.inl h0
+  · exact Or.inr (sub_eq_zero.mp h1)
+
+private theorem boolPoly_eq_zero_of_isBool {x : F} (h : IsBool x) :
+    NoteCommit.boolPoly x = 0 := by
+  rcases h with h | h <;> rw [h] <;> simp [NoteCommit.boolPoly]
+
 namespace VarBaseLSB
 
 structure Row (F : Type) where
@@ -76,6 +91,11 @@ def lsbY (row : Row R) : R :=
 def constraints (row : Row R) : Prop :=
   NoteCommit.boolPoly (lsb row) = 0 ∧ lsbX row = 0 ∧ lsbY row = 0
 
+def Spec (row : Row R) : Prop :=
+  IsBool (lsb row) ∧
+    (lsb row = 0 → row.xP = row.baseX ∧ row.yP + row.baseY = 0) ∧
+    (lsb row = 1 → row.xP = 0 ∧ row.yP = 0)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (NoteCommit.boolPoly (lsb row))
   assertZero (lsbX row)
@@ -83,15 +103,60 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, lsb, lsbX, lsbY,
-      ternary]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, lsb, lsbX, lsbY]
+    rcases h_holds with ⟨hBool, hX, hY⟩
+    rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
+    constructor
+    · exact isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool)
+    constructor
+    · intro hBit
+      constructor
+      · have hX' := hX
+        simp [circuit_norm, ternary, hz0, hz1, hxP, hbaseX] at hX'
+        apply sub_eq_zero.mp
+        linear_combination hX' - input_baseX * hBit
+      · have hY' := hY
+        simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY] at hY'
+        linear_combination hY' + input_baseY * hBit
+    · intro hBit
+      constructor
+      · have hX' := hX
+        simp [circuit_norm, ternary, hz0, hz1, hxP, hbaseX] at hX'
+        linear_combination hX' - input_baseX * hBit
+      · have hY' := hY
+        simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY] at hY'
+        linear_combination hY' + input_baseY * hBit
   completeness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, lsb, lsbX, lsbY,
-      ternary]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, lsb, lsbX, lsbY]
+    rcases h_spec with ⟨hBool, hZero, hOne⟩
+    rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
+    constructor
+    · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool
+    constructor
+    · rcases hBool with hBit | hBit
+      · exact by
+          rcases hZero hBit with ⟨hx, _⟩
+          simp [circuit_norm, ternary, hz0, hz1, hxP, hbaseX, hx]
+          left
+          simpa [sub_eq_add_neg] using hBit
+      · exact by
+          rcases hOne hBit with ⟨hx, _⟩
+          simp [circuit_norm, ternary, hz0, hz1, hxP, hbaseX, hx]
+          left
+          linear_combination -hBit
+    · rcases hBool with hBit | hBit
+      · exact by
+          rcases hZero hBit with ⟨_, hy⟩
+          simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY, hy]
+          left
+          simpa [sub_eq_add_neg] using hBit
+      · exact by
+          rcases hOne hBit with ⟨_, hy⟩
+          simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY, hy]
+          left
+          linear_combination -hBit
 
 end VarBaseLSB
 
@@ -113,21 +178,51 @@ def ySwitch (row : Row R) : R :=
 def constraints (row : Row R) : Prop :=
   NoteCommit.boolPoly (bit row) = 0 ∧ ySwitch row = 0
 
+def Spec (row : Row R) : Prop :=
+  IsBool (bit row) ∧
+    (bit row = 0 → row.baseY + row.yP = 0) ∧
+    (bit row = 1 → row.baseY = row.yP)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
   assertZero (ySwitch row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, bit, ySwitch,
-      ternary]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bit, ySwitch]
+    rcases h_holds with ⟨hBool, hSwitch⟩
+    rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
+    constructor
+    · exact isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool)
+    constructor
+    · intro hBit
+      have hSwitch' := hSwitch
+      simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP] at hSwitch'
+      linear_combination hSwitch' + (2 * input_yP) * hBit
+    · intro hBit
+      have hSwitch' := hSwitch
+      simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP] at hSwitch'
+      apply eq_of_sub_eq_zero
+      linear_combination hSwitch' + (2 * input_yP) * hBit
   completeness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, bit, ySwitch,
-      ternary]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bit, ySwitch]
+    rcases h_spec with ⟨hBool, hZero, hOne⟩
+    rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
+    constructor
+    · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool
+    · rcases hBool with hBit | hBit
+      · exact by
+          have hy := hZero hBit
+          simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP, hy]
+          left
+          simpa [sub_eq_add_neg] using hBit
+      · exact by
+          have hy := hOne hBit
+          simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP, hy]
+          left
+          linear_combination -hBit
 
 end VarBaseCompleteBit
 
