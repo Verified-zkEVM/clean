@@ -24,6 +24,25 @@ namespace CommitIvk
 
 variable {F : Type} [Field F]
 
+def IsBool {K : Type} [Zero K] [One K] (x : K) : Prop :=
+  x = 0 ∨ x = 1
+
+private theorem isBool_of_bool_factor_eq_zero {x : F} (h : x * (x + -1) = 0) :
+    IsBool x := by
+  rcases mul_eq_zero.mp h with h0 | h1
+  · exact Or.inl h0
+  · exact Or.inr (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h1))
+
+private theorem bool_factor_eq_zero_of_isBool {x : F} (h : IsBool x) :
+    x * (x + -1) = 0 := by
+  rcases h with h | h <;> rw [h] <;> simp
+
+private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
+  rcases h with h | h <;> rw [h] <;> simp
+
+private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
+  sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
+
 variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
   [OfNat R 16] [OfNat R 32] [OfNat R 512]
   [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 245)]
@@ -85,6 +104,23 @@ def constraints (row : Row R) : Prop :=
     b2CPrimeCheck row = 0 ∧
     row.d1 * row.z14B2CPrime = 0
 
+def Spec (row : Row R) : Prop :=
+  IsBool row.b1 ∧
+    IsBool row.d1 ∧
+    row.bWhole = row.b0 + row.b1 * 16 + row.b2 * 32 ∧
+    row.dWhole = row.d0 + row.d1 * 512 ∧
+    row.ak = row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) ∧
+    row.nk = row.b2 + row.c * 32 + row.d0 * OfNat.ofNat (2 ^ 245) +
+      row.d1 * OfNat.ofNat (2 ^ 254) ∧
+    (row.b1 = 0 ∨ row.b0 = 0) ∧
+    (row.b1 = 0 ∨ row.z13A = 0) ∧
+    row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - NoteCommit.tP ∧
+    (row.b1 = 0 ∨ row.z13APrime = 0) ∧
+    (row.d1 = 0 ∨ row.d0 = 0) ∧
+    (row.d1 = 0 ∨ row.z13C = 0) ∧
+    row.b2CPrime = row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP ∧
+    (row.d1 = 0 ∨ row.z14B2CPrime = 0)
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (NoteCommit.boolPoly row.b1)
   assertZero (NoteCommit.boolPoly row.d1)
@@ -103,17 +139,62 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, bDecomposition,
+    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bDecomposition,
       dDecomposition, akDecomposition, nkDecomposition, aPrimeCheck, b2CPrimeCheck,
       NoteCommit.tP]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with
+      ⟨hb1, hd1, hb, hd, hak, hnk, hb0, hz13A, haPrime, hz13APrime, hd0, hz13C,
+        hb2CPrime, hz14B2CPrime⟩
+    exact ⟨isBool_of_bool_factor_eq_zero hb1, isBool_of_bool_factor_eq_zero hd1,
+      left_eq_of_add_neg_eq_zero hb, left_eq_of_add_neg_eq_zero hd,
+      (left_eq_of_add_neg_eq_zero hak).symm, (left_eq_of_add_neg_eq_zero hnk).symm,
+      mul_eq_zero.mp hb0, mul_eq_zero.mp hz13A,
+      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero haPrime).symm,
+      mul_eq_zero.mp hz13APrime, mul_eq_zero.mp hd0, mul_eq_zero.mp hz13C,
+      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hb2CPrime).symm,
+      mul_eq_zero.mp hz14B2CPrime⟩
   completeness := by
-    circuit_proof_start [main, constraints, NoteCommit.boolPoly, bDecomposition,
+    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bDecomposition,
       dDecomposition, akDecomposition, nkDecomposition, aPrimeCheck, b2CPrimeCheck,
       NoteCommit.tP]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with
+      ⟨hb1, hd1, hb, hd, hak, hnk, hb0, hz13A, haPrime, hz13APrime, hd0, hz13C,
+        hb2CPrime, hz14B2CPrime⟩
+    constructor
+    · exact bool_factor_eq_zero_of_isBool hb1
+    constructor
+    · exact bool_factor_eq_zero_of_isBool hd1
+    constructor
+    · rw [hb]
+      ring
+    constructor
+    · rw [hd]
+      ring
+    constructor
+    · rw [hak]
+      ring
+    constructor
+    · rw [hnk]
+      ring
+    constructor
+    · exact mul_eq_zero_of_or hb0
+    constructor
+    · exact mul_eq_zero_of_or hz13A
+    constructor
+    · rw [haPrime]
+      ring
+    constructor
+    · exact mul_eq_zero_of_or hz13APrime
+    constructor
+    · exact mul_eq_zero_of_or hd0
+    constructor
+    · exact mul_eq_zero_of_or hz13C
+    constructor
+    · rw [hb2CPrime]
+      ring
+    exact mul_eq_zero_of_or hz14B2CPrime
 
 /-!
 `commit_ivk` source-level wiring.
@@ -142,38 +223,32 @@ def ivkCheck (row : Row R) : R :=
 def constraints (row : Row R) : Prop :=
   CommitIvk.constraints row.gate ∧ ivkCheck row = 0
 
+def Spec (row : Row R) : Prop :=
+  CommitIvk.Spec row.gate ∧ row.computedIvk = row.ivk
+
 def main (row : Var Row F) : Circuit F Unit := do
-  assertZero (NoteCommit.boolPoly row.gate.b1)
-  assertZero (NoteCommit.boolPoly row.gate.d1)
-  assertZero (CommitIvk.bDecomposition row.gate)
-  assertZero (CommitIvk.dDecomposition row.gate)
-  assertZero (CommitIvk.akDecomposition row.gate)
-  assertZero (CommitIvk.nkDecomposition row.gate)
-  assertZero (row.gate.b1 * row.gate.b0)
-  assertZero (row.gate.b1 * row.gate.z13A)
-  assertZero (CommitIvk.aPrimeCheck row.gate)
-  assertZero (row.gate.b1 * row.gate.z13APrime)
-  assertZero (row.gate.d1 * row.gate.d0)
-  assertZero (row.gate.d1 * row.gate.z13C)
-  assertZero (CommitIvk.b2CPrimeCheck row.gate)
-  assertZero (row.gate.d1 * row.gate.z14B2CPrime)
+  CommitIvk.circuit row.gate
   assertZero (ivkCheck row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, ivkCheck, CommitIvk.constraints,
+    circuit_proof_start [main, Spec, constraints, ivkCheck, CommitIvk.circuit, CommitIvk.Spec,
+      CommitIvk.constraints,
       CommitIvk.bDecomposition, CommitIvk.dDecomposition, CommitIvk.akDecomposition,
       CommitIvk.nkDecomposition, CommitIvk.aPrimeCheck, CommitIvk.b2CPrimeCheck,
       NoteCommit.boolPoly, NoteCommit.tP]
-    simp_all [sub_eq_add_neg]
+    exact ⟨h_holds.1, left_eq_of_add_neg_eq_zero h_holds.2⟩
   completeness := by
-    circuit_proof_start [main, constraints, ivkCheck, CommitIvk.constraints,
+    circuit_proof_start [main, Spec, constraints, ivkCheck, CommitIvk.circuit, CommitIvk.Spec,
+      CommitIvk.constraints,
       CommitIvk.bDecomposition, CommitIvk.dDecomposition, CommitIvk.akDecomposition,
       CommitIvk.nkDecomposition, CommitIvk.aPrimeCheck, CommitIvk.b2CPrimeCheck,
       NoteCommit.boolPoly, NoteCommit.tP]
-    simp_all [sub_eq_add_neg]
+    constructor
+    · exact h_spec.1
+    simpa [sub_eq_add_neg] using sub_eq_zero.mpr h_spec.2
 
 end Wiring
 
