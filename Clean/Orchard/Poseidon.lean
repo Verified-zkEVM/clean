@@ -856,6 +856,15 @@ def input1Check (row : Row R) : R :=
 def hashCheck (row : Row R) : R :=
   row.permuted0 - row.hash
 
+def Spec (row : Row R) : Prop :=
+  PadAndAdd.Spec row.absorbed ∧
+    row.absorbed.initial0 = 0 ∧
+    row.absorbed.initial1 = 0 ∧
+    row.absorbed.initial2 = row.capacity ∧
+    row.absorbed.input0 = row.nk ∧
+    row.absorbed.input1 = row.rho ∧
+    row.hash = row.permuted0
+
 def constraints (row : Row R) : Prop :=
   PadAndAdd.output0Check row.absorbed = 0 ∧
     PadAndAdd.output1Check row.absorbed = 0 ∧
@@ -880,31 +889,43 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, initial0Check, initial1Check,
+    circuit_proof_start [main, Spec, PadAndAdd.Spec, initial0Check, initial1Check,
       capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.output0Check,
       PadAndAdd.output1Check, PadAndAdd.capacityCheck]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hAbs0, hAbs1, hAbs2, hInit0, hInit1, hCapacity, hInput0,
+      hInput1, hHash⟩
     constructor
-    · have h := h_holds.1
-      rw [h_holds.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
-    · have h := h_holds.2.1
-      rw [h_holds.2.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
+    · constructor
+      · have h0' : input_absorbed_initial0 + input_absorbed_input0 -
+            input_absorbed_output0 = 0 := by
+          simp_all [sub_eq_add_neg]
+        exact (sub_eq_zero.mp h0').symm
+      constructor
+      · have h1' : input_absorbed_initial1 + input_absorbed_input1 -
+            input_absorbed_output1 = 0 := by
+          simp_all [sub_eq_add_neg]
+        exact (sub_eq_zero.mp h1').symm
+      · have h2' : input_absorbed_initial2 - input_absorbed_output2 = 0 := by
+          simp_all [sub_eq_add_neg]
+        exact (sub_eq_zero.mp h2').symm
+    constructor
+    · exact hInit0
+    constructor
+    · exact hInit1
+    constructor
+    · exact left_eq_of_add_neg_eq_zero hCapacity
+    constructor
+    · exact left_eq_of_add_neg_eq_zero hInput0
+    constructor
+    · exact left_eq_of_add_neg_eq_zero hInput1
+    · exact eq_of_add_neg_eq_zero hHash
   completeness := by
-    circuit_proof_start [main, constraints, initial0Check, initial1Check,
+    circuit_proof_start [main, Spec, PadAndAdd.Spec, initial0Check, initial1Check,
       capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.output0Check,
       PadAndAdd.output1Check, PadAndAdd.capacityCheck]
-    simp_all [sub_eq_add_neg]
-    constructor
-    · have h := h_spec.1
-      rw [h_spec.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
-    · have h := h_spec.2.1
-      rw [h_spec.2.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
+    simp_all
 
 end Hash2
 
@@ -942,12 +963,15 @@ def input2Check (row : Row R) : R :=
 def outputCheck (row : Row R) : R :=
   row.permutationOutput.s0 - row.hash.permuted0
 
+def Spec (row : Row R) : Prop :=
+  Hash2.Spec row.hash ∧
+    row.hash.absorbed.output0 = row.permutationInput.s0 ∧
+    row.hash.absorbed.output1 = row.permutationInput.s1 ∧
+    row.hash.absorbed.output2 = row.permutationInput.s2 ∧
+    row.hash.permuted0 = row.permutationOutput.s0
+
 def constraints (row : Row R) : Prop :=
-  Hash2.constraints row.hash ∧
-    input0Check row = 0 ∧
-    input1Check row = 0 ∧
-    input2Check row = 0 ∧
-    outputCheck row = 0
+  Spec row
 
 def main (row : Var Row F) : Circuit F Unit := do
   Hash2.circuit row.hash
@@ -958,35 +982,33 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, input0Check, input1Check, input2Check,
-      outputCheck, Hash2.circuit, Hash2.constraints, Hash2.initial0Check,
+    circuit_proof_start [main, Spec, input0Check, input1Check, input2Check,
+      outputCheck, Hash2.circuit, Hash2.Spec, Hash2.initial0Check,
       Hash2.initial1Check, Hash2.capacityCheck, Hash2.input0Check, Hash2.input1Check,
       Hash2.hashCheck, PadAndAdd.output0Check, PadAndAdd.output1Check,
       PadAndAdd.capacityCheck]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hHash, h0, h1, h2, hOutput⟩
     constructor
-    · have h := h_holds.1.1
-      rw [h_holds.1.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
-    · have h := h_holds.1.2.1
-      rw [h_holds.1.2.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
+    · exact hHash
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h0
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h1
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h2
+    · exact eq_of_add_neg_eq_zero hOutput
   completeness := by
-    circuit_proof_start [main, constraints, input0Check, input1Check, input2Check,
-      outputCheck, Hash2.circuit, Hash2.constraints, Hash2.initial0Check,
+    circuit_proof_start [main, Spec, input0Check, input1Check, input2Check,
+      outputCheck, Hash2.circuit, Hash2.Spec, Hash2.initial0Check,
       Hash2.initial1Check, Hash2.capacityCheck, Hash2.input0Check, Hash2.input1Check,
       Hash2.hashCheck, PadAndAdd.output0Check, PadAndAdd.output1Check,
       PadAndAdd.capacityCheck]
-    simp_all [sub_eq_add_neg]
-    constructor
-    · have h := h_spec.1.1
-      rw [h_spec.1.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
-    · have h := h_spec.1.2.1
-      rw [h_spec.1.2.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
+    rcases h_spec with ⟨⟨hPad, hInit0, hInit1, hCapacity, hInput0, hInput1, hHash⟩,
+      hBoundary0, hBoundary1, hBoundary2, hOutput⟩
+    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
+    simp_all [PadAndAdd.Spec]
 
 end Hash2PermutationBoundary
 
