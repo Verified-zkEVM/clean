@@ -63,8 +63,6 @@ def tP [OfNat R 45560315531419706090280762371685220353] : R :=
 
 namespace DecomposeB
 
-variable [OfNat R 16] [OfNat R 32] [OfNat R 64]
-
 structure Row (F : Type) where
   b : F
   b0 : F
@@ -73,20 +71,21 @@ structure Row (F : Type) where
   b3 : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K 32]
+    [OfNat K 64] (row : Row K) : K :=
   row.b - (row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64)
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool row.b1 ∧
   IsBool row.b2 ∧
   row.b = row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (boolPoly row.b1)
   assertZero (boolPoly row.b2)
   assertZero (decomposition row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -106,8 +105,6 @@ end DecomposeB
 
 namespace DecomposeD
 
-variable [OfNat R 2] [OfNat R 4] [OfNat R 1024]
-
 structure Row (F : Type) where
   d : F
   d0 : F
@@ -116,20 +113,21 @@ structure Row (F : Type) where
   d3 : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 4]
+    [OfNat K 1024] (row : Row K) : K :=
   row.d - (row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024)
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool row.d0 ∧
   IsBool row.d1 ∧
   row.d = row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (boolPoly row.d0)
   assertZero (boolPoly row.d1)
   assertZero (decomposition row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -149,24 +147,22 @@ end DecomposeD
 
 namespace DecomposeE
 
-variable [OfNat R 64]
-
 structure Row (F : Type) where
   e : F
   e0 : F
   e1 : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 64] (row : Row K) : K :=
   row.e - (row.e0 + row.e1 * 64)
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.e = row.e0 + row.e1 * 64
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (decomposition row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -181,8 +177,6 @@ end DecomposeE
 
 namespace DecomposeG
 
-variable [OfNat R 2] [OfNat R 1024]
-
 structure Row (F : Type) where
   g : F
   g0 : F
@@ -190,18 +184,19 @@ structure Row (F : Type) where
   g2 : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 1024]
+    (row : Row K) : K :=
   row.g - (row.g0 + row.g1 * 2 + row.g2 * 1024)
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool row.g0 ∧
   row.g = row.g0 + row.g1 * 2 + row.g2 * 1024
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (boolPoly row.g0)
   assertZero (decomposition row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -219,26 +214,24 @@ end DecomposeG
 
 namespace DecomposeH
 
-variable [OfNat R 32]
-
 structure Row (F : Type) where
   h : F
   h0 : F
   h1 : F
 deriving ProvableStruct
 
-def decomposition (row : Row R) : R :=
+def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] (row : Row K) : K :=
   row.h - (row.h0 + row.h1 * 32)
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool row.h1 ∧
   row.h = row.h0 + row.h1 * 32
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (boolPoly row.h1)
   assertZero (decomposition row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -605,12 +598,6 @@ algorithm beyond the separately ported Sinsemilla gates.
 -/
 namespace Wiring
 
-variable [OfNat R 2] [OfNat R 4] [OfNat R 16] [OfNat R 32] [OfNat R 64]
-  [OfNat R 256] [OfNat R 512] [OfNat R 1024]
-  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 249)]
-  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)] [OfNat R 288230376151711744]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   b : DecomposeB.Row F
   d : DecomposeD.Row F
@@ -630,25 +617,25 @@ structure Row (F : Type) where
   cmY : F
 deriving ProvableStruct
 
-def b0Check (row : Row R) : R := row.b.b0 - row.gd.b0
-def b1Check (row : Row R) : R := row.b.b1 - row.gd.b1
-def b2Check (row : Row R) : R := row.b.b2 - row.gdY.lsb
-def b3Check (row : Row R) : R := row.b.b3 - row.pkd.b3
-def d0Check (row : Row R) : R := row.d.d0 - row.pkd.d0
-def d1Check (row : Row R) : R := row.d.d1 - row.pkdY.lsb
-def d2Check (row : Row R) : R := row.d.d2 - row.value.d2
-def z1DCheck (row : Row R) : R := row.d.d3 - row.value.d3
-def e0Check (row : Row R) : R := row.e.e0 - row.value.e0
-def e1Check (row : Row R) : R := row.e.e1 - row.rho.e1
-def g0Check (row : Row R) : R := row.g.g0 - row.rho.g0
-def g1Check (row : Row R) : R := row.g.g1 - row.psi.g1
-def z1GCheck (row : Row R) : R := row.g.g2 - row.psi.g2
-def h0Check (row : Row R) : R := row.h.h0 - row.psi.h0
-def h1Check (row : Row R) : R := row.h.h1 - row.psi.h1
-def cmXCheck (row : Row R) : R := row.computedCmX - row.cmX
-def cmYCheck (row : Row R) : R := row.computedCmY - row.cmY
+def b0Check {K : Type} [Sub K] (row : Row K) : K := row.b.b0 - row.gd.b0
+def b1Check {K : Type} [Sub K] (row : Row K) : K := row.b.b1 - row.gd.b1
+def b2Check {K : Type} [Sub K] (row : Row K) : K := row.b.b2 - row.gdY.lsb
+def b3Check {K : Type} [Sub K] (row : Row K) : K := row.b.b3 - row.pkd.b3
+def d0Check {K : Type} [Sub K] (row : Row K) : K := row.d.d0 - row.pkd.d0
+def d1Check {K : Type} [Sub K] (row : Row K) : K := row.d.d1 - row.pkdY.lsb
+def d2Check {K : Type} [Sub K] (row : Row K) : K := row.d.d2 - row.value.d2
+def z1DCheck {K : Type} [Sub K] (row : Row K) : K := row.d.d3 - row.value.d3
+def e0Check {K : Type} [Sub K] (row : Row K) : K := row.e.e0 - row.value.e0
+def e1Check {K : Type} [Sub K] (row : Row K) : K := row.e.e1 - row.rho.e1
+def g0Check {K : Type} [Sub K] (row : Row K) : K := row.g.g0 - row.rho.g0
+def g1Check {K : Type} [Sub K] (row : Row K) : K := row.g.g1 - row.psi.g1
+def z1GCheck {K : Type} [Sub K] (row : Row K) : K := row.g.g2 - row.psi.g2
+def h0Check {K : Type} [Sub K] (row : Row K) : K := row.h.h0 - row.psi.h0
+def h1Check {K : Type} [Sub K] (row : Row K) : K := row.h.h1 - row.psi.h1
+def cmXCheck {K : Type} [Sub K] (row : Row K) : K := row.computedCmX - row.cmX
+def cmYCheck {K : Type} [Sub K] (row : Row K) : K := row.computedCmY - row.cmY
 
-def CopySpec (row : Row R) : Prop :=
+def CopySpec (row : Row Ecc.PallasBaseField) : Prop :=
   row.b.b0 = row.gd.b0 ∧
     row.b.b1 = row.gd.b1 ∧
     row.b.b2 = row.gdY.lsb ∧
@@ -667,7 +654,7 @@ def CopySpec (row : Row R) : Prop :=
     row.computedCmX = row.cmX ∧
     row.computedCmY = row.cmY
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   DecomposeB.Spec row.b ∧
     DecomposeD.Spec row.d ∧
     DecomposeE.Spec row.e ∧
@@ -682,7 +669,7 @@ def Spec (row : Row R) : Prop :=
     YCanonicity.Spec row.pkdY ∧
     CopySpec row
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   DecomposeB.circuit row.b
   DecomposeD.circuit row.d
   DecomposeE.circuit row.e
@@ -713,7 +700,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (cmXCheck row)
   assertZero (cmYCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by

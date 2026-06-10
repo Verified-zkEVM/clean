@@ -461,31 +461,22 @@ constraints.
 -/
 namespace ActionNoteCommitWiring
 
-variable {F : Type} [Field F]
-
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-  [OfNat R 2] [OfNat R 4] [OfNat R 16] [OfNat R 32] [OfNat R 64]
-  [OfNat R 256] [OfNat R 512] [OfNat R 1024]
-  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 249)]
-  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)] [OfNat R 288230376151711744]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   action : ActionWiring.Row F
   oldNoteCommit : NoteCommit.Wiring.Row F
   newNoteCommit : NoteCommit.Wiring.Row F
 deriving ProvableStruct
 
-def oldCmXCheck (row : Row R) : R :=
+def oldCmXCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.oldNoteCommit.cmX - row.action.derivedCmOldX
 
-def oldCmYCheck (row : Row R) : R :=
+def oldCmYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.oldNoteCommit.cmY - row.action.derivedCmOldY
 
-def newCmxCheck (row : Row R) : R :=
+def newCmxCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.newNoteCommit.cmX - row.action.cmxNew
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   ActionWiring.Spec row.action ∧
     NoteCommit.Wiring.Spec row.oldNoteCommit ∧
     NoteCommit.Wiring.Spec row.newNoteCommit ∧
@@ -493,7 +484,7 @@ def Spec (row : Row R) : Prop :=
     row.oldNoteCommit.cmY = row.action.derivedCmOldY ∧
     row.newNoteCommit.cmX = row.action.cmxNew
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
   NoteCommit.Wiring.circuit row.oldNoteCommit
   NoteCommit.Wiring.circuit row.newNoteCommit
@@ -501,7 +492,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (oldCmYCheck row)
   assertZero (newCmxCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
