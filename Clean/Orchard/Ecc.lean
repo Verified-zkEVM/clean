@@ -240,6 +240,18 @@ theorem isPallasScalarMul_one_iff
     rw [hEq]
     simp [IsPallasScalarMul, pallasScalarMulCoords_one]
 
+theorem isOrchardFixedBaseMul_zero_iff
+    {baseId : OrchardFixedBaseId} {product : Point PallasBaseField} :
+    IsOrchardFixedBaseMul baseId 0 product ↔ isIdentityEncoding product := by
+  simpa [IsOrchardFixedBaseMul] using
+    (isPallasScalarMul_zero_iff (base := fixedBasePoint baseId) (product := product))
+
+theorem isOrchardFixedBaseMul_one_iff
+    {baseId : OrchardFixedBaseId} {product : Point PallasBaseField} :
+    IsOrchardFixedBaseMul baseId 1 product ↔ product = fixedBasePoint baseId := by
+  simpa [IsOrchardFixedBaseMul] using
+    (isPallasScalarMul_one_iff (base := fixedBasePoint baseId) (product := product))
+
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
 
