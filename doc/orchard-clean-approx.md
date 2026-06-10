@@ -130,7 +130,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Depends on generator-table lookup, range checks, ECC addition, and conditional swap.
    - Status: `Initial y_Q` and `Sinsemilla gate` arithmetic constraints from
      `chip.rs` are ported as `Orchard.Sinsemilla.InitialYQ.circuit` and
-     `Orchard.Sinsemilla.Gate.circuit`. The MerkleCRH decomposition gate from
+     `Orchard.Sinsemilla.Gate.circuit`. The public/private `hash_to_point`
+     initialization copy wiring around `Initial y_Q` is ported as
+     `Orchard.Sinsemilla.InitWiring.circuit`. The MerkleCRH decomposition gate from
      `merkle/chip.rs` is ported as `Orchard.Sinsemilla.Merkle.circuit`; the
      fixed three-piece `MerkleInstructions::hash_layer` assignment and extracted hash
      wiring is ported as `Orchard.Sinsemilla.Merkle.Wiring.circuit`. One layer of

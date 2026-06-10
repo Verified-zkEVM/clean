@@ -69,6 +69,61 @@ def circuit : FormalAssertion F Row where
 
 end InitialYQ
 
+/-!
+`hash_to_point` initial-`Q` wiring.
+
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`
+- `public_q_initialization`
+- `private_q_initialization`
+
+Both source paths assign/copy `x_Q` into the initial accumulator `x_A`, provide `y_Q`
+to the `Initial y_Q` gate, and rely on that gate to constrain the first doubled
+accumulator. This assertion records the copy/equality wiring around `InitialYQ.circuit`;
+whether `y_Q` came from a fixed column or the previous advice row is a Halo2 layout
+detail outside this approximation.
+-/
+namespace InitWiring
+
+variable {R : Type} [Zero R] [Add R] [Sub R] [Mul R] [OfNat R 2]
+
+structure Row (F : Type) where
+  qX : F
+  qY : F
+  init : InitialYQ.Row F
+deriving ProvableStruct
+
+def xCheck (row : Row R) : R :=
+  row.init.doubleAndAdd.xA - row.qX
+
+def yCheck (row : Row R) : R :=
+  row.init.yQ - row.qY
+
+def initPoly (row : Row R) : R :=
+  2 * row.init.yQ - DoubleAndAdd.yA row.init.doubleAndAdd
+
+def constraints (row : Row R) : Prop :=
+  initPoly row = 0 ∧ xCheck row = 0 ∧ yCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (initPoly row)
+  assertZero (xCheck row)
+  assertZero (yCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, xCheck, yCheck, initPoly,
+      DoubleAndAdd.yA, DoubleAndAdd.xR]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, xCheck, yCheck, initPoly,
+      DoubleAndAdd.yA, DoubleAndAdd.xR]
+    simp_all [sub_eq_add_neg]
+
+end InitWiring
+
 namespace Gate
 
 variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 4]
