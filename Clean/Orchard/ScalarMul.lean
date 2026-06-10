@@ -1,6 +1,7 @@
 import Clean.Circuit
 import Clean.Orchard.NoteCommit
 import Clean.Orchard.Sinsemilla
+import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 import Mathlib.Tactic
@@ -820,6 +821,9 @@ end FixedBase
 
 namespace FixedShort
 
+variable [DecidableEq F]
+variable [Field R] [DecidableEq R]
+
 structure Row (F : Type) where
   yP : F
   yA : F
@@ -839,16 +843,15 @@ def negationCheck (row : Row R) : R :=
 def IsSign (sign : R) : Prop :=
   sign = 1 ∨ sign = 0 - 1
 
-def shortWeierstrassNeg (point : R × R) : R × R :=
-  (point.1, 0 - point.2)
-
-def SignedPointNegation (row : Row R) : Prop :=
+def SignedScalarMulBySign (row : Row R) : Prop :=
   ∀ x : R,
-    (row.sign = 1 → (x, row.yP) = (x, row.yA)) ∧
-      (row.sign = 0 - 1 → (x, row.yP) = shortWeierstrassNeg (x, row.yA))
+    (row.sign = 1 →
+      (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.smul 0 1 (x, row.yA)) ∧
+      (row.sign = 0 - 1 →
+        (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.yA))
 
 def Spec (row : Row R) : Prop :=
-  IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointNegation row
+  IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedScalarMulBySign row
 
 def constraints (row : Row R) : Prop :=
   NoteCommit.boolPoly row.lastWindow = 0 ∧
@@ -866,8 +869,11 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, IsSign, SignedPointNegation,
-      shortWeierstrassNeg, NoteCommit.boolPoly, signCheck, yCheck, negationCheck]
+    circuit_proof_start [main, Spec, constraints, IsSign, SignedScalarMulBySign,
+      CompElliptic.CurveForms.ShortWeierstrass.smul,
+      CompElliptic.CurveForms.ShortWeierstrass.add,
+      CompElliptic.CurveForms.ShortWeierstrass.neg, NoteCommit.boolPoly, signCheck, yCheck,
+      negationCheck]
     rcases h_holds with ⟨hLastWindow, hSign, _hY, hNegation⟩
     have hSignedY : input_yA = input_sign * input_yP :=
       (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNegation)).symm
@@ -885,15 +891,18 @@ def circuit : FormalAssertion F Row where
         apply Prod.ext
         · rfl
         · rw [hSignedY, hPos]
-          ring
+          simp
       · intro hNeg
         apply Prod.ext
         · rfl
         · rw [hSignedY, hNeg]
-          ring
+          simp
   completeness := by
-    circuit_proof_start [main, Spec, constraints, IsSign, SignedPointNegation,
-      shortWeierstrassNeg, NoteCommit.boolPoly, signCheck, yCheck, negationCheck]
+    circuit_proof_start [main, Spec, constraints, IsSign, SignedScalarMulBySign,
+      CompElliptic.CurveForms.ShortWeierstrass.smul,
+      CompElliptic.CurveForms.ShortWeierstrass.add,
+      CompElliptic.CurveForms.ShortWeierstrass.neg, NoteCommit.boolPoly, signCheck, yCheck,
+      negationCheck]
     rcases h_spec with ⟨hLastWindow, hSign, hPoint⟩
     refine ⟨?_, ?_, ?_, ?_⟩
     · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using
@@ -905,7 +914,6 @@ def circuit : FormalAssertion F Row where
         rw [hY]
         ring
       · have hY := congrArg Prod.snd ((hPoint 0).2 hSign)
-        unfold shortWeierstrassNeg at hY
         simp at hY
         rw [hY]
         ring
@@ -915,7 +923,6 @@ def circuit : FormalAssertion F Row where
         rw [hSign, hY]
         ring
       · have hY := congrArg Prod.snd ((hPoint 0).2 hSign)
-        unfold shortWeierstrassNeg at hY
         simp at hY
         rw [hSign, hY]
         ring
