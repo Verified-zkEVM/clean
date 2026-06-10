@@ -126,7 +126,7 @@ witness paths; proofs intact; green. This is the basis on which the PR is judged
 
 - [x] Direction decided (PR #401 comment)
 - [x] Requirements survey (doc/witgen-ir-requirements.md)
-- [ ] Phase 1 — IR sketch
+- [x] Phase 1 — IR sketch (`Clean/Circuit/WitnessIR.lean`)
 - [ ] Phase 2 — core integration
 - [ ] Phase 3 — reference interpreter + equivalence proof
 - [ ] Phase 4 — authoring surface
