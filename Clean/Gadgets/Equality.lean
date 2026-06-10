@@ -5,7 +5,7 @@ and smoothly simplifies to an equality statement under `circuit_norm`.
 import Clean.Circuit.Loops
 import Clean.Circuit.Explicit
 
-variable {F : Type} [Field F] {M : TypeMap} [ProvableType M]
+variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
@@ -136,7 +136,7 @@ def assertEquals (x y : M (Expression F)) : Circuit F Unit :=
 def Expression.assertEquals (x y : Expression F) : Circuit F Unit :=
   Gadgets.Equality.circuit id (x, y)
 
-class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
+class HasAssertEq (β : Type) (F : outParam Type) [FiniteField F] where
   assert_eq : β → β → Circuit F Unit
 
 instance : HasAssertEq (Expression F) F where
@@ -150,7 +150,7 @@ infix:50 " === " => HasAssertEq.assert_eq
 
 -- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
 
-class HasAssignEq (β : Type) (F : outParam Type) [Field F] where
+class HasAssignEq (β : Type) (F : outParam Type) [FiniteField F] where
   assignEq : β → Circuit F β
 
 instance : HasAssignEq (Expression F) F where

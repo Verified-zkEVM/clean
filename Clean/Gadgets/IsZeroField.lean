@@ -5,7 +5,7 @@ import Clean.Utils.Field
 import Clean.Utils.Tactics
 
 namespace Gadgets.IsZeroField
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F : Type} [FiniteField F] [DecidableEq F]
 
 /--
 Returns 1 if the input is 0, otherwise returns 0.

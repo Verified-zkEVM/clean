@@ -1,7 +1,7 @@
 /- This file contains miscellaneous additions and helpers on top of the Circuit DSL -/
 import Clean.Circuit.Subcircuit
 
-variable {F : Type} [Field F] {M : TypeMap} [ProvableType M]
+variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 instance {M : TypeMap} [ProvableType M] : Inhabited (Circuit F (Var M F)) where
   default := witness default

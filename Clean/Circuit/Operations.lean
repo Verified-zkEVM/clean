@@ -1,10 +1,11 @@
 import Clean.Circuit.Expression
+import Clean.Circuit.WitnessIR
 import Clean.Circuit.Lookup
 import Clean.Circuit.Provable
 import Clean.Circuit.Channel
 import Clean.Circuit.SimpGadget
 
-variable {F : Type} [Field F] {α : Type} {n : ℕ}
+variable {F : Type} [FiniteField F] {α : Type} {n : ℕ}
 
 /--
 `FlatOperation` models the operations that can be done in a circuit, in a simple/flat way.
@@ -14,7 +15,7 @@ It is needed because we already need to talk about operations in the `Subcircuit
 which in turn is needed to define `Operation`.
 -/
 inductive FlatOperation (F : Type) where
-  | witness : (m : ℕ) → (ProverEnvironment F → Vector F m) → FlatOperation F
+  | witness : (m : ℕ) → WitgenIR F m → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
   | interact : AbstractInteraction F → FlatOperation F
@@ -27,7 +28,7 @@ def NestedOperations.toFlat {F : Type} : NestedOperations F → List (FlatOperat
   | .single op => [op]
   | .nested (_, lst) => List.flatMap toFlat lst
 
-abbrev WitnessOperation (F : Type) := (m : ℕ) ×' (ProverEnvironment F → Vector F m)
+abbrev WitnessOperation (F : Type) := (m : ℕ) ×' WitgenIR F m
 
 namespace FlatOperation
 instance [Repr F] : Repr (FlatOperation F) where
@@ -59,7 +60,7 @@ def localLength : List (FlatOperation F) → ℕ
 @[circuit_norm]
 def localWitnesses (env : ProverEnvironment F) : (l : List (FlatOperation F)) → Vector F (localLength l)
   | [] => #v[]
-  | witness _ compute :: ops => compute env ++ localWitnesses env ops
+  | witness _ compute :: ops => compute.eval env ++ localWitnesses env ops
   | assert _ :: ops | lookup _ :: ops | interact _ :: ops => localWitnesses env ops
 
 -- extracting individual types of operations
@@ -99,22 +100,22 @@ def induct {motive : List (FlatOperation F) → Sort*}
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup interact ops)
   | .interact i :: ops => interact i ops (induct empty witness assert lookup interact ops)
 
-omit [Field F] in @[circuit_norm]
+omit [FiniteField F] in @[circuit_norm]
 lemma witnessOperations_append {ops1 ops2 : List (FlatOperation F)} :
     witnessOperations (ops1 ++ ops2) = witnessOperations ops1 ++ witnessOperations ops2 := by
   induction ops1 using FlatOperation.induct <;> simp_all [witnessOperations]
 
-omit [Field F] in @[circuit_norm]
+omit [FiniteField F] in @[circuit_norm]
 lemma constraints_append {ops1 ops2 : List (FlatOperation F)} :
     constraints (ops1 ++ ops2) = constraints ops1 ++ constraints ops2 := by
   induction ops1 using FlatOperation.induct <;> simp_all [constraints]
 
-omit [Field F] in @[circuit_norm]
+omit [FiniteField F] in @[circuit_norm]
 lemma lookups_append {ops1 ops2 : List (FlatOperation F)} :
     lookups (ops1 ++ ops2) = lookups ops1 ++ lookups ops2 := by
   induction ops1 using FlatOperation.induct <;> simp_all [lookups]
 
-omit [Field F] in @[circuit_norm]
+omit [FiniteField F] in @[circuit_norm]
 lemma interactions_append {ops1 ops2 : List (FlatOperation F)} :
     interactions (ops1 ++ ops2) = interactions ops1 ++ interactions ops2 := by
   induction ops1 using FlatOperation.induct <;> simp_all [interactions]
@@ -131,8 +132,8 @@ lemma constraintsHoldFlat_iff_forall_mem {eval : Environment F} {ops : List (Fla
 A `Condition` lets you define a predicate on operations, given the type and content of the
 current operation as well as the current offset.
 -/
-structure Condition (F : Type) [Field F] where
-  witness : (m : ℕ) → (ProverEnvironment F → Vector F m) → Prop := fun _ _ => True
+structure Condition (F : Type) [FiniteField F] where
+  witness : (m : ℕ) → WitgenIR F m → Prop := fun _ _ => True
   assert (_ : Expression F) : Prop := True
   lookup (_ : Lookup F) : Prop := True
   interact (_ : AbstractInteraction F) : Prop := True
@@ -258,7 +259,7 @@ To enable composition of formal proofs, subcircuits come with custom
 `Spec`, `Assumptions`, `ProverSpec` and `ProverAssumptions`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
-structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
+structure Subcircuit (F : Type) [FiniteField F] (offset : ℕ) where
   ops : NestedOperations F
 
   -- we have a low-level notion of "the constraints hold on these operations".
@@ -310,8 +311,8 @@ Core type representing the result of a circuit: a sequence of operations.
 In addition to `witness`, `assert` and `lookup`,
 `Operation` can also be a `subcircuit`, which itself is essentially a list of operations.
 -/
-inductive Operation (F : Type) [Field F] where
-  | witness : (m : ℕ) → (compute : ProverEnvironment F → Vector F m) → Operation F
+inductive Operation (F : Type) [FiniteField F] where
+  | witness : (m : ℕ) → (compute : WitgenIR F m) → Operation F
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
   | interact : AbstractInteraction F → Operation F
@@ -338,7 +339,7 @@ def localLength : Operation F → ℕ
   | .subcircuit s => s.localLength
 
 def localWitnesses (env : ProverEnvironment F) : (op : Operation F) → Vector F op.localLength
-  | .witness _ c => c env
+  | .witness _ c => c.eval env
   | .assert _ => #v[]
   | .lookup _ => #v[]
   | .interact _ => #v[]
@@ -350,7 +351,7 @@ end Operation
 methods on operations that take a self argument.
 -/
 @[reducible, circuit_norm]
-def Operations (F : Type) [Field F] := List (Operation F)
+def Operations (F : Type) [FiniteField F] := List (Operation F)
 
 namespace Operations
 def toList : Operations F → List (Operation F) := id
@@ -391,7 +392,7 @@ The actual vector of witnesses created by these operations in the given environm
 def localWitnesses (env : ProverEnvironment F) :
     (ops : Operations F) → Vector F ops.localLength
   | [] => #v[]
-  | .witness _ c :: ops => c env ++ localWitnesses env ops
+  | .witness _ c :: ops => c.eval env ++ localWitnesses env ops
   | .assert _ :: ops => localWitnesses env ops
   | .lookup _ :: ops => localWitnesses env ops
   | .interact _ :: ops => localWitnesses env ops
@@ -439,7 +440,7 @@ noncomputable def interactionsWith (channel : RawChannel F) (ops : Operations F)
   interactionsWith channel ([] : Operations F) = [] := rfl
 
 @[circuit_norm] lemma interactionsWith_witness (channel : RawChannel F)
-    (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+    (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   interactionsWith channel (.witness m c :: ops) = interactionsWith channel ops := rfl
 
 @[circuit_norm] lemma interactionsWith_assert (channel : RawChannel F)
@@ -546,8 +547,8 @@ end Operations
 A `Condition` lets you define a predicate on operations, given the type and content of the
 current operation as well as the current offset.
 -/
-structure Condition (F : Type) [Field F] where
-  witness (offset : ℕ) : (m : ℕ) → (ProverEnvironment F → Vector F m) → Prop := fun _ _ => True
+structure Condition (F : Type) [FiniteField F] where
+  witness (offset : ℕ) : (m : ℕ) → WitgenIR F m → Prop := fun _ _ => True
   assert (offset : ℕ) (_ : Expression F) : Prop := True
   lookup (offset : ℕ) (_ : Lookup F) : Prop := True
   interact (offset : ℕ) (_ : AbstractInteraction F) : Prop := True
@@ -568,8 +569,8 @@ def Condition.implies (c c' : Condition F) : Condition F where
   interact offset i := c.interact offset i → c'.interact offset i
   subcircuit offset _ s := c.subcircuit offset s → c'.subcircuit offset s
 
-structure ConditionNoOffset (F : Type) [Field F] where
-  witness (m : ℕ) (_ : ProverEnvironment F → Vector F m) : Prop := True
+structure ConditionNoOffset (F : Type) [FiniteField F] where
+  witness (m : ℕ) (_ : WitgenIR F m) : Prop := True
   assert (_ : Expression F) : Prop := True
   lookup (_ : Lookup F) : Prop := True
   interact (_ : AbstractInteraction F) : Prop := True
@@ -869,7 +870,7 @@ namespace Operations
 @[circuit_norm] lemma constraints_nil : constraints ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma constraints_assert (e : Expression F) (ops : Operations F) :
   constraints (.assert e :: ops) = e :: constraints ops := rfl
-@[circuit_norm] lemma constraints_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+@[circuit_norm] lemma constraints_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   constraints (.witness m c :: ops) = constraints ops := rfl
 @[circuit_norm] lemma constraints_lookup (l : Lookup F) (ops : Operations F) :
   constraints (.lookup l :: ops) = constraints ops := rfl
@@ -885,7 +886,7 @@ namespace Operations
 @[circuit_norm] lemma lookups_nil : lookups ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma lookups_assert (e : Expression F) (ops : Operations F) :
   lookups (.assert e :: ops) = lookups ops := rfl
-@[circuit_norm] lemma lookups_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+@[circuit_norm] lemma lookups_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   lookups (.witness m c :: ops) = lookups ops := rfl
 @[circuit_norm] lemma lookups_lookup (l : Lookup F) (ops : Operations F) :
   lookups (.lookup l :: ops) = l :: lookups ops := rfl
@@ -901,7 +902,7 @@ namespace Operations
 @[circuit_norm] lemma interactions_nil : interactions ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma interactions_assert (e : Expression F) (ops : Operations F) :
   interactions (.assert e :: ops) = interactions ops := rfl
-@[circuit_norm] lemma interactions_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+@[circuit_norm] lemma interactions_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   interactions (.witness m c :: ops) = interactions ops := rfl
 @[circuit_norm] lemma interactions_lookup (l : Lookup F) (ops : Operations F) :
   interactions (.lookup l :: ops) = interactions ops := rfl
@@ -917,7 +918,7 @@ namespace Operations
 @[circuit_norm] lemma shallowInteractions_nil : shallowInteractions ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma shallowInteractions_assert (e : Expression F) (ops : Operations F) :
   shallowInteractions (.assert e :: ops) = shallowInteractions ops := rfl
-@[circuit_norm] lemma shallowInteractions_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+@[circuit_norm] lemma shallowInteractions_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   shallowInteractions (.witness m c :: ops) = shallowInteractions ops := rfl
 @[circuit_norm] lemma shallowInteractions_lookup (l : Lookup F) (ops : Operations F) :
   shallowInteractions (.lookup l :: ops) = shallowInteractions ops := rfl
@@ -933,7 +934,7 @@ namespace Operations
 @[circuit_norm] lemma witnessOperations_nil : witnessOperations ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma witnessOperations_assert (e : Expression F) (ops : Operations F) :
   witnessOperations (.assert e :: ops) = witnessOperations ops := rfl
-@[circuit_norm] lemma witnessOperations_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+@[circuit_norm] lemma witnessOperations_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   witnessOperations (.witness m c :: ops) = ⟨m, c⟩ :: witnessOperations ops := rfl
 @[circuit_norm] lemma witnessOperations_lookup (l : Lookup F) (ops : Operations F) :
   witnessOperations (.lookup l :: ops) = witnessOperations ops := rfl
@@ -949,7 +950,7 @@ namespace Operations
 @[circuit_norm] lemma subcircuits_nil : subcircuits ([] : Operations F) = [] := rfl
 @[circuit_norm] lemma subcircuits_assert (e : Expression F) (ops : Operations F) :
   subcircuits (.assert e :: ops) = subcircuits ops := rfl
-@[circuit_norm] lemma subcircuits_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+@[circuit_norm] lemma subcircuits_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   subcircuits (.witness m c :: ops) = subcircuits ops := rfl
 @[circuit_norm] lemma subcircuits_lookup (l : Lookup F) (ops : Operations F) :
   subcircuits (.lookup l :: ops) = subcircuits ops := rfl
@@ -970,7 +971,7 @@ theorem interactionsWith_append {channel : RawChannel F} {ops1 ops2 : Operations
 @[circuit_norm]
 theorem subcircuitChannelsWithGuarantees_nil : subcircuitChannelsWithGuarantees ([] : Operations F) = [] := rfl
 @[circuit_norm]
-theorem subcircuitChannelsWithGuarantees_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+theorem subcircuitChannelsWithGuarantees_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
     subcircuitChannelsWithGuarantees (.witness m c :: ops) = subcircuitChannelsWithGuarantees ops := rfl
 @[circuit_norm]
 theorem subcircuitChannelsWithGuarantees_assert (e : Expression F) (ops : Operations F) :
@@ -1007,7 +1008,7 @@ lemma subcircuitChannelsWithGuarantees_subset_iff_forall {ops : Operations F} {c
 @[circuit_norm]
 theorem subcircuitChannelsWithRequirements_nil : subcircuitChannelsWithRequirements ([] : Operations F) = [] := rfl
 @[circuit_norm]
-theorem subcircuitChannelsWithRequirements_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+theorem subcircuitChannelsWithRequirements_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
     subcircuitChannelsWithRequirements (.witness m c :: ops) = subcircuitChannelsWithRequirements ops := rfl
 @[circuit_norm]
 theorem subcircuitChannelsWithRequirements_assert (e : Expression F) (ops : Operations F) :
@@ -1043,7 +1044,7 @@ lemma subcircuitChannelsWithRequirements_subset_iff_forall {ops : Operations F} 
   tauto
 
 @[circuit_norm] theorem shallowChannels_nil : shallowChannels ([] : Operations F) = [] := rfl
-@[circuit_norm] theorem shallowChannels_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+@[circuit_norm] theorem shallowChannels_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   shallowChannels (.witness m c :: ops) = shallowChannels ops := rfl
 @[circuit_norm] theorem shallowChannels_assert (e : Expression F) (ops : Operations F) :
   shallowChannels (.assert e :: ops) = shallowChannels ops := rfl
@@ -1204,7 +1205,7 @@ lemma forall_interactionsWith_iff {channel : RawChannel F} {ops : Operations F}
   simp [interactionsWith]
 
 @[circuit_norm] lemma toFlat_nil : toFlat ([] : Operations F) = [] := rfl
-@[circuit_norm] lemma toFlat_witness (m : ℕ) (c : ProverEnvironment F → Vector F m) (ops : Operations F) :
+@[circuit_norm] lemma toFlat_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
   toFlat (.witness m c :: ops) = .witness m c :: toFlat ops := rfl
 @[circuit_norm] lemma toFlat_assert (e : Expression F) (ops : Operations F) :
   toFlat (.assert e :: ops) = .assert e :: toFlat ops := rfl

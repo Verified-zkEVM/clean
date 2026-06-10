@@ -11,7 +11,7 @@ import Lean.Elab.Tactic
 
 open Lean Meta Elab Tactic
 
-variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
+variable {n m : ℕ} {F : Type} [FiniteField F] {α β : Type}
 
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
     xs.forM body = forM xs.toList body := by

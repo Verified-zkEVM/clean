@@ -10,7 +10,7 @@ import Clean.Circuit.Extensions
 import Clean.Table.Theorems
 import Clean.Gadgets.Equality
 
-def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
+def InductiveTable.Soundness (F : Type) [FiniteField F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop)
     (step : Var State F → Var Input F → Circuit F (Var State F)) :=
   ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
@@ -26,7 +26,7 @@ def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) 
     Spec initialState (xs.concat x) (row_index + 1) (xs_len ▸ List.length_concat)
       (eval env (step acc_var x_var |>.output ((size State) + (size Input)))) env.data
 
-def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
+def InductiveTable.Completeness (F : Type) [FiniteField F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (InputAssumptions : ℕ → Input F → ProverData F → Prop)
     (InitialStateAssumptions : State F → ProverData F → Prop)
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop)
@@ -51,7 +51,7 @@ In the case of two-row windows, an `InductiveTable` is basically a `FormalCircui
 - with assumptions replaced by the spec on the previous row, plus extra assumptions on honest prover inputs for completeness
 - with input offset hard-coded to `size Row + size Input`
 -/
-structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input] where
+structure InductiveTable (F : Type) [FiniteField F] (State Input : Type → Type) [ProvableType State] [ProvableType Input] where
   /-- the `step` circuit encodes the transition logic from one state to the next -/
   step : Var State F → Var Input F → Circuit F (Var State F)
 
@@ -79,7 +79,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     )
 
 namespace InductiveTable
-variable {F : Type} [Field F] {State Input : TypeMap} [ProvableType State] [ProvableType Input]
+variable {F : Type} [FiniteField F] {State Input : TypeMap} [ProvableType State] [ProvableType Input]
 
 /-
 we show that every `InductiveTable` can be used to define a `FormalTable`,
@@ -143,7 +143,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
 def traceInputs {N : ℕ} (trace : TraceOfLength F (ProvablePair State Input) N) : List (Input F) :=
   trace.val.toList.map Prod.snd
 
-omit [Field F] in
+omit [FiniteField F] in
 lemma traceInputs_length {N : ℕ} (trace : TraceOfLength F (ProvablePair State Input) N) :
     (traceInputs trace).length = N := by
   rw [traceInputs, List.length_map, trace.val.toList_length, trace.prop]

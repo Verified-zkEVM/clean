@@ -1,7 +1,7 @@
 import Clean.Air.Circuit
 
 namespace Air.Flat
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
 /--
@@ -9,7 +9,7 @@ A flat AIR component: one circuit whose constraints are checked independently on
 There are no direct adjacent-row constraints; communication with other rows/components is
 expressed by channel interactions.
 -/
-structure Component (F : Type) [Field F] where
+structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
   [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
   circuit : GeneralFormalCircuit F Input Output
@@ -134,7 +134,7 @@ theorem weakSoundness {component : Component F} {env : Environment F} :
 end Component
 
 /-- Concrete rows and prover data for one flat AIR component. -/
-structure Table (F : Type) [Field F] where
+structure Table (F : Type) [FiniteField F] where
   component : Component F
   width : ℕ
   table : List (Array F)
@@ -396,7 +396,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
 end Table
 
 /-- Light-weight package of multiple flat AIR tables sharing one prover data object. -/
-structure Tables (F : Type) [Field F] where
+structure Tables (F : Type) [FiniteField F] where
   tables : List (Table F)
   data : ProverData F
   same_data : ∀ table ∈ tables, table.data = data

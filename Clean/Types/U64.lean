@@ -275,11 +275,11 @@ lemma toLimbs_map {α β : Type} (x : U64 α) (f : α → β) :
     toLimbs (map x f) = (toLimbs x).map f := by
   simp [toLimbs, toElements, map]
 
-lemma getElem_eval_toLimbs {F} [Field F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
+lemma getElem_eval_toLimbs {F} [FiniteField F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
   exact ProvableType.getElem_eval_toElements x i hi
 
-lemma eval_fromLimbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 8} :
+lemma eval_fromLimbs {F} [FiniteField F] {env : Environment F} {v : Vector (Expression F) 8} :
     eval env (U64.fromLimbs v) = .fromLimbs (v.map env) := by
   simp only [circuit_norm, U64.fromLimbs, ProvableType.eval_fromElements]
 end ByteVector

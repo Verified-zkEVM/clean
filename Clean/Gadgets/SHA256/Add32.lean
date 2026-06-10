@@ -304,7 +304,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
-  set S := evalBitsNat env input_var_a + evalBitsNat env input_var_b with hS_def
+  obtain ⟨S, hS_def⟩ : ∃ S, S = evalBitsNat env input_var_a + evalBitsNat env input_var_b := ⟨_, rfl⟩
+  simp only [← hS_def] at h_env_z h_env_cout
   have h_p_large := h_large.elim
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num
   have hp32 : (2:ℕ)^32 < p := by linarith

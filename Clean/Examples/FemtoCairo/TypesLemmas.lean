@@ -14,7 +14,7 @@ lemma State.ext {F : Type} {s1 s2 : State F} (h1 : s1.pc = s2.pc) (h2 : s1.ap = 
   cases s1; cases s2; simp_all only
 
 section StateEval
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 /-- Evaluating a State variable and extracting pc equals evaluating the pc expression -/
 @[circuit_norm]
@@ -37,7 +37,7 @@ lemma State.eval_fp (env : Environment F) (s : Var State F) :
 end StateEval
 
 section RawInstructionEval
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 /-- Evaluating a RawInstruction variable and extracting rawInstrType equals evaluating the rawInstrType expression -/
 @[circuit_norm]

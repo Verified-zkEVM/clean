@@ -17,7 +17,7 @@ register_option debug.elaborateCircuit : Bool := {
   descr := "trace generated dsimp unfold sets used by elaborate_circuit"
 }
 
-variable {n : ℕ} {F : Type} [Field F] {α β : Type}
+variable {n : ℕ} {F : Type} [FiniteField F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where
   /-- an "explicit" circuit is encapsulated by three functions of the input offset -/
@@ -379,28 +379,28 @@ theorem ExplicitCircuit.from_map_channelsWithRequirements {f : α → β} {g : C
 instance : ExplicitCircuits (F:=F) witnessVar where
   output _ n := ⟨ n ⟩
   localLength _ _ := 1
-  operations c n := [.witness 1 fun env => #v[c env]]
+  operations c n := [.witness 1 (.native fun env => #v[c env])]
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := []
 
 instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
   localLength _ := k
-  operations n := [.witness k c]
+  operations n := [.witness k (.native c)]
   channelsWithGuarantees _ := []
   channelsWithRequirements _ := []
 
 instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVector k c) where
   output n := varFromOffset (fields k) n
   localLength _ := k
-  operations n := [.witness k c]
+  operations n := [.witness k (.native c)]
   channelsWithGuarantees _ := []
   channelsWithRequirements _ := []
 
 instance {M : TypeMap} [ProvableType M] : ExplicitCircuits (ProvableType.witness (α:=M) (F:=F)) where
   localLength _ _ := size M
   output _ n := varFromOffset M n
-  operations c n := [.witness (size M) (toElements ∘ c)]
+  operations c n := [.witness (size M) (.native (toElements ∘ c))]
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := []
 
@@ -408,7 +408,7 @@ instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDep M) F) :
     ExplicitCircuit (witness c (self := inferInstanceAs (Witnessable F M (Var M)))) where
   localLength _ := size M
   output offset := varFromOffset M offset
-  operations _ := [.witness (size M) (toElements ∘ c)]
+  operations _ := [.witness (size M) (.native (toElements ∘ c))]
   channelsWithGuarantees _ := []
   channelsWithRequirements _ := []
 
@@ -427,7 +427,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
-  operations c n := [.witness (size value) (toElements ∘ c)]
+  operations c n := [.witness (size value) (.native (toElements ∘ c))]
   operations_eq c n := by
     rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]

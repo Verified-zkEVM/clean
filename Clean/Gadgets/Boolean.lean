@@ -27,7 +27,7 @@ theorem lt_two {α : Type*} [Zero α] [One α] [Preorder α] [OfNat α 2]
 
 /-- x is boolean iff x * (x - 1) = 0 -/
 @[grind =]
-theorem iff_mul_sub_one {F : Type} [Field F] {x : F} :
+theorem iff_mul_sub_one {F : Type} [FiniteField F] {x : F} :
     IsBool x ↔ x * (x - 1) = 0 := by
   rw [mul_eq_zero, sub_eq_zero, IsBool]
 

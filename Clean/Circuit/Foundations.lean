@@ -11,7 +11,7 @@ This ensures that the `FormalCircuit` and `FormalAssertion` definitions are not 
 import Clean.Circuit.Formal
 import Clean.Circuit.Theorems
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 variable {α β : TypeMap}
 
 namespace GeneralFormalCircuit.WithHint

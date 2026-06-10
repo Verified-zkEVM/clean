@@ -9,7 +9,7 @@ verifier/prover values.
 -/
 
 namespace TestMixedCircuitType
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 structure Input (F : Type) where
   x : F

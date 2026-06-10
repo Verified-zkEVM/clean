@@ -270,6 +270,11 @@ def WitgenIR.eval {m : ℕ} [FiniteField F] :
 theorem WitgenIR.eval_native {m : ℕ} [FiniteField F]
     (f : ProverEnvironment F → Vector F m) : (WitgenIR.native f).eval = f := rfl
 
+@[circuit_norm]
+theorem WitgenIR.eval_native_apply {m : ℕ} [FiniteField F]
+    (f : ProverEnvironment F → Vector F m) (env : ProverEnvironment F) :
+    (WitgenIR.native f).eval env = f env := rfl
+
 /-!
 ## Expressibility checks
 
@@ -342,3 +347,5 @@ def toBitsWitness (n : ℕ) (x : Expression F) : WitgenIR F n :=
 end Examples
 
 end Witgen
+
+export Witgen (WitgenIR)

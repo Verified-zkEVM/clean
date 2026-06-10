@@ -1,7 +1,7 @@
 import Clean.Circuit.Formal
 import Clean.Circuit.Theorems
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 namespace FlatOperation
 
@@ -419,7 +419,7 @@ def ComputableWitnesses (circuit : FormalCircuitBase F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F) (env env' : ProverEnvironment F),
   circuit.main input |>.operations n |>.forAllFlat n {
     witness n _ compute :=
-      env.AgreesBelow n env' → eval env input = eval env' input → compute env = compute env' }
+      env.AgreesBelow n env' → eval env input = eval env' input → compute.eval env = compute.eval env' }
 
 /--
 `ComputableWitnesses` is stronger than `ComputableWitnesses'` (so it's fine to only prove the former).
@@ -472,7 +472,7 @@ theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
 -- simplification of subcircuits in `circuit_norm`
 
 section
-variable {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+variable {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 variable {env : Environment F} {env_p : ProverEnvironment F} {input_var : Var Input F} {n : ℕ}
 
 -- Simplification lemmas for toSubcircuit.localLength
@@ -490,7 +490,7 @@ Simplifies localLength for GeneralFormalCircuit.WithHint.toSubcircuit to avoid u
 -/
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_localLength
-    {F : Type} [Field F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint F Input Output) (n : ℕ)
     (input_var : Var Input F) :
     (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
@@ -516,7 +516,7 @@ theorem GeneralFormalCircuit.toSubcircuit_assumptions (circuit : GeneralFormalCi
 
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_assumptions
-    {F : Type} [Field F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint F Input Output) (n : ℕ)
     (input_var : Var Input F) (env : Environment F) :
     (circuit.toSubcircuit n input_var).Assumptions env =
@@ -545,7 +545,7 @@ Simplifies Soundness for GeneralFormalCircuit.WithHint.toSubcircuit to avoid unf
 -/
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_soundness
-    {F : Type} [Field F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint F Input Output) (n : ℕ)
     (input_var : Var Input F) (env : Environment F) :
     (circuit.toSubcircuit n input_var).Spec env =
@@ -576,7 +576,7 @@ Simplifies Completeness for GeneralFormalCircuit.WithHint.toSubcircuit to avoid 
 -/
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_completeness
-    {F : Type} [Field F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint F Input Output) (n : ℕ)
     (input_var : Var Input F) (env : ProverEnvironment F) :
     (circuit.toSubcircuit n input_var).ProverAssumptions env =
@@ -612,7 +612,7 @@ Simplifies ProverSpec for GeneralFormalCircuit.WithHint.toSubcircuit to avoid un
 -/
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses
-    {F : Type} [Field F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint F Input Output) (n : ℕ)
     (input_var : Var Input F) (env : ProverEnvironment F) :
   (circuit.toSubcircuit n input_var).ProverSpec env =
