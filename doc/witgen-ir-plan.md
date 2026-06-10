@@ -147,5 +147,5 @@ witness paths; proofs intact; green. This is the basis on which the PR is judged
   The single `witnessNative` holdout is HintExample, by design (the genuine
   hint-closure case). FemtoCairo (the stress test) exercises `arrGet` (program
   fetch), the `dataGet` memory intrinsic, and conditionals-into-structs.
-- [ ] Phase 6 — exportability checker + serializer
+- [x] Phase 6 — exportability checker + serializer (`Clean/Circuit/WitnessExport.lean`: #assert_exportable, #witgen_json; Rust-side interpreter remains a separate track)
 - [ ] Phase 7 — cleanup
