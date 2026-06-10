@@ -109,7 +109,8 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.ScalarMul.VarBaseOverflow.circuit`,
      `Orchard.ScalarMul.FixedBase.Coords.circuit`,
      `Orchard.ScalarMul.FixedBase.RunningSumCoords.circuit`,
-     `Orchard.ScalarMul.FixedBase.FullWidth.circuit`, and
+     `Orchard.ScalarMul.FixedBase.FullWidth.circuit`,
+     `Orchard.ScalarMul.FixedBase.BaseFieldCanonicity.circuit`, and
      `Orchard.ScalarMul.FixedShort.circuit`.
 6. Sinsemilla:
    `halo2_gadgets/src/sinsemilla/chip.rs`,

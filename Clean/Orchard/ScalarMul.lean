@@ -30,6 +30,9 @@ References:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`
 - `Full-width fixed-base scalar mul`
 
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`
+- `Canonicity checks`
+
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`
 - `Short fixed-base mul gate`
 
@@ -436,6 +439,76 @@ def circuit : FormalAssertion F CoordsRow where
     simp_all [sub_eq_add_neg]
 
 end FullWidth
+
+namespace BaseFieldCanonicity
+
+variable [OfNat R (2 ^ 120)] [OfNat R (2 ^ 130)] [OfNat R (2 ^ 252)]
+  [OfNat R 45560315531419706090280762371685220353]
+
+structure Row (F : Type) where
+  alpha : F
+  z84Alpha : F
+  alpha1 : F
+  alpha2 : F
+  alpha0Prime : F
+  z13Alpha0Prime : F
+  z44Alpha : F
+  z43Alpha : F
+deriving ProvableStruct
+
+def alpha0 (row : Row R) : R :=
+  row.alpha - row.z84Alpha * OfNat.ofNat (2 ^ 252)
+
+def alpha1RangeCheck (row : Row R) : R :=
+  row.alpha1 * (1 - row.alpha1) * (2 - row.alpha1) * (3 - row.alpha1)
+
+def z84AlphaCheck (row : Row R) : R :=
+  row.z84Alpha - (row.alpha1 + row.alpha2 * 4)
+
+def alpha0PrimeCheck (row : Row R) : R :=
+  row.alpha0Prime - (alpha0 row + OfNat.ofNat (2 ^ 130) - NoteCommit.tP)
+
+def alpha0Hi120 (row : Row R) : R :=
+  row.z44Alpha - row.z84Alpha * OfNat.ofNat (2 ^ 120)
+
+def a43 (row : Row R) : R :=
+  row.z43Alpha - row.z44Alpha * 8
+
+def constraints (row : Row R) : Prop :=
+  row.alpha2 * row.alpha1 = 0 ∧
+    row.alpha2 * alpha0Hi120 row = 0 ∧
+    row.alpha2 * NoteCommit.boolPoly (a43 row) = 0 ∧
+    row.alpha2 * row.z13Alpha0Prime = 0 ∧
+    alpha1RangeCheck row = 0 ∧
+    NoteCommit.boolPoly row.alpha2 = 0 ∧
+    z84AlphaCheck row = 0 ∧
+    alpha0PrimeCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (row.alpha2 * row.alpha1)
+  assertZero (row.alpha2 * alpha0Hi120 row)
+  assertZero (row.alpha2 * NoteCommit.boolPoly (a43 row))
+  assertZero (row.alpha2 * row.z13Alpha0Prime)
+  assertZero (alpha1RangeCheck row)
+  assertZero (NoteCommit.boolPoly row.alpha2)
+  assertZero (z84AlphaCheck row)
+  assertZero (alpha0PrimeCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, alpha0, alpha1RangeCheck,
+      z84AlphaCheck, alpha0PrimeCheck, alpha0Hi120, a43, NoteCommit.boolPoly,
+      NoteCommit.tP]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, alpha0, alpha1RangeCheck,
+      z84AlphaCheck, alpha0PrimeCheck, alpha0Hi120, a43, NoteCommit.boolPoly,
+      NoteCommit.tP]
+    simp_all [sub_eq_add_neg]
+
+end BaseFieldCanonicity
 
 end FixedBase
 
