@@ -960,6 +960,52 @@ def circuit : FormalAssertion F Row where
 
 end PartialPairBlock
 
+namespace PartialRows4Block
+
+structure Row (F : Type) where
+  r0 : PartialRounds.Row F
+  r1 : PartialRounds.Row F
+  r2 : PartialRounds.Row F
+  r3 : PartialRounds.Row F
+deriving ProvableStruct
+
+def Spec (row : Row R) : Prop :=
+  PartialRounds.Spec row.r0 ∧
+    PartialRounds.Spec row.r1 ∧
+    PartialRounds.Spec row.r2 ∧
+    PartialRounds.Spec row.r3 ∧
+    stateEq (partialNext row.r0) (partialCur row.r1) ∧
+    stateEq (partialNext row.r1) (partialCur row.r2) ∧
+    stateEq (partialNext row.r2) (partialCur row.r3)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  PartialPairBlock.circuit { prev := row.r0, next := row.r1 }
+  PartialPairBlock.circuit { prev := row.r2, next := row.r3 }
+  PartialToPartial.circuit { prev := row.r1, next := row.r2 }
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec,
+      PartialPairBlock.circuit, PartialPairBlock.Spec,
+      PartialToPartial.circuit, PartialToPartial.Spec,
+      PartialRounds.circuit, PartialRounds.Spec,
+      stateSame, stateEq, partialCur, partialNext]
+    rcases h_holds with ⟨h01, h23, h12⟩
+    exact ⟨h01.1, h01.2.1, h23.1, h23.2.1, h01.2.2,
+      stateEq_of_stateSame h12, h23.2.2⟩
+  completeness := by
+    circuit_proof_start [main, Spec,
+      PartialPairBlock.circuit, PartialPairBlock.Spec,
+      PartialToPartial.circuit, PartialToPartial.Spec,
+      PartialRounds.circuit, PartialRounds.Spec,
+      stateSame, stateEq, partialCur, partialNext]
+    rcases h_spec with ⟨h0, h1, h2, h3, h01, h12, h23⟩
+    exact ⟨⟨h0, h1, h01⟩, ⟨h2, h3, h23⟩, stateSame_of_stateEq h12⟩
+
+end PartialRows4Block
+
 end Permutation
 
 /-!
