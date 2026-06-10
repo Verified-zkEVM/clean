@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard.Gadget
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -195,4 +196,108 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end ActionWiring
+
+/-!
+Action wiring with selected computed gadget outputs.
+
+Reference:
+`orchard@0.14.0/src/circuit.rs`
+- `Value commitment integrity`
+- `Spend authority`
+- final public-input/action wiring in `Circuit::synthesize`
+
+This assertion connects source-level gadget outputs into `ActionWiring.circuit`:
+`value_commit_orchard` supplies `cv_net`, and spend authority supplies `rk`. Other
+action sub-gadgets remain represented by the explicit fields of `ActionWiring.Row` and
+their lower-level assertions.
+-/
+namespace ActionComputedWiring
+
+variable {F : Type} [Field F]
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
+
+structure Row (F : Type) where
+  action : ActionWiring.Row F
+  valueCommitment : Gadget.ValueCommitment.Row F
+  spendAuth : Gadget.SpendAuth.Row F
+deriving ProvableStruct
+
+def cvXCheck (row : Row R) : R :=
+  row.valueCommitment.cvX - row.action.cvNetX
+
+def cvYCheck (row : Row R) : R :=
+  row.valueCommitment.cvY - row.action.cvNetY
+
+def rkXCheck (row : Row R) : R :=
+  row.spendAuth.rkX - row.action.rkX
+
+def rkYCheck (row : Row R) : R :=
+  row.spendAuth.rkY - row.action.rkY
+
+def constraints (row : Row R) : Prop :=
+  ActionWiring.constraints row.action ∧
+    Gadget.ValueCommitment.constraints row.valueCommitment ∧
+    Gadget.SpendAuth.constraints row.spendAuth ∧
+    cvXCheck row = 0 ∧
+    cvYCheck row = 0 ∧
+    rkXCheck row = 0 ∧
+    rkYCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  ActionWiring.main row.action
+  Gadget.ValueCommitment.main row.valueCommitment
+  Gadget.SpendAuth.main row.spendAuth
+  assertZero (cvXCheck row)
+  assertZero (cvYCheck row)
+  assertZero (rkXCheck row)
+  assertZero (rkYCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, cvXCheck, cvYCheck, rkXCheck, rkYCheck,
+      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
+      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
+      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
+      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
+      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
+      Gadget.ValueCommitment.main, Gadget.ValueCommitment.constraints,
+      Gadget.ValueCommitment.addRow, Gadget.SpendAuth.main, Gadget.SpendAuth.constraints,
+      Gadget.SpendAuth.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
+      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
+      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
+      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
+      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
+      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
+      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, cvXCheck, cvYCheck, rkXCheck, rkYCheck,
+      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
+      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
+      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
+      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
+      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
+      Gadget.ValueCommitment.main, Gadget.ValueCommitment.constraints,
+      Gadget.ValueCommitment.addRow, Gadget.SpendAuth.main, Gadget.SpendAuth.constraints,
+      Gadget.SpendAuth.addRow, Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints,
+      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
+      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
+      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
+      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
+      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
+      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
+      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
+      Ecc.CompleteAdd.yQPlusYP]
+    simp_all [sub_eq_add_neg]
+
+end ActionComputedWiring
 end Orchard
