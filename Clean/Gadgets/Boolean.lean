@@ -195,8 +195,8 @@ inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
-def witness (compute : ProverEnvironment (F p) → F p) := do
-  let x ← witnessVarNative compute
+def witness (e : Witgen.FExpr (F p)) := do
+  let x ← witnessVar (.ofFExpr e)
   assertZero (var x * (var x - 1))
   return Boolean.mk x
 

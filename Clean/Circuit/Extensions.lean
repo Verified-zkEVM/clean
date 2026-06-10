@@ -4,10 +4,10 @@ import Clean.Circuit.Subcircuit
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 instance {M : TypeMap} [ProvableType M] : Inhabited (Circuit F (Var M F)) where
-  default := witnessNative default
+  default := ProvableType.witness (.ofFExprs (.replicate (size M) (.const 0)))
 
 def copyToVar (x : Expression F) : Circuit F (Variable F) := do
-  let x' ← witnessVarNative x.eval
+  let x' ← witnessVar (.ofFExpr (.expr x))
   assertZero (x - (var x'))
   return x'
 
@@ -30,7 +30,8 @@ theorem eval_varFromOffset_valueFromOffset (M : TypeMap) [ProvableType M] (offse
 
 def witnessAny (M: TypeMap) [ProvableType M] : Circuit F (Var M F) := do
   let offset ← getOffset
-  witnessNative fun env => valueFromOffset M offset env
+  ProvableType.witness (α := M) (.prog []
+    (.range (size M) fun i => .envGet (((offset : ℕ) : Witgen.NExpr F) + i)) rfl)
 
 theorem witnessAny_localWitnesses (n : ℕ) (env : ProverEnvironment F) :
     env.UsesLocalWitnessesCompleteness n (witnessAny M |>.operations n) ↔ True := by

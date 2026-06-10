@@ -114,6 +114,13 @@ def witnessVectorNative (m : ℕ) (compute : ProverEnvironment F → Vector F m)
     let vars := varFromOffset (fields m) offset
     (vars, [.witness m (.native compute)])
 
+/-- Witness a single field element computed by the given witness-IR program,
+returning the raw `Variable`. -/
+@[circuit_norm]
+def witnessVar (ir : WitgenIR F 1) : Circuit F (Variable F) :=
+  fun (offset : ℕ) =>
+    (⟨offset⟩, [.witness 1 ir])
+
 /-- Witness a single field element computed by the given witness-IR program.
 Prefer the generic `witness` entry point; an `FExpr` coerces into `WitgenIR F 1`. -/
 @[circuit_norm]
@@ -279,7 +286,7 @@ attribute [circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 end
 
-export Circuit (witnessField witnessVector
+export Circuit (witnessVar witnessField witnessVector
   witnessVarNative witnessFieldNative witnessVarsNative witnessVectorNative assertZero lookup)
 
 -- general `witness` method

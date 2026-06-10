@@ -148,4 +148,8 @@ witness paths; proofs intact; green. This is the basis on which the PR is judged
   hint-closure case). FemtoCairo (the stress test) exercises `arrGet` (program
   fetch), the `dataGet` memory intrinsic, and conditionals-into-structs.
 - [x] Phase 6 — exportability checker + serializer (`Clean/Circuit/WitnessExport.lean`: #assert_exportable, #witgen_json; Rust-side interpreter remains a separate track)
-- [ ] Phase 7 — cleanup
+- [x] Phase 7 — cleanup: `.native` audit done (witnessAny, Table.getRow/assignVar,
+  copyToVar, Byte/Boolean.witness, Inhabited default ported to pure IR; justified
+  natives: HintExample, LookupCircuit.constantOutput, the export red-test). `.native`
+  stays available for prototyping/hints. Authoring guide: doc/witgen-authoring.md;
+  AGENTS.md updated.

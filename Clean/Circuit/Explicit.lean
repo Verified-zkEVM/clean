@@ -376,6 +376,13 @@ theorem ExplicitCircuit.from_map_channelsWithRequirements {f : α → β} {g : C
 
 -- basic operations are explicit circuits
 
+instance {ir : WitgenIR F 1} : ExplicitCircuit (witnessVar ir) where
+  output n := ⟨n⟩
+  localLength _ := 1
+  operations n := [.witness 1 ir]
+  channelsWithGuarantees _ := []
+  channelsWithRequirements _ := []
+
 instance {ir : WitgenIR F 1} : ExplicitCircuit (witnessField ir) where
   output n := varFromOffset field n
   localLength _ := 1

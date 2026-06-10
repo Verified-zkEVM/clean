@@ -44,16 +44,19 @@ Circuits are written using the `Circuit F α` monad, which accumulates operation
 
 ```lean
 def myCircuit (x : Expression F) : Circuit F (Expression F) := do
-  let y ← witness fun env => env x + 1  -- witness a new variable
-  y === x + 1                           -- add constraint: y = x + 1
+  let y ← witness (.expr (x + 1))  -- witness a new variable (witness IR: evaluate x + 1)
+  y === x + 1                      -- add constraint: y = x + 1
   return y
 ```
 
-In that example, `===` is custom syntax which adds an `assertZero` operation.
+In that example, `===` is custom syntax which adds an `assertZero` operation, and the
+witness value is given in the witness IR (see `doc/witgen-authoring.md`), which keeps
+witness generation serializable for external provers.
 
 ### Key Operations
 
-- `witness` / `witnessVar` / `witnessField`: Create new witness variables
+- `witness`: Create new witness variables from witness-IR expressions
+  (`witnessNative` takes an arbitrary closure instead — prototyping/hints only)
 - `lookup`: Add lookup constraint (value must be in table)
 - `===`: Assert equality between two values
 - `<==`: Witness and constrain equal to expression
@@ -144,11 +147,14 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 
 ### Adding a New Gadget
 
-1. Define the `main` circuit function
+1. Define the `main` circuit function; write witnesses with the generic `witness`
+   entry point in the witness IR (see `doc/witgen-authoring.md` — `witnessNative`
+   closures are only for prototyping/hints and are not exportable)
 2. Define `Assumptions` and `Spec`
 3. Create `ElaboratedCircuit` instance with `localLength` and `output`
 4. Prove `soundness` and `completeness`
 5. Bundle into `FormalCircuit`
+6. Optionally add `#assert_exportable (circuit ...)` to pin exportability
 
 ### Working on Lean Proofs
 

@@ -397,7 +397,8 @@ def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
       inputSize := ctx.inputSize,
-      circuit := ctx.circuit ++ [.witness (size S) (.native fun env => .mapRange _ fun i => env.get (ctx.offset + i))],
+      circuit := ctx.circuit ++ [.witness (size S) (.prog []
+        (.range (size S) fun i => .envGet (((ctx.offset : ℕ) : Witgen.NExpr F) + i)) rfl)],
       assignment := ctx.assignment.pushRow row
     }
     (varFromOffset S ctx.offset, ctx')
@@ -453,7 +454,7 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   | .var v => assignVar off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
-    let new_var ← witnessVarNative fun env => x.eval env
+    let new_var ← witnessVar (.ofFExpr (.expr x))
     assertZero (x - var new_var)
     assignVar off new_var
 
