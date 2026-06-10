@@ -383,11 +383,14 @@ def leftCheck (row : DecompositionRow R) : R :=
 def rightCheck (row : DecompositionRow R) : R :=
   row.b2 + row.cWhole * twoPow5 - row.rightNode
 
+def Spec (row : DecompositionRow R) : Prop :=
+  row.lWhole = a0 row ∧
+  row.leftNode = row.z1A + (b0 row + row.b1 * twoPow10) * twoPow240 ∧
+  row.rightNode = row.b2 + row.cWhole * twoPow5 ∧
+  row.z1B = row.b1 + row.b2 * twoPow5
+
 def constraints (row : DecompositionRow R) : Prop :=
-  a0 row - row.lWhole = 0 ∧
-  leftCheck row = 0 ∧
-  rightCheck row = 0 ∧
-  b1B2Check row = 0
+  Spec row
 
 def main (row : Var DecompositionRow F) : Circuit F Unit := do
   assertZero (a0 row - row.lWhole)
@@ -397,15 +400,35 @@ def main (row : Var DecompositionRow F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F DecompositionRow where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, a0, leftCheck, rightCheck, b1B2Check,
+    circuit_proof_start [main, Spec, a0, leftCheck, rightCheck, b1B2Check,
       b0, twoPow5, twoPow10, twoPow240]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hl, hleft, hright, hb⟩
+    constructor
+    · rw [sub_eq_add_neg]
+      exact (left_eq_of_add_neg_eq_zero hl).symm
+    constructor
+    · rw [sub_eq_add_neg]
+      exact (left_eq_of_add_neg_eq_zero hleft).symm
+    constructor
+    · exact (left_eq_of_add_neg_eq_zero hright).symm
+    · exact left_eq_of_add_neg_eq_zero hb
   completeness := by
-    circuit_proof_start [main, constraints, a0, leftCheck, rightCheck, b1B2Check,
+    circuit_proof_start [main, Spec, a0, leftCheck, rightCheck, b1B2Check,
       b0, twoPow5, twoPow10, twoPow240]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hl, hleft, hright, hb⟩
+    constructor
+    · rw [hl]
+      ring
+    constructor
+    · rw [hleft]
+      ring
+    constructor
+    · rw [hright]
+      ring
+    · rw [hb]
+      ring
 
 /-!
 `hash_layer` source-level wiring.
@@ -431,8 +454,11 @@ deriving ProvableStruct
 def hashCheck (row : Row R) : R :=
   row.computedHash - row.hash
 
+def Spec (row : Row R) : Prop :=
+  Merkle.Spec row.decomposition ∧ row.hash = row.computedHash
+
 def constraints (row : Row R) : Prop :=
-  Merkle.constraints row.decomposition ∧ hashCheck row = 0
+  Spec row
 
 def main (row : Var Row F) : Circuit F Unit := do
   Merkle.circuit row.decomposition
@@ -440,17 +466,20 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, hashCheck, Merkle.circuit, Merkle.constraints, Merkle.a0,
+    circuit_proof_start [main, Spec, constraints, hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hMerkle, hHash⟩
+    exact ⟨hMerkle, (left_eq_of_add_neg_eq_zero hHash).symm⟩
   completeness := by
-    circuit_proof_start [main, constraints, hashCheck, Merkle.circuit, Merkle.constraints, Merkle.a0,
+    circuit_proof_start [main, Spec, constraints, hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hMerkle, hHash⟩
+    rw [hHash]
+    exact ⟨hMerkle, by ring⟩
 
 end Wiring
 
@@ -501,14 +530,17 @@ def layerRightCheck (row : Row R) : R :=
 def nextCheck (row : Row R) : R :=
   row.layer.hash - row.nextNode
 
+def Spec (row : Row R) : Prop :=
+  (row.posBit = 0 ∨ row.posBit = 1) ∧
+    row.left = ternary row.posBit row.sibling row.node ∧
+    row.right = ternary row.posBit row.node row.sibling ∧
+    Wiring.Spec row.layer ∧
+    row.layer.decomposition.leftNode = row.left ∧
+    row.layer.decomposition.rightNode = row.right ∧
+    row.nextNode = row.layer.hash
+
 def constraints (row : Row R) : Prop :=
-  boolPoly row.posBit = 0 ∧
-    leftCheck row = 0 ∧
-    rightCheck row = 0 ∧
-    Wiring.constraints row.layer ∧
-    layerLeftCheck row = 0 ∧
-    layerRightCheck row = 0 ∧
-    nextCheck row = 0
+  Spec row
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (boolPoly row.posBit)
@@ -521,21 +553,55 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, leftCheck, rightCheck, layerLeftCheck,
+    circuit_proof_start [main, Spec, constraints, leftCheck, rightCheck, layerLeftCheck,
       layerRightCheck, nextCheck, ternary, boolPoly,
-      Wiring.circuit, Wiring.constraints, Wiring.hashCheck, Merkle.circuit, Merkle.constraints, Merkle.a0,
+      Wiring.circuit, Wiring.Spec, Wiring.constraints, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨hBool, hLeft, hRight, hLayer, hLayerLeft, hLayerRight, hNext⟩
+    constructor
+    · rcases mul_eq_zero.mp hBool with hZero | hOne
+      · exact Or.inl hZero
+      · exact Or.inr (left_eq_of_add_neg_eq_zero hOne)
+    constructor
+    · rw [sub_eq_add_neg]
+      exact left_eq_of_add_neg_eq_zero hLeft
+    constructor
+    · rw [sub_eq_add_neg]
+      exact left_eq_of_add_neg_eq_zero hRight
+    exact ⟨hLayer, left_eq_of_add_neg_eq_zero hLayerLeft,
+      left_eq_of_add_neg_eq_zero hLayerRight, (left_eq_of_add_neg_eq_zero hNext).symm⟩
   completeness := by
-    circuit_proof_start [main, constraints, leftCheck, rightCheck, layerLeftCheck,
+    circuit_proof_start [main, Spec, constraints, leftCheck, rightCheck, layerLeftCheck,
       layerRightCheck, nextCheck, ternary, boolPoly,
-      Wiring.circuit, Wiring.constraints, Wiring.hashCheck, Merkle.circuit, Merkle.constraints, Merkle.a0,
+      Wiring.circuit, Wiring.Spec, Wiring.constraints, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
-    simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨hBool, hLeft, hRight, hLayer, hLayerLeft, hLayerRight, hNext⟩
+    constructor
+    · rcases hBool with hZero | hOne
+      · rw [hZero]
+        ring
+      · rw [hOne]
+        ring
+    constructor
+    · rw [hLeft]
+      ring
+    constructor
+    · rw [hRight]
+      ring
+    constructor
+    · exact hLayer
+    constructor
+    · rw [hLayerLeft, hLeft]
+      ring
+    constructor
+    · rw [hLayerRight, hRight]
+      ring
+    · rw [hNext]
+      ring
 
 end PathStep
 
