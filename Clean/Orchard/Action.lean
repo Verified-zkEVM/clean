@@ -458,12 +458,6 @@ def oldCmYCheck (row : Row R) : R :=
 def newCmxCheck (row : Row R) : R :=
   row.newNoteCommit.cmX - row.action.cmxNew
 
-def constraints (row : Row R) : Prop :=
-  ActionWiring.constraints row.action ∧
-    oldCmXCheck row = 0 ∧
-    oldCmYCheck row = 0 ∧
-    newCmxCheck row = 0
-
 def Spec (row : Row R) : Prop :=
   ActionWiring.Spec row.action ∧
     row.oldNoteCommit.cmX = row.action.derivedCmOldX ∧
@@ -480,28 +474,16 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, oldCmXCheck, oldCmYCheck, newCmxCheck,
-      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
-      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
-      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
-      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
-      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
-      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck]
+    circuit_proof_start [main, Spec, oldCmXCheck, oldCmYCheck, newCmxCheck,
+      ActionWiring.circuit, ActionWiring.Spec]
     rcases h_holds with ⟨hAction, hOldX, hOldY, hNewCmx⟩
     exact ⟨hAction,
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOldX),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOldY),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNewCmx)⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, oldCmXCheck, oldCmYCheck, newCmxCheck,
-      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
-      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
-      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
-      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
-      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
-      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck]
+    circuit_proof_start [main, Spec, oldCmXCheck, oldCmYCheck, newCmxCheck,
+      ActionWiring.circuit, ActionWiring.Spec]
     rcases h_spec with ⟨hAction, hOldX, hOldY, hNewCmx⟩
     exact ⟨hAction,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOldX,
@@ -609,13 +591,6 @@ def pkDXCheck (row : Row R) : R :=
 def pkDYCheck (row : Row R) : R :=
   row.derivedPkDY - row.action.derivedPkDOldY
 
-def constraints (row : Row R) : Prop :=
-  ActionWiring.constraints row.action ∧
-    akCheck row = 0 ∧
-    ivkScalarCheck row = 0 ∧
-    pkDXCheck row = 0 ∧
-    pkDYCheck row = 0
-
 def Spec (row : Row R) : Prop :=
   ActionWiring.Spec row.action ∧
     row.commitIvk.gate.ak = row.spendAuth.akX ∧
@@ -634,14 +609,8 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
-      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
-      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
-      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
-      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
-      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
-      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck]
+    circuit_proof_start [main, Spec, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
+      ActionWiring.circuit, ActionWiring.Spec]
     rcases h_holds with ⟨hAction, hAk, hIvk, hPkDX, hPkDY⟩
     exact ⟨hAction,
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hAk),
@@ -649,14 +618,8 @@ def circuit : FormalAssertion F Row where
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hPkDX),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hPkDY)⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
-      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
-      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
-      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
-      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
-      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
-      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck]
+    circuit_proof_start [main, Spec, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
+      ActionWiring.circuit, ActionWiring.Spec]
     rcases h_spec with ⟨hAction, hAk, hIvk, hPkDX, hPkDY⟩
     exact ⟨hAction,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hAk,
