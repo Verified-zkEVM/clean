@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard.Ecc
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -25,9 +26,7 @@ namespace Poseidon
 
 variable {F : Type} [Field F]
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-
-def pow5 (x : R) : R :=
+def pow5 {K : Type} [Mul K] (x : K) : K :=
   let x2 := x * x
   x2 * x2 * x
 
@@ -60,37 +59,37 @@ structure Row (F : Type) where
   m22 : F
 deriving ProvableStruct
 
-def s0 (row : Row R) : R := pow5 (row.cur0 + row.rcA0)
-def s1 (row : Row R) : R := pow5 (row.cur1 + row.rcA1)
-def s2 (row : Row R) : R := pow5 (row.cur2 + row.rcA2)
+def s0 {K : Type} [Add K] [Mul K] (row : Row K) : K := pow5 (row.cur0 + row.rcA0)
+def s1 {K : Type} [Add K] [Mul K] (row : Row K) : K := pow5 (row.cur1 + row.rcA1)
+def s2 {K : Type} [Add K] [Mul K] (row : Row K) : K := pow5 (row.cur2 + row.rcA2)
 
-def output0 (row : Row R) : R :=
+def output0 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   s0 row * row.m00 + s1 row * row.m01 + s2 row * row.m02
 
-def output1 (row : Row R) : R :=
+def output1 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   s0 row * row.m10 + s1 row * row.m11 + s2 row * row.m12
 
-def output2 (row : Row R) : R :=
+def output2 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   s0 row * row.m20 + s1 row * row.m21 + s2 row * row.m22
 
-def next0Check (row : Row R) : R :=
+def next0Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   output0 row - row.next0
 
-def next1Check (row : Row R) : R :=
+def next1Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   output1 row - row.next1
 
-def next2Check (row : Row R) : R :=
+def next2Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   output2 row - row.next2
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.next0 = output0 row ∧ row.next1 = output1 row ∧ row.next2 = output2 row
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (next0Check row)
   assertZero (next1Check row)
   assertZero (next2Check row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -180,52 +179,52 @@ structure Row (F : Type) where
   mInv22 : F
 deriving ProvableStruct
 
-def mid0Check (row : Row R) : R :=
+def mid0Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   pow5 (row.cur0 + row.rcA0) - row.mid0Sbox
 
-def mid0 (row : Row R) : R :=
+def mid0 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   row.mid0Sbox * row.m00 + (row.cur1 + row.rcA1) * row.m01 +
     (row.cur2 + row.rcA2) * row.m02
 
-def mid1 (row : Row R) : R :=
+def mid1 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   row.mid0Sbox * row.m10 + (row.cur1 + row.rcA1) * row.m11 +
     (row.cur2 + row.rcA2) * row.m12
 
-def mid2 (row : Row R) : R :=
+def mid2 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   row.mid0Sbox * row.m20 + (row.cur1 + row.rcA1) * row.m21 +
     (row.cur2 + row.rcA2) * row.m22
 
-def nextInv0 (row : Row R) : R :=
+def nextInv0 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   row.next0 * row.mInv00 + row.next1 * row.mInv01 + row.next2 * row.mInv02
 
-def nextInv1 (row : Row R) : R :=
+def nextInv1 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   row.next0 * row.mInv10 + row.next1 * row.mInv11 + row.next2 * row.mInv12
 
-def nextInv2 (row : Row R) : R :=
+def nextInv2 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
   row.next0 * row.mInv20 + row.next1 * row.mInv21 + row.next2 * row.mInv22
 
-def next0Check (row : Row R) : R :=
+def next0Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   pow5 (mid0 row + row.rcB0) - nextInv0 row
 
-def next1Check (row : Row R) : R :=
+def next1Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   mid1 row + row.rcB1 - nextInv1 row
 
-def next2Check (row : Row R) : R :=
+def next2Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   mid2 row + row.rcB2 - nextInv2 row
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.mid0Sbox = pow5 (row.cur0 + row.rcA0) ∧
     nextInv0 row = pow5 (mid0 row + row.rcB0) ∧
     nextInv1 row = mid1 row + row.rcB1 ∧
     nextInv2 row = mid2 row + row.rcB2
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (mid0Check row)
   assertZero (next0Check row)
   assertZero (next1Check row)
   assertZero (next2Check row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -261,26 +260,26 @@ structure Row (F : Type) where
   output2 : F
 deriving ProvableStruct
 
-def output0Check (row : Row R) : R :=
+def output0Check {K : Type} [Add K] [Sub K] (row : Row K) : K :=
   row.initial0 + row.input0 - row.output0
 
-def output1Check (row : Row R) : R :=
+def output1Check {K : Type} [Add K] [Sub K] (row : Row K) : K :=
   row.initial1 + row.input1 - row.output1
 
-def capacityCheck (row : Row R) : R :=
+def capacityCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.initial2 - row.output2
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.output0 = row.initial0 + row.input0 ∧
     row.output1 = row.initial1 + row.input1 ∧
     row.output2 = row.initial2
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (output0Check row)
   assertZero (output1Check row)
   assertZero (capacityCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -326,8 +325,6 @@ structure State (F : Type) where
   s1 : F
   s2 : F
 deriving ProvableStruct
-
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
 
 structure FullRows (F : Type) where
   r0 : FullRound.Row F
@@ -375,34 +372,34 @@ structure Row (F : Type) where
   output : State F
 deriving ProvableStruct
 
-def fullCur (row : FullRound.Row R) : State R where
+def fullCur {K : Type} (row : FullRound.Row K) : State K where
   s0 := row.cur0
   s1 := row.cur1
   s2 := row.cur2
 
-def fullNext (row : FullRound.Row R) : State R where
+def fullNext {K : Type} (row : FullRound.Row K) : State K where
   s0 := row.next0
   s1 := row.next1
   s2 := row.next2
 
-def partialCur (row : PartialRounds.Row R) : State R where
+def partialCur {K : Type} (row : PartialRounds.Row K) : State K where
   s0 := row.cur0
   s1 := row.cur1
   s2 := row.cur2
 
-def partialNext (row : PartialRounds.Row R) : State R where
+def partialNext {K : Type} (row : PartialRounds.Row K) : State K where
   s0 := row.next0
   s1 := row.next1
   s2 := row.next2
 
-def state0Check (a b : State R) : R := a.s0 - b.s0
-def state1Check (a b : State R) : R := a.s1 - b.s1
-def state2Check (a b : State R) : R := a.s2 - b.s2
+def state0Check {K : Type} [Sub K] (a b : State K) : K := a.s0 - b.s0
+def state1Check {K : Type} [Sub K] (a b : State K) : K := a.s1 - b.s1
+def state2Check {K : Type} [Sub K] (a b : State K) : K := a.s2 - b.s2
 
-def stateEq (a b : State R) : Prop :=
+def stateEq {K : Type} [Zero K] [Sub K] (a b : State K) : Prop :=
   state0Check a b = 0 ∧ state1Check a b = 0 ∧ state2Check a b = 0
 
-def stateSame (a b : State R) : Prop :=
+def stateSame {K : Type} (a b : State K) : Prop :=
   a.s0 = b.s0 ∧ a.s1 = b.s1 ∧ a.s2 = b.s2
 
 theorem stateEq_of_stateSame {a b : State F} (h : stateSame a b) : stateEq a b := by
@@ -420,13 +417,13 @@ def assertStateEq (a b : State (Expression F)) : Circuit F Unit := do
   assertZero (state1Check a b)
   assertZero (state2Check a b)
 
-def fullSpec (rows : FullRows R) : Prop :=
+def fullSpec (rows : FullRows Ecc.PallasBaseField) : Prop :=
   FullRound.Spec rows.r0 ∧
     FullRound.Spec rows.r1 ∧
     FullRound.Spec rows.r2 ∧
     FullRound.Spec rows.r3
 
-def partialSpec (rows : PartialRows R) : Prop :=
+def partialSpec (rows : PartialRows Ecc.PallasBaseField) : Prop :=
   PartialRounds.Spec rows.r0 ∧
     PartialRounds.Spec rows.r1 ∧
     PartialRounds.Spec rows.r2 ∧
@@ -456,12 +453,12 @@ def partialSpec (rows : PartialRows R) : Prop :=
     PartialRounds.Spec rows.r26 ∧
     PartialRounds.Spec rows.r27
 
-def fullLinks (rows : FullRows R) : Prop :=
+def fullLinks {K : Type} [Zero K] [Sub K] (rows : FullRows K) : Prop :=
   stateEq (fullNext rows.r0) (fullCur rows.r1) ∧
     stateEq (fullNext rows.r1) (fullCur rows.r2) ∧
     stateEq (fullNext rows.r2) (fullCur rows.r3)
 
-def partialLinks (rows : PartialRows R) : Prop :=
+def partialLinks {K : Type} [Zero K] [Sub K] (rows : PartialRows K) : Prop :=
   stateEq (partialNext rows.r0) (partialCur rows.r1) ∧
     stateEq (partialNext rows.r1) (partialCur rows.r2) ∧
     stateEq (partialNext rows.r2) (partialCur rows.r3) ∧
@@ -490,7 +487,7 @@ def partialLinks (rows : PartialRows R) : Prop :=
     stateEq (partialNext rows.r25) (partialCur rows.r26) ∧
     stateEq (partialNext rows.r26) (partialCur rows.r27)
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   fullSpec row.firstFull ∧
     partialSpec row.partialRows ∧
     fullSpec row.lastFull ∧
@@ -502,7 +499,7 @@ def Spec (row : Row R) : Prop :=
     fullLinks row.lastFull ∧
     stateEq (fullNext row.lastFull.r3) row.output
 
-def wiringSpec (row : Row R) : Prop :=
+def wiringSpec (row : Row Ecc.PallasBaseField) : Prop :=
   stateEq row.initial (fullCur row.firstFull.r0) ∧
     fullLinks row.firstFull ∧
     stateEq (fullNext row.firstFull.r3) (partialCur row.partialRows.r0) ∧
@@ -511,7 +508,7 @@ def wiringSpec (row : Row R) : Prop :=
     fullLinks row.lastFull ∧
     stateEq (fullNext row.lastFull.r3) row.output
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   FullRound.circuit row.firstFull.r0
   FullRound.circuit row.firstFull.r1
   FullRound.circuit row.firstFull.r2
@@ -586,7 +583,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertStateEq (fullNext row.lastFull.r2) (fullCur row.lastFull.r3)
   assertStateEq (fullNext row.lastFull.r3) row.output
 
-def wiringMain (row : Var Row F) : Circuit F Unit := do
+def wiringMain (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertStateEq row.initial (fullCur row.firstFull.r0)
   assertStateEq (fullNext row.firstFull.r0) (fullCur row.firstFull.r1)
   assertStateEq (fullNext row.firstFull.r1) (fullCur row.firstFull.r2)
@@ -632,13 +629,13 @@ structure Row (F : Type) where
   first : FullRound.Row F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   stateSame row.initial (fullCur row.first)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertStateEq row.initial (fullCur row.first)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -664,13 +661,13 @@ structure Row (F : Type) where
   next : FullRound.Row F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   stateSame (fullNext row.prev) (fullCur row.next)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertStateEq (fullNext row.prev) (fullCur row.next)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -696,13 +693,13 @@ structure Row (F : Type) where
   next : PartialRounds.Row F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   stateSame (fullNext row.prev) (partialCur row.next)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertStateEq (fullNext row.prev) (partialCur row.next)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -728,13 +725,13 @@ structure Row (F : Type) where
   next : PartialRounds.Row F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   stateSame (partialNext row.prev) (partialCur row.next)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertStateEq (partialNext row.prev) (partialCur row.next)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -760,13 +757,13 @@ structure Row (F : Type) where
   next : FullRound.Row F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   stateSame (partialNext row.prev) (fullCur row.next)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertStateEq (partialNext row.prev) (fullCur row.next)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -792,13 +789,13 @@ structure Row (F : Type) where
   output : State F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   stateSame (fullNext row.last) row.output
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertStateEq (fullNext row.last) row.output
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -819,10 +816,10 @@ end FullToOutput
 
 namespace FullRowsBlock
 
-def Spec (rows : FullRows R) : Prop :=
+def Spec (rows : FullRows Ecc.PallasBaseField) : Prop :=
   fullSpec rows ∧ fullLinks rows
 
-def main (rows : Var FullRows F) : Circuit F Unit := do
+def main (rows : Var FullRows Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   FullRound.circuit rows.r0
   FullRound.circuit rows.r1
   FullRound.circuit rows.r2
@@ -831,7 +828,7 @@ def main (rows : Var FullRows F) : Circuit F Unit := do
   FullToFull.circuit { prev := rows.r1, next := rows.r2 }
   FullToFull.circuit { prev := rows.r2, next := rows.r3 }
 
-def circuit : FormalAssertion F FullRows where
+def circuit : FormalAssertion Ecc.PallasBaseField FullRows where
   main
   Spec := Spec
   soundness := by
@@ -858,16 +855,16 @@ structure Row (F : Type) where
   firstFull : FullRows F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   fullSpec row.firstFull ∧
     stateEq row.initial (fullCur row.firstFull.r0) ∧
     fullLinks row.firstFull
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   InitialToFull.circuit { initial := row.initial, first := row.firstFull.r0 }
   FullRowsBlock.circuit row.firstFull
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -894,16 +891,16 @@ structure Row (F : Type) where
   output : State F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   fullSpec row.lastFull ∧
     fullLinks row.lastFull ∧
     stateEq (fullNext row.lastFull.r3) row.output
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   FullRowsBlock.circuit row.lastFull
   FullToOutput.circuit { last := row.lastFull.r3, output := row.output }
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -930,17 +927,17 @@ structure Row (F : Type) where
   next : PartialRounds.Row F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   PartialRounds.Spec row.prev ∧
     PartialRounds.Spec row.next ∧
     stateEq (partialNext row.prev) (partialCur row.next)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   PartialRounds.circuit row.prev
   PartialRounds.circuit row.next
   PartialToPartial.circuit { prev := row.prev, next := row.next }
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -969,7 +966,7 @@ structure Row (F : Type) where
   r3 : PartialRounds.Row F
 deriving ProvableStruct
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   PartialRounds.Spec row.r0 ∧
     PartialRounds.Spec row.r1 ∧
     PartialRounds.Spec row.r2 ∧
@@ -978,12 +975,12 @@ def Spec (row : Row R) : Prop :=
     stateEq (partialNext row.r1) (partialCur row.r2) ∧
     stateEq (partialNext row.r2) (partialCur row.r3)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   PartialPairBlock.circuit { prev := row.r0, next := row.r1 }
   PartialPairBlock.circuit { prev := row.r2, next := row.r3 }
   PartialToPartial.circuit { prev := row.r1, next := row.r2 }
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -1037,25 +1034,25 @@ structure Row (F : Type) where
   hash : F
 deriving ProvableStruct
 
-def initial0Check (row : Row R) : R :=
+def initial0Check {K : Type} [Zero K] (row : Row K) : K :=
   row.absorbed.initial0
 
-def initial1Check (row : Row R) : R :=
+def initial1Check {K : Type} [Zero K] (row : Row K) : K :=
   row.absorbed.initial1
 
-def capacityCheck (row : Row R) : R :=
+def capacityCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.absorbed.initial2 - row.capacity
 
-def input0Check (row : Row R) : R :=
+def input0Check {K : Type} [Sub K] (row : Row K) : K :=
   row.absorbed.input0 - row.nk
 
-def input1Check (row : Row R) : R :=
+def input1Check {K : Type} [Sub K] (row : Row K) : K :=
   row.absorbed.input1 - row.rho
 
-def hashCheck (row : Row R) : R :=
+def hashCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.permuted0 - row.hash
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   PadAndAdd.Spec row.absorbed ∧
     row.absorbed.initial0 = 0 ∧
     row.absorbed.initial1 = 0 ∧
@@ -1064,7 +1061,7 @@ def Spec (row : Row R) : Prop :=
     row.absorbed.input1 = row.rho ∧
     row.hash = row.permuted0
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   PadAndAdd.circuit row.absorbed
   assertZero (initial0Check row)
   assertZero (initial1Check row)
@@ -1073,7 +1070,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (input1Check row)
   assertZero (hashCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -1121,35 +1118,33 @@ structure Row (F : Type) where
   permutationOutput : Permutation.State F
 deriving ProvableStruct
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-
-def input0Check (row : Row R) : R :=
+def input0Check {K : Type} [Sub K] (row : Row K) : K :=
   row.hash.absorbed.output0 - row.permutationInput.s0
 
-def input1Check (row : Row R) : R :=
+def input1Check {K : Type} [Sub K] (row : Row K) : K :=
   row.hash.absorbed.output1 - row.permutationInput.s1
 
-def input2Check (row : Row R) : R :=
+def input2Check {K : Type} [Sub K] (row : Row K) : K :=
   row.hash.absorbed.output2 - row.permutationInput.s2
 
-def outputCheck (row : Row R) : R :=
+def outputCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.permutationOutput.s0 - row.hash.permuted0
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Hash2.Spec row.hash ∧
     row.hash.absorbed.output0 = row.permutationInput.s0 ∧
     row.hash.absorbed.output1 = row.permutationInput.s1 ∧
     row.hash.absorbed.output2 = row.permutationInput.s2 ∧
     row.hash.permuted0 = row.permutationOutput.s0
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Hash2.circuit row.hash
   assertZero (input0Check row)
   assertZero (input1Check row)
   assertZero (input2Check row)
   assertZero (outputCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
