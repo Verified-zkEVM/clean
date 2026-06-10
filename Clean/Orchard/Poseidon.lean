@@ -970,9 +970,6 @@ def Spec (row : Row R) : Prop :=
     row.hash.absorbed.output2 = row.permutationInput.s2 ∧
     row.hash.permuted0 = row.permutationOutput.s0
 
-def constraints (row : Row R) : Prop :=
-  Spec row
-
 def main (row : Var Row F) : Circuit F Unit := do
   Hash2.circuit row.hash
   assertZero (input0Check row)
