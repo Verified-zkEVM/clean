@@ -266,7 +266,7 @@ namespace VarBaseIncomplete
 /- The Rust gate uses `y_a = Y_A / 2`. These constraints multiply those
    equations by `2`, avoiding a division operation while preserving the Pallas
    gate's zero set. -/
-def yADouble (row : Sinsemilla.DoubleAndAddRow R) : R :=
+def yADouble {K : Type} [Add K] [Sub K] [Mul K] (row : Sinsemilla.DoubleAndAddRow K) : K :=
   Sinsemilla.DoubleAndAdd.yA row
 
 namespace Init
@@ -276,16 +276,16 @@ structure Row (F : Type) where
   next : Sinsemilla.DoubleAndAddRow F
 deriving ProvableStruct
 
-def poly (row : Row R) : R :=
+def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   2 * row.yAWitnessed - yADouble row.next
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   2 * row.yAWitnessed = yADouble row.next
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (poly row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -310,21 +310,22 @@ structure Row (F : Type) where
   yANextDouble : F
 deriving ProvableStruct
 
-def bit (row : Row R) : R :=
+def bit {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   row.zCur - row.zPrev * 2
 
-def gradient1 (row : Row R) : R :=
+def gradient1 {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
+    (row : Row K) : K :=
   2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) - yADouble row.cur +
     2 * ((bit row * 2 - 1) * row.yPCur)
 
-def secantLine (row : Row R) : R :=
+def secantLine {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
   row.cur.lambda2 * row.cur.lambda2 - row.xANext -
     Sinsemilla.DoubleAndAdd.xR row.cur - row.cur.xA
 
-def gradient2 (row : Row R) : R :=
+def gradient2 {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   2 * row.cur.lambda2 * (row.cur.xA - row.xANext) - yADouble row.cur - row.yANextDouble
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool (bit row) ∧
     2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) +
         2 * ((bit row * 2 - 1) * row.yPCur) = yADouble row.cur ∧
@@ -333,13 +334,13 @@ def Spec (row : Row R) : Prop :=
     2 * row.cur.lambda2 * (row.cur.xA - row.xANext) =
         yADouble row.cur + row.yANextDouble
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
   assertZero (gradient1 row)
   assertZero (secantLine row)
   assertZero (gradient2 row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -368,21 +369,21 @@ structure Row (F : Type) extends Loop.Row F where
   yPNext : F
 deriving ProvableStruct
 
-def xPCheck (row : Row R) : R :=
+def xPCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.cur.xP - row.xPNext
 
-def yPCheck (row : Row R) : R :=
+def yPCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.yPCur - row.yPNext
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.cur.xP = row.xPNext ∧ row.yPCur = row.yPNext ∧ Loop.Spec row.toRow
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (xPCheck row)
   assertZero (yPCheck row)
   Loop.circuit row.toRow
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
