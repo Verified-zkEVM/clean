@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Circuit.WitnessIR
+import Clean.Circuit.WitnessGeneration
 import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath
 import Clean.Utils.OfflineMemory

@@ -128,7 +128,7 @@ witness paths; proofs intact; green. This is the basis on which the PR is judged
 - [x] Requirements survey (doc/witgen-ir-requirements.md)
 - [x] Phase 1 — IR sketch (`Clean/Circuit/WitnessIR.lean`)
 - [x] Phase 2 — core integration
-- [ ] Phase 3 — reference interpreter + equivalence proof
+- [x] Phase 3 — reference interpreter + equivalence proof (`Clean/Circuit/WitnessGeneration.lean`)
 - [ ] Phase 4 — authoring surface
 - [ ] Phase 5 — gadget ports (10 items above)
 - [ ] Phase 6 — exportability checker + serializer
