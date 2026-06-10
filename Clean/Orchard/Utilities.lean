@@ -299,18 +299,22 @@ def twoPowK (k : ℕ) : F :=
 def poly (k : ℕ) (input : ShortLookupBitshift F) : F :=
   input.word * twoPowK k * input.invTwoPowS - input.shiftedWord
 
+def bitshiftSpec (k : ℕ) (input : ShortLookupBitshift F) : Prop :=
+  input.shiftedWord = input.word * twoPowK k * input.invTwoPowS
+
 def main (k : ℕ) (input : Var ShortLookupBitshift F) : Circuit F Unit := do
   assertZero (input.word * (twoPowK k : F) * input.invTwoPowS - input.shiftedWord)
 
 def circuit (k : ℕ) : FormalAssertion F ShortLookupBitshift where
   main := main k
-  Spec input := poly k input = 0
+  Spec := bitshiftSpec k
   soundness := by
-    circuit_proof_start [main, poly, twoPowK]
-    simpa [sub_eq_add_neg] using h_holds
+    circuit_proof_start [main, bitshiftSpec, poly, twoPowK]
+    exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h_holds)).symm
   completeness := by
-    circuit_proof_start [main, poly, twoPowK]
-    simpa [sub_eq_add_neg] using h_spec
+    circuit_proof_start [main, bitshiftSpec, poly, twoPowK]
+    rw [h_spec]
+    ring
 
 /-!
 Reference:
