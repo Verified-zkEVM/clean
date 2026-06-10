@@ -926,38 +926,81 @@ def inputPoint {K : Type} (row : Row K) : K × K :=
 def outputPoint {K : Type} (row : Row K) : K × K :=
   (row.x, row.signedY)
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def inputEccPoint {K : Type} (row : Row K) : Ecc.Point K where
+  x := row.x
+  y := row.y
+
+def outputEccPoint {K : Type} (row : Row K) : Ecc.Point K where
+  x := row.x
+  y := row.signedY
+
+def SignedPointRelation (row : Row Ecc.PallasBaseField) : Prop :=
   row.sign = 1 ∧ outputPoint row = inputPoint row ∨
     row.sign = 0 - 1 ∧
       outputPoint row = CompElliptic.CurveForms.ShortWeierstrass.neg (inputPoint row)
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  SignedPointRelation row ∧ Ecc.isPointOrIdentity (outputEccPoint row)
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.isPointOrIdentity (inputEccPoint row)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   FixedShort.circuit (gateRow row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, gateRow, inputPoint, outputPoint,
+    circuit_proof_start [main, Spec, Assumptions, SignedPointRelation, gateRow,
+      inputPoint, outputPoint, inputEccPoint, outputEccPoint,
       FixedShort.circuit, FixedShort.Spec, FixedShort.IsSign, FixedShort.SignedPointSelection,
-      CompElliptic.CurveForms.ShortWeierstrass.neg]
+      CompElliptic.CurveForms.ShortWeierstrass.neg, Ecc.pointCoords]
     rcases h_holds with ⟨_, hSign, hPoint⟩
+    constructor
     rcases hSign with hSign | hSign
     · exact Or.inl ⟨hSign, hPoint input_x |>.1 hSign⟩
     · exact Or.inr ⟨hSign, hPoint input_x |>.2 hSign⟩
+    · rcases hSign with hSign | hSign
+      · have hOut := hPoint input_x |>.1 hSign
+        have hEq :
+            ({ x := input_x, y := input_signedY } : Ecc.Point Ecc.PallasBaseField) =
+              ({ x := input_x, y := input_y } : Ecc.Point Ecc.PallasBaseField) := by
+          apply congrArg₂ Ecc.Point.mk
+          · rfl
+          · exact congrArg Prod.snd hOut
+        rw [hEq]
+        exact h_assumptions
+      · have hOut := hPoint input_x |>.2 hSign
+        apply Ecc.isPointOrIdentity_of_pallasValid
+        have hValidInput := Ecc.pallasValid_of_isPointOrIdentity h_assumptions
+        have hValidNeg :=
+          CompElliptic.CurveForms.ShortWeierstrass.valid_neg hValidInput
+        have hCoords :
+            Ecc.pointCoords ({ x := input_x, y := input_signedY } : Ecc.Point Ecc.PallasBaseField) =
+              CompElliptic.CurveForms.ShortWeierstrass.neg
+                (Ecc.pointCoords ({ x := input_x, y := input_y } : Ecc.Point Ecc.PallasBaseField)) := by
+          apply Prod.ext
+          · rfl
+          · exact congrArg Prod.snd hOut
+        rw [hCoords]
+        exact hValidNeg
   completeness := by
-    circuit_proof_start [main, Spec, gateRow, inputPoint, outputPoint,
+    circuit_proof_start [main, Spec, Assumptions, SignedPointRelation, gateRow,
+      inputPoint, outputPoint,
       FixedShort.circuit, FixedShort.Spec, FixedShort.IsSign, FixedShort.SignedPointSelection,
       CompElliptic.CurveForms.ShortWeierstrass.neg]
+    rcases h_spec with ⟨hRelation, _hOutputPoint⟩
     refine ⟨?_, ?_, ?_⟩
     · exact Or.inl rfl
-    · rcases h_spec with hPos | hNeg
+    · rcases hRelation with hPos | hNeg
       · exact Or.inl hPos.1
       · exact Or.inr hNeg.1
     · intro x
       constructor
       · intro hSign
-        rcases h_spec with hPos | hNeg
+        rcases hRelation with hPos | hNeg
         · have hPoint := hPos.2
           have hy := congrArg (fun p : Ecc.PallasBaseField × Ecc.PallasBaseField => p.2) hPoint
           change input_signedY = input_y at hy
@@ -967,7 +1010,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
           have htwo : (2 : Ecc.PallasBaseField) = 0 := by linear_combination hEq
           exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
       · intro hSign
-        rcases h_spec with hPos | hNeg
+        rcases hRelation with hPos | hNeg
         · exfalso
           have hEq : (1 : Ecc.PallasBaseField) = 0 - 1 := hPos.1.symm.trans hSign
           have htwo : (2 : Ecc.PallasBaseField) = 0 := by linear_combination hEq
