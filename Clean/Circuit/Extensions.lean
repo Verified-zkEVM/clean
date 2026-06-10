@@ -35,17 +35,14 @@ def witnessAny (M: TypeMap) [ProvableType M] : Circuit F (Var M F) := do
 
 theorem witnessAny_localWitnesses (n : ℕ) (env : ProverEnvironment F) :
     env.UsesLocalWitnessesCompleteness n (witnessAny M |>.operations n) ↔ True := by
-  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
-    ProvableType.toElements_fromElements]
+  simp only [circuit_norm, getOffset, witnessAny]
 
 @[circuit_norm]
 theorem witnessAny_output {n : ℕ} :
     (witnessAny (F:=F) M |>.output n) = varFromOffset M n  := by
-  simp only [circuit_norm, getOffset, witnessAny, valueFromOffset,
-    ProvableType.toElements_fromElements]
+  simp only [circuit_norm, getOffset, witnessAny]
 
 @[circuit_norm]
 theorem witnessAny_interactionsWith {n : ℕ} {channel : RawChannel F} :
     (witnessAny M |>.operations n).interactionsWith channel = [] := by
-  simp [circuit_norm, witnessAny, valueFromOffset, ProvableType.toElements_fromElements,
-    Operations.interactionsWith]
+  simp [circuit_norm, witnessAny, Operations.interactionsWith]

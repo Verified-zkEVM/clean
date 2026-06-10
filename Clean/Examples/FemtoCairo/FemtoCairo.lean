@@ -216,6 +216,7 @@ def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
     mem[(env address).val].value
   else 0
 
+omit p_large_enough [Fact (Nat.Prime p)] in
 /--
   Bridge lemma: the IR `dataGet "memory" 2 _ 1` eval (raw table lookup, column 1,
   with `getD (replicate 2 0)` for out-of-bounds) equals `memoryValue`, which reads

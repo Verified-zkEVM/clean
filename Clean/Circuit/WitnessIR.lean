@@ -135,8 +135,11 @@ inductive NExpr (F : Type) where
 
 /-- Conditions. -/
 inductive BExpr (F : Type) where
+  /-- Field equality condition (decided via the injective `ℕ` embedding). -/
   | feq (x y : FExpr F)
+  /-- Nat-sorted less-than condition. -/
   | lt (x y : NExpr F)
+  /-- Negation of a condition. -/
   | not (b : BExpr F)
 
 end

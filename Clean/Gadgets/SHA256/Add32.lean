@@ -30,6 +30,7 @@ private def bitsVal (a : Var (fields 32) (F p)) : Witgen.NExpr (F p) :=
   (List.finRange 32).foldr
     (fun i acc => a[i.val].val * ((2^i.val : ℕ) : Witgen.NExpr (F p)) + acc) 0
 
+omit h_large in
 private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) :
     (bitsVal a).eval { env := env } = evalBitsNat env a := by
   rw [evalBitsNat, Fin.sum_univ_def, bitsVal, List.sum_eq_foldr, List.foldr_map]
@@ -377,9 +378,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
       rw [h_z_eval]
       ext i hi
       simp only [Vector.getElem_ofFn]
-      have := h_env_z ⟨i, hi⟩
-      simp only [Vector.getElem_ofFn] at this
-      exact this
+      exact h_env_z ⟨i, hi⟩
     -- Compute FZ using the helper
     have h_FZ : Expression.eval env.toEnvironment (fromBitsExpr
         (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) =
