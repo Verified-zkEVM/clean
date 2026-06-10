@@ -29,7 +29,6 @@ example : ElaboratedCircuit.output (F:=F pBabybear) (Input:=Inputs) (Output:=Out
   { z := ⟨ varFromOffset field 0, varFromOffset field 2, varFromOffset field 4, varFromOffset field 6 ⟩,
     carryOut := varFromOffset field 7 } := by
   dsimp only [reducedElaborated]
-  rfl
 
 -- #whnf elaborated.localLength default
 -- #whnf elaborated.output default 0
@@ -46,7 +45,6 @@ example : ExplicitCircuit.output (circuit32 default) 0 =
   { z := ⟨ varFromOffset field 0, varFromOffset field 2, varFromOffset field 4, varFromOffset field 6 ⟩,
     carryOut := varFromOffset field 7 } := by
   dsimp only [explicit_circuit_norm, explicit, assertBool]
-  rfl
 
 example : ExplicitCircuit.channelsWithGuarantees (circuit32 default) 0 = [] := rfl
 example : ExplicitCircuit.channelsWithGuarantees (circuit32 default) 0 = [] := by
