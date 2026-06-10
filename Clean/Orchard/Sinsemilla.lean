@@ -26,6 +26,9 @@ namespace Sinsemilla
 
 variable {F : Type} [Field F]
 
+private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
+  sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
+
 structure DoubleAndAddRow (F : Type) where
   xA : F
   xP : F
@@ -55,17 +58,20 @@ deriving ProvableStruct
 def poly (row : Row F) : F :=
   2 * row.yQ - DoubleAndAdd.yA row.doubleAndAdd
 
+def Spec (row : Row F) : Prop :=
+  DoubleAndAdd.yA row.doubleAndAdd = 2 * row.yQ
+
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (2 * row.yQ - DoubleAndAdd.yA row.doubleAndAdd)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec row := poly row = 0
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, poly, DoubleAndAdd.yA, DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, poly, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h_holds)).symm
   completeness := by
-    circuit_proof_start [main, poly, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [main, Spec, poly, DoubleAndAdd.yA, DoubleAndAdd.xR]
     simp_all [sub_eq_add_neg]
 
 end InitialYQ
@@ -100,28 +106,32 @@ def xCheck (row : Row R) : R :=
 def yCheck (row : Row R) : R :=
   row.init.yQ - row.qY
 
-def initPoly (row : Row R) : R :=
-  2 * row.init.yQ - DoubleAndAdd.yA row.init.doubleAndAdd
-
-def constraints (row : Row R) : Prop :=
-  initPoly row = 0 ∧ xCheck row = 0 ∧ yCheck row = 0
+def Spec (row : Row F) : Prop :=
+  InitialYQ.Spec row.init ∧
+    row.init.doubleAndAdd.xA = row.qX ∧
+    row.init.yQ = row.qY
 
 def main (row : Var Row F) : Circuit F Unit := do
-  assertZero (initPoly row)
+  InitialYQ.circuit row.init
   assertZero (xCheck row)
   assertZero (yCheck row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, xCheck, yCheck, initPoly,
-      DoubleAndAdd.yA, DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, xCheck, yCheck, InitialYQ.circuit,
+      InitialYQ.Spec, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    rcases h_holds with ⟨hInit, hX, hY⟩
+    exact ⟨hInit, left_eq_of_add_neg_eq_zero hX, left_eq_of_add_neg_eq_zero hY⟩
   completeness := by
-    circuit_proof_start [main, constraints, xCheck, yCheck, initPoly,
-      DoubleAndAdd.yA, DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, xCheck, yCheck, InitialYQ.circuit,
+      InitialYQ.Spec, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    rcases h_spec with ⟨hInit, hX, hY⟩
+    rw [← hX, ← hY]
+    constructor
+    · exact hInit
+    constructor <;> ring
 
 end InitWiring
 
