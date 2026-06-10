@@ -24,8 +24,6 @@ namespace ActionChecks
 
 variable {F : Type} [Field F]
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-
 private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
   rcases h with h | h <;> rw [h] <;> simp
 
@@ -43,31 +41,31 @@ structure Row (F : Type) where
   enableOutputs : F
 deriving ProvableStruct
 
-def valueNet (row : Row R) : R :=
+def valueNet {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
   row.vOld - row.vNew - row.magnitude * row.sign
 
-def merklePathValidity (row : Row R) : R :=
+def merklePathValidity {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
   row.vOld * (row.root - row.anchor)
 
-def spendEnabled (row : Row R) : R :=
+def spendEnabled {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
   row.vOld * (1 - row.enableSpends)
 
-def outputEnabled (row : Row R) : R :=
+def outputEnabled {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
   row.vNew * (1 - row.enableOutputs)
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.vOld = row.vNew + row.magnitude * row.sign ∧
     (row.vOld = 0 ∨ row.root = row.anchor) ∧
     (row.vOld = 0 ∨ row.enableSpends = 1) ∧
     (row.vNew = 0 ∨ row.enableOutputs = 1)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (valueNet row)
   assertZero (merklePathValidity row)
   assertZero (spendEnabled row)
   assertZero (outputEnabled row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -117,10 +115,6 @@ values and by the lower-level assertions in other Orchard modules.
 
 namespace ActionWiring
 
-variable {F : Type} [Field F]
-
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-
 structure Row (F : Type) where
   vOld : F
   vNew : F
@@ -153,7 +147,7 @@ structure Row (F : Type) where
   publicCmx : F
 deriving ProvableStruct
 
-def checksRow (row : Row R) : ActionChecks.Row R where
+def checksRow {K : Type} (row : Row K) : ActionChecks.Row K where
   vOld := row.vOld
   vNew := row.vNew
   magnitude := row.magnitude
@@ -163,19 +157,19 @@ def checksRow (row : Row R) : ActionChecks.Row R where
   enableSpends := row.enableSpends
   enableOutputs := row.enableOutputs
 
-def cvNetXCheck (row : Row R) : R := row.cvNetX - row.publicCvNetX
-def cvNetYCheck (row : Row R) : R := row.cvNetY - row.publicCvNetY
-def nfOldCheck (row : Row R) : R := row.nfOld - row.publicNfOld
-def rhoNewCheck (row : Row R) : R := row.rhoNew - row.nfOld
-def rkXCheck (row : Row R) : R := row.rkX - row.publicRkX
-def rkYCheck (row : Row R) : R := row.rkY - row.publicRkY
-def pkDOldXCheck (row : Row R) : R := row.derivedPkDOldX - row.pkDOldX
-def pkDOldYCheck (row : Row R) : R := row.derivedPkDOldY - row.pkDOldY
-def cmOldXCheck (row : Row R) : R := row.derivedCmOldX - row.cmOldX
-def cmOldYCheck (row : Row R) : R := row.derivedCmOldY - row.cmOldY
-def cmxCheck (row : Row R) : R := row.cmxNew - row.publicCmx
+def cvNetXCheck {K : Type} [Sub K] (row : Row K) : K := row.cvNetX - row.publicCvNetX
+def cvNetYCheck {K : Type} [Sub K] (row : Row K) : K := row.cvNetY - row.publicCvNetY
+def nfOldCheck {K : Type} [Sub K] (row : Row K) : K := row.nfOld - row.publicNfOld
+def rhoNewCheck {K : Type} [Sub K] (row : Row K) : K := row.rhoNew - row.nfOld
+def rkXCheck {K : Type} [Sub K] (row : Row K) : K := row.rkX - row.publicRkX
+def rkYCheck {K : Type} [Sub K] (row : Row K) : K := row.rkY - row.publicRkY
+def pkDOldXCheck {K : Type} [Sub K] (row : Row K) : K := row.derivedPkDOldX - row.pkDOldX
+def pkDOldYCheck {K : Type} [Sub K] (row : Row K) : K := row.derivedPkDOldY - row.pkDOldY
+def cmOldXCheck {K : Type} [Sub K] (row : Row K) : K := row.derivedCmOldX - row.cmOldX
+def cmOldYCheck {K : Type} [Sub K] (row : Row K) : K := row.derivedCmOldY - row.cmOldY
+def cmxCheck {K : Type} [Sub K] (row : Row K) : K := row.cmxNew - row.publicCmx
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   ActionChecks.Spec (checksRow row) ∧
     row.cvNetX = row.publicCvNetX ∧
     row.cvNetY = row.publicCvNetY ∧
@@ -189,7 +183,7 @@ def Spec (row : Row R) : Prop :=
     row.derivedCmOldY = row.cmOldY ∧
     row.cmxNew = row.publicCmx
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionChecks.circuit (checksRow row)
   assertZero (cvNetXCheck row)
   assertZero (cvNetYCheck row)
@@ -203,7 +197,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (cmOldYCheck row)
   assertZero (cmxCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -269,10 +263,6 @@ explicit fields of `ActionWiring.Row` and their lower-level assertions.
 -/
 namespace ActionComputedWiring
 
-variable {F : Type} [Field F]
-
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   action : ActionWiring.Row F
   valueCommitment : Gadget.ValueCommitment.Row F
@@ -280,22 +270,22 @@ structure Row (F : Type) where
   spendAuth : Gadget.SpendAuth.Row F
 deriving ProvableStruct
 
-def cvXCheck (row : Row R) : R :=
+def cvXCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.valueCommitment.cvX - row.action.cvNetX
 
-def cvYCheck (row : Row R) : R :=
+def cvYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.valueCommitment.cvY - row.action.cvNetY
 
-def nfCheck (row : Row R) : R :=
+def nfCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.nullifier.nf - row.action.nfOld
 
-def rkXCheck (row : Row R) : R :=
+def rkXCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.spendAuth.rkX - row.action.rkX
 
-def rkYCheck (row : Row R) : R :=
+def rkYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.spendAuth.rkY - row.action.rkY
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   ActionWiring.Spec row.action ∧
     Gadget.ValueCommitment.Spec row.valueCommitment ∧
     Gadget.Nullifier.Spec row.nullifier ∧
@@ -306,7 +296,7 @@ def Spec (row : Row R) : Prop :=
     row.spendAuth.rkX = row.action.rkX ∧
     row.spendAuth.rkY = row.action.rkY
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
   Gadget.ValueCommitment.circuit row.valueCommitment
   Gadget.Nullifier.circuit row.nullifier
@@ -317,7 +307,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (rkXCheck row)
   assertZero (rkYCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -356,19 +346,19 @@ structure Row (F : Type) where
   spendAuth : Gadget.SpendAuth.Entry.Row F
 deriving ProvableStruct
 
-def cvXCheck (row : Row R) : R :=
+def cvXCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.valueCommitment.cvX - row.action.cvNetX
 
-def cvYCheck (row : Row R) : R :=
+def cvYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.valueCommitment.cvY - row.action.cvNetY
 
-def nfCheck (row : Row R) : R :=
+def nfCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.nullifier.nullifier.nf - row.action.nfOld
 
-def rkXCheck (row : Row R) : R :=
+def rkXCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.spendAuth.rkX - row.action.rkX
 
-def rkYCheck (row : Row R) : R :=
+def rkYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.spendAuth.rkY - row.action.rkY
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
@@ -585,14 +575,6 @@ by their own lower-level assertions and explicit row values.
 -/
 namespace ActionAddressWiring
 
-variable {F : Type} [Field F]
-
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-  [OfNat R 2] [OfNat R 3] [OfNat R 16] [OfNat R 32] [OfNat R 512]
-  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 245)]
-  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   action : ActionWiring.Row F
   spendAuth : Gadget.SpendAuth.Row F
@@ -602,19 +584,19 @@ structure Row (F : Type) where
   derivedPkDY : F
 deriving ProvableStruct
 
-def akCheck (row : Row R) : R :=
+def akCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.commitIvk.gate.ak - row.spendAuth.akX
 
-def ivkScalarCheck (row : Row R) : R :=
+def ivkScalarCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.commitIvk.ivk - row.ivkScalar
 
-def pkDXCheck (row : Row R) : R :=
+def pkDXCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.derivedPkDX - row.action.derivedPkDOldX
 
-def pkDYCheck (row : Row R) : R :=
+def pkDYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.derivedPkDY - row.action.derivedPkDOldY
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   ActionWiring.Spec row.action ∧
     Gadget.SpendAuth.Spec row.spendAuth ∧
     CommitIvk.Wiring.Spec row.commitIvk ∧
@@ -623,7 +605,7 @@ def Spec (row : Row R) : Prop :=
     row.derivedPkDX = row.action.derivedPkDOldX ∧
     row.derivedPkDY = row.action.derivedPkDOldY
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
   Gadget.SpendAuth.circuit row.spendAuth
   CommitIvk.Wiring.circuit row.commitIvk
@@ -632,7 +614,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (pkDXCheck row)
   assertZero (pkDYCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
