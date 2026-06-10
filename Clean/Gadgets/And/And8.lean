@@ -23,7 +23,7 @@ def Spec (input : Inputs (F p)) (z : F p) :=
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let ⟨x, y⟩ := input
-  let and ← witnessField (.ofNat (.land (.val (.expr x)) (.val (.expr y))))
+  let and : Expression (F p) ← witness (.ofFExpr (x.val &&& y.val).toField)
   -- we prove AND correct using an XOR lookup and the following identity:
   let xor := x + y - 2*and
   lookup ByteXorTable (x, y, xor)

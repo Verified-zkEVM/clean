@@ -18,8 +18,8 @@ deriving ProvableStruct
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
   let xorByte (a b : Expression (F p)) : Witgen.FExpr (F p) :=
-    .ofNat (.lxor (.val (.expr a)) (.val (.expr b)))
-  let z ← ProvableType.witness (α := U64) (.ofFExprs #v[
+    (a.val ^^^ b.val).toField
+  let z : Var U64 (F p) ← witness (.ofFExprs #v[
     xorByte x.x0 y.x0, xorByte x.x1 y.x1, xorByte x.x2 y.x2, xorByte x.x3 y.x3,
     xorByte x.x4 y.x4, xorByte x.x5 y.x5, xorByte x.x6 y.x6, xorByte x.x7 y.x7])
 

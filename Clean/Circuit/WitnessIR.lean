@@ -142,16 +142,16 @@ inductive BExpr (F : Type) where
 end
 
 /-- `x - y` as a derived field expression. -/
-def FExpr.sub [Field F] (x y : FExpr F) : FExpr F := .add x (.mul (.const (-1)) y)
+@[reducible] def FExpr.sub [Field F] (x y : FExpr F) : FExpr F := .add x (.mul (.const (-1)) y)
 
 /-- `-x` as a derived field expression. -/
-def FExpr.neg [Field F] (x : FExpr F) : FExpr F := .mul (.const (-1)) x
+@[reducible] def FExpr.neg [Field F] (x : FExpr F) : FExpr F := .mul (.const (-1)) x
 
 /-- `2^k` as a derived Nat expression. -/
-def NExpr.pow2 (k : NExpr F) : NExpr F := .shiftL (.const 1) k
+@[reducible] def NExpr.pow2 (k : NExpr F) : NExpr F := .shiftL (.const 1) k
 
 /-- `Nat.testBit x i` as a derived Nat expression, valued in {0, 1}. -/
-def NExpr.testBit (x i : NExpr F) : NExpr F := .mod (.shiftR x i) (.const 2)
+@[reducible] def NExpr.testBit (x i : NExpr F) : NExpr F := .mod (.shiftR x i) (.const 2)
 
 /-- Evaluation context: the prover environment, the values of the `let`-steps computed
 so far, and the innermost `mapRange` index. -/

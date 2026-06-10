@@ -155,7 +155,7 @@ class HasAssignEq (β : Type) (F : outParam Type) [FiniteField F] where
 
 instance : HasAssignEq (Expression F) F where
   assignEq := fun rhs => do
-    let w ← witnessField (.expr rhs)
+    let w ← witness (.ofFExpr (.expr rhs))
     w === rhs
     return w
 

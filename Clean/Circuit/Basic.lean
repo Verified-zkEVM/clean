@@ -114,12 +114,12 @@ def witnessVectorNative (m : ℕ) (compute : ProverEnvironment F → Vector F m)
     let vars := varFromOffset (fields m) offset
     (vars, [.witness m (.native compute)])
 
-/-- Witness a single field element computed by the given witness-IR expression.
-IR-based counterpart of `witnessFieldNative`; this is the proper entry point. -/
+/-- Witness a single field element computed by the given witness-IR program.
+Prefer the generic `witness` entry point; an `FExpr` coerces into `WitgenIR F 1`. -/
 @[circuit_norm]
-def witnessField (e : Witgen.FExpr F) : Circuit F (Expression F) :=
+def witnessField (ir : WitgenIR F 1) : Circuit F (Expression F) :=
   fun (offset : ℕ) =>
-    (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
+    (var ⟨offset⟩, [.witness 1 ir])
 
 /-- Witness `m` field elements computed by the given witness-IR program.
 IR-based counterpart of `witnessVectorNative`. -/
@@ -285,24 +285,34 @@ export Circuit (witnessField witnessVector
 -- general `witness` method
 
 class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
+  /-- Witness a value computed by a witness-IR program (the proper entry point). -/
+  witness : WitgenIR F (size value) → Circuit F (var F)
+  /-- Witness a value computed by an arbitrary Lean closure (not exportable;
+  the migration escape hatch). -/
   witnessNative : (ProverEnvironment F → value F) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
+  witness_def (code : WitgenIR F (size value)) :
+    witness code = var_eq ▸ ProvableType.witness code := by intros; rfl
   witnessNative_eq (compute : ProverEnvironment F → value F) :
     witnessNative compute = var_eq ▸ ProvableType.witnessNative compute := by intros; rfl
 
-export Witnessable (witnessNative)
+export Witnessable (witness witnessNative)
 
 instance : Witnessable F field Expression where
+  witness := witnessField
   witnessNative := witnessFieldNative
 
 instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
+  witness := witnessVector m
   witnessNative := witnessVectorNative m
 
 instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
+  witness := ProvableType.witness
   witnessNative := ProvableType.witnessNative
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
+  witness := ProvableType.witness
   witnessNative := ProvableVector.witnessNative m
 
 -- witness generation
