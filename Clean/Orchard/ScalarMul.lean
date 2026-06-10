@@ -47,15 +47,14 @@ namespace ScalarMul
 
 variable {F : Type} [Field F]
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2]
-
-def ternary (choice ifTrue ifFalse : R) : R :=
+def ternary {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K]
+    (choice ifTrue ifFalse : K) : K :=
   choice * ifTrue + (1 - choice) * ifFalse
 
-def tQ [OfNat R 45560315531506369815346746415080538113] : R :=
+def tQ {K : Type} [OfNat K 45560315531506369815346746415080538113] : K :=
   OfNat.ofNat 45560315531506369815346746415080538113
 
-def IsBool (x : R) : Prop :=
+def IsBool {K : Type} [Zero K] [One K] (x : K) : Prop :=
   x = 0 ∨ x = 1
 
 private theorem isBool_of_boolPoly_eq_zero {x : F} (h : NoteCommit.boolPoly x = 0) :
@@ -499,8 +498,6 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
 end VarBaseOverflow
 
 namespace FixedBase
-
-variable [OfNat R 3] [OfNat R 4] [OfNat R 5] [OfNat R 6] [OfNat R 7] [OfNat R 8]
 
 structure CoordsRow (F : Type) where
   window : F
