@@ -951,5 +951,81 @@ def circuit : FormalAssertion F Row where
 
 end FixedShort
 
+namespace FixedShort
+namespace SignEntry
+
+structure Row (F : Type) where
+  x : F
+  y : F
+  sign : F
+  signedY : F
+deriving ProvableStruct
+
+def gateRow {K : Type} [Zero K] (row : Row K) : FixedShort.Row K where
+  yP := row.signedY
+  yA := row.y
+  lastWindow := 0
+  sign := row.sign
+
+def inputPoint {K : Type} (row : Row K) : K × K :=
+  (row.x, row.y)
+
+def outputPoint {K : Type} (row : Row K) : K × K :=
+  (row.x, row.signedY)
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  row.sign = 1 ∧ outputPoint row = inputPoint row ∨
+    row.sign = 0 - 1 ∧
+      outputPoint row = CompElliptic.CurveForms.ShortWeierstrass.neg (inputPoint row)
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  FixedShort.circuit (gateRow row)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, gateRow, inputPoint, outputPoint,
+      FixedShort.circuit, FixedShort.Spec, FixedShort.IsSign, FixedShort.SignedPointSelection,
+      CompElliptic.CurveForms.ShortWeierstrass.neg]
+    rcases h_holds with ⟨_, hSign, hPoint⟩
+    rcases hSign with hSign | hSign
+    · exact Or.inl ⟨hSign, hPoint input_x |>.1 hSign⟩
+    · exact Or.inr ⟨hSign, hPoint input_x |>.2 hSign⟩
+  completeness := by
+    circuit_proof_start [main, Spec, gateRow, inputPoint, outputPoint,
+      FixedShort.circuit, FixedShort.Spec, FixedShort.IsSign, FixedShort.SignedPointSelection,
+      CompElliptic.CurveForms.ShortWeierstrass.neg]
+    refine ⟨?_, ?_, ?_⟩
+    · exact Or.inl rfl
+    · rcases h_spec with hPos | hNeg
+      · exact Or.inl hPos.1
+      · exact Or.inr hNeg.1
+    · intro x
+      constructor
+      · intro hSign
+        rcases h_spec with hPos | hNeg
+        · have hPoint := hPos.2
+          have hy := congrArg (fun p : Ecc.PallasBaseField × Ecc.PallasBaseField => p.2) hPoint
+          change input_signedY = input_y at hy
+          simp [hy]
+        · exfalso
+          have hEq : (1 : Ecc.PallasBaseField) = 0 - 1 := hSign.symm.trans hNeg.1
+          have htwo : (2 : Ecc.PallasBaseField) = 0 := by linear_combination hEq
+          exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
+      · intro hSign
+        rcases h_spec with hPos | hNeg
+        · exfalso
+          have hEq : (1 : Ecc.PallasBaseField) = 0 - 1 := hPos.1.symm.trans hSign
+          have htwo : (2 : Ecc.PallasBaseField) = 0 := by linear_combination hEq
+          exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
+        · have hPoint := hNeg.2
+          have hy := congrArg (fun p : Ecc.PallasBaseField × Ecc.PallasBaseField => p.2) hPoint
+          change input_signedY = -input_y at hy
+          simp [hy]
+
+end SignEntry
+end FixedShort
+
 end ScalarMul
 end Orchard

@@ -113,7 +113,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.ScalarMul.FixedBase.RunningSumCoords.circuit`,
      `Orchard.ScalarMul.FixedBase.FullWidth.circuit`,
      `Orchard.ScalarMul.FixedBase.BaseFieldCanonicity.circuit`, and
-     `Orchard.ScalarMul.FixedShort.circuit`.
+     `Orchard.ScalarMul.FixedShort.circuit`. The standalone signed-point helper
+     `mul_fixed/short.rs::assign_scalar_sign` is ported as the Pallas-specific
+     `Orchard.ScalarMul.FixedShort.SignEntry.circuit`.
    - Semantic-spec gap: these are still row-level gate assertions, not composed scalar
      multiplication circuits. The higher Orchard gadgets need wrappers whose input/output
      surface contains the scalar, base point, and product point together, so their specs can
@@ -241,6 +243,7 @@ values and returns a clean result.
 | `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by `ecc/chip/mul.rs::Config::assign` | Variable-base scalar multiplication `[scalar] base`, including scalar decomposition, complete and incomplete additions, LSB correction, and overflow check. | Row assertions in `Orchard.ScalarMul.VarBase*` plus copy edges in `Orchard.ActionAddressWiring` | Missing entry-point circuit. Clean does not yet have a composed variable-base scalar-mul circuit whose surface contains scalar, base, and product with spec `product = [scalar] base`. |
 | `FixedPoint::mul`, implemented by `ecc/chip/mul_fixed/full_width.rs` | Full-width fixed-base scalar multiplication `[scalar] B`. Used by Orchard for `ValueCommitR`, `SpendAuthG`, Sinsemilla blinding factors, note commitments, and `CommitIvk`. | Row assertions in `Orchard.ScalarMul.FixedBase.*`; higher gadgets accept product coordinates | Missing entry-point circuit. Clean currently does not connect a scalar and fixed-base identifier to the returned product. |
 | `FixedPointShort::mul`, implemented by `ecc/chip/mul_fixed/short.rs` | Signed short fixed-base scalar multiplication `[sign * magnitude] B`, including magnitude decomposition and final conditional negation. Used by `ValueCommitV`. | `Orchard.ScalarMul.FixedShort.circuit` plus other row assertions | Missing entry-point circuit. The final-row sign semantics are present, but not the composed short fixed-base multiplication API. |
+| `mul_fixed/short.rs::Config::assign_scalar_sign` | Uses the short fixed-base sign gate by itself to return either an input point or its negation, with `sign ∈ {1, -1}`. | `Orchard.ScalarMul.FixedShort.SignEntry.circuit` | Present. The wrapper composes the bundled final-row gate and exposes the semantic signed-point relation over Pallas coordinates. |
 | `FixedPointBaseField::mul`, implemented by `ecc/chip/mul_fixed/base_field_elem.rs` | Fixed-base scalar multiplication by a base-field element. Used by `derive_nullifier` for `[poseidon_hash(nk, rho) + psi] NullifierK`. | Row assertions in `Orchard.ScalarMul.FixedBase.*`; `Orchard.Gadget.Nullifier` accepts `productX/productY` | Missing entry-point circuit. Clean does not yet prove the nullifier product is the scalar multiplication result. |
 
 Consequences for Orchard gadgets:
