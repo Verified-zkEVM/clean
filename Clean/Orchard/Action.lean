@@ -545,7 +545,7 @@ def rootCheck (row : Row R) : R :=
 def Spec (row : Row R) : Prop :=
   ActionWiring.Spec row.action ∧
     Sinsemilla.Merkle.PathStep.Spec row.finalStep ∧
-    rootCheck row = 0
+    row.finalStep.nextNode = row.action.root
 
 def main (row : Var Row F) : Circuit F Unit := do
   ActionWiring.circuit row.action
@@ -561,14 +561,14 @@ def circuit : FormalAssertion F Row where
       Sinsemilla.Merkle.PathStep.circuit, Sinsemilla.Merkle.PathStep.Spec]
     rcases h_holds with ⟨hAction, hStep, hRoot⟩
     exact ⟨hAction, hStep,
-      by simpa [sub_eq_add_neg] using hRoot⟩
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hRoot)⟩
   completeness := by
     circuit_proof_start [main, Spec, rootCheck,
       ActionWiring.circuit, ActionWiring.Spec,
       Sinsemilla.Merkle.PathStep.circuit, Sinsemilla.Merkle.PathStep.Spec]
     rcases h_spec with ⟨hAction, hStep, hRoot⟩
     exact ⟨hAction, hStep,
-      by simpa [sub_eq_add_neg] using hRoot⟩
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hRoot⟩
 
 end ActionMerkleWiring
 
