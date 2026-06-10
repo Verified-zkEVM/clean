@@ -866,9 +866,7 @@ def Spec (row : Row R) : Prop :=
     row.hash = row.permuted0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  assertZero (PadAndAdd.output0Check row.absorbed)
-  assertZero (PadAndAdd.output1Check row.absorbed)
-  assertZero (PadAndAdd.capacityCheck row.absorbed)
+  PadAndAdd.circuit row.absorbed
   assertZero (initial0Check row)
   assertZero (initial1Check row)
   assertZero (capacityCheck row)
@@ -881,24 +879,11 @@ def circuit : FormalAssertion F Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, PadAndAdd.Spec, initial0Check, initial1Check,
-      capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.output0Check,
-      PadAndAdd.output1Check, PadAndAdd.capacityCheck]
-    rcases h_holds with ⟨hAbs0, hAbs1, hAbs2, hInit0, hInit1, hCapacity, hInput0,
+      capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.circuit]
+    rcases h_holds with ⟨hAbsorbed, hInit0, hInit1, hCapacity, hInput0,
       hInput1, hHash⟩
     constructor
-    · constructor
-      · have h0' : input_absorbed_initial0 + input_absorbed_input0 -
-            input_absorbed_output0 = 0 := by
-          simp_all [sub_eq_add_neg]
-        exact (sub_eq_zero.mp h0').symm
-      constructor
-      · have h1' : input_absorbed_initial1 + input_absorbed_input1 -
-            input_absorbed_output1 = 0 := by
-          simp_all [sub_eq_add_neg]
-        exact (sub_eq_zero.mp h1').symm
-      · have h2' : input_absorbed_initial2 - input_absorbed_output2 = 0 := by
-          simp_all [sub_eq_add_neg]
-        exact (sub_eq_zero.mp h2').symm
+    · exact hAbsorbed
     constructor
     · exact hInit0
     constructor
@@ -912,8 +897,7 @@ def circuit : FormalAssertion F Row where
     · exact eq_of_add_neg_eq_zero hHash
   completeness := by
     circuit_proof_start [main, Spec, PadAndAdd.Spec, initial0Check, initial1Check,
-      capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.output0Check,
-      PadAndAdd.output1Check, PadAndAdd.capacityCheck]
+      capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.circuit]
     simp_all
 
 end Hash2
