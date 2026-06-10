@@ -664,9 +664,6 @@ end FullWidth
 
 namespace BaseFieldCanonicity
 
-variable [OfNat R (2 ^ 120)] [OfNat R (2 ^ 130)] [OfNat R (2 ^ 252)]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   alpha : F
   z84Alpha : F
@@ -678,40 +675,43 @@ structure Row (F : Type) where
   z43Alpha : F
 deriving ProvableStruct
 
-def alpha0 (row : Row R) : R :=
+def alpha0 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 252)] (row : Row K) : K :=
   row.alpha - row.z84Alpha * OfNat.ofNat (2 ^ 252)
 
-def alpha1RangeCheck (row : Row R) : R :=
+def alpha1RangeCheck {K : Type} [One K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 3]
+    (row : Row K) : K :=
   row.alpha1 * (1 - row.alpha1) * (2 - row.alpha1) * (3 - row.alpha1)
 
-def z84AlphaCheck (row : Row R) : R :=
+def z84AlphaCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 4] (row : Row K) : K :=
   row.z84Alpha - (row.alpha1 + row.alpha2 * 4)
 
-def alpha0PrimeCheck (row : Row R) : R :=
+def alpha0PrimeCheck {K : Type} [Add K] [Sub K] [Mul K]
+    [OfNat K (2 ^ 130)] [OfNat K (2 ^ 252)]
+    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.alpha0Prime - (alpha0 row + OfNat.ofNat (2 ^ 130) - NoteCommit.tP)
 
-def alpha0Hi120 (row : Row R) : R :=
+def alpha0Hi120 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 120)] (row : Row K) : K :=
   row.z44Alpha - row.z84Alpha * OfNat.ofNat (2 ^ 120)
 
-def a43 (row : Row R) : R :=
+def a43 {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : K :=
   row.z43Alpha - row.z44Alpha * 8
 
-def IsAlpha1 (alpha1 : R) : Prop :=
+def IsAlpha1 (alpha1 : Ecc.PallasBaseField) : Prop :=
   alpha1 = 0 ∨ alpha1 = 1 ∨ alpha1 = 2 ∨ alpha1 = 3
 
-def DecomposesBaseFieldElem (row : Row R) : Prop :=
+def DecomposesBaseFieldElem (row : Row Ecc.PallasBaseField) : Prop :=
   row.z84Alpha = row.alpha1 + row.alpha2 * 4 ∧
     row.alpha0Prime = alpha0 row + OfNat.ofNat (2 ^ 130) - NoteCommit.tP
 
-def CanonicalHighBit (row : Row R) : Prop :=
+def CanonicalHighBit (row : Row Ecc.PallasBaseField) : Prop :=
   row.alpha2 = 1 →
     row.alpha1 = 0 ∧ alpha0Hi120 row = 0 ∧ IsBool (a43 row) ∧ row.z13Alpha0Prime = 0
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsAlpha1 row.alpha1 ∧ IsBool row.alpha2 ∧ DecomposesBaseFieldElem row ∧
     CanonicalHighBit row
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (row.alpha2 * row.alpha1)
   assertZero (row.alpha2 * alpha0Hi120 row)
   assertZero (row.alpha2 * NoteCommit.boolPoly (a43 row))
@@ -721,7 +721,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (z84AlphaCheck row)
   assertZero (alpha0PrimeCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
