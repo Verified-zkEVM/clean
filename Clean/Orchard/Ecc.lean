@@ -109,12 +109,12 @@ def pointCoords (point : Point F) : F × F :=
 
 namespace PointOrIdentity
 
-def main (point : Var Point F) : Circuit F Unit := do
-  let equation := point.y * point.y - point.x * point.x * point.x - (pallasB : F)
+def main (point : Var Point PallasBaseField) : Circuit PallasBaseField Unit := do
+  let equation := point.y * point.y - point.x * point.x * point.x - (pallasB : PallasBaseField)
   assertZero (point.x * equation)
   assertZero (point.y * equation)
 
-def circuit : FormalAssertion F Point where
+def circuit : FormalAssertion PallasBaseField Point where
   main
   Spec := isPointOrIdentity
   soundness := by
@@ -128,7 +128,7 @@ def circuit : FormalAssertion F Point where
             Expression.eval env input_var.y *
               (Expression.eval env input_var.y * Expression.eval env input_var.y -
                 Expression.eval env input_var.x * Expression.eval env input_var.x *
-                  Expression.eval env input_var.x - (5 : F)) = 0 := by
+                  Expression.eval env input_var.x - (5 : PallasBaseField)) = 0 := by
           simpa [sub_eq_add_neg] using h_holds.2
         exact (mul_eq_zero.mp hy_mul).resolve_left hy
     · right
@@ -136,7 +136,7 @@ def circuit : FormalAssertion F Point where
           Expression.eval env input_var.x *
             (Expression.eval env input_var.y * Expression.eval env input_var.y -
               Expression.eval env input_var.x * Expression.eval env input_var.x *
-                Expression.eval env input_var.x - (5 : F)) = 0 := by
+                Expression.eval env input_var.x - (5 : PallasBaseField)) = 0 := by
         simpa [sub_eq_add_neg] using h_holds.1
       exact (mul_eq_zero.mp hx_mul).resolve_left hx
   completeness := by
@@ -163,10 +163,10 @@ end PointOrIdentity
 
 namespace NonIdentityPoint
 
-def main (point : Var Point F) : Circuit F Unit := do
-  assertZero (point.y * point.y - point.x * point.x * point.x - (pallasB : F))
+def main (point : Var Point PallasBaseField) : Circuit PallasBaseField Unit := do
+  assertZero (point.y * point.y - point.x * point.x * point.x - (pallasB : PallasBaseField))
 
-def circuit : FormalAssertion F Point where
+def circuit : FormalAssertion PallasBaseField Point where
   main
   Spec := onCurve
   soundness := by
@@ -377,8 +377,6 @@ deriving ProvableStruct
 
 namespace CompleteAdd
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 section ValueModel
 
 variable [DecidableEq F]
@@ -516,90 +514,91 @@ theorem pallas_y_eq_or_neg_of_same_x {p q : Point PallasBaseField}
 
 end ValueModel
 
-def xQMinusXP (row : CompleteAddRow R) : R :=
+def xQMinusXP {K : Type} [Sub K] (row : CompleteAddRow K) : K :=
   row.q.x - row.p.x
 
-def xPMinusXR (row : CompleteAddRow R) : R :=
+def xPMinusXR {K : Type} [Sub K] (row : CompleteAddRow K) : K :=
   row.p.x - row.r.x
 
-def yQPlusYP (row : CompleteAddRow R) : R :=
+def yQPlusYP {K : Type} [Add K] (row : CompleteAddRow K) : K :=
   row.q.y + row.p.y
 
-def ifAlpha (row : CompleteAddRow R) : R :=
+def ifAlpha {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   xQMinusXP row * row.alpha
 
-def ifBeta (row : CompleteAddRow R) : R :=
+def ifBeta {K : Type} [Mul K] (row : CompleteAddRow K) : K :=
   row.p.x * row.beta
 
-def ifGamma (row : CompleteAddRow R) : R :=
+def ifGamma {K : Type} [Mul K] (row : CompleteAddRow K) : K :=
   row.q.x * row.gamma
 
-def ifDelta (row : CompleteAddRow R) : R :=
+def ifDelta {K : Type} [Add K] [Mul K] (row : CompleteAddRow K) : K :=
   yQPlusYP row * row.delta
 
-def nonexceptionalXR (row : CompleteAddRow R) : R :=
+def nonexceptionalXR {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.lambda * row.lambda - row.p.x - row.q.x - row.r.x
 
-def nonexceptionalYR (row : CompleteAddRow R) : R :=
+def nonexceptionalYR {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.lambda * xPMinusXR row - row.p.y - row.r.y
 
-def poly1 (row : CompleteAddRow R) : R :=
+def poly1 {K : Type} [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   let incomplete := xQMinusXP row * row.lambda - (row.q.y - row.p.y)
   xQMinusXP row * incomplete
 
-def poly2 (row : CompleteAddRow R) : R :=
+def poly2 {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 3]
+    (row : CompleteAddRow K) : K :=
   (1 - ifAlpha row) * (2 * row.p.y * row.lambda - 3 * row.p.x * row.p.x)
 
-def poly3a (row : CompleteAddRow R) : R :=
+def poly3a {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.p.x * row.q.x * xQMinusXP row * nonexceptionalXR row
 
-def poly3b (row : CompleteAddRow R) : R :=
+def poly3b {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.p.x * row.q.x * xQMinusXP row * nonexceptionalYR row
 
-def poly3c (row : CompleteAddRow R) : R :=
+def poly3c {K : Type} [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.p.x * row.q.x * yQPlusYP row * nonexceptionalXR row
 
-def poly3d (row : CompleteAddRow R) : R :=
+def poly3d {K : Type} [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.p.x * row.q.x * yQPlusYP row * nonexceptionalYR row
 
-def poly4a (row : CompleteAddRow R) : R :=
+def poly4a {K : Type} [One K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifBeta row) * (row.r.x - row.q.x)
 
-def poly4b (row : CompleteAddRow R) : R :=
+def poly4b {K : Type} [One K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifBeta row) * (row.r.y - row.q.y)
 
-def poly5a (row : CompleteAddRow R) : R :=
+def poly5a {K : Type} [One K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifGamma row) * (row.r.x - row.p.x)
 
-def poly5b (row : CompleteAddRow R) : R :=
+def poly5b {K : Type} [One K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifGamma row) * (row.r.y - row.p.y)
 
-def poly6a (row : CompleteAddRow R) : R :=
+def poly6a {K : Type} [One K] [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifAlpha row - ifDelta row) * row.r.x
 
-def poly6b (row : CompleteAddRow R) : R :=
+def poly6b {K : Type} [One K] [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifAlpha row - ifDelta row) * row.r.y
 
-def slopeLine (row : CompleteAddRow R) : Prop :=
+def slopeLine {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : Prop :=
   xQMinusXP row * row.lambda = row.q.y - row.p.y
 
-def tangentLine (row : CompleteAddRow R) : Prop :=
+def tangentLine {K : Type} [Mul K] [OfNat K 2] [OfNat K 3] (row : CompleteAddRow K) : Prop :=
   2 * row.p.y * row.lambda = 3 * row.p.x * row.p.x
 
-def nonexceptionalResult (row : CompleteAddRow R) : Prop :=
+def nonexceptionalResult {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : Prop :=
   row.r.x = row.lambda * row.lambda - row.p.x - row.q.x ∧
     row.r.y = row.lambda * xPMinusXR row - row.p.y
 
-def leftIdentityResult (row : CompleteAddRow R) : Prop :=
+def leftIdentityResult {K : Type} (row : CompleteAddRow K) : Prop :=
   row.r = row.q
 
-def rightIdentityResult (row : CompleteAddRow R) : Prop :=
+def rightIdentityResult {K : Type} (row : CompleteAddRow K) : Prop :=
   row.r = row.p
 
-def inverseResult (row : CompleteAddRow R) : Prop :=
+def inverseResult {K : Type} [Zero K] (row : CompleteAddRow K) : Prop :=
   row.r.x = 0 ∧ row.r.y = 0
 
-def Spec (row : CompleteAddRow R) : Prop :=
+def Spec (row : CompleteAddRow PallasBaseField) : Prop :=
   (xQMinusXP row ≠ 0 → slopeLine row) ∧
     (ifAlpha row ≠ 1 → tangentLine row) ∧
     (row.p.x * row.q.x * xQMinusXP row ≠ 0 → nonexceptionalResult row) ∧
@@ -608,7 +607,7 @@ def Spec (row : CompleteAddRow R) : Prop :=
     (ifGamma row ≠ 1 → rightIdentityResult row) ∧
     (ifAlpha row + ifDelta row ≠ 1 → inverseResult row)
 
-def main (row : Var CompleteAddRow F) : Circuit F Unit := do
+def main (row : Var CompleteAddRow PallasBaseField) : Circuit PallasBaseField Unit := do
   assertZero (poly1 row)
   assertZero (poly2 row)
   assertZero (poly3a row)
@@ -622,7 +621,7 @@ def main (row : Var CompleteAddRow F) : Circuit F Unit := do
   assertZero (poly6a row)
   assertZero (poly6b row)
 
-def circuit : FormalAssertion F CompleteAddRow where
+def circuit : FormalAssertion PallasBaseField CompleteAddRow where
   main
   Spec := Spec
   soundness := by
