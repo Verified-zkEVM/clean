@@ -173,7 +173,11 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.Ecc.CompleteAdd.Entry.circuit` for their final additions over explicit
      fixed-base product points. The `derive_nullifier` edge
      `hash = PoseidonHash(nk, rho)` is connected to the nullifier wiring in
-     `Orchard.Gadget.NullifierWithHash.circuit`. The `circuit.rs` spend-authority wiring
+     `Orchard.Gadget.NullifierWithHash.circuit`; Pallas-specific wrappers
+     `Orchard.Gadget.NullifierWithHash.Entry.circuit` and
+     `Orchard.Gadget.NullifierWithPoseidonBoundary.Entry.circuit` compose the
+     two-input Poseidon hash or hash/permutation boundary with
+     `Orchard.Gadget.Nullifier.Entry.circuit`. The `circuit.rs` spend-authority wiring
      `rk = [alpha] SpendAuthG + ak_P` is ported as `Orchard.Gadget.SpendAuth.circuit`,
      with `Orchard.Gadget.SpendAuth.Entry.circuit` providing the Pallas complete-add
      entry wrapper over the explicit `[alpha] SpendAuthG` product.
@@ -242,7 +246,9 @@ Consequences for Orchard gadgets:
   `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`.
   `Orchard.Gadget.Nullifier.Entry.circuit` now models the scalar field addition,
   final complete-add entry relation, and extraction edge, but not the fixed-base scalar
-  multiplication.
+  multiplication. `Orchard.Gadget.NullifierWithHash.Entry.circuit` and
+  `Orchard.Gadget.NullifierWithPoseidonBoundary.Entry.circuit` compose that entry wrapper
+  with the existing Poseidon hash wiring.
 - Spend authority in `orchard/src/circuit.rs` is
   `[alpha] SpendAuthG + ak_P`. `Orchard.Gadget.SpendAuth.Entry.circuit` now models the
   final complete-add entry relation over an explicit `[alpha] SpendAuthG` product, but

@@ -323,6 +323,50 @@ def circuit : FormalAssertion F Row where
     rcases hPad with ⟨hPad0, hPad1, hPad2⟩
     simp_all [Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
 
+namespace Entry
+
+structure Row (F : Type) where
+  hash : Poseidon.Hash2.Row F
+  nullifier : Nullifier.Entry.Row F
+deriving ProvableStruct
+
+def hashOutputCheck {K : Type} [Sub K] (row : Row K) : K :=
+  row.hash.hash - row.nullifier.poseidonHash
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  Poseidon.Hash2.Spec row.hash ∧
+    Nullifier.Entry.Spec row.nullifier ∧
+    row.hash.hash = row.nullifier.poseidonHash
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Nullifier.Entry.Assumptions row.nullifier
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  Poseidon.Hash2.circuit row.hash
+  Nullifier.Entry.circuit row.nullifier
+  assertZero (hashOutputCheck row)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, hashOutputCheck, Assumptions,
+      Poseidon.Hash2.circuit, Poseidon.Hash2.Spec,
+      Nullifier.Entry.circuit, Nullifier.Entry.Spec]
+    rcases h_holds with ⟨hHash, hNullifier, hOutput⟩
+    exact ⟨hHash, hNullifier h_assumptions,
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOutput)⟩
+  completeness := by
+    circuit_proof_start [main, Spec, hashOutputCheck, Assumptions,
+      Poseidon.Hash2.circuit, Poseidon.Hash2.Spec,
+      Nullifier.Entry.circuit, Nullifier.Entry.Spec, Nullifier.Entry.Assumptions]
+    rcases h_spec with ⟨hHash, hNullifier, hOutput⟩
+    exact ⟨hHash, ⟨h_assumptions, hNullifier⟩,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOutput⟩
+
+end Entry
+
 end NullifierWithHash
 
 /-!
@@ -379,6 +423,50 @@ def circuit : FormalAssertion F Row where
     rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
     rcases hPad with ⟨hPad0, hPad1, hPad2⟩
     simp_all [Poseidon.Hash2.Spec, Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
+
+namespace Entry
+
+structure Row (F : Type) where
+  boundary : Poseidon.Hash2PermutationBoundary.Row F
+  nullifier : Nullifier.Entry.Row F
+deriving ProvableStruct
+
+def hashOutputCheck {K : Type} [Sub K] (row : Row K) : K :=
+  row.boundary.hash.hash - row.nullifier.poseidonHash
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  Poseidon.Hash2PermutationBoundary.Spec row.boundary ∧
+    Nullifier.Entry.Spec row.nullifier ∧
+    row.boundary.hash.hash = row.nullifier.poseidonHash
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Nullifier.Entry.Assumptions row.nullifier
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  Poseidon.Hash2PermutationBoundary.circuit row.boundary
+  Nullifier.Entry.circuit row.nullifier
+  assertZero (hashOutputCheck row)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, hashOutputCheck, Assumptions,
+      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
+      Nullifier.Entry.circuit, Nullifier.Entry.Spec]
+    rcases h_holds with ⟨hBoundary, hNullifier, hOutput⟩
+    exact ⟨hBoundary, hNullifier h_assumptions,
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOutput)⟩
+  completeness := by
+    circuit_proof_start [main, Spec, hashOutputCheck, Assumptions,
+      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
+      Nullifier.Entry.circuit, Nullifier.Entry.Spec, Nullifier.Entry.Assumptions]
+    rcases h_spec with ⟨hBoundary, hNullifier, hOutput⟩
+    exact ⟨hBoundary, ⟨h_assumptions, hNullifier⟩,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOutput⟩
+
+end Entry
 
 end NullifierWithPoseidonBoundary
 
