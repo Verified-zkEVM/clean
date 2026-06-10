@@ -26,7 +26,7 @@ template IsZero() {
 }
 -/
 def main (input : Expression (F p)) := do
-  let inv ← witness fun env =>
+  let inv ← witnessNative fun env =>
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
 

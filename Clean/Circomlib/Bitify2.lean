@@ -180,7 +180,7 @@ template Num2BitsNeg(n) {
 -/
 def main (n : ℕ) (input : Expression (F p)) := do
   -- Witness the bits of 2^n - input (when n > 0)
-  let out ← witnessVector n fun env =>
+  let out ← witnessVectorNative n fun env =>
     fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination

@@ -71,7 +71,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- (x and y are guaranteed to be range-checked from earlier interactions)
     BytesChannel.pull z
     -- witness the output carry
-    let carry ← witness fun env => floorDiv (env (x + y)) 256
+    let carry ← witnessNative fun env => floorDiv (env (x + y)) 256
     assertBool carry
     -- assert correctness
     x + y === z + carry * 256
@@ -132,7 +132,7 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     -- pull the current Fibonacci state
     FibonacciChannel.pull (n, x, y)
     -- witness the next Fibonacci value
-    let z ← witness fun eval => mod256 (eval (x + y))
+    let z ← witnessNative fun eval => mod256 (eval (x + y))
     -- pull from the Add8 channel to check addition
     Add8Channel.pull (x, y, z)
     -- push the next Fibonacci state

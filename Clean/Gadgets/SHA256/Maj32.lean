@@ -24,10 +24,10 @@ Witnesses 64 variables: 32 for t, 32 for z.
       (2)  c·(a + b − 2·t) = z − t -/
 def maj32 (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the intermediate product t[i] = a[i] * b[i]
-  let t ← witnessVector 32 fun env =>
+  let t ← witnessVectorNative 32 fun env =>
     Vector.ofFn fun (i : Fin 32) => env a[i] * env b[i]
   -- Witness the majority output
-  let z ← witnessVector 32 fun env =>
+  let z ← witnessVectorNative 32 fun env =>
     Vector.ofFn fun (i : Fin 32) =>
       env t[i] + env c[i] * (env a[i] + env b[i] - 2 * env t[i])
   -- Constraint (1): t[i] = a[i] * b[i]

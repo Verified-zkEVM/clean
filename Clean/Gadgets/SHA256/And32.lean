@@ -15,7 +15,7 @@ Witnesses 32 output bits.
 /-- Bitwise AND of two 32-bit words.
     Per bit: z = a · b  (correct when a, b ∈ {0, 1}). -/
 def and32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  let z ← witnessVector 32 fun env =>
+  let z ← witnessVectorNative 32 fun env =>
     Vector.ofFn fun (i : Fin 32) =>
       env a[i] * env b[i]
   Circuit.forEach (Vector.finRange 32) fun i =>

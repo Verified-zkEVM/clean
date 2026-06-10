@@ -244,11 +244,11 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
     (2^n : F p)
 
   -- Witness output bits
-  let out ← witnessVector n fun env =>
+  let out ← witnessVectorNative n fun env =>
     fieldToBits n (lin.eval env)
 
   -- Witness aux bit
-  let aux ← witness fun env =>
+  let aux ← witnessNative fun env =>
     let lin_val := lin.eval env
     -- Extract the nth bit (borrow bit)
     if (lin_val.val / (2^n)) % 2 = 1 then (1 : F p) else (0 : F p)

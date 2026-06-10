@@ -376,28 +376,28 @@ theorem ExplicitCircuit.from_map_channelsWithRequirements {f : α → β} {g : C
 
 -- basic operations are explicit circuits
 
-instance : ExplicitCircuits (F:=F) witnessVar where
+instance : ExplicitCircuits (F:=F) witnessVarNative where
   output _ n := ⟨ n ⟩
   localLength _ _ := 1
   operations c n := [.witness 1 (.native fun env => #v[c env])]
   channelsWithGuarantees _ _ := []
   channelsWithRequirements _ _ := []
 
-instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
+instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVarsNative k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
   localLength _ := k
   operations n := [.witness k (.native c)]
   channelsWithGuarantees _ := []
   channelsWithRequirements _ := []
 
-instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVector k c) where
+instance {k : ℕ} {c : ProverEnvironment F → Vector F k} : ExplicitCircuit (witnessVectorNative k c) where
   output n := varFromOffset (fields k) n
   localLength _ := k
   operations n := [.witness k (.native c)]
   channelsWithGuarantees _ := []
   channelsWithRequirements _ := []
 
-instance {M : TypeMap} [ProvableType M] : ExplicitCircuits (ProvableType.witness (α:=M) (F:=F)) where
+instance {M : TypeMap} [ProvableType M] : ExplicitCircuits (ProvableType.witnessNative (α:=M) (F:=F)) where
   localLength _ _ := size M
   output _ n := varFromOffset M n
   operations c n := [.witness (size M) (.native (toElements ∘ c))]
@@ -405,7 +405,7 @@ instance {M : TypeMap} [ProvableType M] : ExplicitCircuits (ProvableType.witness
   channelsWithRequirements _ _ := []
 
 instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDep M) F) :
-    ExplicitCircuit (witness c (self := inferInstanceAs (Witnessable F M (Var M)))) where
+    ExplicitCircuit (witnessNative c (self := inferInstanceAs (Witnessable F M (Var M)))) where
   localLength _ := size M
   output offset := varFromOffset M offset
   operations _ := [.witness (size M) (.native (toElements ∘ c))]
@@ -413,23 +413,23 @@ instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDep M) F) :
   channelsWithRequirements _ := []
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
-    ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
+    ExplicitCircuits (witnessNative (F:=F) (value:=value) (var:=var)) where
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
-    rw [inst.witness_eq]
-    show _ = inst.var_eq ▸ (ProvableType.witness c).output n
+    rw [inst.witnessNative_eq]
+    show _ = inst.var_eq ▸ (ProvableType.witnessNative c).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
   localLength _ _ := size value
   localLength_eq c n := by
-    rw [inst.witness_eq, Circuit.localLength, eqRec_eq_cast,
+    rw [inst.witnessNative_eq, Circuit.localLength, eqRec_eq_cast,
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
   operations c n := [.witness (size value) (.native (toElements ∘ c))]
   operations_eq c n := by
-    rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+    rw [inst.witnessNative_eq, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
     rfl
 
@@ -438,13 +438,13 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
 
   subcircuitsConsistent c n := by
     simp only [circuit_norm]
-    rw [inst.witness_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+    rw [inst.witnessNative_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
     reduce
     trivial
   channelsLawful c n := by
     simp only [circuit_norm]
-    rw [inst.witness_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+    rw [inst.witnessNative_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
     simp [circuit_norm]
 
@@ -489,8 +489,8 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
 
 attribute [explicit_circuit_unfold_type] Circuit
 
-attribute [explicit_circuit_no_unfold] Circuit.bind witnessVar witnessVars witnessVector ProvableType.witness
-  witness assertZero lookup Channel.emit Channel.pull Channel.push Pure.pure Bind.bind Functor.map
+attribute [explicit_circuit_no_unfold] Circuit.bind witnessVarNative witnessVarsNative witnessVectorNative ProvableType.witnessNative
+  witnessNative assertZero lookup Channel.emit Channel.pull Channel.push Pure.pure Bind.bind Functor.map
 
 attribute [explicit_circuit_norm, circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.operations ExplicitCircuit.output
   ExplicitCircuit.channelsWithGuarantees ExplicitCircuit.channelsWithRequirements
@@ -1075,25 +1075,25 @@ elab_rules : tactic
 section
 
 -- single
-example : ExplicitCircuit (witness fun _ => (0 : F) : Circuit F (Expression F)) := by infer_explicit_circuit
+example : ExplicitCircuit (witnessNative fun _ => (0 : F) : Circuit F (Expression F)) := by infer_explicit_circuit
 
 example :
   let add := do
-    let x : Expression F ← witness fun _ => 0
-    let y ← witness fun _ => 1
-    let z ← witness fun eval => eval (x + y)
+    let x : Expression F ← witnessNative fun _ => 0
+    let y ← witnessNative fun _ => 1
+    let z ← witnessNative fun eval => eval (x + y)
     assertZero (x + y - z)
     return z
 
   ExplicitCircuit add := by infer_explicit_circuit
 
 -- family
-example : ExplicitCircuits (witnessField (F:=F)) := by infer_explicit_circuits
+example : ExplicitCircuits (witnessFieldNative (F:=F)) := by infer_explicit_circuits
 
 example :
   let add (x : Expression F) := do
-    let y : Expression F ← witness fun _ => 1
-    let z ← witness fun eval => eval (x + y)
+    let y : Expression F ← witnessNative fun _ => 1
+    let z ← witnessNative fun eval => eval (x + y)
     assertZero (x + y - z)
     return z
 
@@ -1102,8 +1102,8 @@ example :
 -- elaborated
 example :
   let add (x : Expression F) := do
-    let y : Expression F ← witness fun _ => 1
-    let z ← witness fun eval => eval (x + y)
+    let y : Expression F ← witnessNative fun _ => 1
+    let z ← witnessNative fun eval => eval (x + y)
     assertZero (x + y - z)
     return z
 

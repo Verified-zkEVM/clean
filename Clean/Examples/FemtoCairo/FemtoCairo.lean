@@ -146,13 +146,13 @@ def fetchInstruction
   main (pc : Expression (F p)) := do
     let programTable := .staticOfFn h_programSize "program" program
 
-    let rawInstrType ← witness fun eval => if hpc : (eval pc).val < programSize
+    let rawInstrType ← witnessNative fun eval => if hpc : (eval pc).val < programSize
       then program ⟨ (eval pc).val, hpc ⟩ else 0
-    let op1 ← witness fun eval => if hpc : (eval pc).val + 1 < programSize
+    let op1 ← witnessNative fun eval => if hpc : (eval pc).val + 1 < programSize
       then program ⟨ (eval pc).val + 1, hpc ⟩ else 0
-    let op2 ← witness fun eval => if hpc : (eval pc).val + 2 < programSize
+    let op2 ← witnessNative fun eval => if hpc : (eval pc).val + 2 < programSize
       then program ⟨ (eval pc).val + 2, hpc ⟩ else 0
-    let op3 ← witness fun eval => if hpc : (eval pc).val + 3 < programSize
+    let op3 ← witnessNative fun eval => if hpc : (eval pc).val + 3 < programSize
       then program ⟨ (eval pc).val + 3, hpc ⟩ else 0
 
     lookup programTable ⟨pc, rawInstrType⟩
@@ -257,11 +257,11 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
-    let value1 ← witness fun env => memoryValue env addr1
+    let value1 ← witnessNative fun env => memoryValue env addr1
 
     let addr2 <== mode.isDoubleAddressing * value1
 
-    let value2 ← witness fun env => memoryValue env addr2
+    let value2 ← witnessNative fun env => memoryValue env addr2
     lookup MemoryTable ⟨addr1, value1⟩
     lookup MemoryTable ⟨addr2, value2⟩
 
@@ -416,7 +416,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     let { instrType := { isAdd, isMul, isStoreState, isLoadState }, .. } := decoded
 
     -- Witness the claimed next state
-    let nextState : Var State (F p) ← witness fun eval => {
+    let nextState : Var State (F p) ← witnessNative fun eval => {
       pc := if eval isLoadState = 1 then eval v1 else eval state.pc + 4
       ap := if eval isLoadState = 1 then eval v2 else eval state.ap
       fp := if eval isLoadState = 1 then eval v3 else eval state.fp

@@ -196,7 +196,7 @@ inductive Boolean (F : Type) where
 
 namespace Boolean
 def witness (compute : ProverEnvironment (F p) → F p) := do
-  let x ← witnessVar compute
+  let x ← witnessVarNative compute
   assertZero (var x * (var x - 1))
   return Boolean.mk x
 

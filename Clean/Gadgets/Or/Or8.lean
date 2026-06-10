@@ -22,7 +22,7 @@ def Spec (input : Inputs (F p)) (z : F p) :=
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let ⟨x, y⟩ := input
-  let or ← witness fun eval => (eval x).val ||| (eval y).val
+  let or ← witnessNative fun eval => (eval x).val ||| (eval y).val
   -- we prove OR correct using an XOR lookup
   let xor := 2*or - x - y
   lookup ByteXorTable (x, y, xor)

@@ -89,27 +89,27 @@ def localLength (circuit : Circuit F α) (offset := 0) : ℕ :=
 
 /-- Create a new variable. -/
 @[circuit_norm]
-def witnessVar (compute : ProverEnvironment F → F) : Circuit F (Variable F) :=
+def witnessVarNative (compute : ProverEnvironment F → F) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
     (var, [.witness 1 (.native fun env => #v[compute env])])
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witnessField (compute : ProverEnvironment F → F) := do
-  let v ← witnessVar compute
+def witnessFieldNative (compute : ProverEnvironment F → F) := do
+  let v ← witnessVarNative compute
   return var v
 
 /-- Create a vector of variables. -/
 @[circuit_norm]
-def witnessVars (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
+def witnessVarsNative (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
     (vars, [.witness m (.native compute)])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
-def witnessVector (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
+def witnessVectorNative (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     let vars := varFromOffset (fields m) offset
     (vars, [.witness m (.native compute)])
@@ -147,16 +147,16 @@ def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
-def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : ProverEnvironment F → α F) :
+def ProvableType.witnessNative {α : TypeMap} [ProvableType α] (compute : ProverEnvironment F → α F) :
     Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
     let var := varFromOffset α offset
     (var, [.witness (size α) (.native fun env => compute env |> toElements)])
 
 @[circuit_norm]
-def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
+def ProvableVector.witnessNative {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
     (compute : ProverEnvironment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
-  ProvableType.witness (α:=ProvableVector α m) compute
+  ProvableType.witnessNative (α:=ProvableVector α m) compute
 
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
@@ -247,30 +247,30 @@ attribute [circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 end
 
-export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
+export Circuit (witnessVarNative witnessFieldNative witnessVarsNative witnessVectorNative assertZero lookup)
 
 -- general `witness` method
 
 class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
-  witness : (ProverEnvironment F → value F) → Circuit F (var F)
+  witnessNative : (ProverEnvironment F → value F) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
-  witness_eq (compute : ProverEnvironment F → value F) :
-    witness compute = var_eq ▸ ProvableType.witness compute := by intros; rfl
+  witnessNative_eq (compute : ProverEnvironment F → value F) :
+    witnessNative compute = var_eq ▸ ProvableType.witnessNative compute := by intros; rfl
 
-export Witnessable (witness)
+export Witnessable (witnessNative)
 
 instance : Witnessable F field Expression where
-  witness := witnessField
+  witnessNative := witnessFieldNative
 
 instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
-  witness := witnessVector m
+  witnessNative := witnessVectorNative m
 
 instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
-  witness := ProvableType.witness
+  witnessNative := ProvableType.witnessNative
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
-  witness := ProvableVector.witness m
+  witnessNative := ProvableVector.witnessNative m
 
 -- witness generation
 
@@ -369,8 +369,8 @@ macro_rules
 
 example :
   let add (x : Expression F) := do
-    let y : Expression F ← witness fun _ => 1
-    let z ← witness fun eval => eval (x + y)
+    let y : Expression F ← witnessNative fun _ => 1
+    let z ← witnessNative fun eval => eval (x + y)
     assertZero (x + y - z)
     pure z
   ConstantLength add := by infer_constant_length

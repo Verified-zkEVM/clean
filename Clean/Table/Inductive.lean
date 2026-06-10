@@ -95,7 +95,7 @@ def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint
   let output ← table.step acc x
   let output' : Var State F ← modifyGet fun ctx =>
     let circuit : Circuit F Unit := do
-      let _state : Var State F ← witness fun env => eval env output
+      let _state : Var State F ← witnessNative fun env => eval env output
       let _input : Var Input F ← witnessAny Input
     let (_, ops) := circuit ctx.offset
     let ctx' : TableContext 2 (ProvablePair State Input) F := {

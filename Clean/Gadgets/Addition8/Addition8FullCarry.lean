@@ -23,11 +23,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
 
   -- witness the result
-  let z ← witness fun eval => mod256 (eval (x + y + carryIn))
+  let z ← witnessNative fun eval => mod256 (eval (x + y + carryIn))
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witness fun eval => floorDiv256 (eval (x + y + carryIn))
+  let carryOut ← witnessNative fun eval => floorDiv256 (eval (x + y + carryIn))
   assertBool carryOut
 
   assertZero (x + y + carryIn - z - carryOut * 256)

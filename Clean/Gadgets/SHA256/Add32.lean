@@ -28,11 +28,11 @@ private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F 
     Both inputs are assumed to have boolean values in each bit position. -/
 def add32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the lower 32 bits of the sum
-  let z ← witnessVector 32 fun env =>
+  let z ← witnessVectorNative 32 fun env =>
     let s := (evalBitsNat env a + evalBitsNat env b) % 2^32
     Vector.ofFn fun (i : Fin 32) => ((s / 2^i.val % 2 : ℕ) : F p)
   -- Witness the carry-out bit
-  let cout ← witnessField fun env =>
+  let cout ← witnessFieldNative fun env =>
     ((( evalBitsNat env a + evalBitsNat env b) / 2^32 % 2 : ℕ) : F p)
   -- Boolean constraints on output bits
   Circuit.forEach (Vector.finRange 32) fun i =>

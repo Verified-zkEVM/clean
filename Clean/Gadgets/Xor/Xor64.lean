@@ -17,7 +17,7 @@ deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
-  let z ← witness fun env =>
+  let z ← witnessNative fun env =>
     let z0 := (env x.x0).val ^^^ (env y.x0).val
     let z1 := (env x.x1).val ^^^ (env y.x1).val
     let z2 := (env x.x2).val ^^^ (env y.x2).val
