@@ -327,6 +327,92 @@ namespace CompleteAdd
 
 variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
 
+section ValueModel
+
+variable [DecidableEq F]
+
+/-- The semantic side condition needed by Halo2's complete-add assignment logic.
+
+The Rust implementation treats `x = 0` as the identity branch. This is sound for the
+Pallas encoding because `(0, y)` is not a non-identity curve point. We keep that property
+explicit here instead of baking it into the row constraints. -/
+def XZeroImpliesIdentity (point : Point F) : Prop :=
+  point.x = 0 → point.y = 0
+
+def lambdaValue (input : AddInputs F) : F :=
+  if input.q.x = input.p.x then
+    if input.p.y ≠ 0 then
+      (3 * input.p.x * input.p.x) * (2 * input.p.y)⁻¹
+    else
+      0
+  else
+    (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
+
+def outputValue (input : AddInputs F) : Point F :=
+  let lambda := lambdaValue input
+  if input.p.x = 0 then
+    input.q
+  else if input.q.x = 0 then
+    input.p
+  else if input.q.x = input.p.x ∧ input.q.y = -input.p.y then
+    { x := 0, y := 0 }
+  else
+    let xR := lambda * lambda - input.p.x - input.q.x
+    let yR := lambda * (input.p.x - xR) - input.p.y
+    { x := xR, y := yR }
+
+def rowValue (input : AddInputs F) : CompleteAddRow F where
+  p := input.p
+  q := input.q
+  r := outputValue input
+  lambda := lambdaValue input
+  alpha := (input.q.x - input.p.x)⁻¹
+  beta := input.p.x⁻¹
+  gamma := input.q.x⁻¹
+  delta :=
+    if input.q.x = input.p.x then
+      (input.q.y + input.p.y)⁻¹
+    else
+      0
+
+theorem outputValue_eq_swAdd {input : AddInputs F}
+    (hpZero : XZeroImpliesIdentity input.p)
+    (hqZero : XZeroImpliesIdentity input.q) :
+    pointCoords (outputValue input) =
+      CompElliptic.CurveForms.ShortWeierstrass.add
+        (0 : F) (pointCoords input.p) (pointCoords input.q) := by
+  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
+  unfold pointCoords outputValue lambdaValue
+    CompElliptic.CurveForms.ShortWeierstrass.add XZeroImpliesIdentity at *
+  simp only
+  by_cases hpx : px = 0
+  · have hpy : py = 0 := hpZero hpx
+    simp [hpx, hpy]
+  · by_cases hqx : qx = 0
+    · have hqy : qy = 0 := hqZero hqx
+      simp [hpx, hqx, hqy]
+    · simp [hpx, hqx]
+      by_cases hx : px = qx
+      · have hx' : qx = px := hx.symm
+        rw [if_pos hx', if_pos hx]
+        by_cases hy : py + qy = 0
+        · have hqy : qy = -py := by linear_combination hy
+          simp [hx', hqy]
+        · have hqy : ¬ qy = -py := by
+            intro h
+            apply hy
+            rw [h]
+            ring
+          simp [hx', hqy, hy]
+          constructor <;>
+            by_cases hpy : py = 0 <;>
+              simp [hpy] <;> ring
+      · have hx' : ¬ qx = px := fun h => hx h.symm
+        simp [hx, hx']
+        constructor <;> ring
+
+end ValueModel
+
 def xQMinusXP (row : CompleteAddRow R) : R :=
   row.q.x - row.p.x
 
