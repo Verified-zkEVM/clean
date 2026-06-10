@@ -242,3 +242,29 @@ Consequences for Orchard gadgets:
   `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`. `Orchard.ActionAddressWiring`
   currently records copy edges around `ivk` and `derived_pk_d_old`, but not the
   variable-base scalar multiplication API.
+
+## Sinsemilla and Orchard wrapper conformance audit
+
+The same custom-gate versus entry-point split appears in the Sinsemilla and Orchard
+wrappers. These gaps are downstream of ECC complete addition and fixed-base scalar
+multiplication, so they should be repaired after the ECC/scalar-mul entry-point circuits
+exist.
+
+| Rust source API | Rust semantics | Current Clean equivalent | Status |
+| --- | --- | --- | --- |
+| `SinsemillaInstructions::hash_to_point` / `hash_to_point_with_private_init`, implemented in `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs` | Initializes the accumulator from public/private `Q`, loops over all message pieces, performs generator-table lookups/range checks and merged double-and-add rows, assigns final `y_A`, rejects identity output, and returns a non-identity point plus running sums. | `Orchard.Sinsemilla.InitialYQ`, `InitWiring`, `Gate`, and explicit `computedHash`/point fields in later wrappers | Missing entry-point circuit. Clean has the local init/gate assertions, but no composed `hash_to_point` circuit whose surface is `(Q, message) -> (point, running sums)`. |
+| `HashDomain::hash` in `halo2_gadgets/src/sinsemilla.rs` | Calls `hash_to_point` and extracts the x-coordinate. | `Orchard.Sinsemilla.Merkle.Wiring` with explicit `computedHash` | Missing entry-point circuit. Clean records the extraction/copy edge but does not compute the hash point from the message. |
+| `CommitDomain::blinding_factor` and `CommitDomain::commit` in `halo2_gadgets/src/sinsemilla.rs` | Computes `[r] R`, computes `M = hash_to_point(message)`, then returns `M + [r] R` and running sums. | `Orchard.Sinsemilla.Commit.circuit` | Missing entry-point circuit. The Clean row contains explicit hash-point and blind-product coordinates and only applies the complete-add assertion. It does not compose fixed-base scalar multiplication or `hash_to_point`. |
+| `CommitDomain::short_commit` in `halo2_gadgets/src/sinsemilla.rs` | Calls `commit`, then returns `ExtractP(commitment)`. | `Orchard.Sinsemilla.ShortCommit.circuit` | Missing entry-point circuit. Clean composes `Sinsemilla.Commit.circuit` and extraction wiring, but `Commit.circuit` itself starts after hash/blinding products are explicit. |
+| `MerkleInstructions::hash_layer` in `halo2_gadgets/src/sinsemilla/merkle/chip.rs` | Builds three Sinsemilla message pieces from `(layer, left, right)`, calls `hash_to_point`, extracts x, and wires decomposition/running-sum cells. | `Orchard.Sinsemilla.Merkle.circuit` and `Merkle.Wiring.circuit` | Partial wiring only. Clean ports the decomposition gate and final `computedHash = hash` edge, but the hash result is explicit rather than produced by a composed `hash_to_point` circuit. |
+| `MerklePath::calculate_root` in `halo2_gadgets/src/sinsemilla/merkle.rs` | Iterates over all path layers, conditionally swaps `(node, sibling)`, calls `hash_layer`, and returns the final root. | `Orchard.Sinsemilla.Merkle.PathStep.circuit` and `Orchard.ActionMerkleWiring.circuit` | One-step wiring only. Clean models a single conditional swap plus explicit `hash_layer` row; it does not provide the full iterated path entry point. |
+| `gadgets::note_commit` in `orchard/src/circuit/note_commit.rs` | Builds eight message pieces `a..h`, performs point-y and field canonicity checks using running-sum outputs from `CommitDomain::commit`, calls `CommitDomain::commit`, and returns the commitment point. | `Orchard.NoteCommit.Wiring.circuit` and `WiringWithCommit.circuit` | Partial wiring only. Clean composes the custom decomposition/canonicity assertions and connects explicit `computedCm*` fields to `Sinsemilla.Commit.circuit`, but it does not prove those fields come from the full `CommitDomain::commit` computation. |
+| `gadgets::commit_ivk` in `orchard/src/circuit/commit_ivk.rs` | Builds four message pieces from `(ak, nk)`, calls `CommitDomain::short_commit`, uses returned running sums for canonicity, and returns `ivk`. | `Orchard.CommitIvk.Wiring.circuit` and `WiringWithShortCommit.circuit` | Partial wiring only. Clean composes the canonicity gate and connects explicit `computedIvk` to `Sinsemilla.ShortCommit.circuit`, but it does not prove `computedIvk = ShortCommit_rivk(ak || nk)` from a full short-commit entry point. |
+
+Immediate bottom-up implication:
+
+- Repairing `Sinsemilla.Commit`, `ShortCommit`, `NoteCommit.WiringWithCommit`, and
+  `CommitIvk.WiringWithShortCommit` semantically depends on first adding real ECC complete-add
+  and fixed-base scalar-multiplication entry-point circuits.
+- Repairing Merkle path semantics additionally needs a composed `hash_to_point`/`hash_layer`
+  entry point and then an iterated path circuit, not only the existing single `PathStep`.
