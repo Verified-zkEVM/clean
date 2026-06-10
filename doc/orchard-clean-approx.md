@@ -112,7 +112,16 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.ScalarMul.FixedBase.FullWidth.circuit`,
      `Orchard.ScalarMul.FixedBase.BaseFieldCanonicity.circuit`, and
      `Orchard.ScalarMul.FixedShort.circuit`.
-6. Sinsemilla:
+6. Poseidon:
+   `halo2_gadgets/src/poseidon/pow5.rs`
+   - Depends on fixed round constants and MDS matrices supplied by the Poseidon spec.
+   - Status: Orchard's width-3, rate-2 Pow5 custom gates `full round`,
+     `partial rounds`, and `pad-and-add` are ported as
+     `Orchard.Poseidon.FullRound.circuit`,
+     `Orchard.Poseidon.PartialRounds.circuit`, and
+     `Orchard.Poseidon.PadAndAdd.circuit`. Fixed-column constants are explicit row
+     values in this approximation.
+7. Sinsemilla:
    `halo2_gadgets/src/sinsemilla/chip.rs`,
    `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`,
    `halo2_gadgets/src/sinsemilla/merkle*.rs`
@@ -125,7 +134,7 @@ Bottom-up implementation order currently inferred from those tagged sources:
      wiring is ported as `Orchard.Sinsemilla.Merkle.Wiring.circuit`. One layer of
      `MerklePath::calculate_root`, including the position-bit conditional swap and
      `hash_layer` transition, is ported as `Orchard.Sinsemilla.Merkle.PathStep.circuit`.
-7. Orchard custom gates and composition:
+8. Orchard custom gates and composition:
    `orchard/src/circuit.rs`,
    `orchard/src/circuit/commit_ivk.rs`,
    `orchard/src/circuit/note_commit.rs`,
