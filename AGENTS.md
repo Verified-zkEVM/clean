@@ -106,6 +106,11 @@ def main (input : Var Inputs F) : Circuit F (Var Outputs F) := do
   ...
 ```
 
+When composing already-defined gadgets or circuits, always call the bundled circuit as a
+subcircuit. Do not inline a child gadget by calling `Child.main input` from a parent
+circuit. Inlining defeats Clean's subcircuit proof structure and forces parent proofs to
+trace through every nested child operation.
+
 ## Proof Patterns
 
 ### Starting a Proof
@@ -128,6 +133,14 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 
 - Use `F p` for field type where `p` is prime
 - Specs are pure Lean propositions relating inputs to outputs
+- Specs must state the highest-level intended meaning of the circuit that can be described
+  from its inputs and outputs. The circuit operations are the implementation; the `Spec` is
+  the semantic contract being proved.
+- Do not define specs by copying, restating, or trivially wrapping the circuit constraints.
+  Do not introduce separate `constraints` definitions as substitutes for semantic specs.
+  For example, an incomplete-addition gadget spec should state the intended incomplete
+  elliptic-curve addition relation, not merely the finite-field equations enforced by the
+  circuit.
 - Assumptions capture preconditions (e.g., value ranges)
 - Follow Mathlib naming conventions
 - Never modify maxHeartbeats
@@ -149,6 +162,10 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 3. Create `ElaboratedCircuit` instance with `localLength` and `output`
 4. Prove `soundness` and `completeness`
 5. Bundle into `FormalCircuit`
+
+Before proving the gadget, check that all child gadgets are composed through their bundled
+`.circuit`/formal assertion interface and that the `Spec` describes meaning rather than
+constraints.
 
 ### Working on Lean Proofs
 
