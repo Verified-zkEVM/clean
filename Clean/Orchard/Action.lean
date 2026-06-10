@@ -602,6 +602,10 @@ namespace ActionAddressWiring
 variable {F : Type} [Field F]
 
 variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+  [OfNat R 2] [OfNat R 3] [OfNat R 16] [OfNat R 32] [OfNat R 512]
+  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 245)]
+  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)]
+  [OfNat R 45560315531419706090280762371685220353]
 
 structure Row (F : Type) where
   action : ActionWiring.Row F
@@ -626,6 +630,8 @@ def pkDYCheck (row : Row R) : R :=
 
 def Spec (row : Row R) : Prop :=
   ActionWiring.Spec row.action ∧
+    Gadget.SpendAuth.Spec row.spendAuth ∧
+    CommitIvk.Wiring.Spec row.commitIvk ∧
     row.commitIvk.gate.ak = row.spendAuth.akX ∧
     row.commitIvk.ivk = row.ivkScalar ∧
     row.derivedPkDX = row.action.derivedPkDOldX ∧
@@ -633,6 +639,8 @@ def Spec (row : Row R) : Prop :=
 
 def main (row : Var Row F) : Circuit F Unit := do
   ActionWiring.circuit row.action
+  Gadget.SpendAuth.circuit row.spendAuth
+  CommitIvk.Wiring.circuit row.commitIvk
   assertZero (akCheck row)
   assertZero (ivkScalarCheck row)
   assertZero (pkDXCheck row)
@@ -643,18 +651,22 @@ def circuit : FormalAssertion F Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
-      ActionWiring.circuit, ActionWiring.Spec]
-    rcases h_holds with ⟨hAction, hAk, hIvk, hPkDX, hPkDY⟩
-    exact ⟨hAction,
+      ActionWiring.circuit, ActionWiring.Spec,
+      Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec,
+      CommitIvk.Wiring.circuit, CommitIvk.Wiring.Spec]
+    rcases h_holds with ⟨hAction, hSpendAuth, hCommitIvk, hAk, hIvk, hPkDX, hPkDY⟩
+    exact ⟨hAction, hSpendAuth, hCommitIvk,
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hAk),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hIvk),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hPkDX),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hPkDY)⟩
   completeness := by
     circuit_proof_start [main, Spec, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
-      ActionWiring.circuit, ActionWiring.Spec]
-    rcases h_spec with ⟨hAction, hAk, hIvk, hPkDX, hPkDY⟩
-    exact ⟨hAction,
+      ActionWiring.circuit, ActionWiring.Spec,
+      Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec,
+      CommitIvk.Wiring.circuit, CommitIvk.Wiring.Spec]
+    rcases h_spec with ⟨hAction, hSpendAuth, hCommitIvk, hAk, hIvk, hPkDX, hPkDY⟩
+    exact ⟨hAction, hSpendAuth, hCommitIvk,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hAk,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hIvk,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hPkDX,
