@@ -43,12 +43,6 @@ private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 :=
 private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
   sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
-  [OfNat R 16] [OfNat R 32] [OfNat R 512]
-  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 245)]
-  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   ak : F
   nk : F
@@ -69,26 +63,31 @@ structure Row (F : Type) where
   z14B2CPrime : F
 deriving ProvableStruct
 
-def bDecomposition (row : Row R) : R :=
+def bDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K 32]
+    (row : Row K) : K :=
   row.bWhole - (row.b0 + row.b1 * 16 + row.b2 * 32)
 
-def dDecomposition (row : Row R) : R :=
+def dDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 512] (row : Row K) : K :=
   row.dWhole - (row.d0 + row.d1 * 512)
 
-def akDecomposition (row : Row R) : R :=
+def akDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 250)]
+    [OfNat K (2 ^ 254)] (row : Row K) : K :=
   row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) - row.ak
 
-def nkDecomposition (row : Row R) : R :=
+def nkDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] [OfNat K (2 ^ 245)]
+    [OfNat K (2 ^ 254)] (row : Row K) : K :=
   row.b2 + row.c * 32 + row.d0 * OfNat.ofNat (2 ^ 245) +
     row.d1 * OfNat.ofNat (2 ^ 254) - row.nk
 
-def aPrimeCheck (row : Row R) : R :=
+def aPrimeCheck {K : Type} [Add K] [Sub K] [OfNat K (2 ^ 130)]
+    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.a + OfNat.ofNat (2 ^ 130) - NoteCommit.tP - row.aPrime
 
-def b2CPrimeCheck (row : Row R) : R :=
+def b2CPrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] [OfNat K (2 ^ 140)]
+    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP - row.b2CPrime
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool row.b1 ∧
     IsBool row.d1 ∧
     row.bWhole = row.b0 + row.b1 * 16 + row.b2 * 32 ∧
@@ -105,7 +104,7 @@ def Spec (row : Row R) : Prop :=
     row.b2CPrime = row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP ∧
     (row.d1 = 0 ∨ row.z14B2CPrime = 0)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (NoteCommit.boolPoly row.b1)
   assertZero (NoteCommit.boolPoly row.d1)
   assertZero (bDecomposition row)
@@ -121,7 +120,7 @@ def main (row : Var Row F) : Circuit F Unit := do
   assertZero (b2CPrimeCheck row)
   assertZero (row.d1 * row.z14B2CPrime)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -201,17 +200,17 @@ structure Row (F : Type) where
   ivk : F
 deriving ProvableStruct
 
-def ivkCheck (row : Row R) : R :=
+def ivkCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.computedIvk - row.ivk
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   CommitIvk.Spec row.gate ∧ row.computedIvk = row.ivk
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   CommitIvk.circuit row.gate
   assertZero (ivkCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
