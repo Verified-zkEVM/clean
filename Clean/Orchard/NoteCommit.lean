@@ -795,36 +795,30 @@ its explicit `computedCm*` outputs to the `Sinsemilla.Commit.circuit` output poi
 -/
 namespace WiringWithCommit
 
-variable [OfNat R 2] [OfNat R 3] [OfNat R 4] [OfNat R 16] [OfNat R 32] [OfNat R 64]
-  [OfNat R 256] [OfNat R 512] [OfNat R 1024]
-  [OfNat R (2 ^ 130)] [OfNat R (2 ^ 140)] [OfNat R (2 ^ 249)]
-  [OfNat R (2 ^ 250)] [OfNat R (2 ^ 254)] [OfNat R 288230376151711744]
-  [OfNat R 45560315531419706090280762371685220353]
-
 structure Row (F : Type) where
   note : Wiring.Row F
   commit : Sinsemilla.Commit.Row F
 deriving ProvableStruct
 
-def cmXCheck (row : Row R) : R :=
+def cmXCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.commit.commitmentX - row.note.computedCmX
 
-def cmYCheck (row : Row R) : R :=
+def cmYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.commit.commitmentY - row.note.computedCmY
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Wiring.Spec row.note ∧
     Sinsemilla.Commit.Spec row.commit ∧
     row.commit.commitmentX = row.note.computedCmX ∧
     row.commit.commitmentY = row.note.computedCmY
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Wiring.circuit row.note
   Sinsemilla.Commit.circuit row.commit
   assertZero (cmXCheck row)
   assertZero (cmYCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by

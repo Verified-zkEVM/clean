@@ -219,8 +219,6 @@ represented by the lower-level Sinsemilla and fixed-base scalar-multiplication a
 -/
 namespace Commit
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   hashX : F
   hashY : F
@@ -235,7 +233,7 @@ structure Row (F : Type) where
   delta : F
 deriving ProvableStruct
 
-def addRow (row : Row R) : Ecc.CompleteAddRow R where
+def addRow {K : Type} (row : Row K) : Ecc.CompleteAddRow K where
   p := { x := row.hashX, y := row.hashY }
   q := { x := row.blindX, y := row.blindY }
   r := { x := row.commitmentX, y := row.commitmentY }
@@ -245,13 +243,13 @@ def addRow (row : Row R) : Ecc.CompleteAddRow R where
   gamma := row.gamma
   delta := row.delta
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Spec (addRow row)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Ecc.CompleteAdd.circuit (addRow row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -342,24 +340,22 @@ end Commit
 
 namespace ShortCommit
 
-variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   commit : Commit.Row F
   extracted : F
 deriving ProvableStruct
 
-def extractCheck (row : Row R) : R :=
+def extractCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.commit.commitmentX - row.extracted
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Commit.Spec row.commit ∧ row.extracted = row.commit.commitmentX
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Commit.circuit row.commit
   assertZero (extractCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by

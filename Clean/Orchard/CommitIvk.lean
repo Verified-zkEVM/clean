@@ -239,27 +239,25 @@ explicit `computedIvk` output to the `Sinsemilla.ShortCommit.circuit` extracted 
 -/
 namespace WiringWithShortCommit
 
-variable [OfNat R 2] [OfNat R 3]
-
 structure Row (F : Type) where
   wiring : Wiring.Row F
   shortCommit : Sinsemilla.ShortCommit.Row F
 deriving ProvableStruct
 
-def ivkCheck (row : Row R) : R :=
+def ivkCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.shortCommit.extracted - row.wiring.computedIvk
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Wiring.Spec row.wiring ∧
     Sinsemilla.ShortCommit.Spec row.shortCommit ∧
     row.shortCommit.extracted = row.wiring.computedIvk
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Wiring.circuit row.wiring
   Sinsemilla.ShortCommit.circuit row.shortCommit
   assertZero (ivkCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
