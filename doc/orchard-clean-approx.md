@@ -134,7 +134,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `derive_nullifier` is ported as `Orchard.Gadget.ValueCommitment.circuit`
      and `Orchard.Gadget.Nullifier.circuit`.
      The four `Orchard circuit checks` constraints from `circuit.rs` are ported as
-     `Orchard.ActionChecks.circuit`. `note_commit.rs` gates `NoteCommit MessagePiece b`,
+     `Orchard.ActionChecks.circuit`; the surrounding source-level action wiring from
+     `Circuit::synthesize` is ported as `Orchard.ActionWiring.circuit`.
+     `note_commit.rs` gates `NoteCommit MessagePiece b`,
      `d`, `e`, `g`, `h`, `NoteCommit input g_d`, `NoteCommit input pk_d`,
      `NoteCommit input rho`, `NoteCommit input psi`, `NoteCommit input value`, and
      `y coordinate checks` are ported as
