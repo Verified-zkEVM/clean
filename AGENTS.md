@@ -135,6 +135,15 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 - Follow Mathlib naming conventions
 - Never modify maxHeartbeats
 
+## Documentation
+
+- `doc/proving-guide.md` — tips for user-facing circuit formalization proofs
+- `doc/witgen-authoring.md` — how to write circuit witnesses in the witness IR
+  (entry points, sugar, nondeterminism, proof-side patterns)
+- `doc/witgen-ir-plan.md`, `doc/witgen-ir-requirements.md` — design history and
+  requirements survey of the witness IR (background; the authoring guide is the
+  practical reference)
+
 ## Key Files to Understand
 
 1. `Clean/Circuit/Basic.lean` - Circuit monad and FormalCircuit
