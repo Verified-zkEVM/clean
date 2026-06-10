@@ -829,12 +829,105 @@ theorem rowValue_spec_pallas {input : AddInputs PallasBaseField}
     Spec (rowValue input) := by
   sorry
 
+theorem spec_eq_outputValue_pallas {row : CompleteAddRow PallasBaseField}
+    (hp : isPointOrIdentity row.p) (hq : isPointOrIdentity row.q) (hrow : Spec row) :
+    row.r = outputValue ({ p := row.p, q := row.q } : AddInputs PallasBaseField) := by
+  rcases hrow with ⟨hSlope, hTangent, hNonexceptionalDiff, hNonexceptionalSum,
+    hLeftIdentity, hRightIdentity, hInverse⟩
+  by_cases hpx : row.p.x = 0
+  · have hflag : ifBeta row ≠ 1 := by
+      unfold ifBeta
+      rw [hpx]
+      simp
+    have hr := hLeftIdentity hflag
+    unfold leftIdentityResult at hr
+    unfold outputValue
+    simp [hpx, hr]
+  · by_cases hqx : row.q.x = 0
+    · have hflag : ifGamma row ≠ 1 := by
+        unfold ifGamma
+        rw [hqx]
+        simp
+      have hr := hRightIdentity hflag
+      unfold rightIdentityResult at hr
+      unfold outputValue
+      simp [hpx, hqx, hr]
+    · by_cases hinv : row.q.x = row.p.x ∧ row.q.y = -row.p.y
+      · have hflag : ifAlpha row + ifDelta row ≠ 1 := by
+          rcases hinv with ⟨hx, hy⟩
+          unfold ifAlpha ifDelta xQMinusXP yQPlusYP
+          simp [hx, hy]
+        have hr := hInverse hflag
+        unfold inverseResult at hr
+        have hr0 : row.r = ({ x := 0, y := 0 } : Point PallasBaseField) := by
+          rw [Point.mk.injEq]
+          exact hr
+        unfold outputValue
+        simp [hpx, hinv, hr0]
+      · have hr : nonexceptionalResult row := by
+          by_cases hx : row.q.x = row.p.x
+          · have hsame := pallas_y_eq_or_neg_of_same_x hp hq hpx hqx hx
+            rcases hsame with hy | hy
+            · have hysum : yQPlusYP row ≠ 0 := by
+                unfold yQPlusYP
+                rw [hy]
+                exact pallas_add_self_ne_zero
+                  (pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx)
+              have hprod : row.p.x * row.q.x * yQPlusYP row ≠ 0 := by
+                exact mul_ne_zero (mul_ne_zero hpx hqx) hysum
+              exact hNonexceptionalSum hprod
+            · exact False.elim (hinv ⟨hx, hy⟩)
+          · have hxdiff : xQMinusXP row ≠ 0 := by
+              unfold xQMinusXP
+              intro hzero
+              exact hx (sub_eq_zero.mp hzero)
+            have hprod : row.p.x * row.q.x * xQMinusXP row ≠ 0 := by
+              exact mul_ne_zero (mul_ne_zero hpx hqx) hxdiff
+            exact hNonexceptionalDiff hprod
+        have hlambda :
+            row.lambda = lambdaValue ({ p := row.p, q := row.q } : AddInputs PallasBaseField) := by
+          by_cases hx : row.q.x = row.p.x
+          · have hpy : row.p.y ≠ 0 :=
+              pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx
+            have hflag : ifAlpha row ≠ 1 := by
+              unfold ifAlpha xQMinusXP
+              simp [hx]
+            have htangent := hTangent hflag
+            unfold tangentLine at htangent
+            unfold lambdaValue
+            simp [hx, hpy]
+            have hden : (2 : PallasBaseField) * row.p.y ≠ 0 :=
+              mul_ne_zero pallas_two_ne_zero hpy
+            field_simp [hden, pallas_two_ne_zero]
+            linear_combination htangent
+          · have hxdiff : xQMinusXP row ≠ 0 := by
+              unfold xQMinusXP
+              intro hzero
+              exact hx (sub_eq_zero.mp hzero)
+            have hslope := hSlope hxdiff
+            unfold slopeLine xQMinusXP at hslope hxdiff
+            unfold lambdaValue
+            simp [hx]
+            field_simp [hxdiff]
+            linear_combination hslope
+        unfold nonexceptionalResult at hr
+        rw [hlambda] at hr
+        unfold xPMinusXR at hr
+        unfold outputValue
+        simp [hpx, hqx, hinv]
+        rw [Point.mk.injEq]
+        constructor
+        · exact hr.1
+        · rw [← hr.1]
+          exact hr.2
+
 theorem spec_eq_swAdd_pallas {row : CompleteAddRow PallasBaseField}
     (hp : isPointOrIdentity row.p) (hq : isPointOrIdentity row.q) (hrow : Spec row) :
     pointCoords row.r =
       CompElliptic.CurveForms.ShortWeierstrass.add
         (0 : PallasBaseField) (pointCoords row.p) (pointCoords row.q) := by
-  sorry
+  rw [spec_eq_outputValue_pallas hp hq hrow]
+  exact outputValue_eq_swAdd_pallas hp hq
 
 namespace Entry
 
