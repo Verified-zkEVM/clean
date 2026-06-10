@@ -165,6 +165,41 @@ theorem pallasScalarMulCoords_isPointOrIdentity
   rw [hproduct]
   exact pallasScalarMulCoords_valid scalar hbase
 
+theorem isPallasScalarMul_isPointOrIdentity
+    {scalar : ℕ} {base product : Point PallasBaseField}
+    (hbase : isPointOrIdentity base)
+    (hmul : IsPallasScalarMul scalar base product) :
+    isPointOrIdentity product :=
+  pallasScalarMulCoords_isPointOrIdentity scalar hbase hmul
+
+theorem isPallasScalarMul_zero_iff
+    {base product : Point PallasBaseField} :
+    IsPallasScalarMul 0 base product ↔ isIdentityEncoding product := by
+  constructor
+  · intro hmul
+    rcases product with ⟨x, y⟩
+    simp [IsPallasScalarMul, pallasScalarMulCoords_zero, pointCoords,
+      isIdentityEncoding] at hmul ⊢
+    exact hmul
+  · intro hIdentity
+    rcases product with ⟨x, y⟩
+    simp [IsPallasScalarMul, pallasScalarMulCoords_zero, pointCoords,
+      isIdentityEncoding] at hIdentity ⊢
+    exact hIdentity
+
+theorem isPallasScalarMul_one_iff
+    {base product : Point PallasBaseField} :
+    IsPallasScalarMul 1 base product ↔ product = base := by
+  constructor
+  · intro hmul
+    rcases base with ⟨baseX, baseY⟩
+    rcases product with ⟨productX, productY⟩
+    simp [IsPallasScalarMul, pallasScalarMulCoords_one, pointCoords] at hmul ⊢
+    exact hmul
+  · intro hEq
+    rw [hEq]
+    simp [IsPallasScalarMul, pallasScalarMulCoords_one]
+
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
 
