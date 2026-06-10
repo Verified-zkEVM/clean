@@ -252,10 +252,8 @@ Complete-add modelling note:
 - The row assignment branches on `x = 0` as the identity case. That is only a semantic group
   operation when the curve model knows that no non-identity Pallas point has `x = 0`.
   CompElliptic proves this as `Pallas.no_onCurve_x_zero` from `5` being a quadratic
-  non-residue in the Pallas base field. Clean now has a generic
-  `Orchard.Ecc.NoCurvePointWithXZero` assumption bridge, but the concrete CompElliptic
-  Pasta field/curve facts still need to be imported or vendored before the complete-add API
-  wrapper can discharge that assumption concretely.
+  non-residue in the Pallas base field; the relevant Pasta field and curve facts are now
+  vendored under `Clean.Orchard.Specs.Elliptic`.
 - Therefore the missing Clean entry point should assume or prove valid point encodings for
   both inputs, compose the complete-add row internally, and specify CompElliptic
   short-Weierstrass addition. Downstream gadgets should not treat the row-level

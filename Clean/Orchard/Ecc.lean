@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard.Specs.Elliptic.Curves.Pasta
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
 import Clean.Utils.Tactics
 import Mathlib.Tactic
@@ -21,6 +22,8 @@ namespace Orchard
 namespace Ecc
 
 variable {F : Type} [Field F]
+
+abbrev PallasBaseField := CompElliptic.Fields.Pasta.PallasBaseField
 
 def pallasB : F := 5
 
@@ -55,6 +58,15 @@ def isPointOrIdentity (point : Point F) : Prop :=
 
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
+
+theorem pallasNoCurvePointWithXZero : NoCurvePointWithXZero (F := PallasBaseField) := by
+  intro y h
+  apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y
+  unfold CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
+  unfold onCurve curveEquation pallasB at h
+  rw [pow_two]
+  linear_combination h
 
 theorem xZeroImpliesIdentity_of_pointOrIdentity
     (hNoXZero : NoCurvePointWithXZero (F := F)) {point : Point F}
@@ -438,6 +450,14 @@ theorem outputValue_eq_swAdd_of_pointOrIdentity {input : AddInputs F}
   outputValue_eq_swAdd
     (xZeroImpliesIdentity_of_pointOrIdentity hNoXZero hp)
     (xZeroImpliesIdentity_of_pointOrIdentity hNoXZero hq)
+
+theorem outputValue_eq_swAdd_pallas {input : AddInputs PallasBaseField}
+    (hp : isPointOrIdentity input.p)
+    (hq : isPointOrIdentity input.q) :
+    pointCoords (outputValue input) =
+      CompElliptic.CurveForms.ShortWeierstrass.add
+        (0 : PallasBaseField) (pointCoords input.p) (pointCoords input.q) :=
+  outputValue_eq_swAdd_of_pointOrIdentity pallasNoCurvePointWithXZero hp hq
 
 end ValueModel
 
