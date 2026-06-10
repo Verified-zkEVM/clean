@@ -865,17 +865,6 @@ def Spec (row : Row R) : Prop :=
     row.absorbed.input1 = row.rho ∧
     row.hash = row.permuted0
 
-def constraints (row : Row R) : Prop :=
-  PadAndAdd.output0Check row.absorbed = 0 ∧
-    PadAndAdd.output1Check row.absorbed = 0 ∧
-    PadAndAdd.capacityCheck row.absorbed = 0 ∧
-    initial0Check row = 0 ∧
-    initial1Check row = 0 ∧
-    capacityCheck row = 0 ∧
-    input0Check row = 0 ∧
-    input1Check row = 0 ∧
-    hashCheck row = 0
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (PadAndAdd.output0Check row.absorbed)
   assertZero (PadAndAdd.output1Check row.absorbed)
