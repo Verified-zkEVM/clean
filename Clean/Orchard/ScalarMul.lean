@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard.Ecc
 import Clean.Orchard.NoteCommit
 import Clean.Orchard.Sinsemilla
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
@@ -973,19 +974,14 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
         rw [hEq]
         exact h_assumptions
       · have hOut := hPoint input_x |>.2 hSign
-        apply Ecc.isPointOrIdentity_of_pallasValid
-        have hValidInput := Ecc.pallasValid_of_isPointOrIdentity h_assumptions
-        have hValidNeg :=
-          CompElliptic.CurveForms.ShortWeierstrass.valid_neg hValidInput
-        have hCoords :
-            Ecc.pointCoords ({ x := input_x, y := input_signedY } : Ecc.Point Ecc.PallasBaseField) =
-              CompElliptic.CurveForms.ShortWeierstrass.neg
-                (Ecc.pointCoords ({ x := input_x, y := input_y } : Ecc.Point Ecc.PallasBaseField)) := by
-          apply Prod.ext
+        have hEq :
+            ({ x := input_x, y := input_signedY } : Ecc.Point Ecc.PallasBaseField) =
+              Ecc.negPoint ({ x := input_x, y := input_y } : Ecc.Point Ecc.PallasBaseField) := by
+          apply congrArg₂ Ecc.Point.mk
           · rfl
           · exact congrArg Prod.snd hOut
-        rw [hCoords]
-        exact hValidNeg
+        rw [hEq]
+        exact Ecc.negPoint_isPointOrIdentity h_assumptions
   completeness := by
     circuit_proof_start [main, Spec, Assumptions, SignedPointRelation, gateRow,
       inputPoint, outputPoint,

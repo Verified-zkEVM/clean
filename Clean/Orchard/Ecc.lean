@@ -60,6 +60,10 @@ def isPointOrIdentity (point : Point F) : Prop :=
 def pointCoords (point : Point F) : F × F :=
   (point.x, point.y)
 
+def negPoint [Neg F] (point : Point F) : Point F where
+  x := point.x
+  y := -point.y
+
 def pallasScalarMulCoords (scalar : ℕ) (base : Point PallasBaseField) :
     PallasBaseField × PallasBaseField :=
   CompElliptic.CurveForms.ShortWeierstrass.smul
@@ -136,6 +140,14 @@ theorem isPointOrIdentity_of_pallasValid {point : Point PallasBaseField}
   · exact Or.inl (by
       simp [pointCoords, isIdentityEncoding] at hIdentity ⊢
       exact hIdentity)
+
+theorem negPoint_isPointOrIdentity {point : Point PallasBaseField}
+    (h : isPointOrIdentity point) :
+    isPointOrIdentity (negPoint point) := by
+  apply isPointOrIdentity_of_pallasValid
+  have hValid := pallasValid_of_isPointOrIdentity h
+  simpa [negPoint, pointCoords]
+    using CompElliptic.CurveForms.ShortWeierstrass.valid_neg hValid
 
 theorem pallasScalarMulCoords_valid
     (scalar : ℕ) {base : Point PallasBaseField}
