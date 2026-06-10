@@ -88,22 +88,6 @@ def aPrimeCheck (row : Row R) : R :=
 def b2CPrimeCheck (row : Row R) : R :=
   row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP - row.b2CPrime
 
-def constraints (row : Row R) : Prop :=
-  NoteCommit.boolPoly row.b1 = 0 ∧
-    NoteCommit.boolPoly row.d1 = 0 ∧
-    bDecomposition row = 0 ∧
-    dDecomposition row = 0 ∧
-    akDecomposition row = 0 ∧
-    nkDecomposition row = 0 ∧
-    row.b1 * row.b0 = 0 ∧
-    row.b1 * row.z13A = 0 ∧
-    aPrimeCheck row = 0 ∧
-    row.b1 * row.z13APrime = 0 ∧
-    row.d1 * row.d0 = 0 ∧
-    row.d1 * row.z13C = 0 ∧
-    b2CPrimeCheck row = 0 ∧
-    row.d1 * row.z14B2CPrime = 0
-
 def Spec (row : Row R) : Prop :=
   IsBool row.b1 ∧
     IsBool row.d1 ∧
@@ -141,7 +125,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bDecomposition,
+    circuit_proof_start [main, Spec, NoteCommit.boolPoly, bDecomposition,
       dDecomposition, akDecomposition, nkDecomposition, aPrimeCheck, b2CPrimeCheck,
       NoteCommit.tP]
     rcases h_holds with
@@ -156,7 +140,7 @@ def circuit : FormalAssertion F Row where
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hb2CPrime).symm,
       mul_eq_zero.mp hz14B2CPrime⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, bDecomposition,
+    circuit_proof_start [main, Spec, NoteCommit.boolPoly, bDecomposition,
       dDecomposition, akDecomposition, nkDecomposition, aPrimeCheck, b2CPrimeCheck,
       NoteCommit.tP]
     rcases h_spec with
