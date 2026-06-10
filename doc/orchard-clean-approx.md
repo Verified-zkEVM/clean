@@ -116,4 +116,7 @@ Bottom-up implementation order currently inferred from those tagged sources:
      decomposition/canonicity gates.
    - Status: `gadget/add_chip.rs` is ported as `Orchard.Utilities.AddChip.circuit`.
      The four `Orchard circuit checks` constraints from `circuit.rs` are ported as
-     `Orchard.ActionChecks.circuit`.
+     `Orchard.ActionChecks.circuit`. `note_commit.rs` gates `NoteCommit MessagePiece b`,
+     `NoteCommit MessagePiece e`, and `NoteCommit input value` are ported as
+     `Orchard.NoteCommit.DecomposeB.circuit`, `Orchard.NoteCommit.DecomposeE.circuit`,
+     and `Orchard.NoteCommit.ValueCanonicity.circuit`.
