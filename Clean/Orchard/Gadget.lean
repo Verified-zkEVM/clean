@@ -56,39 +56,21 @@ def addRow (row : Row R) : Ecc.CompleteAddRow R where
   gamma := row.gamma
   delta := row.delta
 
-def constraints (row : Row R) : Prop :=
-  Ecc.CompleteAdd.constraints (addRow row)
+def Spec (row : Row R) : Prop :=
+  Ecc.CompleteAdd.Spec (addRow row)
 
 def main (row : Var Row F) : Circuit F Unit := do
   Ecc.CompleteAdd.circuit (addRow row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
-      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
-      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
-      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
-      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
+    simp_all
   completeness := by
-    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
-      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
-      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
-      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
-      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
+    simp_all
 
 end ValueCommitment
 
@@ -130,9 +112,9 @@ def scalarCheck (row : Row R) : R :=
 def extractCheck (row : Row R) : R :=
   row.nfPointX - row.nf
 
-def constraints (row : Row R) : Prop :=
+def Spec (row : Row R) : Prop :=
   scalarCheck row = 0 ∧
-    Ecc.CompleteAdd.constraints (addRow row) ∧
+    Ecc.CompleteAdd.Spec (addRow row) ∧
     extractCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
@@ -142,30 +124,14 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, scalarCheck, extractCheck, addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
-      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
-      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
-      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
-      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
-      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP,
-      Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    circuit_proof_start [main, Spec, scalarCheck, extractCheck, addRow,
+      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
     simp_all [sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, scalarCheck, extractCheck, addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
-      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
-      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
-      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
-      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
-      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP,
-      Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    circuit_proof_start [main, Spec, scalarCheck, extractCheck, addRow,
+      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
     simp_all [sub_eq_add_neg]
 
 end Nullifier
@@ -194,77 +160,33 @@ deriving ProvableStruct
 def hashOutputCheck (row : Row R) : R :=
   row.hash.hash - row.nullifier.poseidonHash
 
-def constraints (row : Row R) : Prop :=
-  Poseidon.Hash2.constraints row.hash ∧
-    Nullifier.constraints row.nullifier ∧
+def Spec (row : Row R) : Prop :=
+  Poseidon.Hash2.Spec row.hash ∧
+    Nullifier.Spec row.nullifier ∧
     hashOutputCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  assertZero (Poseidon.PadAndAdd.output0Check row.hash.absorbed)
-  assertZero (Poseidon.PadAndAdd.output1Check row.hash.absorbed)
-  assertZero (Poseidon.PadAndAdd.capacityCheck row.hash.absorbed)
-  assertZero (Poseidon.Hash2.initial0Check row.hash)
-  assertZero (Poseidon.Hash2.initial1Check row.hash)
-  assertZero (Poseidon.Hash2.capacityCheck row.hash)
-  assertZero (Poseidon.Hash2.input0Check row.hash)
-  assertZero (Poseidon.Hash2.input1Check row.hash)
-  assertZero (Poseidon.Hash2.hashCheck row.hash)
+  Poseidon.Hash2.circuit row.hash
   Nullifier.circuit row.nullifier
   assertZero (hashOutputCheck row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, hashOutputCheck, Poseidon.Hash2.constraints,
-      Poseidon.Hash2.initial0Check, Poseidon.Hash2.initial1Check,
-      Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
-      Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck,
-      Poseidon.PadAndAdd.output0Check, Poseidon.PadAndAdd.output1Check,
-      Poseidon.PadAndAdd.capacityCheck, Nullifier.circuit, Nullifier.constraints,
-      Nullifier.scalarCheck, Nullifier.extractCheck, Nullifier.addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
-      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
-      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
-      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
-      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
-    constructor
-    · have h := h_holds.1
-      rw [h_holds.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
-    · have h := h_holds.2.1
-      rw [h_holds.2.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
+    circuit_proof_start [main, Spec, hashOutputCheck, Poseidon.Hash2.circuit,
+      Poseidon.Hash2.Spec, Nullifier.circuit, Nullifier.Spec]
+    rcases h_holds with ⟨hHash, hNullifier, hOutput⟩
+    rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
+    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
+    simp_all [Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, hashOutputCheck, Poseidon.Hash2.constraints,
-      Poseidon.Hash2.initial0Check, Poseidon.Hash2.initial1Check,
-      Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
-      Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck,
-      Poseidon.PadAndAdd.output0Check, Poseidon.PadAndAdd.output1Check,
-      Poseidon.PadAndAdd.capacityCheck, Nullifier.circuit, Nullifier.constraints,
-      Nullifier.scalarCheck, Nullifier.extractCheck, Nullifier.addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
-      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
-      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
-      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
-      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
-    constructor
-    · have h := h_spec.1.1
-      rw [h_spec.1.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
-    · have h := h_spec.1.2.1
-      rw [h_spec.1.2.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
+    circuit_proof_start [main, Spec, hashOutputCheck, Poseidon.Hash2.circuit,
+      Poseidon.Hash2.Spec, Nullifier.circuit, Nullifier.Spec]
+    rcases h_spec with ⟨hHash, hNullifier, hOutput⟩
+    rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
+    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
+    simp_all [Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
 
 end NullifierWithHash
 
@@ -291,9 +213,9 @@ deriving ProvableStruct
 def hashOutputCheck (row : Row R) : R :=
   row.boundary.hash.hash - row.nullifier.poseidonHash
 
-def constraints (row : Row R) : Prop :=
-  Poseidon.Hash2PermutationBoundary.constraints row.boundary ∧
-    Nullifier.constraints row.nullifier ∧
+def Spec (row : Row R) : Prop :=
+  Poseidon.Hash2PermutationBoundary.Spec row.boundary ∧
+    Nullifier.Spec row.nullifier ∧
     hashOutputCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
@@ -303,61 +225,25 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, hashOutputCheck,
-      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.constraints,
-      Poseidon.Hash2PermutationBoundary.input0Check, Poseidon.Hash2PermutationBoundary.input1Check,
-      Poseidon.Hash2PermutationBoundary.input2Check, Poseidon.Hash2PermutationBoundary.outputCheck,
-      Poseidon.Hash2.circuit, Poseidon.Hash2.constraints, Poseidon.Hash2.initial0Check,
-      Poseidon.Hash2.initial1Check, Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
-      Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck, Poseidon.PadAndAdd.output0Check,
-      Poseidon.PadAndAdd.output1Check, Poseidon.PadAndAdd.capacityCheck,
-      Nullifier.circuit, Nullifier.constraints, Nullifier.scalarCheck, Nullifier.extractCheck,
-      Nullifier.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
-      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
-      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
-      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
-      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
-      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
-    constructor
-    · have h := h_holds.1.1.1
-      rw [h_holds.1.1.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
-    · have h := h_holds.1.1.2.1
-      rw [h_holds.1.1.2.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
+    circuit_proof_start [main, Spec, hashOutputCheck,
+      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
+      Nullifier.circuit, Nullifier.Spec]
+    rcases h_holds with ⟨hBoundary, hNullifier, hOutput⟩
+    rcases hBoundary with ⟨hHash, hBoundary0, hBoundary1, hBoundary2, hBoundaryOutput⟩
+    rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
+    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
+    simp_all [Poseidon.Hash2.Spec, Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
   completeness := by
-    circuit_proof_start [main, constraints, hashOutputCheck,
-      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.constraints,
-      Poseidon.Hash2PermutationBoundary.input0Check, Poseidon.Hash2PermutationBoundary.input1Check,
-      Poseidon.Hash2PermutationBoundary.input2Check, Poseidon.Hash2PermutationBoundary.outputCheck,
-      Poseidon.Hash2.circuit, Poseidon.Hash2.constraints, Poseidon.Hash2.initial0Check,
-      Poseidon.Hash2.initial1Check, Poseidon.Hash2.capacityCheck, Poseidon.Hash2.input0Check,
-      Poseidon.Hash2.input1Check, Poseidon.Hash2.hashCheck, Poseidon.PadAndAdd.output0Check,
-      Poseidon.PadAndAdd.output1Check, Poseidon.PadAndAdd.capacityCheck,
-      Nullifier.circuit, Nullifier.constraints, Nullifier.scalarCheck, Nullifier.extractCheck,
-      Nullifier.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
-      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
-      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
-      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
-      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
-      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
-    constructor
-    · have h := h_spec.1.1.1
-      rw [h_spec.1.1.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
-    · have h := h_spec.1.1.2.1
-      rw [h_spec.1.1.2.2.2.2.1] at h
-      simpa [sub_eq_add_neg] using h
+    circuit_proof_start [main, Spec, hashOutputCheck,
+      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
+      Nullifier.circuit, Nullifier.Spec]
+    rcases h_spec with ⟨hBoundary, hNullifier, hOutput⟩
+    rcases hBoundary with ⟨hHash, hBoundary0, hBoundary1, hBoundary2, hBoundaryOutput⟩
+    rcases hHash with ⟨hPad, hInitial0, hInitial1, hCapacity, hInput0, hInput1, hHash⟩
+    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
+    simp_all [Poseidon.Hash2.Spec, Poseidon.PadAndAdd.Spec, sub_eq_add_neg]
 
 end NullifierWithPoseidonBoundary
 
@@ -401,39 +287,21 @@ def addRow (row : Row R) : Ecc.CompleteAddRow R where
   gamma := row.gamma
   delta := row.delta
 
-def constraints (row : Row R) : Prop :=
-  Ecc.CompleteAdd.constraints (addRow row)
+def Spec (row : Row R) : Prop :=
+  Ecc.CompleteAdd.Spec (addRow row)
 
 def main (row : Var Row F) : Circuit F Unit := do
   Ecc.CompleteAdd.circuit (addRow row)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
-      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
-      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
-      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
-      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
+    simp_all
   completeness := by
-    circuit_proof_start [main, constraints, addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2,
-      Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c,
-      Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b,
-      Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a,
-      Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
+    simp_all
 
 end SpendAuth
 

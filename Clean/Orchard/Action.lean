@@ -368,11 +368,11 @@ def rkXCheck (row : Row R) : R :=
 def rkYCheck (row : Row R) : R :=
   row.spendAuth.rkY - row.action.rkY
 
-def constraints (row : Row R) : Prop :=
-  ActionWiring.constraints row.action ∧
-    Gadget.ValueCommitment.constraints row.valueCommitment ∧
-    Gadget.Nullifier.constraints row.nullifier ∧
-    Gadget.SpendAuth.constraints row.spendAuth ∧
+def Spec (row : Row R) : Prop :=
+  ActionWiring.Spec row.action ∧
+    Gadget.ValueCommitment.Spec row.valueCommitment ∧
+    Gadget.Nullifier.Spec row.nullifier ∧
+    Gadget.SpendAuth.Spec row.spendAuth ∧
     cvXCheck row = 0 ∧
     cvYCheck row = 0 ∧
     nfCheck row = 0 ∧
@@ -392,60 +392,28 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
-      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
-      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
-      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
-      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
-      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
-      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
-      Gadget.ValueCommitment.circuit, Gadget.ValueCommitment.constraints,
-      Gadget.ValueCommitment.addRow, Gadget.Nullifier.circuit, Gadget.Nullifier.constraints,
-      Gadget.Nullifier.scalarCheck, Gadget.Nullifier.extractCheck, Gadget.Nullifier.addRow,
-      Gadget.SpendAuth.circuit, Gadget.SpendAuth.constraints,
-      Gadget.SpendAuth.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
-      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
-      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
-      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
-      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
-      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
+    circuit_proof_start [main, Spec, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
+      ActionWiring.circuit, ActionWiring.Spec,
+      Gadget.ValueCommitment.circuit, Gadget.ValueCommitment.Spec,
+      Gadget.Nullifier.circuit, Gadget.Nullifier.Spec,
+      Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec]
     rcases h_holds with ⟨hAction, hValue, hNullifier, hSpendAuth, hCvX, hCvY, hNf, hRkX, hRkY⟩
-    exact ⟨ActionWiring.constraints_of_spec hAction, hValue, hNullifier, hSpendAuth,
+    exact ⟨hAction, hValue, hNullifier, hSpendAuth,
       by simpa [sub_eq_add_neg] using hCvX,
       by simpa [sub_eq_add_neg] using hCvY,
       by simpa [sub_eq_add_neg] using hNf,
       by simpa [sub_eq_add_neg] using hRkX,
       by simpa [sub_eq_add_neg] using hRkY⟩
   completeness := by
-    circuit_proof_start [main, constraints, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
-      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
-      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
-      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
-      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
-      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
-      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
-      Gadget.ValueCommitment.circuit, Gadget.ValueCommitment.constraints,
-      Gadget.ValueCommitment.addRow, Gadget.Nullifier.circuit, Gadget.Nullifier.constraints,
-      Gadget.Nullifier.scalarCheck, Gadget.Nullifier.extractCheck, Gadget.Nullifier.addRow,
-      Gadget.SpendAuth.circuit, Gadget.SpendAuth.constraints,
-      Gadget.SpendAuth.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints,
-      Ecc.CompleteAdd.poly1, Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a,
-      Ecc.CompleteAdd.poly3b, Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d,
-      Ecc.CompleteAdd.poly4a, Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a,
-      Ecc.CompleteAdd.poly5b, Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b,
-      Ecc.CompleteAdd.nonexceptionalXR, Ecc.CompleteAdd.nonexceptionalYR,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
+    circuit_proof_start [main, Spec, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
+      ActionWiring.circuit, ActionWiring.Spec,
+      Gadget.ValueCommitment.circuit, Gadget.ValueCommitment.Spec,
+      Gadget.Nullifier.circuit, Gadget.Nullifier.Spec,
+      Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec]
     rcases h_spec with ⟨hAction, hValue, hNullifier, hSpendAuth, hCvX, hCvY, hNf, hRkX, hRkY⟩
-    exact ⟨ActionWiring.spec_of_constraints hAction, hValue, hNullifier, hSpendAuth,
+    exact ⟨hAction, hValue, hNullifier, hSpendAuth,
       by simpa [sub_eq_add_neg] using hCvX,
       by simpa [sub_eq_add_neg] using hCvY,
       by simpa [sub_eq_add_neg] using hNf,
