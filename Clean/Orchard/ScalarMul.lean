@@ -71,9 +71,6 @@ private theorem boolPoly_eq_zero_of_isBool {x : F} (h : IsBool x) :
 
 namespace VarBaseLSB
 
-variable [DecidableEq F]
-variable [Field R] [DecidableEq R]
-
 structure Row (F : Type) where
   z1 : F
   z0 : F
@@ -83,31 +80,33 @@ structure Row (F : Type) where
   baseY : F
 deriving ProvableStruct
 
-def lsb (row : Row R) : R :=
+def lsb {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   row.z0 - row.z1 * 2
 
-def lsbX (row : Row R) : R :=
+def lsbX {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
+    (row : Row K) : K :=
   ternary (lsb row) row.xP (row.xP - row.baseX)
 
-def lsbY (row : Row R) : R :=
+def lsbY {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
+    (row : Row K) : K :=
   ternary (lsb row) row.yP (row.yP + row.baseY)
 
-def SelectedCorrectionPoint (row : Row R) : Prop :=
+def SelectedCorrectionPoint (row : Row Ecc.PallasBaseField) : Prop :=
   (lsb row = 0 →
     (row.xP, row.yP) =
       CompElliptic.CurveForms.ShortWeierstrass.neg (row.baseX, row.baseY)) ∧
     (lsb row = 1 →
       (row.xP, row.yP) = (0, 0))
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool (lsb row) ∧ SelectedCorrectionPoint row
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (NoteCommit.boolPoly (lsb row))
   assertZero (lsbX row)
   assertZero (lsbY row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
@@ -178,9 +177,6 @@ end VarBaseLSB
 
 namespace VarBaseCompleteBit
 
-variable [DecidableEq F]
-variable [Field R] [DecidableEq R]
-
 structure Row (F : Type) where
   zPrev : F
   zNext : F
@@ -188,27 +184,28 @@ structure Row (F : Type) where
   yP : F
 deriving ProvableStruct
 
-def bit (row : Row R) : R :=
+def bit {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   row.zNext - 2 * row.zPrev
 
-def ySwitch (row : Row R) : R :=
+def ySwitch {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
+    (row : Row K) : K :=
   ternary (bit row) (row.baseY - row.yP) (row.baseY + row.yP)
 
-def SelectedCompleteBitPoint (row : Row R) : Prop :=
-  ∀ x : R,
+def SelectedCompleteBitPoint (row : Row Ecc.PallasBaseField) : Prop :=
+  ∀ x : Ecc.PallasBaseField,
     (bit row = 0 →
       (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.baseY)) ∧
       (bit row = 1 →
         (x, row.yP) = (x, row.baseY))
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool (bit row) ∧ SelectedCompleteBitPoint row
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
   assertZero (ySwitch row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
