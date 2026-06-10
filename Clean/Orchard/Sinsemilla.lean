@@ -239,6 +239,95 @@ def circuit : FormalAssertion F Row where
 
 end Wiring
 
+/-!
+Merkle-path per-layer wiring.
+
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/merkle.rs`
+- `MerklePath::calculate_root`
+
+For each layer, the source conditionally swaps `(node, sibling)` according to the
+little-endian position bit, then hashes `(left, right)` with `hash_layer`. This assertion
+models one such layer. Repeating it outside this assertion models the full path.
+-/
+namespace PathStep
+
+structure Row (F : Type) where
+  node : F
+  sibling : F
+  posBit : F
+  left : F
+  right : F
+  layer : Wiring.Row F
+  nextNode : F
+deriving ProvableStruct
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+  [OfNat R (2 ^ 5)] [OfNat R (2 ^ 10)] [OfNat R (2 ^ 240)]
+
+def boolPoly (x : R) : R :=
+  x * (x - 1)
+
+def ternary (choice ifTrue ifFalse : R) : R :=
+  choice * ifTrue + (1 - choice) * ifFalse
+
+def leftCheck (row : Row R) : R :=
+  row.left - ternary row.posBit row.sibling row.node
+
+def rightCheck (row : Row R) : R :=
+  row.right - ternary row.posBit row.node row.sibling
+
+def layerLeftCheck (row : Row R) : R :=
+  row.layer.decomposition.leftNode - row.left
+
+def layerRightCheck (row : Row R) : R :=
+  row.layer.decomposition.rightNode - row.right
+
+def nextCheck (row : Row R) : R :=
+  row.layer.hash - row.nextNode
+
+def constraints (row : Row R) : Prop :=
+  boolPoly row.posBit = 0 ∧
+    leftCheck row = 0 ∧
+    rightCheck row = 0 ∧
+    Wiring.constraints row.layer ∧
+    layerLeftCheck row = 0 ∧
+    layerRightCheck row = 0 ∧
+    nextCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (boolPoly row.posBit)
+  assertZero (leftCheck row)
+  assertZero (rightCheck row)
+  assertZero (Merkle.a0 row.layer.decomposition - row.layer.decomposition.lWhole)
+  assertZero (Merkle.leftCheck row.layer.decomposition)
+  assertZero (Merkle.rightCheck row.layer.decomposition)
+  assertZero (Merkle.b1B2Check row.layer.decomposition)
+  assertZero (Wiring.hashCheck row.layer)
+  assertZero (layerLeftCheck row)
+  assertZero (layerRightCheck row)
+  assertZero (nextCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, leftCheck, rightCheck, layerLeftCheck,
+      layerRightCheck, nextCheck, ternary, boolPoly,
+      Wiring.constraints, Wiring.hashCheck, Merkle.constraints, Merkle.a0,
+      Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
+      Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, leftCheck, rightCheck, layerLeftCheck,
+      layerRightCheck, nextCheck, ternary, boolPoly,
+      Wiring.constraints, Wiring.hashCheck, Merkle.constraints, Merkle.a0,
+      Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
+      Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
+    simp_all [sub_eq_add_neg]
+
+end PathStep
+
 end Merkle
 
 end Sinsemilla

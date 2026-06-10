@@ -122,7 +122,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.Sinsemilla.Gate.circuit`. The MerkleCRH decomposition gate from
      `merkle/chip.rs` is ported as `Orchard.Sinsemilla.Merkle.circuit`; the
      fixed three-piece `MerkleInstructions::hash_layer` assignment and extracted hash
-     wiring is ported as `Orchard.Sinsemilla.Merkle.Wiring.circuit`.
+     wiring is ported as `Orchard.Sinsemilla.Merkle.Wiring.circuit`. One layer of
+     `MerklePath::calculate_root`, including the position-bit conditional swap and
+     `hash_layer` transition, is ported as `Orchard.Sinsemilla.Merkle.PathStep.circuit`.
 7. Orchard custom gates and composition:
    `orchard/src/circuit.rs`,
    `orchard/src/circuit/commit_ivk.rs`,
