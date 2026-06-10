@@ -82,9 +82,6 @@ def next2Check (row : Row R) : R :=
 def Spec (row : Row R) : Prop :=
   row.next0 = output0 row ∧ row.next1 = output1 row ∧ row.next2 = output2 row
 
-def constraints (row : Row R) : Prop :=
-  next0Check row = 0 ∧ next1Check row = 0 ∧ next2Check row = 0
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (next0Check row)
   assertZero (next1Check row)
@@ -218,12 +215,6 @@ def Spec (row : Row R) : Prop :=
     nextInv0 row = pow5 (mid0 row + row.rcB0) ∧
     nextInv1 row = mid1 row + row.rcB1 ∧
     nextInv2 row = mid2 row + row.rcB2
-
-def constraints (row : Row R) : Prop :=
-  mid0Check row = 0 ∧
-    next0Check row = 0 ∧
-    next1Check row = 0 ∧
-    next2Check row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (mid0Check row)
@@ -413,41 +404,41 @@ def assertStateEq (a b : State (Expression F)) : Circuit F Unit := do
   assertZero (state1Check a b)
   assertZero (state2Check a b)
 
-def fullConstraints (rows : FullRows R) : Prop :=
-  FullRound.constraints rows.r0 ∧
-    FullRound.constraints rows.r1 ∧
-    FullRound.constraints rows.r2 ∧
-    FullRound.constraints rows.r3
+def fullSpec (rows : FullRows R) : Prop :=
+  FullRound.Spec rows.r0 ∧
+    FullRound.Spec rows.r1 ∧
+    FullRound.Spec rows.r2 ∧
+    FullRound.Spec rows.r3
 
-def partialConstraints (rows : PartialRows R) : Prop :=
-  PartialRounds.constraints rows.r0 ∧
-    PartialRounds.constraints rows.r1 ∧
-    PartialRounds.constraints rows.r2 ∧
-    PartialRounds.constraints rows.r3 ∧
-    PartialRounds.constraints rows.r4 ∧
-    PartialRounds.constraints rows.r5 ∧
-    PartialRounds.constraints rows.r6 ∧
-    PartialRounds.constraints rows.r7 ∧
-    PartialRounds.constraints rows.r8 ∧
-    PartialRounds.constraints rows.r9 ∧
-    PartialRounds.constraints rows.r10 ∧
-    PartialRounds.constraints rows.r11 ∧
-    PartialRounds.constraints rows.r12 ∧
-    PartialRounds.constraints rows.r13 ∧
-    PartialRounds.constraints rows.r14 ∧
-    PartialRounds.constraints rows.r15 ∧
-    PartialRounds.constraints rows.r16 ∧
-    PartialRounds.constraints rows.r17 ∧
-    PartialRounds.constraints rows.r18 ∧
-    PartialRounds.constraints rows.r19 ∧
-    PartialRounds.constraints rows.r20 ∧
-    PartialRounds.constraints rows.r21 ∧
-    PartialRounds.constraints rows.r22 ∧
-    PartialRounds.constraints rows.r23 ∧
-    PartialRounds.constraints rows.r24 ∧
-    PartialRounds.constraints rows.r25 ∧
-    PartialRounds.constraints rows.r26 ∧
-    PartialRounds.constraints rows.r27
+def partialSpec (rows : PartialRows R) : Prop :=
+  PartialRounds.Spec rows.r0 ∧
+    PartialRounds.Spec rows.r1 ∧
+    PartialRounds.Spec rows.r2 ∧
+    PartialRounds.Spec rows.r3 ∧
+    PartialRounds.Spec rows.r4 ∧
+    PartialRounds.Spec rows.r5 ∧
+    PartialRounds.Spec rows.r6 ∧
+    PartialRounds.Spec rows.r7 ∧
+    PartialRounds.Spec rows.r8 ∧
+    PartialRounds.Spec rows.r9 ∧
+    PartialRounds.Spec rows.r10 ∧
+    PartialRounds.Spec rows.r11 ∧
+    PartialRounds.Spec rows.r12 ∧
+    PartialRounds.Spec rows.r13 ∧
+    PartialRounds.Spec rows.r14 ∧
+    PartialRounds.Spec rows.r15 ∧
+    PartialRounds.Spec rows.r16 ∧
+    PartialRounds.Spec rows.r17 ∧
+    PartialRounds.Spec rows.r18 ∧
+    PartialRounds.Spec rows.r19 ∧
+    PartialRounds.Spec rows.r20 ∧
+    PartialRounds.Spec rows.r21 ∧
+    PartialRounds.Spec rows.r22 ∧
+    PartialRounds.Spec rows.r23 ∧
+    PartialRounds.Spec rows.r24 ∧
+    PartialRounds.Spec rows.r25 ∧
+    PartialRounds.Spec rows.r26 ∧
+    PartialRounds.Spec rows.r27
 
 def fullLinks (rows : FullRows R) : Prop :=
   stateEq (fullNext rows.r0) (fullCur rows.r1) ∧
@@ -483,10 +474,10 @@ def partialLinks (rows : PartialRows R) : Prop :=
     stateEq (partialNext rows.r25) (partialCur rows.r26) ∧
     stateEq (partialNext rows.r26) (partialCur rows.r27)
 
-def constraints (row : Row R) : Prop :=
-  fullConstraints row.firstFull ∧
-    partialConstraints row.partialRows ∧
-    fullConstraints row.lastFull ∧
+def Spec (row : Row R) : Prop :=
+  fullSpec row.firstFull ∧
+    partialSpec row.partialRows ∧
+    fullSpec row.lastFull ∧
     stateEq row.initial (fullCur row.firstFull.r0) ∧
     fullLinks row.firstFull ∧
     stateEq (fullNext row.firstFull.r3) (partialCur row.partialRows.r0) ∧
@@ -495,7 +486,7 @@ def constraints (row : Row R) : Prop :=
     fullLinks row.lastFull ∧
     stateEq (fullNext row.lastFull.r3) row.output
 
-def wiringConstraints (row : Row R) : Prop :=
+def wiringSpec (row : Row R) : Prop :=
   stateEq row.initial (fullCur row.firstFull.r0) ∧
     fullLinks row.firstFull ∧
     stateEq (fullNext row.firstFull.r3) (partialCur row.partialRows.r0) ∧
