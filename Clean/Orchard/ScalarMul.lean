@@ -404,9 +404,6 @@ end VarBaseIncomplete
 
 namespace VarBaseOverflow
 
-variable [OfNat R (2 ^ 124)] [OfNat R (2 ^ 130)]
-  [OfNat R 45560315531506369815346746415080538113]
-
 structure Row (F : Type) where
   z0 : F
   z130 : F
@@ -417,36 +414,37 @@ structure Row (F : Type) where
   s : F
 deriving ProvableStruct
 
-def sCheck (row : Row R) : R :=
+def sCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 130)] (row : Row K) : K :=
   row.s - (row.alpha + row.k254 * OfNat.ofNat (2 ^ 130))
 
-def recovery (row : Row R) : R :=
+def recovery {K : Type} [Sub K] [OfNat K 2]
+    [OfNat K 45560315531506369815346746415080538113] (row : Row K) : K :=
   row.z0 - row.alpha - tQ
 
-def loZero (row : Row R) : R :=
+def loZero {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 124)] (row : Row K) : K :=
   row.k254 * (row.z130 - OfNat.ofNat (2 ^ 124))
 
-def sMinusLo130Check (row : Row R) : R :=
+def sMinusLo130Check {K : Type} [Mul K] (row : Row K) : K :=
   row.k254 * row.sMinusLo130
 
-def canonicity (row : Row R) : R :=
+def canonicity {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
   (1 - row.k254) * (1 - row.z130 * row.eta) * row.sMinusLo130
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   row.s = row.alpha + row.k254 * OfNat.ofNat (2 ^ 130) ∧
     row.z0 = row.alpha + tQ ∧
     (row.k254 = 0 ∨ row.z130 = OfNat.ofNat (2 ^ 124)) ∧
     (row.k254 = 0 ∨ row.sMinusLo130 = 0) ∧
     (row.k254 = 1 ∨ row.z130 * row.eta = 1 ∨ row.sMinusLo130 = 0)
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (sCheck row)
   assertZero (recovery row)
   assertZero (loZero row)
   assertZero (sMinusLo130Check row)
   assertZero (canonicity row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
