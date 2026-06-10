@@ -703,7 +703,7 @@ def constraints (row : Row R) : Prop :=
     cmYCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
-  Sinsemilla.Commit.main row.commit
+  Sinsemilla.Commit.circuit row.commit
   assertZero (cmXCheck row)
   assertZero (cmYCheck row)
 
@@ -712,8 +712,8 @@ def circuit : FormalAssertion F Row where
   Spec := constraints
   soundness := by
     circuit_proof_start [main, constraints, cmXCheck, cmYCheck,
-      Sinsemilla.Commit.main, Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
-      Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
+      Sinsemilla.Commit.circuit, Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
+      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
       Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
       Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
       Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
@@ -724,8 +724,8 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
   completeness := by
     circuit_proof_start [main, constraints, cmXCheck, cmYCheck,
-      Sinsemilla.Commit.main, Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
-      Ecc.CompleteAdd.main, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
+      Sinsemilla.Commit.circuit, Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
+      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
       Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
       Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
       Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
