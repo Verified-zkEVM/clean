@@ -105,6 +105,12 @@ need no porting):
 Also in this phase: decidable `ComputableWitnesses` for structured IR (syntactic
 read-below-offset check), replacing semantic side-condition proofs where possible.
 
+Port pattern observed (IsZeroField, And8, Xor64, Xor32): the circuit change is a
+1:1 transliteration of the callback into IR; proofs survive untouched except where
+they used the *default* simp set on witness residue (`simpa using h_env 0`-style) —
+those need `circuit_norm` (which carries the IR eval lemmas) added to the simp call.
+
+
 Acceptance: the seven target families (Keccak, SHA256, FemtoCairo,
 FibonacciWithChannels, Bits, IsZero, Poseidon) fully free of `.native` in their
 witness paths; proofs intact; green. This is the basis on which the PR is judged.
@@ -129,7 +135,7 @@ witness paths; proofs intact; green. This is the basis on which the PR is judged
 - [x] Phase 1 — IR sketch (`Clean/Circuit/WitnessIR.lean`)
 - [x] Phase 2 — core integration
 - [x] Phase 3 — reference interpreter + equivalence proof (`Clean/Circuit/WitnessGeneration.lean`)
-- [ ] Phase 4 — authoring surface
-- [ ] Phase 5 — gadget ports (10 items above)
+- [x] Phase 4 — authoring surface (witnessField/witnessVector/ProvableType.witness + ofFExpr(s)/ofExprs; <== emits IR)
+- [ ] Phase 5 — gadget ports (done: IsZeroField, And8, Xor64, Xor32)
 - [ ] Phase 6 — exportability checker + serializer
 - [ ] Phase 7 — cleanup

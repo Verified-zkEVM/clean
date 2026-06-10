@@ -59,6 +59,12 @@ theorem ext {x y : F} (h : val x = val y) : x = y :=
 theorem ext_iff {x y : F} : x = y ↔ val x = val y :=
   ⟨fun h => h ▸ rfl, ext⟩
 
+/-- `val` is injective, as a simp lemma: value equality reduces to field equality.
+Tagged `circuit_norm` so that witness-IR `feq` conditions normalize to propositional
+field equality in circuit proofs. -/
+@[circuit_norm]
+theorem val_inj {x y : F} : val x = val y ↔ x = y := ext_iff.symm
+
 end FiniteField
 
 /-! ## Instance for prime fields (`F p = ZMod p`) -/
@@ -84,5 +90,9 @@ instance {p : ℕ} [Fact p.Prime] : FiniteField (F p) where
     rw [ZMod.val_one]
 
 /-- On prime fields, `fromNat` is just `Nat.cast`. -/
-@[simp] theorem FiniteField.fromNat_F {p : ℕ} [Fact p.Prime] (n : ℕ) :
+@[simp, circuit_norm] theorem FiniteField.fromNat_F {p : ℕ} [Fact p.Prime] (n : ℕ) :
     (FiniteField.fromNat n : F p) = (n : F p) := rfl
+
+/-- On prime fields, `val` is just `ZMod.val`. -/
+@[simp, circuit_norm] theorem FiniteField.val_F {p : ℕ} [Fact p.Prime] (x : F p) :
+    FiniteField.val x = ZMod.val x := rfl

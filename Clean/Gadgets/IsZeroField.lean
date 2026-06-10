@@ -12,8 +12,7 @@ Returns 1 if the input is 0, otherwise returns 0.
 -/
 def circuit : FormalCircuit F field field where
   main (x : Expression F) := do
-    let z ← witnessNative fun env =>
-      if env x ≠ 0 then (env x)⁻¹ else 0
+    let z ← witnessField (.ite (.feq (.expr x) (.const 0)) (.const 0) (.inv (.expr x)))
      -- if x = 0 then b = 1
     let b <== 1 - x * z
       -- if x ≠ 0 then b = 0

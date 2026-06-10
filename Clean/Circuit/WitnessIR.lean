@@ -165,6 +165,7 @@ variable [FiniteField F]
 
 mutual
 
+@[circuit_norm]
 def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .expr e => e.eval ctx.env.toEnvironment
   | .envGet i => ctx.env.get (i.eval ctx)
@@ -184,6 +185,7 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .hintGet key n row col =>
     ((ctx.env.hint key n)[row.eval ctx]?.getD (.replicate n 0))[col.val]'col.isLt
 
+@[circuit_norm]
 def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
   | .const n => n
   | .val x => FiniteField.val (x.eval ctx)
@@ -203,6 +205,7 @@ def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
   | .shiftR x y => x.eval ctx >>> y.eval ctx
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
 
+@[circuit_norm]
 def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
   | .feq x y => FiniteField.val (x.eval ctx) = FiniteField.val (y.eval ctx)
   | .lt x y => x.eval ctx < y.eval ctx
@@ -280,6 +283,10 @@ simp-normalize to exactly the same hypothesis shapes as the closures they replac
 /-- Witness program producing a single scalar from a field-sorted IR expression. -/
 def WitgenIR.ofFExpr (e : FExpr F) : WitgenIR F 1 := .prog [] (.lit [e]) rfl
 
+/-- Witness program computing each output element from its own IR expression. -/
+def WitgenIR.ofFExprs {n : ℕ} (es : Vector (FExpr F) n) : WitgenIR F n :=
+  .prog [] (.lit es.toList) (by simp [VExpr.length])
+
 /-- Witness program copying the values of given circuit expressions (used by `<==`). -/
 def WitgenIR.ofExprs {n : ℕ} (es : Vector (Expression F) n) : WitgenIR F n :=
   .prog [] (.lit (es.toList.map .expr)) (by simp [VExpr.length])
@@ -292,6 +299,29 @@ theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression
     (ofExprs es).eval env = es.map (Expression.eval env.toEnvironment) := by
   ext i hi
   simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps, Vector.cast]
+
+/-- Scalar witness programs evaluate elementwise to their IR expression. -/
+@[circuit_norm ↓]
+theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
+    (env : ProverEnvironment F) (i : ℕ) (hi : i < 1) :
+    ((ofFExpr e).eval env)[i] = e.eval { env := env } := by
+  rcases Nat.lt_one_iff.mp hi
+  rfl
+
+/-- Elementwise evaluation of multi-element witness programs, keyed on `getElem`. -/
+@[circuit_norm ↓]
+theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (FExpr F) n)
+    (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
+    ((ofFExprs es).eval env)[i] = es[i].eval { env := env } := by
+  simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps, Vector.cast]
+
+/-- Field-equality conditions decide propositional equality (via the injective
+`ℕ` embedding). -/
+@[circuit_norm]
+theorem BExpr.eval_feq_iff [FiniteField F] (x y : FExpr F) (ctx : Ctx F) :
+    (BExpr.feq x y).eval ctx = true ↔ x.eval ctx = y.eval ctx := by
+  simp only [BExpr.eval, decide_eq_true_eq]
+  exact FiniteField.ext_iff.symm
 
 /-- Shape-exact evaluation for expression-copying scalar witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/

@@ -17,16 +17,11 @@ deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
-  let z ← witnessNative fun env =>
-    let z0 := (env x.x0).val ^^^ (env y.x0).val
-    let z1 := (env x.x1).val ^^^ (env y.x1).val
-    let z2 := (env x.x2).val ^^^ (env y.x2).val
-    let z3 := (env x.x3).val ^^^ (env y.x3).val
-    let z4 := (env x.x4).val ^^^ (env y.x4).val
-    let z5 := (env x.x5).val ^^^ (env y.x5).val
-    let z6 := (env x.x6).val ^^^ (env y.x6).val
-    let z7 := (env x.x7).val ^^^ (env y.x7).val
-    U64.mk z0 z1 z2 z3 z4 z5 z6 z7
+  let xorByte (a b : Expression (F p)) : Witgen.FExpr (F p) :=
+    .ofNat (.lxor (.val (.expr a)) (.val (.expr b)))
+  let z ← ProvableType.witness (α := U64) (.ofFExprs #v[
+    xorByte x.x0 y.x0, xorByte x.x1 y.x1, xorByte x.x2 y.x2, xorByte x.x3 y.x3,
+    xorByte x.x4 y.x4, xorByte x.x5 y.x5, xorByte x.x6 y.x6, xorByte x.x7 y.x7])
 
   lookup ByteXorTable (x.x0, y.x0, z.x0)
   lookup ByteXorTable (x.x1, y.x1, z.x1)
@@ -101,8 +96,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [Assumptions, circuit_norm, U64.Normalized] at as
   simp only [h_input, circuit_norm, main, ByteXorTable, Fin.forall_iff] at h_env ⊢
   simp only [circuit_norm, explicit_provable_type] at h_env ⊢
-  have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
-  simp_all [xor_val]
+  have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa [circuit_norm, h_input] using h_env 0
+  simp_all [circuit_norm, xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U64 where
   main
