@@ -17,8 +17,18 @@ References:
 - `q_mul_1 == 1 checks`
 - shared `for_loop` constraints for `q_mul_2 == 1 checks` and `q_mul_3 == 1 checks`
 
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul/overflow.rs`
+- `overflow checks`
+
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul/complete.rs`
 - `Decompose scalar for complete bits of variable-base mul`
+
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed.rs`
+- `Running sum coordinates check`
+- `coords_check`
+
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`
+- `Full-width fixed-base scalar mul`
 
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`
 - `Short fixed-base mul gate`
@@ -36,6 +46,9 @@ variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R] [OfNat R 2]
 
 def ternary (choice ifTrue ifFalse : R) : R :=
   choice * ifTrue + (1 - choice) * ifFalse
+
+def tQ [OfNat R 45560315531506369815346746415080538113] : R :=
+  OfNat.ofNat 45560315531506369815346746415080538113
 
 namespace VarBaseLSB
 
@@ -241,6 +254,190 @@ def circuit : FormalAssertion F Row where
 end MainLoop
 
 end VarBaseIncomplete
+
+namespace VarBaseOverflow
+
+variable [OfNat R (2 ^ 124)] [OfNat R (2 ^ 130)]
+  [OfNat R 45560315531506369815346746415080538113]
+
+structure Row (F : Type) where
+  z0 : F
+  z130 : F
+  eta : F
+  k254 : F
+  alpha : F
+  sMinusLo130 : F
+  s : F
+deriving ProvableStruct
+
+def sCheck (row : Row R) : R :=
+  row.s - (row.alpha + row.k254 * OfNat.ofNat (2 ^ 130))
+
+def recovery (row : Row R) : R :=
+  row.z0 - row.alpha - tQ
+
+def loZero (row : Row R) : R :=
+  row.k254 * (row.z130 - OfNat.ofNat (2 ^ 124))
+
+def sMinusLo130Check (row : Row R) : R :=
+  row.k254 * row.sMinusLo130
+
+def canonicity (row : Row R) : R :=
+  (1 - row.k254) * (1 - row.z130 * row.eta) * row.sMinusLo130
+
+def constraints (row : Row R) : Prop :=
+  sCheck row = 0 ∧
+    recovery row = 0 ∧
+    loZero row = 0 ∧
+    sMinusLo130Check row = 0 ∧
+    canonicity row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  assertZero (sCheck row)
+  assertZero (recovery row)
+  assertZero (loZero row)
+  assertZero (sMinusLo130Check row)
+  assertZero (canonicity row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, sCheck, recovery, loZero,
+      sMinusLo130Check, canonicity, tQ]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, sCheck, recovery, loZero,
+      sMinusLo130Check, canonicity, tQ]
+    simp_all [sub_eq_add_neg]
+
+end VarBaseOverflow
+
+namespace FixedBase
+
+variable [OfNat R 3] [OfNat R 4] [OfNat R 5] [OfNat R 6] [OfNat R 7] [OfNat R 8]
+
+structure CoordsRow (F : Type) where
+  window : F
+  xP : F
+  yP : F
+  z : F
+  u : F
+  lagrange0 : F
+  lagrange1 : F
+  lagrange2 : F
+  lagrange3 : F
+  lagrange4 : F
+  lagrange5 : F
+  lagrange6 : F
+  lagrange7 : F
+deriving ProvableStruct
+
+def interpolatedX (row : CoordsRow R) : R :=
+  row.lagrange0 +
+    row.window * row.lagrange1 +
+    row.window * row.window * row.lagrange2 +
+    row.window * row.window * row.window * row.lagrange3 +
+    row.window * row.window * row.window * row.window * row.lagrange4 +
+    row.window * row.window * row.window * row.window * row.window * row.lagrange5 +
+    row.window * row.window * row.window * row.window * row.window * row.window * row.lagrange6 +
+    row.window * row.window * row.window * row.window * row.window * row.window * row.window *
+      row.lagrange7
+
+def xCheck (row : CoordsRow R) : R :=
+  interpolatedX row - row.xP
+
+def yCheck (row : CoordsRow R) : R :=
+  row.u * row.u - row.yP - row.z
+
+def onCurve (row : CoordsRow R) : R :=
+  row.yP * row.yP - row.xP * row.xP * row.xP - 5
+
+def coordsConstraints (row : CoordsRow R) : Prop :=
+  xCheck row = 0 ∧ yCheck row = 0 ∧ onCurve row = 0
+
+def coordsMain (row : Var CoordsRow F) : Circuit F Unit := do
+  assertZero (xCheck row)
+  assertZero (yCheck row)
+  assertZero (onCurve row)
+
+namespace Coords
+
+def circuit : FormalAssertion F CoordsRow where
+  main := coordsMain
+  Spec := coordsConstraints
+  soundness := by
+    circuit_proof_start [coordsMain, coordsConstraints, xCheck, yCheck, onCurve,
+      interpolatedX]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [coordsMain, coordsConstraints, xCheck, yCheck, onCurve,
+      interpolatedX]
+    simp_all [sub_eq_add_neg]
+
+end Coords
+
+namespace RunningSumCoords
+
+structure Row (F : Type) extends CoordsRow F where
+  zCur : F
+  zNext : F
+deriving ProvableStruct
+
+def word (row : Row R) : R :=
+  row.zCur - row.zNext * 8
+
+def coordsRow (row : Row R) : CoordsRow R :=
+  { row.toCoordsRow with window := word row }
+
+def constraints (row : Row R) : Prop :=
+  coordsConstraints (coordsRow row)
+
+def main (row : Var Row F) : Circuit F Unit := do
+  coordsMain { row.toCoordsRow with window := word row }
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, coordsRow, coordsMain, coordsConstraints,
+      word, xCheck, yCheck, onCurve, interpolatedX]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, coordsRow, coordsMain, coordsConstraints,
+      word, xCheck, yCheck, onCurve, interpolatedX]
+    simp_all [sub_eq_add_neg]
+
+end RunningSumCoords
+
+namespace FullWidth
+
+def rangeCheck (row : CoordsRow R) : R :=
+  row.window * (1 - row.window) * (2 - row.window) * (3 - row.window) *
+    (4 - row.window) * (5 - row.window) * (6 - row.window) * (7 - row.window)
+
+def constraints (row : CoordsRow R) : Prop :=
+  coordsConstraints row ∧ rangeCheck row = 0
+
+def main (row : Var CoordsRow F) : Circuit F Unit := do
+  coordsMain row
+  assertZero (rangeCheck row)
+
+def circuit : FormalAssertion F CoordsRow where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, coordsMain, coordsConstraints, rangeCheck,
+      xCheck, yCheck, onCurve, interpolatedX]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, coordsMain, coordsConstraints, rangeCheck,
+      xCheck, yCheck, onCurve, interpolatedX]
+    simp_all [sub_eq_add_neg]
+
+end FullWidth
+
+end FixedBase
 
 namespace FixedShort
 
