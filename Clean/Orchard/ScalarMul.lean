@@ -814,9 +814,6 @@ end FixedBase
 
 namespace FixedShort
 
-variable [DecidableEq F]
-variable [Field R] [DecidableEq R]
-
 structure Row (F : Type) where
   yP : F
   yA : F
@@ -824,34 +821,34 @@ structure Row (F : Type) where
   sign : F
 deriving ProvableStruct
 
-def signCheck (row : Row R) : R :=
+def signCheck {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
   row.sign * row.sign - 1
 
-def yCheck (row : Row R) : R :=
+def yCheck {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   (row.yP - row.yA) * (row.yP + row.yA)
 
-def negationCheck (row : Row R) : R :=
+def negationCheck {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
   row.sign * row.yP - row.yA
 
-def IsSign (sign : R) : Prop :=
+def IsSign (sign : Ecc.PallasBaseField) : Prop :=
   sign = 1 ∨ sign = 0 - 1
 
-def SignedPointSelection (row : Row R) : Prop :=
-  ∀ x : R,
+def SignedPointSelection (row : Row Ecc.PallasBaseField) : Prop :=
+  ∀ x : Ecc.PallasBaseField,
     (row.sign = 1 → (x, row.yP) = (x, row.yA)) ∧
       (row.sign = 0 - 1 →
         (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.yA))
 
-def Spec (row : Row R) : Prop :=
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointSelection row
 
-def main (row : Var Row F) : Circuit F Unit := do
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (NoteCommit.boolPoly row.lastWindow)
   assertZero (signCheck row)
   assertZero (yCheck row)
   assertZero (negationCheck row)
 
-def circuit : FormalAssertion F Row where
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
