@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
@@ -51,6 +52,9 @@ def isIdentityEncoding (point : Point F) : Prop :=
 
 def isPointOrIdentity (point : Point F) : Prop :=
   isIdentityEncoding point ∨ onCurve point
+
+def pointCoords (point : Point F) : F × F :=
+  (point.x, point.y)
 
 namespace PointOrIdentity
 
@@ -133,8 +137,8 @@ Reference:
 - `incomplete addition`
 
 The Rust assignment rejects exceptional cases where either input is encoded identity or
-`x_p = x_q`. This Clean approximation exposes the nonzero-denominator requirement as an
-assumption and models the two custom-gate polynomial constraints directly.
+`x_p = x_q`. This Clean approximation exposes those rejection cases as assumptions and
+specifies the output as short-Weierstrass addition.
 -/
 
 structure AddInputs (F : Type) where
@@ -144,6 +148,8 @@ deriving ProvableStruct
 
 namespace IncompleteAdd
 
+variable [DecidableEq F]
+
 def lambda (input : AddInputs F) : F :=
   (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
 
@@ -152,6 +158,30 @@ def outputValue (input : AddInputs F) : Point F :=
   let xR := slope * slope - input.p.x - input.q.x
   let yR := slope * (input.p.x - xR) - input.p.y
   { x := xR, y := yR }
+
+theorem outputValue_eq_swAdd {input : AddInputs F}
+    (hp : ¬ isIdentityEncoding input.p) (hq : ¬ isIdentityEncoding input.q)
+    (hx : input.p.x ≠ input.q.x) :
+    pointCoords (outputValue input) =
+      CompElliptic.CurveForms.ShortWeierstrass.add
+        (0 : F) (pointCoords input.p) (pointCoords input.q) := by
+  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
+  unfold pointCoords outputValue lambda CompElliptic.CurveForms.ShortWeierstrass.add
+  unfold isIdentityEncoding at hp hq
+  simp only
+  have hp0 : ¬(px, py) = (0, 0) := by
+    intro h
+    apply hp
+    exact Prod.ext_iff.mp h
+  have hq0 : ¬(qx, qy) = (0, 0) := by
+    intro h
+    apply hq
+    exact Prod.ext_iff.mp h
+  rw [if_neg hp0, if_neg hq0]
+  have hx' : ¬ px = qx := hx
+  rw [if_neg hx']
+  rw [Prod.mk.injEq]
+  constructor <;> ring
 
 def poly1 (input : AddInputs F) (output : Point F) : F :=
   (output.x + input.q.x + input.p.x) *
@@ -182,14 +212,19 @@ def main (input : Var AddInputs F) : Circuit F (Var Point F) := do
   return { x := xR, y := yR }
 
 def Assumptions (input : AddInputs F) : Prop :=
-  input.p.x ≠ input.q.x
+  ¬ isIdentityEncoding input.p ∧
+    ¬ isIdentityEncoding input.q ∧
+    input.p.x ≠ input.q.x
 
 def Spec (input : AddInputs F) (output : Point F) : Prop :=
-  output = outputValue input
+  pointCoords output =
+    CompElliptic.CurveForms.ShortWeierstrass.add
+      (0 : F) (pointCoords input.p) (pointCoords input.q)
 
 instance elaborated : ElaboratedCircuit F AddInputs Point main := by
   elaborate_circuit
 
+omit [DecidableEq F] in
 theorem outputValue_constraints {input : AddInputs F} (hx : input.p.x ≠ input.q.x) :
     constraints input (outputValue input) := by
   unfold constraints poly1 poly2 outputValue lambda
@@ -199,6 +234,7 @@ theorem outputValue_constraints {input : AddInputs F} (hx : input.p.x ≠ input.
     exact (sub_eq_zero.mp h).symm
   constructor <;> field_simp [hden] <;> ring
 
+omit [DecidableEq F] in
 theorem constraints_eq_outputValue {input : AddInputs F} {output : Point F}
     (hx : input.p.x ≠ input.q.x) (h : constraints input output) :
     output = outputValue input := by
@@ -242,11 +278,14 @@ theorem soundness : Soundness F main Assumptions Spec := by
   have hc : constraints { p := { x := px, y := py }, q := { x := qx, y := qy } }
       { x := env.get i₀, y := env.get (i₀ + 1) } := by
     simp_all [constraints, poly1, poly2, sub_eq_add_neg]
-  exact constraints_eq_outputValue h_assumptions hc
+  have hout := constraints_eq_outputValue h_assumptions.2.2 hc
+  rw [hout]
+  exact outputValue_eq_swAdd h_assumptions.1 h_assumptions.2.1 h_assumptions.2.2
 
+omit [DecidableEq F] in
 theorem completeness : Completeness F main Assumptions := by
   circuit_proof_start [main, Assumptions, outputValue, lambda, constraints, poly1, poly2]
-  have hc := outputValue_constraints (input := { p := input_p, q := input_q }) h_assumptions
+  have hc := outputValue_constraints (input := { p := input_p, q := input_q }) h_assumptions.2.2
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
   simp_all [outputValue, lambda, constraints, poly1, poly2, sub_eq_add_neg]
