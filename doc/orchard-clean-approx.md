@@ -167,7 +167,10 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Status: `gadget/add_chip.rs` is ported as `Orchard.Utilities.AddChip.circuit`.
      The `gadget.rs` source-level wiring for `value_commit_orchard` and
      `derive_nullifier` is ported as `Orchard.Gadget.ValueCommitment.circuit`
-     and `Orchard.Gadget.Nullifier.circuit`; the `derive_nullifier` edge
+     and `Orchard.Gadget.Nullifier.circuit`; a Pallas-specific value-commitment
+     wrapper `Orchard.Gadget.ValueCommitment.Entry.circuit` now uses
+     `Orchard.Ecc.CompleteAdd.Entry.circuit` for the final addition over explicit
+     fixed-base product points. The `derive_nullifier` edge
      `hash = PoseidonHash(nk, rho)` is connected to the nullifier wiring in
      `Orchard.Gadget.NullifierWithHash.circuit`. The `circuit.rs` spend-authority wiring
      `rk = [alpha] SpendAuthG + ak_P` is ported as `Orchard.Gadget.SpendAuth.circuit`.
@@ -229,8 +232,9 @@ values and returns a clean result.
 Consequences for Orchard gadgets:
 
 - `value_commit_orchard` in `orchard/src/circuit/gadget.rs` is
-  `[v] ValueCommitV + [rcv] ValueCommitR`. `Orchard.Gadget.ValueCommitment.circuit`
-  currently models only the final complete-add row over explicit products.
+  `[v] ValueCommitV + [rcv] ValueCommitR`. `Orchard.Gadget.ValueCommitment.Entry.circuit`
+  now uses the complete-add entry circuit for the final addition over explicit product
+  points, but the fixed-base products themselves still need scalar-mul entry circuits.
 - `derive_nullifier` in `orchard/src/circuit/gadget.rs` is
   `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`.
   `Orchard.Gadget.Nullifier.circuit` currently models the scalar field addition, final

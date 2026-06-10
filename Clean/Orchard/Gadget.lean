@@ -72,6 +72,65 @@ def circuit : FormalAssertion F Row where
     circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
     simp_all
 
+namespace Entry
+
+structure Row (F : Type) where
+  valueProductX : F
+  valueProductY : F
+  blindProductX : F
+  blindProductY : F
+  cvX : F
+  cvY : F
+deriving ProvableStruct
+
+def addInput {K : Type} (row : Row K) : Ecc.AddInputs K where
+  p := { x := row.valueProductX, y := row.valueProductY }
+  q := { x := row.blindProductX, y := row.blindProductY }
+
+def output {K : Type} (row : Row K) : Ecc.Point K where
+  x := row.cvX
+  y := row.cvY
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.CompleteAdd.Entry.Spec (addInput row) (output row)
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.CompleteAdd.Entry.Assumptions (addInput row)
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  let cv ← Ecc.CompleteAdd.Entry.circuit (addInput row)
+  assertZero (cv.x - row.cvX)
+  assertZero (cv.y - row.cvY)
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, addInput, output, Ecc.CompleteAdd.Entry.circuit,
+      Ecc.CompleteAdd.Entry.Spec]
+    rcases h_holds with ⟨hAdd, hX, hY⟩
+    have hx : env.get i₀ = input_cvX := by linear_combination hX
+    have hy : env.get (i₀ + 1) = input_cvY := by linear_combination hY
+    have hAdd' := hAdd h_assumptions
+    rw [← hAdd']
+    simp [Ecc.pointCoords, hx, hy]
+  completeness := by
+    circuit_proof_start [main, Spec, addInput, output, Ecc.CompleteAdd.Entry.circuit,
+      Ecc.CompleteAdd.Entry.Spec, Assumptions, Ecc.CompleteAdd.Entry.Assumptions]
+    constructor
+    · exact h_assumptions
+    · have hAdd := h_env h_assumptions
+      have hPoint : Ecc.pointCoords { x := env.get i₀, y := env.get (i₀ + 1) } =
+          Ecc.pointCoords { x := input_cvX, y := input_cvY } := hAdd.trans h_spec.symm
+      constructor
+      · have hx := congrArg Prod.fst hPoint
+        simpa [Ecc.pointCoords, sub_eq_add_neg] using sub_eq_zero.mpr hx
+      · have hy := congrArg Prod.snd hPoint
+        simpa [Ecc.pointCoords, sub_eq_add_neg] using sub_eq_zero.mpr hy
+
+end Entry
+
 end ValueCommitment
 
 namespace Nullifier
