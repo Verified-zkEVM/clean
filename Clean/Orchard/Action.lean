@@ -639,6 +639,19 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     row.derivedPkDX = row.action.derivedPkDOldX ∧
     row.derivedPkDY = row.action.derivedPkDOldY
 
+def OrchardSpec
+    (row : Row Ecc.PallasBaseField)
+    (ivkScalar : ℕ) (gdOld : Ecc.Point Ecc.PallasBaseField) : Prop :=
+  Ecc.IsPallasScalarMul ivkScalar gdOld (derivedPkD row) ∧
+    Spec row
+
+theorem spec_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {ivkScalar : ℕ} {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (h : OrchardSpec row ivkScalar gdOld) :
+    Spec row :=
+  h.2
+
 theorem pkDOld_eq_derivedPkD_of_spec {row : Row Ecc.PallasBaseField}
     (hSpec : Spec row) :
     pkDOld row = derivedPkD row := by
@@ -658,6 +671,14 @@ theorem pkDOld_scalar_mul_of_derived_scalar_mul
     Ecc.IsPallasScalarMul scalar gdOld (pkDOld row) := by
   rw [pkDOld_eq_derivedPkD_of_spec hSpec]
   exact hMul
+
+theorem pkDOld_scalar_mul_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {ivkScalar : ℕ}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (hSpec : OrchardSpec row ivkScalar gdOld) :
+    Ecc.IsPallasScalarMul ivkScalar gdOld (pkDOld row) :=
+  pkDOld_scalar_mul_of_derived_scalar_mul hSpec.2 hSpec.1
 
 theorem pkDOld_isPointOrIdentity_of_derived_scalar_mul
     {row : Row Ecc.PallasBaseField}
