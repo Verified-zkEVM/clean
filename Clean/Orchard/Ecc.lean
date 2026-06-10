@@ -108,6 +108,16 @@ theorem pallasScalarMulCoords_eq_groupAction
         (E := CompElliptic.Curves.Pasta.Pallas.curve)
         scalar (pallasSWPoint base hbase))
 
+theorem pallasScalarMulCoords_zero (base : Point PallasBaseField) :
+    pallasScalarMulCoords 0 base = (0, 0) := by
+  rfl
+
+theorem pallasScalarMulCoords_one (base : Point PallasBaseField) :
+    pallasScalarMulCoords 1 base = pointCoords base := by
+  simp [pallasScalarMulCoords, pointCoords,
+    CompElliptic.CurveForms.ShortWeierstrass.smul,
+    CompElliptic.CurveForms.ShortWeierstrass.zero_add]
+
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
 
