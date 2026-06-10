@@ -538,9 +538,9 @@ deriving ProvableStruct
 def rootCheck (row : Row R) : R :=
   row.finalStep.nextNode - row.action.root
 
-def constraints (row : Row R) : Prop :=
-  ActionWiring.constraints row.action ∧
-    Sinsemilla.Merkle.PathStep.constraints row.finalStep ∧
+def Spec (row : Row R) : Prop :=
+  ActionWiring.Spec row.action ∧
+    Sinsemilla.Merkle.PathStep.Spec row.finalStep ∧
     rootCheck row = 0
 
 def main (row : Var Row F) : Circuit F Unit := do
@@ -550,48 +550,20 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, rootCheck,
-      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
-      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
-      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
-      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
-      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
-      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
-      Sinsemilla.Merkle.PathStep.circuit, Sinsemilla.Merkle.PathStep.constraints,
-      Sinsemilla.Merkle.PathStep.leftCheck, Sinsemilla.Merkle.PathStep.rightCheck,
-      Sinsemilla.Merkle.PathStep.layerLeftCheck, Sinsemilla.Merkle.PathStep.layerRightCheck,
-      Sinsemilla.Merkle.PathStep.nextCheck, Sinsemilla.Merkle.PathStep.ternary,
-      Sinsemilla.Merkle.PathStep.boolPoly, Sinsemilla.Merkle.Wiring.constraints,
-      Sinsemilla.Merkle.Wiring.hashCheck, Sinsemilla.Merkle.constraints,
-      Sinsemilla.Merkle.a0, Sinsemilla.Merkle.leftCheck, Sinsemilla.Merkle.rightCheck,
-      Sinsemilla.Merkle.b1B2Check, Sinsemilla.Merkle.b0, Sinsemilla.Merkle.twoPow5,
-      Sinsemilla.Merkle.twoPow10, Sinsemilla.Merkle.twoPow240]
+    circuit_proof_start [main, Spec, rootCheck,
+      ActionWiring.circuit, ActionWiring.Spec,
+      Sinsemilla.Merkle.PathStep.circuit, Sinsemilla.Merkle.PathStep.Spec]
     rcases h_holds with ⟨hAction, hStep, hRoot⟩
-    exact ⟨ActionWiring.constraints_of_spec hAction, hStep,
+    exact ⟨hAction, hStep,
       by simpa [sub_eq_add_neg] using hRoot⟩
   completeness := by
-    circuit_proof_start [main, constraints, rootCheck,
-      ActionWiring.circuit, ActionWiring.constraints, ActionWiring.checksRow,
-      ActionChecks.circuit, ActionChecks.constraints, ActionChecks.valueNet,
-      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
-      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
-      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
-      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
-      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck,
-      Sinsemilla.Merkle.PathStep.circuit, Sinsemilla.Merkle.PathStep.constraints,
-      Sinsemilla.Merkle.PathStep.leftCheck, Sinsemilla.Merkle.PathStep.rightCheck,
-      Sinsemilla.Merkle.PathStep.layerLeftCheck, Sinsemilla.Merkle.PathStep.layerRightCheck,
-      Sinsemilla.Merkle.PathStep.nextCheck, Sinsemilla.Merkle.PathStep.ternary,
-      Sinsemilla.Merkle.PathStep.boolPoly, Sinsemilla.Merkle.Wiring.constraints,
-      Sinsemilla.Merkle.Wiring.hashCheck, Sinsemilla.Merkle.constraints,
-      Sinsemilla.Merkle.a0, Sinsemilla.Merkle.leftCheck, Sinsemilla.Merkle.rightCheck,
-      Sinsemilla.Merkle.b1B2Check, Sinsemilla.Merkle.b0, Sinsemilla.Merkle.twoPow5,
-      Sinsemilla.Merkle.twoPow10, Sinsemilla.Merkle.twoPow240]
+    circuit_proof_start [main, Spec, rootCheck,
+      ActionWiring.circuit, ActionWiring.Spec,
+      Sinsemilla.Merkle.PathStep.circuit, Sinsemilla.Merkle.PathStep.Spec]
     rcases h_spec with ⟨hAction, hStep, hRoot⟩
-    exact ⟨ActionWiring.spec_of_constraints hAction, hStep,
+    exact ⟨hAction, hStep,
       by simpa [sub_eq_add_neg] using hRoot⟩
 
 end ActionMerkleWiring

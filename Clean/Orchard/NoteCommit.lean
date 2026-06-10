@@ -855,11 +855,6 @@ def cmXCheck (row : Row R) : R :=
 def cmYCheck (row : Row R) : R :=
   row.commit.commitmentY - row.note.computedCmY
 
-def constraints (row : Row R) : Prop :=
-  Sinsemilla.Commit.constraints row.commit ∧
-    cmXCheck row = 0 ∧
-    cmYCheck row = 0
-
 def Spec (row : Row R) : Prop :=
   Sinsemilla.Commit.Spec row.commit ∧
     row.commit.commitmentX = row.note.computedCmX ∧

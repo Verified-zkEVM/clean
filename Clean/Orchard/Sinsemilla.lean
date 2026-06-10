@@ -248,9 +248,6 @@ def addRow (row : Row R) : Ecc.CompleteAddRow R where
   gamma := row.gamma
   delta := row.delta
 
-def constraints (row : Row R) : Prop :=
-  Ecc.CompleteAdd.constraints (addRow row)
-
 def Spec (row : Row R) : Prop :=
   Ecc.CompleteAdd.Spec (addRow row)
 
@@ -292,9 +289,6 @@ deriving ProvableStruct
 
 def extractCheck (row : Row R) : R :=
   row.commit.commitmentX - row.extracted
-
-def constraints (row : Row R) : Prop :=
-  Commit.constraints row.commit ∧ extractCheck row = 0
 
 def Spec (row : Row R) : Prop :=
   Commit.Spec row.commit ∧ row.extracted = row.commit.commitmentX
@@ -390,9 +384,6 @@ def Spec (row : DecompositionRow R) : Prop :=
   row.rightNode = row.b2 + row.cWhole * twoPow5 ∧
   row.z1B = row.b1 + row.b2 * twoPow5
 
-def constraints (row : DecompositionRow R) : Prop :=
-  Spec row
-
 def main (row : Var DecompositionRow F) : Circuit F Unit := do
   assertZero (a0 row - row.lWhole)
   assertZero (leftCheck row)
@@ -458,9 +449,6 @@ def hashCheck (row : Row R) : R :=
 def Spec (row : Row R) : Prop :=
   Merkle.Spec row.decomposition ∧ row.hash = row.computedHash
 
-def constraints (row : Row R) : Prop :=
-  Spec row
-
 def main (row : Var Row F) : Circuit F Unit := do
   Merkle.circuit row.decomposition
   assertZero (hashCheck row)
@@ -469,13 +457,13 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
+    circuit_proof_start [main, Spec, hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
     rcases h_holds with ⟨hMerkle, hHash⟩
     exact ⟨hMerkle, (left_eq_of_add_neg_eq_zero hHash).symm⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
+    circuit_proof_start [main, Spec, hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
     rcases h_spec with ⟨hMerkle, hHash⟩
@@ -540,9 +528,6 @@ def Spec (row : Row R) : Prop :=
     row.layer.decomposition.rightNode = row.right ∧
     row.nextNode = row.layer.hash
 
-def constraints (row : Row R) : Prop :=
-  Spec row
-
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (boolPoly row.posBit)
   assertZero (leftCheck row)
@@ -556,9 +541,9 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, leftCheck, rightCheck, layerLeftCheck,
+    circuit_proof_start [main, Spec, leftCheck, rightCheck, layerLeftCheck,
       layerRightCheck, nextCheck, ternary, boolPoly,
-      Wiring.circuit, Wiring.Spec, Wiring.constraints, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
+      Wiring.circuit, Wiring.Spec, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
     rcases h_holds with ⟨hBool, hLeft, hRight, hLayer, hLayerLeft, hLayerRight, hNext⟩
@@ -575,9 +560,9 @@ def circuit : FormalAssertion F Row where
     exact ⟨hLayer, left_eq_of_add_neg_eq_zero hLayerLeft,
       left_eq_of_add_neg_eq_zero hLayerRight, (left_eq_of_add_neg_eq_zero hNext).symm⟩
   completeness := by
-    circuit_proof_start [main, Spec, constraints, leftCheck, rightCheck, layerLeftCheck,
+    circuit_proof_start [main, Spec, leftCheck, rightCheck, layerLeftCheck,
       layerRightCheck, nextCheck, ternary, boolPoly,
-      Wiring.circuit, Wiring.Spec, Wiring.constraints, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
+      Wiring.circuit, Wiring.Spec, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
     rcases h_spec with ⟨hBool, hLeft, hRight, hLayer, hLayerLeft, hLayerRight, hNext⟩
