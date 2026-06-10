@@ -1,4 +1,5 @@
 import Clean.Orchard.Action
+import Clean.Orchard.CommitIvk
 import Clean.Orchard.Ecc
 import Clean.Orchard.NoteCommit
 import Clean.Orchard.Sinsemilla

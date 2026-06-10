@@ -128,4 +128,5 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.NoteCommit.RhoCanonicity.circuit`,
      `Orchard.NoteCommit.PsiCanonicity.circuit`, and
      `Orchard.NoteCommit.ValueCanonicity.circuit`, plus
-     `Orchard.NoteCommit.YCanonicity.circuit`.
+     `Orchard.NoteCommit.YCanonicity.circuit`. `commit_ivk.rs` gate
+     `CommitIvk canonicity check` is ported as `Orchard.CommitIvk.circuit`.
