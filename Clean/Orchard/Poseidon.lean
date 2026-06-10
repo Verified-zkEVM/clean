@@ -34,6 +34,9 @@ def pow5 (x : R) : R :=
 private theorem eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : b = a := by
   exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
 
+private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
+  (eq_of_add_neg_eq_zero h).symm
+
 namespace FullRound
 
 structure Row (F : Type) where
@@ -399,6 +402,9 @@ def state2Check (a b : State R) : R := a.s2 - b.s2
 def stateEq (a b : State R) : Prop :=
   state0Check a b = 0 ∧ state1Check a b = 0 ∧ state2Check a b = 0
 
+def stateSame (a b : State R) : Prop :=
+  a.s0 = b.s0 ∧ a.s1 = b.s1 ∧ a.s2 = b.s2
+
 def assertStateEq (a b : State (Expression F)) : Circuit F Unit := do
   assertZero (state0Check a b)
   assertZero (state1Check a b)
@@ -616,23 +622,28 @@ structure Row (F : Type) where
   first : FullRound.Row F
 deriving ProvableStruct
 
-def constraints (row : Row R) : Prop :=
-  stateEq row.initial (fullCur row.first)
+def Spec (row : Row R) : Prop :=
+  stateSame row.initial (fullCur row.first)
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertStateEq row.initial (fullCur row.first)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullCur]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h0
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h1
+    · exact left_eq_of_add_neg_eq_zero h2
   completeness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullCur]
-    simp_all [sub_eq_add_neg]
+    simp_all
 
 end InitialToFull
 
@@ -643,23 +654,28 @@ structure Row (F : Type) where
   next : FullRound.Row F
 deriving ProvableStruct
 
-def constraints (row : Row R) : Prop :=
-  stateEq (fullNext row.prev) (fullCur row.next)
+def Spec (row : Row R) : Prop :=
+  stateSame (fullNext row.prev) (fullCur row.next)
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertStateEq (fullNext row.prev) (fullCur row.next)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullCur, fullNext]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h0
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h1
+    · exact left_eq_of_add_neg_eq_zero h2
   completeness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullCur, fullNext]
-    simp_all [sub_eq_add_neg]
+    simp_all
 
 end FullToFull
 
@@ -670,23 +686,28 @@ structure Row (F : Type) where
   next : PartialRounds.Row F
 deriving ProvableStruct
 
-def constraints (row : Row R) : Prop :=
-  stateEq (fullNext row.prev) (partialCur row.next)
+def Spec (row : Row R) : Prop :=
+  stateSame (fullNext row.prev) (partialCur row.next)
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertStateEq (fullNext row.prev) (partialCur row.next)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullNext, partialCur]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h0
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h1
+    · exact left_eq_of_add_neg_eq_zero h2
   completeness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullNext, partialCur]
-    simp_all [sub_eq_add_neg]
+    simp_all
 
 end FullToPartial
 
@@ -697,23 +718,28 @@ structure Row (F : Type) where
   next : PartialRounds.Row F
 deriving ProvableStruct
 
-def constraints (row : Row R) : Prop :=
-  stateEq (partialNext row.prev) (partialCur row.next)
+def Spec (row : Row R) : Prop :=
+  stateSame (partialNext row.prev) (partialCur row.next)
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertStateEq (partialNext row.prev) (partialCur row.next)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, partialCur, partialNext]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h0
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h1
+    · exact left_eq_of_add_neg_eq_zero h2
   completeness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, partialCur, partialNext]
-    simp_all [sub_eq_add_neg]
+    simp_all
 
 end PartialToPartial
 
@@ -724,23 +750,28 @@ structure Row (F : Type) where
   next : FullRound.Row F
 deriving ProvableStruct
 
-def constraints (row : Row R) : Prop :=
-  stateEq (partialNext row.prev) (fullCur row.next)
+def Spec (row : Row R) : Prop :=
+  stateSame (partialNext row.prev) (fullCur row.next)
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertStateEq (partialNext row.prev) (fullCur row.next)
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullCur, partialNext]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h0
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h1
+    · exact left_eq_of_add_neg_eq_zero h2
   completeness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullCur, partialNext]
-    simp_all [sub_eq_add_neg]
+    simp_all
 
 end PartialToFull
 
@@ -751,23 +782,28 @@ structure Row (F : Type) where
   output : State F
 deriving ProvableStruct
 
-def constraints (row : Row R) : Prop :=
-  stateEq (fullNext row.last) row.output
+def Spec (row : Row R) : Prop :=
+  stateSame (fullNext row.last) row.output
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertStateEq (fullNext row.last) row.output
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullNext]
-    simp_all [sub_eq_add_neg]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h0
+    constructor
+    · exact left_eq_of_add_neg_eq_zero h1
+    · exact left_eq_of_add_neg_eq_zero h2
   completeness := by
-    circuit_proof_start [main, constraints, assertStateEq, stateEq, state0Check,
+    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
       state1Check, state2Check, fullNext]
-    simp_all [sub_eq_add_neg]
+    simp_all
 
 end FullToOutput
 
