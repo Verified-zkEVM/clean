@@ -695,82 +695,53 @@ def h1Check (row : Row R) : R := row.h.h1 - row.psi.h1
 def cmXCheck (row : Row R) : R := row.computedCmX - row.cmX
 def cmYCheck (row : Row R) : R := row.computedCmY - row.cmY
 
-def constraints (row : Row R) : Prop :=
-  DecomposeB.constraints row.b ∧
-    DecomposeD.constraints row.d ∧
-    DecomposeE.decomposition row.e = 0 ∧
-    DecomposeG.constraints row.g ∧
-    DecomposeH.constraints row.h ∧
-    GdCanonicity.constraints row.gd ∧
-    PkdCanonicity.constraints row.pkd ∧
-    ValueCanonicity.valueCheck row.value = 0 ∧
-    RhoCanonicity.constraints row.rho ∧
-    PsiCanonicity.constraints row.psi ∧
-    YCanonicity.constraints row.gdY ∧
-    YCanonicity.constraints row.pkdY ∧
-    b0Check row = 0 ∧
-    b1Check row = 0 ∧
-    b2Check row = 0 ∧
-    b3Check row = 0 ∧
-    d0Check row = 0 ∧
-    d1Check row = 0 ∧
-    d2Check row = 0 ∧
-    z1DCheck row = 0 ∧
-    e0Check row = 0 ∧
-    e1Check row = 0 ∧
-    g0Check row = 0 ∧
-    g1Check row = 0 ∧
-    z1GCheck row = 0 ∧
-    h0Check row = 0 ∧
-    h1Check row = 0 ∧
-    cmXCheck row = 0 ∧
-    cmYCheck row = 0
+def CopySpec (row : Row R) : Prop :=
+  row.b.b0 = row.gd.b0 ∧
+    row.b.b1 = row.gd.b1 ∧
+    row.b.b2 = row.gdY.lsb ∧
+    row.b.b3 = row.pkd.b3 ∧
+    row.d.d0 = row.pkd.d0 ∧
+    row.d.d1 = row.pkdY.lsb ∧
+    row.d.d2 = row.value.d2 ∧
+    row.d.d3 = row.value.d3 ∧
+    row.e.e0 = row.value.e0 ∧
+    row.e.e1 = row.rho.e1 ∧
+    row.g.g0 = row.rho.g0 ∧
+    row.g.g1 = row.psi.g1 ∧
+    row.g.g2 = row.psi.g2 ∧
+    row.h.h0 = row.psi.h0 ∧
+    row.h.h1 = row.psi.h1 ∧
+    row.computedCmX = row.cmX ∧
+    row.computedCmY = row.cmY
+
+def Spec (row : Row R) : Prop :=
+  DecomposeB.Spec row.b ∧
+    DecomposeD.Spec row.d ∧
+    DecomposeE.Spec row.e ∧
+    DecomposeG.Spec row.g ∧
+    DecomposeH.Spec row.h ∧
+    GdCanonicity.Spec row.gd ∧
+    PkdCanonicity.Spec row.pkd ∧
+    ValueCanonicity.Spec row.value ∧
+    RhoCanonicity.Spec row.rho ∧
+    PsiCanonicity.Spec row.psi ∧
+    YCanonicity.Spec row.gdY ∧
+    YCanonicity.Spec row.pkdY ∧
+    CopySpec row
 
 def main (row : Var Row F) : Circuit F Unit := do
-  assertZero (boolPoly row.b.b1)
-  assertZero (boolPoly row.b.b2)
-  assertZero (DecomposeB.decomposition row.b)
-  assertZero (boolPoly row.d.d0)
-  assertZero (boolPoly row.d.d1)
-  assertZero (DecomposeD.decomposition row.d)
-  assertZero (DecomposeE.decomposition row.e)
-  assertZero (boolPoly row.g.g0)
-  assertZero (DecomposeG.decomposition row.g)
-  assertZero (boolPoly row.h.h1)
-  assertZero (DecomposeH.decomposition row.h)
-  assertZero (GdCanonicity.decomposition row.gd)
-  assertZero (GdCanonicity.aPrimeCheck row.gd)
-  assertZero (row.gd.b1 * row.gd.b0)
-  assertZero (row.gd.b1 * row.gd.z13A)
-  assertZero (row.gd.b1 * row.gd.z13APrime)
-  assertZero (PkdCanonicity.decomposition row.pkd)
-  assertZero (PkdCanonicity.b3CPrimeCheck row.pkd)
-  assertZero (row.pkd.d0 * row.pkd.z13C)
-  assertZero (row.pkd.d0 * row.pkd.z14B3CPrime)
-  assertZero (ValueCanonicity.valueCheck row.value)
-  assertZero (RhoCanonicity.decomposition row.rho)
-  assertZero (RhoCanonicity.e1FPrimeCheck row.rho)
-  assertZero (row.rho.g0 * row.rho.z13F)
-  assertZero (row.rho.g0 * row.rho.z14E1FPrime)
-  assertZero (PsiCanonicity.decomposition row.psi)
-  assertZero (PsiCanonicity.g1G2PrimeCheck row.psi)
-  assertZero (row.psi.h1 * row.psi.h0)
-  assertZero (row.psi.h1 * row.psi.z13G)
-  assertZero (row.psi.h1 * row.psi.z13G1G2Prime)
-  assertZero (boolPoly row.gdY.k3)
-  assertZero (YCanonicity.jCheck row.gdY)
-  assertZero (YCanonicity.yCheck row.gdY)
-  assertZero (YCanonicity.jPrimeCheck row.gdY)
-  assertZero (row.gdY.k3 * row.gdY.k2)
-  assertZero (row.gdY.k3 * row.gdY.z13J)
-  assertZero (row.gdY.k3 * row.gdY.z13JPrime)
-  assertZero (boolPoly row.pkdY.k3)
-  assertZero (YCanonicity.jCheck row.pkdY)
-  assertZero (YCanonicity.yCheck row.pkdY)
-  assertZero (YCanonicity.jPrimeCheck row.pkdY)
-  assertZero (row.pkdY.k3 * row.pkdY.k2)
-  assertZero (row.pkdY.k3 * row.pkdY.z13J)
-  assertZero (row.pkdY.k3 * row.pkdY.z13JPrime)
+  DecomposeB.circuit row.b
+  DecomposeD.circuit row.d
+  DecomposeE.circuit row.e
+  DecomposeG.circuit row.g
+  DecomposeH.circuit row.h
+  GdCanonicity.circuit row.gd
+  PkdCanonicity.circuit row.pkd
+  ValueCanonicity.circuit row.value
+  RhoCanonicity.circuit row.rho
+  PsiCanonicity.circuit row.psi
+  YCanonicity.circuit row.gdY
+  YCanonicity.circuit row.pkdY
   assertZero (b0Check row)
   assertZero (b1Check row)
   assertZero (b2Check row)
@@ -791,39 +762,69 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, b0Check, b1Check, b2Check, b3Check,
+    circuit_proof_start [main, Spec, CopySpec, b0Check, b1Check, b2Check, b3Check,
       d0Check, d1Check, d2Check, z1DCheck, e0Check, e1Check, g0Check, g1Check,
-      z1GCheck, h0Check, h1Check, cmXCheck, cmYCheck, DecomposeB.constraints,
-      DecomposeB.decomposition, DecomposeD.constraints, DecomposeD.decomposition,
-      DecomposeE.decomposition, DecomposeG.constraints, DecomposeG.decomposition,
-      DecomposeH.constraints, DecomposeH.decomposition, GdCanonicity.constraints,
-      GdCanonicity.decomposition, GdCanonicity.aPrimeCheck,
-      PkdCanonicity.constraints, PkdCanonicity.decomposition,
-      PkdCanonicity.b3CPrimeCheck, ValueCanonicity.valueCheck,
-      RhoCanonicity.constraints, RhoCanonicity.decomposition,
-      RhoCanonicity.e1FPrimeCheck, PsiCanonicity.constraints,
-      PsiCanonicity.decomposition, PsiCanonicity.g1G2PrimeCheck,
-      YCanonicity.constraints, YCanonicity.jCheck, YCanonicity.yCheck,
-      YCanonicity.jPrimeCheck, boolPoly, tP]
-    simp_all [sub_eq_add_neg]
+      z1GCheck, h0Check, h1Check, cmXCheck, cmYCheck, DecomposeB.circuit,
+      DecomposeB.Spec, DecomposeD.circuit, DecomposeD.Spec, DecomposeE.circuit,
+      DecomposeE.Spec, DecomposeG.circuit, DecomposeG.Spec, DecomposeH.circuit,
+      DecomposeH.Spec, GdCanonicity.circuit, GdCanonicity.Spec, PkdCanonicity.circuit,
+      PkdCanonicity.Spec, ValueCanonicity.circuit, ValueCanonicity.Spec,
+      RhoCanonicity.circuit, RhoCanonicity.Spec, PsiCanonicity.circuit,
+      PsiCanonicity.Spec, YCanonicity.circuit, YCanonicity.Spec]
+    rcases h_holds with ⟨hb, hd, he, hg, hh, hgd, hpkd, hv, hrho, hpsi, hgdY, hpkdY,
+      hb0, hb1, hb2, hb3, hd0, hd1, hd2, hz1D, he0, he1, hg0, hg1, hz1G, hh0, hh1,
+      hcmX, hcmY⟩
+    exact ⟨hb, hd, he, hg, hh, hgd, hpkd, hv, hrho, hpsi, hgdY, hpkdY,
+      left_eq_of_add_neg_eq_zero hb0,
+      left_eq_of_add_neg_eq_zero hb1,
+      left_eq_of_add_neg_eq_zero hb2,
+      left_eq_of_add_neg_eq_zero hb3,
+      left_eq_of_add_neg_eq_zero hd0,
+      left_eq_of_add_neg_eq_zero hd1,
+      left_eq_of_add_neg_eq_zero hd2,
+      left_eq_of_add_neg_eq_zero hz1D,
+      left_eq_of_add_neg_eq_zero he0,
+      left_eq_of_add_neg_eq_zero he1,
+      left_eq_of_add_neg_eq_zero hg0,
+      left_eq_of_add_neg_eq_zero hg1,
+      left_eq_of_add_neg_eq_zero hz1G,
+      left_eq_of_add_neg_eq_zero hh0,
+      left_eq_of_add_neg_eq_zero hh1,
+      left_eq_of_add_neg_eq_zero hcmX,
+      left_eq_of_add_neg_eq_zero hcmY⟩
   completeness := by
-    circuit_proof_start [main, constraints, b0Check, b1Check, b2Check, b3Check,
+    circuit_proof_start [main, Spec, CopySpec, b0Check, b1Check, b2Check, b3Check,
       d0Check, d1Check, d2Check, z1DCheck, e0Check, e1Check, g0Check, g1Check,
-      z1GCheck, h0Check, h1Check, cmXCheck, cmYCheck, DecomposeB.constraints,
-      DecomposeB.decomposition, DecomposeD.constraints, DecomposeD.decomposition,
-      DecomposeE.decomposition, DecomposeG.constraints, DecomposeG.decomposition,
-      DecomposeH.constraints, DecomposeH.decomposition, GdCanonicity.constraints,
-      GdCanonicity.decomposition, GdCanonicity.aPrimeCheck,
-      PkdCanonicity.constraints, PkdCanonicity.decomposition,
-      PkdCanonicity.b3CPrimeCheck, ValueCanonicity.valueCheck,
-      RhoCanonicity.constraints, RhoCanonicity.decomposition,
-      RhoCanonicity.e1FPrimeCheck, PsiCanonicity.constraints,
-      PsiCanonicity.decomposition, PsiCanonicity.g1G2PrimeCheck,
-      YCanonicity.constraints, YCanonicity.jCheck, YCanonicity.yCheck,
-      YCanonicity.jPrimeCheck, boolPoly, tP]
-    simp_all [sub_eq_add_neg]
+      z1GCheck, h0Check, h1Check, cmXCheck, cmYCheck, DecomposeB.circuit,
+      DecomposeB.Spec, DecomposeD.circuit, DecomposeD.Spec, DecomposeE.circuit,
+      DecomposeE.Spec, DecomposeG.circuit, DecomposeG.Spec, DecomposeH.circuit,
+      DecomposeH.Spec, GdCanonicity.circuit, GdCanonicity.Spec, PkdCanonicity.circuit,
+      PkdCanonicity.Spec, ValueCanonicity.circuit, ValueCanonicity.Spec,
+      RhoCanonicity.circuit, RhoCanonicity.Spec, PsiCanonicity.circuit,
+      PsiCanonicity.Spec, YCanonicity.circuit, YCanonicity.Spec]
+    rcases h_spec with ⟨hb, hd, he, hg, hh, hgd, hpkd, hv, hrho, hpsi, hgdY, hpkdY,
+      hb0, hb1, hb2, hb3, hd0, hd1, hd2, hz1D, he0, he1, hg0, hg1, hz1G, hh0, hh1,
+      hcmX, hcmY⟩
+    exact ⟨hb, hd, he, hg, hh, hgd, hpkd, hv, hrho, hpsi, hgdY, hpkdY,
+      by rw [hb0]; ring,
+      by rw [hb1]; ring,
+      by rw [hb2]; ring,
+      by rw [hb3]; ring,
+      by rw [hd0]; ring,
+      by rw [hd1]; ring,
+      by rw [hd2]; ring,
+      by rw [hz1D]; ring,
+      by rw [he0]; ring,
+      by rw [he1]; ring,
+      by rw [hg0]; ring,
+      by rw [hg1]; ring,
+      by rw [hz1G]; ring,
+      by rw [hh0]; ring,
+      by rw [hh1]; ring,
+      by rw [hcmX]; ring,
+      by rw [hcmY]; ring⟩
 
 end Wiring
 
@@ -859,6 +860,11 @@ def constraints (row : Row R) : Prop :=
     cmXCheck row = 0 ∧
     cmYCheck row = 0
 
+def Spec (row : Row R) : Prop :=
+  Sinsemilla.Commit.Spec row.commit ∧
+    row.commit.commitmentX = row.note.computedCmX ∧
+    row.commit.commitmentY = row.note.computedCmY
+
 def main (row : Var Row F) : Circuit F Unit := do
   Sinsemilla.Commit.circuit row.commit
   assertZero (cmXCheck row)
@@ -866,31 +872,29 @@ def main (row : Var Row F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F Row where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, cmXCheck, cmYCheck,
-      Sinsemilla.Commit.circuit, Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
-      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
-      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
-      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
-      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, cmXCheck, cmYCheck,
+      Sinsemilla.Commit.circuit, Sinsemilla.Commit.Spec, Sinsemilla.Commit.addRow,
+      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine,
+      Ecc.CompleteAdd.tangentLine, Ecc.CompleteAdd.nonexceptionalResult,
+      Ecc.CompleteAdd.leftIdentityResult, Ecc.CompleteAdd.rightIdentityResult,
+      Ecc.CompleteAdd.inverseResult, Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta,
+      Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP,
+      Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    rcases h_holds with ⟨hCommit, hX, hY⟩
+    exact ⟨hCommit, left_eq_of_add_neg_eq_zero hX, left_eq_of_add_neg_eq_zero hY⟩
   completeness := by
-    circuit_proof_start [main, constraints, cmXCheck, cmYCheck,
-      Sinsemilla.Commit.circuit, Sinsemilla.Commit.constraints, Sinsemilla.Commit.addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.constraints, Ecc.CompleteAdd.poly1,
-      Ecc.CompleteAdd.poly2, Ecc.CompleteAdd.poly3a, Ecc.CompleteAdd.poly3b,
-      Ecc.CompleteAdd.poly3c, Ecc.CompleteAdd.poly3d, Ecc.CompleteAdd.poly4a,
-      Ecc.CompleteAdd.poly4b, Ecc.CompleteAdd.poly5a, Ecc.CompleteAdd.poly5b,
-      Ecc.CompleteAdd.poly6a, Ecc.CompleteAdd.poly6b, Ecc.CompleteAdd.nonexceptionalXR,
-      Ecc.CompleteAdd.nonexceptionalYR, Ecc.CompleteAdd.ifAlpha,
-      Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta,
-      Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
-    simp_all [sub_eq_add_neg]
+    circuit_proof_start [main, Spec, cmXCheck, cmYCheck,
+      Sinsemilla.Commit.circuit, Sinsemilla.Commit.Spec, Sinsemilla.Commit.addRow,
+      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine,
+      Ecc.CompleteAdd.tangentLine, Ecc.CompleteAdd.nonexceptionalResult,
+      Ecc.CompleteAdd.leftIdentityResult, Ecc.CompleteAdd.rightIdentityResult,
+      Ecc.CompleteAdd.inverseResult, Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta,
+      Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP,
+      Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    rcases h_spec with ⟨hCommit, hX, hY⟩
+    exact ⟨hCommit, by rw [hX]; ring, by rw [hY]; ring⟩
 
 end WiringWithCommit
 
