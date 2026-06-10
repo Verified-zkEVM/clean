@@ -186,4 +186,7 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `commit_ivk.rs` gate
      `CommitIvk canonicity check` is ported as `Orchard.CommitIvk.circuit`; the
      source-level `gadgets::commit_ivk` gate assignment and returned `ivk` wiring is
-     ported as `Orchard.CommitIvk.Wiring.circuit`.
+     ported as `Orchard.CommitIvk.Wiring.circuit`. The action-level address-integrity
+     copy edges from `ak` into `commit_ivk`, from `ivk` into the variable-base scalar
+     input, and from the explicit `[ivk] g_d_old` result into `derived_pk_d_old` are
+     recorded by `Orchard.ActionAddressWiring.circuit`.

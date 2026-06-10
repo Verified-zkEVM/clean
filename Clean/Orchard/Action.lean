@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard.CommitIvk
 import Clean.Orchard.Gadget
 import Clean.Orchard.NoteCommit
 import Clean.Orchard.Sinsemilla
@@ -470,4 +471,85 @@ def circuit : FormalAssertion F Row where
     simp_all [sub_eq_add_neg]
 
 end ActionMerkleWiring
+
+/-!
+Action wiring with diversified-address integrity outputs.
+
+Reference:
+`orchard@0.14.0/src/circuit.rs`
+- `Diversified address integrity`
+- final public-input/action wiring in `Circuit::synthesize`
+
+The source computes `ivk = CommitIvk(ak, nk, rivk)`, converts it to the scalar used by
+`[ivk] g_d_old`, and constrains the resulting `derived_pk_d_old` to the witnessed
+`pk_d_old`. This assertion records those action-level copy edges. The internals of
+`CommitIvk`, fixed-base multiplication, and variable-base multiplication are represented
+by their own lower-level assertions and explicit row values.
+-/
+namespace ActionAddressWiring
+
+variable {F : Type} [Field F]
+
+variable {R : Type} [Zero R] [One R] [Add R] [Sub R] [Mul R]
+
+structure Row (F : Type) where
+  action : ActionWiring.Row F
+  spendAuth : Gadget.SpendAuth.Row F
+  commitIvk : CommitIvk.Wiring.Row F
+  ivkScalar : F
+  derivedPkDX : F
+  derivedPkDY : F
+deriving ProvableStruct
+
+def akCheck (row : Row R) : R :=
+  row.commitIvk.gate.ak - row.spendAuth.akX
+
+def ivkScalarCheck (row : Row R) : R :=
+  row.commitIvk.ivk - row.ivkScalar
+
+def pkDXCheck (row : Row R) : R :=
+  row.derivedPkDX - row.action.derivedPkDOldX
+
+def pkDYCheck (row : Row R) : R :=
+  row.derivedPkDY - row.action.derivedPkDOldY
+
+def constraints (row : Row R) : Prop :=
+  ActionWiring.constraints row.action ∧
+    akCheck row = 0 ∧
+    ivkScalarCheck row = 0 ∧
+    pkDXCheck row = 0 ∧
+    pkDYCheck row = 0
+
+def main (row : Var Row F) : Circuit F Unit := do
+  ActionWiring.main row.action
+  assertZero (akCheck row)
+  assertZero (ivkScalarCheck row)
+  assertZero (pkDXCheck row)
+  assertZero (pkDYCheck row)
+
+def circuit : FormalAssertion F Row where
+  main
+  Spec := constraints
+  soundness := by
+    circuit_proof_start [main, constraints, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
+      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
+      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
+      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
+      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
+      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck]
+    simp_all [sub_eq_add_neg]
+  completeness := by
+    circuit_proof_start [main, constraints, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
+      ActionWiring.main, ActionWiring.constraints, ActionWiring.checksRow,
+      ActionChecks.main, ActionChecks.constraints, ActionChecks.valueNet,
+      ActionChecks.merklePathValidity, ActionChecks.spendEnabled, ActionChecks.outputEnabled,
+      ActionWiring.cvNetXCheck, ActionWiring.cvNetYCheck, ActionWiring.nfOldCheck,
+      ActionWiring.rhoNewCheck, ActionWiring.rkXCheck, ActionWiring.rkYCheck,
+      ActionWiring.pkDOldXCheck, ActionWiring.pkDOldYCheck, ActionWiring.cmOldXCheck,
+      ActionWiring.cmOldYCheck, ActionWiring.cmxCheck]
+    simp_all [sub_eq_add_neg]
+
+end ActionAddressWiring
 end Orchard
