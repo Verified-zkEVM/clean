@@ -71,6 +71,9 @@ private theorem boolPoly_eq_zero_of_isBool {x : F} (h : IsBool x) :
 
 namespace VarBaseLSB
 
+variable [DecidableEq F]
+variable [Field R] [DecidableEq R]
+
 structure Row (F : Type) where
   z1 : F
   z0 : F
@@ -92,10 +95,16 @@ def lsbY (row : Row R) : R :=
 def constraints (row : Row R) : Prop :=
   NoteCommit.boolPoly (lsb row) = 0 ∧ lsbX row = 0 ∧ lsbY row = 0
 
+def SelectedCorrectionPoint (row : Row R) : Prop :=
+  (lsb row = 0 →
+    (row.xP, row.yP) =
+      CompElliptic.CurveForms.ShortWeierstrass.neg (row.baseX, row.baseY)) ∧
+    (lsb row = 1 →
+      (row.xP, row.yP) =
+        CompElliptic.CurveForms.ShortWeierstrass.smul 0 0 (row.baseX, row.baseY))
+
 def Spec (row : Row R) : Prop :=
-  IsBool (lsb row) ∧
-    (lsb row = 0 → row.xP = row.baseX ∧ row.yP + row.baseY = 0) ∧
-    (lsb row = 1 → row.xP = 0 ∧ row.yP = 0)
+  IsBool (lsb row) ∧ SelectedCorrectionPoint row
 
 def main (row : Var Row F) : Circuit F Unit := do
   assertZero (NoteCommit.boolPoly (lsb row))
@@ -106,14 +115,16 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, lsb, lsbX, lsbY]
+    circuit_proof_start [main, Spec, constraints, SelectedCorrectionPoint, NoteCommit.boolPoly,
+      lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg,
+      CompElliptic.CurveForms.ShortWeierstrass.smul]
     rcases h_holds with ⟨hBool, hX, hY⟩
     rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
     constructor
     · exact isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool)
     constructor
     · intro hBit
-      constructor
+      apply Prod.ext
       · have hX' := hX
         simp [circuit_norm, ternary, hz0, hz1, hxP, hbaseX] at hX'
         apply sub_eq_zero.mp
@@ -122,7 +133,7 @@ def circuit : FormalAssertion F Row where
         simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY] at hY'
         linear_combination hY' + input_baseY * hBit
     · intro hBit
-      constructor
+      apply Prod.ext
       · have hX' := hX
         simp [circuit_norm, ternary, hz0, hz1, hxP, hbaseX] at hX'
         linear_combination hX' - input_baseX * hBit
@@ -130,31 +141,41 @@ def circuit : FormalAssertion F Row where
         simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY] at hY'
         linear_combination hY' + input_baseY * hBit
   completeness := by
-    circuit_proof_start [main, Spec, constraints, NoteCommit.boolPoly, lsb, lsbX, lsbY]
-    rcases h_spec with ⟨hBool, hZero, hOne⟩
+    circuit_proof_start [main, Spec, constraints, SelectedCorrectionPoint, NoteCommit.boolPoly,
+      lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg,
+      CompElliptic.CurveForms.ShortWeierstrass.smul]
+    rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
     constructor
     · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool
     constructor
     · rcases hBool with hBit | hBit
       · exact by
-          rcases hZero hBit with ⟨hx, _⟩
+          have hPoint := hSelect.1 hBit
+          have hx := congrArg Prod.fst hPoint
+          simp at hx
           simp [circuit_norm, ternary, hz0, hz1, hxP, hbaseX, hx]
           left
           simpa [sub_eq_add_neg] using hBit
       · exact by
-          rcases hOne hBit with ⟨hx, _⟩
+          have hPoint := hSelect.2 hBit
+          have hx := congrArg Prod.fst hPoint
+          simp at hx
           simp [circuit_norm, ternary, hz0, hz1, hxP, hbaseX, hx]
           left
           linear_combination -hBit
     · rcases hBool with hBit | hBit
       · exact by
-          rcases hZero hBit with ⟨_, hy⟩
+          have hPoint := hSelect.1 hBit
+          have hy := congrArg Prod.snd hPoint
+          simp at hy
           simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY, hy]
           left
           simpa [sub_eq_add_neg] using hBit
       · exact by
-          rcases hOne hBit with ⟨_, hy⟩
+          have hPoint := hSelect.2 hBit
+          have hy := congrArg Prod.snd hPoint
+          simp at hy
           simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY, hy]
           left
           linear_combination -hBit
