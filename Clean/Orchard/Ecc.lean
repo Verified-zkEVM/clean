@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Tactics
+import Mathlib.Tactic
 
 /-!
 # Orchard ECC gadgets
@@ -365,6 +366,34 @@ def constraints (row : CompleteAddRow R) : Prop :=
   poly6a row = 0 ∧
   poly6b row = 0
 
+def slopeLine (row : CompleteAddRow R) : Prop :=
+  xQMinusXP row * row.lambda = row.q.y - row.p.y
+
+def tangentLine (row : CompleteAddRow R) : Prop :=
+  2 * row.p.y * row.lambda = 3 * row.p.x * row.p.x
+
+def nonexceptionalResult (row : CompleteAddRow R) : Prop :=
+  row.r.x = row.lambda * row.lambda - row.p.x - row.q.x ∧
+    row.r.y = row.lambda * xPMinusXR row - row.p.y
+
+def leftIdentityResult (row : CompleteAddRow R) : Prop :=
+  row.r = row.q
+
+def rightIdentityResult (row : CompleteAddRow R) : Prop :=
+  row.r = row.p
+
+def inverseResult (row : CompleteAddRow R) : Prop :=
+  row.r.x = 0 ∧ row.r.y = 0
+
+def Spec (row : CompleteAddRow R) : Prop :=
+  (xQMinusXP row ≠ 0 → slopeLine row) ∧
+    (ifAlpha row ≠ 1 → tangentLine row) ∧
+    (row.p.x * row.q.x * xQMinusXP row ≠ 0 → nonexceptionalResult row) ∧
+    (row.p.x * row.q.x * yQPlusYP row ≠ 0 → nonexceptionalResult row) ∧
+    (ifBeta row ≠ 1 → leftIdentityResult row) ∧
+    (ifGamma row ≠ 1 → rightIdentityResult row) ∧
+    (ifAlpha row + ifDelta row ≠ 1 → inverseResult row)
+
 def main (row : Var CompleteAddRow F) : Circuit F Unit := do
   assertZero (poly1 row)
   assertZero (poly2 row)
@@ -381,23 +410,190 @@ def main (row : Var CompleteAddRow F) : Circuit F Unit := do
 
 def circuit : FormalAssertion F CompleteAddRow where
   main
-  Spec := constraints
+  Spec := Spec
   soundness := by
-    circuit_proof_start [main, constraints, poly1, poly2, poly3a, poly3b, poly3c, poly3d,
-      poly4a, poly4b, poly5a, poly5b, poly6a, poly6b, nonexceptionalXR, nonexceptionalYR,
-      ifAlpha, ifBeta, ifGamma, ifDelta, xQMinusXP, xPMinusXR, yQPlusYP]
+    circuit_proof_start [main, Spec, constraints, slopeLine, tangentLine, nonexceptionalResult,
+      leftIdentityResult, rightIdentityResult, inverseResult, poly1, poly2, poly3a, poly3b,
+      poly3c, poly3d, poly4a, poly4b, poly5a, poly5b, poly6a, poly6b, nonexceptionalXR,
+      nonexceptionalYR, ifAlpha, ifBeta, ifGamma, ifDelta, xQMinusXP, xPMinusXR, yQPlusYP]
     rcases input_p with ⟨px, py⟩
     rcases input_q with ⟨qx, qy⟩
     rcases input_r with ⟨rx, ry⟩
     simp_all [sub_eq_add_neg]
+    rcases h_holds with
+      ⟨h1, h2, h3a, h3b, h3c, h3d, h4a, h4b, h5a, h5b, h6a, h6b⟩
+    constructor
+    · intro hne
+      rcases h1 with hzero | hline
+      · exact False.elim (hne hzero)
+      · linear_combination hline
+    constructor
+    · intro hne
+      rcases h2 with hflag | htangent
+      · have : (qx + -px) * input_alpha = 1 := by linear_combination -hflag
+        exact False.elim (hne this)
+      · linear_combination htangent
+    constructor
+    · intro hpx hqx hxdiff
+      constructor
+      · rcases h3a with hzero | hx
+        · rcases hzero with hzero | hzero
+          · rcases hzero with hzero | hzero
+            · exact False.elim (hpx hzero)
+            · exact False.elim (hqx hzero)
+          · exact False.elim (hxdiff hzero)
+        · linear_combination -hx
+      · rcases h3b with hzero | hy
+        · rcases hzero with hzero | hzero
+          · rcases hzero with hzero | hzero
+            · exact False.elim (hpx hzero)
+            · exact False.elim (hqx hzero)
+          · exact False.elim (hxdiff hzero)
+        · linear_combination -hy
+    constructor
+    · intro hpx hqx hysum
+      constructor
+      · rcases h3c with hzero | hx
+        · rcases hzero with hzero | hzero
+          · rcases hzero with hzero | hzero
+            · exact False.elim (hpx hzero)
+            · exact False.elim (hqx hzero)
+          · exact False.elim (hysum hzero)
+        · linear_combination -hx
+      · rcases h3d with hzero | hy
+        · rcases hzero with hzero | hzero
+          · rcases hzero with hzero | hzero
+            · exact False.elim (hpx hzero)
+            · exact False.elim (hqx hzero)
+          · exact False.elim (hysum hzero)
+        · linear_combination -hy
+    constructor
+    · intro hne
+      constructor
+      · rcases h4a with hflag | hx
+        · have : px * input_beta = 1 := by linear_combination -hflag
+          exact False.elim (hne this)
+        · linear_combination hx
+      · rcases h4b with hflag | hy
+        · have : px * input_beta = 1 := by linear_combination -hflag
+          exact False.elim (hne this)
+        · linear_combination hy
+    constructor
+    · intro hne
+      constructor
+      · rcases h5a with hflag | hx
+        · have : qx * input_gamma = 1 := by linear_combination -hflag
+          exact False.elim (hne this)
+        · linear_combination hx
+      · rcases h5b with hflag | hy
+        · have : qx * input_gamma = 1 := by linear_combination -hflag
+          exact False.elim (hne this)
+        · linear_combination hy
+    · intro hne
+      constructor
+      · rcases h6a with hflag | hx
+        · have : (qx + -px) * input_alpha + (qy + py) * input_delta = 1 := by
+            linear_combination -hflag
+          exact False.elim (hne this)
+        · exact hx
+      · rcases h6b with hflag | hy
+        · have : (qx + -px) * input_alpha + (qy + py) * input_delta = 1 := by
+            linear_combination -hflag
+          exact False.elim (hne this)
+        · exact hy
   completeness := by
-    circuit_proof_start [main, constraints, poly1, poly2, poly3a, poly3b, poly3c, poly3d,
-      poly4a, poly4b, poly5a, poly5b, poly6a, poly6b, nonexceptionalXR, nonexceptionalYR,
-      ifAlpha, ifBeta, ifGamma, ifDelta, xQMinusXP, xPMinusXR, yQPlusYP]
+    circuit_proof_start [main, Spec, constraints, slopeLine, tangentLine, nonexceptionalResult,
+      leftIdentityResult, rightIdentityResult, inverseResult, poly1, poly2, poly3a, poly3b,
+      poly3c, poly3d, poly4a, poly4b, poly5a, poly5b, poly6a, poly6b, nonexceptionalXR,
+      nonexceptionalYR, ifAlpha, ifBeta, ifGamma, ifDelta, xQMinusXP, xPMinusXR, yQPlusYP]
     rcases input_p with ⟨px, py⟩
     rcases input_q with ⟨qx, qy⟩
     rcases input_r with ⟨rx, ry⟩
     simp_all [sub_eq_add_neg]
+    rcases h_spec with ⟨h1, h2, h3, h3', h4, h5, h6⟩
+    constructor
+    · by_cases hzero : qx + -px = 0
+      · exact Or.inl hzero
+      · exact Or.inr (by
+        have hline := h1 hzero
+        linear_combination hline)
+    constructor
+    · by_cases hflag : (qx + -px) * input_alpha = 1
+      · exact Or.inl (by linear_combination -hflag)
+      · exact Or.inr (by
+        have htangent := h2 hflag
+        linear_combination htangent)
+    constructor
+    · by_cases hpx : px = 0
+      · exact Or.inl (Or.inl (Or.inl hpx))
+      · by_cases hqx : qx = 0
+        · exact Or.inl (Or.inl (Or.inr hqx))
+        · by_cases hxdiff : qx + -px = 0
+          · exact Or.inl (Or.inr hxdiff)
+          · exact Or.inr (by
+              have hx := (h3 hpx hqx hxdiff).1
+              linear_combination -hx)
+    constructor
+    · by_cases hpx : px = 0
+      · exact Or.inl (Or.inl (Or.inl hpx))
+      · by_cases hqx : qx = 0
+        · exact Or.inl (Or.inl (Or.inr hqx))
+        · by_cases hxdiff : qx + -px = 0
+          · exact Or.inl (Or.inr hxdiff)
+          · exact Or.inr (by
+              have hy := (h3 hpx hqx hxdiff).2
+              linear_combination -hy)
+    constructor
+    · by_cases hpx : px = 0
+      · exact Or.inl (Or.inl (Or.inl hpx))
+      · by_cases hqx : qx = 0
+        · exact Or.inl (Or.inl (Or.inr hqx))
+        · by_cases hysum : qy + py = 0
+          · exact Or.inl (Or.inr hysum)
+          · exact Or.inr (by
+              have hx := (h3' hpx hqx hysum).1
+              linear_combination -hx)
+    constructor
+    · by_cases hpx : px = 0
+      · exact Or.inl (Or.inl (Or.inl hpx))
+      · by_cases hqx : qx = 0
+        · exact Or.inl (Or.inl (Or.inr hqx))
+        · by_cases hysum : qy + py = 0
+          · exact Or.inl (Or.inr hysum)
+          · exact Or.inr (by
+              have hy := (h3' hpx hqx hysum).2
+              linear_combination -hy)
+    constructor
+    · by_cases hflag : px * input_beta = 1
+      · exact Or.inl (by linear_combination -hflag)
+      · exact Or.inr (by
+          have hx := (h4 hflag).1
+          linear_combination hx)
+    constructor
+    · by_cases hflag : px * input_beta = 1
+      · exact Or.inl (by linear_combination -hflag)
+      · exact Or.inr (by
+          have hy := (h4 hflag).2
+          linear_combination hy)
+    constructor
+    · by_cases hflag : qx * input_gamma = 1
+      · exact Or.inl (by linear_combination -hflag)
+      · exact Or.inr (by
+          have hx := (h5 hflag).1
+          linear_combination hx)
+    constructor
+    · by_cases hflag : qx * input_gamma = 1
+      · exact Or.inl (by linear_combination -hflag)
+      · exact Or.inr (by
+          have hy := (h5 hflag).2
+          linear_combination hy)
+    constructor
+    · by_cases hflag : (qx + -px) * input_alpha + (qy + py) * input_delta = 1
+      · exact Or.inl (by linear_combination -hflag)
+      · exact Or.inr (h6 hflag).1
+    · by_cases hflag : (qx + -px) * input_alpha + (qy + py) * input_delta = 1
+      · exact Or.inl (by linear_combination -hflag)
+      · exact Or.inr (h6 hflag).2
 
 end CompleteAdd
 
