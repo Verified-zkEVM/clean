@@ -92,9 +92,6 @@ def lsbX (row : Row R) : R :=
 def lsbY (row : Row R) : R :=
   ternary (lsb row) row.yP (row.yP + row.baseY)
 
-def constraints (row : Row R) : Prop :=
-  NoteCommit.boolPoly (lsb row) = 0 ∧ lsbX row = 0 ∧ lsbY row = 0
-
 def SelectedCorrectionPoint (row : Row R) : Prop :=
   (lsb row = 0 →
     (row.xP, row.yP) =
@@ -114,7 +111,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, SelectedCorrectionPoint, NoteCommit.boolPoly,
+    circuit_proof_start [main, Spec, SelectedCorrectionPoint, NoteCommit.boolPoly,
       lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_holds with ⟨hBool, hX, hY⟩
     rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
@@ -139,7 +136,7 @@ def circuit : FormalAssertion F Row where
         simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY] at hY'
         linear_combination hY' + input_baseY * hBit
   completeness := by
-    circuit_proof_start [main, Spec, constraints, SelectedCorrectionPoint, NoteCommit.boolPoly,
+    circuit_proof_start [main, Spec, SelectedCorrectionPoint, NoteCommit.boolPoly,
       lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
@@ -197,9 +194,6 @@ def bit (row : Row R) : R :=
 def ySwitch (row : Row R) : R :=
   ternary (bit row) (row.baseY - row.yP) (row.baseY + row.yP)
 
-def constraints (row : Row R) : Prop :=
-  NoteCommit.boolPoly (bit row) = 0 ∧ ySwitch row = 0
-
 def SelectedCompleteBitPoint (row : Row R) : Prop :=
   ∀ x : R,
     (bit row = 0 →
@@ -218,7 +212,7 @@ def circuit : FormalAssertion F Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, constraints, SelectedCompleteBitPoint,
+    circuit_proof_start [main, Spec, SelectedCompleteBitPoint,
       NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_holds with ⟨hBool, hSwitch⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
@@ -246,7 +240,7 @@ def circuit : FormalAssertion F Row where
               (input_baseY + input_yP) * hCoeff
           linear_combination -hDiff
   completeness := by
-    circuit_proof_start [main, Spec, constraints, SelectedCompleteBitPoint,
+    circuit_proof_start [main, Spec, SelectedCompleteBitPoint,
       NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
