@@ -117,15 +117,14 @@ Current Clean coverage:
   one half against `fullRounds4Value`.
 - `Clean.Orchard.Poseidon.Permute.partialRoundP128Circuit`: packaged P128
   partial-round-row subcircuit proving one row against `partialRoundValue`.
-- `Clean.Orchard.Poseidon.Permute.partialRoundRows28` / `partialRoundRows28P128`:
-  fixed `foldl` circuit shapes for the 28 partial-round rows; the P128 variant uses the
-  packaged P128 partial-row subcircuit.
-- `Clean.Orchard.Poseidon.Permute.mainP128`: P128-specialized source-shaped
-  `Pow5Chip::permute` circuit skeleton using the packaged full-round halves and fixed
-  P128 partial-round fold.
-- `Clean.Orchard.Poseidon.Permute.main`: source-shaped `Pow5Chip::permute` round
-  schedule skeleton; it witnesses intermediate full/partial round rows internally but is
-  not yet packaged as a `FormalCircuit` proving `Permute.Spec`.
+- `Clean.Orchard.Poseidon.Permute.partialRoundRows28P128Circuit`: packaged fixed
+  `foldl` subcircuit for the 28 P128 partial-round rows, proving the middle section
+  against `partialRoundRows28P128Value`.
+- `Clean.Orchard.Poseidon.Permute.mainP128Circuit`: packaged P128-specialized
+  `Pow5Chip::permute` circuit proving the full schedule against `permuteP128Value`.
+- `Clean.Orchard.Poseidon.Permute.main`: source-shaped parameterized compatibility
+  wrapper for experiments with non-P128 constants; it is not packaged because the
+  partial-row proof relies on the explicit P128 MDS inverse lemmas.
 - `Clean.Orchard.Poseidon.Sponge` mirrors the `Sponge` /
   `PoseidonSpongeInstructions` part of `poseidon.rs` and currently contains only the
   source-shaped namespace stub.

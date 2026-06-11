@@ -795,6 +795,57 @@ def partialRoundRows28P128 (roundConstants : Nat → State Ecc.Fp)
       apply Circuit.ConstantLength.fromConstantLength'
       simp [partialRoundP128Circuit, circuit_norm])
 
+/-- Packaged fixed 28-row P128 partial-round loop. -/
+def partialRoundRows28P128Circuit (roundConstants : Nat → State Ecc.Fp) :
+    FormalCircuit Ecc.Fp State State where
+  name := "Pow5State::partial_rounds[28][P128]"
+  main := partialRoundRows28P128 roundConstants
+  Spec input output := output = partialRoundRows28P128Value roundConstants input
+  soundness := by
+    circuit_proof_start [partialRoundRows28P128, partialRoundRows28P128Value,
+      partialRoundP128Circuit]
+    obtain ⟨h0, h_step⟩ := h_holds
+    let inputState : State Ecc.Fp := { x0 := input_x0, x1 := input_x1, x2 := input_x2 }
+    let envState : Nat → State Ecc.Fp := fun k =>
+      if k = 0 then inputState else
+        { x0 := env.get (i₀ + (k - 1) * (1 + [1, 1, 1].sum) + 1)
+          x1 := env.get (i₀ + (k - 1) * (1 + [1, 1, 1].sum) + 1 + 1)
+          x2 := env.get (i₀ + (k - 1) * (1 + [1, 1, 1].sum) + 1 + 1 + 1) }
+    have hround : ∀ k (hk : k < 28),
+        envState (k + 1) =
+          partialRoundValue (partialParamsP128 roundConstants (4 + 2 * k)) (envState k) := by
+      intro k hk
+      cases k with
+      | zero =>
+          simp [envState, inputState]
+          simpa using h0
+      | succ j =>
+          have hj := h_step j (by omega)
+          simp [envState]
+          simpa [Nat.succ_eq_add_one, Nat.add_assoc, Nat.mul_add, Nat.add_mul] using hj
+    have hind : ∀ k (hk : k ≤ 28),
+        envState k = Fin.foldl k
+          (fun state i => partialRoundValue (partialParamsP128 roundConstants (4 + 2 * i.val)) state)
+          inputState := by
+      intro k hk
+      induction k with
+      | zero => simp [envState, inputState]
+      | succ k ih =>
+          have hklt : k < 28 := by omega
+          have ih' := ih (by omega)
+          rw [Fin.foldl_succ_last]
+          rw [show (fun x1 (x2 : Fin k) =>
+              partialRoundValue (partialParamsP128 roundConstants (4 + 2 * ↑x2.castSucc)) x1) =
+              (fun state (i : Fin k) =>
+                partialRoundValue (partialParamsP128 roundConstants (4 + 2 * i.val)) state) from rfl]
+          rw [← ih']
+          simpa [show (Fin.last k).val = k by rfl] using hround k hklt
+    have h28 := hind 28 (by omega)
+    simpa [envState, inputState] using h28
+  completeness := by
+    circuit_proof_start [partialRoundRows28P128, partialRoundRows28P128Value,
+      partialRoundP128Circuit]
+
 /-- Apply the four consecutive full-round rows used by `Pow5Chip::permute`, starting
 at source round `round`. -/
 def fullRounds4 (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp)
@@ -849,14 +900,31 @@ def main (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → E
 def mainP128 (roundConstants : Nat → State Ecc.Fp)
     (input : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) := do
   let s ← fullRounds4Circuit roundConstants P128Pow5T3.mds 0 input
-  let s ← partialRoundRows28P128 roundConstants s
+  let s ← partialRoundRows28P128Circuit roundConstants s
   fullRounds4Circuit roundConstants P128Pow5T3.mds (4 + 56) s
 
+/-- Packaged P128Pow5T3 `Pow5Chip::permute` circuit. -/
+def mainP128Circuit (roundConstants : Nat → State Ecc.Fp) :
+    FormalCircuit Ecc.Fp State State where
+  name := "Pow5Chip::permute[P128]"
+  main := mainP128 roundConstants
+  Spec input output := output = permuteP128Value roundConstants input
+  soundness := by
+    circuit_proof_start [mainP128, permuteP128Value, fullRounds4Circuit,
+      partialRoundRows28P128Circuit]
+    rcases h_holds with ⟨hfull0, hpartial, hfull1⟩
+    rw [hfull0] at hpartial
+    rw [hpartial] at hfull1
+    simpa using hfull1
+  completeness := by
+    circuit_proof_start [mainP128, permuteP128Value, fullRounds4Circuit,
+      partialRoundRows28P128Circuit]
+
 /-!
-The next step is to package `main` as a `FormalCircuit` with an explicit elaborated
-instance proving `Spec`.  Keeping the source-shaped `main` separate for now lets
-downstream entry APIs compose the real schedule without exposing internal round rows as
-caller inputs.
+The P128-specialized permutation is packaged as `mainP128Circuit`.  The parameterized
+compatibility wrapper `main` remains available for experiments with non-P128 constants,
+but it is intentionally not packaged because the partial-row proof relies on the explicit
+P128 MDS inverse lemmas.
 -/
 
 end Permute
