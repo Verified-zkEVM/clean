@@ -1003,6 +1003,61 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
 
 end PartialRows4Block
 
+namespace PartialRows8Block
+
+structure Row (F : Type) where
+  r0 : PartialRounds.Row F
+  r1 : PartialRounds.Row F
+  r2 : PartialRounds.Row F
+  r3 : PartialRounds.Row F
+  r4 : PartialRounds.Row F
+  r5 : PartialRounds.Row F
+  r6 : PartialRounds.Row F
+  r7 : PartialRounds.Row F
+deriving ProvableStruct
+
+def first {K : Type} (row : Row K) : PartialRows4Block.Row K where
+  r0 := row.r0
+  r1 := row.r1
+  r2 := row.r2
+  r3 := row.r3
+
+def second {K : Type} (row : Row K) : PartialRows4Block.Row K where
+  r0 := row.r4
+  r1 := row.r5
+  r2 := row.r6
+  r3 := row.r7
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  PartialRows4Block.Spec (first row) ∧
+    PartialRows4Block.Spec (second row) ∧
+    stateEq (partialNext row.r3) (partialCur row.r4)
+
+def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  PartialRows4Block.circuit (first row)
+  PartialRows4Block.circuit (second row)
+  PartialToPartial.circuit { prev := row.r3, next := row.r4 }
+
+def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  main
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec,
+      PartialRows4Block.circuit, PartialRows4Block.Spec,
+      PartialToPartial.circuit, PartialToPartial.Spec,
+      stateSame, stateEq, partialCur, partialNext, first, second]
+    rcases h_holds with ⟨hFirst, hSecond, hLink⟩
+    exact ⟨hFirst, hSecond, stateEq_of_stateSame hLink⟩
+  completeness := by
+    circuit_proof_start [main, Spec,
+      PartialRows4Block.circuit, PartialRows4Block.Spec,
+      PartialToPartial.circuit, PartialToPartial.Spec,
+      stateSame, stateEq, partialCur, partialNext, first, second]
+    rcases h_spec with ⟨hFirst, hSecond, hLink⟩
+    exact ⟨hFirst, hSecond, stateSame_of_stateEq hLink⟩
+
+end PartialRows8Block
+
 def partialBlock0 {K : Type} (rows : PartialRows K) : PartialRows4Block.Row K where
   r0 := rows.r0
   r1 := rows.r1
