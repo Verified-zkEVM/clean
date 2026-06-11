@@ -78,7 +78,8 @@ Bottom-up implementation order currently inferred from those tagged sources:
    `halo2_gadgets/src/utilities/cond_swap.rs`
    - Clean module: `Clean.Orchard.Utilities`
    - Status: `CondSwap.circuit` ports the three gate constraints for scalar field values.
-   - Point muxes are expected to reuse the scalar circuit on `x` and `y`.
+     `PointMux.circuit` ports `mux_on_points` by composing the scalar field mux on
+     `x` and `y` and returning the selected Pallas point.
 3. ECC addition layer:
    `halo2_gadgets/src/ecc/chip/add_incomplete.rs`,
    `halo2_gadgets/src/ecc/chip/add.rs`

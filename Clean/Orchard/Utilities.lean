@@ -1,6 +1,7 @@
 import Clean.Circuit
 import Clean.Gadgets.Boolean
 import Clean.Gadgets.Equality
+import Clean.Orchard.Ecc
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -107,6 +108,97 @@ def circuit [DecidableEq F] : FormalCircuit F CondSwapInputs CondSwapOutput wher
   completeness
 
 end CondSwap
+
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/cond_swap.rs`
+- `CondSwapChip<pallas::Base>::mux_on_points`
+
+The Rust helper runs the field mux on both coordinates and returns the selected point.
+-/
+
+namespace PointMux
+
+structure Inputs (F : Type) where
+  choice : F
+  left : Ecc.Point F
+  right : Ecc.Point F
+deriving ProvableStruct
+
+def xInput {K : Type} (input : Inputs K) : CondSwapInputs K where
+  a := input.left.x
+  b := input.right.x
+  swap := input.choice
+
+def yInput {K : Type} (input : Inputs K) : CondSwapInputs K where
+  a := input.left.y
+  b := input.right.y
+  swap := input.choice
+
+@[circuit_norm]
+def Assumptions (input : Inputs Ecc.PallasBaseField) : Prop :=
+  IsBool input.choice
+
+@[circuit_norm]
+def Spec (input : Inputs Ecc.PallasBaseField) (output : Ecc.Point Ecc.PallasBaseField) :
+    Prop :=
+  output = if input.choice = 1 then input.right else input.left
+
+def main (input : Var Inputs Ecc.PallasBaseField) :
+    Circuit Ecc.PallasBaseField (Var Ecc.Point Ecc.PallasBaseField) := do
+  let xOut ← CondSwap.circuit (xInput input)
+  let yOut ← CondSwap.circuit (yInput input)
+  return { x := xOut.aSwapped, y := yOut.aSwapped }
+
+instance elaborated : ElaboratedCircuit Ecc.PallasBaseField Inputs Ecc.Point main := by
+  elaborate_circuit
+
+theorem soundness :
+    Soundness Ecc.PallasBaseField main Assumptions Spec := by
+  circuit_proof_start [main, Assumptions, Spec, xInput, yInput,
+    CondSwap.circuit, CondSwap.Spec]
+  rcases h_holds with ⟨hX, hY⟩
+  have hXMux := hX h_assumptions
+  have hYMux := hY h_assumptions
+  have hLeftX : Expression.eval env input_var_left.x = input_left.x := by
+    have h := congrArg Ecc.Point.x h_input.2.1
+    simpa [circuit_norm] using h
+  have hLeftY : Expression.eval env input_var_left.y = input_left.y := by
+    have h := congrArg Ecc.Point.y h_input.2.1
+    simpa [circuit_norm] using h
+  have hRightX : Expression.eval env input_var_right.x = input_right.x := by
+    have h := congrArg Ecc.Point.x h_input.2.2
+    simpa [circuit_norm] using h
+  have hRightY : Expression.eval env input_var_right.y = input_right.y := by
+    have h := congrArg Ecc.Point.y h_input.2.2
+    simpa [circuit_norm] using h
+  by_cases hChoiceOne : input_choice = 1
+  · simp [hChoiceOne, hLeftX, hLeftY, hRightX, hRightY] at hXMux hYMux ⊢
+    apply congrArg₂ Ecc.Point.mk
+    · exact hXMux.1
+    · exact hYMux.1
+  · simp [hChoiceOne, hLeftX, hLeftY, hRightX, hRightY] at hXMux hYMux ⊢
+    apply congrArg₂ Ecc.Point.mk
+    · exact hXMux.1
+    · exact hYMux.1
+
+theorem completeness :
+    Completeness Ecc.PallasBaseField main Assumptions := by
+  circuit_proof_start [main, Assumptions, Spec, xInput, yInput,
+    CondSwap.circuit, CondSwap.Spec]
+  rcases h_assumptions with hChoiceZero | hChoiceOne
+  · exact Or.inl hChoiceZero
+  · exact Or.inr hChoiceOne
+
+def circuit : FormalCircuit Ecc.PallasBaseField Inputs Ecc.Point where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end PointMux
 
 /-!
 Reference:
