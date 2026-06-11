@@ -103,72 +103,89 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
       (Ecc.pointCoords (addInput row).q)
 
 def OrchardSpec
-    (row : Row Ecc.PallasBaseField) (valueScalar blindScalar : ℕ) : Prop :=
-  Ecc.IsOrchardFixedBaseMul .valueCommitV valueScalar (valueProduct row) ∧
+    (row : Row Ecc.PallasBaseField) (valueScalar : ℕ)
+    (valueSign : Ecc.PallasBaseField) (blindScalar : ℕ) : Prop :=
+  Ecc.IsOrchardFixedBaseSignedMul .valueCommitV valueScalar valueSign (valueProduct row) ∧
     Ecc.IsOrchardFixedBaseMul .valueCommitR blindScalar (blindProduct row) ∧
     Spec row
 
 def OrchardCommitmentRelation
-    (row : Row Ecc.PallasBaseField) (valueScalar blindScalar : ℕ) : Prop :=
-  Ecc.pointCoords (output row) =
-    CompElliptic.CurveForms.ShortWeierstrass.add
-      (0 : Ecc.PallasBaseField)
-      (Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitV valueScalar)
-      (Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitR blindScalar)
+    (row : Row Ecc.PallasBaseField) (valueScalar : ℕ)
+    (valueSign : Ecc.PallasBaseField) (blindScalar : ℕ) : Prop :=
+  ∃ valueCoords : Ecc.PallasBaseField × Ecc.PallasBaseField,
+    Ecc.OrchardFixedBaseSignedMulCoords .valueCommitV valueScalar valueSign valueCoords ∧
+      Ecc.pointCoords (output row) =
+        CompElliptic.CurveForms.ShortWeierstrass.add
+          (0 : Ecc.PallasBaseField)
+          valueCoords
+          (Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitR blindScalar)
 
 theorem spec_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
-    (h : OrchardSpec row valueScalar blindScalar) :
+    {valueSign : Ecc.PallasBaseField}
+    (h : OrchardSpec row valueScalar valueSign blindScalar) :
     Spec row :=
   h.2.2
 
 theorem valueProduct_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
-    (h : OrchardSpec row valueScalar blindScalar) :
-    Ecc.pointCoords (valueProduct row) =
-      Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitV valueScalar :=
-  (Ecc.isOrchardFixedBaseMul_iff_groupAction).1 h.1
+    {valueSign : Ecc.PallasBaseField}
+    (h : OrchardSpec row valueScalar valueSign blindScalar) :
+    Ecc.OrchardFixedBaseSignedMulCoords .valueCommitV valueScalar valueSign
+      (Ecc.pointCoords (valueProduct row)) :=
+  Ecc.orchardFixedBaseSignedMulCoords_of_isOrchardFixedBaseSignedMul h.1
 
 theorem blindProduct_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
-    (h : OrchardSpec row valueScalar blindScalar) :
+    {valueSign : Ecc.PallasBaseField}
+    (h : OrchardSpec row valueScalar valueSign blindScalar) :
     Ecc.pointCoords (blindProduct row) =
       Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitR blindScalar :=
   (Ecc.isOrchardFixedBaseMul_iff_groupAction).1 h.2.1
 
 theorem valueProduct_identity_of_orchardSpec_value_zero
     {row : Row Ecc.PallasBaseField} {blindScalar : ℕ}
-    (h : OrchardSpec row 0 blindScalar) :
+    (h : OrchardSpec row 0 1 blindScalar) :
     Ecc.isIdentityEncoding (valueProduct row) := by
-  exact (Ecc.isOrchardFixedBaseMul_zero_iff).1 h.1
+  rcases h.1 with ⟨_, hmul⟩ | ⟨hSign, _, _⟩
+  · exact (Ecc.isOrchardFixedBaseMul_zero_iff).1 hmul
+  · exfalso
+    have htwo : (2 : Ecc.PallasBaseField) = 0 := by linear_combination hSign
+    exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
 
 theorem valueProduct_eq_fixedBase_of_orchardSpec_value_one
     {row : Row Ecc.PallasBaseField} {blindScalar : ℕ}
-    (h : OrchardSpec row 1 blindScalar) :
+    (h : OrchardSpec row 1 1 blindScalar) :
     valueProduct row = Ecc.fixedBasePoint .valueCommitV := by
-  exact (Ecc.isOrchardFixedBaseMul_one_iff).1 h.1
+  rcases h.1 with ⟨_, hmul⟩ | ⟨hSign, _, _⟩
+  · exact (Ecc.isOrchardFixedBaseMul_one_iff).1 hmul
+  · exfalso
+    have htwo : (2 : Ecc.PallasBaseField) = 0 := by linear_combination hSign
+    exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
 
 theorem blindProduct_identity_of_orchardSpec_blind_zero
-    {row : Row Ecc.PallasBaseField} {valueScalar : ℕ}
-    (h : OrchardSpec row valueScalar 0) :
+    {row : Row Ecc.PallasBaseField} {valueScalar : ℕ} {valueSign : Ecc.PallasBaseField}
+    (h : OrchardSpec row valueScalar valueSign 0) :
     Ecc.isIdentityEncoding (blindProduct row) := by
   exact (Ecc.isOrchardFixedBaseMul_zero_iff).1 h.2.1
 
 theorem blindProduct_eq_fixedBase_of_orchardSpec_blind_one
-    {row : Row Ecc.PallasBaseField} {valueScalar : ℕ}
-    (h : OrchardSpec row valueScalar 1) :
+    {row : Row Ecc.PallasBaseField} {valueScalar : ℕ} {valueSign : Ecc.PallasBaseField}
+    (h : OrchardSpec row valueScalar valueSign 1) :
     blindProduct row = Ecc.fixedBasePoint .valueCommitR := by
   exact (Ecc.isOrchardFixedBaseMul_one_iff).1 h.2.1
 
 theorem commitmentRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
-    (h : OrchardSpec row valueScalar blindScalar) :
-    OrchardCommitmentRelation row valueScalar blindScalar := by
+    {valueSign : Ecc.PallasBaseField}
+    (h : OrchardSpec row valueScalar valueSign blindScalar) :
+    OrchardCommitmentRelation row valueScalar valueSign blindScalar := by
   have hValue := valueProduct_groupAction_of_orchardSpec h
   have hBlind := blindProduct_groupAction_of_orchardSpec h
   have hspec := spec_of_orchardSpec h
   dsimp [OrchardCommitmentRelation, Spec, valueProduct, blindProduct, addInput] at hValue hBlind hspec ⊢
-  rw [hValue, hBlind] at hspec
+  refine ⟨Ecc.pointCoords (valueProduct row), hValue, ?_⟩
+  rw [hBlind] at hspec
   exact hspec
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
@@ -195,10 +212,11 @@ theorem assumptions_of_scalar_mul_products
 
 theorem assumptions_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
-    (h : OrchardSpec row valueScalar blindScalar) :
+    {valueSign : Ecc.PallasBaseField}
+    (h : OrchardSpec row valueScalar valueSign blindScalar) :
     Assumptions row :=
   assumptions_of_product_valid
-    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1)
+    (Ecc.isOrchardFixedBaseSignedMul_isPointOrIdentity h.1)
     (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.2.1)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do

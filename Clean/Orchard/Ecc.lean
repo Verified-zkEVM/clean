@@ -113,6 +113,33 @@ def IsOrchardFixedBaseBaseFieldMul
     (product : Point PallasBaseField) : Prop :=
   IsPallasBaseFieldScalarMul scalar (fixedBasePoint baseId) product
 
+def negCoords {F : Type} [Neg F] (coords : F × F) : F × F :=
+  (coords.1, -coords.2)
+
+def IsSignedPallasScalarMul
+    (scalar : ℕ) (sign : PallasBaseField)
+    (base product : Point PallasBaseField) : Prop :=
+  sign = 1 ∧ IsPallasScalarMul scalar base product ∨
+    sign = 0 - 1 ∧
+      isPointOrIdentity base ∧
+      pointCoords product = negCoords (pallasScalarMulCoords scalar base)
+
+def SignedPallasScalarMulCoords
+    (scalar : ℕ) (sign : PallasBaseField)
+    (base : Point PallasBaseField) (coords : PallasBaseField × PallasBaseField) : Prop :=
+  sign = 1 ∧ coords = pallasScalarMulCoords scalar base ∨
+    sign = 0 - 1 ∧ coords = negCoords (pallasScalarMulCoords scalar base)
+
+def IsOrchardFixedBaseSignedMul
+    (baseId : OrchardFixedBaseId) (scalar : ℕ) (sign : PallasBaseField)
+    (product : Point PallasBaseField) : Prop :=
+  IsSignedPallasScalarMul scalar sign (fixedBasePoint baseId) product
+
+def OrchardFixedBaseSignedMulCoords
+    (baseId : OrchardFixedBaseId) (scalar : ℕ) (sign : PallasBaseField)
+    (coords : PallasBaseField × PallasBaseField) : Prop :=
+  SignedPallasScalarMulCoords scalar sign (fixedBasePoint baseId) coords
+
 theorem fixedBasePoint_onCurve (baseId : OrchardFixedBaseId) :
     onCurve (fixedBasePoint baseId) := by
   rcases baseId <;>
@@ -403,6 +430,42 @@ theorem isOrchardFixedBaseMul_isPointOrIdentity
     (hmul : IsOrchardFixedBaseMul baseId scalar product) :
     isPointOrIdentity product :=
   isPallasScalarMul_isPointOrIdentity (fixedBasePoint_isPointOrIdentity baseId) hmul
+
+theorem isSignedPallasScalarMul_isPointOrIdentity
+    {scalar : ℕ} {sign : PallasBaseField}
+    {base product : Point PallasBaseField}
+    (hmul : IsSignedPallasScalarMul scalar sign base product) :
+    isPointOrIdentity product := by
+  rcases hmul with ⟨_, hmul⟩ | ⟨_, hbase, hcoords⟩
+  · exact isPallasScalarMul_isPointOrIdentity hmul.1 hmul
+  · apply isPointOrIdentity_of_pallasValid
+    rw [hcoords]
+    have hValid := pallasScalarMulCoords_valid scalar hbase
+    simpa [negCoords]
+      using CompElliptic.CurveForms.ShortWeierstrass.valid_neg hValid
+
+theorem isOrchardFixedBaseSignedMul_isPointOrIdentity
+    {baseId : OrchardFixedBaseId} {scalar : ℕ} {sign : PallasBaseField}
+    {product : Point PallasBaseField}
+    (hmul : IsOrchardFixedBaseSignedMul baseId scalar sign product) :
+    isPointOrIdentity product :=
+  isSignedPallasScalarMul_isPointOrIdentity hmul
+
+theorem signedPallasScalarMulCoords_of_isSignedPallasScalarMul
+    {scalar : ℕ} {sign : PallasBaseField}
+    {base product : Point PallasBaseField}
+    (hmul : IsSignedPallasScalarMul scalar sign base product) :
+    SignedPallasScalarMulCoords scalar sign base (pointCoords product) := by
+  rcases hmul with ⟨hSign, hmul⟩ | ⟨hSign, _, hcoords⟩
+  · exact Or.inl ⟨hSign, hmul.2⟩
+  · exact Or.inr ⟨hSign, hcoords⟩
+
+theorem orchardFixedBaseSignedMulCoords_of_isOrchardFixedBaseSignedMul
+    {baseId : OrchardFixedBaseId} {scalar : ℕ} {sign : PallasBaseField}
+    {product : Point PallasBaseField}
+    (hmul : IsOrchardFixedBaseSignedMul baseId scalar sign product) :
+    OrchardFixedBaseSignedMulCoords baseId scalar sign (pointCoords product) :=
+  signedPallasScalarMulCoords_of_isSignedPallasScalarMul hmul
 
 def orchardFixedBaseMulGroupActionCoords
     (baseId : OrchardFixedBaseId) (scalar : ℕ) :
