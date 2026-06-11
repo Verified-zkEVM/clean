@@ -358,6 +358,98 @@ structure State (F : Type) where
   x2 : F
 deriving ProvableStruct
 
+namespace P128Pow5T3
+/-- Interpret Halo2 `pallas::Base::from_raw` little-endian 64-bit limbs. -/
+def fromRaw (l0 l1 l2 l3 : Nat) : Ecc.Fp :=
+  (l0 + 2 ^ 64 * l1 + 2 ^ 128 * l2 + 2 ^ 192 * l3 : Nat)
+
+/-- P128Pow5T3 `MDS` matrix over Pallas base, ported from `halo2_poseidon/src/fp.rs`. -/
+def mds : Nat → Nat → Ecc.Fp
+  | 0, 0 => fromRaw 3620652786995239779 10941390476615682902 12958439140294781652 771775491557723623
+  | 0, 1 => fromRaw 10289130405333740382 2597814459711051574 2972110829885618516 3571748305317288635
+  | 0, 2 => fromRaw 1860495882540561501 11575296791174797109 15565448752179597279 558523139050038694
+  | 1, 0 => fromRaw 15008753495564424828 4182232445879154442 17933983967831928223 2535916242775023319
+  | 1, 1 => fromRaw 4621379386992785966 8716776849784154887 12927130094725535101 2723237799138601136
+  | 1, 2 => fromRaw 17892098110593660026 11145632283026774079 8400206265390340439 2519119548415220887
+  | 2, 0 => fromRaw 18367836059708218340 2407190131743899997 17524538118055867492 3326433177438457911
+  | 2, 1 => fromRaw 14371531744063403620 14693825613060777155 10579340894105704037 2097176931241650056
+  | 2, 2 => fromRaw 1541238319548489457 8468786250665046518 5899939721334036153 4321031255276163940
+  | _, _ => 0
+
+/-- P128Pow5T3 `MDSINV` matrix over Pallas base, ported from `halo2_poseidon/src/fp.rs`. -/
+def mdsInv : Nat → Nat → Ecc.Fp
+  | 0, 0 => fromRaw 14329968291362131563 4990956366285343413 14725081725716161603 3224674038581586042
+  | 0, 1 => fromRaw 1664150712322061686 18076314957651265430 6906036201411609477 3668116174685169637
+  | 0, 2 => fromRaw 10675296646881109216 1442237576821874752 17609487455796105722 3363729294698305897
+  | 1, 0 => fromRaw 11658153772397471392 1436776915026414377 15787567157432865389 558224821545496985
+  | 1, 1 => fromRaw 16727536405800263769 13483043927481500095 111061169655799213 3092962521913441521
+  | 1, 2 => fromRaw 16164574508216092545 8553082345022233398 1303110714430473906 671845740643625712
+  | 2, 0 => fromRaw 3044870461749446920 12608127523569523637 8231000811050478374 3444051328397582873
+  | 2, 1 => fromRaw 8570256919438797067 14259687304689143095 13032806769834140246 2217801975518692635
+  | 2, 2 => fromRaw 12522420651677217518 9774855583763578497 4334426893519794660 940178088060449066
+  | _, _ => 0
+
+/-- The explicit P128Pow5T3 matrices satisfy `MDS_INV * MDS = I`. -/
+theorem mdsInv_mul_mds (i j : Fin 3) :
+    mdsInv i.val 0 * mds 0 j.val + mdsInv i.val 1 * mds 1 j.val +
+      mdsInv i.val 2 * mds 2 j.val = if i = j then 1 else 0 := by
+  fin_cases i <;> fin_cases j
+  · change ((905457334243774457406483481563174903331369998272502669964302313549729653048815382454531386933288977413134376651702248431747669994576093617278755014122761 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((1 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((1125369057355178362565835492273472726208154592603215705108034755307179642311313632199131204034254268641756658265125610831480272041058530452386248133722878 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((1007755862194239789516852909801011739078263427832546604307054063048796474120851327601368805426727409225903068132618622361226255214794701761938089228952059 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((414082306416280423128121979954833554954275063322831905126278252041948615568209596509495319348751535957217423159363288946106819740263944250751302396193504 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((465955926416090631753147850592035640342151361220113399997543671215509746741994979959193554435612531047340330539485644586093216602700073754508979111947554 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((1 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((433673857820935244456465896065845207296158781552364420302426618874983484272712688267797076528230731483779189870941874500509388498468792026874129403229435 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((449562471328863485691198914517216279512777148692691056159194856255209126857881222111506772307171593026130668102257869742245989185279168589744409745186660 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((800357445755740618006025545006491399277586693701757620137578742873681938279368910023526624149639047081708813274879555286061778289746910215341623666466786 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((456000582988329970701188121217362227123777375892574425683157939357257545157611876874222197847198078100162159365397501348018592369521261023507870991370548 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((1 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+
+/-- Applying the explicit inverse matrix to `MDS * r` returns `r`. -/
+theorem mdsInv_mul_mds_apply (i : Fin 3) (r0 r1 r2 : Ecc.Fp) :
+    (r0 * mds 0 0 + r1 * mds 0 1 + r2 * mds 0 2) * mdsInv i.val 0 +
+      (r0 * mds 1 0 + r1 * mds 1 1 + r2 * mds 1 2) * mdsInv i.val 1 +
+      (r0 * mds 2 0 + r1 * mds 2 1 + r2 * mds 2 2) * mdsInv i.val 2 =
+    match i with
+    | ⟨0, _⟩ => r0
+    | ⟨1, _⟩ => r1
+    | _ => r2 := by
+  fin_cases i
+  · have h00 := mdsInv_mul_mds ⟨0, by norm_num⟩ ⟨0, by norm_num⟩
+    have h01 := mdsInv_mul_mds ⟨0, by norm_num⟩ ⟨1, by norm_num⟩
+    have h02 := mdsInv_mul_mds ⟨0, by norm_num⟩ ⟨2, by norm_num⟩
+    simp at h00 h01 h02
+    linear_combination r0 * h00 + r1 * h01 + r2 * h02
+  · have h10 := mdsInv_mul_mds ⟨1, by norm_num⟩ ⟨0, by norm_num⟩
+    have h11 := mdsInv_mul_mds ⟨1, by norm_num⟩ ⟨1, by norm_num⟩
+    have h12 := mdsInv_mul_mds ⟨1, by norm_num⟩ ⟨2, by norm_num⟩
+    simp at h10 h11 h12
+    linear_combination r0 * h10 + r1 * h11 + r2 * h12
+  · have h20 := mdsInv_mul_mds ⟨2, by norm_num⟩ ⟨0, by norm_num⟩
+    have h21 := mdsInv_mul_mds ⟨2, by norm_num⟩ ⟨1, by norm_num⟩
+    have h22 := mdsInv_mul_mds ⟨2, by norm_num⟩ ⟨2, by norm_num⟩
+    simp at h20 h21 h22
+    linear_combination r0 * h20 + r1 * h21 + r2 * h22
+
+end P128Pow5T3
+
 /-- Constants needed by one width-3 full round. -/
 def fullParams (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp)
     (round : Nat) : FullRound.Params Ecc.Fp where
@@ -471,6 +563,28 @@ def fullRound (params : FullRound.Params Ecc.Fp) (state : Var State Ecc.Fp) :
       next0 := next.x0, next1 := next.x1, next2 := next.x2 }
   return next
 
+/-- Packaged full-round loop body.  This is deliberately a subcircuit even though the
+Rust source implements it as a private method, because keeping one row per package makes
+loop proofs and elaboration manageable. -/
+def fullRoundCircuit (params : FullRound.Params Ecc.Fp) : FormalCircuit Ecc.Fp State State where
+  name := "Pow5State::full_round"
+  main := fullRound params
+  Spec input output := output = fullRoundValue params input
+  soundness := by
+    circuit_proof_start [fullRound, fullRoundValue, FullRound.circuit, FullRound.Spec,
+      FullRound.output0, FullRound.output1, FullRound.output2]
+    rcases h_holds with ⟨h0, h1, h2⟩
+    simp [State.mk.injEq, FullRound.s0, FullRound.s1, FullRound.s2] at h0 h1 h2 ⊢
+    exact ⟨h0, h1, h2⟩
+  completeness := by
+    circuit_proof_start [fullRound, fullRoundValue, FullRound.circuit, FullRound.Spec,
+      FullRound.output0, FullRound.output1, FullRound.output2]
+    constructor
+    · simpa [FullRound.s0, FullRound.s1, FullRound.s2] using h_env ⟨0, by norm_num⟩
+    constructor
+    · simpa [FullRound.s0, FullRound.s1, FullRound.s2] using h_env ⟨1, by norm_num⟩
+    · simpa [FullRound.s0, FullRound.s1, FullRound.s2] using h_env ⟨2, by norm_num⟩
+
 /-- One source-shaped partial-round row: witness the intermediate S-box and next state
 internally and assert the `partial rounds` gate. -/
 def partialRound (params : PartialRounds.Params Ecc.Fp) (state : Var State Ecc.Fp) :
@@ -483,12 +597,21 @@ def partialRound (params : PartialRounds.Params Ecc.Fp) (state : Var State Ecc.F
       next0 := next.x0, next1 := next.x1, next2 := next.x2 }
   return next
 
+/-!
+The analogous packaged partial-round-row circuit needs the explicit assumption that
+`mdsInv` is the inverse of `mds`: the Halo2 gate constrains `M⁻¹ * next`, while the
+honest value-level transition computes `next = M * r_mid`.  The gate-level assertion is
+already proved by `PartialRounds.circuit`; the source-level loop proof should add the
+matrix-inverse invariant before packaging this body as a `FormalCircuit` against
+`partialRoundValue`.
+-/
+
 /-- Apply `count` consecutive full-round rows starting at source round `round`. -/
 def fullRounds (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp) :
     Nat → Nat → Var State Ecc.Fp → Circuit Ecc.Fp (Var State Ecc.Fp)
   | 0, _round, state => return state
   | count + 1, round, state => do
-      let state ← fullRound (fullParams roundConstants mds round) state
+      let state ← fullRoundCircuit (fullParams roundConstants mds round) state
       fullRounds roundConstants mds count (round + 1) state
 
 /-- Apply `count` consecutive partial-round rows.  Each row represents two source
