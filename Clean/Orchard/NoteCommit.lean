@@ -24,8 +24,7 @@ Reference:
 - `gadgets::note_commit`
 
 Most assertions model the enabled Halo2 custom-gate polynomials, not selector, rotation,
-column-layout, lookup, or assignment machinery. `Wiring.circuit` records message-piece and
-canonicity wiring around those gates.
+column-layout, lookup, or assignment machinery.
 
 TODO(source-conformance): the `gadgets::note_commit` entry circuit is not implemented.
 It must compose `CommitDomain::commit` and witness the commitment/blinding products

@@ -15,8 +15,7 @@ Reference:
 
 The top-level `circuit` models the arithmetic constraints enabled by the Halo2
 `q_commit_ivk` selector, not the selector, row layout, Sinsemilla hash, lookup range
-checks, or assignment machinery around the gate. `Wiring.circuit` records canonicity
-wiring around that gate.
+checks, or assignment machinery around the gate.
 
 TODO(source-conformance): the `gadgets::commit_ivk` entry circuit is not implemented. It
 must compose `CommitDomain::short_commit` and witness the short-commit/blinding products
