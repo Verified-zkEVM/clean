@@ -70,6 +70,7 @@ def pallasScalarMulCoords (scalar : ℕ) (base : Point PallasBaseField) :
     CompElliptic.Curves.Pasta.Pallas.a scalar (pointCoords base)
 
 inductive OrchardFixedBaseId where
+  | commitIvkR
   | valueCommitV
   | valueCommitR
   | nullifierK
@@ -77,9 +78,12 @@ inductive OrchardFixedBaseId where
 deriving DecidableEq
 
 /- Coordinates copied from Orchard 0.14.0 fixed-base generators in
-`orchard/src/constants/fixed_bases/{value_commit_v,value_commit_r,nullifier_k,spend_auth_g}.rs`.
+`orchard/src/constants/fixed_bases/{commit_ivk_r,value_commit_v,value_commit_r,nullifier_k,spend_auth_g}.rs`.
 -/
 def fixedBasePoint : OrchardFixedBaseId → Point PallasBaseField
+  | .commitIvkR =>
+      { x := 17022113834174368664964072539940476916905682548990455171271428285673934201112,
+        y := 18912017636736613471143674001158885358143653198146604093009134371854861983145 }
   | .valueCommitV =>
       { x := 21457208314186520936880902219424053485005045883401337627148481900742711001959,
         y := 20379375922573002911833717643813254676246486412159279022689151936901102105230 }

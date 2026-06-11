@@ -234,41 +234,78 @@ Reference:
 The Rust gadget constructs the `CommitIvk` message/canonicity gate, calls
 `CommitDomain::short_commit`, and returns the extracted x-coordinate as `ivk`.
 `Wiring.circuit` records the canonicity-gate wiring. This assertion connects its
-explicit `computedIvk` output to the `Sinsemilla.ShortCommit.circuit` extracted value.
+explicit `computedIvk` output to the `Sinsemilla.ShortCommit.Entry.circuit` extracted
+value, while its spec records the source-level fixed-base blinding product
+`[rivk] CommitIvkR`.
 -/
 namespace WiringWithShortCommit
 
 structure Row (F : Type) where
   wiring : Wiring.Row F
-  shortCommit : Sinsemilla.ShortCommit.Row F
+  shortCommit : Sinsemilla.ShortCommit.Entry.Row F
 deriving ProvableStruct
 
 def ivkCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.shortCommit.extracted - row.wiring.computedIvk
 
+def blindProduct (row : Row Ecc.PallasBaseField) : Ecc.Point Ecc.PallasBaseField where
+  x := row.shortCommit.commit.blindX
+  y := row.shortCommit.commit.blindY
+
+def OrchardSpec (rivkScalar : ℕ) (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.IsOrchardFixedBaseMul .commitIvkR rivkScalar (blindProduct row) ∧
+  Wiring.Spec row.wiring ∧
+    Sinsemilla.ShortCommit.Entry.Spec row.shortCommit ∧
+    row.shortCommit.extracted = row.wiring.computedIvk
+
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   Wiring.Spec row.wiring ∧
-    Sinsemilla.ShortCommit.Spec row.shortCommit ∧
+    Sinsemilla.ShortCommit.Entry.Spec row.shortCommit ∧
     row.shortCommit.extracted = row.wiring.computedIvk
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Sinsemilla.ShortCommit.Entry.Assumptions row.shortCommit
+
+theorem spec_of_orchardSpec {rivkScalar : ℕ} {row : Row Ecc.PallasBaseField}
+    (h : OrchardSpec rivkScalar row) :
+    Spec row :=
+  h.2
+
+theorem blindProduct_groupAction_of_orchardSpec
+    {rivkScalar : ℕ} {row : Row Ecc.PallasBaseField}
+    (h : OrchardSpec rivkScalar row) :
+    Ecc.pointCoords (blindProduct row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .commitIvkR rivkScalar :=
+  (Ecc.isOrchardFixedBaseMul_iff_groupAction).1 h.1
+
+theorem assumptions_of_orchardSpec {rivkScalar : ℕ} {row : Row Ecc.PallasBaseField}
+    (hHash : Ecc.isPointOrIdentity (Sinsemilla.Commit.Entry.addInput row.shortCommit.commit).p)
+    (h : OrchardSpec rivkScalar row) :
+    Assumptions row :=
+  ⟨hHash, Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1⟩
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Wiring.circuit row.wiring
-  Sinsemilla.ShortCommit.circuit row.shortCommit
+  Sinsemilla.ShortCommit.Entry.circuit row.shortCommit
   assertZero (ivkCheck row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, ivkCheck, Wiring.circuit, Wiring.Spec,
-      Sinsemilla.ShortCommit.circuit]
+    circuit_proof_start [main, Spec, Assumptions, ivkCheck, Wiring.circuit,
+      Wiring.Spec, Sinsemilla.ShortCommit.Entry.circuit, Sinsemilla.ShortCommit.Entry.Spec]
     rcases h_holds with ⟨hWiring, hShort, hIvk⟩
-    exact ⟨hWiring, hShort, sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hIvk)⟩
+    exact ⟨hWiring, hShort h_assumptions,
+      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hIvk)⟩
   completeness := by
-    circuit_proof_start [main, Spec, ivkCheck, Wiring.circuit, Wiring.Spec,
-      Sinsemilla.ShortCommit.circuit]
+    circuit_proof_start [main, Spec, Assumptions, ivkCheck, Wiring.circuit,
+      Wiring.Spec, Sinsemilla.ShortCommit.Entry.circuit, Sinsemilla.ShortCommit.Entry.Spec,
+      Sinsemilla.ShortCommit.Entry.Assumptions]
     rcases h_spec with ⟨hWiring, hShort, hIvk⟩
-    exact ⟨hWiring, hShort, by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hIvk⟩
+    exact ⟨hWiring, ⟨h_assumptions, hShort⟩,
+      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hIvk⟩
 
 end WiringWithShortCommit
 
