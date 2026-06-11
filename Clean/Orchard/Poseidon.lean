@@ -17,8 +17,7 @@ Reference:
 
 Orchard configures `Pow5Chip<pallas::Base, 3, 2>` in
 `orchard@0.14.0/src/circuit.rs`. These assertions specialize the source polynomials to
-width 3 and rate 2. Fixed columns such as round constants and MDS coefficients are
-explicit row values in this approximation.
+width 3 and rate 2.
 -/
 
 namespace Orchard
@@ -38,13 +37,7 @@ private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
 
 namespace FullRound
 
-structure Row (F : Type) where
-  cur0 : F
-  cur1 : F
-  cur2 : F
-  next0 : F
-  next1 : F
-  next2 : F
+structure Params (F : Type) where
   rcA0 : F
   rcA1 : F
   rcA2 : F
@@ -57,87 +50,86 @@ structure Row (F : Type) where
   m20 : F
   m21 : F
   m22 : F
+
+structure Row (F : Type) where
+  cur0 : F
+  cur1 : F
+  cur2 : F
+  next0 : F
+  next1 : F
+  next2 : F
 deriving ProvableStruct
 
-def s0 {K : Type} [Add K] [Mul K] (row : Row K) : K := pow5 (row.cur0 + row.rcA0)
-def s1 {K : Type} [Add K] [Mul K] (row : Row K) : K := pow5 (row.cur1 + row.rcA1)
-def s2 {K : Type} [Add K] [Mul K] (row : Row K) : K := pow5 (row.cur2 + row.rcA2)
+def Params.toExpr (params : Params Ecc.PallasBaseField) :
+    Params (Expression Ecc.PallasBaseField) where
+  rcA0 := params.rcA0
+  rcA1 := params.rcA1
+  rcA2 := params.rcA2
+  m00 := params.m00
+  m01 := params.m01
+  m02 := params.m02
+  m10 := params.m10
+  m11 := params.m11
+  m12 := params.m12
+  m20 := params.m20
+  m21 := params.m21
+  m22 := params.m22
 
-def output0 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  s0 row * row.m00 + s1 row * row.m01 + s2 row * row.m02
+def s0 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  pow5 (row.cur0 + params.rcA0)
 
-def output1 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  s0 row * row.m10 + s1 row * row.m11 + s2 row * row.m12
+def s1 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  pow5 (row.cur1 + params.rcA1)
 
-def output2 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  s0 row * row.m20 + s1 row * row.m21 + s2 row * row.m22
+def s2 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  pow5 (row.cur2 + params.rcA2)
 
-def next0Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  output0 row - row.next0
+def output0 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  s0 params row * params.m00 + s1 params row * params.m01 + s2 params row * params.m02
 
-def next1Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  output1 row - row.next1
+def output1 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  s0 params row * params.m10 + s1 params row * params.m11 + s2 params row * params.m12
 
-def next2Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  output2 row - row.next2
+def output2 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  s0 params row * params.m20 + s1 params row * params.m21 + s2 params row * params.m22
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  row.next0 = output0 row ∧ row.next1 = output1 row ∧ row.next2 = output2 row
+def next0Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
+  output0 params row - row.next0
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertZero (next0Check row)
-  assertZero (next1Check row)
-  assertZero (next2Check row)
+def next1Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
+  output1 params row - row.next1
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def next2Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
+  output2 params row - row.next2
+
+def Spec (params : Params Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+  row.next0 = output0 params row ∧
+    row.next1 = output1 params row ∧
+    row.next2 = output2 params row
+
+def main (params : Params Ecc.PallasBaseField)
+    (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  let paramsExpr := params.toExpr
+  assertZero (next0Check paramsExpr row)
+  assertZero (next1Check paramsExpr row)
+  assertZero (next2Check paramsExpr row)
+
+def circuit (params : Params Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
   name := "GATE full round"
-  main
-  Spec := Spec
+  main := main params
+  Spec := Spec params
   soundness := by
     circuit_proof_start [main, Spec, next0Check, next1Check, next2Check,
-      output0, output1, output2, s0, s1, s2, pow5]
+      output0, output1, output2, s0, s1, s2, pow5, Params.toExpr]
     rcases h_holds with ⟨h0, h1, h2⟩
     constructor
-    · have h0' :
-          (input_cur0 + input_rcA0) * (input_cur0 + input_rcA0) *
-                  ((input_cur0 + input_rcA0) * (input_cur0 + input_rcA0)) *
-                (input_cur0 + input_rcA0) * input_m00 +
-              (input_cur1 + input_rcA1) * (input_cur1 + input_rcA1) *
-                  ((input_cur1 + input_rcA1) * (input_cur1 + input_rcA1)) *
-                (input_cur1 + input_rcA1) * input_m01 +
-              (input_cur2 + input_rcA2) * (input_cur2 + input_rcA2) *
-                  ((input_cur2 + input_rcA2) * (input_cur2 + input_rcA2)) *
-                (input_cur2 + input_rcA2) * input_m02 - input_next0 = 0 := by
-        simp_all [sub_eq_add_neg]
-      exact (sub_eq_zero.mp h0').symm
+    · exact eq_of_add_neg_eq_zero h0
     constructor
-    · have h1' :
-          (input_cur0 + input_rcA0) * (input_cur0 + input_rcA0) *
-                  ((input_cur0 + input_rcA0) * (input_cur0 + input_rcA0)) *
-                (input_cur0 + input_rcA0) * input_m10 +
-              (input_cur1 + input_rcA1) * (input_cur1 + input_rcA1) *
-                  ((input_cur1 + input_rcA1) * (input_cur1 + input_rcA1)) *
-                (input_cur1 + input_rcA1) * input_m11 +
-              (input_cur2 + input_rcA2) * (input_cur2 + input_rcA2) *
-                  ((input_cur2 + input_rcA2) * (input_cur2 + input_rcA2)) *
-                (input_cur2 + input_rcA2) * input_m12 - input_next1 = 0 := by
-        simp_all [sub_eq_add_neg]
-      exact (sub_eq_zero.mp h1').symm
-    · have h2' :
-          (input_cur0 + input_rcA0) * (input_cur0 + input_rcA0) *
-                  ((input_cur0 + input_rcA0) * (input_cur0 + input_rcA0)) *
-                (input_cur0 + input_rcA0) * input_m20 +
-              (input_cur1 + input_rcA1) * (input_cur1 + input_rcA1) *
-                  ((input_cur1 + input_rcA1) * (input_cur1 + input_rcA1)) *
-                (input_cur1 + input_rcA1) * input_m21 +
-              (input_cur2 + input_rcA2) * (input_cur2 + input_rcA2) *
-                  ((input_cur2 + input_rcA2) * (input_cur2 + input_rcA2)) *
-                (input_cur2 + input_rcA2) * input_m22 - input_next2 = 0 := by
-        simp_all [sub_eq_add_neg]
-      exact (sub_eq_zero.mp h2').symm
+    · exact eq_of_add_neg_eq_zero h1
+    · exact eq_of_add_neg_eq_zero h2
   completeness := by
     circuit_proof_start [main, Spec, next0Check, next1Check, next2Check,
-      output0, output1, output2, s0, s1, s2, pow5]
+      output0, output1, output2, s0, s1, s2, pow5, Params.toExpr]
     simp_all
     ring_nf
     simp
@@ -146,14 +138,7 @@ end FullRound
 
 namespace PartialRounds
 
-structure Row (F : Type) where
-  cur0 : F
-  cur1 : F
-  cur2 : F
-  mid0Sbox : F
-  next0 : F
-  next1 : F
-  next2 : F
+structure Params (F : Type) where
   rcA0 : F
   rcA1 : F
   rcA2 : F
@@ -178,60 +163,99 @@ structure Row (F : Type) where
   mInv20 : F
   mInv21 : F
   mInv22 : F
+
+structure Row (F : Type) where
+  cur0 : F
+  cur1 : F
+  cur2 : F
+  mid0Sbox : F
+  next0 : F
+  next1 : F
+  next2 : F
 deriving ProvableStruct
 
-def mid0Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  pow5 (row.cur0 + row.rcA0) - row.mid0Sbox
+def Params.toExpr (params : Params Ecc.PallasBaseField) :
+    Params (Expression Ecc.PallasBaseField) where
+  rcA0 := params.rcA0
+  rcA1 := params.rcA1
+  rcA2 := params.rcA2
+  rcB0 := params.rcB0
+  rcB1 := params.rcB1
+  rcB2 := params.rcB2
+  m00 := params.m00
+  m01 := params.m01
+  m02 := params.m02
+  m10 := params.m10
+  m11 := params.m11
+  m12 := params.m12
+  m20 := params.m20
+  m21 := params.m21
+  m22 := params.m22
+  mInv00 := params.mInv00
+  mInv01 := params.mInv01
+  mInv02 := params.mInv02
+  mInv10 := params.mInv10
+  mInv11 := params.mInv11
+  mInv12 := params.mInv12
+  mInv20 := params.mInv20
+  mInv21 := params.mInv21
+  mInv22 := params.mInv22
 
-def mid0 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  row.mid0Sbox * row.m00 + (row.cur1 + row.rcA1) * row.m01 +
-    (row.cur2 + row.rcA2) * row.m02
+def mid0Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
+  pow5 (row.cur0 + params.rcA0) - row.mid0Sbox
 
-def mid1 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  row.mid0Sbox * row.m10 + (row.cur1 + row.rcA1) * row.m11 +
-    (row.cur2 + row.rcA2) * row.m12
+def mid0 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  row.mid0Sbox * params.m00 + (row.cur1 + params.rcA1) * params.m01 +
+    (row.cur2 + params.rcA2) * params.m02
 
-def mid2 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  row.mid0Sbox * row.m20 + (row.cur1 + row.rcA1) * row.m21 +
-    (row.cur2 + row.rcA2) * row.m22
+def mid1 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  row.mid0Sbox * params.m10 + (row.cur1 + params.rcA1) * params.m11 +
+    (row.cur2 + params.rcA2) * params.m12
 
-def nextInv0 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  row.next0 * row.mInv00 + row.next1 * row.mInv01 + row.next2 * row.mInv02
+def mid2 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  row.mid0Sbox * params.m20 + (row.cur1 + params.rcA1) * params.m21 +
+    (row.cur2 + params.rcA2) * params.m22
 
-def nextInv1 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  row.next0 * row.mInv10 + row.next1 * row.mInv11 + row.next2 * row.mInv12
+def nextInv0 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  row.next0 * params.mInv00 + row.next1 * params.mInv01 + row.next2 * params.mInv02
 
-def nextInv2 {K : Type} [Add K] [Mul K] (row : Row K) : K :=
-  row.next0 * row.mInv20 + row.next1 * row.mInv21 + row.next2 * row.mInv22
+def nextInv1 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  row.next0 * params.mInv10 + row.next1 * params.mInv11 + row.next2 * params.mInv12
 
-def next0Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  pow5 (mid0 row + row.rcB0) - nextInv0 row
+def nextInv2 {K : Type} [Add K] [Mul K] (params : Params K) (row : Row K) : K :=
+  row.next0 * params.mInv20 + row.next1 * params.mInv21 + row.next2 * params.mInv22
 
-def next1Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  mid1 row + row.rcB1 - nextInv1 row
+def next0Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
+  pow5 (mid0 params row + params.rcB0) - nextInv0 params row
 
-def next2Check {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  mid2 row + row.rcB2 - nextInv2 row
+def next1Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
+  mid1 params row + params.rcB1 - nextInv1 params row
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  row.mid0Sbox = pow5 (row.cur0 + row.rcA0) ∧
-    nextInv0 row = pow5 (mid0 row + row.rcB0) ∧
-    nextInv1 row = mid1 row + row.rcB1 ∧
-    nextInv2 row = mid2 row + row.rcB2
+def next2Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
+  mid2 params row + params.rcB2 - nextInv2 params row
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertZero (mid0Check row)
-  assertZero (next0Check row)
-  assertZero (next1Check row)
-  assertZero (next2Check row)
+def Spec (params : Params Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+  row.mid0Sbox = pow5 (row.cur0 + params.rcA0) ∧
+    nextInv0 params row = pow5 (mid0 params row + params.rcB0) ∧
+    nextInv1 params row = mid1 params row + params.rcB1 ∧
+    nextInv2 params row = mid2 params row + params.rcB2
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def main (params : Params Ecc.PallasBaseField)
+    (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  let paramsExpr := params.toExpr
+  assertZero (mid0Check paramsExpr row)
+  assertZero (next0Check paramsExpr row)
+  assertZero (next1Check paramsExpr row)
+  assertZero (next2Check paramsExpr row)
+
+def circuit (params : Params Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
   name := "GATE partial rounds"
-  main
-  Spec := Spec
+  main := main params
+  Spec := Spec params
   soundness := by
     circuit_proof_start [main, Spec, mid0Check, next0Check, next1Check,
-      next2Check, mid0, mid1, mid2, nextInv0, nextInv1, nextInv2, pow5]
+      next2Check, mid0, mid1, mid2, nextInv0, nextInv1, nextInv2, pow5,
+      Params.toExpr]
     rcases h_holds with ⟨hmid, h0, h1, h2⟩
     constructor
     · exact eq_of_add_neg_eq_zero hmid
@@ -242,7 +266,8 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
     · exact eq_of_add_neg_eq_zero h2
   completeness := by
     circuit_proof_start [main, Spec, mid0Check, next0Check, next1Check,
-      next2Check, mid0, mid1, mid2, nextInv0, nextInv1, nextInv2, pow5]
+      next2Check, mid0, mid1, mid2, nextInv0, nextInv1, nextInv2, pow5,
+      Params.toExpr]
     simp_all
     ring_nf
     simp
@@ -306,798 +331,12 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
 
 end PadAndAdd
 
-/-!
-Poseidon permutation row schedule.
-
-Reference:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/poseidon/pow5.rs`
-- `Pow5Chip::permute`
-- `Pow5State::full_round`
-- `Pow5State::partial_round`
-
-For `P128Pow5T3`, the source uses `R_F = 8` and `R_P = 56`. The Halo2 chip assigns
-four full-round rows, twenty-eight rows each packing two partial rounds, and four final
-full-round rows. The individual row assertions above record the round arithmetic. The
-formal assertion below records the copied state between adjacent rows and the permutation
-endpoints; fixed constants and matrix entries remain explicit row values.
--/
-namespace Permutation
-
-structure State (F : Type) where
-  s0 : F
-  s1 : F
-  s2 : F
-deriving ProvableStruct
-
-structure FullRows (F : Type) where
-  r0 : FullRound.Row F
-  r1 : FullRound.Row F
-  r2 : FullRound.Row F
-  r3 : FullRound.Row F
-deriving ProvableStruct
-
-structure PartialRows (F : Type) where
-  r0 : PartialRounds.Row F
-  r1 : PartialRounds.Row F
-  r2 : PartialRounds.Row F
-  r3 : PartialRounds.Row F
-  r4 : PartialRounds.Row F
-  r5 : PartialRounds.Row F
-  r6 : PartialRounds.Row F
-  r7 : PartialRounds.Row F
-  r8 : PartialRounds.Row F
-  r9 : PartialRounds.Row F
-  r10 : PartialRounds.Row F
-  r11 : PartialRounds.Row F
-  r12 : PartialRounds.Row F
-  r13 : PartialRounds.Row F
-  r14 : PartialRounds.Row F
-  r15 : PartialRounds.Row F
-  r16 : PartialRounds.Row F
-  r17 : PartialRounds.Row F
-  r18 : PartialRounds.Row F
-  r19 : PartialRounds.Row F
-  r20 : PartialRounds.Row F
-  r21 : PartialRounds.Row F
-  r22 : PartialRounds.Row F
-  r23 : PartialRounds.Row F
-  r24 : PartialRounds.Row F
-  r25 : PartialRounds.Row F
-  r26 : PartialRounds.Row F
-  r27 : PartialRounds.Row F
-deriving ProvableStruct
-
-structure Row (F : Type) where
-  initial : State F
-  firstFull : FullRows F
-  partialRows : PartialRows F
-  lastFull : FullRows F
-  output : State F
-deriving ProvableStruct
-
-def fullCur {K : Type} (row : FullRound.Row K) : State K where
-  s0 := row.cur0
-  s1 := row.cur1
-  s2 := row.cur2
-
-def fullNext {K : Type} (row : FullRound.Row K) : State K where
-  s0 := row.next0
-  s1 := row.next1
-  s2 := row.next2
-
-def partialCur {K : Type} (row : PartialRounds.Row K) : State K where
-  s0 := row.cur0
-  s1 := row.cur1
-  s2 := row.cur2
-
-def partialNext {K : Type} (row : PartialRounds.Row K) : State K where
-  s0 := row.next0
-  s1 := row.next1
-  s2 := row.next2
-
-def state0Check {K : Type} [Sub K] (a b : State K) : K := a.s0 - b.s0
-def state1Check {K : Type} [Sub K] (a b : State K) : K := a.s1 - b.s1
-def state2Check {K : Type} [Sub K] (a b : State K) : K := a.s2 - b.s2
-
-def stateEq {K : Type} [Zero K] [Sub K] (a b : State K) : Prop :=
-  state0Check a b = 0 ∧ state1Check a b = 0 ∧ state2Check a b = 0
-
-def stateSame {K : Type} (a b : State K) : Prop :=
-  a.s0 = b.s0 ∧ a.s1 = b.s1 ∧ a.s2 = b.s2
-
-theorem stateEq_of_stateSame {a b : State F} (h : stateSame a b) : stateEq a b := by
-  rcases h with ⟨h0, h1, h2⟩
-  exact ⟨by simp [state0Check, h0], by simp [state1Check, h1], by simp [state2Check, h2]⟩
-
-theorem stateSame_of_stateEq {a b : State F} (h : stateEq a b) : stateSame a b := by
-  rcases h with ⟨h0, h1, h2⟩
-  exact ⟨sub_eq_zero.mp (by simpa [state0Check] using h0),
-    sub_eq_zero.mp (by simpa [state1Check] using h1),
-    sub_eq_zero.mp (by simpa [state2Check] using h2)⟩
-
-def assertStateEq (a b : State (Expression F)) : Circuit F Unit := do
-  assertZero (state0Check a b)
-  assertZero (state1Check a b)
-  assertZero (state2Check a b)
-
-def fullSpec (rows : FullRows Ecc.PallasBaseField) : Prop :=
-  FullRound.Spec rows.r0 ∧
-    FullRound.Spec rows.r1 ∧
-    FullRound.Spec rows.r2 ∧
-    FullRound.Spec rows.r3
-
-def partialSpec (rows : PartialRows Ecc.PallasBaseField) : Prop :=
-  PartialRounds.Spec rows.r0 ∧
-    PartialRounds.Spec rows.r1 ∧
-    PartialRounds.Spec rows.r2 ∧
-    PartialRounds.Spec rows.r3 ∧
-    PartialRounds.Spec rows.r4 ∧
-    PartialRounds.Spec rows.r5 ∧
-    PartialRounds.Spec rows.r6 ∧
-    PartialRounds.Spec rows.r7 ∧
-    PartialRounds.Spec rows.r8 ∧
-    PartialRounds.Spec rows.r9 ∧
-    PartialRounds.Spec rows.r10 ∧
-    PartialRounds.Spec rows.r11 ∧
-    PartialRounds.Spec rows.r12 ∧
-    PartialRounds.Spec rows.r13 ∧
-    PartialRounds.Spec rows.r14 ∧
-    PartialRounds.Spec rows.r15 ∧
-    PartialRounds.Spec rows.r16 ∧
-    PartialRounds.Spec rows.r17 ∧
-    PartialRounds.Spec rows.r18 ∧
-    PartialRounds.Spec rows.r19 ∧
-    PartialRounds.Spec rows.r20 ∧
-    PartialRounds.Spec rows.r21 ∧
-    PartialRounds.Spec rows.r22 ∧
-    PartialRounds.Spec rows.r23 ∧
-    PartialRounds.Spec rows.r24 ∧
-    PartialRounds.Spec rows.r25 ∧
-    PartialRounds.Spec rows.r26 ∧
-    PartialRounds.Spec rows.r27
-
-def fullLinks {K : Type} [Zero K] [Sub K] (rows : FullRows K) : Prop :=
-  stateEq (fullNext rows.r0) (fullCur rows.r1) ∧
-    stateEq (fullNext rows.r1) (fullCur rows.r2) ∧
-    stateEq (fullNext rows.r2) (fullCur rows.r3)
-
-def partialLinks {K : Type} [Zero K] [Sub K] (rows : PartialRows K) : Prop :=
-  stateEq (partialNext rows.r0) (partialCur rows.r1) ∧
-    stateEq (partialNext rows.r1) (partialCur rows.r2) ∧
-    stateEq (partialNext rows.r2) (partialCur rows.r3) ∧
-    stateEq (partialNext rows.r3) (partialCur rows.r4) ∧
-    stateEq (partialNext rows.r4) (partialCur rows.r5) ∧
-    stateEq (partialNext rows.r5) (partialCur rows.r6) ∧
-    stateEq (partialNext rows.r6) (partialCur rows.r7) ∧
-    stateEq (partialNext rows.r7) (partialCur rows.r8) ∧
-    stateEq (partialNext rows.r8) (partialCur rows.r9) ∧
-    stateEq (partialNext rows.r9) (partialCur rows.r10) ∧
-    stateEq (partialNext rows.r10) (partialCur rows.r11) ∧
-    stateEq (partialNext rows.r11) (partialCur rows.r12) ∧
-    stateEq (partialNext rows.r12) (partialCur rows.r13) ∧
-    stateEq (partialNext rows.r13) (partialCur rows.r14) ∧
-    stateEq (partialNext rows.r14) (partialCur rows.r15) ∧
-    stateEq (partialNext rows.r15) (partialCur rows.r16) ∧
-    stateEq (partialNext rows.r16) (partialCur rows.r17) ∧
-    stateEq (partialNext rows.r17) (partialCur rows.r18) ∧
-    stateEq (partialNext rows.r18) (partialCur rows.r19) ∧
-    stateEq (partialNext rows.r19) (partialCur rows.r20) ∧
-    stateEq (partialNext rows.r20) (partialCur rows.r21) ∧
-    stateEq (partialNext rows.r21) (partialCur rows.r22) ∧
-    stateEq (partialNext rows.r22) (partialCur rows.r23) ∧
-    stateEq (partialNext rows.r23) (partialCur rows.r24) ∧
-    stateEq (partialNext rows.r24) (partialCur rows.r25) ∧
-    stateEq (partialNext rows.r25) (partialCur rows.r26) ∧
-    stateEq (partialNext rows.r26) (partialCur rows.r27)
-
-namespace InitialToFull
-
-structure Row (F : Type) where
-  initial : State F
-  first : FullRound.Row F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  stateSame row.initial (fullCur row.first)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertStateEq row.initial (fullCur row.first)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullCur]
-    rcases h_holds with ⟨h0, h1, h2⟩
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h0
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h1
-    · exact left_eq_of_add_neg_eq_zero h2
-  completeness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullCur]
-    simp_all
-
-end InitialToFull
-
-namespace FullToFull
-
-structure Row (F : Type) where
-  prev : FullRound.Row F
-  next : FullRound.Row F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  stateSame (fullNext row.prev) (fullCur row.next)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertStateEq (fullNext row.prev) (fullCur row.next)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullCur, fullNext]
-    rcases h_holds with ⟨h0, h1, h2⟩
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h0
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h1
-    · exact left_eq_of_add_neg_eq_zero h2
-  completeness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullCur, fullNext]
-    simp_all
-
-end FullToFull
-
-namespace FullToPartial
-
-structure Row (F : Type) where
-  prev : FullRound.Row F
-  next : PartialRounds.Row F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  stateSame (fullNext row.prev) (partialCur row.next)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertStateEq (fullNext row.prev) (partialCur row.next)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullNext, partialCur]
-    rcases h_holds with ⟨h0, h1, h2⟩
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h0
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h1
-    · exact left_eq_of_add_neg_eq_zero h2
-  completeness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullNext, partialCur]
-    simp_all
-
-end FullToPartial
-
-namespace PartialToPartial
-
-structure Row (F : Type) where
-  prev : PartialRounds.Row F
-  next : PartialRounds.Row F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  stateSame (partialNext row.prev) (partialCur row.next)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertStateEq (partialNext row.prev) (partialCur row.next)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, partialCur, partialNext]
-    rcases h_holds with ⟨h0, h1, h2⟩
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h0
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h1
-    · exact left_eq_of_add_neg_eq_zero h2
-  completeness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, partialCur, partialNext]
-    simp_all
-
-end PartialToPartial
-
-namespace PartialToFull
-
-structure Row (F : Type) where
-  prev : PartialRounds.Row F
-  next : FullRound.Row F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  stateSame (partialNext row.prev) (fullCur row.next)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertStateEq (partialNext row.prev) (fullCur row.next)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullCur, partialNext]
-    rcases h_holds with ⟨h0, h1, h2⟩
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h0
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h1
-    · exact left_eq_of_add_neg_eq_zero h2
-  completeness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullCur, partialNext]
-    simp_all
-
-end PartialToFull
-
-namespace FullToOutput
-
-structure Row (F : Type) where
-  last : FullRound.Row F
-  output : State F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  stateSame (fullNext row.last) row.output
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertStateEq (fullNext row.last) row.output
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullNext]
-    rcases h_holds with ⟨h0, h1, h2⟩
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h0
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h1
-    · exact left_eq_of_add_neg_eq_zero h2
-  completeness := by
-    circuit_proof_start [main, Spec, stateSame, assertStateEq, stateEq, state0Check,
-      state1Check, state2Check, fullNext]
-    simp_all
-
-end FullToOutput
-
-namespace FullRowsBlock
-
-def Spec (rows : FullRows Ecc.PallasBaseField) : Prop :=
-  fullSpec rows ∧ fullLinks rows
-
-def main (rows : Var FullRows Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  FullRound.circuit rows.r0
-  FullRound.circuit rows.r1
-  FullRound.circuit rows.r2
-  FullRound.circuit rows.r3
-  FullToFull.circuit { prev := rows.r0, next := rows.r1 }
-  FullToFull.circuit { prev := rows.r1, next := rows.r2 }
-  FullToFull.circuit { prev := rows.r2, next := rows.r3 }
-
-def circuit : FormalAssertion Ecc.PallasBaseField FullRows where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, fullSpec, fullLinks,
-      FullRound.circuit, FullRound.Spec, FullToFull.circuit, FullToFull.Spec,
-      stateSame, stateEq, assertStateEq, fullCur, fullNext]
-    rcases h_holds with ⟨h0, h1, h2, h3, h01, h12, h23⟩
-    exact ⟨⟨h0, h1, h2, h3⟩, stateEq_of_stateSame h01,
-      stateEq_of_stateSame h12, stateEq_of_stateSame h23⟩
-  completeness := by
-    circuit_proof_start [main, Spec, fullSpec, fullLinks,
-      FullRound.circuit, FullRound.Spec, FullToFull.circuit, FullToFull.Spec,
-      stateSame, stateEq, assertStateEq, fullCur, fullNext]
-    rcases h_spec with ⟨⟨h0, h1, h2, h3⟩, h01, h12, h23⟩
-    exact ⟨h0, h1, h2, h3, stateSame_of_stateEq h01,
-      stateSame_of_stateEq h12, stateSame_of_stateEq h23⟩
-
-end FullRowsBlock
-
-namespace InitialFullBlock
-
-structure Row (F : Type) where
-  initial : State F
-  firstFull : FullRows F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  fullSpec row.firstFull ∧
-    stateEq row.initial (fullCur row.firstFull.r0) ∧
-    fullLinks row.firstFull
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  InitialToFull.circuit { initial := row.initial, first := row.firstFull.r0 }
-  FullRowsBlock.circuit row.firstFull
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec,
-      InitialToFull.circuit, InitialToFull.Spec,
-      FullRowsBlock.circuit, FullRowsBlock.Spec,
-      fullSpec, fullLinks, stateEq, stateSame, fullCur]
-    rcases h_holds with ⟨hInitial, hFull⟩
-    exact ⟨hFull.1, stateEq_of_stateSame hInitial, hFull.2⟩
-  completeness := by
-    circuit_proof_start [main, Spec,
-      InitialToFull.circuit, InitialToFull.Spec,
-      FullRowsBlock.circuit, FullRowsBlock.Spec,
-      fullSpec, fullLinks, stateEq, stateSame, fullCur]
-    rcases h_spec with ⟨hFull, hInitial, hLinks⟩
-    exact ⟨stateSame_of_stateEq hInitial, ⟨hFull, hLinks⟩⟩
-
-end InitialFullBlock
-
-namespace FinalFullBlock
-
-structure Row (F : Type) where
-  lastFull : FullRows F
-  output : State F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  fullSpec row.lastFull ∧
-    fullLinks row.lastFull ∧
-    stateEq (fullNext row.lastFull.r3) row.output
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  FullRowsBlock.circuit row.lastFull
-  FullToOutput.circuit { last := row.lastFull.r3, output := row.output }
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec,
-      FullRowsBlock.circuit, FullRowsBlock.Spec,
-      FullToOutput.circuit, FullToOutput.Spec,
-      fullSpec, fullLinks, stateEq, stateSame, fullNext]
-    rcases h_holds with ⟨hFull, hOutput⟩
-    exact ⟨hFull.1, hFull.2, stateEq_of_stateSame hOutput⟩
-  completeness := by
-    circuit_proof_start [main, Spec,
-      FullRowsBlock.circuit, FullRowsBlock.Spec,
-      FullToOutput.circuit, FullToOutput.Spec,
-      fullSpec, fullLinks, stateEq, stateSame, fullNext]
-    rcases h_spec with ⟨hFull, hLinks, hOutput⟩
-    exact ⟨⟨hFull, hLinks⟩, stateSame_of_stateEq hOutput⟩
-
-end FinalFullBlock
-
-namespace PartialPairBlock
-
-structure Row (F : Type) where
-  prev : PartialRounds.Row F
-  next : PartialRounds.Row F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  PartialRounds.Spec row.prev ∧
-    PartialRounds.Spec row.next ∧
-    stateEq (partialNext row.prev) (partialCur row.next)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  PartialRounds.circuit row.prev
-  PartialRounds.circuit row.next
-  PartialToPartial.circuit { prev := row.prev, next := row.next }
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec,
-      PartialRounds.circuit, PartialRounds.Spec,
-      PartialToPartial.circuit, PartialToPartial.Spec,
-      stateSame, stateEq, partialCur, partialNext]
-    rcases h_holds with ⟨hPrev, hNext, hLink⟩
-    exact ⟨hPrev, hNext, stateEq_of_stateSame hLink⟩
-  completeness := by
-    circuit_proof_start [main, Spec,
-      PartialRounds.circuit, PartialRounds.Spec,
-      PartialToPartial.circuit, PartialToPartial.Spec,
-      stateSame, stateEq, partialCur, partialNext]
-    rcases h_spec with ⟨hPrev, hNext, hLink⟩
-    exact ⟨hPrev, hNext, stateSame_of_stateEq hLink⟩
-
-end PartialPairBlock
-
-namespace PartialRows4Block
-
-structure Row (F : Type) where
-  r0 : PartialRounds.Row F
-  r1 : PartialRounds.Row F
-  r2 : PartialRounds.Row F
-  r3 : PartialRounds.Row F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  PartialRounds.Spec row.r0 ∧
-    PartialRounds.Spec row.r1 ∧
-    PartialRounds.Spec row.r2 ∧
-    PartialRounds.Spec row.r3 ∧
-    stateEq (partialNext row.r0) (partialCur row.r1) ∧
-    stateEq (partialNext row.r1) (partialCur row.r2) ∧
-    stateEq (partialNext row.r2) (partialCur row.r3)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  PartialPairBlock.circuit { prev := row.r0, next := row.r1 }
-  PartialPairBlock.circuit { prev := row.r2, next := row.r3 }
-  PartialToPartial.circuit { prev := row.r1, next := row.r2 }
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec,
-      PartialPairBlock.circuit, PartialPairBlock.Spec,
-      PartialToPartial.circuit, PartialToPartial.Spec,
-      PartialRounds.circuit, PartialRounds.Spec,
-      stateSame, stateEq, partialCur, partialNext]
-    rcases h_holds with ⟨h01, h23, h12⟩
-    exact ⟨h01.1, h01.2.1, h23.1, h23.2.1, h01.2.2,
-      stateEq_of_stateSame h12, h23.2.2⟩
-  completeness := by
-    circuit_proof_start [main, Spec,
-      PartialPairBlock.circuit, PartialPairBlock.Spec,
-      PartialToPartial.circuit, PartialToPartial.Spec,
-      PartialRounds.circuit, PartialRounds.Spec,
-      stateSame, stateEq, partialCur, partialNext]
-    rcases h_spec with ⟨h0, h1, h2, h3, h01, h12, h23⟩
-    exact ⟨⟨h0, h1, h01⟩, ⟨h2, h3, h23⟩, stateSame_of_stateEq h12⟩
-
-end PartialRows4Block
-
-namespace PartialRows8Block
-
-structure Row (F : Type) where
-  r0 : PartialRounds.Row F
-  r1 : PartialRounds.Row F
-  r2 : PartialRounds.Row F
-  r3 : PartialRounds.Row F
-  r4 : PartialRounds.Row F
-  r5 : PartialRounds.Row F
-  r6 : PartialRounds.Row F
-  r7 : PartialRounds.Row F
-deriving ProvableStruct
-
-def first {K : Type} (row : Row K) : PartialRows4Block.Row K where
-  r0 := row.r0
-  r1 := row.r1
-  r2 := row.r2
-  r3 := row.r3
-
-def second {K : Type} (row : Row K) : PartialRows4Block.Row K where
-  r0 := row.r4
-  r1 := row.r5
-  r2 := row.r6
-  r3 := row.r7
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  PartialRows4Block.Spec (first row) ∧
-    PartialRows4Block.Spec (second row) ∧
-    stateEq (partialNext row.r3) (partialCur row.r4)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  PartialRows4Block.circuit (first row)
-  PartialRows4Block.circuit (second row)
-  PartialToPartial.circuit { prev := row.r3, next := row.r4 }
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec,
-      PartialRows4Block.circuit, PartialRows4Block.Spec,
-      PartialToPartial.circuit, PartialToPartial.Spec,
-      stateSame, stateEq, partialCur, partialNext, first, second]
-    rcases h_holds with ⟨hFirst, hSecond, hLink⟩
-    exact ⟨hFirst, hSecond, stateEq_of_stateSame hLink⟩
-  completeness := by
-    circuit_proof_start [main, Spec,
-      PartialRows4Block.circuit, PartialRows4Block.Spec,
-      PartialToPartial.circuit, PartialToPartial.Spec,
-      stateSame, stateEq, partialCur, partialNext, first, second]
-    rcases h_spec with ⟨hFirst, hSecond, hLink⟩
-    exact ⟨hFirst, hSecond, stateSame_of_stateEq hLink⟩
-
-end PartialRows8Block
-
-end Permutation
-
-/-!
-Two-input Poseidon hash wiring used by Orchard nullifiers.
-
-References:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/poseidon.rs`
-- `Hash::init`
-- `Hash::hash`
-
-`halo2@halo2_poseidon-0.5.0/src/lib.rs`
-- `ConstantLength<2>::initial_capacity_element`
-- `ConstantLength<2>::padding`
-
-For Orchard's `P128Pow5T3` nullifier hash, the width is 3 and the rate is 2. The
-constant-length domain initializes state words 0 and 1 to zero, state word 2 to the
-domain capacity element, absorbs exactly `nk` and `rho`, appends no padding, permutes,
-and squeezes state word 0. The permutation result is represented by explicit row values;
-the Pow5 gate rows above model the round arithmetic separately.
--/
-namespace Hash2
-
-structure Row (F : Type) where
-  nk : F
-  rho : F
-  capacity : F
-  absorbed : PadAndAdd.Row F
-  permuted0 : F
-  hash : F
-deriving ProvableStruct
-
-def initial0Check {K : Type} [Zero K] (row : Row K) : K :=
-  row.absorbed.initial0
-
-def initial1Check {K : Type} [Zero K] (row : Row K) : K :=
-  row.absorbed.initial1
-
-def capacityCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.absorbed.initial2 - row.capacity
-
-def input0Check {K : Type} [Sub K] (row : Row K) : K :=
-  row.absorbed.input0 - row.nk
-
-def input1Check {K : Type} [Sub K] (row : Row K) : K :=
-  row.absorbed.input1 - row.rho
-
-def hashCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.permuted0 - row.hash
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  PadAndAdd.Spec row.absorbed ∧
-    row.absorbed.initial0 = 0 ∧
-    row.absorbed.initial1 = 0 ∧
-    row.absorbed.initial2 = row.capacity ∧
-    row.absorbed.input0 = row.nk ∧
-    row.absorbed.input1 = row.rho ∧
-    row.hash = row.permuted0
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  PadAndAdd.circuit row.absorbed
-  assertZero (initial0Check row)
-  assertZero (initial1Check row)
-  assertZero (capacityCheck row)
-  assertZero (input0Check row)
-  assertZero (input1Check row)
-  assertZero (hashCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, PadAndAdd.Spec, initial0Check, initial1Check,
-      capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.circuit]
-    rcases h_holds with ⟨hAbsorbed, hInit0, hInit1, hCapacity, hInput0,
-      hInput1, hHash⟩
-    constructor
-    · exact hAbsorbed
-    constructor
-    · exact hInit0
-    constructor
-    · exact hInit1
-    constructor
-    · exact left_eq_of_add_neg_eq_zero hCapacity
-    constructor
-    · exact left_eq_of_add_neg_eq_zero hInput0
-    constructor
-    · exact left_eq_of_add_neg_eq_zero hInput1
-    · exact eq_of_add_neg_eq_zero hHash
-  completeness := by
-    circuit_proof_start [main, Spec, PadAndAdd.Spec, initial0Check, initial1Check,
-      capacityCheck, input0Check, input1Check, hashCheck, PadAndAdd.circuit]
-    simp_all
-
-end Hash2
-
-/-!
-Boundary wiring between the two-input hash gadget and a Poseidon permutation schedule.
-
-Reference:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/poseidon.rs`
-- `poseidon_sponge`
-- `Hash::hash`
-
-After absorption, the source permutes the whole width-3 state and squeezes state word 0.
-This assertion connects `Hash2.circuit` to explicit permutation endpoint states. The
-round rows and row-to-row schedule copies are represented by `Permutation.*` assertions.
--/
-namespace Hash2PermutationBoundary
-
-structure Row (F : Type) where
-  hash : Hash2.Row F
-  permutationInput : Permutation.State F
-  permutationOutput : Permutation.State F
-deriving ProvableStruct
-
-def input0Check {K : Type} [Sub K] (row : Row K) : K :=
-  row.hash.absorbed.output0 - row.permutationInput.s0
-
-def input1Check {K : Type} [Sub K] (row : Row K) : K :=
-  row.hash.absorbed.output1 - row.permutationInput.s1
-
-def input2Check {K : Type} [Sub K] (row : Row K) : K :=
-  row.hash.absorbed.output2 - row.permutationInput.s2
-
-def outputCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.permutationOutput.s0 - row.hash.permuted0
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Hash2.Spec row.hash ∧
-    row.hash.absorbed.output0 = row.permutationInput.s0 ∧
-    row.hash.absorbed.output1 = row.permutationInput.s1 ∧
-    row.hash.absorbed.output2 = row.permutationInput.s2 ∧
-    row.hash.permuted0 = row.permutationOutput.s0
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Hash2.circuit row.hash
-  assertZero (input0Check row)
-  assertZero (input1Check row)
-  assertZero (input2Check row)
-  assertZero (outputCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, input0Check, input1Check, input2Check,
-      outputCheck, Hash2.circuit, Hash2.Spec, Hash2.initial0Check,
-      Hash2.initial1Check, Hash2.capacityCheck, Hash2.input0Check, Hash2.input1Check,
-      Hash2.hashCheck, PadAndAdd.output0Check, PadAndAdd.output1Check,
-      PadAndAdd.capacityCheck]
-    rcases h_holds with ⟨hHash, h0, h1, h2, hOutput⟩
-    constructor
-    · exact hHash
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h0
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h1
-    constructor
-    · exact left_eq_of_add_neg_eq_zero h2
-    · exact eq_of_add_neg_eq_zero hOutput
-  completeness := by
-    circuit_proof_start [main, Spec, input0Check, input1Check, input2Check,
-      outputCheck, Hash2.circuit, Hash2.Spec, Hash2.initial0Check,
-      Hash2.initial1Check, Hash2.capacityCheck, Hash2.input0Check, Hash2.input1Check,
-      Hash2.hashCheck, PadAndAdd.output0Check, PadAndAdd.output1Check,
-      PadAndAdd.capacityCheck]
-    rcases h_spec with ⟨⟨hPad, hInit0, hInit1, hCapacity, hInput0, hInput1, hHash⟩,
-      hBoundary0, hBoundary1, hBoundary2, hOutput⟩
-    rcases hPad with ⟨hPad0, hPad1, hPad2⟩
-    simp_all [PadAndAdd.Spec]
-
-end Hash2PermutationBoundary
+-- TODO: Implement exact source-level Poseidon entry APIs:
+-- `Pow5Chip::permute`, `PoseidonSpongeInstructions::initial_state`,
+-- `PoseidonSpongeInstructions::add_input`, `Hash::init`, and `Hash::hash`.
+-- These must witness/copy cells and compose the named gate assertions above with the
+-- same row schedule, selector enables, fixed-column assignments, and advice rotations as
+-- the Halo2 source.
 
 end Poseidon
 end Orchard

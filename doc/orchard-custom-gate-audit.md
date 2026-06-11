@@ -74,19 +74,10 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   lookup/running-sum API or exact fixed/advice column and rotation layout for base-field
   fixed-base mul.
 
-- **`GATE full round`, `GATE partial rounds`, and `GATE pad-and-add`:** Clean represents
-  round constants as row values. These should not be witness inputs. Locally fixed
-  constants should be Lean constants, and Poseidon parameter data such as round constants
-  and MDS coefficients should be Lean parameters to the gate/formal assertion. The source
-  uses fixed columns supplied by the Poseidon chip configuration; Lean parameters are the
-  appropriate Clean-level contract even before exact fixed-column layout is modeled.
-
-- **Poseidon permutation/link/hash wrappers:** `Permutation.InitialToFull`,
-  `FullToFull`, `FullToPartial`, `PartialToPartial`, `PartialToFull`, `FullToOutput`,
-  `FullRowsBlock`, `InitialFullBlock`, `FinalFullBlock`, `PartialPairBlock`,
-  `PartialRows4Block`, `PartialRows8Block`, `Hash2`, and
-  `Hash2PermutationBoundary` are not source `meta.create_gate` definitions. They should
-  remain unnamed as `GATE`s unless replaced by an exact source API port.
+- **Poseidon entry APIs:** exact ports of `Pow5Chip::permute`,
+  `PoseidonSpongeInstructions::initial_state`, `PoseidonSpongeInstructions::add_input`,
+  `Hash::init`, and `Hash::hash` are not implemented. Current Clean coverage is limited
+  to the named `full round`, `partial rounds`, and `pad-and-add` gate assertions.
 
 - **`GATE Initial y_Q` and `GATE Sinsemilla gate`:** Clean exposes source-rotated values
   as row fields and does not encode the exact fixed/advice/rotation layout. Any generator
