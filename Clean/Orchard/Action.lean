@@ -412,7 +412,7 @@ theorem nullifierRelation_of_orchardSpec
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Gadget.Nullifier.Entry.OrchardNullifierRelation
       row.nullifier.nullifier nullifierScalar :=
-  Gadget.Nullifier.Entry.nullifierRelation_of_orchardSpec h.2.2.1.2.1
+  Gadget.NullifierWithPoseidonBoundary.Entry.nullifierRelation_of_orchardSpec h.2.2.1
 
 theorem spendAuthRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField}

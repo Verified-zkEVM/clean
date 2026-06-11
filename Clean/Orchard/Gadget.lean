@@ -546,6 +546,12 @@ theorem product_groupAction_of_orchardSpec
       Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar :=
   Nullifier.Entry.product_groupAction_of_orchardSpec h.2.1
 
+theorem nullifierRelation_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    (h : OrchardSpec row scalar) :
+    Nullifier.Entry.OrchardNullifierRelation row.nullifier scalar :=
+  Nullifier.Entry.nullifierRelation_of_orchardSpec h.2.1
+
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Nullifier.Entry.Assumptions row.nullifier
 
@@ -663,6 +669,12 @@ theorem product_groupAction_of_orchardSpec
     Ecc.pointCoords (Nullifier.Entry.product row.nullifier) =
       Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar :=
   Nullifier.Entry.product_groupAction_of_orchardSpec h.2.1
+
+theorem nullifierRelation_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    (h : OrchardSpec row scalar) :
+    Nullifier.Entry.OrchardNullifierRelation row.nullifier scalar :=
+  Nullifier.Entry.nullifierRelation_of_orchardSpec h.2.1
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Nullifier.Entry.Assumptions row.nullifier
