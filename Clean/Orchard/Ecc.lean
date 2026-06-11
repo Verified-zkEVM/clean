@@ -347,6 +347,18 @@ theorem isPallasScalarMul_one_iff
     rw [hEq]
     simp [IsPallasScalarMul, pallasScalarMulCoords_one]
 
+theorem isPallasBaseFieldScalarMul_zero_iff
+    {base product : Point PallasBaseField} :
+    IsPallasBaseFieldScalarMul 0 base product ↔ isIdentityEncoding product := by
+  simpa [IsPallasBaseFieldScalarMul, pallasBaseFieldScalarNat] using
+    (isPallasScalarMul_zero_iff (base := base) (product := product))
+
+theorem isPallasBaseFieldScalarMul_one_iff
+    {base product : Point PallasBaseField} :
+    IsPallasBaseFieldScalarMul 1 base product ↔ product = base := by
+  simpa [IsPallasBaseFieldScalarMul, pallasBaseFieldScalarNat] using
+    (isPallasScalarMul_one_iff (base := base) (product := product))
+
 theorem isOrchardFixedBaseMul_zero_iff
     {baseId : OrchardFixedBaseId} {product : Point PallasBaseField} :
     IsOrchardFixedBaseMul baseId 0 product ↔ isIdentityEncoding product := by

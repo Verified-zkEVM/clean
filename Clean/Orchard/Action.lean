@@ -782,6 +782,26 @@ theorem pkDOld_isPointOrIdentity_of_orchardSpec
   Ecc.isPallasBaseFieldScalarMulGroupAction_product
     (pkDOld_groupAction_of_orchardSpec hSpec)
 
+theorem pkDOld_identity_of_orchardSpec_ivk_zero
+    {row : Row Ecc.PallasBaseField}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (hIvk : row.ivkScalar = 0)
+    (hSpec : OrchardSpec row gdOld) :
+    Ecc.isIdentityEncoding (pkDOld row) := by
+  have hMul := pkDOld_scalar_mul_of_orchardSpec hSpec
+  rw [hIvk] at hMul
+  exact (Ecc.isPallasBaseFieldScalarMul_zero_iff).1 hMul
+
+theorem pkDOld_eq_gdOld_of_orchardSpec_ivk_one
+    {row : Row Ecc.PallasBaseField}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (hIvk : row.ivkScalar = 1)
+    (hSpec : OrchardSpec row gdOld) :
+    pkDOld row = gdOld := by
+  have hMul := pkDOld_scalar_mul_of_orchardSpec hSpec
+  rw [hIvk] at hMul
+  exact (Ecc.isPallasBaseFieldScalarMul_one_iff).1 hMul
+
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
   Gadget.SpendAuth.circuit row.spendAuth
