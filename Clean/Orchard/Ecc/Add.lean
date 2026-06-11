@@ -57,10 +57,6 @@ def r {K : Type} (row : Input K) : Point K where
 
 end Input
 
-end Gate
-
-namespace Gate
-
 def xQMinusXP {K : Type} [Sub K] (row : Input K) : K :=
   row.q.x - row.p.x
 
@@ -390,7 +386,7 @@ def outputValue (input : Input Fp) : Point Fp :=
   else if input.q.x = 0 then
     input.p
   else if input.q.x = input.p.x ∧ input.q.y = -input.p.y then
-    { x := 0, y := 0 }
+    Point.zero
   else
     let xR := lambda * lambda - input.p.x - input.q.x
     let yR := lambda * (input.p.x - xR) - input.p.y
@@ -433,7 +429,7 @@ theorem outputValue_eq_shortWeierstrass_add {input : Input Fp}
         rw [if_pos hx', if_pos hx]
         by_cases hy : py + qy = 0
         · have hqy : qy = -py := by linear_combination hy
-          simp [hx', hqy]
+          simp [Point.zero, hx', hqy]
         · have hqy : ¬ qy = -py := by
             intro h
             apply hy
@@ -583,13 +579,13 @@ theorem rowValue_spec_pallas {input : Input Fp}
     · have hpy := Point.y_eq_zero_of_valid_of_x_eq_zero hp hpx
       by_cases hqx : input.q.x = 0
       · have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
-        have hpEq : input.p = ({ x := 0, y := 0 } : Point Fp) := by
+        have hpEq : input.p = Point.zero := by
           rw [Point.mk.injEq]
           exact ⟨hpx, hpy⟩
-        have hqEq : input.q = ({ x := 0, y := 0 } : Point Fp) := by
+        have hqEq : input.q = Point.zero := by
           rw [Point.mk.injEq]
           exact ⟨hqx, hqy⟩
-        simp [hpEq, hqEq]
+        simp [Point.zero, hpEq, hqEq]
       · have hcontra : input.q.x * input.q.x⁻¹ = 1 := by
           field_simp [hqx]
         exact False.elim (hflag hcontra)
@@ -628,7 +624,7 @@ theorem rowValue_spec_pallas {input : Input Fp}
         exact False.elim (hflag hcontra)
       · by_cases hx : input.q.x = input.p.x
         · by_cases hy : input.q.y = -input.p.y
-          · simp [hpx, hx, hy]
+          · simp [Point.zero, hpx, hx, hy]
           · have hsame := pallas_y_eq_or_neg_of_same_x hp hq hpx hqx hx
             rcases hsame with hyeq | hyneg
             · have hysum : input.q.y + input.p.y ≠ 0 := by
@@ -654,7 +650,7 @@ theorem rowValue_spec_pallas {input : Input Fp}
 
 theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
     (hp : Pallas.Valid row.p.coords) (hq : Pallas.Valid row.q.coords) (hrow : Spec row) :
-    row.r = outputValue ({ p := row.p, q := row.q } : Input Fp) := by
+    row.r = outputValue { p := row.p, q := row.q } := by
   dsimp [Gate.Input.p, Gate.Input.q, Gate.Input.r] at hp hq hrow ⊢
   rcases hrow with ⟨hSlope, hTangent, hNonexceptionalDiff, hNonexceptionalSum,
     hLeftIdentity, hRightIdentity, hInverse⟩
@@ -683,7 +679,7 @@ theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
           simp [Gate.Input.p, Gate.Input.q, hx, hy]
         have hr := hInverse hflag
         unfold inverseResult at hr
-        have hr0 : row.r = ({ x := 0, y := 0 } : Point Fp) := by
+        have hr0 : row.r = Point.zero := by
           rw [Point.mk.injEq]
           exact hr
         unfold outputValue
@@ -714,7 +710,7 @@ theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
                 mul_ne_zero (mul_ne_zero hpx hqx) hxdiff
             exact hNonexceptionalDiff hprod
         have hlambda :
-            row.lambda = lambdaValue ({ p := row.p, q := row.q } : Input Fp) := by
+            row.lambda = lambdaValue { p := row.p, q := row.q } := by
           by_cases hx : row.x_qr.curr = row.x_p
           · have hpy : row.y_p ≠ 0 :=
               Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx
