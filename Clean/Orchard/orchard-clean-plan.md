@@ -103,10 +103,10 @@ def circuit : FormalCircuit <Field> <Input> <Output> where
   completeness := by ...
 ```
 
-When soundness and completeness proofs get long, factor out three additional definitons:
+When soundness and completeness proofs get long, factor out additional definitions, in this order:
 
 - `main`, the `Circuit` itself
-- `Spec` and `Completeness` the contract
+- `Assumptions` and `Spec`, the contract (when using `GeneralFormalCircuit`, also `ProverAssumptions`)
 - `elaborated`, the `ElaboratedCircuit`, a typeclass instance needed by soundness and `circuit`, defined by `:= by elaborate_circuit`
 - `soundness` and `completeness` theorems
 
@@ -129,6 +129,11 @@ In general, Halo2 file/chip organization and naming closely.
 
 For example, if halo2 knows ECC entry point methods `incomplete_add` and `add`, then clean namespaces should be
 `IncompleteAdd` and `Add`.
+
+Similarly, match halo2 names of columns and assigned cells with the same clean variable names.
+
+If a gate takes a column and then uses both `Rotation::curr` and `Rotation::next`, pass an input struct
+containing both `{ curr: F; next: F }`.
 
 ## Current source dependency map
 
