@@ -717,23 +717,25 @@ theorem spec_eq_swAdd_pallas {row : CompleteAddRow Fp}
 
 def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
+  let p <== input.p
+  let q <== input.q
   let xR ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).r.x
+    (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).r.x
   let yR ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).r.y
+    (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).r.y
   let lambda ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).lambda
+    (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).lambda
   let alpha ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).alpha
+    (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).alpha
   let beta ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).beta
+    (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).beta
   let gamma ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).gamma
+    (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).gamma
   let delta ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).delta
+    (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).delta
   let row : Var CompleteAddRow Fp := {
-    p := input.p
-    q := input.q
+    p
+    q
     r := { x := xR, y := yR }
     lambda
     alpha
@@ -759,41 +761,42 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, Point.isPointOrIdentity,
     Gate.circuit, Gate.Spec, spec_eq_swAdd_pallas]
   rcases h_assumptions with ⟨hp, hq⟩
-  let row : CompleteAddRow Fp := {
-    p := input_p
-    q := input_q
-    r := { x := env.get i₀, y := env.get (i₀ + 1) }
-    lambda := env.get (i₀ + 1 + 1)
-    alpha := env.get (i₀ + 1 + 1 + 1)
-    beta := env.get (i₀ + 1 + 1 + 1 + 1)
-    gamma := env.get (i₀ + 1 + 1 + 1 + 1 + 1)
-    delta := env.get (i₀ + 1 + 1 + 1 + 1 + 1 + 1)
+  rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
+  let pCopy : Point Fp := {
+    x := Expression.eval env (varFromOffset Point i₀).x
+    y := Expression.eval env (varFromOffset Point i₀).y
   }
-  exact spec_eq_swAdd_pallas (row := row) hp hq h_holds
+  let qCopy : Point Fp := {
+    x := Expression.eval env (varFromOffset Point (i₀ + 2)).x
+    y := Expression.eval env (varFromOffset Point (i₀ + 2)).y
+  }
+  let row : CompleteAddRow Fp := {
+    p := pCopy
+    q := qCopy
+    r := { x := env.get (i₀ + 2 + 2), y := env.get (i₀ + 2 + 2 + 1) }
+    lambda := env.get (i₀ + 2 + 2 + 1 + 1)
+    alpha := env.get (i₀ + 2 + 2 + 1 + 1 + 1)
+    beta := env.get (i₀ + 2 + 2 + 1 + 1 + 1 + 1)
+    gamma := env.get (i₀ + 2 + 2 + 1 + 1 + 1 + 1 + 1)
+    delta := env.get (i₀ + 2 + 2 + 1 + 1 + 1 + 1 + 1 + 1)
+  }
+  have hpCopy : Point.isPointOrIdentity pCopy := by
+    simpa [pCopy, hpCopyEq] using hp
+  have hqCopy : Point.isPointOrIdentity qCopy := by
+    simpa [qCopy, hqCopyEq] using hq
+  have hspec := spec_eq_swAdd_pallas (row := row) hpCopy hqCopy hrow
+  simpa [row, pCopy, qCopy, hpCopyEq, hqCopyEq] using hspec
 
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, Point.isPointOrIdentity,
     Gate.circuit, Gate.Spec, rowValue_spec_pallas]
   rcases h_assumptions with ⟨hp, hq⟩
-  let row : CompleteAddRow Fp := {
-    p := input_p
-    q := input_q
-    r := { x := env.get i₀, y := env.get (i₀ + 1) }
-    lambda := env.get (i₀ + 1 + 1)
-    alpha := env.get (i₀ + 1 + 1 + 1)
-    beta := env.get (i₀ + 1 + 1 + 1 + 1)
-    gamma := env.get (i₀ + 1 + 1 + 1 + 1 + 1)
-    delta := env.get (i₀ + 1 + 1 + 1 + 1 + 1 + 1)
-  }
-  let expected := rowValue ({ p := input_p, q := input_q } : Input Fp)
-  have hrowEq : row = expected := by
-    dsimp [row, expected]
-    rcases h_env with ⟨hx, hy, hlambda, halpha, hbeta, hgamma, hdelta⟩
-    rw [hx, hy, hlambda, halpha, hbeta, hgamma, hdelta]
-    rfl
-  change Gate.Spec row
-  rw [hrowEq]
-  exact rowValue_spec_pallas (input := { p := input_p, q := input_q }) hp hq
+  rcases input_p with ⟨px, py⟩
+  rcases input_q with ⟨qx, qy⟩
+  simp_all [circuit_norm, explicit_provable_type]
+  have hrow := rowValue_spec_pallas
+    (input := { p := { x := px, y := py }, q := { x := qx, y := qy } }) hp hq
+  simpa [Gate.Spec, rowValue] using hrow
 
 def circuit : FormalCircuit Fp Input Point where
   main
