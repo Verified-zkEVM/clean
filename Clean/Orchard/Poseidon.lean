@@ -1003,6 +1003,67 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
 
 end PartialRows4Block
 
+def partialBlock0 {K : Type} (rows : PartialRows K) : PartialRows4Block.Row K where
+  r0 := rows.r0
+  r1 := rows.r1
+  r2 := rows.r2
+  r3 := rows.r3
+
+def partialBlock1 {K : Type} (rows : PartialRows K) : PartialRows4Block.Row K where
+  r0 := rows.r4
+  r1 := rows.r5
+  r2 := rows.r6
+  r3 := rows.r7
+
+def partialBlock2 {K : Type} (rows : PartialRows K) : PartialRows4Block.Row K where
+  r0 := rows.r8
+  r1 := rows.r9
+  r2 := rows.r10
+  r3 := rows.r11
+
+def partialBlock3 {K : Type} (rows : PartialRows K) : PartialRows4Block.Row K where
+  r0 := rows.r12
+  r1 := rows.r13
+  r2 := rows.r14
+  r3 := rows.r15
+
+def partialBlock4 {K : Type} (rows : PartialRows K) : PartialRows4Block.Row K where
+  r0 := rows.r16
+  r1 := rows.r17
+  r2 := rows.r18
+  r3 := rows.r19
+
+def partialBlock5 {K : Type} (rows : PartialRows K) : PartialRows4Block.Row K where
+  r0 := rows.r20
+  r1 := rows.r21
+  r2 := rows.r22
+  r3 := rows.r23
+
+def partialBlock6 {K : Type} (rows : PartialRows K) : PartialRows4Block.Row K where
+  r0 := rows.r24
+  r1 := rows.r25
+  r2 := rows.r26
+  r3 := rows.r27
+
+def BlockSpec (row : Row Ecc.PallasBaseField) : Prop :=
+  InitialFullBlock.Spec { initial := row.initial, firstFull := row.firstFull } ∧
+    PartialRows4Block.Spec (partialBlock0 row.partialRows) ∧
+    PartialRows4Block.Spec (partialBlock1 row.partialRows) ∧
+    PartialRows4Block.Spec (partialBlock2 row.partialRows) ∧
+    PartialRows4Block.Spec (partialBlock3 row.partialRows) ∧
+    PartialRows4Block.Spec (partialBlock4 row.partialRows) ∧
+    PartialRows4Block.Spec (partialBlock5 row.partialRows) ∧
+    PartialRows4Block.Spec (partialBlock6 row.partialRows) ∧
+    FullToPartial.Spec { prev := row.firstFull.r3, next := row.partialRows.r0 } ∧
+    PartialToPartial.Spec { prev := row.partialRows.r3, next := row.partialRows.r4 } ∧
+    PartialToPartial.Spec { prev := row.partialRows.r7, next := row.partialRows.r8 } ∧
+    PartialToPartial.Spec { prev := row.partialRows.r11, next := row.partialRows.r12 } ∧
+    PartialToPartial.Spec { prev := row.partialRows.r15, next := row.partialRows.r16 } ∧
+    PartialToPartial.Spec { prev := row.partialRows.r19, next := row.partialRows.r20 } ∧
+    PartialToPartial.Spec { prev := row.partialRows.r23, next := row.partialRows.r24 } ∧
+    PartialToFull.Spec { prev := row.partialRows.r27, next := row.lastFull.r0 } ∧
+    FinalFullBlock.Spec { lastFull := row.lastFull, output := row.output }
+
 end Permutation
 
 /-!
@@ -1175,6 +1236,29 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
     simp_all [PadAndAdd.Spec]
 
 end Hash2PermutationBoundary
+
+/-!
+Two-input Poseidon hash with an explicit `P128Pow5T3` permutation schedule.
+
+This is the API-level wrapper for the nullifier hash path in this approximation: it
+combines the sponge boundary with the row-by-row permutation schedule, and copies the
+absorbed state into the permutation input and the squeezed permutation output back into
+the hash row.
+-/
+namespace Hash2WithPermutation
+
+structure Row (F : Type) where
+  boundary : Hash2PermutationBoundary.Row F
+  permutation : Permutation.Row F
+deriving ProvableStruct
+
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  Hash2PermutationBoundary.Spec row.boundary ∧
+    Permutation.BlockSpec row.permutation ∧
+    Permutation.stateSame row.boundary.permutationInput row.permutation.initial ∧
+    Permutation.stateSame row.boundary.permutationOutput row.permutation.output
+
+end Hash2WithPermutation
 
 end Poseidon
 end Orchard
