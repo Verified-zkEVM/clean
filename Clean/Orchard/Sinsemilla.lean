@@ -55,22 +55,22 @@ structure Row (F : Type) where
   doubleAndAdd : DoubleAndAddRow F
 deriving ProvableStruct
 
-def Params.toExpr (params : Params Ecc.PallasBaseField) :
-    Params (Expression Ecc.PallasBaseField) where
+def Params.toExpr (params : Params Ecc.Fp) :
+    Params (Expression Ecc.Fp) where
   yQ := params.yQ
 
 def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2]
     (params : Params K) (row : Row K) : K :=
   2 * params.yQ - DoubleAndAdd.yA row.doubleAndAdd
 
-def Spec (params : Params Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (params : Params Ecc.Fp) (row : Row Ecc.Fp) : Prop :=
   DoubleAndAdd.yA row.doubleAndAdd = 2 * params.yQ
 
-def main (params : Params Ecc.PallasBaseField)
-    (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (params : Params Ecc.Fp)
+    (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (poly params.toExpr row)
 
-def circuit (params : Params Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
+def circuit (params : Params Ecc.Fp) : FormalAssertion Ecc.Fp Row where
   name := "GATE Initial y_Q"
   main := main params
   Spec := Spec params
@@ -100,8 +100,8 @@ structure Row (F : Type) where
   next : DoubleAndAddRow F
 deriving ProvableStruct
 
-def Params.toExpr (params : Params Ecc.PallasBaseField) :
-    Params (Expression Ecc.PallasBaseField) where
+def Params.toExpr (params : Params Ecc.Fp) :
+    Params (Expression Ecc.Fp) where
   qS2 := params.qS2
 
 def qS3 {K : Type} [One K] [Sub K] [Mul K] (params : Params K) : K :=
@@ -124,17 +124,17 @@ def yCheck {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 4]
     (params : Params K) (row : Row K) : K :=
   yLhs row - yRhs params row
 
-def Spec (params : Params Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (params : Params Ecc.Fp) (row : Row Ecc.Fp) : Prop :=
   row.cur.lambda2 * row.cur.lambda2 =
     row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA ∧
   yLhs row = yRhs params row
 
-def main (params : Params Ecc.PallasBaseField)
-    (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (params : Params Ecc.Fp)
+    (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (secantLine row)
   assertZero (yCheck params.toExpr row)
 
-def circuit (params : Params Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
+def circuit (params : Params Ecc.Fp) : FormalAssertion Ecc.Fp Row where
   name := "GATE Sinsemilla gate"
   main := main params
   Spec := Spec params
@@ -228,19 +228,19 @@ def rightCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 5)]
     (row : DecompositionRow K) : K :=
   row.b2 + row.cWhole * twoPow5 - row.rightNode
 
-def Spec (row : DecompositionRow Ecc.PallasBaseField) : Prop :=
+def Spec (row : DecompositionRow Ecc.Fp) : Prop :=
   row.lWhole = a0 row ∧
   row.leftNode = row.z1A + (b0 row + row.b1 * twoPow10) * twoPow240 ∧
   row.rightNode = row.b2 + row.cWhole * twoPow5 ∧
   row.z1B = row.b1 + row.b2 * twoPow5
 
-def main (row : Var DecompositionRow Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var DecompositionRow Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (a0 row - row.lWhole)
   assertZero (leftCheck row)
   assertZero (rightCheck row)
   assertZero (b1B2Check row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField DecompositionRow where
+def circuit : FormalAssertion Ecc.Fp DecompositionRow where
   name := "GATE Decomposition check"
   main
   Spec := Spec

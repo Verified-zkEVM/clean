@@ -90,7 +90,7 @@ def b2CPrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] [OfNat K (2 ^ 
     [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP - row.b2CPrime
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.b1 ∧
     IsBool row.d1 ∧
     row.bWhole = row.b0 + row.b1 * 16 + row.b2 * 32 ∧
@@ -107,7 +107,7 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     row.b2CPrime = row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP ∧
     (row.d1 = 0 ∨ row.z14B2CPrime = 0)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (NoteCommit.boolPoly row.b1)
   assertZero (NoteCommit.boolPoly row.d1)
   assertZero (bDecomposition row)
@@ -123,7 +123,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (b2CPrimeCheck row)
   assertZero (row.d1 * row.z14B2CPrime)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE CommitIvk canonicity check"
   main
   Spec := Spec

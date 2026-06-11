@@ -74,17 +74,17 @@ def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K 32]
     [OfNat K 64] (row : Row K) : K :=
   row.b - (row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64)
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.b1 ∧
   IsBool row.b2 ∧
   row.b = row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (boolPoly row.b1)
   assertZero (boolPoly row.b2)
   assertZero (decomposition row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece b"
   main
   Spec := Spec
@@ -117,17 +117,17 @@ def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 4]
     [OfNat K 1024] (row : Row K) : K :=
   row.d - (row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024)
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.d0 ∧
   IsBool row.d1 ∧
   row.d = row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (boolPoly row.d0)
   assertZero (boolPoly row.d1)
   assertZero (decomposition row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece d"
   main
   Spec := Spec
@@ -157,13 +157,13 @@ deriving ProvableStruct
 def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 64] (row : Row K) : K :=
   row.e - (row.e0 + row.e1 * 64)
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.e = row.e0 + row.e1 * 64
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (decomposition row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece e"
   main
   Spec := Spec
@@ -190,15 +190,15 @@ def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 1024]
     (row : Row K) : K :=
   row.g - (row.g0 + row.g1 * 2 + row.g2 * 1024)
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.g0 ∧
   row.g = row.g0 + row.g1 * 2 + row.g2 * 1024
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (boolPoly row.g0)
   assertZero (decomposition row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece g"
   main
   Spec := Spec
@@ -226,15 +226,15 @@ deriving ProvableStruct
 def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] (row : Row K) : K :=
   row.h - (row.h0 + row.h1 * 32)
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.h1 ∧
   row.h = row.h0 + row.h1 * 32
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (boolPoly row.h1)
   assertZero (decomposition row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece h"
   main
   Spec := Spec
@@ -271,21 +271,21 @@ def aPrimeCheck {K : Type} [Add K] [Sub K] [OfNat K (2 ^ 130)]
     [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.a + OfNat.ofNat (2 ^ 130) - tP - row.aPrime
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.gdX = row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) ∧
     row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - tP ∧
     (row.b1 = 0 ∨ row.b0 = 0) ∧
     (row.b1 = 0 ∨ row.z13A = 0) ∧
     (row.b1 = 0 ∨ row.z13APrime = 0)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (decomposition row)
   assertZero (aPrimeCheck row)
   assertZero (row.b1 * row.b0)
   assertZero (row.b1 * row.z13A)
   assertZero (row.b1 * row.z13APrime)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit input g_d"
   main
   Spec := Spec
@@ -328,19 +328,19 @@ def b3CPrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K (2 ^ 
     [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - tP - row.b3CPrime
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.pkdX = row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) ∧
     row.b3CPrime = row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - tP ∧
     (row.d0 = 0 ∨ row.z13C = 0) ∧
     (row.d0 = 0 ∨ row.z14B3CPrime = 0)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (decomposition row)
   assertZero (b3CPrimeCheck row)
   assertZero (row.d0 * row.z13C)
   assertZero (row.d0 * row.z14B3CPrime)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit input pk_d"
   main
   Spec := Spec
@@ -376,13 +376,13 @@ def valueCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 256] [OfNat K 2882303
     (row : Row K) : K :=
   row.d2 + row.d3 * 256 + row.e0 * 288230376151711744 - row.value
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.value = row.d2 + row.d3 * 256 + row.e0 * 288230376151711744
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (valueCheck row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit input value"
   main
   Spec := Spec
@@ -416,19 +416,19 @@ def e1FPrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K (2 ^ 
     [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - tP - row.e1FPrime
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.rho = row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) ∧
     row.e1FPrime = row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - tP ∧
     (row.g0 = 0 ∨ row.z13F = 0) ∧
     (row.g0 = 0 ∨ row.z14E1FPrime = 0)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (decomposition row)
   assertZero (e1FPrimeCheck row)
   assertZero (row.g0 * row.z13F)
   assertZero (row.g0 * row.z14E1FPrime)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit input rho"
   main
   Spec := Spec
@@ -473,7 +473,7 @@ def g1G2PrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 512] [OfNat K (2 
     [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.g1 + row.g2 * 512 + OfNat.ofNat (2 ^ 130) - tP - row.g1G2Prime
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.psi = row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
     row.h1 * OfNat.ofNat (2 ^ 254) ∧
     row.g1G2Prime = row.g1 + row.g2 * 512 + OfNat.ofNat (2 ^ 130) - tP ∧
@@ -481,14 +481,14 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     (row.h1 = 0 ∨ row.z13G = 0) ∧
     (row.h1 = 0 ∨ row.z13G1G2Prime = 0)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (decomposition row)
   assertZero (g1G2PrimeCheck row)
   assertZero (row.h1 * row.h0)
   assertZero (row.h1 * row.z13G)
   assertZero (row.h1 * row.z13G1G2Prime)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit input psi"
   main
   Spec := Spec
@@ -538,7 +538,7 @@ def jPrimeCheck {K : Type} [Add K] [Sub K] [OfNat K (2 ^ 130)]
     [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
   row.j + OfNat.ofNat (2 ^ 130) - tP - row.jPrime
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.k3 ∧
     row.j = row.lsb + row.k0 * 2 + row.z1J * 1024 ∧
     row.y = row.j + row.k2 * OfNat.ofNat (2 ^ 250) +
@@ -548,7 +548,7 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     (row.k3 = 0 ∨ row.z13J = 0) ∧
     (row.k3 = 0 ∨ row.z13JPrime = 0)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (boolPoly row.k3)
   assertZero (jCheck row)
   assertZero (yCheck row)
@@ -557,7 +557,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (row.k3 * row.z13J)
   assertZero (row.k3 * row.z13JPrime)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE y coordinate checks"
   main
   Spec := Spec

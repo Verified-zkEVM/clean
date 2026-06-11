@@ -89,11 +89,11 @@ def rowValue (input : Input F) : CompleteAddRow F where
 theorem outputValue_eq_swAdd {input : Input F}
     (hpZero : XZeroImpliesIdentity input.p)
     (hqZero : XZeroImpliesIdentity input.q) :
-    pointCoords (outputValue input) =
+    Point.coords (outputValue input) =
       CompElliptic.CurveForms.ShortWeierstrass.add
-        (0 : F) (pointCoords input.p) (pointCoords input.q) := by
+        (0 : F) (Point.coords input.p) (Point.coords input.q) := by
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  unfold pointCoords outputValue lambdaValue
+  unfold Point.coords outputValue lambdaValue
     CompElliptic.CurveForms.ShortWeierstrass.add XZeroImpliesIdentity at *
   simp only
   by_cases hpx : px = 0
@@ -122,48 +122,39 @@ theorem outputValue_eq_swAdd {input : Input F}
         simp [hx, hx']
         constructor <;> ring
 
-theorem outputValue_eq_swAdd_of_pointOrIdentity {input : Input F}
-    (hNoXZero : NoCurvePointWithXZero (F := F))
-    (hp : isPointOrIdentity input.p)
-    (hq : isPointOrIdentity input.q) :
-    pointCoords (outputValue input) =
+theorem outputValue_eq_swAdd_pallas {input : Input Fp}
+    (hp : Point.isPointOrIdentity input.p)
+    (hq : Point.isPointOrIdentity input.q) :
+    Point.coords (outputValue input) =
       CompElliptic.CurveForms.ShortWeierstrass.add
-        (0 : F) (pointCoords input.p) (pointCoords input.q) :=
+        (0 : Fp) (Point.coords input.p) (Point.coords input.q) :=
   outputValue_eq_swAdd
-    (xZeroImpliesIdentity_of_pointOrIdentity hNoXZero hp)
-    (xZeroImpliesIdentity_of_pointOrIdentity hNoXZero hq)
+    (Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hp)
+    (Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hq)
 
-theorem outputValue_eq_swAdd_pallas {input : Input PallasBaseField}
-    (hp : isPointOrIdentity input.p)
-    (hq : isPointOrIdentity input.q) :
-    pointCoords (outputValue input) =
-      CompElliptic.CurveForms.ShortWeierstrass.add
-        (0 : PallasBaseField) (pointCoords input.p) (pointCoords input.q) :=
-  outputValue_eq_swAdd_of_pointOrIdentity pallasNoCurvePointWithXZero hp hq
-
-theorem pallas_two_ne_zero : (2 : PallasBaseField) ≠ 0 := by
+theorem pallas_two_ne_zero : (2 : Fp) ≠ 0 := by
   decide
 
-theorem pallas_add_self_ne_zero {y : PallasBaseField} (hy : y ≠ 0) :
+theorem pallas_add_self_ne_zero {y : Fp} (hy : y ≠ 0) :
     y + y ≠ 0 := by
   intro h
-  have hmul : (2 : PallasBaseField) * y = 0 := by
+  have hmul : (2 : Fp) * y = 0 := by
     linear_combination h
   exact hy ((mul_eq_zero.mp hmul).resolve_left pallas_two_ne_zero)
 
-theorem pallas_y_eq_or_neg_of_same_x {p q : Point PallasBaseField}
-    (hp : isPointOrIdentity p) (hq : isPointOrIdentity q)
+theorem pallas_y_eq_or_neg_of_same_x {p q : Point Fp}
+    (hp : Point.isPointOrIdentity p) (hq : Point.isPointOrIdentity q)
     (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
     q.y = p.y ∨ q.y = -p.y := by
-  have hpCurve : onCurve p := by
+  have hpCurve : Point.onCurve p := by
     rcases hp with hId | hCurve
     · exact False.elim (hpx hId.1)
     · exact hCurve
-  have hqCurve : onCurve q := by
+  have hqCurve : Point.onCurve q := by
     rcases hq with hId | hCurve
     · exact False.elim (hqx hId.1)
     · exact hCurve
-  unfold onCurve curveEquation pallasB at hpCurve hqCurve
+  unfold Point.onCurve Point.curveEquation pallasB at hpCurve hqCurve
   have hsquare : (q.y - p.y) * (q.y + p.y) = 0 := by
     rw [hx] at hqCurve
     linear_combination hqCurve - hpCurve
@@ -261,7 +252,7 @@ def rightIdentityResult {K : Type} (row : CompleteAddRow K) : Prop :=
 def inverseResult {K : Type} [Zero K] (row : CompleteAddRow K) : Prop :=
   row.r.x = 0 ∧ row.r.y = 0
 
-def Spec (row : CompleteAddRow PallasBaseField) : Prop :=
+def Spec (row : CompleteAddRow Fp) : Prop :=
   (xQMinusXP row ≠ 0 → slopeLine row) ∧
     (ifAlpha row ≠ 1 → tangentLine row) ∧
     (row.p.x * row.q.x * xQMinusXP row ≠ 0 → nonexceptionalResult row) ∧
@@ -270,7 +261,7 @@ def Spec (row : CompleteAddRow PallasBaseField) : Prop :=
     (ifGamma row ≠ 1 → rightIdentityResult row) ∧
     (ifAlpha row + ifDelta row ≠ 1 → inverseResult row)
 
-def main (row : Var CompleteAddRow PallasBaseField) : Circuit PallasBaseField Unit := do
+def main (row : Var CompleteAddRow Fp) : Circuit Fp Unit := do
   assertZero (poly1 row)
   assertZero (poly2 row)
   assertZero (poly3a row)
@@ -284,7 +275,7 @@ def main (row : Var CompleteAddRow PallasBaseField) : Circuit PallasBaseField Un
   assertZero (poly6a row)
   assertZero (poly6b row)
 
-def circuit : FormalAssertion PallasBaseField CompleteAddRow where
+def circuit : FormalAssertion Fp CompleteAddRow where
   name := "GATE complete addition"
   main
   Spec := Spec
@@ -478,8 +469,8 @@ open Gate
 
 section EntryPoint
 
-theorem rowValue_spec_pallas {input : Input PallasBaseField}
-    (hp : isPointOrIdentity input.p) (hq : isPointOrIdentity input.q) :
+theorem rowValue_spec_pallas {input : Input Fp}
+    (hp : Point.isPointOrIdentity input.p) (hq : Point.isPointOrIdentity input.q) :
     Spec (rowValue input) := by
   constructor
   · intro hxdiff
@@ -498,10 +489,10 @@ theorem rowValue_spec_pallas {input : Input PallasBaseField}
     · by_cases hpy : input.p.y = 0
       · have hpx : input.p.x = 0 := by
           by_contra hpx
-          exact pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx hpy
+          exact Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx hpy
         simp [hx, hpy, hpx]
       · simp [hx, hpy]
-        have hden : (2 : PallasBaseField) * input.p.y ≠ 0 :=
+        have hden : (2 : Fp) * input.p.y ≠ 0 :=
           mul_ne_zero pallas_two_ne_zero hpy
         field_simp [hden, pallas_two_ne_zero]
     · have hcontra : (input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ = 1 := by
@@ -534,7 +525,7 @@ theorem rowValue_spec_pallas {input : Input PallasBaseField}
           rw [hinv.2]
           ring
         have hpy : input.p.y ≠ 0 :=
-          pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx
+          Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx
         have hnotY : input.q.y ≠ -input.p.y := fun h => hnotInv ⟨hx, h⟩
         simp [hpx, hx, hnotY, hpy]
       · exact False.elim (hysum (by rw [hy]; ring))
@@ -554,15 +545,13 @@ theorem rowValue_spec_pallas {input : Input PallasBaseField}
   · intro hflag
     dsimp [rowValue, rightIdentityResult, ifGamma, outputValue] at hflag ⊢
     by_cases hpx : input.p.x = 0
-    · have hpy := xZeroImpliesIdentity_of_pointOrIdentity
-        pallasNoCurvePointWithXZero hp hpx
+    · have hpy := Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hp hpx
       by_cases hqx : input.q.x = 0
-      · have hqy := xZeroImpliesIdentity_of_pointOrIdentity
-          pallasNoCurvePointWithXZero hq hqx
-        have hpEq : input.p = ({ x := 0, y := 0 } : Point PallasBaseField) := by
+      · have hqy := Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hq hqx
+        have hpEq : input.p = ({ x := 0, y := 0 } : Point Fp) := by
           rw [Point.mk.injEq]
           exact ⟨hpx, hpy⟩
-        have hqEq : input.q = ({ x := 0, y := 0 } : Point PallasBaseField) := by
+        have hqEq : input.q = ({ x := 0, y := 0 } : Point Fp) := by
           rw [Point.mk.injEq]
           exact ⟨hqx, hqy⟩
         simp [hpEq, hqEq]
@@ -579,11 +568,9 @@ theorem rowValue_spec_pallas {input : Input PallasBaseField}
       outputValue] at hflag ⊢
     simp at hflag ⊢
     by_cases hpx : input.p.x = 0
-    · have hpy := xZeroImpliesIdentity_of_pointOrIdentity
-          pallasNoCurvePointWithXZero hp hpx
+    · have hpy := Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hp hpx
       by_cases hqx : input.q.x = 0
-      · have hqy := xZeroImpliesIdentity_of_pointOrIdentity
-          pallasNoCurvePointWithXZero hq hqx
+      · have hqy := Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hq hqx
         simp [hpx, hqx, hqy]
       · have hcontra :
             ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
@@ -601,7 +588,7 @@ theorem rowValue_spec_pallas {input : Input PallasBaseField}
           have hne : ¬ input.q.x = input.p.x := by
             rw [hqx]
             exact fun h => hpx h.symm
-          have hne0 : ¬ (0 : PallasBaseField) = input.p.x := fun h => hpx h.symm
+          have hne0 : ¬ (0 : Fp) = input.p.x := fun h => hpx h.symm
           simp [hpx, hqx, hne0]
         exact False.elim (hflag hcontra)
       · by_cases hx : input.q.x = input.p.x
@@ -612,7 +599,7 @@ theorem rowValue_spec_pallas {input : Input PallasBaseField}
             · have hysum : input.q.y + input.p.y ≠ 0 := by
                 rw [hyeq]
                 exact pallas_add_self_ne_zero
-                  (pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx)
+                  (Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx)
               have hcontra :
                     ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
                       if input.q.x = input.p.x then
@@ -630,9 +617,9 @@ theorem rowValue_spec_pallas {input : Input PallasBaseField}
             field_simp [sub_ne_zero.mpr hx]
           exact False.elim (hflag hcontra)
 
-theorem spec_eq_outputValue_pallas {row : CompleteAddRow PallasBaseField}
-    (hp : isPointOrIdentity row.p) (hq : isPointOrIdentity row.q) (hrow : Spec row) :
-    row.r = outputValue ({ p := row.p, q := row.q } : Input PallasBaseField) := by
+theorem spec_eq_outputValue_pallas {row : CompleteAddRow Fp}
+    (hp : Point.isPointOrIdentity row.p) (hq : Point.isPointOrIdentity row.q) (hrow : Spec row) :
+    row.r = outputValue ({ p := row.p, q := row.q } : Input Fp) := by
   rcases hrow with ⟨hSlope, hTangent, hNonexceptionalDiff, hNonexceptionalSum,
     hLeftIdentity, hRightIdentity, hInverse⟩
   by_cases hpx : row.p.x = 0
@@ -660,7 +647,7 @@ theorem spec_eq_outputValue_pallas {row : CompleteAddRow PallasBaseField}
           simp [hx, hy]
         have hr := hInverse hflag
         unfold inverseResult at hr
-        have hr0 : row.r = ({ x := 0, y := 0 } : Point PallasBaseField) := by
+        have hr0 : row.r = ({ x := 0, y := 0 } : Point Fp) := by
           rw [Point.mk.injEq]
           exact hr
         unfold outputValue
@@ -673,7 +660,7 @@ theorem spec_eq_outputValue_pallas {row : CompleteAddRow PallasBaseField}
                 unfold yQPlusYP
                 rw [hy]
                 exact pallas_add_self_ne_zero
-                  (pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx)
+                  (Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx)
               have hprod : row.p.x * row.q.x * yQPlusYP row ≠ 0 := by
                 exact mul_ne_zero (mul_ne_zero hpx hqx) hysum
               exact hNonexceptionalSum hprod
@@ -686,10 +673,10 @@ theorem spec_eq_outputValue_pallas {row : CompleteAddRow PallasBaseField}
               exact mul_ne_zero (mul_ne_zero hpx hqx) hxdiff
             exact hNonexceptionalDiff hprod
         have hlambda :
-            row.lambda = lambdaValue ({ p := row.p, q := row.q } : Input PallasBaseField) := by
+            row.lambda = lambdaValue ({ p := row.p, q := row.q } : Input Fp) := by
           by_cases hx : row.q.x = row.p.x
           · have hpy : row.p.y ≠ 0 :=
-              pallas_y_ne_zero_of_pointOrIdentity_x_ne_zero hp hpx
+              Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx
             have hflag : ifAlpha row ≠ 1 := by
               unfold ifAlpha xQMinusXP
               simp [hx]
@@ -697,7 +684,7 @@ theorem spec_eq_outputValue_pallas {row : CompleteAddRow PallasBaseField}
             unfold tangentLine at htangent
             unfold lambdaValue
             simp [hx, hpy]
-            have hden : (2 : PallasBaseField) * row.p.y ≠ 0 :=
+            have hden : (2 : Fp) * row.p.y ≠ 0 :=
               mul_ne_zero pallas_two_ne_zero hpy
             field_simp [hden, pallas_two_ne_zero]
             linear_combination htangent
@@ -722,33 +709,33 @@ theorem spec_eq_outputValue_pallas {row : CompleteAddRow PallasBaseField}
         · rw [← hr.1]
           exact hr.2
 
-theorem spec_eq_swAdd_pallas {row : CompleteAddRow PallasBaseField}
-    (hp : isPointOrIdentity row.p) (hq : isPointOrIdentity row.q) (hrow : Spec row) :
-    pointCoords row.r =
+theorem spec_eq_swAdd_pallas {row : CompleteAddRow Fp}
+    (hp : Point.isPointOrIdentity row.p) (hq : Point.isPointOrIdentity row.q) (hrow : Spec row) :
+    Point.coords row.r =
       CompElliptic.CurveForms.ShortWeierstrass.add
-        (0 : PallasBaseField) (pointCoords row.p) (pointCoords row.q) := by
+        (0 : Fp) (Point.coords row.p) (Point.coords row.q) := by
   rw [spec_eq_outputValue_pallas hp hq hrow]
   exact outputValue_eq_swAdd_pallas hp hq
 
-def main (input : Var Input PallasBaseField) :
-    Circuit PallasBaseField (Var Point PallasBaseField) := do
+def main (input : Var Input Fp) :
+    Circuit Fp (Var Point Fp) := do
   PointOrIdentity.circuit input.p
   PointOrIdentity.circuit input.q
   let xR ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input PallasBaseField)).r.x
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).r.x
   let yR ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input PallasBaseField)).r.y
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).r.y
   let lambda ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input PallasBaseField)).lambda
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).lambda
   let alpha ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input PallasBaseField)).alpha
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).alpha
   let beta ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input PallasBaseField)).beta
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).beta
   let gamma ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input PallasBaseField)).gamma
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).gamma
   let delta ← witnessField fun env =>
-    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input PallasBaseField)).delta
-  let row : Var CompleteAddRow PallasBaseField := {
+    (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).delta
+  let row : Var CompleteAddRow Fp := {
     p := input.p
     q := input.q
     r := { x := xR, y := yR }
@@ -761,22 +748,22 @@ def main (input : Var Input PallasBaseField) :
   Gate.circuit row
   return row.r
 
-def Assumptions (input : Input PallasBaseField) : Prop :=
-  isPointOrIdentity input.p ∧ isPointOrIdentity input.q
+def Assumptions (input : Input Fp) : Prop :=
+  Point.isPointOrIdentity input.p ∧ Point.isPointOrIdentity input.q
 
-def Spec (input : Input PallasBaseField) (output : Point PallasBaseField) : Prop :=
-  pointCoords output =
+def Spec (input : Input Fp) (output : Point Fp) : Prop :=
+  Point.coords output =
     CompElliptic.CurveForms.ShortWeierstrass.add
-      (0 : PallasBaseField) (pointCoords input.p) (pointCoords input.q)
+      (0 : Fp) (Point.coords input.p) (Point.coords input.q)
 
-instance elaborated : ElaboratedCircuit PallasBaseField Input Point main := by
+instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit
 
-theorem soundness : Soundness PallasBaseField main Assumptions Spec := by
+theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
-    isPointOrIdentity, Gate.circuit, Gate.Spec, spec_eq_swAdd_pallas]
+    Point.isPointOrIdentity, Gate.circuit, Gate.Spec, spec_eq_swAdd_pallas]
   rcases h_holds with ⟨hp, hq, hrow⟩
-  let row : CompleteAddRow PallasBaseField := {
+  let row : CompleteAddRow Fp := {
     p := input_p
     q := input_q
     r := { x := env.get i₀, y := env.get (i₀ + 1) }
@@ -788,12 +775,12 @@ theorem soundness : Soundness PallasBaseField main Assumptions Spec := by
   }
   exact spec_eq_swAdd_pallas (row := row) hp hq hrow
 
-theorem completeness : Completeness PallasBaseField main Assumptions := by
+theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
-    isPointOrIdentity, Gate.circuit, Gate.Spec, rowValue_spec_pallas]
+    Point.isPointOrIdentity, Gate.circuit, Gate.Spec, rowValue_spec_pallas]
   rcases h_assumptions with ⟨hp, hq⟩
   refine ⟨hp, hq, ?_⟩
-  let row : CompleteAddRow PallasBaseField := {
+  let row : CompleteAddRow Fp := {
     p := input_p
     q := input_q
     r := { x := env.get i₀, y := env.get (i₀ + 1) }
@@ -803,7 +790,7 @@ theorem completeness : Completeness PallasBaseField main Assumptions := by
     gamma := env.get (i₀ + 1 + 1 + 1 + 1 + 1)
     delta := env.get (i₀ + 1 + 1 + 1 + 1 + 1 + 1)
   }
-  let expected := rowValue ({ p := input_p, q := input_q } : Input PallasBaseField)
+  let expected := rowValue ({ p := input_p, q := input_q } : Input Fp)
   have hrowEq : row = expected := by
     dsimp [row, expected]
     rcases h_env with ⟨hx, hy, hlambda, halpha, hbeta, hgamma, hdelta⟩
@@ -813,7 +800,7 @@ theorem completeness : Completeness PallasBaseField main Assumptions := by
   rw [hrowEq]
   exact rowValue_spec_pallas (input := { p := input_p, q := input_q }) hp hq
 
-def circuit : FormalCircuit PallasBaseField Input Point where
+def circuit : FormalCircuit Fp Input Point where
   main
   elaborated
   Assumptions

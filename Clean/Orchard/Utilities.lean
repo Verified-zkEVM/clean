@@ -41,13 +41,13 @@ deriving ProvableStruct
 
 namespace CondSwap
 
-def outputValue (input : CondSwapInputs Ecc.PallasBaseField) :
-    CondSwapOutput Ecc.PallasBaseField where
+def outputValue (input : CondSwapInputs Ecc.Fp) :
+    CondSwapOutput Ecc.Fp where
   aSwapped := ternary input.swap input.b input.a
   bSwapped := ternary input.swap input.a input.b
 
-def main (input : Var CondSwapInputs Ecc.PallasBaseField) :
-    Circuit Ecc.PallasBaseField (Var CondSwapOutput Ecc.PallasBaseField) := do
+def main (input : Var CondSwapInputs Ecc.Fp) :
+    Circuit Ecc.Fp (Var CondSwapOutput Ecc.Fp) := do
   let aSwapped ← witnessField fun env => ternary (env input.swap) (env input.b) (env input.a)
   let bSwapped ← witnessField fun env => ternary (env input.swap) (env input.a) (env input.b)
   aSwapped === input.swap * input.b + (1 - input.swap) * input.a
@@ -56,22 +56,22 @@ def main (input : Var CondSwapInputs Ecc.PallasBaseField) :
   return { aSwapped, bSwapped }
 
 @[circuit_norm]
-def Assumptions (input : CondSwapInputs Ecc.PallasBaseField) : Prop :=
+def Assumptions (input : CondSwapInputs Ecc.Fp) : Prop :=
   IsBool input.swap
 
 @[circuit_norm]
-def Spec (input : CondSwapInputs Ecc.PallasBaseField)
-    (output : CondSwapOutput Ecc.PallasBaseField) : Prop :=
+def Spec (input : CondSwapInputs Ecc.Fp)
+    (output : CondSwapOutput Ecc.Fp) : Prop :=
   output = if input.swap = 1 then
     { aSwapped := input.b, bSwapped := input.a }
   else
     { aSwapped := input.a, bSwapped := input.b }
 
 instance elaborated :
-    ElaboratedCircuit Ecc.PallasBaseField CondSwapInputs CondSwapOutput main := by
+    ElaboratedCircuit Ecc.Fp CondSwapInputs CondSwapOutput main := by
   elaborate_circuit
 
-theorem outputValue_eq_of_bool {input : CondSwapInputs Ecc.PallasBaseField}
+theorem outputValue_eq_of_bool {input : CondSwapInputs Ecc.Fp}
     (hbool : IsBool input.swap) :
     outputValue input = if input.swap = 1 then
       { aSwapped := input.b, bSwapped := input.a }
@@ -82,7 +82,7 @@ theorem outputValue_eq_of_bool {input : CondSwapInputs Ecc.PallasBaseField}
   · simp [outputValue, ternary, hone]
 
 theorem soundness :
-    Soundness Ecc.PallasBaseField main Assumptions Spec := by
+    Soundness Ecc.Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, outputValue, ternary]
   have hbool : IsBool input_swap :=
     IsBool.iff_mul_sub_one.mpr (by simpa [sub_eq_add_neg] using h_holds.2.2)
@@ -93,7 +93,7 @@ theorem soundness :
     simp [hone]
 
 theorem completeness :
-    Completeness Ecc.PallasBaseField main Assumptions := by
+    Completeness Ecc.Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, outputValue, ternary]
   constructor
   · rw [h_env.1]
@@ -103,7 +103,7 @@ theorem completeness :
       ring_nf
     · simpa [sub_eq_add_neg] using IsBool.iff_mul_sub_one.mp h_assumptions
 
-def circuit : FormalCircuit Ecc.PallasBaseField CondSwapInputs CondSwapOutput where
+def circuit : FormalCircuit Ecc.Fp CondSwapInputs CondSwapOutput where
   -- TODO: factor the source `a' = b ⋅ swap + a ⋅ (1-swap)` custom gate into a
   -- named `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
   main
@@ -142,25 +142,25 @@ def yInput {K : Type} (input : Inputs K) : CondSwapInputs K where
   swap := input.choice
 
 @[circuit_norm]
-def Assumptions (input : Inputs Ecc.PallasBaseField) : Prop :=
+def Assumptions (input : Inputs Ecc.Fp) : Prop :=
   IsBool input.choice
 
 @[circuit_norm]
-def Spec (input : Inputs Ecc.PallasBaseField) (output : Ecc.Point Ecc.PallasBaseField) :
+def Spec (input : Inputs Ecc.Fp) (output : Ecc.Point Ecc.Fp) :
     Prop :=
   output = if input.choice = 1 then input.right else input.left
 
-def main (input : Var Inputs Ecc.PallasBaseField) :
-    Circuit Ecc.PallasBaseField (Var Ecc.Point Ecc.PallasBaseField) := do
+def main (input : Var Inputs Ecc.Fp) :
+    Circuit Ecc.Fp (Var Ecc.Point Ecc.Fp) := do
   let xOut ← CondSwap.circuit (xInput input)
   let yOut ← CondSwap.circuit (yInput input)
   return { x := xOut.aSwapped, y := yOut.aSwapped }
 
-instance elaborated : ElaboratedCircuit Ecc.PallasBaseField Inputs Ecc.Point main := by
+instance elaborated : ElaboratedCircuit Ecc.Fp Inputs Ecc.Point main := by
   elaborate_circuit
 
 theorem soundness :
-    Soundness Ecc.PallasBaseField main Assumptions Spec := by
+    Soundness Ecc.Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, xInput, yInput,
     CondSwap.circuit, CondSwap.Spec]
   rcases h_holds with ⟨hX, hY⟩
@@ -189,14 +189,14 @@ theorem soundness :
     · exact hYMux.1
 
 theorem completeness :
-    Completeness Ecc.PallasBaseField main Assumptions := by
+    Completeness Ecc.Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, xInput, yInput,
     CondSwap.circuit, CondSwap.Spec]
   rcases h_assumptions with hChoiceZero | hChoiceOne
   · exact Or.inl hChoiceZero
   · exact Or.inr hChoiceOne
 
-def circuit : FormalCircuit Ecc.PallasBaseField Inputs Ecc.Point where
+def circuit : FormalCircuit Ecc.Fp Inputs Ecc.Point where
   main
   elaborated
   Assumptions
@@ -220,28 +220,28 @@ namespace NonIdentityPointMux
 abbrev Inputs := PointMux.Inputs
 
 @[circuit_norm]
-def Assumptions (input : Inputs Ecc.PallasBaseField) : Prop :=
-  PointMux.Assumptions input ∧ Ecc.onCurve input.left ∧ Ecc.onCurve input.right
+def Assumptions (input : Inputs Ecc.Fp) : Prop :=
+  PointMux.Assumptions input ∧ Ecc.Point.onCurve input.left ∧ Ecc.Point.onCurve input.right
 
 @[circuit_norm]
-def Spec (input : Inputs Ecc.PallasBaseField) (output : Ecc.Point Ecc.PallasBaseField) :
+def Spec (input : Inputs Ecc.Fp) (output : Ecc.Point Ecc.Fp) :
     Prop :=
-  PointMux.Spec input output ∧ Ecc.onCurve output
+  PointMux.Spec input output ∧ Ecc.Point.onCurve output
 
-def main (input : Var Inputs Ecc.PallasBaseField) :
-    Circuit Ecc.PallasBaseField (Var Ecc.Point Ecc.PallasBaseField) := do
+def main (input : Var Inputs Ecc.Fp) :
+    Circuit Ecc.Fp (Var Ecc.Point Ecc.Fp) := do
   let output ← PointMux.circuit input
   Ecc.NonIdentityPoint.circuit output
   return output
 
-instance elaborated : ElaboratedCircuit Ecc.PallasBaseField Inputs Ecc.Point main := by
+instance elaborated : ElaboratedCircuit Ecc.Fp Inputs Ecc.Point main := by
   elaborate_circuit
 
 theorem onCurve_of_spec_and_assumptions
-    {input : Inputs Ecc.PallasBaseField} {output : Ecc.Point Ecc.PallasBaseField}
+    {input : Inputs Ecc.Fp} {output : Ecc.Point Ecc.Fp}
     (hAssumptions : Assumptions input)
     (hSpec : PointMux.Spec input output) :
-    Ecc.onCurve output := by
+    Ecc.Point.onCurve output := by
   rcases hAssumptions with ⟨_, hLeft, hRight⟩
   by_cases hChoiceOne : input.choice = 1
   · simp [PointMux.Spec, hChoiceOne] at hSpec
@@ -252,27 +252,27 @@ theorem onCurve_of_spec_and_assumptions
     exact hLeft
 
 theorem soundness :
-    Soundness Ecc.PallasBaseField main Assumptions Spec := by
+    Soundness Ecc.Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
-    Ecc.NonIdentityPoint.circuit, Ecc.onCurve]
+    Ecc.NonIdentityPoint.circuit, Ecc.Point.onCurve]
   rcases h_assumptions with ⟨hMuxAssumptions, _, _⟩
   rcases h_holds with ⟨hMux, hOnCurve⟩
   exact ⟨hMux hMuxAssumptions, hOnCurve⟩
 
 theorem completeness :
-    Completeness Ecc.PallasBaseField main Assumptions := by
+    Completeness Ecc.Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
-    Ecc.NonIdentityPoint.circuit, Ecc.onCurve]
+    Ecc.NonIdentityPoint.circuit, Ecc.Point.onCurve]
   have hAllAssumptions := h_assumptions
   change Assumptions
     ({ choice := input_choice, left := input_left, right := input_right } :
-      Inputs Ecc.PallasBaseField) at hAllAssumptions
+      Inputs Ecc.Fp) at hAllAssumptions
   rcases h_assumptions with ⟨hMuxAssumptions, _, _⟩
   constructor
   · exact hMuxAssumptions
   · exact (onCurve_of_spec_and_assumptions hAllAssumptions (h_env hMuxAssumptions))
 
-def circuit : FormalCircuit Ecc.PallasBaseField Inputs Ecc.Point where
+def circuit : FormalCircuit Ecc.Fp Inputs Ecc.Point where
   main
   elaborated
   Assumptions
@@ -293,20 +293,20 @@ copy-constrained field addition result.
 
 namespace AddChip
 
-def main (input : Var fieldPair Ecc.PallasBaseField) :
-    Circuit Ecc.PallasBaseField (Var field Ecc.PallasBaseField) := do
+def main (input : Var fieldPair Ecc.Fp) :
+    Circuit Ecc.Fp (Var field Ecc.Fp) := do
   let (a, b) := input
   let c ← witnessField fun env => env a + env b
   assertZero (a + b - c)
   return c
 
-def Spec (input : fieldPair Ecc.PallasBaseField) (output : Ecc.PallasBaseField) : Prop :=
+def Spec (input : fieldPair Ecc.Fp) (output : Ecc.Fp) : Prop :=
   output = input.1 + input.2
 
-instance elaborated : ElaboratedCircuit Ecc.PallasBaseField fieldPair field main := by
+instance elaborated : ElaboratedCircuit Ecc.Fp fieldPair field main := by
   elaborate_circuit
 
-theorem soundness : Soundness Ecc.PallasBaseField main (fun _ => True) Spec := by
+theorem soundness : Soundness Ecc.Fp main (fun _ => True) Spec := by
   circuit_proof_start [main, Spec]
   rcases input with ⟨a, b⟩
   simp only [Prod.mk.injEq] at h_input
@@ -314,12 +314,12 @@ theorem soundness : Soundness Ecc.PallasBaseField main (fun _ => True) Spec := b
   rw [← ha, ← hb]
   exact (eq_of_add_neg_eq_zero h_holds).symm
 
-theorem completeness : Completeness Ecc.PallasBaseField main (fun _ => True) := by
+theorem completeness : Completeness Ecc.Fp main (fun _ => True) := by
   circuit_proof_start [main, Spec]
   rw [h_env]
   ring
 
-def circuit : FormalCircuit Ecc.PallasBaseField fieldPair field where
+def circuit : FormalCircuit Ecc.Fp fieldPair field where
   -- TODO: factor the source `Field element addition: c = a + b` custom gate into a
   -- named `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
   main

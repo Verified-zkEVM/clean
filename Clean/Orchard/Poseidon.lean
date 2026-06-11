@@ -60,8 +60,8 @@ structure Row (F : Type) where
   next2 : F
 deriving ProvableStruct
 
-def Params.toExpr (params : Params Ecc.PallasBaseField) :
-    Params (Expression Ecc.PallasBaseField) where
+def Params.toExpr (params : Params Ecc.Fp) :
+    Params (Expression Ecc.Fp) where
   rcA0 := params.rcA0
   rcA1 := params.rcA1
   rcA2 := params.rcA2
@@ -102,19 +102,19 @@ def next1Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row
 def next2Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
   output2 params row - row.next2
 
-def Spec (params : Params Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (params : Params Ecc.Fp) (row : Row Ecc.Fp) : Prop :=
   row.next0 = output0 params row ∧
     row.next1 = output1 params row ∧
     row.next2 = output2 params row
 
-def main (params : Params Ecc.PallasBaseField)
-    (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (params : Params Ecc.Fp)
+    (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   let paramsExpr := params.toExpr
   assertZero (next0Check paramsExpr row)
   assertZero (next1Check paramsExpr row)
   assertZero (next2Check paramsExpr row)
 
-def circuit (params : Params Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
+def circuit (params : Params Ecc.Fp) : FormalAssertion Ecc.Fp Row where
   name := "GATE full round"
   main := main params
   Spec := Spec params
@@ -174,8 +174,8 @@ structure Row (F : Type) where
   next2 : F
 deriving ProvableStruct
 
-def Params.toExpr (params : Params Ecc.PallasBaseField) :
-    Params (Expression Ecc.PallasBaseField) where
+def Params.toExpr (params : Params Ecc.Fp) :
+    Params (Expression Ecc.Fp) where
   rcA0 := params.rcA0
   rcA1 := params.rcA1
   rcA2 := params.rcA2
@@ -234,21 +234,21 @@ def next1Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row
 def next2Check {K : Type} [Add K] [Sub K] [Mul K] (params : Params K) (row : Row K) : K :=
   mid2 params row + params.rcB2 - nextInv2 params row
 
-def Spec (params : Params Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (params : Params Ecc.Fp) (row : Row Ecc.Fp) : Prop :=
   row.mid0Sbox = pow5 (row.cur0 + params.rcA0) ∧
     nextInv0 params row = pow5 (mid0 params row + params.rcB0) ∧
     nextInv1 params row = mid1 params row + params.rcB1 ∧
     nextInv2 params row = mid2 params row + params.rcB2
 
-def main (params : Params Ecc.PallasBaseField)
-    (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (params : Params Ecc.Fp)
+    (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   let paramsExpr := params.toExpr
   assertZero (mid0Check paramsExpr row)
   assertZero (next0Check paramsExpr row)
   assertZero (next1Check paramsExpr row)
   assertZero (next2Check paramsExpr row)
 
-def circuit (params : Params Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
+def circuit (params : Params Ecc.Fp) : FormalAssertion Ecc.Fp Row where
   name := "GATE partial rounds"
   main := main params
   Spec := Spec params
@@ -296,17 +296,17 @@ def output1Check {K : Type} [Add K] [Sub K] (row : Row K) : K :=
 def capacityCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.initial2 - row.output2
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.output0 = row.initial0 + row.input0 ∧
     row.output1 = row.initial1 + row.input1 ∧
     row.output2 = row.initial2
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (output0Check row)
   assertZero (output1Check row)
   assertZero (capacityCheck row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE pad-and-add"
   main
   Spec := Spec

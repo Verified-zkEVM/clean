@@ -91,22 +91,22 @@ def lsbY {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
     (row : Row K) : K :=
   ternary (lsb row) row.yP (row.yP + row.baseY)
 
-def SelectedCorrectionPoint (row : Row Ecc.PallasBaseField) : Prop :=
+def SelectedCorrectionPoint (row : Row Ecc.Fp) : Prop :=
   (lsb row = 0 →
     (row.xP, row.yP) =
       CompElliptic.CurveForms.ShortWeierstrass.neg (row.baseX, row.baseY)) ∧
     (lsb row = 1 →
       (row.xP, row.yP) = (0, 0))
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool (lsb row) ∧ SelectedCorrectionPoint row
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (NoteCommit.boolPoly (lsb row))
   assertZero (lsbX row)
   assertZero (lsbY row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE LSB check"
   main
   Spec := Spec
@@ -192,22 +192,22 @@ def ySwitch {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
     (row : Row K) : K :=
   ternary (bit row) (row.baseY - row.yP) (row.baseY + row.yP)
 
-def SelectedCompleteBitPointNegation (row : Row Ecc.PallasBaseField) : Prop :=
-  ∀ baseX : Ecc.PallasBaseField,
+def SelectedCompleteBitPointNegation (row : Row Ecc.Fp) : Prop :=
+  ∀ baseX : Ecc.Fp,
     (bit row = 0 →
       (baseX, row.yP) =
         CompElliptic.CurveForms.ShortWeierstrass.neg (baseX, row.baseY)) ∧
       (bit row = 1 →
         (baseX, row.yP) = (baseX, row.baseY))
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool (bit row) ∧ SelectedCompleteBitPointNegation row
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
   assertZero (ySwitch row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE Decompose scalar for complete bits of variable-base mul"
   main
   Spec := Spec
@@ -282,13 +282,13 @@ deriving ProvableStruct
 def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   2 * row.yAWitnessed - yADouble row.next
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   2 * row.yAWitnessed = yADouble row.next
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (poly row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE q_mul_1 == 1 checks"
   main
   Spec := Spec
@@ -329,7 +329,7 @@ def secantLine {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
 def gradient2 {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
   2 * row.cur.lambda2 * (row.cur.xA - row.xANext) - yADouble row.cur - row.yANextDouble
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool (bit row) ∧
     2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) +
         2 * ((bit row * 2 - 1) * row.yPCur) = yADouble row.cur ∧
@@ -338,13 +338,13 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     2 * row.cur.lambda2 * (row.cur.xA - row.xANext) =
         yADouble row.cur + row.yANextDouble
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
   assertZero (gradient1 row)
   assertZero (secantLine row)
   assertZero (gradient2 row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE q_mul_3 == 1 checks"
   main
   Spec := Spec
@@ -380,15 +380,15 @@ def xPCheck {K : Type} [Sub K] (row : Row K) : K :=
 def yPCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.yPCur - row.yPNext
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.cur.xP = row.xPNext ∧ row.yPCur = row.yPNext ∧ Loop.Spec row.toRow
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (xPCheck row)
   assertZero (yPCheck row)
   Loop.circuit row.toRow
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE q_mul_2 == 1 checks"
   main
   Spec := Spec
@@ -437,21 +437,21 @@ def sMinusLo130Check {K : Type} [Mul K] (row : Row K) : K :=
 def canonicity {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
   (1 - row.k254) * (1 - row.z130 * row.eta) * row.sMinusLo130
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.s = row.alpha + row.k254 * OfNat.ofNat (2 ^ 130) ∧
     row.z0 = row.alpha + tQ ∧
     (row.k254 = 0 ∨ row.z130 = OfNat.ofNat (2 ^ 124)) ∧
     (row.k254 = 0 ∨ row.sMinusLo130 = 0) ∧
     (row.k254 = 1 ∨ row.z130 * row.eta = 1 ∨ row.sMinusLo130 = 0)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (sCheck row)
   assertZero (recovery row)
   assertZero (loZero row)
   assertZero (sMinusLo130Check row)
   assertZero (canonicity row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE overflow checks"
   main
   Spec := Spec
@@ -518,8 +518,8 @@ structure CoordsParams (F : Type) where
   lagrange6 : F
   lagrange7 : F
 
-def CoordsParams.toExpr (params : CoordsParams Ecc.PallasBaseField) :
-    CoordsParams (Expression Ecc.PallasBaseField) where
+def CoordsParams.toExpr (params : CoordsParams Ecc.Fp) :
+    CoordsParams (Expression Ecc.Fp) where
   z := params.z
   lagrange0 := params.lagrange0
   lagrange1 := params.lagrange1
@@ -560,20 +560,20 @@ def onCurve {K : Type} [Sub K] [Mul K] [OfNat K 5] (row : CoordsRow K) : K :=
 
 namespace Coords
 
-def Spec (params : CoordsParams Ecc.PallasBaseField) (row : CoordsRow Ecc.PallasBaseField) :
+def Spec (params : CoordsParams Ecc.Fp) (row : CoordsRow Ecc.Fp) :
     Prop :=
   row.xP = interpolatedX params row ∧
     row.u * row.u = row.yP + params.z ∧
     row.yP * row.yP = row.xP * row.xP * row.xP + 5
 
-def main (params : CoordsParams Ecc.PallasBaseField) (row : Var CoordsRow Ecc.PallasBaseField) :
-    Circuit Ecc.PallasBaseField Unit := do
+def main (params : CoordsParams Ecc.Fp) (row : Var CoordsRow Ecc.Fp) :
+    Circuit Ecc.Fp Unit := do
   assertZero (xCheck params.toExpr row)
   assertZero (yCheck params.toExpr row)
   assertZero (onCurve row)
 
-def circuit (params : CoordsParams Ecc.PallasBaseField) :
-    FormalAssertion Ecc.PallasBaseField CoordsRow where
+def circuit (params : CoordsParams Ecc.Fp) :
+    FormalAssertion Ecc.Fp CoordsRow where
   name := "GATE Full-width fixed-base scalar mul"
   main := main params
   Spec := Spec params
@@ -607,14 +607,14 @@ def word {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : K :=
 def coordsRow {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : CoordsRow K :=
   { row.toCoordsRow with window := word row }
 
-def Spec (params : CoordsParams Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (params : CoordsParams Ecc.Fp) (row : Row Ecc.Fp) : Prop :=
   Coords.Spec params (coordsRow row)
 
-def main (params : CoordsParams Ecc.PallasBaseField) (row : Var Row Ecc.PallasBaseField) :
-    Circuit Ecc.PallasBaseField Unit := do
+def main (params : CoordsParams Ecc.Fp) (row : Var Row Ecc.Fp) :
+    Circuit Ecc.Fp Unit := do
   Coords.circuit params { row.toCoordsRow with window := word row }
 
-def circuit (params : CoordsParams Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
+def circuit (params : CoordsParams Ecc.Fp) : FormalAssertion Ecc.Fp Row where
   name := "GATE Running sum coordinates check"
   main := main params
   Spec := Spec params
@@ -635,21 +635,21 @@ def rangeCheck {K : Type} [One K] [Sub K] [Mul K]
   row.window * (1 - row.window) * (2 - row.window) * (3 - row.window) *
     (4 - row.window) * (5 - row.window) * (6 - row.window) * (7 - row.window)
 
-def IsWindow (window : Ecc.PallasBaseField) : Prop :=
+def IsWindow (window : Ecc.Fp) : Prop :=
   window = 0 ∨ window = 1 ∨ window = 2 ∨ window = 3 ∨
     window = 4 ∨ window = 5 ∨ window = 6 ∨ window = 7
 
-def Spec (params : CoordsParams Ecc.PallasBaseField) (row : CoordsRow Ecc.PallasBaseField) :
+def Spec (params : CoordsParams Ecc.Fp) (row : CoordsRow Ecc.Fp) :
     Prop :=
   Coords.Spec params row ∧ IsWindow row.window
 
-def main (params : CoordsParams Ecc.PallasBaseField) (row : Var CoordsRow Ecc.PallasBaseField) :
-    Circuit Ecc.PallasBaseField Unit := do
+def main (params : CoordsParams Ecc.Fp) (row : Var CoordsRow Ecc.Fp) :
+    Circuit Ecc.Fp Unit := do
   Coords.circuit params row
   assertZero (rangeCheck row)
 
-def circuit (params : CoordsParams Ecc.PallasBaseField) :
-    FormalAssertion Ecc.PallasBaseField CoordsRow where
+def circuit (params : CoordsParams Ecc.Fp) :
+    FormalAssertion Ecc.Fp CoordsRow where
   main := main params
   Spec := Spec params
   soundness := by
@@ -726,22 +726,22 @@ def alpha0Hi120 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 120)] (row : Row K) : K
 def a43 {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : K :=
   row.z43Alpha - row.z44Alpha * 8
 
-def IsAlpha1 (alpha1 : Ecc.PallasBaseField) : Prop :=
+def IsAlpha1 (alpha1 : Ecc.Fp) : Prop :=
   alpha1 = 0 ∨ alpha1 = 1 ∨ alpha1 = 2 ∨ alpha1 = 3
 
-def DecomposesBaseFieldElem (row : Row Ecc.PallasBaseField) : Prop :=
+def DecomposesBaseFieldElem (row : Row Ecc.Fp) : Prop :=
   row.z84Alpha = row.alpha1 + row.alpha2 * 4 ∧
     row.alpha0Prime = alpha0 row + OfNat.ofNat (2 ^ 130) - NoteCommit.tP
 
-def CanonicalHighBit (row : Row Ecc.PallasBaseField) : Prop :=
+def CanonicalHighBit (row : Row Ecc.Fp) : Prop :=
   row.alpha2 = 1 →
     row.alpha1 = 0 ∧ alpha0Hi120 row = 0 ∧ IsBool (a43 row) ∧ row.z13Alpha0Prime = 0
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsAlpha1 row.alpha1 ∧ IsBool row.alpha2 ∧ DecomposesBaseFieldElem row ∧
     CanonicalHighBit row
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (row.alpha2 * row.alpha1)
   assertZero (row.alpha2 * alpha0Hi120 row)
   assertZero (row.alpha2 * NoteCommit.boolPoly (a43 row))
@@ -751,7 +751,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (z84AlphaCheck row)
   assertZero (alpha0PrimeCheck row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE Canonicity checks"
   main
   Spec := Spec
@@ -860,25 +860,25 @@ def yCheck {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
 def negationCheck {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
   row.sign * row.yP - row.yA
 
-def IsSign (sign : Ecc.PallasBaseField) : Prop :=
+def IsSign (sign : Ecc.Fp) : Prop :=
   sign = 1 ∨ sign = 0 - 1
 
-def SignedPointSelection (row : Row Ecc.PallasBaseField) : Prop :=
-  ∀ x : Ecc.PallasBaseField,
+def SignedPointSelection (row : Row Ecc.Fp) : Prop :=
+  ∀ x : Ecc.Fp,
     (row.sign = 1 → (x, row.yP) = (x, row.yA)) ∧
       (row.sign = 0 - 1 →
         (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.yA))
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointSelection row
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (NoteCommit.boolPoly row.lastWindow)
   assertZero (signCheck row)
   assertZero (yCheck row)
   assertZero (negationCheck row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE Short fixed-base mul gate"
   main
   Spec := Spec
@@ -969,21 +969,21 @@ def outputEccPoint {K : Type} (row : Row K) : Ecc.Point K where
   x := row.x
   y := row.signedY
 
-def SignedPointRelation (row : Row Ecc.PallasBaseField) : Prop :=
+def SignedPointRelation (row : Row Ecc.Fp) : Prop :=
   row.sign = 1 ∧ outputPoint row = inputPoint row ∨
     row.sign = 0 - 1 ∧
       outputPoint row = CompElliptic.CurveForms.ShortWeierstrass.neg (inputPoint row)
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  SignedPointRelation row ∧ Ecc.isPointOrIdentity (outputEccPoint row)
+def Spec (row : Row Ecc.Fp) : Prop :=
+  SignedPointRelation row ∧ Ecc.Point.isPointOrIdentity (outputEccPoint row)
 
-def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
-  Ecc.isPointOrIdentity (inputEccPoint row)
+def Assumptions (row : Row Ecc.Fp) : Prop :=
+  Ecc.Point.isPointOrIdentity (inputEccPoint row)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   FixedShort.circuit (gateRow row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   main
   Assumptions := Assumptions
   Spec := Spec
@@ -991,7 +991,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
     circuit_proof_start [main, Spec, Assumptions, SignedPointRelation, gateRow,
       inputPoint, outputPoint, inputEccPoint, outputEccPoint,
       FixedShort.circuit, FixedShort.Spec, FixedShort.IsSign, FixedShort.SignedPointSelection,
-      CompElliptic.CurveForms.ShortWeierstrass.neg, Ecc.pointCoords]
+      CompElliptic.CurveForms.ShortWeierstrass.neg, Ecc.Point.coords]
     rcases h_holds with ⟨_, hSign, hPoint⟩
     constructor
     rcases hSign with hSign | hSign
@@ -1000,8 +1000,8 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
     · rcases hSign with hSign | hSign
       · have hOut := hPoint input_x |>.1 hSign
         have hEq :
-            ({ x := input_x, y := input_signedY } : Ecc.Point Ecc.PallasBaseField) =
-              ({ x := input_x, y := input_y } : Ecc.Point Ecc.PallasBaseField) := by
+            ({ x := input_x, y := input_signedY } : Ecc.Point Ecc.Fp) =
+              ({ x := input_x, y := input_y } : Ecc.Point Ecc.Fp) := by
           apply congrArg₂ Ecc.Point.mk
           · rfl
           · exact congrArg Prod.snd hOut
@@ -1009,13 +1009,13 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
         exact h_assumptions
       · have hOut := hPoint input_x |>.2 hSign
         have hEq :
-            ({ x := input_x, y := input_signedY } : Ecc.Point Ecc.PallasBaseField) =
-              Ecc.negPoint ({ x := input_x, y := input_y } : Ecc.Point Ecc.PallasBaseField) := by
+            ({ x := input_x, y := input_signedY } : Ecc.Point Ecc.Fp) =
+              Ecc.Point.neg ({ x := input_x, y := input_y } : Ecc.Point Ecc.Fp) := by
           apply congrArg₂ Ecc.Point.mk
           · rfl
           · exact congrArg Prod.snd hOut
         rw [hEq]
-        exact Ecc.negPoint_isPointOrIdentity h_assumptions
+        exact Ecc.Point.isPointOrIdentity_neg h_assumptions
   completeness := by
     circuit_proof_start [main, Spec, Assumptions, SignedPointRelation, gateRow,
       inputPoint, outputPoint,
@@ -1032,21 +1032,21 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
       · intro hSign
         rcases hRelation with hPos | hNeg
         · have hPoint := hPos.2
-          have hy := congrArg (fun p : Ecc.PallasBaseField × Ecc.PallasBaseField => p.2) hPoint
+          have hy := congrArg (fun p : Ecc.Fp × Ecc.Fp => p.2) hPoint
           change input_signedY = input_y at hy
           simp [hy]
         · exfalso
-          have hEq : (1 : Ecc.PallasBaseField) = 0 - 1 := hSign.symm.trans hNeg.1
-          have htwo : (2 : Ecc.PallasBaseField) = 0 := by linear_combination hEq
+          have hEq : (1 : Ecc.Fp) = 0 - 1 := hSign.symm.trans hNeg.1
+          have htwo : (2 : Ecc.Fp) = 0 := by linear_combination hEq
           exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
       · intro hSign
         rcases hRelation with hPos | hNeg
         · exfalso
-          have hEq : (1 : Ecc.PallasBaseField) = 0 - 1 := hPos.1.symm.trans hSign
-          have htwo : (2 : Ecc.PallasBaseField) = 0 := by linear_combination hEq
+          have hEq : (1 : Ecc.Fp) = 0 - 1 := hPos.1.symm.trans hSign
+          have htwo : (2 : Ecc.Fp) = 0 := by linear_combination hEq
           exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
         · have hPoint := hNeg.2
-          have hy := congrArg (fun p : Ecc.PallasBaseField × Ecc.PallasBaseField => p.2) hPoint
+          have hy := congrArg (fun p : Ecc.Fp × Ecc.Fp => p.2) hPoint
           change input_signedY = -input_y at hy
           simp [hy]
 

@@ -171,7 +171,7 @@ Current concrete cases:
 
 ### Concrete Circuit Field
 
-The plan requires Orchard circuits to use `Ecc.PallasBaseField` concretely. Several
+The plan requires Orchard circuits to use `Ecc.Fp` concretely. Several
 modules still define helper functions and some assertions generically over
 `{F : Type} [Field F]` or generic semiring-like typeclass sets. These should be
 specialized or isolated so Orchard circuit packages themselves are Pallas-base circuits,

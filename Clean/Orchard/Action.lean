@@ -50,19 +50,19 @@ def spendEnabled {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
 def outputEnabled {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
   row.vNew * (1 - row.enableOutputs)
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (row : Row Ecc.Fp) : Prop :=
   row.vOld = row.vNew + row.magnitude * row.sign ∧
     (row.vOld = 0 ∨ row.root = row.anchor) ∧
     (row.vOld = 0 ∨ row.enableSpends = 1) ∧
     (row.vNew = 0 ∨ row.enableOutputs = 1)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertZero (valueNet row)
   assertZero (merklePathValidity row)
   assertZero (spendEnabled row)
   assertZero (outputEnabled row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE Orchard circuit checks"
   main
   Spec := Spec
