@@ -586,60 +586,86 @@ Reference:
 This assertion connects `gadgets::note_commit` output cells to the action row: the old
 derived commitment is constrained to the witnessed `cm_old`, and the new commitment's
 extracted x-coordinate supplies the public `cmx`. The internal note-commitment gates are
-kept in `NoteCommit.Wiring.circuit`, so this assertion only records the action-level copy
-constraints.
+composed through `NoteCommit.WiringWithCommit.circuit`; this assertion records the
+action-level copy edges around those commitment outputs.
 -/
 namespace ActionNoteCommitWiring
 
 structure Row (F : Type) where
   action : ActionWiring.Row F
-  oldNoteCommit : NoteCommit.Wiring.Row F
-  newNoteCommit : NoteCommit.Wiring.Row F
+  oldNoteCommit : NoteCommit.WiringWithCommit.Row F
+  newNoteCommit : NoteCommit.WiringWithCommit.Row F
 deriving ProvableStruct
 
 def oldCmXCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.oldNoteCommit.cmX - row.action.derivedCmOldX
+  row.oldNoteCommit.note.cmX - row.action.derivedCmOldX
 
 def oldCmYCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.oldNoteCommit.cmY - row.action.derivedCmOldY
+  row.oldNoteCommit.note.cmY - row.action.derivedCmOldY
 
 def newCmxCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.newNoteCommit.cmX - row.action.cmxNew
+  row.newNoteCommit.note.cmX - row.action.cmxNew
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   ActionWiring.Spec row.action ∧
-    NoteCommit.Wiring.Spec row.oldNoteCommit ∧
-    NoteCommit.Wiring.Spec row.newNoteCommit ∧
-    row.oldNoteCommit.cmX = row.action.derivedCmOldX ∧
-    row.oldNoteCommit.cmY = row.action.derivedCmOldY ∧
-    row.newNoteCommit.cmX = row.action.cmxNew
+    NoteCommit.WiringWithCommit.Spec row.oldNoteCommit ∧
+    NoteCommit.WiringWithCommit.Spec row.newNoteCommit ∧
+    row.oldNoteCommit.note.cmX = row.action.derivedCmOldX ∧
+    row.oldNoteCommit.note.cmY = row.action.derivedCmOldY ∧
+    row.newNoteCommit.note.cmX = row.action.cmxNew
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  NoteCommit.WiringWithCommit.Assumptions row.oldNoteCommit ∧
+    NoteCommit.WiringWithCommit.Assumptions row.newNoteCommit
+
+def OrchardSpec
+    (row : Row Ecc.PallasBaseField) (oldRcmScalar newRcmScalar : ℕ) : Prop :=
+  ActionWiring.Spec row.action ∧
+    NoteCommit.WiringWithCommit.OrchardSpec oldRcmScalar row.oldNoteCommit ∧
+    NoteCommit.WiringWithCommit.OrchardSpec newRcmScalar row.newNoteCommit ∧
+    row.oldNoteCommit.note.cmX = row.action.derivedCmOldX ∧
+    row.oldNoteCommit.note.cmY = row.action.derivedCmOldY ∧
+    row.newNoteCommit.note.cmX = row.action.cmxNew
+
+theorem spec_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {oldRcmScalar newRcmScalar : ℕ}
+    (h : OrchardSpec row oldRcmScalar newRcmScalar) :
+    Spec row :=
+  ⟨h.1, NoteCommit.WiringWithCommit.spec_of_orchardSpec h.2.1,
+    NoteCommit.WiringWithCommit.spec_of_orchardSpec h.2.2.1,
+    h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2⟩
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
-  NoteCommit.Wiring.circuit row.oldNoteCommit
-  NoteCommit.Wiring.circuit row.newNoteCommit
+  NoteCommit.WiringWithCommit.circuit row.oldNoteCommit
+  NoteCommit.WiringWithCommit.circuit row.newNoteCommit
   assertZero (oldCmXCheck row)
   assertZero (oldCmYCheck row)
   assertZero (newCmxCheck row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, oldCmXCheck, oldCmYCheck, newCmxCheck,
+    circuit_proof_start [main, Spec, Assumptions, oldCmXCheck, oldCmYCheck, newCmxCheck,
       ActionWiring.circuit, ActionWiring.Spec,
-      NoteCommit.Wiring.circuit, NoteCommit.Wiring.Spec]
+      NoteCommit.WiringWithCommit.circuit, NoteCommit.WiringWithCommit.Spec]
+    rcases h_assumptions with ⟨hOldAssumptions, hNewAssumptions⟩
     rcases h_holds with ⟨hAction, hOldNoteCommit, hNewNoteCommit, hOldX, hOldY, hNewCmx⟩
-    exact ⟨hAction, hOldNoteCommit, hNewNoteCommit,
+    exact ⟨hAction, hOldNoteCommit hOldAssumptions, hNewNoteCommit hNewAssumptions,
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOldX),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOldY),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNewCmx)⟩
   completeness := by
-    circuit_proof_start [main, Spec, oldCmXCheck, oldCmYCheck, newCmxCheck,
+    circuit_proof_start [main, Spec, Assumptions, oldCmXCheck, oldCmYCheck, newCmxCheck,
       ActionWiring.circuit, ActionWiring.Spec,
-      NoteCommit.Wiring.circuit, NoteCommit.Wiring.Spec]
+      NoteCommit.WiringWithCommit.circuit, NoteCommit.WiringWithCommit.Spec,
+      NoteCommit.WiringWithCommit.Assumptions]
+    rcases h_assumptions with ⟨hOldAssumptions, hNewAssumptions⟩
     rcases h_spec with ⟨hAction, hOldNoteCommit, hNewNoteCommit, hOldX, hOldY, hNewCmx⟩
-    exact ⟨hAction, hOldNoteCommit, hNewNoteCommit,
+    exact ⟨hAction, ⟨hOldAssumptions, hOldNoteCommit⟩,
+      ⟨hNewAssumptions, hNewNoteCommit⟩,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOldX,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOldY,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hNewCmx⟩
