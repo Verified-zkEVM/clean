@@ -64,6 +64,14 @@ make use of established properties of that field and curve defined over it, see 
 Mathematical properties that are known and needed within the scope of a circuit should not be deferred
 as obligations to callers via assumptions.
 
+DO NOT add generic parameters for the Field with bespoke assumptions such as
+
+```lean
+variable {F : Type} [Field F] [OfNat F 2]
+```
+
+Instead, use the concrete Pallas base field and prove whatever assumption you need about that concrete field.
+
 ## Hard reference rule
 
 Every gadget must be ported from the actual Halo2/Orchard implementation. Do not infer a
