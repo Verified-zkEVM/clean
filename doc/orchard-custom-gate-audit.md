@@ -71,15 +71,13 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   source `meta.create_gate` by itself. It intentionally has no `GATE` name.
 
 - **`GATE Running sum coordinates check` and `GATE Full-width fixed-base scalar mul`:**
-  Clean currently represents some verifier-known table/interpolation values as ordinary
-  row inputs. That is dangerous because it gives the prover control over values that are
-  fixed by the configured fixed base. In idiomatic Clean, locally fixed constants should be
-  Lean constants, and fixed-base/table parameters should be ordinary Lean arguments that
-  the `FormalAssertion` depends on. This is not enough to reproduce Halo2 fixed-column
-  layout, but it does preserve the contract that these values are fixed before proving.
+  Clean now represents fixed `z` values and Lagrange interpolation coefficients as Lean
+  parameters to the gate assertions. Remaining layout work is to preserve exact
+  fixed/advice column identities and rotations for VK reconstruction.
 
 - **`GATE Canonicity checks`:** Clean ports the arithmetic checks, but not the surrounding
-  lookup/running-sum API or exact column/rotation layout for base-field fixed-base mul.
+  lookup/running-sum API or exact fixed/advice column and rotation layout for base-field
+  fixed-base mul.
 
 - **`GATE full round`, `GATE partial rounds`, and `GATE pad-and-add`:** Clean represents
   round constants as row values. These should not be witness inputs. Locally fixed

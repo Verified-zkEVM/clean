@@ -507,12 +507,8 @@ end VarBaseOverflow
 
 namespace FixedBase
 
-structure CoordsRow (F : Type) where
-  window : F
-  xP : F
-  yP : F
+structure CoordsParams (F : Type) where
   z : F
-  u : F
   lagrange0 : F
   lagrange1 : F
   lagrange2 : F
@@ -521,54 +517,77 @@ structure CoordsRow (F : Type) where
   lagrange5 : F
   lagrange6 : F
   lagrange7 : F
+
+def CoordsParams.toExpr (params : CoordsParams Ecc.PallasBaseField) :
+    CoordsParams (Expression Ecc.PallasBaseField) where
+  z := params.z
+  lagrange0 := params.lagrange0
+  lagrange1 := params.lagrange1
+  lagrange2 := params.lagrange2
+  lagrange3 := params.lagrange3
+  lagrange4 := params.lagrange4
+  lagrange5 := params.lagrange5
+  lagrange6 := params.lagrange6
+  lagrange7 := params.lagrange7
+
+structure CoordsRow (F : Type) where
+  window : F
+  xP : F
+  yP : F
+  u : F
 deriving ProvableStruct
 
-def interpolatedX {K : Type} [Add K] [Mul K] (row : CoordsRow K) : K :=
-  row.lagrange0 +
-    row.window * row.lagrange1 +
-    row.window * row.window * row.lagrange2 +
-    row.window * row.window * row.window * row.lagrange3 +
-    row.window * row.window * row.window * row.window * row.lagrange4 +
-    row.window * row.window * row.window * row.window * row.window * row.lagrange5 +
-    row.window * row.window * row.window * row.window * row.window * row.window * row.lagrange6 +
+def interpolatedX {K : Type} [Add K] [Mul K] (params : CoordsParams K) (row : CoordsRow K) : K :=
+  params.lagrange0 +
+    row.window * params.lagrange1 +
+    row.window * row.window * params.lagrange2 +
+    row.window * row.window * row.window * params.lagrange3 +
+    row.window * row.window * row.window * row.window * params.lagrange4 +
+    row.window * row.window * row.window * row.window * row.window * params.lagrange5 +
+    row.window * row.window * row.window * row.window * row.window * row.window * params.lagrange6 +
     row.window * row.window * row.window * row.window * row.window * row.window * row.window *
-      row.lagrange7
+      params.lagrange7
 
-def xCheck {K : Type} [Add K] [Sub K] [Mul K] (row : CoordsRow K) : K :=
-  interpolatedX row - row.xP
+def xCheck {K : Type} [Add K] [Sub K] [Mul K] (params : CoordsParams K) (row : CoordsRow K) :
+    K :=
+  interpolatedX params row - row.xP
 
-def yCheck {K : Type} [Sub K] [Mul K] (row : CoordsRow K) : K :=
-  row.u * row.u - row.yP - row.z
+def yCheck {K : Type} [Sub K] [Mul K] (params : CoordsParams K) (row : CoordsRow K) : K :=
+  row.u * row.u - row.yP - params.z
 
 def onCurve {K : Type} [Sub K] [Mul K] [OfNat K 5] (row : CoordsRow K) : K :=
   row.yP * row.yP - row.xP * row.xP * row.xP - 5
 
 namespace Coords
 
-def Spec (row : CoordsRow Ecc.PallasBaseField) : Prop :=
-  row.xP = interpolatedX row ∧
-    row.u * row.u = row.yP + row.z ∧
+def Spec (params : CoordsParams Ecc.PallasBaseField) (row : CoordsRow Ecc.PallasBaseField) :
+    Prop :=
+  row.xP = interpolatedX params row ∧
+    row.u * row.u = row.yP + params.z ∧
     row.yP * row.yP = row.xP * row.xP * row.xP + 5
 
-def main (row : Var CoordsRow Ecc.PallasBaseField) :
+def main (params : CoordsParams Ecc.PallasBaseField) (row : Var CoordsRow Ecc.PallasBaseField) :
     Circuit Ecc.PallasBaseField Unit := do
-  assertZero (xCheck row)
-  assertZero (yCheck row)
+  assertZero (xCheck params.toExpr row)
+  assertZero (yCheck params.toExpr row)
   assertZero (onCurve row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField CoordsRow where
+def circuit (params : CoordsParams Ecc.PallasBaseField) :
+    FormalAssertion Ecc.PallasBaseField CoordsRow where
   name := "GATE Full-width fixed-base scalar mul"
-  main
-  Spec := Spec
+  main := main params
+  Spec := Spec params
   soundness := by
     circuit_proof_start [main, Spec, xCheck, yCheck, onCurve, interpolatedX]
     rcases h_holds with ⟨hx, hy, hCurve⟩
+    simp [CoordsParams.toExpr, circuit_norm] at hx hy
     exact ⟨(sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hx)).symm,
       by linear_combination hy,
       by linear_combination hCurve⟩
   completeness := by
     circuit_proof_start [main, Spec, xCheck, yCheck, onCurve, interpolatedX]
     rcases h_spec with ⟨hx, hy, hCurve⟩
+    simp [CoordsParams.toExpr, circuit_norm]
     exact ⟨by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hx.symm,
       by linear_combination hy,
       by linear_combination hCurve⟩
@@ -588,16 +607,17 @@ def word {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : K :=
 def coordsRow {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : CoordsRow K :=
   { row.toCoordsRow with window := word row }
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Coords.Spec (coordsRow row)
+def Spec (params : CoordsParams Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+  Coords.Spec params (coordsRow row)
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Coords.circuit { row.toCoordsRow with window := word row }
+def main (params : CoordsParams Ecc.PallasBaseField) (row : Var Row Ecc.PallasBaseField) :
+    Circuit Ecc.PallasBaseField Unit := do
+  Coords.circuit params { row.toCoordsRow with window := word row }
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit (params : CoordsParams Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
   name := "GATE Running sum coordinates check"
-  main
-  Spec := Spec
+  main := main params
+  Spec := Spec params
   soundness := by
     circuit_proof_start [main, Spec, coordsRow, Coords.circuit, Coords.Spec, word]
     simpa [sub_eq_add_neg] using h_holds
@@ -619,16 +639,19 @@ def IsWindow (window : Ecc.PallasBaseField) : Prop :=
   window = 0 ∨ window = 1 ∨ window = 2 ∨ window = 3 ∨
     window = 4 ∨ window = 5 ∨ window = 6 ∨ window = 7
 
-def Spec (row : CoordsRow Ecc.PallasBaseField) : Prop :=
-  Coords.Spec row ∧ IsWindow row.window
+def Spec (params : CoordsParams Ecc.PallasBaseField) (row : CoordsRow Ecc.PallasBaseField) :
+    Prop :=
+  Coords.Spec params row ∧ IsWindow row.window
 
-def main (row : Var CoordsRow Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Coords.circuit row
+def main (params : CoordsParams Ecc.PallasBaseField) (row : Var CoordsRow Ecc.PallasBaseField) :
+    Circuit Ecc.PallasBaseField Unit := do
+  Coords.circuit params row
   assertZero (rangeCheck row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField CoordsRow where
-  main
-  Spec := Spec
+def circuit (params : CoordsParams Ecc.PallasBaseField) :
+    FormalAssertion Ecc.PallasBaseField CoordsRow where
+  main := main params
+  Spec := Spec params
   soundness := by
     circuit_proof_start [main, Spec, IsWindow, Coords.circuit, Coords.Spec,
       rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
