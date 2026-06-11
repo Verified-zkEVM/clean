@@ -226,6 +226,62 @@ theorem windowPoint_onCurve {w k : ℕ} (hk : k < 8) :
     Pallas.OnCurve ((windowPoint B.point w k).x, (windowPoint B.point w k).y) :=
   SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero hk)
 
+theorem nsmul_ne_zero {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
+    n • B.point ≠ 0 := by
+  rw [Ne, B.nsmul_eq_zero_iff]
+  intro hdvd
+  have := Nat.le_of_dvd hn hdvd
+  omega
+
+theorem nsmul_onCurve {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
+    Pallas.OnCurve ((n • B.point).x, (n • B.point).y) :=
+  SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero hn hlt)
+
+/--
+The collision-freedom fact behind the incomplete additions of fixed-base scalar
+multiplication: distinct small positive multiples of the generator have distinct
+`x`-coordinates, since equal `x` would force equal-or-opposite points and hence a
+relation `t ∓ s ≡ 0` modulo the (large) group order.
+-/
+theorem nsmul_x_ne {s t : ℕ} (hs : 0 < s) (hst : s < t)
+    (hsum : s + t < PALLAS_SCALAR_CARD) :
+    (t • B.point).x ≠ (s • B.point).x := by
+  have hs_ne : s • B.point ≠ 0 := B.nsmul_ne_zero hs (by omega)
+  have ht_ne : t • B.point ≠ 0 := B.nsmul_ne_zero (by omega) (by omega)
+  intro hx
+  rcases SWPoint.eq_or_eq_neg_of_x_eq ht_ne hs_ne hx with heq | hneg
+  · rw [nsmul_eq_nsmul_iff_modEq, B.order_eq, Nat.ModEq,
+      Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at heq
+    omega
+  · have hzero : (t + s) • B.point = 0 := by
+      rw [add_nsmul, hneg, neg_add_cancel]
+    rw [B.nsmul_eq_zero_iff] at hzero
+    have := Nat.le_of_dvd (by omega) hzero
+    omega
+
+/-- Congruent scalars produce the same multiple of the generator. -/
+theorem nsmul_congr {m n : ℕ} (h : m ≡ n [MOD PALLAS_SCALAR_CARD]) :
+    m • B.point = n • B.point := by
+  rw [nsmul_eq_nsmul_iff_modEq, B.order_eq]
+  exact h
+
+/-- Adding a cast natural to a scalar acts as expected on multiples of the generator. -/
+theorem add_natCast_val_nsmul (a : Fq) (S : ℕ) :
+    (a + (S : Fq)).val • B.point = (a.val + S) • B.point := by
+  apply B.nsmul_congr
+  rw [ZMod.val_add, ZMod.val_natCast]
+  exact (Nat.mod_modEq _ _).trans (Nat.ModEq.add_left _ (Nat.mod_modEq _ _))
+
+/-- The value-level result of multiplying the fixed base by a full-width scalar. -/
+def mulValue (s : Fq) : Point Fp :=
+  { x := (s.val • B.point).x, y := (s.val • B.point).y }
+
+theorem mulValue_valid (s : Fq) : Pallas.Valid (B.mulValue s).coords :=
+  (s.val • B.point).onCurve
+
+theorem mulValue_coords (s : Fq) :
+    (B.mulValue s).coords = ((s.val • B.point).x, (s.val • B.point).y) := rfl
+
 /--
 Soundness of one window row: if the coordinates gate holds on a row whose window value
 is `k < 8`, then the row's point is exactly the window-table point. The interpolation

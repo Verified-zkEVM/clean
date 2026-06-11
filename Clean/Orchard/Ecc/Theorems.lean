@@ -7,6 +7,11 @@ namespace Orchard.Ecc
 
 namespace Point
 
+theorem ext_coords {F : Type} {p q : Point F} (h : p.coords = q.coords) : p = q := by
+  rcases p with ⟨px, py⟩
+  rcases q with ⟨qx, qy⟩
+  simpa [Point.coords, Prod.ext_iff, Point.mk.injEq] using h
+
 lemma neg_coords (point : Point Fp) :
     point.neg.coords = ShortWeierstrass.neg point.coords := by
   simp only [Point.neg, Point.coords, ShortWeierstrass.neg]

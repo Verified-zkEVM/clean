@@ -133,6 +133,10 @@ abbrev Valid (point : PallasBaseField × PallasBaseField) : Prop :=
 abbrev add (p q : PallasBaseField × PallasBaseField) : PallasBaseField × PallasBaseField :=
   CurveForms.ShortWeierstrass.add a p q
 
+/-- Complete addition on coordinates agrees with the `SWPoint` group operation. -/
+theorem add_coords (P Q : SWPoint curve) :
+    add (P.x, P.y) (Q.x, Q.y) = ((P + Q).x, (P + Q).y) := rfl
+
 end Pallas
 
 namespace Vesta
