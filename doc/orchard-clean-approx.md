@@ -218,20 +218,25 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.NoteCommit.YCanonicity.circuit`. The source-level
      `gadgets::note_commit` assignment and copy wiring is ported as
      `Orchard.NoteCommit.Wiring.circuit`; its explicit computed commitment output is
-     connected to `Orchard.Sinsemilla.Commit.circuit` by
-     `Orchard.NoteCommit.WiringWithCommit.circuit`. The old
+     connected to `Orchard.Sinsemilla.Commit.Entry.circuit` by
+     `Orchard.NoteCommit.WiringWithCommit.circuit`, whose Orchard-level spec records the
+     fixed-base blinding relation `[rcm] NoteCommitR`. The old
      `derived_cm_old = cm_old` action edge and new `cmx = ExtractP(cm_new)` public edge
      are connected to `Orchard.ActionWiring.circuit` by
-     `Orchard.ActionNoteCommitWiring.circuit`.
+     `Orchard.ActionNoteCommitWiring.circuit`, which composes the two
+     `WiringWithCommit` children.
      `commit_ivk.rs` gate
      `CommitIvk canonicity check` is ported as `Orchard.CommitIvk.circuit`; the
      source-level `gadgets::commit_ivk` gate assignment and returned `ivk` wiring is
      ported as `Orchard.CommitIvk.Wiring.circuit`, and its explicit computed `ivk`
-     output is connected to `Orchard.Sinsemilla.ShortCommit.circuit` by
-     `Orchard.CommitIvk.WiringWithShortCommit.circuit`. The action-level address-integrity
-     copy edges from `ak` into `commit_ivk`, from `ivk` into the variable-base scalar
-     input, and from the explicit `[ivk] g_d_old` result into `derived_pk_d_old` are
-     recorded by `Orchard.ActionAddressWiring.circuit`.
+     output is connected to `Orchard.Sinsemilla.ShortCommit.Entry.circuit` by
+     `Orchard.CommitIvk.WiringWithShortCommit.circuit`, whose Orchard-level spec records
+     the fixed-base blinding relation `[rivk] CommitIvkR`. The action-level
+     address-integrity copy edges from `ak` into `commit_ivk`, from `ivk` into the
+     variable-base scalar input, and from the explicit `[ivk] g_d_old` result into
+     `derived_pk_d_old` are recorded by `Orchard.ActionAddressWiring.circuit`, which
+     composes `Orchard.Gadget.SpendAuth.Entry.circuit` and
+     `Orchard.CommitIvk.WiringWithShortCommit.circuit`.
 
 ## Entry-point API audit against Halo2/Orchard
 
@@ -268,9 +273,12 @@ Consequences for Orchard gadgets:
   final complete-add entry relation over an explicit `[alpha] SpendAuthG` product, but
   not the fixed-base scalar multiplication.
 - Address integrity in `orchard/src/circuit.rs` computes
-  `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`. `Orchard.ActionAddressWiring`
-  currently records copy edges around `ivk` and `derived_pk_d_old`, but not the
-  variable-base scalar multiplication API.
+  `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`.
+  `Orchard.ActionAddressWiring` now composes the spend-authority entry wrapper and the
+  `CommitIvk` short-commit wrapper, so its Orchard-level spec can state the
+  `[rivk] CommitIvkR` and `[alpha] SpendAuthG` fixed-base relations alongside the
+  variable-base relation for `[ivk] g_d_old`. It still does not compose a variable-base
+  scalar-multiplication entry circuit for `[ivk] g_d_old`.
 
 Complete-add modelling note:
 
@@ -303,13 +311,15 @@ exist.
 | `CommitDomain::short_commit` in `halo2_gadgets/src/sinsemilla.rs` | Calls `commit`, then returns `ExtractP(commitment)`. | `Orchard.Sinsemilla.ShortCommit.Entry.circuit` over explicit hash/blinding product points | Partial entry wrapper. Clean composes the partial commit entry wrapper and extraction wiring, but the commit input still starts after hash/blinding products are explicit. |
 | `MerkleInstructions::hash_layer` in `halo2_gadgets/src/sinsemilla/merkle/chip.rs` | Builds three Sinsemilla message pieces from `(layer, left, right)`, calls `hash_to_point`, extracts x, and wires decomposition/running-sum cells. | `Orchard.Sinsemilla.Merkle.circuit` and `Merkle.Wiring.circuit` | Partial wiring only. Clean ports the decomposition gate and final `computedHash = hash` edge, but the hash result is explicit rather than produced by a composed `hash_to_point` circuit. |
 | `MerklePath::calculate_root` in `halo2_gadgets/src/sinsemilla/merkle.rs` | Iterates over all path layers, conditionally swaps `(node, sibling)`, calls `hash_layer`, and returns the final root. | `Orchard.Sinsemilla.Merkle.PathStep.circuit` and `Orchard.ActionMerkleWiring.circuit` | One-step wiring only. Clean models a single conditional swap plus explicit `hash_layer` row; it does not provide the full iterated path entry point. |
-| `gadgets::note_commit` in `orchard/src/circuit/note_commit.rs` | Builds eight message pieces `a..h`, performs point-y and field canonicity checks using running-sum outputs from `CommitDomain::commit`, calls `CommitDomain::commit`, and returns the commitment point. | `Orchard.NoteCommit.Wiring.circuit` and `WiringWithCommit.circuit` | Partial wiring only. Clean composes the custom decomposition/canonicity assertions and connects explicit `computedCm*` fields to `Sinsemilla.Commit.circuit`, but it does not prove those fields come from the full `CommitDomain::commit` computation. |
-| `gadgets::commit_ivk` in `orchard/src/circuit/commit_ivk.rs` | Builds four message pieces from `(ak, nk)`, calls `CommitDomain::short_commit`, uses returned running sums for canonicity, and returns `ivk`. | `Orchard.CommitIvk.Wiring.circuit` and `WiringWithShortCommit.circuit` | Partial wiring only. Clean composes the canonicity gate and connects explicit `computedIvk` to `Sinsemilla.ShortCommit.circuit`, but it does not prove `computedIvk = ShortCommit_rivk(ak || nk)` from a full short-commit entry point. |
+| `gadgets::note_commit` in `orchard/src/circuit/note_commit.rs` | Builds eight message pieces `a..h`, performs point-y and field canonicity checks using running-sum outputs from `CommitDomain::commit`, calls `CommitDomain::commit`, and returns the commitment point. | `Orchard.NoteCommit.Wiring.circuit` and `WiringWithCommit.circuit`; `Orchard.ActionNoteCommitWiring.circuit` composes two `WiringWithCommit` children | Partial entry wrapper. Clean composes the custom decomposition/canonicity assertions, uses `Sinsemilla.Commit.Entry.circuit` for the final addition/extraction over explicit hash and blinding product points, and records `[rcm] NoteCommitR` in `OrchardSpec`; it still does not prove the hash point comes from a full `hash_to_point` entry circuit or compose a real fixed-base scalar-mul circuit for the blinding product. |
+| `gadgets::commit_ivk` in `orchard/src/circuit/commit_ivk.rs` | Builds four message pieces from `(ak, nk)`, calls `CommitDomain::short_commit`, uses returned running sums for canonicity, and returns `ivk`. | `Orchard.CommitIvk.Wiring.circuit` and `WiringWithShortCommit.circuit`; `Orchard.ActionAddressWiring.circuit` composes `WiringWithShortCommit` | Partial entry wrapper. Clean composes the canonicity gate, uses `Sinsemilla.ShortCommit.Entry.circuit` for the final short-commit extraction over explicit hash and blinding product points, and records `[rivk] CommitIvkR` in `OrchardSpec`; it still does not prove the hash point comes from a full `hash_to_point` entry circuit or compose a real fixed-base scalar-mul circuit for the blinding product. |
 
 Immediate bottom-up implication:
 
-- Repairing `Sinsemilla.Commit`, `ShortCommit`, `NoteCommit.WiringWithCommit`, and
-  `CommitIvk.WiringWithShortCommit` semantically depends on first adding real ECC complete-add
-  and fixed-base scalar-multiplication entry-point circuits.
+- Fully repairing `Sinsemilla.Commit`, `ShortCommit`, `NoteCommit.WiringWithCommit`, and
+  `CommitIvk.WiringWithShortCommit` semantically still depends on adding real fixed-base
+  scalar-multiplication and `hash_to_point` entry-point circuits. The current wrappers
+  already use the complete-add entry relation for the final addition and expose the
+  relevant Orchard fixed-base blinding relations in their Orchard-level specs.
 - Repairing Merkle path semantics additionally needs a composed `hash_to_point`/`hash_layer`
   entry point and then an iterated path circuit, not only the existing single `PathStep`.
