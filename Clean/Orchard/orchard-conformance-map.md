@@ -6,8 +6,11 @@ runs; the desired end state is specified in `orchard-clean-plan.md`.
 
 Authoritative local source checkouts:
 
-- `halo2_gadgets`: `/root/code/halo2`, tag `halo2_gadgets-0.5.0`
-- `orchard`: `/root/code/orchard`, tag `0.14.0`
+- `halo2_gadgets`, tag `halo2_gadgets-0.5.0`:
+  `../audits/zcash-orchard/halo2-halo2_gadgets-0.5.0` (relative to the repo root) or
+  `/root/code/halo2`, depending on the machine
+- `orchard`, tag `0.14.0`: `../audits/zcash-orchard/orchard-0.14.0` or
+  `/root/code/orchard`
 
 ## Source Map
 

@@ -1,9 +1,18 @@
-import Clean.Orchard.Ecc.Defs
+import Clean.Orchard.Ecc.Theorems
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
 namespace Orchard
 namespace Ecc
+
+open CompElliptic.Curves.Pasta
+
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/witness_point.rs`
+- `witness point`
+- `witness non-identity point`
+-/
 
 namespace WitnessPoint
 
@@ -17,49 +26,45 @@ def main (point : Var Point Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Point where
   name := "GATE witness point"
   main
-  Spec := Point.isPointOrIdentity
+  Spec point := Pallas.Valid point.coords
   soundness := by
-    circuit_proof_start [main, Point.isPointOrIdentity, Point.isIdentityEncoding, Point.onCurve, pallasB]
+    circuit_proof_start [main, Pallas.Valid, Point.coords, pallasB,
+      CompElliptic.CurveForms.ShortWeierstrass.Valid,
+      CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
     rw [← h_input]
-    by_cases hx : Expression.eval env input_var.x = 0
-    · by_cases hy : Expression.eval env input_var.y = 0
-      · exact Or.inl ⟨hx, hy⟩
-      · right
-        have hy_mul :
-            Expression.eval env input_var.y *
-              (Expression.eval env input_var.y * Expression.eval env input_var.y -
-                Expression.eval env input_var.x * Expression.eval env input_var.x *
-                  Expression.eval env input_var.x - (5 : Fp)) = 0 := by
+    set x := Expression.eval env input_var.x
+    set y := Expression.eval env input_var.y
+    by_cases hx : x = 0
+    · by_cases hy : y = 0
+      · exact Or.inr (by rw [Prod.mk.injEq]; exact ⟨hx, hy⟩)
+      · left
+        have hy_mul : y * (y * y - x * x * x - (5 : Fp)) = 0 := by
           simpa [sub_eq_add_neg] using h_holds.2
-        exact (mul_eq_zero.mp hy_mul).resolve_left hy
-    · right
-      have hx_mul :
-          Expression.eval env input_var.x *
-            (Expression.eval env input_var.y * Expression.eval env input_var.y -
-              Expression.eval env input_var.x * Expression.eval env input_var.x *
-                Expression.eval env input_var.x - (5 : Fp)) = 0 := by
+        have h_eq := (mul_eq_zero.mp hy_mul).resolve_left hy
+        linear_combination h_eq
+    · left
+      have hx_mul : x * (y * y - x * x * x - (5 : Fp)) = 0 := by
         simpa [sub_eq_add_neg] using h_holds.1
-      exact (mul_eq_zero.mp hx_mul).resolve_left hx
+      have h_eq := (mul_eq_zero.mp hx_mul).resolve_left hx
+      linear_combination h_eq
   completeness := by
-    circuit_proof_start [main, Point.isPointOrIdentity, Point.isIdentityEncoding, Point.onCurve, pallasB]
+    circuit_proof_start [main, Pallas.Valid, Point.coords, pallasB,
+      CompElliptic.CurveForms.ShortWeierstrass.Valid,
+      CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
     rw [← h_input] at h_spec
-    rcases h_spec with h_identity | h_onCurve
-    · rcases h_identity with ⟨hx, hy⟩
+    set x := Expression.eval env.toEnvironment input_var.x
+    set y := Expression.eval env.toEnvironment input_var.y
+    rcases h_spec with h_onCurve | h_identity
+    · have h_eq : y * y - x * x * x - (5 : Fp) = 0 := by linear_combination h_onCurve
       constructor
-      · rw [show Expression.eval env.toEnvironment input_var.x = 0 by simpa using hx]
-        simp
-      · rw [show Expression.eval env.toEnvironment input_var.y = 0 by simpa using hy]
-        simp
-    · have h_eq :
-          Expression.eval env.toEnvironment input_var.y * Expression.eval env.toEnvironment input_var.y +
-                -(Expression.eval env.toEnvironment input_var.x *
-                  Expression.eval env.toEnvironment input_var.x *
-                  Expression.eval env.toEnvironment input_var.x) +
-              -5 =
-            0 := by
-        simpa [sub_eq_add_neg] using h_onCurve
-      constructor <;> simp [h_eq]
-
+      · linear_combination x * h_eq
+      · linear_combination y * h_eq
+    · rw [Prod.mk.injEq] at h_identity
+      obtain ⟨hx, hy⟩ := h_identity
+      simp only at hx hy
+      constructor
+      · rw [hx]; ring
+      · rw [hy]; ring
 end Gate
 
 def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point where
@@ -68,8 +73,8 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point wh
     Gate.circuit point
     return point
 
-  Spec _ output _ := Point.isPointOrIdentity output
-  ProverAssumptions value _ _ := Point.isPointOrIdentity value
+  Spec _ output _ := Pallas.Valid output.coords
+  ProverAssumptions value _ _ := Pallas.Valid value.coords
   ProverSpec value output _ := output = value
 
   soundness := by
@@ -93,17 +98,17 @@ def main (point : Var Point Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Point where
   name := "GATE witness non-identity point"
   main
-  Spec := Point.onCurve
+  Spec point := Pallas.OnCurve point.coords
   soundness := by
-    circuit_proof_start [main, Point.onCurve, pallasB]
+    circuit_proof_start [main, Point.coords, pallasB,
+      CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
     rw [← h_input]
-    simpa only [Point.eval_eq, Point.onCurve, pallasB,
-      sub_eq_add_neg] using h_holds
+    linear_combination h_holds
   completeness := by
-    circuit_proof_start [main, Point.onCurve, pallasB]
+    circuit_proof_start [main, Point.coords, pallasB,
+      CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
     rw [← h_input] at h_spec
-    simpa only [Point.eval_eq, Point.onCurve, pallasB,
-      sub_eq_add_neg] using h_spec
+    linear_combination h_spec
 
 end Gate
 
@@ -113,8 +118,8 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point wh
     Gate.circuit point
     return point
 
-  Spec _ output _ := Point.onCurve output
-  ProverAssumptions value _ _ := Point.onCurve value
+  Spec _ output _ := Pallas.OnCurve output.coords
+  ProverAssumptions value _ _ := Pallas.OnCurve value.coords
   ProverSpec value output _ := output = value
 
   soundness := by

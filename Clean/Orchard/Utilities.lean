@@ -219,14 +219,17 @@ namespace NonIdentityPointMux
 
 abbrev Inputs := PointMux.Inputs
 
+open CompElliptic.Curves.Pasta in
 @[circuit_norm]
 def Assumptions (input : Inputs Ecc.Fp) : Prop :=
-  PointMux.Assumptions input ∧ Ecc.Point.onCurve input.left ∧ Ecc.Point.onCurve input.right
+  PointMux.Assumptions input ∧ Pallas.OnCurve input.left.coords ∧
+    Pallas.OnCurve input.right.coords
 
+open CompElliptic.Curves.Pasta in
 @[circuit_norm]
 def Spec (input : Inputs Ecc.Fp) (output : Ecc.Point Ecc.Fp) :
     Prop :=
-  PointMux.Spec input output ∧ Ecc.Point.onCurve output
+  PointMux.Spec input output ∧ Pallas.OnCurve output.coords
 
 def main (input : Var Inputs Ecc.Fp) :
     Circuit Ecc.Fp (Var Ecc.Point Ecc.Fp) := do
@@ -236,11 +239,12 @@ def main (input : Var Inputs Ecc.Fp) :
 instance elaborated : ElaboratedCircuit Ecc.Fp Inputs Ecc.Point main := by
   elaborate_circuit
 
+open CompElliptic.Curves.Pasta in
 theorem onCurve_of_spec_and_assumptions
     {input : Inputs Ecc.Fp} {output : Ecc.Point Ecc.Fp}
     (hAssumptions : Assumptions input)
     (hSpec : PointMux.Spec input output) :
-    Ecc.Point.onCurve output := by
+    Pallas.OnCurve output.coords := by
   rcases hAssumptions with ⟨_, hLeft, hRight⟩
   by_cases hChoiceOne : input.choice = 1
   · simp [PointMux.Spec, hChoiceOne] at hSpec
