@@ -21,8 +21,7 @@ Source:
 
 Current Clean coverage:
 
-- `Clean.Orchard.Ecc.Defs`: shared Pallas field, point, fixed-base, and scalar-mul
-  relation definitions
+- `Clean.Orchard.Ecc.Defs`: shared Pallas field, point, and row-layout definitions
 - `Clean.Orchard.Ecc.Theorems`: shared ECC lemmas actually used by current circuits
 - `Clean.Orchard.Ecc.WitnessPoint.circuit`: `EccInstructions::witness_point`
 - `Clean.Orchard.Ecc.WitnessPoint.Gate.circuit`: `GATE witness point`
@@ -68,27 +67,27 @@ Source:
 
 Current Clean coverage:
 
-- `Clean.Orchard.Ecc.ScalarMul.VarBaseLSB.circuit`: `GATE LSB check`
-- `Clean.Orchard.Ecc.ScalarMul.VarBaseCompleteBit.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.Defs`: shared scalar-mul gate helpers
+- `Clean.Orchard.Ecc.ScalarMul.Mul.circuit`: `GATE LSB check`
+- `Clean.Orchard.Ecc.ScalarMul.Mul.Complete.circuit`:
   `GATE Decompose scalar for complete bits of variable-base mul`
-- `Clean.Orchard.Ecc.ScalarMul.VarBaseIncomplete.Init.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete.Init.circuit`:
   `GATE q_mul_1 == 1 checks`
-- `Clean.Orchard.Ecc.ScalarMul.VarBaseIncomplete.MainLoop.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete.MainLoop.circuit`:
   `GATE q_mul_2 == 1 checks`
-- `Clean.Orchard.Ecc.ScalarMul.VarBaseIncomplete.Loop.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete.Loop.circuit`:
   `GATE q_mul_3 == 1 checks`
-- `Clean.Orchard.Ecc.ScalarMul.VarBaseOverflow.circuit`: `GATE overflow checks`
-- `Clean.Orchard.Ecc.ScalarMul.FixedBase.Coords.circuit`: helper for `coords_check`;
-  currently misnamed as `GATE Full-width fixed-base scalar mul`
-- `Clean.Orchard.Ecc.ScalarMul.FixedBase.RunningSumCoords.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.Mul.Overflow.circuit`: `GATE overflow checks`
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Coords.circuit`: helper for `coords_check`,
+  without a `GATE` name
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.RunningSumCoords.circuit`:
   `GATE Running sum coordinates check`
-- `Clean.Orchard.Ecc.ScalarMul.FixedBase.FullWidth.circuit`: intended port of
-  `GATE Full-width fixed-base scalar mul`, currently unnamed
-- `Clean.Orchard.Ecc.ScalarMul.FixedBase.BaseFieldCanonicity.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.circuit`:
+  `GATE Full-width fixed-base scalar mul`
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`:
   `GATE Canonicity checks`
-- `Clean.Orchard.Ecc.ScalarMul.FixedShort.circuit`: `GATE Short fixed-base mul gate`
-- `Clean.Orchard.Ecc.ScalarMul.FixedShort.SignEntry.circuit`:
-  `mul_fixed/short.rs::Config::assign_scalar_sign`
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.circuit`:
+  `GATE Short fixed-base mul gate`
 
 ### Poseidon
 
@@ -212,17 +211,15 @@ accept scalar-multiplication products as free inputs.
 
 ### Scalar Multiplication Gate Layout Gaps
 
-The scalar-mul row assertions still do not fully match source row layout:
+The scalar-mul row assertions are source-shaped as separate gate modules, but still do
+not fully match source row layout:
 
 - `GATE q_mul_1 == 1 checks`, `GATE q_mul_2 == 1 checks`, and
-  `GATE q_mul_3 == 1 checks` are split/shared helper rows; the source has three
-  selector-enabled gates with specific rotations, and `q_mul_2` includes base-coordinate
-  constancy checks.
-- `ScalarMul.FixedBase.Coords.circuit` is a helper for `coords_check`, not a source
-  `meta.create_gate` by itself, but it currently carries the
-  `GATE Full-width fixed-base scalar mul` name.
-- `ScalarMul.FixedBase.FullWidth.circuit` is the Clean assertion that includes the
-  full-width window range check, but it currently has no `GATE` name.
+  `GATE q_mul_3 == 1 checks` are source-named, but their Clean row structs are still
+  contractual bundles rather than exact Halo2 advice-column/rotation layouts.
+- `ScalarMul.MulFixed.Coords.circuit` intentionally remains an unbranded helper for
+  `mul_fixed.rs::Config::coords_check`, which is not a source `meta.create_gate` by
+  itself. It is used by `RunningSumCoords` and `FullWidth`.
 - `GATE Canonicity checks` lacks the surrounding lookup/running-sum API and exact
   fixed/advice column and rotation layout for base-field fixed-base mul.
 
