@@ -156,3 +156,7 @@ Similarly, match halo2 names of columns and assigned cells with the same Clean v
 
 If a gate takes a column and then uses both `Rotation::curr` and `Rotation::next`, pass an input struct
 containing both `{ curr: F; next: F }`.
+
+**Code style**. Don't add layers of indirection that don't exist in the halo2 source. For example, if an gate's `configure` method directly
+constructs and returns a list of constraint expression, the Clean custom gate circuit should do the same instead of defining a named wrapper
+for every single of these constraints.
