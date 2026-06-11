@@ -71,15 +71,22 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   source `meta.create_gate` by itself. It intentionally has no `GATE` name.
 
 - **`GATE Running sum coordinates check` and `GATE Full-width fixed-base scalar mul`:**
-  Clean represents interpolation coefficients and `z` values as ordinary row inputs. The
-  source uses fixed columns and configured advice columns.
+  Clean currently represents some verifier-known table/interpolation values as ordinary
+  row inputs. That is dangerous because it gives the prover control over values that are
+  fixed by the configured fixed base. In idiomatic Clean, locally fixed constants should be
+  Lean constants, and fixed-base/table parameters should be ordinary Lean arguments that
+  the `FormalAssertion` depends on. This is not enough to reproduce Halo2 fixed-column
+  layout, but it does preserve the contract that these values are fixed before proving.
 
 - **`GATE Canonicity checks`:** Clean ports the arithmetic checks, but not the surrounding
   lookup/running-sum API or exact column/rotation layout for base-field fixed-base mul.
 
 - **`GATE full round`, `GATE partial rounds`, and `GATE pad-and-add`:** Clean represents
-  round constants as row values. The source uses fixed columns supplied by the Poseidon
-  chip configuration.
+  round constants as row values. These should not be witness inputs. Locally fixed
+  constants should be Lean constants, and Poseidon parameter data such as round constants
+  and MDS coefficients should be Lean parameters to the gate/formal assertion. The source
+  uses fixed columns supplied by the Poseidon chip configuration; Lean parameters are the
+  appropriate Clean-level contract even before exact fixed-column layout is modeled.
 
 - **Poseidon permutation/link/hash wrappers:** `Permutation.InitialToFull`,
   `FullToFull`, `FullToPartial`, `PartialToPartial`, `PartialToFull`, `FullToOutput`,
@@ -89,7 +96,9 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   remain unnamed as `GATE`s unless replaced by an exact source API port.
 
 - **`GATE Initial y_Q` and `GATE Sinsemilla gate`:** Clean exposes source-rotated values
-  as row fields and does not encode the exact fixed/advice/rotation layout.
+  as row fields and does not encode the exact fixed/advice/rotation layout. Any generator
+  table entries or domain constants used by these gates should be Lean constants or
+  template parameters rather than witness-controlled row fields.
 
 - **`Sinsemilla.InitWiring`, `Commit.Entry`, `ShortCommit.Entry`, `Merkle.Wiring`, and
   `Merkle.PathStep`:** these are wiring/partial-entry helpers, not direct source custom
@@ -97,9 +106,14 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
 
 - **`GATE Decomposition check`:** Clean ports the Merkle decomposition arithmetic but does
   not encode the source copy constraints, fixed/advice roles, or hash-to-point child API.
+  Fixed layer/domain constants should be Lean constants or template parameters, not row
+  inputs.
 
 - **NoteCommit and CommitIvk named gates:** Clean ports their arithmetic identities, but
-  does not yet record the exact fixed/advice column roles or selector layout.
+  does not yet record the exact fixed/advice column roles or selector layout. Literal
+  constants such as powers of two and field offsets should be Lean constants; if a gate is
+  parameterized by verifier-known table/domain data, that data should be a Lean argument to
+  the assertion rather than part of the witness row.
 
 - **`ActionWiring`, `ActionComputedWiring.Entry`, `ActionNoteCommitWiring`, and
   `ActionAddressWiring`:** these are not custom gates. They are higher-level wiring or
