@@ -6,7 +6,7 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 /-!
 # Orchard note commitment gates
 
-Clean approximations of Orchard `NoteCommit` arithmetic gates.
+Clean ports of Orchard `NoteCommit` arithmetic gates.
 
 Reference:
 `orchard@0.14.0/src/circuit/note_commit.rs`
@@ -24,10 +24,12 @@ Reference:
 - `gadgets::note_commit`
 
 Most assertions model the enabled Halo2 custom-gate polynomials, not selector, rotation,
-column-layout, lookup, or assignment machinery. `Wiring.circuit` additionally models the
-copy constraints and output wiring that `gadgets::note_commit` makes explicit. Range
-constraints named in the Rust comments are provided outside these gates in the source
-circuit, so they are not duplicated here.
+column-layout, lookup, or assignment machinery. `Wiring.circuit` records message-piece and
+canonicity wiring around those gates.
+
+TODO(source-conformance): the `gadgets::note_commit` entry circuit is not implemented.
+It must compose `CommitDomain::commit` and witness the commitment/blinding products
+internally rather than exposing them as row inputs.
 -/
 
 namespace Orchard
@@ -769,95 +771,17 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
 end Wiring
 
 /-!
-Note-commitment output connected to Sinsemilla commitment arithmetic.
+TODO(source-conformance): `gadgets::note_commit` is not implemented.
 
 Reference:
 `orchard@0.14.0/src/circuit/note_commit.rs`
 - `gadgets::note_commit`
 
-`gadgets::note_commit` builds the message/decomposition rows, calls
-`CommitDomain::commit`, and uses the returned point as the computed note commitment.
-`Wiring.circuit` records the message-piece and canonicity wiring. This assertion connects
-its explicit `computedCm*` outputs to the `Sinsemilla.Commit.Entry.circuit` output
-point, while its spec records the source-level fixed-base blinding product
-`[rcm] NoteCommitR`.
+The replacement should build the message/decomposition rows, call
+`CommitDomain::commit`, witness `[rcm] NoteCommitR` internally, and return the computed
+note-commitment point. The deleted wrapper exposed the Sinsemilla commitment and blinding
+product as row inputs.
 -/
-namespace WiringWithCommit
-
-structure Row (F : Type) where
-  note : Wiring.Row F
-  commit : Sinsemilla.Commit.Entry.Row F
-deriving ProvableStruct
-
-def cmXCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.commit.commitmentX - row.note.computedCmX
-
-def cmYCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.commit.commitmentY - row.note.computedCmY
-
-def blindProduct (row : Row Ecc.PallasBaseField) : Ecc.Point Ecc.PallasBaseField where
-  x := row.commit.blindX
-  y := row.commit.blindY
-
-def OrchardSpec (rcmScalar : ℕ) (row : Row Ecc.PallasBaseField) : Prop :=
-  Ecc.IsOrchardFixedBaseMul .noteCommitR rcmScalar (blindProduct row) ∧
-    Wiring.Spec row.note ∧
-    Sinsemilla.Commit.Entry.Spec row.commit ∧
-    row.commit.commitmentX = row.note.computedCmX ∧
-    row.commit.commitmentY = row.note.computedCmY
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Wiring.Spec row.note ∧
-    Sinsemilla.Commit.Entry.Spec row.commit ∧
-    row.commit.commitmentX = row.note.computedCmX ∧
-    row.commit.commitmentY = row.note.computedCmY
-
-def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
-  Sinsemilla.Commit.Entry.Assumptions row.commit
-
-theorem spec_of_orchardSpec {rcmScalar : ℕ} {row : Row Ecc.PallasBaseField}
-    (h : OrchardSpec rcmScalar row) :
-    Spec row :=
-  h.2
-
-theorem blindProduct_groupAction_of_orchardSpec
-    {rcmScalar : ℕ} {row : Row Ecc.PallasBaseField}
-    (h : OrchardSpec rcmScalar row) :
-    Ecc.pointCoords (blindProduct row) =
-      Ecc.orchardFixedBaseMulGroupActionCoords .noteCommitR rcmScalar :=
-  (Ecc.isOrchardFixedBaseMul_iff_groupAction).1 h.1
-
-theorem assumptions_of_orchardSpec {rcmScalar : ℕ} {row : Row Ecc.PallasBaseField}
-    (hHash : Ecc.isPointOrIdentity (Sinsemilla.Commit.Entry.addInput row.commit).p)
-    (h : OrchardSpec rcmScalar row) :
-    Assumptions row :=
-  ⟨hHash, Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1⟩
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Wiring.circuit row.note
-  Sinsemilla.Commit.Entry.circuit row.commit
-  assertZero (cmXCheck row)
-  assertZero (cmYCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, Assumptions, cmXCheck, cmYCheck,
-      Wiring.circuit, Wiring.Spec, Sinsemilla.Commit.Entry.circuit,
-      Sinsemilla.Commit.Entry.Spec]
-    rcases h_holds with ⟨hNote, hCommit, hX, hY⟩
-    exact ⟨hNote, hCommit h_assumptions,
-      left_eq_of_add_neg_eq_zero hX, left_eq_of_add_neg_eq_zero hY⟩
-  completeness := by
-    circuit_proof_start [main, Spec, Assumptions, cmXCheck, cmYCheck,
-      Wiring.circuit, Wiring.Spec, Sinsemilla.Commit.Entry.circuit,
-      Sinsemilla.Commit.Entry.Spec, Sinsemilla.Commit.Entry.Assumptions]
-    rcases h_spec with ⟨hNote, hCommit, hX, hY⟩
-    exact ⟨hNote, ⟨h_assumptions, hCommit⟩, by rw [hX]; ring, by rw [hY]; ring⟩
-
-end WiringWithCommit
 
 end NoteCommit
 end Orchard

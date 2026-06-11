@@ -115,20 +115,23 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   parameterized by verifier-known table/domain data, that data should be a Lean argument to
   the assertion rather than part of the witness row.
 
-- **`ActionWiring`, `ActionComputedWiring.Entry`, `ActionNoteCommitWiring`, and
-  `ActionAddressWiring`:** these are not custom gates. They are higher-level wiring or
-  partial-entry circuits and must not be used as evidence that the Orchard synthesize path
-  has been ported.
+- **`ActionWiring`:** this is not a custom gate. It records action-row copy/public-input
+  constraints and must not be used as evidence that the full Orchard synthesize path has
+  been ported. The non-conformant `ActionComputedWiring`, `ActionNoteCommitWiring`, and
+  `ActionAddressWiring` wrappers were deleted; rebuild them only after their source-level
+  child entry APIs exist.
 
 - **`Gadget.ValueCommitment.Entry`, `Gadget.Nullifier.Entry`,
   `Gadget.NullifierWithHash.Entry`, `Gadget.NullifierWithPoseidonBoundary.Entry`, and
-  `Gadget.SpendAuth.Entry`:** these are not custom gates and currently have the wrong
-  source API boundary because scalar-multiplication products are explicit inputs.
+  `Gadget.SpendAuth.Entry`:** these non-conformant wrappers were deleted. Their
+  replacements must compute fixed-base products, Poseidon outputs, and complete additions
+  through source-conformant child entry circuits instead of accepting those products as row
+  inputs.
 
-- **`NoteCommit.Wiring`, `NoteCommit.WiringWithCommit`, `CommitIvk.Wiring`, and
-  `CommitIvk.WiringWithShortCommit`:** these are not custom gates. They expose values that
-  the source APIs compute internally and should be deleted, renamed, or rebuilt after the
-  missing scalar-mul and Sinsemilla entry APIs exist.
+- **`NoteCommit.Wiring` and `CommitIvk.Wiring`:** these are not custom gates. They record
+  message/canonicity wiring around custom gates. The non-conformant
+  `NoteCommit.WiringWithCommit` and `CommitIvk.WiringWithShortCommit` wrappers were
+  deleted; rebuild them only after the missing scalar-mul and Sinsemilla entry APIs exist.
 
 - (known issue for reproducing VKs, fix not currently in scope) **All named gates:**
   current Clean rows do not distinguish advice cells, fixed cells, selector cells,

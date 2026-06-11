@@ -1,11 +1,12 @@
-# Orchard Clean approximation plan
+# Orchard Clean source-conformance plan
 
 This PR starts a new Orchard formalization path with a deliberately narrower goal than
 `halo2-in-clean`.
 
-The goal is to implement the Orchard circuit logic in Clean as an arithmetic model of the
-real circuit, without faithfully modelling Halo2, PLONK, selector compression, regions,
-rotations, permutation arguments, pinned verification keys, or the exact layout machinery.
+The goal is to implement the Orchard circuit logic in Clean from the actual Orchard and
+`halo2_gadgets` source APIs. Clean circuits should expose the same meaningful entry-point
+boundaries as the source gadgets whenever the Rust code witnesses auxiliary values
+internally.
 
 ## Scope
 
@@ -14,11 +15,9 @@ rotations, permutation arguments, pinned verification keys, or the exact layout 
 - Model Halo2 copy constraints with shared Clean values or `===`.
 - Use Clean subcircuits for composition.
 - Keep specs over high-level typed inputs whenever practical.
-- Leave faithful Halo2 arithmetization modelling for a separate design effort.
-
-This is an approximation: it can verify that the intended arithmetic relations are
-consistent and compose correctly, but it does not prove that the deployed Halo2 circuit has
-the same selectors, layout, copy constraints, lookup arguments, or verifying key.
+- Faithful Halo2 arithmetization details such as exact column identities, rotations,
+  selector compression, regions, permutation arguments, and pinned verification keys are a
+  separate design layer, but source API conformance is in scope here.
 
 ## Hard reference rule
 
@@ -133,8 +132,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `partial rounds`, and `pad-and-add` are ported as
      `Orchard.Poseidon.FullRound.circuit`,
      `Orchard.Poseidon.PartialRounds.circuit`, and
-     `Orchard.Poseidon.PadAndAdd.circuit`. Fixed-column constants are explicit row
-     values in this approximation. The `ConstantLength<2>` hash wiring used by
+     `Orchard.Poseidon.PadAndAdd.circuit`. Fixed-column constants are currently explicit
+     row values and must be changed to Lean constants or parameters. The
+     `ConstantLength<2>` hash wiring used by
      Orchard nullifiers, from initial state through absorb and squeezed state word 0,
      is ported as `Orchard.Poseidon.Hash2.circuit`. The `P128Pow5T3` permutation row
      schedule is represented by reusable endpoint-copy assertions
@@ -174,28 +174,16 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Depends on Sinsemilla, ECC fixed-base/variable-base multiplication, and Orchard-specific
      decomposition/canonicity gates.
    - Status: `gadget/add_chip.rs` is ported as `Orchard.Utilities.AddChip.circuit`.
-     The `gadget.rs` source-level wiring for `value_commit_orchard` and
-     `derive_nullifier` is ported through
-     `Orchard.Gadget.ValueCommitment.Entry.circuit` and
-     `Orchard.Gadget.Nullifier.Entry.circuit`, which use
-     `Orchard.Ecc.CompleteAdd.Entry.circuit` for their final additions over explicit
-     fixed-base product points. The `derive_nullifier` edge
-     `hash = PoseidonHash(nk, rho)` is connected to the nullifier entry wiring in
-     `Orchard.Gadget.NullifierWithHash.Entry.circuit` and
-     `Orchard.Gadget.NullifierWithPoseidonBoundary.Entry.circuit` compose the
-     two-input Poseidon hash or hash/permutation boundary with
-     `Orchard.Gadget.Nullifier.Entry.circuit`. The `circuit.rs` spend-authority wiring
-     `rk = [alpha] SpendAuthG + ak_P` is ported as
-     `Orchard.Gadget.SpendAuth.Entry.circuit`, the Pallas complete-add entry wrapper
-     over the explicit `[alpha] SpendAuthG` product.
+     The `gadget.rs` source-level APIs `value_commit_orchard`, `derive_nullifier`, and
+     spend-authority key derivation are not implemented. Earlier wrappers that exposed
+     fixed-base products, Poseidon outputs, and scalar-mul products as row inputs were
+     deleted and replaced with TODOs in `Clean.Orchard.Gadget`.
      The four `Orchard circuit checks` constraints from `circuit.rs` are ported as
      `Orchard.ActionChecks.circuit`; the surrounding source-level action wiring from
-     `Circuit::synthesize` is ported as `Orchard.ActionWiring.circuit`. The selected
-     computed action outputs `cv_net`, `nf_old`, and `rk` are connected from
-     the Pallas-specific `Orchard.ActionComputedWiring.Entry.circuit`, which composes
-     the corresponding entry wrappers for value commitment,
-     nullifier-with-Poseidon-boundary, and spend authority, into the action row. The
-     final Merkle path-step output is
+     `Circuit::synthesize` is partially recorded as `Orchard.ActionWiring.circuit` for
+     copy/public-input constraints. The deleted `ActionComputedWiring`,
+     `ActionNoteCommitWiring`, and `ActionAddressWiring` wrappers must be rebuilt only
+     after their source-level child APIs exist. The final Merkle path-step output is
      connected to the action `root` consumed by the Orchard checks in
      `Orchard.ActionMerkleWiring.circuit`.
      `note_commit.rs` gates `NoteCommit MessagePiece b`,
@@ -210,28 +198,17 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.NoteCommit.RhoCanonicity.circuit`,
      `Orchard.NoteCommit.PsiCanonicity.circuit`, and
      `Orchard.NoteCommit.ValueCanonicity.circuit`, plus
-     `Orchard.NoteCommit.YCanonicity.circuit`. The source-level
-     `gadgets::note_commit` assignment and copy wiring is ported as
-     `Orchard.NoteCommit.Wiring.circuit`; its explicit computed commitment output is
-     connected to `Orchard.Sinsemilla.Commit.Entry.circuit` by
-     `Orchard.NoteCommit.WiringWithCommit.circuit`, whose Orchard-level spec records the
-     fixed-base blinding relation `[rcm] NoteCommitR`. The old
-     `derived_cm_old = cm_old` action edge and new `cmx = ExtractP(cm_new)` public edge
-     are connected to `Orchard.ActionWiring.circuit` by
-     `Orchard.ActionNoteCommitWiring.circuit`, which composes the two
-     `WiringWithCommit` children.
+     `Orchard.NoteCommit.YCanonicity.circuit`. `Orchard.NoteCommit.Wiring.circuit`
+     records message-piece and canonicity wiring, but the source-level
+     `gadgets::note_commit` entry circuit is not implemented; the deleted
+     `WiringWithCommit` and action note-commit wrappers exposed commitment/blinding
+     products as row inputs.
      `commit_ivk.rs` gate
      `CommitIvk canonicity check` is ported as `Orchard.CommitIvk.circuit`; the
-     source-level `gadgets::commit_ivk` gate assignment and returned `ivk` wiring is
-     ported as `Orchard.CommitIvk.Wiring.circuit`, and its explicit computed `ivk`
-     output is connected to `Orchard.Sinsemilla.ShortCommit.Entry.circuit` by
-     `Orchard.CommitIvk.WiringWithShortCommit.circuit`, whose Orchard-level spec records
-     the fixed-base blinding relation `[rivk] CommitIvkR`. The action-level
-     address-integrity copy edges from `ak` into `commit_ivk`, from `ivk` into the
-     variable-base scalar input, and from the explicit `[ivk] g_d_old` result into
-     `derived_pk_d_old` are recorded by `Orchard.ActionAddressWiring.circuit`, which
-     composes `Orchard.Gadget.SpendAuth.Entry.circuit` and
-     `Orchard.CommitIvk.WiringWithShortCommit.circuit`.
+     `CommitIvk.Wiring.circuit` records canonicity-gate wiring, but the source-level
+     `gadgets::commit_ivk` entry circuit is not implemented; the deleted
+     `WiringWithShortCommit` and address-integrity wrappers exposed short-commit,
+     blinding, and variable-base multiplication products as row inputs.
 
 ## Entry-point API audit against Halo2/Orchard
 
@@ -244,36 +221,28 @@ values and returns a clean result.
 | --- | --- | --- | --- |
 | `EccInstructions::add` in `halo2_gadgets/src/ecc/chip.rs`, implemented by `add::Config::assign_region` in `ecc/chip/add.rs` | Complete affine addition. Inputs are two `EccPoint`s, auxiliaries `lambda`, `alpha`, `beta`, `gamma`, `delta` and the output point are witnessed internally, and the API returns `P + Q`, including identity and inverse cases. | `Orchard.Ecc.CompleteAdd.Entry.circuit` over `PallasBaseField`; row assertion remains `Orchard.Ecc.CompleteAdd.circuit` | Present. The entry circuit witnesses the output point and auxiliary row values, composes the complete-add row assertion internally, and specifies CompElliptic short-Weierstrass addition over Pallas. |
 | `EccInstructions::add_incomplete`, implemented by `add_incomplete::Config::assign_region` | Incomplete non-identity addition. Inputs are non-identity points with exceptional cases rejected; output is witnessed and returned. | `Orchard.Ecc.IncompleteAdd.circuit` | Present as a `FormalCircuit` with input/output point surface and semantic short-Weierstrass addition spec. |
-| `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by `ecc/chip/mul.rs::Config::assign` | Variable-base scalar multiplication `[scalar] base`, including scalar decomposition, complete and incomplete additions, LSB correction, and overflow check. | Row assertions in `Orchard.ScalarMul.VarBase*` plus copy edges in `Orchard.ActionAddressWiring` | Missing entry-point circuit. Clean does not yet have a composed variable-base scalar-mul circuit whose surface contains scalar, base, and product with spec `product = [scalar] base`. |
+| `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by `ecc/chip/mul.rs::Config::assign` | Variable-base scalar multiplication `[scalar] base`, including scalar decomposition, complete and incomplete additions, LSB correction, and overflow check. | Row assertions in `Orchard.ScalarMul.VarBase*` | Missing entry-point circuit. Clean does not yet have a composed variable-base scalar-mul circuit whose surface contains scalar, base, and product with spec `product = [scalar] base`. |
 | `FixedPoint::mul`, implemented by `ecc/chip/mul_fixed/full_width.rs` | Full-width fixed-base scalar multiplication `[scalar] B`. Used by Orchard for `ValueCommitR`, `SpendAuthG`, Sinsemilla blinding factors, note commitments, and `CommitIvk`. | Row assertions in `Orchard.ScalarMul.FixedBase.*`; higher gadgets accept product coordinates | Missing entry-point circuit. Clean currently does not connect a scalar and fixed-base identifier to the returned product. |
 | `FixedPointShort::mul`, implemented by `ecc/chip/mul_fixed/short.rs` | Signed short fixed-base scalar multiplication `[sign * magnitude] B`, including magnitude decomposition and final conditional negation. Used by `ValueCommitV`. | `Orchard.ScalarMul.FixedShort.circuit` plus other row assertions | Missing entry-point circuit. The final-row sign semantics are present, but not the composed short fixed-base multiplication API. |
 | `mul_fixed/short.rs::Config::assign_scalar_sign` | Uses the short fixed-base sign gate by itself to return either an input point or its negation, with `sign ∈ {1, -1}`. | `Orchard.ScalarMul.FixedShort.SignEntry.circuit` | Present. The wrapper composes the bundled final-row gate and exposes the semantic signed-point relation over Pallas coordinates. |
-| `FixedPointBaseField::mul`, implemented by `ecc/chip/mul_fixed/base_field_elem.rs` | Fixed-base scalar multiplication by a base-field element. Used by `derive_nullifier` for `[poseidon_hash(nk, rho) + psi] NullifierK`. | Row assertions in `Orchard.ScalarMul.FixedBase.*`; `Orchard.Gadget.Nullifier` accepts `productX/productY` | Missing entry-point circuit. Clean does not yet prove the nullifier product is the scalar multiplication result. |
+| `FixedPointBaseField::mul`, implemented by `ecc/chip/mul_fixed/base_field_elem.rs` | Fixed-base scalar multiplication by a base-field element. Used by `derive_nullifier` for `[poseidon_hash(nk, rho) + psi] NullifierK`. | Row assertions in `Orchard.ScalarMul.FixedBase.*` | Missing entry-point circuit. Clean does not yet prove the nullifier product is the scalar multiplication result. |
 
 Consequences for Orchard gadgets:
 
 - `value_commit_orchard` in `orchard/src/circuit/gadget.rs` is
-  `[v] ValueCommitV + [rcv] ValueCommitR`. `Orchard.Gadget.ValueCommitment.Entry.circuit`
-  now uses the complete-add entry circuit for the final addition over explicit product
-  points, but the fixed-base products themselves still need scalar-mul entry circuits.
+  `[v] ValueCommitV + [rcv] ValueCommitR`. The non-conformant wrapper was deleted; rebuild
+  it only after the fixed-base scalar-mul entry circuits exist.
 - `derive_nullifier` in `orchard/src/circuit/gadget.rs` is
-  `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`.
-  `Orchard.Gadget.Nullifier.Entry.circuit` now models the scalar field addition,
-  final complete-add entry relation, and extraction edge, but not the fixed-base scalar
-  multiplication. `Orchard.Gadget.NullifierWithHash.Entry.circuit` and
-  `Orchard.Gadget.NullifierWithPoseidonBoundary.Entry.circuit` compose that entry wrapper
-  with the existing Poseidon hash wiring.
+  `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`. The non-conformant wrappers
+  were deleted; rebuild them only after Poseidon hash and base-field fixed-base scalar-mul
+  entry circuits exist.
 - Spend authority in `orchard/src/circuit.rs` is
-  `[alpha] SpendAuthG + ak_P`. `Orchard.Gadget.SpendAuth.Entry.circuit` now models the
-  final complete-add entry relation over an explicit `[alpha] SpendAuthG` product, but
-  not the fixed-base scalar multiplication.
+  `[alpha] SpendAuthG + ak_P`. The non-conformant wrapper was deleted; rebuild it only
+  after the fixed-base scalar-mul entry circuit exists.
 - Address integrity in `orchard/src/circuit.rs` computes
   `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`.
-  `Orchard.ActionAddressWiring` now composes the spend-authority entry wrapper and the
-  `CommitIvk` short-commit wrapper, so its Orchard-level spec can state the
-  `[rivk] CommitIvkR` and `[alpha] SpendAuthG` fixed-base relations alongside the
-  variable-base relation for `[ivk] g_d_old`. It still does not compose a variable-base
-  scalar-multiplication entry circuit for `[ivk] g_d_old`.
+  The non-conformant address wrapper was deleted; rebuild it only after `commit_ivk`,
+  spend-authority, and variable-base scalar-mul entry circuits exist.
 
 Complete-add modelling note:
 
@@ -306,15 +275,14 @@ exist.
 | `CommitDomain::short_commit` in `halo2_gadgets/src/sinsemilla.rs` | Calls `commit`, then returns `ExtractP(commitment)`. | `Orchard.Sinsemilla.ShortCommit.Entry.circuit` over explicit hash/blinding product points | Partial entry wrapper. Clean composes the partial commit entry wrapper and extraction wiring, but the commit input still starts after hash/blinding products are explicit. |
 | `MerkleInstructions::hash_layer` in `halo2_gadgets/src/sinsemilla/merkle/chip.rs` | Builds three Sinsemilla message pieces from `(layer, left, right)`, calls `hash_to_point`, extracts x, and wires decomposition/running-sum cells. | `Orchard.Sinsemilla.Merkle.circuit` and `Merkle.Wiring.circuit` | Partial wiring only. Clean ports the decomposition gate and final `computedHash = hash` edge, but the hash result is explicit rather than produced by a composed `hash_to_point` circuit. |
 | `MerklePath::calculate_root` in `halo2_gadgets/src/sinsemilla/merkle.rs` | Iterates over all path layers, conditionally swaps `(node, sibling)`, calls `hash_layer`, and returns the final root. | `Orchard.Sinsemilla.Merkle.PathStep.circuit` and `Orchard.ActionMerkleWiring.circuit` | One-step wiring only. Clean models a single conditional swap plus explicit `hash_layer` row; it does not provide the full iterated path entry point. |
-| `gadgets::note_commit` in `orchard/src/circuit/note_commit.rs` | Builds eight message pieces `a..h`, performs point-y and field canonicity checks using running-sum outputs from `CommitDomain::commit`, calls `CommitDomain::commit`, and returns the commitment point. | `Orchard.NoteCommit.Wiring.circuit` and `WiringWithCommit.circuit`; `Orchard.ActionNoteCommitWiring.circuit` composes two `WiringWithCommit` children | Partial entry wrapper. Clean composes the custom decomposition/canonicity assertions, uses `Sinsemilla.Commit.Entry.circuit` for the final addition/extraction over explicit hash and blinding product points, and records `[rcm] NoteCommitR` in `OrchardSpec`; it still does not prove the hash point comes from a full `hash_to_point` entry circuit or compose a real fixed-base scalar-mul circuit for the blinding product. |
-| `gadgets::commit_ivk` in `orchard/src/circuit/commit_ivk.rs` | Builds four message pieces from `(ak, nk)`, calls `CommitDomain::short_commit`, uses returned running sums for canonicity, and returns `ivk`. | `Orchard.CommitIvk.Wiring.circuit` and `WiringWithShortCommit.circuit`; `Orchard.ActionAddressWiring.circuit` composes `WiringWithShortCommit` | Partial entry wrapper. Clean composes the canonicity gate, uses `Sinsemilla.ShortCommit.Entry.circuit` for the final short-commit extraction over explicit hash and blinding product points, and records `[rivk] CommitIvkR` in `OrchardSpec`; it still does not prove the hash point comes from a full `hash_to_point` entry circuit or compose a real fixed-base scalar-mul circuit for the blinding product. |
+| `gadgets::note_commit` in `orchard/src/circuit/note_commit.rs` | Builds eight message pieces `a..h`, performs point-y and field canonicity checks using running-sum outputs from `CommitDomain::commit`, calls `CommitDomain::commit`, and returns the commitment point. | Custom gates plus `Orchard.NoteCommit.Wiring.circuit` for message/canonicity wiring | Missing entry-point circuit. The non-conformant `WiringWithCommit` and action wrappers were deleted because they exposed the commitment and blinding products as row inputs. |
+| `gadgets::commit_ivk` in `orchard/src/circuit/commit_ivk.rs` | Builds four message pieces from `(ak, nk)`, calls `CommitDomain::short_commit`, uses returned running sums for canonicity, and returns `ivk`. | Custom gate plus `Orchard.CommitIvk.Wiring.circuit` for canonicity wiring | Missing entry-point circuit. The non-conformant `WiringWithShortCommit` and address wrappers were deleted because they exposed the short-commit and blinding products as row inputs. |
 
 Immediate bottom-up implication:
 
-- Fully repairing `Sinsemilla.Commit`, `ShortCommit`, `NoteCommit.WiringWithCommit`, and
-  `CommitIvk.WiringWithShortCommit` semantically still depends on adding real fixed-base
-  scalar-multiplication and `hash_to_point` entry-point circuits. The current wrappers
-  already use the complete-add entry relation for the final addition and expose the
-  relevant Orchard fixed-base blinding relations in their Orchard-level specs.
+- Fully repairing `Sinsemilla.Commit`, `ShortCommit`, `gadgets::note_commit`, and
+  `gadgets::commit_ivk` semantically depends on adding real fixed-base scalar
+  multiplication and `hash_to_point` entry-point circuits. Wrappers that expose those
+  products as ordinary row inputs should not be reintroduced.
 - Repairing Merkle path semantics additionally needs a composed `hash_to_point`/`hash_layer`
   entry point and then an iterated path circuit, not only the existing single `PathStep`.
