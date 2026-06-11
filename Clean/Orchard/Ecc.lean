@@ -95,7 +95,7 @@ def fixedBasePoint : OrchardFixedBaseId → Point PallasBaseField
 
 def IsPallasScalarMul
     (scalar : ℕ) (base product : Point PallasBaseField) : Prop :=
-  pointCoords product = pallasScalarMulCoords scalar base
+  isPointOrIdentity base ∧ pointCoords product = pallasScalarMulCoords scalar base
 
 def pallasBaseFieldScalarNat (scalar : PallasBaseField) : ℕ :=
   scalar.val
@@ -176,7 +176,12 @@ theorem isPallasScalarMul_iff_groupAction
     (hbase : isPointOrIdentity base) :
     IsPallasScalarMul scalar base product ↔
       pointCoords product = pallasScalarMulGroupActionCoords scalar base hbase := by
-  rw [IsPallasScalarMul, pallasScalarMulGroupActionCoords_eq]
+  constructor
+  · intro hmul
+    rw [pallasScalarMulGroupActionCoords_eq]
+    exact hmul.2
+  · intro hcoords
+    exact ⟨hbase, by simpa [pallasScalarMulGroupActionCoords_eq] using hcoords⟩
 
 def IsPallasScalarMulGroupAction
     (scalar : ℕ) (base product : Point PallasBaseField) : Prop :=
@@ -185,10 +190,10 @@ def IsPallasScalarMulGroupAction
 
 theorem isPallasScalarMulGroupAction_of_isPallasScalarMul
     {scalar : ℕ} {base product : Point PallasBaseField}
-    (hbase : isPointOrIdentity base)
+    (_hbase : isPointOrIdentity base)
     (hmul : IsPallasScalarMul scalar base product) :
     IsPallasScalarMulGroupAction scalar base product :=
-  ⟨hbase, (isPallasScalarMul_iff_groupAction hbase).1 hmul⟩
+  ⟨hmul.1, (isPallasScalarMul_iff_groupAction hmul.1).1 hmul⟩
 
 theorem isPallasScalarMul_of_groupAction
     {scalar : ℕ} {base product : Point PallasBaseField}
@@ -296,7 +301,7 @@ theorem isPallasScalarMul_isPointOrIdentity
     (hbase : isPointOrIdentity base)
     (hmul : IsPallasScalarMul scalar base product) :
     isPointOrIdentity product :=
-  pallasScalarMulCoords_isPointOrIdentity scalar hbase hmul
+  pallasScalarMulCoords_isPointOrIdentity scalar hbase hmul.2
 
 theorem isPallasScalarMulGroupAction_product
     {scalar : ℕ} {base product : Point PallasBaseField}
@@ -321,55 +326,72 @@ theorem isPallasBaseFieldScalarMulGroupAction_product
 
 theorem isPallasScalarMul_zero_iff
     {base product : Point PallasBaseField} :
-    IsPallasScalarMul 0 base product ↔ isIdentityEncoding product := by
+    IsPallasScalarMul 0 base product ↔
+      isPointOrIdentity base ∧ isIdentityEncoding product := by
   constructor
   · intro hmul
     rcases product with ⟨x, y⟩
     simp [IsPallasScalarMul, pallasScalarMulCoords_zero, pointCoords,
       isIdentityEncoding] at hmul ⊢
     exact hmul
-  · intro hIdentity
+  · intro h
     rcases product with ⟨x, y⟩
     simp [IsPallasScalarMul, pallasScalarMulCoords_zero, pointCoords,
-      isIdentityEncoding] at hIdentity ⊢
-    exact hIdentity
+      isIdentityEncoding] at h ⊢
+    exact h
 
 theorem isPallasScalarMul_one_iff
     {base product : Point PallasBaseField} :
-    IsPallasScalarMul 1 base product ↔ product = base := by
+    IsPallasScalarMul 1 base product ↔
+      isPointOrIdentity base ∧ product = base := by
   constructor
   · intro hmul
     rcases base with ⟨baseX, baseY⟩
     rcases product with ⟨productX, productY⟩
     simp [IsPallasScalarMul, pallasScalarMulCoords_one, pointCoords] at hmul ⊢
     exact hmul
-  · intro hEq
+  · intro h
+    rcases h with ⟨hbase, hEq⟩
     rw [hEq]
-    simp [IsPallasScalarMul, pallasScalarMulCoords_one]
+    simp [IsPallasScalarMul, pallasScalarMulCoords_one, hbase]
 
 theorem isPallasBaseFieldScalarMul_zero_iff
     {base product : Point PallasBaseField} :
-    IsPallasBaseFieldScalarMul 0 base product ↔ isIdentityEncoding product := by
+    IsPallasBaseFieldScalarMul 0 base product ↔
+      isPointOrIdentity base ∧ isIdentityEncoding product := by
   simpa [IsPallasBaseFieldScalarMul, pallasBaseFieldScalarNat] using
     (isPallasScalarMul_zero_iff (base := base) (product := product))
 
 theorem isPallasBaseFieldScalarMul_one_iff
     {base product : Point PallasBaseField} :
-    IsPallasBaseFieldScalarMul 1 base product ↔ product = base := by
+    IsPallasBaseFieldScalarMul 1 base product ↔
+      isPointOrIdentity base ∧ product = base := by
   simpa [IsPallasBaseFieldScalarMul, pallasBaseFieldScalarNat] using
     (isPallasScalarMul_one_iff (base := base) (product := product))
 
 theorem isOrchardFixedBaseMul_zero_iff
     {baseId : OrchardFixedBaseId} {product : Point PallasBaseField} :
     IsOrchardFixedBaseMul baseId 0 product ↔ isIdentityEncoding product := by
-  simpa [IsOrchardFixedBaseMul] using
-    (isPallasScalarMul_zero_iff (base := fixedBasePoint baseId) (product := product))
+  constructor
+  · intro hmul
+    exact ((isPallasScalarMul_zero_iff
+      (base := fixedBasePoint baseId) (product := product)).1 hmul).2
+  · intro hProduct
+    exact (isPallasScalarMul_zero_iff
+      (base := fixedBasePoint baseId) (product := product)).2
+      ⟨fixedBasePoint_isPointOrIdentity baseId, hProduct⟩
 
 theorem isOrchardFixedBaseMul_one_iff
     {baseId : OrchardFixedBaseId} {product : Point PallasBaseField} :
     IsOrchardFixedBaseMul baseId 1 product ↔ product = fixedBasePoint baseId := by
-  simpa [IsOrchardFixedBaseMul] using
-    (isPallasScalarMul_one_iff (base := fixedBasePoint baseId) (product := product))
+  constructor
+  · intro hmul
+    exact ((isPallasScalarMul_one_iff
+      (base := fixedBasePoint baseId) (product := product)).1 hmul).2
+  · intro hProduct
+    exact (isPallasScalarMul_one_iff
+      (base := fixedBasePoint baseId) (product := product)).2
+      ⟨fixedBasePoint_isPointOrIdentity baseId, hProduct⟩
 
 theorem isOrchardFixedBaseMul_isPointOrIdentity
     {baseId : OrchardFixedBaseId} {scalar : ℕ} {product : Point PallasBaseField}
