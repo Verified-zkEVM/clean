@@ -70,11 +70,6 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
 - **`ScalarMul.FixedBase.Coords.circuit`:** this is a helper for `coords_check`, not a
   source `meta.create_gate` by itself. It intentionally has no `GATE` name.
 
-- **`GATE Running sum coordinates check` and `GATE Full-width fixed-base scalar mul`:**
-  Clean now represents fixed `z` values and Lagrange interpolation coefficients as Lean
-  parameters to the gate assertions. Remaining layout work is to preserve exact
-  fixed/advice column identities and rotations for VK reconstruction.
-
 - **`GATE Canonicity checks`:** Clean ports the arithmetic checks, but not the surrounding
   lookup/running-sum API or exact fixed/advice column and rotation layout for base-field
   fixed-base mul.
