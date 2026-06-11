@@ -627,8 +627,20 @@ def h1Check {K : Type} [Sub K] (row : Row K) : K := row.h.h1 - row.psi.h1
 def cmXCheck {K : Type} [Sub K] (row : Row K) : K := row.computedCmX - row.cmX
 def cmYCheck {K : Type} [Sub K] (row : Row K) : K := row.computedCmY - row.cmY
 
-def CopySpec (row : Row Ecc.PallasBaseField) : Prop :=
-  row.b.b0 = row.gd.b0 ∧
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  DecomposeB.Spec row.b ∧
+    DecomposeD.Spec row.d ∧
+    DecomposeE.Spec row.e ∧
+    DecomposeG.Spec row.g ∧
+    DecomposeH.Spec row.h ∧
+    GdCanonicity.Spec row.gd ∧
+    PkdCanonicity.Spec row.pkd ∧
+    ValueCanonicity.Spec row.value ∧
+    RhoCanonicity.Spec row.rho ∧
+    PsiCanonicity.Spec row.psi ∧
+    YCanonicity.Spec row.gdY ∧
+    YCanonicity.Spec row.pkdY ∧
+    row.b.b0 = row.gd.b0 ∧
     row.b.b1 = row.gd.b1 ∧
     row.b.b2 = row.gdY.lsb ∧
     row.b.b3 = row.pkd.b3 ∧
@@ -645,21 +657,6 @@ def CopySpec (row : Row Ecc.PallasBaseField) : Prop :=
     row.h.h1 = row.psi.h1 ∧
     row.computedCmX = row.cmX ∧
     row.computedCmY = row.cmY
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  DecomposeB.Spec row.b ∧
-    DecomposeD.Spec row.d ∧
-    DecomposeE.Spec row.e ∧
-    DecomposeG.Spec row.g ∧
-    DecomposeH.Spec row.h ∧
-    GdCanonicity.Spec row.gd ∧
-    PkdCanonicity.Spec row.pkd ∧
-    ValueCanonicity.Spec row.value ∧
-    RhoCanonicity.Spec row.rho ∧
-    PsiCanonicity.Spec row.psi ∧
-    YCanonicity.Spec row.gdY ∧
-    YCanonicity.Spec row.pkdY ∧
-    CopySpec row
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   DecomposeB.circuit row.b
@@ -696,7 +693,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, CopySpec, b0Check, b1Check, b2Check, b3Check,
+    circuit_proof_start [main, Spec, b0Check, b1Check, b2Check, b3Check,
       d0Check, d1Check, d2Check, z1DCheck, e0Check, e1Check, g0Check, g1Check,
       z1GCheck, h0Check, h1Check, cmXCheck, cmYCheck, DecomposeB.circuit,
       DecomposeB.Spec, DecomposeD.circuit, DecomposeD.Spec, DecomposeE.circuit,
@@ -727,7 +724,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
       left_eq_of_add_neg_eq_zero hcmX,
       left_eq_of_add_neg_eq_zero hcmY⟩
   completeness := by
-    circuit_proof_start [main, Spec, CopySpec, b0Check, b1Check, b2Check, b3Check,
+    circuit_proof_start [main, Spec, b0Check, b1Check, b2Check, b3Check,
       d0Check, d1Check, d2Check, z1DCheck, e0Check, e1Check, g0Check, g1Check,
       z1GCheck, h0Check, h1Check, cmXCheck, cmYCheck, DecomposeB.circuit,
       DecomposeB.Spec, DecomposeD.circuit, DecomposeD.Spec, DecomposeE.circuit,
