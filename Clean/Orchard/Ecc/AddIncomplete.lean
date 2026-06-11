@@ -23,12 +23,6 @@ structure Input (F : Type) where
   q : Point F
 deriving ProvableStruct
 
-structure Row (F : Type) where
-  p : Point F
-  q : Point F
-  r : Point F
-deriving ProvableStruct
-
 def lambda (input : Input Fp) : Fp :=
   (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
 
@@ -62,18 +56,6 @@ theorem outputValue_eq_swAdd {input : Input Fp}
   rw [Prod.mk.injEq]
   constructor <;> ring
 
-def poly1 {K : Type} [Add K] [Sub K] [Mul K] (input : Input K) (output : Point K) :
-    K :=
-  (output.x + input.q.x + input.p.x) *
-      (input.p.x - input.q.x) *
-      (input.p.x - input.q.x) -
-    (input.p.y - input.q.y) * (input.p.y - input.q.y)
-
-def poly2 {K : Type} [Add K] [Sub K] [Mul K] (input : Input K) (output : Point K) :
-    K :=
-  (output.y + input.q.y) * (input.p.x - input.q.x) -
-    (input.p.y - input.q.y) * (input.q.x - output.x)
-
 def Assumptions (input : Input Fp) : Prop :=
   ¬ Point.isIdentityEncoding input.p ∧
     ¬ Point.isIdentityEncoding input.q ∧
@@ -84,9 +66,51 @@ def Spec (input : Input Fp) (output : Point Fp) : Prop :=
     CompElliptic.CurveForms.ShortWeierstrass.add
       (0 : Fp) (Point.coords input.p) (Point.coords input.q)
 
+namespace Gate
+
+structure Row (F : Type) where
+  x_p : F
+  y_p : F
+  x_qr : CurrentNext F
+  y_qr : CurrentNext F
+deriving ProvableStruct
+
+namespace Row
+
+def p {K : Type} (row : Row K) : Point K where
+  x := row.x_p
+  y := row.y_p
+
+def q {K : Type} (row : Row K) : Point K where
+  x := row.x_qr.curr
+  y := row.y_qr.curr
+
+def r {K : Type} (row : Row K) : Point K where
+  x := row.x_qr.next
+  y := row.y_qr.next
+
+def fromPoints {K : Type} (p q r : Point K) : Row K where
+  x_p := p.x
+  y_p := p.y
+  x_qr := { curr := q.x, next := r.x }
+  y_qr := { curr := q.y, next := r.y }
+
+end Row
+
+def poly1 {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
+  (row.x_qr.next + row.x_qr.curr + row.x_p) *
+      (row.x_p - row.x_qr.curr) *
+      (row.x_p - row.x_qr.curr) -
+    (row.y_p - row.y_qr.curr) * (row.y_p - row.y_qr.curr)
+
+def poly2 {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
+  (row.y_qr.next + row.y_qr.curr) * (row.x_p - row.x_qr.curr) -
+    (row.y_p - row.y_qr.curr) * (row.x_qr.curr - row.x_qr.next)
+
 theorem outputValue_polys {input : Input Fp} (hx : input.p.x ≠ input.q.x) :
-    poly1 input (outputValue input) = 0 ∧ poly2 input (outputValue input) = 0 := by
-  unfold poly1 poly2 outputValue lambda
+    poly1 (Row.fromPoints input.p input.q (outputValue input)) = 0 ∧
+      poly2 (Row.fromPoints input.p input.q (outputValue input)) = 0 := by
+  unfold poly1 poly2 Row.fromPoints outputValue lambda
   have hden : input.q.x - input.p.x ≠ 0 := by
     intro h
     apply hx
@@ -96,11 +120,12 @@ theorem outputValue_polys {input : Input Fp} (hx : input.p.x ≠ input.q.x) :
 theorem polys_eq_outputValue {input : Input Fp}
     {output : Point Fp}
     (hx : input.p.x ≠ input.q.x)
-    (h : poly1 input output = 0 ∧ poly2 input output = 0) :
+    (h : poly1 (Row.fromPoints input.p input.q output) = 0 ∧
+      poly2 (Row.fromPoints input.p input.q output) = 0) :
     output = outputValue input := by
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
   rcases output with ⟨rx, ry⟩
-  unfold poly1 poly2 at h
+  unfold poly1 poly2 Row.fromPoints at h
   unfold outputValue lambda
   have hden : qx - px ≠ 0 := by
     intro hden
@@ -131,8 +156,6 @@ theorem polys_eq_outputValue {input : Input Fp}
     ring_nf
     exact h2neg
 
-namespace Gate
-
 def Assumptions (row : Row Fp) : Prop :=
   row.p.x ≠ row.q.x
 
@@ -140,8 +163,8 @@ def Spec (row : Row Fp) : Prop :=
   row.r = outputValue ({ p := row.p, q := row.q } : Input Fp)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertZero (poly1 { p := row.p, q := row.q } row.r)
-  assertZero (poly2 { p := row.p, q := row.q } row.r)
+  assertZero (poly1 row)
+  assertZero (poly2 row)
 
 def circuit : FormalAssertion Fp Row where
   name := "GATE incomplete addition"
@@ -150,17 +173,26 @@ def circuit : FormalAssertion Fp Row where
   Spec
   soundness := by
     circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
-    have hpolys : poly1 { p := input_p, q := input_q } input_r = 0 ∧
-        poly2 { p := input_p, q := input_q } input_r = 0 := by
-      rw [← h_input.1, ← h_input.2.1, ← h_input.2.2]
-      simpa [poly1, poly2, sub_eq_add_neg] using h_holds
-    exact polys_eq_outputValue h_assumptions hpolys
+    change ({ x := input_x_qr_next, y := input_y_qr_next } : Point Fp) =
+      outputValue ({
+        p := { x := input_x_p, y := input_y_p }
+        q := { x := input_x_qr_curr, y := input_y_qr_curr }
+      } : Input Fp)
+    apply polys_eq_outputValue h_assumptions
+    simpa [poly1, poly2, Row.fromPoints, sub_eq_add_neg] using h_holds
   completeness := by
     circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
-    have hpolys := outputValue_polys (input := { p := input_p, q := input_q }) h_assumptions
+    have hpolys := outputValue_polys (input := {
+      p := { x := input_x_p, y := input_y_p }
+      q := { x := input_x_qr_curr, y := input_y_qr_curr }
+    }) h_assumptions
+    change ({ x := input_x_qr_next, y := input_y_qr_next } : Point Fp) =
+      outputValue ({
+        p := { x := input_x_p, y := input_y_p }
+        q := { x := input_x_qr_curr, y := input_y_qr_curr }
+      } : Input Fp) at h_spec
     rw [← h_spec] at hpolys
-    rw [← h_input.1, ← h_input.2.1, ← h_input.2.2] at hpolys
-    simpa [poly1, poly2, sub_eq_add_neg] using hpolys
+    simpa [poly1, poly2, Row.fromPoints, Row.p, Row.q, Row.r, sub_eq_add_neg] using hpolys
 
 end Gate
 
@@ -169,7 +201,12 @@ def main (input : Var Input Fp) :
   let p <== input.p
   let q <== input.q
   let r ← witness fun env => outputValue ({ p := eval env p, q := eval env q } : Input Fp)
-  Gate.circuit ({ p, q, r } : Var Row Fp)
+  Gate.circuit ({
+    x_p := p.x
+    y_p := p.y
+    x_qr := { curr := q.x, next := r.x }
+    y_qr := { curr := q.y, next := r.y }
+  } : Var Gate.Row Fp)
   return r
 
 instance elaborated : ElaboratedCircuit Fp Input Point main := by
@@ -180,22 +217,20 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     outputValue_eq_swAdd]
   rcases h_assumptions with ⟨hp, hq, hx⟩
   rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
-  have hgateAssumptions :
-      Gate.Assumptions {
-        p := {
-          x := Expression.eval env (varFromOffset Point i₀).x
-          y := Expression.eval env (varFromOffset Point i₀).y
+  let row : Gate.Row Fp := {
+        x_p := Expression.eval env (varFromOffset Point i₀).x
+        y_p := Expression.eval env (varFromOffset Point i₀).y
+        x_qr := {
+          curr := Expression.eval env (varFromOffset Point (i₀ + 2)).x
+          next := Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).x
         }
-        q := {
-          x := Expression.eval env (varFromOffset Point (i₀ + 2)).x
-          y := Expression.eval env (varFromOffset Point (i₀ + 2)).y
+        y_qr := {
+          curr := Expression.eval env (varFromOffset Point (i₀ + 2)).y
+          next := Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).y
         }
-        r := {
-          x := Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).x
-          y := Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).y
-        }
-      } := by
-    simp [Gate.Assumptions]
+      }
+  have hgateAssumptions : Gate.Assumptions row := by
+    dsimp [row, Gate.Assumptions, Gate.Row.p, Gate.Row.q]
     intro h
     apply hx
     have hpx := congrArg Point.x hpCopyEq
@@ -203,13 +238,16 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     rw [← hpx, ← hqx]
     exact h
   have hrowEq := hrow hgateAssumptions
+  change Point.coords (Gate.Row.r row) =
+    CompElliptic.CurveForms.ShortWeierstrass.add 0 input_p.coords input_q.coords
   rw [hrowEq]
-  simpa [hpCopyEq, hqCopyEq] using outputValue_eq_swAdd hp hq hx
+  simpa [row, Gate.Row.p, Gate.Row.q, hpCopyEq, hqCopyEq] using
+    outputValue_eq_swAdd (input := { p := input_p, q := input_q }) hp hq hx
 
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Gate.circuit, Gate.Assumptions, Gate.Spec]
-  rcases h_assumptions with ⟨hp, hq, hx⟩
-  simp_all [circuit_norm, explicit_provable_type]
+  rcases h_assumptions with ⟨_hp, _hq, hx⟩
+  simp_all [circuit_norm, explicit_provable_type, Gate.Row.p, Gate.Row.q, Gate.Row.r]
 
 def circuit : FormalCircuit Fp Input Point where
   main

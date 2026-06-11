@@ -24,6 +24,11 @@ structure Point (F : Type) where
   x : F
   y : F
 
+structure CurrentNext (F : Type) where
+  curr : F
+  next : F
+deriving ProvableStruct
+
 instance : ProvableType Point where
   size := 2
   toElements point := #v[point.x, point.y]
