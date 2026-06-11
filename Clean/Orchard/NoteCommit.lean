@@ -770,13 +770,15 @@ Reference:
 `gadgets::note_commit` builds the message/decomposition rows, calls
 `CommitDomain::commit`, and uses the returned point as the computed note commitment.
 `Wiring.circuit` records the message-piece and canonicity wiring. This assertion connects
-its explicit `computedCm*` outputs to the `Sinsemilla.Commit.circuit` output point.
+its explicit `computedCm*` outputs to the `Sinsemilla.Commit.Entry.circuit` output
+point, while its spec records the source-level fixed-base blinding product
+`[rcm] NoteCommitR`.
 -/
 namespace WiringWithCommit
 
 structure Row (F : Type) where
   note : Wiring.Row F
-  commit : Sinsemilla.Commit.Row F
+  commit : Sinsemilla.Commit.Entry.Row F
 deriving ProvableStruct
 
 def cmXCheck {K : Type} [Sub K] (row : Row K) : K :=
@@ -785,45 +787,67 @@ def cmXCheck {K : Type} [Sub K] (row : Row K) : K :=
 def cmYCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.commit.commitmentY - row.note.computedCmY
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Wiring.Spec row.note ∧
-    Sinsemilla.Commit.Spec row.commit ∧
+def blindProduct (row : Row Ecc.PallasBaseField) : Ecc.Point Ecc.PallasBaseField where
+  x := row.commit.blindX
+  y := row.commit.blindY
+
+def OrchardSpec (rcmScalar : ℕ) (row : Row Ecc.PallasBaseField) : Prop :=
+  Ecc.IsOrchardFixedBaseMul .noteCommitR rcmScalar (blindProduct row) ∧
+    Wiring.Spec row.note ∧
+    Sinsemilla.Commit.Entry.Spec row.commit ∧
     row.commit.commitmentX = row.note.computedCmX ∧
     row.commit.commitmentY = row.note.computedCmY
 
+def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+  Wiring.Spec row.note ∧
+    Sinsemilla.Commit.Entry.Spec row.commit ∧
+    row.commit.commitmentX = row.note.computedCmX ∧
+    row.commit.commitmentY = row.note.computedCmY
+
+def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
+  Sinsemilla.Commit.Entry.Assumptions row.commit
+
+theorem spec_of_orchardSpec {rcmScalar : ℕ} {row : Row Ecc.PallasBaseField}
+    (h : OrchardSpec rcmScalar row) :
+    Spec row :=
+  h.2
+
+theorem blindProduct_groupAction_of_orchardSpec
+    {rcmScalar : ℕ} {row : Row Ecc.PallasBaseField}
+    (h : OrchardSpec rcmScalar row) :
+    Ecc.pointCoords (blindProduct row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .noteCommitR rcmScalar :=
+  (Ecc.isOrchardFixedBaseMul_iff_groupAction).1 h.1
+
+theorem assumptions_of_orchardSpec {rcmScalar : ℕ} {row : Row Ecc.PallasBaseField}
+    (hHash : Ecc.isPointOrIdentity (Sinsemilla.Commit.Entry.addInput row.commit).p)
+    (h : OrchardSpec rcmScalar row) :
+    Assumptions row :=
+  ⟨hHash, Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1⟩
+
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Wiring.circuit row.note
-  Sinsemilla.Commit.circuit row.commit
+  Sinsemilla.Commit.Entry.circuit row.commit
   assertZero (cmXCheck row)
   assertZero (cmYCheck row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, cmXCheck, cmYCheck,
-      Wiring.circuit, Wiring.Spec,
-      Sinsemilla.Commit.circuit, Sinsemilla.Commit.Spec, Sinsemilla.Commit.addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine,
-      Ecc.CompleteAdd.tangentLine, Ecc.CompleteAdd.nonexceptionalResult,
-      Ecc.CompleteAdd.leftIdentityResult, Ecc.CompleteAdd.rightIdentityResult,
-      Ecc.CompleteAdd.inverseResult, Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta,
-      Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP,
-      Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    circuit_proof_start [main, Spec, Assumptions, cmXCheck, cmYCheck,
+      Wiring.circuit, Wiring.Spec, Sinsemilla.Commit.Entry.circuit,
+      Sinsemilla.Commit.Entry.Spec]
     rcases h_holds with ⟨hNote, hCommit, hX, hY⟩
-    exact ⟨hNote, hCommit, left_eq_of_add_neg_eq_zero hX, left_eq_of_add_neg_eq_zero hY⟩
+    exact ⟨hNote, hCommit h_assumptions,
+      left_eq_of_add_neg_eq_zero hX, left_eq_of_add_neg_eq_zero hY⟩
   completeness := by
-    circuit_proof_start [main, Spec, cmXCheck, cmYCheck,
-      Wiring.circuit, Wiring.Spec,
-      Sinsemilla.Commit.circuit, Sinsemilla.Commit.Spec, Sinsemilla.Commit.addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine,
-      Ecc.CompleteAdd.tangentLine, Ecc.CompleteAdd.nonexceptionalResult,
-      Ecc.CompleteAdd.leftIdentityResult, Ecc.CompleteAdd.rightIdentityResult,
-      Ecc.CompleteAdd.inverseResult, Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta,
-      Ecc.CompleteAdd.ifGamma, Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP,
-      Ecc.CompleteAdd.xPMinusXR, Ecc.CompleteAdd.yQPlusYP]
+    circuit_proof_start [main, Spec, Assumptions, cmXCheck, cmYCheck,
+      Wiring.circuit, Wiring.Spec, Sinsemilla.Commit.Entry.circuit,
+      Sinsemilla.Commit.Entry.Spec, Sinsemilla.Commit.Entry.Assumptions]
     rcases h_spec with ⟨hNote, hCommit, hX, hY⟩
-    exact ⟨hNote, hCommit, by rw [hX]; ring, by rw [hY]; ring⟩
+    exact ⟨hNote, ⟨h_assumptions, hCommit⟩, by rw [hX]; ring, by rw [hY]; ring⟩
 
 end WiringWithCommit
 
