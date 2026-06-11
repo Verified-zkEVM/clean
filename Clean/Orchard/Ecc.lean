@@ -446,6 +446,30 @@ theorem isOrchardFixedBaseBaseFieldMul_isPointOrIdentity
   isPallasBaseFieldScalarMul_isPointOrIdentity
     (fixedBasePoint_isPointOrIdentity baseId) hmul
 
+theorem isOrchardFixedBaseBaseFieldMul_zero_iff
+    {baseId : OrchardFixedBaseId} {product : Point PallasBaseField} :
+    IsOrchardFixedBaseBaseFieldMul baseId 0 product ↔ isIdentityEncoding product := by
+  constructor
+  · intro hmul
+    exact ((isPallasBaseFieldScalarMul_zero_iff
+      (base := fixedBasePoint baseId) (product := product)).1 hmul).2
+  · intro hProduct
+    exact (isPallasBaseFieldScalarMul_zero_iff
+      (base := fixedBasePoint baseId) (product := product)).2
+      ⟨fixedBasePoint_isPointOrIdentity baseId, hProduct⟩
+
+theorem isOrchardFixedBaseBaseFieldMul_one_iff
+    {baseId : OrchardFixedBaseId} {product : Point PallasBaseField} :
+    IsOrchardFixedBaseBaseFieldMul baseId 1 product ↔ product = fixedBasePoint baseId := by
+  constructor
+  · intro hmul
+    exact ((isPallasBaseFieldScalarMul_one_iff
+      (base := fixedBasePoint baseId) (product := product)).1 hmul).2
+  · intro hProduct
+    exact (isPallasBaseFieldScalarMul_one_iff
+      (base := fixedBasePoint baseId) (product := product)).2
+      ⟨fixedBasePoint_isPointOrIdentity baseId, hProduct⟩
+
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
 

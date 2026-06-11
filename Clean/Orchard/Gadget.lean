@@ -366,13 +366,13 @@ theorem product_identity_of_orchardSpec_scalar_zero
     {row : Row Ecc.PallasBaseField}
     (h : OrchardSpec row 0) :
     Ecc.isIdentityEncoding (product row) := by
-  exact (Ecc.isPallasBaseFieldScalarMul_zero_iff).1 h.1 |>.2
+  exact (Ecc.isOrchardFixedBaseBaseFieldMul_zero_iff).1 h.1
 
 theorem product_eq_fixedBase_of_orchardSpec_scalar_one
     {row : Row Ecc.PallasBaseField}
     (h : OrchardSpec row 1) :
     product row = Ecc.fixedBasePoint .nullifierK := by
-  exact (Ecc.isPallasBaseFieldScalarMul_one_iff).1 h.1 |>.2
+  exact (Ecc.isOrchardFixedBaseBaseFieldMul_one_iff).1 h.1
 
 theorem nullifierRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
