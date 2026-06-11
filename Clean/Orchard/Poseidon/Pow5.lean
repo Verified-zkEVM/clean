@@ -331,5 +331,157 @@ def circuit : FormalAssertion Ecc.Fp Row where
 
 end PadAndAdd
 
+namespace Permute
+
+/-!
+Source reference: `poseidon/pow5.rs::Pow5Chip::permute` and
+`Pow5State::{load,full_round,partial_round,round}`.
+
+For Orchard's `P128Pow5T3`, `WIDTH = 3`, `RATE = 2`, `R_F = 8`, and `R_P = 56`.
+Halo2 lays out one full round per row and two partial rounds per row:
+
+- copy/load the incoming state at row 0;
+- 4 first-half full-round rows;
+- 28 partial-round rows, each representing rounds `r` and `r+1`;
+- 4 second-half full-round rows.
+
+The circuit below mirrors that schedule while keeping the actual constants as Lean
+parameters.  This is intentionally the `Pow5Chip::permute` surface: callers supply only
+an initial state and receive the final state; intermediate rows are witnessed inside the
+circuit.
+-/
+
+/-- Width-3 Poseidon state used by Orchard's `P128Pow5T3`. -/
+structure State (F : Type) where
+  x0 : F
+  x1 : F
+  x2 : F
+deriving ProvableStruct
+
+/-- Constants needed by one width-3 full round. -/
+def fullParams (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp)
+    (round : Nat) : FullRound.Params Ecc.Fp where
+  rcA0 := (roundConstants round).x0
+  rcA1 := (roundConstants round).x1
+  rcA2 := (roundConstants round).x2
+  m00 := mds 0 0
+  m01 := mds 0 1
+  m02 := mds 0 2
+  m10 := mds 1 0
+  m11 := mds 1 1
+  m12 := mds 1 2
+  m20 := mds 2 0
+  m21 := mds 2 1
+  m22 := mds 2 2
+
+/-- Constants needed by one width-3 partial-round row, which checks two source rounds. -/
+def partialParams (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
+    (round : Nat) : PartialRounds.Params Ecc.Fp where
+  rcA0 := (roundConstants round).x0
+  rcA1 := (roundConstants round).x1
+  rcA2 := (roundConstants round).x2
+  rcB0 := (roundConstants (round + 1)).x0
+  rcB1 := (roundConstants (round + 1)).x1
+  rcB2 := (roundConstants (round + 1)).x2
+  m00 := mds 0 0
+  m01 := mds 0 1
+  m02 := mds 0 2
+  m10 := mds 1 0
+  m11 := mds 1 1
+  m12 := mds 1 2
+  m20 := mds 2 0
+  m21 := mds 2 1
+  m22 := mds 2 2
+  mInv00 := mdsInv 0 0
+  mInv01 := mdsInv 0 1
+  mInv02 := mdsInv 0 2
+  mInv10 := mdsInv 1 0
+  mInv11 := mdsInv 1 1
+  mInv12 := mdsInv 1 2
+  mInv20 := mdsInv 2 0
+  mInv21 := mdsInv 2 1
+  mInv22 := mdsInv 2 2
+
+/-- Value-level full-round transition, matching `Pow5State::full_round`. -/
+def fullRoundValue (params : FullRound.Params Ecc.Fp) (state : State Ecc.Fp) : State Ecc.Fp :=
+  let row : FullRound.Row Ecc.Fp :=
+    { cur0 := state.x0, cur1 := state.x1, cur2 := state.x2,
+      next0 := 0, next1 := 0, next2 := 0 }
+  { x0 := FullRound.output0 params row
+    x1 := FullRound.output1 params row
+    x2 := FullRound.output2 params row }
+
+/-- The first-round S-box value witnessed in a partial-round row. -/
+def partialMid0SboxValue (params : PartialRounds.Params Ecc.Fp) (state : State Ecc.Fp) : Ecc.Fp :=
+  pow5 (state.x0 + params.rcA0)
+
+/-- Value-level partial-round-row transition, matching `Pow5State::partial_round`. -/
+def partialRoundValue (params : PartialRounds.Params Ecc.Fp) (state : State Ecc.Fp) : State Ecc.Fp :=
+  let rowWithMid : PartialRounds.Row Ecc.Fp :=
+    { cur0 := state.x0, cur1 := state.x1, cur2 := state.x2,
+      mid0Sbox := partialMid0SboxValue params state,
+      next0 := 0, next1 := 0, next2 := 0 }
+  let r0 := pow5 (PartialRounds.mid0 params rowWithMid + params.rcB0)
+  let r1 := PartialRounds.mid1 params rowWithMid + params.rcB1
+  let r2 := PartialRounds.mid2 params rowWithMid + params.rcB2
+  { x0 := r0 * params.m00 + r1 * params.m01 + r2 * params.m02
+    x1 := r0 * params.m10 + r1 * params.m11 + r2 * params.m12
+    x2 := r0 * params.m20 + r1 * params.m21 + r2 * params.m22 }
+
+/-- One source-shaped full-round row: witness the next state internally and assert the
+`full round` gate. -/
+def fullRound (params : FullRound.Params Ecc.Fp) (state : Var State Ecc.Fp) :
+    Circuit Ecc.Fp (Var State Ecc.Fp) := do
+  let next ← witness fun env => fullRoundValue params (eval env state)
+  FullRound.circuit params
+    { cur0 := state.x0, cur1 := state.x1, cur2 := state.x2,
+      next0 := next.x0, next1 := next.x1, next2 := next.x2 }
+  return next
+
+/-- One source-shaped partial-round row: witness the intermediate S-box and next state
+internally and assert the `partial rounds` gate. -/
+def partialRound (params : PartialRounds.Params Ecc.Fp) (state : Var State Ecc.Fp) :
+    Circuit Ecc.Fp (Var State Ecc.Fp) := do
+  let mid0Sbox ← witness fun env => partialMid0SboxValue params (eval env state)
+  let next ← witness fun env => partialRoundValue params (eval env state)
+  PartialRounds.circuit params
+    { cur0 := state.x0, cur1 := state.x1, cur2 := state.x2,
+      mid0Sbox,
+      next0 := next.x0, next1 := next.x1, next2 := next.x2 }
+  return next
+
+/-- Apply `count` consecutive full-round rows starting at source round `round`. -/
+def fullRounds (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp) :
+    Nat → Nat → Var State Ecc.Fp → Circuit Ecc.Fp (Var State Ecc.Fp)
+  | 0, _round, state => return state
+  | count + 1, round, state => do
+      let state ← fullRound (fullParams roundConstants mds round) state
+      fullRounds roundConstants mds count (round + 1) state
+
+/-- Apply `count` consecutive partial-round rows.  Each row represents two source
+partial rounds, so the source round index advances by two. -/
+def partialRoundRows (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp) :
+    Nat → Nat → Var State Ecc.Fp → Circuit Ecc.Fp (Var State Ecc.Fp)
+  | 0, _round, state => return state
+  | count + 1, round, state => do
+      let state ← partialRound (partialParams roundConstants mds mdsInv round) state
+      partialRoundRows roundConstants mds mdsInv count (round + 2) state
+
+/-- `Pow5Chip::permute` for Orchard's width-3/rate-2 Poseidon instance. -/
+def main (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
+    (input : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) := do
+  let s ← fullRounds roundConstants mds 4 0 input
+  let s ← partialRoundRows roundConstants mds mdsInv 28 4 s
+  fullRounds roundConstants mds 4 (4 + 56) s
+
+/-!
+The next step is to package `main` as a `FormalCircuit` with an explicit elaborated
+instance and a value-level permutation spec.  Keeping the source-shaped `main` separate
+for now lets downstream entry APIs compose the real schedule without exposing internal
+round rows as caller inputs.
+-/
+
+end Permute
+
 end Poseidon
 end Orchard
