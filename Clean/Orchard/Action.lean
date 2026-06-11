@@ -444,7 +444,7 @@ theorem nullifierProduct_fixedBaseMul_of_orchardSpec
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.IsOrchardFixedBaseMul .nullifierK nullifierScalar
       (Gadget.Nullifier.Entry.product row.nullifier.nullifier) :=
-  h.2.2.1.2.1.1
+  Gadget.NullifierWithPoseidonBoundary.Entry.product_fixedBaseMul_of_orchardSpec h.2.2.1
 
 theorem spendAuthProduct_fixedBaseMul_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
@@ -476,7 +476,7 @@ theorem nullifierProduct_groupAction_of_orchardSpec
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.pointCoords (Gadget.Nullifier.Entry.product row.nullifier.nullifier) =
       Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK nullifierScalar :=
-  Gadget.Nullifier.Entry.product_groupAction_of_orchardSpec h.2.2.1.2.1
+  Gadget.NullifierWithPoseidonBoundary.Entry.product_groupAction_of_orchardSpec h.2.2.1
 
 theorem spendAuthProduct_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
