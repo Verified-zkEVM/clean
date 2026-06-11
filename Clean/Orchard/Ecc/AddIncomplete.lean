@@ -5,8 +5,6 @@ import Mathlib.Tactic
 namespace Orchard
 namespace Ecc
 
-variable {F : Type} [Field F]
-
 /-!
 Reference:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add_incomplete.rs`

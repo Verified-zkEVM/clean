@@ -6,8 +6,6 @@ import Mathlib.Tactic
 namespace Orchard
 namespace Ecc
 
-variable {F : Type} [Field F]
-
 /-!
 Reference:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add.rs`
@@ -40,7 +38,7 @@ deriving ProvableStruct
 
 section ValueModel
 
-variable [DecidableEq F]
+variable {F : Type} [Field F] [DecidableEq F]
 
 /-- The semantic side condition needed by Halo2's complete-add assignment logic.
 
@@ -154,7 +152,7 @@ theorem pallas_y_eq_or_neg_of_same_x {p q : Point Fp}
     rcases hq with hId | hCurve
     · exact False.elim (hqx hId.1)
     · exact hCurve
-  unfold Point.onCurve Point.curveEquation pallasB at hpCurve hqCurve
+  unfold Point.onCurve pallasB at hpCurve hqCurve
   have hsquare : (q.y - p.y) * (q.y + p.y) = 0 := by
     rw [hx] at hqCurve
     linear_combination hqCurve - hpCurve

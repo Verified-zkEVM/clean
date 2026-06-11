@@ -254,7 +254,7 @@ theorem onCurve_of_spec_and_assumptions
 theorem soundness :
     Soundness Ecc.Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
-    Ecc.NonIdentityPoint.circuit, Ecc.Point.onCurve]
+    Ecc.NonIdentityPoint.circuit]
   rcases h_assumptions with ⟨hMuxAssumptions, _, _⟩
   rcases h_holds with ⟨hMux, hOnCurve⟩
   exact ⟨hMux hMuxAssumptions, hOnCurve⟩
@@ -262,7 +262,7 @@ theorem soundness :
 theorem completeness :
     Completeness Ecc.Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
-    Ecc.NonIdentityPoint.circuit, Ecc.Point.onCurve]
+    Ecc.NonIdentityPoint.circuit]
   have hAllAssumptions := h_assumptions
   change Assumptions
     ({ choice := input_choice, left := input_left, right := input_right } :

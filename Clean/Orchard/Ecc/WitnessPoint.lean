@@ -5,8 +5,6 @@ import Mathlib.Tactic
 namespace Orchard
 namespace Ecc
 
-variable {F : Type} [Field F]
-
 namespace PointOrIdentity
 
 def main (point : Var Point Fp) : Circuit Fp Unit := do
@@ -19,7 +17,7 @@ def circuit : FormalAssertion Fp Point where
   main
   Spec := Point.isPointOrIdentity
   soundness := by
-    circuit_proof_start [main, Point.isPointOrIdentity, Point.isIdentityEncoding, Point.onCurve, Point.curveEquation, pallasB]
+    circuit_proof_start [main, Point.isPointOrIdentity, Point.isIdentityEncoding, Point.onCurve, pallasB]
     rw [← h_input]
     by_cases hx : Expression.eval env input_var.x = 0
     · by_cases hy : Expression.eval env input_var.y = 0
@@ -41,7 +39,7 @@ def circuit : FormalAssertion Fp Point where
         simpa [sub_eq_add_neg] using h_holds.1
       exact (mul_eq_zero.mp hx_mul).resolve_left hx
   completeness := by
-    circuit_proof_start [main, Point.isPointOrIdentity, Point.isIdentityEncoding, Point.onCurve, Point.curveEquation, pallasB]
+    circuit_proof_start [main, Point.isPointOrIdentity, Point.isIdentityEncoding, Point.onCurve, pallasB]
     rw [← h_input] at h_spec
     rcases h_spec with h_identity | h_onCurve
     · rcases h_identity with ⟨hx, hy⟩
@@ -72,14 +70,14 @@ def circuit : FormalAssertion Fp Point where
   main
   Spec := Point.onCurve
   soundness := by
-    circuit_proof_start [main, Point.onCurve, Point.curveEquation, pallasB]
+    circuit_proof_start [main, Point.onCurve, pallasB]
     rw [← h_input]
-    simpa only [Point.eval_eq, Point.onCurve, Point.curveEquation, pallasB,
+    simpa only [Point.eval_eq, Point.onCurve, pallasB,
       sub_eq_add_neg] using h_holds
   completeness := by
-    circuit_proof_start [main, Point.onCurve, Point.curveEquation, pallasB]
+    circuit_proof_start [main, Point.onCurve, pallasB]
     rw [← h_input] at h_spec
-    simpa only [Point.eval_eq, Point.onCurve, Point.curveEquation, pallasB,
+    simpa only [Point.eval_eq, Point.onCurve, pallasB,
       sub_eq_add_neg] using h_spec
 
 end NonIdentityPoint

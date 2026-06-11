@@ -4,9 +4,9 @@ import Mathlib.Tactic
 namespace Orchard
 namespace Ecc
 
-variable {F : Type} [Field F]
+namespace Point
 
-theorem Point.isPointOrIdentity_neg {point : Point Fp}
+theorem isPointOrIdentity_neg {point : Point Fp}
     (h : Point.isPointOrIdentity point) :
     Point.isPointOrIdentity (Point.neg point) := by
   rcases point with ⟨x, y⟩
@@ -17,23 +17,23 @@ theorem Point.isPointOrIdentity_neg {point : Point Fp}
     change y = 0 at hy
     simp [Point.neg, Point.isIdentityEncoding, hx, hy]
   · right
-    unfold Point.onCurve Point.curveEquation pallasB at hCurve
+    unfold Point.onCurve pallasB at hCurve
     change Point.onCurve ({ x := x, y := -y } : Point Fp)
-    unfold Point.onCurve Point.curveEquation pallasB
+    unfold Point.onCurve pallasB
     ring_nf at hCurve ⊢
     linear_combination hCurve
 
-theorem Point.not_onCurve_of_x_eq_zero (y : Fp) :
+theorem not_onCurve_of_x_eq_zero (y : Fp) :
     ¬ Point.onCurve ({ x := 0, y } : Point Fp) := by
   intro h
   apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y
   unfold CompElliptic.CurveForms.ShortWeierstrass.OnCurve
     CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
-  unfold Point.onCurve Point.curveEquation pallasB at h
+  unfold Point.onCurve pallasB at h
   rw [pow_two]
   linear_combination h
 
-theorem Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero {point : Point Fp}
+theorem y_eq_zero_of_isPointOrIdentity_of_x_eq_zero {point : Point Fp}
     (hPoint : Point.isPointOrIdentity point) :
     point.x = 0 → point.y = 0 := by
   rcases point with ⟨x, y⟩
@@ -41,12 +41,12 @@ theorem Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero {point : Point Fp}
   rcases hPoint with hIdentity | hCurve
   · exact hIdentity.2
   · by_contra hy
-    exact Point.not_onCurve_of_x_eq_zero y (by
+    exact not_onCurve_of_x_eq_zero y (by
       change x = 0 at hx
       rw [hx] at hCurve
       exact hCurve)
 
-theorem Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero {point : Point Fp}
+theorem y_ne_zero_of_isPointOrIdentity_of_x_ne_zero {point : Point Fp}
     (hPoint : Point.isPointOrIdentity point) (hx : point.x ≠ 0) :
     point.y ≠ 0 := by
   intro hy
@@ -59,9 +59,11 @@ theorem Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero {point : Point Fp}
     apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_y_zero x
     unfold CompElliptic.CurveForms.ShortWeierstrass.OnCurve
       CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
-    unfold Point.onCurve Point.curveEquation pallasB at hCurve
+    unfold Point.onCurve pallasB at hCurve
     rw [pow_two]
     linear_combination hCurve
+
+end Point
 
 end Ecc
 end Orchard
