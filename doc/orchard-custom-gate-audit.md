@@ -100,9 +100,10 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   table entries or domain constants used by these gates should be Lean constants or
   template parameters rather than witness-controlled row fields.
 
-- **`Sinsemilla.InitWiring`, `Commit.Entry`, `ShortCommit.Entry`, `Merkle.Wiring`, and
-  `Merkle.PathStep`:** these are wiring/partial-entry helpers, not direct source custom
-  gates. They should not receive `GATE` names.
+- **Sinsemilla entry APIs:** `hash_to_point`, `HashDomain::hash`,
+  `CommitDomain::commit`, `CommitDomain::short_commit`, `MerkleInstructions::hash_layer`,
+  and `MerklePath::calculate_root` are not implemented. Current Clean coverage is limited
+  to the named custom gates and the Merkle decomposition gate.
 
 - **`GATE Decomposition check`:** Clean ports the Merkle decomposition arithmetic but does
   not encode the source copy constraints, fixed/advice roles, or hash-to-point child API.
@@ -115,23 +116,11 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   parameterized by verifier-known table/domain data, that data should be a Lean argument to
   the assertion rather than part of the witness row.
 
-- **Action-level wiring wrappers:** the non-conformant `ActionWiring`,
-  `ActionComputedWiring`, `ActionNoteCommitWiring`, `ActionMerkleWiring`, and
-  `ActionAddressWiring` circuits were deleted. Rebuild action-level public-input,
-  equality, Merkle, note-commitment, value-commitment, nullifier, spend-authority, and
-  address-integrity wiring only inside a final source-conformant action entry circuit.
-
-- **`Gadget.ValueCommitment.Entry`, `Gadget.Nullifier.Entry`,
-  `Gadget.NullifierWithHash.Entry`, `Gadget.NullifierWithPoseidonBoundary.Entry`, and
-  `Gadget.SpendAuth.Entry`:** these non-conformant wrappers were deleted. Their
-  replacements must compute fixed-base products, Poseidon outputs, and complete additions
-  through source-conformant child entry circuits instead of accepting those products as row
-  inputs.
-
-- **`NoteCommit.Wiring` and `CommitIvk.Wiring`:** these are not custom gates. They record
-  message/canonicity wiring around custom gates. The non-conformant
-  `NoteCommit.WiringWithCommit` and `CommitIvk.WiringWithShortCommit` wrappers were
-  deleted; rebuild them only after the missing scalar-mul and Sinsemilla entry APIs exist.
+- **Orchard source entry APIs:** `value_commit_orchard`, `derive_nullifier`,
+  spend-authority key derivation, `gadgets::note_commit`, `gadgets::commit_ivk`, and the
+  full `Circuit::synthesize` action entry circuit are not implemented. They must compose
+  source-conformant child entry circuits rather than accept intermediate hash, commitment,
+  or scalar-multiplication products as inputs.
 
 - (known issue for reproducing VKs, fix not currently in scope) **All named gates:**
   current Clean rows do not distinguish advice cells, fixed cells, selector cells,

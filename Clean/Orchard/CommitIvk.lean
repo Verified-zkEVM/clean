@@ -185,51 +185,6 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
     exact mul_eq_zero_of_or hz14B2CPrime
 
 /-!
-`commit_ivk` source-level wiring.
-
-Reference:
-`orchard@0.14.0/src/circuit/commit_ivk.rs`
-- `gadgets::commit_ivk`
-
-The Rust gadget constructs four Sinsemilla message pieces, obtains running-sum endpoints
-from `CommitDomain::short_commit`, feeds those cells into `GateCells`, assigns the
-canonicity gate, and returns `ivk`. The short commitment itself is represented here by an
-explicit `computedIvk` row value; this assertion only records the wiring around the
-already ported canonicity gate.
--/
-namespace Wiring
-
-structure Row (F : Type) where
-  gate : CommitIvk.Row F
-  computedIvk : F
-  ivk : F
-deriving ProvableStruct
-
-def ivkCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.computedIvk - row.ivk
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  CommitIvk.Spec row.gate ∧ row.computedIvk = row.ivk
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  CommitIvk.circuit row.gate
-  assertZero (ivkCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, ivkCheck, CommitIvk.circuit, CommitIvk.Spec]
-    exact ⟨h_holds.1, left_eq_of_add_neg_eq_zero h_holds.2⟩
-  completeness := by
-    circuit_proof_start [main, Spec, ivkCheck, CommitIvk.circuit, CommitIvk.Spec]
-    constructor
-    · exact h_spec.1
-    simpa [sub_eq_add_neg] using sub_eq_zero.mpr h_spec.2
-
-end Wiring
-
-/-!
 TODO(source-conformance): `gadgets::commit_ivk` is not implemented.
 
 Reference:
@@ -237,9 +192,8 @@ Reference:
 - `gadgets::commit_ivk`
 
 The replacement should construct the `CommitIvk` message/canonicity gate, call
-`CommitDomain::short_commit`, witness `[rivk] CommitIvkR` internally, and return the
-extracted x-coordinate as `ivk`. The deleted wrapper exposed the Sinsemilla short-commit
-and blinding product as row inputs.
+`CommitDomain::short_commit`, wire returned running sums into the canonicity gate,
+witness `[rivk] CommitIvkR` internally, and return the extracted x-coordinate as `ivk`.
 -/
 
 end CommitIvk

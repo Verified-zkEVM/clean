@@ -99,32 +99,29 @@ TODO(source-conformance): implement the full action synthesis entry circuit that
 Merkle, note-commitment, value-commitment, nullifier, spend-authority, and address
 integrity sub-gadgets internally.
 
-The deleted `ActionWiring` circuit was only a flattened collection of public-instance
-and equality edges from `Circuit::synthesize`, not a source entry API. Rebuild these
-edges inside the final action circuit after the child gadgets compute their outputs.
+Public-instance and equality edges from `Circuit::synthesize` should be built inside the
+final action circuit after the child gadgets compute their outputs.
 -/
 
 /-!
 TODO(source-conformance): action computed-output wiring is not implemented.
 
-The deleted wrapper composed non-conformant value-commitment, nullifier, and
-spend-authority wrappers that exposed internally computed fixed-base products and hash
-outputs as row inputs.
+The replacement should compose source-conformant value-commitment, nullifier, and
+spend-authority entry circuits.
 -/
 
 /-!
 TODO(source-conformance): old/new note-commitment action wiring is not implemented.
 
-The deleted wrapper depended on `gadgets::note_commit` being modeled as an entry circuit
-that computes the Sinsemilla commitment and blinding scalar multiplication internally.
+The replacement should compose source-conformant `gadgets::note_commit` entry circuits
+that compute Sinsemilla commitments and blinding scalar multiplications internally.
 -/
 
 /-!
 TODO(source-conformance): Merkle-path action wiring is not implemented.
 
-The deleted `ActionMerkleWiring` circuit connected one explicit path-step output to the
-action row. The replacement should compose the full `MerklePath::calculate_root` entry
-circuit inside the final action synthesis circuit.
+The replacement should compose the full `MerklePath::calculate_root` entry circuit inside
+the final action synthesis circuit.
 -/
 
 /-!
@@ -137,6 +134,6 @@ Reference:
 
 The replacement should compute `ivk = CommitIvk(ak, nk, rivk)`, convert it to the
 variable-base scalar, compute `[ivk] g_d_old`, and constrain the result to `pk_d_old`
-inside the entry circuit. The deleted wrapper exposed the derived point as row inputs.
+inside the entry circuit.
 -/
 end Orchard
