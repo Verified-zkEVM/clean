@@ -115,11 +115,11 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   parameterized by verifier-known table/domain data, that data should be a Lean argument to
   the assertion rather than part of the witness row.
 
-- **`ActionWiring`:** this is not a custom gate. It records action-row copy/public-input
-  constraints and must not be used as evidence that the full Orchard synthesize path has
-  been ported. The non-conformant `ActionComputedWiring`, `ActionNoteCommitWiring`, and
-  `ActionAddressWiring` wrappers were deleted; rebuild them only after their source-level
-  child entry APIs exist.
+- **Action-level wiring wrappers:** the non-conformant `ActionWiring`,
+  `ActionComputedWiring`, `ActionNoteCommitWiring`, `ActionMerkleWiring`, and
+  `ActionAddressWiring` circuits were deleted. Rebuild action-level public-input,
+  equality, Merkle, note-commitment, value-commitment, nullifier, spend-authority, and
+  address-integrity wiring only inside a final source-conformant action entry circuit.
 
 - **`Gadget.ValueCommitment.Entry`, `Gadget.Nullifier.Entry`,
   `Gadget.NullifierWithHash.Entry`, `Gadget.NullifierWithPoseidonBoundary.Entry`, and

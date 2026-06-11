@@ -179,13 +179,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      fixed-base products, Poseidon outputs, and scalar-mul products as row inputs were
      deleted and replaced with TODOs in `Clean.Orchard.Gadget`.
      The four `Orchard circuit checks` constraints from `circuit.rs` are ported as
-     `Orchard.ActionChecks.circuit`; the surrounding source-level action wiring from
-     `Circuit::synthesize` is partially recorded as `Orchard.ActionWiring.circuit` for
-     copy/public-input constraints. The deleted `ActionComputedWiring`,
-     `ActionNoteCommitWiring`, and `ActionAddressWiring` wrappers must be rebuilt only
-     after their source-level child APIs exist. The final Merkle path-step output is
-     connected to the action `root` consumed by the Orchard checks in
-     `Orchard.ActionMerkleWiring.circuit`.
+     `Orchard.ActionChecks.circuit`. The action-level synthesize wiring is not
+     implemented; deleted flattened wiring wrappers must be rebuilt only as part of the
+     final source-conformant action circuit after their source-level child APIs exist.
      `note_commit.rs` gates `NoteCommit MessagePiece b`,
      `d`, `e`, `g`, `h`, `NoteCommit input g_d`, `NoteCommit input pk_d`,
      `NoteCommit input rho`, `NoteCommit input psi`, `NoteCommit input value`, and
@@ -274,7 +270,7 @@ exist.
 | `CommitDomain::blinding_factor` and `CommitDomain::commit` in `halo2_gadgets/src/sinsemilla.rs` | Computes `[r] R`, computes `M = hash_to_point(message)`, then returns `M + [r] R` and running sums. | `Orchard.Sinsemilla.Commit.Entry.circuit` over explicit hash/blinding product points | Partial entry wrapper. The final addition now uses the complete-add entry relation, but Clean still does not compose fixed-base scalar multiplication or `hash_to_point`. |
 | `CommitDomain::short_commit` in `halo2_gadgets/src/sinsemilla.rs` | Calls `commit`, then returns `ExtractP(commitment)`. | `Orchard.Sinsemilla.ShortCommit.Entry.circuit` over explicit hash/blinding product points | Partial entry wrapper. Clean composes the partial commit entry wrapper and extraction wiring, but the commit input still starts after hash/blinding products are explicit. |
 | `MerkleInstructions::hash_layer` in `halo2_gadgets/src/sinsemilla/merkle/chip.rs` | Builds three Sinsemilla message pieces from `(layer, left, right)`, calls `hash_to_point`, extracts x, and wires decomposition/running-sum cells. | `Orchard.Sinsemilla.Merkle.circuit` and `Merkle.Wiring.circuit` | Partial wiring only. Clean ports the decomposition gate and final `computedHash = hash` edge, but the hash result is explicit rather than produced by a composed `hash_to_point` circuit. |
-| `MerklePath::calculate_root` in `halo2_gadgets/src/sinsemilla/merkle.rs` | Iterates over all path layers, conditionally swaps `(node, sibling)`, calls `hash_layer`, and returns the final root. | `Orchard.Sinsemilla.Merkle.PathStep.circuit` and `Orchard.ActionMerkleWiring.circuit` | One-step wiring only. Clean models a single conditional swap plus explicit `hash_layer` row; it does not provide the full iterated path entry point. |
+| `MerklePath::calculate_root` in `halo2_gadgets/src/sinsemilla/merkle.rs` | Iterates over all path layers, conditionally swaps `(node, sibling)`, calls `hash_layer`, and returns the final root. | `Orchard.Sinsemilla.Merkle.PathStep.circuit` | Missing entry-point circuit. Clean models a single conditional swap plus explicit `hash_layer` row; it does not provide the full iterated path entry point. The deleted action wrapper exposed the final path-step output as an input. |
 | `gadgets::note_commit` in `orchard/src/circuit/note_commit.rs` | Builds eight message pieces `a..h`, performs point-y and field canonicity checks using running-sum outputs from `CommitDomain::commit`, calls `CommitDomain::commit`, and returns the commitment point. | Custom gates plus `Orchard.NoteCommit.Wiring.circuit` for message/canonicity wiring | Missing entry-point circuit. The non-conformant `WiringWithCommit` and action wrappers were deleted because they exposed the commitment and blinding products as row inputs. |
 | `gadgets::commit_ivk` in `orchard/src/circuit/commit_ivk.rs` | Builds four message pieces from `(ak, nk)`, calls `CommitDomain::short_commit`, uses returned running sums for canonicity, and returns `ivk`. | Custom gate plus `Orchard.CommitIvk.Wiring.circuit` for canonicity wiring | Missing entry-point circuit. The non-conformant `WiringWithShortCommit` and address wrappers were deleted because they exposed the short-commit and blinding products as row inputs. |
 
