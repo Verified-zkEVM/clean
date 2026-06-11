@@ -109,9 +109,7 @@ end Gate
 
 def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point where
   main value := do
-    let x ← witnessField fun env => (value env).x
-    let y ← witnessField fun env => (value env).y
-    let point := ({ x, y } : Var Point Fp)
+    let point ← witness value
     Gate.circuit point
     return point
 
@@ -124,12 +122,9 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point wh
     exact h_holds
 
   completeness := by
-    circuit_proof_start [Gate.circuit]
-    rcases h_env with ⟨hx, hy⟩
-    constructor
-    · rw [hx, hy]
-      exact h_assumptions
-    · simp [hx, hy]
+    circuit_proof_start [Gate.circuit, explicit_provable_type]
+    rcases input with ⟨x, y⟩
+    simp_all [circuit_norm]
 
 end WitnessNonIdentityPoint
 
