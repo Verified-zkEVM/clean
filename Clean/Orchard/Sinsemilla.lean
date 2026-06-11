@@ -215,60 +215,9 @@ The source computes a hash point `M`, a fixed-base blinding factor `[r] R`, and 
 returns `M + [r] R`. `short_commit` extracts the x-coordinate from that commitment. The
 hash point and blinding factor are explicit row values here; their internal arithmetic is
 represented by the lower-level Sinsemilla and fixed-base scalar-multiplication assertions.
+The entry circuits below compose the complete-addition API for the final addition.
 -/
 namespace Commit
-
-structure Row (F : Type) where
-  hashX : F
-  hashY : F
-  blindX : F
-  blindY : F
-  commitmentX : F
-  commitmentY : F
-  lambda : F
-  alpha : F
-  beta : F
-  gamma : F
-  delta : F
-deriving ProvableStruct
-
-def addRow {K : Type} (row : Row K) : Ecc.CompleteAddRow K where
-  p := { x := row.hashX, y := row.hashY }
-  q := { x := row.blindX, y := row.blindY }
-  r := { x := row.commitmentX, y := row.commitmentY }
-  lambda := row.lambda
-  alpha := row.alpha
-  beta := row.beta
-  gamma := row.gamma
-  delta := row.delta
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Ecc.CompleteAdd.Spec (addRow row)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Ecc.CompleteAdd.circuit (addRow row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine, Ecc.CompleteAdd.tangentLine,
-      Ecc.CompleteAdd.nonexceptionalResult, Ecc.CompleteAdd.leftIdentityResult,
-      Ecc.CompleteAdd.rightIdentityResult, Ecc.CompleteAdd.inverseResult,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    exact h_holds
-  completeness := by
-    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit,
-      Ecc.CompleteAdd.Spec, Ecc.CompleteAdd.slopeLine, Ecc.CompleteAdd.tangentLine,
-      Ecc.CompleteAdd.nonexceptionalResult, Ecc.CompleteAdd.leftIdentityResult,
-      Ecc.CompleteAdd.rightIdentityResult, Ecc.CompleteAdd.inverseResult,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    exact h_spec
 
 namespace Entry
 
@@ -338,50 +287,6 @@ end Entry
 end Commit
 
 namespace ShortCommit
-
-structure Row (F : Type) where
-  commit : Commit.Row F
-  extracted : F
-deriving ProvableStruct
-
-def extractCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.commit.commitmentX - row.extracted
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Commit.Spec row.commit ∧ row.extracted = row.commit.commitmentX
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Commit.circuit row.commit
-  assertZero (extractCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, extractCheck, Commit.circuit, Commit.Spec,
-      Commit.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec,
-      Ecc.CompleteAdd.slopeLine, Ecc.CompleteAdd.tangentLine,
-      Ecc.CompleteAdd.nonexceptionalResult, Ecc.CompleteAdd.leftIdentityResult,
-      Ecc.CompleteAdd.rightIdentityResult, Ecc.CompleteAdd.inverseResult,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    rcases h_holds with ⟨hCommit, hExtract⟩
-    exact ⟨hCommit, (left_eq_of_add_neg_eq_zero hExtract).symm⟩
-  completeness := by
-    circuit_proof_start [main, Spec, extractCheck, Commit.circuit, Commit.Spec,
-      Commit.addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec,
-      Ecc.CompleteAdd.slopeLine, Ecc.CompleteAdd.tangentLine,
-      Ecc.CompleteAdd.nonexceptionalResult, Ecc.CompleteAdd.leftIdentityResult,
-      Ecc.CompleteAdd.rightIdentityResult, Ecc.CompleteAdd.inverseResult,
-      Ecc.CompleteAdd.ifAlpha, Ecc.CompleteAdd.ifBeta, Ecc.CompleteAdd.ifGamma,
-      Ecc.CompleteAdd.ifDelta, Ecc.CompleteAdd.xQMinusXP, Ecc.CompleteAdd.xPMinusXR,
-      Ecc.CompleteAdd.yQPlusYP]
-    rcases h_spec with ⟨hCommit, hExtract⟩
-    constructor
-    · exact hCommit
-    · rw [hExtract]
-      ring
 
 namespace Entry
 

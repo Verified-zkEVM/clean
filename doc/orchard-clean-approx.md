@@ -153,10 +153,9 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.Sinsemilla.Gate.circuit`. The public/private `hash_to_point`
      initialization copy wiring around `Initial y_Q` is ported as
      `Orchard.Sinsemilla.InitWiring.circuit`. `CommitDomain::commit` and
-     `CommitDomain::short_commit` output wiring are ported as
-     `Orchard.Sinsemilla.Commit.circuit` and `Orchard.Sinsemilla.ShortCommit.circuit`.
-     Pallas-specific wrappers `Orchard.Sinsemilla.Commit.Entry.circuit` and
-     `Orchard.Sinsemilla.ShortCommit.Entry.circuit` use
+     `CommitDomain::short_commit` output wiring are ported through
+     `Orchard.Sinsemilla.Commit.Entry.circuit` and
+     `Orchard.Sinsemilla.ShortCommit.Entry.circuit`, which use
      `Orchard.Ecc.CompleteAdd.Entry.circuit` for the final commitment addition and
      extraction over explicit hash/blinding product points.
      The MerkleCRH decomposition gate from
@@ -303,7 +302,7 @@ exist.
 | --- | --- | --- | --- |
 | `SinsemillaInstructions::hash_to_point` / `hash_to_point_with_private_init`, implemented in `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs` | Initializes the accumulator from public/private `Q`, loops over all message pieces, performs generator-table lookups/range checks and merged double-and-add rows, assigns final `y_A`, rejects identity output, and returns a non-identity point plus running sums. | `Orchard.Sinsemilla.InitialYQ`, `InitWiring`, `Gate`, and explicit `computedHash`/point fields in later wrappers | Missing entry-point circuit. Clean has the local init/gate assertions, but no composed `hash_to_point` circuit whose surface is `(Q, message) -> (point, running sums)`. |
 | `HashDomain::hash` in `halo2_gadgets/src/sinsemilla.rs` | Calls `hash_to_point` and extracts the x-coordinate. | `Orchard.Sinsemilla.Merkle.Wiring` with explicit `computedHash` | Missing entry-point circuit. Clean records the extraction/copy edge but does not compute the hash point from the message. |
-| `CommitDomain::blinding_factor` and `CommitDomain::commit` in `halo2_gadgets/src/sinsemilla.rs` | Computes `[r] R`, computes `M = hash_to_point(message)`, then returns `M + [r] R` and running sums. | `Orchard.Sinsemilla.Commit.Entry.circuit` over explicit hash/blinding product points; row assertion remains `Commit.circuit` | Partial entry wrapper. The final addition now uses the complete-add entry relation, but Clean still does not compose fixed-base scalar multiplication or `hash_to_point`. |
+| `CommitDomain::blinding_factor` and `CommitDomain::commit` in `halo2_gadgets/src/sinsemilla.rs` | Computes `[r] R`, computes `M = hash_to_point(message)`, then returns `M + [r] R` and running sums. | `Orchard.Sinsemilla.Commit.Entry.circuit` over explicit hash/blinding product points | Partial entry wrapper. The final addition now uses the complete-add entry relation, but Clean still does not compose fixed-base scalar multiplication or `hash_to_point`. |
 | `CommitDomain::short_commit` in `halo2_gadgets/src/sinsemilla.rs` | Calls `commit`, then returns `ExtractP(commitment)`. | `Orchard.Sinsemilla.ShortCommit.Entry.circuit` over explicit hash/blinding product points | Partial entry wrapper. Clean composes the partial commit entry wrapper and extraction wiring, but the commit input still starts after hash/blinding products are explicit. |
 | `MerkleInstructions::hash_layer` in `halo2_gadgets/src/sinsemilla/merkle/chip.rs` | Builds three Sinsemilla message pieces from `(layer, left, right)`, calls `hash_to_point`, extracts x, and wires decomposition/running-sum cells. | `Orchard.Sinsemilla.Merkle.circuit` and `Merkle.Wiring.circuit` | Partial wiring only. Clean ports the decomposition gate and final `computedHash = hash` edge, but the hash result is explicit rather than produced by a composed `hash_to_point` circuit. |
 | `MerklePath::calculate_root` in `halo2_gadgets/src/sinsemilla/merkle.rs` | Iterates over all path layers, conditionally swaps `(node, sibling)`, calls `hash_layer`, and returns the final root. | `Orchard.Sinsemilla.Merkle.PathStep.circuit` and `Orchard.ActionMerkleWiring.circuit` | One-step wiring only. Clean models a single conditional swap plus explicit `hash_layer` row; it does not provide the full iterated path entry point. |
