@@ -584,6 +584,73 @@ def partialRoundValue (params : PartialRounds.Params Ecc.Fp) (state : State Ecc.
     x1 := r0 * params.m10 + r1 * params.m11 + r2 * params.m12
     x2 := r0 * params.m20 + r1 * params.m21 + r2 * params.m22 }
 
+/-- The concrete row witnessed by the honest P128 partial-round prover. -/
+def partialRowValueP128 (roundConstants : Nat → State Ecc.Fp) (round : Nat)
+    (state : State Ecc.Fp) : PartialRounds.Row Ecc.Fp :=
+  let params := partialParamsP128 roundConstants round
+  let next := partialRoundValue params state
+  { cur0 := state.x0, cur1 := state.x1, cur2 := state.x2,
+    mid0Sbox := partialMid0SboxValue params state,
+    next0 := next.x0, next1 := next.x1, next2 := next.x2 }
+
+/-- The honest P128 partial-round row satisfies the Halo2 gate relation. -/
+theorem partialRowValueP128_spec (roundConstants : Nat → State Ecc.Fp) (round : Nat)
+    (state : State Ecc.Fp) :
+    PartialRounds.Spec (partialParamsP128 roundConstants round)
+      (partialRowValueP128 roundConstants round state) := by
+  constructor
+  · rfl
+  constructor
+  · simp [partialRowValueP128, partialRoundValue, partialMid0SboxValue,
+      partialParamsP128, partialParams, PartialRounds.nextInv0, PartialRounds.mid0,
+      PartialRounds.mid1, PartialRounds.mid2]
+    exact P128Pow5T3.mdsInv_mul_mds_apply ⟨0, by norm_num⟩
+      (pow5 (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 0 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 0 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 0 2 +
+        (roundConstants (round + 1)).x0))
+      (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 1 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 1 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 1 2 +
+        (roundConstants (round + 1)).x1)
+      (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 2 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 2 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 2 2 +
+        (roundConstants (round + 1)).x2)
+  constructor
+  · simp [partialRowValueP128, partialRoundValue, partialMid0SboxValue,
+      partialParamsP128, partialParams, PartialRounds.nextInv1, PartialRounds.mid0,
+      PartialRounds.mid1, PartialRounds.mid2]
+    exact P128Pow5T3.mdsInv_mul_mds_apply ⟨1, by norm_num⟩
+      (pow5 (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 0 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 0 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 0 2 +
+        (roundConstants (round + 1)).x0))
+      (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 1 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 1 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 1 2 +
+        (roundConstants (round + 1)).x1)
+      (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 2 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 2 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 2 2 +
+        (roundConstants (round + 1)).x2)
+  · simp [partialRowValueP128, partialRoundValue, partialMid0SboxValue,
+      partialParamsP128, partialParams, PartialRounds.nextInv2, PartialRounds.mid0,
+      PartialRounds.mid1, PartialRounds.mid2]
+    exact P128Pow5T3.mdsInv_mul_mds_apply ⟨2, by norm_num⟩
+      (pow5 (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 0 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 0 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 0 2 +
+        (roundConstants (round + 1)).x0))
+      (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 1 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 1 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 1 2 +
+        (roundConstants (round + 1)).x1)
+      (pow5 (state.x0 + (roundConstants round).x0) * P128Pow5T3.mds 2 0 +
+        (state.x1 + (roundConstants round).x1) * P128Pow5T3.mds 2 1 +
+        (state.x2 + (roundConstants round).x2) * P128Pow5T3.mds 2 2 +
+        (roundConstants (round + 1)).x2)
+
 /-! ### Plain Lean permutation specification -/
 
 /-- Apply the four consecutive value-level full rounds used by `Pow5Chip::permute`,
@@ -676,16 +743,57 @@ def partialRoundP128 (roundConstants : Nat → State Ecc.Fp) (round : Nat)
     (state : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) :=
   partialRound (partialParamsP128 roundConstants round) state
 
+/-- Packaged P128Pow5T3 partial-round-row loop body. -/
+def partialRoundP128Circuit (roundConstants : Nat → State Ecc.Fp) (round : Nat) :
+    FormalCircuit Ecc.Fp State State where
+  name := "Pow5State::partial_round[P128]"
+  main := partialRoundP128 roundConstants round
+  Spec input output := output = partialRoundValue (partialParamsP128 roundConstants round) input
+  soundness := by
+    circuit_proof_start [partialRoundP128, partialRound, partialRoundValue, partialMid0SboxValue,
+      PartialRounds.circuit, PartialRounds.Spec, partialParamsP128, partialParams,
+      PartialRounds.mid0, PartialRounds.mid1, PartialRounds.mid2,
+      PartialRounds.nextInv0, PartialRounds.nextInv1, PartialRounds.nextInv2]
+    rcases h_holds with ⟨hmid, h0, h1, h2⟩
+    simp [State.mk.injEq] at hmid h0 h1 h2 ⊢
+    constructor
+    · have happ := P128Pow5T3.mds_mul_mdsInv_apply ⟨0, by norm_num⟩
+        (env.get (i₀ + 1)) (env.get (i₀ + 1 + 1)) (env.get (i₀ + 1 + 1 + 1))
+      rw [h0, h1, h2] at happ
+      simpa [hmid] using happ.symm
+    constructor
+    · have happ := P128Pow5T3.mds_mul_mdsInv_apply ⟨1, by norm_num⟩
+        (env.get (i₀ + 1)) (env.get (i₀ + 1 + 1)) (env.get (i₀ + 1 + 1 + 1))
+      rw [h0, h1, h2] at happ
+      simpa [hmid] using happ.symm
+    · have happ := P128Pow5T3.mds_mul_mdsInv_apply ⟨2, by norm_num⟩
+        (env.get (i₀ + 1)) (env.get (i₀ + 1 + 1)) (env.get (i₀ + 1 + 1 + 1))
+      rw [h0, h1, h2] at happ
+      simpa [hmid] using happ.symm
+  completeness := by
+    circuit_proof_start [partialRoundP128, partialRound, PartialRounds.circuit,
+      PartialRounds.Spec]
+    rcases h_env with ⟨hmid, hnext⟩
+    have hnext0 := hnext ⟨0, by norm_num⟩
+    have hnext1 := hnext ⟨1, by norm_num⟩
+    have hnext2 := hnext ⟨2, by norm_num⟩
+    norm_num at hnext0 hnext1 hnext2
+    simp at hnext0 hnext1 hnext2
+    rw [hmid, hnext0, hnext1, hnext2]
+    change PartialRounds.Spec (partialParamsP128 roundConstants round)
+      (partialRowValueP128 roundConstants round { x0 := input_x0, x1 := input_x1, x2 := input_x2 })
+    simp [partialRowValueP128_spec]
+
 /-- Apply the 28 consecutive P128Pow5T3 partial-round rows used by `Pow5Chip::permute`,
 starting at source round 4.  Each row represents two source partial rounds. -/
 def partialRoundRows28P128 (roundConstants : Nat → State Ecc.Fp)
     (state : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) :=
   Circuit.foldl (.finRange 28) state
-    (fun state i => partialRoundP128 roundConstants (4 + 2 * i.val) state)
-    (by simp only [circuit_norm, partialRoundP128, partialRound])
+    (fun state i => partialRoundP128Circuit roundConstants (4 + 2 * i.val) state)
+    (by simp only [circuit_norm, partialRoundP128Circuit])
     (by
       apply Circuit.ConstantLength.fromConstantLength'
-      simp [partialRoundP128, partialRound, PartialRounds.circuit, circuit_norm])
+      simp [partialRoundP128Circuit, circuit_norm])
 
 /-- Apply the four consecutive full-round rows used by `Pow5Chip::permute`, starting
 at source round `round`. -/

@@ -115,9 +115,11 @@ Current Clean coverage:
 - `Clean.Orchard.Poseidon.Permute.fullRounds4Circuit`: packaged fixed `foldl`
   subcircuit for the four full rounds used by each half of `Pow5Chip::permute`, proving
   one half against `fullRounds4Value`.
+- `Clean.Orchard.Poseidon.Permute.partialRoundP128Circuit`: packaged P128
+  partial-round-row subcircuit proving one row against `partialRoundValue`.
 - `Clean.Orchard.Poseidon.Permute.partialRoundRows28` / `partialRoundRows28P128`:
   fixed `foldl` circuit shapes for the 28 partial-round rows; the P128 variant uses the
-  explicit P128 MDS/MDS_INV constants.
+  packaged P128 partial-row subcircuit.
 - `Clean.Orchard.Poseidon.Permute.mainP128`: P128-specialized source-shaped
   `Pow5Chip::permute` circuit skeleton using the packaged full-round halves and fixed
   P128 partial-round fold.
