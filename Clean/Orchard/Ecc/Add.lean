@@ -59,144 +59,6 @@ end Input
 
 end Gate
 
-section ValueModel
-
-/-- The semantic side condition needed by Halo2's complete-add assignment logic.
-
-The Rust implementation treats `x = 0` as the identity branch. This is sound for the
-Pallas encoding because `(0, y)` is not a non-identity curve point. We keep that property
-explicit here instead of baking it into the row constraints. -/
-def XZeroImpliesIdentity (point : Point Fp) : Prop :=
-  point.x = 0 → point.y = 0
-
-def lambdaValue (input : Input Fp) : Fp :=
-  if input.q.x = input.p.x then
-    if input.p.y ≠ 0 then
-      (3 * input.p.x * input.p.x) * (2 * input.p.y)⁻¹
-    else
-      0
-  else
-    (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
-
-def outputValue (input : Input Fp) : Point Fp :=
-  let lambda := lambdaValue input
-  if input.p.x = 0 then
-    input.q
-  else if input.q.x = 0 then
-    input.p
-  else if input.q.x = input.p.x ∧ input.q.y = -input.p.y then
-    { x := 0, y := 0 }
-  else
-    let xR := lambda * lambda - input.p.x - input.q.x
-    let yR := lambda * (input.p.x - xR) - input.p.y
-    { x := xR, y := yR }
-
-def rowValue (input : Input Fp) : Gate.Input Fp where
-  x_p := input.p.x
-  y_p := input.p.y
-  x_qr := { curr := input.q.x, next := (outputValue input).x }
-  y_qr := { curr := input.q.y, next := (outputValue input).y }
-  lambda := lambdaValue input
-  alpha := (input.q.x - input.p.x)⁻¹
-  beta := input.p.x⁻¹
-  gamma := input.q.x⁻¹
-  delta :=
-    if input.q.x = input.p.x then
-      (input.q.y + input.p.y)⁻¹
-    else
-      0
-
-theorem outputValue_eq_shortWeierstrass_add {input : Input Fp}
-    (hpZero : XZeroImpliesIdentity input.p)
-    (hqZero : XZeroImpliesIdentity input.q) :
-    (outputValue input).coords =
-      CompElliptic.CurveForms.ShortWeierstrass.add
-        (0 : Fp) input.p.coords input.q.coords := by
-  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  unfold Point.coords outputValue lambdaValue
-    CompElliptic.CurveForms.ShortWeierstrass.add XZeroImpliesIdentity at *
-  simp only
-  by_cases hpx : px = 0
-  · have hpy : py = 0 := hpZero hpx
-    simp [hpx, hpy]
-  · by_cases hqx : qx = 0
-    · have hqy : qy = 0 := hqZero hqx
-      simp [hpx, hqx, hqy]
-    · simp [hpx, hqx]
-      by_cases hx : px = qx
-      · have hx' : qx = px := hx.symm
-        rw [if_pos hx', if_pos hx]
-        by_cases hy : py + qy = 0
-        · have hqy : qy = -py := by linear_combination hy
-          simp [hx', hqy]
-        · have hqy : ¬ qy = -py := by
-            intro h
-            apply hy
-            rw [h]
-            ring
-          simp [hx', hqy, hy]
-          constructor <;>
-            by_cases hpy : py = 0 <;>
-              simp [hpy] <;> ring
-      · have hx' : ¬ qx = px := fun h => hx h.symm
-        simp [hx, hx']
-        constructor <;> ring
-
-theorem outputValue_eq_add {input : Input Fp}
-    (hp : Pallas.Valid input.p.coords)
-    (hq : Pallas.Valid input.q.coords) :
-    (outputValue input).coords =
-      Pallas.add input.p.coords input.q.coords := by
-  exact outputValue_eq_shortWeierstrass_add
-    (Point.y_eq_zero_of_valid_of_x_eq_zero hp)
-    (Point.y_eq_zero_of_valid_of_x_eq_zero hq)
-
-theorem outputValue_valid_pallas {input : Input Fp}
-    (hp : Pallas.Valid input.p.coords)
-    (hq : Pallas.Valid input.q.coords) :
-    Pallas.Valid (outputValue input).coords := by
-  rw [outputValue_eq_add hp hq]
-  exact CompElliptic.CurveForms.ShortWeierstrass.valid_add hp hq
-
-theorem pallas_two_ne_zero : (2 : Fp) ≠ 0 := by
-  decide
-
-theorem pallas_add_self_ne_zero {y : Fp} (hy : y ≠ 0) :
-    y + y ≠ 0 := by
-  intro h
-  have hmul : (2 : Fp) * y = 0 := by
-    linear_combination h
-  exact hy ((mul_eq_zero.mp hmul).resolve_left pallas_two_ne_zero)
-
-theorem pallas_y_eq_or_neg_of_same_x {p q : Point Fp}
-    (hp : Pallas.Valid p.coords) (hq : Pallas.Valid q.coords)
-    (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
-    q.y = p.y ∨ q.y = -p.y := by
-  have hpCurve : Pallas.OnCurve p.coords := by
-    rcases hp with hCurve | hIdentity
-    · exact hCurve
-    · rcases p with ⟨px, py⟩
-      simp only [Point.coords, Prod.mk.injEq] at hIdentity
-      exact False.elim (hpx hIdentity.1)
-  have hqCurve : Pallas.OnCurve q.coords := by
-    rcases hq with hCurve | hIdentity
-    · exact hCurve
-    · rcases q with ⟨qx, qy⟩
-      simp only [Point.coords, Prod.mk.injEq] at hIdentity
-      exact False.elim (hqx hIdentity.1)
-  unfold Pallas.OnCurve CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-    Pallas.a Pallas.b Point.coords at hpCurve hqCurve
-  have hsquare : (q.y - p.y) * (q.y + p.y) = 0 := by
-    rw [hx] at hqCurve
-    linear_combination hqCurve - hpCurve
-  rcases mul_eq_zero.mp hsquare with h | h
-  · left
-    exact sub_eq_zero.mp h
-  · right
-    linear_combination h
-
-end ValueModel
-
 namespace Gate
 
 def xQMinusXP {K : Type} [Sub K] (row : Input K) : K :=
@@ -501,6 +363,144 @@ def circuit : FormalAssertion Fp Input where
       · exact Or.inr (h6 hflag).2
 
 end Gate
+
+section ValueModel
+
+/-- The semantic side condition needed by Halo2's complete-add assignment logic.
+
+The Rust implementation treats `x = 0` as the identity branch. This is sound for the
+Pallas encoding because `(0, y)` is not a non-identity curve point. We keep that property
+explicit here instead of baking it into the row constraints. -/
+def XZeroImpliesIdentity (point : Point Fp) : Prop :=
+  point.x = 0 → point.y = 0
+
+def lambdaValue (input : Input Fp) : Fp :=
+  if input.q.x = input.p.x then
+    if input.p.y ≠ 0 then
+      (3 * input.p.x * input.p.x) * (2 * input.p.y)⁻¹
+    else
+      0
+  else
+    (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
+
+def outputValue (input : Input Fp) : Point Fp :=
+  let lambda := lambdaValue input
+  if input.p.x = 0 then
+    input.q
+  else if input.q.x = 0 then
+    input.p
+  else if input.q.x = input.p.x ∧ input.q.y = -input.p.y then
+    { x := 0, y := 0 }
+  else
+    let xR := lambda * lambda - input.p.x - input.q.x
+    let yR := lambda * (input.p.x - xR) - input.p.y
+    { x := xR, y := yR }
+
+def rowValue (input : Input Fp) : Gate.Input Fp where
+  x_p := input.p.x
+  y_p := input.p.y
+  x_qr := { curr := input.q.x, next := (outputValue input).x }
+  y_qr := { curr := input.q.y, next := (outputValue input).y }
+  lambda := lambdaValue input
+  alpha := (input.q.x - input.p.x)⁻¹
+  beta := input.p.x⁻¹
+  gamma := input.q.x⁻¹
+  delta :=
+    if input.q.x = input.p.x then
+      (input.q.y + input.p.y)⁻¹
+    else
+      0
+
+theorem outputValue_eq_shortWeierstrass_add {input : Input Fp}
+    (hpZero : XZeroImpliesIdentity input.p)
+    (hqZero : XZeroImpliesIdentity input.q) :
+    (outputValue input).coords =
+      CompElliptic.CurveForms.ShortWeierstrass.add
+        (0 : Fp) input.p.coords input.q.coords := by
+  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
+  unfold Point.coords outputValue lambdaValue
+    CompElliptic.CurveForms.ShortWeierstrass.add XZeroImpliesIdentity at *
+  simp only
+  by_cases hpx : px = 0
+  · have hpy : py = 0 := hpZero hpx
+    simp [hpx, hpy]
+  · by_cases hqx : qx = 0
+    · have hqy : qy = 0 := hqZero hqx
+      simp [hpx, hqx, hqy]
+    · simp [hpx, hqx]
+      by_cases hx : px = qx
+      · have hx' : qx = px := hx.symm
+        rw [if_pos hx', if_pos hx]
+        by_cases hy : py + qy = 0
+        · have hqy : qy = -py := by linear_combination hy
+          simp [hx', hqy]
+        · have hqy : ¬ qy = -py := by
+            intro h
+            apply hy
+            rw [h]
+            ring
+          simp [hx', hqy, hy]
+          constructor <;>
+            by_cases hpy : py = 0 <;>
+              simp [hpy] <;> ring
+      · have hx' : ¬ qx = px := fun h => hx h.symm
+        simp [hx, hx']
+        constructor <;> ring
+
+theorem outputValue_eq_add {input : Input Fp}
+    (hp : Pallas.Valid input.p.coords)
+    (hq : Pallas.Valid input.q.coords) :
+    (outputValue input).coords =
+      Pallas.add input.p.coords input.q.coords := by
+  exact outputValue_eq_shortWeierstrass_add
+    (Point.y_eq_zero_of_valid_of_x_eq_zero hp)
+    (Point.y_eq_zero_of_valid_of_x_eq_zero hq)
+
+theorem outputValue_valid_pallas {input : Input Fp}
+    (hp : Pallas.Valid input.p.coords)
+    (hq : Pallas.Valid input.q.coords) :
+    Pallas.Valid (outputValue input).coords := by
+  rw [outputValue_eq_add hp hq]
+  exact CompElliptic.CurveForms.ShortWeierstrass.valid_add hp hq
+
+theorem pallas_two_ne_zero : (2 : Fp) ≠ 0 := by
+  decide
+
+theorem pallas_add_self_ne_zero {y : Fp} (hy : y ≠ 0) :
+    y + y ≠ 0 := by
+  intro h
+  have hmul : (2 : Fp) * y = 0 := by
+    linear_combination h
+  exact hy ((mul_eq_zero.mp hmul).resolve_left pallas_two_ne_zero)
+
+theorem pallas_y_eq_or_neg_of_same_x {p q : Point Fp}
+    (hp : Pallas.Valid p.coords) (hq : Pallas.Valid q.coords)
+    (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
+    q.y = p.y ∨ q.y = -p.y := by
+  have hpCurve : Pallas.OnCurve p.coords := by
+    rcases hp with hCurve | hIdentity
+    · exact hCurve
+    · rcases p with ⟨px, py⟩
+      simp only [Point.coords, Prod.mk.injEq] at hIdentity
+      exact False.elim (hpx hIdentity.1)
+  have hqCurve : Pallas.OnCurve q.coords := by
+    rcases hq with hCurve | hIdentity
+    · exact hCurve
+    · rcases q with ⟨qx, qy⟩
+      simp only [Point.coords, Prod.mk.injEq] at hIdentity
+      exact False.elim (hqx hIdentity.1)
+  unfold Pallas.OnCurve CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+    Pallas.a Pallas.b Point.coords at hpCurve hqCurve
+  have hsquare : (q.y - p.y) * (q.y + p.y) = 0 := by
+    rw [hx] at hqCurve
+    linear_combination hqCurve - hpCurve
+  rcases mul_eq_zero.mp hsquare with h | h
+  · left
+    exact sub_eq_zero.mp h
+  · right
+    linear_combination h
+
+end ValueModel
 
 open Gate
 
