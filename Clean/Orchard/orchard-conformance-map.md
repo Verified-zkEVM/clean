@@ -106,8 +106,8 @@ Current Clean coverage:
 - `Clean.Orchard.Poseidon.PartialRounds.circuit`: `GATE partial rounds`
 - `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
 - `Clean.Orchard.Poseidon.Permute.P128Pow5T3.mds` / `mdsInv`: explicit Pallas-base
-  MDS constants ported from `halo2_poseidon/src/fp.rs`, with a proof that
-  `MDS_INV * MDS = I`.
+  MDS constants ported from `halo2_poseidon/src/fp.rs`, with proofs that
+  `MDS_INV * MDS = I` and `MDS * MDS_INV = I`.
 - `Clean.Orchard.Poseidon.Permute.permuteValue`: plain Lean implementation of the
   width-3/rate-2 `Pow5Chip::permute` schedule.
 - `Clean.Orchard.Poseidon.Permute.fullRoundCircuit`: packaged full-round loop-body
@@ -115,6 +115,12 @@ Current Clean coverage:
 - `Clean.Orchard.Poseidon.Permute.fullRounds4Circuit`: packaged fixed `foldl`
   subcircuit for the four full rounds used by each half of `Pow5Chip::permute`, proving
   one half against `fullRounds4Value`.
+- `Clean.Orchard.Poseidon.Permute.partialRoundRows28` / `partialRoundRows28P128`:
+  fixed `foldl` circuit shapes for the 28 partial-round rows; the P128 variant uses the
+  explicit P128 MDS/MDS_INV constants.
+- `Clean.Orchard.Poseidon.Permute.mainP128`: P128-specialized source-shaped
+  `Pow5Chip::permute` circuit skeleton using the packaged full-round halves and fixed
+  P128 partial-round fold.
 - `Clean.Orchard.Poseidon.Permute.main`: source-shaped `Pow5Chip::permute` round
   schedule skeleton; it witnesses intermediate full/partial round rows internally but is
   not yet packaged as a `FormalCircuit` proving `Permute.Spec`.

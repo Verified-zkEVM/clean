@@ -448,6 +448,65 @@ theorem mdsInv_mul_mds_apply (i : Fin 3) (r0 r1 r2 : Ecc.Fp) :
     simp at h20 h21 h22
     linear_combination r0 * h20 + r1 * h21 + r2 * h22
 
+/-- The explicit P128Pow5T3 matrices also satisfy `MDS * MDS_INV = I`. -/
+theorem mds_mul_mdsInv (i j : Fin 3) :
+    mds i.val 0 * mdsInv 0 j.val + mds i.val 1 * mdsInv 1 j.val +
+      mds i.val 2 * mdsInv 2 j.val = if i = j then 1 else 0 := by
+  fin_cases i <;> fin_cases j
+  · change ((252414977221963652040159588858838472674275672223867859224037507807533378360892347491770185987227473984153453302232272321051560602514070509623027844535049 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((1 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((595637745071801538825578886976562432581644860673815276503110093995341293242694362045492894193262535536314223432152895107050083064507232646992077115676495 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((217531341786394079401826084312512192285910869979333208328170817362611862824639970924504615738262408204698822943055036438887289778195141886775365442250612 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((723959034974947826707549888555860818275138155216983330064385751646232375073548645886988701046913083082546403953579206285658878342837952018582218493643876 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((918532324383891622975338057098125967491616155769391793003475552443493351153224249228714657126421740157939297767499982638760507272005172128514725787258468 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((1 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((501514742549093910219214367922196274107711409693404556357747047703746379909533615078807758679232151568580292825802103173657349816069537261968731118865690 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((1055154691395897133220687357238214748101287033514008102512480712710590474516577573561829630768527065762010498398099131403322639653409048170198115892553556 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((1113950849104371020328917096715328408984550394751395029376807079754116211609421596209246095727712973214048243646534966077216334084510236197702606993237303 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((0 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  · change ((656466542042339784845321807415608330631406907391930843417490863871470215434305642567462296102450372418544115486853139406047411092278185757157851485647346 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) = ((1 : Nat) : ZMod CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    rw [ZMod.natCast_eq_natCast_iff']
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+
+/-- Applying the explicit MDS matrix to `MDS_INV * n` returns `n`. -/
+theorem mds_mul_mdsInv_apply (i : Fin 3) (n0 n1 n2 : Ecc.Fp) :
+    (n0 * mdsInv 0 0 + n1 * mdsInv 0 1 + n2 * mdsInv 0 2) * mds i.val 0 +
+      (n0 * mdsInv 1 0 + n1 * mdsInv 1 1 + n2 * mdsInv 1 2) * mds i.val 1 +
+      (n0 * mdsInv 2 0 + n1 * mdsInv 2 1 + n2 * mdsInv 2 2) * mds i.val 2 =
+    match i with
+    | ⟨0, _⟩ => n0
+    | ⟨1, _⟩ => n1
+    | _ => n2 := by
+  fin_cases i
+  · have h00 := mds_mul_mdsInv ⟨0, by norm_num⟩ ⟨0, by norm_num⟩
+    have h01 := mds_mul_mdsInv ⟨0, by norm_num⟩ ⟨1, by norm_num⟩
+    have h02 := mds_mul_mdsInv ⟨0, by norm_num⟩ ⟨2, by norm_num⟩
+    simp at h00 h01 h02
+    linear_combination n0 * h00 + n1 * h01 + n2 * h02
+  · have h10 := mds_mul_mdsInv ⟨1, by norm_num⟩ ⟨0, by norm_num⟩
+    have h11 := mds_mul_mdsInv ⟨1, by norm_num⟩ ⟨1, by norm_num⟩
+    have h12 := mds_mul_mdsInv ⟨1, by norm_num⟩ ⟨2, by norm_num⟩
+    simp at h10 h11 h12
+    linear_combination n0 * h10 + n1 * h11 + n2 * h12
+  · have h20 := mds_mul_mdsInv ⟨2, by norm_num⟩ ⟨0, by norm_num⟩
+    have h21 := mds_mul_mdsInv ⟨2, by norm_num⟩ ⟨1, by norm_num⟩
+    have h22 := mds_mul_mdsInv ⟨2, by norm_num⟩ ⟨2, by norm_num⟩
+    simp at h20 h21 h22
+    linear_combination n0 * h20 + n1 * h21 + n2 * h22
+
 end P128Pow5T3
 
 /-- Constants needed by one width-3 full round. -/
@@ -494,6 +553,11 @@ def partialParams (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → 
   mInv21 := mdsInv 2 1
   mInv22 := mdsInv 2 2
 
+/-- P128Pow5T3 partial-round-row parameters for a source round index. -/
+def partialParamsP128 (roundConstants : Nat → State Ecc.Fp) (round : Nat) :
+    PartialRounds.Params Ecc.Fp :=
+  partialParams roundConstants P128Pow5T3.mds P128Pow5T3.mdsInv round
+
 /-- Value-level full-round transition, matching `Pow5State::full_round`. -/
 def fullRoundValue (params : FullRound.Params Ecc.Fp) (state : State Ecc.Fp) : State Ecc.Fp :=
   let row : FullRound.Row Ecc.Fp :=
@@ -530,20 +594,30 @@ def fullRounds4Value (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat 
     (fun state i => fullRoundValue (fullParams roundConstants mds (round + i.val)) state)
     state
 
-/-- Apply `count` consecutive value-level partial-round rows.  Each row represents two
-source partial rounds, so the source round index advances by two. -/
-def partialRoundRowsValue (roundConstants : Nat → State Ecc.Fp)
-    (mds mdsInv : Nat → Nat → Ecc.Fp) : Nat → Nat → State Ecc.Fp → State Ecc.Fp
-  | 0, _round, state => state
-  | count + 1, round, state =>
-      partialRoundRowsValue roundConstants mds mdsInv count (round + 2)
-        (partialRoundValue (partialParams roundConstants mds mdsInv round) state)
+/-- Apply the 28 consecutive P128Pow5T3 value-level partial-round rows used by
+`Pow5Chip::permute`, starting at source round 4. -/
+def partialRoundRows28P128Value (roundConstants : Nat → State Ecc.Fp)
+    (state : State Ecc.Fp) : State Ecc.Fp :=
+  Fin.foldl 28
+    (fun state i =>
+      partialRoundValue (partialParamsP128 roundConstants (4 + 2 * i.val)) state)
+    state
 
 /-- Plain Lean implementation of Orchard's `P128Pow5T3` `Pow5Chip::permute` schedule. -/
+def permuteP128Value (roundConstants : Nat → State Ecc.Fp) (input : State Ecc.Fp) :
+    State Ecc.Fp :=
+  let s := fullRounds4Value roundConstants P128Pow5T3.mds 0 input
+  let s := partialRoundRows28P128Value roundConstants s
+  fullRounds4Value roundConstants P128Pow5T3.mds (4 + 56) s
+
+/-- Parameterized compatibility wrapper for the old skeleton API, now also using the
+fixed 28-row fold shape. -/
 def permuteValue (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
     (input : State Ecc.Fp) : State Ecc.Fp :=
   let s := fullRounds4Value roundConstants mds 0 input
-  let s := partialRoundRowsValue roundConstants mds mdsInv 28 4 s
+  let s := Fin.foldl 28
+    (fun state i => partialRoundValue (partialParams roundConstants mds mdsInv (4 + 2 * i.val)) state)
+    s
   fullRounds4Value roundConstants mds (4 + 56) s
 
 /-- Source-level permutation spec: the circuit output is the plain Lean permutation. -/
@@ -597,14 +671,21 @@ def partialRound (params : PartialRounds.Params Ecc.Fp) (state : Var State Ecc.F
       next0 := next.x0, next1 := next.x1, next2 := next.x2 }
   return next
 
-/-!
-The analogous packaged partial-round-row circuit needs the explicit assumption that
-`mdsInv` is the inverse of `mds`: the Halo2 gate constrains `M⁻¹ * next`, while the
-honest value-level transition computes `next = M * r_mid`.  The gate-level assertion is
-already proved by `PartialRounds.circuit`; the source-level loop proof should add the
-matrix-inverse invariant before packaging this body as a `FormalCircuit` against
-`partialRoundValue`.
--/
+/-- One P128Pow5T3 source-shaped partial-round row. -/
+def partialRoundP128 (roundConstants : Nat → State Ecc.Fp) (round : Nat)
+    (state : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) :=
+  partialRound (partialParamsP128 roundConstants round) state
+
+/-- Apply the 28 consecutive P128Pow5T3 partial-round rows used by `Pow5Chip::permute`,
+starting at source round 4.  Each row represents two source partial rounds. -/
+def partialRoundRows28P128 (roundConstants : Nat → State Ecc.Fp)
+    (state : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) :=
+  Circuit.foldl (.finRange 28) state
+    (fun state i => partialRoundP128 roundConstants (4 + 2 * i.val) state)
+    (by simp only [circuit_norm, partialRoundP128, partialRound])
+    (by
+      apply Circuit.ConstantLength.fromConstantLength'
+      simp [partialRoundP128, partialRound, PartialRounds.circuit, circuit_norm])
 
 /-- Apply the four consecutive full-round rows used by `Pow5Chip::permute`, starting
 at source round `round`. -/
@@ -638,21 +719,30 @@ def fullRounds4Circuit (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Na
   completeness := by
     circuit_proof_start [fullRounds4, fullRounds4Value, fullRoundCircuit]
 
-/-- Apply `count` consecutive partial-round rows.  Each row represents two source
-partial rounds, so the source round index advances by two. -/
-def partialRoundRows (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp) :
-    Nat → Nat → Var State Ecc.Fp → Circuit Ecc.Fp (Var State Ecc.Fp)
-  | 0, _round, state => return state
-  | count + 1, round, state => do
-      let state ← partialRound (partialParams roundConstants mds mdsInv round) state
-      partialRoundRows roundConstants mds mdsInv count (round + 2) state
+/-- Apply the 28 consecutive partial-round rows used by `Pow5Chip::permute`, starting
+at source round 4.  Each row represents two source partial rounds. -/
+def partialRoundRows28 (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
+    (state : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) :=
+  Circuit.foldl (.finRange 28) state
+    (fun state i => partialRound (partialParams roundConstants mds mdsInv (4 + 2 * i.val)) state)
+    (by simp only [circuit_norm, partialRound])
+    (by
+      apply Circuit.ConstantLength.fromConstantLength'
+      simp [partialRound, PartialRounds.circuit, circuit_norm])
 
 /-- `Pow5Chip::permute` for Orchard's width-3/rate-2 Poseidon instance. -/
 def main (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
     (input : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) := do
   let s ← fullRounds4Circuit roundConstants mds 0 input
-  let s ← partialRoundRows roundConstants mds mdsInv 28 4 s
+  let s ← partialRoundRows28 roundConstants mds mdsInv s
   fullRounds4Circuit roundConstants mds (4 + 56) s
+
+/-- P128Pow5T3-specialized `Pow5Chip::permute` circuit shape. -/
+def mainP128 (roundConstants : Nat → State Ecc.Fp)
+    (input : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) := do
+  let s ← fullRounds4Circuit roundConstants P128Pow5T3.mds 0 input
+  let s ← partialRoundRows28P128 roundConstants s
+  fullRounds4Circuit roundConstants P128Pow5T3.mds (4 + 56) s
 
 /-!
 The next step is to package `main` as a `FormalCircuit` with an explicit elaborated
