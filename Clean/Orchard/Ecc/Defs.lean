@@ -44,14 +44,7 @@ theorem eval_eq (env : Environment F) (point : Point (Expression F)) :
     eval env point = ({ x := env point.x, y := env point.y } : Point F) := by
   with_unfolding_all rfl
 
-def onCurve (point : Point F) : Prop :=
-  point.y * point.y - point.x * point.x * point.x - pallasB = 0
-
-def isIdentityEncoding (point : Point F) : Prop :=
-  point.x = 0 ∧ point.y = 0
-
-def isPointOrIdentity (point : Point F) : Prop :=
-  isIdentityEncoding point ∨ onCurve point
+def zero : Point F := { x := 0, y := 0 }
 
 def coords (point : Point F) : F × F :=
   (point.x, point.y)

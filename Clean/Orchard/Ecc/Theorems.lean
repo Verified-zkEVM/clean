@@ -1,74 +1,53 @@
 import Clean.Orchard.Ecc.Defs
 import Mathlib.Tactic
 
+open CompElliptic.Curves.Pasta.Pallas CompElliptic.CurveForms
+
 namespace Orchard.Ecc
 
 namespace Point
 
-theorem isPointOrIdentity_neg {point : Point Fp}
-    (h : Point.isPointOrIdentity point) :
-    Point.isPointOrIdentity (Point.neg point) := by
-  rcases point with ⟨x, y⟩
-  rcases h with hIdentity | hCurve
-  · left
-    rcases hIdentity with ⟨hx, hy⟩
-    change x = 0 at hx
-    change y = 0 at hy
-    simp [Point.neg, Point.isIdentityEncoding, hx, hy]
-  · right
-    unfold Point.onCurve pallasB at hCurve
-    change Point.onCurve ({ x := x, y := -y } : Point Fp)
-    unfold Point.onCurve pallasB
-    ring_nf at hCurve ⊢
-    linear_combination hCurve
+lemma neg_coords (point : Point Fp) :
+    point.neg.coords = ShortWeierstrass.neg point.coords := by
+  simp only [Point.neg, Point.coords, ShortWeierstrass.neg]
+
+theorem valid_neg {point : Point Fp} (h : Valid point.coords) :
+    Valid point.neg.coords := by
+  rw [neg_coords]
+  exact ShortWeierstrass.valid_neg h
 
 theorem not_onCurve_of_x_eq_zero (y : Fp) :
-    ¬ Point.onCurve ({ x := 0, y } : Point Fp) := by
-  intro h
+    ¬ OnCurve ({ x := 0, y } : Point Fp).coords := by
   apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y
-  unfold CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
-  unfold Point.onCurve pallasB at h
-  rw [pow_two]
-  linear_combination h
 
-theorem not_isIdentityEncoding_of_onCurve {point : Point Fp}
-    (hPoint : Point.onCurve point) :
-    ¬ Point.isIdentityEncoding point := by
+theorem ne_zero_of_onCurve {point : Point Fp}
+  (hPoint : OnCurve point.coords) :
+    point ≠ zero := by
   rcases point with ⟨x, y⟩
   intro hIdentity
-  change x = 0 ∧ y = 0 at hIdentity
+  simp only [zero, mk.injEq] at hIdentity
   rw [hIdentity.1] at hPoint
   exact not_onCurve_of_x_eq_zero y hPoint
 
-theorem y_eq_zero_of_isPointOrIdentity_of_x_eq_zero {point : Point Fp}
-    (hPoint : Point.isPointOrIdentity point) :
+theorem y_eq_zero_of_valid_of_x_eq_zero {point : Point Fp}
+  (hPoint : Valid point.coords) :
     point.x = 0 → point.y = 0 := by
   rcases point with ⟨x, y⟩
+  simp only [Point.coords] at *
   intro hx
-  rcases hPoint with hIdentity | hCurve
-  · exact hIdentity.2
-  · by_contra hy
-    exact not_onCurve_of_x_eq_zero y (by
-      change x = 0 at hx
-      rw [hx] at hCurve
-      exact hCurve)
+  rcases hPoint with hCurve | hIdentity
+  · rw [hx] at hCurve
+    nomatch not_onCurve_of_x_eq_zero y hCurve
+  · simp_all
 
-theorem y_ne_zero_of_isPointOrIdentity_of_x_ne_zero {point : Point Fp}
-    (hPoint : Point.isPointOrIdentity point) (hx : point.x ≠ 0) :
+theorem y_ne_zero_of_valid_of_x_ne_zero {point : Point Fp}
+    (hPoint : Valid point.coords) (hx : point.x ≠ 0) :
     point.y ≠ 0 := by
-  intro hy
   rcases point with ⟨x, y⟩
-  change x ≠ 0 at hx
-  change y = 0 at hy
-  rcases hPoint with hIdentity | hCurve
-  · exact hx hIdentity.1
-  · subst hy
-    apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_y_zero x
-    unfold CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-      CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
-    unfold Point.onCurve pallasB at hCurve
-    rw [pow_two]
-    linear_combination hCurve
+  simp only [Point.coords] at *
+  rintro rfl
+  rcases hPoint with hCurve | hIdentity
+  · apply no_onCurve_y_zero x hCurve
+  · simp_all
 
 end Orchard.Ecc.Point
