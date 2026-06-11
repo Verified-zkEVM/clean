@@ -21,6 +21,9 @@ Source:
 
 Current Clean coverage:
 
+- `Clean.Orchard.Ecc.Defs`: shared Pallas field, point, fixed-base, and scalar-mul
+  relation definitions
+- `Clean.Orchard.Ecc.Theorems`: shared ECC lemmas actually used by current circuits
 - `Clean.Orchard.Ecc.PointOrIdentity.circuit`: `GATE witness point`
 - `Clean.Orchard.Ecc.NonIdentityPoint.circuit`: `GATE witness non-identity point`
 - `Clean.Orchard.Ecc.IncompleteAdd.circuit`: entry-level incomplete-add circuit
