@@ -499,15 +499,6 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     fullLinks row.lastFull ∧
     stateEq (fullNext row.lastFull.r3) row.output
 
-def wiringSpec (row : Row Ecc.PallasBaseField) : Prop :=
-  stateEq row.initial (fullCur row.firstFull.r0) ∧
-    fullLinks row.firstFull ∧
-    stateEq (fullNext row.firstFull.r3) (partialCur row.partialRows.r0) ∧
-    partialLinks row.partialRows ∧
-    stateEq (partialNext row.partialRows.r27) (fullCur row.lastFull.r0) ∧
-    fullLinks row.lastFull ∧
-    stateEq (fullNext row.lastFull.r3) row.output
-
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   FullRound.circuit row.firstFull.r0
   FullRound.circuit row.firstFull.r1
