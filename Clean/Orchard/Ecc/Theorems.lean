@@ -33,6 +33,15 @@ theorem not_onCurve_of_x_eq_zero (y : Fp) :
   rw [pow_two]
   linear_combination h
 
+theorem not_isIdentityEncoding_of_onCurve {point : Point Fp}
+    (hPoint : Point.onCurve point) :
+    ¬ Point.isIdentityEncoding point := by
+  rcases point with ⟨x, y⟩
+  intro hIdentity
+  change x = 0 ∧ y = 0 at hIdentity
+  rw [hIdentity.1] at hPoint
+  exact not_onCurve_of_x_eq_zero y hPoint
+
 theorem y_eq_zero_of_isPointOrIdentity_of_x_eq_zero {point : Point Fp}
     (hPoint : Point.isPointOrIdentity point) :
     point.x = 0 → point.y = 0 := by

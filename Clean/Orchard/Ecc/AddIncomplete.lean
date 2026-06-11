@@ -1,4 +1,4 @@
-import Clean.Orchard.Ecc.Defs
+import Clean.Orchard.Ecc.Theorems
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
@@ -10,9 +10,8 @@ Reference:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add_incomplete.rs`
 - `incomplete addition`
 
-The Rust assignment rejects exceptional cases where either input is encoded identity or
-`x_p = x_q`. This Clean circuit exposes those rejection cases as assumptions and
-specifies the output as short-Weierstrass addition.
+The Rust assignment takes non-identity input points, rejects `x_p = x_q`, and assigns the
+next-row output as their incomplete short-Weierstrass sum.
 -/
 
 
@@ -57,8 +56,8 @@ theorem outputValue_eq_swAdd {input : Input Fp}
   constructor <;> ring
 
 def Assumptions (input : Input Fp) : Prop :=
-  ¬ Point.isIdentityEncoding input.p ∧
-    ¬ Point.isIdentityEncoding input.q ∧
+  Point.onCurve input.p ∧
+    Point.onCurve input.q ∧
     input.p.x ≠ input.q.x
 
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
@@ -215,7 +214,11 @@ instance elaborated : ElaboratedCircuit Fp Input Point main := by
 theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, Gate.circuit, Gate.Spec,
     outputValue_eq_swAdd]
-  rcases h_assumptions with ⟨hp, hq, hx⟩
+  rcases h_assumptions with ⟨hpCurve, hqCurve, hx⟩
+  have hp : ¬ Point.isIdentityEncoding input_p :=
+    Point.not_isIdentityEncoding_of_onCurve hpCurve
+  have hq : ¬ Point.isIdentityEncoding input_q :=
+    Point.not_isIdentityEncoding_of_onCurve hqCurve
   rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
   let row : Gate.Row Fp := {
         x_p := Expression.eval env (varFromOffset Point i₀).x
