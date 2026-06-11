@@ -62,7 +62,7 @@ def fromPoints {K : Type} (p q r : Point K)
 
 end CompleteAddRow
 
-namespace CompleteAdd
+namespace Add
 
 structure Input (F : Type) where
   p : Point F
@@ -206,7 +206,7 @@ def xQMinusXP {K : Type} [Sub K] (row : CompleteAddRow K) : K :=
 def xPMinusXR {K : Type} [Sub K] (row : CompleteAddRow K) : K :=
   row.p.x - row.r.x
 
-def yQPlusYP {K : Type} [Add K] (row : CompleteAddRow K) : K :=
+def yQPlusYP {K : Type} [_root_.Add K] (row : CompleteAddRow K) : K :=
   row.q.y + row.p.y
 
 def ifAlpha {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
@@ -218,7 +218,7 @@ def ifBeta {K : Type} [Mul K] (row : CompleteAddRow K) : K :=
 def ifGamma {K : Type} [Mul K] (row : CompleteAddRow K) : K :=
   row.q.x * row.gamma
 
-def ifDelta {K : Type} [Add K] [Mul K] (row : CompleteAddRow K) : K :=
+def ifDelta {K : Type} [_root_.Add K] [Mul K] (row : CompleteAddRow K) : K :=
   yQPlusYP row * row.delta
 
 def nonexceptionalXR {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
@@ -227,11 +227,11 @@ def nonexceptionalXR {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
 def nonexceptionalYR {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.lambda * xPMinusXR row - row.p.y - row.r.y
 
-def poly1 {K : Type} [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
+def poly1 {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   let incomplete := xQMinusXP row * row.lambda - (row.q.y - row.p.y)
   xQMinusXP row * incomplete
 
-def poly2 {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 3]
+def poly2 {K : Type} [One K] [_root_.Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 3]
     (row : CompleteAddRow K) : K :=
   (1 - ifAlpha row) * (2 * row.p.y * row.lambda - 3 * row.p.x * row.p.x)
 
@@ -241,10 +241,10 @@ def poly3a {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
 def poly3b {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.p.x * row.q.x * xQMinusXP row * nonexceptionalYR row
 
-def poly3c {K : Type} [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
+def poly3c {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.p.x * row.q.x * yQPlusYP row * nonexceptionalXR row
 
-def poly3d {K : Type} [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
+def poly3d {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   row.p.x * row.q.x * yQPlusYP row * nonexceptionalYR row
 
 def poly4a {K : Type} [One K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
@@ -259,10 +259,10 @@ def poly5a {K : Type} [One K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
 def poly5b {K : Type} [One K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifGamma row) * (row.r.y - row.p.y)
 
-def poly6a {K : Type} [One K] [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
+def poly6a {K : Type} [One K] [_root_.Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifAlpha row - ifDelta row) * row.r.x
 
-def poly6b {K : Type} [One K] [Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
+def poly6b {K : Type} [One K] [_root_.Add K] [Sub K] [Mul K] (row : CompleteAddRow K) : K :=
   (1 - ifAlpha row - ifDelta row) * row.r.y
 
 def slopeLine {K : Type} [Sub K] [Mul K] (row : CompleteAddRow K) : Prop :=
@@ -859,7 +859,7 @@ def circuit : FormalCircuit Fp Input Point where
 
 end EntryPoint
 
-end CompleteAdd
+end Add
 
 end Ecc
 end Orchard

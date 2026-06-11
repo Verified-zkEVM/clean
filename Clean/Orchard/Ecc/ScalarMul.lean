@@ -1037,13 +1037,13 @@ def circuit : FormalAssertion Ecc.Fp Row where
         · exfalso
           have hEq : (1 : Ecc.Fp) = 0 - 1 := hSign.symm.trans hNeg.1
           have htwo : (2 : Ecc.Fp) = 0 := by linear_combination hEq
-          exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
+          exact Ecc.Add.pallas_two_ne_zero htwo
       · intro hSign
         rcases hRelation with hPos | hNeg
         · exfalso
           have hEq : (1 : Ecc.Fp) = 0 - 1 := hPos.1.symm.trans hSign
           have htwo : (2 : Ecc.Fp) = 0 := by linear_combination hEq
-          exact Ecc.CompleteAdd.pallas_two_ne_zero htwo
+          exact Ecc.Add.pallas_two_ne_zero htwo
         · have hPoint := hNeg.2
           have hy := congrArg (fun p : Ecc.Fp × Ecc.Fp => p.2) hPoint
           change input_signedY = -input_y at hy
