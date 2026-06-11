@@ -80,6 +80,8 @@ Bottom-up implementation order currently inferred from those tagged sources:
    - Status: `CondSwap.circuit` ports the three gate constraints for scalar field values.
      `PointMux.circuit` ports `mux_on_points` by composing the scalar field mux on
      `x` and `y` and returning the selected Pallas point.
+     `NonIdentityPointMux.circuit` ports `mux_on_non_identity_points` by adding the
+     non-identity point assertion for the selected output.
 3. ECC addition layer:
    `halo2_gadgets/src/ecc/chip/add_incomplete.rs`,
    `halo2_gadgets/src/ecc/chip/add.rs`

@@ -202,6 +202,82 @@ end PointMux
 
 /-!
 Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/cond_swap.rs`
+- `CondSwapChip<pallas::Base>::mux_on_non_identity_points`
+
+This is the non-identity point variant of `PointMux`: it selects one input point and
+asserts that the selected output satisfies the Pallas curve equation.
+-/
+
+namespace NonIdentityPointMux
+
+abbrev Inputs := PointMux.Inputs
+
+@[circuit_norm]
+def Assumptions (input : Inputs Ecc.PallasBaseField) : Prop :=
+  PointMux.Assumptions input ∧ Ecc.onCurve input.left ∧ Ecc.onCurve input.right
+
+@[circuit_norm]
+def Spec (input : Inputs Ecc.PallasBaseField) (output : Ecc.Point Ecc.PallasBaseField) :
+    Prop :=
+  PointMux.Spec input output ∧ Ecc.onCurve output
+
+def main (input : Var Inputs Ecc.PallasBaseField) :
+    Circuit Ecc.PallasBaseField (Var Ecc.Point Ecc.PallasBaseField) := do
+  let output ← PointMux.circuit input
+  Ecc.NonIdentityPoint.circuit output
+  return output
+
+instance elaborated : ElaboratedCircuit Ecc.PallasBaseField Inputs Ecc.Point main := by
+  elaborate_circuit
+
+theorem onCurve_of_spec_and_assumptions
+    {input : Inputs Ecc.PallasBaseField} {output : Ecc.Point Ecc.PallasBaseField}
+    (hAssumptions : Assumptions input)
+    (hSpec : PointMux.Spec input output) :
+    Ecc.onCurve output := by
+  rcases hAssumptions with ⟨_, hLeft, hRight⟩
+  by_cases hChoiceOne : input.choice = 1
+  · simp [PointMux.Spec, hChoiceOne] at hSpec
+    rw [hSpec]
+    exact hRight
+  · simp [PointMux.Spec, hChoiceOne] at hSpec
+    rw [hSpec]
+    exact hLeft
+
+theorem soundness :
+    Soundness Ecc.PallasBaseField main Assumptions Spec := by
+  circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
+    Ecc.NonIdentityPoint.circuit, Ecc.onCurve]
+  rcases h_assumptions with ⟨hMuxAssumptions, _, _⟩
+  rcases h_holds with ⟨hMux, hOnCurve⟩
+  exact ⟨hMux hMuxAssumptions, hOnCurve⟩
+
+theorem completeness :
+    Completeness Ecc.PallasBaseField main Assumptions := by
+  circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
+    Ecc.NonIdentityPoint.circuit, Ecc.onCurve]
+  have hAllAssumptions := h_assumptions
+  change Assumptions
+    ({ choice := input_choice, left := input_left, right := input_right } :
+      Inputs Ecc.PallasBaseField) at hAllAssumptions
+  rcases h_assumptions with ⟨hMuxAssumptions, _, _⟩
+  constructor
+  · exact hMuxAssumptions
+  · exact (onCurve_of_spec_and_assumptions hAllAssumptions (h_env hMuxAssumptions))
+
+def circuit : FormalCircuit Ecc.PallasBaseField Inputs Ecc.Point where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end NonIdentityPointMux
+
+/-!
+Reference:
 `orchard@0.14.0/src/circuit/gadget/add_chip.rs`
 - `Field element addition: c = a + b`
 
