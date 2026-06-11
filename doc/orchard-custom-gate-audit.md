@@ -12,10 +12,7 @@ The following Clean circuits now carry source-derived gate names:
 
 - `GATE witness point`
 - `GATE witness non-identity point`
-- `GATE incomplete addition`
 - `GATE complete addition`
-- `GATE a' = b ⋅ swap + a ⋅ (1-swap)`
-- `GATE Field element addition: c = a + b`
 - `GATE range check`
 - `GATE Short lookup bitshift`
 - `GATE LSB check`
@@ -56,17 +53,14 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   selector cells, rotations, or equality-enabled columns. This is enough for arithmetic
   proof work, but not enough to reconstruct the Halo2 layout or pinned VK.
 
-- **`GATE incomplete addition`:** Clean models this as a `FormalCircuit` from two input
-  points to an output point. The source gate is a row-level custom gate with advice cells
-  for the output and auxiliary slope values in a specific column/rotation layout.
-
-- **`GATE a' = b ⋅ swap + a ⋅ (1-swap)`:** Clean models conditional swap as a
-  `FormalCircuit` that witnesses outputs. The source gate constrains assigned advice cells
-  in the configured cond-swap layout.
-
-- **`GATE Field element addition: c = a + b`:** Clean models the add chip as a
-  `FormalCircuit` that witnesses `c`. The source gate constrains configured advice cells
-  `a`, `b`, and `c`.
+- **Missing factored gate assertions for entry circuits:** `Ecc.IncompleteAdd.circuit`,
+  `Utilities.CondSwap.circuit`, and `Utilities.AddChip.circuit` are entry-level
+  `FormalCircuit`s that witness outputs internally. That is the right API shape for their
+  callers, but the source custom gates should still be factored out as named
+  `FormalAssertion`s and composed by these entry circuits:
+  - `GATE incomplete addition`
+  - `GATE a' = b ⋅ swap + a ⋅ (1-swap)`
+  - `GATE Field element addition: c = a + b`
 
 - **`GATE range check` and `LookupRangeCheck.shortRangeCircuit`:** Clean uses polynomial
   range membership for some range checks. Source lookup-backed range checks must be ported

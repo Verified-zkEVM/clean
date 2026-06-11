@@ -826,7 +826,8 @@ theorem completeness : Completeness PallasBaseField main Assumptions := by
   simp_all [outputValue, lambda, poly1, poly2, sub_eq_add_neg]
 
 def circuit : FormalCircuit PallasBaseField AddInputs Point where
-  name := "GATE incomplete addition"
+  -- TODO: factor the source `incomplete addition` custom gate into a named
+  -- `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
   main
   elaborated
   Assumptions

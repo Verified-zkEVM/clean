@@ -104,7 +104,8 @@ theorem completeness :
     · simpa [sub_eq_add_neg] using IsBool.iff_mul_sub_one.mp h_assumptions
 
 def circuit : FormalCircuit Ecc.PallasBaseField CondSwapInputs CondSwapOutput where
-  name := "GATE a' = b ⋅ swap + a ⋅ (1-swap)"
+  -- TODO: factor the source `a' = b ⋅ swap + a ⋅ (1-swap)` custom gate into a
+  -- named `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
   main
   elaborated
   Assumptions
@@ -319,7 +320,8 @@ theorem completeness : Completeness Ecc.PallasBaseField main (fun _ => True) := 
   ring
 
 def circuit : FormalCircuit Ecc.PallasBaseField fieldPair field where
-  name := "GATE Field element addition: c = a + b"
+  -- TODO: factor the source `Field element addition: c = a + b` custom gate into a
+  -- named `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
   main
   elaborated
   Assumptions := fun _ => True
