@@ -150,6 +150,27 @@ theorem pallasScalarMulCoords_eq_groupAction
         (E := CompElliptic.Curves.Pasta.Pallas.curve)
         scalar (pallasSWPoint base hbase))
 
+def pallasScalarMulGroupActionCoords
+    (scalar : ℕ) (base : Point PallasBaseField)
+    (hbase : isPointOrIdentity base) :
+    PallasBaseField × PallasBaseField :=
+  (((scalar • pallasSWPoint base hbase).x),
+    ((scalar • pallasSWPoint base hbase).y))
+
+theorem pallasScalarMulGroupActionCoords_eq
+    (scalar : ℕ) {base : Point PallasBaseField}
+    (hbase : isPointOrIdentity base) :
+    pallasScalarMulGroupActionCoords scalar base hbase =
+      pallasScalarMulCoords scalar base :=
+  pallasScalarMulCoords_eq_groupAction scalar hbase
+
+theorem isPallasScalarMul_iff_groupAction
+    {scalar : ℕ} {base product : Point PallasBaseField}
+    (hbase : isPointOrIdentity base) :
+    IsPallasScalarMul scalar base product ↔
+      pointCoords product = pallasScalarMulGroupActionCoords scalar base hbase := by
+  rw [IsPallasScalarMul, pallasScalarMulGroupActionCoords_eq]
+
 theorem pallasScalarMulCoords_zero (base : Point PallasBaseField) :
     pallasScalarMulCoords 0 base = (0, 0) := by
   rfl
@@ -271,16 +292,21 @@ theorem isOrchardFixedBaseMul_isPointOrIdentity
 def orchardFixedBaseMulGroupActionCoords
     (baseId : OrchardFixedBaseId) (scalar : ℕ) :
     PallasBaseField × PallasBaseField :=
-  (((scalar • pallasSWPoint (fixedBasePoint baseId)
-      (fixedBasePoint_isPointOrIdentity baseId)).x),
-    ((scalar • pallasSWPoint (fixedBasePoint baseId)
-      (fixedBasePoint_isPointOrIdentity baseId)).y))
+  pallasScalarMulGroupActionCoords scalar (fixedBasePoint baseId)
+    (fixedBasePoint_isPointOrIdentity baseId)
 
 theorem orchardFixedBaseMulCoords_eq_groupAction
     (baseId : OrchardFixedBaseId) (scalar : ℕ) :
     orchardFixedBaseMulGroupActionCoords baseId scalar =
       pallasScalarMulCoords scalar (fixedBasePoint baseId) :=
   pallasScalarMulCoords_eq_groupAction scalar (fixedBasePoint_isPointOrIdentity baseId)
+
+theorem isOrchardFixedBaseMul_iff_groupAction
+    {baseId : OrchardFixedBaseId} {scalar : ℕ} {product : Point PallasBaseField} :
+    IsOrchardFixedBaseMul baseId scalar product ↔
+      pointCoords product = orchardFixedBaseMulGroupActionCoords baseId scalar := by
+  rw [IsOrchardFixedBaseMul, orchardFixedBaseMulGroupActionCoords,
+    isPallasScalarMul_iff_groupAction]
 
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)

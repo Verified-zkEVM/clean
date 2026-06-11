@@ -715,6 +715,17 @@ theorem pkDOld_scalar_mul_of_orchardSpec
     Ecc.IsPallasScalarMul ivkScalar gdOld (pkDOld row) :=
   pkDOld_scalar_mul_of_derived_scalar_mul hSpec.2 hSpec.1
 
+theorem pkDOld_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {ivkScalar : ℕ}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (hGdOld : Ecc.isPointOrIdentity gdOld)
+    (hSpec : OrchardSpec row ivkScalar gdOld) :
+    Ecc.pointCoords (pkDOld row) =
+      Ecc.pallasScalarMulGroupActionCoords ivkScalar gdOld hGdOld :=
+  (Ecc.isPallasScalarMul_iff_groupAction hGdOld).1
+    (pkDOld_scalar_mul_of_orchardSpec hSpec)
+
 theorem pkDOld_isPointOrIdentity_of_derived_scalar_mul
     {row : Row Ecc.PallasBaseField}
     {scalar : ℕ}
