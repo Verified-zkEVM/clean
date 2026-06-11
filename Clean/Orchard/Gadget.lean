@@ -17,10 +17,10 @@ References:
 `orchard@0.14.0/src/circuit.rs`
 - `Spend authority`
 
-These assertions model how the Rust circuit connects outputs from fixed-base
+These entry assertions model how the Rust circuit connects outputs from fixed-base
 multiplication, Poseidon, the field-addition chip, and complete point addition. They do
-not model those sub-gadgets internally; their outputs and complete-addition auxiliary
-witnesses are explicit row values.
+not model scalar multiplication internally yet; its product outputs are explicit row
+values. Complete point addition is composed through `Ecc.CompleteAdd.Entry.circuit`.
 -/
 
 namespace Orchard
@@ -29,46 +29,6 @@ namespace Gadget
 variable {F : Type} [Field F]
 
 namespace ValueCommitment
-
-structure Row (F : Type) where
-  valueProductX : F
-  valueProductY : F
-  blindProductX : F
-  blindProductY : F
-  cvX : F
-  cvY : F
-  lambda : F
-  alpha : F
-  beta : F
-  gamma : F
-  delta : F
-deriving ProvableStruct
-
-def addRow {K : Type} (row : Row K) : Ecc.CompleteAddRow K where
-  p := { x := row.valueProductX, y := row.valueProductY }
-  q := { x := row.blindProductX, y := row.blindProductY }
-  r := { x := row.cvX, y := row.cvY }
-  lambda := row.lambda
-  alpha := row.alpha
-  beta := row.beta
-  gamma := row.gamma
-  delta := row.delta
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Ecc.CompleteAdd.Spec (addRow row)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Ecc.CompleteAdd.circuit (addRow row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
-    simp_all
-  completeness := by
-    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
-    simp_all
 
 namespace Entry
 
@@ -256,64 +216,6 @@ end Entry
 end ValueCommitment
 
 namespace Nullifier
-
-structure Row (F : Type) where
-  poseidonHash : F
-  psi : F
-  scalar : F
-  cmX : F
-  cmY : F
-  productX : F
-  productY : F
-  nfPointX : F
-  nfPointY : F
-  nf : F
-  lambda : F
-  alpha : F
-  beta : F
-  gamma : F
-  delta : F
-deriving ProvableStruct
-
-def addRow {K : Type} (row : Row K) : Ecc.CompleteAddRow K where
-  p := { x := row.cmX, y := row.cmY }
-  q := { x := row.productX, y := row.productY }
-  r := { x := row.nfPointX, y := row.nfPointY }
-  lambda := row.lambda
-  alpha := row.alpha
-  beta := row.beta
-  gamma := row.gamma
-  delta := row.delta
-
-def scalarCheck {K : Type} [Add K] [Sub K] (row : Row K) : K :=
-  row.poseidonHash + row.psi - row.scalar
-
-def extractCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.nfPointX - row.nf
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  row.scalar = row.poseidonHash + row.psi ∧
-    Ecc.CompleteAdd.Spec (addRow row) ∧
-    row.nf = row.nfPointX
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertZero (scalarCheck row)
-  Ecc.CompleteAdd.circuit (addRow row)
-  assertZero (extractCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, scalarCheck, extractCheck, addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
-    rcases h_holds with ⟨hScalar, hAdd, hExtract⟩
-    exact ⟨by linear_combination -hScalar, hAdd, by linear_combination -hExtract⟩
-  completeness := by
-    circuit_proof_start [main, Spec, scalarCheck, extractCheck, addRow,
-      Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
-    rcases h_spec with ⟨hScalar, hAdd, hExtract⟩
-    exact ⟨by linear_combination -hScalar, hAdd, by linear_combination -hExtract⟩
 
 namespace Entry
 
@@ -669,50 +571,10 @@ Reference:
 
 The source computes `alpha_commitment = [alpha] SpendAuthG`, then
 `rk = alpha_commitment + ak_P`, and constrains `rk` to public inputs. The fixed-base
-product is explicit here; this assertion models the complete-addition wiring from that
-product and `ak_P` to `rk`.
+product is explicit here; this entry assertion composes the complete-addition API from
+that product and `ak_P` to `rk`.
 -/
 namespace SpendAuth
-
-structure Row (F : Type) where
-  alphaProductX : F
-  alphaProductY : F
-  akX : F
-  akY : F
-  rkX : F
-  rkY : F
-  lambda : F
-  alpha : F
-  beta : F
-  gamma : F
-  delta : F
-deriving ProvableStruct
-
-def addRow {K : Type} (row : Row K) : Ecc.CompleteAddRow K where
-  p := { x := row.alphaProductX, y := row.alphaProductY }
-  q := { x := row.akX, y := row.akY }
-  r := { x := row.rkX, y := row.rkY }
-  lambda := row.lambda
-  alpha := row.alpha
-  beta := row.beta
-  gamma := row.gamma
-  delta := row.delta
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Ecc.CompleteAdd.Spec (addRow row)
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Ecc.CompleteAdd.circuit (addRow row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
-    simp_all
-  completeness := by
-    circuit_proof_start [main, Spec, addRow, Ecc.CompleteAdd.circuit, Ecc.CompleteAdd.Spec]
-    simp_all
 
 namespace Entry
 
