@@ -422,6 +422,38 @@ theorem spendAuthRelation_of_orchardSpec
       row.spendAuth spendAuthScalar :=
   Gadget.SpendAuth.Entry.spendAuthRelation_of_orchardSpec h.2.2.2.1
 
+theorem valueProduct_fixedBaseMul_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Ecc.IsOrchardFixedBaseMul .valueCommitV valueScalar
+      (Gadget.ValueCommitment.Entry.valueProduct row.valueCommitment) :=
+  h.2.1.1
+
+theorem blindProduct_fixedBaseMul_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Ecc.IsOrchardFixedBaseMul .valueCommitR blindScalar
+      (Gadget.ValueCommitment.Entry.blindProduct row.valueCommitment) :=
+  h.2.1.2.1
+
+theorem nullifierProduct_fixedBaseMul_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Ecc.IsOrchardFixedBaseMul .nullifierK nullifierScalar
+      (Gadget.Nullifier.Entry.product row.nullifier.nullifier) :=
+  h.2.2.1.2.1.1
+
+theorem spendAuthProduct_fixedBaseMul_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Ecc.IsOrchardFixedBaseMul .spendAuthG spendAuthScalar
+      (Gadget.SpendAuth.Entry.alphaProduct row.spendAuth) :=
+  h.2.2.2.1.1
+
 theorem valueProduct_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
     {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
