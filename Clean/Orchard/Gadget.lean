@@ -335,46 +335,47 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
         (Ecc.pointCoords (addInput row).q) ∧
     row.nf = row.nfPointX
 
-def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
-  Ecc.IsOrchardFixedBaseMul .nullifierK scalar (product row) ∧
+def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : Ecc.PallasBaseField) : Prop :=
+  Ecc.IsOrchardFixedBaseBaseFieldMul .nullifierK scalar (product row) ∧
     Spec row
 
-def OrchardNullifierRelation (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
+def OrchardNullifierRelation (row : Row Ecc.PallasBaseField)
+    (scalar : Ecc.PallasBaseField) : Prop :=
   row.scalar = row.poseidonHash + row.psi ∧
     Ecc.pointCoords (output row) =
       CompElliptic.CurveForms.ShortWeierstrass.add
         (0 : Ecc.PallasBaseField)
         (Ecc.pointCoords (cmPoint row))
-        (Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar) ∧
+        (Ecc.orchardFixedBaseBaseFieldMulGroupActionCoords .nullifierK scalar) ∧
     row.nf = row.nfPointX
 
 theorem spec_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     Spec row :=
   h.2
 
 theorem product_groupAction_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     Ecc.pointCoords (product row) =
-      Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar :=
-  (Ecc.isOrchardFixedBaseMul_iff_groupAction).1 h.1
+      Ecc.orchardFixedBaseBaseFieldMulGroupActionCoords .nullifierK scalar :=
+  (Ecc.isOrchardFixedBaseBaseFieldMul_iff_groupAction).1 h.1
 
 theorem product_identity_of_orchardSpec_scalar_zero
     {row : Row Ecc.PallasBaseField}
     (h : OrchardSpec row 0) :
     Ecc.isIdentityEncoding (product row) := by
-  exact (Ecc.isOrchardFixedBaseMul_zero_iff).1 h.1
+  exact (Ecc.isPallasBaseFieldScalarMul_zero_iff).1 h.1 |>.2
 
 theorem product_eq_fixedBase_of_orchardSpec_scalar_one
     {row : Row Ecc.PallasBaseField}
     (h : OrchardSpec row 1) :
     product row = Ecc.fixedBasePoint .nullifierK := by
-  exact (Ecc.isOrchardFixedBaseMul_one_iff).1 h.1
+  exact (Ecc.isPallasBaseFieldScalarMul_one_iff).1 h.1 |>.2
 
 theorem nullifierRelation_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     OrchardNullifierRelation row scalar := by
   have hProduct := product_groupAction_of_orchardSpec h
@@ -406,12 +407,12 @@ theorem assumptions_of_scalar_mul_product
     (Ecc.isPallasScalarMul_isPointOrIdentity hBase hProduct)
 
 theorem assumptions_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (hCm : Ecc.isPointOrIdentity (cmPoint row))
     (h : OrchardSpec row scalar) :
     Assumptions row :=
   assumptions_of_product_valid hCm
-    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1)
+    (Ecc.isOrchardFixedBaseBaseFieldMul_isPointOrIdentity h.1)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (row.poseidonHash + row.psi - row.scalar)
@@ -521,33 +522,33 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     Nullifier.Entry.Spec row.nullifier ∧
     row.hash.hash = row.nullifier.poseidonHash
 
-def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
+def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : Ecc.PallasBaseField) : Prop :=
   Poseidon.Hash2.Spec row.hash ∧
     Nullifier.Entry.OrchardSpec row.nullifier scalar ∧
     row.hash.hash = row.nullifier.poseidonHash
 
 theorem spec_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     Spec row :=
   ⟨h.1, Nullifier.Entry.spec_of_orchardSpec h.2.1, h.2.2⟩
 
 theorem product_fixedBaseMul_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
-    Ecc.IsOrchardFixedBaseMul .nullifierK scalar
+    Ecc.IsOrchardFixedBaseBaseFieldMul .nullifierK scalar
       (Nullifier.Entry.product row.nullifier) :=
   h.2.1.1
 
 theorem product_groupAction_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     Ecc.pointCoords (Nullifier.Entry.product row.nullifier) =
-      Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar :=
+      Ecc.orchardFixedBaseBaseFieldMulGroupActionCoords .nullifierK scalar :=
   Nullifier.Entry.product_groupAction_of_orchardSpec h.2.1
 
 theorem nullifierRelation_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     Nullifier.Entry.OrchardNullifierRelation row.nullifier scalar :=
   Nullifier.Entry.nullifierRelation_of_orchardSpec h.2.1
@@ -645,33 +646,33 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     Nullifier.Entry.Spec row.nullifier ∧
     row.boundary.hash.hash = row.nullifier.poseidonHash
 
-def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
+def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : Ecc.PallasBaseField) : Prop :=
   Poseidon.Hash2PermutationBoundary.Spec row.boundary ∧
     Nullifier.Entry.OrchardSpec row.nullifier scalar ∧
     row.boundary.hash.hash = row.nullifier.poseidonHash
 
 theorem spec_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     Spec row :=
   ⟨h.1, Nullifier.Entry.spec_of_orchardSpec h.2.1, h.2.2⟩
 
 theorem product_fixedBaseMul_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
-    Ecc.IsOrchardFixedBaseMul .nullifierK scalar
+    Ecc.IsOrchardFixedBaseBaseFieldMul .nullifierK scalar
       (Nullifier.Entry.product row.nullifier) :=
   h.2.1.1
 
 theorem product_groupAction_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     Ecc.pointCoords (Nullifier.Entry.product row.nullifier) =
-      Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar :=
+      Ecc.orchardFixedBaseBaseFieldMulGroupActionCoords .nullifierK scalar :=
   Nullifier.Entry.product_groupAction_of_orchardSpec h.2.1
 
 theorem nullifierRelation_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {scalar : Ecc.PallasBaseField}
     (h : OrchardSpec row scalar) :
     Nullifier.Entry.OrchardNullifierRelation row.nullifier scalar :=
   Nullifier.Entry.nullifierRelation_of_orchardSpec h.2.1

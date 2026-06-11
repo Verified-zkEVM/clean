@@ -374,7 +374,9 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
 
 def OrchardSpec
     (row : Row Ecc.PallasBaseField)
-    (valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ) : Prop :=
+    (valueScalar blindScalar : ℕ)
+    (nullifierScalar : Ecc.PallasBaseField)
+    (spendAuthScalar : ℕ) : Prop :=
   ActionWiring.Spec row.action ∧
     Gadget.ValueCommitment.Entry.OrchardSpec
       row.valueCommitment valueScalar blindScalar ∧
@@ -389,7 +391,8 @@ def OrchardSpec
 
 theorem spec_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Spec row :=
   ⟨h.1,
@@ -400,7 +403,8 @@ theorem spec_of_orchardSpec
 
 theorem valueCommitmentRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Gadget.ValueCommitment.Entry.OrchardCommitmentRelation
       row.valueCommitment valueScalar blindScalar :=
@@ -408,7 +412,8 @@ theorem valueCommitmentRelation_of_orchardSpec
 
 theorem nullifierRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Gadget.Nullifier.Entry.OrchardNullifierRelation
       row.nullifier.nullifier nullifierScalar :=
@@ -416,7 +421,8 @@ theorem nullifierRelation_of_orchardSpec
 
 theorem spendAuthRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Gadget.SpendAuth.Entry.OrchardSpendAuthRelation
       row.spendAuth spendAuthScalar :=
@@ -424,7 +430,8 @@ theorem spendAuthRelation_of_orchardSpec
 
 theorem valueProduct_fixedBaseMul_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.IsOrchardFixedBaseMul .valueCommitV valueScalar
       (Gadget.ValueCommitment.Entry.valueProduct row.valueCommitment) :=
@@ -432,7 +439,8 @@ theorem valueProduct_fixedBaseMul_of_orchardSpec
 
 theorem blindProduct_fixedBaseMul_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.IsOrchardFixedBaseMul .valueCommitR blindScalar
       (Gadget.ValueCommitment.Entry.blindProduct row.valueCommitment) :=
@@ -440,15 +448,17 @@ theorem blindProduct_fixedBaseMul_of_orchardSpec
 
 theorem nullifierProduct_fixedBaseMul_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
-    Ecc.IsOrchardFixedBaseMul .nullifierK nullifierScalar
+    Ecc.IsOrchardFixedBaseBaseFieldMul .nullifierK nullifierScalar
       (Gadget.Nullifier.Entry.product row.nullifier.nullifier) :=
   Gadget.NullifierWithPoseidonBoundary.Entry.product_fixedBaseMul_of_orchardSpec h.2.2.1
 
 theorem spendAuthProduct_fixedBaseMul_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.IsOrchardFixedBaseMul .spendAuthG spendAuthScalar
       (Gadget.SpendAuth.Entry.alphaProduct row.spendAuth) :=
@@ -456,7 +466,8 @@ theorem spendAuthProduct_fixedBaseMul_of_orchardSpec
 
 theorem valueProduct_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.pointCoords (Gadget.ValueCommitment.Entry.valueProduct row.valueCommitment) =
       Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitV valueScalar :=
@@ -464,7 +475,8 @@ theorem valueProduct_groupAction_of_orchardSpec
 
 theorem blindProduct_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.pointCoords (Gadget.ValueCommitment.Entry.blindProduct row.valueCommitment) =
       Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitR blindScalar :=
@@ -472,15 +484,17 @@ theorem blindProduct_groupAction_of_orchardSpec
 
 theorem nullifierProduct_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.pointCoords (Gadget.Nullifier.Entry.product row.nullifier.nullifier) =
-      Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK nullifierScalar :=
+      Ecc.orchardFixedBaseBaseFieldMulGroupActionCoords .nullifierK nullifierScalar :=
   Gadget.NullifierWithPoseidonBoundary.Entry.product_groupAction_of_orchardSpec h.2.2.1
 
 theorem spendAuthProduct_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
     Ecc.pointCoords (Gadget.SpendAuth.Entry.alphaProduct row.spendAuth) =
       Ecc.orchardFixedBaseMulGroupActionCoords .spendAuthG spendAuthScalar :=
@@ -493,7 +507,8 @@ def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
 
 theorem assumptions_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
-    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    {valueScalar blindScalar spendAuthScalar : ℕ}
+    {nullifierScalar : Ecc.PallasBaseField}
     (hCm : Ecc.isPointOrIdentity (Gadget.Nullifier.Entry.cmPoint row.nullifier.nullifier))
     (hAk : Ecc.isPointOrIdentity (Gadget.SpendAuth.Entry.akPoint row.spendAuth))
     (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
@@ -846,7 +861,7 @@ theorem pkDOld_identity_of_orchardSpec_ivk_zero
     Ecc.isIdentityEncoding (pkDOld row) := by
   have hMul := pkDOld_scalar_mul_of_orchardSpec hSpec
   rw [hIvk] at hMul
-  exact (Ecc.isPallasBaseFieldScalarMul_zero_iff).1 hMul
+  exact ((Ecc.isPallasBaseFieldScalarMul_zero_iff).1 hMul).2
 
 theorem pkDOld_eq_gdOld_of_orchardSpec_ivk_one
     {row : Row Ecc.PallasBaseField}
@@ -856,7 +871,7 @@ theorem pkDOld_eq_gdOld_of_orchardSpec_ivk_one
     pkDOld row = gdOld := by
   have hMul := pkDOld_scalar_mul_of_orchardSpec hSpec
   rw [hIvk] at hMul
-  exact (Ecc.isPallasBaseFieldScalarMul_one_iff).1 hMul
+  exact ((Ecc.isPallasBaseFieldScalarMul_one_iff).1 hMul).2
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action

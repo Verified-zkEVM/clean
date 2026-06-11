@@ -108,6 +108,11 @@ def IsOrchardFixedBaseMul
     (baseId : OrchardFixedBaseId) (scalar : ℕ) (product : Point PallasBaseField) : Prop :=
   IsPallasScalarMul scalar (fixedBasePoint baseId) product
 
+def IsOrchardFixedBaseBaseFieldMul
+    (baseId : OrchardFixedBaseId) (scalar : PallasBaseField)
+    (product : Point PallasBaseField) : Prop :=
+  IsPallasBaseFieldScalarMul scalar (fixedBasePoint baseId) product
+
 theorem fixedBasePoint_onCurve (baseId : OrchardFixedBaseId) :
     onCurve (fixedBasePoint baseId) := by
   rcases baseId <;>
@@ -417,6 +422,29 @@ theorem isOrchardFixedBaseMul_iff_groupAction
       pointCoords product = orchardFixedBaseMulGroupActionCoords baseId scalar := by
   rw [IsOrchardFixedBaseMul, orchardFixedBaseMulGroupActionCoords,
     isPallasScalarMul_iff_groupAction]
+
+def orchardFixedBaseBaseFieldMulGroupActionCoords
+    (baseId : OrchardFixedBaseId) (scalar : PallasBaseField) :
+    PallasBaseField × PallasBaseField :=
+  orchardFixedBaseMulGroupActionCoords baseId (pallasBaseFieldScalarNat scalar)
+
+theorem isOrchardFixedBaseBaseFieldMul_iff_groupAction
+    {baseId : OrchardFixedBaseId} {scalar : PallasBaseField}
+    {product : Point PallasBaseField} :
+    IsOrchardFixedBaseBaseFieldMul baseId scalar product ↔
+      pointCoords product =
+        orchardFixedBaseBaseFieldMulGroupActionCoords baseId scalar := by
+  rw [IsOrchardFixedBaseBaseFieldMul, IsPallasBaseFieldScalarMul,
+    orchardFixedBaseBaseFieldMulGroupActionCoords,
+    orchardFixedBaseMulGroupActionCoords, isPallasScalarMul_iff_groupAction]
+
+theorem isOrchardFixedBaseBaseFieldMul_isPointOrIdentity
+    {baseId : OrchardFixedBaseId} {scalar : PallasBaseField}
+    {product : Point PallasBaseField}
+    (hmul : IsOrchardFixedBaseBaseFieldMul baseId scalar product) :
+    isPointOrIdentity product :=
+  isPallasBaseFieldScalarMul_isPointOrIdentity
+    (fixedBasePoint_isPointOrIdentity baseId) hmul
 
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
