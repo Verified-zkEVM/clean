@@ -182,8 +182,7 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.Gadget.Nullifier.Entry.circuit` now use
      `Orchard.Ecc.CompleteAdd.Entry.circuit` for their final additions over explicit
      fixed-base product points. The `derive_nullifier` edge
-     `hash = PoseidonHash(nk, rho)` is connected to the nullifier wiring in
-     `Orchard.Gadget.NullifierWithHash.circuit`; Pallas-specific wrappers
+     `hash = PoseidonHash(nk, rho)` is connected to the nullifier entry wiring in
      `Orchard.Gadget.NullifierWithHash.Entry.circuit` and
      `Orchard.Gadget.NullifierWithPoseidonBoundary.Entry.circuit` compose the
      two-input Poseidon hash or hash/permutation boundary with

@@ -486,44 +486,12 @@ Reference:
 `orchard@0.14.0/src/circuit/gadget.rs`
 - `derive_nullifier`
 
-This strengthens `Nullifier.circuit` with the source edge
+This entry assertion strengthens `Nullifier.Entry.circuit` with the source edge
 `hash = PoseidonHash(nk, rho)`. The Poseidon permutation result is still explicit in
 `Poseidon.Hash2.Row`; the Pow5 gate assertions in `Clean.Orchard.Poseidon` model the
 round arithmetic separately.
 -/
 namespace NullifierWithHash
-
-structure Row (F : Type) where
-  hash : Poseidon.Hash2.Row F
-  nullifier : Nullifier.Row F
-deriving ProvableStruct
-
-def hashOutputCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.hash.hash - row.nullifier.poseidonHash
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Poseidon.Hash2.Spec row.hash ∧
-    Nullifier.Spec row.nullifier ∧
-    row.hash.hash = row.nullifier.poseidonHash
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Poseidon.Hash2.circuit row.hash
-  Nullifier.circuit row.nullifier
-  assertZero (hashOutputCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, hashOutputCheck, Poseidon.Hash2.circuit,
-      Poseidon.Hash2.Spec, Nullifier.circuit, Nullifier.Spec]
-    rcases h_holds with ⟨hHash, hNullifier, hOutput⟩
-    exact ⟨hHash, hNullifier, sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOutput)⟩
-  completeness := by
-    circuit_proof_start [main, Spec, hashOutputCheck, Poseidon.Hash2.circuit,
-      Poseidon.Hash2.Spec, Nullifier.circuit, Nullifier.Spec]
-    rcases h_spec with ⟨hHash, hNullifier, hOutput⟩
-    exact ⟨hHash, hNullifier, by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOutput⟩
 
 namespace Entry
 
@@ -609,45 +577,11 @@ Reference:
 `orchard@0.14.0/src/circuit/gadget.rs`
 - `derive_nullifier`
 
-This strengthens `NullifierWithHash.circuit` by also connecting the two-input Poseidon
-hash row to explicit permutation endpoint states, matching the `poseidon_sponge` boundary
-used by `PoseidonHash::hash`.
+This entry assertion connects the two-input Poseidon hash row to explicit permutation
+endpoint states and to `Nullifier.Entry.circuit`, matching the `poseidon_sponge`
+boundary used by `PoseidonHash::hash`.
 -/
 namespace NullifierWithPoseidonBoundary
-
-structure Row (F : Type) where
-  boundary : Poseidon.Hash2PermutationBoundary.Row F
-  nullifier : Nullifier.Row F
-deriving ProvableStruct
-
-def hashOutputCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.boundary.hash.hash - row.nullifier.poseidonHash
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Poseidon.Hash2PermutationBoundary.Spec row.boundary ∧
-    Nullifier.Spec row.nullifier ∧
-    row.boundary.hash.hash = row.nullifier.poseidonHash
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  Poseidon.Hash2PermutationBoundary.circuit row.boundary
-  Nullifier.circuit row.nullifier
-  assertZero (hashOutputCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, hashOutputCheck,
-      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
-      Nullifier.circuit, Nullifier.Spec]
-    rcases h_holds with ⟨hBoundary, hNullifier, hOutput⟩
-    exact ⟨hBoundary, hNullifier, sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hOutput)⟩
-  completeness := by
-    circuit_proof_start [main, Spec, hashOutputCheck,
-      Poseidon.Hash2PermutationBoundary.circuit, Poseidon.Hash2PermutationBoundary.Spec,
-      Nullifier.circuit, Nullifier.Spec]
-    rcases h_spec with ⟨hBoundary, hNullifier, hOutput⟩
-    exact ⟨hBoundary, hNullifier, by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hOutput⟩
 
 namespace Entry
 
