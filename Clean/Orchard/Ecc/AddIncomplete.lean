@@ -28,27 +28,16 @@ def outputValue (input : Input Fp) : Point Fp :=
   let yR := slope * (input.p.x - xR) - input.p.y
   { x := xR, y := yR }
 
-theorem outputValue_eq_swAdd {input : Input Fp}
-    (hp : ¬ input.p.isIdentityEncoding) (hq : ¬ input.q.isIdentityEncoding)
+theorem outputValue_eq_add {input : Input Fp}
+    (hp : input.p ≠ Point.zero) (hq : input.q ≠ Point.zero)
     (hx : input.p.x ≠ input.q.x) :
     (outputValue input).coords = Pallas.add input.p.coords input.q.coords := by
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  unfold Point.coords outputValue Pallas.add
-    CompElliptic.CurveForms.ShortWeierstrass.add
-  unfold Point.isIdentityEncoding at hp hq
-  simp only
-  have hp0 : ¬(px, py) = (0, 0) := by
-    intro h
-    apply hp
-    exact Prod.ext_iff.mp h
-  have hq0 : ¬(qx, qy) = (0, 0) := by
-    intro h
-    apply hq
-    exact Prod.ext_iff.mp h
+  simp only [outputValue, Point.coords, Pallas.add, Point.zero, CompElliptic.CurveForms.ShortWeierstrass.add] at *
+  have hp0 : ¬(px, py) = (0, 0) := by grind
+  have hq0 : ¬(qx, qy) = (0, 0) := by grind
   rw [if_neg hp0, if_neg hq0]
-  have hx' : ¬ px = qx := hx
-  rw [if_neg hx']
-  rw [Prod.mk.injEq]
+  rw [if_neg hx, Prod.mk.injEq]
   constructor <;> ring
 
 namespace Gate
@@ -196,26 +185,14 @@ def Spec (input : Input Fp) (output : Point Fp) : Prop :=
   Pallas.OnCurve output.coords ∧
     output.coords = Pallas.add input.p.coords input.q.coords
 
-theorem not_isIdentityEncoding_of_pallas_onCurve {point : Point Fp}
-    (hPoint : Pallas.OnCurve point.coords) :
-    ¬ point.isIdentityEncoding := by
-  rcases point with ⟨x, y⟩
-  intro hIdentity
-  change x = 0 ∧ y = 0 at hIdentity
-  apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y
-  rw [hIdentity.1] at hPoint
-  exact hPoint
-
 theorem outputValue_onCurve {input : Input Fp}
     (hp : Pallas.OnCurve input.p.coords)
     (hq : Pallas.OnCurve input.q.coords)
     (hx : input.p.x ≠ input.q.x) :
     Pallas.OnCurve (outputValue input).coords := by
-  have hpNonId : ¬ input.p.isIdentityEncoding :=
-    not_isIdentityEncoding_of_pallas_onCurve hp
-  have hqNonId : ¬ input.q.isIdentityEncoding :=
-    not_isIdentityEncoding_of_pallas_onCurve hq
-  have hcoords := outputValue_eq_swAdd (input := input) hpNonId hqNonId hx
+  have hpNonId : input.p ≠ Point.zero := Point.ne_zero_of_onCurve hp
+  have hqNonId : input.q ≠ Point.zero := Point.ne_zero_of_onCurve hq
+  have hcoords := outputValue_eq_add hpNonId hqNonId hx
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
   have hp0 : (px, py) ≠ ((0 : Fp), 0) := by
     intro h
@@ -254,41 +231,23 @@ instance elaborated : ElaboratedCircuit Fp Input Point main := by
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, Gate.circuit, Gate.Spec,
-    outputValue_eq_swAdd, outputValue_onCurve, Gate.Input.r, Gate.Input.p, Gate.Input.q]
+    outputValue_eq_add, outputValue_onCurve, Gate.Input.r, Gate.Input.p, Gate.Input.q,
+    Gate.Assumptions]
   rcases h_assumptions with ⟨hpCurve, hqCurve, hx⟩
-  have hp : ¬ input_p.isIdentityEncoding :=
-    not_isIdentityEncoding_of_pallas_onCurve hpCurve
-  have hq : ¬ input_q.isIdentityEncoding :=
-    not_isIdentityEncoding_of_pallas_onCurve hqCurve
+  have hp : input_p ≠ Point.zero := Point.ne_zero_of_onCurve hpCurve
+  have hq : input_q ≠ Point.zero := Point.ne_zero_of_onCurve hqCurve
+  set x_p := Expression.eval env (varFromOffset Point i₀).x
+  set x_q := Expression.eval env (varFromOffset Point (i₀ + 2)).x
   rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
-  let gateInput : Gate.Input Fp := {
-        x_p := Expression.eval env (varFromOffset Point i₀).x
-        y_p := Expression.eval env (varFromOffset Point i₀).y
-        x_qr := {
-          curr := Expression.eval env (varFromOffset Point (i₀ + 2)).x
-          next := Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).x
-        }
-        y_qr := {
-          curr := Expression.eval env (varFromOffset Point (i₀ + 2)).y
-          next := Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).y
-        }
-      }
-  have hgateAssumptions : Gate.Assumptions gateInput := by
-    dsimp [gateInput, Gate.Assumptions, Gate.Input.p, Gate.Input.q]
-    intro h
-    apply hx
-    have hpx := congrArg Point.x hpCopyEq
-    have hqx := congrArg Point.x hqCopyEq
-    rw [← hpx, ← hqx]
-    exact h
-  have hrowEq := hrow hgateAssumptions
+  have hgateAssumptions : x_p ≠ x_q := by
+    convert hx
+    rw [← hpCopyEq]
+    rw [← hqCopyEq]
+  specialize hrow hgateAssumptions
+  simp only [hrow, hpCopyEq, hqCopyEq]
   constructor
-  · rw [hrowEq]
-    simpa [gateInput, Gate.Input.p, Gate.Input.q, hpCopyEq, hqCopyEq] using
-      outputValue_onCurve (input := { p := input_p, q := input_q }) hpCurve hqCurve hx
-  · rw [hrowEq]
-    simpa [gateInput, Gate.Input.p, Gate.Input.q, hpCopyEq, hqCopyEq] using
-      outputValue_eq_swAdd (input := { p := input_p, q := input_q }) hp hq hx
+  · exact outputValue_onCurve hpCurve hqCurve hx
+  · exact outputValue_eq_add (input := { p := input_p, q := input_q }) hp hq hx
 
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Gate.circuit, Gate.Assumptions, Gate.Spec]
