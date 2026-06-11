@@ -422,6 +422,38 @@ theorem spendAuthRelation_of_orchardSpec
       row.spendAuth spendAuthScalar :=
   Gadget.SpendAuth.Entry.spendAuthRelation_of_orchardSpec h.2.2.2.1
 
+theorem valueProduct_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Ecc.pointCoords (Gadget.ValueCommitment.Entry.valueProduct row.valueCommitment) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitV valueScalar :=
+  Gadget.ValueCommitment.Entry.valueProduct_groupAction_of_orchardSpec h.2.1
+
+theorem blindProduct_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Ecc.pointCoords (Gadget.ValueCommitment.Entry.blindProduct row.valueCommitment) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitR blindScalar :=
+  Gadget.ValueCommitment.Entry.blindProduct_groupAction_of_orchardSpec h.2.1
+
+theorem nullifierProduct_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Ecc.pointCoords (Gadget.Nullifier.Entry.product row.nullifier.nullifier) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK nullifierScalar :=
+  Gadget.Nullifier.Entry.product_groupAction_of_orchardSpec h.2.2.1.2.1
+
+theorem spendAuthProduct_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Ecc.pointCoords (Gadget.SpendAuth.Entry.alphaProduct row.spendAuth) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .spendAuthG spendAuthScalar :=
+  Gadget.SpendAuth.Entry.alphaProduct_groupAction_of_orchardSpec h.2.2.2.1
+
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Gadget.ValueCommitment.Entry.Assumptions row.valueCommitment ∧
     Gadget.NullifierWithPoseidonBoundary.Entry.Assumptions row.nullifier ∧
