@@ -49,10 +49,6 @@ The following Clean circuits now carry source-derived gate names:
 
 These items should not be treated as exact Halo2 gate/API ports until repaired.
 
-- **All named gates:** current Clean rows do not distinguish advice cells, fixed cells,
-  selector cells, rotations, or equality-enabled columns. This is enough for arithmetic
-  proof work, but not enough to reconstruct the Halo2 layout or pinned VK.
-
 - **Missing factored gate assertions for entry circuits:** `Ecc.IncompleteAdd.circuit`,
   `Utilities.CondSwap.circuit`, and `Utilities.AddChip.circuit` are entry-level
   `FormalCircuit`s that witness outputs internally. That is the right API shape for their
@@ -123,3 +119,7 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   `CommitIvk.WiringWithShortCommit`:** these are not custom gates. They expose values that
   the source APIs compute internally and should be deleted, renamed, or rebuilt after the
   missing scalar-mul and Sinsemilla entry APIs exist.
+
+- (known issue for reproducing VKs, fix not currently in scope) **All named gates:** current Clean rows do not distinguish advice cells, fixed cells,
+  selector cells, rotations, or equality-enabled columns. This is enough for arithmetic
+  proof work, but not enough to reconstruct the Halo2 layout or pinned VK.
