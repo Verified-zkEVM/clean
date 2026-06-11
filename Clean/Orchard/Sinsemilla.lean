@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Orchard.Ecc
+import Clean.Orchard.Utilities
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -597,11 +598,10 @@ def ternary {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K]
     (choice ifTrue ifFalse : K) : K :=
   choice * ifTrue + (1 - choice) * ifFalse
 
-def leftCheck {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  row.left - ternary row.posBit row.sibling row.node
-
-def rightCheck {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  row.right - ternary row.posBit row.node row.sibling
+def swapInput {K : Type} (row : Row K) : Utilities.CondSwapInputs K where
+  a := row.node
+  b := row.sibling
+  swap := row.posBit
 
 def layerLeftCheck {K : Type} [Sub K] (row : Row K) : K :=
   row.layer.decomposition.leftNode - row.left
@@ -623,8 +623,9 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (boolPoly row.posBit)
-  assertZero (leftCheck row)
-  assertZero (rightCheck row)
+  let swapped ← Utilities.CondSwap.circuit (swapInput row)
+  assertZero (row.left - swapped.aSwapped)
+  assertZero (row.right - swapped.bSwapped)
   Wiring.circuit row.layer
   assertZero (layerLeftCheck row)
   assertZero (layerRightCheck row)
@@ -634,27 +635,41 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, leftCheck, rightCheck, layerLeftCheck,
+    circuit_proof_start [main, Spec, swapInput, layerLeftCheck,
       layerRightCheck, nextCheck, ternary, boolPoly,
+      Utilities.CondSwap.circuit, Utilities.CondSwap.Spec,
       Wiring.circuit, Wiring.Spec, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
-    rcases h_holds with ⟨hBool, hLeft, hRight, hLayer, hLayerLeft, hLayerRight, hNext⟩
-    constructor
-    · rcases mul_eq_zero.mp hBool with hZero | hOne
+    rcases h_holds with ⟨hBoolPoly, hSwap, hLeft, hRight, hLayer,
+      hLayerLeft, hLayerRight, hNext⟩
+    have hBool : input_posBit = 0 ∨ input_posBit = 1 := by
+      rcases mul_eq_zero.mp hBoolPoly with hZero | hOne
       · exact Or.inl hZero
       · exact Or.inr (left_eq_of_add_neg_eq_zero hOne)
+    have hSwapRel := hSwap hBool
     constructor
-    · rw [sub_eq_add_neg]
-      exact left_eq_of_add_neg_eq_zero hLeft
+    · exact hBool
     constructor
-    · rw [sub_eq_add_neg]
-      exact left_eq_of_add_neg_eq_zero hRight
+    · have hLeftOut := left_eq_of_add_neg_eq_zero hLeft
+      rcases hBool with hZero | hOne
+      · simp [hZero, hLeftOut] at hSwapRel ⊢
+        exact hSwapRel.1
+      · simp [hOne, hLeftOut] at hSwapRel ⊢
+        exact hSwapRel.1
+    constructor
+    · have hRightOut := left_eq_of_add_neg_eq_zero hRight
+      rcases hBool with hZero | hOne
+      · simp [hZero, hRightOut] at hSwapRel ⊢
+        exact hSwapRel.2
+      · simp [hOne, hRightOut] at hSwapRel ⊢
+        exact hSwapRel.2
     exact ⟨hLayer, left_eq_of_add_neg_eq_zero hLayerLeft,
       left_eq_of_add_neg_eq_zero hLayerRight, (left_eq_of_add_neg_eq_zero hNext).symm⟩
   completeness := by
-    circuit_proof_start [main, Spec, leftCheck, rightCheck, layerLeftCheck,
+    circuit_proof_start [main, Spec, swapInput, layerLeftCheck,
       layerRightCheck, nextCheck, ternary, boolPoly,
+      Utilities.CondSwap.circuit, Utilities.CondSwap.Spec,
       Wiring.circuit, Wiring.Spec, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
       Merkle.twoPow5, Merkle.twoPow10, Merkle.twoPow240]
@@ -666,10 +681,26 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
       · rw [hOne]
         ring
     constructor
-    · rw [hLeft]
+    · exact hBool
+    constructor
+    · have hSwap := h_env hBool
+      have hLeftOut : env.get i₀ = input_left := by
+        rcases hBool with hZero | hOne
+        · simp [hZero] at hSwap hLeft ⊢
+          exact hSwap.1.trans hLeft.symm
+        · simp [hOne] at hSwap hLeft ⊢
+          exact hSwap.1.trans hLeft.symm
+      rw [hLeftOut]
       ring
     constructor
-    · rw [hRight]
+    · have hSwap := h_env hBool
+      have hRightOut : env.get (i₀ + 1) = input_right := by
+        rcases hBool with hZero | hOne
+        · simp [hZero] at hSwap hRight ⊢
+          exact hSwap.2.trans hRight.symm
+        · simp [hOne] at hSwap hRight ⊢
+          exact hSwap.2.trans hRight.symm
+      rw [hRightOut]
       ring
     constructor
     · exact hLayer
