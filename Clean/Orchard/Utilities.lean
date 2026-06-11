@@ -41,11 +41,13 @@ deriving ProvableStruct
 
 namespace CondSwap
 
-def outputValue (input : CondSwapInputs F) : CondSwapOutput F where
+def outputValue (input : CondSwapInputs Ecc.PallasBaseField) :
+    CondSwapOutput Ecc.PallasBaseField where
   aSwapped := ternary input.swap input.b input.a
   bSwapped := ternary input.swap input.a input.b
 
-def main (input : Var CondSwapInputs F) : Circuit F (Var CondSwapOutput F) := do
+def main (input : Var CondSwapInputs Ecc.PallasBaseField) :
+    Circuit Ecc.PallasBaseField (Var CondSwapOutput Ecc.PallasBaseField) := do
   let aSwapped ← witnessField fun env => ternary (env input.swap) (env input.b) (env input.a)
   let bSwapped ← witnessField fun env => ternary (env input.swap) (env input.a) (env input.b)
   aSwapped === input.swap * input.b + (1 - input.swap) * input.a
@@ -54,20 +56,22 @@ def main (input : Var CondSwapInputs F) : Circuit F (Var CondSwapOutput F) := do
   return { aSwapped, bSwapped }
 
 @[circuit_norm]
-def Assumptions (input : CondSwapInputs F) : Prop :=
+def Assumptions (input : CondSwapInputs Ecc.PallasBaseField) : Prop :=
   IsBool input.swap
 
 @[circuit_norm]
-def Spec [DecidableEq F] (input : CondSwapInputs F) (output : CondSwapOutput F) : Prop :=
+def Spec (input : CondSwapInputs Ecc.PallasBaseField)
+    (output : CondSwapOutput Ecc.PallasBaseField) : Prop :=
   output = if input.swap = 1 then
     { aSwapped := input.b, bSwapped := input.a }
   else
     { aSwapped := input.a, bSwapped := input.b }
 
-instance elaborated : ElaboratedCircuit F CondSwapInputs CondSwapOutput main := by
+instance elaborated :
+    ElaboratedCircuit Ecc.PallasBaseField CondSwapInputs CondSwapOutput main := by
   elaborate_circuit
 
-theorem outputValue_eq_of_bool [DecidableEq F] {input : CondSwapInputs F}
+theorem outputValue_eq_of_bool {input : CondSwapInputs Ecc.PallasBaseField}
     (hbool : IsBool input.swap) :
     outputValue input = if input.swap = 1 then
       { aSwapped := input.b, bSwapped := input.a }
@@ -77,8 +81,8 @@ theorem outputValue_eq_of_bool [DecidableEq F] {input : CondSwapInputs F}
   · simp [outputValue, ternary, hzero]
   · simp [outputValue, ternary, hone]
 
-theorem soundness [DecidableEq F] :
-    Soundness F main Assumptions Spec := by
+theorem soundness :
+    Soundness Ecc.PallasBaseField main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, outputValue, ternary]
   have hbool : IsBool input_swap :=
     IsBool.iff_mul_sub_one.mpr (by simpa [sub_eq_add_neg] using h_holds.2.2)
@@ -88,8 +92,8 @@ theorem soundness [DecidableEq F] :
   · rw [h_holds.1, h_holds.2.1]
     simp [hone]
 
-theorem completeness [DecidableEq F] :
-    Completeness F main Assumptions := by
+theorem completeness :
+    Completeness Ecc.PallasBaseField main Assumptions := by
   circuit_proof_start [main, Assumptions, outputValue, ternary]
   constructor
   · rw [h_env.1]
@@ -99,7 +103,7 @@ theorem completeness [DecidableEq F] :
       ring_nf
     · simpa [sub_eq_add_neg] using IsBool.iff_mul_sub_one.mp h_assumptions
 
-def circuit [DecidableEq F] : FormalCircuit F CondSwapInputs CondSwapOutput where
+def circuit : FormalCircuit Ecc.PallasBaseField CondSwapInputs CondSwapOutput where
   main
   elaborated
   Assumptions
@@ -287,19 +291,20 @@ copy-constrained field addition result.
 
 namespace AddChip
 
-def main (input : Var fieldPair F) : Circuit F (Var field F) := do
+def main (input : Var fieldPair Ecc.PallasBaseField) :
+    Circuit Ecc.PallasBaseField (Var field Ecc.PallasBaseField) := do
   let (a, b) := input
   let c ← witnessField fun env => env a + env b
   assertZero (a + b - c)
   return c
 
-def Spec (input : fieldPair F) (output : F) : Prop :=
+def Spec (input : fieldPair Ecc.PallasBaseField) (output : Ecc.PallasBaseField) : Prop :=
   output = input.1 + input.2
 
-instance elaborated : ElaboratedCircuit F fieldPair field main := by
+instance elaborated : ElaboratedCircuit Ecc.PallasBaseField fieldPair field main := by
   elaborate_circuit
 
-theorem soundness : Soundness F main (fun _ => True) Spec := by
+theorem soundness : Soundness Ecc.PallasBaseField main (fun _ => True) Spec := by
   circuit_proof_start [main, Spec]
   rcases input with ⟨a, b⟩
   simp only [Prod.mk.injEq] at h_input
@@ -307,12 +312,12 @@ theorem soundness : Soundness F main (fun _ => True) Spec := by
   rw [← ha, ← hb]
   exact (eq_of_add_neg_eq_zero h_holds).symm
 
-theorem completeness : Completeness F main (fun _ => True) := by
+theorem completeness : Completeness Ecc.PallasBaseField main (fun _ => True) := by
   circuit_proof_start [main, Spec]
   rw [h_env]
   ring
 
-def circuit : FormalCircuit F fieldPair field where
+def circuit : FormalCircuit Ecc.PallasBaseField fieldPair field where
   main
   elaborated
   Assumptions := fun _ => True
