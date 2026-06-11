@@ -428,6 +428,39 @@ def partialRoundValue (params : PartialRounds.Params Ecc.Fp) (state : State Ecc.
     x1 := r0 * params.m10 + r1 * params.m11 + r2 * params.m12
     x2 := r0 * params.m20 + r1 * params.m21 + r2 * params.m22 }
 
+/-! ### Plain Lean permutation specification -/
+
+/-- Apply `count` consecutive value-level full rounds, starting at source round `round`. -/
+def fullRoundsValue (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp) :
+    Nat → Nat → State Ecc.Fp → State Ecc.Fp
+  | 0, _round, state => state
+  | count + 1, round, state =>
+      fullRoundsValue roundConstants mds count (round + 1)
+        (fullRoundValue (fullParams roundConstants mds round) state)
+
+/-- Apply `count` consecutive value-level partial-round rows.  Each row represents two
+source partial rounds, so the source round index advances by two. -/
+def partialRoundRowsValue (roundConstants : Nat → State Ecc.Fp)
+    (mds mdsInv : Nat → Nat → Ecc.Fp) : Nat → Nat → State Ecc.Fp → State Ecc.Fp
+  | 0, _round, state => state
+  | count + 1, round, state =>
+      partialRoundRowsValue roundConstants mds mdsInv count (round + 2)
+        (partialRoundValue (partialParams roundConstants mds mdsInv round) state)
+
+/-- Plain Lean implementation of Orchard's `P128Pow5T3` `Pow5Chip::permute` schedule. -/
+def permuteValue (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
+    (input : State Ecc.Fp) : State Ecc.Fp :=
+  let s := fullRoundsValue roundConstants mds 4 0 input
+  let s := partialRoundRowsValue roundConstants mds mdsInv 28 4 s
+  fullRoundsValue roundConstants mds 4 (4 + 56) s
+
+/-- Source-level permutation spec: the circuit output is the plain Lean permutation. -/
+def Spec (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
+    (input output : State Ecc.Fp) : Prop :=
+  output = permuteValue roundConstants mds mdsInv input
+
+/-! ### Circuit implementation -/
+
 /-- One source-shaped full-round row: witness the next state internally and assert the
 `full round` gate. -/
 def fullRound (params : FullRound.Params Ecc.Fp) (state : Var State Ecc.Fp) :
@@ -476,9 +509,9 @@ def main (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → E
 
 /-!
 The next step is to package `main` as a `FormalCircuit` with an explicit elaborated
-instance and a value-level permutation spec.  Keeping the source-shaped `main` separate
-for now lets downstream entry APIs compose the real schedule without exposing internal
-round rows as caller inputs.
+instance proving `Spec`.  Keeping the source-shaped `main` separate for now lets
+downstream entry APIs compose the real schedule without exposing internal round rows as
+caller inputs.
 -/
 
 end Permute

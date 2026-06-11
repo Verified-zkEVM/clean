@@ -105,9 +105,11 @@ Current Clean coverage:
 - `Clean.Orchard.Poseidon.FullRound.circuit`: `GATE full round`
 - `Clean.Orchard.Poseidon.PartialRounds.circuit`: `GATE partial rounds`
 - `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
+- `Clean.Orchard.Poseidon.Permute.permuteValue`: plain Lean implementation of the
+  width-3/rate-2 `Pow5Chip::permute` schedule.
 - `Clean.Orchard.Poseidon.Permute.main`: source-shaped `Pow5Chip::permute` round
   schedule skeleton; it witnesses intermediate full/partial round rows internally but is
-  not yet packaged with a strengthened permutation spec.
+  not yet packaged as a `FormalCircuit` proving `Permute.Spec`.
 - `Clean.Orchard.Poseidon.Sponge` mirrors the `Sponge` /
   `PoseidonSpongeInstructions` part of `poseidon.rs` and currently contains only the
   source-shaped namespace stub.
