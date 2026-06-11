@@ -138,6 +138,38 @@ theorem blindProduct_groupAction_of_orchardSpec
       Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitR blindScalar :=
   h.2.1
 
+theorem valueProduct_identity_of_orchardSpec_value_zero
+    {row : Row Ecc.PallasBaseField} {blindScalar : ℕ}
+    (h : OrchardSpec row 0 blindScalar) :
+    Ecc.isIdentityEncoding (valueProduct row) := by
+  have hMul : Ecc.IsOrchardFixedBaseMul .valueCommitV 0 (valueProduct row) :=
+    (Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1
+  exact (Ecc.isOrchardFixedBaseMul_zero_iff).1 hMul
+
+theorem valueProduct_eq_fixedBase_of_orchardSpec_value_one
+    {row : Row Ecc.PallasBaseField} {blindScalar : ℕ}
+    (h : OrchardSpec row 1 blindScalar) :
+    valueProduct row = Ecc.fixedBasePoint .valueCommitV := by
+  have hMul : Ecc.IsOrchardFixedBaseMul .valueCommitV 1 (valueProduct row) :=
+    (Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1
+  exact (Ecc.isOrchardFixedBaseMul_one_iff).1 hMul
+
+theorem blindProduct_identity_of_orchardSpec_blind_zero
+    {row : Row Ecc.PallasBaseField} {valueScalar : ℕ}
+    (h : OrchardSpec row valueScalar 0) :
+    Ecc.isIdentityEncoding (blindProduct row) := by
+  have hMul : Ecc.IsOrchardFixedBaseMul .valueCommitR 0 (blindProduct row) :=
+    (Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.2.1
+  exact (Ecc.isOrchardFixedBaseMul_zero_iff).1 hMul
+
+theorem blindProduct_eq_fixedBase_of_orchardSpec_blind_one
+    {row : Row Ecc.PallasBaseField} {valueScalar : ℕ}
+    (h : OrchardSpec row valueScalar 1) :
+    blindProduct row = Ecc.fixedBasePoint .valueCommitR := by
+  have hMul : Ecc.IsOrchardFixedBaseMul .valueCommitR 1 (blindProduct row) :=
+    (Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.2.1
+  exact (Ecc.isOrchardFixedBaseMul_one_iff).1 hMul
+
 theorem commitmentRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
     (h : OrchardSpec row valueScalar blindScalar) :
@@ -339,6 +371,22 @@ theorem product_groupAction_of_orchardSpec
     Ecc.pointCoords (product row) =
       Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar :=
   h.1
+
+theorem product_identity_of_orchardSpec_scalar_zero
+    {row : Row Ecc.PallasBaseField}
+    (h : OrchardSpec row 0) :
+    Ecc.isIdentityEncoding (product row) := by
+  have hMul : Ecc.IsOrchardFixedBaseMul .nullifierK 0 (product row) :=
+    (Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1
+  exact (Ecc.isOrchardFixedBaseMul_zero_iff).1 hMul
+
+theorem product_eq_fixedBase_of_orchardSpec_scalar_one
+    {row : Row Ecc.PallasBaseField}
+    (h : OrchardSpec row 1) :
+    product row = Ecc.fixedBasePoint .nullifierK := by
+  have hMul : Ecc.IsOrchardFixedBaseMul .nullifierK 1 (product row) :=
+    (Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1
+  exact (Ecc.isOrchardFixedBaseMul_one_iff).1 hMul
 
 theorem nullifierRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {scalar : ℕ}
@@ -753,6 +801,22 @@ theorem spendAuthRelation_of_orchardSpec
   dsimp [OrchardSpendAuthRelation, Spec, alphaProduct, akPoint, addInput] at hProduct hSpec ⊢
   rw [hProduct] at hSpec
   exact hSpec
+
+theorem alphaProduct_identity_of_orchardSpec_alpha_zero
+    {row : Row Ecc.PallasBaseField}
+    (h : OrchardSpec row 0) :
+    Ecc.isIdentityEncoding (alphaProduct row) := by
+  have hMul : Ecc.IsOrchardFixedBaseMul .spendAuthG 0 (alphaProduct row) :=
+    (Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1
+  exact (Ecc.isOrchardFixedBaseMul_zero_iff).1 hMul
+
+theorem alphaProduct_eq_fixedBase_of_orchardSpec_alpha_one
+    {row : Row Ecc.PallasBaseField}
+    (h : OrchardSpec row 1) :
+    alphaProduct row = Ecc.fixedBasePoint .spendAuthG := by
+  have hMul : Ecc.IsOrchardFixedBaseMul .spendAuthG 1 (alphaProduct row) :=
+    (Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1
+  exact (Ecc.isOrchardFixedBaseMul_one_iff).1 hMul
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
