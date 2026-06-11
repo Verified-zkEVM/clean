@@ -1,10 +1,8 @@
-import Clean.Orchard.Ecc.WitnessPoint
 import Clean.Orchard.Ecc.Theorems
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
-namespace Orchard
-namespace Ecc
+namespace Orchard.Ecc
 
 /-!
 Reference:
@@ -26,7 +24,7 @@ deriving ProvableStruct
 
 namespace Gate
 
-structure Row (F : Type) where
+structure Input (F : Type) where
   x_p : F
   y_p : F
   x_qr : CurrentNext F
@@ -38,24 +36,24 @@ structure Row (F : Type) where
   delta : F
 deriving ProvableStruct
 
-namespace Row
+namespace Input
 
 @[simp]
-def p {K : Type} (row : Row K) : Point K where
+def p {K : Type} (row : Input K) : Point K where
   x := row.x_p
   y := row.y_p
 
 @[simp]
-def q {K : Type} (row : Row K) : Point K where
+def q {K : Type} (row : Input K) : Point K where
   x := row.x_qr.curr
   y := row.y_qr.curr
 
 @[simp]
-def r {K : Type} (row : Row K) : Point K where
+def r {K : Type} (row : Input K) : Point K where
   x := row.x_qr.next
   y := row.y_qr.next
 
-end Row
+end Input
 
 end Gate
 
@@ -93,7 +91,7 @@ def outputValue (input : Input F) : Point F :=
     let yR := lambda * (input.p.x - xR) - input.p.y
     { x := xR, y := yR }
 
-def rowValue (input : Input F) : Gate.Row F where
+def rowValue (input : Input F) : Gate.Input F where
   x_p := input.p.x
   y_p := input.p.y
   x_qr := { curr := input.q.x, next := (outputValue input).x }
@@ -145,14 +143,14 @@ theorem outputValue_eq_swAdd {input : Input F}
         constructor <;> ring
 
 theorem outputValue_eq_swAdd_pallas {input : Input Fp}
-    (hp : Point.isPointOrIdentity input.p)
-    (hq : Point.isPointOrIdentity input.q) :
+    (hp : Pallas.Valid input.p.coords)
+    (hq : Pallas.Valid input.q.coords) :
     Point.coords (outputValue input) =
       CompElliptic.CurveForms.ShortWeierstrass.add
         (0 : Fp) (Point.coords input.p) (Point.coords input.q) :=
   outputValue_eq_swAdd
-    (Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hp)
-    (Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hq)
+    (Point.y_eq_zero_of_valid_of_x_eq_zero hp)
+    (Point.y_eq_zero_of_valid_of_x_eq_zero hq)
 
 theorem pallas_two_ne_zero : (2 : Fp) ≠ 0 := by
   decide
@@ -165,7 +163,7 @@ theorem pallas_add_self_ne_zero {y : Fp} (hy : y ≠ 0) :
   exact hy ((mul_eq_zero.mp hmul).resolve_left pallas_two_ne_zero)
 
 theorem pallas_y_eq_or_neg_of_same_x {p q : Point Fp}
-    (hp : Point.isPointOrIdentity p) (hq : Point.isPointOrIdentity q)
+    (hp : Pallas.Valid p.coords) (hq : Pallas.Valid q.coords)
     (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
     q.y = p.y ∨ q.y = -p.y := by
   have hpCurve : Point.onCurve p := by
@@ -190,91 +188,91 @@ end ValueModel
 
 namespace Gate
 
-def xQMinusXP {K : Type} [Sub K] (row : Row K) : K :=
+def xQMinusXP {K : Type} [Sub K] (row : Input K) : K :=
   row.q.x - row.p.x
 
-def xPMinusXR {K : Type} [Sub K] (row : Row K) : K :=
+def xPMinusXR {K : Type} [Sub K] (row : Input K) : K :=
   row.p.x - row.r.x
 
-def yQPlusYP {K : Type} [_root_.Add K] (row : Row K) : K :=
+def yQPlusYP {K : Type} [_root_.Add K] (row : Input K) : K :=
   row.q.y + row.p.y
 
-def ifAlpha {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
+def ifAlpha {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
   xQMinusXP row * row.alpha
 
-def ifBeta {K : Type} [Mul K] (row : Row K) : K :=
+def ifBeta {K : Type} [Mul K] (row : Input K) : K :=
   row.p.x * row.beta
 
-def ifGamma {K : Type} [Mul K] (row : Row K) : K :=
+def ifGamma {K : Type} [Mul K] (row : Input K) : K :=
   row.q.x * row.gamma
 
-def ifDelta {K : Type} [_root_.Add K] [Mul K] (row : Row K) : K :=
+def ifDelta {K : Type} [_root_.Add K] [Mul K] (row : Input K) : K :=
   yQPlusYP row * row.delta
 
-def nonexceptionalXR {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
+def nonexceptionalXR {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
   row.lambda * row.lambda - row.p.x - row.q.x - row.r.x
 
-def nonexceptionalYR {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
+def nonexceptionalYR {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
   row.lambda * xPMinusXR row - row.p.y - row.r.y
 
-def poly1 {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly1 {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : Input K) : K :=
   let incomplete := xQMinusXP row * row.lambda - (row.q.y - row.p.y)
   xQMinusXP row * incomplete
 
 def poly2 {K : Type} [One K] [_root_.Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 3]
-    (row : Row K) : K :=
+    (row : Input K) : K :=
   (1 - ifAlpha row) * (2 * row.p.y * row.lambda - 3 * row.p.x * row.p.x)
 
-def poly3a {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
+def poly3a {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
   row.p.x * row.q.x * xQMinusXP row * nonexceptionalXR row
 
-def poly3b {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
+def poly3b {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
   row.p.x * row.q.x * xQMinusXP row * nonexceptionalYR row
 
-def poly3c {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly3c {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : Input K) : K :=
   row.p.x * row.q.x * yQPlusYP row * nonexceptionalXR row
 
-def poly3d {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly3d {K : Type} [_root_.Add K] [Sub K] [Mul K] (row : Input K) : K :=
   row.p.x * row.q.x * yQPlusYP row * nonexceptionalYR row
 
-def poly4a {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly4a {K : Type} [One K] [Sub K] [Mul K] (row : Input K) : K :=
   (1 - ifBeta row) * (row.r.x - row.q.x)
 
-def poly4b {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly4b {K : Type} [One K] [Sub K] [Mul K] (row : Input K) : K :=
   (1 - ifBeta row) * (row.r.y - row.q.y)
 
-def poly5a {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly5a {K : Type} [One K] [Sub K] [Mul K] (row : Input K) : K :=
   (1 - ifGamma row) * (row.r.x - row.p.x)
 
-def poly5b {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly5b {K : Type} [One K] [Sub K] [Mul K] (row : Input K) : K :=
   (1 - ifGamma row) * (row.r.y - row.p.y)
 
-def poly6a {K : Type} [One K] [_root_.Add K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly6a {K : Type} [One K] [_root_.Add K] [Sub K] [Mul K] (row : Input K) : K :=
   (1 - ifAlpha row - ifDelta row) * row.r.x
 
-def poly6b {K : Type} [One K] [_root_.Add K] [Sub K] [Mul K] (row : Row K) : K :=
+def poly6b {K : Type} [One K] [_root_.Add K] [Sub K] [Mul K] (row : Input K) : K :=
   (1 - ifAlpha row - ifDelta row) * row.r.y
 
-def slopeLine {K : Type} [Sub K] [Mul K] (row : Row K) : Prop :=
+def slopeLine {K : Type} [Sub K] [Mul K] (row : Input K) : Prop :=
   xQMinusXP row * row.lambda = row.q.y - row.p.y
 
-def tangentLine {K : Type} [Mul K] [OfNat K 2] [OfNat K 3] (row : Row K) : Prop :=
+def tangentLine {K : Type} [Mul K] [OfNat K 2] [OfNat K 3] (row : Input K) : Prop :=
   2 * row.p.y * row.lambda = 3 * row.p.x * row.p.x
 
-def nonexceptionalResult {K : Type} [Sub K] [Mul K] (row : Row K) : Prop :=
+def nonexceptionalResult {K : Type} [Sub K] [Mul K] (row : Input K) : Prop :=
   row.r.x = row.lambda * row.lambda - row.p.x - row.q.x ∧
     row.r.y = row.lambda * xPMinusXR row - row.p.y
 
-def leftIdentityResult {K : Type} (row : Row K) : Prop :=
+def leftIdentityResult {K : Type} (row : Input K) : Prop :=
   row.r = row.q
 
-def rightIdentityResult {K : Type} (row : Row K) : Prop :=
+def rightIdentityResult {K : Type} (row : Input K) : Prop :=
   row.r = row.p
 
-def inverseResult {K : Type} [Zero K] (row : Row K) : Prop :=
+def inverseResult {K : Type} [Zero K] (row : Input K) : Prop :=
   row.r.x = 0 ∧ row.r.y = 0
 
-def Spec (row : Row Fp) : Prop :=
+def Spec (row : Input Fp) : Prop :=
   (xQMinusXP row ≠ 0 → slopeLine row) ∧
     (ifAlpha row ≠ 1 → tangentLine row) ∧
     (row.p.x * row.q.x * xQMinusXP row ≠ 0 → nonexceptionalResult row) ∧
@@ -283,7 +281,7 @@ def Spec (row : Row Fp) : Prop :=
     (ifGamma row ≠ 1 → rightIdentityResult row) ∧
     (ifAlpha row + ifDelta row ≠ 1 → inverseResult row)
 
-def main (row : Var Row Fp) : Circuit Fp Unit := do
+def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (poly1 row)
   assertZero (poly2 row)
   assertZero (poly3a row)
@@ -297,7 +295,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (poly6a row)
   assertZero (poly6b row)
 
-def circuit : FormalAssertion Fp Row where
+def circuit : FormalAssertion Fp Input where
   name := "GATE complete addition"
   main
   Spec := Spec
@@ -496,7 +494,7 @@ end Gate
 open Gate
 
 theorem rowValue_spec_pallas {input : Input Fp}
-    (hp : Point.isPointOrIdentity input.p) (hq : Point.isPointOrIdentity input.q) :
+    (hp : Pallas.Valid input.p.coords) (hq : Pallas.Valid input.q.coords) :
     Spec (rowValue input) := by
   constructor
   · intro hxdiff
@@ -515,7 +513,7 @@ theorem rowValue_spec_pallas {input : Input Fp}
     · by_cases hpy : input.p.y = 0
       · have hpx : input.p.x = 0 := by
           by_contra hpx
-          exact Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx hpy
+          exact Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx hpy
         simp [hx, hpy, hpx]
       · simp [hx, hpy]
         have hden : (2 : Fp) * input.p.y ≠ 0 :=
@@ -551,7 +549,7 @@ theorem rowValue_spec_pallas {input : Input Fp}
           rw [hinv.2]
           ring
         have hpy : input.p.y ≠ 0 :=
-          Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx
+          Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx
         have hnotY : input.q.y ≠ -input.p.y := fun h => hnotInv ⟨hx, h⟩
         simp [hpx, hx, hnotY, hpy]
       · exact False.elim (hysum (by rw [hy]; ring))
@@ -571,9 +569,9 @@ theorem rowValue_spec_pallas {input : Input Fp}
   · intro hflag
     dsimp [rowValue, rightIdentityResult, ifGamma, outputValue] at hflag ⊢
     by_cases hpx : input.p.x = 0
-    · have hpy := Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hp hpx
+    · have hpy := Point.y_eq_zero_of_valid_of_x_eq_zero hp hpx
       by_cases hqx : input.q.x = 0
-      · have hqy := Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hq hqx
+      · have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
         have hpEq : input.p = ({ x := 0, y := 0 } : Point Fp) := by
           rw [Point.mk.injEq]
           exact ⟨hpx, hpy⟩
@@ -594,9 +592,9 @@ theorem rowValue_spec_pallas {input : Input Fp}
       outputValue] at hflag ⊢
     simp at hflag ⊢
     by_cases hpx : input.p.x = 0
-    · have hpy := Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hp hpx
+    · have hpy := Point.y_eq_zero_of_valid_of_x_eq_zero hp hpx
       by_cases hqx : input.q.x = 0
-      · have hqy := Point.y_eq_zero_of_isPointOrIdentity_of_x_eq_zero hq hqx
+      · have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
         simp [hpx, hqx, hqy]
       · have hcontra :
             ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
@@ -625,7 +623,7 @@ theorem rowValue_spec_pallas {input : Input Fp}
             · have hysum : input.q.y + input.p.y ≠ 0 := by
                 rw [hyeq]
                 exact pallas_add_self_ne_zero
-                  (Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx)
+                  (Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx)
               have hcontra :
                     ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
                       if input.q.x = input.p.x then
@@ -643,35 +641,35 @@ theorem rowValue_spec_pallas {input : Input Fp}
             field_simp [sub_ne_zero.mpr hx]
           exact False.elim (hflag hcontra)
 
-theorem spec_eq_outputValue_pallas {row : Gate.Row Fp}
-    (hp : Point.isPointOrIdentity row.p) (hq : Point.isPointOrIdentity row.q) (hrow : Spec row) :
+theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
+    (hp : Pallas.Valid row.p.coords) (hq : Pallas.Valid row.q.coords) (hrow : Spec row) :
     row.r = outputValue ({ p := row.p, q := row.q } : Input Fp) := by
-  dsimp [Gate.Row.p, Gate.Row.q, Gate.Row.r] at hp hq hrow ⊢
+  dsimp [Gate.Input.p, Gate.Input.q, Gate.Input.r] at hp hq hrow ⊢
   rcases hrow with ⟨hSlope, hTangent, hNonexceptionalDiff, hNonexceptionalSum,
     hLeftIdentity, hRightIdentity, hInverse⟩
   by_cases hpx : row.x_p = 0
   · have hflag : ifBeta row ≠ 1 := by
       unfold ifBeta
-      simp [Gate.Row.p, hpx]
+      simp [Gate.Input.p, hpx]
     have hr := hLeftIdentity hflag
     unfold leftIdentityResult at hr
     unfold outputValue
     simp [hpx]
-    simpa [Point.mk.injEq, Gate.Row.q, Gate.Row.r] using hr
+    simpa [Point.mk.injEq, Gate.Input.q, Gate.Input.r] using hr
   · by_cases hqx : row.x_qr.curr = 0
     · have hflag : ifGamma row ≠ 1 := by
         unfold ifGamma
-        simp [Gate.Row.q, hqx]
+        simp [Gate.Input.q, hqx]
       have hr := hRightIdentity hflag
       unfold rightIdentityResult at hr
       unfold outputValue
       simp [hpx, hqx]
-      simpa [Point.mk.injEq, Gate.Row.p, Gate.Row.r] using hr
+      simpa [Point.mk.injEq, Gate.Input.p, Gate.Input.r] using hr
     · by_cases hinv : row.x_qr.curr = row.x_p ∧ row.y_qr.curr = -row.y_p
       · have hflag : ifAlpha row + ifDelta row ≠ 1 := by
           rcases hinv with ⟨hx, hy⟩
           unfold ifAlpha ifDelta xQMinusXP yQPlusYP
-          simp [Gate.Row.p, Gate.Row.q, hx, hy]
+          simp [Gate.Input.p, Gate.Input.q, hx, hy]
         have hr := hInverse hflag
         unfold inverseResult at hr
         have hr0 : row.r = ({ x := 0, y := 0 } : Point Fp) := by
@@ -679,64 +677,64 @@ theorem spec_eq_outputValue_pallas {row : Gate.Row Fp}
           exact hr
         unfold outputValue
         simp [hpx, hinv]
-        simpa [Point.mk.injEq, Gate.Row.r] using hr0
+        simpa [Point.mk.injEq, Gate.Input.r] using hr0
       · have hr : nonexceptionalResult row := by
           by_cases hx : row.x_qr.curr = row.x_p
           · have hsame := pallas_y_eq_or_neg_of_same_x hp hq hpx hqx hx
             rcases hsame with hy | hy
             · have hysum : yQPlusYP row ≠ 0 := by
                 unfold yQPlusYP
-                simp [Gate.Row.p, Gate.Row.q] at hy ⊢
+                simp [Gate.Input.p, Gate.Input.q] at hy ⊢
                 rw [hy]
                 exact pallas_add_self_ne_zero
-                  (Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx)
+                  (Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx)
               have hprod : row.p.x * row.q.x * yQPlusYP row ≠ 0 := by
-                simpa [Gate.Row.p, Gate.Row.q] using
+                simpa [Gate.Input.p, Gate.Input.q] using
                   mul_ne_zero (mul_ne_zero hpx hqx) hysum
               exact hNonexceptionalSum hprod
             · exact False.elim (hinv ⟨hx, hy⟩)
           · have hxdiff : xQMinusXP row ≠ 0 := by
               unfold xQMinusXP
-              simp [Gate.Row.p, Gate.Row.q]
+              simp [Gate.Input.p, Gate.Input.q]
               intro hzero
               exact hx (sub_eq_zero.mp hzero)
             have hprod : row.p.x * row.q.x * xQMinusXP row ≠ 0 := by
-              simpa [Gate.Row.p, Gate.Row.q] using
+              simpa [Gate.Input.p, Gate.Input.q] using
                 mul_ne_zero (mul_ne_zero hpx hqx) hxdiff
             exact hNonexceptionalDiff hprod
         have hlambda :
             row.lambda = lambdaValue ({ p := row.p, q := row.q } : Input Fp) := by
           by_cases hx : row.x_qr.curr = row.x_p
           · have hpy : row.y_p ≠ 0 :=
-              Point.y_ne_zero_of_isPointOrIdentity_of_x_ne_zero hp hpx
+              Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx
             have hflag : ifAlpha row ≠ 1 := by
               unfold ifAlpha xQMinusXP
-              simp [Gate.Row.p, Gate.Row.q, hx]
+              simp [Gate.Input.p, Gate.Input.q, hx]
             have htangent := hTangent hflag
             unfold tangentLine at htangent
-            simp [Gate.Row.p] at htangent
+            simp [Gate.Input.p] at htangent
             unfold lambdaValue
-            simp [Gate.Row.p, Gate.Row.q, hx, hpy]
+            simp [Gate.Input.p, Gate.Input.q, hx, hpy]
             have hden : (2 : Fp) * row.y_p ≠ 0 :=
               mul_ne_zero pallas_two_ne_zero hpy
             field_simp [hden, pallas_two_ne_zero]
             linear_combination htangent
           · have hxdiff : xQMinusXP row ≠ 0 := by
               unfold xQMinusXP
-              simp [Gate.Row.p, Gate.Row.q]
+              simp [Gate.Input.p, Gate.Input.q]
               intro hzero
               exact hx (sub_eq_zero.mp hzero)
             have hslope := hSlope hxdiff
             unfold slopeLine xQMinusXP at hslope hxdiff
-            simp [Gate.Row.p, Gate.Row.q] at hslope hxdiff
+            simp [Gate.Input.p, Gate.Input.q] at hslope hxdiff
             unfold lambdaValue
-            simp [Gate.Row.p, Gate.Row.q, hx]
+            simp [Gate.Input.p, Gate.Input.q, hx]
             field_simp [hxdiff]
             linear_combination hslope
         unfold nonexceptionalResult at hr
         rw [hlambda] at hr
         unfold xPMinusXR at hr
-        simp [Gate.Row.p, Gate.Row.q, Gate.Row.r] at hr
+        simp [Gate.Input.p, Gate.Input.q, Gate.Input.r] at hr
         unfold outputValue
         simp [hpx, hqx, hinv]
         constructor
@@ -744,8 +742,8 @@ theorem spec_eq_outputValue_pallas {row : Gate.Row Fp}
         · rw [← hr.1]
           exact hr.2
 
-theorem spec_eq_swAdd_pallas {row : Gate.Row Fp}
-    (hp : Point.isPointOrIdentity row.p) (hq : Point.isPointOrIdentity row.q) (hrow : Spec row) :
+theorem spec_eq_swAdd_pallas {row : Gate.Input Fp}
+    (hp : Pallas.Valid row.p.coords) (hq : Pallas.Valid row.q.coords) (hrow : Spec row) :
     Point.coords row.r =
       CompElliptic.CurveForms.ShortWeierstrass.add
         (0 : Fp) (Point.coords row.p) (Point.coords row.q) := by
@@ -770,7 +768,7 @@ def main (input : Var Input Fp) :
     (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).gamma
   let delta ← witnessField fun env =>
     (rowValue ({ p := eval env p, q := eval env q } : Input Fp)).delta
-  let row : Var Gate.Row Fp := {
+  let row : Var Gate.Input Fp := {
     x_p := p.x
     y_p := p.y
     x_qr := { curr := q.x, next := xR }
@@ -785,7 +783,7 @@ def main (input : Var Input Fp) :
   return row.r
 
 def Assumptions (input : Input Fp) : Prop :=
-  Point.isPointOrIdentity input.p ∧ Point.isPointOrIdentity input.q
+  Pallas.Valid input.p.coords ∧ Pallas.Valid input.q.coords
 
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
   Point.coords output =
@@ -796,7 +794,7 @@ instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec, Point.isPointOrIdentity,
+  circuit_proof_start [main, Assumptions, Spec, Pallas.Valid,
     Gate.circuit, Gate.Spec, spec_eq_swAdd_pallas]
   rcases h_assumptions with ⟨hp, hq⟩
   rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
@@ -808,7 +806,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     x := Expression.eval env (varFromOffset Point (i₀ + 2)).x
     y := Expression.eval env (varFromOffset Point (i₀ + 2)).y
   }
-  let row : Gate.Row Fp := {
+  let row : Gate.Input Fp := {
     x_p := pCopy.x
     y_p := pCopy.y
     x_qr := { curr := qCopy.x, next := env.get (i₀ + 2 + 2) }
@@ -819,15 +817,15 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     gamma := env.get (i₀ + 2 + 2 + 1 + 1 + 1 + 1 + 1)
     delta := env.get (i₀ + 2 + 2 + 1 + 1 + 1 + 1 + 1 + 1)
   }
-  have hpCopy : Point.isPointOrIdentity pCopy := by
+  have hpCopy : Pallas.Valid pCopy.coords := by
     simpa [pCopy, hpCopyEq] using hp
-  have hqCopy : Point.isPointOrIdentity qCopy := by
+  have hqCopy : Pallas.Valid qCopy.coords := by
     simpa [qCopy, hqCopyEq] using hq
   have hspec := spec_eq_swAdd_pallas (row := row) hpCopy hqCopy hrow
   simpa [row, pCopy, qCopy, hpCopyEq, hqCopyEq] using hspec
 
 theorem completeness : Completeness Fp main Assumptions := by
-  circuit_proof_start [main, Assumptions, Spec, Point.isPointOrIdentity,
+  circuit_proof_start [main, Assumptions, Spec, Pallas.Valid,
     Gate.circuit, Gate.Spec, rowValue_spec_pallas]
   rcases h_assumptions with ⟨hp, hq⟩
   rcases input_p with ⟨px, py⟩
@@ -845,7 +843,4 @@ def circuit : FormalCircuit Fp Input Point where
   soundness
   completeness
 
-end Add
-
-end Ecc
-end Orchard
+end Orchard.Ecc.Add
