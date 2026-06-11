@@ -61,6 +61,9 @@ exactly matches the pinned Halo2 VK.
   be used whenever Halo2 does `copy_advice`.
 - When a Halo2 circuit witnesses auxiliary variables internally, the Clean circuit should
   do the same. Do not expose that variable to the caller as input.
+- Halo2 `Value<T>` inputs are prover-side inputs. In Clean, model them with
+  `CircuitType` using `Unconstrained T` or `UnconstrainedDep T`, and package the method as
+  a `GeneralFormalCircuit.WithHint` when the circuit witnesses cells from that value.
 - The input/output schema of any Clean circuit should precisely match some method on the
   Halo2 side.
 - `Input` and `Output` should closely model high-level types, such as elliptic curve

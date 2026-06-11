@@ -717,8 +717,6 @@ theorem spec_eq_swAdd_pallas {row : CompleteAddRow Fp}
 
 def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
-  PointOrIdentity.circuit input.p
-  PointOrIdentity.circuit input.q
   let xR ← witnessField fun env =>
     (rowValue ({ p := eval env input.p, q := eval env input.q } : Input Fp)).r.x
   let yR ← witnessField fun env =>
@@ -758,9 +756,9 @@ instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
-    Point.isPointOrIdentity, Gate.circuit, Gate.Spec, spec_eq_swAdd_pallas]
-  rcases h_holds with ⟨hp, hq, hrow⟩
+  circuit_proof_start [main, Assumptions, Spec, Point.isPointOrIdentity,
+    Gate.circuit, Gate.Spec, spec_eq_swAdd_pallas]
+  rcases h_assumptions with ⟨hp, hq⟩
   let row : CompleteAddRow Fp := {
     p := input_p
     q := input_q
@@ -771,13 +769,12 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     gamma := env.get (i₀ + 1 + 1 + 1 + 1 + 1)
     delta := env.get (i₀ + 1 + 1 + 1 + 1 + 1 + 1)
   }
-  exact spec_eq_swAdd_pallas (row := row) hp hq hrow
+  exact spec_eq_swAdd_pallas (row := row) hp hq h_holds
 
 theorem completeness : Completeness Fp main Assumptions := by
-  circuit_proof_start [main, Assumptions, Spec, PointOrIdentity.circuit,
-    Point.isPointOrIdentity, Gate.circuit, Gate.Spec, rowValue_spec_pallas]
+  circuit_proof_start [main, Assumptions, Spec, Point.isPointOrIdentity,
+    Gate.circuit, Gate.Spec, rowValue_spec_pallas]
   rcases h_assumptions with ⟨hp, hq⟩
-  refine ⟨hp, hq, ?_⟩
   let row : CompleteAddRow Fp := {
     p := input_p
     q := input_q

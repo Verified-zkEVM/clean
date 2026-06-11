@@ -231,7 +231,6 @@ def Spec (input : Inputs Ecc.Fp) (output : Ecc.Point Ecc.Fp) :
 def main (input : Var Inputs Ecc.Fp) :
     Circuit Ecc.Fp (Var Ecc.Point Ecc.Fp) := do
   let output ← PointMux.circuit input
-  Ecc.NonIdentityPoint.circuit output
   return output
 
 instance elaborated : ElaboratedCircuit Ecc.Fp Inputs Ecc.Point main := by
@@ -254,23 +253,23 @@ theorem onCurve_of_spec_and_assumptions
 theorem soundness :
     Soundness Ecc.Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
-    Ecc.NonIdentityPoint.circuit]
-  rcases h_assumptions with ⟨hMuxAssumptions, _, _⟩
-  rcases h_holds with ⟨hMux, hOnCurve⟩
-  exact ⟨hMux hMuxAssumptions, hOnCurve⟩
+    onCurve_of_spec_and_assumptions]
+  rcases h_assumptions with ⟨hMuxAssumptions, hLeft, hRight⟩
+  have hMux := h_holds hMuxAssumptions
+  constructor
+  · exact hMux
+  · by_cases hChoiceOne : input_choice = 1
+    · simp [hChoiceOne] at hMux
+      rw [hMux]
+      exact hRight
+    · simp [hChoiceOne] at hMux
+      rw [hMux]
+      exact hLeft
 
 theorem completeness :
     Completeness Ecc.Fp main Assumptions := by
-  circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
-    Ecc.NonIdentityPoint.circuit]
-  have hAllAssumptions := h_assumptions
-  change Assumptions
-    ({ choice := input_choice, left := input_left, right := input_right } :
-      Inputs Ecc.Fp) at hAllAssumptions
-  rcases h_assumptions with ⟨hMuxAssumptions, _, _⟩
-  constructor
-  · exact hMuxAssumptions
-  · exact (onCurve_of_spec_and_assumptions hAllAssumptions (h_env hMuxAssumptions))
+  circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec]
+  exact h_assumptions.1
 
 def circuit : FormalCircuit Ecc.Fp Inputs Ecc.Point where
   main
