@@ -104,8 +104,10 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
 
 def OrchardSpec
     (row : Row Ecc.PallasBaseField) (valueScalar blindScalar : ℕ) : Prop :=
-  Ecc.IsOrchardFixedBaseMul .valueCommitV valueScalar (valueProduct row) ∧
-    Ecc.IsOrchardFixedBaseMul .valueCommitR blindScalar (blindProduct row) ∧
+  Ecc.pointCoords (valueProduct row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitV valueScalar ∧
+    Ecc.pointCoords (blindProduct row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitR blindScalar ∧
     Spec row
 
 def OrchardCommitmentRelation
@@ -127,13 +129,9 @@ theorem commitmentRelation_of_orchardSpec
     (h : OrchardSpec row valueScalar blindScalar) :
     OrchardCommitmentRelation row valueScalar blindScalar := by
   rcases h with ⟨hValue, hBlind, hSpec⟩
-  change Ecc.pointCoords (valueProduct row) =
-    Ecc.pallasScalarMulCoords valueScalar (Ecc.fixedBasePoint .valueCommitV) at hValue
-  change Ecc.pointCoords (blindProduct row) =
-    Ecc.pallasScalarMulCoords blindScalar (Ecc.fixedBasePoint .valueCommitR) at hBlind
   dsimp [OrchardCommitmentRelation, Spec, valueProduct, blindProduct, addInput] at hValue hBlind hSpec ⊢
   rw [hValue, hBlind] at hSpec
-  simpa [Ecc.orchardFixedBaseMulCoords_eq_groupAction] using hSpec
+  exact hSpec
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
@@ -162,8 +160,10 @@ theorem assumptions_of_orchardSpec
     (h : OrchardSpec row valueScalar blindScalar) :
     Assumptions row :=
   assumptions_of_product_valid
-    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1)
-    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.2.1)
+    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity
+      ((Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1))
+    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity
+      ((Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.2.1))
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   let cv ← Ecc.CompleteAdd.Entry.circuit (addInput row)
@@ -300,7 +300,8 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     row.nf = row.nfPointX
 
 def OrchardSpec (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
-  Ecc.IsOrchardFixedBaseMul .nullifierK scalar (product row) ∧
+  Ecc.pointCoords (product row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar ∧
     Spec row
 
 def OrchardNullifierRelation (row : Row Ecc.PallasBaseField) (scalar : ℕ) : Prop :=
@@ -323,13 +324,11 @@ theorem nullifierRelation_of_orchardSpec
     (h : OrchardSpec row scalar) :
     OrchardNullifierRelation row scalar := by
   rcases h with ⟨hProduct, hSpec⟩
-  change Ecc.pointCoords (product row) =
-    Ecc.pallasScalarMulCoords scalar (Ecc.fixedBasePoint .nullifierK) at hProduct
   rcases hSpec with ⟨hScalar, hAdd, hExtract⟩
   refine ⟨hScalar, ?_, hExtract⟩
   dsimp [product, cmPoint, addInput] at hProduct hAdd ⊢
   rw [hProduct] at hAdd
-  simpa [Ecc.orchardFixedBaseMulCoords_eq_groupAction] using hAdd
+  exact hAdd
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
@@ -357,7 +356,8 @@ theorem assumptions_of_orchardSpec
     (h : OrchardSpec row scalar) :
     Assumptions row :=
   assumptions_of_product_valid hCm
-    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1)
+    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity
+      ((Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1))
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (row.poseidonHash + row.psi - row.scalar)
@@ -700,7 +700,8 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
       (Ecc.pointCoords (addInput row).q)
 
 def OrchardSpec (row : Row Ecc.PallasBaseField) (alpha : ℕ) : Prop :=
-  Ecc.IsOrchardFixedBaseMul .spendAuthG alpha (alphaProduct row) ∧
+  Ecc.pointCoords (alphaProduct row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .spendAuthG alpha ∧
     Spec row
 
 def OrchardSpendAuthRelation (row : Row Ecc.PallasBaseField) (alpha : ℕ) : Prop :=
@@ -721,11 +722,9 @@ theorem spendAuthRelation_of_orchardSpec
     (h : OrchardSpec row alpha) :
     OrchardSpendAuthRelation row alpha := by
   rcases h with ⟨hProduct, hSpec⟩
-  change Ecc.pointCoords (alphaProduct row) =
-    Ecc.pallasScalarMulCoords alpha (Ecc.fixedBasePoint .spendAuthG) at hProduct
   dsimp [OrchardSpendAuthRelation, Spec, alphaProduct, akPoint, addInput] at hProduct hSpec ⊢
   rw [hProduct] at hSpec
-  simpa [Ecc.orchardFixedBaseMulCoords_eq_groupAction] using hSpec
+  exact hSpec
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
   Ecc.CompleteAdd.Entry.Assumptions (addInput row)
@@ -754,7 +753,8 @@ theorem assumptions_of_orchardSpec
     (h : OrchardSpec row alpha) :
     Assumptions row :=
   assumptions_of_product_valid
-    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1)
+    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity
+      ((Ecc.isOrchardFixedBaseMul_iff_groupAction).2 h.1))
     hAk
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
