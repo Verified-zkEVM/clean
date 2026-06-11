@@ -1,23 +1,68 @@
 # Orchard Clean source-conformance plan
 
-This PR starts a new Orchard formalization path with a deliberately narrower goal than
-`halo2-in-clean`.
+This PR represents an effort to model the Zcash Orchard circuit, written in Halo2, faithfully in Clean.
 
-The goal is to implement the Orchard circuit logic in Clean from the actual Orchard and
-`halo2_gadgets` source APIs. Clean circuits should expose the same meaningful entry-point
-boundaries as the source gadgets whenever the Rust code witnesses auxiliary values
-internally.
+## Goal
 
-## Scope
+- All orchard circuits are faithfully ported to Clean.
+- Circuit input/output signatures _exactly_ match halo2 signatures.
+- Clean specs and assumptions _precisely_ model the intended contractual API of orchard circuits
 
-- Port Orchard and `halo2_gadgets` gadget relations into ordinary Clean circuits.
-- Model Halo2 custom gates as `FormalAssertion`s or small `FormalCircuit`s.
-- Model Halo2 copy constraints with shared Clean values or `===`.
-- Use Clean subcircuits for composition.
-- Keep specs over high-level typed inputs whenever practical.
-- Faithful Halo2 arithmetization details such as exact column identities, rotations,
-  selector compression, regions, permutation arguments, and pinned verification keys are a
-  separate design layer, but source API conformance is in scope here.
+## How we model halo2 in clean
+
+Halo2 cell layout (advice/fixed/instance columns, current/next row, regions) is richer
+than Clean's linear witness tape.
+
+Furthermore, halo2 has two circuit layers: `configure`, where custom gates are defined,
+and `synthesize`, where regions are creates, witness values are assigned, custom gates are "called" by enabling their
+selectors, and wires/copy constraints between cells are added. Clean has just one circuit layer.
+
+To still represent the halo2 circuits faithfully, we will add _additional ad-hoc structure_ to our Clean circuits that
+approximates the intended halo2 structure and will later enable a mechanical translation of our clean circuits
+into a verification key that _exactly_ matches the pinned halo2 VK.
+
+### Configure / Custom gates
+
+- Serializing Clean circuits preserves their subcircuit structure and marks subcircuits
+  with their given `name`. This can be used to recover custom gates definitions from the single-layer
+  serialized clean circuits.
+- To be precise, Halo2 custom gates are modeled as `FormalAssertion`s with a `name := "GATE <halo2 gate name>`.
+- _Advice_ column inputs are modeled by a struct that distinguishes values clearly by current and next row
+- _Fixed_ column inputs are modeled as Lean parameters that the entire `FormalAssertion` depends on. The parameters should be
+  in value form (field elements) and translated to `.const` Expressions inside the gate.
+- _Selectors_ are NOT modeled. Instead, to "enable" a gate we will simply call it from the outside as a clean subcircuit.
+- Halo2 lookups should be modeled by Clean `lookup` operations and `Table` definitions.
+
+### Synthesize / High-level circuit wiring
+
+- Every individual `synthesize` or other circuit method in Halo2 should be ported to a formalized circuit package in Clean
+  (`FormalCircuit`, `FormalAssertion` or `GeneralFormalCircuit`).
+- Clean circuits compose by calling dependent chips / `synthesize()` / `assign_region()` methods as subcircuits
+- When a halo2 circuit enables a custom gate, its Clean equivalent calls the gate circuit as subcircuit.
+- When a custom gate has fixed columns whose concrete values are decided by the caller (`assign_fixed` in halo2), the
+  Clean circuit should instantiate the gate with the same explicit parameters.
+- Copy constraints are modeled by the clean `===` operator.
+  - If two values are genuinely different _cells_ on the halo2 side, we should _not_ use the same variable for them in clean.
+    Instead, witness a new `Expression` and connect it to the copied one by `===`.
+  - Clean's `<==` operator does witnessing and equality constraints in one step and should be used whenever halo2 does `copy_advice`.
+- When a halo2 circuit witnesses auxiliary variables internally, the clean circuit should do the same (not expose that
+  variable to the caller as input). The input/output schema of any clean circuit should precisely match some method on the halo2 side.
+- `Input` and `Output` should be defined to closely model high-level types (elliptic curve point, etc) when halo2 does the same.
+
+## Specs and Assumptions
+
+Clean `Spec` and `Assumptions` must faithfully model the _high-level intended contract_ of the halo2 circuit.
+
+**Important**: When a halo2 circuit constrains a given relation _internally_ (e.g. scalar multiplication) then the clean
+circuit MUST establish the same fact in its spec, not weaken the relation by deferring properties to assumptions.
+
+## Circuit field
+
+Orchard uses the Pallas base field as its circuit field. Clean circuits should use the same explicit field, and
+make use of established properties of that field and curve defined over it, see `Orchard/Specs`.
+
+Mathematical properties that are known and needed within the scope of a circuit should not be deferred
+as obligations to callers via assumptions.
 
 ## Hard reference rule
 
@@ -196,15 +241,15 @@ The next bottom-up repairs should close the gaps where Clean currently has only 
 assertion but the Rust source exposes a higher-level entry point that witnesses auxiliary
 values and returns a clean result.
 
-| Rust source API | Rust semantics | Current Clean equivalent | Status |
-| --- | --- | --- | --- |
+| Rust source API                                                                                                             | Rust semantics                                                                                                                                                                                                                  | Current Clean equivalent                                                                                                | Status                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `EccInstructions::add` in `halo2_gadgets/src/ecc/chip.rs`, implemented by `add::Config::assign_region` in `ecc/chip/add.rs` | Complete affine addition. Inputs are two `EccPoint`s, auxiliaries `lambda`, `alpha`, `beta`, `gamma`, `delta` and the output point are witnessed internally, and the API returns `P + Q`, including identity and inverse cases. | `Orchard.Ecc.CompleteAdd.Entry.circuit` over `PallasBaseField`; row assertion remains `Orchard.Ecc.CompleteAdd.circuit` | Present. The entry circuit witnesses the output point and auxiliary row values, composes the complete-add row assertion internally, and specifies CompElliptic short-Weierstrass addition over Pallas. |
-| `EccInstructions::add_incomplete`, implemented by `add_incomplete::Config::assign_region` | Incomplete non-identity addition. Inputs are non-identity points with exceptional cases rejected; output is witnessed and returned. | `Orchard.Ecc.IncompleteAdd.circuit` | Present as a `FormalCircuit` with input/output point surface and semantic short-Weierstrass addition spec. |
-| `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by `ecc/chip/mul.rs::Config::assign` | Variable-base scalar multiplication `[scalar] base`, including scalar decomposition, complete and incomplete additions, LSB correction, and overflow check. | Row assertions in `Orchard.ScalarMul.VarBase*` | Missing entry-point circuit. Clean does not yet have a composed variable-base scalar-mul circuit whose surface contains scalar, base, and product with spec `product = [scalar] base`. |
-| `FixedPoint::mul`, implemented by `ecc/chip/mul_fixed/full_width.rs` | Full-width fixed-base scalar multiplication `[scalar] B`. Used by Orchard for `ValueCommitR`, `SpendAuthG`, Sinsemilla blinding factors, note commitments, and `CommitIvk`. | Row assertions in `Orchard.ScalarMul.FixedBase.*`; higher gadgets accept product coordinates | Missing entry-point circuit. Clean currently does not connect a scalar and fixed-base identifier to the returned product. |
-| `FixedPointShort::mul`, implemented by `ecc/chip/mul_fixed/short.rs` | Signed short fixed-base scalar multiplication `[sign * magnitude] B`, including magnitude decomposition and final conditional negation. Used by `ValueCommitV`. | `Orchard.ScalarMul.FixedShort.circuit` plus other row assertions | Missing entry-point circuit. The final-row sign semantics are present, but not the composed short fixed-base multiplication API. |
-| `mul_fixed/short.rs::Config::assign_scalar_sign` | Uses the short fixed-base sign gate by itself to return either an input point or its negation, with `sign ∈ {1, -1}`. | `Orchard.ScalarMul.FixedShort.SignEntry.circuit` | Present. The wrapper composes the bundled final-row gate and exposes the semantic signed-point relation over Pallas coordinates. |
-| `FixedPointBaseField::mul`, implemented by `ecc/chip/mul_fixed/base_field_elem.rs` | Fixed-base scalar multiplication by a base-field element. Used by `derive_nullifier` for `[poseidon_hash(nk, rho) + psi] NullifierK`. | Row assertions in `Orchard.ScalarMul.FixedBase.*` | Missing entry-point circuit. Clean does not yet prove the nullifier product is the scalar multiplication result. |
+| `EccInstructions::add_incomplete`, implemented by `add_incomplete::Config::assign_region`                                   | Incomplete non-identity addition. Inputs are non-identity points with exceptional cases rejected; output is witnessed and returned.                                                                                             | `Orchard.Ecc.IncompleteAdd.circuit`                                                                                     | Present as a `FormalCircuit` with input/output point surface and semantic short-Weierstrass addition spec.                                                                                             |
+| `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by `ecc/chip/mul.rs::Config::assign`                          | Variable-base scalar multiplication `[scalar] base`, including scalar decomposition, complete and incomplete additions, LSB correction, and overflow check.                                                                     | Row assertions in `Orchard.ScalarMul.VarBase*`                                                                          | Missing entry-point circuit. Clean does not yet have a composed variable-base scalar-mul circuit whose surface contains scalar, base, and product with spec `product = [scalar] base`.                 |
+| `FixedPoint::mul`, implemented by `ecc/chip/mul_fixed/full_width.rs`                                                        | Full-width fixed-base scalar multiplication `[scalar] B`. Used by Orchard for `ValueCommitR`, `SpendAuthG`, Sinsemilla blinding factors, note commitments, and `CommitIvk`.                                                     | Row assertions in `Orchard.ScalarMul.FixedBase.*`; higher gadgets accept product coordinates                            | Missing entry-point circuit. Clean currently does not connect a scalar and fixed-base identifier to the returned product.                                                                              |
+| `FixedPointShort::mul`, implemented by `ecc/chip/mul_fixed/short.rs`                                                        | Signed short fixed-base scalar multiplication `[sign * magnitude] B`, including magnitude decomposition and final conditional negation. Used by `ValueCommitV`.                                                                 | `Orchard.ScalarMul.FixedShort.circuit` plus other row assertions                                                        | Missing entry-point circuit. The final-row sign semantics are present, but not the composed short fixed-base multiplication API.                                                                       |
+| `mul_fixed/short.rs::Config::assign_scalar_sign`                                                                            | Uses the short fixed-base sign gate by itself to return either an input point or its negation, with `sign ∈ {1, -1}`.                                                                                                           | `Orchard.ScalarMul.FixedShort.SignEntry.circuit`                                                                        | Present. The wrapper composes the bundled final-row gate and exposes the semantic signed-point relation over Pallas coordinates.                                                                       |
+| `FixedPointBaseField::mul`, implemented by `ecc/chip/mul_fixed/base_field_elem.rs`                                          | Fixed-base scalar multiplication by a base-field element. Used by `derive_nullifier` for `[poseidon_hash(nk, rho) + psi] NullifierK`.                                                                                           | Row assertions in `Orchard.ScalarMul.FixedBase.*`                                                                       | Missing entry-point circuit. Clean does not yet prove the nullifier product is the scalar multiplication result.                                                                                       |
 
 Consequences for Orchard gadgets:
 
@@ -245,16 +290,16 @@ wrappers. These gaps are downstream of ECC complete addition and fixed-base scal
 multiplication, so they should be repaired after the ECC/scalar-mul entry-point circuits
 exist.
 
-| Rust source API | Rust semantics | Current Clean equivalent | Status |
-| --- | --- | --- | --- |
+| Rust source API                                                                                                                                  | Rust semantics                                                                                                                                                                                                                                                      | Current Clean equivalent                                                  | Status                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SinsemillaInstructions::hash_to_point` / `hash_to_point_with_private_init`, implemented in `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs` | Initializes the accumulator from public/private `Q`, loops over all message pieces, performs generator-table lookups/range checks and merged double-and-add rows, assigns final `y_A`, rejects identity output, and returns a non-identity point plus running sums. | Custom gates `Orchard.Sinsemilla.InitialYQ` and `Orchard.Sinsemilla.Gate` | Missing entry-point circuit. Clean has the local gate assertions, but no composed `hash_to_point` circuit whose surface is `(Q, message) -> (point, running sums)`. |
-| `HashDomain::hash` in `halo2_gadgets/src/sinsemilla.rs` | Calls `hash_to_point` and extracts the x-coordinate. | No entry circuit | Missing entry-point circuit. |
-| `CommitDomain::blinding_factor` and `CommitDomain::commit` in `halo2_gadgets/src/sinsemilla.rs` | Computes `[r] R`, computes `M = hash_to_point(message)`, then returns `M + [r] R` and running sums. | No entry circuit | Missing entry-point circuit. Depends on fixed-base scalar multiplication, `hash_to_point`, and complete addition. |
-| `CommitDomain::short_commit` in `halo2_gadgets/src/sinsemilla.rs` | Calls `commit`, then returns `ExtractP(commitment)`. | No entry circuit | Missing entry-point circuit. |
-| `MerkleInstructions::hash_layer` in `halo2_gadgets/src/sinsemilla/merkle/chip.rs` | Builds three Sinsemilla message pieces from `(layer, left, right)`, calls `hash_to_point`, extracts x, and wires decomposition/running-sum cells. | Custom gate `Orchard.Sinsemilla.Merkle.circuit` | Missing entry-point circuit. Clean ports the decomposition gate only. |
-| `MerklePath::calculate_root` in `halo2_gadgets/src/sinsemilla/merkle.rs` | Iterates over all path layers, conditionally swaps `(node, sibling)`, calls `hash_layer`, and returns the final root. | No entry circuit | Missing entry-point circuit. |
-| `gadgets::note_commit` in `orchard/src/circuit/note_commit.rs` | Builds eight message pieces `a..h`, performs point-y and field canonicity checks using running-sum outputs from `CommitDomain::commit`, calls `CommitDomain::commit`, and returns the commitment point. | Custom gates in `Orchard.NoteCommit` | Missing entry-point circuit. |
-| `gadgets::commit_ivk` in `orchard/src/circuit/commit_ivk.rs` | Builds four message pieces from `(ak, nk)`, calls `CommitDomain::short_commit`, uses returned running sums for canonicity, and returns `ivk`. | Custom gate `Orchard.CommitIvk.circuit` | Missing entry-point circuit. |
+| `HashDomain::hash` in `halo2_gadgets/src/sinsemilla.rs`                                                                                          | Calls `hash_to_point` and extracts the x-coordinate.                                                                                                                                                                                                                | No entry circuit                                                          | Missing entry-point circuit.                                                                                                                                        |
+| `CommitDomain::blinding_factor` and `CommitDomain::commit` in `halo2_gadgets/src/sinsemilla.rs`                                                  | Computes `[r] R`, computes `M = hash_to_point(message)`, then returns `M + [r] R` and running sums.                                                                                                                                                                 | No entry circuit                                                          | Missing entry-point circuit. Depends on fixed-base scalar multiplication, `hash_to_point`, and complete addition.                                                   |
+| `CommitDomain::short_commit` in `halo2_gadgets/src/sinsemilla.rs`                                                                                | Calls `commit`, then returns `ExtractP(commitment)`.                                                                                                                                                                                                                | No entry circuit                                                          | Missing entry-point circuit.                                                                                                                                        |
+| `MerkleInstructions::hash_layer` in `halo2_gadgets/src/sinsemilla/merkle/chip.rs`                                                                | Builds three Sinsemilla message pieces from `(layer, left, right)`, calls `hash_to_point`, extracts x, and wires decomposition/running-sum cells.                                                                                                                   | Custom gate `Orchard.Sinsemilla.Merkle.circuit`                           | Missing entry-point circuit. Clean ports the decomposition gate only.                                                                                               |
+| `MerklePath::calculate_root` in `halo2_gadgets/src/sinsemilla/merkle.rs`                                                                         | Iterates over all path layers, conditionally swaps `(node, sibling)`, calls `hash_layer`, and returns the final root.                                                                                                                                               | No entry circuit                                                          | Missing entry-point circuit.                                                                                                                                        |
+| `gadgets::note_commit` in `orchard/src/circuit/note_commit.rs`                                                                                   | Builds eight message pieces `a..h`, performs point-y and field canonicity checks using running-sum outputs from `CommitDomain::commit`, calls `CommitDomain::commit`, and returns the commitment point.                                                             | Custom gates in `Orchard.NoteCommit`                                      | Missing entry-point circuit.                                                                                                                                        |
+| `gadgets::commit_ivk` in `orchard/src/circuit/commit_ivk.rs`                                                                                     | Builds four message pieces from `(ak, nk)`, calls `CommitDomain::short_commit`, uses returned running sums for canonicity, and returns `ivk`.                                                                                                                       | Custom gate `Orchard.CommitIvk.circuit`                                   | Missing entry-point circuit.                                                                                                                                        |
 
 Immediate bottom-up implication:
 
