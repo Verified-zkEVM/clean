@@ -195,12 +195,10 @@ Bottom-up implementation order currently inferred from those tagged sources:
      `Orchard.ActionChecks.circuit`; the surrounding source-level action wiring from
      `Circuit::synthesize` is ported as `Orchard.ActionWiring.circuit`. The selected
      computed action outputs `cv_net`, `nf_old`, and `rk` are connected from
-     `Orchard.Gadget.ValueCommitment.circuit`, `Orchard.Gadget.Nullifier.circuit`,
-     and `Orchard.Gadget.SpendAuth.circuit` into the action row by
-     `Orchard.ActionComputedWiring.circuit`; the Pallas-specific
-     `Orchard.ActionComputedWiring.Entry.circuit` composes the corresponding entry
-     wrappers for value commitment, nullifier-with-Poseidon-boundary, and spend
-     authority. The final Merkle path-step output is
+     the Pallas-specific `Orchard.ActionComputedWiring.Entry.circuit`, which composes
+     the corresponding entry wrappers for value commitment,
+     nullifier-with-Poseidon-boundary, and spend authority, into the action row. The
+     final Merkle path-step output is
      connected to the action `root` consumed by the Orchard checks in
      `Orchard.ActionMerkleWiring.circuit`.
      `note_commit.rs` gates `NoteCommit MessagePiece b`,

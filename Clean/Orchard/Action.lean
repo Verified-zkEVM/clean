@@ -256,86 +256,13 @@ Reference:
 - `Spend authority`
 - final public-input/action wiring in `Circuit::synthesize`
 
-This assertion connects source-level gadget outputs into `ActionWiring.circuit`:
+This entry assertion connects source-level gadget outputs into `ActionWiring.circuit`:
 `value_commit_orchard` supplies `cv_net`, the nullifier gadget supplies `nf_old`, and
-spend authority supplies `rk`. Other action sub-gadgets remain represented by the
-explicit fields of `ActionWiring.Row` and their lower-level assertions.
+spend authority supplies `rk`. The child gadgets are composed through their entry
+wrappers so the action-level API carries the same complete-addition and fixed-base
+scalar-multiplication relations as the lower Orchard gadget wrappers.
 -/
 namespace ActionComputedWiring
-
-structure Row (F : Type) where
-  action : ActionWiring.Row F
-  valueCommitment : Gadget.ValueCommitment.Row F
-  nullifier : Gadget.Nullifier.Row F
-  spendAuth : Gadget.SpendAuth.Row F
-deriving ProvableStruct
-
-def cvXCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.valueCommitment.cvX - row.action.cvNetX
-
-def cvYCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.valueCommitment.cvY - row.action.cvNetY
-
-def nfCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.nullifier.nf - row.action.nfOld
-
-def rkXCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.spendAuth.rkX - row.action.rkX
-
-def rkYCheck {K : Type} [Sub K] (row : Row K) : K :=
-  row.spendAuth.rkY - row.action.rkY
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  ActionWiring.Spec row.action ∧
-    Gadget.ValueCommitment.Spec row.valueCommitment ∧
-    Gadget.Nullifier.Spec row.nullifier ∧
-    Gadget.SpendAuth.Spec row.spendAuth ∧
-    row.valueCommitment.cvX = row.action.cvNetX ∧
-    row.valueCommitment.cvY = row.action.cvNetY ∧
-    row.nullifier.nf = row.action.nfOld ∧
-    row.spendAuth.rkX = row.action.rkX ∧
-    row.spendAuth.rkY = row.action.rkY
-
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  ActionWiring.circuit row.action
-  Gadget.ValueCommitment.circuit row.valueCommitment
-  Gadget.Nullifier.circuit row.nullifier
-  Gadget.SpendAuth.circuit row.spendAuth
-  assertZero (cvXCheck row)
-  assertZero (cvYCheck row)
-  assertZero (nfCheck row)
-  assertZero (rkXCheck row)
-  assertZero (rkYCheck row)
-
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start [main, Spec, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
-      ActionWiring.circuit, ActionWiring.Spec,
-      Gadget.ValueCommitment.circuit, Gadget.ValueCommitment.Spec,
-      Gadget.Nullifier.circuit, Gadget.Nullifier.Spec,
-      Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec]
-    rcases h_holds with ⟨hAction, hValue, hNullifier, hSpendAuth, hCvX, hCvY, hNf, hRkX, hRkY⟩
-    exact ⟨hAction, hValue, hNullifier, hSpendAuth,
-      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hCvX),
-      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hCvY),
-      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNf),
-      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hRkX),
-      sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hRkY)⟩
-  completeness := by
-    circuit_proof_start [main, Spec, cvXCheck, cvYCheck, nfCheck, rkXCheck, rkYCheck,
-      ActionWiring.circuit, ActionWiring.Spec,
-      Gadget.ValueCommitment.circuit, Gadget.ValueCommitment.Spec,
-      Gadget.Nullifier.circuit, Gadget.Nullifier.Spec,
-      Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec]
-    rcases h_spec with ⟨hAction, hValue, hNullifier, hSpendAuth, hCvX, hCvY, hNf, hRkX, hRkY⟩
-    exact ⟨hAction, hValue, hNullifier, hSpendAuth,
-      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hCvX,
-      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hCvY,
-      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hNf,
-      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hRkX,
-      by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hRkY⟩
 
 namespace Entry
 
