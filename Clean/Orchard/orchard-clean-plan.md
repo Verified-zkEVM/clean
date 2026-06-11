@@ -152,8 +152,8 @@ use a `.Gate` namespace for the gate, not a `.Entry` namespace for the entry poi
 
 In general, follow Halo2 file/chip organization and naming closely.
 
-For example, if halo2 knows ECC entry point methods `incomplete_add` and `add`, then Clean namespaces should be
-`IncompleteAdd` and `Add`.
+For example, if Halo2 has source modules `add_incomplete.rs` and `add.rs`, then Clean
+modules and namespaces should follow that source shape as `AddIncomplete` and `Add`.
 
 Similarly, match halo2 names of columns and assigned cells with the same Clean variable names.
 

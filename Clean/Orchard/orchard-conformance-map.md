@@ -28,8 +28,8 @@ Current Clean coverage:
 - `Clean.Orchard.Ecc.WitnessPoint.Gate.circuit`: `GATE witness point`
 - `Clean.Orchard.Ecc.WitnessNonIdentityPoint.circuit`: `EccInstructions::witness_point_non_id`
 - `Clean.Orchard.Ecc.WitnessNonIdentityPoint.Gate.circuit`: `GATE witness non-identity point`
-- `Clean.Orchard.Ecc.IncompleteAdd.Gate.circuit`: `GATE incomplete addition`
-- `Clean.Orchard.Ecc.IncompleteAdd.circuit`: `EccInstructions::add_incomplete`
+- `Clean.Orchard.Ecc.AddIncomplete.Gate.circuit`: `GATE incomplete addition`
+- `Clean.Orchard.Ecc.AddIncomplete.circuit`: `EccInstructions::add_incomplete`
 - `Clean.Orchard.Ecc.Add.Gate.circuit`: `GATE complete addition`
 - `Clean.Orchard.Ecc.Add.circuit`: `EccInstructions::add`
 

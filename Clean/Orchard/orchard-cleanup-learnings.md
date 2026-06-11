@@ -21,3 +21,11 @@ Commit range: `6451581a^..0e96c5f1`
 - When witnessing a high-level structured value, use `witness` on that high-level type
   instead of manually splitting it into coordinate-level `witnessField` calls. This keeps
   the Clean code closer to the Halo2 API and reduces proof noise.
+- For elliptic-curve closure facts, use the established theorem layer in
+  `Clean/Orchard/Specs/Elliptic` and add small bridge lemmas as needed. Do not brute-force
+  large affine-coordinate preservation proofs inside circuit files with `field_simp` and
+  `ring_nf`.
+- Keep Lean module filenames and namespaces aligned with the actual Halo2 source module
+  names, not with illustrative examples in the plan. For example, source
+  `add_incomplete.rs` / `mod add_incomplete` maps to Lean `AddIncomplete`, not
+  `IncompleteAdd`.
