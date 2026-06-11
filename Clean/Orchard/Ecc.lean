@@ -268,6 +268,20 @@ theorem isOrchardFixedBaseMul_isPointOrIdentity
     isPointOrIdentity product :=
   isPallasScalarMul_isPointOrIdentity (fixedBasePoint_isPointOrIdentity baseId) hmul
 
+def orchardFixedBaseMulGroupActionCoords
+    (baseId : OrchardFixedBaseId) (scalar : ℕ) :
+    PallasBaseField × PallasBaseField :=
+  (((scalar • pallasSWPoint (fixedBasePoint baseId)
+      (fixedBasePoint_isPointOrIdentity baseId)).x),
+    ((scalar • pallasSWPoint (fixedBasePoint baseId)
+      (fixedBasePoint_isPointOrIdentity baseId)).y))
+
+theorem orchardFixedBaseMulCoords_eq_groupAction
+    (baseId : OrchardFixedBaseId) (scalar : ℕ) :
+    orchardFixedBaseMulGroupActionCoords baseId scalar =
+      pallasScalarMulCoords scalar (fixedBasePoint baseId) :=
+  pallasScalarMulCoords_eq_groupAction scalar (fixedBasePoint_isPointOrIdentity baseId)
+
 def NoCurvePointWithXZero : Prop :=
   ∀ y : F, ¬ onCurve ({ x := 0, y } : Point F)
 
