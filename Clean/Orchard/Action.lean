@@ -743,7 +743,7 @@ namespace ActionAddressWiring
 
 structure Row (F : Type) where
   action : ActionWiring.Row F
-  spendAuth : Gadget.SpendAuth.Row F
+  spendAuth : Gadget.SpendAuth.Entry.Row F
   commitIvk : CommitIvk.WiringWithShortCommit.Row F
   ivkScalar : F
   derivedPkDX : F
@@ -772,7 +772,7 @@ def pkDOld {K : Type} (row : Row K) : Ecc.Point K where
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   ActionWiring.Spec row.action ∧
-    Gadget.SpendAuth.Spec row.spendAuth ∧
+    Gadget.SpendAuth.Entry.Spec row.spendAuth ∧
     CommitIvk.WiringWithShortCommit.Spec row.commitIvk ∧
     row.commitIvk.wiring.gate.ak = row.spendAuth.akX ∧
     row.commitIvk.wiring.ivk = row.ivkScalar ∧
@@ -780,41 +780,43 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
     row.derivedPkDY = row.action.derivedPkDOldY
 
 def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
-  CommitIvk.WiringWithShortCommit.Assumptions row.commitIvk
+  Gadget.SpendAuth.Entry.Assumptions row.spendAuth ∧
+    CommitIvk.WiringWithShortCommit.Assumptions row.commitIvk
 
 def OrchardSpec
-    (row : Row Ecc.PallasBaseField) (rivkScalar : ℕ)
+    (row : Row Ecc.PallasBaseField) (rivkScalar spendAuthScalar : ℕ)
     (gdOld : Ecc.Point Ecc.PallasBaseField) : Prop :=
   Ecc.isPointOrIdentity gdOld ∧
     Ecc.IsPallasBaseFieldScalarMul row.ivkScalar gdOld (derivedPkD row) ∧
+    Gadget.SpendAuth.Entry.OrchardSpec row.spendAuth spendAuthScalar ∧
     CommitIvk.WiringWithShortCommit.OrchardSpec rivkScalar row.commitIvk ∧
     Spec row
 
 theorem spec_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
-    (h : OrchardSpec row rivkScalar gdOld) :
+    (h : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     Spec row :=
-  h.2.2.2
+  h.2.2.2.2
 
 theorem gdOld_isPointOrIdentity_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
-    (h : OrchardSpec row rivkScalar gdOld) :
+    (h : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     Ecc.isPointOrIdentity gdOld :=
   h.1
 
 theorem derivedPkD_scalar_mul_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
-    (h : OrchardSpec row rivkScalar gdOld) :
+    (h : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     Ecc.IsPallasBaseFieldScalarMul row.ivkScalar gdOld (derivedPkD row) :=
   h.2.1
 
 theorem derivedPkD_groupAction_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
-    (h : OrchardSpec row rivkScalar gdOld) :
+    (h : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     Ecc.IsPallasBaseFieldScalarMulGroupAction row.ivkScalar gdOld (derivedPkD row) :=
   Ecc.isPallasBaseFieldScalarMulGroupAction_of_isPallasBaseFieldScalarMul h.1 h.2.1
 
@@ -839,9 +841,9 @@ theorem pkDOld_scalar_mul_of_derived_scalar_mul
   exact hMul
 
 theorem pkDOld_scalar_mul_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
-    (hSpec : OrchardSpec row rivkScalar gdOld) :
+    (hSpec : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     Ecc.IsPallasBaseFieldScalarMul row.ivkScalar gdOld (pkDOld row) :=
   pkDOld_scalar_mul_of_derived_scalar_mul (spec_of_orchardSpec hSpec)
     (derivedPkD_scalar_mul_of_orchardSpec hSpec)
@@ -857,9 +859,9 @@ theorem pkDOld_groupAction_of_derived_groupAction
   exact hMul
 
 theorem pkDOld_groupAction_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
-    (hSpec : OrchardSpec row rivkScalar gdOld) :
+    (hSpec : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     Ecc.IsPallasBaseFieldScalarMulGroupAction row.ivkScalar gdOld (pkDOld row) :=
   pkDOld_groupAction_of_derived_groupAction
     (spec_of_orchardSpec hSpec)
@@ -877,28 +879,28 @@ theorem pkDOld_isPointOrIdentity_of_derived_scalar_mul
     (pkDOld_scalar_mul_of_derived_scalar_mul hSpec hMul)
 
 theorem pkDOld_isPointOrIdentity_of_orchardSpec
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
-    (hSpec : OrchardSpec row rivkScalar gdOld) :
+    (hSpec : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     Ecc.isPointOrIdentity (pkDOld row) :=
   Ecc.isPallasBaseFieldScalarMulGroupAction_product
     (pkDOld_groupAction_of_orchardSpec hSpec)
 
 theorem pkDOld_identity_of_orchardSpec_ivk_zero
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
     (hIvk : row.ivkScalar = 0)
-    (hSpec : OrchardSpec row rivkScalar gdOld) :
+    (hSpec : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     Ecc.isIdentityEncoding (pkDOld row) := by
   have hMul := pkDOld_scalar_mul_of_orchardSpec hSpec
   rw [hIvk] at hMul
   exact ((Ecc.isPallasBaseFieldScalarMul_zero_iff).1 hMul).2
 
 theorem pkDOld_eq_gdOld_of_orchardSpec_ivk_one
-    {row : Row Ecc.PallasBaseField} {rivkScalar : ℕ}
+    {row : Row Ecc.PallasBaseField} {rivkScalar spendAuthScalar : ℕ}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
     (hIvk : row.ivkScalar = 1)
-    (hSpec : OrchardSpec row rivkScalar gdOld) :
+    (hSpec : OrchardSpec row rivkScalar spendAuthScalar gdOld) :
     pkDOld row = gdOld := by
   have hMul := pkDOld_scalar_mul_of_orchardSpec hSpec
   rw [hIvk] at hMul
@@ -906,7 +908,7 @@ theorem pkDOld_eq_gdOld_of_orchardSpec_ivk_one
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
-  Gadget.SpendAuth.circuit row.spendAuth
+  Gadget.SpendAuth.Entry.circuit row.spendAuth
   CommitIvk.WiringWithShortCommit.circuit row.commitIvk
   assertZero (akCheck row)
   assertZero (ivkScalarCheck row)
@@ -920,10 +922,11 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
   soundness := by
     circuit_proof_start [main, Spec, Assumptions, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
       ActionWiring.circuit, ActionWiring.Spec,
-      Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec,
+      Gadget.SpendAuth.Entry.circuit, Gadget.SpendAuth.Entry.Spec,
       CommitIvk.WiringWithShortCommit.circuit, CommitIvk.WiringWithShortCommit.Spec]
+    rcases h_assumptions with ⟨hSpendAssumptions, hCommitIvkAssumptions⟩
     rcases h_holds with ⟨hAction, hSpendAuth, hCommitIvk, hAk, hIvk, hPkDX, hPkDY⟩
-    exact ⟨hAction, hSpendAuth, hCommitIvk h_assumptions,
+    exact ⟨hAction, hSpendAuth hSpendAssumptions, hCommitIvk hCommitIvkAssumptions,
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hAk),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hIvk),
       sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hPkDX),
@@ -931,11 +934,14 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
   completeness := by
     circuit_proof_start [main, Spec, Assumptions, akCheck, ivkScalarCheck, pkDXCheck, pkDYCheck,
       ActionWiring.circuit, ActionWiring.Spec,
-      Gadget.SpendAuth.circuit, Gadget.SpendAuth.Spec,
+      Gadget.SpendAuth.Entry.circuit, Gadget.SpendAuth.Entry.Spec,
+      Gadget.SpendAuth.Entry.Assumptions,
       CommitIvk.WiringWithShortCommit.circuit, CommitIvk.WiringWithShortCommit.Spec,
       CommitIvk.WiringWithShortCommit.Assumptions]
+    rcases h_assumptions with ⟨hSpendAssumptions, hCommitIvkAssumptions⟩
     rcases h_spec with ⟨hAction, hSpendAuth, hCommitIvk, hAk, hIvk, hPkDX, hPkDY⟩
-    exact ⟨hAction, hSpendAuth, ⟨h_assumptions, hCommitIvk⟩,
+    exact ⟨hAction, ⟨hSpendAssumptions, hSpendAuth⟩,
+      ⟨hCommitIvkAssumptions, hCommitIvk⟩,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hAk,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hIvk,
       by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hPkDX,
