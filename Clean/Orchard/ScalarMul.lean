@@ -536,30 +536,30 @@ def yCheck {K : Type} [Sub K] [Mul K] (row : CoordsRow K) : K :=
 def onCurve {K : Type} [Sub K] [Mul K] [OfNat K 5] (row : CoordsRow K) : K :=
   row.yP * row.yP - row.xP * row.xP * row.xP - 5
 
-def coordsSpec (row : CoordsRow Ecc.PallasBaseField) : Prop :=
+namespace Coords
+
+def Spec (row : CoordsRow Ecc.PallasBaseField) : Prop :=
   row.xP = interpolatedX row ∧
     row.u * row.u = row.yP + row.z ∧
     row.yP * row.yP = row.xP * row.xP * row.xP + 5
 
-def coordsMain (row : Var CoordsRow Ecc.PallasBaseField) :
+def main (row : Var CoordsRow Ecc.PallasBaseField) :
     Circuit Ecc.PallasBaseField Unit := do
   assertZero (xCheck row)
   assertZero (yCheck row)
   assertZero (onCurve row)
 
-namespace Coords
-
 def circuit : FormalAssertion Ecc.PallasBaseField CoordsRow where
-  main := coordsMain
-  Spec := coordsSpec
+  main
+  Spec := Spec
   soundness := by
-    circuit_proof_start [coordsMain, coordsSpec, xCheck, yCheck, onCurve, interpolatedX]
+    circuit_proof_start [main, Spec, xCheck, yCheck, onCurve, interpolatedX]
     rcases h_holds with ⟨hx, hy, hCurve⟩
     exact ⟨(sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hx)).symm,
       by linear_combination hy,
       by linear_combination hCurve⟩
   completeness := by
-    circuit_proof_start [coordsMain, coordsSpec, xCheck, yCheck, onCurve, interpolatedX]
+    circuit_proof_start [main, Spec, xCheck, yCheck, onCurve, interpolatedX]
     rcases h_spec with ⟨hx, hy, hCurve⟩
     exact ⟨by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hx.symm,
       by linear_combination hy,
@@ -581,7 +581,7 @@ def coordsRow {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : CoordsRow K
   { row.toCoordsRow with window := word row }
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  coordsSpec (coordsRow row)
+  Coords.Spec (coordsRow row)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Coords.circuit { row.toCoordsRow with window := word row }
@@ -590,10 +590,10 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, coordsRow, Coords.circuit, coordsSpec, word]
+    circuit_proof_start [main, Spec, coordsRow, Coords.circuit, Coords.Spec, word]
     simpa [sub_eq_add_neg] using h_holds
   completeness := by
-    circuit_proof_start [main, Spec, coordsRow, Coords.circuit, coordsSpec, word]
+    circuit_proof_start [main, Spec, coordsRow, Coords.circuit, Coords.Spec, word]
     simpa [sub_eq_add_neg] using h_spec
 
 end RunningSumCoords
@@ -611,7 +611,7 @@ def IsWindow (window : Ecc.PallasBaseField) : Prop :=
     window = 4 ∨ window = 5 ∨ window = 6 ∨ window = 7
 
 def Spec (row : CoordsRow Ecc.PallasBaseField) : Prop :=
-  coordsSpec row ∧ IsWindow row.window
+  Coords.Spec row ∧ IsWindow row.window
 
 def main (row : Var CoordsRow Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   Coords.circuit row
@@ -621,7 +621,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField CoordsRow where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, IsWindow, Coords.circuit, coordsMain, coordsSpec,
+    circuit_proof_start [main, Spec, IsWindow, Coords.circuit, Coords.Spec,
       rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
     constructor
     · simpa [sub_eq_add_neg] using h_holds.1
@@ -644,7 +644,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField CoordsRow where
       · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (by
           linear_combination -h7)))))))
   completeness := by
-    circuit_proof_start [main, Spec, IsWindow, Coords.circuit, coordsMain, coordsSpec,
+    circuit_proof_start [main, Spec, IsWindow, Coords.circuit, Coords.Spec,
       rangeCheck, xCheck, yCheck, onCurve, interpolatedX]
     constructor
     · simpa [sub_eq_add_neg] using h_spec.1
