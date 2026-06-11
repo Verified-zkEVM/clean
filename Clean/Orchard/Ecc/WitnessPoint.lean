@@ -70,7 +70,6 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point wh
     Gate.circuit point
     return point
 
-  Assumptions _ _ := True
   Spec _ output _ := Point.isPointOrIdentity output
   ProverAssumptions value _ _ := Point.isPointOrIdentity value
   ProverSpec value output _ := output = value
@@ -121,7 +120,6 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point wh
     Gate.circuit point
     return point
 
-  Assumptions _ _ := True
   Spec _ output _ := Point.onCurve output
   ProverAssumptions value _ _ := Point.onCurve value
   ProverSpec value output _ := output = value
