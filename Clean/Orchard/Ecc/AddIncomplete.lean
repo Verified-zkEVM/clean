@@ -160,25 +160,15 @@ def circuit : FormalAssertion Fp Input where
   Assumptions
   Spec
   soundness := by
-    circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
-    change ({ x := input_x_qr_next, y := input_y_qr_next } : Point Fp) =
-      outputValue ({
-        p := { x := input_x_p, y := input_y_p }
-        q := { x := input_x_qr_curr, y := input_y_qr_curr }
-      } : AddIncomplete.Input Fp)
+    circuit_proof_start [main, Assumptions, Spec, poly1, poly2, Input.r]
     apply eq_outputValue_of_polys_zero h_assumptions
     simpa [poly1, poly2, Input.fromPoints, sub_eq_add_neg] using h_holds
   completeness := by
-    circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
+    circuit_proof_start [main, Assumptions, Spec, poly1, poly2, Input.r, Input.p, Input.q]
     have hpolys := polys_zero_of_outputValue (input := {
       p := { x := input_x_p, y := input_y_p }
       q := { x := input_x_qr_curr, y := input_y_qr_curr }
     }) h_assumptions
-    change ({ x := input_x_qr_next, y := input_y_qr_next } : Point Fp) =
-      outputValue ({
-        p := { x := input_x_p, y := input_y_p }
-        q := { x := input_x_qr_curr, y := input_y_qr_curr }
-      } : AddIncomplete.Input Fp) at h_spec
     rw [← h_spec] at hpolys
     simpa [poly1, poly2, Input.fromPoints, Input.p, Input.q, Input.r, sub_eq_add_neg] using hpolys
 
@@ -189,12 +179,12 @@ def main (input : Var Input Fp) :
   let p <== input.p
   let q <== input.q
   let r ← witness fun env => outputValue { p := eval env p, q := eval env q }
-  Gate.circuit ({
+  Gate.circuit {
     x_p := p.x
     y_p := p.y
     x_qr := { curr := q.x, next := r.x }
     y_qr := { curr := q.y, next := r.y }
-  })
+  }
   return r
 
 def Assumptions (input : Input Fp) : Prop :=
@@ -213,8 +203,6 @@ theorem not_isIdentityEncoding_of_pallas_onCurve {point : Point Fp}
   intro hIdentity
   change x = 0 ∧ y = 0 at hIdentity
   apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y
-  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b (x, y) at hPoint
   rw [hIdentity.1] at hPoint
   exact hPoint
 
@@ -229,15 +217,6 @@ theorem outputValue_onCurve {input : Input Fp}
     not_isIdentityEncoding_of_pallas_onCurve hq
   have hcoords := outputValue_eq_swAdd (input := input) hpNonId hqNonId hx
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b (px, py) at hp
-  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b (qx, qy) at hq
-  change (outputValue { p := { x := px, y := py }, q := { x := qx, y := qy } }).coords =
-    Pallas.add (px, py) (qx, qy) at hcoords
-  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
-    (outputValue { p := { x := px, y := py }, q := { x := qx, y := qy } }).coords
   have hp0 : (px, py) ≠ ((0 : Fp), 0) := by
     intro h
     have hx0 : px = 0 := (Prod.ext_iff.mp h).1
@@ -254,10 +233,7 @@ theorem outputValue_onCurve {input : Input Fp}
     intro h
     exact hx h.1
   rw [hcoords]
-  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
-    (CompElliptic.CurveForms.ShortWeierstrass.add
-      CompElliptic.Curves.Pasta.Pallas.a (px, py) (qx, qy))
+  simp only [Pallas.add, Pallas.OnCurve, Point.coords]
   rw [CompElliptic.CurveForms.ShortWeierstrass.add_eq_addXY hp0 hq0 hxy]
   have hxy' :
       ¬(px = qx ∧ py =
@@ -278,7 +254,7 @@ instance elaborated : ElaboratedCircuit Fp Input Point main := by
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, Gate.circuit, Gate.Spec,
-    outputValue_eq_swAdd, outputValue_onCurve]
+    outputValue_eq_swAdd, outputValue_onCurve, Gate.Input.r, Gate.Input.p, Gate.Input.q]
   rcases h_assumptions with ⟨hpCurve, hqCurve, hx⟩
   have hp : ¬ input_p.isIdentityEncoding :=
     not_isIdentityEncoding_of_pallas_onCurve hpCurve
@@ -307,13 +283,10 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     exact h
   have hrowEq := hrow hgateAssumptions
   constructor
-  · change Pallas.OnCurve (Gate.Input.r gateInput).coords
-    rw [hrowEq]
+  · rw [hrowEq]
     simpa [gateInput, Gate.Input.p, Gate.Input.q, hpCopyEq, hqCopyEq] using
       outputValue_onCurve (input := { p := input_p, q := input_q }) hpCurve hqCurve hx
-  · change (Gate.Input.r gateInput).coords =
-      Pallas.add input_p.coords input_q.coords
-    rw [hrowEq]
+  · rw [hrowEq]
     simpa [gateInput, Gate.Input.p, Gate.Input.q, hpCopyEq, hqCopyEq] using
       outputValue_eq_swAdd (input := { p := input_p, q := input_q }) hp hq hx
 
