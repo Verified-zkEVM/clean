@@ -101,9 +101,15 @@ Source:
 
 Current Clean coverage:
 
+- `Clean.Orchard.Poseidon.Pow5` mirrors `poseidon/pow5.rs`.
 - `Clean.Orchard.Poseidon.FullRound.circuit`: `GATE full round`
 - `Clean.Orchard.Poseidon.PartialRounds.circuit`: `GATE partial rounds`
 - `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
+- `Clean.Orchard.Poseidon.Sponge` mirrors the `Sponge` /
+  `PoseidonSpongeInstructions` part of `poseidon.rs` and currently contains only the
+  source-shaped namespace stub.
+- `Clean.Orchard.Poseidon.Hash` mirrors `poseidon.rs::Hash` and currently contains only
+  the source-shaped namespace stub.
 
 `FullRound` and `PartialRounds` already take fixed-column round constants and matrix
 entries as Lean parameters. No source-level permutation or hash API is currently
