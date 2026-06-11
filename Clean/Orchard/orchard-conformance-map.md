@@ -28,6 +28,7 @@ Current Clean coverage:
 - `Clean.Orchard.Ecc.WitnessPoint.Gate.circuit`: `GATE witness point`
 - `Clean.Orchard.Ecc.WitnessNonIdentityPoint.circuit`: `EccInstructions::witness_point_non_id`
 - `Clean.Orchard.Ecc.WitnessNonIdentityPoint.Gate.circuit`: `GATE witness non-identity point`
+- `Clean.Orchard.Ecc.IncompleteAdd.Gate.circuit`: `GATE incomplete addition`
 - `Clean.Orchard.Ecc.IncompleteAdd.circuit`: entry-level incomplete-add circuit
 - `Clean.Orchard.Ecc.CompleteAdd.Gate.circuit`: `GATE complete addition`
 - `Clean.Orchard.Ecc.CompleteAdd.circuit`: entry-level complete-add circuit
@@ -164,10 +165,8 @@ source API name. Current code does not consistently follow that rule.
 
 Current concrete cases:
 
-- `Ecc.IncompleteAdd.circuit`, `Utilities.CondSwap.circuit`, and
-  `Utilities.AddChip.circuit` are entry-level circuits but do not yet compose separately
-  factored named gate assertions:
-  - `GATE incomplete addition`
+- `Utilities.CondSwap.circuit` and `Utilities.AddChip.circuit` are entry-level circuits
+  but do not yet compose separately factored named gate assertions:
   - `GATE a' = b * swap + a * (1-swap)`
   - `GATE Field element addition: c = a + b`
 

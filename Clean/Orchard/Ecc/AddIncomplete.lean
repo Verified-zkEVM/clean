@@ -23,6 +23,12 @@ structure Input (F : Type) where
   q : Point F
 deriving ProvableStruct
 
+structure Row (F : Type) where
+  p : Point F
+  q : Point F
+  r : Point F
+deriving ProvableStruct
+
 def lambda (input : Input Fp) : Fp :=
   (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
 
@@ -56,33 +62,17 @@ theorem outputValue_eq_swAdd {input : Input Fp}
   rw [Prod.mk.injEq]
   constructor <;> ring
 
-def poly1 (input : Input Fp) (output : Point Fp) :
-    Fp :=
+def poly1 {K : Type} [Add K] [Sub K] [Mul K] (input : Input K) (output : Point K) :
+    K :=
   (output.x + input.q.x + input.p.x) *
       (input.p.x - input.q.x) *
       (input.p.x - input.q.x) -
     (input.p.y - input.q.y) * (input.p.y - input.q.y)
 
-def poly2 (input : Input Fp) (output : Point Fp) :
-    Fp :=
+def poly2 {K : Type} [Add K] [Sub K] [Mul K] (input : Input K) (output : Point K) :
+    K :=
   (output.y + input.q.y) * (input.p.x - input.q.x) -
     (input.p.y - input.q.y) * (input.q.x - output.x)
-
-def main (input : Var Input Fp) :
-    Circuit Fp (Var Point Fp) := do
-  let xR ← witnessField fun env =>
-    let slope := (env input.q.y - env input.p.y) * (env input.q.x - env input.p.x)⁻¹
-    slope * slope - env input.p.x - env input.q.x
-  let yR ← witnessField fun env =>
-    let slope := (env input.q.y - env input.p.y) * (env input.q.x - env input.p.x)⁻¹
-    let xR := slope * slope - env input.p.x - env input.q.x
-    slope * (env input.p.x - xR) - env input.p.y
-  assertZero ((xR + input.q.x + input.p.x) *
-    (input.p.x - input.q.x) * (input.p.x - input.q.x) -
-    (input.p.y - input.q.y) * (input.p.y - input.q.y))
-  assertZero ((yR + input.q.y) * (input.p.x - input.q.x) -
-    (input.p.y - input.q.y) * (input.q.x - xR))
-  return { x := xR, y := yR }
 
 def Assumptions (input : Input Fp) : Prop :=
   ¬ Point.isIdentityEncoding input.p ∧
@@ -93,9 +83,6 @@ def Spec (input : Input Fp) (output : Point Fp) : Prop :=
   Point.coords output =
     CompElliptic.CurveForms.ShortWeierstrass.add
       (0 : Fp) (Point.coords input.p) (Point.coords input.q)
-
-instance elaborated : ElaboratedCircuit Fp Input Point main := by
-  elaborate_circuit
 
 theorem outputValue_polys {input : Input Fp} (hx : input.p.x ≠ input.q.x) :
     poly1 input (outputValue input) = 0 ∧ poly2 input (outputValue input) = 0 := by
@@ -144,30 +131,87 @@ theorem polys_eq_outputValue {input : Input Fp}
     ring_nf
     exact h2neg
 
+namespace Gate
+
+def Assumptions (row : Row Fp) : Prop :=
+  row.p.x ≠ row.q.x
+
+def Spec (row : Row Fp) : Prop :=
+  row.r = outputValue ({ p := row.p, q := row.q } : Input Fp)
+
+def main (row : Var Row Fp) : Circuit Fp Unit := do
+  assertZero (poly1 { p := row.p, q := row.q } row.r)
+  assertZero (poly2 { p := row.p, q := row.q } row.r)
+
+def circuit : FormalAssertion Fp Row where
+  name := "GATE incomplete addition"
+  main
+  Assumptions
+  Spec
+  soundness := by
+    circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
+    have hpolys : poly1 { p := input_p, q := input_q } input_r = 0 ∧
+        poly2 { p := input_p, q := input_q } input_r = 0 := by
+      rw [← h_input.1, ← h_input.2.1, ← h_input.2.2]
+      simpa [poly1, poly2, sub_eq_add_neg] using h_holds
+    exact polys_eq_outputValue h_assumptions hpolys
+  completeness := by
+    circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
+    have hpolys := outputValue_polys (input := { p := input_p, q := input_q }) h_assumptions
+    rw [← h_spec] at hpolys
+    rw [← h_input.1, ← h_input.2.1, ← h_input.2.2] at hpolys
+    simpa [poly1, poly2, sub_eq_add_neg] using hpolys
+
+end Gate
+
+def main (input : Var Input Fp) :
+    Circuit Fp (Var Point Fp) := do
+  let p <== input.p
+  let q <== input.q
+  let r ← witness fun env => outputValue ({ p := eval env p, q := eval env q } : Input Fp)
+  Gate.circuit ({ p, q, r } : Var Row Fp)
+  return r
+
+instance elaborated : ElaboratedCircuit Fp Input Point main := by
+  elaborate_circuit
+
 theorem soundness : Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
-  rcases input_p with ⟨px, py⟩
-  rcases input_q with ⟨qx, qy⟩
-  have hc :
-      poly1 { p := { x := px, y := py }, q := { x := qx, y := qy } }
-          { x := env.get i₀, y := env.get (i₀ + 1) } = 0 ∧
-        poly2 { p := { x := px, y := py }, q := { x := qx, y := qy } }
-          { x := env.get i₀, y := env.get (i₀ + 1) } = 0 := by
-    simp_all [poly1, poly2, sub_eq_add_neg]
-  have hout := polys_eq_outputValue h_assumptions.2.2 hc
-  rw [hout]
-  exact outputValue_eq_swAdd h_assumptions.1 h_assumptions.2.1 h_assumptions.2.2
+  circuit_proof_start [main, Assumptions, Spec, Gate.circuit, Gate.Spec,
+    outputValue_eq_swAdd]
+  rcases h_assumptions with ⟨hp, hq, hx⟩
+  rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
+  have hgateAssumptions :
+      Gate.Assumptions {
+        p := {
+          x := Expression.eval env (varFromOffset Point i₀).x
+          y := Expression.eval env (varFromOffset Point i₀).y
+        }
+        q := {
+          x := Expression.eval env (varFromOffset Point (i₀ + 2)).x
+          y := Expression.eval env (varFromOffset Point (i₀ + 2)).y
+        }
+        r := {
+          x := Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).x
+          y := Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).y
+        }
+      } := by
+    simp [Gate.Assumptions]
+    intro h
+    apply hx
+    have hpx := congrArg Point.x hpCopyEq
+    have hqx := congrArg Point.x hqCopyEq
+    rw [← hpx, ← hqx]
+    exact h
+  have hrowEq := hrow hgateAssumptions
+  rw [hrowEq]
+  simpa [hpCopyEq, hqCopyEq] using outputValue_eq_swAdd hp hq hx
 
 theorem completeness : Completeness Fp main Assumptions := by
-  circuit_proof_start [main, Assumptions, outputValue, lambda, poly1, poly2]
-  have hc := outputValue_polys (input := { p := input_p, q := input_q }) h_assumptions.2.2
-  rcases input_p with ⟨px, py⟩
-  rcases input_q with ⟨qx, qy⟩
-  simp_all [outputValue, lambda, poly1, poly2, sub_eq_add_neg]
+  circuit_proof_start [main, Assumptions, Gate.circuit, Gate.Assumptions, Gate.Spec]
+  rcases h_assumptions with ⟨hp, hq, hx⟩
+  simp_all [circuit_norm, explicit_provable_type]
 
 def circuit : FormalCircuit Fp Input Point where
-  -- TODO: factor the source `incomplete addition` custom gate into a named
-  -- `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
   main
   elaborated
   Assumptions
