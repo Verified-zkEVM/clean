@@ -536,23 +536,21 @@ deriving ProvableStruct
 
 namespace IncompleteAdd
 
-variable [DecidableEq F]
-
-def lambda (input : AddInputs F) : F :=
+def lambda (input : AddInputs PallasBaseField) : PallasBaseField :=
   (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
 
-def outputValue (input : AddInputs F) : Point F :=
+def outputValue (input : AddInputs PallasBaseField) : Point PallasBaseField :=
   let slope := lambda input
   let xR := slope * slope - input.p.x - input.q.x
   let yR := slope * (input.p.x - xR) - input.p.y
   { x := xR, y := yR }
 
-theorem outputValue_eq_swAdd {input : AddInputs F}
+theorem outputValue_eq_swAdd {input : AddInputs PallasBaseField}
     (hp : ¬ isIdentityEncoding input.p) (hq : ¬ isIdentityEncoding input.q)
     (hx : input.p.x ≠ input.q.x) :
     pointCoords (outputValue input) =
       CompElliptic.CurveForms.ShortWeierstrass.add
-        (0 : F) (pointCoords input.p) (pointCoords input.q) := by
+        (0 : PallasBaseField) (pointCoords input.p) (pointCoords input.q) := by
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
   unfold pointCoords outputValue lambda CompElliptic.CurveForms.ShortWeierstrass.add
   unfold isIdentityEncoding at hp hq
@@ -571,17 +569,20 @@ theorem outputValue_eq_swAdd {input : AddInputs F}
   rw [Prod.mk.injEq]
   constructor <;> ring
 
-def poly1 (input : AddInputs F) (output : Point F) : F :=
+def poly1 (input : AddInputs PallasBaseField) (output : Point PallasBaseField) :
+    PallasBaseField :=
   (output.x + input.q.x + input.p.x) *
       (input.p.x - input.q.x) *
       (input.p.x - input.q.x) -
     (input.p.y - input.q.y) * (input.p.y - input.q.y)
 
-def poly2 (input : AddInputs F) (output : Point F) : F :=
+def poly2 (input : AddInputs PallasBaseField) (output : Point PallasBaseField) :
+    PallasBaseField :=
   (output.y + input.q.y) * (input.p.x - input.q.x) -
     (input.p.y - input.q.y) * (input.q.x - output.x)
 
-def main (input : Var AddInputs F) : Circuit F (Var Point F) := do
+def main (input : Var AddInputs PallasBaseField) :
+    Circuit PallasBaseField (Var Point PallasBaseField) := do
   let xR ← witnessField fun env =>
     let slope := (env input.q.y - env input.p.y) * (env input.q.x - env input.p.x)⁻¹
     slope * slope - env input.p.x - env input.q.x
@@ -596,21 +597,20 @@ def main (input : Var AddInputs F) : Circuit F (Var Point F) := do
     (input.p.y - input.q.y) * (input.q.x - xR))
   return { x := xR, y := yR }
 
-def Assumptions (input : AddInputs F) : Prop :=
+def Assumptions (input : AddInputs PallasBaseField) : Prop :=
   ¬ isIdentityEncoding input.p ∧
     ¬ isIdentityEncoding input.q ∧
     input.p.x ≠ input.q.x
 
-def Spec (input : AddInputs F) (output : Point F) : Prop :=
+def Spec (input : AddInputs PallasBaseField) (output : Point PallasBaseField) : Prop :=
   pointCoords output =
     CompElliptic.CurveForms.ShortWeierstrass.add
-      (0 : F) (pointCoords input.p) (pointCoords input.q)
+      (0 : PallasBaseField) (pointCoords input.p) (pointCoords input.q)
 
-instance elaborated : ElaboratedCircuit F AddInputs Point main := by
+instance elaborated : ElaboratedCircuit PallasBaseField AddInputs Point main := by
   elaborate_circuit
 
-omit [DecidableEq F] in
-theorem outputValue_polys {input : AddInputs F} (hx : input.p.x ≠ input.q.x) :
+theorem outputValue_polys {input : AddInputs PallasBaseField} (hx : input.p.x ≠ input.q.x) :
     poly1 input (outputValue input) = 0 ∧ poly2 input (outputValue input) = 0 := by
   unfold poly1 poly2 outputValue lambda
   have hden : input.q.x - input.p.x ≠ 0 := by
@@ -619,8 +619,8 @@ theorem outputValue_polys {input : AddInputs F} (hx : input.p.x ≠ input.q.x) :
     exact (sub_eq_zero.mp h).symm
   constructor <;> field_simp [hden] <;> ring
 
-omit [DecidableEq F] in
-theorem polys_eq_outputValue {input : AddInputs F} {output : Point F}
+theorem polys_eq_outputValue {input : AddInputs PallasBaseField}
+    {output : Point PallasBaseField}
     (hx : input.p.x ≠ input.q.x)
     (h : poly1 input output = 0 ∧ poly2 input output = 0) :
     output = outputValue input := by
@@ -657,7 +657,7 @@ theorem polys_eq_outputValue {input : AddInputs F} {output : Point F}
     ring_nf
     exact h2neg
 
-theorem soundness : Soundness F main Assumptions Spec := by
+theorem soundness : Soundness PallasBaseField main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
@@ -671,15 +671,14 @@ theorem soundness : Soundness F main Assumptions Spec := by
   rw [hout]
   exact outputValue_eq_swAdd h_assumptions.1 h_assumptions.2.1 h_assumptions.2.2
 
-omit [DecidableEq F] in
-theorem completeness : Completeness F main Assumptions := by
+theorem completeness : Completeness PallasBaseField main Assumptions := by
   circuit_proof_start [main, Assumptions, outputValue, lambda, poly1, poly2]
   have hc := outputValue_polys (input := { p := input_p, q := input_q }) h_assumptions.2.2
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
   simp_all [outputValue, lambda, poly1, poly2, sub_eq_add_neg]
 
-def circuit : FormalCircuit F AddInputs Point where
+def circuit : FormalCircuit PallasBaseField AddInputs Point where
   main
   elaborated
   Assumptions
