@@ -62,10 +62,6 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   range membership for some range checks. Source lookup-backed range checks must be ported
   using Clean lookups, not polynomial stand-ins, when layout/source conformance matters.
 
-- **`GATE LSB check`:** Clean exposes the rotated advice values as row fields. The source
-  gate queries `z_1`, `z_0`, `x_p`, `y_p`, `base_x`, and `base_y` from specific columns and
-  rotations.
-
 - **`GATE q_mul_1 == 1 checks`, `GATE q_mul_2 == 1 checks`, and
   `GATE q_mul_3 == 1 checks`:** Clean splits/shared the incomplete-mul loop equations into
   helper rows. The source has three selector-enabled gates with specific rotations; q_mul_2
@@ -120,6 +116,8 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   the source APIs compute internally and should be deleted, renamed, or rebuilt after the
   missing scalar-mul and Sinsemilla entry APIs exist.
 
-- (known issue for reproducing VKs, fix not currently in scope) **All named gates:** current Clean rows do not distinguish advice cells, fixed cells,
-  selector cells, rotations, or equality-enabled columns. This is enough for arithmetic
-  proof work, but not enough to reconstruct the Halo2 layout or pinned VK.
+- (known issue for reproducing VKs, fix not currently in scope) **All named gates:**
+  current Clean rows do not distinguish advice cells, fixed cells, selector cells,
+  equality-enabled columns, column identity, or rotations such as current/next/previous
+  row queries. This is enough for arithmetic proof work, but not enough to reconstruct the
+  Halo2 layout or pinned VK.
