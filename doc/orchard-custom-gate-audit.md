@@ -89,14 +89,9 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
 
 - **`GATE Decomposition check`:** Clean ports the Merkle decomposition arithmetic but does
   not encode the source copy constraints, fixed/advice roles, or hash-to-point child API.
-  Fixed layer/domain constants should be Lean constants or template parameters, not row
-  inputs.
 
 - **NoteCommit and CommitIvk named gates:** Clean ports their arithmetic identities, but
-  does not yet record the exact fixed/advice column roles or selector layout. Literal
-  constants such as powers of two and field offsets should be Lean constants; if a gate is
-  parameterized by verifier-known table/domain data, that data should be a Lean argument to
-  the assertion rather than part of the witness row.
+  does not yet record the exact advice column roles, rotations, or selector layout.
 
 - **Orchard source entry APIs:** `value_commit_orchard`, `derive_nullifier`,
   spend-authority key derivation, `gadgets::note_commit`, `gadgets::commit_ivk`, and the
