@@ -427,6 +427,17 @@ def Assumptions (row : Row Ecc.PallasBaseField) : Prop :=
     Gadget.NullifierWithPoseidonBoundary.Entry.Assumptions row.nullifier ∧
     Gadget.SpendAuth.Entry.Assumptions row.spendAuth
 
+theorem assumptions_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {valueScalar blindScalar nullifierScalar spendAuthScalar : ℕ}
+    (hCm : Ecc.isPointOrIdentity (Gadget.Nullifier.Entry.cmPoint row.nullifier.nullifier))
+    (hAk : Ecc.isPointOrIdentity (Gadget.SpendAuth.Entry.akPoint row.spendAuth))
+    (h : OrchardSpec row valueScalar blindScalar nullifierScalar spendAuthScalar) :
+    Assumptions row :=
+  ⟨Gadget.ValueCommitment.Entry.assumptions_of_orchardSpec h.2.1,
+    Gadget.Nullifier.Entry.assumptions_of_orchardSpec hCm h.2.2.1.2.1,
+    Gadget.SpendAuth.Entry.assumptions_of_orchardSpec hAk h.2.2.2.1⟩
+
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
   Gadget.ValueCommitment.Entry.circuit row.valueCommitment

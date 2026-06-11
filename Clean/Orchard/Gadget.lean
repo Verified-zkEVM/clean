@@ -157,6 +157,14 @@ theorem assumptions_of_scalar_mul_products
     (Ecc.isPallasScalarMul_isPointOrIdentity hValueBase hValueMul)
     (Ecc.isPallasScalarMul_isPointOrIdentity hBlindBase hBlindMul)
 
+theorem assumptions_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar) :
+    Assumptions row :=
+  assumptions_of_product_valid
+    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1)
+    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.2.1)
+
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   let cv ← Ecc.CompleteAdd.Entry.circuit (addInput row)
   assertZero (cv.x - row.cvX)
@@ -342,6 +350,14 @@ theorem assumptions_of_scalar_mul_product
     Assumptions row :=
   assumptions_of_product_valid hCm
     (Ecc.isPallasScalarMul_isPointOrIdentity hBase hProduct)
+
+theorem assumptions_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    (hCm : Ecc.isPointOrIdentity (cmPoint row))
+    (h : OrchardSpec row scalar) :
+    Assumptions row :=
+  assumptions_of_product_valid hCm
+    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (row.poseidonHash + row.psi - row.scalar)
@@ -730,6 +746,15 @@ theorem assumptions_of_scalar_mul_product
     Assumptions row :=
   assumptions_of_product_valid
     (Ecc.isPallasScalarMul_isPointOrIdentity hBase hProduct)
+    hAk
+
+theorem assumptions_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {alpha : ℕ}
+    (hAk : Ecc.isPointOrIdentity (akPoint row))
+    (h : OrchardSpec row alpha) :
+    Assumptions row :=
+  assumptions_of_product_valid
+    (Ecc.isOrchardFixedBaseMul_isPointOrIdentity h.1)
     hAk
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
