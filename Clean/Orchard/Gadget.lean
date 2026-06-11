@@ -124,6 +124,20 @@ theorem spec_of_orchardSpec
     Spec row :=
   h.2.2
 
+theorem valueProduct_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar) :
+    Ecc.pointCoords (valueProduct row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitV valueScalar :=
+  h.1
+
+theorem blindProduct_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
+    (h : OrchardSpec row valueScalar blindScalar) :
+    Ecc.pointCoords (blindProduct row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .valueCommitR blindScalar :=
+  h.2.1
+
 theorem commitmentRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {valueScalar blindScalar : ℕ}
     (h : OrchardSpec row valueScalar blindScalar) :
@@ -318,6 +332,13 @@ theorem spec_of_orchardSpec
     (h : OrchardSpec row scalar) :
     Spec row :=
   h.2
+
+theorem product_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {scalar : ℕ}
+    (h : OrchardSpec row scalar) :
+    Ecc.pointCoords (product row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .nullifierK scalar :=
+  h.1
 
 theorem nullifierRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {scalar : ℕ}
@@ -716,6 +737,13 @@ theorem spec_of_orchardSpec
     (h : OrchardSpec row alpha) :
     Spec row :=
   h.2
+
+theorem alphaProduct_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField} {alpha : ℕ}
+    (h : OrchardSpec row alpha) :
+    Ecc.pointCoords (alphaProduct row) =
+      Ecc.orchardFixedBaseMulGroupActionCoords .spendAuthG alpha :=
+  h.1
 
 theorem spendAuthRelation_of_orchardSpec
     {row : Row Ecc.PallasBaseField} {alpha : ℕ}
