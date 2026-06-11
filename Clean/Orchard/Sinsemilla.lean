@@ -48,29 +48,37 @@ end DoubleAndAdd
 
 namespace InitialYQ
 
-structure Row (F : Type) where
+structure Params (F : Type) where
   yQ : F
+
+structure Row (F : Type) where
   doubleAndAdd : DoubleAndAddRow F
 deriving ProvableStruct
 
-def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
-  2 * row.yQ - DoubleAndAdd.yA row.doubleAndAdd
+def Params.toExpr (params : Params Ecc.PallasBaseField) :
+    Params (Expression Ecc.PallasBaseField) where
+  yQ := params.yQ
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  DoubleAndAdd.yA row.doubleAndAdd = 2 * row.yQ
+def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2]
+    (params : Params K) (row : Row K) : K :=
+  2 * params.yQ - DoubleAndAdd.yA row.doubleAndAdd
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
-  assertZero (2 * row.yQ - DoubleAndAdd.yA row.doubleAndAdd)
+def Spec (params : Params Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
+  DoubleAndAdd.yA row.doubleAndAdd = 2 * params.yQ
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def main (params : Params Ecc.PallasBaseField)
+    (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+  assertZero (poly params.toExpr row)
+
+def circuit (params : Params Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
   name := "GATE Initial y_Q"
-  main
-  Spec := Spec
+  main := main params
+  Spec := Spec params
   soundness := by
-    circuit_proof_start [main, Spec, poly, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [main, Spec, poly, Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
     exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h_holds)).symm
   completeness := by
-    circuit_proof_start [main, Spec, poly, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [main, Spec, poly, Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
     simp_all [sub_eq_add_neg]
 
 end InitialYQ
@@ -84,14 +92,20 @@ Initialization should be built inside the full `hash_to_point` entry circuit, wi
 
 namespace Gate
 
-structure Row (F : Type) where
+structure Params (F : Type) where
   qS2 : F
+
+structure Row (F : Type) where
   cur : DoubleAndAddRow F
   next : DoubleAndAddRow F
 deriving ProvableStruct
 
-def qS3 {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
-  row.qS2 * (row.qS2 - 1)
+def Params.toExpr (params : Params Ecc.PallasBaseField) :
+    Params (Expression Ecc.PallasBaseField) where
+  qS2 := params.qS2
+
+def qS3 {K : Type} [One K] [Sub K] [Mul K] (params : Params K) : K :=
+  params.qS2 * (params.qS2 - 1)
 
 def secantLine {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
   row.cur.lambda2 * row.cur.lambda2 -
@@ -100,31 +114,33 @@ def secantLine {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
 def yLhs {K : Type} [Sub K] [Mul K] [OfNat K 4] (row : Row K) : K :=
   4 * row.cur.lambda2 * (row.cur.xA - row.next.xA)
 
-def yRhs {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
+def yRhs {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
+    (params : Params K) (row : Row K) : K :=
   2 * DoubleAndAdd.yA row.cur +
-    (2 - qS3 row) * DoubleAndAdd.yA row.next +
-    qS3 row * 2 * row.next.lambda1
+    (2 - qS3 params) * DoubleAndAdd.yA row.next +
+    qS3 params * 2 * row.next.lambda1
 
 def yCheck {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 4]
-    (row : Row K) : K :=
-  yLhs row - yRhs row
+    (params : Params K) (row : Row K) : K :=
+  yLhs row - yRhs params row
 
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
+def Spec (params : Params Ecc.PallasBaseField) (row : Row Ecc.PallasBaseField) : Prop :=
   row.cur.lambda2 * row.cur.lambda2 =
     row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA ∧
-  yLhs row = yRhs row
+  yLhs row = yRhs params row
 
-def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
+def main (params : Params Ecc.PallasBaseField)
+    (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (secantLine row)
-  assertZero (yCheck row)
+  assertZero (yCheck params.toExpr row)
 
-def circuit : FormalAssertion Ecc.PallasBaseField Row where
+def circuit (params : Params Ecc.PallasBaseField) : FormalAssertion Ecc.PallasBaseField Row where
   name := "GATE Sinsemilla gate"
-  main
-  Spec := Spec
+  main := main params
+  Spec := Spec params
   soundness := by
     circuit_proof_start [main, Spec, secantLine, yCheck, yLhs, yRhs, qS3,
-      DoubleAndAdd.yA, DoubleAndAdd.xR]
+      Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
     constructor
     · have hSec :
           input_cur_lambda2 * input_cur_lambda2 -
@@ -139,16 +155,16 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
                   ((input_cur_lambda1 + input_cur_lambda2) *
                     (input_cur_xA -
                       (input_cur_lambda1 * input_cur_lambda1 - input_cur_xA - input_cur_xP))) +
-                (2 - input_qS2 * (input_qS2 - 1)) *
+                (2 - params.qS2 * (params.qS2 - 1)) *
                   ((input_next_lambda1 + input_next_lambda2) *
                     (input_next_xA -
                       (input_next_lambda1 * input_next_lambda1 - input_next_xA - input_next_xP))) +
-                input_qS2 * (input_qS2 - 1) * 2 * input_next_lambda1) = 0 := by
+                params.qS2 * (params.qS2 - 1) * 2 * input_next_lambda1) = 0 := by
         simp_all [sub_eq_add_neg]
       exact sub_eq_zero.mp hY
   completeness := by
     circuit_proof_start [main, Spec, secantLine, yCheck, yLhs, yRhs, qS3,
-      DoubleAndAdd.yA, DoubleAndAdd.xR]
+      Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
     simp_all [sub_eq_add_neg]
     constructor <;> ring
 

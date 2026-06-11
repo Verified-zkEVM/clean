@@ -79,10 +79,8 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   `Hash::init`, and `Hash::hash` are not implemented. Current Clean coverage is limited
   to the named `full round`, `partial rounds`, and `pad-and-add` gate assertions.
 
-- **`GATE Initial y_Q` and `GATE Sinsemilla gate`:** Clean exposes source-rotated values
-  as row fields and does not encode the exact fixed/advice/rotation layout. Any generator
-  table entries or domain constants used by these gates should be Lean constants or
-  template parameters rather than witness-controlled row fields.
+- **`GATE Initial y_Q` and `GATE Sinsemilla gate`:** Clean exposes source-rotated advice
+  values as row fields and does not encode the exact fixed/advice/rotation layout.
 
 - **Sinsemilla entry APIs:** `hash_to_point`, `HashDomain::hash`,
   `CommitDomain::commit`, `CommitDomain::short_commit`, `MerkleInstructions::hash_layer`,
