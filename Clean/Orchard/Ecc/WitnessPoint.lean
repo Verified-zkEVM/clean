@@ -62,54 +62,30 @@ def circuit : FormalAssertion Fp Point where
 
 end Gate
 
-def main (value : Var (UnconstrainedDep Point) Fp) : Circuit Fp (Var Point Fp) := do
-  let x ← witnessField fun env => (value env).x
-  let y ← witnessField fun env => (value env).y
-  let point := ({ x, y } : Var Point Fp)
-  Gate.circuit point
-  return point
-
-def Assumptions (_ : Value (UnconstrainedDep Point) Fp)
-    (_ : ProverData Fp) : Prop :=
-  True
-
-def Spec (_ : Value (UnconstrainedDep Point) Fp) (output : Point Fp)
-    (_ : ProverData Fp) : Prop :=
-  Point.isPointOrIdentity output
-
-def ProverAssumptions (value : ProverValue (UnconstrainedDep Point) Fp)
-    (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  Point.isPointOrIdentity value
-
-def ProverSpec (value : ProverValue (UnconstrainedDep Point) Fp) (output : Point Fp)
-    (_ : ProverHint Fp) : Prop :=
-  output = value
-
-instance elaborated : ElaboratedCircuit Fp (UnconstrainedDep Point) Point main := by
-  elaborate_circuit
-
-theorem soundness : GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec, Gate.circuit]
-  exact h_holds
-
-theorem completeness :
-    GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
-  circuit_proof_start [main, ProverAssumptions, ProverSpec, Gate.circuit]
-  rcases h_env with ⟨hx, hy⟩
-  constructor
-  · rw [hx, hy]
-    exact h_assumptions
-  · simp [hx, hy]
-
 def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point where
-  main
-  elaborated
-  Assumptions
-  Spec
-  ProverAssumptions
-  ProverSpec
-  soundness
-  completeness
+  main value := do
+    let x ← witnessField fun env => (value env).x
+    let y ← witnessField fun env => (value env).y
+    let point := ({ x, y } : Var Point Fp)
+    Gate.circuit point
+    return point
+
+  Assumptions _ _ := True
+  Spec _ output _ := Point.isPointOrIdentity output
+  ProverAssumptions value _ _ := Point.isPointOrIdentity value
+  ProverSpec value output _ := output = value
+
+  soundness := by
+    circuit_proof_start [Gate.circuit]
+    exact h_holds
+
+  completeness := by
+    circuit_proof_start [Gate.circuit]
+    rcases h_env with ⟨hx, hy⟩
+    constructor
+    · rw [hx, hy]
+      exact h_assumptions
+    · simp [hx, hy]
 
 end WitnessPoint
 
@@ -137,54 +113,30 @@ def circuit : FormalAssertion Fp Point where
 
 end Gate
 
-def main (value : Var (UnconstrainedDep Point) Fp) : Circuit Fp (Var Point Fp) := do
-  let x ← witnessField fun env => (value env).x
-  let y ← witnessField fun env => (value env).y
-  let point := ({ x, y } : Var Point Fp)
-  Gate.circuit point
-  return point
-
-def Assumptions (_ : Value (UnconstrainedDep Point) Fp)
-    (_ : ProverData Fp) : Prop :=
-  True
-
-def Spec (_ : Value (UnconstrainedDep Point) Fp) (output : Point Fp)
-    (_ : ProverData Fp) : Prop :=
-  Point.onCurve output
-
-def ProverAssumptions (value : ProverValue (UnconstrainedDep Point) Fp)
-    (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  Point.onCurve value
-
-def ProverSpec (value : ProverValue (UnconstrainedDep Point) Fp) (output : Point Fp)
-    (_ : ProverHint Fp) : Prop :=
-  output = value
-
-instance elaborated : ElaboratedCircuit Fp (UnconstrainedDep Point) Point main := by
-  elaborate_circuit
-
-theorem soundness : GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec, Gate.circuit]
-  exact h_holds
-
-theorem completeness :
-    GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
-  circuit_proof_start [main, ProverAssumptions, ProverSpec, Gate.circuit]
-  rcases h_env with ⟨hx, hy⟩
-  constructor
-  · rw [hx, hy]
-    exact h_assumptions
-  · simp [hx, hy]
-
 def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point where
-  main
-  elaborated
-  Assumptions
-  Spec
-  ProverAssumptions
-  ProverSpec
-  soundness
-  completeness
+  main value := do
+    let x ← witnessField fun env => (value env).x
+    let y ← witnessField fun env => (value env).y
+    let point := ({ x, y } : Var Point Fp)
+    Gate.circuit point
+    return point
+
+  Assumptions _ _ := True
+  Spec _ output _ := Point.onCurve output
+  ProverAssumptions value _ _ := Point.onCurve value
+  ProverSpec value output _ := output = value
+
+  soundness := by
+    circuit_proof_start [Gate.circuit]
+    exact h_holds
+
+  completeness := by
+    circuit_proof_start [Gate.circuit]
+    rcases h_env with ⟨hx, hy⟩
+    constructor
+    · rw [hx, hy]
+      exact h_assumptions
+    · simp [hx, hy]
 
 end WitnessNonIdentityPoint
 
