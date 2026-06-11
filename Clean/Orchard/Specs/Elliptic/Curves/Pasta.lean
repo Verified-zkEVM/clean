@@ -45,6 +45,10 @@ def curve : SWCurve PallasBaseField where
   IsElliptic := by rw [isUnit_iff_ne_zero]; native_decide
   B_nonzero := b_ne_zero
 
+instance instIsElliptic : (toW a b).IsElliptic := by
+  change (toW curve.A curve.B).IsElliptic
+  infer_instance
+
 /-- The `(0, 0)` sentinel is off the Pallas curve. -/
 theorem not_onCurve_zero : ¬ OnCurve a b (0, 0) :=
   CurveForms.ShortWeierstrass.not_onCurve_zero b_ne_zero
@@ -116,6 +120,18 @@ example (P : SWPoint curve) : (0 : ℕ) • P = 0 := zero_nsmul P
 example (P : SWPoint curve) : (2 : ℕ) • P = P + P := two_nsmul P
 example (P : SWPoint curve) : (1 : ℤ) • P = P := one_zsmul P
 example (P : SWPoint curve) : (-1 : ℤ) • P = -P := neg_one_zsmul P
+
+/-- Pallas on-curve predicate specialized from short-Weierstrass form. -/
+abbrev OnCurve (point : PallasBaseField × PallasBaseField) : Prop :=
+  CurveForms.ShortWeierstrass.OnCurve a b point
+
+/-- Pallas valid point predicate specialized from short-Weierstrass form. -/
+abbrev Valid (point : PallasBaseField × PallasBaseField) : Prop :=
+  CurveForms.ShortWeierstrass.Valid a b point
+
+/-- Pallas complete addition specialized from short-Weierstrass form. -/
+abbrev add (p q : PallasBaseField × PallasBaseField) : PallasBaseField × PallasBaseField :=
+  CurveForms.ShortWeierstrass.add a p q
 
 end Pallas
 

@@ -2,10 +2,9 @@ import Clean.Orchard.Ecc.Theorems
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
-namespace Orchard
-namespace Ecc
+namespace Orchard.Ecc
 
-open CompElliptic.CurveForms.ShortWeierstrass (add)
+open CompElliptic.Curves.Pasta
 
 /-!
 Reference:
@@ -32,9 +31,10 @@ def outputValue (input : Input Fp) : Point Fp :=
 theorem outputValue_eq_swAdd {input : Input Fp}
     (hp : ¬ input.p.isIdentityEncoding) (hq : ¬ input.q.isIdentityEncoding)
     (hx : input.p.x ≠ input.q.x) :
-    (outputValue input).coords = add (0 : Fp) input.p.coords input.q.coords := by
+    (outputValue input).coords = Pallas.add input.p.coords input.q.coords := by
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  unfold Point.coords outputValue add
+  unfold Point.coords outputValue Pallas.add
+    CompElliptic.CurveForms.ShortWeierstrass.add
   unfold Point.isIdentityEncoding at hp hq
   simp only
   have hp0 : ¬(px, py) = (0, 0) := by
@@ -198,26 +198,80 @@ def main (input : Var Input Fp) :
   return r
 
 def Assumptions (input : Input Fp) : Prop :=
-  input.p.onCurve ∧
-    input.q.onCurve ∧
+  Pallas.OnCurve input.p.coords ∧
+    Pallas.OnCurve input.q.coords ∧
     input.p.x ≠ input.q.x
 
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
-  output.onCurve ∧
-    output.coords = add (0 : Fp) input.p.coords input.q.coords
+  Pallas.OnCurve output.coords ∧
+    output.coords = Pallas.add input.p.coords input.q.coords
+
+theorem not_isIdentityEncoding_of_pallas_onCurve {point : Point Fp}
+    (hPoint : Pallas.OnCurve point.coords) :
+    ¬ point.isIdentityEncoding := by
+  rcases point with ⟨x, y⟩
+  intro hIdentity
+  change x = 0 ∧ y = 0 at hIdentity
+  apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y
+  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b (x, y) at hPoint
+  rw [hIdentity.1] at hPoint
+  exact hPoint
 
 theorem outputValue_onCurve {input : Input Fp}
-    (hp : input.p.onCurve) (hq : input.q.onCurve) (hx : input.p.x ≠ input.q.x) :
-    (outputValue input).onCurve := by
+    (hp : Pallas.OnCurve input.p.coords)
+    (hq : Pallas.OnCurve input.q.coords)
+    (hx : input.p.x ≠ input.q.x) :
+    Pallas.OnCurve (outputValue input).coords := by
   have hpNonId : ¬ input.p.isIdentityEncoding :=
-    Point.not_isIdentityEncoding_of_onCurve hp
+    not_isIdentityEncoding_of_pallas_onCurve hp
   have hqNonId : ¬ input.q.isIdentityEncoding :=
-    Point.not_isIdentityEncoding_of_onCurve hq
+    not_isIdentityEncoding_of_pallas_onCurve hq
   have hcoords := outputValue_eq_swAdd (input := input) hpNonId hqNonId hx
-  have hadd := Point.shortWeierstrass_add_onCurve_of_onCurve_of_x_ne hp hq hx
-  exact Point.onCurve_of_shortWeierstrass_onCurve (point := outputValue input) (by
-    rw [hcoords]
-    exact hadd)
+  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
+  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b (px, py) at hp
+  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b (qx, qy) at hq
+  change (outputValue { p := { x := px, y := py }, q := { x := qx, y := qy } }).coords =
+    Pallas.add (px, py) (qx, qy) at hcoords
+  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
+    (outputValue { p := { x := px, y := py }, q := { x := qx, y := qy } }).coords
+  have hp0 : (px, py) ≠ ((0 : Fp), 0) := by
+    intro h
+    have hx0 : px = 0 := (Prod.ext_iff.mp h).1
+    exact CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero py (by
+      rw [hx0] at hp
+      exact hp)
+  have hq0 : (qx, qy) ≠ ((0 : Fp), 0) := by
+    intro h
+    have hx0 : qx = 0 := (Prod.ext_iff.mp h).1
+    exact CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero qy (by
+      rw [hx0] at hq
+      exact hq)
+  have hxy : ¬(px = qx ∧ py + qy = 0) := by
+    intro h
+    exact hx h.1
+  rw [hcoords]
+  change CompElliptic.CurveForms.ShortWeierstrass.OnCurve
+    CompElliptic.Curves.Pasta.Pallas.a CompElliptic.Curves.Pasta.Pallas.b
+    (CompElliptic.CurveForms.ShortWeierstrass.add
+      CompElliptic.Curves.Pasta.Pallas.a (px, py) (qx, qy))
+  rw [CompElliptic.CurveForms.ShortWeierstrass.add_eq_addXY hp0 hq0 hxy]
+  have hxy' :
+      ¬(px = qx ∧ py =
+        WeierstrassCurve.Affine.negY
+          (CompElliptic.CurveForms.ShortWeierstrass.toW
+            CompElliptic.Curves.Pasta.Pallas.a
+            CompElliptic.Curves.Pasta.Pallas.b) qx qy) := by
+    rintro ⟨hxeq, _⟩
+    exact hx hxeq
+  have hns := WeierstrassCurve.Affine.nonsingular_add
+    (CompElliptic.CurveForms.ShortWeierstrass.nonsingular_toW hp)
+    (CompElliptic.CurveForms.ShortWeierstrass.nonsingular_toW hq)
+    hxy'
+  exact CompElliptic.CurveForms.ShortWeierstrass.equation_toW.mp hns.left
 
 instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit
@@ -227,9 +281,9 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     outputValue_eq_swAdd, outputValue_onCurve]
   rcases h_assumptions with ⟨hpCurve, hqCurve, hx⟩
   have hp : ¬ input_p.isIdentityEncoding :=
-    Point.not_isIdentityEncoding_of_onCurve hpCurve
+    not_isIdentityEncoding_of_pallas_onCurve hpCurve
   have hq : ¬ input_q.isIdentityEncoding :=
-    Point.not_isIdentityEncoding_of_onCurve hqCurve
+    not_isIdentityEncoding_of_pallas_onCurve hqCurve
   rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
   let gateInput : Gate.Input Fp := {
         x_p := Expression.eval env (varFromOffset Point i₀).x
@@ -253,11 +307,12 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     exact h
   have hrowEq := hrow hgateAssumptions
   constructor
-  · change (Gate.Input.r gateInput).onCurve
+  · change Pallas.OnCurve (Gate.Input.r gateInput).coords
     rw [hrowEq]
     simpa [gateInput, Gate.Input.p, Gate.Input.q, hpCopyEq, hqCopyEq] using
       outputValue_onCurve (input := { p := input_p, q := input_q }) hpCurve hqCurve hx
-  · change (Gate.Input.r gateInput).coords = add 0 input_p.coords input_q.coords
+  · change (Gate.Input.r gateInput).coords =
+      Pallas.add input_p.coords input_q.coords
     rw [hrowEq]
     simpa [gateInput, Gate.Input.p, Gate.Input.q, hpCopyEq, hqCopyEq] using
       outputValue_eq_swAdd (input := { p := input_p, q := input_q }) hp hq hx
@@ -275,7 +330,4 @@ def circuit : FormalCircuit Fp Input Point where
   soundness
   completeness
 
-end AddIncomplete
-
-end Ecc
-end Orchard
+end Orchard.Ecc.AddIncomplete
