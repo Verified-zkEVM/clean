@@ -191,15 +191,16 @@ def ySwitch {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
     (row : Row K) : K :=
   ternary (bit row) (row.baseY - row.yP) (row.baseY + row.yP)
 
-def SelectedCompleteBitPoint (row : Row Ecc.PallasBaseField) : Prop :=
-  ∀ x : Ecc.PallasBaseField,
+def SelectedCompleteBitPointNegation (row : Row Ecc.PallasBaseField) : Prop :=
+  ∀ baseX : Ecc.PallasBaseField,
     (bit row = 0 →
-      (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.baseY)) ∧
+      (baseX, row.yP) =
+        CompElliptic.CurveForms.ShortWeierstrass.neg (baseX, row.baseY)) ∧
       (bit row = 1 →
-        (x, row.yP) = (x, row.baseY))
+        (baseX, row.yP) = (baseX, row.baseY))
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  IsBool (bit row) ∧ SelectedCompleteBitPoint row
+  IsBool (bit row) ∧ SelectedCompleteBitPointNegation row
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
@@ -209,7 +210,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, SelectedCompleteBitPoint,
+    circuit_proof_start [main, Spec, SelectedCompleteBitPointNegation,
       NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_holds with ⟨hBool, hSwitch⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
@@ -237,7 +238,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
               (input_baseY + input_yP) * hCoeff
           linear_combination -hDiff
   completeness := by
-    circuit_proof_start [main, Spec, SelectedCompleteBitPoint,
+    circuit_proof_start [main, Spec, SelectedCompleteBitPointNegation,
       NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
