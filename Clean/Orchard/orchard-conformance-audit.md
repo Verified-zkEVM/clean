@@ -1,7 +1,6 @@
-# Orchard custom gate audit
+# Orchard conformance audit
 
-This file records the current survey of `Clean/Orchard` custom-gate assertions against
-the gate names in the Orchard 0.14.0 and `halo2_gadgets-0.5.0` sources.
+This file records the current survey of `Clean/Orchard` against Orchard 0.14.0 and `halo2_gadgets-0.5.0` sources.
 
 Rule for naming: a Clean circuit gets `name := "GATE <source name>"` only when it is
 intended to correspond to a concrete source `meta.create_gate("<source name>", ...)`.

@@ -80,30 +80,47 @@ Reference sources for this branch:
 If a future agent cannot find the relevant source code, it must stop and ask Gregor instead
 of guessing the implementation.
 
-## Suggested order
+## Naming and style
 
-1. Build the small ECC assertion layer from `halo2_gadgets/src/ecc/chip`.
-2. Port simple utilities used pervasively by Orchard, especially range checks and running
-   sums, from `halo2_gadgets/src/utilities`.
-3. Port Sinsemilla gates from `halo2_gadgets/src/sinsemilla`.
-4. Port Orchard-specific custom gates from `orchard@orchard-0.14.0/src/circuit.rs`,
-   `commit_ivk.rs`, and `note_commit.rs`.
-5. Compose higher-level Orchard pieces: note commitment, value commitment, nullifier,
-   spend authorization, and action checks.
-6. Keep a source map in comments as files grow, so each Clean gadget names the exact Rust
-   source it follows.
+Each clean formal circuit should be given its own namespace, which defines `circuit` (the formal package).
 
-## First milestone
+Example:
 
-The first gadget is the Pallas witness-point assertion from:
+```lean
+def circuit : FormalCircuit <Field> <Input> <Output> where
+  main input := do ...
+  Assumptions input := ...
+  Spec input output := ...
+  soundness := by ...
+  completeness := by ...
+```
 
-`halo2_gadgets/src/ecc/chip/witness_point.rs`
+When soundness and completeness proofs get long, factor out three additional definitons:
 
-It ports the two Halo2 gates:
+- `main`, the `Circuit` itself
+- `Spec` and `Completeness` the contract
+- `elaborated`, the `ElaboratedCircuit`, a typeclass instance needed by soundness and `circuit`, defined by `:= by elaborate_circuit`
+- `soundness` and `completeness` theorems
 
-- `witness point`: accepts either `(0, 0)` for the identity encoding or a point satisfying
-  `y^2 = x^3 + 5`.
-- `witness non-identity point`: requires the curve equation directly.
+In the latter case, the `circuit` declaration should look roughly like this:
+
+```lean
+def circuit : FormalCircuit <Field> <Input> <Output> where
+  main
+  elaborated -- pass explicitly in this case
+  Assumptions
+  Spec
+  soundness
+  completeness
+```
+
+If a given halo2 API has both a low-level gate and a synthesis-level entry point circuit, then use a `.Gate` namespace
+for the gate (not a `.Entry` namespace for the entry point).
+
+In general, Halo2 file/chip organization and naming closely.
+
+For example, if halo2 knows ECC entry point methods `incomplete_add` and `add`, then clean namespaces should be
+`IncompleteAdd` and `Add`.
 
 ## Current source dependency map
 
@@ -130,6 +147,7 @@ Bottom-up implementation order currently inferred from those tagged sources:
    `halo2_gadgets/src/ecc/chip/add_incomplete.rs`,
    `halo2_gadgets/src/ecc/chip/add.rs`
    - Depends on non-identity point assertions.
+   - Clean module: `Clean.Orchard.Ecc`
    - Status: incomplete addition is ported as `IncompleteAdd.circuit`; complete
      addition custom-gate constraints are ported as `CompleteAdd.circuit`.
 4. Running sums and range checks:
