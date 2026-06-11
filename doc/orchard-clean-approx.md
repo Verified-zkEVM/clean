@@ -165,7 +165,7 @@ Bottom-up implementation order currently inferred from those tagged sources:
      wiring is ported as `Orchard.Sinsemilla.Merkle.Wiring.circuit`. One layer of
      `MerklePath::calculate_root`, including the position-bit conditional swap through
      `Orchard.Utilities.CondSwap.circuit` and `hash_layer` transition, is ported as
-     `Orchard.Sinsemilla.Merkle.PathStep.circuit`.
+     `Orchard.Sinsemilla.Merkle.PathStep.circuit` with a conditional-selection spec.
 8. Orchard custom gates and composition:
    `orchard/src/circuit.rs`,
    `orchard/src/circuit/commit_ivk.rs`,

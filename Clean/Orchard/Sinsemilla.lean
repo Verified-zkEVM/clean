@@ -594,10 +594,6 @@ deriving ProvableStruct
 def boolPoly {K : Type} [One K] [Sub K] [Mul K] (x : K) : K :=
   x * (x - 1)
 
-def ternary {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K]
-    (choice ifTrue ifFalse : K) : K :=
-  choice * ifTrue + (1 - choice) * ifFalse
-
 def swapInput {K : Type} (row : Row K) : Utilities.CondSwapInputs K where
   a := row.node
   b := row.sibling
@@ -614,8 +610,8 @@ def nextCheck {K : Type} [Sub K] (row : Row K) : K :=
 
 def Spec (row : Row Ecc.PallasBaseField) : Prop :=
   (row.posBit = 0 ∨ row.posBit = 1) ∧
-    row.left = ternary row.posBit row.sibling row.node ∧
-    row.right = ternary row.posBit row.node row.sibling ∧
+    row.left = (if row.posBit = 1 then row.sibling else row.node) ∧
+    row.right = (if row.posBit = 1 then row.node else row.sibling) ∧
     Wiring.Spec row.layer ∧
     row.layer.decomposition.leftNode = row.left ∧
     row.layer.decomposition.rightNode = row.right ∧
@@ -636,7 +632,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, swapInput, layerLeftCheck,
-      layerRightCheck, nextCheck, ternary, boolPoly,
+      layerRightCheck, nextCheck, boolPoly,
       Utilities.CondSwap.circuit, Utilities.CondSwap.Spec,
       Wiring.circuit, Wiring.Spec, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
@@ -668,7 +664,7 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
       left_eq_of_add_neg_eq_zero hLayerRight, (left_eq_of_add_neg_eq_zero hNext).symm⟩
   completeness := by
     circuit_proof_start [main, Spec, swapInput, layerLeftCheck,
-      layerRightCheck, nextCheck, ternary, boolPoly,
+      layerRightCheck, nextCheck, boolPoly,
       Utilities.CondSwap.circuit, Utilities.CondSwap.Spec,
       Wiring.circuit, Wiring.Spec, Wiring.hashCheck, Merkle.circuit, Merkle.Spec, Merkle.a0,
       Merkle.leftCheck, Merkle.rightCheck, Merkle.b1B2Check, Merkle.b0,
