@@ -121,6 +121,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (row.d1 * row.z14B2CPrime)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE CommitIvk canonicity check"
   main
   Spec := Spec
   soundness := by

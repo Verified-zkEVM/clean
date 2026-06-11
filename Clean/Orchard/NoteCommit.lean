@@ -84,6 +84,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (decomposition row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit MessagePiece b"
   main
   Spec := Spec
   soundness := by
@@ -126,6 +127,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (decomposition row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit MessagePiece d"
   main
   Spec := Spec
   soundness := by
@@ -161,6 +163,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (decomposition row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit MessagePiece e"
   main
   Spec := Spec
   soundness := by
@@ -195,6 +198,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (decomposition row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit MessagePiece g"
   main
   Spec := Spec
   soundness := by
@@ -230,6 +234,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (decomposition row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit MessagePiece h"
   main
   Spec := Spec
   soundness := by
@@ -280,6 +285,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (row.b1 * row.z13APrime)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit input g_d"
   main
   Spec := Spec
   soundness := by
@@ -334,6 +340,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (row.d0 * row.z14B3CPrime)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit input pk_d"
   main
   Spec := Spec
   soundness := by
@@ -375,6 +382,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (valueCheck row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit input value"
   main
   Spec := Spec
   soundness := by
@@ -420,6 +428,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (row.g0 * row.z14E1FPrime)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit input rho"
   main
   Spec := Spec
   soundness := by
@@ -479,6 +488,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (row.h1 * row.z13G1G2Prime)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE NoteCommit input psi"
   main
   Spec := Spec
   soundness := by
@@ -547,6 +557,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (row.k3 * row.z13JPrime)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE y coordinate checks"
   main
   Spec := Spec
   soundness := by

@@ -104,6 +104,7 @@ theorem completeness :
     · simpa [sub_eq_add_neg] using IsBool.iff_mul_sub_one.mp h_assumptions
 
 def circuit : FormalCircuit Ecc.PallasBaseField CondSwapInputs CondSwapOutput where
+  name := "GATE a' = b ⋅ swap + a ⋅ (1-swap)"
   main
   elaborated
   Assumptions
@@ -318,6 +319,7 @@ theorem completeness : Completeness Ecc.PallasBaseField main (fun _ => True) := 
   ring
 
 def circuit : FormalCircuit Ecc.PallasBaseField fieldPair field where
+  name := "GATE Field element addition: c = a + b"
   main
   elaborated
   Assumptions := fun _ => True
@@ -426,6 +428,7 @@ def main (windowNumBits : ℕ) (step : Var Step F) : Circuit F Unit := do
   assertZero (rangeCheckPolyExpr (2 ^ windowNumBits) word)
 
 def circuit (windowNumBits : ℕ) : FormalAssertion F Step where
+  name := "GATE range check"
   main := main windowNumBits
   Spec := Spec windowNumBits
   soundness := by
@@ -518,6 +521,7 @@ def main (k : ℕ) (input : Var ShortLookupBitshift F) : Circuit F Unit := do
   assertZero (input.word * (twoPowK k : F) * input.invTwoPowS - input.shiftedWord)
 
 def circuit (k : ℕ) : FormalAssertion F ShortLookupBitshift where
+  name := "GATE Short lookup bitshift"
   main := main k
   Spec := bitshiftSpec k
   soundness := by

@@ -90,6 +90,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (next2Check row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE full round"
   main
   Spec := Spec
   soundness := by
@@ -225,6 +226,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (next2Check row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE partial rounds"
   main
   Spec := Spec
   soundness := by
@@ -280,6 +282,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (capacityCheck row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE pad-and-add"
   main
   Spec := Spec
   soundness := by

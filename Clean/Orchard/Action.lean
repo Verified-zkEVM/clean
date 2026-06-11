@@ -66,6 +66,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (outputEnabled row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE Orchard circuit checks"
   main
   Spec := Spec
   soundness := by

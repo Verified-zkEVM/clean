@@ -597,6 +597,7 @@ def main (point : Var Point PallasBaseField) : Circuit PallasBaseField Unit := d
   assertZero (point.y * equation)
 
 def circuit : FormalAssertion PallasBaseField Point where
+  name := "GATE witness point"
   main
   Spec := isPointOrIdentity
   soundness := by
@@ -649,6 +650,7 @@ def main (point : Var Point PallasBaseField) : Circuit PallasBaseField Unit := d
   assertZero (point.y * point.y - point.x * point.x * point.x - (pallasB : PallasBaseField))
 
 def circuit : FormalAssertion PallasBaseField Point where
+  name := "GATE witness non-identity point"
   main
   Spec := onCurve
   soundness := by
@@ -824,6 +826,7 @@ theorem completeness : Completeness PallasBaseField main Assumptions := by
   simp_all [outputValue, lambda, poly1, poly2, sub_eq_add_neg]
 
 def circuit : FormalCircuit PallasBaseField AddInputs Point where
+  name := "GATE incomplete addition"
   main
   elaborated
   Assumptions
@@ -1103,6 +1106,7 @@ def main (row : Var CompleteAddRow PallasBaseField) : Circuit PallasBaseField Un
   assertZero (poly6b row)
 
 def circuit : FormalAssertion PallasBaseField CompleteAddRow where
+  name := "GATE complete addition"
   main
   Spec := Spec
   soundness := by

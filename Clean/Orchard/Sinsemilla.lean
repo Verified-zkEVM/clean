@@ -64,6 +64,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (2 * row.yQ - DoubleAndAdd.yA row.doubleAndAdd)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE Initial y_Q"
   main
   Spec := Spec
   soundness := by
@@ -114,6 +115,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (yCheck row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE Sinsemilla gate"
   main
   Spec := Spec
   soundness := by
@@ -392,6 +394,7 @@ def main (row : Var DecompositionRow Ecc.PallasBaseField) : Circuit Ecc.PallasBa
   assertZero (b1B2Check row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField DecompositionRow where
+  name := "GATE Decomposition check"
   main
   Spec := Spec
   soundness := by

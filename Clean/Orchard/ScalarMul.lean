@@ -107,6 +107,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (lsbY row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE LSB check"
   main
   Spec := Spec
   soundness := by
@@ -207,6 +208,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (ySwitch row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE Decompose scalar for complete bits of variable-base mul"
   main
   Spec := Spec
   soundness := by
@@ -287,6 +289,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (poly row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE q_mul_1 == 1 checks"
   main
   Spec := Spec
   soundness := by
@@ -342,6 +345,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (gradient2 row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE q_mul_3 == 1 checks"
   main
   Spec := Spec
   soundness := by
@@ -385,6 +389,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   Loop.circuit row.toRow
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE q_mul_2 == 1 checks"
   main
   Spec := Spec
   soundness := by
@@ -447,6 +452,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (canonicity row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE overflow checks"
   main
   Spec := Spec
   soundness := by
@@ -551,6 +557,7 @@ def main (row : Var CoordsRow Ecc.PallasBaseField) :
   assertZero (onCurve row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField CoordsRow where
+  name := "GATE Full-width fixed-base scalar mul"
   main
   Spec := Spec
   soundness := by
@@ -588,6 +595,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   Coords.circuit { row.toCoordsRow with window := word row }
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE Running sum coordinates check"
   main
   Spec := Spec
   soundness := by
@@ -721,6 +729,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (alpha0PrimeCheck row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE Canonicity checks"
   main
   Spec := Spec
   soundness := by
@@ -847,6 +856,7 @@ def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit 
   assertZero (negationCheck row)
 
 def circuit : FormalAssertion Ecc.PallasBaseField Row where
+  name := "GATE Short fixed-base mul gate"
   main
   Spec := Spec
   soundness := by
