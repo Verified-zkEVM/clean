@@ -203,6 +203,29 @@ theorem isPallasScalarMulGroupAction_base
     isPointOrIdentity base :=
   hmul.1
 
+def IsPallasBaseFieldScalarMulGroupAction
+    (scalar : PallasBaseField) (base product : Point PallasBaseField) : Prop :=
+  IsPallasScalarMulGroupAction (pallasBaseFieldScalarNat scalar) base product
+
+theorem isPallasBaseFieldScalarMulGroupAction_of_isPallasBaseFieldScalarMul
+    {scalar : PallasBaseField} {base product : Point PallasBaseField}
+    (hbase : isPointOrIdentity base)
+    (hmul : IsPallasBaseFieldScalarMul scalar base product) :
+    IsPallasBaseFieldScalarMulGroupAction scalar base product :=
+  isPallasScalarMulGroupAction_of_isPallasScalarMul hbase hmul
+
+theorem isPallasBaseFieldScalarMul_of_groupAction
+    {scalar : PallasBaseField} {base product : Point PallasBaseField}
+    (hmul : IsPallasBaseFieldScalarMulGroupAction scalar base product) :
+    IsPallasBaseFieldScalarMul scalar base product :=
+  isPallasScalarMul_of_groupAction hmul
+
+theorem isPallasBaseFieldScalarMulGroupAction_base
+    {scalar : PallasBaseField} {base product : Point PallasBaseField}
+    (hmul : IsPallasBaseFieldScalarMulGroupAction scalar base product) :
+    isPointOrIdentity base :=
+  isPallasScalarMulGroupAction_base hmul
+
 theorem pallasScalarMulCoords_zero (base : Point PallasBaseField) :
     pallasScalarMulCoords 0 base = (0, 0) := by
   rfl
@@ -282,6 +305,19 @@ theorem isPallasScalarMulGroupAction_product
   isPallasScalarMul_isPointOrIdentity
     (isPallasScalarMulGroupAction_base hmul)
     (isPallasScalarMul_of_groupAction hmul)
+
+theorem isPallasBaseFieldScalarMul_isPointOrIdentity
+    {scalar : PallasBaseField} {base product : Point PallasBaseField}
+    (hbase : isPointOrIdentity base)
+    (hmul : IsPallasBaseFieldScalarMul scalar base product) :
+    isPointOrIdentity product :=
+  isPallasScalarMul_isPointOrIdentity hbase hmul
+
+theorem isPallasBaseFieldScalarMulGroupAction_product
+    {scalar : PallasBaseField} {base product : Point PallasBaseField}
+    (hmul : IsPallasBaseFieldScalarMulGroupAction scalar base product) :
+    isPointOrIdentity product :=
+  isPallasScalarMulGroupAction_product hmul
 
 theorem isPallasScalarMul_zero_iff
     {base product : Point PallasBaseField} :

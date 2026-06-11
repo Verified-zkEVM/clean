@@ -708,8 +708,7 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
 
 def OrchardSpec
     (row : Row Ecc.PallasBaseField) (gdOld : Ecc.Point Ecc.PallasBaseField) : Prop :=
-  Ecc.IsPallasScalarMulGroupAction
-      (Ecc.pallasBaseFieldScalarNat row.ivkScalar) gdOld (derivedPkD row) ∧
+  Ecc.IsPallasBaseFieldScalarMulGroupAction row.ivkScalar gdOld (derivedPkD row) ∧
     Spec row
 
 theorem spec_of_orchardSpec
@@ -761,8 +760,7 @@ theorem pkDOld_groupAction_of_orchardSpec
     {row : Row Ecc.PallasBaseField}
     {gdOld : Ecc.Point Ecc.PallasBaseField}
     (hSpec : OrchardSpec row gdOld) :
-    Ecc.IsPallasScalarMulGroupAction
-      (Ecc.pallasBaseFieldScalarNat row.ivkScalar) gdOld (pkDOld row) :=
+    Ecc.IsPallasBaseFieldScalarMulGroupAction row.ivkScalar gdOld (pkDOld row) :=
   pkDOld_groupAction_of_derived_groupAction hSpec.2 hSpec.1
 
 theorem pkDOld_isPointOrIdentity_of_derived_scalar_mul
@@ -775,6 +773,14 @@ theorem pkDOld_isPointOrIdentity_of_derived_scalar_mul
     Ecc.isPointOrIdentity (pkDOld row) :=
   Ecc.isPallasScalarMul_isPointOrIdentity hGdOld
     (pkDOld_scalar_mul_of_derived_scalar_mul hSpec hMul)
+
+theorem pkDOld_isPointOrIdentity_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (hSpec : OrchardSpec row gdOld) :
+    Ecc.isPointOrIdentity (pkDOld row) :=
+  Ecc.isPallasBaseFieldScalarMulGroupAction_product
+    (pkDOld_groupAction_of_orchardSpec hSpec)
 
 def main (row : Var Row Ecc.PallasBaseField) : Circuit Ecc.PallasBaseField Unit := do
   ActionWiring.circuit row.action
