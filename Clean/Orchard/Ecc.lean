@@ -97,6 +97,13 @@ def IsPallasScalarMul
     (scalar : ℕ) (base product : Point PallasBaseField) : Prop :=
   pointCoords product = pallasScalarMulCoords scalar base
 
+def pallasBaseFieldScalarNat (scalar : PallasBaseField) : ℕ :=
+  scalar.val
+
+def IsPallasBaseFieldScalarMul
+    (scalar : PallasBaseField) (base product : Point PallasBaseField) : Prop :=
+  IsPallasScalarMul (pallasBaseFieldScalarNat scalar) base product
+
 def IsOrchardFixedBaseMul
     (baseId : OrchardFixedBaseId) (scalar : ℕ) (product : Point PallasBaseField) : Prop :=
   IsPallasScalarMul scalar (fixedBasePoint baseId) product
