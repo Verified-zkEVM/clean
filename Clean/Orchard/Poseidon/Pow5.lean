@@ -522,13 +522,13 @@ def partialRoundValue (params : PartialRounds.Params Ecc.Fp) (state : State Ecc.
 
 /-! ### Plain Lean permutation specification -/
 
-/-- Apply `count` consecutive value-level full rounds, starting at source round `round`. -/
-def fullRoundsValue (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp) :
-    Nat → Nat → State Ecc.Fp → State Ecc.Fp
-  | 0, _round, state => state
-  | count + 1, round, state =>
-      fullRoundsValue roundConstants mds count (round + 1)
-        (fullRoundValue (fullParams roundConstants mds round) state)
+/-- Apply the four consecutive value-level full rounds used by `Pow5Chip::permute`,
+starting at source round `round`. -/
+def fullRounds4Value (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp)
+    (round : Nat) (state : State Ecc.Fp) : State Ecc.Fp :=
+  Fin.foldl 4
+    (fun state i => fullRoundValue (fullParams roundConstants mds (round + i.val)) state)
+    state
 
 /-- Apply `count` consecutive value-level partial-round rows.  Each row represents two
 source partial rounds, so the source round index advances by two. -/
@@ -542,9 +542,9 @@ def partialRoundRowsValue (roundConstants : Nat → State Ecc.Fp)
 /-- Plain Lean implementation of Orchard's `P128Pow5T3` `Pow5Chip::permute` schedule. -/
 def permuteValue (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
     (input : State Ecc.Fp) : State Ecc.Fp :=
-  let s := fullRoundsValue roundConstants mds 4 0 input
+  let s := fullRounds4Value roundConstants mds 0 input
   let s := partialRoundRowsValue roundConstants mds mdsInv 28 4 s
-  fullRoundsValue roundConstants mds 4 (4 + 56) s
+  fullRounds4Value roundConstants mds (4 + 56) s
 
 /-- Source-level permutation spec: the circuit output is the plain Lean permutation. -/
 def Spec (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
@@ -606,13 +606,37 @@ matrix-inverse invariant before packaging this body as a `FormalCircuit` against
 `partialRoundValue`.
 -/
 
-/-- Apply `count` consecutive full-round rows starting at source round `round`. -/
-def fullRounds (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp) :
-    Nat → Nat → Var State Ecc.Fp → Circuit Ecc.Fp (Var State Ecc.Fp)
-  | 0, _round, state => return state
-  | count + 1, round, state => do
-      let state ← fullRoundCircuit (fullParams roundConstants mds round) state
-      fullRounds roundConstants mds count (round + 1) state
+/-- Apply the four consecutive full-round rows used by `Pow5Chip::permute`, starting
+at source round `round`. -/
+def fullRounds4 (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp)
+    (round : Nat) (state : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) :=
+  Circuit.foldl (.finRange 4) state
+    (fun state i => fullRoundCircuit (fullParams roundConstants mds (round + i.val)) state)
+    (by simp only [circuit_norm, fullRoundCircuit])
+    (by
+      apply Circuit.ConstantLength.fromConstantLength'
+      simp [fullRoundCircuit, circuit_norm])
+
+/-- Packaged four-full-round loop used by each half of `Pow5Chip::permute`. -/
+def fullRounds4Circuit (roundConstants : Nat → State Ecc.Fp) (mds : Nat → Nat → Ecc.Fp)
+    (round : Nat) : FormalCircuit Ecc.Fp State State where
+  name := "Pow5State::full_rounds[4]"
+  main := fullRounds4 roundConstants mds round
+  Spec input output := output = fullRounds4Value roundConstants mds round input
+  soundness := by
+    circuit_proof_start [fullRounds4, fullRounds4Value, fullRoundCircuit]
+    obtain ⟨h0, h_step⟩ := h_holds
+    have h1 := h_step 0 (by norm_num)
+    have h2 := h_step 1 (by norm_num)
+    have h3 := h_step 2 (by norm_num)
+    simp only [Fin.foldl_succ_last, Fin.foldl_zero] at h0 h1 h2 h3 ⊢
+    norm_num at h1 h2 h3 ⊢
+    rw [h0] at h1
+    rw [h1] at h2
+    rw [h2] at h3
+    simpa using h3
+  completeness := by
+    circuit_proof_start [fullRounds4, fullRounds4Value, fullRoundCircuit]
 
 /-- Apply `count` consecutive partial-round rows.  Each row represents two source
 partial rounds, so the source round index advances by two. -/
@@ -626,9 +650,9 @@ def partialRoundRows (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat �
 /-- `Pow5Chip::permute` for Orchard's width-3/rate-2 Poseidon instance. -/
 def main (roundConstants : Nat → State Ecc.Fp) (mds mdsInv : Nat → Nat → Ecc.Fp)
     (input : Var State Ecc.Fp) : Circuit Ecc.Fp (Var State Ecc.Fp) := do
-  let s ← fullRounds roundConstants mds 4 0 input
+  let s ← fullRounds4Circuit roundConstants mds 0 input
   let s ← partialRoundRows roundConstants mds mdsInv 28 4 s
-  fullRounds roundConstants mds 4 (4 + 56) s
+  fullRounds4Circuit roundConstants mds (4 + 56) s
 
 /-!
 The next step is to package `main` as a `FormalCircuit` with an explicit elaborated

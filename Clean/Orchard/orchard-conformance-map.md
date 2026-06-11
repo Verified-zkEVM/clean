@@ -112,6 +112,9 @@ Current Clean coverage:
   width-3/rate-2 `Pow5Chip::permute` schedule.
 - `Clean.Orchard.Poseidon.Permute.fullRoundCircuit`: packaged full-round loop-body
   subcircuit proving one step against `fullRoundValue`.
+- `Clean.Orchard.Poseidon.Permute.fullRounds4Circuit`: packaged fixed `foldl`
+  subcircuit for the four full rounds used by each half of `Pow5Chip::permute`, proving
+  one half against `fullRounds4Value`.
 - `Clean.Orchard.Poseidon.Permute.main`: source-shaped `Pow5Chip::permute` round
   schedule skeleton; it witnesses intermediate full/partial round rows internally but is
   not yet packaged as a `FormalCircuit` proving `Permute.Spec`.
