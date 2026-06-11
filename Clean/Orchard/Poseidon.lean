@@ -1283,28 +1283,5 @@ def circuit : FormalAssertion Ecc.PallasBaseField Row where
 
 end Hash2PermutationBoundary
 
-/-!
-Two-input Poseidon hash with an explicit `P128Pow5T3` permutation schedule.
-
-This is the API-level wrapper for the nullifier hash path in this approximation: it
-combines the sponge boundary with the row-by-row permutation schedule, and copies the
-absorbed state into the permutation input and the squeezed permutation output back into
-the hash row.
--/
-namespace Hash2WithPermutation
-
-structure Row (F : Type) where
-  boundary : Hash2PermutationBoundary.Row F
-  permutation : Permutation.Row F
-deriving ProvableStruct
-
-def Spec (row : Row Ecc.PallasBaseField) : Prop :=
-  Hash2PermutationBoundary.Spec row.boundary ∧
-    Permutation.BlockSpec row.permutation ∧
-    Permutation.stateSame row.boundary.permutationInput row.permutation.initial ∧
-    Permutation.stateSame row.boundary.permutationOutput row.permutation.output
-
-end Hash2WithPermutation
-
 end Poseidon
 end Orchard
