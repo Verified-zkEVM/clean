@@ -4,7 +4,7 @@ import Clean.Orchard.Ecc
 import Clean.Orchard.Gadget
 import Clean.Orchard.NoteCommit
 import Clean.Orchard.Poseidon
-import Clean.Orchard.ScalarMul
+import Clean.Orchard.Ecc.ScalarMul
 import Clean.Orchard.Sinsemilla
 import Clean.Orchard.Specs.Elliptic.CoordinateSystem
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass

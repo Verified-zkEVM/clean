@@ -1,5 +1,5 @@
 import Clean.Circuit
-import Clean.Orchard.Ecc
+import Clean.Orchard.Ecc.Add
 import Clean.Orchard.NoteCommit
 import Clean.Orchard.Sinsemilla
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
@@ -10,7 +10,7 @@ import Mathlib.Tactic
 /-!
 # Orchard scalar multiplication gates
 
-Clean approximations of direct scalar-multiplication custom gates from `halo2_gadgets`.
+Clean ports of direct scalar-multiplication custom gates from `halo2_gadgets`.
 
 References:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul.rs`

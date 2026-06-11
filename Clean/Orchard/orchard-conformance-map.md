@@ -27,8 +27,8 @@ Current Clean coverage:
 - `Clean.Orchard.Ecc.PointOrIdentity.circuit`: `GATE witness point`
 - `Clean.Orchard.Ecc.NonIdentityPoint.circuit`: `GATE witness non-identity point`
 - `Clean.Orchard.Ecc.IncompleteAdd.circuit`: entry-level incomplete-add circuit
-- `Clean.Orchard.Ecc.CompleteAdd.circuit`: `GATE complete addition`
-- `Clean.Orchard.Ecc.CompleteAdd.Entry.circuit`: entry-level complete-add circuit
+- `Clean.Orchard.Ecc.CompleteAdd.Gate.circuit`: `GATE complete addition`
+- `Clean.Orchard.Ecc.CompleteAdd.circuit`: entry-level complete-add circuit
 
 ### Utilities
 
@@ -65,26 +65,26 @@ Source:
 
 Current Clean coverage:
 
-- `Clean.Orchard.ScalarMul.VarBaseLSB.circuit`: `GATE LSB check`
-- `Clean.Orchard.ScalarMul.VarBaseCompleteBit.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.VarBaseLSB.circuit`: `GATE LSB check`
+- `Clean.Orchard.Ecc.ScalarMul.VarBaseCompleteBit.circuit`:
   `GATE Decompose scalar for complete bits of variable-base mul`
-- `Clean.Orchard.ScalarMul.VarBaseIncomplete.Init.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.VarBaseIncomplete.Init.circuit`:
   `GATE q_mul_1 == 1 checks`
-- `Clean.Orchard.ScalarMul.VarBaseIncomplete.MainLoop.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.VarBaseIncomplete.MainLoop.circuit`:
   `GATE q_mul_2 == 1 checks`
-- `Clean.Orchard.ScalarMul.VarBaseIncomplete.Loop.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.VarBaseIncomplete.Loop.circuit`:
   `GATE q_mul_3 == 1 checks`
-- `Clean.Orchard.ScalarMul.VarBaseOverflow.circuit`: `GATE overflow checks`
-- `Clean.Orchard.ScalarMul.FixedBase.Coords.circuit`: helper for `coords_check`;
+- `Clean.Orchard.Ecc.ScalarMul.VarBaseOverflow.circuit`: `GATE overflow checks`
+- `Clean.Orchard.Ecc.ScalarMul.FixedBase.Coords.circuit`: helper for `coords_check`;
   currently misnamed as `GATE Full-width fixed-base scalar mul`
-- `Clean.Orchard.ScalarMul.FixedBase.RunningSumCoords.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.FixedBase.RunningSumCoords.circuit`:
   `GATE Running sum coordinates check`
-- `Clean.Orchard.ScalarMul.FixedBase.FullWidth.circuit`: intended port of
+- `Clean.Orchard.Ecc.ScalarMul.FixedBase.FullWidth.circuit`: intended port of
   `GATE Full-width fixed-base scalar mul`, currently unnamed
-- `Clean.Orchard.ScalarMul.FixedBase.BaseFieldCanonicity.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.FixedBase.BaseFieldCanonicity.circuit`:
   `GATE Canonicity checks`
-- `Clean.Orchard.ScalarMul.FixedShort.circuit`: `GATE Short fixed-base mul gate`
-- `Clean.Orchard.ScalarMul.FixedShort.SignEntry.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.FixedShort.circuit`: `GATE Short fixed-base mul gate`
+- `Clean.Orchard.Ecc.ScalarMul.FixedShort.SignEntry.circuit`:
   `mul_fixed/short.rs::Config::assign_scalar_sign`
 
 ### Poseidon
@@ -162,9 +162,6 @@ source API name. Current code does not consistently follow that rule.
 
 Current concrete cases:
 
-- `Ecc.CompleteAdd.circuit` is the row gate, while `Ecc.CompleteAdd.Entry.circuit` is
-  the entry point. This should become source-shaped naming, likely `Ecc.Add.Gate` and
-  `Ecc.Add`.
 - `Ecc.IncompleteAdd.circuit`, `Utilities.CondSwap.circuit`, and
   `Utilities.AddChip.circuit` are entry-level circuits but do not yet compose separately
   factored named gate assertions:
