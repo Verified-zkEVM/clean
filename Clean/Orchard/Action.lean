@@ -740,7 +740,8 @@ def Spec (row : Row Ecc.PallasBaseField) : Prop :=
 
 def OrchardSpec
     (row : Row Ecc.PallasBaseField) (gdOld : Ecc.Point Ecc.PallasBaseField) : Prop :=
-  Ecc.IsPallasBaseFieldScalarMulGroupAction row.ivkScalar gdOld (derivedPkD row) ∧
+  Ecc.isPointOrIdentity gdOld ∧
+    Ecc.IsPallasBaseFieldScalarMul row.ivkScalar gdOld (derivedPkD row) ∧
     Spec row
 
 theorem spec_of_orchardSpec
@@ -748,7 +749,28 @@ theorem spec_of_orchardSpec
     {gdOld : Ecc.Point Ecc.PallasBaseField}
     (h : OrchardSpec row gdOld) :
     Spec row :=
-  h.2
+  h.2.2
+
+theorem gdOld_isPointOrIdentity_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (h : OrchardSpec row gdOld) :
+    Ecc.isPointOrIdentity gdOld :=
+  h.1
+
+theorem derivedPkD_scalar_mul_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (h : OrchardSpec row gdOld) :
+    Ecc.IsPallasBaseFieldScalarMul row.ivkScalar gdOld (derivedPkD row) :=
+  h.2.1
+
+theorem derivedPkD_groupAction_of_orchardSpec
+    {row : Row Ecc.PallasBaseField}
+    {gdOld : Ecc.Point Ecc.PallasBaseField}
+    (h : OrchardSpec row gdOld) :
+    Ecc.IsPallasBaseFieldScalarMulGroupAction row.ivkScalar gdOld (derivedPkD row) :=
+  Ecc.isPallasBaseFieldScalarMulGroupAction_of_isPallasBaseFieldScalarMul h.1 h.2.1
 
 theorem pkDOld_eq_derivedPkD_of_spec {row : Row Ecc.PallasBaseField}
     (hSpec : Spec row) :
@@ -775,8 +797,8 @@ theorem pkDOld_scalar_mul_of_orchardSpec
     {gdOld : Ecc.Point Ecc.PallasBaseField}
     (hSpec : OrchardSpec row gdOld) :
     Ecc.IsPallasBaseFieldScalarMul row.ivkScalar gdOld (pkDOld row) :=
-  pkDOld_scalar_mul_of_derived_scalar_mul hSpec.2
-    (Ecc.isPallasScalarMul_of_groupAction hSpec.1)
+  pkDOld_scalar_mul_of_derived_scalar_mul (spec_of_orchardSpec hSpec)
+    (derivedPkD_scalar_mul_of_orchardSpec hSpec)
 
 theorem pkDOld_groupAction_of_derived_groupAction
     {row : Row Ecc.PallasBaseField}
@@ -793,7 +815,9 @@ theorem pkDOld_groupAction_of_orchardSpec
     {gdOld : Ecc.Point Ecc.PallasBaseField}
     (hSpec : OrchardSpec row gdOld) :
     Ecc.IsPallasBaseFieldScalarMulGroupAction row.ivkScalar gdOld (pkDOld row) :=
-  pkDOld_groupAction_of_derived_groupAction hSpec.2 hSpec.1
+  pkDOld_groupAction_of_derived_groupAction
+    (spec_of_orchardSpec hSpec)
+    (derivedPkD_groupAction_of_orchardSpec hSpec)
 
 theorem pkDOld_isPointOrIdentity_of_derived_scalar_mul
     {row : Row Ecc.PallasBaseField}
