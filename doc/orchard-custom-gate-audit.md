@@ -74,24 +74,13 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
   lookup/running-sum API or exact fixed/advice column and rotation layout for base-field
   fixed-base mul.
 
-- **`GATE full round`, `GATE partial rounds`, and `GATE pad-and-add`:** Clean represents
-  round constants as row values. These should not be witness inputs. Locally fixed
-  constants should be Lean constants, and Poseidon parameter data such as round constants
-  and MDS coefficients should be Lean parameters to the gate/formal assertion. The source
-  uses fixed columns supplied by the Poseidon chip configuration; Lean parameters are the
-  appropriate Clean-level contract even before exact fixed-column layout is modeled.
+- **Poseidon entry APIs:** exact ports of `Pow5Chip::permute`,
+  `PoseidonSpongeInstructions::initial_state`, `PoseidonSpongeInstructions::add_input`,
+  `Hash::init`, and `Hash::hash` are not implemented. Current Clean coverage is limited
+  to the named `full round`, `partial rounds`, and `pad-and-add` gate assertions.
 
-- **Poseidon permutation/link/hash wrappers:** `Permutation.InitialToFull`,
-  `FullToFull`, `FullToPartial`, `PartialToPartial`, `PartialToFull`, `FullToOutput`,
-  `FullRowsBlock`, `InitialFullBlock`, `FinalFullBlock`, `PartialPairBlock`,
-  `PartialRows4Block`, `PartialRows8Block`, `Hash2`, and
-  `Hash2PermutationBoundary` are not source `meta.create_gate` definitions. They should
-  remain unnamed as `GATE`s unless replaced by an exact source API port.
-
-- **`GATE Initial y_Q` and `GATE Sinsemilla gate`:** Clean exposes source-rotated values
-  as row fields and does not encode the exact fixed/advice/rotation layout. Any generator
-  table entries or domain constants used by these gates should be Lean constants or
-  template parameters rather than witness-controlled row fields.
+- **`GATE Initial y_Q` and `GATE Sinsemilla gate`:** Clean exposes source-rotated advice
+  values as row fields and does not encode the exact fixed/advice/rotation layout.
 
 - **Sinsemilla entry APIs:** `hash_to_point`, `HashDomain::hash`,
   `CommitDomain::commit`, `CommitDomain::short_commit`, `MerkleInstructions::hash_layer`,
@@ -100,14 +89,9 @@ These items should not be treated as exact Halo2 gate/API ports until repaired.
 
 - **`GATE Decomposition check`:** Clean ports the Merkle decomposition arithmetic but does
   not encode the source copy constraints, fixed/advice roles, or hash-to-point child API.
-  Fixed layer/domain constants should be Lean constants or template parameters, not row
-  inputs.
 
 - **NoteCommit and CommitIvk named gates:** Clean ports their arithmetic identities, but
-  does not yet record the exact fixed/advice column roles or selector layout. Literal
-  constants such as powers of two and field offsets should be Lean constants; if a gate is
-  parameterized by verifier-known table/domain data, that data should be a Lean argument to
-  the assertion rather than part of the witness row.
+  does not yet record the exact advice column roles, rotations, or selector layout.
 
 - **Orchard source entry APIs:** `value_commit_orchard`, `derive_nullifier`,
   spend-authority key derivation, `gadgets::note_commit`, `gadgets::commit_ivk`, and the
