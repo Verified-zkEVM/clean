@@ -1053,4 +1053,214 @@ def circuit (G : Generators) (w : ℕ) :
 
 end HashPiece
 
+/-!
+### Piece chaining (`hash_to_point.rs::hash_all_pieces`)
+
+The pieces of a message are chained by recursion over the list of per-piece word
+counts. Each level hashes one piece and emits the gate that completes the piece's last
+double-and-add step, pairing the piece's last row with the *next* level's exposed first
+row: `q_s2 = 0` between pieces, `q_s2 = 2` for the final gate, whose `next` row is the
+dummy row holding the witnessed final `y_a` in the `λ₁` cell (`hash_all_pieces`). The
+gate polynomial `2·Y_A(cur) + (2 - q_s3)·Y_A(next) + q_s3·2·λ₁(next)` uniformly selects
+the right entering-`Y_A` expression of the next level, captured by `enterYA`.
+-/
+
+namespace Chain
+
+/-- Inputs of the chain tail over `k` remaining pieces: the piece cells, the entering
+accumulator `x_A` cell, and the entering accumulator `y` as a prover hint. -/
+structure Input (k : ℕ) (F : Type) where
+  pieces : Vector F k
+  xA : F
+  yA : UnconstrainedDep field F
+deriving CircuitType
+
+/-- Outputs: the hash point, and the first gate row of this level (the previous level
+emits the gate pairing its last row with this row; at the end of the message this is
+the dummy row carrying the witnessed final `y_a` in its `λ₁` cell). -/
+structure Output (F : Type) where
+  point : Ecc.Point F
+  first : DoubleAndAddRow F
+deriving CircuitType
+
+instance (k : ℕ) : Inhabited (Var (Input k) Ecc.Fp) :=
+  ⟨{ pieces := .replicate k default, xA := default, yA := fun _ => default }⟩
+
+/-- The entering accumulator `2·y` of a level, as derived by the preceding gate from
+the level's first row: the `Y_A` expression for in-message rows, twice the witnessed
+`y_a` cell for the final dummy row. -/
+def enterYA {F : Type} [Add F] [Sub F] [Mul F] [OfNat F 2]
+    (isFinal : Bool) (row : DoubleAndAddRow F) : F :=
+  if isFinal then 2 * row.lambda1 else DoubleAndAdd.yA row
+
+/-- The pieces decompose into the given flat chunk list (`K`-bit words, little-endian
+within each piece, `ns[i] + 1` words for piece `i`). -/
+def PieceChunks : (ns : List ℕ) → Vector Ecc.Fp ns.length → List ℕ → Prop
+  | [], _, chunks => chunks = []
+  | n :: rest, pieces, chunks => ∃ ms : ℕ → ℕ,
+      (∀ r, ms r < 2 ^ K) ∧
+      pieces[0] = ((∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp) ∧
+      ∃ tailChunks, chunks = (List.range (n + 1)).map ms ++ tailChunks ∧
+        PieceChunks rest pieces.tail tailChunks
+
+/-- The honest chunk values of the pieces. -/
+def honestChunks : (ns : List ℕ) → Vector Ecc.Fp ns.length → List ℕ
+  | [], _ => []
+  | n :: rest, pieces =>
+    (List.range (n + 1)).map (pieceWord pieces[0]) ++ honestChunks rest pieces.tail
+
+/-- Each piece value fits in `K·(ns[i] + 1)` bits. -/
+def PieceBounds : (ns : List ℕ) → Vector Ecc.Fp ns.length → Prop
+  | [], _ => True
+  | n :: rest, pieces =>
+    ZMod.val (show Ecc.Fp from pieces[0]) < 2 ^ (K * (n + 1)) ∧
+      PieceBounds rest pieces.tail
+
+def Spec (G : Generators) (ns : List ℕ) (input : Value (Input ns.length) Ecc.Fp)
+    (output : Value Output Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+  output.first.xA = input.xA ∧
+  ∃ chunks : List ℕ, PieceChunks ns input.pieces chunks ∧
+    ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA →
+      2 * A.y = enterYA ns.isEmpty output.first →
+      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A chunks = some B →
+        output.point.x = B.x ∧ output.point.y = B.y
+
+def ProverAssumptions (G : Generators) (ns : List ℕ)
+    (input : ProverValue (Input ns.length) Ecc.Fp) (_ : ProverData Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  PieceBounds ns input.pieces ∧
+  ∃ (A B : SWPoint Pallas.curve), A ≠ 0 ∧ A.x = input.xA ∧ A.y = input.yA ∧
+    Orchard.Specs.Sinsemilla.hashToPoint G.S A (honestChunks ns input.pieces) = some B
+
+def ProverSpec (G : Generators) (ns : List ℕ)
+    (input : ProverValue (Input ns.length) Ecc.Fp)
+    (output : ProverValue Output Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+  output.first.xA = input.xA ∧
+  ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA → A.y = input.yA →
+    enterYA ns.isEmpty output.first = 2 * A.y ∧
+    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+        (honestChunks ns input.pieces) = some B →
+      output.point.x = B.x ∧ output.point.y = B.y
+
+/-! #### The empty tail: the final dummy row -/
+
+namespace Nil
+
+def main (input : Var (Input 0) Ecc.Fp) : Circuit Ecc.Fp (Var Output Ecc.Fp) := do
+  let yFin ← witnessField fun env => input.yA env
+  return {
+    point := { x := input.xA, y := yFin },
+    first := { xA := input.xA, xP := 0, lambda1 := yFin, lambda2 := 0 } }
+
+instance elaborated : ElaboratedCircuit Ecc.Fp (Input 0) Output main := by
+  elaborate_circuit
+
+theorem soundness (G : Generators) :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp main (fun _ _ => True)
+      (Spec G []) := by
+  circuit_proof_start [main, Spec, PieceChunks, enterYA]
+  refine ⟨[], rfl, ?_⟩
+  intro A hA0 hAx hAy B hB
+  have hAy' : 2 * A.y = 2 * env.get i₀ := by simpa using hAy
+  rw [Orchard.Specs.Sinsemilla.hashToPoint_nil] at hB
+  obtain rfl : A = B := Option.some.inj hB
+  exact ⟨hAx.symm, (mul_left_cancel₀ HashPiece.two_ne_zero_Fp hAy').symm⟩
+
+theorem completeness (G : Generators) :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp main
+      (ProverAssumptions G []) (ProverSpec G []) := by
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, honestChunks, enterYA]
+  intro A hA0 hAx hAy
+  constructor
+  · simp only [List.isEmpty_nil, if_true]
+    rw [h_env, ← hAy]
+  · intro B hB
+    rw [Orchard.Specs.Sinsemilla.hashToPoint_nil] at hB
+    obtain rfl : A = B := Option.some.inj hB
+    exact ⟨hAx.symm, by rw [h_env, ← hAy]⟩
+
+def circuit (G : Generators) :
+    GeneralFormalCircuit.WithHint Ecc.Fp (Input 0) Output where
+  main := main
+  Spec := Spec G []
+  ProverAssumptions := ProverAssumptions G []
+  ProverSpec := ProverSpec G []
+  soundness := soundness G
+  completeness := completeness G
+
+end Nil
+
+/-! #### One piece plus the recursive tail
+
+WIP: `elaborate_circuit` currently generates a kernel-rejected congruence proof for
+`Cons.main` (the subcircuit-length proof over the length-indexed `Input` type); the
+level needs either an `elaborate_circuit` fix or a hand-written `ElaboratedCircuit`
+instance. The structure below is the validated design.
+
+```
+namespace Cons
+
+def main (G : Generators) (n : ℕ) (rest : List ℕ)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (input : Var (Input (rest.length + 1)) Ecc.Fp) :
+    Circuit Ecc.Fp (Var Output Ecc.Fp) := do
+  let out ← HashPiece.circuit G n
+    { piece := input.pieces[0], xA := input.xA, yA := input.yA }
+  let tailOut ← tail
+    { pieces := Vector.cast (by omega) input.pieces.tail,
+      xA := out.xANext, yA := out.yANext }
+  Gate.circuit { qS2 := if rest.isEmpty then 2 else 0 }
+    { cur := out.last, next := tailOut.first }
+  return { point := tailOut.point, first := out.first }
+
+instance elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output) :
+    ElaboratedCircuit Ecc.Fp (Input (rest.length + 1)) Output (main G n rest tail) := by
+  elaborate_circuit
+
+theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (hS : tail.Spec = Spec G rest) :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G n rest tail)
+      (fun _ _ => True) (Spec G (n :: rest)) := by
+  sorry
+
+theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (hPA : tail.ProverAssumptions = ProverAssumptions G rest)
+    (hPS : tail.ProverSpec = ProverSpec G rest) :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G n rest tail)
+      (ProverAssumptions G (n :: rest)) (ProverSpec G (n :: rest)) := by
+  sorry
+
+def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (hS : tail.Spec = Spec G rest)
+    (hPA : tail.ProverAssumptions = ProverAssumptions G rest)
+    (hPS : tail.ProverSpec = ProverSpec G rest) :
+    GeneralFormalCircuit.WithHint Ecc.Fp (Input (rest.length + 1)) Output where
+  main := main G n rest tail
+  Spec := Spec G (n :: rest)
+  ProverAssumptions := ProverAssumptions G (n :: rest)
+  ProverSpec := ProverSpec G (n :: rest)
+  soundness := soundness G n rest tail hS
+  completeness := completeness G n rest tail hPA hPS
+
+end Cons
+
+/-- The chain tail over the remaining word counts, bundled with the contract that its
+spec fields are the canonical recursive ones. -/
+def circuit (G : Generators) : (ns : List ℕ) →
+    { c : GeneralFormalCircuit.WithHint Ecc.Fp (Input ns.length) Output //
+      c.Spec = Spec G ns ∧ c.ProverAssumptions = ProverAssumptions G ns ∧
+        c.ProverSpec = ProverSpec G ns }
+  | [] => ⟨Nil.circuit G, rfl, rfl, rfl⟩
+  | n :: rest =>
+    let ⟨tail, hS, hPA, hPS⟩ := circuit G rest
+    ⟨Cons.circuit G n rest tail hS hPA hPS, rfl, rfl, rfl⟩
+```
+-/
+
+end Chain
+
 end Orchard.Sinsemilla
