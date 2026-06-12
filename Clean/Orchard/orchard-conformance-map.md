@@ -125,15 +125,21 @@ Current Clean coverage:
 - `Clean.Orchard.Poseidon.Permute.main`: source-shaped parameterized compatibility
   wrapper for experiments with non-P128 constants; it is not packaged because the
   partial-row proof relies on the explicit P128 MDS inverse lemmas.
-- `Clean.Orchard.Poseidon.Sponge` mirrors the `Sponge` /
-  `PoseidonSpongeInstructions` part of `poseidon.rs` and currently contains only the
-  source-shaped namespace stub.
-- `Clean.Orchard.Poseidon.Hash` mirrors `poseidon.rs::Hash` and currently contains only
-  the source-shaped namespace stub.
+- `Clean.Orchard.Poseidon.Sponge.InitialState.circuit`: packaged width-3/rate-2
+  `Pow5Chip::initial_state`, parameterized by the domain capacity element.
+- `Clean.Orchard.Poseidon.Sponge.AddInput.circuit`: packaged width-3/rate-2
+  `Pow5Chip::add_input` over one full padded rate block, using `GATE pad-and-add`.
+- `Clean.Orchard.Poseidon.Sponge.GetOutput.circuit`: packaged
+  `PoseidonSpongeInstructions::get_output` projection of the rate words.
+- `Clean.Orchard.Poseidon.Hash.Init.circuit`: packaged `Hash::init` state
+  initialization.
+- `Clean.Orchard.Poseidon.Hash.HashPaddedBlock.circuit`: packaged straight-line
+  one-padded-block `Hash::hash` composition (`init -> add_input -> permute -> squeeze`).
 
 `FullRound` and `PartialRounds` already take fixed-column round constants and matrix
-entries as Lean parameters. No source-level permutation or hash API is currently
-implemented.
+entries as Lean parameters. The P128 permutation and one-padded-block hash path are now
+packaged; remaining work is to port concrete round constants and the full
+`ConstantLength<L>` padding scheduler.
 
 ### Sinsemilla And Merkle
 
