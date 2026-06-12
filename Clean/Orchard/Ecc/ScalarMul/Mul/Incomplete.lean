@@ -1,5 +1,7 @@
 import Clean.Orchard.Ecc.ScalarMul.Defs
 import Clean.Orchard.Sinsemilla
+import Clean.Orchard.Sinsemilla.HashToPoint
+import Clean.Orchard.Specs.Sinsemilla
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
@@ -261,6 +263,56 @@ each step computes `(acc + (2k-1) P) + acc`, so `m_b = 2 m_{b-1} + 2 k_{b-1} - 1
 def accScalar (m : ℕ) (bits : ℕ → Bool) : ℕ → ℕ
   | 0 => m
   | b + 1 => 2 * accScalar m bits b + (if bits b then 1 else 0) * 2 - 1
+
+/-- The conditionally-negated per-bit point `(2k-1) P` added by each step. -/
+noncomputable def stepPoint (P : SWPoint Pallas.curve) (bits : ℕ → Bool) :
+    ℕ → SWPoint Pallas.curve :=
+  fun b => if bits b then P else -P
+
+private theorem incompleteAdd_some {X Y : SWPoint Pallas.curve}
+    (hX : X ≠ 0) (hY : Y ≠ 0) (hxy : X.x ≠ Y.x) :
+    Orchard.Specs.Sinsemilla.incompleteAdd X Y = some (X + Y) := by
+  rw [Orchard.Specs.Sinsemilla.incompleteAdd,
+    if_neg (by push_neg; exact ⟨hX, hY, hxy⟩)]
+
+/-- A non-degenerate double-and-add step on a small positive multiple of the base:
+`([m]P ⸭ (2k-1)P) ⸭ [m]P = [2m + 2k - 1]P`. -/
+private theorem step_nsmul {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ → Bool)
+    {m : ℕ} (h2 : 2 ≤ m) (hBound : 2 * m + 1 < PALLAS_SCALAR_CARD) (b : ℕ) :
+    Orchard.Specs.Sinsemilla.step (stepPoint P bits) (m • P) b
+      = some ((2 * m + (if bits b then 1 else 0) * 2 - 1) • P) := by
+  have hA0 : m • P ≠ 0 := Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)
+  have hxm1 : (m • P).x ≠ P.x := by
+    have h := Ecc.pallas_nsmul_x_ne hP (s := 1) (t := m) (by omega) (by omega) (by omega)
+    rwa [one_nsmul] at h
+  rw [Orchard.Specs.Sinsemilla.step, stepPoint]
+  by_cases hb : bits b
+  · rw [if_pos hb,
+      incompleteAdd_some hA0 hP hxm1,
+      show m • P + P = (m + 1) • P from by rw [succ_nsmul],
+      Option.bind_some,
+      incompleteAdd_some (Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)) hA0
+        (Ecc.pallas_nsmul_x_ne hP (s := m) (t := m + 1) (by omega) (by omega) (by omega)),
+      ← add_nsmul]
+    rw [if_pos hb]
+    norm_num
+    congr 1
+    omega
+  · rw [if_neg hb,
+      incompleteAdd_some hA0 (neg_ne_zero.mpr hP) hxm1,
+      show m • P + -P = (m - 1) • P from by
+        have hm : m • P = (m - 1) • P + P := by
+          rw [← succ_nsmul, Nat.sub_add_cancel (by omega)]
+        rw [hm, add_neg_cancel_right],
+      Option.bind_some,
+      incompleteAdd_some (Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)) hA0
+        (Ne.symm (Ecc.pallas_nsmul_x_ne hP (s := m - 1) (t := m) (by omega) (by omega)
+          (by omega))),
+      ← add_nsmul]
+    rw [if_neg hb]
+    norm_num
+    congr 1
+    omega
 
 /-! ### Circuit -/
 

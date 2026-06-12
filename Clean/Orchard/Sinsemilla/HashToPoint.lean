@@ -186,11 +186,11 @@ Hypotheses are exactly the row constraints:
   invariant; definitional at initialization and re-established by `hYCheck`),
 - `hSecant, hYCheck`: the Sinsemilla gate.
 -/
-theorem step_pinned (G : Generators) {A B : SWPoint Pallas.curve} {m : ℕ}
-    (hstep : Orchard.Specs.Sinsemilla.step G.S A m = some B)
+theorem step_pinned (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.curve} {m : ℕ}
+    (hstep : Orchard.Specs.Sinsemilla.step S A m = some B)
     {xp lambda1 lambda2 xa' ya' : Ecc.Fp}
-    (hYP : A.y - lambda1 * (A.x - xp) = (G.S m).y)
-    (hXP : xp = (G.S m).x)
+    (hYP : A.y - lambda1 * (A.x - xp) = (S m).y)
+    (hXP : xp = (S m).x)
     (hYA : 2 * A.y = (lambda1 + lambda2) * (A.x - (lambda1 * lambda1 - A.x - xp)))
     (hSecant : lambda2 * lambda2 = xa' + (lambda1 * lambda1 - A.x - xp) + A.x)
     (hYCheck : lambda2 * (A.x - xa') = A.y + ya') :
@@ -198,13 +198,13 @@ theorem step_pinned (G : Generators) {A B : SWPoint Pallas.curve} {m : ℕ}
   open Orchard.Specs.Sinsemilla in
   -- unfold the spec-level step into its two incomplete additions
   unfold Orchard.Specs.Sinsemilla.step at hstep
-  by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
+  by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
   · rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos hc₁] at hstep
     simp at hstep
   rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_neg hc₁] at hstep
   push_neg at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
-  set R : SWPoint Pallas.curve := A + G.S m with hR_def
+  set R : SWPoint Pallas.curve := A + S m with hR_def
   rw [show ((some R).bind fun t => Orchard.Specs.Sinsemilla.incompleteAdd t A)
     = Orchard.Specs.Sinsemilla.incompleteAdd R A from rfl] at hstep
   by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
@@ -230,30 +230,30 @@ theorem step_pinned (G : Generators) {A B : SWPoint Pallas.curve} {m : ℕ}
       = ((0 : Ecc.Fp), (0 : Ecc.Fp)) from rfl, hx, hy]
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
   have hRadd := Ecc.AddIncomplete.outputValue_eq_add
-    (input := { p := { x := A.x, y := A.y }, q := { x := (G.S m).x, y := (G.S m).y } })
+    (input := { p := { x := A.x, y := A.y }, q := { x := (S m).x, y := (S m).y } })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS
   rw [show (({ x := A.x, y := A.y } : Ecc.Point Ecc.Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := (G.S m).x, y := (G.S m).y } : Ecc.Point Ecc.Fp)).coords
-      = ((G.S m).x, (G.S m).y) from rfl,
+    show (({ x := (S m).x, y := (S m).y } : Ecc.Point Ecc.Fp)).coords
+      = ((S m).x, (S m).y) from rfl,
     Pallas.add_coords, ← hR_def] at hRadd
-  set slope₁ : Ecc.Fp := ((G.S m).y - A.y) * ((G.S m).x - A.x)⁻¹ with hslope₁
-  have hRx : slope₁ * slope₁ - A.x - (G.S m).x = R.x := by
+  set slope₁ : Ecc.Fp := ((S m).y - A.y) * ((S m).x - A.x)⁻¹ with hslope₁
+  have hRx : slope₁ * slope₁ - A.x - (S m).x = R.x := by
     have := congrArg Prod.fst hRadd
     simpa [Ecc.AddIncomplete.outputValue] using this
-  have hRy : slope₁ * (A.x - (slope₁ * slope₁ - A.x - (G.S m).x)) - A.y = R.y := by
+  have hRy : slope₁ * (A.x - (slope₁ * slope₁ - A.x - (S m).x)) - A.y = R.y := by
     have := congrArg Prod.snd hRadd
     simpa [Ecc.AddIncomplete.outputValue] using this
   -- the lookup pins `λ₁` to the chord slope
-  have hAxS' : A.x - (G.S m).x ≠ 0 := sub_ne_zero.mpr hAxS
+  have hAxS' : A.x - (S m).x ≠ 0 := sub_ne_zero.mpr hAxS
   have hl1 : lambda1 = slope₁ := by
     apply mul_right_cancel₀ hAxS'
     rw [hslope₁, mul_assoc,
-      show ((G.S m).x - A.x)⁻¹ * (A.x - (G.S m).x) = -1 from by
-        rw [show A.x - (G.S m).x = -((G.S m).x - A.x) by ring, mul_neg,
+      show ((S m).x - A.x)⁻¹ * (A.x - (S m).x) = -1 from by
+        rw [show A.x - (S m).x = -((S m).x - A.x) by ring, mul_neg,
           inv_mul_cancel₀ (sub_ne_zero.mpr (Ne.symm hAxS))]]
     linear_combination -hYP
   -- hence `x_R` and the intermediate `y` are the real intermediate point
-  have hxR : lambda1 * lambda1 - A.x - (G.S m).x = R.x := by
+  have hxR : lambda1 * lambda1 - A.x - (S m).x = R.x := by
     rw [hl1]
     exact hRx
   have hyR : lambda1 * (A.x - R.x) - A.y = R.y := by
