@@ -174,6 +174,20 @@ instance elaborated (G : Generators) (w : ℕ) :
     ElaboratedCircuit Ecc.Fp Input Output (main G w) := by
   elaborate_circuit
 
+private theorem two_ne_zero_Fp : (2 : Ecc.Fp) ≠ 0 := by
+  rw [show (2 : Ecc.Fp) = ((2 : ℕ) : Ecc.Fp) by norm_num, Ne, ZMod.natCast_eq_zero_iff]
+  intro hdvd
+  have := Nat.le_of_dvd (by norm_num) hdvd
+  norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at this
+
+private theorem double_halved {f g s : Ecc.Fp} (h : f * (2 : Ecc.Fp)⁻¹ - g = s) :
+    f - 2 * g = 2 * s := by
+  have h2 := congrArg (fun t => 2 * t) h
+  simp only [mul_sub] at h2
+  rw [show (2 : Ecc.Fp) * (f * (2 : Ecc.Fp)⁻¹) = f from by
+    rw [mul_comm f, ← mul_assoc, mul_inv_cancel₀ two_ne_zero_Fp, one_mul]] at h2
+  linear_combination h2
+
 /--
 The workhorse of one Sinsemilla row, following the constraint program of the halo2 book
 ("Sinsemilla / Constraint program"): for a non-degenerate step `(A ⸭ S) ⸭ A = B`, the
@@ -188,13 +202,15 @@ Hypotheses are exactly the row constraints:
 -/
 theorem step_pinned (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.curve} {m : ℕ}
     (hstep : Orchard.Specs.Sinsemilla.step S A m = some B)
-    {xp lambda1 lambda2 xa' ya' : Ecc.Fp}
-    (hYP : A.y - lambda1 * (A.x - xp) = (S m).y)
+    {xp lambda1 lambda2 xa' YA' : Ecc.Fp}
+    (hYP : 2 * A.y - 2 * lambda1 * (A.x - xp) = 2 * (S m).y)
     (hXP : xp = (S m).x)
     (hYA : 2 * A.y = (lambda1 + lambda2) * (A.x - (lambda1 * lambda1 - A.x - xp)))
     (hSecant : lambda2 * lambda2 = xa' + (lambda1 * lambda1 - A.x - xp) + A.x)
-    (hYCheck : lambda2 * (A.x - xa') = A.y + ya') :
-    xa' = B.x ∧ ya' = B.y := by
+    (hYCheck : 4 * lambda2 * (A.x - xa') = 4 * A.y + 2 * YA') :
+    xa' = B.x ∧ YA' = 2 * B.y := by
+  have hYP' : A.y - lambda1 * (A.x - xp) = (S m).y :=
+    mul_left_cancel₀ two_ne_zero_Fp (by linear_combination hYP)
   open Orchard.Specs.Sinsemilla in
   -- unfold the spec-level step into its two incomplete additions
   unfold Orchard.Specs.Sinsemilla.step at hstep
@@ -251,7 +267,7 @@ theorem step_pinned (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
       show ((S m).x - A.x)⁻¹ * (A.x - (S m).x) = -1 from by
         rw [show A.x - (S m).x = -((S m).x - A.x) by ring, mul_neg,
           inv_mul_cancel₀ (sub_ne_zero.mpr (Ne.symm hAxS))]]
-    linear_combination -hYP
+    linear_combination -hYP'
   -- hence `x_R` and the intermediate `y` are the real intermediate point
   have hxR : lambda1 * lambda1 - A.x - (S m).x = R.x := by
     rw [hl1]
@@ -292,9 +308,181 @@ theorem step_pinned (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
   constructor
   · rw [← hBx, ← hl2]
     linear_combination -hSecant - hxR
-  · rw [← hBy, ← hl2, show lambda2 * lambda2 - A.x - R.x = xa' by
+  · apply mul_left_cancel₀ two_ne_zero_Fp
+    rw [← hBy, ← hl2, show lambda2 * lambda2 - A.x - R.x = xa' by
       linear_combination hSecant + hxR]
     linear_combination -hYCheck
+
+/-- Telescoped base-`2^K` running sum (mirrors the short-mul chain lemma). -/
+private theorem chain_eq_sum {n : ℕ} (z : ℕ → Ecc.Fp) (ms : ℕ → ℕ)
+    (hword : ∀ r < n, z r = (ms r : Ecc.Fp) + 2 ^ K * z (r + 1))
+    (hzn : z n = 0) :
+    z 0 = ((∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp) := by
+  have key : ∀ r ≤ n,
+      z 0 = ((∑ j ∈ Finset.range r, ms j * 2 ^ (K * j) : ℕ) : Ecc.Fp)
+        + z r * ((2 ^ (K * r) : ℕ) : Ecc.Fp) := by
+    intro r hr
+    induction r with
+    | zero => simp
+    | succ v ih =>
+      rw [ih (by omega), hword v (by omega), Finset.sum_range_succ]
+      push_cast
+      rw [show K * (v + 1) = K * v + K by ring]
+      push_cast [pow_add]
+      ring
+  have hn := key n (by omega)
+  rw [hzn, zero_mul, _root_.add_zero] at hn
+  exact hn
+
+/-- The verifier-side contract of one piece, see `step_pinned` for the chain step. The
+chain runs through the first `w` words; the last word's lookup facts are exposed so the
+composing circuit can finish the step with its boundary gate. -/
+def Spec (G : Generators) (w : ℕ) (input : Value Input Ecc.Fp)
+    (output : Value Output Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+  ∃ ms : ℕ → ℕ,
+    (∀ r, ms r < 2 ^ K) ∧
+    input.piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp) ∧
+    output.first.xA = input.xA ∧
+    output.last.xP = (G.S (ms w)).x ∧
+    DoubleAndAdd.yA output.last * (2 : Ecc.Fp)⁻¹
+        - output.last.lambda1 * (output.last.xA - output.last.xP) = (G.S (ms w)).y ∧
+    ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA →
+      2 * A.y = DoubleAndAdd.yA output.first →
+      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+          ((List.range w).map ms) = some B →
+        output.last.xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA output.last
+
+/--
+The chain induction of one piece over cleaned row facts: `dR r` are the per-row cell
+values, `zV r` the running sum values. Splitting this from `soundness` keeps each
+declaration within the elaboration budget.
+-/
+private theorem soundness_aux (G : Generators) (w : ℕ)
+    (dR : ℕ → DoubleAndAddRow Ecc.Fp) (zV : ℕ → Ecc.Fp) (piece xA : Ecc.Fp)
+    (hxA0 : (dR 0).xA = xA)
+    (hz0 : zV 0 = piece)
+    (hL : ∀ r, r < w + 1 → ∃ m : ℕ, m < 2 ^ K ∧
+      (if r = w then zV r else zV r - 2 ^ K * zV (r + 1)) = (m : Ecc.Fp) ∧
+      (dR r).xP = (G.S m).x ∧
+      DoubleAndAdd.yA (dR r) * (2 : Ecc.Fp)⁻¹
+        - (dR r).lambda1 * ((dR r).xA - (dR r).xP) = (G.S m).y)
+    (hG : ∀ r, r < w →
+      ((dR r).lambda2 * (dR r).lambda2
+        = (dR (r + 1)).xA + ((dR r).lambda1 * (dR r).lambda1 - (dR r).xA - (dR r).xP)
+          + (dR r).xA) ∧
+      4 * (dR r).lambda2 * ((dR r).xA - (dR (r + 1)).xA)
+        = 2 * DoubleAndAdd.yA (dR r) + 2 * DoubleAndAdd.yA (dR (r + 1))) :
+    ∃ ms : ℕ → ℕ,
+      (∀ r, ms r < 2 ^ K) ∧
+      piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp) ∧
+      (dR 0).xA = xA ∧
+      (dR w).xP = (G.S (ms w)).x ∧
+      DoubleAndAdd.yA (dR w) * (2 : Ecc.Fp)⁻¹
+        - (dR w).lambda1 * ((dR w).xA - (dR w).xP) = (G.S (ms w)).y ∧
+      ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = xA →
+        2 * A.y = DoubleAndAdd.yA (dR 0) →
+        ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+            ((List.range w).map ms) = some B →
+          (dR w).xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA (dR w) := by
+  -- choose the word values
+  have hLE : ∀ r : Fin (w + 1), ∃ m : ℕ, m < 2 ^ K ∧
+      (if r.val = w then zV r.val else zV r.val - 2 ^ K * zV (r.val + 1)) = (m : Ecc.Fp) ∧
+      (dR r.val).xP = (G.S m).x ∧
+      DoubleAndAdd.yA (dR r.val) * (2 : Ecc.Fp)⁻¹
+        - (dR r.val).lambda1 * ((dR r.val).xA - (dR r.val).xP) = (G.S m).y :=
+    fun r => hL r.val r.isLt
+  choose mf hmf_lt hmf_word hmf_x hmf_y using hLE
+  obtain ⟨ms, hms⟩ : ∃ ms : ℕ → ℕ, ms = fun r =>
+      if h : r < w + 1 then mf ⟨r, h⟩ else 0 := ⟨_, rfl⟩
+  have hms_lt : ∀ r, ms r < 2 ^ K := by
+    intro r
+    simp only [hms]
+    split_ifs
+    · exact hmf_lt _
+    · norm_num [K]
+  have hms_at : ∀ r (hr : r < w + 1), ms r = mf ⟨r, hr⟩ := by
+    intro r hr
+    simp only [hms]
+    rw [dif_pos hr]
+  -- recombination of the piece from its words
+  have hpiece : piece
+      = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp) := by
+    rw [← hz0]
+    have key : ∀ r, r ≤ w →
+        zV 0 = ((∑ j ∈ Finset.range r, ms j * 2 ^ (K * j) : ℕ) : Ecc.Fp)
+          + zV r * ((2 ^ (K * r) : ℕ) : Ecc.Fp) := by
+      intro r hr
+      induction r with
+      | zero => simp
+      | succ v ih =>
+        have h := hmf_word ⟨v, by omega⟩
+        rw [if_neg (show ¬ (⟨v, by omega⟩ : Fin (w + 1)).val = w by
+          simp only [Fin.val_mk]; omega)] at h
+        rw [ih (by omega), Finset.sum_range_succ]
+        rw [← hms_at v (by omega)] at h
+        push_cast
+        rw [show K * (v + 1) = K * v + K by ring]
+        push_cast [pow_add]
+        linear_combination ((2 : Ecc.Fp) ^ (K * v)) * h
+    have hlast : zV w = ((ms w : ℕ) : Ecc.Fp) := by
+      have h := hmf_word ⟨w, by omega⟩
+      rw [if_pos rfl] at h
+      rw [hms_at w (by omega)]
+      exact h
+    rw [key w (by omega), hlast, Finset.sum_range_succ]
+    push_cast
+    ring
+  refine ⟨ms, hms_lt, hpiece, hxA0, ?_, ?_, ?_⟩
+  · rw [hms_at w (by omega)]
+    exact hmf_x ⟨w, by omega⟩
+  · rw [hms_at w (by omega)]
+    exact hmf_y ⟨w, by omega⟩
+  -- the chain invariant over message prefixes
+  intro A hA0 hAx hAyA B hchain
+  have hinv : ∀ r, r ≤ w → ∀ Ar : SWPoint Pallas.curve,
+      Orchard.Specs.Sinsemilla.hashToPoint G.S A ((List.range r).map ms) = some Ar →
+      (dR r).xA = Ar.x ∧ 2 * Ar.y = DoubleAndAdd.yA (dR r) := by
+    intro r
+    induction r with
+    | zero =>
+      intro _ Ar hAr
+      rw [show ((List.range 0).map ms) = ([] : List ℕ) from rfl,
+        Orchard.Specs.Sinsemilla.hashToPoint_nil] at hAr
+      obtain rfl : A = Ar := Option.some.inj hAr
+      exact ⟨hxA0.trans hAx.symm, hAyA⟩
+    | succ r ih =>
+      intro hr Ar hAr
+      rw [List.range_succ] at hAr
+      simp only [List.map_append, List.map_cons, List.map_nil] at hAr
+      rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hAr
+      cases hpre : Orchard.Specs.Sinsemilla.hashToPoint G.S A ((List.range r).map ms) with
+      | none =>
+        rw [hpre] at hAr
+        simp at hAr
+      | some Ap =>
+        rw [hpre] at hAr
+        replace hAr : Orchard.Specs.Sinsemilla.step G.S Ap (ms r) = some Ar := hAr
+        obtain ⟨hxAr, hyAr⟩ := ih (by omega) Ap hpre
+        have hxw := hmf_x ⟨r, by omega⟩
+        have hyw := hmf_y ⟨r, by omega⟩
+        rw [← hms_at r (by omega)] at hxw hyw
+        obtain ⟨hsec, hyck⟩ := hG r (by omega)
+        have hyAr' := hyAr
+        simp only [DoubleAndAdd.yA, DoubleAndAdd.xR] at hyAr'
+        have hyw2 := double_halved hyw
+        have hpin := step_pinned G.S hAr
+          (xp := (dR r).xP) (lambda1 := (dR r).lambda1) (lambda2 := (dR r).lambda2)
+          (xa' := (dR (r + 1)).xA)
+          (YA' := DoubleAndAdd.yA (dR (r + 1)))
+          (by linear_combination hyw2 + hyAr + 2 * (dR r).lambda1 * hxAr)
+          hxw
+          (by linear_combination hyAr'
+            + 2 * ((dR r).lambda1 + (dR r).lambda2) * hxAr)
+          (by linear_combination hsec)
+          (by linear_combination hyck - 4 * (dR r).lambda2 * hxAr - 2 * hyAr)
+        exact ⟨hpin.1, hpin.2.symm⟩
+  exact hinv w (by omega) B hchain
+
 
 end HashPiece
 

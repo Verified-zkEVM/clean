@@ -102,4 +102,33 @@ theorem hashToPoint_cons (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.
   | some acc =>
     rfl
 
+theorem hashToPoint_append (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+    (l₁ l₂ : List ℕ) :
+    hashToPoint S Q (l₁ ++ l₂)
+      = (hashToPoint S Q l₁).bind fun acc => hashToPoint S acc l₂ := by
+  show List.foldl _ _ (l₁ ++ l₂) = _
+  rw [List.foldl_append]
+  show List.foldl _ (hashToPoint S Q l₁) l₂ = _
+  cases h : hashToPoint S Q l₁ with
+  | none =>
+    show List.foldl _ none l₂ = none
+    exact foldl_none S l₂
+  | some acc =>
+    rfl
+
+/-- Peel the last step off a chain. -/
+theorem hashToPoint_concat (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+    (l : List ℕ) (m : ℕ) :
+    hashToPoint S Q (l ++ [m])
+      = (hashToPoint S Q l).bind fun acc => step S acc m := by
+  rw [hashToPoint_append]
+  cases h : hashToPoint S Q l with
+  | none => rfl
+  | some acc =>
+    show hashToPoint S acc [m] = step S acc m
+    rw [hashToPoint_cons]
+    cases h : step S acc m with
+    | none => rfl
+    | some b => rfl
+
 end Orchard.Specs.Sinsemilla
