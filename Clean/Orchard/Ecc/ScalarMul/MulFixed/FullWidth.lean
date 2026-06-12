@@ -123,48 +123,11 @@ def rowValue (B : FixedBase) (s : Fq) (w : ℕ) : CoordsRow Fp where
   yP := (windowPoint B.point w (windowVal s w)).y
   u := B.u w (windowVal s w)
 
-/-- `∑_{j ≤ w} (ks j + 2)·8^j`: the scalar accumulated after windows `0..w`. -/
-def partialSum (ks : ℕ → ℕ) : ℕ → ℕ
-  | 0 => ks 0 + 2
-  | w + 1 => partialSum ks w + (ks (w + 1) + 2) * 8 ^ (w + 1)
-
-theorem partialSum_pos (ks : ℕ → ℕ) (w : ℕ) : 0 < partialSum ks w := by
-  cases w with
-  | zero => simp [partialSum]
-  | succ w => simp [partialSum]
-
-theorem partialSum_lt (ks : ℕ → ℕ) :
-    ∀ w, (∀ j ≤ w, ks j < 8) → partialSum ks w < 2 * 8 ^ (w + 1)
-  | 0, h => by
-    have := h 0 (by omega)
-    simp only [partialSum]
-    omega
-  | w + 1, h => by
-    have ih := partialSum_lt ks w fun j hj => h j (by omega)
-    have hk := h (w + 1) (by omega)
-    have hmul : (ks (w + 1) + 2) * 8 ^ (w + 1) ≤ 10 * 8 ^ (w + 1) :=
-      Nat.mul_le_mul_right _ (by omega)
-    have h16 : 2 * 8 ^ (w + 1 + 1) = 16 * 8 ^ (w + 1) := by ring
-    simp only [partialSum]
-    omega
-
-theorem partialSum_eq_sum (ks : ℕ → ℕ) :
-    ∀ w, partialSum ks w = ∑ j ∈ Finset.range (w + 1), (ks j + 2) * 8 ^ j
-  | 0 => by simp [partialSum]
-  | w + 1 => by rw [partialSum, partialSum_eq_sum ks w, ← Finset.sum_range_succ]
-
 theorem offsetAcc_eq : offsetAcc = ∑ j ∈ Finset.range 84, 2 * 8 ^ j := by
   unfold offsetAcc
   refine Finset.sum_congr rfl fun j _ => ?_
   rw [pow_add, pow_mul]
   norm_num [mul_comm]
-
-private theorem sum_base8 (n : ℕ) :
-    ∀ m, ∑ j ∈ Finset.range m, n / 8 ^ j % 8 * 8 ^ j = n % 8 ^ m
-  | 0 => by simp [Nat.mod_one]
-  | m + 1 => by
-    rw [Finset.sum_range_succ, sum_base8 n m, Nat.mod_pow_succ]
-    ring
 
 /-- The canonical window decomposition recombines to the scalar: the `+2` offsets of the
 lower 84 windows cancel against `offset_acc` in the most significant window. -/

@@ -95,8 +95,16 @@ Current Clean coverage:
   multiplication entry circuit `[scalar] B`, with soundness and completeness proved
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`:
   `GATE Canonicity checks`
-- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.Gate.circuit`:
   `GATE Short fixed-base mul gate`
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.FixedBase`: value-level model of a short
+  fixed base point with its 22-window tables, parameterizing the short entry circuit
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.circuit`: `FixedPointShort::mul`
+  (`mul_fixed/short.rs::Config::assign`), the signed short fixed-base scalar
+  multiplication entry circuit `[±magnitude] B`, with soundness and completeness proved;
+  composes the strict running-sum decomposition (`GATE range check` and
+  `GATE Running sum coordinates check` per window), incomplete and complete addition,
+  and the final conditional negation gate
 
 ### Poseidon
 
@@ -189,25 +197,27 @@ callers.
 
 ### Lookup And Range-Check Conformance
 
-Clean has arithmetic stand-ins for some lookup-backed range checks:
+Clean has an arithmetic stand-in for one lookup-backed range check:
 
-- `GATE range check`
 - `LookupRangeCheck.shortRangeCircuit`
 
 Source-conformant repairs should use Clean `lookup` and explicit `Table` definitions
 where Halo2 uses lookup tables. This is required before higher-level range-dependent
 gadgets can be considered source-conformant.
 
+Note that `GATE range check` (`decompose_running_sum.rs`) is *not* lookup-backed in
+halo2: it is the polynomial constraint `range_check(word, 8)` and the Clean port is
+source-conformant.
+
 ### Scalar Multiplication Entry APIs
 
-Full-width fixed-base mul is the first source-level entry circuit; the rest of the
-scalar-mul coverage is row-level gate assertions. Missing source-level entry circuits:
+Full-width and signed short fixed-base mul are source-level entry circuits; the rest of
+the scalar-mul coverage is row-level gate assertions. Missing source-level entry
+circuits:
 
 - `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by
   `ecc/chip/mul.rs::Config::assign`: variable-base scalar multiplication
   `[scalar] base`.
-- `FixedPointShort::mul`, implemented by `ecc/chip/mul_fixed/short.rs`: signed short
-  fixed-base scalar multiplication used by `ValueCommitV`.
 - `FixedPointBaseField::mul`, implemented by
   `ecc/chip/mul_fixed/base_field_elem.rs`: fixed-base multiplication by a base-field
   element, used by nullifier derivation.

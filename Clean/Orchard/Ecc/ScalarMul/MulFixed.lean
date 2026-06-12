@@ -97,23 +97,29 @@ end Coords
 
 namespace RunningSumCoords
 
-structure Row (F : Type) extends CoordsRow F where
+/-- The advice cells queried by the gate: the running sum `z` values in the `window`
+column at the current and next row, and the window-table point cells of the current
+row. The window value itself is not a cell; it is derived as `z_cur - z_next · 8`. -/
+structure Row (F : Type) where
   zCur : F
   zNext : F
+  xP : F
+  yP : F
+  u : F
 deriving ProvableStruct
 
 def word {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : K :=
   row.zCur - row.zNext * 8
 
 def coordsRow {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : CoordsRow K :=
-  { row.toCoordsRow with window := word row }
+  { window := word row, xP := row.xP, yP := row.yP, u := row.u }
 
 def Spec (params : CoordsParams Fp) (row : Row Fp) : Prop :=
   Coords.Spec params (coordsRow row)
 
 def main (params : CoordsParams Fp) (row : Var Row Fp) :
     Circuit Fp Unit := do
-  Coords.circuit params { row.toCoordsRow with window := word row }
+  Coords.circuit params { window := word row, xP := row.xP, yP := row.yP, u := row.u }
 
 def circuit (params : CoordsParams Fp) : FormalAssertion Fp Row where
   name := "GATE Running sum coordinates check"
@@ -182,6 +188,44 @@ theorem windowScalar_val {w k : ℕ} (hw : w < 84) (hk : k < 8) :
   rw [if_neg (by omega),
     show ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) by push_cast; ring,
     ZMod.val_natCast_of_lt hbound]
+
+/-- `∑_{j ≤ w} (ks j + 2)·8^j`: the scalar accumulated after windows `0..w`, where each
+window `j` contributes `(ks j + 2)·8^j` (`mul_fixed.rs::process_lower_bits`). -/
+def partialSum (ks : ℕ → ℕ) : ℕ → ℕ
+  | 0 => ks 0 + 2
+  | w + 1 => partialSum ks w + (ks (w + 1) + 2) * 8 ^ (w + 1)
+
+theorem partialSum_pos (ks : ℕ → ℕ) (w : ℕ) : 0 < partialSum ks w := by
+  cases w with
+  | zero => simp [partialSum]
+  | succ w => simp [partialSum]
+
+theorem partialSum_lt (ks : ℕ → ℕ) :
+    ∀ w, (∀ j ≤ w, ks j < 8) → partialSum ks w < 2 * 8 ^ (w + 1)
+  | 0, h => by
+    have := h 0 (by omega)
+    simp only [partialSum]
+    omega
+  | w + 1, h => by
+    have ih := partialSum_lt ks w fun j hj => h j (by omega)
+    have hk := h (w + 1) (by omega)
+    have hmul : (ks (w + 1) + 2) * 8 ^ (w + 1) ≤ 10 * 8 ^ (w + 1) :=
+      Nat.mul_le_mul_right _ (by omega)
+    have h16 : 2 * 8 ^ (w + 1 + 1) = 16 * 8 ^ (w + 1) := by ring
+    simp only [partialSum]
+    omega
+
+theorem partialSum_eq_sum (ks : ℕ → ℕ) :
+    ∀ w, partialSum ks w = ∑ j ∈ Finset.range (w + 1), (ks j + 2) * 8 ^ j
+  | 0 => by simp [partialSum]
+  | w + 1 => by rw [partialSum, partialSum_eq_sum ks w, ← Finset.sum_range_succ]
+
+theorem sum_base8 (n : ℕ) :
+    ∀ m, ∑ j ∈ Finset.range m, n / 8 ^ j % 8 * 8 ^ j = n % 8 ^ m
+  | 0 => by simp [Nat.mod_one]
+  | m + 1 => by
+    rw [Finset.sum_range_succ, sum_base8 n m, Nat.mod_pow_succ]
+    ring
 
 /--
 A fixed base for full-width fixed-base scalar multiplication: a generator of the Pallas
