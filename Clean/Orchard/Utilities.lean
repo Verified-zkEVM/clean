@@ -699,43 +699,6 @@ def circuit (k : ℕ) : FormalAssertion F ShortLookupBitshift where
 /-!
 Reference:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/lookup_range_check.rs`
-- `LookupRangeCheck4_5BConfig::short_range_check`
-- combined lookup tagged with 4- and 5-bit table rows
-
-The Halo2 source enforces the short 4- and 5-bit cases with a tagged lookup table. This
-Clean approximation models the same range membership as a polynomial over the allowed
-values.
--/
-
-def shortRangeSpec (numBits : ℕ) (input : ShortRangeCheck F) : Prop :=
-  RunningSum.InRange (2 ^ numBits) input.word
-
-def shortRangeMain (numBits : ℕ) (input : Var ShortRangeCheck F) : Circuit F Unit := do
-  assertZero (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input.word)
-
-def shortRangeCircuit (numBits : ℕ) : FormalAssertion F ShortRangeCheck where
-  main := shortRangeMain numBits
-  Spec := shortRangeSpec numBits
-  soundness := by
-    circuit_proof_start [shortRangeMain, shortRangeSpec, RunningSum.rangeCheckPoly,
-      RunningSum.rangeCheckPolyExpr, RunningSum.InRange]
-    change Expression.eval env
-        (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input_var_word) = 0 at h_holds
-    rw [RunningSum.eval_rangeCheckPolyExpr] at h_holds
-    rw [h_input] at h_holds
-    exact (RunningSum.rangeCheckPoly_eq_zero_iff (2 ^ numBits) input_word).mp h_holds
-  completeness := by
-    circuit_proof_start [shortRangeMain, shortRangeSpec, RunningSum.rangeCheckPoly,
-      RunningSum.rangeCheckPolyExpr, RunningSum.InRange]
-    change Expression.eval env.toEnvironment
-        (RunningSum.rangeCheckPolyExpr (2 ^ numBits) input_var_word) = 0
-    rw [RunningSum.eval_rangeCheckPolyExpr]
-    rw [h_input]
-    exact (RunningSum.rangeCheckPoly_eq_zero_iff (2 ^ numBits) input_word).mpr h_spec
-
-/-!
-Reference:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/lookup_range_check.rs`
 - `PallasLookupRangeCheck::copy_check` / `range_check` (with `strict = false`)
 
 `copy_check` copies an element into a fresh running-sum cell `z_0` and decomposes it
@@ -766,6 +729,235 @@ def tableIdx : Table Fp field := .fromStatic {
     · intro h
       exact ⟨⟨x.val, h⟩, (ZMod.natCast_zmod_val x).symm⟩
 }
+
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/lookup_range_check.rs`
+- `LookupRangeCheckConfig::short_range_check`
+
+The generic short range-check path uses two lookups into `table_idx`: one for the
+word itself and one for `word * 2^(K - num_bits)`, plus the `Short lookup bitshift`
+gate tying the assigned shifted word to the original word.
+-/
+
+def shortRangeSpec (numBits : ℕ) (input : ShortRangeCheck Fp) : Prop :=
+  input.word.val < 2 ^ numBits
+
+private theorem pow_two_pos (n : ℕ) : 0 < 2 ^ n := by
+  exact pow_pos (by norm_num : (0 : ℕ) < 2) n
+
+private theorem shortRange_soundness_aux (numBits : ℕ) (hNumBits : numBits ≤ K)
+    (word shifted : Fp)
+    (hWord : word.val < 2 ^ K)
+    (hShifted : shifted.val < 2 ^ K)
+    (hEq : shifted = word * (2 ^ (K - numBits) : Fp)) :
+    word.val < 2 ^ numBits := by
+  have hCard : 2 ^ K * 2 ^ K < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  have hProdLtCard : word.val * 2 ^ (K - numBits) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    calc
+      word.val * 2 ^ (K - numBits) < 2 ^ K * 2 ^ K := by
+        exact Nat.mul_lt_mul_of_lt_of_le hWord
+          (Nat.pow_le_pow_right (by norm_num) (Nat.sub_le K numBits))
+          (pow_two_pos _)
+      _ < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := hCard
+  have hShiftedVal :
+      shifted.val = word.val * 2 ^ (K - numBits) := by
+    rw [hEq, ← ZMod.natCast_zmod_val word]
+    have hPowCast : (2 ^ (K - numBits) : Fp) = ((2 ^ (K - numBits) : ℕ) : Fp) := by
+      norm_num
+    rw [hPowCast, ← Nat.cast_mul]
+    rw [ZMod.val_natCast_of_lt word.val_lt]
+    exact ZMod.val_natCast_of_lt hProdLtCard
+  by_contra h
+  have hge : 2 ^ numBits ≤ word.val := Nat.le_of_not_gt h
+  have hle : 2 ^ K ≤ word.val * 2 ^ (K - numBits) := by
+    calc
+      2 ^ K = 2 ^ numBits * 2 ^ (K - numBits) := by
+        rw [Nat.mul_comm, ← pow_add]
+        congr 1
+        omega
+      _ ≤ word.val * 2 ^ (K - numBits) := by
+        exact Nat.mul_le_mul_right _ hge
+  rw [hShiftedVal] at hShifted
+  exact Nat.not_lt_of_ge hle hShifted
+
+private theorem shortRange_completeness_shifted (numBits : ℕ) (hNumBits : numBits ≤ K)
+    (word : Fp) (hWord : word.val < 2 ^ numBits) :
+    (word * (2 ^ (K - numBits) : Fp)).val < 2 ^ K := by
+  have hProdLt : word.val * 2 ^ (K - numBits) < 2 ^ K := by
+    calc
+      word.val * 2 ^ (K - numBits) < 2 ^ numBits * 2 ^ (K - numBits) := by
+        exact Nat.mul_lt_mul_of_pos_right hWord (pow_two_pos _)
+      _ = 2 ^ K := by
+        rw [Nat.mul_comm, ← pow_add]
+        congr 1
+        omega
+  have hProdLtCard :
+      word.val * 2 ^ (K - numBits) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_trans hProdLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  rw [← ZMod.natCast_zmod_val word]
+  have hPowCast : (2 ^ (K - numBits) : Fp) = ((2 ^ (K - numBits) : ℕ) : Fp) := by
+    norm_num
+  rw [hPowCast, ← Nat.cast_mul]
+  rw [ZMod.val_natCast_of_lt hProdLtCard]
+  exact hProdLt
+
+def shortRangeMain (numBits : ℕ) (_hNumBits : numBits ≤ K)
+    (input : Var ShortRangeCheck Fp) : Circuit Fp Unit := do
+  lookup tableIdx input.word
+  let shiftedWord ← witnessField fun env =>
+    env input.word * (2 ^ (K - numBits) : Fp)
+  lookup tableIdx shiftedWord
+  circuit K {
+    word := input.word
+    shiftedWord
+    invTwoPowS := Expression.const ((2 ^ numBits : Fp)⁻¹)
+  }
+
+def shortRangeCircuit (numBits : ℕ) (hNumBits : numBits ≤ K) :
+    FormalAssertion Fp ShortRangeCheck where
+  main := shortRangeMain numBits hNumBits
+  Spec := shortRangeSpec numBits
+  soundness := by
+    circuit_proof_start [shortRangeMain, shortRangeSpec, tableIdx, bitshiftSpec, twoPowK]
+    obtain ⟨hLookupWord, hRest⟩ := h_holds
+    obtain ⟨hLookupShifted, hBitshift⟩ := hRest
+    have hBitshift := hBitshift trivial
+    simp only [circuit_norm] at hLookupWord hLookupShifted hBitshift h_input
+    constructor
+    · exact shortRange_soundness_aux numBits hNumBits input_word (env.get i₀)
+        hLookupWord hLookupShifted (by
+          change env.get i₀ = input_word * (2 ^ K : Fp) * ((2 ^ numBits : Fp)⁻¹) at hBitshift
+          rw [hBitshift]
+          have hPowLtCard : 2 ^ numBits < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+            exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hNumBits)
+              (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+          have hPowNe : (2 ^ numBits : Fp) ≠ 0 := by
+            intro hzero
+            have hzero' : ((2 ^ numBits : ℕ) : Fp) = 0 := by
+              simpa using hzero
+            have hdiv := (ZMod.natCast_eq_zero_iff (2 ^ numBits)
+              CompElliptic.Fields.Pasta.PALLAS_BASE_CARD).mp hzero'
+            exact (Nat.not_dvd_of_pos_of_lt (pow_two_pos _) hPowLtCard) hdiv
+          have hPowSplitFp :
+              (2 ^ K : Fp) = (2 ^ (K - numBits) : Fp) * (2 ^ numBits : Fp) := by
+            rw [← pow_add]
+            congr 1
+            omega
+          rw [hPowSplitFp]
+          field_simp [hPowNe])
+    · exact Or.inr trivial
+  completeness := by
+    circuit_proof_start [shortRangeMain, shortRangeSpec, tableIdx, bitshiftSpec, twoPowK]
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · exact lt_of_lt_of_le h_spec (Nat.pow_le_pow_right (by norm_num) hNumBits)
+    · rw [h_env]
+      exact shortRange_completeness_shifted numBits hNumBits input_word h_spec
+    · trivial
+    · change env.get i₀ = input_word * (2 ^ K : Fp) * ((2 ^ numBits : Fp)⁻¹)
+      rw [h_env]
+      have hPowLtCard : 2 ^ numBits < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+        exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hNumBits)
+          (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+      have hPowNe : (2 ^ numBits : Fp) ≠ 0 := by
+        intro hzero
+        have hzero' : ((2 ^ numBits : ℕ) : Fp) = 0 := by
+          simpa using hzero
+        have hdiv := (ZMod.natCast_eq_zero_iff (2 ^ numBits)
+          CompElliptic.Fields.Pasta.PALLAS_BASE_CARD).mp hzero'
+        exact (Nat.not_dvd_of_pos_of_lt (pow_two_pos _) hPowLtCard) hdiv
+      have hPowSplitFp :
+          (2 ^ K : Fp) = (2 ^ (K - numBits) : Fp) * (2 ^ numBits : Fp) := by
+        rw [← pow_add]
+        congr 1
+        omega
+      rw [hPowSplitFp]
+      field_simp [hPowNe]
+
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/lookup_range_check.rs`
+- `LookupRangeCheck4_5BConfig::short_range_check`
+- combined lookup tagged with 4- and 5-bit table rows
+
+The optimized path for `num_bits = 4` and `num_bits = 5` skips the shifted-word row
+and instead looks up `(word, num_bits)` in a tagged duplicate of `table_idx`.
+-/
+
+def taggedTable : Table Fp fieldPair := .fromStatic {
+  name := "table_idx_with_range_check_tag"
+  length := 2 ^ 4 + 2 ^ 5
+  row i :=
+    if h : i.val < 2 ^ 4 then
+      ((i.val : Fp), (4 : Fp))
+    else
+      (((i.val - 2 ^ 4 : ℕ) : Fp), (5 : Fp))
+  index := fun x => if x.2 = (4 : Fp) then x.1.val else 2 ^ 4 + x.1.val
+  Spec := fun x =>
+    (x.2 = (4 : Fp) ∧ x.1.val < 2 ^ 4) ∨
+      (x.2 = (5 : Fp) ∧ x.1.val < 2 ^ 5)
+  contains_iff := by
+    intro x
+    constructor
+    · rintro ⟨i, rfl⟩
+      by_cases hi : i.val < 2 ^ 4
+      · left
+        simp only [hi, dite_true, true_and]
+        rw [ZMod.val_natCast_of_lt (lt_trans hi (by
+          norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))]
+        exact hi
+      · right
+        have hsub : i.val - 2 ^ 4 < 2 ^ 5 := by
+          have hi' := i.is_lt
+          omega
+        simp only [hi, dite_false, true_and]
+        rw [ZMod.val_natCast_of_lt (lt_trans hsub (by
+          norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))]
+        exact hsub
+    · intro h
+      rcases h with ⟨htag, hword⟩ | ⟨htag, hword⟩
+      · refine ⟨⟨x.1.val, by omega⟩, ?_⟩
+        simp only
+        rw [dif_pos hword]
+        ext <;> simp [htag]
+      · refine ⟨⟨2 ^ 4 + x.1.val, by omega⟩, ?_⟩
+        simp only
+        have hnot : ¬2 ^ 4 + x.1.val < 2 ^ 4 := by omega
+        rw [dif_neg hnot]
+        ext <;> simp [htag]
+}
+
+def taggedShortRangeMain (numBits : ℕ) (_hBits : numBits = 4 ∨ numBits = 5)
+    (input : Var ShortRangeCheck Fp) : Circuit Fp Unit := do
+  lookup taggedTable (input.word, Expression.const (numBits : Fp))
+
+private theorem tag_four_ne_five : (4 : Fp) ≠ 5 := by
+  native_decide
+
+private theorem tag_five_ne_four : (5 : Fp) ≠ 4 := by
+  exact fun h => tag_four_ne_five h.symm
+
+def taggedShortRangeCircuit (numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
+    FormalAssertion Fp ShortRangeCheck where
+  main := taggedShortRangeMain numBits hBits
+  Spec := shortRangeSpec numBits
+  soundness := by
+    circuit_proof_start [taggedShortRangeMain, shortRangeSpec, taggedTable]
+    rcases hBits with rfl | rfl
+    · rcases h_holds with h | h
+      · exact h.2
+      · exfalso
+        exact tag_four_ne_five h.1
+    · rcases h_holds with h | h
+      · exfalso
+        exact tag_five_ne_four h.1
+      · exact h.2
+  completeness := by
+    circuit_proof_start [taggedShortRangeMain, shortRangeSpec, taggedTable]
+    rcases hBits with rfl | rfl
+    · exact Or.inl ⟨by norm_num, h_spec⟩
+    · exact Or.inr ⟨by norm_num, h_spec⟩
 
 namespace CopyCheck
 

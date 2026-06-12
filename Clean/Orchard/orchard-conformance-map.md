@@ -209,13 +209,14 @@ callers.
 
 ### Lookup And Range-Check Conformance
 
-Clean has an arithmetic stand-in for one lookup-backed range check:
+Clean now models the short lookup-backed range-check paths with Clean `lookup`
+operations:
 
-- `LookupRangeCheck.shortRangeCircuit`
-
-Source-conformant repairs should use Clean `lookup` and explicit `Table` definitions
-where Halo2 uses lookup tables. This is required before higher-level range-dependent
-gadgets can be considered source-conformant.
+- `LookupRangeCheck.shortRangeCircuit`: looks up `word` in `table_idx`, witnesses and
+  looks up `word * 2^(K - num_bits)`, and composes `GATE Short lookup bitshift`.
+- `LookupRangeCheck.taggedShortRangeCircuit`: models
+  `LookupRangeCheck4_5BConfig::short_range_check` for `num_bits = 4` and `5` with a
+  two-column tagged table `(table_idx, table_range_check_tag)`.
 
 Note that `GATE range check` (`decompose_running_sum.rs`) is _not_ lookup-backed in
 halo2: it is the polynomial constraint `range_check(word, 8)` and the Clean port is
