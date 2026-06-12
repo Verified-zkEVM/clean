@@ -152,6 +152,11 @@ Source:
 
 Current Clean coverage:
 
+- `Clean.Orchard.Gadget.ValueCommitOrchard.circuit`: `gadget.rs::value_commit_orchard`,
+  the value-commitment entry circuit
+  `cv = [v] ValueCommitV + [rcv] ValueCommitR`, composing the short and full-width
+  fixed-base mul entry circuits and complete addition, with soundness and completeness
+  proved
 - `Clean.Orchard.ActionChecks.circuit`: `GATE Orchard circuit checks`
 - `Clean.Orchard.NoteCommit.DecomposeB.circuit`:
   `GATE NoteCommit MessagePiece b`
@@ -273,9 +278,9 @@ fixed-base scalar multiplication, and source-shaped `hash_to_point` composition.
 
 ### Orchard Entry APIs
 
-Missing source-level APIs:
+`value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`). Missing
+source-level APIs:
 
-- `value_commit_orchard`
 - `derive_nullifier`
 - spend-authority key derivation in `Circuit::synthesize`
 - address-integrity wiring in `Circuit::synthesize`
@@ -285,7 +290,6 @@ Missing source-level APIs:
 
 These must compose source-conformant child circuits. In particular:
 
-- `value_commit_orchard` is `[v] ValueCommitV + [rcv] ValueCommitR`.
 - `derive_nullifier` is `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`.
 - Spend authority is `[alpha] SpendAuthG + ak_P`.
 - Address integrity computes `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`.
