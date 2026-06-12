@@ -8,9 +8,7 @@ This module mirrors `halo2_gadgets/src/poseidon.rs` around `Sponge`,
 `P128Pow5T3` instance.
 -/
 
-namespace Orchard
-namespace Poseidon
-namespace Sponge
+namespace Orchard.Poseidon.Sponge
 
 /-- The rate-2 part of a P128 Poseidon state. -/
 structure Rate2 (F : Type) where
@@ -138,6 +136,4 @@ def circuit : FormalCircuit Fp Permute.State Rate2 where
 
 end GetOutput
 
-end Sponge
-end Poseidon
-end Orchard
+end Orchard.Poseidon.Sponge

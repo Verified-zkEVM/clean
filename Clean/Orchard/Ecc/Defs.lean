@@ -57,10 +57,6 @@ end Point
 
 end Ecc
 
-/-- Orchard's Pallas base field, made available at the Orchard namespace for concise gadget code. -/
-abbrev Fp := Ecc.Fp
-
-/-- Orchard's Pallas scalar field, made available at the Orchard namespace for concise gadget code. -/
-abbrev Fq := Ecc.Fq
+export Ecc (Fp Fq)
 
 end Orchard

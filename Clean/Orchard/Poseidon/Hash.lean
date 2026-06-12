@@ -7,9 +7,7 @@ This module mirrors `halo2_gadgets/src/poseidon.rs::Hash` for the source-shaped 
 that can be expressed once a full padded rate-2 block is available.
 -/
 
-namespace Orchard
-namespace Poseidon
-namespace Hash
+namespace Orchard.Poseidon.Hash
 
 namespace Init
 
@@ -42,7 +40,7 @@ def value (roundConstants : Nat → Permute.State Fp) (capacity : Fp)
     (block : Sponge.Rate2 Fp) : Fp :=
   let initial : Permute.State Fp := { x0 := 0, x1 := 0, x2 := capacity }
   let absorbed := Sponge.AddInput.value { initialState := initial, input := block }
-  let permuted := Permute.permuteP128Value roundConstants absorbed
+  let permuted := Permute.value roundConstants absorbed
   (Sponge.GetOutput.value permuted).x0
 
 /-- `Hash::hash` for one already-padded rate-2 block. -/
@@ -120,7 +118,7 @@ def blockVar {L : Nat} (message : Vector (Expression Fp) L) (i : Nat) :
 
 /-- Value-level state after absorbing and permuting one padded block. -/
 def absorbPermuteValue (input : Sponge.AddInputInput Fp) : Permute.State Fp :=
-  Permute.permuteP128ConcreteValue (Sponge.AddInput.value input)
+  Permute.concreteValue (Sponge.AddInput.value input)
 
 namespace AbsorbPermute
 
@@ -231,6 +229,4 @@ hashes are already packaged by `HashPaddedBlock.circuit`.
 
 end ConstantLength
 
-end Hash
-end Poseidon
-end Orchard
+end Orchard.Poseidon.Hash

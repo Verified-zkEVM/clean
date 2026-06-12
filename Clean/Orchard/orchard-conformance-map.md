@@ -110,20 +110,18 @@ Current Clean coverage:
 - `Clean.Orchard.Poseidon.Permute.P128Pow5T3.roundConstants` / `mds` / `mdsInv`:
   explicit Pallas-base constants ported from `halo2_poseidon/src/fp.rs`, with proofs
   that `MDS_INV * MDS = I` and `MDS * MDS_INV = I`.
-- `Clean.Orchard.Poseidon.Permute.permuteValue`: plain Lean implementation of the
-  width-3/rate-2 `Pow5Chip::permute` schedule.
-- `Clean.Orchard.Poseidon.Permute.FullRound.circuit`: packaged full-round loop-body
-  subcircuit proving one step against `fullRoundValue`.
+- `Clean.Orchard.Poseidon.Permute.value`: plain Lean implementation of the
+  P128 width-3/rate-2 `Pow5Chip::permute` schedule.
+- `Clean.Orchard.Poseidon.FullRound.circuit`: packaged full-round loop-body subcircuit
+  proving one step against `FullRound.value`.
 - `Clean.Orchard.Poseidon.Permute.fullRounds4Circuit`: packaged fixed `foldl`
-  subcircuit for the four full rounds used by each half of `Pow5Chip::permute`, proving
-  one half against `fullRounds4Value`.
-- `Clean.Orchard.Poseidon.Permute.PartialRounds.circuitP128`: packaged P128
-  partial-round-row subcircuit proving one row against `partialRoundValue`.
+  subcircuit for the four full rounds used by each half of `Pow5Chip::permute`.
+- `Clean.Orchard.Poseidon.PartialRounds.circuitP128`: packaged P128 partial-round-row
+  subcircuit proving one row against `PartialRounds.value`.
 - `Clean.Orchard.Poseidon.Permute.partialRoundRows28P128Circuit`: packaged fixed
-  `foldl` subcircuit for the 28 P128 partial-round rows, proving the middle section
-  against `partialRoundRows28P128Value`.
+  `foldl` subcircuit for the 28 P128 partial-round rows.
 - `Clean.Orchard.Poseidon.Permute.mainP128Circuit`: packaged P128-specialized
-  `Pow5Chip::permute` circuit proving the full schedule against `permuteP128Value`.
+  `Pow5Chip::permute` circuit proving the full schedule against `Permute.value`.
 - `Clean.Orchard.Poseidon.Permute.mainP128ConcreteCircuit`: concrete specialization of
   the P128 permutation package using the ported Pallas round constants.
 - `Clean.Orchard.Poseidon.Sponge.InitialState.circuit`: packaged width-3/rate-2
