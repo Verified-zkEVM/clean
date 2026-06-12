@@ -476,6 +476,101 @@ private def rowD (env : Environment Fp) (i₀ n j : ℕ) : Sinsemilla.DoubleAndA
   { xA := rowXA env i₀ n j, xP := rowXP env i₀ n j,
     lambda1 := rowL1 env i₀ n j, lambda2 := rowL2 env i₀ n j }
 
+/--
+The chain induction of variable-base double-and-add over cleaned row facts:
+`XA, XP, YP, L1, L2` are the per-row cell values, `YAD r` the derived `Y_A` expression
+value of row `r` (with `YAD (n+1)` the witnessed doubled final `y`), and `bits` the bit
+values. Splitting this from `soundness` keeps each declaration within the elaboration
+budget.
+-/
+private theorem soundness_aux (n : ℕ) (P : SWPoint Pallas.curve) (hP : P ≠ 0)
+    (m : ℕ) (h2 : 2 ≤ m) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254)
+    (XA XP YP L1 L2 YAD : ℕ → Fp) (bits : ℕ → Bool)
+    (hxA0 : XA 0 = (m • P).x)
+    (hYAD0 : YAD 0 = 2 * (m • P).y)
+    (hyad : ∀ r, r ≤ n → YAD r = (L1 r + L2 r) * (XA r - (L1 r * L1 r - XA r - XP r)))
+    (hxp : ∀ r, r ≤ n → XP r = P.x)
+    (hyp : ∀ r, r ≤ n → YP r = P.y)
+    (hg1 : ∀ r, r ≤ n → 2 * L1 r * (XA r - XP r) +
+      2 * (((if bits r then 1 else 0) * 2 - 1) * YP r) = YAD r)
+    (hsec : ∀ r, r ≤ n → L2 r * L2 r
+      = XA (r + 1) + (L1 r * L1 r - XA r - XP r) + XA r)
+    (hg2 : ∀ r, r ≤ n → 2 * L2 r * (XA r - XA (r + 1)) = YAD r + YAD (r + 1)) :
+    XA (n + 1) = (accScalar m bits (n + 1) • P).x ∧
+      YAD (n + 1) = 2 * (accScalar m bits (n + 1) • P).y := by
+  -- the inductive invariant: row r enters with the accumulator `[accScalar m bits r] P`
+  suffices hinv : ∀ r, r ≤ n + 1 →
+      XA r = (accScalar m bits r • P).x ∧ YAD r = 2 * (accScalar m bits r • P).y by
+    exact hinv (n + 1) (by omega)
+  intro r hr
+  induction r with
+  | zero => exact ⟨hxA0, hYAD0⟩
+  | succ v ih =>
+    obtain ⟨ihx, ihy⟩ := ih (by omega)
+    have hv : v ≤ n := by omega
+    -- bounds on the accumulated multiplier
+    have hMle : accScalar m bits v ≤ 2 ^ v * (m + 1) - 1 := accScalar_le bits v
+    have hM2 : 2 ≤ accScalar m bits v := accScalar_two_le h2 bits v
+    have hpow : 2 ^ v * (m + 1) ≤ 2 ^ (n + 1) * (m + 1) :=
+      Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by omega))
+    have hMbound : 2 * accScalar m bits v + 1 < PALLAS_SCALAR_CARD := by
+      have h254 := pow254_lt_card
+      have hsplit : 2 ^ (n + 2) * (m + 1) = 2 * (2 ^ (n + 1) * (m + 1)) := by ring
+      omega
+    -- the non-degenerate spec-level step
+    have hstep := step_nsmul hP bits hM2 hMbound v
+    -- the entering accumulator point
+    set M := accScalar m bits v with hM
+    have hA0 : M • P ≠ 0 :=
+      Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)
+    -- the row equations in step_pinned's shape
+    have hstepXP : XP v = (stepPoint P bits v).x := by
+      rw [hxp v hv]
+      unfold stepPoint
+      rcases Bool.dichotomy (bits v) with hb | hb <;> rw [hb]
+      · rfl
+      · rfl
+    have hstepYP : (M • P).y - L1 v * ((M • P).x - XP v) = (stepPoint P bits v).y := by
+      have h := hg1 v hv
+      rw [← ihx]
+      unfold stepPoint
+      rcases Bool.dichotomy (bits v) with hb | hb <;>
+        rw [hb] at h ⊢ <;>
+        simp only [Bool.false_eq_true, if_false, if_true] at h ⊢
+      · show _ = -P.y
+        apply mul_left_cancel₀ Add.pallas_two_ne_zero
+        linear_combination -h - ihy - 2 * hyp v hv
+      · show _ = P.y
+        apply mul_left_cancel₀ Add.pallas_two_ne_zero
+        linear_combination -h - ihy + 2 * hyp v hv
+    have hstepYA : 2 * (M • P).y
+        = (L1 v + L2 v) * ((M • P).x - (L1 v * L1 v - (M • P).x - XP v)) := by
+      rw [← ihx, ← ihy]
+      exact hyad v hv
+    have hstepSec : L2 v * L2 v
+        = XA (v + 1) + (L1 v * L1 v - (M • P).x - XP v) + (M • P).x := by
+      rw [← ihx]
+      exact hsec v hv
+    have hstepYC : L2 v * ((M • P).x - XA (v + 1))
+        = (M • P).y + YAD (v + 1) * (2 : Fp)⁻¹ := by
+      have h := hg2 v hv
+      rw [← ihx]
+      have h2ne : (2 : Fp) ≠ 0 := Add.pallas_two_ne_zero
+      field_simp
+      linear_combination h + ihy
+    have hpinned := Sinsemilla.HashPiece.step_pinned (stepPoint P bits)
+      hstep hstepYP hstepXP hstepYA hstepSec hstepYC
+    have haccv : accScalar m bits (v + 1) = 2 * M + (if bits v then 1 else 0) * 2 - 1 :=
+      rfl
+    constructor
+    · rw [haccv]
+      exact hpinned.1
+    · rw [haccv]
+      have h := hpinned.2
+      have h2ne : (2 : Fp) ≠ 0 := Add.pallas_two_ne_zero
+      field_simp at h
+      linear_combination h
+
 theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
       (Spec n) := by
