@@ -155,29 +155,76 @@ def circuit : FormalCircuit Ecc.Fp Sponge.AddInputInput Permute.State where
 
 end AbsorbPermute
 
+/-- Value-level body of one `ConstantLength<L>` absorb/permute step. The loop
+length `m` is explicit so the scheduler proof can induct on it. -/
+def stepValueAt {L m : Nat} (message : Vector Ecc.Fp L) (state : Permute.State Ecc.Fp)
+    (i : Fin m) : Permute.State Ecc.Fp :=
+  absorbPermuteValue { initialState := state, input := blockValue message i.val }
+
+/-- Circuit-level body of one `ConstantLength<L>` absorb/permute step. The loop length
+`m` is explicit so the scheduler proof can induct on it. -/
+def stepCircuitAt {L m : Nat} (message : Vector (Expression Ecc.Fp) L)
+    (state : Var Permute.State Ecc.Fp) (i : Fin m) :
+    Circuit Ecc.Fp (Var Permute.State Ecc.Fp) :=
+  AbsorbPermute.circuit { initialState := state, input := blockVar message i.val }
+
+/-- Value-level step at the actual `ConstantLength<L>` block count. -/
+def stepValue {L : Nat} (message : Vector Ecc.Fp L) :
+    Permute.State Ecc.Fp → Fin (blockCount L) → Permute.State Ecc.Fp :=
+  stepValueAt message
+
+/-- Circuit-level step at the actual `ConstantLength<L>` block count. -/
+def stepCircuit {L : Nat} (message : Vector (Expression Ecc.Fp) L) :
+    Var Permute.State Ecc.Fp → Fin (blockCount L) → Circuit Ecc.Fp (Var Permute.State Ecc.Fp) :=
+  stepCircuitAt message
+
 /-- Value-level `Hash::hash` for `ConstantLength<L>`. -/
 def value {L : Nat} (message : Vector Ecc.Fp L) : Ecc.Fp :=
   let initial : Permute.State Ecc.Fp := { x0 := 0, x1 := 0, x2 := capacity L }
-  let finalState := Fin.foldl (blockCount L)
-    (fun state i => absorbPermuteValue { initialState := state, input := blockValue message i.val })
-    initial
+  let finalState := Fin.foldl (blockCount L) (stepValue message) initial
   (Sponge.GetOutput.value finalState).x0
 
 /-- Source-shaped `Hash::hash` for `ConstantLength<L>`, specialized to P128Pow5T3. -/
 def main {L : Nat} (message : Vector (Expression Ecc.Fp) L) :
     Circuit Ecc.Fp (Expression Ecc.Fp) := do
   let initial ← Init.circuit (capacity L) ()
-  let finalState ← Circuit.foldlRange (blockCount L) initial
-    (fun state i => AbsorbPermute.circuit { initialState := state, input := blockVar message i.val })
+  let finalState ← Circuit.foldlRange (blockCount L) initial (stepCircuit message)
     (by
       apply Circuit.ConstantLength.fromConstantLength'
-      simp [AbsorbPermute.circuit, circuit_norm])
+      simp [stepCircuit, stepCircuitAt, AbsorbPermute.circuit, circuit_norm])
   let output ← Sponge.GetOutput.circuit finalState
   return output.x0
 
 /-- Spec for `Hash::hash` over `ConstantLength<L>`. -/
 def Spec {L : Nat} (message : Vector Ecc.Fp L) (output : Ecc.Fp) : Prop :=
   output = value message
+
+def evalState (env : Environment Ecc.Fp) (state : Var Permute.State Ecc.Fp) :
+    Permute.State Ecc.Fp :=
+  { x0 := Expression.eval env state.x0, x1 := Expression.eval env state.x1,
+    x2 := Expression.eval env state.x2 }
+
+def evalBlock (env : Environment Ecc.Fp) (block : Var Sponge.Rate2 Ecc.Fp) :
+    Sponge.Rate2 Ecc.Fp :=
+  { x0 := Expression.eval env block.x0, x1 := Expression.eval env block.x1 }
+
+lemma evalBlock_blockVar {L : Nat} {env : Environment Ecc.Fp}
+    {messageVar : Vector (Expression Ecc.Fp) L} {message : Vector Ecc.Fp L}
+    (h_input : Vector.map (Expression.eval env) messageVar = message) (i : Nat) :
+    evalBlock env (blockVar messageVar i) = blockValue message i := by
+  subst message
+  simp [evalBlock, blockVar, blockValue, paddedVar, paddedWord]
+  constructor
+  · split
+    · rename_i h
+      symm
+      exact Vector.getElem_map (Expression.eval env) h
+    · rfl
+  · split
+    · rename_i h
+      symm
+      exact Vector.getElem_map (Expression.eval env) h
+    · rfl
 
 /-!
 The source-shaped generic scheduler above mirrors the `ConstantLength<L>` padding loop.
