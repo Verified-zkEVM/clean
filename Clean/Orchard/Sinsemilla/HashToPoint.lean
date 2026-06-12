@@ -1042,8 +1042,14 @@ theorem soundness (G : Generators) (w : ℕ) :
   simpa only [hdR, hzV, apply_ite (Expression.eval env), dite_eq_ite,
     eq_self_iff_true, if_true, Nat.add_zero, h_input.2.1, circuit_norm] using haux
 
-
-
+def circuit (G : Generators) (w : ℕ) :
+    GeneralFormalCircuit.WithHint Ecc.Fp Input Output where
+  main := main G w
+  Spec := Spec G w
+  ProverAssumptions := ProverAssumptions G w
+  ProverSpec := ProverSpec G w
+  soundness := soundness G w
+  completeness := completeness G w
 
 end HashPiece
 

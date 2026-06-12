@@ -254,9 +254,22 @@ not fully match source row layout:
 
 ### Sinsemilla And Merkle Entry APIs
 
+Implemented building blocks:
+
+- `chip/generator_table.rs` lookup table: `Sinsemilla.generatorTable` (the `2^K`-entry
+  `(idx, x, y)` table over abstract `Specs.Sinsemilla.Generators`).
+- `hash_to_point.rs::hash_piece`: `Sinsemilla.HashPiece.circuit`
+  (`GeneralFormalCircuit.WithHint`, proven sound and complete for any word count):
+  running-sum decomposition with per-word generator lookups (including the derived
+  `y_p = Y_A/2 - λ₁(x_A - x_P)` lookup expression), in-piece `q_s2 = 1` gates, and the
+  accumulator `y` threaded as a prover hint, matching the source cell layout. The
+  value-level spec layer (`Specs.Sinsemilla`: incomplete `⸭`, `⊥`-propagating chain) is
+  the semantic anchor.
+
 Missing source-level APIs:
 
-- `SinsemillaInstructions::hash_to_point`
+- `SinsemillaInstructions::hash_to_point` (the piece-composing entry: piece chaining
+  with `q_s2 = 0` boundary / `q_s2 = 2` final gates and `y_Q` initialization)
 - `SinsemillaInstructions::hash_to_point_with_private_init`
 - `HashDomain::hash`
 - `CommitDomain::blinding_factor`
@@ -265,9 +278,8 @@ Missing source-level APIs:
 - `MerkleInstructions::hash_layer`
 - `MerklePath::calculate_root`
 
-The current `Initial y_Q`, `Sinsemilla gate`, and Merkle decomposition assertions are
-local gates only. Full repairs depend on lookup/range checks, complete addition,
-fixed-base scalar multiplication, and source-shaped `hash_to_point` composition.
+The remaining repairs depend on the composing `hash_to_point` entry plus complete
+addition and fixed-base scalar multiplication for the commit domains.
 
 ### Orchard Entry APIs
 

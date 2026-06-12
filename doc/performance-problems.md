@@ -69,6 +69,31 @@ cross between different spellings of the same value by **syntactic rewriting** (
    in the kernel; switching to `obtain ⟨ks, hks_def⟩ : ∃ ks', ks' = fun w => ... := ⟨_, rfl⟩`
    fixed it.)
 
+5. **Keep `Option`-level plumbing out of big contexts.** Converting
+   `(hashToPoint ...).isSome` to `∃ B, ... = some B` *inside* a circuit proof (via
+   `Option.isSome_iff_exists.mp`) triggered a 200k-heartbeat `whnf` on the stuck chain
+   value. Stating the assumption in `∃`-form to begin with made the same `obtain` free.
+   Generally: pick hypothesis spellings that destructure by constructor, with no lemma
+   application at use site.
+
+6. **Don't `subst` a variable that a huge context depends on.** In a leaf case of a
+   completeness proof, `obtain rfl : w = 0 := by omega` retypechecks every hypothesis
+   with `w := 0`, turning previously-stuck symbolic powers (`2 ^ (K * (w + 1))`) into
+   concrete values — instant `isDefEq` timeout. Rewrite only the hypothesis you need
+   (`rw [show w = 0 from by omega] at hbound`) and leave the context symbolic.
+
+7. **Prefer `have` over `obtain ⟨..⟩ :=` for big conjunctions.** Destructuring a
+   conjunction whose components are large (`rcases`/`obtain` on an aux-lemma
+   instantiation) can cost far more than the application itself; binding with `have` and
+   using `.1`/`.2` projections at the use sites avoided a budget overrun where the
+   `obtain` form died.
+
+8. **A `try`/`first` combinator does not suppress nested `by`-block failures.** In
+   `all_goals try (obtain rfl : r = 0 := by omega)`, a failing inner `omega` is *logged*
+   as an error even though `try` catches the tactic failure. Same for the anonymous
+   hypothesis term `‹r < 1›` (which elaborates to `by assumption`). Branch explicitly
+   (`rcases Nat.lt_or_ge r 1 with h | h`) so omega only runs where it succeeds.
+
 ## Measuring honestly
 
 - **`#count_heartbeats in` lies for this purpose.** It runs the command with an
