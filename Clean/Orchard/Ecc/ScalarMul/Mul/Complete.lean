@@ -180,13 +180,237 @@ def ProverSpec (input : ProverValue Input Fp) (output : Output Fp)
   (∀ b : Fin 3, output.zs[b.val] = zRunValue input.z input.bits b.val) ∧
   output.acc.coords = accValue input.base.x input.base.y (input.xA, input.yA) input.bits 3
 
+/-- The evaluations of the prepended running-sum cells, by computation. Stating this
+over an abstract `v` (pinned by `hv`) lets the `getElem`s elaborate; the concrete
+append term would not. -/
+private theorem eval_z (env : Environment Fp) (i₀ : ℕ) (v : Vector (Expression Fp) 4)
+    (hv : v = (#v[var { index := i₀ }] : Vector (Expression Fp) 1) ++
+      (Vector.mapRange 3 fun i => var { index := i₀ + 1 + i } :
+        Vector (Expression Fp) 3)) :
+    Expression.eval env v[0] = env.get i₀ ∧
+    Expression.eval env v[1] = env.get (i₀ + 1) ∧
+    Expression.eval env v[2] = env.get (i₀ + 1 + 1) ∧
+    Expression.eval env v[3] = env.get (i₀ + 1 + 2) := by
+  subst hv
+  exact ⟨rfl, rfl, rfl, rfl⟩
+
+/-- One complete bit: the decomposition gate facts pin the running-sum step and the
+conditionally-negated `y_p` in terms of the decidable bit `z' = 2z + 1`. -/
+private theorem bit_facts {zP zN bY yP : Fp}
+    (hbool : IsBool (Complete.bit { zPrev := zP, zNext := zN, baseY := bY, yP := yP }))
+    (hsel : SelectedCompleteBitPointNegation
+      { zPrev := zP, zNext := zN, baseY := bY, yP := yP }) :
+    (zN = 2 * zP + if zN = 2 * zP + 1 then 1 else 0) ∧
+      yP = if zN = 2 * zP + 1 then bY else -bY := by
+  rcases hbool with h | h
+  · have hz : zN = 2 * zP := by
+      simp only [Complete.bit] at h
+      linear_combination h
+    have hcond : ¬(zN = 2 * zP + 1) := by
+      rw [hz]
+      intro hc
+      exact one_ne_zero (by linear_combination -hc)
+    have hy := (hsel 0).1 h
+    simp only [CompElliptic.CurveForms.ShortWeierstrass.neg, Prod.mk.injEq] at hy
+    rw [if_neg hcond, if_neg hcond]
+    exact ⟨by rw [hz]; ring, hy.2⟩
+  · have hz : zN = 2 * zP + 1 := by
+      simp only [Complete.bit] at h
+      linear_combination h
+    have hy := (hsel 0).2 h
+    simp only [Prod.mk.injEq] at hy
+    rw [if_pos hz, if_pos hz]
+    exact ⟨hz, hy.2⟩
+
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True) Spec := by
-  sorry
+  circuit_proof_start [main, Spec, Complete.circuit, Complete.Spec,
+    Add.circuit, Add.Spec, Add.Assumptions]
+  obtain ⟨h_z0, h_loop⟩ := h_holds
+  have h0 := h_loop ⟨0, by norm_num⟩
+  have h1 := h_loop ⟨1, by norm_num⟩
+  have h2 := h_loop ⟨2, by norm_num⟩
+  clear h_loop
+  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
+    Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, Fin.foldl_zero,
+    Fin.foldl_const, Fin.val_last, circuit_norm,
+    Vector.getElem_append, Vector.getElem_mapRange] at h0 h1 h2
+  norm_num at h0 h1 h2
+  obtain ⟨hz0e, hz1e, hz2e, hz3e⟩ := eval_z env i₀ _ rfl
+  rw [hz0e, hz1e] at h0
+  rw [hz1e, hz2e] at h1
+  rw [hz2e, hz3e] at h2
+  obtain ⟨hby0, ⟨hbool0, hsel0⟩, hAddA0, hAddB0⟩ := h0
+  obtain ⟨hby1, ⟨hbool1, hsel1⟩, hAddA1, hAddB1⟩ := h1
+  obtain ⟨hby2, ⟨hbool2, hsel2⟩, hAddA2, hAddB2⟩ := h2
+  obtain ⟨hchain0, hyP0⟩ := bit_facts hbool0 hsel0
+  obtain ⟨hchain1, hyP1⟩ := bit_facts hbool1 hsel1
+  obtain ⟨hchain2, hyP2⟩ := bit_facts hbool2 hsel2
+  -- the bit values, decidably read off the running-sum cells
+  refine ⟨fun b =>
+    decide (env.get (i₀ + 1 + b) =
+      2 * (if b = 0 then env.get i₀ else env.get (i₀ + b)) + 1), ⟨?_, ?_⟩, ?_⟩
+  · rw [← h_z0]
+    simpa using hchain0
+  · intro b
+    rcases b with ⟨_ | _ | _, hb⟩
+    · simpa using hchain1
+    · simpa using hchain2
+    · omega
+  · intro hAccV hBaseV
+    obtain ⟨hbx, hby⟩ : Expression.eval env input_var.base.x = input_base.x ∧
+        Expression.eval env input_var.base.y = input_base.y := by
+      have h := h_input.1
+      rw [← h]
+      exact ⟨rfl, rfl⟩
+    rw [h_input.2.1, h_input.2.2.1] at hAddA0 hAddB0
+    rw [hbx] at hAddA0 hAddA1 hAddA2
+    rw [hby] at hby0 hby1 hby2
+    rw [hby0] at hyP0
+    rw [hby1] at hyP1
+    rw [hby2] at hyP2
+    -- the conditionally-negated points are valid
+    have hU0V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 1)) := by
+      rw [hyP0]
+      split
+      · exact hBaseV
+      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
+    have hU1V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 24 + 1)) := by
+      rw [hyP1]
+      split
+      · exact hBaseV
+      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
+    have hU2V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 48 + 1)) := by
+      rw [hyP2]
+      split
+      · exact hBaseV
+      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
+    -- chain the six complete additions
+    have hT0 := hAddA0 hU0V hAccV
+    have hA1 := hAddB0 hAccV hT0.1
+    have hT1 := hAddA1 hU1V hA1.1
+    have hA2 := hAddB1 hA1.1 hT1.1
+    have hT2 := hAddA2 hU2V hA2.1
+    have hA3 := hAddB2 hA2.1 hT2.1
+    simp only [Fin.foldl_const, Fin.val_last]
+    refine ⟨hA3.1, ?_⟩
+    rw [show i₀ + 1 + 3 + 2 * 24 + 2 + 11 + 2 + 2
+        = i₀ + 1 + 3 + 48 + 1 + 1 + 11 + 2 + 2 from by omega]
+    rw [hA3.2, hT2.2, hA2.2, hT1.2, hA1.2, hT0.2, hyP0, hyP1, hyP2]
+    simp only [accValue, stepValue, Ecc.Point.coords, decide_eq_true_eq]
+    norm_num
+
+/-- The honest assignment of one complete bit satisfies the decomposition gate. -/
+private theorem bit_facts_complete (zP bY : Fp) (b : Bool) :
+    IsBool (Complete.bit
+      { zPrev := zP, zNext := 2 * zP + (if b = true then 1 else 0), baseY := bY,
+        yP := if b = true then bY else -bY }) ∧
+    SelectedCompleteBitPointNegation
+      { zPrev := zP, zNext := 2 * zP + (if b = true then 1 else 0), baseY := bY,
+        yP := if b = true then bY else -bY } := by
+  constructor
+  · cases b <;> simp [Complete.bit, IsBool]
+  · intro baseX
+    cases b
+    · refine ⟨fun _ => ?_, fun h => ?_⟩
+      · simp [CompElliptic.CurveForms.ShortWeierstrass.neg]
+      · simp [Complete.bit] at h
+    · refine ⟨fun h => ?_, fun _ => by simp⟩
+      simp [Complete.bit] at h
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
-  sorry
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, Complete.circuit, Complete.Spec,
+    Add.circuit, Add.Spec, Add.Assumptions]
+  obtain ⟨h_z0w, h_zsw, h_loop⟩ := h_env
+  obtain ⟨hbx, hby⟩ : Expression.eval env.toEnvironment input_var.base.x = input_base.x ∧
+      Expression.eval env.toEnvironment input_var.base.y = input_base.y := by
+    have h := h_input.1
+    rw [← h]
+    exact ⟨rfl, rfl⟩
+  simp only [Vector.getElem_ofFn] at h_zsw
+  have hz1 := h_zsw ⟨0, by norm_num⟩
+  have hz2 := h_zsw ⟨1, by norm_num⟩
+  have hz3 := h_zsw ⟨2, by norm_num⟩
+  norm_num at hz1 hz2 hz3
+  have hl0 := h_loop ⟨0, by norm_num⟩
+  have hl1 := h_loop ⟨1, by norm_num⟩
+  have hl2 := h_loop ⟨2, by norm_num⟩
+  clear h_loop h_zsw
+  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
+    Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, Fin.foldl_zero,
+    Fin.foldl_const, Fin.val_last, circuit_norm] at hl0 hl1 hl2
+  norm_num at hl0 hl1 hl2
+  obtain ⟨hby0, hyP0, hAdds0⟩ := hl0
+  obtain ⟨hby1, hyP1, hAdds1⟩ := hl1
+  obtain ⟨hby2, hyP2, hAdds2⟩ := hl2
+  obtain ⟨hz0e, hz1e, hz2e, hz3e⟩ := eval_z env.toEnvironment i₀ _ rfl
+  obtain ⟨hAccV, hBaseV⟩ := h_assumptions
+  rw [hby] at hby0 hby1 hby2 hyP0 hyP1 hyP2
+  rw [hbx] at hAdds0 hAdds1 hAdds2
+  rw [h_input.2.1, h_input.2.2.1] at hAdds0
+  -- the honest running-sum steps
+  have hz1' : env.get (i₀ + 1) = 2 * input_z + (if input_bits 0 = true then 1 else 0) := by
+    rw [hz1]
+    rfl
+  have hz2' : env.get (i₀ + 1 + 1)
+      = 2 * env.get (i₀ + 1) + (if input_bits 1 = true then 1 else 0) := by
+    rw [hz2, hz1]
+    rfl
+  have hz3' : env.get (i₀ + 1 + 2)
+      = 2 * env.get (i₀ + 1 + 1) + (if input_bits 2 = true then 1 else 0) := by
+    rw [hz3, hz2]
+    rfl
+  -- the conditionally-negated points are valid
+  have hU0V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 1)) := by
+    rw [hyP0]
+    split
+    · exact hBaseV
+    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
+  have hU1V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 24 + 1)) := by
+    rw [hyP1]
+    split
+    · exact hBaseV
+    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
+  have hU2V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 48 + 1)) := by
+    rw [hyP2]
+    split
+    · exact hBaseV
+    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
+  -- chain the six complete additions
+  have hT0 := hAdds0.1 hU0V hAccV
+  have hA1 := hAdds0.2 hAccV hT0.1
+  have hT1 := hAdds1.1 hU1V hA1.1
+  have hA2 := hAdds1.2 hA1.1 hT1.1
+  have hT2 := hAdds2.1 hU2V hA2.1
+  have hA3 := hAdds2.2 hA2.1 hT2.1
+  refine ⟨⟨h_z0w, fun i => ?_⟩, ?_, ?_⟩
+  · obtain ⟨b, hb⟩ := i
+    simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
+      Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, Fin.foldl_zero,
+      Fin.foldl_const, Fin.val_last, circuit_norm]
+    rcases b with _ | _ | _ | n
+    · rw [hbx, hby, hz0e, hz1e, h_z0w, hz1', hby0, hyP0, h_input.2.1, h_input.2.2.1]
+      exact ⟨hby0 ▸ rfl, bit_facts_complete input_z input_base.y (input_bits 0),
+        ⟨hyP0 ▸ hU0V, hAccV⟩, hAccV, hT0.1⟩
+    · rw [hbx, hby, hz1e, hz2e, hz1', hz2', hby1, hyP1]
+      exact ⟨rfl, by rw [← hz1']; exact bit_facts_complete _ input_base.y (input_bits 1),
+        ⟨hyP1 ▸ hU1V, hA1.1⟩, hA1.1, hT1.1⟩
+    · rw [hbx, hby, hz2e, hz3e, hz2', hz3', hby2, hyP2]
+      exact ⟨rfl, by rw [← hz2']; exact bit_facts_complete _ input_base.y (input_bits 2),
+        ⟨hyP2 ▸ hU2V, hA2.1⟩, hA2.1, hT2.1⟩
+    · omega
+  · intro b
+    rcases b with ⟨_ | _ | _ | n, hb⟩
+    · simpa using hz1
+    · simpa using hz2
+    · simpa using hz3
+    · omega
+  · simp only [Fin.foldl_const, Fin.val_last]
+    rw [show i₀ + 1 + 3 + 2 * 24 + 2 + 11 + 2 + 2
+        = i₀ + 1 + 3 + 48 + 1 + 1 + 11 + 2 + 2 from by omega]
+    rw [hA3.2, hT2.2, hA2.2, hT1.2, hA1.2, hT0.2, hyP0, hyP1, hyP2]
+    simp only [accValue, stepValue, Ecc.Point.coords]
 
 /-- `complete.rs::Config::assign_region`: the complete-addition bits of variable-base
 scalar multiplication. -/
