@@ -147,11 +147,131 @@ def Spec (input : Input Fp) : Prop :=
 instance elaborated : ElaboratedCircuit Fp Input unit main := by
   elaborate_circuit
 
+/-- Telescoping a `K`-bit running-sum chain: `f 0` splits into `K * k` low bits and
+`2^(K*k) * f k`. -/
+private theorem chain_telescope (f : ℕ → Fp) :
+    ∀ k : ℕ,
+    (∀ i, i < k → ∃ w : ℕ, w < 2 ^ Utilities.LookupRangeCheck.K ∧
+      f i = 2 ^ Utilities.LookupRangeCheck.K * f (i + 1) + (w : Fp)) →
+    ∃ lo : ℕ, lo < 2 ^ (Utilities.LookupRangeCheck.K * k) ∧
+      f 0 = (lo : Fp) + 2 ^ (Utilities.LookupRangeCheck.K * k) * f k
+  | 0, _ => ⟨0, by norm_num, by norm_num⟩
+  | k + 1, h => by
+    set K := Utilities.LookupRangeCheck.K
+    obtain ⟨lo, hlt, heq⟩ := chain_telescope f k fun i hi => h i (by omega)
+    obtain ⟨w, hw, hstep⟩ := h k (by omega)
+    refine ⟨lo + w * 2 ^ (K * k), ?_, ?_⟩
+    · have hsplit : (2 : ℕ) ^ (K * (k + 1)) = 2 ^ K * 2 ^ (K * k) := by
+        rw [← pow_add]
+        ring_nf
+      have hbound : lo + w * 2 ^ (K * k) < (w + 1) * 2 ^ (K * k) := by
+        have := Nat.two_pow_pos (K * k)
+        nlinarith
+      have : (w + 1) * 2 ^ (K * k) ≤ 2 ^ K * 2 ^ (K * k) :=
+        Nat.mul_le_mul_right _ (by omega)
+      omega
+    · rw [heq, hstep]
+      push_cast
+      rw [show K * (k + 1) = K * k + K from by ring, pow_add]
+      ring
+
+/-- Name the evaluation of a vector's cell 13 opaquely; stating this over an abstract
+`v` lets the caller instantiate it with a concrete append term whose `getElem` bound
+would not elaborate inline. -/
+private theorem eval_get13 (env : Environment Fp) (v : Vector (Expression Fp) 14) :
+    ∃ z, Expression.eval env v[13] = z := ⟨_, rfl⟩
+
 theorem soundness : FormalAssertion.Soundness Fp main (fun _ => True) Spec := by
-  sorry
+  circuit_proof_start [main, Spec, Utilities.LookupRangeCheck.CopyCheck.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Spec, Overflow.circuit, Overflow.Spec]
+  obtain ⟨⟨hS0, hChain⟩, hS, hRec, hLoZ, hSHiZ, hEta⟩ := h_holds
+  have h2124 : (OfNat.ofNat (2 ^ 124) : Fp) = (2 : Fp) ^ 124 := by norm_num
+  have h2130 : (OfNat.ofNat (2 ^ 130) : Fp) = (2 : Fp) ^ 130 := by norm_num
+  rw [h2124] at hLoZ
+  rw [h2130] at hS
+  refine ⟨hRec, hLoZ, ?_⟩
+  -- extract the thirteen 10-bit words of the running-sum chain at concrete indices
+  obtain ⟨w0, hw0, he0⟩ := hChain ⟨0, by norm_num⟩
+  obtain ⟨w1, hw1, he1⟩ := hChain ⟨1, by norm_num⟩
+  obtain ⟨w2, hw2, he2⟩ := hChain ⟨2, by norm_num⟩
+  obtain ⟨w3, hw3, he3⟩ := hChain ⟨3, by norm_num⟩
+  obtain ⟨w4, hw4, he4⟩ := hChain ⟨4, by norm_num⟩
+  obtain ⟨w5, hw5, he5⟩ := hChain ⟨5, by norm_num⟩
+  obtain ⟨w6, hw6, he6⟩ := hChain ⟨6, by norm_num⟩
+  obtain ⟨w7, hw7, he7⟩ := hChain ⟨7, by norm_num⟩
+  obtain ⟨w8, hw8, he8⟩ := hChain ⟨8, by norm_num⟩
+  obtain ⟨w9, hw9, he9⟩ := hChain ⟨9, by norm_num⟩
+  obtain ⟨w10, hw10, he10⟩ := hChain ⟨10, by norm_num⟩
+  obtain ⟨w11, hw11, he11⟩ := hChain ⟨11, by norm_num⟩
+  obtain ⟨w12, hw12, he12⟩ := hChain ⟨12, by norm_num⟩
+  clear hChain
+  norm_num [Vector.getElem_append, Vector.getElem_mapRange, Expression.eval,
+    Utilities.LookupRangeCheck.K] at hS0 hSHiZ hEta he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
+  norm_num [Utilities.LookupRangeCheck.K] at hw0 hw1 hw2 hw3 hw4 hw5 hw6 hw7 hw8 hw9 hw10 hw11 hw12
+  -- name the final decomposition cell opaquely
+  obtain ⟨z13, hz13⟩ := eval_get13 env
+    ((#v[var { index := i₀ + 1 }] : Vector (Expression Fp) 1) ++
+      (Vector.mapRange 13 fun j => var { index := i₀ + 1 + 1 + j } :
+        Vector (Expression Fp) 13))
+  rw [hz13] at he12 hSHiZ hEta
+  refine ⟨z13,
+    w0 + 2 ^ 10 * w1 + 2 ^ 20 * w2 + 2 ^ 30 * w3 + 2 ^ 40 * w4 + 2 ^ 50 * w5 +
+      2 ^ 60 * w6 + 2 ^ 70 * w7 + 2 ^ 80 * w8 + 2 ^ 90 * w9 + 2 ^ 100 * w10 +
+      2 ^ 110 * w11 + 2 ^ 120 * w12,
+    by omega, ?_, hSHiZ, ?_⟩
+  · push_cast
+    linear_combination -hS - hS0 + he0 + (2 ^ 10 : Fp) * he1 + (2 ^ 20 : Fp) * he2 +
+      (2 ^ 30 : Fp) * he3 + (2 ^ 40 : Fp) * he4 + (2 ^ 50 : Fp) * he5 +
+      (2 ^ 60 : Fp) * he6 + (2 ^ 70 : Fp) * he7 + (2 ^ 80 : Fp) * he8 +
+      (2 ^ 90 : Fp) * he9 + (2 ^ 100 : Fp) * he10 + (2 ^ 110 : Fp) * he11 +
+      (2 ^ 120 : Fp) * he12
+  · rcases hEta with h | h | h
+    · exact Or.inl h
+    · refine Or.inr (Or.inl ?_)
+      intro hz
+      rw [hz, zero_mul] at h
+      exact zero_ne_one h
+    · exact Or.inr (Or.inr h)
 
 theorem completeness : FormalAssertion.Completeness Fp main (fun _ => True) Spec := by
-  sorry
+  circuit_proof_start [main, Spec, Utilities.LookupRangeCheck.CopyCheck.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Overflow.circuit, Overflow.Spec]
+  obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := h_spec
+  obtain ⟨hs_wit, ⟨_, h_values⟩, h_eta⟩ := h_env
+  have h2124 : (OfNat.ofNat (2 ^ 124) : Fp) = (2 : Fp) ^ 124 := by norm_num
+  have h2130 : (OfNat.ofNat (2 ^ 130) : Fp) = (2 : Fp) ^ 130 := by norm_num
+  -- the honest final decomposition cell, and its vanishing when s fits in 130 bits
+  have h13 := h_values ⟨13, by norm_num⟩
+  norm_num [Utilities.LookupRangeCheck.K] at h13
+  have hsmall : sHi = 0 → ZMod.val (env.get i₀) / 2 ^ 130 = 0 := by
+    intro h0
+    have hval : env.get i₀ = (sLo : Fp) := by
+      rw [hs_wit, hkey, h0]
+      ring
+    rw [hval, ZMod.val_natCast_of_lt
+      (lt_trans hsLo_lt (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))]
+    exact Nat.div_eq_of_lt hsLo_lt
+  refine ⟨by rw [h2130]; exact hs_wit, hRec, ?_, ?_, ?_⟩
+  · rcases hLoZ with h | h
+    · exact Or.inl h
+    · refine Or.inr ?_
+      rw [h2124]
+      exact h
+  · rcases hHiZ with h | h0
+    · exact Or.inl h
+    · refine Or.inr ?_
+      rw [h13, show (1361129467683753853853498429727072845824 : ℕ) = 2 ^ 130 from by
+        norm_num, hsmall h0]
+      norm_num
+  · rcases hEtaSpec with h | hz | h0
+    · exact Or.inl h
+    · refine Or.inr (Or.inl ?_)
+      rw [h_eta, if_neg hz]
+      exact mul_inv_cancel₀ hz
+    · refine Or.inr (Or.inr ?_)
+      rw [h13, show (1361129467683753853853498429727072845824 : ℕ) = 2 ^ 130 from by
+        norm_num, hsmall h0]
+      norm_num
 
 /-- `overflow.rs::Config::overflow_check`. -/
 def circuit : FormalAssertion Fp Input where

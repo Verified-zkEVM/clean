@@ -628,19 +628,27 @@ def main (numWords : ℕ) (element : Expression Ecc.Fp) :
 /-- The output cells form a `K`-bit running-sum decomposition of `element`:
 `z_0 = element` and each step satisfies `z_i = 2^K * z_{i+1} + a_i` for a `K`-bit
 word `a_i`. -/
-def Spec (numWords : ℕ) (element : Ecc.Fp) (zs : fields (numWords + 1) Ecc.Fp) : Prop :=
+def Spec (numWords : ℕ) (element : Ecc.Fp) (zs : fields (numWords + 1) Ecc.Fp)
+    (_ : ProverData Ecc.Fp) : Prop :=
   zs[0]'(Nat.succ_pos numWords) = element ∧
     ∀ i : Fin numWords, ∃ word : ℕ, word < 2 ^ K ∧
       zs[i.val]'(Nat.lt_succ_of_lt i.isLt) =
         2 ^ K * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt) + (word : Ecc.Fp)
+
+/-- The honest prover assigns the canonical decomposition: `z_i = element >> (K * i)`. -/
+def ProverSpec (numWords : ℕ) (element : Ecc.Fp) (zs : fields (numWords + 1) Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  ∀ i : Fin (numWords + 1),
+    zs[i.val] = ((element.val / 2 ^ (K * i.val) : ℕ) : Ecc.Fp)
 
 instance elaborated (numWords : ℕ) :
     ElaboratedCircuit Ecc.Fp field (fields (numWords + 1)) (main numWords) := by
   elaborate_circuit
 
 theorem soundness (numWords : ℕ) :
-    Soundness (Input:=field) (Output:=fields (numWords + 1)) Ecc.Fp (main numWords)
-      (fun _ => True) (Spec numWords) := by
+    GeneralFormalCircuit.WithHint.Soundness (Input:=field)
+      (Output:=fields (numWords + 1)) Ecc.Fp (main numWords)
+      (fun _ _ => True) (Spec numWords) := by
   circuit_proof_start [main, Spec, tableIdx]
   obtain ⟨h_copy, h_lookup⟩ := h_holds
   constructor
@@ -668,44 +676,58 @@ private theorem word_val_lt (a : ℕ) :
   exact Nat.mod_lt _ (by norm_num [K])
 
 theorem completeness (numWords : ℕ) :
-    Completeness (Input:=field) (Output:=fields (numWords + 1)) Ecc.Fp (main numWords)
-      (fun _ => True) := by
-  circuit_proof_start [main, tableIdx]
+    GeneralFormalCircuit.WithHint.Completeness (Input:=field)
+      (Output:=fields (numWords + 1)) Ecc.Fp (main numWords)
+      (fun _ _ _ => True) (ProverSpec numWords) := by
+  circuit_proof_start [main, ProverSpec, tableIdx]
   obtain ⟨h_z0, h_zs⟩ := h_env
-  refine ⟨h_z0, fun i => ?_⟩
   set x : Ecc.Fp := input with hx
   have h_zval : ∀ (j : ℕ) (hj : j < numWords),
       env.get (i₀ + 1 + j) = ((x.val / 2 ^ (K * (j + 1)) : ℕ) : Ecc.Fp) := by
     intro j hj
     have h := h_zs ⟨j, hj⟩
     simpa using h
-  simp only [Vector.getElem_ofFn]
-  rcases i with ⟨_ | j, hi⟩
-  · have h1 := h_zval 0 hi
-    norm_num at h1
-    simp only [Vector.getElem_append, Vector.getElem_mapRange]
-    norm_num
-    simp only [Expression.eval]
-    rw [h_z0, h1]
-    have h := word_val_lt x.val
-    rw [ZMod.natCast_zmod_val] at h
-    simpa [sub_eq_add_neg] using h
-  · have h1 := h_zval j (by omega)
-    have h2 := h_zval (j + 1) hi
-    simp only [Vector.getElem_append, Vector.getElem_mapRange]
-    norm_num
-    simp only [Expression.eval]
-    rw [h1, h2]
-    have h := word_val_lt (x.val / 2 ^ (K * (j + 1)))
-    rw [Nat.div_div_eq_div_mul, ← pow_add,
-      show K * (j + 1) + K = K * (j + 1 + 1) by ring] at h
-    simpa [sub_eq_add_neg] using h
+  constructor
+  · refine ⟨h_z0, fun i => ?_⟩
+    simp only [Vector.getElem_ofFn]
+    rcases i with ⟨_ | j, hi⟩
+    · have h1 := h_zval 0 hi
+      norm_num at h1
+      simp only [Vector.getElem_append, Vector.getElem_mapRange]
+      norm_num
+      simp only [Expression.eval]
+      rw [h_z0, h1]
+      have h := word_val_lt x.val
+      rw [ZMod.natCast_zmod_val] at h
+      simpa [sub_eq_add_neg] using h
+    · have h1 := h_zval j (by omega)
+      have h2 := h_zval (j + 1) hi
+      simp only [Vector.getElem_append, Vector.getElem_mapRange]
+      norm_num
+      simp only [Expression.eval]
+      rw [h1, h2]
+      have h := word_val_lt (x.val / 2 ^ (K * (j + 1)))
+      rw [Nat.div_div_eq_div_mul, ← pow_add,
+        show K * (j + 1) + K = K * (j + 1 + 1) by ring] at h
+      simpa [sub_eq_add_neg] using h
+  · intro i
+    rcases i with ⟨_ | j, hi⟩
+    · simp only [Vector.getElem_append, Vector.getElem_mapRange]
+      norm_num
+      simp only [Expression.eval]
+      rw [h_z0]
+    · have h1 := h_zval j (by omega)
+      simp only [Vector.getElem_append, Vector.getElem_mapRange]
+      norm_num
+      simp only [Expression.eval]
+      exact h1
 
-def circuit (numWords : ℕ) : FormalCircuit Ecc.Fp field (fields (numWords + 1)) where
+def circuit (numWords : ℕ) :
+    GeneralFormalCircuit.WithHint Ecc.Fp field (fields (numWords + 1)) where
   main := main numWords
-  elaborated := elaborated numWords
-  Assumptions _ := True
   Spec := Spec numWords
+  ProverAssumptions _ _ _ := True
+  ProverSpec := ProverSpec numWords
   soundness := soundness numWords
   completeness := completeness numWords
 
