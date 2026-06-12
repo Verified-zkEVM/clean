@@ -115,51 +115,27 @@ Source:
 
 Current Clean coverage:
 
-- `Clean.Orchard.Poseidon.Pow5` mirrors `poseidon/pow5.rs`.
-- `Clean.Orchard.Poseidon.Pow5.Constants` mirrors the concrete Pallas constants from
-  `halo2_poseidon/src/fp.rs`.
-- `Clean.Orchard.Poseidon.FullRound.Gate.circuit`: `GATE full round`
-- `Clean.Orchard.Poseidon.PartialRounds.Gate.circuit`: `GATE partial rounds`
-- `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
-- `Clean.Orchard.Poseidon.Permute.P128Pow5T3.roundConstants` / `mds` / `mdsInv`:
-  explicit Pallas-base constants ported from `halo2_poseidon/src/fp.rs`, with proofs
-  that `MDS_INV * MDS = I` and `MDS * MDS_INV = I`.
-- `Clean.Orchard.Poseidon.Permute.value`: plain Lean implementation of the
-  P128 width-3/rate-2 `Pow5Chip::permute` schedule.
-- `Clean.Orchard.Poseidon.FullRound.circuit`: packaged full-round loop-body subcircuit
-  proving one step against `FullRound.value`.
-- `Clean.Orchard.Poseidon.Permute.fullRounds4Circuit`: packaged fixed `foldl`
-  subcircuit for the four full rounds used by each half of `Pow5Chip::permute`.
-- `Clean.Orchard.Poseidon.PartialRounds.circuitP128`: packaged P128 partial-round-row
-  subcircuit proving one row against `PartialRounds.value`.
-- `Clean.Orchard.Poseidon.Permute.partialRoundRows28P128Circuit`: packaged fixed
-  `foldl` subcircuit for the 28 P128 partial-round rows.
-- `Clean.Orchard.Poseidon.Permute.mainP128Circuit`: packaged P128-specialized
-  `Pow5Chip::permute` circuit proving the full schedule against `Permute.value`.
-- `Clean.Orchard.Poseidon.Permute.mainP128ConcreteCircuit`: concrete specialization of
-  the P128 permutation package using the ported Pallas round constants.
-- `Clean.Orchard.Poseidon.Sponge.InitialState.circuit`: packaged width-3/rate-2
-  `Pow5Chip::initial_state`, parameterized by the domain capacity element.
-- `Clean.Orchard.Poseidon.Sponge.AddInput.circuit`: packaged width-3/rate-2
-  `Pow5Chip::add_input` over one full padded rate block, using `GATE pad-and-add`.
-- `Clean.Orchard.Poseidon.Sponge.GetOutput.circuit`: packaged
-  `PoseidonSpongeInstructions::get_output` projection of the rate words.
-- `Clean.Orchard.Poseidon.Hash.Init.circuit`: packaged `Hash::init` state
-  initialization.
-- `Clean.Orchard.Poseidon.Hash.HashPaddedBlock.circuit`: packaged straight-line
-  one-padded-block `Hash::hash` composition (`init -> add_input -> permute -> squeeze`).
-- `Clean.Orchard.Poseidon.Hash.HashPaddedBlock.concreteCircuit`: concrete one-block P128
-  hash package using the ported round constants.
-- `Clean.Orchard.Poseidon.Hash.ConstantLength.AbsorbPermute.circuit`: packaged one-block
-  scheduler step (`add_input -> permute`) used by the generic constant-length hash loop.
-- `Clean.Orchard.Poseidon.Hash.ConstantLength`: source-shaped generic rate-2
-  `ConstantLength<L>` padding scheduler definitions (`blockCount`, `capacity`, padded
-  words/blocks, value function, and circuit body). The generic dependent `foldlRange`
-  proof package for the outer scheduler is the remaining Poseidon proof task.
-
-`FullRound` and `PartialRounds` already take fixed-column round constants and matrix
-entries as Lean parameters. The P128 permutation, concrete constants, and one-padded-block
-hash path are now packaged.
+- Source-shaped Poseidon modules live in `Clean.Orchard.Poseidon.Pow5`,
+  `Clean.Orchard.Poseidon.Sponge`, and `Clean.Orchard.Poseidon.Hash`; concrete Pallas
+  constants from `halo2_poseidon/src/fp.rs` live in
+  `Clean.Orchard.Poseidon.Pow5.Constants`.
+- Custom gates are packaged:
+  - `Clean.Orchard.Poseidon.FullRound.Gate.circuit`: `GATE full round`
+  - `Clean.Orchard.Poseidon.PartialRounds.Gate.circuit`: `GATE partial rounds`
+  - `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
+- Source entry-point circuits are packaged:
+  - `Clean.Orchard.Poseidon.Permute.mainP128ConcreteCircuit`: concrete P128
+    `Pow5Chip::permute`
+  - `Clean.Orchard.Poseidon.Sponge.InitialState.circuit`:
+    `Pow5Chip::initial_state`
+  - `Clean.Orchard.Poseidon.Sponge.AddInput.circuit`: `Pow5Chip::add_input`
+  - `Clean.Orchard.Poseidon.Sponge.GetOutput.circuit`:
+    `PoseidonSpongeInstructions::get_output`
+  - `Clean.Orchard.Poseidon.Hash.Init.circuit`: `Hash::init`
+  - `Clean.Orchard.Poseidon.Hash.HashPaddedBlock.concreteCircuit`: one-padded-block
+    P128 `Hash::hash`
+  - `Clean.Orchard.Poseidon.Hash.ConstantLength.circuit`: generic rate-2
+    `Hash::hash` for `ConstantLength<L>` with `L > 0`
 
 ### Sinsemilla And Merkle
 
@@ -285,17 +261,9 @@ not fully match source row layout:
 
 ### Poseidon Entry APIs
 
-The named custom gates are present, but the source-level APIs are not:
-
-- `Pow5Chip::permute`
-- `PoseidonSpongeInstructions::initial_state`
-- `PoseidonSpongeInstructions::add_input`
-- `Hash::init`
-- `Hash::hash`
-
-Do not reintroduce wrapper circuits that expose explicit permutation rows or hash
-boundary values as caller inputs. The source APIs witness/copy cells internally and should
-be ported with that surface.
+Complete. The named custom gates and source-level entry APIs are packaged; callers should
+use those packaged circuits rather than raw `main` definitions or wrappers exposing
+internal permutation rows.
 
 ### Sinsemilla And Merkle Entry APIs
 
