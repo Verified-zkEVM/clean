@@ -325,7 +325,160 @@ private theorem k_canonical {alpha k254 z130 : Fp} {K Zhi R : ℕ} {b254 : Bool}
       omega
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [Ecc.Add.circuit, Incomplete.DoubleAndAdd.circuit,
+    Complete.AssignRegion.circuit, Mul.circuit, Overflow.OverflowCheck.circuit]
+  obtain ⟨hAcc, hz0, hHi, hLo, hComp, hbx, hby, hMul, hAdd2, hOv⟩ := h_holds
+  simp only [Incomplete.DoubleAndAdd.Spec] at hHi hLo
+  obtain ⟨bitsHi, hHiChain, hHiAcc⟩ := hHi
+  obtain ⟨bitsLo, hLoChain, hLoAcc⟩ := hLo
+  simp only [Complete.AssignRegion.Spec] at hComp
+  obtain ⟨bitsC, hCChain, hCAcc⟩ := hComp
+  simp only [Mul.Spec, Mul.SelectedCorrectionPoint, Mul.lsb] at hMul
+  obtain ⟨hk0Bool, hCorrNeg, hCorrZero⟩ := hMul
+  simp only [Overflow.OverflowCheck.Spec] at hOv
+  obtain ⟨hOvZ0, hOvDisj2, hOvEx⟩ := hOv
+  intro B hB hcoords
+  simp only [Ecc.Add.Assumptions, Ecc.Add.Spec, Ecc.Point.coords] at hAcc hAdd2
+  simp only [Ecc.Point.coords] at h_assumptions hcoords ⊢
+  -- the doubled base: acc = [2]B
+  have hAccPair := (hAcc ⟨Or.inl h_assumptions, Or.inl h_assumptions⟩).2
+  rw [hcoords, Pallas.add_coords, ← two_nsmul] at hAccPair
+  -- hi half: accumulator [accScalar 2 bitsHi 125]B
+  have hHiOut := hHiAcc B 2 hB hcoords hAccPair (le_refl 2) (by norm_num)
+  -- running-sum chains, mirrored over ℕ
+  have hHiCells := chain_cast _ _ 0 bitsHi (by rw [hz0]; norm_num) hHiChain.1 hHiChain.2
+  have hZhiCell := hHiCells 124 (by omega)
+  simp only [circuit_norm] at hZhiCell
+  have hK254 := hHiCells 0 (by omega)
+  simp only [circuit_norm] at hK254
+  rw [show ((chainNat 0 bitsHi 1 : ℕ) : Fp) = (if bitsHi 0 then 1 else 0) from by
+    simp only [chainNat]; cases bitsHi 0 <;> simp] at hK254
+  have hLoCells := chain_cast _ _ (chainNat 0 bitsHi 125) bitsLo hZhiCell
+    hLoChain.1 hLoChain.2
+  have hZloCell := hLoCells 125 (by omega)
+  simp only [circuit_norm] at hZloCell
+  have hCCells := chain_cast _ _ (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC
+    hZloCell hCChain.1 hCChain.2
+  have hZcCell := hCCells 2 (by omega)
+  simp only [circuit_norm] at hZcCell
+  -- chain bounds
+  have hZhiLt : chainNat 0 bitsHi 125 < 2 ^ 125 :=
+    lt_of_lt_of_le (chainNat_lt 0 bitsHi 125) (by norm_num)
+  have hCloLt : chainNat 0 bitsLo 126 < 2 ^ 126 :=
+    lt_of_lt_of_le (chainNat_lt 0 bitsLo 126) (by norm_num)
+  have hCcLt : chainNat 0 bitsC 3 < 2 ^ 3 :=
+    lt_of_lt_of_le (chainNat_lt 0 bitsC 3) (by norm_num)
+  -- the accumulated scalars in closed form
+  have hm1 : accScalar 2 bitsHi 125 = 2 ^ 125 + 2 * chainNat 0 bitsHi 125 + 1 := by
+    rw [accScalar_closed 2 (by norm_num) bitsHi 125]
+    norm_num
+  -- lo half: accumulator [accScalar m₁ bitsLo 126]B
+  have hLoOut := hLoAcc B (accScalar 2 bitsHi 125) hB hcoords hHiOut
+    (by rw [hm1]; omega)
+    (by rw [hm1]; have h := hZhiLt; norm_num at h ⊢; omega)
+  rw [show accScalar (accScalar 2 bitsHi 125) bitsLo (125 + 1)
+    = accScalar (accScalar 2 bitsHi 125) bitsLo 126 from rfl] at hLoOut
+  have hm2 : accScalar (accScalar 2 bitsHi 125) bitsLo 126
+      = 2 ^ 251 + 2 * chainNat (chainNat 0 bitsHi 125) bitsLo 126 + 1 := by
+    rw [accScalar_closed _ (by rw [hm1]; omega) bitsLo 126, hm1,
+      chainNat_offset (chainNat 0 bitsHi 125) bitsLo 126]
+    norm_num
+    omega
+  have hZloLt : chainNat (chainNat 0 bitsHi 125) bitsLo 126 < 2 ^ 251 := by
+    have h1 := chainNat_lt (chainNat 0 bitsHi 125) bitsLo 126
+    have h2 : chainNat 0 bitsHi 125 + 1 ≤ 2 ^ 125 := hZhiLt
+    exact lt_of_lt_of_le h1 ((Nat.mul_le_mul le_rfl h2).trans (by norm_num))
+  have hm2Lt : accScalar (accScalar 2 bitsHi 125) bitsLo 126 < PALLAS_SCALAR_CARD := by
+    rw [hm2]
+    have h := hZloLt
+    norm_num [PALLAS_SCALAR_CARD] at h ⊢
+    omega
+  -- complete bits: accumulator [accScalar m₂ bitsC 3]B
+  have hCompS := hCAcc
+    (by rw [hLoOut]; exact Or.inl (pallas_nsmul_onCurve hB (by rw [hm2]; omega) hm2Lt))
+    (Or.inl h_assumptions)
+  simp only [Ecc.Point.coords] at hCompS
+  obtain ⟨hValidAcc, hCompPair⟩ := hCompS
+  have hBx : input_base.x = B.x := congrArg Prod.fst hcoords
+  have hBy : input_base.y = B.y := congrArg Prod.snd hcoords
+  rw [hBx, hBy, hLoOut,
+    accValue_nsmul B (accScalar (accScalar 2 bitsHi 125) bitsLo 126)
+      (by rw [hm2]; omega) bitsC 3] at hCompPair
+  have hm3 : accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3
+      = 2 ^ 254 + 2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3
+        + 1 := by
+    rw [accScalar_closed _ (by rw [hm2]; omega) bitsC 3, hm2,
+      chainNat_offset (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3]
+    norm_num
+    omega
+  -- the canonicity argument: the witnessed scalar is α + t_q over ℕ
+  have hKpart : ∀ k0n : ℕ, k0n ≤ 1 →
+      ((2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3 + k0n : ℕ) : Fp)
+        = input_alpha + tQ →
+      2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3 + k0n
+        = ZMod.val input_alpha + tQNat := by
+    intro k0n hk0le hcong
+    refine k_canonical (R := 2 ^ 4 * chainNat 0 bitsLo 126 + 2 * chainNat 0 bitsC 3 + k0n)
+      hK254 hZhiCell hZhiLt ?_ ?_ ?_ hcong hOvDisj2 hOvEx
+    · intro hf
+      have h := chainNat_msb bitsHi 124
+      rw [hf] at h
+      have h2 := chainNat_lt 0 (fun i => bitsHi (i + 1)) 124
+      norm_num at h h2 ⊢
+      omega
+    · have h1 := hCloLt
+      have h2 := hCcLt
+      norm_num at h1 h2 ⊢
+      omega
+    · have h1 := chainNat_offset (chainNat 0 bitsHi 125) bitsLo 126
+      have h2 := chainNat_offset (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3
+      norm_num at h1 h2 ⊢
+      omega
+  -- the final scalar identity: [2^254 + k]B = [α]B
+  have hfin : ∀ s : ℕ, s = 2 ^ 254 + ZMod.val input_alpha + tQNat →
+      s • B = ZMod.val input_alpha • B := by
+    intro s hs
+    have hq : PALLAS_SCALAR_CARD = 2 ^ 254 + tQNat := by
+      norm_num [PALLAS_SCALAR_CARD, tQNat]
+    rw [hs, show 2 ^ 254 + ZMod.val input_alpha + tQNat
+        = ZMod.val input_alpha + PALLAS_SCALAR_CARD from by rw [hq]; ring,
+      add_nsmul, (pallas_nsmul_eq_zero_iff hB PALLAS_SCALAR_CARD).mpr dvd_rfl,
+      _root_.add_zero]
+  have hIx : Expression.eval env input_var_base.x = input_base.x :=
+    congrArg Ecc.Point.x h_input.2
+  have hIy : Expression.eval env input_var_base.y = input_base.y :=
+    congrArg Ecc.Point.y h_input.2
+  -- the LSB step
+  rcases hk0Bool with hk0 | hk0
+  · -- k₀ = 0: the correction point is −B, the result is [m₃ − 1]B
+    replace hCorrNeg := hCorrNeg hk0
+    rw [hbx, hby, hIx, hIy, hBx, hBy,
+      show CompElliptic.CurveForms.ShortWeierstrass.neg (B.x, B.y) = ((-B).x, (-B).y)
+        from by simp [CompElliptic.CurveForms.ShortWeierstrass.neg]] at hCorrNeg
+    have hK := hKpart 0 (by omega)
+      (by push_cast; linear_combination hOvZ0 - hk0 - 2 * hZcCell)
+    have hAdd2S := (hAdd2 ⟨by
+      rw [hCorrNeg]
+      exact Or.inl (SWPoint.onCurve_of_ne_zero (neg_ne_zero.mpr hB)), hValidAcc⟩).2
+    rw [hCorrNeg, hCompPair, Pallas.add_coords,
+      neg_add_nsmul B (by rw [hm3]; omega)] at hAdd2S
+    simp only [Nat.add_assoc, Nat.reduceAdd] at hAdd2S ⊢
+    rw [hAdd2S,
+      hfin (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 - 1)
+        (by rw [hm3]; omega)]
+  · -- k₀ = 1: the correction point is the identity, the result is [m₃]B
+    replace hCorrZero := hCorrZero hk0
+    have hK := hKpart 1 (by omega)
+      (by push_cast; linear_combination hOvZ0 - hk0 - 2 * hZcCell)
+    have hAdd2S := (hAdd2 ⟨by rw [hCorrZero]; exact Or.inr rfl, hValidAcc⟩).2
+    rw [hCorrZero, hCompPair,
+      show ((0 : Fp), (0 : Fp))
+        = ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y) from rfl,
+      Pallas.add_coords, _root_.zero_add] at hAdd2S
+    simp only [Nat.add_assoc, Nat.reduceAdd] at hAdd2S ⊢
+    rw [hAdd2S,
+      hfin (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3)
+        (by rw [hm3]; omega)]
 
 theorem completeness : Completeness Fp main Assumptions := by
   sorry
