@@ -62,6 +62,13 @@ cross between different spellings of the same value by **syntactic rewriting** (
    while the structurally identical completeness proof explodes: completeness names the
    honest prover values concretely.
 
+   **`set` is not enough for this.** `set x := e with hx` introduces a let-bound local
+   that the kernel can still zeta-unfold, so the dangerous value remains reducible. Only
+   the `obtain`-an-existential form produces a genuinely opaque variable. (The short
+   fixed-base mul soundness proof originally used `set` for the window function and died
+   in the kernel; switching to `obtain ⟨ks, hks_def⟩ : ∃ ks', ks' = fun w => ... := ⟨_, rfl⟩`
+   fixed it.)
+
 ## Measuring honestly
 
 - **`#count_heartbeats in` lies for this purpose.** It runs the command with an
