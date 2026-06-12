@@ -266,10 +266,18 @@ Implemented building blocks:
   value-level spec layer (`Specs.Sinsemilla`: incomplete `⸭`, `⊥`-propagating chain) is
   the semantic anchor.
 
+- `hash_to_point.rs::hash_all_pieces` + public-`Q` initialization:
+  `Sinsemilla.Entry.circuit` (`GeneralFormalCircuit.WithHint`, proven sound and
+  complete for any nonempty list of per-piece word counts). Pieces are chained by a
+  recursive bundled tower (`Sinsemilla.Chain.circuit`): each level emits the gate
+  completing its own piece's last double-and-add step against the next level's
+  exposed first row (`q_s2 = 0` between pieces, `q_s2 = 2` for the final gate whose
+  dummy row carries the witnessed final `y_a`), and the entry adds the constant
+  `x_Q` cell plus the `q_sinsemilla4` (`Initial y_Q`) gate. The `Spec` lands at
+  `Specs.Sinsemilla.hashToPoint` from the protocol-spec value layer.
+
 Missing source-level APIs:
 
-- `SinsemillaInstructions::hash_to_point` (the piece-composing entry: piece chaining
-  with `q_s2 = 0` boundary / `q_s2 = 2` final gates and `y_Q` initialization)
 - `SinsemillaInstructions::hash_to_point_with_private_init`
 - `HashDomain::hash`
 - `CommitDomain::blinding_factor`
@@ -278,7 +286,7 @@ Missing source-level APIs:
 - `MerkleInstructions::hash_layer`
 - `MerklePath::calculate_root`
 
-The remaining repairs depend on the composing `hash_to_point` entry plus complete
+The remaining repairs are thin wrappers over the `hash_to_point` entry plus complete
 addition and fixed-base scalar multiplication for the commit domains.
 
 ### Orchard Entry APIs

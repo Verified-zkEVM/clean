@@ -1483,4 +1483,117 @@ def circuit (G : Generators) : (ns : List ℕ) →
 
 end Chain
 
+/-!
+### The `hash_to_point` entry (`SinsemillaInstructions::hash_to_point`)
+
+Public-point initialization: `x_Q` is constrained to the domain constant, the chain
+runs with the accumulator hint `y_Q`, and the `q_sinsemilla4` gate (`Initial y_Q`)
+pins the first row's derived `Y_A` to `2·y_Q`.
+-/
+
+namespace Entry
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
+    (pieces : Var (fields (ns.length + 1)) Ecc.Fp) :
+    Circuit Ecc.Fp (Var Ecc.Point Ecc.Fp) := do
+  let xQ <== Expression.const Q.x
+  let out ← (Chain.circuit G (n₀ :: ns)).1
+    { pieces := pieces, xA := xQ, yA := fun _ => Q.y }
+  InitialYQ.circuit { yQ := Q.y } { doubleAndAdd := out.first }
+  return out.point
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
+    (ns : List ℕ) :
+    ElaboratedCircuit Ecc.Fp (fields (ns.length + 1)) Ecc.Point (main G Q n₀ ns) where
+  localLength _ := 1 + Chain.chainLength (n₀ :: ns)
+  localLength_eq := by
+    intro input offset
+    simp only [main, circuit_norm, (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.1,
+      InitialYQ.circuit]
+  channelsLawful := by
+    dsimp only [ElaboratedCircuit.ChannelsLawful]
+    dsimp only [main]
+    simp only [circuit_norm, seval, InitialYQ.circuit,
+      (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.1,
+      (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2]
+    try trivial
+
+def Spec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
+    (pieces : Value (fields (ns.length + 1)) Ecc.Fp) (output : Ecc.Point Ecc.Fp)
+    (_ : ProverData Ecc.Fp) : Prop :=
+  ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
+    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+      output = { x := B.x, y := B.y }
+
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
+    (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Ecc.Fp)
+    (_ : ProverData Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+  Chain.PieceBounds (n₀ :: ns) pieces ∧
+  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+    (Chain.honestChunks (n₀ :: ns) pieces) = some B
+
+def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
+    (pieces : ProverValue (fields (ns.length + 1)) Ecc.Fp) (output : Ecc.Point Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+      (Chain.honestChunks (n₀ :: ns) pieces) = some B →
+    output = { x := B.x, y := B.y }
+
+theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (n₀ : ℕ) (ns : List ℕ) :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q n₀ ns)
+      (fun _ _ => True) (Spec G Q n₀ ns) := by
+  circuit_proof_start [main, Spec, InitialYQ.circuit, InitialYQ.Spec]
+  obtain ⟨h_xQ, h_chain, h_yQ⟩ := h_holds
+  simp only [(Chain.circuit G (n₀ :: ns)).2.2.1] at h_chain
+  replace h_chain := h_chain trivial
+  rw [(Chain.circuit G (n₀ :: ns)).2.1] at h_chain
+  simp only [Chain.Spec] at h_chain
+  obtain ⟨hfxA, chunks, hPC, hchainAll⟩ := h_chain
+  refine ⟨⟨chunks, hPC, ?_⟩, Or.inl (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2⟩
+  intro B hB
+  obtain ⟨px, py⟩ := hchainAll Q hQ (by rw [h_xQ])
+    (by exact h_yQ.symm) B hB
+  rw [px, py]
+
+theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (n₀ : ℕ) (ns : List ℕ) :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q n₀ ns)
+      (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, InitialYQ.circuit,
+    InitialYQ.Spec]
+  obtain ⟨h_xQ_env, h_chain_env⟩ := h_env
+  obtain ⟨hbounds, B, hchain⟩ := h_assumptions
+  have hPSchain := h_chain_env (by
+    rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
+    exact ⟨hbounds, Q, B, hQ, h_xQ_env.symm, rfl, hchain⟩)
+  rw [(Chain.circuit G (n₀ :: ns)).2.2.2.2.1] at hPSchain
+  obtain ⟨-, htfxA, hAfun⟩ := hPSchain
+  obtain ⟨henter, hBfin⟩ := hAfun Q hQ h_xQ_env.symm rfl
+  obtain ⟨px, py⟩ := hBfin B hchain
+  refine ⟨⟨h_xQ_env, ?_, ?_⟩, ?_⟩
+  · -- the chain's honest assumptions (same as above)
+    rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
+    exact ⟨hbounds, Q, B, hQ, h_xQ_env.symm, rfl, hchain⟩
+  · -- the initial-y_Q gate on honest values
+    exact henter
+  · -- the entry contract
+    intro B' hB'
+    rw [hchain] at hB'
+    obtain rfl : B = B' := Option.some.inj hB'
+    dsimp only at px py
+    rw [px, py]
+
+def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (n₀ : ℕ) (ns : List ℕ) :
+    GeneralFormalCircuit.WithHint Ecc.Fp (fields (ns.length + 1)) Ecc.Point where
+  main := main G Q n₀ ns
+  Spec := Spec G Q n₀ ns
+  ProverAssumptions := ProverAssumptions G Q n₀ ns
+  ProverSpec := ProverSpec G Q n₀ ns
+  soundness := soundness G Q hQ n₀ ns
+  completeness := completeness G Q hQ n₀ ns
+
+end Entry
+
 end Orchard.Sinsemilla
