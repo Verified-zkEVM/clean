@@ -257,10 +257,10 @@ def iterCellsValue (baseX baseY xA yA : Fp) (bit : Bool) : IterCells Fp :=
     xANext := l.xANext }
 
 /-- The accumulated multiplier after `b` double-and-add steps starting from `[m]P`:
-`m_b = 2 m_{b-1} + k_{b-1}`. -/
+each step computes `(acc + (2k-1) P) + acc`, so `m_b = 2 m_{b-1} + 2 k_{b-1} - 1`. -/
 def accScalar (m : ℕ) (bits : ℕ → Bool) : ℕ → ℕ
   | 0 => m
-  | b + 1 => 2 * accScalar m bits b + (if bits b then 1 else 0)
+  | b + 1 => 2 * accScalar m bits b + (if bits b then 1 else 0) * 2 - 1
 
 /-! ### Circuit -/
 
