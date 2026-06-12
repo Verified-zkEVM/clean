@@ -241,11 +241,6 @@ def circuit (L : ℕ) [NeZero L] : FormalCircuit Fp (fields L) field where
       Permute.mainP128Circuit, AbsorbPermute.circuit, Sponge.GetOutput.circuit
     ]
 
-/-!
-The source-shaped generic scheduler above mirrors the `ConstantLength<L>` padding loop.
-Packaging its dependent `foldlRange` proof is the remaining proof task; fixed one-block
-hashes are already packaged by `HashPaddedBlock.circuit`.
--/
 
 end ConstantLength
 
