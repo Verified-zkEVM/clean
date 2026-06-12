@@ -321,7 +321,6 @@ end
 instance {n : ℕ} : ToString (UnverifiedPrattCertificate n) where
   toString := fun c => s!"{repr c}"
 
-
 mutual
 
   partial def computePrattPart (l : List PrimeWithMultiplicity) : Option UnverifiedPrattPart := do

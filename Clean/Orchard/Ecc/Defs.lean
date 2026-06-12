@@ -56,4 +56,7 @@ def neg [Neg F] (point : Point F) : Point F where
 end Point
 
 end Ecc
+
+export Ecc (Fp Fq)
+
 end Orchard

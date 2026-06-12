@@ -148,9 +148,22 @@ def circuit : FormalCircuit <Field> <Input> <Output> where
 ```
 
 If a given Halo2 API has both a low-level gate and a synthesis-level entry point circuit,
-use a `.Gate` namespace for the gate, not a `.Entry` namespace for the entry point.
+use a `.Gate` namespace for the gate, not a `.Entry` namespace for the entry point. The
+source-shaped entry point should live directly in the source namespace as `main` and
+`circuit`; the custom-gate assertion should live under `Namespace.Gate.main` and
+`Namespace.Gate.circuit`.
+
+Namespace-local structs that exist only to collect inputs to a gate or method should be
+called `Input`, not `Row`, unless the Halo2 source type itself is row-like and explicitly
+named that way.
 
 In general, follow Halo2 file/chip organization and naming closely.
+
+Use dotted namespace declarations for multi-component source paths. Prefer
+`namespace Orchard.Poseidon.Permute` over stacked declarations like
+`namespace Orchard; namespace Poseidon; namespace Permute`. Local one-component
+subnamespaces are fine when grouping adjacent definitions inside an already-open source
+namespace.
 
 For example, if Halo2 has source modules `add_incomplete.rs` and `add.rs`, then Clean
 modules and namespaces should follow that source shape as `AddIncomplete` and `Add`.
@@ -160,6 +173,30 @@ Similarly, match halo2 names of columns and assigned cells with the same Clean v
 If a gate takes a column and then uses both `Rotation::curr` and `Rotation::next`, pass an input struct
 containing both `{ curr: F; next: F }`.
 
-**Code style**. Don't add layers of indirection that don't exist in the halo2 source. For example, if an gate's `configure` method directly
-constructs and returns a list of constraint expression, the Clean custom gate circuit should do the same instead of defining a named wrapper
-for every single of these constraints.
+**Code style**. Don't add layers of indirection that don't exist in the halo2 source. In particular, do **not** name tiny expression fragments or individual constraint checks when Halo2 writes them inline in `configure` / `create_gate`.
+
+Bad:
+
+```lean
+def output0 (params : Params Fp) (row : Input Fp) : Fp :=
+  pow5 (row.cur0 + params.rcA0) * params.m00 +
+    pow5 (row.cur1 + params.rcA1) * params.m01 +
+    pow5 (row.cur2 + params.rcA2) * params.m02
+
+def next0Check (params : Params Fp) (row : Input Fp) : Fp :=
+  output0 params row - row.next0
+
+def main (params : Params Fp) (row : Var Input Fp) : Circuit Fp Unit := do
+  assertZero (next0Check params row)
+```
+
+Good:
+
+```lean
+def main (params : Params Fp) (row : Var Input Fp) : Circuit Fp Unit := do
+  let paramsExpr := params.toExpr
+  assertZero (
+    pow5 (row.cur0 + paramsExpr.rcA0) * paramsExpr.m00 +
+      pow5 (row.cur1 + paramsExpr.rcA1) * paramsExpr.m01 +
+      pow5 (row.cur2 + paramsExpr.rcA2) * paramsExpr.m02 - row.next0)
+```

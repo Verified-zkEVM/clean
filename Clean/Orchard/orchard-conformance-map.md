@@ -115,13 +115,27 @@ Source:
 
 Current Clean coverage:
 
-- `Clean.Orchard.Poseidon.FullRound.circuit`: `GATE full round`
-- `Clean.Orchard.Poseidon.PartialRounds.circuit`: `GATE partial rounds`
-- `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
-
-`FullRound` and `PartialRounds` already take fixed-column round constants and matrix
-entries as Lean parameters. No source-level permutation or hash API is currently
-implemented.
+- Source-shaped Poseidon modules live in `Clean.Orchard.Poseidon.Pow5`,
+  `Clean.Orchard.Poseidon.Sponge`, and `Clean.Orchard.Poseidon.Hash`; concrete Pallas
+  constants from `halo2_poseidon/src/fp.rs` live in
+  `Clean.Orchard.Poseidon.Pow5.Constants`.
+- Custom gates are packaged:
+  - `Clean.Orchard.Poseidon.FullRound.Gate.circuit`: `GATE full round`
+  - `Clean.Orchard.Poseidon.PartialRounds.Gate.circuit`: `GATE partial rounds`
+  - `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
+- Source entry-point circuits are packaged:
+  - `Clean.Orchard.Poseidon.Permute.mainP128ConcreteCircuit`: concrete P128
+    `Pow5Chip::permute`
+  - `Clean.Orchard.Poseidon.Sponge.InitialState.circuit`:
+    `Pow5Chip::initial_state`
+  - `Clean.Orchard.Poseidon.Sponge.AddInput.circuit`: `Pow5Chip::add_input`
+  - `Clean.Orchard.Poseidon.Sponge.GetOutput.circuit`:
+    `PoseidonSpongeInstructions::get_output`
+  - `Clean.Orchard.Poseidon.Hash.Init.circuit`: `Hash::init`
+  - `Clean.Orchard.Poseidon.Hash.HashPaddedBlock.concreteCircuit`: one-padded-block
+    P128 `Hash::hash`
+  - `Clean.Orchard.Poseidon.Hash.ConstantLength.circuit`: generic rate-2
+    `Hash::hash` for `ConstantLength<L>` with `L > 0`
 
 ### Sinsemilla And Merkle
 
@@ -193,8 +207,8 @@ Current concrete cases:
 
 ### Concrete Circuit Field
 
-The plan requires Orchard circuits to use `Ecc.Fp` concretely. Several
-modules still define helper functions and some assertions generically over
+The plan requires Orchard circuits to use the concrete Orchard `Fp` circuit field.
+Several modules still define helper functions and some assertions generically over
 `{F : Type} [Field F]` or generic semiring-like typeclass sets. These should be
 specialized or isolated so Orchard circuit packages themselves are Pallas-base circuits,
 and field facts needed by specs are proved for that concrete field instead of assumed by
@@ -210,7 +224,7 @@ Source-conformant repairs should use Clean `lookup` and explicit `Table` definit
 where Halo2 uses lookup tables. This is required before higher-level range-dependent
 gadgets can be considered source-conformant.
 
-Note that `GATE range check` (`decompose_running_sum.rs`) is *not* lookup-backed in
+Note that `GATE range check` (`decompose_running_sum.rs`) is _not_ lookup-backed in
 halo2: it is the polynomial constraint `range_check(word, 8)` and the Clean port is
 source-conformant.
 
@@ -244,20 +258,6 @@ not fully match source row layout:
   itself. It is used by `RunningSumCoords` and `FullWidth`.
 - `GATE Canonicity checks` lacks the surrounding lookup/running-sum API and exact
   fixed/advice column and rotation layout for base-field fixed-base mul.
-
-### Poseidon Entry APIs
-
-The named custom gates are present, but the source-level APIs are not:
-
-- `Pow5Chip::permute`
-- `PoseidonSpongeInstructions::initial_state`
-- `PoseidonSpongeInstructions::add_input`
-- `Hash::init`
-- `Hash::hash`
-
-Do not reintroduce wrapper circuits that expose explicit permutation rows or hash
-boundary values as caller inputs. The source APIs witness/copy cells internally and should
-be ported with that surface.
 
 ### Sinsemilla And Merkle Entry APIs
 

@@ -66,3 +66,26 @@ Commit range: `6451581a^..0e96c5f1`
 - When proof automation can see through copied values, prefer short proof scripts using
   `set`, `specialize`, `simp only`, and existing helper theorems over manually rebuilding
   full gate input records in the proof.
+
+Pow5 review: <https://github.com/Verified-zkEVM/clean/pull/405#pullrequestreview-3430008781>
+
+- For multi-component namespaces, use dotted namespace declarations such as
+  `namespace Orchard.Poseidon.Permute`; do not stack `namespace Orchard`,
+  `namespace Poseidon`, `namespace Permute` blocks.
+- Put a custom gate and its source-level wrapper next to each other in the same source
+  namespace: `FullRound.Gate.circuit` followed by `FullRound.main` /
+  `FullRound.circuit`, and similarly for `PartialRounds`.
+- Expose Orchard field names by namespace export (`export Ecc (Fp Fq)`) instead of abbrev
+  aliases, and use those Orchard-level names in Orchard gadget code.
+- Keep large ported constants and their arithmetic proof lemmas in constants modules, not
+  inline with gadget/chip code.
+- Remove unused source markers, compatibility wrappers, explanatory dead-code notes, and
+  imports immediately; dead or decorative code is a style violation even when harmless.
+- Namespace-local gate input bundles should be named `Input`, not ad-hoc names like `Row`,
+  especially when a gate spans more than one Halo2 row.
+- Do not factor tiny one-off gate expressions into named helpers when Halo2 writes them
+  inline. Both layers are wrong: `output0 := ...` for a one-line gate expression, and
+  `next0Check := output0 params row - row.next0` for its residual. These are not useful
+  abstractions; they are non-source-shaped indirection. Inline such expressions in the
+  gate `main` / assertion list unless the helper names a real Halo2 concept or is
+  substantively reused.
