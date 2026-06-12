@@ -25,14 +25,20 @@ could not be matched by `rw` or `simp only` under any formulation we tried:
 
 Whatever kabstract compares differs in something not surfaced by `pp.explicit`
 (binder types? structure-eta forms? metadata?). The eventual fix was architectural:
-restructure the circuit to witness per-column **vectors** and build gate rows by
-index (the `HashPiece` shape), eliminating fold-carried state entirely.
+restructure the circuit so no iteration's *output* mentions the loop state.
 
-Recommendations:
-- treat "loops whose state is consumed by later per-row reasoning" as an
-  anti-pattern in circuit style guidance, or
-- make the framework normalize fold outputs into a nameable form, or
-- provide a debugging mode that prints exactly what kabstract compares.
+**Post-mortem (added later):** the framework already encodes the right contract —
+`Circuit.foldl` demands `ConstantOutput`, which is precisely what makes its proofs
+collapse (`SHA256Compress.fin_foldl_eq_stateVar`, `Keccak/Permutation`); and even
+state-dependent outputs are provable via the explicit `stateVar` +
+`foldlAcc_eq_stateVar` recipe in `SHA256Compress.lean`. The failed body used
+`foldlRange`, whose only hypothesis is `ConstantLength`, so the trap surfaced deep
+inside the soundness proof instead of at definition time. The double-and-add was
+eventually rebuilt with `Circuit.mapFinRange` over per-row witness blocks (row-major,
+matching the halo2 assignment order), which has closed-form `output_eq`/`forAll`
+lemmas and needed no collapse lemma at all. Tracked as
+https://github.com/Verified-zkEVM/clean/issues/407 (document the loop combinators'
+differing contracts; consider demanding `ConstantOutput` or warning in `foldlRange`).
 
 ## 2. Selective unfolding is load-bearing and trial-and-error
 

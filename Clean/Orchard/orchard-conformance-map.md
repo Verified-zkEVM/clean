@@ -86,6 +86,12 @@ Current Clean coverage:
   `GATE q_mul_2 == 1 checks`
 - `Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete.Loop.circuit`:
   `GATE q_mul_3 == 1 checks`
+- `Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete.DoubleAndAdd.circuit`:
+  `incomplete.rs::Config::double_and_add` (`CircuitVersion::AnchoredBase`), fully
+  proven (soundness and completeness). Witness cells are created in the source's
+  assignment order: the three starting copies (`z`, `x_a`, `y_a`), then per loop row
+  `z, x_p, y_p, λ1, λ2, x_a(next)` exactly as `assign_advice`/`copy_advice` are
+  called, then the final `y_a`.
 - `Clean.Orchard.Ecc.ScalarMul.Mul.Overflow.circuit`: `GATE overflow checks`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.Coords.circuit`: helper for `coords_check`,
   without a `GATE` name
