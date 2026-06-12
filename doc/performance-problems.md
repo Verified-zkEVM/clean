@@ -94,6 +94,48 @@ cross between different spellings of the same value by **syntactic rewriting** (
    hypothesis term `‹r < 1›` (which elaborates to `by assumption`). Branch explicitly
    (`rcases Nat.lt_or_ge r 1 with h | h`) so omega only runs where it succeeds.
 
+## Kernel size cliffs in completeness proofs of large compositions
+
+A second, distinct kernel failure mode showed up in the variable-base scalar-mul *entry*
+circuit (`Mul/Assign.lean`, a composition of five verified subcircuits): the
+completeness proof elaborates fine, every goal closes, and the kernel still reports
+`(kernel) deep recursion detected` at the theorem header. Bisection (move a closing
+`sorry` through the proof) showed no single poisonous step — instead a *cliff*: past a
+certain accumulated proof-term size, any marginal addition (a small lemma application, a
+`rw`, even an `exact` with all arguments sorried) tips the kernel over. Facts that made
+the bisection legible:
+
+- **`have`-bound terms are never pruned.** `have h := e; rest` elaborates to
+  `(fun h => rest) e`, so `e` is in the final term whether or not `h` is used. The only
+  things excluded from the kernel's workload are tactics *after* the goal-closer. A
+  "minimal" repro with one `have hAcc := h_env.1; sorry` can therefore carry the entire
+  normalization cast of `h_env` — and an unused-looking hypothesis is never free.
+- **`rcases`/`obtain` on a big conjunction multiplies the goal into every `casesOn`
+  motive** (item 7 above, but it bites the kernel too, not just the elaborator budget).
+  An 11-way `obtain` on the completeness `h_env` died where `.1`/`.2` projections passed.
+- **`circuit_proof_start`'s one-shot `simp ... at h_env` can be the largest single
+  cast.** For this circuit the kernel could not re-check it at all. Workaround (see
+  `Assign.lean`): `circuit_proof_start_core`, then `dsimp only [main, circuit_norm] at
+  h_env` (definitional, castless), project the components with `.1`/`.2`, `clear h_env`,
+  and `simp only [circuit_norm, h_input, <child circuits>]` on each small component
+  separately. Each per-component cast is kernel-checkable.
+- **Move every self-contained argument into a standalone `private theorem` over opaque
+  variables.** Each lemma is kernel-checked as its own declaration; the main proof pays
+  only an application node. In `Assign.lean` this rescued the honest-witness arguments
+  (`chain_cells`, `z0_cell_value`, `mul_spec_honest`, …) which all kernel-fail when
+  inlined and all pass standalone.
+
+When all of the above still isn't enough — the parent is simply too big — the fix is
+architectural: **split the parent into subcircuits**. Subcircuits in Clean are virtual:
+they add no constraints, witnesses, or wiring, so introducing one where the reference
+implementation (e.g. halo2) inlines a function preserves circuit/VK fidelity exactly.
+But each child's soundness/completeness becomes its own kernel-checked declaration, and
+the parent sees one folded `Assumptions → Spec` implication per child instead of the
+child's full operation list. This is the same decomposition that keeps Poseidon, Keccak,
+BLAKE3 and SHA-2 tractable. Rule of thumb: *when a parent circuit's completeness
+kernel-fails at the theorem header and bisection shows a cliff rather than a culprit,
+the circuit is asking for a subcircuit boundary.*
+
 ## Measuring honestly
 
 - **`#count_heartbeats in` lies for this purpose.** It runs the command with an

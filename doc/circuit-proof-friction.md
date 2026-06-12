@@ -40,6 +40,26 @@ lemmas and needed no collapse lemma at all. Tracked as
 https://github.com/Verified-zkEVM/clean/issues/407 (document the loop combinators'
 differing contracts; consider demanding `ConstantOutput` or warning in `foldlRange`).
 
+## 1b. `circuit_proof_start`'s `h_env` normalization is kernel-fatal for large parents
+
+For the scalar-mul entry circuit (five verified children composed in one `main`), the
+single `simp only [circuit_norm, h_input, ...] at h_env` that `circuit_proof_start`
+performs produces a rewrite cast the kernel cannot re-check: `(kernel) deep recursion
+detected` at the theorem header as soon as `h_env` is referenced. The manual recipe that
+works (see `Mul/Assign.lean`, `completeness`): `circuit_proof_start_core`; `dsimp only
+[main, circuit_norm] at h_env` (definitional, so no cast); bind each conjunct with
+`have hX := h_env.2.….1` projections (an `obtain` re-embeds the giant tail in every
+`casesOn` motive — also kernel-fatal); `clear h_env`; then simp each small component
+separately. Even then the parent sits on a kernel size cliff (see
+`performance-problems.md`), and the durable fix is splitting the parent into virtual
+subcircuits.
+
+Recommendation: a completeness variant of `circuit_proof_start` that uses the
+dsimp-then-project-then-per-component strategy for `h_env`, and (more importantly)
+documentation steering authors of large compositions toward subcircuit boundaries at the
+reference implementation's function boundaries (e.g. halo2's `process_lsb`) *before*
+they fight the kernel.
+
 ## 2. Selective unfolding is load-bearing and trial-and-error
 
 Putting expression-level helper defs (`Sinsemilla.DoubleAndAdd.yA`/`xR`) into the
