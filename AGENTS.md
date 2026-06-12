@@ -111,6 +111,24 @@ subcircuit. Do not inline a child gadget by calling `Child.main input` from a pa
 circuit. Inlining defeats Clean's subcircuit proof structure and forces parent proofs to
 trace through every nested child operation.
 
+### ElaboratedCircuit and `elaborate_circuit`
+
+FormalCircuit and variants carry an instance of `ElaboratedCircuit`, which exposes
+circuit data like `localLength` and `output` in explicit, fully reduced form. This helps parent
+circuits simplify without unfolding child circuit internals.
+
+Inline `FormalCircuit` declarations get their elaborated metadata from the
+default `elaborated := by elaborate_circuit`; factored circuits have to define a standalone
+`ElaboratedCircuit` instance since that is needed by `Soundness`.
+
+If elaboration fails, do not treat that as an insurmountable blocker.
+Inspect a potential failing `ExplicitCircuit` / `ExplicitCircuits` goal. Sometimes adding the right
+leaf instance can get past that.
+In rare cases, defining the `ElaboratedCircuit` by hand is a workaround for failing `elaborate_circuit`.
+
+Relevant code and examples are in `Clean/Circuit/Explicit.lean`, especially `infer_explicit_circuit`,
+`infer_explicit_circuits`, `elaborate_circuit`, `elaborate_circuit_with`.
+
 ## Proof Patterns
 
 ### Starting a Proof
