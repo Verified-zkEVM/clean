@@ -574,6 +574,143 @@ def shortRangeCircuit (numBits : ℕ) : FormalAssertion F ShortRangeCheck where
     rw [h_input]
     exact (RunningSum.rangeCheckPoly_eq_zero_iff (2 ^ numBits) input_word).mpr h_spec
 
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/lookup_range_check.rs`
+- `PallasLookupRangeCheck::copy_check` / `range_check` (with `strict = false`)
+
+`copy_check` copies an element into a fresh running-sum cell `z_0` and decomposes it
+into `K`-bit words via the running sum `z_{i+1} = (z_i - a_i) / 2^K`. Each word
+`a_i = z_i - 2^K * z_{i+1}` is constrained by a lookup into the 10-bit `table_idx`
+table. With `strict = false`, the final `z_{numWords}` is not constrained to zero; for
+an honest prover it carries the high bits `element >> (K * numWords)`.
+-/
+
+/-- Number of bits constrained per lookup word (`sinsemilla::K`). -/
+def K : ℕ := 10
+
+/-- The 10-bit range table `table_idx`. In Orchard it is preloaded by the Sinsemilla
+chip; here it is the static table of the field elements `0, …, 2^K - 1`. -/
+def tableIdx : Table Ecc.Fp field := .fromStatic {
+  name := "table_idx"
+  length := 2 ^ K
+  row i := (i.val : Ecc.Fp)
+  index := fun (x : Ecc.Fp) => x.val
+  Spec := fun (x : Ecc.Fp) => x.val < 2 ^ K
+  contains_iff := by
+    intro (x : Ecc.Fp)
+    constructor
+    · rintro ⟨i, rfl⟩
+      show ((i.val : Ecc.Fp)).val < 2 ^ K
+      rw [ZMod.val_natCast_of_lt (lt_trans i.is_lt (by norm_num [K]))]
+      exact i.is_lt
+    · intro h
+      exact ⟨⟨x.val, h⟩, (ZMod.natCast_zmod_val x).symm⟩
+}
+
+namespace CopyCheck
+
+def main (numWords : ℕ) (element : Expression Ecc.Fp) :
+    Circuit Ecc.Fp (Var (fields (numWords + 1)) Ecc.Fp) := do
+  -- copy `element` into the running-sum column as `z_0`
+  let z₀ <== element
+  -- z_{i+1} = (z_i - a_i) / 2^K; for the honest prover, z_i = element >> (K * i)
+  let zRest ← witnessVector numWords fun env =>
+    .ofFn fun (i : Fin numWords) =>
+      (((env element).val / 2 ^ (K * (i.val + 1)) : ℕ) : Ecc.Fp)
+  let zs := Vector.cast (Nat.add_comm 1 numWords) (#v[z₀] ++ zRest)
+  let words : Vector (Expression Ecc.Fp) numWords := .ofFn fun i =>
+    zs[i.val]'(Nat.lt_succ_of_lt i.isLt) -
+      (2 ^ K : Ecc.Fp) * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt)
+  Circuit.forEach words (lookup tableIdx)
+  return zs
+
+/-- The output cells form a `K`-bit running-sum decomposition of `element`:
+`z_0 = element` and each step satisfies `z_i = 2^K * z_{i+1} + a_i` for a `K`-bit
+word `a_i`. -/
+def Spec (numWords : ℕ) (element : Ecc.Fp) (zs : fields (numWords + 1) Ecc.Fp) : Prop :=
+  zs[0]'(Nat.succ_pos numWords) = element ∧
+    ∀ i : Fin numWords, ∃ word : ℕ, word < 2 ^ K ∧
+      zs[i.val]'(Nat.lt_succ_of_lt i.isLt) =
+        2 ^ K * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt) + (word : Ecc.Fp)
+
+instance elaborated (numWords : ℕ) :
+    ElaboratedCircuit Ecc.Fp field (fields (numWords + 1)) (main numWords) := by
+  elaborate_circuit
+
+theorem soundness (numWords : ℕ) :
+    Soundness (Input:=field) (Output:=fields (numWords + 1)) Ecc.Fp (main numWords)
+      (fun _ => True) (Spec numWords) := by
+  circuit_proof_start [main, Spec, tableIdx]
+  obtain ⟨h_copy, h_lookup⟩ := h_holds
+  constructor
+  · simpa [circuit_norm] using h_copy
+  · intro i
+    have h := h_lookup i
+    simp only [Vector.getElem_ofFn] at h
+    refine ⟨_, h, ?_⟩
+    rw [ZMod.natCast_zmod_val]
+    simp only [circuit_norm]
+    ring
+
+/-- The honest word `z_i - 2^K * z_{i+1}` with `z_i = a, z_{i+1} = a / 2^K` is the low
+`K`-bit chunk of `a`, hence in range. -/
+private theorem word_val_lt (a : ℕ) :
+    ZMod.val ((a : Ecc.Fp) - 2 ^ K * ((a / 2 ^ K : ℕ) : Ecc.Fp)) < 2 ^ K := by
+  have h2K : (2 ^ K : ℕ) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  have hsub : (a : Ecc.Fp) - 2 ^ K * ((a / 2 ^ K : ℕ) : Ecc.Fp)
+      = ((a % 2 ^ K : ℕ) : Ecc.Fp) := by
+    have h := congrArg (Nat.cast (R := Ecc.Fp)) (Nat.mod_add_div a (2 ^ K))
+    push_cast at h
+    linear_combination -h
+  rw [hsub, ZMod.val_natCast_of_lt (lt_trans (Nat.mod_lt _ (by norm_num [K])) h2K)]
+  exact Nat.mod_lt _ (by norm_num [K])
+
+theorem completeness (numWords : ℕ) :
+    Completeness (Input:=field) (Output:=fields (numWords + 1)) Ecc.Fp (main numWords)
+      (fun _ => True) := by
+  circuit_proof_start [main, tableIdx]
+  obtain ⟨h_z0, h_zs⟩ := h_env
+  refine ⟨h_z0, fun i => ?_⟩
+  set x : Ecc.Fp := input with hx
+  have h_zval : ∀ (j : ℕ) (hj : j < numWords),
+      env.get (i₀ + 1 + j) = ((x.val / 2 ^ (K * (j + 1)) : ℕ) : Ecc.Fp) := by
+    intro j hj
+    have h := h_zs ⟨j, hj⟩
+    simpa using h
+  simp only [Vector.getElem_ofFn]
+  rcases i with ⟨_ | j, hi⟩
+  · have h1 := h_zval 0 hi
+    norm_num at h1
+    simp only [Vector.getElem_append, Vector.getElem_mapRange]
+    norm_num
+    simp only [Expression.eval]
+    rw [h_z0, h1]
+    have h := word_val_lt x.val
+    rw [ZMod.natCast_zmod_val] at h
+    simpa [sub_eq_add_neg] using h
+  · have h1 := h_zval j (by omega)
+    have h2 := h_zval (j + 1) hi
+    simp only [Vector.getElem_append, Vector.getElem_mapRange]
+    norm_num
+    simp only [Expression.eval]
+    rw [h1, h2]
+    have h := word_val_lt (x.val / 2 ^ (K * (j + 1)))
+    rw [Nat.div_div_eq_div_mul, ← pow_add,
+      show K * (j + 1) + K = K * (j + 1 + 1) by ring] at h
+    simpa [sub_eq_add_neg] using h
+
+def circuit (numWords : ℕ) : FormalCircuit Ecc.Fp field (fields (numWords + 1)) where
+  main := main numWords
+  elaborated := elaborated numWords
+  Assumptions _ := True
+  Spec := Spec numWords
+  soundness := soundness numWords
+  completeness := completeness numWords
+
+end CopyCheck
+
 end LookupRangeCheck
 
 end Utilities
