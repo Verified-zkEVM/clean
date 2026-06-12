@@ -1,4 +1,6 @@
 import Clean.Orchard.Ecc.ScalarMul.Defs
+import Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete
+import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
 
 /-!
@@ -90,5 +92,112 @@ def circuit : FormalAssertion Fp Row where
           simp [circuit_norm, ternary, hzPrev, hzNext, hbaseY, hyP, hy]
           left
           linear_combination -hBit
+
+/-!
+### `complete.rs::Config::assign_region`
+
+The three complete-addition bits `k_3, k_2, k_1` of variable-base scalar mul. Each bit
+extends the running sum, conditionally negates the base y-coordinate (checked by the
+decomposition gate above), and performs two complete additions:
+`acc ← acc + (acc + U)` with `U = (base.x, ±base.y)`.
+-/
+
+namespace AssignRegion
+
+open CompElliptic.Curves.Pasta
+open Incomplete.DoubleAndAdd (BitsHint zRunValue)
+
+/-- Inputs: the base point, the accumulator cells from incomplete addition, the
+running-sum cell, and the prover-side complete-range bits (indexed `0..2`). -/
+structure Input (F : Type) where
+  base : Ecc.Point F
+  xA : F
+  yA : F
+  z : F
+  bits : Unconstrained BitsHint F
+deriving CircuitType
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ base := { x := default, y := default }, xA := default, yA := default,
+     z := default, bits := fun _ => default }⟩
+
+structure Output (F : Type) where
+  acc : Ecc.Point F
+  zs : Vector F 3
+deriving ProvableStruct
+
+/-- One complete-addition step on coordinate pairs:
+`acc + (U + acc)` with `U = (base.x, ±base.y)`. -/
+def stepValue (baseX baseY : Fp) (acc : Fp × Fp) (bit : Bool) : Fp × Fp :=
+  Pallas.add acc (Pallas.add (baseX, if bit then baseY else -baseY) acc)
+
+/-- The accumulator after the first `b` complete-addition steps. -/
+def accValue (baseX baseY : Fp) (acc : Fp × Fp) (bits : ℕ → Bool) : ℕ → Fp × Fp
+  | 0 => acc
+  | b + 1 => stepValue baseX baseY (accValue baseX baseY acc bits b) (bits b)
+
+def main (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
+  -- copy the running sum from incomplete addition
+  let z₀ <== input.z
+  -- the interstitial running-sum cells of the three complete bits
+  let zs ← witnessVector 3 fun env =>
+    .ofFn fun (b : Fin 3) => zRunValue (env input.z) (input.bits env) b.val
+  let zsAll := Vector.cast (Nat.add_comm 1 3) ((#v[z₀] : Vector (Expression Fp) 1) ++ zs)
+  let acc₀ : Var Ecc.Point Fp := { x := input.xA, y := input.yA }
+  let accFinal ← Circuit.foldlRange 3 acc₀ fun acc i => do
+    -- copy base.y for the decomposition gate, witness the conditionally-negated y_p
+    let baseY <== input.base.y
+    let yP ← witnessField fun env =>
+      if input.bits env i.val then env input.base.y else -(env input.base.y)
+    Complete.circuit {
+      zPrev := zsAll[i.val]'(by have := i.isLt; omega),
+      zNext := zsAll[i.val + 1]'(by have := i.isLt; omega),
+      baseY, yP }
+    -- U = (base.x, y_p); acc + U, then acc + (acc + U)
+    let tmp ← Add.circuit { p := { x := input.base.x, y := yP }, q := acc }
+    Add.circuit { p := acc, q := tmp }
+  return { acc := accFinal, zs }
+
+instance elaborated : ElaboratedCircuit Fp Input Output main := by
+  elaborate_circuit
+
+def Spec (input : Value Input Fp) (output : Output Fp) (_ : ProverData Fp) : Prop :=
+  ∃ bits : ℕ → Bool,
+    (output.zs[0] = 2 * input.z + (if bits 0 then 1 else 0) ∧
+      ∀ b : Fin 2, output.zs[b.val + 1] =
+        2 * output.zs[b.val]'(by have := b.isLt; omega) +
+          (if bits (b.val + 1) then 1 else 0)) ∧
+    (Pallas.Valid (input.xA, input.yA) → Pallas.Valid input.base.coords →
+      Pallas.Valid output.acc.coords ∧
+        output.acc.coords = accValue input.base.x input.base.y (input.xA, input.yA) bits 3)
+
+def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
+    (_ : ProverHint Fp) : Prop :=
+  Pallas.Valid (input.xA, input.yA) ∧ Pallas.Valid input.base.coords
+
+def ProverSpec (input : ProverValue Input Fp) (output : Output Fp)
+    (_ : ProverHint Fp) : Prop :=
+  (∀ b : Fin 3, output.zs[b.val] = zRunValue input.z input.bits b.val) ∧
+  output.acc.coords = accValue input.base.x input.base.y (input.xA, input.yA) input.bits 3
+
+theorem soundness :
+    GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True) Spec := by
+  sorry
+
+theorem completeness :
+    GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
+  sorry
+
+/-- `complete.rs::Config::assign_region`: the complete-addition bits of variable-base
+scalar multiplication. -/
+def circuit : GeneralFormalCircuit.WithHint Fp Input Output where
+  main
+  Spec
+  ProverAssumptions
+  ProverSpec
+  soundness
+  completeness
+
+end AssignRegion
 
 end Orchard.Ecc.ScalarMul.Mul.Complete

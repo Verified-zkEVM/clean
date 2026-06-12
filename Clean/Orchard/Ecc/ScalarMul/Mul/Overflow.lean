@@ -1,4 +1,5 @@
 import Clean.Orchard.Ecc.ScalarMul.Defs
+import Clean.Orchard.Utilities
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/overflow.rs`.
@@ -97,5 +98,69 @@ def circuit : FormalAssertion Fp Row where
             simp
           · rw [hSMinusLo130]
             simp
+
+/-!
+### `overflow.rs::Config::overflow_check`
+
+Witnesses `s = alpha + k_254 ⋅ 2^130`, decomposes its low 130 bits with thirteen
+10-bit lookups (`copy_check`, strict = false), witnesses `η = inv0(z_130)`, and applies
+the overflow gate to the copied cells.
+-/
+
+namespace OverflowCheck
+
+/-- Inputs: the original scalar cell and the running-sum cells the check inspects,
+`z_0` (full sum), `z_130` (after the hi half), and `k_254 = z_254` (first bit). -/
+structure Input (F : Type) where
+  alpha : F
+  z0 : F
+  z130 : F
+  k254 : F
+deriving ProvableStruct
+
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  -- s = alpha + k_254 ⋅ 2^130
+  let s ← witnessField fun env => env input.alpha + env input.k254 * (2 ^ 130 : Fp)
+  -- decompose the low 130 bits of s using thirteen 10-bit lookups
+  let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 s
+  -- s_minus_lo_130 = (s - (2^0 s_0 + ... + 2^129 s_129)) / 2^130
+  let sMinusLo130 := zsDecomp[13]
+  -- η = inv0(z_130)
+  let eta ← witnessField fun env =>
+    if env input.z130 = 0 then 0 else (env input.z130)⁻¹
+  Overflow.circuit {
+    z0 := input.z0, z130 := input.z130, eta, k254 := input.k254,
+    alpha := input.alpha, sMinusLo130, s }
+
+/-- The semantic contract of the overflow check: `z_0` recovers `alpha + t_q`, and the
+canonicity disjunctions over the 130-bit decomposition of `s = alpha + k_254 ⋅ 2^130`
+hold. The decomposition is existential: some split `s = s_lo + 2^130 ⋅ s_hi` with
+`s_lo < 2^130` satisfies the per-case vanishing. -/
+def Spec (input : Input Fp) : Prop :=
+  input.z0 = input.alpha + tQ ∧
+  (input.k254 = 0 ∨ input.z130 = (2 ^ 124 : Fp)) ∧
+  ∃ (sHi : Fp) (sLo : ℕ), sLo < 2 ^ 130 ∧
+    input.alpha + input.k254 * (2 ^ 130 : Fp) = (sLo : Fp) + (2 ^ 130 : Fp) * sHi ∧
+    (input.k254 = 0 ∨ sHi = 0) ∧
+    (input.k254 = 1 ∨ input.z130 ≠ 0 ∨ sHi = 0)
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+theorem soundness : FormalAssertion.Soundness Fp main (fun _ => True) Spec := by
+  sorry
+
+theorem completeness : FormalAssertion.Completeness Fp main (fun _ => True) Spec := by
+  sorry
+
+/-- `overflow.rs::Config::overflow_check`. -/
+def circuit : FormalAssertion Fp Input where
+  main
+  Assumptions _ := True
+  Spec
+  soundness
+  completeness
+
+end OverflowCheck
 
 end Orchard.Ecc.ScalarMul.Mul.Overflow
