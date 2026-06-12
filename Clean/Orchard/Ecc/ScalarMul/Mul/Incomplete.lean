@@ -927,10 +927,275 @@ theorem soundness (n : ℕ) :
     exact Prod.ext hx (mul_left_cancel₀ Add.pallas_two_ne_zero hy)
 
 
+/-- The honest accumulator entering row `r` is `[accScalar m bits r] P`, by induction
+over `honest_step`'s output conclusions. -/
+private theorem accVal_eq_nsmul {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ → Bool)
+    {m : ℕ} (h2 : 2 ≤ m) (n : ℕ) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254) :
+    ∀ r, r ≤ n + 1 →
+      accVal P.x P.y (m • P).x (m • P).y bits r
+        = ((accScalar m bits r • P).x, (accScalar m bits r • P).y) := by
+  intro r hr
+  induction r with
+  | zero => rfl
+  | succ v ih =>
+    have hacc := ih (by omega)
+    have hM2 : 2 ≤ accScalar m bits v := accScalar_two_le h2 bits v
+    have hMle : accScalar m bits v ≤ 2 ^ v * (m + 1) - 1 := accScalar_le bits v
+    have hpow : 2 ^ v * (m + 1) ≤ 2 ^ (n + 1) * (m + 1) :=
+      Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by omega))
+    have hMbound : 2 * accScalar m bits v + 1 < PALLAS_SCALAR_CARD := by
+      have h254 := pow254_lt_card
+      have hsplit : 2 ^ (n + 2) * (m + 1) = 2 * (2 ^ (n + 1) * (m + 1)) := by ring
+      omega
+    have hstep := honest_step hP bits hM2 hMbound v
+    simp only [accVal]
+    rw [hacc]
+    exact Prod.ext hstep.2.2.1 hstep.2.2.2
+
 theorem completeness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main n) (ProverAssumptions n)
       (ProverSpec n) := by
-  sorry
+  circuit_proof_start [main, ProverAssumptions, ProverSpec, Init.circuit, Init.Spec,
+    MainLoop.circuit, MainLoop.Spec, Loop.circuit, Loop.Spec]
+  obtain ⟨he_z0, he_xA0, he_yA0, he_rows, he_yAF, -⟩ := h_env
+  obtain ⟨P, mm, hP, hbase, hacc, h2m, hbnd⟩ := h_assumptions
+  obtain ⟨hbx, hby⟩ : Expression.eval env.toEnvironment input_var.base.x = P.x ∧
+      Expression.eval env.toEnvironment input_var.base.y = P.y := by
+    have h := h_input.1
+    constructor
+    · rw [show Expression.eval env.toEnvironment input_var.base.x = input_base.x from
+        by rw [← h]]
+      exact congrArg Prod.fst hbase
+    · rw [show Expression.eval env.toEnvironment input_var.base.y = input_base.y from
+        by rw [← h]]
+      exact congrArg Prod.snd hbase
+  obtain ⟨haccx, haccy⟩ : input_xA = (mm • P).x ∧ input_yA = (mm • P).y :=
+    ⟨congrArg Prod.fst hacc, congrArg Prod.snd hacc⟩
+  -- the honest accumulator in point coordinates
+  have hAV : ∀ r, r ≤ n + 1 →
+      accVal P.x P.y input_xA input_yA input_bits r
+      = ((accScalar mm input_bits r • P).x, (accScalar mm input_bits r • P).y) := by
+    rw [haccx, haccy]
+    exact accVal_eq_nsmul hP input_bits h2m n hbnd
+  have hMbound : ∀ r, r ≤ n → 2 * accScalar mm input_bits r + 1 < PALLAS_SCALAR_CARD := by
+    intro r hr
+    have hMle := accScalar_le (m := mm) input_bits r
+    have hpow : 2 ^ r * (mm + 1) ≤ 2 ^ (n + 1) * (mm + 1) :=
+      Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by omega))
+    have h254 := pow254_lt_card
+    have hsplit : 2 ^ (n + 2) * (mm + 1) = 2 * (2 ^ (n + 1) * (mm + 1)) := by ring
+    have hpos : 0 < 2 ^ r * (mm + 1) := by positivity
+    omega
+  have hHS := fun (r : ℕ) (hr : r ≤ n) =>
+    honest_step hP input_bits (accScalar_two_le h2m input_bits r) (hMbound r hr) r
+  -- the honest lambda cells in point coordinates
+  have hRL : ∀ r, r ≤ n + 1 →
+      rowLambdaValue P.x P.y input_xA input_yA input_bits r
+      = lambdaCellsValue P.x P.y ((accScalar mm input_bits r • P).x)
+          ((accScalar mm input_bits r • P).y) (input_bits r) := by
+    intro r hr
+    simp only [rowLambdaValue]
+    simp only [hAV r hr]
+  -- the xANext defining identity at any row
+  have hXdef : ∀ r,
+      (lambdaCellsValue P.x P.y ((accScalar mm input_bits r • P).x)
+        ((accScalar mm input_bits r • P).y) (input_bits r)).xANext
+      = (lambdaCellsValue P.x P.y ((accScalar mm input_bits r • P).x)
+          ((accScalar mm input_bits r • P).y) (input_bits r)).lambda2 *
+        (lambdaCellsValue P.x P.y ((accScalar mm input_bits r • P).x)
+          ((accScalar mm input_bits r • P).y) (input_bits r)).lambda2
+        - (accScalar mm input_bits r • P).x
+        - ((lambdaCellsValue P.x P.y ((accScalar mm input_bits r • P).x)
+            ((accScalar mm input_bits r • P).y) (input_bits r)).lambda1 *
+           (lambdaCellsValue P.x P.y ((accScalar mm input_bits r • P).x)
+            ((accScalar mm input_bits r • P).y) (input_bits r)).lambda1
+           - (accScalar mm input_bits r • P).x - P.x) :=
+    fun r => rfl
+  -- the conditionally negated y of the per-bit point
+  have hSy : ∀ b, (stepPoint P input_bits b).y
+      = ((if input_bits b then 1 else 0) * 2 - 1) * P.y := by
+    intro b
+    unfold stepPoint
+    rcases Bool.dichotomy (input_bits b) with hb | hb <;> rw [hb]
+    · show (-P).y = _
+      rw [show ((-P : SWPoint Pallas.curve)).y = -P.y from rfl]
+      norm_num
+    · show P.y = _
+      norm_num
+  -- the running-sum step in subtraction form
+  have hZB : ∀ (z : Fp) (r : ℕ), zRunValue z input_bits r -
+      (if r = 0 then z else zRunValue z input_bits (r - 1)) * 2
+      = (if input_bits r then 1 else 0) := by
+    intro z r
+    rcases r with _ | r'
+    · rw [if_pos rfl]
+      show 2 * z + (if input_bits 0 then 1 else 0) - z * 2 = _
+      rcases Bool.dichotomy (input_bits 0) with hb | hb <;> rw [hb] <;> norm_num <;> ring
+    · rw [if_neg (Nat.succ_ne_zero r'), Nat.add_sub_cancel]
+      show 2 * zRunValue z input_bits r' + (if input_bits (r' + 1) then 1 else 0)
+        - zRunValue z input_bits r' * 2 = _
+      rcases Bool.dichotomy (input_bits (r' + 1)) with hb | hb <;> rw [hb] <;> norm_num <;> ring
+  have hIB : ∀ r : ℕ, IsBool (zRunValue input_z input_bits r -
+      (if r = 0 then input_z else zRunValue input_z input_bits (r - 1)) * 2) := by
+    intro r
+    rw [hZB input_z r]
+    rcases Bool.dichotomy (input_bits r) with hb | hb <;> rw [hb]
+    · left; norm_num
+    · right; norm_num
+  -- the cleaned per-row cell facts, in point coordinates
+  have hcell : ∀ (r : ℕ), r < n + 1 →
+      env.get (i₀ + 1 + 1 + 1 + r * 6) = zRunValue input_z input_bits r ∧
+      env.get (i₀ + 1 + 1 + 1 + r * 6 + 1) = P.x ∧
+      env.get (i₀ + 1 + 1 + 1 + r * 6 + 1 + 1) = P.y ∧
+      env.get (i₀ + 1 + 1 + 1 + r * 6 + 1 + 1 + 1)
+        = (lambdaCellsValue P.x P.y ((accScalar mm input_bits r • P).x)
+            ((accScalar mm input_bits r • P).y) (input_bits r)).lambda1 ∧
+      env.get (i₀ + 1 + 1 + 1 + r * 6 + 1 + 1 + 1 + 1)
+        = (lambdaCellsValue P.x P.y ((accScalar mm input_bits r • P).x)
+            ((accScalar mm input_bits r • P).y) (input_bits r)).lambda2 ∧
+      env.get (i₀ + 1 + 1 + 1 + r * 6 + 1 + 1 + 1 + 1 + 1)
+        = (accScalar mm input_bits (r + 1) • P).x := by
+    intro r hr
+    have hc := he_rows ⟨r, hr⟩
+    rw [hbx, hby] at hc
+    refine ⟨hc.1, hc.2.1, hc.2.2.1, ?_, ?_, ?_⟩
+    · rw [hc.2.2.2.1, hRL r (by omega)]
+    · rw [hc.2.2.2.2.1, hRL r (by omega)]
+    · rw [hc.2.2.2.2.2, hAV (r + 1) (by omega)]
+  have he_yAFP : env.get (i₀ + 1 + 1 + 1 + (n + 1) * 6)
+      = (accScalar mm input_bits (n + 1) • P).y := by
+    rw [show i₀ + 1 + 1 + 1 + (n + 1) * 6 = (n + 1) * 6 + (i₀ + 1 + 1 + 1) from by ring,
+      he_yAF, hbx, hby, hAV (n + 1) (by omega)]
+  have hM0 : mm • P = accScalar mm input_bits 0 • P := rfl
+  refine ⟨⟨he_z0, he_xA0, he_yA0, (he_rows ⟨0, by omega⟩).2.1, (he_rows ⟨0, by omega⟩).2.2.1,
+    ?_, ?_, ?_⟩, ?_, ?_⟩
+  · -- q_mul_1: the copied y_a is the derived y of the first row
+    obtain ⟨hz0c, hxp0, hyp0, hl10, hl20, hxn0⟩ := hcell 0 (by omega)
+    have h0 := (hHS 0 (by omega)).2.1
+    simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+    norm_num
+    simp only [Expression.eval]
+    norm_num at hxp0 hl10 hl20 h0
+    rw [he_yA0, he_xA0, hxp0, hl10, hl20, haccx, haccy, hM0]
+    linear_combination h0
+  · -- q_mul_2 row gates
+    intro i
+    obtain ⟨j, hj⟩ := i
+    simp only [Vector.get]
+    obtain ⟨hz_j, hxp_j, hyp_j, hl1_j, hl2_j, hxn_j⟩ := hcell j (by omega)
+    obtain ⟨hz_j1, hxp_j1, hyp_j1, hl1_j1, hl2_j1, hxn_j1⟩ := hcell (j + 1) (by omega)
+    have hg := hHS j (by omega)
+    have hgS := hHS (j + 1) (by omega)
+    have h4 := hZB input_z j
+    have hb3 := hIB j
+    have hsy := hSy j
+    rcases j with _ | j'
+    · -- first row gate
+      rw [if_pos rfl] at h4 hb3
+      rw [show 2 * accScalar mm input_bits 0 + (if input_bits 0 then 1 else 0) * 2 - 1
+        = accScalar mm input_bits 1 from rfl] at hg
+      norm_num
+      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      norm_num at hz_j hxp_j hyp_j hl1_j hl2_j hxn_j hxp_j1 hyp_j1 hl1_j1 hl2_j1
+      rw [hxp_j, hxp_j1, hyp_j, hyp_j1, hz_j, he_z0, he_xA0, hl1_j, hl2_j, hxn_j,
+        hl1_j1, hl2_j1, haccx, hM0]
+      refine ⟨rfl, rfl, hb3, ?_, ?_, ?_⟩
+      · linear_combination -hg.1 + hg.2.1 - 2 * hsy + 4 * P.y * h4
+      · linear_combination hg.2.2.1 - hXdef 0
+      · linear_combination 2 * hg.2.2.2 + hg.2.1 + hgS.2.1 +
+          2 * (lambdaCellsValue P.x P.y (accScalar mm input_bits 0 • P).x
+            (accScalar mm input_bits 0 • P).y (input_bits 0)).lambda2 * hg.2.2.1
+    · -- later row gates
+      rw [if_neg (Nat.succ_ne_zero j'), Nat.add_sub_cancel] at h4 hb3
+      obtain ⟨hz_p, -, -, -, -, hxn_p⟩ := hcell j' (by omega)
+      replace hgS := hHS (j' + 2) (by omega)
+      rw [show 2 * accScalar mm input_bits (j' + 1) +
+          (if input_bits (j' + 1) then 1 else 0) * 2 - 1
+        = accScalar mm input_bits (j' + 2) from rfl] at hg
+      norm_num
+      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      rw [hxp_j, hxp_j1, hyp_j, hyp_j1, hz_j, hz_p, hxn_p, hl1_j, hl2_j, hxn_j,
+        hl1_j1, hl2_j1]
+      refine ⟨rfl, rfl, hb3, ?_, ?_, ?_⟩
+      · linear_combination -hg.1 + hg.2.1 - 2 * hsy + 4 * P.y * h4
+      · linear_combination hg.2.2.1 - hXdef (j' + 1)
+      · linear_combination 2 * hg.2.2.2 + hg.2.1 + hgS.2.1 +
+          2 * (lambdaCellsValue P.x P.y (accScalar mm input_bits (j' + 1) • P).x
+            (accScalar mm input_bits (j' + 1) • P).y (input_bits (j' + 1))).lambda2 *
+            hg.2.2.1
+  · -- q_mul_3: the last row gate against the witnessed final y_a
+    obtain ⟨hz_n, hxp_n, hyp_n, hl1_n, hl2_n, hxn_n⟩ := hcell n (by omega)
+    have hg := hHS n (by omega)
+    have h4 := hZB input_z n
+    have hb3 := hIB n
+    have hsy := hSy n
+    rcases Nat.eq_zero_or_pos n with hn | hn
+    · subst hn
+      rw [if_pos rfl] at h4 hb3
+      rw [show 2 * accScalar mm input_bits 0 + (if input_bits 0 then 1 else 0) * 2 - 1
+        = accScalar mm input_bits 1 from rfl] at hg
+      norm_num
+      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      norm_num at hz_n hxp_n hyp_n hl1_n hl2_n hxn_n he_yAFP
+      rw [hz_n, he_z0, he_xA0, hxp_n, hyp_n, hl1_n, hl2_n, hxn_n, he_yAFP,
+        haccx, hM0]
+      refine ⟨hb3, ?_, ?_, ?_⟩
+      · linear_combination -hg.1 + hg.2.1 - 2 * hsy + 4 * P.y * h4
+      · linear_combination hg.2.2.1 - hXdef 0
+      · linear_combination 2 * hg.2.2.2 + hg.2.1 +
+          2 * (lambdaCellsValue P.x P.y (accScalar mm input_bits 0 • P).x
+            (accScalar mm input_bits 0 • P).y (input_bits 0)).lambda2 * hg.2.2.1
+    · obtain ⟨hz_p, -, -, -, -, hxn_p⟩ := hcell (n - 1) (by omega)
+      rw [if_neg (by omega)] at h4 hb3
+      rw [show n - 1 + 1 = n from by omega] at hxn_p
+      rw [show 2 * accScalar mm input_bits n + (if input_bits n then 1 else 0) * 2 - 1
+        = accScalar mm input_bits (n + 1) from rfl] at hg
+      norm_num
+      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        apply_ite (Expression.eval env.toEnvironment),
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      simp only [if_neg (Nat.pos_iff_ne_zero.mp hn)]
+      rw [hz_n, hz_p, hxn_p, hxp_n, hyp_n, hl1_n, hl2_n, hxn_n, he_yAFP]
+      refine ⟨hb3, ?_, ?_, ?_⟩
+      · linear_combination -hg.1 + hg.2.1 - 2 * hsy + 4 * P.y * h4
+      · linear_combination hg.2.2.1 - hXdef n
+      · linear_combination 2 * hg.2.2.2 + hg.2.1 +
+          2 * (lambdaCellsValue P.x P.y (accScalar mm input_bits n • P).x
+            (accScalar mm input_bits n • P).y (input_bits n)).lambda2 * hg.2.2.1
+  · -- the interstitial running-sum outputs
+    intro b
+    obtain ⟨bv, hbv⟩ := b
+    exact (hcell bv (by omega)).1
+  · -- the final accumulator outputs
+    intro P' mm' hP' hbase' hacc' h2m' hbnd'
+    obtain ⟨hbx', hby'⟩ : Expression.eval env.toEnvironment input_var.base.x = P'.x ∧
+        Expression.eval env.toEnvironment input_var.base.y = P'.y := by
+      have h := h_input.1
+      constructor
+      · rw [show Expression.eval env.toEnvironment input_var.base.x = input_base.x from
+          by rw [← h]]
+        exact congrArg Prod.fst hbase'
+      · rw [show Expression.eval env.toEnvironment input_var.base.y = input_base.y from
+          by rw [← h]]
+        exact congrArg Prod.snd hbase'
+    obtain ⟨haccx', haccy'⟩ : input_xA = (mm' • P').x ∧ input_yA = (mm' • P').y :=
+      ⟨congrArg Prod.fst hacc', congrArg Prod.snd hacc'⟩
+    have hAV' : accVal P'.x P'.y input_xA input_yA input_bits (n + 1)
+        = ((accScalar mm' input_bits (n + 1) • P').x,
+           (accScalar mm' input_bits (n + 1) • P').y) := by
+      rw [haccx', haccy']
+      exact accVal_eq_nsmul hP' input_bits h2m' n hbnd' (n + 1) le_rfl
+    have hxout : env.get (i₀ + 1 + 1 + 1 + n * 6 + 1 + 1 + 1 + 1 + 1)
+        = (accScalar mm' input_bits (n + 1) • P').x := by
+      rw [(he_rows ⟨n, by omega⟩).2.2.2.2.2, hbx', hby', hAV']
+    have hyout : env.get (i₀ + 1 + 1 + 1 + (n + 1) * 6)
+        = (accScalar mm' input_bits (n + 1) • P').y := by
+      rw [show i₀ + 1 + 1 + 1 + (n + 1) * 6 = (n + 1) * 6 + (i₀ + 1 + 1 + 1) from by ring,
+        he_yAF, hbx', hby', hAV']
+    exact Prod.ext hxout hyout
 
 /-- `incomplete.rs::Config::<{n+1}>::double_and_add` (`CircuitVersion::AnchoredBase`).
 Instantiated at `n = 124` for the `hi` half and `n = 125` for the `lo` half. -/
