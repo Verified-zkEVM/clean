@@ -416,8 +416,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
       | zero => simp
       | succ v ih =>
         have h := hmf_word ⟨v, by omega⟩
-        rw [if_neg (show ¬ (⟨v, by omega⟩ : Fin (w + 1)).val = w by
-          simp only [Fin.val_mk]; omega)] at h
+        rw [if_neg (show ¬ (⟨v, by omega⟩ : Fin (w + 1)).val = w by simp; omega)] at h
         rw [ih (by omega), Finset.sum_range_succ]
         rw [← hms_at v (by omega)] at h
         push_cast
@@ -482,6 +481,71 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
           (by linear_combination hyck - 4 * (dR r).lambda2 * hxAr - 2 * hyAr)
         exact ⟨hpin.1, hpin.2.symm⟩
   exact hinv w (by omega) B hchain
+
+
+
+theorem soundness (G : Generators) (w : ℕ) :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G w) (fun _ _ => True)
+      (Spec G w) := by
+  circuit_proof_start [main, Spec, Gate.circuit, Gate.Spec, generatorTable]
+  obtain ⟨h_copy, h_lookups, h_gates⟩ := h_holds
+  simp only [Vector.get, Vector.getElem_ofFn, Vector.getElem_append, Vector.getElem_mapRange,
+    circuit_norm] at h_lookups h_gates ⊢
+  obtain ⟨dR, hdR⟩ : ∃ dR : ℕ → DoubleAndAddRow Ecc.Fp, dR = fun r =>
+      { xA := if _ : r = 0 then input_xA
+          else env.get (i₀ + 1 + w + (w + 1) + (w + 1) + (w + 1) + (r - 1)),
+        xP := env.get (i₀ + 1 + w + r),
+        lambda1 := env.get (i₀ + 1 + w + (w + 1) + r),
+        lambda2 := env.get (i₀ + 1 + w + (w + 1) + (w + 1) + r) } := ⟨_, rfl⟩
+  obtain ⟨zV, hzV⟩ : ∃ zV : ℕ → Ecc.Fp, zV = fun r =>
+      if _ : r < 1 then env.get i₀ else env.get (i₀ + 1 + (r - 1)) := ⟨_, rfl⟩
+  have hL : ∀ r, r < w + 1 → ∃ m : ℕ, m < 2 ^ K ∧
+      (if r = w then zV r else zV r - 2 ^ K * zV (r + 1)) = (m : Ecc.Fp) ∧
+      (dR r).xP = (G.S m).x ∧
+      DoubleAndAdd.yA (dR r) * (2 : Ecc.Fp)⁻¹
+        - (dR r).lambda1 * ((dR r).xA - (dR r).xP) = (G.S m).y := by
+    intro r hr
+    obtain ⟨m, hm, hidx, hx, hy⟩ := h_lookups ⟨r, hr⟩
+    simp only [DoubleAndAdd.yA, DoubleAndAdd.xR, apply_dite (Expression.eval env),
+      h_input.2.1, circuit_norm] at hidx hx hy
+    refine ⟨m, hm, ?_, by simp only [hdR]; exact hx, ?_⟩
+    · simp only [hzV]
+      rcases Nat.lt_or_ge r 1 with h0 | h0
+      · obtain rfl : r = 0 := by omega
+        split_ifs at hidx ⊢ <;> try omega
+        all_goals try simp only [circuit_norm, List.getElem_cons_zero,
+          show ∀ a : ℕ, a + 1 - 1 = a from fun _ => rfl, Nat.add_zero] at hidx
+        all_goals try simp only [show ∀ a : ℕ, a + 1 - 1 = a from fun _ => rfl,
+          Nat.add_zero]
+        all_goals linear_combination hidx
+      · split_ifs at hidx ⊢ <;> try omega
+        all_goals try simp only [circuit_norm,
+          show ∀ a : ℕ, a + 1 - 1 = a from fun _ => rfl] at hidx
+        all_goals try simp only [show ∀ a : ℕ, a + 1 - 1 = a from fun _ => rfl]
+        all_goals linear_combination hidx
+    · simp only [hdR, DoubleAndAdd.yA, DoubleAndAdd.xR]
+      linear_combination hy
+  have hG : ∀ r, r < w →
+      ((dR r).lambda2 * (dR r).lambda2
+        = (dR (r + 1)).xA + ((dR r).lambda1 * (dR r).lambda1 - (dR r).xA - (dR r).xP)
+          + (dR r).xA) ∧
+      4 * (dR r).lambda2 * ((dR r).xA - (dR (r + 1)).xA)
+        = 2 * DoubleAndAdd.yA (dR r) + 2 * DoubleAndAdd.yA (dR (r + 1)) := by
+    intro r hr
+    obtain ⟨hsec, hy⟩ := h_gates ⟨r, hr⟩
+    simp only [Gate.yLhs, Gate.yRhs, Gate.qS3, DoubleAndAdd.yA, DoubleAndAdd.xR,
+      apply_dite (Expression.eval env), h_input.2.1, circuit_norm] at hsec hy
+    constructor
+    · simp only [hdR]
+      linear_combination hsec
+    · simp only [hdR, DoubleAndAdd.yA, DoubleAndAdd.xR]
+      linear_combination hy
+  have haux := soundness_aux G w dR zV input_piece input_xA
+    (by simp only [hdR]; rfl) (by simp only [hzV]; exact h_copy) hL hG
+  simpa only [hdR, hzV, apply_ite (Expression.eval env), dite_eq_ite,
+    eq_self_iff_true, if_true, Nat.add_zero, h_input.2.1, circuit_norm] using haux
+
+
 
 
 end HashPiece
