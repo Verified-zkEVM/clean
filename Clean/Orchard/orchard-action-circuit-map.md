@@ -36,7 +36,9 @@ Source baseline:
             - Clean: partially modeled through Sinsemilla/message-piece gates; no complete source-level message-piece API.
           - `RangeConstrained::witness_short`
             - Source: `halo2_gadgets/src/utilities/lookup_range_check.rs`
-            - Clean: generic `shortRangeCircuit` and tagged 4/5B `taggedShortRangeCircuit` are lookup-backed in `Clean/Orchard/Utilities.lean`.
+            - Clean: `LookupRangeCheck.WitnessShort.circuit` and
+              `LookupRangeCheck.WitnessShort.taggedCircuit` in
+              `Clean/Orchard/Utilities.lean`; both call lookup-backed short checks.
           - `SinsemillaChip::hash_to_point`
             - Source: `halo2_gadgets/src/sinsemilla/chip.rs`, `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`
             - Clean: partial work in `Clean/Orchard/Sinsemilla/HashToPoint.lean`; not wired as the full Orchard `hash_to_point` API.
@@ -111,7 +113,9 @@ Source baseline:
         - Clean: implemented in `Clean/Orchard/CommitIvk.lean`.
       - `RangeConstrained::witness_short` for `b_0`, `b_2`, `d_0`
         - Source: `halo2_gadgets/src/utilities/lookup_range_check.rs`
-        - Clean: generic short checks and optimized tagged 4/5B checks are lookup-backed.
+        - Clean: `LookupRangeCheck.WitnessShort.circuit` and
+          `LookupRangeCheck.WitnessShort.taggedCircuit` wrap the generic and optimized
+          lookup-backed short checks.
       - `CommitDomain::short_commit`
         - Source: `halo2_gadgets/src/sinsemilla`
         - Clean: not implemented as a source-level commit/short-commit API. TODO in `Clean/Orchard/Sinsemilla.lean`.
@@ -162,7 +166,8 @@ Source baseline:
       - `YCanonicity`
         - Clean: `NoteCommit.YCanonicity.circuit`.
       - `RangeConstrained::witness_short`
-        - Clean: generic short lookup path and optimized tagged 4/5B path are source-shaped.
+        - Clean: `LookupRangeCheck.WitnessShort.circuit` and
+          `LookupRangeCheck.WitnessShort.taggedCircuit` are source-shaped wrappers.
       - `CommitDomain::commit`
         - Source: `halo2_gadgets/src/sinsemilla`
         - Clean: not implemented as a source-level commit API.

@@ -60,6 +60,12 @@ Current Clean coverage:
 - `Clean.Orchard.Utilities.RunningSum.circuit`: `GATE range check`
 - `Clean.Orchard.Utilities.LookupRangeCheck.circuit`: `GATE Short lookup bitshift`
 - `Clean.Orchard.Utilities.LookupRangeCheck.shortRangeCircuit`: short range-check helper
+- `Clean.Orchard.Utilities.LookupRangeCheck.taggedShortRangeCircuit`: optimized 4/5-bit
+  tagged short range-check helper
+- `Clean.Orchard.Utilities.LookupRangeCheck.WitnessShort.circuit`:
+  `RangeConstrained::witness_short` / `LookupRangeCheck::witness_short_check`
+- `Clean.Orchard.Utilities.LookupRangeCheck.WitnessShort.taggedCircuit`:
+  4/5-bit tagged `RangeConstrained::witness_short` path
 
 ### Scalar Multiplication
 
@@ -223,6 +229,10 @@ operations:
 - `LookupRangeCheck.taggedShortRangeCircuit`: models
   `LookupRangeCheck4_5BConfig::short_range_check` for `num_bits = 4` and `5` with a
   two-column tagged table `(table_idx, table_range_check_tag)`.
+- `LookupRangeCheck.WitnessShort.circuit`: witnesses the prover-only bitrange subset
+  and calls the generic short range-check path.
+- `LookupRangeCheck.WitnessShort.taggedCircuit`: witnesses the prover-only bitrange
+  subset and calls the optimized tagged 4/5-bit path.
 
 Note that `GATE range check` (`decompose_running_sum.rs`) is _not_ lookup-backed in
 halo2: it is the polynomial constraint `range_check(word, 8)` and the Clean port is

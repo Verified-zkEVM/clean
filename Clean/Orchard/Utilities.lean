@@ -959,6 +959,116 @@ def taggedShortRangeCircuit (numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5
     · exact Or.inl ⟨by norm_num, h_spec⟩
     · exact Or.inr ⟨by norm_num, h_spec⟩
 
+namespace WitnessShort
+
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/lookup_range_check.rs`
+- `RangeConstrained::witness_short`
+- `LookupRangeCheck::witness_short_check`
+
+This source-level wrapper witnesses `bitrange_subset(value, bitrange)` from prover data,
+then calls the appropriate short range-check path. The verifier-side spec can only state
+that the output is range-constrained; the prover spec records the honest bitrange
+assignment.
+-/
+
+def bitrangeSubset (value : Fp) (start numBits : ℕ) : Fp :=
+  ((value.val / 2 ^ start % 2 ^ numBits : ℕ) : Fp)
+
+def main (start numBits : ℕ) (hNumBits : numBits ≤ K)
+    (input : Var (UnconstrainedDep field) Fp) : Circuit Fp (Var field Fp) := do
+  let word ← witnessField fun env => bitrangeSubset (input env) start numBits
+  shortRangeCircuit numBits hNumBits { word }
+  return word
+
+def taggedMain (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5)
+    (input : Var (UnconstrainedDep field) Fp) : Circuit Fp (Var field Fp) := do
+  let word ← witnessField fun env => bitrangeSubset (input env) start numBits
+  taggedShortRangeCircuit numBits hBits { word }
+  return word
+
+def Spec (numBits : ℕ) (_input : Value (UnconstrainedDep field) Fp) (output : Fp)
+    (_ : ProverData Fp) : Prop :=
+  output.val < 2 ^ numBits
+
+def ProverSpec (start numBits : ℕ) (input : ProverValue (UnconstrainedDep field) Fp)
+    (output : Fp) (_ : ProverHint Fp) : Prop :=
+  output = bitrangeSubset input start numBits
+
+private theorem bitrangeSubset_val_lt (start numBits : ℕ) (hNumBits : numBits ≤ K)
+    (value : Fp) :
+    (bitrangeSubset value start numBits).val < 2 ^ numBits := by
+  have hPowLtCard : 2 ^ numBits < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hNumBits)
+      (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  have hmod : value.val / 2 ^ start % 2 ^ numBits < 2 ^ numBits :=
+    Nat.mod_lt _ (pow_two_pos _)
+  unfold bitrangeSubset
+  rw [ZMod.val_natCast_of_lt (lt_trans hmod hPowLtCard)]
+  exact hmod
+
+instance elaborated (start numBits : ℕ) (hNumBits : numBits ≤ K) :
+    ElaboratedCircuit Fp (UnconstrainedDep field) field (main start numBits hNumBits) := by
+  elaborate_circuit
+
+instance taggedElaborated (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
+    ElaboratedCircuit Fp (UnconstrainedDep field) field (taggedMain start numBits hBits) := by
+  elaborate_circuit
+
+theorem soundness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
+    GeneralFormalCircuit.WithHint.Soundness (Input:=UnconstrainedDep field) (Output:=field)
+      Fp (main start numBits hNumBits) (fun _ _ => True) (Spec numBits) := by
+  circuit_proof_start [main, Spec, shortRangeCircuit]
+  exact h_holds
+
+theorem taggedSoundness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
+    GeneralFormalCircuit.WithHint.Soundness (Input:=UnconstrainedDep field) (Output:=field)
+      Fp (taggedMain start numBits hBits) (fun _ _ => True) (Spec numBits) := by
+  circuit_proof_start [taggedMain, Spec, taggedShortRangeCircuit]
+  exact h_holds
+
+theorem completeness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
+    GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDep field) (Output:=field)
+      Fp (main start numBits hNumBits) (fun _ _ _ => True) (ProverSpec start numBits) := by
+  circuit_proof_start [main, ProverSpec, shortRangeCircuit, shortRangeSpec]
+  constructor
+  · rw [h_env]
+    exact bitrangeSubset_val_lt start numBits hNumBits input
+  · exact h_env
+
+theorem taggedCompleteness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
+    GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDep field) (Output:=field)
+      Fp (taggedMain start numBits hBits) (fun _ _ _ => True) (ProverSpec start numBits) := by
+  circuit_proof_start [taggedMain, ProverSpec, taggedShortRangeCircuit, shortRangeSpec]
+  constructor
+  · rcases hBits with rfl | rfl
+    · rw [h_env]
+      exact bitrangeSubset_val_lt start 4 (by norm_num [K]) input
+    · rw [h_env]
+      exact bitrangeSubset_val_lt start 5 (by norm_num [K]) input
+  · exact h_env
+
+def circuit (start numBits : ℕ) (hNumBits : numBits ≤ K) :
+    GeneralFormalCircuit.WithHint Fp (UnconstrainedDep field) field where
+  main := main start numBits hNumBits
+  elaborated := elaborated start numBits hNumBits
+  Spec := Spec numBits
+  ProverSpec := ProverSpec start numBits
+  soundness := soundness start numBits hNumBits
+  completeness := completeness start numBits hNumBits
+
+def taggedCircuit (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
+    GeneralFormalCircuit.WithHint Fp (UnconstrainedDep field) field where
+  main := taggedMain start numBits hBits
+  elaborated := taggedElaborated start numBits hBits
+  Spec := Spec numBits
+  ProverSpec := ProverSpec start numBits
+  soundness := taggedSoundness start numBits hBits
+  completeness := taggedCompleteness start numBits hBits
+
+end WitnessShort
+
 namespace CopyCheck
 
 def main (numWords : ℕ) (element : Expression Fp) :
