@@ -276,18 +276,21 @@ Implemented building blocks:
   `x_Q` cell plus the `q_sinsemilla4` (`Initial y_Q`) gate. The `Spec` lands at
   `Specs.Sinsemilla.hashToPoint` from the protocol-spec value layer.
 
+- `sinsemilla.rs` domain APIs (`Clean/Orchard/Sinsemilla/Domain.lean`, all proven
+  sound and complete):
+  - `HashDomain::hash`: `Sinsemilla.HashDomain.circuit` (entry + `x`-extraction).
+  - `CommitDomain::commit`: `Sinsemilla.CommitDomain.circuit`
+    (`M.hash_to_point(msg) + [r] R` via the full-width fixed-base mul and complete
+    addition, mirroring `value_commit_orchard`'s composition).
+  - `CommitDomain::short_commit`: `Sinsemilla.CommitDomain.Short.circuit`.
+  - `CommitDomain::blinding_factor`: `Sinsemilla.CommitDomain.blindingFactor`
+    (the bare `[r] R`, an alias of `MulFixed.FullWidth.circuit`).
+
 Missing source-level APIs:
 
 - `SinsemillaInstructions::hash_to_point_with_private_init`
-- `HashDomain::hash`
-- `CommitDomain::blinding_factor`
-- `CommitDomain::commit`
-- `CommitDomain::short_commit`
 - `MerkleInstructions::hash_layer`
 - `MerklePath::calculate_root`
-
-The remaining repairs are thin wrappers over the `hash_to_point` entry plus complete
-addition and fixed-base scalar multiplication for the commit domains.
 
 ### Orchard Entry APIs
 
