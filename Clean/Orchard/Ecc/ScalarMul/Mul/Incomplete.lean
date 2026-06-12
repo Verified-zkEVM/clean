@@ -226,9 +226,9 @@ coordinates; the conditional negation `(2k-1) y_p` only enters `λ1`. -/
 def lambdaCellsValue (baseX baseY xA yA : Fp) (bit : Bool) : LambdaCells Fp :=
   let yP := if bit then baseY else -baseY
   let lambda1 := (yA - yP) / (xA - baseX)
-  let xR := lambda1 ^ 2 - xA - baseX
+  let xR := lambda1 * lambda1 - xA - baseX
   let lambda2 := 2 * yA / (xA - xR) - lambda1
-  { lambda1, lambda2, xANext := lambda2 ^ 2 - xA - xR }
+  { lambda1, lambda2, xANext := lambda2 * lambda2 - xA - xR }
 
 /-- The honest accumulator `(x_a, y_a)` entering row `r`
 (`incomplete.rs::double_and_add` assignment formulas, total via `0⁻¹ = 0`). -/
@@ -575,7 +575,121 @@ private theorem honest_step {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : �
         ((m • P).x - (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).xANext) -
         (m • P).y
       = ((2 * m + (if bits b then 1 else 0) * 2 - 1) • P).y := by
-  sorry
+  set l := lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b) with hl
+  have hA0 : m • P ≠ 0 := Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)
+  have hxne1 : (m • P).x ≠ P.x := by
+    have h := Ecc.pallas_nsmul_x_ne hP (s := 1) (t := m) (by omega) (by omega) (by omega)
+    rwa [one_nsmul] at h
+  have hxne1' : (m • P).x - P.x ≠ 0 := sub_ne_zero.mpr hxne1
+  -- λ1 is the chord slope through `[m]P` and `±P`
+  have hYP : 2 * (m • P).y - 2 * l.lambda1 * ((m • P).x - P.x)
+      = 2 * (stepPoint P bits b).y := by
+    rw [hl]
+    unfold stepPoint lambdaCellsValue
+    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> simp only [if_true]
+    · show _ = 2 * (-P).y
+      rw [show ((-P : SWPoint Pallas.curve)).y = -P.y from rfl]
+      field_simp
+      norm_num
+    · field_simp
+      ring
+  -- the first incomplete addition: `x_R` is the x-coordinate of `[m ± 1] P`
+  have hyPval : (if bits b then P.y else -P.y) = (stepPoint P bits b).y := by
+    unfold stepPoint
+    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb]
+    · rfl
+    · rfl
+  have hstep := step_nsmul hP bits h2 hBound b
+  -- the spec-level step is two incomplete additions; recover the intermediate point
+  rw [Orchard.Specs.Sinsemilla.step] at hstep
+  have hS0 : stepPoint P bits b ≠ 0 := by
+    unfold stepPoint
+    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb]
+    · exact neg_ne_zero.mpr hP
+    · exact hP
+  have hxSP : (stepPoint P bits b).x = P.x := by
+    unfold stepPoint
+    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb]
+    · rfl
+    · rfl
+  rw [incompleteAdd_some hA0 hS0 (by rw [hxSP]; exact hxne1), Option.bind_some] at hstep
+  set R := m • P + stepPoint P bits b with hR
+  have hRne : R ≠ 0 ∧ R.x ≠ (m • P).x := by
+    constructor
+    · intro h0
+      rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos (Or.inl h0)] at hstep
+      simp at hstep
+    · intro hx
+      rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos (Or.inr (Or.inr hx))] at hstep
+      simp at hstep
+  -- the chord construction lands on `R`
+  have hRadd := Ecc.AddIncomplete.outputValue_eq_add
+    (input := { p := { x := (m • P).x, y := (m • P).y },
+                q := { x := P.x, y := (stepPoint P bits b).y } })
+    (by
+      intro h
+      apply hA0
+      apply SWPoint.ext_pair
+      have hx := congrArg Ecc.Point.x h
+      have hy := congrArg Ecc.Point.y h
+      simp only [Ecc.Point.zero] at hx hy
+      rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
+        = ((0 : Fp), (0 : Fp)) from rfl, hx, hy])
+    (by
+      intro h
+      apply hS0
+      apply SWPoint.ext_pair
+      have hx := congrArg Ecc.Point.x h
+      have hy := congrArg Ecc.Point.y h
+      simp only [Ecc.Point.zero] at hx hy
+      rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
+        = ((0 : Fp), (0 : Fp)) from rfl, hxSP, hx, hy])
+    hxne1
+  rw [show (({ x := (m • P).x, y := (m • P).y } : Ecc.Point Fp)).coords
+      = ((m • P).x, (m • P).y) from rfl,
+    show (({ x := P.x, y := (stepPoint P bits b).y } : Ecc.Point Fp)).coords
+      = ((stepPoint P bits b).x, (stepPoint P bits b).y) from by rw [hxSP]; rfl,
+    Pallas.add_coords, ← hR] at hRadd
+  have hlam1 : l.lambda1 = ((m • P).y - (stepPoint P bits b).y) / ((m • P).x - P.x) := by
+    rw [hl, ← hyPval]
+    rfl
+  have hxne2 : P.x - (m • P).x ≠ 0 := sub_ne_zero.mpr (Ne.symm hxne1)
+  have hRx : l.lambda1 * l.lambda1 - (m • P).x - P.x = R.x := by
+    have h := congrArg Prod.fst hRadd
+    simp only [Ecc.AddIncomplete.outputValue, Ecc.Point.coords] at h
+    rw [← h, hlam1]
+    field_simp
+    ring
+  have hxRne : (m • P).x - (l.lambda1 * l.lambda1 - (m • P).x - P.x) ≠ 0 := by
+    rw [hRx]
+    exact sub_ne_zero.mpr fun h => hRne.2 h.symm
+  -- λ2's defining identity
+  have hlam2 : l.lambda2
+      = 2 * (m • P).y / ((m • P).x - (l.lambda1 * l.lambda1 - (m • P).x - P.x))
+        - l.lambda1 := by
+    rw [hl]
+    rfl
+  have hYA : 2 * (m • P).y
+      = (l.lambda1 + l.lambda2) *
+        ((m • P).x - (l.lambda1 * l.lambda1 - (m • P).x - P.x)) := by
+    rw [hlam2]
+    have hD : (m • P).x - (l.lambda1 ^ 2 - (m • P).x - P.x) ≠ 0 := by
+      rw [pow_two]
+      exact hxRne
+    field_simp
+    ring
+  -- pin the outputs with the row engine
+  have hpinned := Sinsemilla.HashPiece.step_pinned (stepPoint P bits)
+    (step_nsmul hP bits h2 hBound b)
+    (xp := P.x) (lambda1 := l.lambda1) (lambda2 := l.lambda2)
+    (xa' := l.xANext)
+    (YA' := 2 * (l.lambda2 * ((m • P).x - l.xANext) - (m • P).y))
+    hYP (by rw [hxSP]) hYA
+    (by rw [hl]; unfold lambdaCellsValue; ring)
+    (by ring)
+  refine ⟨hYP, hYA, hpinned.1, ?_⟩
+  have h := hpinned.2
+  exact mul_left_cancel₀ Add.pallas_two_ne_zero h
 
 theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
