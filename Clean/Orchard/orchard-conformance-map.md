@@ -102,20 +102,22 @@ Source:
 Current Clean coverage:
 
 - `Clean.Orchard.Poseidon.Pow5` mirrors `poseidon/pow5.rs`.
-- `Clean.Orchard.Poseidon.FullRound.circuit`: `GATE full round`
-- `Clean.Orchard.Poseidon.PartialRounds.circuit`: `GATE partial rounds`
+- `Clean.Orchard.Poseidon.Pow5.Constants` mirrors the concrete Pallas constants from
+  `halo2_poseidon/src/fp.rs`.
+- `Clean.Orchard.Poseidon.FullRound.Gate.circuit`: `GATE full round`
+- `Clean.Orchard.Poseidon.PartialRounds.Gate.circuit`: `GATE partial rounds`
 - `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
 - `Clean.Orchard.Poseidon.Permute.P128Pow5T3.roundConstants` / `mds` / `mdsInv`:
   explicit Pallas-base constants ported from `halo2_poseidon/src/fp.rs`, with proofs
   that `MDS_INV * MDS = I` and `MDS * MDS_INV = I`.
 - `Clean.Orchard.Poseidon.Permute.permuteValue`: plain Lean implementation of the
   width-3/rate-2 `Pow5Chip::permute` schedule.
-- `Clean.Orchard.Poseidon.Permute.fullRoundCircuit`: packaged full-round loop-body
+- `Clean.Orchard.Poseidon.Permute.FullRound.circuit`: packaged full-round loop-body
   subcircuit proving one step against `fullRoundValue`.
 - `Clean.Orchard.Poseidon.Permute.fullRounds4Circuit`: packaged fixed `foldl`
   subcircuit for the four full rounds used by each half of `Pow5Chip::permute`, proving
   one half against `fullRounds4Value`.
-- `Clean.Orchard.Poseidon.Permute.partialRoundP128Circuit`: packaged P128
+- `Clean.Orchard.Poseidon.Permute.PartialRounds.circuitP128`: packaged P128
   partial-round-row subcircuit proving one row against `partialRoundValue`.
 - `Clean.Orchard.Poseidon.Permute.partialRoundRows28P128Circuit`: packaged fixed
   `foldl` subcircuit for the 28 P128 partial-round rows, proving the middle section
@@ -124,9 +126,6 @@ Current Clean coverage:
   `Pow5Chip::permute` circuit proving the full schedule against `permuteP128Value`.
 - `Clean.Orchard.Poseidon.Permute.mainP128ConcreteCircuit`: concrete specialization of
   the P128 permutation package using the ported Pallas round constants.
-- `Clean.Orchard.Poseidon.Permute.main`: source-shaped parameterized compatibility
-  wrapper for experiments with non-P128 constants; it is not packaged because the
-  partial-row proof relies on the explicit P128 MDS inverse lemmas.
 - `Clean.Orchard.Poseidon.Sponge.InitialState.circuit`: packaged width-3/rate-2
   `Pow5Chip::initial_state`, parameterized by the domain capacity element.
 - `Clean.Orchard.Poseidon.Sponge.AddInput.circuit`: packaged width-3/rate-2
@@ -215,8 +214,8 @@ Current concrete cases:
 
 ### Concrete Circuit Field
 
-The plan requires Orchard circuits to use `Ecc.Fp` concretely. Several
-modules still define helper functions and some assertions generically over
+The plan requires Orchard circuits to use the concrete Orchard `Fp` circuit field.
+Several modules still define helper functions and some assertions generically over
 `{F : Type} [Field F]` or generic semiring-like typeclass sets. These should be
 specialized or isolated so Orchard circuit packages themselves are Pallas-base circuits,
 and field facts needed by specs are proved for that concrete field instead of assumed by

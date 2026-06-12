@@ -12,9 +12,6 @@ namespace Orchard
 namespace Poseidon
 namespace Sponge
 
-/-- Source file mirrored by this module. -/
-def sourceFile : String := "halo2_gadgets/src/poseidon.rs"
-
 /-- The rate-2 part of a P128 Poseidon state. -/
 structure Rate2 (F : Type) where
   x0 : F
@@ -31,17 +28,17 @@ namespace InitialState
 
 /-- `Pow5Chip::initial_state` for width 3/rate 2.  The capacity element is supplied by
   the domain (`D::initial_capacity_element()` in Halo2). -/
-def main (capacity : Ecc.Fp) (_ : Var unit Ecc.Fp) : Circuit Ecc.Fp (Var Permute.State Ecc.Fp) := do
-  let x0 <== (0 : Expression Ecc.Fp)
-  let x1 <== (0 : Expression Ecc.Fp)
-  let x2 <== (capacity : Expression Ecc.Fp)
+def main (capacity : Fp) (_ : Var unit Fp) : Circuit Fp (Var Permute.State Fp) := do
+  let x0 <== (0 : Expression Fp)
+  let x1 <== (0 : Expression Fp)
+  let x2 <== (capacity : Expression Fp)
   return { x0, x1, x2 }
 
-def Spec (capacity : Ecc.Fp) (_ : Unit) (output : Permute.State Ecc.Fp) : Prop :=
+def Spec (capacity : Fp) (_ : Unit) (output : Permute.State Fp) : Prop :=
   output = { x0 := 0, x1 := 0, x2 := capacity }
 
 /-- Packaged `Pow5Chip::initial_state`. -/
-def circuit (capacity : Ecc.Fp) : FormalCircuit Ecc.Fp unit Permute.State where
+def circuit (capacity : Fp) : FormalCircuit Fp unit Permute.State where
   name := "Pow5Chip::initial_state"
   main := main capacity
   Spec := Spec capacity
@@ -58,7 +55,7 @@ namespace AddInput
 
 /-- Value-level effect of `Pow5Chip::add_input`: add the two rate words and preserve the
 capacity element. -/
-def value (input : AddInputInput Ecc.Fp) : Permute.State Ecc.Fp :=
+def value (input : AddInputInput Fp) : Permute.State Fp :=
   { x0 := input.initialState.x0 + input.input.x0
     x1 := input.initialState.x1 + input.input.x1
     x2 := input.initialState.x2 }
@@ -66,7 +63,7 @@ def value (input : AddInputInput Ecc.Fp) : Permute.State Ecc.Fp :=
 /-- Source-shaped `Pow5Chip::add_input` for width 3/rate 2.  The input words are assumed
 already padded, matching the `Absorbing<PaddedWord<F>, RATE>` argument after the sponge
 mode has produced a full padded rate block. -/
-def main (input : Var AddInputInput Ecc.Fp) : Circuit Ecc.Fp (Var Permute.State Ecc.Fp) := do
+def main (input : Var AddInputInput Fp) : Circuit Fp (Var Permute.State Fp) := do
   -- Halo2 copies the initial state and input words into a fresh region before enabling
   -- the pad-and-add gate, so we allocate fresh cells and constrain them equal here.
   let initial0 <== input.initialState.x0
@@ -80,11 +77,11 @@ def main (input : Var AddInputInput Ecc.Fp) : Circuit Ecc.Fp (Var Permute.State 
       output0 := output.x0, output1 := output.x1, output2 := output.x2 }
   return output
 
-def Spec (input : AddInputInput Ecc.Fp) (output : Permute.State Ecc.Fp) : Prop :=
+def Spec (input : AddInputInput Fp) (output : Permute.State Fp) : Prop :=
   output = value input
 
 /-- Packaged `Pow5Chip::add_input`. -/
-def circuit : FormalCircuit Ecc.Fp AddInputInput Permute.State where
+def circuit : FormalCircuit Fp AddInputInput Permute.State where
   name := "Pow5Chip::add_input"
   main
   Spec
@@ -120,17 +117,17 @@ end AddInput
 namespace GetOutput
 
 /-- `PoseidonSpongeInstructions::get_output`: expose the rate portion of the state. -/
-def value (state : Permute.State Ecc.Fp) : Rate2 Ecc.Fp :=
+def value (state : Permute.State Fp) : Rate2 Fp :=
   { x0 := state.x0, x1 := state.x1 }
 
-def main (state : Var Permute.State Ecc.Fp) : Circuit Ecc.Fp (Var Rate2 Ecc.Fp) :=
+def main (state : Var Permute.State Fp) : Circuit Fp (Var Rate2 Fp) :=
   return { x0 := state.x0, x1 := state.x1 }
 
-def Spec (state : Permute.State Ecc.Fp) (output : Rate2 Ecc.Fp) : Prop :=
+def Spec (state : Permute.State Fp) (output : Rate2 Fp) : Prop :=
   output = value state
 
 /-- Packaged `PoseidonSpongeInstructions::get_output`. -/
-def circuit : FormalCircuit Ecc.Fp Permute.State Rate2 where
+def circuit : FormalCircuit Fp Permute.State Rate2 where
   name := "PoseidonSpongeInstructions::get_output"
   main
   Spec

@@ -148,7 +148,14 @@ def circuit : FormalCircuit <Field> <Input> <Output> where
 ```
 
 If a given Halo2 API has both a low-level gate and a synthesis-level entry point circuit,
-use a `.Gate` namespace for the gate, not a `.Entry` namespace for the entry point.
+use a `.Gate` namespace for the gate, not a `.Entry` namespace for the entry point. The
+source-shaped entry point should live directly in the source namespace as `main` and
+`circuit`; the custom-gate assertion should live under `Namespace.Gate.main` and
+`Namespace.Gate.circuit`.
+
+Namespace-local structs that exist only to collect inputs to a gate or method should be
+called `Input`, not `Row`, unless the Halo2 source type itself is row-like and explicitly
+named that way.
 
 In general, follow Halo2 file/chip organization and naming closely.
 
@@ -163,3 +170,14 @@ containing both `{ curr: F; next: F }`.
 **Code style**. Don't add layers of indirection that don't exist in the halo2 source. For example, if an gate's `configure` method directly
 constructs and returns a list of constraint expression, the Clean custom gate circuit should do the same instead of defining a named wrapper
 for every single of these constraints.
+
+Do not leave unused compatibility wrappers, exploratory definitions, or explanatory
+`sourceFile` constants in reviewable code. If a definition is not used by a packaged
+circuit/spec or a current proof, delete it before opening or updating a PR.
+
+Large concrete constants should live in source-shaped constants modules, not inline in
+circuit implementation files. For example, constants from `halo2_poseidon/src/fp.rs`
+belong in a dedicated Lean constants file, not in the `Pow5` chip implementation.
+
+Within Orchard gadget code, use the Orchard-level aliases `Fp` and `Fq` for Pasta fields
+instead of repeatedly writing `Ecc.Fp` / `Ecc.Fq`.
