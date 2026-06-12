@@ -224,7 +224,7 @@ Source-conformant repairs should use Clean `lookup` and explicit `Table` definit
 where Halo2 uses lookup tables. This is required before higher-level range-dependent
 gadgets can be considered source-conformant.
 
-Note that `GATE range check` (`decompose_running_sum.rs`) is *not* lookup-backed in
+Note that `GATE range check` (`decompose_running_sum.rs`) is _not_ lookup-backed in
 halo2: it is the polynomial constraint `range_check(word, 8)` and the Clean port is
 source-conformant.
 
@@ -258,12 +258,6 @@ not fully match source row layout:
   itself. It is used by `RunningSumCoords` and `FullWidth`.
 - `GATE Canonicity checks` lacks the surrounding lookup/running-sum API and exact
   fixed/advice column and rotation layout for base-field fixed-base mul.
-
-### Poseidon Entry APIs
-
-Complete. The named custom gates and source-level entry APIs are packaged; callers should
-use those packaged circuits rather than raw `main` definitions or wrappers exposing
-internal permutation rows.
 
 ### Sinsemilla And Merkle Entry APIs
 
