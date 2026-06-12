@@ -241,19 +241,27 @@ source-conformant.
 ### Scalar Multiplication Entry APIs
 
 Full-width and signed short fixed-base mul are source-level entry circuits; the rest of
-the scalar-mul coverage is row-level gate assertions. Missing source-level entry
-circuits:
+the scalar-mul coverage is row-level gate assertions.
 
 - `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by
-  `ecc/chip/mul.rs::Config::assign`: variable-base scalar multiplication
-  `[scalar] base`.
-- `FixedPointBaseField::mul`, implemented by
+  `ecc/chip/mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`), is modeled by
+  `Clean.Orchard.Ecc.ScalarMul.Mul.Assign.circuit` — fully verified (soundness and
+  completeness, no sorries). Its `Spec` is the semantic contract: for any nonzero curve
+  point `B` matching the base coordinates, the output is `([alpha.val] B).coords`. The
+  composition follows the source: `[2]base` by complete addition, `z_init = 0`, the
+  `hi`/`lo` incomplete halves, the three complete bits, `process_lsb`, and
+  `overflow_check`; the scalar bits are prover-side hints derived from
+  `k = alpha + t_q`, as in the source. Two purely virtual subcircuit boundaries
+  (`Assign.Decompose` for the decomposition region, `Assign.ProcessLsb` mirroring
+  `mul.rs::Config::process_lsb`) factor the proofs without changing operations,
+  witnesses, or cell order relative to the inlined source.
+- Missing source-level entry circuit: `FixedPointBaseField::mul`, implemented by
   `ecc/chip/mul_fixed/base_field_elem.rs`: fixed-base multiplication by a base-field
   element, used by nullifier derivation.
 
-These entry circuits must witness internal decomposition/addition/window values and
-specify actual elliptic-curve scalar multiplication. Downstream Orchard gadgets must not
-accept scalar-multiplication products as free inputs.
+The missing entry circuit must witness internal decomposition/addition/window values
+and specify actual elliptic-curve scalar multiplication. Downstream Orchard gadgets must
+not accept scalar-multiplication products as free inputs.
 
 ### Scalar Multiplication Gate Layout Gaps
 

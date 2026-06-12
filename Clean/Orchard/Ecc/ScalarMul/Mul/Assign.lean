@@ -759,10 +759,274 @@ def Spec (input : Input Fp) (output : Ecc.Point Fp) : Prop :=
   ∀ B : SWPoint Pallas.curve, B ≠ 0 → input.base.coords = (B.x, B.y) →
     output.coords = ((input.alpha.val • B).x, (input.alpha.val • B).y)
 theorem soundness : Soundness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [Ecc.Add.circuit, Decompose.circuit, ProcessLsb.circuit,
+    Overflow.OverflowCheck.circuit]
+  obtain ⟨hAcc, hDec, hLsb, hOv⟩ := h_holds
+  simp only [Decompose.Spec, Ecc.Point.coords] at hDec
+  obtain ⟨bitsHi, bitsLo, bitsC, hK254, hZ130, hZ1, hAccImpl⟩ := hDec
+  simp only [ProcessLsb.Spec, Ecc.Point.coords] at hLsb
+  obtain ⟨k0, hk0Bool, hz0eq, hResImpl⟩ := hLsb
+  simp only [Overflow.OverflowCheck.Spec] at hOv
+  obtain ⟨hOvZ0, hOvDisj2, hOvEx⟩ := hOv
+  intro B hB hcoords
+  simp only [Ecc.Add.Assumptions, Ecc.Add.Spec, Ecc.Point.coords] at hAcc
+  simp only [Ecc.Point.coords] at h_assumptions hcoords ⊢
+  -- the doubled base: acc = [2]B
+  have hAccPair := (hAcc ⟨Or.inl h_assumptions, Or.inl h_assumptions⟩).2
+  rw [hcoords, Pallas.add_coords, ← two_nsmul] at hAccPair
+  -- the decomposition accumulator: [accScalar (accScalar (accScalar 2 ..) ..) ..]B
+  have hDecOut := hAccImpl B hB hcoords hAccPair
+  -- chain bounds
+  have hZhiLt : chainNat 0 bitsHi 125 < 2 ^ 125 :=
+    lt_of_lt_of_le (chainNat_lt 0 bitsHi 125) (by norm_num)
+  have hCloLt : chainNat 0 bitsLo 126 < 2 ^ 126 :=
+    lt_of_lt_of_le (chainNat_lt 0 bitsLo 126) (by norm_num)
+  have hCcLt : chainNat 0 bitsC 3 < 2 ^ 3 :=
+    lt_of_lt_of_le (chainNat_lt 0 bitsC 3) (by norm_num)
+  -- the accumulated scalars in closed form
+  have hm1 : accScalar 2 bitsHi 125 = 2 ^ 125 + 2 * chainNat 0 bitsHi 125 + 1 := by
+    rw [accScalar_closed 2 (by norm_num) bitsHi 125]
+    norm_num
+  have hm2 : accScalar (accScalar 2 bitsHi 125) bitsLo 126
+      = 2 ^ 251 + 2 * chainNat (chainNat 0 bitsHi 125) bitsLo 126 + 1 := by
+    rw [accScalar_closed _ (by rw [hm1]; omega) bitsLo 126, hm1,
+      chainNat_offset (chainNat 0 bitsHi 125) bitsLo 126]
+    norm_num
+    omega
+  have hm3 : accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3
+      = 2 ^ 254 + 2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3
+        + 1 := by
+    rw [accScalar_closed _ (by rw [hm2]; omega) bitsC 3, hm2,
+      chainNat_offset (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3]
+    norm_num
+    omega
+  -- the canonicity argument: the witnessed scalar is α + t_q over ℕ
+  have hKpart : ∀ k0n : ℕ, k0n ≤ 1 →
+      ((2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3 + k0n : ℕ) : Fp)
+        = input_alpha + tQ →
+      2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3 + k0n
+        = ZMod.val input_alpha + tQNat := by
+    intro k0n hk0le hcong
+    refine k_canonical (R := 2 ^ 4 * chainNat 0 bitsLo 126 + 2 * chainNat 0 bitsC 3 + k0n)
+      hK254 hZ130 hZhiLt ?_ ?_ ?_ hcong hOvDisj2 hOvEx
+    · intro hf
+      have h := chainNat_msb bitsHi 124
+      rw [hf] at h
+      have h2 := chainNat_lt 0 (fun i => bitsHi (i + 1)) 124
+      norm_num at h h2 ⊢
+      omega
+    · have h1 := hCloLt
+      have h2 := hCcLt
+      norm_num at h1 h2 ⊢
+      omega
+    · have h1 := chainNat_offset (chainNat 0 bitsHi 125) bitsLo 126
+      have h2 := chainNat_offset (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3
+      norm_num at h1 h2 ⊢
+      omega
+  -- the final scalar identity: [2^254 + k]B = [α]B
+  have hfin : ∀ s : ℕ, s = 2 ^ 254 + ZMod.val input_alpha + tQNat →
+      s • B = ZMod.val input_alpha • B := by
+    intro s hs
+    have hq : PALLAS_SCALAR_CARD = 2 ^ 254 + tQNat := by
+      norm_num [PALLAS_SCALAR_CARD, tQNat]
+    rw [hs, show 2 ^ 254 + ZMod.val input_alpha + tQNat
+        = ZMod.val input_alpha + PALLAS_SCALAR_CARD from by rw [hq]; ring,
+      add_nsmul, (pallas_nsmul_eq_zero_iff hB PALLAS_SCALAR_CARD).mpr dvd_rfl,
+      _root_.add_zero]
+  -- the LSB step pins the result to [2^254 + k]B
+  have hRes := hResImpl B
+    (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 • B)
+    hB hcoords hDecOut.2
+  rcases hk0Bool with hk0 | hk0
+  · -- k₀ = 0: the correction point is −B, the result is [m₃ − 1]B
+    rw [hk0] at hz0eq
+    rw [hk0, if_neg (by norm_num : ¬((0 : Fp) = 1)),
+      neg_add_nsmul B (by rw [hm3]; omega)] at hRes
+    have hK := hKpart 0 (by omega)
+      (by push_cast; linear_combination hOvZ0 - hz0eq - 2 * hZ1)
+    rw [hRes, hfin
+      (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 - 1)
+      (by rw [hm3]; omega)]
+  · -- k₀ = 1: the correction point is the identity, the result is [m₃]B
+    rw [hk0] at hz0eq
+    rw [hk0, if_pos rfl, _root_.zero_add] at hRes
+    have hK := hKpart 1 (by omega)
+      (by push_cast; linear_combination hOvZ0 - hz0eq - 2 * hZ1)
+    rw [hRes, hfin
+      (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3)
+      (by rw [hm3]; omega)]
+
+/-- The honest running-sum chains of `kBits` are the shifted values of `k`. -/
+private theorem cells_kNat (alpha : Fp) :
+    chainNat 0 (kBits alpha) 1 = kNat alpha / 2 ^ 254 ∧
+    chainNat 0 (kBits alpha) 125 = kNat alpha / 2 ^ 130 ∧
+    chainNat (chainNat (chainNat 0 (kBits alpha) 125) (fun i => kBits alpha (125 + i)) 126)
+      (fun i => kBits alpha (251 + i)) 3 = kNat alpha / 2 := by
+  have hC130 : chainNat 0 (kBits alpha) 125 = kNat alpha / 2 ^ 130 := by
+    rw [chainNat_kBits alpha 125 (by omega)]
+  have hC4 : chainNat (kNat alpha / 2 ^ 130) (fun i => kBits alpha (125 + i)) 126
+      = kNat alpha / 2 ^ 4 := by
+    rw [← hC130, ← chainNat_append 0 (kBits alpha) 125 126,
+      show (125 : ℕ) + 126 = 251 from by norm_num,
+      chainNat_kBits alpha 251 (by omega)]
+  have hC2 : chainNat (kNat alpha / 2 ^ 4) (fun i => kBits alpha (251 + i)) 3
+      = kNat alpha / 2 := by
+    rw [show kNat alpha / 2 ^ 4 = chainNat 0 (kBits alpha) 251 from by
+        rw [chainNat_kBits alpha 251 (by omega)],
+      ← chainNat_append 0 (kBits alpha) 251 3,
+      show (251 : ℕ) + 3 = 254 from by norm_num,
+      chainNat_kBits alpha 254 (by omega)]
+    norm_num
+  exact ⟨by rw [chainNat_kBits alpha 1 (by omega)], hC130,
+    by rw [hC130, hC4]; exact hC2⟩
+
+/-- The honest `z₀` cell reconstructs the working scalar `k`. Stated over opaque cell
+values so the heavy cast reasoning is kernel-checked here, not in `completeness`. -/
+private theorem z0_cell_value (alpha : Fp) {z1v z0v : Fp}
+    (hz1v : z1v = ((kNat alpha / 2 : ℕ) : Fp))
+    (hz0w : z0v = 2 * z1v + (if kBits alpha 254 then 1 else 0)) :
+    z0v = ((kNat alpha : ℕ) : Fp) := by
+  have hbit : (if kBits alpha 254 then (1 : Fp) else 0)
+      = ((kNat alpha % 2 : ℕ) : Fp) := by
+    rw [show kBits alpha 254 = decide (kNat alpha % 2 = 1) from by unfold kBits; norm_num]
+    rcases Nat.mod_two_eq_zero_or_one (kNat alpha) with h | h <;> rw [h] <;> simp
+  rw [hz0w, hz1v, hbit, show ((kNat alpha : ℕ) : Fp)
+    = ((2 * (kNat alpha / 2) + kNat alpha % 2 : ℕ) : Fp) from by congr 1; omega]
+  push_cast
+  ring
+
+/-- The honest running-sum cells satisfy the overflow-check contract. -/
+private theorem overflow_spec_honest (alpha : Fp) {z0v z130v k254v : Fp}
+    (hz0v : z0v = ((kNat alpha : ℕ) : Fp))
+    (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
+    (h254 : k254v = ((kNat alpha / 2 ^ 254 : ℕ) : Fp)) :
+    Overflow.OverflowCheck.Spec
+      { alpha := alpha, z0 := z0v, z130 := z130v, k254 := k254v } := by
+  have hKlt := kNat_lt alpha
+  have hvallt : ZMod.val alpha
+      < 28948022309329048855892746252171976963363056481941560715954676764349967630337 := by
+    have h' := ZMod.val_lt alpha
+    norm_num [PALLAS_BASE_CARD] at h'
+    exact h'
+  have hkdef : kNat alpha = ZMod.val alpha + tQNat := rfl
+  have htq : tQNat = 45560315531506369815346746415080538113 := rfl
+  have hav : ((ZMod.val alpha : ℕ) : Fp) = alpha := ZMod.natCast_rightInverse alpha
+  have h2254 : kNat alpha / 2 ^ 254 = 0 ∨ kNat alpha / 2 ^ 254 = 1 := by
+    have h := hKlt
+    norm_num at h ⊢
+    omega
+  refine ⟨?_, ?_, ?_⟩
+  · -- z₀ = α + t_q
+    rw [hz0v, hkdef]
+    push_cast
+    rw [hav]
+    congr 1
+  · -- k₂₅₄ = 0 ∨ z₁₃₀ = 2^124
+    rw [h254, h130]
+    rcases h2254 with h | h
+    · left; rw [h]; norm_num
+    · right
+      have hval : kNat alpha / 2 ^ 130 = 2 ^ 124 := by
+        have h1 := hKlt
+        norm_num at h h1 ⊢
+        omega
+      rw [hval]
+      push_cast
+      norm_num
+  · -- the decomposition of s = α + k₂₅₄·2^130
+    rw [h254]
+    rcases h2254 with h | h
+    · rw [h]
+      by_cases hsm : ZMod.val alpha < 2 ^ 130
+      · exact ⟨0, ZMod.val alpha, hsm,
+          by push_cast; rw [hav]; ring, Or.inr rfl, Or.inr (Or.inr rfl)⟩
+      · refine ⟨((ZMod.val alpha / 2 ^ 130 : ℕ) : Fp), ZMod.val alpha % 2 ^ 130,
+          Nat.mod_lt _ (by norm_num), ?_, Or.inl (by push_cast; ring), ?_⟩
+        · have hsc : ((ZMod.val alpha : ℕ) : Fp)
+              = ((ZMod.val alpha % 2 ^ 130 : ℕ) : Fp)
+                + 2 ^ 130 * ((ZMod.val alpha / 2 ^ 130 : ℕ) : Fp) := by
+            rw [show ((ZMod.val alpha : ℕ) : Fp)
+              = ((ZMod.val alpha % 2 ^ 130
+                  + 2 ^ 130 * (ZMod.val alpha / 2 ^ 130) : ℕ) : Fp) from by
+                congr 1
+                omega]
+            push_cast
+            ring
+          push_cast
+          linear_combination hsc - hav
+        · -- z₁₃₀ ≠ 0, since k ≥ 2^130
+          right; left
+          rw [h130]
+          intro h0
+          have hlt : kNat alpha / 2 ^ 130 < 2 ^ 125 := by
+            have h1 := hKlt
+            norm_num at h1 ⊢
+            omega
+          have hge : 1 ≤ kNat alpha / 2 ^ 130 := by
+            norm_num at hsm hlt ⊢
+            omega
+          have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h0
+          have hle := Nat.le_of_dvd (by omega) hdvd
+          norm_num [PALLAS_BASE_CARD] at hle hlt
+          omega
+    · -- top bit set: α ≥ p − 2^130, the decomposition wraps once
+      rw [h]
+      refine ⟨0, ZMod.val alpha + 2 ^ 130
+          - 28948022309329048855892746252171976963363056481941560715954676764349967630337,
+        ?_, ?_, Or.inr rfl, Or.inl (by push_cast; norm_num)⟩
+      · norm_num at h ⊢
+        omega
+      · have hge : 28948022309329048855892746252171976963363056481941560715954676764349967630337
+            ≤ ZMod.val alpha + 2 ^ 130 := by
+          norm_num at h ⊢
+          omega
+        rw [show ((ZMod.val alpha + 2 ^ 130
+            - 28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
+          = ((ZMod.val alpha + 2 ^ 130 : ℕ) : Fp)
+            - ((28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
+          from by rw [Nat.cast_sub hge],
+          show ((28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
+            = 0 from by
+            rw [show (28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ)
+              = PALLAS_BASE_CARD from by norm_num [PALLAS_BASE_CARD]]
+            exact ZMod.natCast_self PALLAS_BASE_CARD]
+        push_cast
+        rw [hav]
+        ring
 
 theorem completeness : Completeness Fp main Assumptions := by
-  sorry
+  circuit_proof_start [Ecc.Add.circuit, Decompose.circuit, ProcessLsb.circuit,
+    Overflow.OverflowCheck.circuit]
+  obtain ⟨hAcc, hDec, hLsb⟩ := h_env
+  simp only [Ecc.Point.coords] at h_assumptions
+  -- the base as a nonzero curve point
+  obtain ⟨B, hB, hBx, hBy⟩ : ∃ B : SWPoint Pallas.curve, B ≠ 0 ∧
+      B.x = input_base.x ∧ B.y = input_base.y := by
+    refine ⟨⟨input_base.x, input_base.y, Or.inl h_assumptions⟩, ?_, rfl, rfl⟩
+    intro h0
+    have hx : input_base.x = (0 : Fp) := congrArg SWPoint.x h0
+    have hy : input_base.y = (0 : Fp) := congrArg SWPoint.y h0
+    rw [hx, hy] at h_assumptions
+    exact Pallas.not_onCurve_zero h_assumptions
+  have hbase : (input_base.x, input_base.y) = (B.x, B.y) := by rw [hBx, hBy]
+  -- the doubled base: acc = [2]B
+  simp only [Ecc.Add.Assumptions, Ecc.Add.Spec, Ecc.Point.coords] at hAcc
+  have hAccPair := (hAcc ⟨Or.inl h_assumptions, Or.inl h_assumptions⟩).2
+  rw [hbase, Pallas.add_coords, ← two_nsmul] at hAccPair
+  -- the decomposition prover facts: honest cells as shifted values of k
+  have hDecS := hDec ⟨B, hB, hbase, hAccPair⟩
+  simp only [Decompose.ProverSpec, Ecc.Point.coords] at hDecS
+  obtain ⟨-, h254, h130, h1c, hValidAcc⟩ := hDecS
+  have hck := cells_kNat input_alpha
+  rw [show (fun i => kBits input_alpha i) = kBits input_alpha from rfl, hck.1] at h254
+  rw [show (fun i => kBits input_alpha i) = kBits input_alpha from rfl, hck.2.1] at h130
+  rw [show (fun i => kBits input_alpha i) = kBits input_alpha from rfl, hck.2.2] at h1c
+  -- the LSB prover facts: the honest z₀ reconstructs k
+  have hLsbS := hLsb ⟨h_assumptions, hValidAcc⟩
+  simp only [ProcessLsb.ProverSpec] at hLsbS
+  have hz0v := z0_cell_value input_alpha h1c hLsbS.2
+  exact ⟨⟨Or.inl h_assumptions, Or.inl h_assumptions⟩, ⟨B, hB, hbase, hAccPair⟩,
+    ⟨h_assumptions, hValidAcc⟩, overflow_spec_honest input_alpha hz0v h130 h254⟩
 
 /-- `mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`):
 variable-base scalar multiplication by a base-field element. -/
