@@ -153,6 +153,20 @@ theorem hashToPoint_ne_zero {S : ℕ → SWPoint Pallas.curve} {Q B : SWPoint Pa
       rw [hs] at h
       exact ih (step_ne_zero hs) h
 
+/-- Split a defined chain at a list boundary. -/
+theorem hashToPoint_append_some {S : ℕ → SWPoint Pallas.curve}
+    {Q B : SWPoint Pallas.curve} {l₁ l₂ : List ℕ}
+    (h : hashToPoint S Q (l₁ ++ l₂) = some B) :
+    ∃ C, hashToPoint S Q l₁ = some C ∧ hashToPoint S C l₂ = some B := by
+  rw [hashToPoint_append] at h
+  cases hc : hashToPoint S Q l₁ with
+  | none =>
+    rw [hc] at h
+    simp at h
+  | some C =>
+    rw [hc] at h
+    exact ⟨C, rfl, h⟩
+
 /-- Peel the last step off a chain. -/
 theorem hashToPoint_concat (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
     (l : List ℕ) (m : ℕ) :

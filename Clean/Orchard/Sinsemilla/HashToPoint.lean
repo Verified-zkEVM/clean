@@ -1371,7 +1371,79 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     letI := elaborated G n rest tail tailLen htail hcwg hcwr
     GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G n rest tail)
       (ProverAssumptions G (n :: rest)) (ProverSpec G (n :: rest)) := by
-  sorry
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, HashPiece.circuit,
+    HashPiece.ProverSpec, HashPiece.ProverAssumptions, Gate.circuit, Gate.Spec]
+  obtain ⟨h_piece_env, h_tail_env⟩ := h_env
+  obtain ⟨hbounds, A, B, hA0, hAx, hAy, hchain⟩ := h_assumptions
+  simp only [PieceBounds] at hbounds
+  simp only [honestChunks] at hchain
+  have hp0 := congrArg
+    (fun v : Vector Ecc.Fp (rest.length + 1) => v[0]) h_input.1
+  have hptail := congrArg
+    (fun v : Vector Ecc.Fp (rest.length + 1) => v.tail) h_input.1
+  simp only [Vector.getElem_map] at hp0
+  try simp only [] at hptail
+  have hmt : (Vector.map (Expression.eval env.toEnvironment) input_var.pieces).tail
+      = Vector.map (Expression.eval env.toEnvironment)
+          (Vector.cast (by omega) (Vector.tail input_var.pieces)) := by
+    ext i hi
+    simp
+  rw [hmt] at hptail
+  obtain ⟨B₁, hpre, hsuffix⟩ := Orchard.Specs.Sinsemilla.hashToPoint_append_some hchain
+  have hpre' : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+      ((List.range (n + 1)).map
+        (pieceWord (Expression.eval env.toEnvironment input_var.pieces[0])))
+      = some B₁ := by
+    rw [hp0]
+    exact hpre
+  have hb1 : ZMod.val (Expression.eval env.toEnvironment input_var.pieces[0])
+      < 2 ^ (K * (n + 1)) := by
+    rw [hp0]
+    exact hbounds.1
+  have hPSpiece := h_piece_env ⟨hb1, A, B₁, hA0, hAx, hAy, hpre'⟩
+  obtain ⟨-, hfxA0, hsecPS, hchainPS⟩ := hPSpiece
+  obtain ⟨hYA0, hBfun⟩ := hchainPS A hA0 hAx hAy
+  obtain ⟨hxAsN, hyAcc, hnext⟩ := hBfun B₁ hpre'
+  have hB₁0 : B₁ ≠ 0 := Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hA0 hpre
+  have hPStail := h_tail_env (by
+    rw [hPA]
+    refine ⟨?_, B₁, B, hB₁0, hxAsN.symm, hyAcc.symm, ?_⟩
+    · rw [hptail]
+      exact hbounds.2
+    · rw [hptail]
+      exact hsuffix)
+  rw [hPS] at hPStail
+  obtain ⟨-, htfxA, hAfun⟩ := hPStail
+  obtain ⟨henter, hBfin⟩ := hAfun B₁ hB₁0 hxAsN.symm hyAcc.symm
+  obtain ⟨hpx, hpy⟩ := hBfin B (by rw [hptail]; exact hsuffix)
+  dsimp only at htfxA henter hpx hpy
+  refine ⟨⟨⟨hb1, A, B₁, hA0, hAx, hAy, hpre'⟩, ?_, ?_, ?_⟩, hfxA0, ?_⟩
+  · -- the tail's honest-prover assumptions
+    rw [hPA]
+    refine ⟨?_, B₁, B, hB₁0, hxAsN.symm, hyAcc.symm, ?_⟩
+    · rw [hptail]
+      exact hbounds.2
+    · rw [hptail]
+      exact hsuffix
+  · -- the gate's secant equation on honest values
+    rw [htfxA]
+    linear_combination -hsecPS
+  · -- the gate's Y_A check on honest values
+    rw [gate_yRhs_enterYA]
+    simp only [Gate.yLhs]
+    have hnext' := hnext
+    simp only [nextYA] at hnext'
+    rw [htfxA] at henter ⊢
+    linear_combination 2 * hnext' - 2 * henter
+  · -- the level's chain contract
+    intro A' hA'0 hA'x hA'y
+    obtain rfl : A' = A := SWPoint.ext_pair (by rw [hA'x, hA'y, hAx, hAy])
+    refine ⟨hYA0, ?_⟩
+    intro Bf hBf
+    simp only [honestChunks] at hBf
+    rw [hchain] at hBf
+    obtain rfl : B = Bf := Option.some.inj hBf
+    exact ⟨hpx, hpy⟩
 
 def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
     (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
