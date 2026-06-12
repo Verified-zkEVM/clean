@@ -105,9 +105,9 @@ Current Clean coverage:
 - `Clean.Orchard.Poseidon.FullRound.circuit`: `GATE full round`
 - `Clean.Orchard.Poseidon.PartialRounds.circuit`: `GATE partial rounds`
 - `Clean.Orchard.Poseidon.PadAndAdd.circuit`: `GATE pad-and-add`
-- `Clean.Orchard.Poseidon.Permute.P128Pow5T3.mds` / `mdsInv`: explicit Pallas-base
-  MDS constants ported from `halo2_poseidon/src/fp.rs`, with proofs that
-  `MDS_INV * MDS = I` and `MDS * MDS_INV = I`.
+- `Clean.Orchard.Poseidon.Permute.P128Pow5T3.roundConstants` / `mds` / `mdsInv`:
+  explicit Pallas-base constants ported from `halo2_poseidon/src/fp.rs`, with proofs
+  that `MDS_INV * MDS = I` and `MDS * MDS_INV = I`.
 - `Clean.Orchard.Poseidon.Permute.permuteValue`: plain Lean implementation of the
   width-3/rate-2 `Pow5Chip::permute` schedule.
 - `Clean.Orchard.Poseidon.Permute.fullRoundCircuit`: packaged full-round loop-body
@@ -122,6 +122,8 @@ Current Clean coverage:
   against `partialRoundRows28P128Value`.
 - `Clean.Orchard.Poseidon.Permute.mainP128Circuit`: packaged P128-specialized
   `Pow5Chip::permute` circuit proving the full schedule against `permuteP128Value`.
+- `Clean.Orchard.Poseidon.Permute.mainP128ConcreteCircuit`: concrete specialization of
+  the P128 permutation package using the ported Pallas round constants.
 - `Clean.Orchard.Poseidon.Permute.main`: source-shaped parameterized compatibility
   wrapper for experiments with non-P128 constants; it is not packaged because the
   partial-row proof relies on the explicit P128 MDS inverse lemmas.
@@ -135,11 +137,16 @@ Current Clean coverage:
   initialization.
 - `Clean.Orchard.Poseidon.Hash.HashPaddedBlock.circuit`: packaged straight-line
   one-padded-block `Hash::hash` composition (`init -> add_input -> permute -> squeeze`).
+- `Clean.Orchard.Poseidon.Hash.HashPaddedBlock.concreteCircuit`: concrete one-block P128
+  hash package using the ported round constants.
+- `Clean.Orchard.Poseidon.Hash.ConstantLength`: source-shaped generic rate-2
+  `ConstantLength<L>` padding scheduler definitions (`blockCount`, `capacity`, padded
+  words/blocks, value function, and circuit body). The generic dependent `foldlRange`
+  proof package is the remaining Poseidon proof task.
 
 `FullRound` and `PartialRounds` already take fixed-column round constants and matrix
-entries as Lean parameters. The P128 permutation and one-padded-block hash path are now
-packaged; remaining work is to port concrete round constants and the full
-`ConstantLength<L>` padding scheduler.
+entries as Lean parameters. The P128 permutation, concrete constants, and one-padded-block
+hash path are now packaged.
 
 ### Sinsemilla And Merkle
 
