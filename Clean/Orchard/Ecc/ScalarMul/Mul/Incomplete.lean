@@ -174,15 +174,6 @@ namespace DoubleAndAdd
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 
-/--
-Every non-identity point of the Pallas curve generates the full prime-order group.
-This is the variable-base analogue of `FixedBase.order_eq`: a curve-level fact (the
-Pallas group has prime order `q`) that is not yet formalized from first principles, so
-circuits take it as an explicit parameter.
--/
-def PallasPrimeOrder : Prop :=
-  ∀ P : SWPoint Pallas.curve, P ≠ 0 → addOrderOf P = PALLAS_SCALAR_CARD
-
 /-- Prover-side scalar bits, MSB-first, indexed from the first processed bit. -/
 def BitsHint : Type := ℕ → Bool
 
@@ -365,26 +356,26 @@ def ProverSpec (n : ℕ) (input : ProverValue Input Fp) (output : Output (n + 1)
     (output.xA, output.yA) =
       ((accScalar m input.bits (n + 1) • P).x, (accScalar m input.bits (n + 1) • P).y)
 
-theorem soundness (n : ℕ) (hOrd : PallasPrimeOrder) :
+theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
       (Spec n) := by
   sorry
 
-theorem completeness (n : ℕ) (hOrd : PallasPrimeOrder) :
+theorem completeness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main n) (ProverAssumptions n)
       (ProverSpec n) := by
   sorry
 
 /-- `incomplete.rs::Config::<{n+1}>::double_and_add` (`CircuitVersion::AnchoredBase`).
 Instantiated at `n = 124` for the `hi` half and `n = 125` for the `lo` half. -/
-def circuit (n : ℕ) (hOrd : PallasPrimeOrder) :
+def circuit (n : ℕ) :
     GeneralFormalCircuit.WithHint Fp Input (Output (n + 1)) where
   main := main n
   Spec := Spec n
   ProverAssumptions := ProverAssumptions n
   ProverSpec := ProverSpec n
-  soundness := soundness n hOrd
-  completeness := completeness n hOrd
+  soundness := soundness n
+  completeness := completeness n
 
 end DoubleAndAdd
 
