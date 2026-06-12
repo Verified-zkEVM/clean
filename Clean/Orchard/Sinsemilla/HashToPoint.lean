@@ -1233,16 +1233,133 @@ def elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
     simp only [circuit_norm, seval, HashPiece.circuit, Gate.circuit, hcwg, hcwr]
     try trivial
 
+/-- The gate's `y`-polynomial right-hand side computes twice the entering-`Y_A`
+expression of the next level, for both the boundary (`q_s2 = 0`) and final
+(`q_s2 = 2`) selector values. -/
+private theorem gate_yRhs_enterYA (b : Bool) (row : Gate.Row Ecc.Fp) :
+    Gate.yRhs { qS2 := if b = true then (2 : Ecc.Fp) else 0 } row
+      = 2 * DoubleAndAdd.yA row.cur + 2 * enterYA b row.next := by
+  cases b <;> (simp [Gate.yRhs, Gate.qS3, enterYA]; try ring)
+
+/--
+The chain glue of one level over cleaned values: the piece's prefix contract, the
+gate completing its last step (via `step_pinned`), and the tail's chain contract
+compose to the level's chain contract.
+-/
+private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
+    (ms : ℕ → ℕ)
+    {first last tailFirst : DoubleAndAddRow Ecc.Fp} {xAin : Ecc.Fp}
+    (hlast_xP : last.xP = (G.S (ms n)).x)
+    (hlast_yp : DoubleAndAdd.yA last * (2 : Ecc.Fp)⁻¹
+      - last.lambda1 * (last.xA - last.xP) = (G.S (ms n)).y)
+    (hchain_piece : ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = xAin →
+      2 * A.y = DoubleAndAdd.yA first →
+      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+          ((List.range n).map ms) = some B →
+        last.xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA last)
+    (hsec : last.lambda2 * last.lambda2
+      = tailFirst.xA + DoubleAndAdd.xR last + last.xA)
+    (hyck : Gate.yLhs { cur := last, next := tailFirst }
+      = Gate.yRhs { qS2 := if isFinal = true then (2 : Ecc.Fp) else 0 }
+          { cur := last, next := tailFirst })
+    {xATail : Ecc.Fp} (htfxA : tailFirst.xA = xATail)
+    (tailChunks : List ℕ) {pointX pointY : Ecc.Fp}
+    (htail_chain : ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = xATail →
+      2 * A.y = enterYA isFinal tailFirst →
+      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A tailChunks = some B →
+        pointX = B.x ∧ pointY = B.y) :
+    ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = xAin →
+      2 * A.y = DoubleAndAdd.yA first →
+      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+          ((List.range (n + 1)).map ms ++ tailChunks) = some B →
+        pointX = B.x ∧ pointY = B.y := by
+  intro A hA0 hAx hAyA B hB
+  -- split the chain at the piece boundary
+  rw [Orchard.Specs.Sinsemilla.hashToPoint_append] at hB
+  cases hpre : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+      ((List.range (n + 1)).map ms) with
+  | none =>
+    rw [hpre] at hB
+    simp at hB
+  | some B₁ =>
+    rw [hpre] at hB
+    replace hB : Orchard.Specs.Sinsemilla.hashToPoint G.S B₁ tailChunks = some B := hB
+    -- peel the piece's last word
+    rw [List.range_succ] at hpre
+    simp only [List.map_append, List.map_cons, List.map_nil] at hpre
+    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hpre
+    cases hpre0 : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+        ((List.range n).map ms) with
+    | none =>
+      rw [hpre0] at hpre
+      simp at hpre
+    | some B₀ =>
+      rw [hpre0] at hpre
+      replace hpre : Orchard.Specs.Sinsemilla.step G.S B₀ (ms n) = some B₁ := hpre
+      obtain ⟨hlast_xA, hlast_yA⟩ := hchain_piece A hA0 hAx hAyA B₀ hpre0
+      -- the gate completes the last step
+      have hyck' : 4 * last.lambda2 * (last.xA - tailFirst.xA)
+          = 2 * DoubleAndAdd.yA last + 2 * enterYA isFinal tailFirst := by
+        have h := hyck
+        rw [gate_yRhs_enterYA] at h
+        simpa only [Gate.yLhs] using h
+      have hlast_yA' := hlast_yA
+      simp only [DoubleAndAdd.yA, DoubleAndAdd.xR] at hlast_yA'
+      have hsec' := hsec
+      simp only [DoubleAndAdd.xR] at hsec'
+      have hpin := HashPiece.step_pinned G.S hpre
+        (xp := last.xP) (lambda1 := last.lambda1) (lambda2 := last.lambda2)
+        (xa' := tailFirst.xA) (YA' := enterYA isFinal tailFirst)
+        (by linear_combination HashPiece.double_halved hlast_yp + hlast_yA
+          + 2 * last.lambda1 * hlast_xA)
+        hlast_xP
+        (by linear_combination hlast_yA'
+          + 2 * (last.lambda1 + last.lambda2) * hlast_xA)
+        (by linear_combination hsec')
+        (by linear_combination hyck' - 4 * last.lambda2 * hlast_xA - 2 * hlast_yA)
+      exact htail_chain B₁ (Orchard.Specs.Sinsemilla.step_ne_zero hpre)
+        (hpin.1.symm.trans htfxA) hpin.2.symm B hB
+
 theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
     (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
     (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
     (hcwg : tail.channelsWithGuarantees = [])
     (hcwr : tail.channelsWithRequirements = [])
-    (hS : tail.Spec = Spec G rest) :
+    (hS : tail.Spec = Spec G rest)
+    (hAss : tail.Assumptions = fun _ _ => True) :
     letI := elaborated G n rest tail tailLen htail hcwg hcwr
     GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G n rest tail)
       (fun _ _ => True) (Spec G (n :: rest)) := by
-  sorry
+  circuit_proof_start [main, Spec, HashPiece.circuit, HashPiece.Spec,
+    Gate.circuit, Gate.Spec]
+  obtain ⟨h_piece, h_tail, h_gate⟩ := h_holds
+  simp only [hAss] at h_tail
+  replace h_tail := h_tail trivial
+  rw [hS] at h_tail
+  simp only [Spec, Vector.get, Vector.getElem_ofFn, List.isEmpty_cons,
+    show ∀ r : DoubleAndAddRow Ecc.Fp, enterYA false r = DoubleAndAdd.yA r
+      from fun _ => rfl,
+    circuit_norm] at h_piece h_tail h_gate ⊢
+  obtain ⟨ms, hms, hrecomb, hfxA, hlxP, hlyp, hchain⟩ := h_piece
+  obtain ⟨htfxA, tailChunks, htailPC, htailchain⟩ := h_tail
+  obtain ⟨hsec, hyck⟩ := h_gate
+  refine ⟨⟨hfxA, (List.range (n + 1)).map ms ++ tailChunks, ?_, ?_⟩, Or.inl hcwr⟩
+  · -- the pieces decompose into the chunks
+    simp only [PieceChunks]
+    refine ⟨ms, hms, ?_, tailChunks, rfl, ?_⟩
+    · rw [← h_input.1]
+      simpa using hrecomb
+    · have hv : Vector.tail input.pieces
+          = Vector.map (Expression.eval env)
+            (Vector.cast (by omega) (Vector.tail input_var.pieces)) := by
+        rw [← h_input.1]
+        ext i hi
+        simp
+      rw [hv]
+      exact htailPC
+  · -- the chain contract
+    exact soundness_aux G n rest.isEmpty ms hlxP hlyp hchain hsec hyck htfxA
+      tailChunks htailchain
 
 theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
@@ -1262,6 +1379,7 @@ def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
     (hcwg : tail.channelsWithGuarantees = [])
     (hcwr : tail.channelsWithRequirements = [])
     (hS : tail.Spec = Spec G rest)
+    (hAss : tail.Assumptions = fun _ _ => True)
     (hPA : tail.ProverAssumptions = ProverAssumptions G rest)
     (hPS : tail.ProverSpec = ProverSpec G rest) :
     GeneralFormalCircuit.WithHint Ecc.Fp (Input (rest.length + 1)) Output where
@@ -1270,7 +1388,7 @@ def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
   Spec := Spec G (n :: rest)
   ProverAssumptions := ProverAssumptions G (n :: rest)
   ProverSpec := ProverSpec G (n :: rest)
-  soundness := soundness G n rest tail tailLen htail hcwg hcwr hS
+  soundness := soundness G n rest tail tailLen htail hcwg hcwr hS hAss
   completeness := completeness G n rest tail tailLen htail hcwg hcwr hPA hPS
 
 end Cons
@@ -1280,15 +1398,16 @@ spec fields are the canonical recursive ones, its local length is constant, and 
 declares no channels. -/
 def circuit (G : Generators) : (ns : List ℕ) →
     { c : GeneralFormalCircuit.WithHint Ecc.Fp (Input ns.length) Output //
-      c.Spec = Spec G ns ∧ c.ProverAssumptions = ProverAssumptions G ns ∧
+      c.Spec = Spec G ns ∧ c.Assumptions = (fun _ _ => True) ∧
+        c.ProverAssumptions = ProverAssumptions G ns ∧
         c.ProverSpec = ProverSpec G ns ∧
         (∀ inp, c.localLength inp = chainLength ns) ∧
         c.channelsWithGuarantees = [] ∧ c.channelsWithRequirements = [] }
-  | [] => ⟨Nil.circuit G, rfl, rfl, rfl, fun _ => rfl, rfl, rfl⟩
+  | [] => ⟨Nil.circuit G, rfl, rfl, rfl, rfl, fun _ => rfl, rfl, rfl⟩
   | n :: rest =>
-    let ⟨tail, hS, hPA, hPS, hLen, hcwg, hcwr⟩ := circuit G rest
-    ⟨Cons.circuit G n rest tail (chainLength rest) hLen hcwg hcwr hS hPA hPS,
-      rfl, rfl, rfl, fun _ => rfl, rfl, rfl⟩
+    let ⟨tail, hS, hAss, hPA, hPS, hLen, hcwg, hcwr⟩ := circuit G rest
+    ⟨Cons.circuit G n rest tail (chainLength rest) hLen hcwg hcwr hS hAss hPA hPS,
+      rfl, rfl, rfl, rfl, fun _ => rfl, rfl, rfl⟩
 
 end Chain
 

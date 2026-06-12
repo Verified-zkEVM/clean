@@ -116,6 +116,43 @@ theorem hashToPoint_append (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Palla
   | some acc =>
     rfl
 
+/-- A defined step never lands on the identity: its second incomplete addition
+excludes the colliding `x`-coordinates of equal-or-opposite points. -/
+theorem step_ne_zero {S : ℕ → SWPoint Pallas.curve} {A B : SWPoint Pallas.curve}
+    {m : ℕ} (h : step S A m = some B) : B ≠ 0 := by
+  unfold step at h
+  by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
+  · rw [incompleteAdd, if_pos hc₁] at h
+    simp at h
+  rw [incompleteAdd, if_neg hc₁] at h
+  rw [show ((some (A + S m)).bind fun t => incompleteAdd t A)
+    = incompleteAdd (A + S m) A from rfl] at h
+  by_cases hc₂ : A + S m = 0 ∨ A = 0 ∨ (A + S m).x = A.x
+  · rw [incompleteAdd, if_pos hc₂] at h
+    simp at h
+  rw [incompleteAdd, if_neg hc₂] at h
+  push_neg at hc₂
+  obtain rfl : A + S m + A = B := Option.some.inj h
+  intro h0
+  exact hc₂.2.2 (by rw [add_eq_zero_iff_eq_neg.mp h0, SWPoint.neg_x])
+
+/-- Chain points of a defined hash are never the identity. -/
+theorem hashToPoint_ne_zero {S : ℕ → SWPoint Pallas.curve} {Q B : SWPoint Pallas.curve}
+    {l : List ℕ} (hQ : Q ≠ 0) (h : hashToPoint S Q l = some B) : B ≠ 0 := by
+  induction l generalizing Q with
+  | nil =>
+    rw [hashToPoint_nil] at h
+    exact Option.some.inj h ▸ hQ
+  | cons m ms ih =>
+    rw [hashToPoint_cons] at h
+    cases hs : step S Q m with
+    | none =>
+      rw [hs] at h
+      simp at h
+    | some C =>
+      rw [hs] at h
+      exact ih (step_ne_zero hs) h
+
 /-- Peel the last step off a chain. -/
 theorem hashToPoint_concat (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
     (l : List ℕ) (m : ℕ) :
