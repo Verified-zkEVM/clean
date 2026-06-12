@@ -241,7 +241,6 @@ def circuit (L : ℕ) [NeZero L] : FormalCircuit Fp (fields L) field where
       Permute.mainP128Circuit, AbsorbPermute.circuit, Sponge.GetOutput.circuit
     ]
 
-
 end ConstantLength
 
 end Orchard.Poseidon.Hash
