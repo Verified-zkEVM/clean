@@ -117,14 +117,9 @@ FormalCircuit and variants carry an instance of `ElaboratedCircuit`, which expos
 circuit data like `localLength` and `output` in explicit, fully reduced form. This helps parent
 circuits simplify without unfolding child circuit internals.
 
-Inline `FormalCircuit` declarations get their elaborated metadata from the
-default `elaborated := by elaborate_circuit`; factored circuits have to define a standalone
-`ElaboratedCircuit` instance since that is needed by `Soundness`.
+Inline `FormalCircuit` declarations get their elaborated metadata from the default `elaborated := by elaborate_circuit`; factored circuits have to define a standalone `ElaboratedCircuit` instance since that is needed by `Soundness`. In the latter case, for performance reasons, it is _very_ important to pass in `elaborated` as an explicit field (otherwise `soundness` has to elaborate with metavariables since `elaborate` is not filled in at that time).
 
-If elaboration fails, do not treat that as an insurmountable blocker.
-Inspect a potential failing `ExplicitCircuit` / `ExplicitCircuits` goal. Sometimes adding the right
-leaf instance can get past that.
-In rare cases, defining the `ElaboratedCircuit` by hand is a workaround for failing `elaborate_circuit`.
+If elaboration fails, do not treat that as an insurmountable blocker. Inspect a potential failing `ExplicitCircuit` / `ExplicitCircuits` goal. Sometimes adding the right leaf instance can get past that. In rare cases, defining the `ElaboratedCircuit` by hand is a workaround for failing `elaborate_circuit`.
 
 Relevant code and examples are in `Clean/Circuit/Explicit.lean`, especially `infer_explicit_circuit`,
 `infer_explicit_circuits`, `elaborate_circuit`, `elaborate_circuit_with`.
