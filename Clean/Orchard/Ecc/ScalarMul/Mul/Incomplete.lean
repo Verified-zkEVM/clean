@@ -578,6 +578,30 @@ private theorem soundness_aux (n : ℕ) (P : SWPoint Pallas.curve) (hP : P ≠ 0
     · rw [haccv]
       exact hpinned.2
 
+/--
+The honest row at a small positive multiple of the base: the gate equations hold for
+`lambdaCellsValue`'s cells, and they step the accumulator to `[2m + 2k - 1] P`.
+-/
+private theorem honest_step {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ → Bool)
+    {m : ℕ} (h2 : 2 ≤ m) (hBound : 2 * m + 1 < PALLAS_SCALAR_CARD) (b : ℕ) :
+    2 * (m • P).y - 2 * (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).lambda1 *
+        ((m • P).x - P.x)
+      = 2 * (stepPoint P bits b).y ∧
+    2 * (m • P).y
+      = ((lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).lambda1 +
+          (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).lambda2) *
+        ((m • P).x -
+          ((lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).lambda1 *
+            (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).lambda1 -
+            (m • P).x - P.x)) ∧
+    (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).xANext
+      = ((2 * m + (if bits b then 1 else 0) * 2 - 1) • P).x ∧
+    (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).lambda2 *
+        ((m • P).x - (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).xANext) -
+        (m • P).y
+      = ((2 * m + (if bits b then 1 else 0) * 2 - 1) • P).y := by
+  sorry
+
 theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
       (Spec n) := by
