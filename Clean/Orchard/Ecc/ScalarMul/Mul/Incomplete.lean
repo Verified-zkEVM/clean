@@ -411,6 +411,9 @@ def ProverSpec (n : ℕ) (input : ProverValue Input Fp) (output : Output (n + 1)
 theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
       (Spec n) := by
+  circuit_proof_start [main, Spec, Init.circuit, Init.Spec, MainLoop.circuit, MainLoop.Spec,
+    Loop.circuit, Loop.Spec]
+  obtain ⟨h_z0, h_yA0, h_xA0, h_xP0, h_yP0, h_init, h_loop, h_last⟩ := h_holds
   sorry
 
 theorem completeness (n : ℕ) :
