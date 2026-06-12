@@ -6,6 +6,7 @@ import Clean.Orchard.NoteCommit
 import Clean.Orchard.Poseidon
 import Clean.Orchard.Ecc.ScalarMul
 import Clean.Orchard.Sinsemilla
+import Clean.Orchard.Sinsemilla.HashToPoint
 import Clean.Orchard.Specs.Elliptic.CoordinateSystem
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
 import Clean.Orchard.Specs.Sinsemilla
