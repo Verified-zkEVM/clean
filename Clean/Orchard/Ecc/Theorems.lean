@@ -56,3 +56,32 @@ theorem y_ne_zero_of_valid_of_x_ne_zero {point : Point Fp}
   · simp_all
 
 end Orchard.Ecc.Point
+
+namespace Orchard.Ecc
+
+/-! ### Pallas group order -/
+
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
+
+/--
+**Axiom**: the Pallas curve group has exactly `q = PALLAS_SCALAR_CARD` points.
+
+This is the published point count of the Pallas curve. The vendored CompElliptic
+formalization has no point counting, so this is the one central trust assumption behind
+scalar-multiplication circuit proofs; all consumers needing order facts derive them from
+here (see `pallas_addOrderOf`).
+-/
+axiom pallas_natCard :
+    Nat.card (ShortWeierstrass.SWPoint curve) = PALLAS_SCALAR_CARD
+
+/-- Every non-identity Pallas point generates the full prime-order group. -/
+theorem pallas_addOrderOf {P : ShortWeierstrass.SWPoint curve} (h : P ≠ 0) :
+    addOrderOf P = PALLAS_SCALAR_CARD := by
+  have hdvd := addOrderOf_dvd_natCard P
+  rw [pallas_natCard] at hdvd
+  rcases CompElliptic.Fields.Pasta.PALLAS_SCALAR_is_prime.eq_one_or_self_of_dvd
+      _ hdvd with h1 | hq
+  · exact absurd (AddMonoid.addOrderOf_eq_one_iff.mp h1) h
+  · exact hq
+
+end Orchard.Ecc

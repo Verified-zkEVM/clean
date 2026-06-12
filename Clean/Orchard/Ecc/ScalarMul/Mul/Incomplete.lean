@@ -148,4 +148,235 @@ def circuit : FormalAssertion Fp Row where
 
 end MainLoop
 
+/-!
+### `incomplete.rs::Config::double_and_add`
+
+The synthesis-level double-and-add over `numBits = n + 1` incomplete-addition rows,
+shared by the `hi` (125 bits) and `lo` (126 bits) halves of variable-base scalar
+multiplication. This ports the `CircuitVersion::AnchoredBase` variant: the first row's
+`x_p, y_p` cells are copies of `base`, and the `q_mul_2` constancy checks propagate the
+base to every row.
+
+The scalar bits are prover-side `Value<bool>`s, modeled as an `Unconstrained` hint
+(MSB-first, indexed from the first processed bit).
+
+The running accumulator's y-coordinate is not a per-row cell in the source; it exists
+only as the derived expression `y_{A,i} = Y_{A,i}/2`. Only the initial y (copied into
+the `lambda_1` column) and the final y (witnessed after the last row) are cells.
+
+Note on cell order: the z running-sum cells are witnessed as one block up front instead
+of interleaved per row; Clean's linear witness tape does not model the source's
+column/row grid, and the conformance map already records this layout gap.
+-/
+
+namespace DoubleAndAdd
+
+open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
+
+/-- Prover-side scalar bits, MSB-first, indexed from the first processed bit. -/
+def BitsHint : Type := ℕ → Bool
+
+instance : Inhabited BitsHint := ⟨fun _ => false⟩
+
+/-- The inputs of `double_and_add`: the non-identity base point, the accumulator cells
+`(x_a, y_a)`, the starting running-sum cell `z`, and the prover-side scalar bits. -/
+structure Input (F : Type) where
+  base : Ecc.Point F
+  xA : F
+  yA : F
+  z : F
+  bits : Unconstrained BitsHint F
+deriving CircuitType
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ base := { x := default, y := default }, xA := default, yA := default,
+     z := default, bits := fun _ => default }⟩
+
+/-- The cells freshly witnessed for the first row (its `x_p, y_p` are copies of
+`base` in the anchored circuit version). -/
+structure LambdaCells (F : Type) where
+  lambda1 : F
+  lambda2 : F
+  xANext : F
+deriving ProvableStruct
+
+/-- The cells freshly witnessed for each later row. -/
+structure IterCells (F : Type) where
+  xP : F
+  yP : F
+  lambda1 : F
+  lambda2 : F
+  xANext : F
+deriving ProvableStruct
+
+/-- Loop state: the previous row's cells and the previous row's `x_a`. -/
+structure LoopState (F : Type) where
+  prev : IterCells F
+  xA : F
+deriving ProvableStruct
+
+/-- The outputs of `double_and_add`: the final accumulator cells and all interstitial
+running-sum cells (excluding the copied starting `z`). -/
+structure Output (numBits : ℕ) (F : Type) where
+  xA : F
+  yA : F
+  zs : Vector F numBits
+deriving ProvableStruct
+
+/-! ### Honest-prover witness values -/
+
+/-- The running sum after bit `b` (MSB-first): `z_b = 2 z_{b-1} + k_b`. -/
+def zRunValue (zIn : Fp) (bits : ℕ → Bool) : ℕ → Fp
+  | 0 => 2 * zIn + (if bits 0 then 1 else 0)
+  | b + 1 => 2 * zRunValue zIn bits b + (if bits (b + 1) then 1 else 0)
+
+/-- The derived accumulator y-coordinate of a row: `y_A = Y_A / 2` where
+`Y_A = (λ1 + λ2)(x_A − x_R)`. -/
+def yAValue (c : IterCells Fp) (xA : Fp) : Fp :=
+  ((c.lambda1 + c.lambda2) * (xA - (c.lambda1 ^ 2 - xA - c.xP))) / 2
+
+/-- The accumulator y-coordinate after a row: `y_A' = λ2(x_A − x_A') − y_A`. -/
+def yANextValue (c : IterCells Fp) (xA : Fp) : Fp :=
+  c.lambda2 * (xA - c.xANext) - yAValue c xA
+
+/-- Honest lambda cells of one double-and-add row, from the accumulator `(x_a, y_a)`
+entering the row and the row's bit. The assigned `x_p, y_p` cells always hold the base
+coordinates; the conditional negation `(2k-1) y_p` only enters `λ1`. -/
+def lambdaCellsValue (baseX baseY xA yA : Fp) (bit : Bool) : LambdaCells Fp :=
+  let yP := if bit then baseY else -baseY
+  let lambda1 := (yA - yP) / (xA - baseX)
+  let xR := lambda1 ^ 2 - xA - baseX
+  let lambda2 := 2 * yA / (xA - xR) - lambda1
+  { lambda1, lambda2, xANext := lambda2 ^ 2 - xA - xR }
+
+/-- Honest cells of one later double-and-add row. -/
+def iterCellsValue (baseX baseY xA yA : Fp) (bit : Bool) : IterCells Fp :=
+  let l := lambdaCellsValue baseX baseY xA yA bit
+  { xP := baseX, yP := baseY, lambda1 := l.lambda1, lambda2 := l.lambda2,
+    xANext := l.xANext }
+
+/-- The accumulated multiplier after `b` double-and-add steps starting from `[m]P`:
+each step computes `(acc + (2k-1) P) + acc`, so `m_b = 2 m_{b-1} + 2 k_{b-1} - 1`. -/
+def accScalar (m : ℕ) (bits : ℕ → Bool) : ℕ → ℕ
+  | 0 => m
+  | b + 1 => 2 * accScalar m bits b + (if bits b then 1 else 0) * 2 - 1
+
+/-! ### Circuit -/
+
+def main (n : ℕ) (input : Var Input Fp) :
+    Circuit Fp (Var (Output (n + 1)) Fp) := do
+  -- copy the starting running sum, y_a (into the lambda_1 column), and x_a
+  let z₀ <== input.z
+  let yA₀ <== input.yA
+  let xA₀ <== input.xA
+  -- the interstitial running-sum cells of all n + 1 bits
+  let zs ← witnessVector (n + 1) fun env =>
+    .ofFn fun (b : Fin (n + 1)) => zRunValue (env input.z) (input.bits env) b.val
+  let zsAll := Vector.cast (Nat.add_comm 1 (n + 1))
+    ((#v[z₀] : Vector (Expression Fp) 1) ++ zs)
+  -- first row: x_p, y_p are anchored to `base` (CircuitVersion::AnchoredBase)
+  let xP₀ <== input.base.x
+  let yP₀ <== input.base.y
+  let w₀ : Var LambdaCells Fp ← witness fun env =>
+    lambdaCellsValue (env input.base.x) (env input.base.y)
+      (env input.xA) (env input.yA) (input.bits env 0)
+  -- q_mul_1: the copied y_a is the derived y of the first row
+  Init.circuit {
+    yAWitnessed := yA₀,
+    next := { xA := xA₀, xP := xP₀, lambda1 := w₀.lambda1, lambda2 := w₀.lambda2 } }
+  let s₁ : Var LoopState Fp := {
+    prev := { xP := xP₀, yP := yP₀, lambda1 := w₀.lambda1, lambda2 := w₀.lambda2,
+              xANext := w₀.xANext },
+    xA := xA₀ }
+  -- rows 1..n: witness the row, then close the previous row with q_mul_2
+  let sLast ← Circuit.foldlRange n s₁ fun s i => do
+    let w : Var IterCells Fp ← witness fun env =>
+      iterCellsValue (env input.base.x) (env input.base.y)
+        (env s.prev.xANext) (yANextValue (eval env s.prev) (env s.xA))
+        (input.bits env (i.val + 1))
+    MainLoop.circuit {
+      toRow := {
+        zCur := zsAll[i.val + 1]'(by have := i.isLt; omega),
+        zPrev := zsAll[i.val]'(by have := i.isLt; omega),
+        cur := { xA := s.xA, xP := s.prev.xP,
+                 lambda1 := s.prev.lambda1, lambda2 := s.prev.lambda2 },
+        xANext := s.prev.xANext, yPCur := s.prev.yP,
+        yANextDouble := Sinsemilla.DoubleAndAdd.yA
+          { xA := s.prev.xANext, xP := w.xP, lambda1 := w.lambda1, lambda2 := w.lambda2 } },
+      xPNext := w.xP, yPNext := w.yP }
+    return { prev := w, xA := s.prev.xANext }
+  -- witness the final y_a, then close the last row with q_mul_3
+  let yAFinal ← witnessField fun env =>
+    yANextValue (eval env sLast.prev) (env sLast.xA)
+  Loop.circuit {
+    zCur := zsAll[n + 1]'(by omega), zPrev := zsAll[n]'(by omega),
+    cur := { xA := sLast.xA, xP := sLast.prev.xP,
+             lambda1 := sLast.prev.lambda1, lambda2 := sLast.prev.lambda2 },
+    xANext := sLast.prev.xANext, yPCur := sLast.prev.yP,
+    yANextDouble := 2 * yAFinal }
+  return { xA := sLast.prev.xANext, yA := yAFinal, zs }
+
+instance elaborated (n : ℕ) : ElaboratedCircuit Fp Input (Output (n + 1)) (main n) := by
+  elaborate_circuit
+
+/-- Soundness contract. The constraints pin a bit sequence through the running-sum
+chain, and — for any base/accumulator interpretation satisfying the incomplete-addition
+preconditions — force the output accumulator to be the double-and-add result. -/
+def Spec (n : ℕ) (input : Value Input Fp)
+    (output : Output (n + 1) Fp) (_ : ProverData Fp) : Prop :=
+  ∃ bits : ℕ → Bool,
+    (output.zs[0] = 2 * input.z + (if bits 0 then 1 else 0) ∧
+      ∀ b : Fin n, output.zs[b.val + 1] =
+        2 * output.zs[b.val]'(by have := b.isLt; omega) +
+          (if bits (b.val + 1) then 1 else 0)) ∧
+    ∀ (P : SWPoint Pallas.curve) (m : ℕ),
+      P ≠ 0 →
+      (input.base.x, input.base.y) = (P.x, P.y) →
+      (input.xA, input.yA) = ((m • P).x, (m • P).y) →
+      2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
+      (output.xA, output.yA) =
+        ((accScalar m bits (n + 1) • P).x, (accScalar m bits (n + 1) • P).y)
+
+def ProverAssumptions (n : ℕ) (input : ProverValue Input Fp) (_ : ProverData Fp)
+    (_ : ProverHint Fp) : Prop :=
+  ∃ (P : SWPoint Pallas.curve) (m : ℕ),
+    P ≠ 0 ∧ (input.base.x, input.base.y) = (P.x, P.y) ∧
+    (input.xA, input.yA) = ((m • P).x, (m • P).y) ∧
+    2 ≤ m ∧ 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254
+
+def ProverSpec (n : ℕ) (input : ProverValue Input Fp) (output : Output (n + 1) Fp)
+    (_ : ProverHint Fp) : Prop :=
+  (∀ b : Fin (n + 1), output.zs[b.val] = zRunValue input.z input.bits b.val) ∧
+  ∀ (P : SWPoint Pallas.curve) (m : ℕ),
+    P ≠ 0 →
+    (input.base.x, input.base.y) = (P.x, P.y) →
+    (input.xA, input.yA) = ((m • P).x, (m • P).y) →
+    2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
+    (output.xA, output.yA) =
+      ((accScalar m input.bits (n + 1) • P).x, (accScalar m input.bits (n + 1) • P).y)
+
+theorem soundness (n : ℕ) :
+    GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
+      (Spec n) := by
+  sorry
+
+theorem completeness (n : ℕ) :
+    GeneralFormalCircuit.WithHint.Completeness Fp (main n) (ProverAssumptions n)
+      (ProverSpec n) := by
+  sorry
+
+/-- `incomplete.rs::Config::<{n+1}>::double_and_add` (`CircuitVersion::AnchoredBase`).
+Instantiated at `n = 124` for the `hi` half and `n = 125` for the `lo` half. -/
+def circuit (n : ℕ) :
+    GeneralFormalCircuit.WithHint Fp Input (Output (n + 1)) where
+  main := main n
+  Spec := Spec n
+  ProverAssumptions := ProverAssumptions n
+  ProverSpec := ProverSpec n
+  soundness := soundness n
+  completeness := completeness n
+
+end DoubleAndAdd
+
 end Orchard.Ecc.ScalarMul.Mul.Incomplete

@@ -123,48 +123,11 @@ def rowValue (B : FixedBase) (s : Fq) (w : ℕ) : CoordsRow Fp where
   yP := (windowPoint B.point w (windowVal s w)).y
   u := B.u w (windowVal s w)
 
-/-- `∑_{j ≤ w} (ks j + 2)·8^j`: the scalar accumulated after windows `0..w`. -/
-def partialSum (ks : ℕ → ℕ) : ℕ → ℕ
-  | 0 => ks 0 + 2
-  | w + 1 => partialSum ks w + (ks (w + 1) + 2) * 8 ^ (w + 1)
-
-theorem partialSum_pos (ks : ℕ → ℕ) (w : ℕ) : 0 < partialSum ks w := by
-  cases w with
-  | zero => simp [partialSum]
-  | succ w => simp [partialSum]
-
-theorem partialSum_lt (ks : ℕ → ℕ) :
-    ∀ w, (∀ j ≤ w, ks j < 8) → partialSum ks w < 2 * 8 ^ (w + 1)
-  | 0, h => by
-    have := h 0 (by omega)
-    simp only [partialSum]
-    omega
-  | w + 1, h => by
-    have ih := partialSum_lt ks w fun j hj => h j (by omega)
-    have hk := h (w + 1) (by omega)
-    have hmul : (ks (w + 1) + 2) * 8 ^ (w + 1) ≤ 10 * 8 ^ (w + 1) :=
-      Nat.mul_le_mul_right _ (by omega)
-    have h16 : 2 * 8 ^ (w + 1 + 1) = 16 * 8 ^ (w + 1) := by ring
-    simp only [partialSum]
-    omega
-
-theorem partialSum_eq_sum (ks : ℕ → ℕ) :
-    ∀ w, partialSum ks w = ∑ j ∈ Finset.range (w + 1), (ks j + 2) * 8 ^ j
-  | 0 => by simp [partialSum]
-  | w + 1 => by rw [partialSum, partialSum_eq_sum ks w, ← Finset.sum_range_succ]
-
 theorem offsetAcc_eq : offsetAcc = ∑ j ∈ Finset.range 84, 2 * 8 ^ j := by
   unfold offsetAcc
   refine Finset.sum_congr rfl fun j _ => ?_
   rw [pow_add, pow_mul]
   norm_num [mul_comm]
-
-private theorem sum_base8 (n : ℕ) :
-    ∀ m, ∑ j ∈ Finset.range m, n / 8 ^ j % 8 * 8 ^ j = n % 8 ^ m
-  | 0 => by simp [Nat.mod_one]
-  | m + 1 => by
-    rw [Finset.sum_range_succ, sum_base8 n m, Nat.mod_pow_succ]
-    ring
 
 /-- The canonical window decomposition recombines to the scalar: the `+2` offsets of the
 lower 84 windows cancel against `offset_acc` in the most significant window. -/
@@ -393,6 +356,44 @@ theorem soundness (B : FixedBase) :
     exact (B.add_natCast_val_nsmul _ _).symm
   rw [hpt, B.mulValue_coords]
 
+/-- Extract the four field equations from a witnessed `CoordsRow`. Extracting via this
+lemma instead of instantiating the `Fin 4` hypothesis at a target component type keeps
+elaboration cheap: the simp proof reduces `(toElements r)[i]` syntactically, whereas
+unification against a concrete `rowValue` makes `whnf` unfold
+`windowScalar`/`offsetAcc` values. -/
+private theorem env_get_row {env : ProverEnvironment Fp} {n : ℕ} {r : CoordsRow Fp}
+    (h : ∀ i : Fin 4, env.get (n + i.val) = (toElements r)[i.val]) :
+    env.get n = r.window ∧ env.get (n + 1) = r.xP ∧
+      env.get (n + 1 + 1) = r.yP ∧ env.get (n + 1 + 1 + 1) = r.u := by
+  obtain ⟨window, xP, yP, u⟩ := r
+  have h0 := h 0
+  have h1 := h 1
+  have h2 := h 2
+  have h3 := h 3
+  simp only [explicit_provable_type, circuit_norm, Nat.reduceMod, Nat.add_zero]
+    at h0 h1 h2 h3
+  exact ⟨h0, h1, h2, h3⟩
+
+/-- `rfl` bridges between `rowValue` fields and `windowPoint` coordinates, stated at
+symbolic `w` where they are cheap to check: with `w` opaque, `windowScalar`'s `w = 84`
+test stays stuck, so neither the elaborator nor the kernel descends into `offsetAcc`
+values. Rewriting with these (instead of bridging at `w := 84` by defeq) keeps the
+window-84 steps of the completeness proof from blowing up. -/
+private theorem rowValue_xP (B : FixedBase) (s : Fq) (w : ℕ) :
+    (rowValue B s w).xP = (windowPoint B.point w (windowVal s w)).x := rfl
+
+private theorem rowValue_yP (B : FixedBase) (s : Fq) (w : ℕ) :
+    (rowValue B s w).yP = (windowPoint B.point w (windowVal s w)).y := rfl
+
+/-- Rebuild a `CoordsRow` from field equations. The eta-expansion `rfl` happens at an
+opaque `r`, which the kernel checks cheaply; closing the same goal at
+`r := rowValue B s 84` by `rfl` makes the kernel recurse into `offsetAcc` values. -/
+private theorem coordsRow_eq {r : CoordsRow Fp} {a b c d : Fp}
+    (hw : a = r.window) (hx : b = r.xP) (hy : c = r.yP) (hu : d = r.u) :
+    r = { window := a, xP := b, yP := c, u := d } := by
+  subst hw hx hy hu
+  rfl
+
 theorem completeness (B : FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main B) (fun _ _ _ => True)
       (ProverSpec B) := by
@@ -404,35 +405,28 @@ theorem completeness (B : FixedBase) :
     Fin.foldl_const, Fin.val_last] at h_add_env ⊢
   rw [show (if _ : 0 < 83 then (830 : ℕ) else 0) = 830 from rfl] at h_add_env ⊢
   -- witnessed row values
-  have h0w : env.get i₀ = (rowValue B input 0).window := h_w0 ⟨0, by norm_num⟩
-  have h0x : env.get (i₀ + 1) = (rowValue B input 0).xP := h_w0 ⟨1, by norm_num⟩
-  have h0y : env.get (i₀ + 1 + 1) = (rowValue B input 0).yP := h_w0 ⟨2, by norm_num⟩
-  have h0u : env.get (i₀ + 1 + 1 + 1) = (rowValue B input 0).u := h_w0 ⟨3, by norm_num⟩
-  have hrowW : ∀ (j : ℕ) (hj : j < 83),
-      env.get (i₀ + 4 + j * 10) = (rowValue B input (j + 1)).window :=
-    fun j hj => (h_loop_env ⟨j, hj⟩).1 ⟨0, by norm_num⟩
-  have hrowX : ∀ (j : ℕ) (hj : j < 83),
-      env.get (i₀ + 4 + j * 10 + 1) = (rowValue B input (j + 1)).xP :=
-    fun j hj => (h_loop_env ⟨j, hj⟩).1 ⟨1, by norm_num⟩
-  have hrowY : ∀ (j : ℕ) (hj : j < 83),
-      env.get (i₀ + 4 + j * 10 + 1 + 1) = (rowValue B input (j + 1)).yP :=
-    fun j hj => (h_loop_env ⟨j, hj⟩).1 ⟨2, by norm_num⟩
-  have hrowU : ∀ (j : ℕ) (hj : j < 83),
-      env.get (i₀ + 4 + j * 10 + 1 + 1 + 1) = (rowValue B input (j + 1)).u :=
-    fun j hj => (h_loop_env ⟨j, hj⟩).1 ⟨3, by norm_num⟩
-  have h84w : env.get (i₀ + 4 + 830) = (rowValue B input 84).window := by
-    have h : env.get (830 + (i₀ + 4)) = (rowValue B input 84).window := h_w84 ⟨0, by norm_num⟩
-    rwa [Nat.add_comm 830 (i₀ + 4)] at h
-  have h84x : env.get (i₀ + 4 + 830 + 1) = (rowValue B input 84).xP := by
-    have h : env.get (830 + (i₀ + 4) + 1) = (rowValue B input 84).xP := h_w84 ⟨1, by norm_num⟩
-    rwa [Nat.add_comm 830 (i₀ + 4)] at h
-  have h84y : env.get (i₀ + 4 + 830 + 1 + 1) = (rowValue B input 84).yP := by
-    have h : env.get (830 + (i₀ + 4) + 1 + 1) = (rowValue B input 84).yP := h_w84 ⟨2, by norm_num⟩
-    rwa [Nat.add_comm 830 (i₀ + 4)] at h
-  have h84u : env.get (i₀ + 4 + 830 + 1 + 1 + 1) = (rowValue B input 84).u := by
-    have h : env.get (830 + (i₀ + 4) + 1 + 1 + 1) = (rowValue B input 84).u :=
-      h_w84 ⟨3, by norm_num⟩
-    rwa [Nat.add_comm 830 (i₀ + 4)] at h
+  obtain ⟨h0w, h0x, h0y, h0u⟩ := env_get_row h_w0
+  have hrow : ∀ (j : ℕ) (hj : j < 83),
+      env.get (i₀ + 4 + j * 10) = (rowValue B input (j + 1)).window ∧
+        env.get (i₀ + 4 + j * 10 + 1) = (rowValue B input (j + 1)).xP ∧
+        env.get (i₀ + 4 + j * 10 + 1 + 1) = (rowValue B input (j + 1)).yP ∧
+        env.get (i₀ + 4 + j * 10 + 1 + 1 + 1) = (rowValue B input (j + 1)).u :=
+    fun j hj => env_get_row (h_loop_env ⟨j, hj⟩).1
+  have hrowW := fun j hj => (hrow j hj).1
+  have hrowX := fun j hj => (hrow j hj).2.1
+  have hrowY := fun j hj => (hrow j hj).2.2.1
+  have hrowU := fun j hj => (hrow j hj).2.2.2
+  have h84 : env.get (830 + (i₀ + 4)) = (rowValue B input 84).window ∧
+      env.get (830 + (i₀ + 4) + 1) = (rowValue B input 84).xP ∧
+        env.get (830 + (i₀ + 4) + 1 + 1) = (rowValue B input 84).yP ∧
+        env.get (830 + (i₀ + 4) + 1 + 1 + 1) = (rowValue B input 84).u :=
+    env_get_row h_w84
+  rw [Nat.add_comm 830 (i₀ + 4)] at h84
+  obtain ⟨h84w, h84x, h84y, h84u⟩ := h84
+  have hrow84 : rowValue B input 84
+      = { window := env.get (i₀ + 4 + 830), xP := env.get (i₀ + 4 + 830 + 1),
+          yP := env.get (i₀ + 4 + 830 + 1 + 1), u := env.get (i₀ + 4 + 830 + 1 + 1 + 1) } :=
+    coordsRow_eq h84w h84x h84y h84u
   -- per-iteration incomplete addition, with the accumulator cleaned up
   have h_step' : ∀ (j : ℕ) (hj : j < 83),
       Pallas.OnCurve (env.get (i₀ + 4 + j * 10 + 1), env.get (i₀ + 4 + j * 10 + 1 + 1)) ∧
@@ -550,18 +544,27 @@ theorem completeness (B : FixedBase) :
         rw [hval]; exact Nat.mul_le_mul_right _ (by omega)
       exact B.nsmul_x_ne hS_pos (by omega) hsum_card
   -- shared facts for the final complete addition
-  have hS83_lt := partialSum_lt (windowVal input) 83 fun _ _ => windowVal_lt input _
-  have hS83_pos := partialSum_pos (windowVal input) 83
+  -- Keep the accumulated scalar opaque from here on: kernel defeq checks must get stuck
+  -- on `S83 • B.point` instead of unfolding the 83-step `partialSum` recursion
+  -- (soundness gets this for free since its scalar is an existential witness).
+  obtain ⟨S83, hS83_def⟩ : ∃ S, partialSum (windowVal input) 83 = S := ⟨_, rfl⟩
+  have hS83_lt : S83 < 2 * 8 ^ (83 + 1) := by
+    rw [← hS83_def]
+    exact partialSum_lt (windowVal input) 83 fun _ _ => windowVal_lt input _
+  have hS83_pos : 0 < S83 := by
+    rw [← hS83_def]
+    exact partialSum_pos (windowVal input) 83
   have hS83_card := inv_lt_card hS83_lt (by omega)
   have hacc83 :
       ({ x := Expression.eval env.toEnvironment
             (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).x,
          y := Expression.eval env.toEnvironment
             (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).y } : Point Fp)
-      = { x := (partialSum (windowVal input) 83 • B.point).x,
-          y := (partialSum (windowVal input) 83 • B.point).y } := h_inv 83 (by omega)
+      = { x := (S83 • B.point).x, y := (S83 • B.point).y } := by
+    rw [← hS83_def]
+    exact h_inv 83 (by omega)
   have hValidP : Pallas.Valid (env.get (i₀ + 4 + 830 + 1), env.get (i₀ + 4 + 830 + 1 + 1)) := by
-    rw [h84x, h84y]
+    rw [h84x, h84y, rowValue_xP, rowValue_yP]
     exact Or.inl (SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero (windowVal_lt input 84)))
   have hValidAcc : Pallas.Valid
       (({ x := Expression.eval env.toEnvironment
@@ -577,14 +580,14 @@ theorem completeness (B : FixedBase) :
     exact (rowValue_spec B input (by norm_num)).2
   · intro i
     obtain ⟨j, hj⟩ := i
-    simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
-      Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, circuit_norm]
+    simp only [Nat.reduceAdd, Circuit.FoldlM.foldlAcc, Vector.getElem_finRange,
+      Fin.val_mk, circuit_norm]
     rcases j with _ | j'
     · simp only [Fin.foldl_zero]
       exact hB 0 hj
     · simp only [Fin.foldl_const, Fin.val_last]
       exact hB (j' + 1) hj
-  · rw [h84w, h84x, h84y, h84u]
+  · rw [← hrow84]
     exact (rowValue_spec B input (by norm_num)).1
   · rw [h84w]
     exact (rowValue_spec B input (by norm_num)).2
@@ -601,21 +604,18 @@ theorem completeness (B : FixedBase) :
               (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).y } : Point Fp)).coords = _
     rw [show (({ x := env.get (i₀ + 4 + 830 + 1), y := env.get (i₀ + 4 + 830 + 1 + 1) } :
         Point Fp)).coords = (env.get (i₀ + 4 + 830 + 1), env.get (i₀ + 4 + 830 + 1 + 1))
-      from rfl, h84x, h84y, hacc83]
+      from rfl, h84x, h84y, rowValue_xP, rowValue_yP, hacc83]
     show Pallas.add
         ((windowPoint B.point 84 (windowVal input 84)).x,
           (windowPoint B.point 84 (windowVal input 84)).y)
-        ((partialSum (windowVal input) 83 • B.point).x,
-          (partialSum (windowVal input) 83 • B.point).y)
+        ((S83 • B.point).x, (S83 • B.point).y)
       = (B.mulValue input).coords
     rw [Pallas.add_coords]
-    show (((windowScalar 84 (windowVal input 84)).val • B.point
-        + partialSum (windowVal input) 83 • B.point).x,
-      ((windowScalar 84 (windowVal input 84)).val • B.point
-        + partialSum (windowVal input) 83 • B.point).y) = _
-    have hpt : (windowScalar 84 (windowVal input 84)).val • B.point
-        + partialSum (windowVal input) 83 • B.point = input.val • B.point := by
-      rw [← add_nsmul, ← B.add_natCast_val_nsmul, windowScalar_partialSum]
+    show (((windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point).x,
+      ((windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point).y) = _
+    have hpt : (windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point
+        = input.val • B.point := by
+      rw [← hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul, windowScalar_partialSum]
     rw [hpt, B.mulValue_coords]
 
 def circuit (B : FixedBase) : GeneralFormalCircuit.WithHint Fp (Unconstrained Fq) Point where

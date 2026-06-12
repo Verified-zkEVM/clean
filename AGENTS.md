@@ -193,6 +193,9 @@ Practical recommendations:
 
 Check `doc/proving-guide.md` for more tips especially related to user-facing circuit formalization proofs.
 
+When a proof exceeds `maxHeartbeats` or fails with `(kernel) deep recursion detected`,
+read `doc/performance-problems.md` first.
+
 ### Debugging
 
 To understand performance of a Lean command, wrap it with `#count_heartbeats` from mathlib:

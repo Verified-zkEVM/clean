@@ -85,12 +85,26 @@ Current Clean coverage:
   without a `GATE` name
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.RunningSumCoords.circuit`:
   `GATE Running sum coordinates check`
-- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FixedBase`: value-level model of a fixed base
+  point with its precomputed window tables (`z`/`u` values, Lagrange coefficients),
+  parameterizing the fixed-base entry circuits
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.Gate.circuit`:
   `GATE Full-width fixed-base scalar mul`
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.circuit`: `FixedPoint::mul`
+  (`mul_fixed/full_width.rs::Config::assign`), the full-width fixed-base scalar
+  multiplication entry circuit `[scalar] B`, with soundness and completeness proved
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`:
   `GATE Canonicity checks`
-- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.Gate.circuit`:
   `GATE Short fixed-base mul gate`
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.FixedBase`: value-level model of a short
+  fixed base point with its 22-window tables, parameterizing the short entry circuit
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.circuit`: `FixedPointShort::mul`
+  (`mul_fixed/short.rs::Config::assign`), the signed short fixed-base scalar
+  multiplication entry circuit `[±magnitude] B`, with soundness and completeness proved;
+  composes the strict running-sum decomposition (`GATE range check` and
+  `GATE Running sum coordinates check` per window), incomplete and complete addition,
+  and the final conditional negation gate
 
 ### Poseidon
 
@@ -176,6 +190,11 @@ Source:
 
 Current Clean coverage:
 
+- `Clean.Orchard.Gadget.ValueCommitOrchard.circuit`: `gadget.rs::value_commit_orchard`,
+  the value-commitment entry circuit
+  `cv = [v] ValueCommitV + [rcv] ValueCommitR`, composing the short and full-width
+  fixed-base mul entry circuits and complete addition, with soundness and completeness
+  proved
 - `Clean.Orchard.ActionChecks.circuit`: `GATE Orchard circuit checks`
 - `Clean.Orchard.NoteCommit.DecomposeB.circuit`:
   `GATE NoteCommit MessagePiece b`
@@ -221,27 +240,27 @@ callers.
 
 ### Lookup And Range-Check Conformance
 
-Clean has arithmetic stand-ins for some lookup-backed range checks:
+Clean has an arithmetic stand-in for one lookup-backed range check:
 
-- `GATE range check`
 - `LookupRangeCheck.shortRangeCircuit`
 
 Source-conformant repairs should use Clean `lookup` and explicit `Table` definitions
 where Halo2 uses lookup tables. This is required before higher-level range-dependent
 gadgets can be considered source-conformant.
 
+Note that `GATE range check` (`decompose_running_sum.rs`) is *not* lookup-backed in
+halo2: it is the polynomial constraint `range_check(word, 8)` and the Clean port is
+source-conformant.
+
 ### Scalar Multiplication Entry APIs
 
-Current scalar-mul coverage is mostly row-level gate assertions. Missing source-level
-entry circuits:
+Full-width and signed short fixed-base mul are source-level entry circuits; the rest of
+the scalar-mul coverage is row-level gate assertions. Missing source-level entry
+circuits:
 
 - `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by
   `ecc/chip/mul.rs::Config::assign`: variable-base scalar multiplication
   `[scalar] base`.
-- `FixedPoint::mul`, implemented by `ecc/chip/mul_fixed/full_width.rs`: full-width
-  fixed-base scalar multiplication `[scalar] B`.
-- `FixedPointShort::mul`, implemented by `ecc/chip/mul_fixed/short.rs`: signed short
-  fixed-base scalar multiplication used by `ValueCommitV`.
 - `FixedPointBaseField::mul`, implemented by
   `ecc/chip/mul_fixed/base_field_elem.rs`: fixed-base multiplication by a base-field
   element, used by nullifier derivation.
@@ -297,9 +316,9 @@ fixed-base scalar multiplication, and source-shaped `hash_to_point` composition.
 
 ### Orchard Entry APIs
 
-Missing source-level APIs:
+`value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`). Missing
+source-level APIs:
 
-- `value_commit_orchard`
 - `derive_nullifier`
 - spend-authority key derivation in `Circuit::synthesize`
 - address-integrity wiring in `Circuit::synthesize`
@@ -309,7 +328,6 @@ Missing source-level APIs:
 
 These must compose source-conformant child circuits. In particular:
 
-- `value_commit_orchard` is `[v] ValueCommitV + [rcv] ValueCommitR`.
 - `derive_nullifier` is `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`.
 - Spend authority is `[alpha] SpendAuthG + ak_P`.
 - Address integrity computes `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`.
