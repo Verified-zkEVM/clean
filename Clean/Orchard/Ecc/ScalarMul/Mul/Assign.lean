@@ -480,17 +480,398 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
       hfin (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3)
         (by rw [hm3]; omega)]
 
+/-! ### Honest-witness helpers: the chain of `kBits` reconstructs `kNat` -/
+
+private theorem chainNat_testBit (K n : ℕ) (hK : K < 2 ^ n) :
+    ∀ j, j ≤ n → chainNat 0 (fun i => K.testBit (n - 1 - i)) j = K / 2 ^ (n - j)
+  | 0, _ => by
+    simp only [chainNat]
+    rw [Nat.sub_zero]
+    exact (Nat.div_eq_of_lt hK).symm
+  | j + 1, hj => by
+    have ih := chainNat_testBit K n hK j (by omega)
+    have hsplit : K / 2 ^ (n - j) = K / 2 ^ (n - (j + 1)) / 2 := by
+      rw [Nat.div_div_eq_div_mul, ← pow_succ]
+      congr 2
+      omega
+    have hbit : (if K.testBit (n - 1 - j) then 1 else 0) = K / 2 ^ (n - (j + 1)) % 2 := by
+      rw [show n - 1 - j = n - (j + 1) from by omega, Nat.testBit_eq_decide_div_mod_eq]
+      rcases Nat.mod_two_eq_zero_or_one (K / 2 ^ (n - (j + 1))) with h | h <;> simp [h]
+    show 2 * chainNat 0 (fun i => K.testBit (n - 1 - i)) j + _ = _
+    rw [ih, hsplit, hbit]
+    omega
+
+/-- Chains compose: continuing for `b` more steps from the `a`-step value. -/
+private theorem chainNat_append (zin : ℕ) (bits : ℕ → Bool) (a : ℕ) :
+    ∀ b, chainNat zin bits (a + b)
+      = chainNat (chainNat zin bits a) (fun i => bits (a + i)) b
+  | 0 => rfl
+  | b + 1 => by
+    have ih := chainNat_append zin bits a b
+    show 2 * chainNat zin bits (a + b) + (if bits (a + b) then 1 else 0) = _
+    rw [ih]
+    rfl
+
+private theorem kNat_lt (alpha : Fp) : kNat alpha < 2 ^ 255 := by
+  have h := ZMod.val_lt alpha
+  norm_num [PALLAS_BASE_CARD] at h
+  norm_num [kNat, tQNat]
+  omega
+
+/-- The honest running sum after `j` of the 255 steps is the high `j` bits of `k`. -/
+private theorem chainNat_kBits (alpha : Fp) (j : ℕ) (hj : j ≤ 255) :
+    chainNat 0 (kBits alpha) j = kNat alpha / 2 ^ (255 - j) := by
+  have h := chainNat_testBit (kNat alpha) 255 (kNat_lt alpha) j hj
+  have hf : (fun i => (kNat alpha).testBit (255 - 1 - i)) = kBits alpha := by
+    funext i
+    show (kNat alpha).testBit (255 - 1 - i) = (kNat alpha).testBit (254 - i)
+    congr 1
+  rw [← hf]
+  exact h
+
+/-- `zRunValue` is the cast of the natural chain. -/
+private theorem zRunValue_chainNat (Zin : ℕ) (bits : ℕ → Bool) :
+    ∀ b, Incomplete.DoubleAndAdd.zRunValue (Zin : Fp) bits b
+      = (chainNat Zin bits (b + 1) : Fp)
+  | 0 => by
+    show 2 * (Zin : Fp) + _ = _
+    rw [show chainNat Zin bits 1 = 2 * Zin + (if bits 0 then 1 else 0) from rfl]
+    cases bits 0 <;> simp
+  | b + 1 => by
+    have ih := zRunValue_chainNat Zin bits b
+    show 2 * Incomplete.DoubleAndAdd.zRunValue (Zin : Fp) bits b + _ = _
+    rw [ih, show chainNat Zin bits (b + 1 + 1)
+      = 2 * chainNat Zin bits (b + 1) + (if bits (b + 1) then 1 else 0) from rfl]
+    cases bits (b + 1) <;> simp
+
+/-- The honest running-sum cells hold the shifted values of `k`. Stated over opaque
+cell values; the heavy `chainNat` reasoning is kernel-checked here once. -/
+private theorem chain_cells (alpha : Fp) {zin v0 v124 v125 v2 : Fp}
+    (hzin : zin = 0)
+    (h0 : v0 = Incomplete.DoubleAndAdd.zRunValue zin (fun i => kBits alpha i) 0)
+    (h124 : v124 = Incomplete.DoubleAndAdd.zRunValue zin (fun i => kBits alpha i) 124)
+    (h125 : v125
+      = Incomplete.DoubleAndAdd.zRunValue v124 (fun i => kBits alpha (125 + i)) 125)
+    (h2 : v2 = Incomplete.DoubleAndAdd.zRunValue v125 (fun i => kBits alpha (251 + i)) 2) :
+    v0 = ((kNat alpha / 2 ^ 254 : ℕ) : Fp) ∧
+    v124 = ((kNat alpha / 2 ^ 130 : ℕ) : Fp) ∧
+    v125 = ((kNat alpha / 2 ^ 4 : ℕ) : Fp) ∧
+    v2 = ((kNat alpha / 2 : ℕ) : Fp) := by
+  have hC130 : chainNat 0 (kBits alpha) 125 = kNat alpha / 2 ^ 130 := by
+    rw [chainNat_kBits alpha 125 (by omega)]
+  have hC254 : chainNat 0 (kBits alpha) 1 = kNat alpha / 2 ^ 254 := by
+    rw [chainNat_kBits alpha 1 (by omega)]
+  have hC4 : chainNat (kNat alpha / 2 ^ 130) (fun i => kBits alpha (125 + i)) 126
+      = kNat alpha / 2 ^ 4 := by
+    rw [← hC130, ← chainNat_append 0 (kBits alpha) 125 126,
+      show (125 : ℕ) + 126 = 251 from by norm_num,
+      chainNat_kBits alpha 251 (by omega)]
+  have hC2 : chainNat (kNat alpha / 2 ^ 4) (fun i => kBits alpha (251 + i)) 3
+      = kNat alpha / 2 := by
+    rw [show kNat alpha / 2 ^ 4 = chainNat 0 (kBits alpha) 251 from by
+        rw [chainNat_kBits alpha 251 (by omega)],
+      ← chainNat_append 0 (kBits alpha) 251 3,
+      show (251 : ℕ) + 3 = 254 from by norm_num,
+      chainNat_kBits alpha 254 (by omega)]
+    norm_num
+  rw [hzin, show (0 : Fp) = ((0 : ℕ) : Fp) from by norm_num] at h0 h124
+  rw [zRunValue_chainNat 0 (fun i => kBits alpha i) 0,
+    show (fun i => kBits alpha i) = kBits alpha from rfl,
+    show (0 : ℕ) + 1 = 1 from rfl, hC254] at h0
+  rw [zRunValue_chainNat 0 (fun i => kBits alpha i) 124,
+    show (fun i => kBits alpha i) = kBits alpha from rfl,
+    show (124 : ℕ) + 1 = 125 from rfl, hC130] at h124
+  rw [h124, zRunValue_chainNat (kNat alpha / 2 ^ 130) (fun i => kBits alpha (125 + i)) 125,
+    show (125 : ℕ) + 1 = 126 from rfl, hC4] at h125
+  rw [h125, zRunValue_chainNat (kNat alpha / 2 ^ 4) (fun i => kBits alpha (251 + i)) 2,
+    show (2 : ℕ) + 1 = 3 from rfl, hC2] at h2
+  exact ⟨h0, h124, h125, h2⟩
+
+/-- The honest `z₀` cell reconstructs the working scalar `k`. Stated over opaque cell
+values so the heavy cast reasoning is kernel-checked here, not in `completeness`. -/
+private theorem z0_cell_value (alpha : Fp) {z1v z0v : Fp}
+    (hz1v : z1v = ((kNat alpha / 2 : ℕ) : Fp))
+    (hz0w : z0v = 2 * z1v + (if kBits alpha 254 then 1 else 0)) :
+    z0v = ((kNat alpha : ℕ) : Fp) := by
+  have hbit : (if kBits alpha 254 then (1 : Fp) else 0)
+      = ((kNat alpha % 2 : ℕ) : Fp) := by
+    rw [show kBits alpha 254 = decide (kNat alpha % 2 = 1) from by unfold kBits; norm_num]
+    rcases Nat.mod_two_eq_zero_or_one (kNat alpha) with h | h <;> rw [h] <;> simp
+  rw [hz0w, hz1v, hbit, show ((kNat alpha : ℕ) : Fp)
+    = ((2 * (kNat alpha / 2) + kNat alpha % 2 : ℕ) : Fp) from by congr 1; omega]
+  push_cast
+  ring
+
+/-- The honest LSB row satisfies `GATE LSB check`. Stated over opaque cell values so
+the main completeness term stays small (the kernel deep-recurses past a size cliff). -/
+private theorem mul_spec_honest (alpha : Fp) {z1v z0v xv yv bx bY bxe bye : Fp}
+    (hz0v : z0v = ((kNat alpha : ℕ) : Fp))
+    (hz1v : z1v = ((kNat alpha / 2 : ℕ) : Fp))
+    (hcx : xv = if kBits alpha 254 then 0 else bxe)
+    (hcy : yv = if kBits alpha 254 then 0 else -bye)
+    (hbx : bx = bxe) (hby : bY = bye) :
+    Mul.Spec { z1 := z1v, z0 := z0v, xP := xv, yP := yv, baseX := bx, baseY := bY } := by
+  simp only [Mul.Spec, Mul.SelectedCorrectionPoint, Mul.lsb]
+  have hkb : kBits alpha 254 = decide (kNat alpha % 2 = 1) := by
+    unfold kBits
+    norm_num
+  have hl0 : z0v - z1v * 2 = ((kNat alpha % 2 : ℕ) : Fp) := by
+    rw [hz0v, hz1v, show ((kNat alpha : ℕ) : Fp)
+      = ((2 * (kNat alpha / 2) + kNat alpha % 2 : ℕ) : Fp) from by congr 1; omega]
+    push_cast
+    ring
+  rw [hl0, hcx, hcy, hbx, hby, hkb]
+  rcases Nat.mod_two_eq_zero_or_one (kNat alpha) with hpar | hpar <;> rw [hpar]
+  · refine ⟨Or.inl (by norm_num), fun _ => ?_, fun h1 => absurd h1 (by norm_num)⟩
+    norm_num [CompElliptic.CurveForms.ShortWeierstrass.neg]
+  · refine ⟨Or.inr (by norm_num), fun h0 => absurd h0 (by norm_num), fun _ => ?_⟩
+    norm_num
+
+/-- The honest correction point is valid: `-B` if `k₀ = 0`, the identity otherwise. -/
+private theorem corr_valid_honest (alpha : Fp) (B : SWPoint Pallas.curve)
+    {xv yv bxe bye : Fp}
+    (hcx : xv = if kBits alpha 254 then 0 else bxe)
+    (hcy : yv = if kBits alpha 254 then 0 else -bye)
+    (hbx : bxe = B.x) (hby : bye = B.y) :
+    Pallas.Valid (xv, yv) := by
+  rw [hcx, hcy, hbx, hby,
+    show kBits alpha 254 = decide (kNat alpha % 2 = 1) from by unfold kBits; norm_num]
+  rcases Nat.mod_two_eq_zero_or_one (kNat alpha) with hpar | hpar <;> rw [hpar]
+  · norm_num
+    exact (-B).onCurve
+  · norm_num
+    exact Or.inr rfl
+
+/-- The honest running-sum cells satisfy the overflow-check contract. -/
+private theorem overflow_spec_honest (alpha : Fp) {z0v z130v k254v : Fp}
+    (hz0v : z0v = ((kNat alpha : ℕ) : Fp))
+    (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
+    (h254 : k254v = ((kNat alpha / 2 ^ 254 : ℕ) : Fp)) :
+    Overflow.OverflowCheck.Spec
+      { alpha := alpha, z0 := z0v, z130 := z130v, k254 := k254v } := by
+  have hKlt := kNat_lt alpha
+  have hvallt : ZMod.val alpha
+      < 28948022309329048855892746252171976963363056481941560715954676764349967630337 := by
+    have h' := ZMod.val_lt alpha
+    norm_num [PALLAS_BASE_CARD] at h'
+    exact h'
+  have hkdef : kNat alpha = ZMod.val alpha + tQNat := rfl
+  have htq : tQNat = 45560315531506369815346746415080538113 := rfl
+  have hav : ((ZMod.val alpha : ℕ) : Fp) = alpha := ZMod.natCast_rightInverse alpha
+  have h2254 : kNat alpha / 2 ^ 254 = 0 ∨ kNat alpha / 2 ^ 254 = 1 := by
+    have h := hKlt
+    norm_num at h ⊢
+    omega
+  refine ⟨?_, ?_, ?_⟩
+  · -- z₀ = α + t_q
+    rw [hz0v, hkdef]
+    push_cast
+    rw [hav]
+    congr 1
+  · -- k₂₅₄ = 0 ∨ z₁₃₀ = 2^124
+    rw [h254, h130]
+    rcases h2254 with h | h
+    · left; rw [h]; norm_num
+    · right
+      have hval : kNat alpha / 2 ^ 130 = 2 ^ 124 := by
+        have h1 := hKlt
+        norm_num at h h1 ⊢
+        omega
+      rw [hval]
+      push_cast
+      norm_num
+  · -- the decomposition of s = α + k₂₅₄·2^130
+    rw [h254]
+    rcases h2254 with h | h
+    · rw [h]
+      by_cases hsm : ZMod.val alpha < 2 ^ 130
+      · exact ⟨0, ZMod.val alpha, hsm,
+          by push_cast; rw [hav]; ring, Or.inr rfl, Or.inr (Or.inr rfl)⟩
+      · refine ⟨((ZMod.val alpha / 2 ^ 130 : ℕ) : Fp), ZMod.val alpha % 2 ^ 130,
+          Nat.mod_lt _ (by norm_num), ?_, Or.inl (by push_cast; ring), ?_⟩
+        · have hsc : ((ZMod.val alpha : ℕ) : Fp)
+              = ((ZMod.val alpha % 2 ^ 130 : ℕ) : Fp)
+                + 2 ^ 130 * ((ZMod.val alpha / 2 ^ 130 : ℕ) : Fp) := by
+            rw [show ((ZMod.val alpha : ℕ) : Fp)
+              = ((ZMod.val alpha % 2 ^ 130
+                  + 2 ^ 130 * (ZMod.val alpha / 2 ^ 130) : ℕ) : Fp) from by
+                congr 1
+                omega]
+            push_cast
+            ring
+          push_cast
+          linear_combination hsc - hav
+        · -- z₁₃₀ ≠ 0, since k ≥ 2^130
+          right; left
+          rw [h130]
+          intro h0
+          have hlt : kNat alpha / 2 ^ 130 < 2 ^ 125 := by
+            have h1 := hKlt
+            norm_num at h1 ⊢
+            omega
+          have hge : 1 ≤ kNat alpha / 2 ^ 130 := by
+            norm_num at hsm hlt ⊢
+            omega
+          have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h0
+          have hle := Nat.le_of_dvd (by omega) hdvd
+          norm_num [PALLAS_BASE_CARD] at hle hlt
+          omega
+    · -- top bit set: α ≥ p − 2^130, the decomposition wraps once
+      rw [h]
+      refine ⟨0, ZMod.val alpha + 2 ^ 130
+          - 28948022309329048855892746252171976963363056481941560715954676764349967630337,
+        ?_, ?_, Or.inr rfl, Or.inl (by push_cast; norm_num)⟩
+      · norm_num at h ⊢
+        omega
+      · have hge : 28948022309329048855892746252171976963363056481941560715954676764349967630337
+            ≤ ZMod.val alpha + 2 ^ 130 := by
+          norm_num at h ⊢
+          omega
+        rw [show ((ZMod.val alpha + 2 ^ 130
+            - 28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
+          = ((ZMod.val alpha + 2 ^ 130 : ℕ) : Fp)
+            - ((28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
+          from by rw [Nat.cast_sub hge],
+          show ((28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
+            = 0 from by
+            rw [show (28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ)
+              = PALLAS_BASE_CARD from by norm_num [PALLAS_BASE_CARD]]
+            exact ZMod.natCast_self PALLAS_BASE_CARD]
+        push_cast
+        rw [hav]
+        ring
+
+/-- Bounds on the honest hi/lo accumulator scalars, kernel-checked standalone. -/
+private theorem m_bounds (alpha : Fp) :
+    2 ≤ accScalar 2 (fun i => kBits alpha i) 125 ∧
+    2 ^ (125 + 2) * (accScalar 2 (fun i => kBits alpha i) 125 + 1) ≤ 2 ^ 254 ∧
+    1 ≤ accScalar (accScalar 2 (fun i => kBits alpha i) 125)
+        (fun i => kBits alpha (125 + i)) 126 := by
+  have hC130 : chainNat 0 (kBits alpha) 125 = kNat alpha / 2 ^ 130 := by
+    rw [chainNat_kBits alpha 125 (by omega)]
+  have hm1 : accScalar 2 (fun i => kBits alpha i) 125
+      = 2 ^ 125 + 2 * (kNat alpha / 2 ^ 130) + 1 := by
+    rw [accScalar_closed 2 (by norm_num) _ 125,
+      show (fun i => kBits alpha i) = kBits alpha from rfl, hC130]
+    norm_num
+  have hKlt := kNat_lt alpha
+  refine ⟨by rw [hm1]; have := Nat.two_pow_pos 125; omega,
+    by rw [hm1]; have h := hKlt; norm_num at h ⊢; omega, ?_⟩
+  have hm2c := accScalar_closed (accScalar 2 (fun i => kBits alpha i) 125)
+    (by rw [hm1]; have := Nat.two_pow_pos 125; omega) (fun i => kBits alpha (125 + i)) 126
+  omega
+
 theorem completeness : Completeness Fp main Assumptions := by
-  sorry
-
-/-- `mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`):
-variable-base scalar multiplication by a base-field element. -/
-def circuit : FormalCircuit Fp Input Ecc.Point where
-  main
-  elaborated
-  Assumptions
-  Spec
-  soundness
-  completeness
-
-end Orchard.Ecc.ScalarMul.Mul.Assign
+  circuit_proof_start_core
+  -- The one-shot `circuit_proof_start` normalization of `h_env` produces a simp
+  -- cast the kernel cannot re-check (deep recursion). Mimic it manually, but
+  -- normalize `h_env` by `dsimp` (definitional, castless), project the eleven
+  -- components, and simp each small piece on its own.
+  try simp only [circuit_norm] at input_var
+  try simp only [circuit_norm] at input
+  try simp only [circuit_norm] at h_input
+  try dsimp only [Assumptions] at h_assumptions
+  try provable_struct_simp
+  dsimp only [main, circuit_norm] at h_env
+  have hAcc := h_env.1
+  have hz0 := h_env.2.1
+  have hHi := h_env.2.2.2.1
+  have hLo := h_env.2.2.2.2.1
+  have hComp := h_env.2.2.2.2.2.1
+  have hz0w := h_env.2.2.2.2.2.2.1
+  have hbxw := h_env.2.2.2.2.2.2.2.1
+  have hbyw := h_env.2.2.2.2.2.2.2.2.2.1
+  have hcxw := h_env.2.2.2.2.2.2.2.2.2.2.2.1
+  have hcyw := h_env.2.2.2.2.2.2.2.2.2.2.2.2.1
+  clear h_env
+  simp only [circuit_norm, h_input, Ecc.Add.circuit, Incomplete.DoubleAndAdd.circuit,
+    Complete.AssignRegion.circuit] at hAcc hz0 hHi hLo hComp
+  simp only [circuit_norm, h_input, Ecc.Add.circuit, Incomplete.DoubleAndAdd.circuit,
+    Complete.AssignRegion.circuit] at hz0w hbxw hbyw hcxw hcyw
+  dsimp only [main, circuit_norm]
+  simp only [circuit_norm, h_input, Ecc.Add.circuit, Incomplete.DoubleAndAdd.circuit,
+    Complete.AssignRegion.circuit, Mul.circuit, Overflow.OverflowCheck.circuit]
+  simp only [Ecc.Add.Assumptions, Ecc.Add.Spec, Ecc.Point.coords] at hAcc
+  simp only [Ecc.Point.coords] at h_assumptions
+  -- the base as a nonzero curve point
+  obtain ⟨B, hB, hBx, hBy⟩ : ∃ B : SWPoint Pallas.curve, B ≠ 0 ∧
+      B.x = input_base.x ∧ B.y = input_base.y := by
+    refine ⟨⟨input_base.x, input_base.y, Or.inl h_assumptions⟩, ?_, rfl, rfl⟩
+    intro h0
+    have hx : input_base.x = (0 : Fp) := congrArg SWPoint.x h0
+    have hy : input_base.y = (0 : Fp) := congrArg SWPoint.y h0
+    rw [hx, hy] at h_assumptions
+    exact Pallas.not_onCurve_zero h_assumptions
+  have hbase : (input_base.x, input_base.y) = (B.x, B.y) := by rw [hBx, hBy]
+  have hIx : Expression.eval env.toEnvironment input_var_base.x = input_base.x :=
+    congrArg Ecc.Point.x h_input.2
+  have hIy : Expression.eval env.toEnvironment input_var_base.y = input_base.y :=
+    congrArg Ecc.Point.y h_input.2
+  have hmB := m_bounds input_alpha
+  -- acc = [2]B
+  have hAccPair := (hAcc ⟨Or.inl h_assumptions, Or.inl h_assumptions⟩).2
+  rw [hbase, Pallas.add_coords, ← two_nsmul] at hAccPair
+  -- hi half prover facts
+  have hHiS := hHi ⟨B, 2, hB, hbase, hAccPair, le_refl 2, by norm_num⟩
+  simp only [Incomplete.DoubleAndAdd.ProverSpec] at hHiS
+  obtain ⟨-, hHiZs, hHiAcc⟩ := hHiS
+  have hHiOutPair := hHiAcc B 2 hB hbase hAccPair (le_refl 2) (by norm_num)
+  rw [show accScalar 2 (fun i => kBits input_alpha i) (124 + 1)
+    = accScalar 2 (fun i => kBits input_alpha i) 125 from rfl] at hHiOutPair
+  -- honest running-sum cells, as shifted values of k
+  have h124 := hHiZs ⟨124, by omega⟩
+  have h0c := hHiZs ⟨0, by omega⟩
+  simp only [circuit_norm] at h124 h0c
+  -- lo half prover facts
+  have hLoS := hLo ⟨B, accScalar 2 (fun i => kBits input_alpha i) 125, hB, hbase,
+    hHiOutPair, hmB.1, hmB.2.1⟩
+  simp only [Incomplete.DoubleAndAdd.ProverSpec] at hLoS
+  obtain ⟨-, hLoZs, hLoAcc⟩ := hLoS
+  have hLoOutPair := hLoAcc B (accScalar 2 (fun i => kBits input_alpha i) 125) hB hbase
+    hHiOutPair hmB.1 hmB.2.1
+  rw [show accScalar (accScalar 2 (fun i => kBits input_alpha i) 125)
+      (fun i => kBits input_alpha (125 + i)) (125 + 1)
+    = accScalar (accScalar 2 (fun i => kBits input_alpha i) 125)
+      (fun i => kBits input_alpha (125 + i)) 126 from rfl] at hLoOutPair
+  have h125 := hLoZs ⟨125, by omega⟩
+  simp only [circuit_norm] at h125
+  -- complete-bits prover facts
+  have hCompS := hComp ⟨by
+      rw [hLoOutPair]
+      exact ((accScalar (accScalar 2 (fun i => kBits input_alpha i) 125)
+        (fun i => kBits input_alpha (125 + i)) 126 • B)).onCurve,
+    Or.inl h_assumptions⟩
+  simp only [Complete.AssignRegion.ProverSpec] at hCompS
+  obtain ⟨-, hCompZs, hCompAcc⟩ := hCompS
+  have h2c := hCompZs ⟨2, by omega⟩
+  simp only [circuit_norm] at h2c
+  -- TODO(kernel): applying `chain_cells`/`z0_cell_value` here currently tips the
+  -- kernel into deep recursion; the remaining four obligations are sorried until
+  -- the poisonous defeq is isolated. All mathematical content is in the proven
+  -- lemmas above (`chain_cells`, `z0_cell_value`, `mul_spec_honest`,
+  -- `corr_valid_honest`, `overflow_spec_honest`).
+  -- assemble the constraint obligations
+  refine ⟨⟨Or.inl h_assumptions, Or.inl h_assumptions⟩, hz0,
+    ⟨B, 2, hB, hbase, hAccPair, le_refl 2, by norm_num⟩,
+    ⟨B, accScalar 2 (fun i => kBits input_alpha i) 125, hB, hbase, hHiOutPair,
+      hmB.1, hmB.2.1⟩,
+    ⟨by
+      rw [hLoOutPair]
+      exact ((accScalar (accScalar 2 (fun i => kBits input_alpha i) 125)
+        (fun i => kBits input_alpha (125 + i)) 126 • B)).onCurve,
+      Or.inl h_assumptions⟩,
+    hbxw, hbyw, ?mul, ⟨?corrValid, ?accValid⟩, ?ov⟩
+  case mul =>
+    sorry
+  case corrValid =>
+    sorry
+  case accValid =>
+    rw [hCompAcc, ← hBx, ← hBy, hLoOutPair, accValue_nsmul B
+      (accScalar (accScalar 2 (fun i => kBits input_alpha i) 125)
+        (fun i => kBits input_alpha (125 + i)) 126)
+      hmB.2.2 (fun i => kBits input_alpha (251 + i)) 3]
+    exact ((accScalar (accScalar (accScalar 2 (fun i => kBits input_alpha i) 125)
+      (fun i => kBits input_alpha (125 + i)) 126)
+      (fun i => kBits input_alpha (251 + i)) 3 • B)).onCurve
+  case ov =>
+    sorry
