@@ -34,7 +34,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (n₀ : ℕ)
     (ns : List ℕ) (pieces : Var (fields (ns.length + 1)) Ecc.Fp) :
     Circuit Ecc.Fp (Expression Ecc.Fp) := do
   let p ← Entry.circuit G Q hQ n₀ ns pieces
-  return p.x
+  return p.point.x
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
@@ -66,7 +66,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ n₀ ns)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
   circuit_proof_start [main, Spec, Entry.circuit, Entry.Spec]
-  obtain ⟨chunks, hPC, hfun⟩ := h_holds
+  obtain ⟨chunks, hPC, hZ1, hfun⟩ := h_holds
   refine ⟨chunks, hPC, ?_⟩
   intro B hB
   exact congrArg Ecc.Point.x (hfun B hB)
@@ -79,7 +79,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     Entry.ProverAssumptions, Entry.ProverSpec]
   refine ⟨h_assumptions, ?_⟩
   intro B hB
-  exact congrArg Ecc.Point.x ((h_env h_assumptions).2 B hB)
+  exact congrArg Ecc.Point.x ((h_env h_assumptions).2.2 B hB)
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
@@ -116,7 +116,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   -- p = M.hash_to_point(msg)
   let p ← Entry.circuit G Q hQ n₀ ns input.pieces
   -- commitment = p + blind
-  Ecc.Add.circuit { p := p, q := blind }
+  Ecc.Add.circuit { p := p.point, q := blind }
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
@@ -155,7 +155,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
   obtain ⟨h_fw, h_entry, h_add⟩ := h_holds
   obtain ⟨s, hblind⟩ := h_fw
-  obtain ⟨chunks, hPC, hfun⟩ := h_entry
+  obtain ⟨chunks, hPC, hZ1, hfun⟩ := h_entry
   refine ⟨chunks, s, hPC, ?_⟩
   intro B hB
   have hp := hfun B hB
@@ -180,7 +180,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   obtain ⟨h_fw_env, h_entry_env, h_add_env⟩ := h_env
   obtain ⟨hbounds, B, hchain⟩ := h_assumptions
   obtain ⟨-, hblind⟩ := h_fw_env
-  have hp := (h_entry_env ⟨hbounds, B, hchain⟩).2 B hchain
+  have hp := (h_entry_env ⟨hbounds, B, hchain⟩).2.2 B hchain
   have h_final := h_add_env ⟨by
       rw [hp]
       exact Or.inl (SWPoint.onCurve_of_ne_zero

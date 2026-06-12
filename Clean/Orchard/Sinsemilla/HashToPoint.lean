@@ -110,6 +110,10 @@ structure Output (F : Type) where
   first : DoubleAndAddRow F
   last : DoubleAndAddRow F
   xANext : F
+  /-- The running sum after the first word (`z_1`; zero for a single-word piece,
+  where `z_{w+1} = 0` is implicit). Exposed because `MerkleCRH`'s decomposition gate
+  reads the hash's own `z_1` cells. -/
+  z1 : F
   yANext : UnconstrainedDep field F
 deriving CircuitType
 
@@ -167,6 +171,7 @@ def main (G : Generators) (w : ℕ) (input : Var Input Ecc.Fp) :
     first := dRows[0]'(by omega),
     last := dRows[w]'(by omega),
     xANext := xAs[w]'(by omega),
+    z1 := if _ : w = 0 then 0 else zRest[0]'(by omega),
     yANext := fun env =>
       (accAfter G (env input.xA, input.yA env) (env input.piece) (w + 1)).2 }
 
@@ -524,6 +529,7 @@ def Spec (G : Generators) (w : ℕ) (input : Value Input Ecc.Fp)
   ∃ ms : ℕ → ℕ,
     (∀ r, ms r < 2 ^ K) ∧
     input.piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp) ∧
+    input.piece = ((ms 0 : ℕ) : Ecc.Fp) + (2 ^ K : Ecc.Fp) * output.z1 ∧
     output.first.xA = input.xA ∧
     output.last.xP = (G.S (ms w)).x ∧
     DoubleAndAdd.yA output.last * (2 : Ecc.Fp)⁻¹
@@ -558,6 +564,7 @@ def ProverSpec (G : Generators) (w : ℕ) (input : ProverValue Input Ecc.Fp)
   output.first.xA = input.xA ∧
   output.xANext = output.last.lambda2 * output.last.lambda2
     - output.last.xA - DoubleAndAdd.xR output.last ∧
+  output.z1 = pieceZ input.piece 1 ∧
   ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA → A.y = input.yA →
     DoubleAndAdd.yA output.first = 2 * A.y ∧
     ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
@@ -696,7 +703,7 @@ theorem completeness (G : Generators) (w : ℕ) :
         - (accAfter G (input_xA, input_yA) input_piece r).2 :=
     fun _ => rfl
   have h2 := mul_inv_cancel₀ two_ne_zero_Fp
-  refine ⟨⟨h_z0, ?_, ?_⟩, h_input.2.1, ?_, ?_⟩
+  refine ⟨⟨h_z0, ?_, ?_⟩, h_input.2.1, ?_, ?_, ?_⟩
   · -- lookups
     intro i
     refine ⟨pieceWord input_piece ↑i, pieceWord_lt _ _, ?_, h_xPs i, ?_⟩
@@ -798,6 +805,17 @@ theorem completeness (G : Generators) (w : ℕ) :
     simp only [DoubleAndAdd.xR]
     rw [hxw, hxA_last, hpw, hl1w, hl2w]
     linear_combination haccx w
+  · -- the honest first-word running sum
+    by_cases hw : w = 0
+    · rw [dif_pos hw]
+      rw [hw] at hbound
+      simp only [circuit_norm]
+      unfold pieceZ
+      rw [Nat.div_eq_of_lt (by simpa [K] using hbound)]
+      simp
+    · rw [dif_neg hw]
+      have h : env.get (i₀ + 1 + 0) = pieceZ input_piece (0 + 1) := h_zs ⟨0, by omega⟩
+      simpa using h
   · -- the chain contract
     intro A' hA'0 hA'x hA'y
     obtain rfl : A' = A := SWPoint.ext_pair (by rw [hA'x, hA'y, hAx, hAy])
@@ -872,6 +890,8 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
     ∃ ms : ℕ → ℕ,
       (∀ r, ms r < 2 ^ K) ∧
       piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp) ∧
+      piece = ((ms 0 : ℕ) : Ecc.Fp)
+        + (2 ^ K : Ecc.Fp) * (if w = 0 then 0 else zV 1) ∧
       (dR 0).xA = xA ∧
       (dR w).xP = (G.S (ms w)).x ∧
       DoubleAndAdd.yA (dR w) * (2 : Ecc.Fp)⁻¹
@@ -928,7 +948,20 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
     rw [key w (by omega), hlast, Finset.sum_range_succ]
     push_cast
     ring
-  refine ⟨ms, hms_lt, hpiece, hxA0, ?_, ?_, ?_⟩
+  refine ⟨ms, hms_lt, hpiece, ?_, hxA0, ?_, ?_, ?_⟩
+  · -- the first-word split
+    by_cases hw : w = 0
+    · rw [if_pos hw, ← hz0]
+      have h := hmf_word ⟨0, by omega⟩
+      rw [if_pos (by simp [hw])] at h
+      rw [← hms_at 0 (by omega)] at h
+      rw [h]
+      ring
+    · rw [if_neg hw, ← hz0]
+      have h := hmf_word ⟨0, by omega⟩
+      rw [if_neg (by simp; omega)] at h
+      rw [← hms_at 0 (by omega)] at h
+      linear_combination h
   · rw [hms_at w (by omega)]
     exact hmf_x ⟨w, by omega⟩
   · rw [hms_at w (by omega)]
@@ -1075,12 +1108,15 @@ structure Input (k : ℕ) (F : Type) where
   yA : UnconstrainedDep field F
 deriving CircuitType
 
-/-- Outputs: the hash point, and the first gate row of this level (the previous level
+/-- Outputs: the hash point, the first gate row of this level (the previous level
 emits the gate pairing its last row with this row; at the end of the message this is
-the dummy row carrying the witnessed final `y_a` in its `λ₁` cell). -/
-structure Output (F : Type) where
+the dummy row carrying the witnessed final `y_a` in its `λ₁` cell), and the `z_1`
+running-sum cells of the remaining pieces (the source `hash_to_point` returns its
+running sums; `MerkleCRH`'s decomposition gate reads them). -/
+structure Output (k : ℕ) (F : Type) where
   point : Ecc.Point F
   first : DoubleAndAddRow F
+  z1s : Vector F k
 deriving CircuitType
 
 instance (k : ℕ) : Inhabited (Var (Input k) Ecc.Fp) :=
@@ -1116,10 +1152,25 @@ def PieceBounds : (ns : List ℕ) → Vector Ecc.Fp ns.length → Prop
     ZMod.val (show Ecc.Fp from pieces[0]) < 2 ^ (K * (n + 1)) ∧
       PieceBounds rest pieces.tail
 
+/-- Each exposed `z_1` cell is the recombination of its piece's chunks with the first
+word stripped (anchored to the same flat chunk list as `PieceChunks`). -/
+def Z1Facts : (ns : List ℕ) → List ℕ → Vector Ecc.Fp ns.length → Prop
+  | [], _, _ => True
+  | n :: rest, chunks, z1s =>
+    z1s[0] = ((∑ j ∈ Finset.range n, chunks.getD (j + 1) 0 * 2 ^ (K * j) : ℕ) : Ecc.Fp) ∧
+      Z1Facts rest (chunks.drop (n + 1)) z1s.tail
+
+/-- The honest `z_1` values. -/
+def Z1sHonest : (ns : List ℕ) → Vector Ecc.Fp ns.length → Vector Ecc.Fp ns.length → Prop
+  | [], _, _ => True
+  | _ :: rest, pieces, z1s =>
+    z1s[0] = pieceZ pieces[0] 1 ∧ Z1sHonest rest pieces.tail z1s.tail
+
 def Spec (G : Generators) (ns : List ℕ) (input : Value (Input ns.length) Ecc.Fp)
-    (output : Value Output Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+    (output : Value (Output ns.length) Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
   output.first.xA = input.xA ∧
   ∃ chunks : List ℕ, PieceChunks ns input.pieces chunks ∧
+    Z1Facts ns chunks output.z1s ∧
     ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA →
       2 * A.y = enterYA ns.isEmpty output.first →
       ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A chunks = some B →
@@ -1134,8 +1185,9 @@ def ProverAssumptions (G : Generators) (ns : List ℕ)
 
 def ProverSpec (G : Generators) (ns : List ℕ)
     (input : ProverValue (Input ns.length) Ecc.Fp)
-    (output : ProverValue Output Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+    (output : ProverValue (Output ns.length) Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
   output.first.xA = input.xA ∧
+  Z1sHonest ns input.pieces output.z1s ∧
   ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA → A.y = input.yA →
     enterYA ns.isEmpty output.first = 2 * A.y ∧
     ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
@@ -1146,19 +1198,20 @@ def ProverSpec (G : Generators) (ns : List ℕ)
 
 namespace Nil
 
-def main (input : Var (Input 0) Ecc.Fp) : Circuit Ecc.Fp (Var Output Ecc.Fp) := do
+def main (input : Var (Input 0) Ecc.Fp) : Circuit Ecc.Fp (Var (Output 0) Ecc.Fp) := do
   let yFin ← witnessField fun env => input.yA env
   return {
     point := { x := input.xA, y := yFin },
-    first := { xA := input.xA, xP := 0, lambda1 := yFin, lambda2 := 0 } }
+    first := { xA := input.xA, xP := 0, lambda1 := yFin, lambda2 := 0 },
+    z1s := #v[] }
 
-instance elaborated : ElaboratedCircuit Ecc.Fp (Input 0) Output main := by
+instance elaborated : ElaboratedCircuit Ecc.Fp (Input 0) (Output 0) main := by
   elaborate_circuit
 
 theorem soundness (G : Generators) :
     GeneralFormalCircuit.WithHint.Soundness Ecc.Fp main (fun _ _ => True)
       (Spec G []) := by
-  circuit_proof_start [main, Spec, PieceChunks, enterYA]
+  circuit_proof_start [main, Spec, PieceChunks, Z1Facts, enterYA]
   refine ⟨[], rfl, ?_⟩
   intro A hA0 hAx hAy B hB
   have hAy' : 2 * A.y = 2 * env.get i₀ := by simpa using hAy
@@ -1169,7 +1222,8 @@ theorem soundness (G : Generators) :
 theorem completeness (G : Generators) :
     GeneralFormalCircuit.WithHint.Completeness Ecc.Fp main
       (ProverAssumptions G []) (ProverSpec G []) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, honestChunks, enterYA]
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, honestChunks,
+    Z1sHonest, enterYA]
   intro A hA0 hAx hAy
   constructor
   · simp only [List.isEmpty_nil, if_true]
@@ -1180,7 +1234,7 @@ theorem completeness (G : Generators) :
     exact ⟨hAx.symm, by rw [h_env, ← hAy]⟩
 
 def circuit (G : Generators) :
-    GeneralFormalCircuit.WithHint Ecc.Fp (Input 0) Output where
+    GeneralFormalCircuit.WithHint Ecc.Fp (Input 0) (Output 0) where
   main := main
   Spec := Spec G []
   ProverAssumptions := ProverAssumptions G []
@@ -1189,6 +1243,42 @@ def circuit (G : Generators) :
   completeness := completeness G
 
 end Nil
+
+/-- Strip the first word: the exposed `z_1` is the tail recombination. -/
+private theorem z1_recombination {n : ℕ} {ms : ℕ → ℕ} {piece z1 : Ecc.Fp}
+    (hrec : piece = ((∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hz1 : piece = ((ms 0 : ℕ) : Ecc.Fp) + (2 ^ K : Ecc.Fp) * z1) :
+    z1 = ((∑ j ∈ Finset.range n, ms (j + 1) * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+  have h2K : (2 ^ K : Ecc.Fp) ≠ 0 := pow_ne_zero _ HashPiece.two_ne_zero_Fp
+  apply mul_left_cancel₀ h2K
+  have hsum : (∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r))
+      = ms 0 + 2 ^ K * ∑ j ∈ Finset.range n, ms (j + 1) * 2 ^ (K * j) := by
+    rw [Finset.sum_range_succ', Finset.mul_sum]
+    have hstep : ∀ j : ℕ,
+        ms (j + 1) * 2 ^ (K * (j + 1)) = 2 ^ K * (ms (j + 1) * 2 ^ (K * j)) := by
+      intro j
+      rw [show K * (j + 1) = K + K * j from by ring, pow_add]
+      ring
+    simp only [hstep, Nat.mul_zero, pow_zero, Nat.mul_one]
+    ring
+  have hsumFp := congrArg (Nat.cast (R := Ecc.Fp)) hsum
+  push_cast at hsumFp hrec ⊢
+  linear_combination hsumFp + hrec - hz1
+
+private theorem z1Facts_head_sum {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List ℕ) :
+    (∑ j ∈ Finset.range n,
+        ((List.range (n + 1)).map ms ++ tailChunks).getD (j + 1) 0 * 2 ^ (K * j))
+      = ∑ j ∈ Finset.range n, ms (j + 1) * 2 ^ (K * j) := by
+  apply Finset.sum_congr rfl
+  intro j hj
+  have hj' : j < n := Finset.mem_range.mp hj
+  rw [List.getD_append _ _ _ _ (by simp; omega),
+    List.getD_eq_getElem _ _ (by simp; omega)]
+  simp
+
+private theorem chunks_drop_append {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List ℕ) :
+    ((List.range (n + 1)).map ms ++ tailChunks).drop (n + 1) = tailChunks :=
+  List.drop_left' (by simp)
 
 /-! #### One piece plus the recursive tail -/
 
@@ -1201,9 +1291,9 @@ def chainLength : List ℕ → ℕ
 namespace Cons
 
 def main (G : Generators) (n : ℕ) (rest : List ℕ)
-    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) (Output rest.length))
     (input : Var (Input (rest.length + 1)) Ecc.Fp) :
-    Circuit Ecc.Fp (Var Output Ecc.Fp) := do
+    Circuit Ecc.Fp (Var (Output (rest.length + 1)) Ecc.Fp) := do
   let out ← HashPiece.circuit G n
     { piece := input.pieces[0], xA := input.xA, yA := input.yA }
   let tailOut ← tail
@@ -1211,17 +1301,23 @@ def main (G : Generators) (n : ℕ) (rest : List ℕ)
       xA := out.xANext, yA := out.yANext }
   Gate.circuit { qS2 := if rest.isEmpty then 2 else 0 }
     { cur := out.last, next := tailOut.first }
-  return { point := tailOut.point, first := out.first }
+  let z1Head : Expression Ecc.Fp := out.z1
+  let z1Tail : Vector (Expression Ecc.Fp) rest.length := tailOut.z1s
+  return {
+    point := tailOut.point,
+    first := out.first,
+    z1s := Vector.cast (by omega) (#v[z1Head] ++ z1Tail) }
 
 /-- Hand-written elaboration data: `elaborate_circuit` cannot derive the local length
 through the recursive tail, whose bundle is a variable here; the constant-length and
 no-channels facts are threaded through the chain recursion. -/
 def elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
-    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) (Output rest.length))
     (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
     (hcwg : tail.channelsWithGuarantees = [])
     (hcwr : tail.channelsWithRequirements = []) :
-    ElaboratedCircuit Ecc.Fp (Input (rest.length + 1)) Output (main G n rest tail) where
+    ElaboratedCircuit Ecc.Fp (Input (rest.length + 1)) (Output (rest.length + 1))
+      (main G n rest tail) where
   localLength input := (HashPiece.circuit G n).localLength
       { piece := input.pieces[0], xA := input.xA, yA := input.yA } + tailLen
   localLength_eq := by
@@ -1321,7 +1417,7 @@ private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
         (hpin.1.symm.trans htfxA) hpin.2.symm B hB
 
 theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
-    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) (Output rest.length))
     (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
     (hcwg : tail.channelsWithGuarantees = [])
     (hcwr : tail.channelsWithRequirements = [])
@@ -1340,10 +1436,10 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
     show ∀ r : DoubleAndAddRow Ecc.Fp, enterYA false r = DoubleAndAdd.yA r
       from fun _ => rfl,
     circuit_norm] at h_piece h_tail h_gate ⊢
-  obtain ⟨ms, hms, hrecomb, hfxA, hlxP, hlyp, hchain⟩ := h_piece
-  obtain ⟨htfxA, tailChunks, htailPC, htailchain⟩ := h_tail
+  obtain ⟨ms, hms, hrecomb, hz1p, hfxA, hlxP, hlyp, hchain⟩ := h_piece
+  obtain ⟨htfxA, tailChunks, htailPC, htailZ1, htailchain⟩ := h_tail
   obtain ⟨hsec, hyck⟩ := h_gate
-  refine ⟨⟨hfxA, (List.range (n + 1)).map ms ++ tailChunks, ?_, ?_⟩, Or.inl hcwr⟩
+  refine ⟨⟨hfxA, (List.range (n + 1)).map ms ++ tailChunks, ?_, ?_, ?_⟩, Or.inl hcwr⟩
   · -- the pieces decompose into the chunks
     simp only [PieceChunks]
     refine ⟨ms, hms, ?_, tailChunks, rfl, ?_⟩
@@ -1357,12 +1453,25 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
         simp
       rw [hv]
       exact htailPC
+  · -- the z1 facts
+    simp only [Z1Facts]
+    refine ⟨?_, ?_⟩
+    · rw [show (∑ j ∈ Finset.range n,
+            ((List.range (n + 1)).map ms ++ tailChunks).getD (j + 1) 0 * 2 ^ (K * j))
+          = ∑ j ∈ Finset.range n, ms (j + 1) * 2 ^ (K * j)
+          from z1Facts_head_sum ms tailChunks]
+      convert z1_recombination hrecomb hz1p using 2
+      simp
+    · rw [chunks_drop_append]
+      convert htailZ1 using 2
+      ext i hi
+      simp
   · -- the chain contract
     exact soundness_aux G n rest.isEmpty ms hlxP hlyp hchain hsec hyck htfxA
       tailChunks htailchain
 
 theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
-    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) (Output rest.length))
     (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
     (hcwg : tail.channelsWithGuarantees = [])
     (hcwr : tail.channelsWithRequirements = [])
@@ -1401,7 +1510,7 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     rw [hp0]
     exact hbounds.1
   have hPSpiece := h_piece_env ⟨hb1, A, B₁, hA0, hAx, hAy, hpre'⟩
-  obtain ⟨-, hfxA0, hsecPS, hchainPS⟩ := hPSpiece
+  obtain ⟨-, hfxA0, hsecPS, hz1PS, hchainPS⟩ := hPSpiece
   obtain ⟨hYA0, hBfun⟩ := hchainPS A hA0 hAx hAy
   obtain ⟨hxAsN, hyAcc, hnext⟩ := hBfun B₁ hpre'
   have hB₁0 : B₁ ≠ 0 := Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hA0 hpre
@@ -1413,11 +1522,11 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     · rw [hptail]
       exact hsuffix)
   rw [hPS] at hPStail
-  obtain ⟨-, htfxA, hAfun⟩ := hPStail
+  obtain ⟨-, htfxA, htailZ1H, hAfun⟩ := hPStail
   obtain ⟨henter, hBfin⟩ := hAfun B₁ hB₁0 hxAsN.symm hyAcc.symm
   obtain ⟨hpx, hpy⟩ := hBfin B (by rw [hptail]; exact hsuffix)
   dsimp only at htfxA henter hpx hpy
-  refine ⟨⟨⟨hb1, A, B₁, hA0, hAx, hAy, hpre'⟩, ?_, ?_, ?_⟩, hfxA0, ?_⟩
+  refine ⟨⟨⟨hb1, A, B₁, hA0, hAx, hAy, hpre'⟩, ?_, ?_, ?_⟩, hfxA0, ?_, ?_⟩
   · -- the tail's honest-prover assumptions
     rw [hPA]
     refine ⟨?_, B₁, B, hB₁0, hxAsN.symm, hyAcc.symm, ?_⟩
@@ -1435,6 +1544,15 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     simp only [nextYA] at hnext'
     rw [htfxA] at henter ⊢
     linear_combination 2 * hnext' - 2 * henter
+  · -- the honest z1 values
+    simp only [Z1sHonest]
+    refine ⟨?_, ?_⟩
+    · convert hz1PS using 2 <;> simp [hp0]
+    · convert htailZ1H using 2
+      · ext i hi
+        simp [← h_input.1]
+      · ext i hi
+        simp
   · -- the level's chain contract
     intro A' hA'0 hA'x hA'y
     obtain rfl : A' = A := SWPoint.ext_pair (by rw [hA'x, hA'y, hAx, hAy])
@@ -1446,7 +1564,7 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     exact ⟨hpx, hpy⟩
 
 def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
-    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) (Output rest.length))
     (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
     (hcwg : tail.channelsWithGuarantees = [])
     (hcwr : tail.channelsWithRequirements = [])
@@ -1454,7 +1572,8 @@ def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
     (hAss : tail.Assumptions = fun _ _ => True)
     (hPA : tail.ProverAssumptions = ProverAssumptions G rest)
     (hPS : tail.ProverSpec = ProverSpec G rest) :
-    GeneralFormalCircuit.WithHint Ecc.Fp (Input (rest.length + 1)) Output where
+    GeneralFormalCircuit.WithHint Ecc.Fp (Input (rest.length + 1))
+      (Output (rest.length + 1)) where
   main := main G n rest tail
   elaborated := elaborated G n rest tail tailLen htail hcwg hcwr
   Spec := Spec G (n :: rest)
@@ -1469,7 +1588,7 @@ end Cons
 spec fields are the canonical recursive ones, its local length is constant, and it
 declares no channels. -/
 def circuit (G : Generators) : (ns : List ℕ) →
-    { c : GeneralFormalCircuit.WithHint Ecc.Fp (Input ns.length) Output //
+    { c : GeneralFormalCircuit.WithHint Ecc.Fp (Input ns.length) (Output ns.length) //
       c.Spec = Spec G ns ∧ c.Assumptions = (fun _ _ => True) ∧
         c.ProverAssumptions = ProverAssumptions G ns ∧
         c.ProverSpec = ProverSpec G ns ∧
@@ -1493,18 +1612,28 @@ pins the first row's derived `Y_A` to `2·y_Q`.
 
 namespace Entry
 
+/-- Outputs of `hash_to_point`: the hash point and the `z_1` running-sum cell of each
+piece. The source `hash_to_point` returns its running sums; `MerkleCRH`'s
+decomposition gate reads the `z_1` cells of its first two pieces. -/
+structure Output (k : ℕ) (F : Type) where
+  point : Ecc.Point F
+  z1s : Vector F k
+deriving CircuitType
+
 def main (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
     (pieces : Var (fields (ns.length + 1)) Ecc.Fp) :
-    Circuit Ecc.Fp (Var Ecc.Point Ecc.Fp) := do
+    Circuit Ecc.Fp (Var (Output (ns.length + 1)) Ecc.Fp) := do
   let xQ <== Expression.const Q.x
   let out ← (Chain.circuit G (n₀ :: ns)).1
     { pieces := pieces, xA := xQ, yA := fun _ => Q.y }
   InitialYQ.circuit { yQ := Q.y } { doubleAndAdd := out.first }
-  return out.point
+  let z1s : Vector (Expression Ecc.Fp) (ns.length + 1) := out.z1s
+  return { point := out.point, z1s := z1s }
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     (ns : List ℕ) :
-    ElaboratedCircuit Ecc.Fp (fields (ns.length + 1)) Ecc.Point (main G Q n₀ ns) where
+    ElaboratedCircuit Ecc.Fp (fields (ns.length + 1)) (Output (ns.length + 1))
+      (main G Q n₀ ns) where
   localLength _ := 1 + Chain.chainLength (n₀ :: ns)
   localLength_eq := by
     intro input offset
@@ -1519,11 +1648,13 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     try trivial
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
-    (pieces : Value (fields (ns.length + 1)) Ecc.Fp) (output : Ecc.Point Ecc.Fp)
+    (pieces : Value (fields (ns.length + 1)) Ecc.Fp)
+    (output : Value (Output (ns.length + 1)) Ecc.Fp)
     (_ : ProverData Ecc.Fp) : Prop :=
   ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
+    Chain.Z1Facts (n₀ :: ns) chunks output.z1s ∧
     ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
-      output = { x := B.x, y := B.y }
+      output.point = { x := B.x, y := B.y }
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Ecc.Fp)
@@ -1533,11 +1664,13 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     (Chain.honestChunks (n₀ :: ns) pieces) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
-    (pieces : ProverValue (fields (ns.length + 1)) Ecc.Fp) (output : Ecc.Point Ecc.Fp)
+    (pieces : ProverValue (fields (ns.length + 1)) Ecc.Fp)
+    (output : ProverValue (Output (ns.length + 1)) Ecc.Fp)
     (_ : ProverHint Ecc.Fp) : Prop :=
+  Chain.Z1sHonest (n₀ :: ns) pieces output.z1s ∧
   ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) pieces) = some B →
-    output = { x := B.x, y := B.y }
+    output.point = { x := B.x, y := B.y }
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
@@ -1549,12 +1682,13 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   replace h_chain := h_chain trivial
   rw [(Chain.circuit G (n₀ :: ns)).2.1] at h_chain
   simp only [Chain.Spec] at h_chain
-  obtain ⟨hfxA, chunks, hPC, hchainAll⟩ := h_chain
-  refine ⟨⟨chunks, hPC, ?_⟩, Or.inl (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2⟩
-  intro B hB
-  obtain ⟨px, py⟩ := hchainAll Q hQ (by rw [h_xQ])
-    (by exact h_yQ.symm) B hB
-  rw [px, py]
+  obtain ⟨hfxA, chunks, hPC, hZ1, hchainAll⟩ := h_chain
+  refine ⟨⟨chunks, hPC, ?_, ?_⟩, Or.inl (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2⟩
+  · convert hZ1 using 2
+  · intro B hB
+    obtain ⟨px, py⟩ := hchainAll Q hQ (by rw [h_xQ])
+      (by exact h_yQ.symm) B hB
+    rw [px, py]
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
@@ -1568,15 +1702,17 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
     exact ⟨hbounds, Q, B, hQ, h_xQ_env.symm, rfl, hchain⟩)
   rw [(Chain.circuit G (n₀ :: ns)).2.2.2.2.1] at hPSchain
-  obtain ⟨-, htfxA, hAfun⟩ := hPSchain
+  obtain ⟨-, htfxA, hZ1H, hAfun⟩ := hPSchain
   obtain ⟨henter, hBfin⟩ := hAfun Q hQ h_xQ_env.symm rfl
   obtain ⟨px, py⟩ := hBfin B hchain
-  refine ⟨⟨h_xQ_env, ?_, ?_⟩, ?_⟩
+  refine ⟨⟨h_xQ_env, ?_, ?_⟩, ?_, ?_⟩
   · -- the chain's honest assumptions (same as above)
     rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
     exact ⟨hbounds, Q, B, hQ, h_xQ_env.symm, rfl, hchain⟩
   · -- the initial-y_Q gate on honest values
     exact henter
+  · -- the honest z1 values
+    convert hZ1H using 2
   · -- the entry contract
     intro B' hB'
     rw [hchain] at hB'
@@ -1586,7 +1722,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint Ecc.Fp (fields (ns.length + 1)) Ecc.Point where
+    GeneralFormalCircuit.WithHint Ecc.Fp (fields (ns.length + 1))
+      (Output (ns.length + 1)) where
   main := main G Q n₀ ns
   Spec := Spec G Q n₀ ns
   ProverAssumptions := ProverAssumptions G Q n₀ ns
