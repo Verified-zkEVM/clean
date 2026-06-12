@@ -85,8 +85,14 @@ Current Clean coverage:
   without a `GATE` name
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.RunningSumCoords.circuit`:
   `GATE Running sum coordinates check`
-- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FixedBase`: value-level model of a fixed base
+  point with its precomputed window tables (`z`/`u` values, Lagrange coefficients),
+  parameterizing the fixed-base entry circuits
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.Gate.circuit`:
   `GATE Full-width fixed-base scalar mul`
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.circuit`: `FixedPoint::mul`
+  (`mul_fixed/full_width.rs::Config::assign`), the full-width fixed-base scalar
+  multiplication entry circuit `[scalar] B`, with soundness and completeness proved
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`:
   `GATE Canonicity checks`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.circuit`:
@@ -194,14 +200,12 @@ gadgets can be considered source-conformant.
 
 ### Scalar Multiplication Entry APIs
 
-Current scalar-mul coverage is mostly row-level gate assertions. Missing source-level
-entry circuits:
+Full-width fixed-base mul is the first source-level entry circuit; the rest of the
+scalar-mul coverage is row-level gate assertions. Missing source-level entry circuits:
 
 - `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by
   `ecc/chip/mul.rs::Config::assign`: variable-base scalar multiplication
   `[scalar] base`.
-- `FixedPoint::mul`, implemented by `ecc/chip/mul_fixed/full_width.rs`: full-width
-  fixed-base scalar multiplication `[scalar] B`.
 - `FixedPointShort::mul`, implemented by `ecc/chip/mul_fixed/short.rs`: signed short
   fixed-base scalar multiplication used by `ValueCommitV`.
 - `FixedPointBaseField::mul`, implemented by
