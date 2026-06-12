@@ -1190,14 +1190,14 @@ def circuit (G : Generators) :
 
 end Nil
 
-/-! #### One piece plus the recursive tail
+/-! #### One piece plus the recursive tail -/
 
-WIP: `elaborate_circuit` currently generates a kernel-rejected congruence proof for
-`Cons.main` (the subcircuit-length proof over the length-indexed `Input` type); the
-level needs either an `elaborate_circuit` fix or a hand-written `ElaboratedCircuit`
-instance. The structure below is the validated design.
+/-- Number of local witnesses of the chain tail: the final `y_a`, plus per piece the
+`hash_piece` cells (`z₀`, the `z` tail, and the four row-cell columns). -/
+def chainLength : List ℕ → ℕ
+  | [] => 1
+  | n :: rest => 1 + (n + (n + 1 + (n + 1 + (n + 1 + (n + 1))))) + chainLength rest
 
-```
 namespace Cons
 
 def main (G : Generators) (n : ℕ) (rest : List ℕ)
@@ -1213,53 +1213,82 @@ def main (G : Generators) (n : ℕ) (rest : List ℕ)
     { cur := out.last, next := tailOut.first }
   return { point := tailOut.point, first := out.first }
 
-instance elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
-    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output) :
-    ElaboratedCircuit Ecc.Fp (Input (rest.length + 1)) Output (main G n rest tail) := by
-  elaborate_circuit
+/-- Hand-written elaboration data: `elaborate_circuit` cannot derive the local length
+through the recursive tail, whose bundle is a variable here; the constant-length and
+no-channels facts are threaded through the chain recursion. -/
+def elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
+    (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
+    (hcwg : tail.channelsWithGuarantees = [])
+    (hcwr : tail.channelsWithRequirements = []) :
+    ElaboratedCircuit Ecc.Fp (Input (rest.length + 1)) Output (main G n rest tail) where
+  localLength input := (HashPiece.circuit G n).localLength
+      { piece := input.pieces[0], xA := input.xA, yA := input.yA } + tailLen
+  localLength_eq := by
+    intro input offset
+    simp only [main, circuit_norm, htail, Gate.circuit]
+  channelsLawful := by
+    dsimp only [ElaboratedCircuit.ChannelsLawful]
+    dsimp only [main]
+    simp only [circuit_norm, seval, HashPiece.circuit, Gate.circuit, hcwg, hcwr]
+    try trivial
 
 theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
     (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
+    (hcwg : tail.channelsWithGuarantees = [])
+    (hcwr : tail.channelsWithRequirements = [])
     (hS : tail.Spec = Spec G rest) :
+    letI := elaborated G n rest tail tailLen htail hcwg hcwr
     GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G n rest tail)
       (fun _ _ => True) (Spec G (n :: rest)) := by
   sorry
 
 theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
+    (hcwg : tail.channelsWithGuarantees = [])
+    (hcwr : tail.channelsWithRequirements = [])
     (hPA : tail.ProverAssumptions = ProverAssumptions G rest)
     (hPS : tail.ProverSpec = ProverSpec G rest) :
+    letI := elaborated G n rest tail tailLen htail hcwg hcwr
     GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G n rest tail)
       (ProverAssumptions G (n :: rest)) (ProverSpec G (n :: rest)) := by
   sorry
 
 def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
     (tail : GeneralFormalCircuit.WithHint Ecc.Fp (Input rest.length) Output)
+    (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
+    (hcwg : tail.channelsWithGuarantees = [])
+    (hcwr : tail.channelsWithRequirements = [])
     (hS : tail.Spec = Spec G rest)
     (hPA : tail.ProverAssumptions = ProverAssumptions G rest)
     (hPS : tail.ProverSpec = ProverSpec G rest) :
     GeneralFormalCircuit.WithHint Ecc.Fp (Input (rest.length + 1)) Output where
   main := main G n rest tail
+  elaborated := elaborated G n rest tail tailLen htail hcwg hcwr
   Spec := Spec G (n :: rest)
   ProverAssumptions := ProverAssumptions G (n :: rest)
   ProverSpec := ProverSpec G (n :: rest)
-  soundness := soundness G n rest tail hS
-  completeness := completeness G n rest tail hPA hPS
+  soundness := soundness G n rest tail tailLen htail hcwg hcwr hS
+  completeness := completeness G n rest tail tailLen htail hcwg hcwr hPA hPS
 
 end Cons
 
-/-- The chain tail over the remaining word counts, bundled with the contract that its
-spec fields are the canonical recursive ones. -/
+/-- The chain tail over the remaining word counts, bundled with the contracts that its
+spec fields are the canonical recursive ones, its local length is constant, and it
+declares no channels. -/
 def circuit (G : Generators) : (ns : List ℕ) →
     { c : GeneralFormalCircuit.WithHint Ecc.Fp (Input ns.length) Output //
       c.Spec = Spec G ns ∧ c.ProverAssumptions = ProverAssumptions G ns ∧
-        c.ProverSpec = ProverSpec G ns }
-  | [] => ⟨Nil.circuit G, rfl, rfl, rfl⟩
+        c.ProverSpec = ProverSpec G ns ∧
+        (∀ inp, c.localLength inp = chainLength ns) ∧
+        c.channelsWithGuarantees = [] ∧ c.channelsWithRequirements = [] }
+  | [] => ⟨Nil.circuit G, rfl, rfl, rfl, fun _ => rfl, rfl, rfl⟩
   | n :: rest =>
-    let ⟨tail, hS, hPA, hPS⟩ := circuit G rest
-    ⟨Cons.circuit G n rest tail hS hPA hPS, rfl, rfl, rfl⟩
-```
--/
+    let ⟨tail, hS, hPA, hPS, hLen, hcwg, hcwr⟩ := circuit G rest
+    ⟨Cons.circuit G n rest tail (chainLength rest) hLen hcwg hcwr hS hPA hPS,
+      rfl, rfl, rfl, fun _ => rfl, rfl, rfl⟩
 
 end Chain
 
