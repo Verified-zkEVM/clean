@@ -314,6 +314,11 @@ private theorem step_nsmul {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ
     congr 1
     omega
 
+/-- The loop-state transition: the freshly witnessed row becomes `prev`, and its
+predecessor's `x_a'` cell is the row's entering `x_a`. -/
+def stateStep (w : Var IterCells Fp) (s : Var LoopState Fp) : Var LoopState Fp :=
+  { prev := w, xA := s.prev.xANext }
+
 /-! ### Circuit -/
 
 def main (n : ℕ) (input : Var Input Fp) :
@@ -357,7 +362,7 @@ def main (n : ℕ) (input : Var Input Fp) :
         yANextDouble := Sinsemilla.DoubleAndAdd.yA
           { xA := s.prev.xANext, xP := w.xP, lambda1 := w.lambda1, lambda2 := w.lambda2 } },
       xPNext := w.xP, yPNext := w.yP }
-    return { prev := w, xA := s.prev.xANext }
+    return stateStep w s
   -- witness the final y_a, then close the last row with q_mul_3
   let yAFinal ← witnessField fun env =>
     yANextValue (eval env sLast.prev) (env sLast.xA)
@@ -476,6 +481,187 @@ private def rowD (env : Environment Fp) (i₀ n j : ℕ) : Sinsemilla.DoubleAndA
   { xA := rowXA env i₀ n j, xP := rowXP env i₀ n j,
     lambda1 := rowL1 env i₀ n j, lambda2 := rowL2 env i₀ n j }
 
+/-- The evaluation of an arbitrary running-sum cell, as a value-level conditional. -/
+private theorem zsAll_get_at (env : Environment Fp) (i₀ n : ℕ)
+    (v : Vector (Expression Fp) (1 + (n + 1)))
+    (hv : v = (#v[var { index := i₀ }] : Vector (Expression Fp) 1) ++
+      (Vector.mapRange (n + 1) fun i => var { index := i₀ + 1 + 1 + 1 + i } :
+        Vector (Expression Fp) (n + 1)))
+    (b : ℕ) (hb : b < n + 2) :
+    Expression.eval env (v[b]'(by omega))
+      = if b = 0 then env.get i₀ else env.get (i₀ + 1 + 1 + 1 + (b - 1)) := by
+  subst hv
+  rcases b with _ | b'
+  · simp only [Vector.getElem_append]
+    norm_num
+    rfl
+  · rw [if_neg (by omega)]
+    simp only [Vector.getElem_append, Vector.getElem_mapRange]
+    norm_num
+    rfl
+
+/-- The elaborated loop body's state transition, named for fold reasoning. -/
+private def loopF (i₀ n k : ℕ) : Var LoopState Fp → Fin k → Var LoopState Fp :=
+  fun acc i =>
+    stateStep
+      { xP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] },
+        yP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 },
+        lambda1 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 },
+        lambda2 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 + 1 },
+        xANext := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 + 1 + 1 } }
+      acc
+
+/-- The elaborated loop's initial state, named for fold reasoning. -/
+private def loopInit (i₀ n : ℕ) : Var LoopState Fp where
+  prev :=
+    { xP := var { index := i₀ + 1 + 1 + 1 + (n + 1) },
+      yP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 },
+      lambda1 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 },
+      lambda2 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 },
+      xANext := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 + 1 } }
+  xA := var { index := i₀ + 1 + 1 }
+
+/-- The elaborated loop body's literal lambda is `loopF`. -/
+private theorem loopF_def (i₀ n k : ℕ) :
+    (fun acc (i : Fin k) =>
+      stateStep
+        { xP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] },
+          yP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 },
+          lambda1 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 },
+          lambda2 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 + 1 },
+          xANext := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 + 1 + 1 } }
+        acc)
+    = loopF i₀ n k := rfl
+
+/-- The elaborated loop's literal initial state is `loopInit`. -/
+private theorem loopInit_def (i₀ n : ℕ) :
+    { prev :=
+        { xP := var { index := i₀ + 1 + 1 + 1 + (n + 1) },
+          yP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 },
+          lambda1 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 },
+          lambda2 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 },
+          xANext := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 + 1 } },
+      xA := var { index := i₀ + 1 + 1 } }
+    = loopInit i₀ n := rfl
+
+/-- The loop-state fold, projected: after `k` iterations the state holds row `k`'s
+cells and its entering `x_a`. -/
+private theorem foldl_state (env : Environment Fp) (i₀ n : ℕ) (k : ℕ) :
+    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).xA
+      = rowXA env i₀ n k ∧
+    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.xP
+      = rowXP env i₀ n k ∧
+    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.yP
+      = rowYP env i₀ n k ∧
+    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.lambda1
+      = rowL1 env i₀ n k ∧
+    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.lambda2
+      = rowL2 env i₀ n k ∧
+    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.xANext
+      = rowXA env i₀ n (k + 1) := by
+  induction k with
+  | zero =>
+    simp only [Fin.foldl_zero]
+    exact ⟨rfl, rfl, rfl, rfl, rfl, by norm_num [rowXA, loopInit]; rfl⟩
+  | succ v ih =>
+    rw [Fin.foldl_succ_last]
+    have hcast : (fun (acc : Var LoopState Fp) (i : Fin v) => loopF i₀ n (v + 1) acc i.castSucc)
+        = loopF i₀ n v := by
+      funext acc i
+      simp only [loopF, Fin.val_castSucc]
+    rw [hcast]
+    exact ⟨ih.2.2.2.2.2, rfl, rfl, rfl, rfl, rfl⟩
+
+/--
+The chain induction of variable-base double-and-add over cleaned row facts:
+`XA, XP, YP, L1, L2` are the per-row cell values, `YAD r` the derived `Y_A` expression
+value of row `r` (with `YAD (n+1)` the witnessed doubled final `y`), and `bits` the bit
+values. Splitting this from `soundness` keeps each declaration within the elaboration
+budget.
+-/
+private theorem soundness_aux (n : ℕ) (P : SWPoint Pallas.curve) (hP : P ≠ 0)
+    (m : ℕ) (h2 : 2 ≤ m) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254)
+    (XA XP YP L1 L2 YAD : ℕ → Fp) (bits : ℕ → Bool)
+    (hxA0 : XA 0 = (m • P).x)
+    (hYAD0 : YAD 0 = 2 * (m • P).y)
+    (hyad : ∀ r, r ≤ n → YAD r = (L1 r + L2 r) * (XA r - (L1 r * L1 r - XA r - XP r)))
+    (hxp : ∀ r, r ≤ n → XP r = P.x)
+    (hyp : ∀ r, r ≤ n → YP r = P.y)
+    (hg1 : ∀ r, r ≤ n → 2 * L1 r * (XA r - XP r) +
+      2 * (((if bits r then 1 else 0) * 2 - 1) * YP r) = YAD r)
+    (hsec : ∀ r, r ≤ n → L2 r * L2 r
+      = XA (r + 1) + (L1 r * L1 r - XA r - XP r) + XA r)
+    (hg2 : ∀ r, r ≤ n → 2 * L2 r * (XA r - XA (r + 1)) = YAD r + YAD (r + 1)) :
+    XA (n + 1) = (accScalar m bits (n + 1) • P).x ∧
+      YAD (n + 1) = 2 * (accScalar m bits (n + 1) • P).y := by
+  -- the inductive invariant: row r enters with the accumulator `[accScalar m bits r] P`
+  suffices hinv : ∀ r, r ≤ n + 1 →
+      XA r = (accScalar m bits r • P).x ∧ YAD r = 2 * (accScalar m bits r • P).y by
+    exact hinv (n + 1) (by omega)
+  intro r hr
+  induction r with
+  | zero => exact ⟨hxA0, hYAD0⟩
+  | succ v ih =>
+    obtain ⟨ihx, ihy⟩ := ih (by omega)
+    have hv : v ≤ n := by omega
+    -- bounds on the accumulated multiplier
+    have hMle : accScalar m bits v ≤ 2 ^ v * (m + 1) - 1 := accScalar_le bits v
+    have hM2 : 2 ≤ accScalar m bits v := accScalar_two_le h2 bits v
+    have hpow : 2 ^ v * (m + 1) ≤ 2 ^ (n + 1) * (m + 1) :=
+      Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by omega))
+    have hMbound : 2 * accScalar m bits v + 1 < PALLAS_SCALAR_CARD := by
+      have h254 := pow254_lt_card
+      have hsplit : 2 ^ (n + 2) * (m + 1) = 2 * (2 ^ (n + 1) * (m + 1)) := by ring
+      omega
+    -- the non-degenerate spec-level step
+    have hstep := step_nsmul hP bits hM2 hMbound v
+    -- the entering accumulator point
+    set M := accScalar m bits v with hM
+    have hA0 : M • P ≠ 0 :=
+      Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)
+    -- the row equations in step_pinned's shape
+    have hstepXP : XP v = (stepPoint P bits v).x := by
+      rw [hxp v hv]
+      unfold stepPoint
+      rcases Bool.dichotomy (bits v) with hb | hb <;> rw [hb]
+      · rfl
+      · rfl
+    have hstepYP : 2 * (M • P).y - 2 * L1 v * ((M • P).x - XP v)
+        = 2 * (stepPoint P bits v).y := by
+      have h := hg1 v hv
+      rw [← ihx]
+      unfold stepPoint
+      rcases Bool.dichotomy (bits v) with hb | hb <;>
+        rw [hb] at h ⊢ <;>
+        simp only [Bool.false_eq_true, if_false, if_true] at h ⊢
+      · show _ = 2 * (-P).y
+        rw [show ((-P : SWPoint Pallas.curve)).y = -P.y from rfl]
+        linear_combination -h - ihy - 2 * hyp v hv
+      · show _ = 2 * P.y
+        linear_combination -h - ihy + 2 * hyp v hv
+    have hstepYA : 2 * (M • P).y
+        = (L1 v + L2 v) * ((M • P).x - (L1 v * L1 v - (M • P).x - XP v)) := by
+      rw [← ihx, ← ihy]
+      exact hyad v hv
+    have hstepSec : L2 v * L2 v
+        = XA (v + 1) + (L1 v * L1 v - (M • P).x - XP v) + (M • P).x := by
+      rw [← ihx]
+      exact hsec v hv
+    have hstepYC : 4 * L2 v * ((M • P).x - XA (v + 1))
+        = 4 * (M • P).y + 2 * YAD (v + 1) := by
+      have h := hg2 v hv
+      rw [← ihx]
+      linear_combination 2 * h + 2 * ihy
+    have hpinned := Sinsemilla.HashPiece.step_pinned (stepPoint P bits)
+      hstep hstepYP hstepXP hstepYA hstepSec hstepYC
+    have haccv : accScalar m bits (v + 1) = 2 * M + (if bits v then 1 else 0) * 2 - 1 :=
+      rfl
+    constructor
+    · rw [haccv]
+      exact hpinned.1
+    · rw [haccv]
+      exact hpinned.2
+
 theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
       (Spec n) := by
@@ -526,7 +712,7 @@ theorem soundness (n : ℕ) :
         rw [hzsS 0 (by omega), hzs0,
           show Expression.eval env (var { index := i₀ }) = input_z from h_z0] at h
         try simp only [if_pos rfl]
-        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble, stateStep,
           Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
         simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
           rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
@@ -537,7 +723,7 @@ theorem soundness (n : ℕ) :
         · linear_combination h.2.2.2.2.2
       · simp only [Fin.foldl_succ, Fin.foldl_zero, Fin.val_succ, Fin.val_zero] at h
         rw [hzsS 1 (by omega), hzsS 0 (by omega)] at h
-        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble, stateStep,
           Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
         simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
           rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
@@ -549,7 +735,7 @@ theorem soundness (n : ℕ) :
       · rw [Fin.foldl_succ_last, Fin.foldl_succ_last] at h
         simp only [Fin.val_last, Fin.coe_castSucc, Fin.val_succ, Fin.val_zero] at h
         rw [hzsS (j'' + 2) (by omega), hzsS (j'' + 1) (by omega)] at h
-        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble, stateStep,
           Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
         simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
           rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
@@ -580,7 +766,9 @@ theorem soundness (n : ℕ) :
       rw [hzsS (bv + 1) (by omega), hzsS bv (by omega)] at h_lb
       have h := hchain_of_bool _ _ h_lb
       simpa using h
-  · sorry
+  · intro Pt mm hPt hbase hacc h2m hbnd
+    sorry
+
 
 theorem completeness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main n) (ProverAssumptions n)
