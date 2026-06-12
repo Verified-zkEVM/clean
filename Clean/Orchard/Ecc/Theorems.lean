@@ -84,4 +84,42 @@ theorem pallas_addOrderOf {P : ShortWeierstrass.SWPoint curve} (h : P ≠ 0) :
   · exact absurd (AddMonoid.addOrderOf_eq_one_iff.mp h1) h
   · exact hq
 
+theorem pallas_nsmul_eq_zero_iff {P : ShortWeierstrass.SWPoint curve} (hP : P ≠ 0)
+    (n : ℕ) : n • P = 0 ↔ PALLAS_SCALAR_CARD ∣ n := by
+  rw [← pallas_addOrderOf hP, addOrderOf_dvd_iff_nsmul_eq_zero]
+
+theorem pallas_nsmul_ne_zero {P : ShortWeierstrass.SWPoint curve} (hP : P ≠ 0)
+    {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) : n • P ≠ 0 := by
+  rw [Ne, pallas_nsmul_eq_zero_iff hP]
+  intro hdvd
+  have := Nat.le_of_dvd hn hdvd
+  omega
+
+theorem pallas_nsmul_onCurve {P : ShortWeierstrass.SWPoint curve} (hP : P ≠ 0)
+    {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
+    OnCurve ((n • P).x, (n • P).y) :=
+  ShortWeierstrass.SWPoint.onCurve_of_ne_zero (pallas_nsmul_ne_zero hP hn hlt)
+
+/--
+The collision-freedom fact behind incomplete additions on a variable base: distinct
+small positive multiples of a non-identity point have distinct `x`-coordinates, since
+equal `x` would force equal-or-opposite points and hence a relation `t ∓ s ≡ 0` modulo
+the (large) group order.
+-/
+theorem pallas_nsmul_x_ne {P : ShortWeierstrass.SWPoint curve} (hP : P ≠ 0)
+    {s t : ℕ} (hs : 0 < s) (hst : s < t) (hsum : s + t < PALLAS_SCALAR_CARD) :
+    (t • P).x ≠ (s • P).x := by
+  have hs_ne : s • P ≠ 0 := pallas_nsmul_ne_zero hP hs (by omega)
+  have ht_ne : t • P ≠ 0 := pallas_nsmul_ne_zero hP (by omega) (by omega)
+  intro hx
+  rcases ShortWeierstrass.SWPoint.eq_or_eq_neg_of_x_eq ht_ne hs_ne hx with heq | hneg
+  · rw [nsmul_eq_nsmul_iff_modEq, pallas_addOrderOf hP, Nat.ModEq,
+      Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at heq
+    omega
+  · have hzero : (t + s) • P = 0 := by
+      rw [add_nsmul, hneg, neg_add_cancel]
+    rw [pallas_nsmul_eq_zero_iff hP] at hzero
+    have := Nat.le_of_dvd (by omega) hzero
+    omega
+
 end Orchard.Ecc
