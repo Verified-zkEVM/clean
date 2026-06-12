@@ -1,5 +1,6 @@
 import Clean.Orchard.Ecc.ScalarMul.Defs
 import Clean.Orchard.Ecc.ScalarMul.Mul
+import Clean.Orchard.Ecc.ScalarMul.Mul.Assign
 import Clean.Orchard.Ecc.ScalarMul.Mul.Complete
 import Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete
 import Clean.Orchard.Ecc.ScalarMul.Mul.Overflow
