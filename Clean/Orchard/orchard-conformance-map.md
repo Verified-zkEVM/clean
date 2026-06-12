@@ -54,6 +54,8 @@ Current Clean coverage:
   scalar field values, implemented by composing the factored CondSwap gate
 - `Clean.Orchard.Utilities.PointMux.circuit`: `mux_on_points`
 - `Clean.Orchard.Utilities.NonIdentityPointMux.circuit`: `mux_on_non_identity_points`
+- `Clean.Orchard.Utilities.AddChip.Gate.circuit`:
+  `GATE Field element addition: c = a + b`
 - `Clean.Orchard.Utilities.AddChip.circuit`: field addition entry circuit
 - `Clean.Orchard.Utilities.RunningSum.circuit`: `GATE range check`
 - `Clean.Orchard.Utilities.LookupRangeCheck.circuit`: `GATE Short lookup bitshift`
@@ -195,18 +197,6 @@ Current Clean coverage:
 - `Clean.Orchard.CommitIvk.circuit`: `GATE CommitIvk canonicity check`
 
 ## Known Non-Conformances
-
-### Naming And Gate Factoring
-
-The plan says that when a Halo2 API has both a low-level gate and a synthesis-level entry
-point, the gate should live in a `.Gate` namespace and the entry point should use the
-source API name. Current code does not consistently follow that rule.
-
-Current concrete case:
-
-- `Utilities.AddChip.circuit` is an entry-level circuit but does not yet compose a
-  separately factored named gate assertion:
-  - `GATE Field element addition: c = a + b`
 
 ### Concrete Circuit Field
 

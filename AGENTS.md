@@ -137,6 +137,11 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
   ...
 ```
 
+Do not pass the current circuit's `main`, `Spec`, or `Assumptions` to
+`circuit_proof_start`; the tactic unfolds them automatically. Use the argument list for
+helper definitions, child circuit specs, theorem names, or extra simp facts needed after
+setup.
+
 ### Key Simp Sets
 
 - `circuit_norm`: Main simplification set for circuit reasoning

@@ -434,11 +434,37 @@ copy-constrained field addition result.
 
 namespace AddChip
 
+namespace Gate
+
+def main (input : Var fieldTriple Fp) : Circuit Fp Unit := do
+  assertZero (input.1 + input.2.1 - input.2.2)
+
+def Spec (input : fieldTriple Fp) : Prop :=
+  input.2.2 = input.1 + input.2.1
+
+def circuit : FormalAssertion Fp fieldTriple where
+  name := "GATE Field element addition: c = a + b"
+  main
+  Spec
+  soundness := by
+    circuit_proof_start
+    rcases input with ⟨a, b, c⟩
+    simp only [Prod.mk.injEq] at h_input
+    rcases h_input with ⟨ha, hb, hc⟩
+    rw [← ha, ← hb, ← hc]
+    exact (eq_of_add_neg_eq_zero h_holds).symm
+  completeness := by
+    circuit_proof_start
+    rw [← h_input] at h_spec
+    simpa [sub_eq_add_neg] using sub_eq_zero.mpr h_spec.symm
+
+end Gate
+
 def main (input : Var fieldPair Fp) :
     Circuit Fp (Var field Fp) := do
   let (a, b) := input
   let c ← witnessField fun env => env a + env b
-  assertZero (a + b - c)
+  Gate.circuit (a, b, c)
   return c
 
 def Spec (input : fieldPair Fp) (output : Fp) : Prop :=
@@ -448,21 +474,17 @@ instance elaborated : ElaboratedCircuit Fp fieldPair field main := by
   elaborate_circuit
 
 theorem soundness : Soundness Fp main (fun _ => True) Spec := by
-  circuit_proof_start [main, Spec]
-  rcases input with ⟨a, b⟩
-  simp only [Prod.mk.injEq] at h_input
-  rcases h_input with ⟨ha, hb⟩
-  rw [← ha, ← hb]
-  exact (eq_of_add_neg_eq_zero h_holds).symm
+  circuit_proof_start
+  constructor
+  · rw [← h_input]
+    exact h_holds trivial
+  · exact Or.inr trivial
 
 theorem completeness : Completeness Fp main (fun _ => True) := by
-  circuit_proof_start [main, Spec]
-  rw [h_env]
-  ring
+  circuit_proof_start
+  exact ⟨trivial, by simpa [Gate.Spec] using h_env⟩
 
 def circuit : FormalCircuit Fp fieldPair field where
-  -- TODO: factor the source `Field element addition: c = a + b` custom gate into a
-  -- named `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
   main
   elaborated
   Spec
