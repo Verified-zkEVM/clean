@@ -1265,7 +1265,7 @@ private theorem z1_recombination {n : ℕ} {ms : ℕ → ℕ} {piece z1 : Ecc.Fp
   push_cast at hsumFp hrec ⊢
   linear_combination hsumFp + hrec - hz1
 
-private theorem z1Facts_head_sum {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List ℕ) :
+theorem z1Facts_head_sum {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List ℕ) :
     (∑ j ∈ Finset.range n,
         ((List.range (n + 1)).map ms ++ tailChunks).getD (j + 1) 0 * 2 ^ (K * j))
       = ∑ j ∈ Finset.range n, ms (j + 1) * 2 ^ (K * j) := by
@@ -1276,7 +1276,7 @@ private theorem z1Facts_head_sum {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List
     List.getD_eq_getElem _ _ (by simp; omega)]
   simp
 
-private theorem chunks_drop_append {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List ℕ) :
+theorem chunks_drop_append {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List ℕ) :
     ((List.range (n + 1)).map ms ++ tailChunks).drop (n + 1) = tailChunks :=
   List.drop_left' (by simp)
 

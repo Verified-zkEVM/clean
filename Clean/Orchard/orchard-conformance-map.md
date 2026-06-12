@@ -311,10 +311,18 @@ Implemented building blocks:
   - `CommitDomain::blinding_factor`: `Sinsemilla.CommitDomain.blindingFactor`
     (the bare `[r] R`, an alias of `MulFixed.FullWidth.circuit`).
 
+- `MerkleInstructions::hash_layer`: `Sinsemilla.Merkle.HashLayer.circuit`
+  (`Clean/Orchard/Sinsemilla/Merkle.lean`, proven sound and complete): witnesses the
+  three message pieces `a`/`b`/`c` and the 5-bit sub-pieces `b_1`/`b_2`
+  (range-checked), hashes via the `hash_to_point` entry, and ties the pieces to
+  `(l, left, right)` with the `q_decompose` gate reading the hash's own `z_1`
+  running-sum cells. Spec: the output is the `x`-coordinate of
+  `SinsemillaHashToPoint(Q, merkleChunks l lv rv)` for 255-bit encodings `lv`, `rv`
+  of the child nodes (non-canonical encodings allowed, as in the source).
+
 Missing source-level APIs:
 
 - `SinsemillaInstructions::hash_to_point_with_private_init`
-- `MerkleInstructions::hash_layer`
 - `MerklePath::calculate_root`
 
 ### Orchard Entry APIs

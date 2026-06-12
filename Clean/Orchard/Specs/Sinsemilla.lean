@@ -182,4 +182,15 @@ theorem hashToPoint_concat (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Palla
     | none => rfl
     | some b => rfl
 
+/-! ### The `MerkleCRH` message -/
+
+/--
+The 52 `K`-bit chunks of the `MerkleCRH^Orchard` message `l⋆ || left⋆ || right⋆`
+(10 + 255 + 255 bits, little-endian; protocol spec §5.4.1.3), given 255-bit
+little-endian encodings `lv`, `rv` of the two child nodes. The encodings may be
+non-canonical (the circuit only constrains 255 bits, matching the source).
+-/
+def merkleChunks (l lv rv : ℕ) : List ℕ :=
+  (List.range 52).map fun i => (l + 2 ^ 10 * lv + 2 ^ 265 * rv) / 2 ^ (K * i) % 2 ^ K
+
 end Orchard.Specs.Sinsemilla

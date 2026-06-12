@@ -8,6 +8,7 @@ import Clean.Orchard.Ecc.ScalarMul
 import Clean.Orchard.Sinsemilla
 import Clean.Orchard.Sinsemilla.Domain
 import Clean.Orchard.Sinsemilla.HashToPoint
+import Clean.Orchard.Sinsemilla.Merkle
 import Clean.Orchard.Specs.Elliptic.CoordinateSystem
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
 import Clean.Orchard.Specs.Sinsemilla
