@@ -203,21 +203,6 @@ structure LambdaCells (F : Type) where
   xANext : F
 deriving ProvableStruct
 
-/-- The cells freshly witnessed for each later row. -/
-structure IterCells (F : Type) where
-  xP : F
-  yP : F
-  lambda1 : F
-  lambda2 : F
-  xANext : F
-deriving ProvableStruct
-
-/-- Loop state: the previous row's cells and the previous row's `x_a`. -/
-structure LoopState (F : Type) where
-  prev : IterCells F
-  xA : F
-deriving ProvableStruct
-
 /-- The outputs of `double_and_add`: the final accumulator cells and all interstitial
 running-sum cells (excluding the copied starting `z`). -/
 structure Output (numBits : ℕ) (F : Type) where
@@ -233,15 +218,6 @@ def zRunValue (zIn : Fp) (bits : ℕ → Bool) : ℕ → Fp
   | 0 => 2 * zIn + (if bits 0 then 1 else 0)
   | b + 1 => 2 * zRunValue zIn bits b + (if bits (b + 1) then 1 else 0)
 
-/-- The derived accumulator y-coordinate of a row: `y_A = Y_A / 2` where
-`Y_A = (λ1 + λ2)(x_A − x_R)`. -/
-def yAValue (c : IterCells Fp) (xA : Fp) : Fp :=
-  ((c.lambda1 + c.lambda2) * (xA - (c.lambda1 ^ 2 - xA - c.xP))) / 2
-
-/-- The accumulator y-coordinate after a row: `y_A' = λ2(x_A − x_A') − y_A`. -/
-def yANextValue (c : IterCells Fp) (xA : Fp) : Fp :=
-  c.lambda2 * (xA - c.xANext) - yAValue c xA
-
 /-- Honest lambda cells of one double-and-add row, from the accumulator `(x_a, y_a)`
 entering the row and the row's bit. The assigned `x_p, y_p` cells always hold the base
 coordinates; the conditional negation `(2k-1) y_p` only enters `λ1`. -/
@@ -252,11 +228,19 @@ def lambdaCellsValue (baseX baseY xA yA : Fp) (bit : Bool) : LambdaCells Fp :=
   let lambda2 := 2 * yA / (xA - xR) - lambda1
   { lambda1, lambda2, xANext := lambda2 ^ 2 - xA - xR }
 
-/-- Honest cells of one later double-and-add row. -/
-def iterCellsValue (baseX baseY xA yA : Fp) (bit : Bool) : IterCells Fp :=
-  let l := lambdaCellsValue baseX baseY xA yA bit
-  { xP := baseX, yP := baseY, lambda1 := l.lambda1, lambda2 := l.lambda2,
-    xANext := l.xANext }
+/-- The honest accumulator `(x_a, y_a)` entering row `r`
+(`incomplete.rs::double_and_add` assignment formulas, total via `0⁻¹ = 0`). -/
+def accVal (baseX baseY xA yA : Fp) (bits : ℕ → Bool) : ℕ → Fp × Fp
+  | 0 => (xA, yA)
+  | r + 1 =>
+    let p := accVal baseX baseY xA yA bits r
+    let l := lambdaCellsValue baseX baseY p.1 p.2 (bits r)
+    (l.xANext, l.lambda2 * (p.1 - l.xANext) - p.2)
+
+/-- The honest lambda cells of row `r`. -/
+def rowLambdaValue (baseX baseY xA yA : Fp) (bits : ℕ → Bool) (r : ℕ) : LambdaCells Fp :=
+  lambdaCellsValue baseX baseY
+    (accVal baseX baseY xA yA bits r).1 (accVal baseX baseY xA yA bits r).2 (bits r)
 
 /-- The accumulated multiplier after `b` double-and-add steps starting from `[m]P`:
 each step computes `(acc + (2k-1) P) + acc`, so `m_b = 2 m_{b-1} + 2 k_{b-1} - 1`. -/
@@ -314,11 +298,6 @@ private theorem step_nsmul {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ
     congr 1
     omega
 
-/-- The loop-state transition: the freshly witnessed row becomes `prev`, and its
-predecessor's `x_a'` cell is the row's entering `x_a`. -/
-def stateStep (w : Var IterCells Fp) (s : Var LoopState Fp) : Var LoopState Fp :=
-  { prev := w, xA := s.prev.xANext }
-
 /-! ### Circuit -/
 
 def main (n : ℕ) (input : Var Input Fp) :
@@ -335,44 +314,56 @@ def main (n : ℕ) (input : Var Input Fp) :
   -- first row: x_p, y_p are anchored to `base` (CircuitVersion::AnchoredBase)
   let xP₀ <== input.base.x
   let yP₀ <== input.base.y
-  let w₀ : Var LambdaCells Fp ← witness fun env =>
-    lambdaCellsValue (env input.base.x) (env input.base.y)
-      (env input.xA) (env input.yA) (input.bits env 0)
+  -- later rows' x_p, y_p cells; the q_mul_2 constancy checks pin them to the anchor
+  let xPs ← witnessVector n fun env => .ofFn fun _ => env input.base.x
+  let yPs ← witnessVector n fun env => .ofFn fun _ => env input.base.y
+  -- the lambda cells and next-row x_a cells of every row
+  let l1s ← witnessVector (n + 1) fun env =>
+    .ofFn fun (r : Fin (n + 1)) =>
+      (rowLambdaValue (env input.base.x) (env input.base.y) (env input.xA)
+        (env input.yA) (input.bits env) r.val).lambda1
+  let l2s ← witnessVector (n + 1) fun env =>
+    .ofFn fun (r : Fin (n + 1)) =>
+      (rowLambdaValue (env input.base.x) (env input.base.y) (env input.xA)
+        (env input.yA) (input.bits env) r.val).lambda2
+  let xAs ← witnessVector (n + 1) fun env =>
+    .ofFn fun (r : Fin (n + 1)) =>
+      (accVal (env input.base.x) (env input.base.y) (env input.xA) (env input.yA)
+        (input.bits env) (r.val + 1)).1
+  -- the witnessed final y_a
+  let yAFinal ← witnessField fun env =>
+    (accVal (env input.base.x) (env input.base.y) (env input.xA) (env input.yA)
+      (input.bits env) (n + 1)).2
+  -- the double-and-add row structs (x_a chained from the copied accumulator)
+  let dRow : Fin (n + 1) → Var Sinsemilla.DoubleAndAddRow Fp := fun r =>
+    { xA := if _ : r.val = 0 then xA₀ else xAs[r.val - 1]'(by omega),
+      xP := if _ : r.val = 0 then xP₀ else xPs[r.val - 1]'(by omega),
+      lambda1 := l1s[r.val]'(r.isLt),
+      lambda2 := l2s[r.val]'(r.isLt) }
+  let yPof : Fin (n + 1) → Expression Fp := fun r =>
+    if _ : r.val = 0 then yP₀ else yPs[r.val - 1]'(by omega)
   -- q_mul_1: the copied y_a is the derived y of the first row
-  Init.circuit {
-    yAWitnessed := yA₀,
-    next := { xA := xA₀, xP := xP₀, lambda1 := w₀.lambda1, lambda2 := w₀.lambda2 } }
-  let s₁ : Var LoopState Fp := {
-    prev := { xP := xP₀, yP := yP₀, lambda1 := w₀.lambda1, lambda2 := w₀.lambda2,
-              xANext := w₀.xANext },
-    xA := xA₀ }
-  -- rows 1..n: witness the row, then close the previous row with q_mul_2
-  let sLast ← Circuit.foldlRange n s₁ fun s i => do
-    let w : Var IterCells Fp ← witness fun env =>
-      iterCellsValue (env input.base.x) (env input.base.y)
-        (env s.prev.xANext) (yANextValue (eval env s.prev) (env s.xA))
-        (input.bits env (i.val + 1))
-    MainLoop.circuit {
-      toRow := {
+  Init.circuit { yAWitnessed := yA₀, next := dRow ⟨0, by omega⟩ }
+  -- q_mul_2 on rows 0..n-1
+  let gateRows : Vector (Var MainLoop.Row Fp) n := .ofFn fun i =>
+    { toRow := {
         zCur := zsAll[i.val + 1]'(by have := i.isLt; omega),
         zPrev := zsAll[i.val]'(by have := i.isLt; omega),
-        cur := { xA := s.xA, xP := s.prev.xP,
-                 lambda1 := s.prev.lambda1, lambda2 := s.prev.lambda2 },
-        xANext := s.prev.xANext, yPCur := s.prev.yP,
-        yANextDouble := Sinsemilla.DoubleAndAdd.yA
-          { xA := s.prev.xANext, xP := w.xP, lambda1 := w.lambda1, lambda2 := w.lambda2 } },
-      xPNext := w.xP, yPNext := w.yP }
-    return stateStep w s
-  -- witness the final y_a, then close the last row with q_mul_3
-  let yAFinal ← witnessField fun env =>
-    yANextValue (eval env sLast.prev) (env sLast.xA)
+        cur := dRow ⟨i.val, by omega⟩,
+        xANext := xAs[i.val]'(by have := i.isLt; omega),
+        yPCur := yPof ⟨i.val, by omega⟩,
+        yANextDouble := Sinsemilla.DoubleAndAdd.yA (dRow ⟨i.val + 1, by omega⟩) },
+      xPNext := (dRow ⟨i.val + 1, by omega⟩).xP,
+      yPNext := yPof ⟨i.val + 1, by omega⟩ }
+  Circuit.forEach gateRows MainLoop.circuit
+  -- q_mul_3 on the last row
   Loop.circuit {
     zCur := zsAll[n + 1]'(by omega), zPrev := zsAll[n]'(by omega),
-    cur := { xA := sLast.xA, xP := sLast.prev.xP,
-             lambda1 := sLast.prev.lambda1, lambda2 := sLast.prev.lambda2 },
-    xANext := sLast.prev.xANext, yPCur := sLast.prev.yP,
+    cur := dRow ⟨n, by omega⟩,
+    xANext := xAs[n]'(by omega),
+    yPCur := yPof ⟨n, by omega⟩,
     yANextDouble := 2 * yAFinal }
-  return { xA := sLast.prev.xANext, yA := yAFinal, zs }
+  return { xA := xAs[n]'(by omega), yA := yAFinal, zs }
 
 instance elaborated (n : ℕ) : ElaboratedCircuit Fp Input (Output (n + 1)) (main n) := by
   elaborate_circuit
@@ -449,38 +440,6 @@ private theorem zsAll_get (i₀ n : ℕ) (v : Vector (Expression Fp) (1 + (n + 1
   · intro b hb
     simp [Vector.getElem_append, Vector.getElem_mapRange]
 
-/-- The `x_a` cell entering row `j`: the copied accumulator for row 0, the first
-witnessed `x_a'` for row 1, the loop iterations' `x_a'` cells afterwards. -/
-private def rowXA (env : Environment Fp) (i₀ n : ℕ) : ℕ → Fp
-  | 0 => env.get (i₀ + 1 + 1)
-  | 1 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 + 1)
-  | j + 2 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 3 + j * 5 + 1 + 1 + 1 + 1)
-
-/-- The `x_p` cell of row `j`. -/
-private def rowXP (env : Environment Fp) (i₀ n : ℕ) : ℕ → Fp
-  | 0 => env.get (i₀ + 1 + 1 + 1 + (n + 1))
-  | j + 1 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 3 + j * 5)
-
-/-- The `y_p` cell of row `j`. -/
-private def rowYP (env : Environment Fp) (i₀ n : ℕ) : ℕ → Fp
-  | 0 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1)
-  | j + 1 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 3 + j * 5 + 1)
-
-/-- The `λ₁` cell of row `j`. -/
-private def rowL1 (env : Environment Fp) (i₀ n : ℕ) : ℕ → Fp
-  | 0 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1)
-  | j + 1 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 3 + j * 5 + 1 + 1)
-
-/-- The `λ₂` cell of row `j`. -/
-private def rowL2 (env : Environment Fp) (i₀ n : ℕ) : ℕ → Fp
-  | 0 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1)
-  | j + 1 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 3 + j * 5 + 1 + 1 + 1)
-
-/-- The double-and-add row struct of row `j`. -/
-private def rowD (env : Environment Fp) (i₀ n j : ℕ) : Sinsemilla.DoubleAndAddRow Fp :=
-  { xA := rowXA env i₀ n j, xP := rowXP env i₀ n j,
-    lambda1 := rowL1 env i₀ n j, lambda2 := rowL2 env i₀ n j }
-
 /-- The evaluation of an arbitrary running-sum cell, as a value-level conditional. -/
 private theorem zsAll_get_at (env : Environment Fp) (i₀ n : ℕ)
     (v : Vector (Expression Fp) (1 + (n + 1)))
@@ -499,78 +458,6 @@ private theorem zsAll_get_at (env : Environment Fp) (i₀ n : ℕ)
     simp only [Vector.getElem_append, Vector.getElem_mapRange]
     norm_num
     rfl
-
-/-- The elaborated loop body's state transition, named for fold reasoning. -/
-private def loopF (i₀ n k : ℕ) : Var LoopState Fp → Fin k → Var LoopState Fp :=
-  fun acc i =>
-    stateStep
-      { xP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] },
-        yP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 },
-        lambda1 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 },
-        lambda2 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 + 1 },
-        xANext := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 + 1 + 1 } }
-      acc
-
-/-- The elaborated loop's initial state, named for fold reasoning. -/
-private def loopInit (i₀ n : ℕ) : Var LoopState Fp where
-  prev :=
-    { xP := var { index := i₀ + 1 + 1 + 1 + (n + 1) },
-      yP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 },
-      lambda1 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 },
-      lambda2 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 },
-      xANext := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 + 1 } }
-  xA := var { index := i₀ + 1 + 1 }
-
-/-- The elaborated loop body's literal lambda is `loopF`. -/
-private theorem loopF_def (i₀ n k : ℕ) :
-    (fun acc (i : Fin k) =>
-      stateStep
-        { xP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] },
-          yP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 },
-          lambda1 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 },
-          lambda2 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 + 1 },
-          xANext := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + List.sum [1, 1, 1] + ↑i * List.sum [1, 1, 1, 1, 1] + 1 + 1 + 1 + 1 } }
-        acc)
-    = loopF i₀ n k := rfl
-
-/-- The elaborated loop's literal initial state is `loopInit`. -/
-private theorem loopInit_def (i₀ n : ℕ) :
-    { prev :=
-        { xP := var { index := i₀ + 1 + 1 + 1 + (n + 1) },
-          yP := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 },
-          lambda1 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 },
-          lambda2 := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 },
-          xANext := var { index := i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 + 1 } },
-      xA := var { index := i₀ + 1 + 1 } }
-    = loopInit i₀ n := rfl
-
-/-- The loop-state fold, projected: after `k` iterations the state holds row `k`'s
-cells and its entering `x_a`. -/
-private theorem foldl_state (env : Environment Fp) (i₀ n : ℕ) (k : ℕ) :
-    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).xA
-      = rowXA env i₀ n k ∧
-    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.xP
-      = rowXP env i₀ n k ∧
-    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.yP
-      = rowYP env i₀ n k ∧
-    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.lambda1
-      = rowL1 env i₀ n k ∧
-    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.lambda2
-      = rowL2 env i₀ n k ∧
-    Expression.eval env (Fin.foldl k (loopF i₀ n k) (loopInit i₀ n)).prev.xANext
-      = rowXA env i₀ n (k + 1) := by
-  induction k with
-  | zero =>
-    simp only [Fin.foldl_zero]
-    exact ⟨rfl, rfl, rfl, rfl, rfl, by norm_num [rowXA, loopInit]; rfl⟩
-  | succ v ih =>
-    rw [Fin.foldl_succ_last]
-    have hcast : (fun (acc : Var LoopState Fp) (i : Fin v) => loopF i₀ n (v + 1) acc i.castSucc)
-        = loopF i₀ n v := by
-      funext acc i
-      simp only [loopF, Fin.val_castSucc]
-    rw [hcast]
-    exact ⟨ih.2.2.2.2.2, rfl, rfl, rfl, rfl, rfl⟩
 
 /--
 The chain induction of variable-base double-and-add over cleaned row facts:
@@ -665,110 +552,7 @@ private theorem soundness_aux (n : ℕ) (P : SWPoint Pallas.curve) (hP : P ≠ 0
 theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
       (Spec n) := by
-  circuit_proof_start [main, Spec, Init.circuit, Init.Spec, MainLoop.circuit, MainLoop.Spec,
-    Loop.circuit, Loop.Spec]
-  obtain ⟨h_z0, h_yA0, h_xA0, h_xP0, h_yP0, h_init, h_loop, h_last⟩ := h_holds
-  -- name the running-sum cells
-  obtain ⟨hzs0, hzsS⟩ := zsAll_get i₀ n _ rfl
-  -- the bit of row `b`, read off the running-sum cells
-  refine ⟨fun b => decide (env.get (i₀ + 1 + 1 + 1 + b)
-    = 2 * (if b = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (b - 1))) + 1),
-    ⟨?_, ?_⟩, ?_⟩
-  all_goals
-    have hchain_of_bool : ∀ zP zN : Fp, IsBool (zN - zP * 2) →
-        zN = 2 * zP + (if decide (zN = 2 * zP + 1) = true then 1 else 0) := by
-      intro zP zN hb
-      rcases hb with h | h
-      · have hz : zN = 2 * zP := by linear_combination h
-        have hcond : ¬(zN = 2 * zP + 1) := by
-          rw [hz]
-          intro hc
-          exact one_ne_zero (α := Fp) (by linear_combination -hc)
-        simp [hcond, hz]
-      · have hz : zN = 2 * zP + 1 := by linear_combination h
-        simp [hz]
-    have hrow : ∀ (j : ℕ) (hj : j < n),
-        rowXP env i₀ n j = rowXP env i₀ n (j + 1) ∧
-        rowYP env i₀ n j = rowYP env i₀ n (j + 1) ∧
-        IsBool (env.get (i₀ + 1 + 1 + 1 + j) -
-          (if j = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (j - 1))) * 2) ∧
-        2 * rowL1 env i₀ n j * (rowXA env i₀ n j - rowXP env i₀ n j) +
-          2 * (((env.get (i₀ + 1 + 1 + 1 + j) -
-            (if j = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (j - 1))) * 2) * 2 - 1) *
-              rowYP env i₀ n j)
-          = yADouble (rowD env i₀ n j) ∧
-        rowL2 env i₀ n j * rowL2 env i₀ n j
-          = rowXA env i₀ n (j + 1) +
-            Sinsemilla.DoubleAndAdd.xR (rowD env i₀ n j) +
-            rowXA env i₀ n j ∧
-        2 * rowL2 env i₀ n j * (rowXA env i₀ n j - rowXA env i₀ n (j + 1))
-          = yADouble (rowD env i₀ n j) + yADouble (rowD env i₀ n (j + 1)) := by
-      intro j hj
-      have h := h_loop ⟨j, hj⟩
-      simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Circuit.FoldlM.foldlAcc,
-        Vector.getElem_finRange, Fin.val_mk, circuit_norm] at h
-      rcases j with _ | _ | j''
-      · simp only [Fin.foldl_zero] at h
-        rw [hzsS 0 (by omega), hzs0,
-          show Expression.eval env (var { index := i₀ }) = input_z from h_z0] at h
-        try simp only [if_pos rfl]
-        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble, stateStep,
-          Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
-        simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
-          rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
-        norm_num at h ⊢
-        refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
-        · linear_combination h.2.2.2.1
-        · linear_combination h.2.2.2.2.1
-        · linear_combination h.2.2.2.2.2
-      · simp only [Fin.foldl_succ, Fin.foldl_zero, Fin.val_succ, Fin.val_zero] at h
-        rw [hzsS 1 (by omega), hzsS 0 (by omega)] at h
-        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble, stateStep,
-          Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
-        simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
-          rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
-        norm_num at h ⊢
-        refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
-        · linear_combination h.2.2.2.1
-        · linear_combination h.2.2.2.2.1
-        · linear_combination h.2.2.2.2.2
-      · rw [Fin.foldl_succ_last, Fin.foldl_succ_last] at h
-        simp only [Fin.val_last, Fin.coe_castSucc, Fin.val_succ, Fin.val_zero] at h
-        rw [hzsS (j'' + 2) (by omega), hzsS (j'' + 1) (by omega)] at h
-        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble, stateStep,
-          Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
-        simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
-          rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
-        norm_num at h ⊢
-        refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
-        · linear_combination h.2.2.2.1
-        · linear_combination h.2.2.2.2.1
-        · linear_combination h.2.2.2.2.2
-  · rcases Nat.eq_zero_or_pos n with hn | hn
-    · subst hn
-      obtain ⟨h_lb, h_lrest⟩ := h_last
-      rw [hzsS 0 (by omega), hzs0,
-        show Expression.eval env (var { index := i₀ }) = input_z from h_z0] at h_lb
-      simpa using hchain_of_bool _ _ h_lb
-    · have h := (hrow 0 hn).2.2.1
-      try simp only [if_pos rfl] at h
-      simpa using hchain_of_bool _ _ h
-  · intro b
-    obtain ⟨bv, hbvlt⟩ := b
-    simp only [Fin.val_mk]
-    rcases Nat.lt_or_ge (bv + 1) n with hb | hb
-    · have h := (hrow (bv + 1) hb).2.2.1
-      try simp only [Nat.succ_ne_zero, if_false, Nat.add_sub_cancel] at h
-      simpa using hchain_of_bool _ _ h
-    · have hbn : bv + 1 = n := by omega
-      subst hbn
-      obtain ⟨h_lb, h_lrest⟩ := h_last
-      rw [hzsS (bv + 1) (by omega), hzsS bv (by omega)] at h_lb
-      have h := hchain_of_bool _ _ h_lb
-      simpa using h
-  · intro Pt mm hPt hbase hacc h2m hbnd
-    sorry
-
+  sorry
 
 theorem completeness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main n) (ProverAssumptions n)
