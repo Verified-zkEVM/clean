@@ -434,28 +434,29 @@ private theorem pow254_lt_card : 2 ^ 254 < PALLAS_SCALAR_CARD := by
 
 /-- The witnessed `z` cell of loop row `r`. -/
 private def rowZ (env : Environment Fp) (i₀ : ℕ) (r : ℕ) : Fp :=
-  env.get (i₀ + 3 + r * 6)
+  env.get (i₀ + 1 + 1 + 1 + r * 6)
 
 /-- The `x_a` cell entering row `r`: the copied accumulator for row 0, the previous
 row's witnessed `x_a'` afterwards. -/
 private def rowXA (env : Environment Fp) (i₀ : ℕ) (r : ℕ) : Fp :=
-  if r = 0 then env.get (i₀ + 1) else env.get (i₀ + 3 + (r - 1) * 6 + 5)
+  if r = 0 then env.get (i₀ + 1)
+  else env.get (i₀ + 1 + 1 + 1 + (r - 1) * 6 + 1 + 1 + 1 + 1 + 1)
 
 /-- The `x_p` cell of row `r` (row 0's is the anchored copy of `base.x`). -/
 private def rowXP (env : Environment Fp) (i₀ : ℕ) (r : ℕ) : Fp :=
-  env.get (i₀ + 3 + r * 6 + 1)
+  env.get (i₀ + 1 + 1 + 1 + r * 6 + 1)
 
 /-- The `y_p` cell of row `r` (row 0's is the anchored copy of `base.y`). -/
 private def rowYP (env : Environment Fp) (i₀ : ℕ) (r : ℕ) : Fp :=
-  env.get (i₀ + 3 + r * 6 + 2)
+  env.get (i₀ + 1 + 1 + 1 + r * 6 + 1 + 1)
 
 /-- The `λ₁` cell of row `r`. -/
 private def rowL1 (env : Environment Fp) (i₀ : ℕ) (r : ℕ) : Fp :=
-  env.get (i₀ + 3 + r * 6 + 3)
+  env.get (i₀ + 1 + 1 + 1 + r * 6 + 1 + 1 + 1)
 
 /-- The `λ₂` cell of row `r`. -/
 private def rowL2 (env : Environment Fp) (i₀ : ℕ) (r : ℕ) : Fp :=
-  env.get (i₀ + 3 + r * 6 + 4)
+  env.get (i₀ + 1 + 1 + 1 + r * 6 + 1 + 1 + 1 + 1)
 
 /-- The double-and-add row struct of row `r`. -/
 private def rowD (env : Environment Fp) (i₀ r : ℕ) : Sinsemilla.DoubleAndAddRow Fp :=
@@ -579,7 +580,237 @@ private theorem honest_step {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : �
 theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
       (Spec n) := by
-  sorry
+  circuit_proof_start [main, Spec, Init.circuit, Init.Spec, MainLoop.circuit, MainLoop.Spec,
+    Loop.circuit, Loop.Spec]
+  obtain ⟨h_z0, h_xA0, h_yA0, h_xP0, h_yP0, h_init, h_loop, h_last⟩ := h_holds
+  have hchain_of_bool : ∀ zP zN : Fp, IsBool (zN - zP * 2) →
+      zN = 2 * zP + (if decide (zN = 2 * zP + 1) = true then 1 else 0) := by
+    intro zP zN hb
+    rcases hb with h | h
+    · have hz : zN = 2 * zP := by linear_combination h
+      have hcond : ¬(zN = 2 * zP + 1) := by
+        rw [hz]
+        intro hc
+        exact one_ne_zero (α := Fp) (by linear_combination -hc)
+      simp [hz]
+    · have hz : zN = 2 * zP + 1 := by linear_combination h
+      simp [hz]
+  have hrow : ∀ (j : ℕ) (hj : j < n),
+      rowXP env i₀ j = rowXP env i₀ (j + 1) ∧
+      rowYP env i₀ j = rowYP env i₀ (j + 1) ∧
+      IsBool (rowZ env i₀ j -
+        (if j = 0 then input_z else rowZ env i₀ (j - 1)) * 2) ∧
+      2 * rowL1 env i₀ j * (rowXA env i₀ j - rowXP env i₀ j) +
+        2 * (((rowZ env i₀ j -
+          (if j = 0 then input_z else rowZ env i₀ (j - 1)) * 2) * 2 - 1) *
+            rowYP env i₀ j)
+        = yADouble (rowD env i₀ j) ∧
+      rowL2 env i₀ j * rowL2 env i₀ j
+        = rowXA env i₀ (j + 1) +
+          Sinsemilla.DoubleAndAdd.xR (rowD env i₀ j) +
+          rowXA env i₀ j ∧
+      2 * rowL2 env i₀ j * (rowXA env i₀ j - rowXA env i₀ (j + 1))
+        = yADouble (rowD env i₀ j) + yADouble (rowD env i₀ (j + 1)) := by
+    intro j hj
+    have h := h_loop ⟨j, hj⟩
+    simp only [Vector.get] at h
+    rcases j with _ | j'
+    · norm_num at h
+      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
+      rw [show env.get i₀ = input_z from h_z0] at h
+      simp only [rowZ, rowXA, rowXP, rowYP, rowL1, rowL2, rowD, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      norm_num at h ⊢
+      refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
+      · linear_combination h.2.2.2.1
+      · linear_combination h.2.2.2.2.1
+      · linear_combination h.2.2.2.2.2
+    · norm_num at h
+      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
+      simp only [rowZ, rowXA, rowXP, rowYP, rowL1, rowL2, rowD, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      norm_num at h ⊢
+      refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
+      · linear_combination h.2.2.2.1
+      · linear_combination h.2.2.2.2.1
+      · linear_combination h.2.2.2.2.2
+  refine ⟨fun b => decide (env.get (i₀ + 1 + 1 + 1 + b * 6)
+    = (2 * if b = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (b - 1) * 6)) + 1),
+    ⟨?_, ?_⟩, ?_⟩
+  · rcases Nat.eq_zero_or_pos n with hn | hn
+    · subst hn
+      obtain ⟨h_lb, h_lrest⟩ := h_last
+      norm_num at h_lb
+      simp only [Loop.bit, Expression.eval] at h_lb
+      rw [show env.get i₀ = input_z from h_z0] at h_lb
+      simpa using hchain_of_bool _ _ h_lb
+    · have h := (hrow 0 hn).2.2.1
+      simp only [rowZ] at h
+      simpa using hchain_of_bool _ _ h
+  · intro b
+    obtain ⟨bv, hbvlt⟩ := b
+    rcases Nat.lt_or_ge (bv + 1) n with hb | hb
+    · have h := (hrow (bv + 1) hb).2.2.1
+      simp only [rowZ, Nat.succ_ne_zero, if_false, Nat.add_sub_cancel] at h
+      simpa using hchain_of_bool _ _ h
+    · have hbn : bv + 1 = n := by omega
+      subst hbn
+      obtain ⟨h_lb, h_lrest⟩ := h_last
+      norm_num at h_lb
+      have h := hchain_of_bool _ _ h_lb
+      simpa using h
+  · intro Pt mm hPt hbase hacc h2m hbnd
+    -- the last row's gate facts
+    obtain ⟨hlb, hlg1, hlsec, hlg2⟩ := h_last
+    norm_num at hlb hlg1 hlsec hlg2
+    simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+      apply_ite (Expression.eval env), Sinsemilla.DoubleAndAdd.yA,
+      Sinsemilla.DoubleAndAdd.xR] at hlb hlg1 hlsec hlg2
+    norm_num at h_init
+    -- inputs in point coordinates
+    obtain ⟨hbx, hby⟩ : Expression.eval env input_var.base.x = Pt.x ∧
+        Expression.eval env input_var.base.y = Pt.y := by
+      have h := h_input.1
+      constructor
+      · rw [show Expression.eval env input_var.base.x = input_base.x from by rw [← h]]
+        exact congrArg Prod.fst hbase
+      · rw [show Expression.eval env input_var.base.y = input_base.y from by rw [← h]]
+        exact congrArg Prod.snd hbase
+    obtain ⟨haccx, haccy⟩ : input_xA = (mm • Pt).x ∧ input_yA = (mm • Pt).y :=
+      ⟨congrArg Prod.fst hacc, congrArg Prod.snd hacc⟩
+    -- base-point constancy along the rows
+    have hconst : ∀ r, r ≤ n → rowXP env i₀ r = Pt.x ∧ rowYP env i₀ r = Pt.y := by
+      intro r
+      induction r with
+      | zero =>
+        intro _
+        constructor
+        · rw [show rowXP env i₀ 0 = env.get (i₀ + 1 + 1 + 1 + 0 * 6 + 1) from rfl,
+            h_xP0, hbx]
+        · rw [show rowYP env i₀ 0 = env.get (i₀ + 1 + 1 + 1 + 0 * 6 + 1 + 1) from rfl,
+            h_yP0, hby]
+      | succ v ih =>
+        intro hv
+        obtain ⟨hx, hy⟩ := ih (by omega)
+        obtain ⟨hcx, hcy, -⟩ := hrow v (by omega)
+        exact ⟨by rw [← hcx]; exact hx, by rw [← hcy]; exact hy⟩
+    -- the per-row bit values, decidably
+    have hbiteq : ∀ r, r ≤ n →
+        env.get (i₀ + 1 + 1 + 1 + r * 6) -
+          (if r = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (r - 1) * 6)) * 2 =
+        (if (decide (env.get (i₀ + 1 + 1 + 1 + r * 6)
+          = (2 * if r = 0 then input_z
+              else env.get (i₀ + 1 + 1 + 1 + (r - 1) * 6)) + 1)) = true
+          then 1 else 0) := by
+      intro r hr
+      have hb : IsBool (env.get (i₀ + 1 + 1 + 1 + r * 6) -
+          (if r = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (r - 1) * 6)) * 2) := by
+        rcases Nat.lt_or_ge r n with h | h
+        · have hb' := (hrow r h).2.2.1
+          simp only [rowZ] at hb'
+          exact hb'
+        · have hrn : r = n := by omega
+          subst hrn
+          rcases Nat.eq_zero_or_pos r with h0 | h0
+          · subst h0
+            rw [if_pos rfl]
+            rw [show input_z = env.get i₀ from h_z0.symm]
+            simpa using hlb
+          · rw [if_neg (by omega)]
+            simpa [if_neg (Nat.pos_iff_ne_zero.mp h0)] using hlb
+      have hch := hchain_of_bool _ _ hb
+      linear_combination hch
+    -- assemble the chain induction
+    have haux := soundness_aux n Pt hPt mm h2m hbnd
+      (rowXA env i₀) (rowXP env i₀) (rowYP env i₀) (rowL1 env i₀) (rowL2 env i₀)
+      (fun r => if r = n + 1 then
+          2 * env.get (i₀ + 1 + 1 + 1 + (n + 1) * 6)
+        else yADouble (rowD env i₀ r))
+      (fun b => decide (env.get (i₀ + 1 + 1 + 1 + b * 6)
+        = (2 * if b = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (b - 1) * 6)) + 1))
+      ?hxA0 ?hYAD0 ?hyad ?hxp ?hyp ?hg1 ?hsec ?hg2
+    case hxA0 =>
+      rw [show rowXA env i₀ 0 = env.get (i₀ + 1) from if_pos rfl, h_xA0, haccx]
+    case hYAD0 =>
+      simp only []
+      rw [if_neg (by omega)]
+      simp only [Expression.eval, yADouble, Sinsemilla.DoubleAndAdd.yA,
+        Sinsemilla.DoubleAndAdd.xR] at h_init
+      simp only [rowD, rowXA, rowXP, rowL1, rowL2, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      norm_num
+      rw [← haccy, ← h_yA0]
+      linear_combination -h_init
+    case hyad =>
+      intro r hr
+      simp only []
+      rw [if_neg (by omega)]
+      simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR, rowD]
+      try ring
+    case hxp => exact fun r hr => (hconst r hr).1
+    case hyp => exact fun r hr => (hconst r hr).2
+    case hg1 =>
+      intro r hr
+      simp only []
+      rw [if_neg (show ¬(r = n + 1) by omega)]
+      have hbit := hbiteq r hr
+      rw [← hbit]
+      rcases Nat.lt_or_ge r n with h | h
+      · have hg := (hrow r h).2.2.2.1
+        simp only [rowZ] at hg ⊢
+        exact hg
+      · have hrn : r = n := by omega
+        subst hrn
+        simp only [rowD, rowXA, rowXP, rowYP, rowL1, rowL2, yADouble,
+          Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+        rcases Nat.eq_zero_or_pos r with h0 | h0
+        · subst h0
+          norm_num
+          rw [show input_z = env.get i₀ from h_z0.symm]
+          norm_num at hlg1
+          linear_combination hlg1
+        · simp only [if_neg (Nat.pos_iff_ne_zero.mp h0)] at hlg1 ⊢
+          linear_combination hlg1
+    case hsec =>
+      intro r hr
+      rcases Nat.lt_or_ge r n with h | h
+      · exact (hrow r h).2.2.2.2.1
+      · have hrn : r = n := by omega
+        subst hrn
+        simp only [rowXA, rowXP, rowL1, rowL2]
+        rcases Nat.eq_zero_or_pos r with h0 | h0
+        · subst h0
+          norm_num
+          norm_num at hlsec
+          linear_combination hlsec
+        · simp only [if_neg (Nat.pos_iff_ne_zero.mp h0), if_neg (Nat.succ_ne_zero r),
+            Nat.add_sub_cancel] at hlsec ⊢
+          linear_combination hlsec
+    case hg2 =>
+      intro r hr
+      simp only []
+      rcases Nat.lt_or_ge r n with h | h
+      · rw [if_neg (show ¬(r = n + 1) by omega), if_neg (show ¬(r + 1 = n + 1) by omega)]
+        exact (hrow r h).2.2.2.2.2
+      · have hrn : r = n := by omega
+        subst hrn
+        rw [if_neg (show ¬(r = r + 1) by omega), if_pos rfl]
+        simp only [rowD, rowXA, rowXP, rowL1, rowL2, yADouble,
+          Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+        rcases Nat.eq_zero_or_pos r with h0 | h0
+        · subst h0
+          norm_num
+          norm_num at hlg2
+          linear_combination hlg2
+        · simp only [if_neg (Nat.pos_iff_ne_zero.mp h0), if_neg (Nat.succ_ne_zero r),
+            Nat.add_sub_cancel] at hlg2 ⊢
+          linear_combination hlg2
+    obtain ⟨hx, hy⟩ := haux
+    simp only [rowXA, Nat.succ_ne_zero, if_false, Nat.add_sub_cancel] at hx
+    rw [if_pos rfl] at hy
+    exact Prod.ext hx (mul_left_cancel₀ Add.pallas_two_ne_zero hy)
 
 
 theorem completeness (n : ℕ) :
