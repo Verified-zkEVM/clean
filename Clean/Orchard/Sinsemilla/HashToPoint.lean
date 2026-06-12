@@ -1,5 +1,6 @@
 import Clean.Orchard.Sinsemilla
 import Clean.Orchard.Specs.Sinsemilla
+import Clean.Orchard.Ecc.AddIncomplete
 
 /-!
 Reference:
@@ -172,6 +173,128 @@ def main (G : Generators) (w : ℕ) (input : Var Input Ecc.Fp) :
 instance elaborated (G : Generators) (w : ℕ) :
     ElaboratedCircuit Ecc.Fp Input Output (main G w) := by
   elaborate_circuit
+
+/--
+The workhorse of one Sinsemilla row, following the constraint program of the halo2 book
+("Sinsemilla / Constraint program"): for a non-degenerate step `(A ⸭ S) ⸭ A = B`, the
+row equations pin every cell, where `ya`/`ya'` denote the halves of the derived
+`Y_A`-expressions of the current and next row.
+
+Hypotheses are exactly the row constraints:
+- `hYP, hXP`: the lookup, with the derived `y_p` and the generator coordinates,
+- `hYA`: the current accumulator `y` matches the row's `Y_A` expression (the inductive
+  invariant; definitional at initialization and re-established by `hYCheck`),
+- `hSecant, hYCheck`: the Sinsemilla gate.
+-/
+theorem step_pinned (G : Generators) {A B : SWPoint Pallas.curve} {m : ℕ}
+    (hstep : Orchard.Specs.Sinsemilla.step G.S A m = some B)
+    {xp lambda1 lambda2 xa' ya' : Ecc.Fp}
+    (hYP : A.y - lambda1 * (A.x - xp) = (G.S m).y)
+    (hXP : xp = (G.S m).x)
+    (hYA : 2 * A.y = (lambda1 + lambda2) * (A.x - (lambda1 * lambda1 - A.x - xp)))
+    (hSecant : lambda2 * lambda2 = xa' + (lambda1 * lambda1 - A.x - xp) + A.x)
+    (hYCheck : lambda2 * (A.x - xa') = A.y + ya') :
+    xa' = B.x ∧ ya' = B.y := by
+  open Orchard.Specs.Sinsemilla in
+  -- unfold the spec-level step into its two incomplete additions
+  unfold Orchard.Specs.Sinsemilla.step at hstep
+  by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
+  · rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos hc₁] at hstep
+    simp at hstep
+  rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_neg hc₁] at hstep
+  push_neg at hc₁
+  obtain ⟨hA0, hS0, hAxS⟩ := hc₁
+  set R : SWPoint Pallas.curve := A + G.S m with hR_def
+  rw [show ((some R).bind fun t => Orchard.Specs.Sinsemilla.incompleteAdd t A)
+    = Orchard.Specs.Sinsemilla.incompleteAdd R A from rfl] at hstep
+  by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
+  · rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos hc₂] at hstep
+    simp at hstep
+  rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_neg hc₂] at hstep
+  push_neg at hc₂
+  obtain ⟨hR0, -, hRxA⟩ := hc₂
+  have hB : B = A + R := by
+    have := Option.some.inj hstep
+    rw [← this, _root_.add_comm]
+  subst hXP
+  -- nonzero points have nonzero coordinate encodings
+  have point_ne_zero : ∀ {P : SWPoint Pallas.curve}, P ≠ 0 →
+      ({ x := P.x, y := P.y } : Ecc.Point Ecc.Fp) ≠ Ecc.Point.zero := by
+    intro P hP h
+    apply hP
+    apply SWPoint.ext_pair
+    have hx := congrArg Ecc.Point.x h
+    have hy := congrArg Ecc.Point.y h
+    simp only [Ecc.Point.zero] at hx hy
+    rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
+      = ((0 : Ecc.Fp), (0 : Ecc.Fp)) from rfl, hx, hy]
+  -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
+  have hRadd := Ecc.AddIncomplete.outputValue_eq_add
+    (input := { p := { x := A.x, y := A.y }, q := { x := (G.S m).x, y := (G.S m).y } })
+    (point_ne_zero hA0) (point_ne_zero hS0) hAxS
+  rw [show (({ x := A.x, y := A.y } : Ecc.Point Ecc.Fp)).coords = (A.x, A.y) from rfl,
+    show (({ x := (G.S m).x, y := (G.S m).y } : Ecc.Point Ecc.Fp)).coords
+      = ((G.S m).x, (G.S m).y) from rfl,
+    Pallas.add_coords, ← hR_def] at hRadd
+  set slope₁ : Ecc.Fp := ((G.S m).y - A.y) * ((G.S m).x - A.x)⁻¹ with hslope₁
+  have hRx : slope₁ * slope₁ - A.x - (G.S m).x = R.x := by
+    have := congrArg Prod.fst hRadd
+    simpa [Ecc.AddIncomplete.outputValue] using this
+  have hRy : slope₁ * (A.x - (slope₁ * slope₁ - A.x - (G.S m).x)) - A.y = R.y := by
+    have := congrArg Prod.snd hRadd
+    simpa [Ecc.AddIncomplete.outputValue] using this
+  -- the lookup pins `λ₁` to the chord slope
+  have hAxS' : A.x - (G.S m).x ≠ 0 := sub_ne_zero.mpr hAxS
+  have hl1 : lambda1 = slope₁ := by
+    apply mul_right_cancel₀ hAxS'
+    rw [hslope₁, mul_assoc,
+      show ((G.S m).x - A.x)⁻¹ * (A.x - (G.S m).x) = -1 from by
+        rw [show A.x - (G.S m).x = -((G.S m).x - A.x) by ring, mul_neg,
+          inv_mul_cancel₀ (sub_ne_zero.mpr (Ne.symm hAxS))]]
+    linear_combination -hYP
+  -- hence `x_R` and the intermediate `y` are the real intermediate point
+  have hxR : lambda1 * lambda1 - A.x - (G.S m).x = R.x := by
+    rw [hl1]
+    exact hRx
+  have hyR : lambda1 * (A.x - R.x) - A.y = R.y := by
+    rw [hl1, ← hRx]
+    exact hRy
+  -- the second addition: `B = A ⸭ R`, with the chord through `A` and `R`
+  have hRxA' : A.x - R.x ≠ 0 := sub_ne_zero.mpr fun h => hRxA h.symm
+  have hBadd := Ecc.AddIncomplete.outputValue_eq_add
+    (input := { p := { x := A.x, y := A.y }, q := { x := R.x, y := R.y } })
+    (point_ne_zero hA0) (point_ne_zero hR0) (fun h => hRxA h.symm)
+  rw [show (({ x := A.x, y := A.y } : Ecc.Point Ecc.Fp)).coords = (A.x, A.y) from rfl,
+    show (({ x := R.x, y := R.y } : Ecc.Point Ecc.Fp)).coords = (R.x, R.y) from rfl,
+    Pallas.add_coords, ← hB] at hBadd
+  set slope₂ : Ecc.Fp := (R.y - A.y) * (R.x - A.x)⁻¹ with hslope₂
+  have hBx : slope₂ * slope₂ - A.x - R.x = B.x := by
+    have := congrArg Prod.fst hBadd
+    simpa [Ecc.AddIncomplete.outputValue] using this
+  have hBy : slope₂ * (A.x - (slope₂ * slope₂ - A.x - R.x)) - A.y = B.y := by
+    have := congrArg Prod.snd hBadd
+    simpa [Ecc.AddIncomplete.outputValue] using this
+  -- the `Y_A` invariant pins `λ₂` to the second chord slope
+  have hl2 : lambda2 = slope₂ := by
+    apply mul_right_cancel₀ hRxA'
+    have hslope₂_mul : slope₂ * (A.x - R.x) = A.y - R.y := by
+      rw [hslope₂, mul_assoc,
+        show (R.x - A.x)⁻¹ * (A.x - R.x) = -1 from by
+          rw [show A.x - R.x = -(R.x - A.x) by ring, mul_neg,
+            inv_mul_cancel₀ (sub_ne_zero.mpr hRxA)]]
+      ring
+    rw [hslope₂_mul]
+    have hYA' : 2 * A.y = (lambda1 + lambda2) * (A.x - R.x) := by
+      rw [← hxR]
+      exact hYA
+    linear_combination -hYA' - hyR
+  -- the gate then pins the next accumulator to `B`
+  constructor
+  · rw [← hBx, ← hl2]
+    linear_combination -hSecant - hxR
+  · rw [← hBy, ← hl2, show lambda2 * lambda2 - A.x - R.x = xa' by
+      linear_combination hSecant + hxR]
+    linear_combination -hYCheck
 
 end HashPiece
 
