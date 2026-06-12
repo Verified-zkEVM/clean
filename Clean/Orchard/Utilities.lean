@@ -41,37 +41,76 @@ deriving ProvableStruct
 
 namespace CondSwap
 
-def outputValue (input : CondSwapInputs Ecc.Fp) :
-    CondSwapOutput Ecc.Fp where
+namespace Gate
+
+structure Input (F : Type) where
+  a : F
+  b : F
+  aSwapped : F
+  bSwapped : F
+  swap : F
+deriving ProvableStruct
+
+def Spec (input : Input Fp) : Prop :=
+  input.aSwapped = ternary input.swap input.b input.a ∧
+    input.bSwapped = ternary input.swap input.a input.b ∧
+    IsBool input.swap
+
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  assertZero (input.aSwapped - (input.swap * input.b + (1 - input.swap) * input.a))
+  assertZero (input.bSwapped - (input.swap * input.a + (1 - input.swap) * input.b))
+  assertZero (input.swap * (input.swap - 1))
+
+def circuit : FormalAssertion Fp Input where
+  name := "GATE a' = b ⋅ swap + a ⋅ (1-swap)"
+  main
+  Spec
+  soundness := by
+    circuit_proof_start [main, Spec, ternary]
+    rcases h_holds with ⟨hA, hB, hBool⟩
+    refine ⟨?_, ?_, ?_⟩
+    · exact sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hA)
+    · exact sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hB)
+    · exact IsBool.iff_mul_sub_one.mpr (by simpa [sub_eq_add_neg] using hBool)
+  completeness := by
+    circuit_proof_start [main, Spec, ternary]
+    rcases h_spec with ⟨hA, hB, hSwap⟩
+    refine ⟨?_, ?_, ?_⟩
+    · rw [hA]
+      ring
+    · rw [hB]
+      ring
+    · simpa [sub_eq_add_neg] using IsBool.iff_mul_sub_one.mp hSwap
+
+end Gate
+
+def outputValue (input : CondSwapInputs Fp) :
+    CondSwapOutput Fp where
   aSwapped := ternary input.swap input.b input.a
   bSwapped := ternary input.swap input.a input.b
 
-def main (input : Var CondSwapInputs Ecc.Fp) :
-    Circuit Ecc.Fp (Var CondSwapOutput Ecc.Fp) := do
+def main (input : Var CondSwapInputs Fp) :
+    Circuit Fp (Var CondSwapOutput Fp) := do
   let aSwapped ← witnessField fun env => ternary (env input.swap) (env input.b) (env input.a)
   let bSwapped ← witnessField fun env => ternary (env input.swap) (env input.a) (env input.b)
-  aSwapped === input.swap * input.b + (1 - input.swap) * input.a
-  bSwapped === input.swap * input.a + (1 - input.swap) * input.b
-  assertZero (input.swap * (input.swap - 1))
+  Gate.circuit { a := input.a, b := input.b, aSwapped, bSwapped, swap := input.swap }
   return { aSwapped, bSwapped }
 
-@[circuit_norm]
-def Assumptions (input : CondSwapInputs Ecc.Fp) : Prop :=
+def Assumptions (input : CondSwapInputs Fp) : Prop :=
   IsBool input.swap
 
-@[circuit_norm]
-def Spec (input : CondSwapInputs Ecc.Fp)
-    (output : CondSwapOutput Ecc.Fp) : Prop :=
+def Spec (input : CondSwapInputs Fp)
+    (output : CondSwapOutput Fp) : Prop :=
   output = if input.swap = 1 then
     { aSwapped := input.b, bSwapped := input.a }
   else
     { aSwapped := input.a, bSwapped := input.b }
 
 instance elaborated :
-    ElaboratedCircuit Ecc.Fp CondSwapInputs CondSwapOutput main := by
+    ElaboratedCircuit Fp CondSwapInputs CondSwapOutput main := by
   elaborate_circuit
 
-theorem outputValue_eq_of_bool {input : CondSwapInputs Ecc.Fp}
+theorem outputValue_eq_of_bool {input : CondSwapInputs Fp}
     (hbool : IsBool input.swap) :
     outputValue input = if input.swap = 1 then
       { aSwapped := input.b, bSwapped := input.a }
@@ -82,36 +121,135 @@ theorem outputValue_eq_of_bool {input : CondSwapInputs Ecc.Fp}
   · simp [outputValue, ternary, hone]
 
 theorem soundness :
-    Soundness Ecc.Fp main Assumptions Spec := by
+    Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, outputValue, ternary]
-  have hbool : IsBool input_swap :=
-    IsBool.iff_mul_sub_one.mpr (by simpa [sub_eq_add_neg] using h_holds.2.2)
+  rcases h_holds trivial with ⟨hA, hB, hbool⟩
+  simp only at hA hB hbool
   rcases hbool with hzero | hone
-  · rw [h_holds.1, h_holds.2.1]
-    simp [hzero]
-  · rw [h_holds.1, h_holds.2.1]
-    simp [hone]
+  · constructor
+    · rw [hA, hB]
+      simp [hzero, ternary]
+    · exact Or.inr trivial
+  · constructor
+    · rw [hA, hB]
+      simp [hone, ternary]
+    · exact Or.inr trivial
 
 theorem completeness :
-    Completeness Ecc.Fp main Assumptions := by
+    Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, outputValue, ternary]
   constructor
-  · rw [h_env.1]
-    ring_nf
-  · constructor
-    · rw [h_env.2]
-      ring_nf
-    · simpa [sub_eq_add_neg] using IsBool.iff_mul_sub_one.mp h_assumptions
+  · trivial
+  · exact ⟨h_env.1, h_env.2, h_assumptions⟩
 
-def circuit : FormalCircuit Ecc.Fp CondSwapInputs CondSwapOutput where
-  -- TODO: factor the source `a' = b ⋅ swap + a ⋅ (1-swap)` custom gate into a
-  -- named `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
+def circuit : FormalCircuit Fp CondSwapInputs CondSwapOutput where
   main
   elaborated
   Assumptions
   Spec
   soundness
   completeness
+
+/-!
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/utilities/cond_swap.rs`
+- `CondSwapInstructions::swap`
+
+This is the CondSwap entry API actually used by Orchard's Merkle path calculation. The
+existing `a` cell is copied into the gate row, while `b` and the boolean `swap` flag are
+prover-side `Value`s witnessed inside this region.
+-/
+
+namespace Swap
+
+structure Input (F : Type) where
+  a : F
+  b : UnconstrainedDep field F
+  swap : Unconstrained Bool F
+deriving CircuitType
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ a := default, b := fun _ => default, swap := fun _ => default }⟩
+
+def outputValue (input : Input.ProverValue Fp) :
+    CondSwapOutput Fp where
+  aSwapped := if input.swap then input.b else input.a
+  bSwapped := if input.swap then input.a else input.b
+
+def main (input : Input.Var Fp) :
+    Circuit Fp (Var CondSwapOutput Fp) := do
+  let a <== input.a
+  let b ← witness input.b
+  let swap ← witness fun env => if input.swap env then 1 else 0
+  let aSwapped ← witness fun env => if input.swap env then env b else env a
+  let bSwapped ← witness fun env => if input.swap env then env a else env b
+  Gate.circuit { a, b, aSwapped, bSwapped, swap }
+  return { aSwapped, bSwapped }
+
+def Spec (input : Input.Value Fp) (output : CondSwapOutput Fp)
+    (_ : ProverData Fp) : Prop :=
+  ∃ (b swap : Fp), IsBool swap ∧
+    output = if swap = 1 then
+      { aSwapped := b, bSwapped := input.a }
+    else
+      { aSwapped := input.a, bSwapped := b }
+
+def ProverSpec (input : Input.ProverValue Fp)
+    (output : CondSwapOutput Fp) (_ : ProverHint Fp) : Prop :=
+  output = outputValue input
+
+instance elaborated : ElaboratedCircuit Fp Input CondSwapOutput main := by
+  elaborate_circuit
+
+theorem soundness :
+    GeneralFormalCircuit.WithHint.Soundness (Input:=Input) (Output:=CondSwapOutput)
+      Fp main (fun _ _ => True) Spec := by
+  circuit_proof_start [main, Spec, ternary]
+  rcases h_holds with ⟨hCopy, hGate⟩
+  rcases hGate trivial with ⟨hA, hB, hSwap⟩
+  constructor
+  · refine ⟨env.get (i₀ + 1), env.get (i₀ + 1 + 1), hSwap, ?_⟩
+    simp only at hA hB hSwap
+    rcases hSwap with hzero | hone
+    · rw [hA, hB, hCopy]
+      simp [hzero, ternary]
+    · rw [hA, hB, hCopy]
+      simp [hone, ternary]
+  · exact Or.inr trivial
+
+theorem completeness :
+    GeneralFormalCircuit.WithHint.Completeness (Input:=Input) (Output:=CondSwapOutput)
+      Fp main (fun _ _ _ => True) ProverSpec := by
+  circuit_proof_start [main, ProverSpec, outputValue, Gate.circuit, Gate.Spec, ternary]
+  obtain ⟨hCopy, hB, hSwap, hASwapped, hBSwapped⟩ := h_env
+  constructor
+  · refine ⟨hCopy, ?_, ?_, ?_⟩
+    · by_cases h : input_swap
+      · rw [hASwapped, hSwap, hB, hCopy]
+        simp [h]
+      · rw [hASwapped, hSwap, hB, hCopy]
+        simp [h]
+    · by_cases h : input_swap
+      · rw [hBSwapped, hSwap, hB, hCopy]
+        simp [h]
+      · rw [hBSwapped, hSwap, hB, hCopy]
+        simp [h]
+    · by_cases h : input_swap
+      · rw [hSwap]
+        exact Or.inr (by simp [h])
+      · rw [hSwap]
+        exact Or.inl (by simp [h])
+  · rw [hASwapped, hBSwapped, hB, hCopy]
+
+def circuit : GeneralFormalCircuit.WithHint Fp Input CondSwapOutput where
+  main
+  elaborated
+  Spec
+  ProverSpec
+  soundness
+  completeness
+
+end Swap
 
 end CondSwap
 
@@ -142,25 +280,25 @@ def yInput {K : Type} (input : Inputs K) : CondSwapInputs K where
   swap := input.choice
 
 @[circuit_norm]
-def Assumptions (input : Inputs Ecc.Fp) : Prop :=
+def Assumptions (input : Inputs Fp) : Prop :=
   IsBool input.choice
 
 @[circuit_norm]
-def Spec (input : Inputs Ecc.Fp) (output : Ecc.Point Ecc.Fp) :
+def Spec (input : Inputs Fp) (output : Ecc.Point Fp) :
     Prop :=
   output = if input.choice = 1 then input.right else input.left
 
-def main (input : Var Inputs Ecc.Fp) :
-    Circuit Ecc.Fp (Var Ecc.Point Ecc.Fp) := do
+def main (input : Var Inputs Fp) :
+    Circuit Fp (Var Ecc.Point Fp) := do
   let xOut ← CondSwap.circuit (xInput input)
   let yOut ← CondSwap.circuit (yInput input)
   return { x := xOut.aSwapped, y := yOut.aSwapped }
 
-instance elaborated : ElaboratedCircuit Ecc.Fp Inputs Ecc.Point main := by
+instance elaborated : ElaboratedCircuit Fp Inputs Ecc.Point main := by
   elaborate_circuit
 
 theorem soundness :
-    Soundness Ecc.Fp main Assumptions Spec := by
+    Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, xInput, yInput,
     CondSwap.circuit, CondSwap.Spec]
   rcases h_holds with ⟨hX, hY⟩
@@ -189,14 +327,14 @@ theorem soundness :
     · exact hYMux.1
 
 theorem completeness :
-    Completeness Ecc.Fp main Assumptions := by
+    Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, xInput, yInput,
-    CondSwap.circuit, CondSwap.Spec]
+    CondSwap.circuit, CondSwap.Spec, CondSwap.Assumptions]
   rcases h_assumptions with hChoiceZero | hChoiceOne
   · exact Or.inl hChoiceZero
   · exact Or.inr hChoiceOne
 
-def circuit : FormalCircuit Ecc.Fp Inputs Ecc.Point where
+def circuit : FormalCircuit Fp Inputs Ecc.Point where
   main
   elaborated
   Assumptions
@@ -221,27 +359,27 @@ abbrev Inputs := PointMux.Inputs
 
 open CompElliptic.Curves.Pasta in
 @[circuit_norm]
-def Assumptions (input : Inputs Ecc.Fp) : Prop :=
+def Assumptions (input : Inputs Fp) : Prop :=
   PointMux.Assumptions input ∧ Pallas.OnCurve input.left.coords ∧
     Pallas.OnCurve input.right.coords
 
 open CompElliptic.Curves.Pasta in
 @[circuit_norm]
-def Spec (input : Inputs Ecc.Fp) (output : Ecc.Point Ecc.Fp) :
+def Spec (input : Inputs Fp) (output : Ecc.Point Fp) :
     Prop :=
   PointMux.Spec input output ∧ Pallas.OnCurve output.coords
 
-def main (input : Var Inputs Ecc.Fp) :
-    Circuit Ecc.Fp (Var Ecc.Point Ecc.Fp) := do
+def main (input : Var Inputs Fp) :
+    Circuit Fp (Var Ecc.Point Fp) := do
   let output ← PointMux.circuit input
   return output
 
-instance elaborated : ElaboratedCircuit Ecc.Fp Inputs Ecc.Point main := by
+instance elaborated : ElaboratedCircuit Fp Inputs Ecc.Point main := by
   elaborate_circuit
 
 open CompElliptic.Curves.Pasta in
 theorem onCurve_of_spec_and_assumptions
-    {input : Inputs Ecc.Fp} {output : Ecc.Point Ecc.Fp}
+    {input : Inputs Fp} {output : Ecc.Point Fp}
     (hAssumptions : Assumptions input)
     (hSpec : PointMux.Spec input output) :
     Pallas.OnCurve output.coords := by
@@ -255,7 +393,7 @@ theorem onCurve_of_spec_and_assumptions
     exact hLeft
 
 theorem soundness :
-    Soundness Ecc.Fp main Assumptions Spec := by
+    Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
     onCurve_of_spec_and_assumptions]
   rcases h_assumptions with ⟨hMuxAssumptions, hLeft, hRight⟩
@@ -271,11 +409,11 @@ theorem soundness :
       exact hLeft
 
 theorem completeness :
-    Completeness Ecc.Fp main Assumptions := by
+    Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec]
   exact h_assumptions.1
 
-def circuit : FormalCircuit Ecc.Fp Inputs Ecc.Point where
+def circuit : FormalCircuit Fp Inputs Ecc.Point where
   main
   elaborated
   Assumptions
@@ -296,20 +434,20 @@ copy-constrained field addition result.
 
 namespace AddChip
 
-def main (input : Var fieldPair Ecc.Fp) :
-    Circuit Ecc.Fp (Var field Ecc.Fp) := do
+def main (input : Var fieldPair Fp) :
+    Circuit Fp (Var field Fp) := do
   let (a, b) := input
   let c ← witnessField fun env => env a + env b
   assertZero (a + b - c)
   return c
 
-def Spec (input : fieldPair Ecc.Fp) (output : Ecc.Fp) : Prop :=
+def Spec (input : fieldPair Fp) (output : Fp) : Prop :=
   output = input.1 + input.2
 
-instance elaborated : ElaboratedCircuit Ecc.Fp fieldPair field main := by
+instance elaborated : ElaboratedCircuit Fp fieldPair field main := by
   elaborate_circuit
 
-theorem soundness : Soundness Ecc.Fp main (fun _ => True) Spec := by
+theorem soundness : Soundness Fp main (fun _ => True) Spec := by
   circuit_proof_start [main, Spec]
   rcases input with ⟨a, b⟩
   simp only [Prod.mk.injEq] at h_input
@@ -317,17 +455,16 @@ theorem soundness : Soundness Ecc.Fp main (fun _ => True) Spec := by
   rw [← ha, ← hb]
   exact (eq_of_add_neg_eq_zero h_holds).symm
 
-theorem completeness : Completeness Ecc.Fp main (fun _ => True) := by
+theorem completeness : Completeness Fp main (fun _ => True) := by
   circuit_proof_start [main, Spec]
   rw [h_env]
   ring
 
-def circuit : FormalCircuit Ecc.Fp fieldPair field where
+def circuit : FormalCircuit Fp fieldPair field where
   -- TODO: factor the source `Field element addition: c = a + b` custom gate into a
   -- named `FormalAssertion`, then compose it here instead of naming this entry circuit as a gate.
   main
   elaborated
-  Assumptions := fun _ => True
   Spec
   soundness
   completeness
@@ -591,17 +728,17 @@ def K : ℕ := 10
 
 /-- The 10-bit range table `table_idx`. In Orchard it is preloaded by the Sinsemilla
 chip; here it is the static table of the field elements `0, …, 2^K - 1`. -/
-def tableIdx : Table Ecc.Fp field := .fromStatic {
+def tableIdx : Table Fp field := .fromStatic {
   name := "table_idx"
   length := 2 ^ K
-  row i := (i.val : Ecc.Fp)
-  index := fun (x : Ecc.Fp) => x.val
-  Spec := fun (x : Ecc.Fp) => x.val < 2 ^ K
+  row i := (i.val : Fp)
+  index := fun (x : Fp) => x.val
+  Spec := fun (x : Fp) => x.val < 2 ^ K
   contains_iff := by
-    intro (x : Ecc.Fp)
+    intro (x : Fp)
     constructor
     · rintro ⟨i, rfl⟩
-      show ((i.val : Ecc.Fp)).val < 2 ^ K
+      show ((i.val : Fp)).val < 2 ^ K
       rw [ZMod.val_natCast_of_lt (lt_trans i.is_lt (by norm_num [K]))]
       exact i.is_lt
     · intro h
@@ -610,44 +747,44 @@ def tableIdx : Table Ecc.Fp field := .fromStatic {
 
 namespace CopyCheck
 
-def main (numWords : ℕ) (element : Expression Ecc.Fp) :
-    Circuit Ecc.Fp (Var (fields (numWords + 1)) Ecc.Fp) := do
+def main (numWords : ℕ) (element : Expression Fp) :
+    Circuit Fp (Var (fields (numWords + 1)) Fp) := do
   -- copy `element` into the running-sum column as `z_0`
   let z₀ <== element
   -- z_{i+1} = (z_i - a_i) / 2^K; for the honest prover, z_i = element >> (K * i)
   let zRest ← witnessVector numWords fun env =>
     .ofFn fun (i : Fin numWords) =>
-      (((env element).val / 2 ^ (K * (i.val + 1)) : ℕ) : Ecc.Fp)
+      (((env element).val / 2 ^ (K * (i.val + 1)) : ℕ) : Fp)
   let zs := Vector.cast (Nat.add_comm 1 numWords) (#v[z₀] ++ zRest)
-  let words : Vector (Expression Ecc.Fp) numWords := .ofFn fun i =>
+  let words : Vector (Expression Fp) numWords := .ofFn fun i =>
     zs[i.val]'(Nat.lt_succ_of_lt i.isLt) -
-      (2 ^ K : Ecc.Fp) * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt)
+      (2 ^ K : Fp) * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt)
   Circuit.forEach words (lookup tableIdx)
   return zs
 
 /-- The output cells form a `K`-bit running-sum decomposition of `element`:
 `z_0 = element` and each step satisfies `z_i = 2^K * z_{i+1} + a_i` for a `K`-bit
 word `a_i`. -/
-def Spec (numWords : ℕ) (element : Ecc.Fp) (zs : fields (numWords + 1) Ecc.Fp)
-    (_ : ProverData Ecc.Fp) : Prop :=
+def Spec (numWords : ℕ) (element : Fp) (zs : fields (numWords + 1) Fp)
+    (_ : ProverData Fp) : Prop :=
   zs[0]'(Nat.succ_pos numWords) = element ∧
     ∀ i : Fin numWords, ∃ word : ℕ, word < 2 ^ K ∧
       zs[i.val]'(Nat.lt_succ_of_lt i.isLt) =
-        2 ^ K * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt) + (word : Ecc.Fp)
+        2 ^ K * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt) + (word : Fp)
 
 /-- The honest prover assigns the canonical decomposition: `z_i = element >> (K * i)`. -/
-def ProverSpec (numWords : ℕ) (element : Ecc.Fp) (zs : fields (numWords + 1) Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
+def ProverSpec (numWords : ℕ) (element : Fp) (zs : fields (numWords + 1) Fp)
+    (_ : ProverHint Fp) : Prop :=
   ∀ i : Fin (numWords + 1),
-    zs[i.val] = ((element.val / 2 ^ (K * i.val) : ℕ) : Ecc.Fp)
+    zs[i.val] = ((element.val / 2 ^ (K * i.val) : ℕ) : Fp)
 
 instance elaborated (numWords : ℕ) :
-    ElaboratedCircuit Ecc.Fp field (fields (numWords + 1)) (main numWords) := by
+    ElaboratedCircuit Fp field (fields (numWords + 1)) (main numWords) := by
   elaborate_circuit
 
 theorem soundness (numWords : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness (Input:=field)
-      (Output:=fields (numWords + 1)) Ecc.Fp (main numWords)
+      (Output:=fields (numWords + 1)) Fp (main numWords)
       (fun _ _ => True) (Spec numWords) := by
   circuit_proof_start [main, Spec, tableIdx]
   obtain ⟨h_copy, h_lookup⟩ := h_holds
@@ -664,12 +801,12 @@ theorem soundness (numWords : ℕ) :
 /-- The honest word `z_i - 2^K * z_{i+1}` with `z_i = a, z_{i+1} = a / 2^K` is the low
 `K`-bit chunk of `a`, hence in range. -/
 private theorem word_val_lt (a : ℕ) :
-    ZMod.val ((a : Ecc.Fp) - 2 ^ K * ((a / 2 ^ K : ℕ) : Ecc.Fp)) < 2 ^ K := by
+    ZMod.val ((a : Fp) - 2 ^ K * ((a / 2 ^ K : ℕ) : Fp)) < 2 ^ K := by
   have h2K : (2 ^ K : ℕ) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
     norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
-  have hsub : (a : Ecc.Fp) - 2 ^ K * ((a / 2 ^ K : ℕ) : Ecc.Fp)
-      = ((a % 2 ^ K : ℕ) : Ecc.Fp) := by
-    have h := congrArg (Nat.cast (R := Ecc.Fp)) (Nat.mod_add_div a (2 ^ K))
+  have hsub : (a : Fp) - 2 ^ K * ((a / 2 ^ K : ℕ) : Fp)
+      = ((a % 2 ^ K : ℕ) : Fp) := by
+    have h := congrArg (Nat.cast (R := Fp)) (Nat.mod_add_div a (2 ^ K))
     push_cast at h
     linear_combination -h
   rw [hsub, ZMod.val_natCast_of_lt (lt_trans (Nat.mod_lt _ (by norm_num [K])) h2K)]
@@ -677,13 +814,13 @@ private theorem word_val_lt (a : ℕ) :
 
 theorem completeness (numWords : ℕ) :
     GeneralFormalCircuit.WithHint.Completeness (Input:=field)
-      (Output:=fields (numWords + 1)) Ecc.Fp (main numWords)
+      (Output:=fields (numWords + 1)) Fp (main numWords)
       (fun _ _ _ => True) (ProverSpec numWords) := by
   circuit_proof_start [main, ProverSpec, tableIdx]
   obtain ⟨h_z0, h_zs⟩ := h_env
-  set x : Ecc.Fp := input with hx
+  set x : Fp := input with hx
   have h_zval : ∀ (j : ℕ) (hj : j < numWords),
-      env.get (i₀ + 1 + j) = ((x.val / 2 ^ (K * (j + 1)) : ℕ) : Ecc.Fp) := by
+      env.get (i₀ + 1 + j) = ((x.val / 2 ^ (K * (j + 1)) : ℕ) : Fp) := by
     intro j hj
     have h := h_zs ⟨j, hj⟩
     simpa using h
@@ -723,10 +860,9 @@ theorem completeness (numWords : ℕ) :
       exact h1
 
 def circuit (numWords : ℕ) :
-    GeneralFormalCircuit.WithHint Ecc.Fp field (fields (numWords + 1)) where
+    GeneralFormalCircuit.WithHint Fp field (fields (numWords + 1)) where
   main := main numWords
   Spec := Spec numWords
-  ProverAssumptions _ _ _ := True
   ProverSpec := ProverSpec numWords
   soundness := soundness numWords
   completeness := completeness numWords

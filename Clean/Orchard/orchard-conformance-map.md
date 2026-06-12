@@ -46,8 +46,12 @@ Source:
 
 Current Clean coverage:
 
+- `Clean.Orchard.Utilities.CondSwap.Gate.circuit`:
+  `GATE a' = b ⋅ swap + a ⋅ (1-swap)`
+- `Clean.Orchard.Utilities.CondSwap.Swap.circuit`: `CondSwapInstructions::swap`,
+  the CondSwap entry API used by Orchard Merkle path calculation
 - `Clean.Orchard.Utilities.CondSwap.circuit`: entry-level conditional swap/mux over
-  scalar field values
+  scalar field values, implemented by composing the factored CondSwap gate
 - `Clean.Orchard.Utilities.PointMux.circuit`: `mux_on_points`
 - `Clean.Orchard.Utilities.NonIdentityPointMux.circuit`: `mux_on_non_identity_points`
 - `Clean.Orchard.Utilities.AddChip.circuit`: field addition entry circuit
@@ -198,11 +202,10 @@ The plan says that when a Halo2 API has both a low-level gate and a synthesis-le
 point, the gate should live in a `.Gate` namespace and the entry point should use the
 source API name. Current code does not consistently follow that rule.
 
-Current concrete cases:
+Current concrete case:
 
-- `Utilities.CondSwap.circuit` and `Utilities.AddChip.circuit` are entry-level circuits
-  but do not yet compose separately factored named gate assertions:
-  - `GATE a' = b * swap + a * (1-swap)`
+- `Utilities.AddChip.circuit` is an entry-level circuit but does not yet compose a
+  separately factored named gate assertion:
   - `GATE Field element addition: c = a + b`
 
 ### Concrete Circuit Field
