@@ -444,11 +444,12 @@ private theorem zsAll_get (i₀ n : ℕ) (v : Vector (Expression Fp) (1 + (n + 1
   · intro b hb
     simp [Vector.getElem_append, Vector.getElem_mapRange]
 
-/-- The `x_a` cell entering row `j` (the copied accumulator for row 0, the previous
-iteration's `x_a'` cell afterwards). -/
+/-- The `x_a` cell entering row `j`: the copied accumulator for row 0, the first
+witnessed `x_a'` for row 1, the loop iterations' `x_a'` cells afterwards. -/
 private def rowXA (env : Environment Fp) (i₀ n : ℕ) : ℕ → Fp
   | 0 => env.get (i₀ + 1 + 1)
-  | j + 1 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 3 + j * 5 + 1 + 1 + 1 + 1)
+  | 1 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 1 + 1)
+  | j + 2 => env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + 3 + j * 5 + 1 + 1 + 1 + 1)
 
 /-- The `x_p` cell of row `j`. -/
 private def rowXP (env : Environment Fp) (i₀ n : ℕ) : ℕ → Fp
@@ -520,16 +521,43 @@ theorem soundness (n : ℕ) :
       have h := h_loop ⟨j, hj⟩
       simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Circuit.FoldlM.foldlAcc,
         Vector.getElem_finRange, Fin.val_mk, circuit_norm] at h
-      rcases j with _ | j'
+      rcases j with _ | _ | j''
       · simp only [Fin.foldl_zero] at h
         rw [hzsS 0 (by omega), hzs0,
           show Expression.eval env (var { index := i₀ }) = input_z from h_z0] at h
         try simp only [if_pos rfl]
-        sorry
-      · try simp only [Fin.foldl_const, Fin.val_last] at h
-        rw [hzsS (j' + 1) (by omega), hzsS j' (by omega)] at h
-        try simp only [Nat.succ_ne_zero, if_false, Nat.add_sub_cancel]
-        sorry
+        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+          Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
+        simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
+          rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
+        norm_num at h ⊢
+        refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
+        · linear_combination h.2.2.2.1
+        · linear_combination h.2.2.2.2.1
+        · linear_combination h.2.2.2.2.2
+      · simp only [Fin.foldl_succ, Fin.foldl_zero, Fin.val_succ, Fin.val_zero] at h
+        rw [hzsS 1 (by omega), hzsS 0 (by omega)] at h
+        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+          Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
+        simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
+          rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
+        norm_num at h ⊢
+        refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
+        · linear_combination h.2.2.2.1
+        · linear_combination h.2.2.2.2.1
+        · linear_combination h.2.2.2.2.2
+      · rw [Fin.foldl_succ_last, Fin.foldl_succ_last] at h
+        simp only [Fin.val_last, Fin.coe_castSucc, Fin.val_succ, Fin.val_zero] at h
+        rw [hzsS (j'' + 2) (by omega), hzsS (j'' + 1) (by omega)] at h
+        simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+          Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
+        simp only [yADouble, Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR,
+          rowD, rowL1, rowL2, rowXA, rowXP, rowYP]
+        norm_num at h ⊢
+        refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
+        · linear_combination h.2.2.2.1
+        · linear_combination h.2.2.2.2.1
+        · linear_combination h.2.2.2.2.2
   · rcases Nat.eq_zero_or_pos n with hn | hn
     · subst hn
       obtain ⟨h_lb, h_lrest⟩ := h_last
