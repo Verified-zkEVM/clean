@@ -459,6 +459,35 @@ private theorem zsAll_get_at (env : Environment Fp) (i₀ n : ℕ)
     norm_num
     rfl
 
+/-- The `x_a` cell entering row `r`: the copied accumulator for row 0, the previous
+row's witnessed `x_a'` afterwards. -/
+private def rowXA (env : Environment Fp) (i₀ n : ℕ) (r : ℕ) : Fp :=
+  if r = 0 then env.get (i₀ + 1 + 1)
+  else env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + n + n + (n + 1) + (n + 1) + (r - 1))
+
+/-- The `x_p` cell of row `r`: the anchored copy for row 0, witnessed afterwards. -/
+private def rowXP (env : Environment Fp) (i₀ n : ℕ) (r : ℕ) : Fp :=
+  if r = 0 then env.get (i₀ + 1 + 1 + 1 + (n + 1))
+  else env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + (r - 1))
+
+/-- The `y_p` cell of row `r`. -/
+private def rowYP (env : Environment Fp) (i₀ n : ℕ) (r : ℕ) : Fp :=
+  if r = 0 then env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1)
+  else env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + n + (r - 1))
+
+/-- The `λ₁` cell of row `r`. -/
+private def rowL1 (env : Environment Fp) (i₀ n : ℕ) (r : ℕ) : Fp :=
+  env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + n + n + r)
+
+/-- The `λ₂` cell of row `r`. -/
+private def rowL2 (env : Environment Fp) (i₀ n : ℕ) (r : ℕ) : Fp :=
+  env.get (i₀ + 1 + 1 + 1 + (n + 1) + 1 + 1 + n + n + (n + 1) + r)
+
+/-- The double-and-add row struct of row `r`. -/
+private def rowD (env : Environment Fp) (i₀ n r : ℕ) : Sinsemilla.DoubleAndAddRow Fp :=
+  { xA := rowXA env i₀ n r, xP := rowXP env i₀ n r,
+    lambda1 := rowL1 env i₀ n r, lambda2 := rowL2 env i₀ n r }
+
 /--
 The chain induction of variable-base double-and-add over cleaned row facts:
 `XA, XP, YP, L1, L2` are the per-row cell values, `YAD r` the derived `Y_A` expression
@@ -555,7 +584,87 @@ theorem soundness (n : ℕ) :
   circuit_proof_start [main, Spec, Init.circuit, Init.Spec, MainLoop.circuit, MainLoop.Spec,
     Loop.circuit, Loop.Spec]
   obtain ⟨h_z0, h_yA0, h_xA0, h_xP0, h_yP0, h_init, h_loop, h_last⟩ := h_holds
-  sorry
+  obtain ⟨hzs0, hzsS⟩ := zsAll_get i₀ n _ rfl
+  have hchain_of_bool : ∀ zP zN : Fp, IsBool (zN - zP * 2) →
+      zN = 2 * zP + (if decide (zN = 2 * zP + 1) = true then 1 else 0) := by
+    intro zP zN hb
+    rcases hb with h | h
+    · have hz : zN = 2 * zP := by linear_combination h
+      have hcond : ¬(zN = 2 * zP + 1) := by
+        rw [hz]
+        intro hc
+        exact one_ne_zero (α := Fp) (by linear_combination -hc)
+      simp [hcond, hz]
+    · have hz : zN = 2 * zP + 1 := by linear_combination h
+      simp [hz]
+  have hrow : ∀ (j : ℕ) (hj : j < n),
+      rowXP env i₀ n j = rowXP env i₀ n (j + 1) ∧
+      rowYP env i₀ n j = rowYP env i₀ n (j + 1) ∧
+      IsBool (env.get (i₀ + 1 + 1 + 1 + j) -
+        (if j = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (j - 1))) * 2) ∧
+      2 * rowL1 env i₀ n j * (rowXA env i₀ n j - rowXP env i₀ n j) +
+        2 * (((env.get (i₀ + 1 + 1 + 1 + j) -
+          (if j = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (j - 1))) * 2) * 2 - 1) *
+            rowYP env i₀ n j)
+        = yADouble (rowD env i₀ n j) ∧
+      rowL2 env i₀ n j * rowL2 env i₀ n j
+        = rowXA env i₀ n (j + 1) +
+          Sinsemilla.DoubleAndAdd.xR (rowD env i₀ n j) +
+          rowXA env i₀ n j ∧
+      2 * rowL2 env i₀ n j * (rowXA env i₀ n j - rowXA env i₀ n (j + 1))
+        = yADouble (rowD env i₀ n j) + yADouble (rowD env i₀ n (j + 1)) := by
+    intro j hj
+    have h := h_loop ⟨j, hj⟩
+    simp only [Vector.get, Vector.getElem_ofFn, Fin.val_mk] at h
+    rcases j with _ | j'
+    · norm_num [Vector.getElem_append, Vector.getElem_mapRange] at h
+      rw [show Expression.eval env (var { index := i₀ }) = input_z from h_z0] at h
+      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
+      simp only [rowXA, rowXP, rowYP, rowL1, rowL2, rowD, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      norm_num at h ⊢
+      refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
+      · linear_combination h.2.2.2.1
+      · linear_combination h.2.2.2.2.1
+      · linear_combination h.2.2.2.2.2
+    · norm_num [Vector.getElem_append, Vector.getElem_mapRange] at h
+      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR] at h
+      simp only [rowXA, rowXP, rowYP, rowL1, rowL2, rowD, yADouble,
+        Sinsemilla.DoubleAndAdd.yA, Sinsemilla.DoubleAndAdd.xR]
+      norm_num at h ⊢
+      refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
+      · linear_combination h.2.2.2.1
+      · linear_combination h.2.2.2.2.1
+      · linear_combination h.2.2.2.2.2
+  refine ⟨fun b => decide (env.get (i₀ + 1 + 1 + 1 + b)
+    = (2 * if b = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (b - 1))) + 1),
+    ⟨?_, ?_⟩, ?_⟩
+  · rcases Nat.eq_zero_or_pos n with hn | hn
+    · subst hn
+      obtain ⟨h_lb, h_lrest⟩ := h_last
+      rw [hzsS 0 (by omega), hzs0,
+        show Expression.eval env (var { index := i₀ }) = input_z from h_z0] at h_lb
+      simpa using hchain_of_bool _ _ h_lb
+    · have h := (hrow 0 hn).2.2.1
+      simp only [if_pos rfl] at h
+      simpa using hchain_of_bool _ _ h
+  · intro b
+    obtain ⟨bv, hbvlt⟩ := b
+    simp only [Fin.val_mk]
+    rcases Nat.lt_or_ge (bv + 1) n with hb | hb
+    · have h := (hrow (bv + 1) hb).2.2.1
+      try simp only [Nat.succ_ne_zero, if_false, Nat.add_sub_cancel] at h
+      simpa using hchain_of_bool _ _ h
+    · have hbn : bv + 1 = n := by omega
+      subst hbn
+      obtain ⟨h_lb, h_lrest⟩ := h_last
+      rw [hzsS (bv + 1) (by omega), hzsS bv (by omega)] at h_lb
+      have h := hchain_of_bool _ _ h_lb
+      simpa using h
+  · intro Pt mm hPt hbase hacc h2m hbnd
+    sorry
 
 theorem completeness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main n) (ProverAssumptions n)
