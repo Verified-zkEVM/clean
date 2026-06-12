@@ -122,15 +122,44 @@ def blockVar {L : Nat} (message : Vector (Expression Ecc.Fp) L) (i : Nat) :
   { x0 := paddedVar message (2 * i), x1 := paddedVar message (2 * i + 1) }
 
 /-- Value-level state after absorbing and permuting one padded block. -/
-def absorbPermuteValue (state : Permute.State Ecc.Fp) (block : Sponge.Rate2 Ecc.Fp) :
-    Permute.State Ecc.Fp :=
-  Permute.permuteP128ConcreteValue (Sponge.AddInput.value { initialState := state, input := block })
+def absorbPermuteValue (input : Sponge.AddInputInput Ecc.Fp) : Permute.State Ecc.Fp :=
+  Permute.permuteP128ConcreteValue (Sponge.AddInput.value input)
+
+namespace AbsorbPermute
+
+/-- Source-shaped one-block sponge step: `add_input -> permute`. -/
+def main (input : Var Sponge.AddInputInput Ecc.Fp) : Circuit Ecc.Fp (Var Permute.State Ecc.Fp) := do
+  let absorbed ← Sponge.AddInput.circuit input
+  Permute.mainP128ConcreteCircuit absorbed
+
+def Spec (input : Sponge.AddInputInput Ecc.Fp) (output : Permute.State Ecc.Fp) : Prop :=
+  output = absorbPermuteValue input
+
+/-- Packaged one-block sponge step used by the `ConstantLength<L>` scheduler. -/
+def circuit : FormalCircuit Ecc.Fp Sponge.AddInputInput Permute.State where
+  name := "Hash::hash[ConstantLength]/absorb_permute_block"
+  main
+  Spec
+  soundness := by
+    circuit_proof_start [main, Spec, absorbPermuteValue, Sponge.AddInput.circuit,
+      Permute.mainP128ConcreteCircuit]
+    rcases h_holds with ⟨habsorb, hpermute⟩
+    rw [habsorb] at hpermute
+    constructor
+    · simpa using hpermute trivial
+    · simp [Permute.mainP128Circuit]
+  completeness := by
+    circuit_proof_start [main, Spec, absorbPermuteValue, Sponge.AddInput.circuit,
+      Permute.mainP128ConcreteCircuit]
+    trivial
+
+end AbsorbPermute
 
 /-- Value-level `Hash::hash` for `ConstantLength<L>`. -/
 def value {L : Nat} (message : Vector Ecc.Fp L) : Ecc.Fp :=
   let initial : Permute.State Ecc.Fp := { x0 := 0, x1 := 0, x2 := capacity L }
   let finalState := Fin.foldl (blockCount L)
-    (fun state i => absorbPermuteValue state (blockValue message i.val))
+    (fun state i => absorbPermuteValue { initialState := state, input := blockValue message i.val })
     initial
   (Sponge.GetOutput.value finalState).x0
 
@@ -139,13 +168,10 @@ def main {L : Nat} (message : Vector (Expression Ecc.Fp) L) :
     Circuit Ecc.Fp (Expression Ecc.Fp) := do
   let initial ← Init.circuit (capacity L) ()
   let finalState ← Circuit.foldlRange (blockCount L) initial
-    (fun state i => do
-      let absorbed ← Sponge.AddInput.circuit { initialState := state, input := blockVar message i.val }
-      Permute.mainP128ConcreteCircuit absorbed)
+    (fun state i => AbsorbPermute.circuit { initialState := state, input := blockVar message i.val })
     (by
       apply Circuit.ConstantLength.fromConstantLength'
-      simp [Sponge.AddInput.circuit, Permute.mainP128ConcreteCircuit,
-        Permute.mainP128Circuit, circuit_norm])
+      simp [AbsorbPermute.circuit, circuit_norm])
   let output ← Sponge.GetOutput.circuit finalState
   return output.x0
 

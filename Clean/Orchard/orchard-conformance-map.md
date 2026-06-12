@@ -139,10 +139,12 @@ Current Clean coverage:
   one-padded-block `Hash::hash` composition (`init -> add_input -> permute -> squeeze`).
 - `Clean.Orchard.Poseidon.Hash.HashPaddedBlock.concreteCircuit`: concrete one-block P128
   hash package using the ported round constants.
+- `Clean.Orchard.Poseidon.Hash.ConstantLength.AbsorbPermute.circuit`: packaged one-block
+  scheduler step (`add_input -> permute`) used by the generic constant-length hash loop.
 - `Clean.Orchard.Poseidon.Hash.ConstantLength`: source-shaped generic rate-2
   `ConstantLength<L>` padding scheduler definitions (`blockCount`, `capacity`, padded
   words/blocks, value function, and circuit body). The generic dependent `foldlRange`
-  proof package is the remaining Poseidon proof task.
+  proof package for the outer scheduler is the remaining Poseidon proof task.
 
 `FullRound` and `PartialRounds` already take fixed-column round constants and matrix
 entries as Lean parameters. The P128 permutation, concrete constants, and one-padded-block
