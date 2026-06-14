@@ -193,6 +193,38 @@ non-canonical (the circuit only constrains 255 bits, matching the source).
 def merkleChunks (l lv rv : ℕ) : List ℕ :=
   (List.range 52).map fun i => (l + 2 ^ 10 * lv + 2 ^ 265 * rv) / 2 ^ (K * i) % 2 ^ K
 
+/-! ### `K`-bit chunking -/
+
+/-- The `n` little-endian `K`-bit chunks of `val`. -/
+def chunksOf (val n : ℕ) : List ℕ :=
+  (List.range n).map fun i => val / 2 ^ (K * i) % 2 ^ K
+
+@[simp] theorem chunksOf_length (val n : ℕ) : (chunksOf val n).length = n := by
+  simp [chunksOf]
+
+/-- Split a chunk list at position `m`: the low `m` chunks of `val`, then the chunks of
+the part above bit `K*m`. -/
+theorem chunksOf_add (val m n : ℕ) :
+    chunksOf val (m + n) = chunksOf val m ++ chunksOf (val / 2 ^ (K * m)) n := by
+  unfold chunksOf
+  rw [List.range_add, List.map_append, List.map_map]
+  congr 1
+  apply List.map_congr_left
+  intro i _
+  simp only [Function.comp_apply]
+  rw [Nat.div_div_eq_div_mul, ← pow_add, ← Nat.mul_add, Nat.add_comm m i]
+
+/-- Chunks below position `n` are unaffected by reducing `val` mod `2 ^ (K * n)`. -/
+theorem chunksOf_mod (val n : ℕ) : chunksOf (val % 2 ^ (K * n)) n = chunksOf val n := by
+  unfold chunksOf
+  apply List.map_congr_left
+  intro i hi
+  simp only [List.mem_range] at hi
+  have hP : 2 ^ (K * n) = 2 ^ (K * i) * 2 ^ (K * (n - i)) := by
+    rw [← pow_add]; congr 1; rw [← Nat.mul_add, Nat.add_sub_cancel' (Nat.le_of_lt hi)]
+  rw [hP, Nat.mod_mul_right_div_self,
+    Nat.mod_mod_of_dvd _ (pow_dvd_pow 2 (Nat.le_mul_of_pos_right K (by omega)))]
+
 /-! ### The `NoteCommit` message -/
 
 /--
@@ -210,9 +242,11 @@ x-coordinate / base-field encodings; `gdY`, `pkdY` are the `ỹ` sign bits; `v` 
 note value. The encodings may be non-canonical — the hash circuit constrains 255-bit
 ranges; canonicity is enforced separately by the `NoteCommit input *` gates. The final
 4 zero bits are the `h_2` padding of message piece `h`. -/
-def noteCommitChunks (gdX gdY pkdX pkdY v rho psi : ℕ) : List ℕ :=
-  let msg := gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY
+def noteCommitMessage (gdX gdY pkdX pkdY v rho psi : ℕ) : ℕ :=
+  gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY
     + 2 ^ 512 * v + 2 ^ 576 * rho + 2 ^ 831 * psi
-  (List.range 109).map fun i => msg / 2 ^ (K * i) % 2 ^ K
+
+def noteCommitChunks (gdX gdY pkdX pkdY v rho psi : ℕ) : List ℕ :=
+  chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi) 109
 
 end Orchard.Specs.Sinsemilla
