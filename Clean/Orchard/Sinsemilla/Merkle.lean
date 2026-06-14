@@ -705,4 +705,243 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 end HashLayer
 
+def depth : ℕ := 32
+
+def MerkleStep (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+    (node node' : Ecc.Fp) : Prop :=
+  ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
+    ((lv : Ecc.Fp) = node ∨ (rv : Ecc.Fp) = node) ∧
+    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (merkleChunks l lv rv) = some B →
+      node' = B.x
+
+def MerkleRoot (G : Generators) (Q : SWPoint Pallas.curve) :
+    ℕ → Ecc.Fp → ℕ → Ecc.Fp → Prop
+  | _, node, 0, root => root = node
+  | l, node, k + 1, root =>
+    ∃ mid, MerkleStep G Q l node mid ∧ MerkleRoot G Q (l + 1) mid k root
+
+namespace Layer
+
+structure Input (F : Type) where
+  node : F
+  sibling : UnconstrainedDep field F
+  posBit : Unconstrained Bool F
+deriving CircuitType
+
+instance : Inhabited (Var Input Ecc.Fp) :=
+  ⟨{ node := default, sibling := fun _ => default, posBit := fun _ => default }⟩
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ) (hl : l < 2 ^ 10)
+    (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) := do
+  let sw ← Utilities.CondSwap.Swap.circuit
+    { a := input.node, b := input.sibling, swap := input.posBit }
+  HashLayer.circuit G Q hQ l hl { left := sw.aSwapped, right := sw.bSwapped }
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (l : ℕ) (hl : l < 2 ^ 10) :
+    ElaboratedCircuit Ecc.Fp Input field (main G Q hQ l hl) where
+  localLength _ := 274
+  localLength_eq := by
+    intro input offset
+    have hHL : ∀ x, (HashLayer.circuit G Q hQ l hl).localLength x = 269 := fun _ => rfl
+    simp only [main, circuit_norm, hHL, Utilities.CondSwap.Swap.circuit]
+  channelsLawful := by
+    dsimp only [ElaboratedCircuit.ChannelsLawful]
+    dsimp only [main]
+    have hHLg : (HashLayer.circuit G Q hQ l hl).channelsWithGuarantees = [] := rfl
+    have hHLr : (HashLayer.circuit G Q hQ l hl).channelsWithRequirements = [] := rfl
+    simp only [circuit_norm, seval, Utilities.CondSwap.Swap.circuit, hHLg, hHLr]
+    try trivial
+
+def Spec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+    (input : Value Input Ecc.Fp) (output : Value field Ecc.Fp)
+    (_ : ProverData Ecc.Fp) : Prop :=
+  MerkleStep G Q l input.node output
+
+theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (l : ℕ) (hl : l < 2 ^ 10) :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ l hl)
+      (fun _ _ => True) (Spec G Q l) := by
+  circuit_proof_start [main, Spec, Utilities.CondSwap.Swap.circuit,
+    Utilities.CondSwap.Swap.Spec, HashLayer.circuit, HashLayer.Spec, MerkleStep]
+  obtain ⟨⟨b, swap, hbool, hsw⟩, lv, rv, hlv, hrv, hlv_eq, hrv_eq, hfun⟩ := h_holds
+  refine ⟨lv, rv, hlv, hrv, ?_, hfun⟩
+  rcases hbool with h0 | h1
+  · rw [if_neg (by rw [h0]; exact zero_ne_one)] at hsw
+    simp only [Utilities.CondSwapOutput.mk.injEq] at hsw
+    exact Or.inl (by rw [hlv_eq]; exact hsw.1)
+  · rw [if_pos h1] at hsw
+    simp only [Utilities.CondSwapOutput.mk.injEq] at hsw
+    exact Or.inr (by rw [hrv_eq]; exact hsw.2)
+
+/-- The swapped pair (left, right) hashed by this layer, as `MerkleCRH` chunks: the
+position bit selects which of `node`/`sibling` is the left child. -/
+def proverChunks (l : ℕ) (input : ProverValue Input Ecc.Fp) : List ℕ :=
+  merkleChunks l
+    (ZMod.val (show Ecc.Fp from if input.posBit then input.sibling else input.node))
+    (ZMod.val (show Ecc.Fp from if input.posBit then input.node else input.sibling))
+
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+    (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q (proverChunks l input) = some B
+
+def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+    (input : ProverValue Input Ecc.Fp) (output : ProverValue field Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (proverChunks l input) = some B → output = B.x
+
+theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (l : ℕ) (hl : l < 2 ^ 10) :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ l hl)
+      (ProverAssumptions G Q l) (ProverSpec G Q l) := by
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, proverChunks,
+    Utilities.CondSwap.Swap.circuit, Utilities.CondSwap.Swap.ProverSpec,
+    Utilities.CondSwap.Swap.outputValue,
+    HashLayer.circuit, HashLayer.ProverAssumptions, HashLayer.ProverSpec]
+  -- the swap subcircuit pins its two output cells to the position-selected pair, so the
+  -- hash subcircuit's prover assumption is exactly our hypothesis.
+  obtain ⟨⟨-, hsw⟩, hHL⟩ := h_env
+  simp only [Utilities.CondSwap.CondSwapOutput.mk.injEq] at hsw
+  obtain ⟨h3, h4⟩ := hsw
+  rw [h3, h4] at hHL ⊢
+  exact ⟨h_assumptions, (hHL h_assumptions).2⟩
+
+def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (l : ℕ) (hl : l < 2 ^ 10) :
+    GeneralFormalCircuit.WithHint Ecc.Fp Input field where
+  main := main G Q hQ l hl
+  Spec := Spec G Q l
+  ProverAssumptions := ProverAssumptions G Q l
+  ProverSpec := ProverSpec G Q l
+  soundness := soundness G Q hQ l hl
+  completeness := completeness G Q hQ l hl
+
+end Layer
+
+/-- Forward induction: a chain of `MerkleStep`s assembles into a `MerkleRoot`. -/
+private theorem merkleRoot_of_steps (G : Generators) (Q : SWPoint Pallas.curve)
+    (f : ℕ → Ecc.Fp) (l : ℕ) :
+    ∀ k, (∀ i, i < k → MerkleStep G Q (l + i) (f i) (f (i + 1))) →
+      MerkleRoot G Q l (f 0) k (f k) := by
+  intro k
+  induction k generalizing l f with
+  | zero => intro _; rfl
+  | succ k ih =>
+    intro h
+    refine ⟨f 1, ?_, ?_⟩
+    · have h0 := h 0 (Nat.succ_pos k)
+      simpa using h0
+    · have hres := ih (l := l + 1) (f := fun i => f (i + 1)) (fun i hi => by
+        have hi' := h (i + 1) (by omega)
+        have : l + 1 + i = l + (i + 1) := by omega
+        rw [this]; exact hi')
+      simpa using hres
+
+namespace CalculateRoot
+
+structure Input (F : Type) where
+  leaf : F
+  path : UnconstrainedDep (fields 32) F
+  pos : Unconstrained (Vector Bool 32) F
+deriving CircuitType
+
+instance : Inhabited (Var Input Ecc.Fp) :=
+  ⟨{ leaf := default, path := fun _ => default, pos := fun _ => default }⟩
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) :=
+  Circuit.foldl (.finRange 32) input.leaf
+    (fun node i => Layer.circuit G Q hQ i.val (by omega)
+      { node := node,
+        sibling := fun env => (show Vector Ecc.Fp 32 from input.path env)[i],
+        posBit := fun env => (show Vector Bool 32 from input.pos env)[i] })
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
+    ElaboratedCircuit Ecc.Fp Input field (main G Q hQ) where
+  localLength _ := 32 * 274
+  localLength_eq := by
+    intro input offset
+    have hL : ∀ (l : ℕ) (hl : l < 2 ^ 10) x,
+        (Layer.circuit G Q hQ l hl).localLength x = 274 := fun _ _ _ => rfl
+    simp only [main, circuit_norm, hL]
+  subcircuitsConsistent := by
+    intro input offset
+    rw [Operations.SubcircuitsConsistent, ← Circuit.forAll_def]
+    show (Circuit.foldl (.finRange 32) input.leaf _ _ _).forAll offset _
+    rw [Circuit.foldl, Circuit.FoldlM.forAll_iff_finRange]
+    · intro i
+      simp only [circuit_norm, Layer.circuit]
+    · apply Circuit.ConstantLength.fromConstantLength'
+      intro acc i i' n
+      rfl
+  channelsLawful := by
+    dsimp only [ElaboratedCircuit.ChannelsLawful]
+    intro input_var offset
+    dsimp only [main]
+    have hLg : ∀ (l : ℕ) (hl : l < 2 ^ 10),
+        (Layer.circuit G Q hQ l hl).channelsWithGuarantees = [] := fun _ _ => rfl
+    have hLr : ∀ (l : ℕ) (hl : l < 2 ^ 10),
+        (Layer.circuit G Q hQ l hl).channelsWithRequirements = [] := fun _ _ => rfl
+    simp only [circuit_norm, seval, hLg, hLr]
+    try trivial
+
+def Spec (G : Generators) (Q : SWPoint Pallas.curve)
+    (input : Value Input Ecc.Fp) (output : Value field Ecc.Fp)
+    (_ : ProverData Ecc.Fp) : Prop :=
+  MerkleRoot G Q 0 input.leaf depth output
+
+theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ)
+      (fun _ _ => True) (Spec G Q) := by
+  circuit_proof_start [main, Spec]
+  obtain ⟨h0, hstep⟩ := h_holds
+  refine ⟨?_, Or.inl rfl, fun i hi => Or.inl rfl⟩
+  -- The per-layer output is a pure offset reference: independent of the layer index,
+  -- the input record, and the well-formedness proof. So we canonicalize the running
+  -- node to a single offset-indexed form. The bridging equalities below all hold by
+  -- `rfl` (the kernel reduces the output lazily, ignoring the discarded fields), which
+  -- is far cheaper than a `simp` traversal over the large fold expressions.
+  have hpf : (0 : ℕ) < 2 ^ 10 := by norm_num
+  have hlen : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Ecc.Fp),
+      (Layer.circuit G Q hQ l hl).localLength inp = 274 := fun _ _ _ => rfl
+  -- `bridge` is the key kernel-cheap rewrite. The per-layer output is a pure offset
+  -- reference, so as a *value* it is independent of layer index, input record and
+  -- well-formedness proof; `bridge` says so, with an offset-equality hypothesis folded
+  -- in. It is proved by `rfl` over *opaque* arguments — the kernel checks that body once
+  -- and every *application* is mere type instantiation, so no concrete fold output is
+  -- ever reduced (which is what blew the budget). Offset gaps are discharged purely at
+  -- the `ℕ` level via `hlen`, again touching no output subterm.
+  have bridge : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Ecc.Fp) (o₁ o₂ : ℕ),
+      o₁ = o₂ →
+      Expression.eval env ((Layer.circuit G Q hQ l hl).output inp o₁)
+        = Expression.eval env ((Layer.circuit G Q hQ 0 hpf).output default o₂) := by
+    intro l hl inp o₁ o₂ h; subst h; rfl
+  -- state function: f 0 = leaf, f (j+1) = canonical output value at offset i₀ + j*274
+  let f : ℕ → Ecc.Fp := fun n => match n with
+    | 0 => input_leaf
+    | j + 1 => Expression.eval env
+        ((Layer.circuit G Q hQ 0 hpf).output default (i₀ + j * 274))
+  have hsteps : ∀ i, i < 32 → MerkleStep G Q (0 + i) (f i) (f (i + 1)) := by
+    intro i hi
+    rw [Nat.zero_add]
+    obtain _ | j := i
+    · obtain ⟨lv, rv, hlv, hrv, hcase, hfun⟩ := h0 trivial
+      -- layer-0 input node is the leaf itself (`f 0`), so the node part is a definitional
+      -- `rfl`; only the output goes through `bridge`.
+      refine ⟨lv, rv, hlv, hrv,
+        hcase.imp (fun h => h.trans rfl) (fun h => h.trans rfl),
+        fun B hB => (bridge 0 hpf _ _ _ (by simp)).symm.trans (hfun B hB)⟩
+    · obtain ⟨lv, rv, hlv, hrv, hcase, hfun⟩ := hstep j (by omega) trivial
+      refine ⟨lv, rv, hlv, hrv,
+        hcase.imp (fun h => h.trans (bridge j (by omega) _ _ _ (by simp [hlen])))
+          (fun h => h.trans (bridge j (by omega) _ _ _ (by simp [hlen]))),
+        fun B hB => (bridge (j + 1) (by omega) _ _ _ (by simp [hlen])).symm.trans (hfun B hB)⟩
+  have hconcl : MerkleRoot G Q 0 (f 0) 32 (f 32) := merkleRoot_of_steps G Q f 0 32 hsteps
+  -- the foldl output `goalOut` is the layer-31 canonical output; bridge it to `f 32`
+  -- without reducing the output expression.
+  refine Eq.mp (congrArg (MerkleRoot G Q 0 (f 0) 32) ?_) hconcl
+  exact (bridge 31 (by omega) _ _ _ (by simp [hlen])).symm
+
+end CalculateRoot
+
 end Orchard.Sinsemilla.Merkle
