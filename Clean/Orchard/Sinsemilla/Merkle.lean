@@ -27,6 +27,7 @@ open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open Orchard.Specs.Sinsemilla (K Generators merkleChunks)
 
+
 /-! ### Digit toolkit
 
 `K`-bit little-endian digit sums: extraction of single digits, recombination, bounds.
@@ -228,25 +229,6 @@ private theorem natCast_inj_lt {a b : ℕ} (ha : a < 2 ^ 10) (hb : b < 2 ^ 10)
   have hv := congrArg ZMod.val h
   rwa [ZMod.val_natCast_of_lt (by omega), ZMod.val_natCast_of_lt (by omega)] at hv
 
-private theorem exists_lt_of_inRange {range : ℕ} (h0 : 0 < range) {x : Ecc.Fp}
-    (h : Utilities.RunningSum.InRange range x) :
-    ∃ k : ℕ, k < range ∧ x = (k : Ecc.Fp) := by
-  unfold Utilities.RunningSum.InRange Utilities.RunningSum.rangeCheckValues at h
-  rcases h with h | ⟨i, hi, hx⟩
-  · exact ⟨0, h0, by rw [h]; norm_num⟩
-  · simp at hi
-    obtain ⟨n, hn, rfl⟩ := hi
-    exact ⟨n, by omega, hx⟩
-
-private theorem inRange_of_lt {range k : ℕ} (hk : k < range) :
-    Utilities.RunningSum.InRange range ((k : ℕ) : Ecc.Fp) := by
-  unfold Utilities.RunningSum.InRange Utilities.RunningSum.rangeCheckValues
-  rcases Nat.eq_zero_or_pos k with rfl | hk0
-  · exact Or.inl (by norm_num)
-  · right
-    refine ⟨(k : Ecc.Fp), ?_, rfl⟩
-    simp
-    exact ⟨k, by omega, rfl⟩
 
 /-! ### Assembling the soundness-side encodings
 
@@ -534,8 +516,8 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
       + 2 ^ 15 * ((env input.right).val % 2 ^ 5) : ℕ) : Ecc.Fp)
   let c ← witnessField fun env => (((env input.right).val / 2 ^ 5 : ℕ) : Ecc.Fp)
   -- constrain b_1 and b_2 to 5 bits
-  Utilities.LookupRangeCheck.shortRangeCircuit 5 { word := b1 }
-  Utilities.LookupRangeCheck.shortRangeCircuit 5 { word := b2 }
+  Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b1 }
+  Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b2 }
   -- hash = SinsemillaHashToPoint(Q, a || b || c)
   let out ← Entry.circuit G Q hQ 24 [1, 24] #v[a, b, c]
   -- the decomposition gate ties the pieces to (l, left, right)
@@ -547,10 +529,27 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
     lWhole := Expression.const (l : Ecc.Fp) }
   return out.point.x
 
+-- Hand-written elaboration data (NOT `elaborate_circuit`): the generated all-in-one
+-- instance for this circuit produces a proof term whose kernel check exceeds the
+-- default heartbeat budget (the hash subcircuit is large). Splitting the fields, with
+-- an explicit `localLength`, keeps each kernel check small.
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) :
-    ElaboratedCircuit Ecc.Fp Input field (main G Q hQ l) := by
-  elaborate_circuit
+    ElaboratedCircuit Ecc.Fp Input field (main G Q hQ l) where
+  localLength _ := 269
+  localLength_eq := by
+    intro input offset
+    have hEL : ∀ x, (Entry.circuit G Q hQ 24 [1, 24]).localLength x = 262 := fun _ => rfl
+    simp only [main, circuit_norm, hEL, _root_.Orchard.Sinsemilla.Merkle.circuit,
+      Utilities.LookupRangeCheck.shortRangeCircuit]
+  channelsLawful := by
+    dsimp only [ElaboratedCircuit.ChannelsLawful]
+    dsimp only [main]
+    have hECg : (Entry.circuit G Q hQ 24 [1, 24]).channelsWithGuarantees = [] := rfl
+    have hECr : (Entry.circuit G Q hQ 24 [1, 24]).channelsWithRequirements = [] := rfl
+    simp only [circuit_norm, seval, _root_.Orchard.Sinsemilla.Merkle.circuit,
+      Utilities.LookupRangeCheck.shortRangeCircuit, hECg, hECr]
+    try trivial
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
     (input : Value Input Ecc.Fp) (output : Value field Ecc.Fp)
@@ -585,8 +584,10 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     Utilities.LookupRangeCheck.shortRangeSpec,
     Chain.PieceChunks, Chain.Z1Facts]
   obtain ⟨h_b1, h_b2, ⟨chunks, hPC, hZ1, hfun⟩, hg1, hg2, hg3, hg4⟩ := h_holds
-  obtain ⟨b1n, hb1n, hb1⟩ := exists_lt_of_inRange (by norm_num) h_b1
-  obtain ⟨b2n, hb2n, hb2⟩ := exists_lt_of_inRange (by norm_num) h_b2
+  obtain ⟨b1n, hb1n, hb1⟩ : ∃ b1n, b1n < 2 ^ 5 ∧ env.get (i₀ + 1) = ((b1n : ℕ) : Ecc.Fp) :=
+    ⟨_, h_b1, (ZMod.natCast_zmod_val _).symm⟩
+  obtain ⟨b2n, hb2n, hb2⟩ : ∃ b2n, b2n < 2 ^ 5 ∧ env.get (i₀ + 1 + 1) = ((b2n : ℕ) : Ecc.Fp) :=
+    ⟨_, h_b2, (ZMod.natCast_zmod_val _).symm⟩
   obtain ⟨msA, hmsA, haval, t1, rfl, msB, hmsB, hbval, t2, rfl,
     msC, hmsC, hcval, t3, rfl, rfl⟩ := hPC
   obtain ⟨hz1A, hz1B, -⟩ := hZ1
@@ -608,13 +609,13 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         (Entry.main G Q 24 [1, 24]
             #v[Expression.var ⟨i₀⟩, Expression.var ⟨i₀ + 1 + 1 + 1⟩,
               Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
-            (i₀ + 1 + 1 + 1 + 1 + 1)).1.z1s)[0]'(by simp)
+            (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1)).1.z1s)[0]'(by simp)
       = ((∑ j ∈ Finset.range 24, msA (j + 1) * 2 ^ (K * j) : ℕ) : Ecc.Fp) := hz1A
   have hz1B' : (Vector.map (Expression.eval env)
         (Entry.main G Q 24 [1, 24]
             #v[Expression.var ⟨i₀⟩, Expression.var ⟨i₀ + 1 + 1 + 1⟩,
               Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
-            (i₀ + 1 + 1 + 1 + 1 + 1)).1.z1s).tail[0]'(by simp)
+            (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1)).1.z1s).tail[0]'(by simp)
       = ((msB 1 : ℕ) : Ecc.Fp) := hz1B
   rw [Vector.getElem_tail hlenT] at hz1B'
   simp only [Vector.getElem_map] at hz1A' hz1B'
@@ -669,9 +670,14 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (ZMod.natCast_zmod_val input_left) (ZMod.natCast_zmod_val input_right)
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
   · rw [hb1_w]
-    exact inRange_of_lt (by omega)
+    have hd : ZMod.val input_left / 2 ^ 250 < 2 ^ 5 :=
+      Nat.div_lt_of_lt_mul (by rw [← pow_add]; exact hlv)
+    rw [ZMod.val_natCast_of_lt (lt_trans hd (by norm_num [PALLAS_BASE_CARD]))]
+    exact hd
   · rw [hb2_w]
-    exact inRange_of_lt (by omega)
+    have hd : ZMod.val input_right % 2 ^ 5 < 2 ^ 5 := Nat.mod_lt _ (by norm_num)
+    rw [ZMod.val_natCast_of_lt (lt_trans hd (by norm_num [PALLAS_BASE_CARD]))]
+    exact hd
   · exact ⟨hp.1, hex⟩
   · exact hg.1
   · exact hg.2.1
