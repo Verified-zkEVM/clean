@@ -240,8 +240,9 @@ source-conformant.
 
 ### Scalar Multiplication Entry APIs
 
-Full-width and signed short fixed-base mul are source-level entry circuits; the rest of
-the scalar-mul coverage is row-level gate assertions.
+Full-width and signed short fixed-base mul, and variable-base mul, are source-level entry
+circuits; the remaining scalar-mul entry gap is `FixedPointBaseField::mul` (only its row
+gate exists).
 
 - `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by
   `ecc/chip/mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`), is modeled by
@@ -320,10 +321,19 @@ Implemented building blocks:
   `SinsemillaHashToPoint(Q, merkleChunks l lv rv)` for 255-bit encodings `lv`, `rv`
   of the child nodes (non-canonical encodings allowed, as in the source).
 
+- `MerklePath::calculate_root`: `Sinsemilla.Merkle.CalculateRoot.circuit`
+  (`Clean/Orchard/Sinsemilla/Merkle.lean`, proven sound and complete): the
+  `MERKLE_DEPTH = 32` authentication-path fold, a `Circuit.foldl` over 32
+  `Sinsemilla.Merkle.Layer` sub-circuits (each composing `CondSwap.Swap.circuit` with
+  `Merkle.HashLayer.circuit`). `Spec` is the value-level 32-layer `MerkleCRH` fold from
+  the leaf (`MerkleRoot`); `ProverSpec` is the honest root (`honestNode`). The
+  kernel-heavy 32-fold proof relies on a `bridge` lemma so the non-opaque hash output
+  is never reduced (see `lean-perf-debugging` notes); the bundle passes `elaborated`
+  explicitly.
+
 Missing source-level APIs:
 
 - `SinsemillaInstructions::hash_to_point_with_private_init`
-- `MerklePath::calculate_root`
 
 ### Orchard Entry APIs
 

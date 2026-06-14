@@ -23,14 +23,19 @@ Source baseline:
   - Merkle path validity
     - `MerklePath::calculate_root`
       - Source: `halo2_gadgets/src/sinsemilla/merkle.rs`
-      - Clean: not implemented as a source-level Merkle path entry circuit. TODO in `Clean/Orchard/Sinsemilla.lean`.
+      - Clean: implemented in `Clean/Orchard/Sinsemilla/Merkle.lean` as
+        `Sinsemilla.Merkle.CalculateRoot.circuit` (proven sound and complete): a
+        `Circuit.foldl` over 32 `Merkle.Layer` sub-circuits (each composing
+        `CondSwap.Swap.circuit` with `Merkle.HashLayer.circuit`).
       - For each tree layer:
         - `CondSwapInstructions::swap`
           - Source: `halo2_gadgets/src/utilities/cond_swap.rs`, called via `halo2_gadgets/src/sinsemilla/merkle/chip.rs`
           - Clean: implemented in `Clean/Orchard/Utilities.lean` as `CondSwap.Swap.circuit`; gate factored as `CondSwap.Gate.circuit`.
         - `MerkleInstructions::hash_layer`
           - Source: `halo2_gadgets/src/sinsemilla/merkle/chip.rs`
-          - Clean: only the local decomposition gate is present in `Clean/Orchard/Sinsemilla.lean` as `Merkle.circuit`; no full hash-layer entry circuit.
+          - Clean: implemented in `Clean/Orchard/Sinsemilla/Merkle.lean` as
+            `Sinsemilla.Merkle.HashLayer.circuit` (proven sound and complete);
+            the local decomposition gate is `Sinsemilla.Merkle.circuit`.
           - `MessagePiece::from_subpieces`
             - Source: `halo2_gadgets/src/sinsemilla/message.rs`
             - Clean: partially modeled through Sinsemilla/message-piece gates; no complete source-level message-piece API.
@@ -41,7 +46,10 @@ Source baseline:
               `Clean/Orchard/Utilities.lean`; both call lookup-backed short checks.
           - `SinsemillaChip::hash_to_point`
             - Source: `halo2_gadgets/src/sinsemilla/chip.rs`, `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`
-            - Clean: partial work in `Clean/Orchard/Sinsemilla/HashToPoint.lean`; not wired as the full Orchard `hash_to_point` API.
+            - Clean: implemented in `Clean/Orchard/Sinsemilla/HashToPoint.lean` as
+              `Sinsemilla.Entry.circuit` (with `HashPiece`/`Chain`), proven sound and
+              complete; lands at `Specs.Sinsemilla.hashToPoint`. (Still missing:
+              `hash_to_point_with_private_init`.)
             - Generator lookup table
               - Source: `halo2_gadgets/src/sinsemilla/chip/generator_table.rs`
               - Clean: `generatorTable` in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
@@ -118,17 +126,23 @@ Source baseline:
           lookup-backed short checks.
       - `CommitDomain::short_commit`
         - Source: `halo2_gadgets/src/sinsemilla`
-        - Clean: not implemented as a source-level commit/short-commit API. TODO in `Clean/Orchard/Sinsemilla.lean`.
+        - Clean: implemented in `Clean/Orchard/Sinsemilla/Domain.lean` as
+          `Sinsemilla.CommitDomain.Short.circuit` (proven sound and complete); the
+          underlying `commit` is `Sinsemilla.CommitDomain.circuit` and the blinding
+          term `Sinsemilla.CommitDomain.blindingFactor`.
         - Depends on `SinsemillaChip::hash_to_point`
-          - Clean: partial, see Merkle path dependency above.
+          - Clean: `Sinsemilla.Entry.circuit`, done (see Merkle path dependency above).
         - Depends on fixed-base blinding and incomplete/complete ECC additions
-          - Clean: fixed-base mul and ECC add pieces exist; full short-commit wiring is missing.
+          - Clean: composed inside `CommitDomain.circuit` (full-width fixed-base mul +
+            complete addition).
     - `ScalarVar::from_base`
       - Source: `halo2_gadgets/src/ecc`
       - Clean: no dedicated source-level conversion entry identified.
     - `[ivk] g_d_old`
       - Source: variable-base scalar multiplication, `halo2_gadgets/src/ecc/chip/mul.rs`
-      - Clean: row gates and entry work exist under `Clean/Orchard/Ecc/ScalarMul/Mul*.lean`; conformance map still marks source entry/API gaps.
+      - Clean: implemented as the variable-base entry `Mul.Assign.circuit`
+        (`Clean/Orchard/Ecc/ScalarMul/Mul/Assign.lean`, `FormalCircuit`, proven sound
+        and complete; `Spec` is `output = [alpha] base`).
       - Incomplete variable-base mul gates
         - Source: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`
         - Clean: `Clean/Orchard/Ecc/ScalarMul/Mul/Incomplete.lean`.
@@ -170,9 +184,10 @@ Source baseline:
           `LookupRangeCheck.WitnessShort.taggedCircuit` are source-shaped wrappers.
       - `CommitDomain::commit`
         - Source: `halo2_gadgets/src/sinsemilla`
-        - Clean: not implemented as a source-level commit API.
+        - Clean: `Sinsemilla.CommitDomain.circuit`
+          (`Clean/Orchard/Sinsemilla/Domain.lean`), proven sound and complete.
       - `SinsemillaChip::hash_to_point`
-        - Clean: partial, see Merkle path dependency above.
+        - Clean: `Sinsemilla.Entry.circuit`, done (see Merkle path dependency above).
       - `[rcm_old] NoteCommitR`
         - Source: full-width fixed-base mul
         - Clean: `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`.
@@ -230,4 +245,7 @@ Source baseline:
 
 - Variable-base scalar multiplication
   - Source: `halo2_gadgets/src/ecc/chip/mul*.rs`
-  - Clean: pieces under `Clean/Orchard/Ecc/ScalarMul/Mul*.lean`; source-level entry/API conformance still incomplete.
+  - Clean: full source-level entry `Mul.Assign.circuit`
+    (`Clean/Orchard/Ecc/ScalarMul/Mul/Assign.lean`, `FormalCircuit`, proven sound and
+    complete), composing the incomplete `DoubleAndAdd`, complete bits, `ProcessLsb`,
+    and `OverflowCheck` sub-circuits (all under `Clean/Orchard/Ecc/ScalarMul/Mul*.lean`).
