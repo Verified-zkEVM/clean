@@ -801,8 +801,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   -- the swap subcircuit pins its two output cells to the position-selected pair, so the
   -- hash subcircuit's prover assumption is exactly our hypothesis.
   obtain ⟨⟨-, hsw⟩, hHL⟩ := h_env
-  simp only [Utilities.CondSwap.CondSwapOutput.mk.injEq] at hsw
-  obtain ⟨h3, h4⟩ := hsw
+  injection hsw with h3 h4
   rw [h3, h4] at hHL ⊢
   exact ⟨h_assumptions, (hHL h_assumptions).2⟩
 
