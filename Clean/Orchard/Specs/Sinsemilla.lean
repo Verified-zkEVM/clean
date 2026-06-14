@@ -193,4 +193,26 @@ non-canonical (the circuit only constrains 255 bits, matching the source).
 def merkleChunks (l lv rv : ℕ) : List ℕ :=
   (List.range 52).map fun i => (l + 2 ^ 10 * lv + 2 ^ 265 * rv) / 2 ^ (K * i) % 2 ^ K
 
+/-! ### The `NoteCommit` message -/
+
+/--
+The 109 `K`-bit chunks of the Orchard `NoteCommit^Orchard` message
+`g★_d || pk★_d || i2lebsp₆₄(v) || rho || psi`
+(protocol spec §3.7 / §5.4.8.4, `note_commit.rs`), assembled little-endian as the bit
+string
+
+```
+  x(g_d) [255]  ỹ(g_d) [1]  x(pk_d) [255]  ỹ(pk_d) [1]  v [64]  rho [255]  psi [255]  0000 [4 pad]
+```
+
+= 1090 bits = 109 chunks. `gdX`, `pkdX`, `rho`, `psi` are the (≤255-bit, little-endian)
+x-coordinate / base-field encodings; `gdY`, `pkdY` are the `ỹ` sign bits; `v` is the 64-bit
+note value. The encodings may be non-canonical — the hash circuit constrains 255-bit
+ranges; canonicity is enforced separately by the `NoteCommit input *` gates. The final
+4 zero bits are the `h_2` padding of message piece `h`. -/
+def noteCommitChunks (gdX gdY pkdX pkdY v rho psi : ℕ) : List ℕ :=
+  let msg := gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY
+    + 2 ^ 512 * v + 2 ^ 576 * rho + 2 ^ 831 * psi
+  (List.range 109).map fun i => msg / 2 ^ (K * i) % 2 ^ K
+
 end Orchard.Specs.Sinsemilla
