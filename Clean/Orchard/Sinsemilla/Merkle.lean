@@ -941,6 +941,164 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
   refine Eq.mp (congrArg (MerkleRoot G Q 0 (f 0) 32) ?_) hconcl
   exact (bridge 31 (by omega) _ _ _ (by simp [hlen])).symm
 
+
+/-- The honest running node after `k` layers (`none` if any layer hash is undefined).
+Index-based to mirror the circuit's `Circuit.foldl`. -/
+noncomputable def honestNode (G : Generators) (Q : SWPoint Pallas.curve)
+    (input : ProverValue Input Ecc.Fp) : ℕ → Option Ecc.Fp
+  | 0 => some (show Ecc.Fp from input.leaf)
+  | k + 1 =>
+    if hk : k < 32 then
+      (honestNode G Q input k).bind fun node =>
+        (Specs.Sinsemilla.hashToPoint G.S Q
+          (Layer.proverChunks k
+            { node := node,
+              sibling := (show Vector Ecc.Fp 32 from input.path)[k]'(by omega),
+              posBit := (show Vector Bool 32 from input.pos)[k]'(by omega) })).map (·.x)
+    else none
+
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
+    (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+  (honestNode G Q input 32).isSome
+
+def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve)
+    (input : ProverValue Input Ecc.Fp) (output : ProverValue field Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  ∀ root, honestNode G Q input 32 = some root → (show Ecc.Fp from output) = root
+
+/-- `honestNode` is downward-monotone in success: if it succeeds after `k+1` layers, it
+already succeeds after `k`. -/
+theorem honestNode_isSome_of_succ (G : Generators) (Q : SWPoint Pallas.curve)
+    (input : ProverValue Input Ecc.Fp) (k : ℕ)
+    (h : (honestNode G Q input (k + 1)).isSome) : (honestNode G Q input k).isSome := by
+  rw [honestNode] at h
+  split at h
+  · rcases hb : honestNode G Q input k with _ | v
+    · rw [hb] at h; simp at h
+    · simp
+  · simp at h
+
+theorem honestNode_isSome_le (G : Generators) (Q : SWPoint Pallas.curve)
+    (input : ProverValue Input Ecc.Fp) {i j : ℕ} (hij : i ≤ j)
+    (h : (honestNode G Q input j).isSome) : (honestNode G Q input i).isSome := by
+  induction j with
+  | zero => rw [Nat.le_zero.mp hij]; exact h
+  | succ m ih =>
+    rcases Nat.lt_or_ge i (m + 1) with hlt | hge
+    · exact ih (by omega) (honestNode_isSome_of_succ G Q input m h)
+    · have : i = m + 1 := by omega
+      rwa [this]
+
+theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ)
+      (ProverAssumptions G Q) (ProverSpec G Q) := by
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, Layer.circuit,
+    Layer.ProverAssumptions, Layer.ProverSpec, Layer.proverChunks]
+  obtain ⟨hL0, hLstep⟩ := h_env
+  have hpf : (0 : ℕ) < 2 ^ 10 := by norm_num
+  have hlen : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Ecc.Fp),
+      (Layer.circuit G Q hQ l hl).localLength inp = 274 := fun _ _ _ => rfl
+  -- output-value canonicalization (see soundness `bridge`): independent of layer / input
+  -- record / proof, with the offset gap folded into a ℕ equation.
+  have bridge : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Ecc.Fp) (o₁ o₂ : ℕ),
+      o₁ = o₂ →
+      Expression.eval env.toEnvironment (Layer.main G Q hQ l hl inp o₁).1
+        = Expression.eval env.toEnvironment (Layer.main G Q hQ 0 hpf default o₂).1 := by
+    intro l hl inp o₁ o₂ h; subst h; rfl
+  -- the canonical running node after `n` layers
+  let acc : ℕ → Ecc.Fp := fun n => match n with
+    | 0 => input_leaf
+    | k + 1 => Expression.eval env.toEnvironment
+        (Layer.main G Q hQ 0 hpf default (i₀ + k * 274)).1
+  set I : ProverValue Input Ecc.Fp := { leaf := input_leaf, path := input_path, pos := input_pos }
+  -- the chunk list hashed at layer `k` with running node `acc k`
+  have key : ∀ k, k ≤ 32 → honestNode G Q I k = some (acc k) := by
+    intro k
+    induction k with
+    | zero => intro _; rfl
+    | succ k ih =>
+      intro hk
+      have hk' : k < 32 := by omega
+      have hik : honestNode G Q I k = some (acc k) := ih (by omega)
+      -- honestNode (k+1) reduces to the layer-k hash, mapped to its x-coordinate
+      have hred : honestNode G Q I (k + 1) = (Specs.Sinsemilla.hashToPoint G.S Q
+          (Layer.proverChunks k
+            { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk',
+              posBit := (show Vector Bool 32 from I.pos)[k]'hk' })).map (·.x) := by
+        rw [honestNode, dif_pos hk', hik]; rfl
+      have hsome : (honestNode G Q I (k + 1)).isSome :=
+        honestNode_isSome_le G Q I (by omega) h_assumptions
+      rw [hred] at hsome ⊢
+      -- the layer-k hash exists
+      set chunks : List ℕ := Layer.proverChunks k
+        { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk',
+          posBit := (show Vector Bool 32 from I.pos)[k]'hk' } with hchunks
+      obtain ⟨B, hB⟩ : ∃ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B := by
+        rcases h : Specs.Sinsemilla.hashToPoint G.S Q chunks with _ | B
+        · rw [h] at hsome; simp at hsome
+        · exact ⟨B, rfl⟩
+      rw [hB]
+      show some B.x = some (acc (k + 1))
+      congr 1
+      -- now show `B.x = acc (k+1)` via the per-layer prover spec
+      rcases k with _ | j
+      · -- layer 0: feed `hL0` the existence we just produced
+        have spec := (hL0 ⟨B, hB⟩).2 B hB
+        rw [← spec]
+        exact bridge 0 (by norm_num) _ _ _ (by simp)
+      · -- layer j+1: the running node equals the canonical `acc (j+1)` (bridge)
+        have hbe : Expression.eval env.toEnvironment
+            (Layer.main G Q hQ j (by omega)
+              { node := default, sibling := fun e => (input_var.path e)[j],
+                posBit := fun e => (input_var.pos e)[j] } (i₀ + j * 274)).1 = acc (j + 1) :=
+          bridge j (by omega) _ _ _ rfl
+        have spec := (hLstep j hk' ⟨B, by rw [hbe]; exact hB⟩).2 B (by rw [hbe]; exact hB)
+        rw [← spec]
+        exact bridge (j + 1) (by omega) _ _ _ rfl
+  -- each layer's hash exists (the running node is the honest one, via `key`)
+  have hAsm : ∀ k (hk : k < 32), ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
+      (Layer.proverChunks k
+        { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk,
+          posBit := (show Vector Bool 32 from I.pos)[k]'hk }) = some B := by
+    intro k hk
+    have h1 : (Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
+        { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk,
+          posBit := (show Vector Bool 32 from I.pos)[k]'hk })).map (·.x) = some (acc (k + 1)) := by
+      have hk1 := key (k + 1) (by omega)
+      rw [honestNode, dif_pos hk, key k (by omega)] at hk1
+      exact hk1
+    rcases hh : Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
+        { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk,
+          posBit := (show Vector Bool 32 from I.pos)[k]'hk }) with _ | B
+    · rw [hh] at h1; simp at h1
+    · exact ⟨B, rfl⟩
+  refine ⟨⟨?_, ?_⟩, ?_⟩
+  · -- layer-0 assumption
+    exact hAsm 0 (by norm_num)
+  · -- layer-(i+1) assumptions
+    intro i hi
+    have hbe : Expression.eval env.toEnvironment
+        (Layer.main G Q hQ i (by omega)
+          { node := default, sibling := fun e => (input_var.path e)[i],
+            posBit := fun e => (input_var.pos e)[i] } (i₀ + i * 274)).1 = acc (i + 1) :=
+      bridge i (by omega) _ _ _ rfl
+    rw [hbe]
+    exact hAsm (i + 1) (by omega)
+  · -- the output is the honest root
+    intro root hroot
+    rw [key 32 (le_refl 32)] at hroot
+    obtain rfl : acc 32 = root := Option.some.inj hroot
+    exact bridge 31 (by omega) _ _ _ rfl
+
+def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
+    GeneralFormalCircuit.WithHint Ecc.Fp Input field where
+  main := main G Q hQ
+  elaborated := elaborated G Q hQ
+  Spec := Spec G Q
+  ProverAssumptions := ProverAssumptions G Q
+  ProverSpec := ProverSpec G Q
+  soundness := soundness G Q hQ
+  completeness := completeness G Q hQ
 end CalculateRoot
 
 end Orchard.Sinsemilla.Merkle
