@@ -249,4 +249,29 @@ def noteCommitMessage (gdX gdY pkdX pkdY v rho psi : ℕ) : ℕ :=
 def noteCommitChunks (gdX gdY pkdX pkdY v rho psi : ℕ) : List ℕ :=
   chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi) 109
 
+/-- The 109 message chunks tile into the 8 Sinsemilla message pieces `a..h` at their
+`K`-bit boundaries: piece sizes `25, 1, 25, 6, 1, 25, 25, 1` chunks starting at bits
+`0, 250, 260, 510, 570, 580, 830, 1080`. -/
+theorem noteCommitChunks_tiling (gdX gdY pkdX pkdY v rho psi : ℕ) :
+    noteCommitChunks gdX gdY pkdX pkdY v rho psi =
+      chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi) 25
+        ++ chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 1
+        ++ chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25
+        ++ chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6
+        ++ chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) 1
+        ++ chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25
+        ++ chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25
+        ++ chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) 1 := by
+  unfold noteCommitChunks
+  set m := noteCommitMessage gdX gdY pkdX pkdY v rho psi
+  rw [show (109 : ℕ) = 25 + 84 from rfl, chunksOf_add,
+      show (84 : ℕ) = 1 + 83 from rfl, chunksOf_add,
+      show (83 : ℕ) = 25 + 58 from rfl, chunksOf_add,
+      show (58 : ℕ) = 6 + 52 from rfl, chunksOf_add,
+      show (52 : ℕ) = 1 + 51 from rfl, chunksOf_add,
+      show (51 : ℕ) = 25 + 26 from rfl, chunksOf_add,
+      show (26 : ℕ) = 25 + 1 from rfl, chunksOf_add]
+  simp only [Nat.div_div_eq_div_mul, ← pow_add, K, Nat.reduceMul, Nat.reduceAdd,
+    List.append_assoc]
+
 end Orchard.Specs.Sinsemilla
