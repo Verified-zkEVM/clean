@@ -1,5 +1,5 @@
 import Clean.Circuit
-import Clean.Orchard.Sinsemilla
+import Clean.Orchard.Ecc
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 

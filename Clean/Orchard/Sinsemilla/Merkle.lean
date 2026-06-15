@@ -16,7 +16,7 @@ Reference:
 - `c` = bits 5..255 of `right` (25 words),
 
 with the short sub-pieces `b_1`, `b_2` witnessed separately and range-checked to
-5 bits. The `q_decompose` gate (`Merkle.circuit`, the `Decomposition check`) ties the
+5 bits. The `q_decompose` gate (`Merkle.Gate.circuit`, the `Decomposition check`) ties the
 pieces to `(l, left, right)` through the hash's own `z_1` running-sum cells, which
 `hash_to_point` exposes.
 -/
@@ -27,6 +27,104 @@ open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open Orchard.Specs.Sinsemilla (K Generators merkleChunks)
 
+/-! ### MerkleCRH decomposition gate
+
+Reference:
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/merkle/chip.rs`
+- `Decomposition check`
+
+Ports the `q_decompose` gate that connects the three Sinsemilla message pieces
+`a`, `b`, `c` to `(l, left, right)`. -/
+
+private theorem left_eq_of_add_neg_eq_zero {a b : Ecc.Fp} (h : a + -b = 0) : a = b :=
+  sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
+
+def twoPow5 {K : Type} [OfNat K (2 ^ 5)] : K := OfNat.ofNat (2 ^ 5)
+
+def twoPow10 {K : Type} [OfNat K (2 ^ 10)] : K := OfNat.ofNat (2 ^ 10)
+
+def twoPow240 {K : Type} [OfNat K (2 ^ 240)] : K := OfNat.ofNat (2 ^ 240)
+
+namespace Gate
+
+structure Row (F : Type) where
+  aWhole : F
+  bWhole : F
+  cWhole : F
+  leftNode : F
+  rightNode : F
+  z1A : F
+  z1B : F
+  b1 : F
+  b2 : F
+  lWhole : F
+deriving ProvableStruct
+
+def a0 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 10)] (row : Row K) : K :=
+  row.aWhole - row.z1A * twoPow10
+
+def b1B2Check {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 5)]
+    (row : Row K) : K :=
+  row.z1B - (row.b1 + row.b2 * twoPow5)
+
+def b0 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 10)] (row : Row K) : K :=
+  row.bWhole - row.z1B * twoPow10
+
+def leftCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 10)]
+    [OfNat K (2 ^ 240)] (row : Row K) : K :=
+  let reconstructed := row.z1A + (b0 row + row.b1 * twoPow10) * twoPow240
+  reconstructed - row.leftNode
+
+def rightCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 5)]
+    (row : Row K) : K :=
+  row.b2 + row.cWhole * twoPow5 - row.rightNode
+
+def Spec (row : Row Ecc.Fp) : Prop :=
+  row.lWhole = a0 row ∧
+  row.leftNode = row.z1A + (b0 row + row.b1 * twoPow10) * twoPow240 ∧
+  row.rightNode = row.b2 + row.cWhole * twoPow5 ∧
+  row.z1B = row.b1 + row.b2 * twoPow5
+
+def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+  assertZero (a0 row - row.lWhole)
+  assertZero (leftCheck row)
+  assertZero (rightCheck row)
+  assertZero (b1B2Check row)
+
+def circuit : FormalAssertion Ecc.Fp Row where
+  name := "GATE Decomposition check"
+  main
+  Spec := Spec
+  soundness := by
+    circuit_proof_start [main, Spec, a0, leftCheck, rightCheck, b1B2Check,
+      b0, twoPow5, twoPow10, twoPow240]
+    rcases h_holds with ⟨hl, hleft, hright, hb⟩
+    constructor
+    · rw [sub_eq_add_neg]
+      exact (left_eq_of_add_neg_eq_zero hl).symm
+    constructor
+    · rw [sub_eq_add_neg]
+      exact (left_eq_of_add_neg_eq_zero hleft).symm
+    constructor
+    · exact (left_eq_of_add_neg_eq_zero hright).symm
+    · exact left_eq_of_add_neg_eq_zero hb
+  completeness := by
+    circuit_proof_start [main, Spec, a0, leftCheck, rightCheck, b1B2Check,
+      b0, twoPow5, twoPow10, twoPow240]
+    rcases h_spec with ⟨hl, hleft, hright, hb⟩
+    constructor
+    · rw [hl]
+      ring
+    constructor
+    · rw [hleft]
+      ring
+    constructor
+    · rw [hright]
+      ring
+    · rw [hb]
+      ring
+
+end Gate
 
 /-! ### Digit toolkit
 
@@ -521,7 +619,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
   -- hash = SinsemillaHashToPoint(Q, a || b || c)
   let out ← Entry.circuit G Q hQ 24 [1, 24] #v[a, b, c]
   -- the decomposition gate ties the pieces to (l, left, right)
-  Merkle.circuit {
+  Merkle.Gate.circuit {
     aWhole := a, bWhole := b, cWhole := c,
     leftNode := input.left, rightNode := input.right,
     z1A := out.z1s[0], z1B := out.z1s[1],
@@ -540,14 +638,14 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   localLength_eq := by
     intro input offset
     have hEL : ∀ x, (Entry.circuit G Q hQ 24 [1, 24]).localLength x = 262 := fun _ => rfl
-    simp only [main, circuit_norm, hEL, _root_.Orchard.Sinsemilla.Merkle.circuit,
+    simp only [main, circuit_norm, hEL, _root_.Orchard.Sinsemilla.Merkle.Gate.circuit,
       Utilities.LookupRangeCheck.shortRangeCircuit]
   channelsLawful := by
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     dsimp only [main]
     have hECg : (Entry.circuit G Q hQ 24 [1, 24]).channelsWithGuarantees = [] := rfl
     have hECr : (Entry.circuit G Q hQ 24 [1, 24]).channelsWithRequirements = [] := rfl
-    simp only [circuit_norm, seval, _root_.Orchard.Sinsemilla.Merkle.circuit,
+    simp only [circuit_norm, seval, _root_.Orchard.Sinsemilla.Merkle.Gate.circuit,
       Utilities.LookupRangeCheck.shortRangeCircuit, hECg, hECr]
     try trivial
 
@@ -579,7 +677,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ l)
       (fun _ _ => True) (Spec G Q l) := by
   circuit_proof_start [main, Spec, Entry.circuit, Entry.Spec,
-    Merkle.circuit, Merkle.Spec, Merkle.a0, Merkle.b0,
+    Merkle.Gate.circuit, Merkle.Gate.Spec, Merkle.Gate.a0, Merkle.Gate.b0,
     Utilities.LookupRangeCheck.shortRangeCircuit,
     Utilities.LookupRangeCheck.shortRangeSpec,
     Chain.PieceChunks]
@@ -623,8 +721,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ l)
       (ProverAssumptions G Q l) (ProverSpec G Q l) := by
   circuit_proof_start [main, ProverSpec, ProverAssumptions, Entry.circuit,
-    Entry.ProverAssumptions, Entry.ProverSpec, Merkle.circuit, Merkle.Spec,
-    Merkle.a0, Merkle.b0, Utilities.LookupRangeCheck.shortRangeCircuit,
+    Entry.ProverAssumptions, Entry.ProverSpec, Merkle.Gate.circuit, Merkle.Gate.Spec,
+    Merkle.Gate.a0, Merkle.Gate.b0, Utilities.LookupRangeCheck.shortRangeCircuit,
     Utilities.LookupRangeCheck.shortRangeSpec, Chain.PieceBounds,
     Chain.honestChunks, Chain.Z1sHonest,
     Vector.tail_eq_cast_extract, Vector.extract_mk, List.extract_toArray,

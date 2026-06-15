@@ -5,7 +5,7 @@ import Clean.Orchard.Gadget
 import Clean.Orchard.NoteCommit
 import Clean.Orchard.Poseidon
 import Clean.Orchard.Ecc.ScalarMul
-import Clean.Orchard.Sinsemilla
+import Clean.Orchard.Sinsemilla.Chip
 import Clean.Orchard.Sinsemilla.Domain
 import Clean.Orchard.Sinsemilla.HashToPoint
 import Clean.Orchard.Sinsemilla.Merkle

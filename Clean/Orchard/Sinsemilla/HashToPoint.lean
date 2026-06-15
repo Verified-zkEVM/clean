@@ -1,5 +1,6 @@
 import Batteries.Data.Vector.Lemmas
-import Clean.Orchard.Sinsemilla
+import Clean.Orchard.Sinsemilla.Chip
+import Clean.Orchard.Ecc.DoubleAndAdd
 import Clean.Orchard.Specs.Sinsemilla
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Sinsemilla.HVec
@@ -20,6 +21,8 @@ namespace Orchard.Sinsemilla
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (K Generators)
+open Orchard.Sinsemilla.Chip
+open Orchard.Ecc
 
 /-- One row of the Sinsemilla generator table:
 `(table_idx, table_x, table_y)`. -/
