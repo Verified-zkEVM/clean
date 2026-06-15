@@ -400,11 +400,11 @@ have different `w`), and return `(Point, zs)` from `CommitDomain.circuit` to mat
 
 ### Orchard Entry APIs
 
-`value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`) and
+`value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`),
 `derive_nullifier` is implemented (`Gadget.DeriveNullifier.circuit`, soundness and
-completeness proved). Missing source-level APIs:
+completeness proved), and the `Circuit::synthesize` spend-authority block is implemented
+(`SpendAuthority.circuit`, soundness and completeness proved). Missing source-level APIs:
 
-- spend-authority key derivation in `Circuit::synthesize`
 - address-integrity wiring in `Circuit::synthesize`
 - `gadgets::note_commit`
 - `gadgets::commit_ivk`
@@ -414,7 +414,9 @@ These must compose source-conformant child circuits. In particular:
 
 - `derive_nullifier` (done) is `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`,
   parameterized by the `NullifierK` fixed base.
-- Spend authority is `[alpha] SpendAuthG + ak_P`.
+- Spend authority (done) is `[alpha] SpendAuthG + ak_P`, parameterized by the
+  `SpendAuthG` fixed base. The enclosing action circuit still needs to constrain the
+  resulting coordinates to `RK_X` and `RK_Y`.
 - Address integrity computes `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`.
 
 ### Gate Layout Metadata For VK Reconstruction

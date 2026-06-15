@@ -109,7 +109,13 @@ Source baseline:
 
   - Spend authority
     - Source block: `orchard-0.14.0/src/circuit.rs`, `Spend authority`
-    - Clean: not implemented as an action/source entry. TODO in `Clean/Orchard/Gadget.lean`.
+    - Clean: implemented in `Clean/Orchard/SpendAuthority.lean` as
+      `SpendAuthority.circuit` (proven sound and complete): it witnesses `alpha` as a
+      full-width fixed scalar via `MulFixed.FullWidth.circuit`, discards the returned
+      scalar decomposition as the source does, and computes
+      `rk = [alpha] SpendAuthG + ak_P` via complete addition. The public-input
+      constraints on `RK_X` and `RK_Y` remain part of the missing top-level action
+      wiring.
     - `[alpha] SpendAuthG`
       - Source: `FixedPoint::mul`, `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`
       - Clean: implemented in `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`.

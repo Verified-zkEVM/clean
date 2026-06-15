@@ -20,11 +20,6 @@ multiplied by the fixed base `ValueCommitR`.
 `nf = extract_p(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`, composing the Poseidon
 hash, the base-field-element fixed-base multiplication by `NullifierK`, and the complete
 addition with `cm`.
-
-TODO(source-conformance): spend-authority key derivation is not implemented.
-
-The replacement should witness `[alpha] SpendAuthG` internally and then compose complete
-addition with `ak_P`, instead of taking the fixed-base product as a row input.
 -/
 
 namespace Orchard
