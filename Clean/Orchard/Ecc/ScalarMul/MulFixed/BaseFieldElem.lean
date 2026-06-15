@@ -504,6 +504,103 @@ private theorem alpha0_lt_tp {S α0 : ℕ} (hSlt : S < 2 ^ 130) (hα0lt : α0 < 
   rw [Nat.ModEq, Nat.mod_eq_of_lt hSp, Nat.mod_eq_of_lt hMp] at hmod
   omega
 
+/-- The honest-prover canonicity-gate obligation, proved over an **abstract** row whose
+field values are pinned to the honest assignment. Stating it generically keeps the heavy
+whnf/kernel work off the giant `m.z84` running-sum term that the concrete entry-circuit
+row carries (see `doc/performance-problems.md`, the giant-foldl cliff). The hypotheses are
+exactly the honest cell values: `d := α.val / 8^84` is the top window, `α1 = d % 4`,
+`α2 = d / 4`, `α0' = α - d·2²⁵² + 2¹³⁰ - t_p`, and the running-sum cells `z₄₄`, `z₄₃`,
+plus the lookup output `z₁₃ = ⌊α0'.val / 2¹³⁰⌋`. Canonicity (`α.val < p`) forces the high
+window to `4` and `α0 < t_p` in the `α2 = 1` branch. -/
+private theorem honest_canon_spec {row : Row Fp} {α : Fp}
+    (hcanon : α.val < PALLAS_BASE_CARD)
+    (ha : row.alpha = α)
+    (hz84 : row.z84Alpha = ((α.val / 8 ^ 84 : ℕ) : Fp))
+    (ha1 : row.alpha1 = ((α.val / 8 ^ 84 % 4 : ℕ) : Fp))
+    (ha2 : row.alpha2 = ((α.val / 8 ^ 84 / 4 : ℕ) : Fp))
+    (hap : row.alpha0Prime
+      = α - ((α.val / 8 ^ 84 : ℕ) : Fp) * (2 : Fp) ^ 252 + (2 : Fp) ^ 130 - (tPNat : Fp))
+    (hz44 : row.z44Alpha = ((α.val / 8 ^ 44 : ℕ) : Fp))
+    (hz43 : row.z43Alpha = ((α.val / 8 ^ 43 : ℕ) : Fp))
+    (hz13 : row.z13Alpha0Prime = ((row.alpha0Prime.val / 2 ^ 130 : ℕ) : Fp)) :
+    DecomposesBaseFieldElem row ∧ CanonicalHighBit row := by
+  refine ⟨⟨?_, ?_⟩, ?_⟩
+  · -- z84_check: `d = d%4 + 4·(d/4)`
+    rw [hz84, ha1, ha2]
+    have key : α.val / 8 ^ 84 % 4 + 4 * (α.val / 8 ^ 84 / 4) = α.val / 8 ^ 84 :=
+      Nat.mod_add_div _ _
+    conv_lhs => rw [← key]
+    push_cast; ring
+  · -- alpha0Prime_check: the OfNat ↔ `(2:Fp)^n` and `t_p` bridges
+    rw [hap]
+    unfold alpha0
+    rw [ha, hz84, show (OfNat.ofNat (2 ^ 252) : Fp) = (2 : Fp) ^ 252 from by norm_num,
+      show (OfNat.ofNat (2 ^ 130) : Fp) = (2 : Fp) ^ 130 from by norm_num]
+    push_cast [NoteCommit.tP, tPNat]
+    ring
+  · -- CanonicalHighBit: the `α2 = 1` branch
+    intro hα2eq
+    rw [ha2] at hα2eq
+    -- `d < 5` from canonicity (`p < 5·2²⁵²`), and `d/4 = 1`, so `d = 4`
+    have hb5 : PALLAS_BASE_CARD < 8 ^ 84 * 5 := by norm_num [PALLAS_BASE_CARD]
+    have hdlt5 : α.val / 8 ^ 84 < 5 := Nat.div_lt_of_lt_mul (lt_trans hcanon hb5)
+    have hd4 : α.val / 8 ^ 84 / 4 = 1 :=
+      RunningSumMul.natCast_inj_of_lt_8 (by omega) (by norm_num) (by rw [hα2eq]; norm_num)
+    have hd_eq4 : α.val / 8 ^ 84 = 4 := by omega
+    -- split `α.val = α0 + 2²⁵⁴` with `α0 = α.val % 2²⁵² < t_p`
+    have h884 : (8 : ℕ) ^ 84 = 2 ^ 252 := by norm_num
+    have hd_eq4' : α.val / 2 ^ 252 = 4 := by rw [← h884]; exact hd_eq4
+    have hsplit : α.val = α.val % 2 ^ 252 + 2 ^ 254 := by
+      have hdm := Nat.div_add_mod α.val (2 ^ 252)
+      rw [hd_eq4'] at hdm
+      have hpp : (2 : ℕ) ^ 252 * 4 = 2 ^ 254 := by ring
+      omega
+    have hbc := base_card_eq
+    have hα0tp : α.val % 2 ^ 252 < tPNat := by omega
+    -- division facts for the running-sum cells
+    have htp129 : tPNat < 2 ^ 129 := by norm_num [tPNat]
+    have htp132 : tPNat < 2 ^ 132 := by norm_num [tPNat]
+    have htp130 : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    have h44 : α.val / 8 ^ 44 = 2 ^ 122 := by
+      rw [show (8 : ℕ) ^ 44 = 2 ^ 132 from by norm_num, hsplit,
+        show (2 : ℕ) ^ 254 = 2 ^ 122 * 2 ^ 132 from by ring,
+        Nat.add_mul_div_right _ _ (by positivity),
+        Nat.div_eq_of_lt (lt_trans hα0tp htp132), _root_.zero_add]
+    have h43 : α.val / 8 ^ 43 = 2 ^ 125 := by
+      rw [show (8 : ℕ) ^ 43 = 2 ^ 129 from by norm_num, hsplit,
+        show (2 : ℕ) ^ 254 = 2 ^ 125 * 2 ^ 129 from by ring,
+        Nat.add_mul_div_right _ _ (by positivity),
+        Nat.div_eq_of_lt (lt_trans hα0tp htp129), _root_.zero_add]
+    -- the lookup element `α0' = ↑(α0 + 2¹³⁰ - t_p)`, a value `< 2¹³⁰`
+    have hge : tPNat ≤ α.val % 2 ^ 252 + 2 ^ 130 := by omega
+    have hαval : α = ((α.val % 2 ^ 252 + 2 ^ 254 : ℕ) : Fp) := by
+      rw [← hsplit]; exact (ZMod.natCast_zmod_val α).symm
+    have hNnat : row.alpha0Prime = ((α.val % 2 ^ 252 + 2 ^ 130 - tPNat : ℕ) : Fp) := by
+      rw [hap, hd_eq4, Nat.cast_sub hge]
+      conv_lhs => rw [hαval]
+      push_cast; ring
+    have hNlt : α.val % 2 ^ 252 + 2 ^ 130 - tPNat < 2 ^ 130 := by omega
+    have hNltp : α.val % 2 ^ 252 + 2 ^ 130 - tPNat < PALLAS_BASE_CARD := by
+      have h2130P : (2 : ℕ) ^ 130 < PALLAS_BASE_CARD := by norm_num [PALLAS_BASE_CARD]
+      omega
+    have hap_val : row.alpha0Prime.val < 2 ^ 130 := by
+      rw [hNnat, ZMod.val_natCast_of_lt hNltp]; exact hNlt
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · -- α1 = 0
+      rw [ha1, hd_eq4]; norm_num
+    · -- alpha0_hi_120 = 0
+      unfold alpha0Hi120
+      rw [hz44, hz84, h44, hd_eq4,
+        show (OfNat.ofNat (2 ^ 120) : Fp) = (2 : Fp) ^ 120 from by norm_num]
+      push_cast; ring
+    · -- IsBool a43
+      refine Or.inl ?_
+      unfold a43
+      rw [hz43, hz44, h43, h44]
+      push_cast; ring
+    · -- z13 = 0
+      rw [hz13, Nat.div_eq_of_lt hap_val]; norm_num
+
 theorem soundness (B : MulFixed.FixedBase) :
     Soundness Fp (main B) Assumptions (Spec B) := by
   circuit_proof_start [main, Spec, RunningSumMul.circuit, BaseFieldElem.circuit,
@@ -651,17 +748,18 @@ theorem completeness (B : MulFixed.FixedBase) :
   obtain ⟨hRSM, hap0, hCC, ha1, ha2, hz84c, hz44c, hz43c⟩ := h_env
   have hpa : RunningSumMul.ProverAssumptions input env.data env.hint := by
     unfold RunningSumMul.ProverAssumptions; exact ZMod.val_lt (show Fp from input)
-  obtain ⟨-, -, -, -, hz84v⟩ := hRSM hpa
-  -- the honest top window `d = α.val / 8^84 < 8`, with `m.z84 = ↑d`
-  simp only [RunningSumMul.zValue] at hz84v
+  obtain ⟨-, -, hz43v, hz44v, hz84v⟩ := hRSM hpa
+  -- the honest running-sum cells `m.z84 = ↑(α.val / 8^84)`, etc.
+  simp only [RunningSumMul.zValue] at hz84v hz44v hz43v
   have hp8 : 8 < PALLAS_BASE_CARD := by norm_num [PALLAS_BASE_CARD]
   have hvlt : (show Fp from input).val < 8 ^ 85 :=
     lt_of_lt_of_le (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
   have hd8 : (show Fp from input).val / 8 ^ 84 < 8 :=
     Nat.div_lt_of_lt_mul (by rw [show (8 : ℕ) ^ 84 * 8 = 8 ^ 85 from by ring]; exact hvlt)
-  -- the witnessed `α1`, `α2` cells in terms of `d`
-  rw [hz84v, ZMod.val_natCast_of_lt (lt_trans hd8 hp8)] at ha1 ha2
-  refine ⟨hpa, hz84c, hz44c, hz43c, ?_, ?_, ?_, ?_⟩
+  -- the honest top window `d = α.val / 8^84 < 8`, used in `α1`, `α2`, `α0'`
+  rw [hz84v] at ha1 ha2 hap0
+  rw [ZMod.val_natCast_of_lt (lt_trans hd8 hp8)] at ha1 ha2
+  refine ⟨hpa, hz84c, hz44c, hz43c, ?_, ?_, ?_⟩
   · -- IsAlpha1 α1
     rw [ha1]
     have : (show Fp from input).val / 8 ^ 84 % 4 < 4 := Nat.mod_lt _ (by norm_num)
@@ -671,16 +769,18 @@ theorem completeness (B : MulFixed.FixedBase) :
     rw [ha2]
     have hd4 : (show Fp from input).val / 8 ^ 84 / 4 < 2 := by omega
     interval_cases h : (show Fp from input).val / 8 ^ 84 / 4 <;> simp [IsBool]
-  · -- DecomposesBaseFieldElem.
-    -- The `refine ⟨?_, ?_⟩` here times out: `DecomposesBaseFieldElem {giant row}` must
-    -- whnf-unfold the def against a row whose `z84Alpha`/`alpha0Prime` fields are the
-    -- huge `m.z84` foldl expression. Fix (TODO): factor a lemma `honest_canon_spec {row}`
-    -- taking the row's field-value equalities as hypotheses and proving `Spec row` over an
-    -- abstract row (cheap whnf), then apply it once. z84_check is `d = d%4 + 4·(d/4)`;
-    -- alpha0Prime_check is the OfNat(2^N)↔(2:Fp)^N bridges; both are short once isolated.
-    sorry
-  · -- CanonicalHighBit (d/4=1 ⟹ d=4 by canonicity α.val<p; α0<t_p gives the four facts)
-    sorry
+  · -- DecomposesBaseFieldElem ∧ CanonicalHighBit, via the abstract-row lemma (keeps the
+    -- giant `m.z84` foldl out of the def-unfolding whnf).
+    refine honest_canon_spec (α := input) hpa rfl (hz84c.trans hz84v) ha1 ha2 hap0
+      (hz44c.trans hz44v) (hz43c.trans hz43v) ?_
+    -- z13 = ↑(α0'.val / 2¹³⁰), from the 13-window lookup running sum. Bind first so the
+    -- lookup spec elaborates at its own (small) type, then close by defeq against the row.
+    have h13 := hCC.2 13
+    -- rewrite the `Fin 14` index to the `ℕ` literal `13` syntactically, so the match with
+    -- the row's `z13Alpha0Prime := …[13]` is by projection rather than a costly defeq that
+    -- reduces the running-sum vector index.
+    dsimp only [] at h13 ⊢
+    exact h13
 
 /-- `base_field_elem.rs::Config::assign` (`FixedPointBaseField::mul`): base-field-element
 fixed-base scalar multiplication `[α]B`. -/
