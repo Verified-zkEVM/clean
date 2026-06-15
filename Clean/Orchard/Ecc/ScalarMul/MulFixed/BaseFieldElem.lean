@@ -462,9 +462,30 @@ element `α` (reinterpreted as the scalar `α.val`, which is `< p < q`). -/
 def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Ecc.Point Fp) : Prop :=
   output.coords = ((alpha.val • B.point).x, (alpha.val • B.point).y)
 
+/-- `p = 2^254 + t_p` for the Pallas base field. -/
+private theorem base_card_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
+  norm_num [PALLAS_BASE_CARD, tPNat]
+
 theorem soundness (B : MulFixed.FixedBase) :
     Soundness Fp (main B) Assumptions (Spec B) := by
-  sorry
+  circuit_proof_start [main, Spec, RunningSumMul.circuit, BaseFieldElem.circuit,
+    BaseFieldElem.Spec, Utilities.LookupRangeCheck.CopyCheck.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Spec]
+  obtain ⟨hRSM, hCopy, hz84eq, hz44eq, hz43eq, hGate⟩ := h_holds
+  -- the windowed-mul spec: the decomposed value `V`, with `α = (V : Fp)`
+  obtain ⟨ks, hks_lt, hαV, hres, hz43V, hz44V, hz84V⟩ := hRSM
+  simp only [Ecc.Point.coords] at hres ⊢
+  set V := ∑ j ∈ Finset.range 85, ks j * 8 ^ j with hV
+  -- the canonicity gate facts
+  simp only [BaseFieldElem.IsAlpha1, BaseFieldElem.DecomposesBaseFieldElem,
+    BaseFieldElem.CanonicalHighBit, BaseFieldElem.alpha0, BaseFieldElem.alpha0Hi120,
+    BaseFieldElem.a43, IsBool] at hGate
+  obtain ⟨hAlpha1, hAlpha2, ⟨hz84dec, hα0prime⟩, hCanon⟩ := hGate
+  -- the crux: the decomposed value is the canonical representative `α.val`
+  have hVcanon : V = ZMod.val (show Fp from input) := by
+    sorry
+  -- hence the output is `[α.val]·B`
+  rw [hres, hVcanon]
 
 theorem completeness (B : MulFixed.FixedBase) :
     Completeness Fp (main B) Assumptions := by
