@@ -142,6 +142,15 @@ private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) 
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hlow]
 
+private theorem chunksOf_add_high_mod {low high n : ℕ} :
+    Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
+      Orchard.Specs.Sinsemilla.chunksOf low n := by
+  rw [← Orchard.Specs.Sinsemilla.chunksOf_mod (low + 2 ^ (K * n) * high) n]
+  rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * n) = 2 ^ (K * n) by
+    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [Nat.add_mul_mod_self_left]
+  exact Orchard.Specs.Sinsemilla.chunksOf_mod low n
+
 private theorem chunksOf_one_eq_singleton {x : ℕ} (hx : x < 2 ^ K) :
     Orchard.Specs.Sinsemilla.chunksOf x 1 = [x] := by
   unfold Orchard.Specs.Sinsemilla.chunksOf
@@ -149,6 +158,22 @@ private theorem chunksOf_one_eq_singleton {x : ℕ} (hx : x < 2 ^ K) :
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [Nat.mod_eq_of_lt hx]
+
+set_option exponentiation.threshold 900 in
+private theorem noteCommitChunks_segment_a (gdX gdY pkdX pkdY v rho psi : ℕ) :
+    Orchard.Specs.Sinsemilla.chunksOf
+        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi) 25 =
+      Orchard.Specs.Sinsemilla.chunksOf gdX 25 := by
+  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  rw [show
+      gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY +
+          2 ^ 512 * v + 2 ^ 576 * rho + 2 ^ 831 * psi =
+        gdX + 2 ^ (K * 25) *
+          (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
+            2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi) by
+    norm_num [K]
+    ring_nf]
+  exact chunksOf_add_high_mod
 
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
