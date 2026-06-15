@@ -481,9 +481,54 @@ theorem soundness (B : MulFixed.FixedBase) :
     BaseFieldElem.CanonicalHighBit, BaseFieldElem.alpha0, BaseFieldElem.alpha0Hi120,
     BaseFieldElem.a43, IsBool] at hGate
   obtain ⟨hAlpha1, hAlpha2, ⟨hz84dec, hα0prime⟩, hCanon⟩ := hGate
+  -- bound on the decomposed value: it fits in 85 windows
+  have hVlt : V < 8 ^ 85 := RunningSumMul.sum_lt_of_windows fun j hj => hks_lt j hj
+  -- the top window value `A0 = V / 8^84 = ks 84 < 8`, with `V = α0 + A0·2^252`
+  set A0 : ℕ := V / 8 ^ 84 with hA0
+  have hA0lt : A0 < 8 := by
+    rw [hA0]; rw [show (8 : ℕ) ^ 85 = 8 ^ 84 * 8 from by ring] at hVlt
+    exact Nat.div_lt_of_lt_mul (by omega)
+  set α0 : ℕ := V % 8 ^ 84 with hα0def
+  have hα0lt : α0 < 2 ^ 252 := by
+    rw [hα0def]; exact lt_of_lt_of_le (Nat.mod_lt _ (by positivity)) (by norm_num)
+  have hVsplit : V = α0 + A0 * 8 ^ 84 := by
+    rw [hα0def, hA0]; omega
+  -- gate cells, via the copy equalities, in terms of `V`
+  have e84 : env.get _ = ((V / 8 ^ 84 : ℕ) : Fp) := hz84eq.trans hz84V
+  have e44 : env.get _ = ((V / 8 ^ 44 : ℕ) : Fp) := hz44eq.trans hz44V
+  have e43 : env.get _ = ((V / 8 ^ 43 : ℕ) : Fp) := hz43eq.trans hz43V
+  -- `α2` and `α1` as naturals: `A0 = a1 + 4·a2`
+  rw [e84, ← hA0] at hz84dec
   -- the crux: the decomposed value is the canonical representative `α.val`
+  have h884 : (8 : ℕ) ^ 84 = 2 ^ 252 := by norm_num
+  have hVltp : V < PALLAS_BASE_CARD := by
+    rw [base_card_eq]
+    rcases hAlpha2 with ha2 | ha2
+    · -- α2 = 0: the top window is ≤ 3, so V < 2^254
+      rw [ha2, zero_mul, _root_.add_zero] at hz84dec
+      have hA0le : A0 ≤ 3 := by
+        rcases hAlpha1 with h | h | h | h <;> rw [h] at hz84dec
+        · have : A0 = 0 :=
+            RunningSumMul.natCast_inj_of_lt_8 hA0lt (by norm_num) (by rw [hz84dec]; norm_num)
+          omega
+        · have : A0 = 1 :=
+            RunningSumMul.natCast_inj_of_lt_8 hA0lt (by norm_num) (by rw [hz84dec]; norm_num)
+          omega
+        · have : A0 = 2 :=
+            RunningSumMul.natCast_inj_of_lt_8 hA0lt (by norm_num) (by rw [hz84dec]; norm_num)
+          omega
+        · have : A0 = 3 :=
+            RunningSumMul.natCast_inj_of_lt_8 hA0lt (by norm_num) (by rw [hz84dec]; norm_num)
+          omega
+      have hmul : A0 * 8 ^ 84 ≤ 3 * 2 ^ 252 := by
+        rw [h884]; exact Nat.mul_le_mul_right _ hA0le
+      rw [hVsplit]
+      norm_num [tPNat] at hα0lt ⊢
+      omega
+    · -- α2 = 1: canonicity forces α0 < t_p
+      sorry
   have hVcanon : V = ZMod.val (show Fp from input) := by
-    sorry
+    rw [hαV, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp]
   -- hence the output is `[α.val]·B`
   rw [hres, hVcanon]
 
