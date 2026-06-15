@@ -231,6 +231,27 @@ private theorem noteCommitChunks_segment_c (gdX gdY pkdX pkdY v rho psi : ℕ)
   exact chunksOf_eq_of_mod
     (noteCommitChunks_segment_c_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY)
 
+set_option exponentiation.threshold 900 in
+private theorem noteCommitChunks_segment_d_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
+    (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) (hpkdX : pkdX < 2 ^ 255) :
+    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) %
+        2 ^ (K * 6) =
+      (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) % 2 ^ (K * 6) := by
+  rw [show 2 ^ (K * 6) = 2 ^ 60 by norm_num [K]]
+  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  norm_num at *
+  omega
+
+set_option exponentiation.threshold 900 in
+private theorem noteCommitChunks_segment_d (gdX gdY pkdX pkdY v rho psi : ℕ)
+    (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) (hpkdX : pkdX < 2 ^ 255) :
+    Orchard.Specs.Sinsemilla.chunksOf
+        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6 =
+      Orchard.Specs.Sinsemilla.chunksOf
+        (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6 := by
+  exact chunksOf_eq_of_mod
+    (noteCommitChunks_segment_d_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX)
+
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
 Each witnesses a "prime" value (the element shifted up by `2^130`/`2^140` minus `t_P`)
