@@ -264,6 +264,18 @@ The missing entry circuit must witness internal decomposition/addition/window va
 and specify actual elliptic-curve scalar multiplication. Downstream Orchard gadgets must
 not accept scalar-multiplication products as free inputs.
 
+NON-CONFORMANT output signature (fixed-base mul entries): Halo2's `FixedPoint::mul`
+(`mul_fixed/full_width.rs::Config::assign`) returns `(EccPoint, EccScalarFixed)` and
+`FixedPointShort::mul` (`mul_fixed/short.rs::Config::assign`) returns
+`(EccPoint, EccScalarFixedShort)` — the second component is the witnessed scalar
+*decomposition* (the assigned window / running-sum cells). Clean's
+`MulFixed.FullWidth.circuit` and `MulFixed.Short.circuit` return only `Point`, dropping
+that scalar. This is the same class of gap as the hash running sums (Output omits a value
+Halo2 returns); fix by returning `(Point, scalar-decomposition)` to match. (The variable-
+base `Mul.Assign.circuit` similarly returns only `Point` where `EccInstructions::mul`
+returns `(EccPoint, ScalarVar)`, but there `ScalarVar = BaseFieldElem(alpha)` merely
+re-wraps the already-present input `alpha`, so it is benign and not tracked as a gap.)
+
 ### Scalar Multiplication Gate Layout Gaps
 
 The scalar-mul row assertions are source-shaped as separate gate modules, but still do
