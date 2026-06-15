@@ -116,6 +116,24 @@ private theorem map_pieceWord_eq_of_sum {piece : Ecc.Fp} {n : ℕ} {ms : ℕ →
     simp only [List.mem_range] at hi
     exact pieceWord_eq_of_sum hms hpiece hcard hi
 
+private theorem chunksOf_eq_map_of_sum {value n : ℕ} {ms : ℕ → ℕ}
+    (hms : ∀ r, ms r < 2 ^ K)
+    (hvalue : value = ∑ r ∈ Finset.range n, ms r * 2 ^ (K * r)) :
+    Orchard.Specs.Sinsemilla.chunksOf value n = (List.range n).map ms := by
+  apply List.ext_getElem
+  · simp [Orchard.Specs.Sinsemilla.chunksOf]
+  intro i hi hi'
+  have hin : i < n := by
+    simp only [Orchard.Specs.Sinsemilla.chunksOf, List.length_map, List.length_range] at hi
+    exact hi
+  rw [show (Orchard.Specs.Sinsemilla.chunksOf value n)[i]
+      = value / 2 ^ (K * i) % 2 ^ K from by
+        simp [Orchard.Specs.Sinsemilla.chunksOf]
+        norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [hvalue]
+  simp only [List.getElem_map, List.getElem_range]
+  exact digit_of_sum K i n ms hms hin
+
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
 Each witnesses a "prime" value (the element shifted up by `2^130`/`2^140` minus `t_P`)
