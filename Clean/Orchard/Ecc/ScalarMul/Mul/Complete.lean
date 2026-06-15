@@ -231,10 +231,9 @@ theorem soundness :
   have h1 := h_loop ⟨1, by norm_num⟩
   have h2 := h_loop ⟨2, by norm_num⟩
   clear h_loop
-  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
-    Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, Fin.foldl_zero,
-    Fin.foldl_const, Fin.val_last, circuit_norm,
-    Vector.getElem_append, Vector.getElem_mapRange] at h0 h1 h2
+  simp only [Nat.reduceAdd, Nat.reduceMul,
+    Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk,
+    Fin.foldl_const, Fin.val_last, circuit_norm] at h0 h1 h2
   norm_num at h0 h1 h2
   obtain ⟨hz0e, hz1e, hz2e, hz3e⟩ := eval_z env i₀ _ rfl
   rw [hz0e, hz1e] at h0
@@ -337,8 +336,8 @@ theorem completeness :
   have hl1 := h_loop ⟨1, by norm_num⟩
   have hl2 := h_loop ⟨2, by norm_num⟩
   clear h_loop h_zsw
-  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
-    Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, Fin.foldl_zero,
+  simp only [Nat.reduceAdd, Nat.reduceMul,
+    Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk,
     Fin.foldl_const, Fin.val_last, circuit_norm] at hl0 hl1 hl2
   norm_num at hl0 hl1 hl2
   obtain ⟨hby0, hyP0, hAdds0⟩ := hl0
@@ -386,9 +385,9 @@ theorem completeness :
   have hA3 := hAdds2.2 hA2.1 hT2.1
   refine ⟨⟨h_z0w, fun i => ?_⟩, ?_, ?_⟩
   · obtain ⟨b, hb⟩ := i
-    simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
-      Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, Fin.foldl_zero,
-      Fin.foldl_const, Fin.val_last, circuit_norm]
+    simp only [Nat.reduceAdd,
+      Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk,
+      Fin.foldl_const, circuit_norm]
     rcases b with _ | _ | _ | n
     · rw [hbx, hby, hz0e, hz1e, h_z0w, hz1', hby0, hyP0, h_input.2.1, h_input.2.2.1]
       exact ⟨hby0 ▸ rfl, bit_facts_complete input_z input_base.y (input_bits 0),
