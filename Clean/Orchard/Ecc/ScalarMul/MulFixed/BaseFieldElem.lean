@@ -1,7 +1,23 @@
 import Clean.Orchard.Ecc.ScalarMul.MulFixed
+import Clean.Orchard.Ecc.AddIncomplete
+import Clean.Orchard.Ecc.Add
+import Clean.Orchard.Utilities
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`.
+
+`circuit` (`Canonicity checks` namespace below) is the custom gate enabled on the
+canonicity-check rows. `Assign.circuit` is the source-level entry point
+`base_field_elem.rs::Config::assign` (gadget API `FixedPointBaseField::mul`): it
+decomposes the 255-bit base-field element into 85 three-bit windows with a strict
+running sum, runs the shared fixed-base windowed multiplication (window-table coordinate
+checks, incomplete additions, offset-corrected most significant window, complete
+addition), then enforces canonicity of the base-field element via a 13-window lookup
+range check on `α_0 + 2¹³⁰ - t_p` and the `Canonicity checks` gate.
+
+The windowed multiplication + complete addition is factored into the `RunningSumMul`
+subcircuit (a purely virtual boundary; no extra constraints or wiring), which exposes
+the running-sum cells `z₄₃`, `z₄₄`, `z₈₄` that the canonicity check copies in.
 -/
 
 namespace Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem
@@ -149,5 +165,215 @@ def circuit : FormalAssertion Fp Row where
       ring
     · rw [hAlpha0Prime]
       ring
+
+open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD PALLAS_BASE_CARD)
+
+/-!
+### Windowed multiplication subcircuit (`RunningSumMul`)
+
+Region 1+2 of `base_field_elem.rs::Config::assign`: the strict running-sum
+decomposition of `α` into 85 three-bit windows, the shared fixed-base windowed
+multiplication, and the final complete addition producing `[α]B`. Exposes the
+running-sum cells `z₄₃`, `z₄₄`, `z₈₄` that the canonicity check copies in.
+
+Value model: `windowVal α w` is window `w` of the base-`8` decomposition of `α.val`,
+`zValue α w = ⌊α.val / 8^w⌋` is the running-sum value, and `rowTailValue` is the
+honest-prover assignment of one window row's witnessed cells.
+-/
+
+namespace RunningSumMul
+
+/-- Window `w` of the base-`8` decomposition of `α.val`. -/
+def windowVal (α : Fp) (w : ℕ) : ℕ := α.val / 8 ^ w % 8
+
+theorem windowVal_lt (α : Fp) (w : ℕ) : windowVal α w < 8 :=
+  Nat.mod_lt _ (by norm_num)
+
+/-- The honest-prover running-sum value `z_w = ⌊α.val / 8^w⌋`. -/
+def zValue (α : Fp) (w : ℕ) : Fp := ((α.val / 8 ^ w : ℕ) : Fp)
+
+/-- The honest-prover witnessed cells of window row `w`: the next running-sum value,
+the window-table point's coordinates, and the table square root `u`. -/
+structure RowTail (F : Type) where
+  zNext : F
+  xP : F
+  yP : F
+  u : F
+deriving ProvableStruct
+
+def rowTailValue (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) : RowTail Fp where
+  zNext := zValue α (w + 1)
+  xP := (MulFixed.windowPoint B.point w (windowVal α w)).x
+  yP := (MulFixed.windowPoint B.point w (windowVal α w)).y
+  u := B.u w (windowVal α w)
+
+/-- Output: the multiplication result `[α]B`, and the running-sum cells the canonicity
+check inspects (`z₄₃ = z_43`, `z₄₄ = z_44`, `z₈₄ = z_84`). -/
+structure Output (F : Type) where
+  result : Ecc.Point F
+  z43 : F
+  z44 : F
+  z84 : F
+deriving ProvableStruct
+
+def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
+    Circuit Fp (Var Output Fp) := do
+  -- `copy_decompose`: `z_0` is a copy of `α`
+  let z₀ <== alpha
+  -- window 0 initializes the accumulator
+  let t₀ : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) 0
+  Utilities.RunningSum.circuit 3 { zCur := z₀, zNext := t₀.zNext }
+  MulFixed.RunningSumCoords.circuit (B.params 0)
+    { zCur := z₀, zNext := t₀.zNext, xP := t₀.xP, yP := t₀.yP, u := t₀.u }
+  let acc₀ : Var Ecc.Point Fp := { x := t₀.xP, y := t₀.yP }
+  -- windows 1..42 are added with incomplete addition; final `zCur = z_43`
+  let (acc₄₂, z₄₃) ← Circuit.foldlRange 42 (acc₀, t₀.zNext) fun (acc, zCur) i => do
+    let t : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) (i.val + 1)
+    Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
+    MulFixed.RunningSumCoords.circuit (B.params (i.val + 1))
+      { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
+    let acc' ← Ecc.AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
+    return (acc', t.zNext)
+  -- explicit window 43; `t₄₃.zNext = z_44`
+  let t₄₃ : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) 43
+  Utilities.RunningSum.circuit 3 { zCur := z₄₃, zNext := t₄₃.zNext }
+  MulFixed.RunningSumCoords.circuit (B.params 43)
+    { zCur := z₄₃, zNext := t₄₃.zNext, xP := t₄₃.xP, yP := t₄₃.yP, u := t₄₃.u }
+  let acc₄₃ ← Ecc.AddIncomplete.circuit { p := { x := t₄₃.xP, y := t₄₃.yP }, q := acc₄₂ }
+  -- windows 44..83 are added with incomplete addition; final `zCur = z_84`
+  let (acc₈₃, z₈₄) ← Circuit.foldlRange 40 (acc₄₃, t₄₃.zNext) fun (acc, zCur) i => do
+    let t : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) (i.val + 44)
+    Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
+    MulFixed.RunningSumCoords.circuit (B.params (i.val + 44))
+      { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
+    let acc' ← Ecc.AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
+    return (acc', t.zNext)
+  -- most significant window 84
+  let t₈₄ : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) 84
+  Utilities.RunningSum.circuit 3 { zCur := z₈₄, zNext := t₈₄.zNext }
+  MulFixed.RunningSumCoords.circuit (B.params 84)
+    { zCur := z₈₄, zNext := t₈₄.zNext, xP := t₈₄.xP, yP := t₈₄.yP, u := t₈₄.u }
+  -- strict decomposition: the final running sum value is zero
+  t₈₄.zNext === (0 : Expression Fp)
+  -- `[α]B` by complete addition of the most significant window
+  let result ← Ecc.Add.circuit { p := { x := t₈₄.xP, y := t₈₄.yP }, q := acc₈₃ }
+  return { result := result, z43 := z₄₃, z44 := t₄₃.zNext, z84 := z₈₄ }
+
+instance elaborated (B : MulFixed.FixedBase) :
+    ElaboratedCircuit Fp field Output (main B) := by
+  elaborate_circuit
+
+/-- Soundness contract: the witnessed windows decompose `α` (as a value `< 8^85`), the
+output is `[that value]·B`, and the exposed running-sum cells are the corresponding
+partial running sums. -/
+def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Output Fp)
+    (_ : ProverData Fp) : Prop :=
+  ∃ ks : ℕ → ℕ, (∀ w < 85, ks w < 8) ∧
+    let V := ∑ j ∈ Finset.range 85, ks j * 8 ^ j
+    alpha = (V : Fp) ∧
+    output.result.coords = ((V • B.point).x, (V • B.point).y) ∧
+    output.z43 = ((V / 8 ^ 43 : ℕ) : Fp) ∧
+    output.z44 = ((V / 8 ^ 44 : ℕ) : Fp) ∧
+    output.z84 = ((V / 8 ^ 84 : ℕ) : Fp)
+
+def ProverAssumptions (alpha : Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
+  alpha.val < PALLAS_BASE_CARD
+
+def ProverSpec (B : MulFixed.FixedBase) (alpha : Fp) (output : Output Fp)
+    (_ : ProverHint Fp) : Prop :=
+  output.result.coords = ((alpha.val • B.point).x, (alpha.val • B.point).y) ∧
+    output.z43 = zValue alpha 43 ∧ output.z44 = zValue alpha 44 ∧
+    output.z84 = zValue alpha 84
+
+theorem soundness (B : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint.Soundness Fp (main B) (fun _ _ => True) (Spec B) := by
+  sorry
+
+theorem completeness (B : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint.Completeness Fp (main B) ProverAssumptions
+      (ProverSpec B) := by
+  sorry
+
+/-- The decomposition + windowed-multiplication regions of
+`base_field_elem.rs::Config::assign`. -/
+def circuit (B : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint Fp field Output where
+  main := main B
+  Spec := Spec B
+  ProverAssumptions := ProverAssumptions
+  ProverSpec := ProverSpec B
+  soundness := soundness B
+  completeness := completeness B
+
+end RunningSumMul
+
+/-!
+### Entry circuit (`Assign`)
+
+`base_field_elem.rs::Config::assign`: the full source-level `FixedPointBaseField::mul`.
+Composes `RunningSumMul` with the canonicity tail — a 13-window lookup range check on
+`α_0 + 2¹³⁰ - t_p` and the `Canonicity checks` gate — and returns `[α]B`.
+-/
+
+namespace Assign
+
+/-- `t_p` as a natural number (`p = 2^254 + tPNat` for the Pallas base field). -/
+def tPNat : ℕ := 45560315531419706090280762371685220353
+
+def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
+    Circuit Fp (Var Ecc.Point Fp) := do
+  -- region 1+2: strict running-sum decomposition, windowed mul, complete addition
+  let m ← RunningSumMul.circuit B alpha
+  -- region 3: canonicity of the base-field element.
+  -- α_0 = α - z_84 · 2^252, the low 252 bits.
+  -- α_0_prime = α_0 + 2^130 - t_p; 13 ten-bit lookups give z_13_alpha_0_prime.
+  let alpha0Prime ← witnessField fun env =>
+    (env alpha - env (m.z84) * (2 ^ 252 : Fp)) + (2 ^ 130 : Fp) - (tPNat : Fp)
+  let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 alpha0Prime
+  let z13Alpha0Prime := zsDecomp[13]
+  -- the 2-bit / 1-bit pieces of the top window, and the canonicity gate
+  let alpha1 ← witnessField fun env => ((env (m.z84)).val % 4 : ℕ)
+  let alpha2 ← witnessField fun env => ((env (m.z84)).val / 4 : ℕ)
+  let z84Alpha <== m.z84
+  let z44Alpha <== m.z44
+  let z43Alpha <== m.z43
+  BaseFieldElem.circuit {
+    alpha := alpha, z84Alpha := z84Alpha, alpha1 := alpha1, alpha2 := alpha2,
+    alpha0Prime := alpha0Prime, z13Alpha0Prime := z13Alpha0Prime,
+    z44Alpha := z44Alpha, z43Alpha := z43Alpha }
+  return m.result
+
+instance elaborated (B : MulFixed.FixedBase) :
+    ElaboratedCircuit Fp field Ecc.Point (main B) := by
+  elaborate_circuit
+
+/-- Preconditions: `α` is a canonical base-field element (always true for an actual
+`Fp` cell — `α.val < p` by definition). -/
+def Assumptions (_ : Fp) : Prop := True
+
+/-- The circuit computes `[α]·B`, the fixed-base multiplication of `B` by the base-field
+element `α` (reinterpreted as the scalar `α.val`, which is `< p < q`). -/
+def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Ecc.Point Fp) : Prop :=
+  output.coords = ((alpha.val • B.point).x, (alpha.val • B.point).y)
+
+theorem soundness (B : MulFixed.FixedBase) :
+    Soundness Fp (main B) Assumptions (Spec B) := by
+  sorry
+
+theorem completeness (B : MulFixed.FixedBase) :
+    Completeness Fp (main B) Assumptions := by
+  sorry
+
+/-- `base_field_elem.rs::Config::assign` (`FixedPointBaseField::mul`): base-field-element
+fixed-base scalar multiplication `[α]B`. -/
+def circuit (B : MulFixed.FixedBase) : FormalCircuit Fp field Ecc.Point where
+  main := main B
+  Assumptions := Assumptions
+  Spec := Spec B
+  soundness := soundness B
+  completeness := completeness B
+
+end Assign
 
 end Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem
