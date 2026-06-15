@@ -48,8 +48,12 @@ Source baseline:
             - Source: `halo2_gadgets/src/sinsemilla/chip.rs`, `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`
             - Clean: implemented in `Clean/Orchard/Sinsemilla/HashToPoint.lean` as
               `Sinsemilla.Entry.circuit` (with `HashPiece`/`Chain`), proven sound and
-              complete; lands at `Specs.Sinsemilla.hashToPoint`. (Still missing:
-              `hash_to_point_with_private_init`.)
+              complete; lands at `Specs.Sinsemilla.hashToPoint`. NON-CONFORMANT output
+              signature: Halo2 returns `(Point, Vec<Vec<AssignedCell>>)` (the per-piece
+              running sums `zs`); Clean returns only the point + a one-off `z1`, not the
+              full `zs`. This blocks `note_commit`/`commit_ivk` canonicity. See the
+              conformance map's "Hash Output Signature: Running Sums" non-conformance.
+              (Also still missing: `hash_to_point_with_private_init`.)
             - Generator lookup table
               - Source: `halo2_gadgets/src/sinsemilla/chip/generator_table.rs`
               - Clean: `generatorTable` in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
