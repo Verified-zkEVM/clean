@@ -400,10 +400,10 @@ have different `w`), and return `(Point, zs)` from `CommitDomain.circuit` to mat
 
 ### Orchard Entry APIs
 
-`value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`). Missing
-source-level APIs:
+`value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`) and
+`derive_nullifier` is implemented (`Gadget.DeriveNullifier.circuit`, soundness and
+completeness proved). Missing source-level APIs:
 
-- `derive_nullifier`
 - spend-authority key derivation in `Circuit::synthesize`
 - address-integrity wiring in `Circuit::synthesize`
 - `gadgets::note_commit`
@@ -412,7 +412,8 @@ source-level APIs:
 
 These must compose source-conformant child circuits. In particular:
 
-- `derive_nullifier` is `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`.
+- `derive_nullifier` (done) is `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`,
+  parameterized by the `NullifierK` fixed base.
 - Spend authority is `[alpha] SpendAuthG + ak_P`.
 - Address integrity computes `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`.
 

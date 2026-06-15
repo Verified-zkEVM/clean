@@ -81,7 +81,10 @@ Source baseline:
   - Nullifier integrity
     - `gadget::derive_nullifier`
       - Source: `orchard-0.14.0/src/circuit/gadget.rs`
-      - Clean: not implemented as an entry circuit. TODO in `Clean/Orchard/Gadget.lean`.
+      - Clean: `Gadget.DeriveNullifier.circuit` in `Clean/Orchard/Gadget.lean` — fully
+        verified (soundness + completeness, no sorries); composes the Poseidon hash, the
+        `BaseFieldElem` fixed-base mul by `NullifierK`, and the complete addition with
+        `cm`, returning the extracted `x`-coordinate.
       - `PoseidonHash::init`
         - Source: `halo2_gadgets/src/poseidon`
         - Clean: implemented in `Clean/Orchard/Poseidon/Sponge.lean` as `InitialState.circuit`.
