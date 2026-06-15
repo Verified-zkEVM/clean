@@ -228,7 +228,7 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
     { zCur := z₀, zNext := t₀.zNext, xP := t₀.xP, yP := t₀.yP, u := t₀.u }
   let acc₀ : Var Ecc.Point Fp := { x := t₀.xP, y := t₀.yP }
   -- windows 1..42 are added with incomplete addition; final `zCur = z_43`
-  let (acc₄₂, z₄₃) ← Circuit.foldlRange 42 (acc₀, t₀.zNext) fun (acc, zCur) i => do
+  let (acc₄₂, z₄₃) ← Circuit.foldl (Vector.finRange 42) (acc₀, t₀.zNext) fun (acc, zCur) i => do
     let t : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) (i.val + 1)
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 1))
@@ -242,7 +242,7 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
     { zCur := z₄₃, zNext := t₄₃.zNext, xP := t₄₃.xP, yP := t₄₃.yP, u := t₄₃.u }
   let acc₄₃ ← Ecc.AddIncomplete.circuit { p := { x := t₄₃.xP, y := t₄₃.yP }, q := acc₄₂ }
   -- windows 44..83 are added with incomplete addition; final `zCur = z_84`
-  let (acc₈₃, z₈₄) ← Circuit.foldlRange 40 (acc₄₃, t₄₃.zNext) fun (acc, zCur) i => do
+  let (acc₈₃, z₈₄) ← Circuit.foldl (Vector.finRange 40) (acc₄₃, t₄₃.zNext) fun (acc, zCur) i => do
     let t : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) (i.val + 44)
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 44))
@@ -393,6 +393,11 @@ private theorem step_lt_next {S t j : ℕ} (hS : S < 2 * 8 ^ (j + 1))
 
 theorem soundness (B : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main B) (fun _ _ => True) (Spec B) := by
+  circuit_proof_start [main, Spec,
+    Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
+    MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
+    Ecc.AddIncomplete.circuit, Ecc.AddIncomplete.Spec, Ecc.AddIncomplete.Assumptions,
+    Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
   sorry
 
 theorem completeness (B : MulFixed.FixedBase) :
