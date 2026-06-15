@@ -466,6 +466,27 @@ def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Ecc.Point Fp) : Prop :=
 private theorem base_card_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
   norm_num [PALLAS_BASE_CARD, tPNat]
 
+/-- Telescoping a 13-step `2^10`-radix running sum to its 130-bit digit sum. Stated over
+abstract cell values so the heavy combination is kernel-checked once, not inlined into
+the (giant-term) entry-circuit soundness proof. -/
+private theorem telescope13_eq {z0 z1 z2 z3 z4 z5 z6 z7 z8 z9 z10 z11 z12 ap : Fp}
+    {w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 : ℕ}
+    (h0 : z0 = ap)
+    (e0 : z0 = 2 ^ 10 * z1 + (w0 : Fp)) (e1 : z1 = 2 ^ 10 * z2 + (w1 : Fp))
+    (e2 : z2 = 2 ^ 10 * z3 + (w2 : Fp)) (e3 : z3 = 2 ^ 10 * z4 + (w3 : Fp))
+    (e4 : z4 = 2 ^ 10 * z5 + (w4 : Fp)) (e5 : z5 = 2 ^ 10 * z6 + (w5 : Fp))
+    (e6 : z6 = 2 ^ 10 * z7 + (w6 : Fp)) (e7 : z7 = 2 ^ 10 * z8 + (w7 : Fp))
+    (e8 : z8 = 2 ^ 10 * z9 + (w8 : Fp)) (e9 : z9 = 2 ^ 10 * z10 + (w9 : Fp))
+    (e10 : z10 = 2 ^ 10 * z11 + (w10 : Fp)) (e11 : z11 = 2 ^ 10 * z12 + (w11 : Fp))
+    (e12 : z12 = (w12 : Fp)) :
+    ap = ((w0 + 2 ^ 10 * w1 + 2 ^ 20 * w2 + 2 ^ 30 * w3 + 2 ^ 40 * w4 + 2 ^ 50 * w5 +
+      2 ^ 60 * w6 + 2 ^ 70 * w7 + 2 ^ 80 * w8 + 2 ^ 90 * w9 + 2 ^ 100 * w10 +
+      2 ^ 110 * w11 + 2 ^ 120 * w12 : ℕ) : Fp) := by
+  push_cast
+  linear_combination -h0 + e0 + 2 ^ 10 * e1 + 2 ^ 20 * e2 + 2 ^ 30 * e3 + 2 ^ 40 * e4 +
+    2 ^ 50 * e5 + 2 ^ 60 * e6 + 2 ^ 70 * e7 + 2 ^ 80 * e8 + 2 ^ 90 * e9 +
+    2 ^ 100 * e10 + 2 ^ 110 * e11 + 2 ^ 120 * e12
+
 theorem soundness (B : MulFixed.FixedBase) :
     Soundness Fp (main B) Assumptions (Spec B) := by
   circuit_proof_start [main, Spec, RunningSumMul.circuit, BaseFieldElem.circuit,
@@ -552,8 +573,21 @@ theorem soundness (B : MulFixed.FixedBase) :
         rcases Nat.div_eq_zero_iff.mp hq0 with h | h
         · norm_num at h
         · exact h
-      -- the lookup bound on `α0 + 2^130 - t_p` forces `α0 < t_p`
-      sorry
+      -- The 13-window lookup on `α_0_prime` forces `α0 < t_p`.
+      --
+      -- `hα0prime : α_0_prime = α0 + 2^130 - t_p` (after the rewrites below), and the
+      -- lookup (`hCopy`) with `z_13 = 0` (`hz13`) gives `α_0_prime = ↑S` for some
+      -- `S < 2^130` (the 130-bit digit sum). Since `α0 < 2^132` (`hα0lt132`), the
+      -- value `α0 + 2^130 - t_p < p` does not wrap, so `S = α0 + 2^130 - t_p < 2^130`,
+      -- i.e. `α0 < t_p`. The telescoping is proven in `telescope13_eq`; wiring it onto
+      -- the concrete `CopyCheck` output vector currently hits a kernel/whnf cliff on the
+      -- giant getElem terms (see commit notes / task #5). TODO: reformulate the lookup
+      -- running sum over a plain `ℕ → Fp` function to sidestep the getElem reduction.
+      rw [hαV, e84, hz84val,
+        show (V : Fp) = (α0 : Fp) + (4 : ℕ) * OfNat.ofNat (2 ^ 252) from by
+          rw [hV254]; push_cast; ring] at hα0prime
+      have hα0tp : α0 < tPNat := by sorry
+      rw [hV254]; omega
   have hVcanon : V = ZMod.val (show Fp from input) := by
     rw [hαV, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp]
   -- hence the output is `[α.val]·B`
