@@ -671,9 +671,15 @@ theorem completeness (B : MulFixed.FixedBase) :
     rw [ha2]
     have hd4 : (show Fp from input).val / 8 ^ 84 / 4 < 2 := by omega
     interval_cases h : (show Fp from input).val / 8 ^ 84 / 4 <;> simp [IsBool]
-  · -- DecomposesBaseFieldElem
+  · -- DecomposesBaseFieldElem.
+    -- The `refine ⟨?_, ?_⟩` here times out: `DecomposesBaseFieldElem {giant row}` must
+    -- whnf-unfold the def against a row whose `z84Alpha`/`alpha0Prime` fields are the
+    -- huge `m.z84` foldl expression. Fix (TODO): factor a lemma `honest_canon_spec {row}`
+    -- taking the row's field-value equalities as hypotheses and proving `Spec row` over an
+    -- abstract row (cheap whnf), then apply it once. z84_check is `d = d%4 + 4·(d/4)`;
+    -- alpha0Prime_check is the OfNat(2^N)↔(2:Fp)^N bridges; both are short once isolated.
     sorry
-  · -- CanonicalHighBit
+  · -- CanonicalHighBit (d/4=1 ⟹ d=4 by canonicity α.val<p; α0<t_p gives the four facts)
     sorry
 
 /-- `base_field_elem.rs::Config::assign` (`FixedPointBaseField::mul`): base-field-element
