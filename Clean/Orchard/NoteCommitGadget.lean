@@ -640,6 +640,15 @@ theorem commitAndConstrain_output_eq (G : Generators) (Q : SWPoint Pallas.curve)
   unfold commitAndConstrain constrainCommitment
   simp only [Circuit.output, Circuit.bind_def]
 
+theorem main_output_eq_commitWithZs_point (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (offset : ℕ) :
+    (main G Q hQ R input).output offset =
+      let cells := (assignMessageCells input).output offset
+      let commitOffset := offset + (assignMessageCells input).localLength offset
+      ((commitWithZs G Q hQ R input cells).output commitOffset).point := by
+  unfold main commitAndConstrain constrainCommitment
+  simp only [Circuit.output, Circuit.bind_def]
+
 /-- Split the top-level source-shaped `main` soundness constraints into the message-cell
 assignment phase and the commitment/gate phase. This is intentionally used instead of
 globally unfolding `main` in `circuit_proof_start`, which expands the whole gadget. -/
@@ -686,6 +695,24 @@ theorem main_usesLocalWitnesses_iff (G : Generators) (Q : SWPoint Pallas.curve)
           (offset + (assignMessageCells input).localLength offset)) := by
   unfold main
   rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses]
+
+theorem main_commitWithZs_spec_of_soundness (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    Sinsemilla.CommitDomain.WithZs.Spec G Q R 25 messageTail
+      (eval env commitInput)
+      (eval env ((commitWithZs G Q hQ R input cells).output commitOffset)) env.data := by
+  rw [main_soundness_constraints_iff] at h
+  rcases h with ⟨_, h_commit⟩
+  rw [commitAndConstrain_soundness_constraints_iff] at h_commit
+  exact commitWithZs_spec_of_soundness G Q hQ R env input ((assignMessageCells input).output offset)
+    (offset + (assignMessageCells input).localLength offset) h_commit.1
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
