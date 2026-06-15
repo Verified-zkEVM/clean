@@ -644,7 +644,37 @@ theorem soundness (B : MulFixed.FixedBase) :
 
 theorem completeness (B : MulFixed.FixedBase) :
     Completeness Fp (main B) Assumptions := by
-  sorry
+  circuit_proof_start [main, Assumptions, RunningSumMul.circuit,
+    RunningSumMul.ProverSpec, Utilities.LookupRangeCheck.CopyCheck.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.ProverSpec, BaseFieldElem.circuit,
+    BaseFieldElem.Spec]
+  obtain ⟨hRSM, hap0, hCC, ha1, ha2, hz84c, hz44c, hz43c⟩ := h_env
+  have hpa : RunningSumMul.ProverAssumptions input env.data env.hint := by
+    unfold RunningSumMul.ProverAssumptions; exact ZMod.val_lt (show Fp from input)
+  obtain ⟨-, -, -, -, hz84v⟩ := hRSM hpa
+  -- the honest top window `d = α.val / 8^84 < 8`, with `m.z84 = ↑d`
+  simp only [RunningSumMul.zValue] at hz84v
+  have hp8 : 8 < PALLAS_BASE_CARD := by norm_num [PALLAS_BASE_CARD]
+  have hvlt : (show Fp from input).val < 8 ^ 85 :=
+    lt_of_lt_of_le (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
+  have hd8 : (show Fp from input).val / 8 ^ 84 < 8 :=
+    Nat.div_lt_of_lt_mul (by rw [show (8 : ℕ) ^ 84 * 8 = 8 ^ 85 from by ring]; exact hvlt)
+  -- the witnessed `α1`, `α2` cells in terms of `d`
+  rw [hz84v, ZMod.val_natCast_of_lt (lt_trans hd8 hp8)] at ha1 ha2
+  refine ⟨hpa, hz84c, hz44c, hz43c, ?_, ?_, ?_, ?_⟩
+  · -- IsAlpha1 α1
+    rw [ha1]
+    have : (show Fp from input).val / 8 ^ 84 % 4 < 4 := Nat.mod_lt _ (by norm_num)
+    interval_cases h : (show Fp from input).val / 8 ^ 84 % 4 <;>
+      simp [BaseFieldElem.IsAlpha1]
+  · -- IsBool α2
+    rw [ha2]
+    have hd4 : (show Fp from input).val / 8 ^ 84 / 4 < 2 := by omega
+    interval_cases h : (show Fp from input).val / 8 ^ 84 / 4 <;> simp [IsBool]
+  · -- DecomposesBaseFieldElem
+    sorry
+  · -- CanonicalHighBit
+    sorry
 
 /-- `base_field_elem.rs::Config::assign` (`FixedPointBaseField::mul`): base-field-element
 fixed-base scalar multiplication `[α]B`. -/
