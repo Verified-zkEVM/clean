@@ -169,6 +169,34 @@ instance yCanonicityExplicit (y lsb : Var field Ecc.Fp) :
 attribute [explicit_circuit_no_unfold] witnessShort witnessBitrange canonBitshift130
   pkdXCanonicity rhoCanonicity psiCanonicity yCanonicity
 
+@[circuit_norm] theorem witnessShort_localLength (src : Var field Ecc.Fp) (start numBits : ℕ)
+    (h : numBits ≤ Utilities.LookupRangeCheck.K) (offset : ℕ) :
+    (witnessShort src start numBits h).localLength offset = 2 := by
+  unfold witnessShort
+  simp only [circuit_norm, Utilities.LookupRangeCheck.WitnessShort.circuit]
+
+@[circuit_norm] theorem witnessBitrange_localLength (src : Var field Ecc.Fp) (start numBits : ℕ)
+    (offset : ℕ) :
+    (witnessBitrange src start numBits).localLength offset = 1 := rfl
+
+@[circuit_norm] theorem canonBitshift130_localLength (a : Var field Ecc.Fp) (offset : ℕ) :
+    (canonBitshift130 a).localLength offset = 15 := rfl
+
+@[circuit_norm] theorem pkdXCanonicity_localLength (b3 c : Var field Ecc.Fp) (offset : ℕ) :
+    (pkdXCanonicity b3 c).localLength offset = 16 := rfl
+
+@[circuit_norm] theorem rhoCanonicity_localLength (e1 f : Var field Ecc.Fp) (offset : ℕ) :
+    (rhoCanonicity e1 f).localLength offset = 16 := rfl
+
+@[circuit_norm] theorem psiCanonicity_localLength (g1 g2 : Var field Ecc.Fp) (offset : ℕ) :
+    (psiCanonicity g1 g2).localLength offset = 15 := rfl
+
+@[circuit_norm] theorem yCanonicity_localLength (y lsb : Var field Ecc.Fp) (offset : ℕ) :
+    (yCanonicity y lsb).localLength offset = 47 := by
+  unfold yCanonicity
+  simp only [circuit_norm, Utilities.LookupRangeCheck.CopyCheck.circuit,
+    YCanonicity.circuit]
+
 /-! ### `gadgets::note_commit` (note_commit.rs:1594) -/
 
 /-- Inputs of `gadgets::note_commit`: the note's `g_d`, `pk_d` points, the value/`rho`/`psi`
@@ -209,10 +237,25 @@ structure MessageCells where
   h0 : Var field Ecc.Fp
   h1 : Var field Ecc.Fp
 
+structure MessageSubpieces where
+  b0 : Var field Ecc.Fp
+  b1 : Var field Ecc.Fp
+  b2 : Var field Ecc.Fp
+  b3 : Var field Ecc.Fp
+  d0 : Var field Ecc.Fp
+  d1 : Var field Ecc.Fp
+  d2 : Var field Ecc.Fp
+  e0 : Var field Ecc.Fp
+  e1 : Var field Ecc.Fp
+  g0 : Var field Ecc.Fp
+  g1 : Var field Ecc.Fp
+  h0 : Var field Ecc.Fp
+  h1 : Var field Ecc.Fp
+
 abbrev messageTail : List ℕ := [1, 25, 6, 1, 25, 25, 1]
 abbrev messageLengths : List ℕ := 25 :: messageTail
 
-def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells := do
+def assignSubpieces (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageSubpieces := do
   let gdX := input.gd.x
   let gdY := input.gd.y
   let pkdX := input.pkd.x
@@ -220,7 +263,6 @@ def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells 
   let v := input.value
   let rho := input.rho
   let psi := input.psi
-  -- range-checked subpieces
   let b0 ← witnessShort gdX 250 4 (by norm_num [K])
   let b3 ← witnessShort pkdX 0 4 (by norm_num [K])
   let d2 ← witnessShort v 0 8 (by norm_num [K])
@@ -235,24 +277,47 @@ def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells 
   let d1 ← witnessBitrange pkdY 0 1
   let g0 ← witnessBitrange rho 254 1
   let h1 ← witnessBitrange psi 254 1
-  -- y-coordinate canonicity (ties b_2 = ỹ(g_d), d_1 = ỹ(pk_d) to the y decompositions)
-  let b2 ← yCanonicity gdY b2
-  let d1 ← yCanonicity pkdY d1
-  -- the message pieces (honest packed values; the Decompose* gates constrain the packing)
+  return { b0, b1, b2, b3, d0, d1, d2, e0, e1, g0, g1, h0, h1 }
+
+def constrainYSubpieces (input : Var Input Ecc.Fp) (subpieces : MessageSubpieces) :
+    Circuit Ecc.Fp MessageSubpieces := do
+  let b2 ← yCanonicity input.gd.y subpieces.b2
+  let d1 ← yCanonicity input.pkd.y subpieces.d1
+  return { subpieces with b2, d1 }
+
+def assignMessagePieces (input : Var Input Ecc.Fp) (subpieces : MessageSubpieces) :
+    Circuit Ecc.Fp MessageCells := do
+  let gdX := input.gd.x
+  let pkdX := input.pkd.x
+  let v := input.value
+  let rho := input.rho
+  let psi := input.psi
   let a ← witnessBitrange gdX 0 250
-  let b ← witnessField fun env => env b0 + env b1 * 2 ^ 4 + env b2 * 2 ^ 5 + env b3 * 2 ^ 6
+  let b ← witnessField fun env =>
+    env subpieces.b0 + env subpieces.b1 * 2 ^ 4 + env subpieces.b2 * 2 ^ 5 +
+      env subpieces.b3 * 2 ^ 6
   let c ← witnessBitrange pkdX 4 250
-  let d ← witnessField fun env => env d0 + env d1 * 2 + env d2 * 2 ^ 2 +
+  let d ← witnessField fun env =>
+    env subpieces.d0 + env subpieces.d1 * 2 + env subpieces.d2 * 2 ^ 2 +
     bitrangeSubset (Expression.eval env v) 8 50 * 2 ^ 10
-  let e ← witnessField fun env => env e0 + env e1 * 2 ^ 6
+  let e ← witnessField fun env => env subpieces.e0 + env subpieces.e1 * 2 ^ 6
   let f ← witnessBitrange rho 4 250
-  let g ← witnessField fun env => env g0 + env g1 * 2 +
+  let g ← witnessField fun env => env subpieces.g0 + env subpieces.g1 * 2 +
     bitrangeSubset (Expression.eval env psi) 9 240 * 2 ^ 10
-  let h ← witnessField fun env => env h0 + env h1 * 2 ^ 5
+  let h ← witnessField fun env => env subpieces.h0 + env subpieces.h1 * 2 ^ 5
   return {
     a, b, c, d, e, f, g, h,
-    b0, b1, b2, b3, d0, d1, d2, e0, e1, g0, g1, h0, h1
+    b0 := subpieces.b0, b1 := subpieces.b1, b2 := subpieces.b2, b3 := subpieces.b3,
+    d0 := subpieces.d0, d1 := subpieces.d1, d2 := subpieces.d2,
+    e0 := subpieces.e0, e1 := subpieces.e1,
+    g0 := subpieces.g0, g1 := subpieces.g1,
+    h0 := subpieces.h0, h1 := subpieces.h1
   }
+
+def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells := do
+  let subpieces ← assignSubpieces input
+  let subpieces ← constrainYSubpieces input subpieces
+  assignMessagePieces input subpieces
 
 def commitWithZs (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (cells : MessageCells) :
@@ -317,6 +382,21 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let cells ← assignMessageCells input
   commitAndConstrain G Q hQ R input cells
 
+instance assignSubpiecesExplicit (input : Var Input Ecc.Fp) :
+    ExplicitCircuit (assignSubpieces input) := by
+  unfold assignSubpieces
+  infer_explicit_circuit
+
+instance constrainYSubpiecesExplicit (input : Var Input Ecc.Fp) (subpieces : MessageSubpieces) :
+    ExplicitCircuit (constrainYSubpieces input subpieces) := by
+  unfold constrainYSubpieces
+  infer_explicit_circuit
+
+instance assignMessagePiecesExplicit (input : Var Input Ecc.Fp) (subpieces : MessageSubpieces) :
+    ExplicitCircuit (assignMessagePieces input subpieces) := by
+  unfold assignMessagePieces
+  infer_explicit_circuit
+
 instance assignMessageCellsExplicit (input : Var Input Ecc.Fp) :
     ExplicitCircuit (assignMessageCells input) := by
   unfold assignMessageCells
@@ -342,8 +422,53 @@ instance commitAndConstrainExplicit (G : Generators) (Q : SWPoint Pallas.curve)
   unfold commitAndConstrain
   infer_explicit_circuit
 
-attribute [explicit_circuit_no_unfold] assignMessageCells commitAndConstrain commitWithZs
-  constrainCommitment
+attribute [explicit_circuit_no_unfold] assignSubpieces constrainYSubpieces assignMessagePieces
+  assignMessageCells commitAndConstrain commitWithZs constrainCommitment
+
+@[circuit_norm] theorem assignSubpieces_localLength (input : Var Input Ecc.Fp) (offset : ℕ) :
+    (assignSubpieces input).localLength offset = 20 := by
+  unfold assignSubpieces
+  simp only [circuit_norm]
+
+@[circuit_norm] theorem constrainYSubpieces_localLength (input : Var Input Ecc.Fp)
+    (subpieces : MessageSubpieces) (offset : ℕ) :
+    (constrainYSubpieces input subpieces).localLength offset = 94 := by
+  unfold constrainYSubpieces
+  simp only [circuit_norm]
+
+@[circuit_norm] theorem assignMessagePieces_localLength (input : Var Input Ecc.Fp)
+    (subpieces : MessageSubpieces) (offset : ℕ) :
+    (assignMessagePieces input subpieces).localLength offset = 8 := by
+  unfold assignMessagePieces
+  simp only [circuit_norm]
+
+@[circuit_norm] theorem assignMessageCells_localLength (input : Var Input Ecc.Fp)
+    (offset : ℕ) :
+    (assignMessageCells input).localLength offset = 122 := by
+  unfold assignMessageCells
+  simp only [circuit_norm]
+
+@[circuit_norm] theorem constrainCommitment_localLength (input : Var Input Ecc.Fp)
+    (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messageLengths) Ecc.Fp)
+    (offset : ℕ) :
+    (constrainCommitment input cells out).localLength offset = 62 := by
+  unfold constrainCommitment
+  simp only [circuit_norm, DecomposeB.circuit, DecomposeD.circuit, DecomposeE.circuit,
+    DecomposeG.circuit, DecomposeH.circuit, GdCanonicity.circuit, PkdCanonicity.circuit,
+    ValueCanonicity.circuit, RhoCanonicity.circuit, PsiCanonicity.circuit]
+
+@[circuit_norm] theorem commitWithZs_localLength (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
+    (cells : MessageCells) (offset : ℕ) :
+    (commitWithZs G Q hQ R input cells).localLength offset = 1447 := rfl
+
+@[circuit_norm] theorem commitAndConstrain_localLength (G : Generators)
+    (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
+    (input : Var Input Ecc.Fp) (cells : MessageCells) (offset : ℕ) :
+    (commitAndConstrain G Q hQ R input cells).localLength offset = 1509 := by
+  unfold commitAndConstrain
+  simp only [circuit_norm]
 
 instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
@@ -355,6 +480,23 @@ def mainOutput (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let cells := (assignMessageCells input).output offset
   (commitAndConstrain G Q hQ R input cells).output
     (offset + (assignMessageCells input).localLength offset)
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) where
+  localLength _ := 1631
+  localLength_eq := by
+    intro input offset
+    unfold main
+    simp only [circuit_norm]
+  output := mainOutput G Q hQ R
+  output_eq input offset := by
+    unfold main mainOutput
+    simp only [Circuit.output, Circuit.bind_def, Circuit.localLength]
+  subcircuitsConsistent input offset :=
+    (mainExplicit G Q hQ R).subcircuitsConsistent input offset
+  channelsLawful input offset := by
+    convert (mainExplicit G Q hQ R).channelsLawful input offset
 
 /-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
 `g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
