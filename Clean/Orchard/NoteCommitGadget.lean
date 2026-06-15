@@ -159,6 +159,13 @@ private theorem chunksOf_one_eq_singleton {x : ℕ} (hx : x < 2 ^ K) :
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [Nat.mod_eq_of_lt hx]
 
+private theorem chunksOf_one_eq_singleton_mod {x : ℕ} :
+    Orchard.Specs.Sinsemilla.chunksOf x 1 = [x % 2 ^ K] := by
+  unfold Orchard.Specs.Sinsemilla.chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
+  rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
+    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+
 set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_a (gdX gdY pkdX pkdY v rho psi : ℕ) :
     Orchard.Specs.Sinsemilla.chunksOf
@@ -174,6 +181,26 @@ private theorem noteCommitChunks_segment_a (gdX gdY pkdX pkdY v rho psi : ℕ) :
     norm_num [K]
     ring_nf]
   exact chunksOf_add_high_mod
+
+set_option exponentiation.threshold 900 in
+private theorem noteCommitChunks_segment_b_word (gdX gdY pkdX pkdY v rho psi : ℕ)
+    (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
+    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) %
+        2 ^ K =
+      gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64 := by
+  rw [show 2 ^ K = 1024 by norm_num [K]]
+  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  norm_num at *
+  omega
+
+set_option exponentiation.threshold 900 in
+private theorem noteCommitChunks_segment_b (gdX gdY pkdX pkdY v rho psi : ℕ)
+    (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
+    Orchard.Specs.Sinsemilla.chunksOf
+        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 1 =
+      [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] := by
+  rw [chunksOf_one_eq_singleton_mod,
+    noteCommitChunks_segment_b_word gdX gdY pkdX pkdY v rho psi hgdX hgdY]
 
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
