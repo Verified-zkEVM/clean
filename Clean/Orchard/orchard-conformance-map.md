@@ -264,6 +264,18 @@ The missing entry circuit must witness internal decomposition/addition/window va
 and specify actual elliptic-curve scalar multiplication. Downstream Orchard gadgets must
 not accept scalar-multiplication products as free inputs.
 
+NON-CONFORMANT output signature (fixed-base mul entries): Halo2's `FixedPoint::mul`
+(`mul_fixed/full_width.rs::Config::assign`) returns `(EccPoint, EccScalarFixed)` and
+`FixedPointShort::mul` (`mul_fixed/short.rs::Config::assign`) returns
+`(EccPoint, EccScalarFixedShort)` — the second component is the witnessed scalar
+*decomposition* (the assigned window / running-sum cells). Clean's
+`MulFixed.FullWidth.circuit` and `MulFixed.Short.circuit` return only `Point`, dropping
+that scalar. This is the same class of gap as the hash running sums (Output omits a value
+Halo2 returns); fix by returning `(Point, scalar-decomposition)` to match. (The variable-
+base `Mul.Assign.circuit` similarly returns only `Point` where `EccInstructions::mul`
+returns `(EccPoint, ScalarVar)`, but there `ScalarVar = BaseFieldElem(alpha)` merely
+re-wraps the already-present input `alpha`, so it is benign and not tracked as a gap.)
+
 ### Scalar Multiplication Gate Layout Gaps
 
 The scalar-mul row assertions are source-shaped as separate gate modules, but still do
@@ -334,6 +346,42 @@ Implemented building blocks:
 Missing source-level APIs:
 
 - `SinsemillaInstructions::hash_to_point_with_private_init`
+
+### Hash Output Signature: Running Sums (NON-CONFORMANT)
+
+The Sinsemilla hash output type does **not** match Halo2, violating the input/output
+signature requirement (plan "Goal" and "Synthesize" §: the I/O schema of a Clean circuit
+must precisely match the Halo2 method).
+
+Halo2 returns the per-piece running sums as part of the output:
+
+```rust
+// halo2_gadgets/src/sinsemilla.rs
+fn hash_to_point(...) -> Result<(NonIdentityPoint, Vec<Vec<AssignedCell<…>>>), Error>
+fn commit(...)        -> Result<(Point,            Vec<Vec<AssignedCell<…>>>), Error>
+// zs[i] = [z_0, …, z_{w_i}] is piece i's running sum
+// (hash_to_point.rs::hash_piece builds zs; hash_all_pieces collects zs_sum;
+//  note_commit.rs reads zs[0][13], zs[3][1], …)
+```
+
+Current Clean state (under-models the output):
+
+- `HashPiece` computes the full running sum `zs : Vector field (w + 1)` internally
+  (`HashToPoint.lean`, in `main`) but its `Output` exposes only `z1 = zs[1]` — a one-off
+  added by the z1-refactor for the single cell Merkle's decomposition gate needed.
+- `Chain.Output` / `Entry.Output` carry only `z1s` (the per-piece `z_1`), not the full
+  `zs`.
+- `CommitDomain.circuit` / `HashDomain.circuit` return only the point, dropping `zs`.
+
+Consequence: this blocks the canonicity-checking entries that copy specific running-sum
+cells out of the hash region — `gadgets::note_commit` (needs `zs[i][13]`, `zs[i][1]`) and
+`gadgets::commit_ivk` (same pattern). It is why those are still missing.
+
+Fix (faithful, supersedes the z1-only exposure): expose each piece's full running sum
+`zs` through `HashPiece.Output` (so `z1` becomes `zs[1]`), thread per-piece `zs` through
+the recursive `Chain`/`Entry` tower (a flat `Vector (Vector …) …` does not type — pieces
+have different `w`), and return `(Point, zs)` from `CommitDomain.circuit` to match
+`commit`. Re-prove the four hash circuits accordingly.
 
 ### Orchard Entry APIs
 
