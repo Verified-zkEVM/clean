@@ -105,6 +105,17 @@ private theorem pieceWord_eq_of_sum {piece : Ecc.Fp} {n : ℕ} {ms : ℕ → ℕ
   rw [hval]
   exact digit_of_sum K i n ms hms hi
 
+private theorem map_pieceWord_eq_of_sum {piece : Ecc.Fp} {n : ℕ} {ms : ℕ → ℕ}
+    (hms : ∀ r, ms r < 2 ^ K)
+    (hpiece : piece =
+      ((∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hcard : (∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) <
+      CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) :
+    (List.range n).map (Orchard.Sinsemilla.pieceWord piece) = (List.range n).map ms := by
+  exact List.map_congr_left fun i hi => by
+    simp only [List.mem_range] at hi
+    exact pieceWord_eq_of_sum hms hpiece hcard hi
+
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
 Each witnesses a "prime" value (the element shifted up by `2^130`/`2^140` minus `t_P`)
