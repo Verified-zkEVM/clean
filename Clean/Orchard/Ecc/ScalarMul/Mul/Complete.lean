@@ -9,21 +9,21 @@ Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.
 
 namespace Orchard.Ecc.ScalarMul.Mul.Complete
 
-structure Row (F : Type) where
+structure Input (F : Type) where
   zPrev : F
   zNext : F
   baseY : F
   yP : F
 deriving ProvableStruct
 
-def bit {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
+def bit {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Input K) : K :=
   row.zNext - 2 * row.zPrev
 
 def ySwitch {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
-    (row : Row K) : K :=
+    (row : Input K) : K :=
   ternary (bit row) (row.baseY - row.yP) (row.baseY + row.yP)
 
-def SelectedCompleteBitPointNegation (row : Row Fp) : Prop :=
+def SelectedCompleteBitPointNegation (row : Input Fp) : Prop :=
   ∀ baseX : Fp,
     (bit row = 0 →
       (baseX, row.yP) =
@@ -31,14 +31,14 @@ def SelectedCompleteBitPointNegation (row : Row Fp) : Prop :=
       (bit row = 1 →
         (baseX, row.yP) = (baseX, row.baseY))
 
-def Spec (row : Row Fp) : Prop :=
+def Spec (row : Input Fp) : Prop :=
   IsBool (bit row) ∧ SelectedCompleteBitPointNegation row
 
-def main (row : Var Row Fp) : Circuit Fp Unit := do
+def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
   assertZero (ySwitch row)
 
-def circuit : FormalAssertion Fp Row where
+def circuit : FormalAssertion Fp Input where
   name := "GATE Decompose scalar for complete bits of variable-base mul"
   main
   Spec := Spec
@@ -110,7 +110,7 @@ open Incomplete.DoubleAndAdd (BitsHint zRunValue)
 /-- Inputs: the base point, the accumulator cells from incomplete addition, the
 running-sum cell, and the prover-side complete-range bits (indexed `0..2`). -/
 structure Input (F : Type) where
-  base : Ecc.Point F
+  base : Point F
   xA : F
   yA : F
   z : F
@@ -122,7 +122,7 @@ instance : Inhabited (Var Input Fp) :=
      z := default, bits := fun _ => default }⟩
 
 structure Output (F : Type) where
-  acc : Ecc.Point F
+  acc : Point F
   zs : Vector F 3
 deriving ProvableStruct
 
@@ -143,7 +143,7 @@ def main (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
   let zs ← witnessVector 3 fun env =>
     .ofFn fun (b : Fin 3) => zRunValue (env input.z) (input.bits env) b.val
   let zsAll := Vector.cast (Nat.add_comm 1 3) ((#v[z₀] : Vector (Expression Fp) 1) ++ zs)
-  let acc₀ : Var Ecc.Point Fp := { x := input.xA, y := input.yA }
+  let acc₀ : Var Point Fp := { x := input.xA, y := input.yA }
   let accFinal ← Circuit.foldlRange 3 acc₀ fun acc i => do
     -- copy base.y for the decomposition gate, witness the conditionally-negated y_p
     let baseY <== input.base.y
@@ -296,7 +296,7 @@ theorem soundness :
     rw [show i₀ + 1 + 3 + 2 * 24 + 2 + 11 + 2 + 2
         = i₀ + 1 + 3 + 48 + 1 + 1 + 11 + 2 + 2 from by omega]
     rw [hA3.2, hT2.2, hA2.2, hT1.2, hA1.2, hT0.2, hyP0, hyP1, hyP2]
-    simp only [accValue, stepValue, Ecc.Point.coords, decide_eq_true_eq]
+    simp only [accValue, stepValue, Point.coords, decide_eq_true_eq]
     norm_num
 
 /-- The honest assignment of one complete bit satisfies the decomposition gate. -/
@@ -409,7 +409,7 @@ theorem completeness :
     rw [show i₀ + 1 + 3 + 2 * 24 + 2 + 11 + 2 + 2
         = i₀ + 1 + 3 + 48 + 1 + 1 + 11 + 2 + 2 from by omega]
     rw [hA3.2, hT2.2, hA2.2, hT1.2, hA1.2, hT0.2, hyP0, hyP1, hyP2]
-    simp only [accValue, stepValue, Ecc.Point.coords]
+    simp only [accValue, stepValue, Point.coords]
 
 /-- `complete.rs::Config::assign_region`: the complete-addition bits of variable-base
 scalar multiplication. -/

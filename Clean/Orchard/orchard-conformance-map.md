@@ -83,7 +83,7 @@ Source:
 Current Clean coverage:
 
 - `Clean.Orchard.Ecc.ScalarMul.Defs`: shared scalar-mul gate helpers
-- `Clean.Orchard.Ecc.ScalarMul.Mul.circuit`: `GATE LSB check`
+- `Clean.Orchard.Ecc.ScalarMul.Mul.Gate.circuit`: `GATE LSB check`
 - `Clean.Orchard.Ecc.ScalarMul.Mul.Complete.circuit`:
   `GATE Decompose scalar for complete bits of variable-base mul`
 - `Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete.Init.circuit`:
@@ -111,14 +111,14 @@ Current Clean coverage:
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.circuit`: `FixedPoint::mul`
   (`mul_fixed/full_width.rs::Config::assign`), the full-width fixed-base scalar
   multiplication entry circuit `[scalar] B`, with soundness and completeness proved
-- `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.Gate.circuit`:
   `GATE Canonicity checks`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.RunningSumMul.circuit`: the strict
   85-window running-sum decomposition, shared fixed-base windowed multiplication, and
   final complete addition producing `[alpha] B` (`GeneralFormalCircuit.WithHint`,
   soundness and completeness proved); exposes the running-sum cells `z_43`, `z_44`, `z_84`
   that the canonicity check copies in
-- `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.Assign.circuit`:
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`:
   `FixedPointBaseField::mul` (`mul_fixed/base_field_elem.rs::Config::assign`), the
   base-field-element fixed-base scalar multiplication entry circuit `[alpha] B`, with
   soundness and completeness proved; composes `RunningSumMul` with the canonicity tail
@@ -257,7 +257,7 @@ completeness, no sorries).
 
 - `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by
   `ecc/chip/mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`), is modeled by
-  `Clean.Orchard.Ecc.ScalarMul.Mul.Assign.circuit` — fully verified (soundness and
+  `Clean.Orchard.Ecc.ScalarMul.Mul.circuit` — fully verified (soundness and
   completeness, no sorries). Its `Spec` is the semantic contract: for any nonzero curve
   point `B` matching the base coordinates, the output is `([alpha.val] B).coords`. The
   composition follows the source: `[2]base` by complete addition, `z_init = 0`, the
@@ -270,7 +270,7 @@ completeness, no sorries).
 - `FixedPointBaseField::mul`, implemented by
   `ecc/chip/mul_fixed/base_field_elem.rs::Config::assign`: fixed-base multiplication by a
   base-field element (used by nullifier derivation), is modeled by
-  `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.Assign.circuit` — fully verified
+  `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit` — fully verified
   (soundness and completeness, no sorries). Its `Spec` is the semantic contract: the
   output is `([alpha.val] B).coords`. It composes the strict 85-window running-sum
   decomposition + shared windowed multiplication + complete addition (`RunningSumMul`)
@@ -287,7 +287,7 @@ NON-CONFORMANT output signature (fixed-base mul entries): Halo2's `FixedPoint::m
 `MulFixed.FullWidth.circuit` and `MulFixed.Short.circuit` return only `Point`, dropping
 that scalar. This is the same class of gap as the hash running sums (Output omits a value
 Halo2 returns); fix by returning `(Point, scalar-decomposition)` to match. (The variable-
-base `Mul.Assign.circuit` similarly returns only `Point` where `EccInstructions::mul`
+base `Mul.circuit` similarly returns only `Point` where `EccInstructions::mul`
 returns `(EccPoint, ScalarVar)`, but there `ScalarVar = BaseFieldElem(alpha)` merely
 re-wraps the already-present input `alpha`, so it is benign and not tracked as a gap.)
 

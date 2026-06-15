@@ -25,7 +25,7 @@ Soundness rests on the identity `2^254 + t_q ≡ 0 (mod q)`: the double-and-add
 accumulates `[2^254 + k] base = [alpha] base`.
 -/
 
-namespace Orchard.Ecc.ScalarMul.Mul.Assign
+namespace Orchard.Ecc.ScalarMul.Mul
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
@@ -342,7 +342,7 @@ namespace Decompose
 
 /-- Inputs: the base, the doubled accumulator `[2]base`, and the scalar-bit hints. -/
 structure Input (F : Type) where
-  base : Ecc.Point F
+  base : Point F
   xA : F
   yA : F
   bits : Unconstrained BitsHint F
@@ -355,7 +355,7 @@ instance : Inhabited (Var Input Fp) :=
 /-- Outputs: the accumulator after all 254 double-and-add bits, plus the running-sum
 cells the rest of `assign` inspects: `z_1`, `z_130` and `k_254`. -/
 structure Output (F : Type) where
-  acc : Ecc.Point F
+  acc : Point F
   z1 : F
   z130 : F
   k254 : F
@@ -479,14 +479,14 @@ theorem soundness :
     (by show Pallas.Valid (input_base.x, input_base.y)
         rw [hbase]
         exact Or.inl (SWPoint.onCurve_of_ne_zero hB))
-  simp only [Ecc.Point.coords] at hCompS
+  simp only [Point.coords] at hCompS
   obtain ⟨hValidAcc, hCompPair⟩ := hCompS
   rw [show input_base.x = B.x from congrArg Prod.fst hbase,
     show input_base.y = B.y from congrArg Prod.snd hbase, hLoOut,
     accValue_nsmul B (accScalar (accScalar 2 bitsHi 125) bitsLo 126)
       hmB.2.2.1 bitsC 3] at hCompPair
-  exact ⟨by simp only [Ecc.Point.coords]; exact hValidAcc,
-    by simp only [Ecc.Point.coords]; exact hCompPair⟩
+  exact ⟨by simp only [Point.coords]; exact hValidAcc,
+    by simp only [Point.coords]; exact hCompPair⟩
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
@@ -585,9 +585,9 @@ namespace ProcessLsb
 /-- Inputs: the base, the running-sum cell `z_1`, the accumulator after the complete
 rounds, and the prover-side LSB hint. -/
 structure Input (F : Type) where
-  base : Ecc.Point F
+  base : Point F
   z1 : F
-  acc : Ecc.Point F
+  acc : Point F
   bit : Unconstrained Bool F
 deriving CircuitType
 
@@ -596,7 +596,7 @@ instance : Inhabited (Var Input Fp) :=
      acc := { x := default, y := default }, bit := fun _ => default }⟩
 
 structure Output (F : Type) where
-  result : Ecc.Point F
+  result : Point F
   z0 : F
 deriving ProvableStruct
 
@@ -612,9 +612,9 @@ def main (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
     if input.bit env then 0 else env input.base.x
   let corrY ← witnessField fun env =>
     if input.bit env then 0 else -(env input.base.y)
-  Mul.circuit { z1 := input.z1, z0, xP := corrX, yP := corrY, baseX, baseY }
+  Mul.Gate.circuit { z1 := input.z1, z0, xP := corrX, yP := corrY, baseX, baseY }
   -- complete addition of the correction point
-  let result ← Ecc.Add.circuit { p := { x := corrX, y := corrY }, q := input.acc }
+  let result ← Add.circuit { p := { x := corrX, y := corrY }, q := input.acc }
   return { result, z0 }
 
 instance elaborated : ElaboratedCircuit Fp Input Output main := by
@@ -641,11 +641,11 @@ def ProverSpec (input : ProverValue Input Fp) (output : Output Fp)
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True) Spec := by
-  circuit_proof_start [Mul.circuit, Ecc.Add.circuit]
+  circuit_proof_start [Mul.Gate.circuit, Add.circuit]
   obtain ⟨hbx, hby, hMul, hAdd⟩ := h_holds
-  simp only [Mul.Spec, Mul.SelectedCorrectionPoint, Mul.lsb] at hMul
+  simp only [Mul.Gate.Spec, Mul.Gate.SelectedCorrectionPoint, Mul.Gate.lsb] at hMul
   obtain ⟨hk0Bool, hCorrNeg, hCorrZero⟩ := hMul
-  simp only [Ecc.Add.Assumptions, Ecc.Add.Spec, Ecc.Point.coords] at hAdd
+  simp only [Add.Assumptions, Add.Spec, Point.coords] at hAdd
   refine ⟨env.get i₀ - input_z1 * 2, hk0Bool, by ring, ?_⟩
   intro B A hB hbase hacc
   obtain ⟨hIx, hIy⟩ : Expression.eval env input_var.base.x = input_base.x ∧
@@ -681,7 +681,7 @@ theorem soundness :
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
-  circuit_proof_start [Mul.circuit, Ecc.Add.circuit]
+  circuit_proof_start [Mul.Gate.circuit, Add.circuit]
   obtain ⟨hz0w, hbxw, hbyw, hcxw, hcyw, -⟩ := h_env
   obtain ⟨hOnC, hValidAcc⟩ := h_assumptions
   obtain ⟨hIx, hIy⟩ : Expression.eval env.toEnvironment input_var.base.x = input_base.x ∧
@@ -691,7 +691,7 @@ theorem completeness :
     exact ⟨rfl, rfl⟩
   refine ⟨⟨hbxw, hbyw, ?_, ?_, hValidAcc⟩, hz0w⟩
   · -- the LSB gate holds for the honest row
-    simp only [Mul.Spec, Mul.SelectedCorrectionPoint, Mul.lsb]
+    simp only [Mul.Gate.Spec, Mul.Gate.SelectedCorrectionPoint, Mul.Gate.lsb]
     rw [hz0w, hcxw, hcyw, hbxw, hbyw, hIx, hIy,
       show (2 * input_z1 + (if input_bit then (1 : Fp) else 0)) - input_z1 * 2
         = (if input_bit then (1 : Fp) else 0) from by ring]
@@ -705,7 +705,7 @@ theorem completeness :
     cases input_bit
     · norm_num
       refine Or.inl ?_
-      simp only [CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Ecc.Point.coords]
+      simp only [CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Point.coords]
         at hOnC ⊢
       linear_combination hOnC
     · norm_num
@@ -726,12 +726,12 @@ end ProcessLsb
 /-- Inputs of variable-base scalar mul: the scalar cell and the non-identity base. -/
 structure Input (F : Type) where
   alpha : F
-  base : Ecc.Point F
+  base : Point F
 deriving ProvableStruct
 
-def main (input : Var Input Fp) : Circuit Fp (Var Ecc.Point Fp) := do
+def main (input : Var Input Fp) : Circuit Fp (Var Point Fp) := do
   -- initialize the accumulator `acc = [2]base` using complete addition
-  let acc ← Ecc.Add.circuit { p := input.base, q := input.base }
+  let acc ← Add.circuit { p := input.base, q := input.base }
   -- the 254 double-and-add bits `k_254..k_1`: z_init, hi/lo halves, complete bits
   let dec ← Decompose.circuit {
     base := input.base, xA := acc.x, yA := acc.y,
@@ -747,7 +747,7 @@ def main (input : Var Input Fp) : Circuit Fp (Var Ecc.Point Fp) := do
     k254 := dec.k254 }
   return lsb.result
 
-instance elaborated : ElaboratedCircuit Fp Input Ecc.Point main := by
+instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit
 
 def Assumptions (input : Input Fp) : Prop :=
@@ -755,22 +755,22 @@ def Assumptions (input : Input Fp) : Prop :=
 
 /-- The circuit computes the variable-base scalar multiplication `[alpha] base`,
 with the identity encoded as `(0, 0)` coordinates. -/
-def Spec (input : Input Fp) (output : Ecc.Point Fp) : Prop :=
+def Spec (input : Input Fp) (output : Point Fp) : Prop :=
   ∀ B : SWPoint Pallas.curve, B ≠ 0 → input.base.coords = (B.x, B.y) →
     output.coords = ((input.alpha.val • B).x, (input.alpha.val • B).y)
 theorem soundness : Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [Ecc.Add.circuit, Decompose.circuit, ProcessLsb.circuit,
+  circuit_proof_start [Add.circuit, Decompose.circuit, ProcessLsb.circuit,
     Overflow.OverflowCheck.circuit]
   obtain ⟨hAcc, hDec, hLsb, hOv⟩ := h_holds
-  simp only [Decompose.Spec, Ecc.Point.coords] at hDec
+  simp only [Decompose.Spec, Point.coords] at hDec
   obtain ⟨bitsHi, bitsLo, bitsC, hK254, hZ130, hZ1, hAccImpl⟩ := hDec
-  simp only [ProcessLsb.Spec, Ecc.Point.coords] at hLsb
+  simp only [ProcessLsb.Spec, Point.coords] at hLsb
   obtain ⟨k0, hk0Bool, hz0eq, hResImpl⟩ := hLsb
   simp only [Overflow.OverflowCheck.Spec] at hOv
   obtain ⟨hOvZ0, hOvDisj2, hOvEx⟩ := hOv
   intro B hB hcoords
-  simp only [Ecc.Add.Assumptions, Ecc.Add.Spec, Ecc.Point.coords] at hAcc
-  simp only [Ecc.Point.coords] at h_assumptions hcoords ⊢
+  simp only [Add.Assumptions, Add.Spec, Point.coords] at hAcc
+  simp only [Point.coords] at h_assumptions hcoords ⊢
   -- the doubled base: acc = [2]B
   have hAccPair := (hAcc ⟨Or.inl h_assumptions, Or.inl h_assumptions⟩).2
   rw [hcoords, Pallas.add_coords, ← two_nsmul] at hAccPair
@@ -995,10 +995,10 @@ private theorem overflow_spec_honest (alpha : Fp) {z0v z130v k254v : Fp}
         ring
 
 theorem completeness : Completeness Fp main Assumptions := by
-  circuit_proof_start [Ecc.Add.circuit, Decompose.circuit, ProcessLsb.circuit,
+  circuit_proof_start [Add.circuit, Decompose.circuit, ProcessLsb.circuit,
     Overflow.OverflowCheck.circuit]
   obtain ⟨hAcc, hDec, hLsb⟩ := h_env
-  simp only [Ecc.Point.coords] at h_assumptions
+  simp only [Point.coords] at h_assumptions
   -- the base as a nonzero curve point
   obtain ⟨B, hB, hBx, hBy⟩ : ∃ B : SWPoint Pallas.curve, B ≠ 0 ∧
       B.x = input_base.x ∧ B.y = input_base.y := by
@@ -1010,12 +1010,12 @@ theorem completeness : Completeness Fp main Assumptions := by
     exact Pallas.not_onCurve_zero h_assumptions
   have hbase : (input_base.x, input_base.y) = (B.x, B.y) := by rw [hBx, hBy]
   -- the doubled base: acc = [2]B
-  simp only [Ecc.Add.Assumptions, Ecc.Add.Spec, Ecc.Point.coords] at hAcc
+  simp only [Add.Assumptions, Add.Spec, Point.coords] at hAcc
   have hAccPair := (hAcc ⟨Or.inl h_assumptions, Or.inl h_assumptions⟩).2
   rw [hbase, Pallas.add_coords, ← two_nsmul] at hAccPair
   -- the decomposition prover facts: honest cells as shifted values of k
   have hDecS := hDec ⟨B, hB, hbase, hAccPair⟩
-  simp only [Decompose.ProverSpec, Ecc.Point.coords] at hDecS
+  simp only [Decompose.ProverSpec, Point.coords] at hDecS
   obtain ⟨-, h254, h130, h1c, hValidAcc⟩ := hDecS
   have hck := cells_kNat input_alpha
   rw [show (fun i => kBits input_alpha i) = kBits input_alpha from rfl, hck.1] at h254
@@ -1030,7 +1030,7 @@ theorem completeness : Completeness Fp main Assumptions := by
 
 /-- `mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`):
 variable-base scalar multiplication by a base-field element. -/
-def circuit : FormalCircuit Fp Input Ecc.Point where
+def circuit : FormalCircuit Fp Input Point where
   main
   elaborated
   Assumptions
@@ -1038,4 +1038,4 @@ def circuit : FormalCircuit Fp Input Ecc.Point where
   soundness
   completeness
 
-end Orchard.Ecc.ScalarMul.Mul.Assign
+end Orchard.Ecc.ScalarMul.Mul

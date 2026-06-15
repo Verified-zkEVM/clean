@@ -89,3 +89,15 @@ Pow5 review: <https://github.com/Verified-zkEVM/clean/pull/405#pullrequestreview
   abstractions; they are non-source-shaped indirection. Inline such expressions in the
   gate `main` / assertion list unless the helper names a real Halo2 concept or is
   substantively reused.
+- Use the unqualified exported Orchard names, not `Ecc.`-qualified ones. `Ecc.Defs`
+  does `export Ecc (Fp Fq)` and defines `Ecc.Point`, and Orchard gadget files sit under
+  the `Orchard.Ecc.*` namespace, so write `Fp`, `Fq`, `Point`, `Add.circuit`,
+  `AddIncomplete.circuit` — never `Ecc.Fp`, `Ecc.Point`, `Ecc.Add.circuit`. (The sibling
+  `FullWidth`/`Short` files already do this; match them.)
+- Use Clean's existing top-level `IsBool` (from `Gadgets.Boolean`) and its lemmas, not a
+  per-namespace re-definition. Do not redefine `IsBool`/`ternary` in a local `Defs` module
+  when an exported one exists.
+- State point-valued circuit specs at the `Point` level, e.g. `output = B.mulValue s` (or
+  the point itself), not by projecting coordinates: avoid
+  `output.coords = ((s • B.point).x, (s • B.point).y)`. The `.x`/`.coords` projection in a
+  contract is ugly and non-semantic; use the high-level point equality.

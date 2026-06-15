@@ -6,8 +6,8 @@ import Clean.Orchard.Utilities
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`.
 
-`circuit` (`Canonicity checks` namespace below) is the custom gate enabled on the
-canonicity-check rows. `Assign.circuit` is the source-level entry point
+`Gate.circuit` (`Canonicity checks`, namespace `Gate` below) is the custom gate enabled
+on the canonicity-check rows. `circuit` is the source-level entry point
 `base_field_elem.rs::Config::assign` (gadget API `FixedPointBaseField::mul`): it
 decomposes the 255-bit base-field element into 85 three-bit windows with a strict
 running sum, runs the shared fixed-base windowed multiplication (window-table coordinate
@@ -22,7 +22,9 @@ the running-sum cells `z₄₃`, `z₄₄`, `z₈₄` that the canonicity check 
 
 namespace Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem
 
-structure Row (F : Type) where
+namespace Gate
+
+structure Input (F : Type) where
   alpha : F
   z84Alpha : F
   alpha1 : F
@@ -33,43 +35,43 @@ structure Row (F : Type) where
   z43Alpha : F
 deriving ProvableStruct
 
-def alpha0 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 252)] (row : Row K) : K :=
+def alpha0 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 252)] (row : Input K) : K :=
   row.alpha - row.z84Alpha * OfNat.ofNat (2 ^ 252)
 
 def alpha1RangeCheck {K : Type} [One K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 3]
-    (row : Row K) : K :=
+    (row : Input K) : K :=
   row.alpha1 * (1 - row.alpha1) * (2 - row.alpha1) * (3 - row.alpha1)
 
-def z84AlphaCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 4] (row : Row K) : K :=
+def z84AlphaCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 4] (row : Input K) : K :=
   row.z84Alpha - (row.alpha1 + row.alpha2 * 4)
 
 def alpha0PrimeCheck {K : Type} [Add K] [Sub K] [Mul K]
     [OfNat K (2 ^ 130)] [OfNat K (2 ^ 252)]
-    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
+    [OfNat K 45560315531419706090280762371685220353] (row : Input K) : K :=
   row.alpha0Prime - (alpha0 row + OfNat.ofNat (2 ^ 130) - NoteCommit.tP)
 
-def alpha0Hi120 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 120)] (row : Row K) : K :=
+def alpha0Hi120 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 120)] (row : Input K) : K :=
   row.z44Alpha - row.z84Alpha * OfNat.ofNat (2 ^ 120)
 
-def a43 {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : K :=
+def a43 {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Input K) : K :=
   row.z43Alpha - row.z44Alpha * 8
 
 def IsAlpha1 (alpha1 : Fp) : Prop :=
   alpha1 = 0 ∨ alpha1 = 1 ∨ alpha1 = 2 ∨ alpha1 = 3
 
-def DecomposesBaseFieldElem (row : Row Fp) : Prop :=
+def DecomposesBaseFieldElem (row : Input Fp) : Prop :=
   row.z84Alpha = row.alpha1 + row.alpha2 * 4 ∧
     row.alpha0Prime = alpha0 row + OfNat.ofNat (2 ^ 130) - NoteCommit.tP
 
-def CanonicalHighBit (row : Row Fp) : Prop :=
+def CanonicalHighBit (row : Input Fp) : Prop :=
   row.alpha2 = 1 →
     row.alpha1 = 0 ∧ alpha0Hi120 row = 0 ∧ IsBool (a43 row) ∧ row.z13Alpha0Prime = 0
 
-def Spec (row : Row Fp) : Prop :=
+def Spec (row : Input Fp) : Prop :=
   IsAlpha1 row.alpha1 ∧ IsBool row.alpha2 ∧ DecomposesBaseFieldElem row ∧
     CanonicalHighBit row
 
-def main (row : Var Row Fp) : Circuit Fp Unit := do
+def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (row.alpha2 * row.alpha1)
   assertZero (row.alpha2 * alpha0Hi120 row)
   assertZero (row.alpha2 * NoteCommit.boolPoly (a43 row))
@@ -79,7 +81,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (z84AlphaCheck row)
   assertZero (alpha0PrimeCheck row)
 
-def circuit : FormalAssertion Fp Row where
+def circuit : FormalAssertion Fp Input where
   name := "GATE Canonicity checks"
   main
   Spec := Spec
@@ -166,6 +168,8 @@ def circuit : FormalAssertion Fp Row where
     · rw [hAlpha0Prime]
       ring
 
+end Gate
+
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD PALLAS_BASE_CARD)
 
@@ -211,7 +215,7 @@ def rowTailValue (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) : RowTail Fp where
 /-- Output: the multiplication result `[α]B`, and the running-sum cells the canonicity
 check inspects (`z₄₃ = z_43`, `z₄₄ = z_44`, `z₈₄ = z_84`). -/
 structure Output (F : Type) where
-  result : Ecc.Point F
+  result : Point F
   z43 : F
   z44 : F
   z84 : F
@@ -226,28 +230,28 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   Utilities.RunningSum.circuit 3 { zCur := z₀, zNext := t₀.zNext }
   MulFixed.RunningSumCoords.circuit (B.params 0)
     { zCur := z₀, zNext := t₀.zNext, xP := t₀.xP, yP := t₀.yP, u := t₀.u }
-  let acc₀ : Var Ecc.Point Fp := { x := t₀.xP, y := t₀.yP }
+  let acc₀ : Var Point Fp := { x := t₀.xP, y := t₀.yP }
   -- windows 1..42 are added with incomplete addition; final `zCur = z_43`
   let (acc₄₂, z₄₃) ← Circuit.foldl (Vector.finRange 42) (acc₀, t₀.zNext) fun (acc, zCur) i => do
     let t : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) (i.val + 1)
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 1))
       { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
-    let acc' ← Ecc.AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
+    let acc' ← AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
     return (acc', t.zNext)
   -- explicit window 43; `t₄₃.zNext = z_44`
   let t₄₃ : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) 43
   Utilities.RunningSum.circuit 3 { zCur := z₄₃, zNext := t₄₃.zNext }
   MulFixed.RunningSumCoords.circuit (B.params 43)
     { zCur := z₄₃, zNext := t₄₃.zNext, xP := t₄₃.xP, yP := t₄₃.yP, u := t₄₃.u }
-  let acc₄₃ ← Ecc.AddIncomplete.circuit { p := { x := t₄₃.xP, y := t₄₃.yP }, q := acc₄₂ }
+  let acc₄₃ ← AddIncomplete.circuit { p := { x := t₄₃.xP, y := t₄₃.yP }, q := acc₄₂ }
   -- windows 44..83 are added with incomplete addition; final `zCur = z_84`
   let (acc₈₃, z₈₄) ← Circuit.foldl (Vector.finRange 40) (acc₄₃, t₄₃.zNext) fun (acc, zCur) i => do
     let t : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) (i.val + 44)
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 44))
       { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
-    let acc' ← Ecc.AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
+    let acc' ← AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
     return (acc', t.zNext)
   -- most significant window 84
   let t₈₄ : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) 84
@@ -257,7 +261,7 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   -- strict decomposition: the final running sum value is zero
   t₈₄.zNext === (0 : Expression Fp)
   -- `[α]B` by complete addition of the most significant window
-  let result ← Ecc.Add.circuit { p := { x := t₈₄.xP, y := t₈₄.yP }, q := acc₈₃ }
+  let result ← Add.circuit { p := { x := t₈₄.xP, y := t₈₄.yP }, q := acc₈₃ }
   return { result := result, z43 := z₄₃, z44 := t₄₃.zNext, z84 := z₈₄ }
 
 instance elaborated (B : MulFixed.FixedBase) :
@@ -272,7 +276,7 @@ def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Output Fp)
   ∃ ks : ℕ → ℕ, (∀ w < 85, ks w < 8) ∧
     let V := ∑ j ∈ Finset.range 85, ks j * 8 ^ j
     alpha = (V : Fp) ∧
-    output.result.coords = ((V • B.point).x, (V • B.point).y) ∧
+    output.result = { x := (V • B.point).x, y := (V • B.point).y } ∧
     output.z43 = ((V / 8 ^ 43 : ℕ) : Fp) ∧
     output.z44 = ((V / 8 ^ 44 : ℕ) : Fp) ∧
     output.z84 = ((V / 8 ^ 84 : ℕ) : Fp)
@@ -282,7 +286,7 @@ def ProverAssumptions (alpha : Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Pro
 
 def ProverSpec (B : MulFixed.FixedBase) (alpha : Fp) (output : Output Fp)
     (_ : ProverHint Fp) : Prop :=
-  output.result.coords = ((alpha.val • B.point).x, (alpha.val • B.point).y) ∧
+  output.result = B.mulValue (alpha.val : Fq) ∧
     output.z43 = zValue alpha 43 ∧ output.z44 = zValue alpha 44 ∧
     output.z84 = zValue alpha 84
 
@@ -458,24 +462,24 @@ private theorem zCell_pos {j : ℕ} (i₀ : ℕ) (hj : 1 ≤ j) :
 /-- The evaluated accumulator after processing windows `0..j` (relative to a circuit
 starting at offset `i₀`). Window `0` initializes the accumulator with its window point;
 every subsequent window's output lives at a uniform `+10` stride. -/
-private def accPt (env : Environment Fp) (i₀ : ℕ) : ℕ → Ecc.Point Fp
+private def accPt (env : Environment Fp) (i₀ : ℕ) : ℕ → Point Fp
   | 0 => { x := env.get (i₀ + 1 + 1), y := env.get (i₀ + 1 + 1 + 1) }
   | j + 1 =>
-    { x := Expression.eval env (varFromOffset Ecc.Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).x,
-      y := Expression.eval env (varFromOffset Ecc.Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).y }
+    { x := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).x,
+      y := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).y }
 
 private theorem accPt_succ (env : Environment Fp) (i₀ j : ℕ) :
     accPt env i₀ (j + 1) =
-      { x := Expression.eval env (varFromOffset Ecc.Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).x,
-        y := Expression.eval env (varFromOffset Ecc.Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).y } :=
+      { x := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).x,
+        y := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).y } :=
   rfl
 
 private theorem accPt_pos {j : ℕ} (env : Environment Fp) (i₀ : ℕ) (hj : 1 ≤ j) :
     accPt env i₀ j =
       { x := Expression.eval env
-          (varFromOffset Ecc.Point (i₀ + 1 + 4 + (j - 1) * 10 + 4 + 2 + 2)).x,
+          (varFromOffset Point (i₀ + 1 + 4 + (j - 1) * 10 + 4 + 2 + 2)).x,
         y := Expression.eval env
-          (varFromOffset Ecc.Point (i₀ + 1 + 4 + (j - 1) * 10 + 4 + 2 + 2)).y } := by
+          (varFromOffset Point (i₀ + 1 + 4 + (j - 1) * 10 + 4 + 2 + 2)).y } := by
   obtain ⟨j', rfl⟩ : ∃ j', j = j' + 1 := ⟨j - 1, by omega⟩
   rw [accPt_succ, Nat.add_sub_cancel]
 
@@ -491,8 +495,8 @@ theorem soundness (B : MulFixed.FixedBase) :
   circuit_proof_start [main, Spec,
     Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
     MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
-    Ecc.AddIncomplete.circuit, Ecc.AddIncomplete.Spec, Ecc.AddIncomplete.Assumptions,
-    Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
+    AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
+    Add.circuit, Add.Spec, Add.Assumptions]
   obtain ⟨h_z0, h_rs0, h_coords0, ⟨h_seg1_w1, h_seg1_loop⟩, h_rs43, h_coords43, h_inc43,
     ⟨h_seg2_w44, h_seg2_loop⟩, h_rs84, h_coords84, h_z85, h_add⟩ := h_holds
   simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceSub] at h_seg1_w1 h_seg1_loop h_rs43 h_coords43 h_inc43 h_seg2_w44 h_seg2_loop h_rs84 h_coords84 h_z85 h_add ⊢
@@ -622,7 +626,7 @@ theorem soundness (B : MulFixed.FixedBase) :
       have hval0 : (MulFixed.windowScalar 0 k0).val = MulFixed.partialSum ks 0 := by
         rw [MulFixed.windowScalar_val (by norm_num) hk0_lt, MulFixed.partialSum, hks0]
         simp
-      show ({ x := env.get (i₀ + 1 + 1), y := env.get (i₀ + 1 + 1 + 1) } : Ecc.Point Fp) = _
+      show ({ x := env.get (i₀ + 1 + 1), y := env.get (i₀ + 1 + 1 + 1) } : Point Fp) = _
       rw [show (MulFixed.RunningSumCoords.coordsRow
           { zCur := env.get i₀, zNext := env.get (i₀ + 1), xP := env.get (i₀ + 1 + 1),
             yP := env.get (i₀ + 1 + 1 + 1),
@@ -681,7 +685,7 @@ theorem soundness (B : MulFixed.FixedBase) :
           rw [hpx, hacc]
           show (t • B.point).x ≠ (MulFixed.partialSum ks j • B.point).x
           exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
-      apply Ecc.Point.ext_coords
+      apply Point.ext_coords
       rw [h_spec.2, hpx, hpy, hacc]
       show Pallas.add ((t • B.point).x, (t • B.point).y)
           ((MulFixed.partialSum ks j • B.point).x, (MulFixed.partialSum ks j • B.point).y)
@@ -720,10 +724,10 @@ theorem soundness (B : MulFixed.FixedBase) :
   have hS83_card := inv_lt_card hS83_lt (by omega)
   have hacc83 :
       ({ x := Expression.eval env
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
          y := Expression.eval env
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
-        : Ecc.Point Fp)
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+        : Point Fp)
       = { x := (S83 • B.point).x, y := (S83 • B.point).y } := by
     rw [hS83_def]
     have := h_inv 83 (by omega)
@@ -737,31 +741,31 @@ theorem soundness (B : MulFixed.FixedBase) :
     exact Or.inl (SWPoint.onCurve_of_ne_zero hP84_ne)
   have hValidAcc : Pallas.Valid
       (({ x := Expression.eval env
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
           y := Expression.eval env
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
-        : Ecc.Point Fp)).coords := by
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+        : Point Fp)).coords := by
     rw [hacc83]
     exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
   have h_final := h_add ⟨hValidP, hValidAcc⟩
   have hresult :
       ({ x := Expression.eval env
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).x,
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).x,
          y := Expression.eval env
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).y }
-        : Ecc.Point Fp).coords = ((V • B.point).x, (V • B.point).y) := by
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).y }
+        : Point Fp).coords = ((V • B.point).x, (V • B.point).y) := by
     rw [h_final.2]
     show Pallas.add
         (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
             y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) }
-          : Ecc.Point Fp)).coords
+          : Point Fp)).coords
         (({ x := Expression.eval env
-              (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+              (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
             y := Expression.eval env
-              (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
-          : Ecc.Point Fp)).coords = _
+              (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+          : Point Fp)).coords = _
     rw [show (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
-                 y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) } : Ecc.Point Fp)).coords
+                 y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) } : Point Fp)).coords
       = (env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
          env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)) from rfl,
       hpx84, hpy84, hacc83]
@@ -782,7 +786,7 @@ theorem soundness (B : MulFixed.FixedBase) :
   -- assemble
   refine ⟨ks, fun w _ => hks_lt w, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hαV, hV_def]
-  · rw [← hV_def]; exact hresult
+  · apply Point.ext_coords; rw [← hV_def]; exact hresult
   · rw [show env.get (i₀ + 1 + 4 + 41 * 10) = env.get (zCell i₀ 42) from rfl, hzdiv 42 (by omega),
       ← hV_def]
   · rw [show env.get (i₀ + 1 + 4 + 42 * 10) = env.get (zCell i₀ 43) from rfl, hzdiv 43 (by omega),
@@ -854,7 +858,7 @@ private theorem word_inRange (α : Fp) (w : ℕ) {a b : Fp}
 
 /-- The honest row values satisfy the coordinates check. -/
 private theorem coordsRow_spec (B : MulFixed.FixedBase) (α : Fp) {w : ℕ} (hw : w < 85)
-    {row : MulFixed.RunningSumCoords.Row Fp}
+    {row : MulFixed.RunningSumCoords.Input Fp}
     (hzc : row.zCur = zValue α w) (hzn : row.zNext = zValue α (w + 1))
     (hx : row.xP = (MulFixed.windowPoint B.point w (windowVal α w)).x)
     (hy : row.yP = (MulFixed.windowPoint B.point w (windowVal α w)).y)
@@ -916,8 +920,8 @@ theorem completeness (B : MulFixed.FixedBase) :
   circuit_proof_start [main, ProverSpec, ProverAssumptions,
     Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
     MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
-    Ecc.AddIncomplete.circuit, Ecc.AddIncomplete.Spec, Ecc.AddIncomplete.Assumptions,
-    Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
+    AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
+    Add.circuit, Add.Spec, Add.Assumptions]
   simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceSub] at h_env
   rw [show (42 * 10 + (i₀ + 1 + 4) + 4 + 6 : ℕ) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 from by omega]
     at h_env
@@ -927,7 +931,7 @@ theorem completeness (B : MulFixed.FixedBase) :
   obtain ⟨h_z0w, h_t0, ⟨⟨h_t1, h_inc1⟩, h_seg1_loop⟩, h_t43, h_inc43,
     ⟨⟨h_t44, h_inc44⟩, h_seg2_loop⟩, h_t84, h_add⟩ := h_env
   simp only [h_input] at h_t44 h_seg2_loop
-  simp only [Ecc.AddIncomplete.Assumptions, Ecc.AddIncomplete.Spec] at h_inc44 h_seg2_loop
+  simp only [AddIncomplete.Assumptions, AddIncomplete.Spec] at h_inc44 h_seg2_loop
   have hα := h_assumptions
   -- per-window witnessed row values (windows `1..83`, window `j + 1`), gluing both foldl
   -- segments and the explicit window 43
@@ -1026,7 +1030,7 @@ theorem completeness (B : MulFixed.FixedBase) :
           = MulFixed.partialSum (windowVal input) 0 := by
         rw [MulFixed.windowScalar_val (by norm_num) (windowVal_lt input 0), MulFixed.partialSum]
         simp
-      show ({ x := env.get (i₀ + 1 + 1), y := env.get (i₀ + 1 + 1 + 1) } : Ecc.Point Fp) = _
+      show ({ x := env.get (i₀ + 1 + 1), y := env.get (i₀ + 1 + 1 + 1) } : Point Fp) = _
       obtain ⟨h0z, h0x, h0y, h0u⟩ := env_get_rowTail h_t0
       rw [h0x, h0y, rowTailValue_xP, rowTailValue_yP]
       unfold MulFixed.windowPoint
@@ -1062,7 +1066,7 @@ theorem completeness (B : MulFixed.FixedBase) :
           rw [hpx, hacc]
           show (t • B.point).x ≠ (MulFixed.partialSum (windowVal input) j • B.point).x
           exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
-      apply Ecc.Point.ext_coords
+      apply Point.ext_coords
       rw [h_spec.2, hpx, hpy, hacc]
       show Pallas.add ((t • B.point).x, (t • B.point).y)
           ((MulFixed.partialSum (windowVal input) j • B.point).x,
@@ -1115,10 +1119,10 @@ theorem completeness (B : MulFixed.FixedBase) :
   have hS83_card := inv_lt_card hS83_lt (by omega)
   have hacc83 :
       ({ x := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
          y := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
-        : Ecc.Point Fp)
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+        : Point Fp)
       = { x := (S83 • B.point).x, y := (S83 • B.point).y } := by
     rw [hS83_def]
     have := h_inv 83 (by omega)
@@ -1137,10 +1141,10 @@ theorem completeness (B : MulFixed.FixedBase) :
     rw [hpx84, hpy84]; exact Or.inl (SWPoint.onCurve_of_ne_zero hP84_ne)
   have hValidAcc : Pallas.Valid
       (({ x := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
           y := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
-        : Ecc.Point Fp)).coords := by
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+        : Point Fp)).coords := by
     rw [hacc83]; exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
   -- per-window constraint obligations (windows `1..83`)
   have hB : ∀ (j : ℕ), j < 83 →
@@ -1194,24 +1198,24 @@ theorem completeness (B : MulFixed.FixedBase) :
   have h_final := h_add ⟨hValidP, hValidAcc⟩
   have hresult :
       ({ x := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).x,
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).x,
          y := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).y }
-        : Ecc.Point Fp).coords
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).y }
+        : Point Fp).coords
         = (((show Fp from input).val • B.point).x, ((show Fp from input).val • B.point).y) := by
     rw [h_final.2]
     show Pallas.add
         (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
             y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) }
-          : Ecc.Point Fp)).coords
+          : Point Fp)).coords
         (({ x := Expression.eval env.toEnvironment
-              (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+              (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
             y := Expression.eval env.toEnvironment
-              (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
-          : Ecc.Point Fp)).coords = _
+              (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+          : Point Fp)).coords = _
     rw [show (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
                  y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) } :
-            Ecc.Point Fp)).coords
+            Point Fp)).coords
       = (env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
          env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)) from rfl,
       hpx84, hpy84, hacc83]
@@ -1275,22 +1279,24 @@ theorem completeness (B : MulFixed.FixedBase) :
     show zCell i₀ (42 + 1) = i₀ + 1 + 4 + 42 * 10 from rfl,
     show accPt env.toEnvironment i₀ 42
       = { x := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 41 * 10 + 4 + 2 + 2)).x,
+            (varFromOffset Point (i₀ + 1 + 4 + 41 * 10 + 4 + 2 + 2)).x,
           y := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 41 * 10 + 4 + 2 + 2)).y } from
+            (varFromOffset Point (i₀ + 1 + 4 + 41 * 10 + 4 + 2 + 2)).y } from
       accPt_succ env.toEnvironment i₀ 41] at hB42
   have hB43 := hB 43 (by omega)
   rw [show zCell i₀ 43 = i₀ + 1 + 4 + 42 * 10 from rfl,
     show zCell i₀ (43 + 1) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 from rfl,
     show accPt env.toEnvironment i₀ 43
       = { x := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 2 + 2)).x,
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 2 + 2)).x,
           y := Expression.eval env.toEnvironment
-            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 2 + 2)).y } from
+            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 2 + 2)).y } from
       accPt_succ env.toEnvironment i₀ 42] at hB43
   refine ⟨?_, ?_, hz43, hz44, hz84⟩
   swap
-  · simp only [Ecc.Point.coords] at hresult ⊢
+  · apply Point.ext_coords
+    rw [B.mulValue_coords, RunningSumMul.natCast_val_nsmul]
+    simp only [Point.coords] at hresult ⊢
     exact hresult
   refine ⟨h_z0w, hz0InRange, hz0Coords, ⟨hB 0 (by omega), ?_⟩, hB42.1, hB42.2.1, hB42.2.2,
     ⟨hB43, ?_⟩, hw84InRange, hw84Coords, hz85zero, hValidP, hValidAcc⟩
@@ -1329,13 +1335,13 @@ Composes `RunningSumMul` with the canonicity tail — a 13-window lookup range c
 `α_0 + 2¹³⁰ - t_p` and the `Canonicity checks` gate — and returns `[α]B`.
 -/
 
-namespace Assign
+open Gate
 
 /-- `t_p` as a natural number (`p = 2^254 + tPNat` for the Pallas base field). -/
 def tPNat : ℕ := 45560315531419706090280762371685220353
 
 def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
-    Circuit Fp (Var Ecc.Point Fp) := do
+    Circuit Fp (Var Point Fp) := do
   -- region 1+2: strict running-sum decomposition, windowed mul, complete addition
   let m ← RunningSumMul.circuit B alpha
   -- region 3: canonicity of the base-field element.
@@ -1351,14 +1357,14 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   let z84Alpha <== m.z84
   let z44Alpha <== m.z44
   let z43Alpha <== m.z43
-  BaseFieldElem.circuit {
+  Gate.circuit {
     alpha := alpha, z84Alpha := z84Alpha, alpha1 := alpha1, alpha2 := alpha2,
     alpha0Prime := alpha0Prime, z13Alpha0Prime := z13Alpha0Prime,
     z44Alpha := z44Alpha, z43Alpha := z43Alpha }
   return m.result
 
 instance elaborated (B : MulFixed.FixedBase) :
-    ElaboratedCircuit Fp field Ecc.Point (main B) := by
+    ElaboratedCircuit Fp field Point (main B) := by
   elaborate_circuit
 
 /-- Preconditions: `α` is a canonical base-field element (always true for an actual
@@ -1367,8 +1373,8 @@ def Assumptions (_ : Fp) : Prop := True
 
 /-- The circuit computes `[α]·B`, the fixed-base multiplication of `B` by the base-field
 element `α` (reinterpreted as the scalar `α.val`, which is `< p < q`). -/
-def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Ecc.Point Fp) : Prop :=
-  output.coords = ((alpha.val • B.point).x, (alpha.val • B.point).y)
+def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
+  output = B.mulValue (alpha.val : Fq)
 
 /-- `p = 2^254 + t_p` for the Pallas base field. -/
 private theorem base_card_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
@@ -1420,7 +1426,7 @@ exactly the honest cell values: `d := α.val / 8^84` is the top window, `α1 = d
 `α2 = d / 4`, `α0' = α - d·2²⁵² + 2¹³⁰ - t_p`, and the running-sum cells `z₄₄`, `z₄₃`,
 plus the lookup output `z₁₃ = ⌊α0'.val / 2¹³⁰⌋`. Canonicity (`α.val < p`) forces the high
 window to `4` and `α0 < t_p` in the `α2 = 1` branch. -/
-private theorem honest_canon_spec {row : Row Fp} {α : Fp}
+private theorem honest_canon_spec {row : Input Fp} {α : Fp}
     (hcanon : α.val < PALLAS_BASE_CARD)
     (ha : row.alpha = α)
     (hz84 : row.z84Alpha = ((α.val / 8 ^ 84 : ℕ) : Fp))
@@ -1511,18 +1517,17 @@ private theorem honest_canon_spec {row : Row Fp} {α : Fp}
 
 theorem soundness (B : MulFixed.FixedBase) :
     Soundness Fp (main B) Assumptions (Spec B) := by
-  circuit_proof_start [main, Spec, RunningSumMul.circuit, BaseFieldElem.circuit,
-    BaseFieldElem.Spec, Utilities.LookupRangeCheck.CopyCheck.circuit,
+  circuit_proof_start [main, Spec, RunningSumMul.circuit, Gate.circuit,
+    Gate.Spec, Utilities.LookupRangeCheck.CopyCheck.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Spec]
   obtain ⟨hRSM, hCopy, hz84eq, hz44eq, hz43eq, hGate⟩ := h_holds
   -- the windowed-mul spec: the decomposed value `V`, with `α = (V : Fp)`
-  obtain ⟨ks, hks_lt, hαV, hres, hz43V, hz44V, hz84V⟩ := hRSM
-  simp only [Ecc.Point.coords] at hres ⊢
+  obtain ⟨ks, hks_lt, hαV, hresPt, hz43V, hz44V, hz84V⟩ := hRSM
   set V := ∑ j ∈ Finset.range 85, ks j * 8 ^ j with hV
   -- the canonicity gate facts
-  simp only [BaseFieldElem.IsAlpha1, BaseFieldElem.DecomposesBaseFieldElem,
-    BaseFieldElem.CanonicalHighBit, BaseFieldElem.alpha0, BaseFieldElem.alpha0Hi120,
-    BaseFieldElem.a43, IsBool] at hGate
+  simp only [Gate.IsAlpha1, Gate.DecomposesBaseFieldElem,
+    Gate.CanonicalHighBit, Gate.alpha0, Gate.alpha0Hi120,
+    Gate.a43, IsBool] at hGate
   obtain ⟨hAlpha1, hAlpha2, ⟨hz84dec, hα0prime⟩, hCanon⟩ := hGate
   -- bound on the decomposed value: it fits in 85 windows
   have hVlt : V < 8 ^ 85 := RunningSumMul.sum_lt_of_windows fun j hj => hks_lt j hj
@@ -1645,14 +1650,17 @@ theorem soundness (B : MulFixed.FixedBase) :
   have hVcanon : V = ZMod.val (show Fp from input) := by
     rw [hαV, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp]
   -- hence the output is `[α.val]·B`
-  rw [hres, hVcanon]
+  refine hresPt.trans ?_
+  apply Point.ext_coords
+  rw [B.mulValue_coords, RunningSumMul.natCast_val_nsmul, hVcanon]
+  rfl
 
 theorem completeness (B : MulFixed.FixedBase) :
     Completeness Fp (main B) Assumptions := by
   circuit_proof_start [main, Assumptions, RunningSumMul.circuit,
     RunningSumMul.ProverSpec, Utilities.LookupRangeCheck.CopyCheck.circuit,
-    Utilities.LookupRangeCheck.CopyCheck.ProverSpec, BaseFieldElem.circuit,
-    BaseFieldElem.Spec]
+    Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Gate.circuit,
+    Gate.Spec]
   obtain ⟨hRSM, hap0, hCC, ha1, ha2, hz84c, hz44c, hz43c⟩ := h_env
   have hpa : RunningSumMul.ProverAssumptions input env.data env.hint := by
     unfold RunningSumMul.ProverAssumptions; exact ZMod.val_lt (show Fp from input)
@@ -1672,7 +1680,7 @@ theorem completeness (B : MulFixed.FixedBase) :
     rw [ha1]
     have : (show Fp from input).val / 8 ^ 84 % 4 < 4 := Nat.mod_lt _ (by norm_num)
     interval_cases h : (show Fp from input).val / 8 ^ 84 % 4 <;>
-      simp [BaseFieldElem.IsAlpha1]
+      simp [Gate.IsAlpha1]
   · -- IsBool α2
     rw [ha2]
     have hd4 : (show Fp from input).val / 8 ^ 84 / 4 < 2 := by omega
@@ -1692,13 +1700,11 @@ theorem completeness (B : MulFixed.FixedBase) :
 
 /-- `base_field_elem.rs::Config::assign` (`FixedPointBaseField::mul`): base-field-element
 fixed-base scalar multiplication `[α]B`. -/
-def circuit (B : MulFixed.FixedBase) : FormalCircuit Fp field Ecc.Point where
+def circuit (B : MulFixed.FixedBase) : FormalCircuit Fp field Point where
   main := main B
   Assumptions := Assumptions
   Spec := Spec B
   soundness := soundness B
   completeness := completeness B
-
-end Assign
 
 end Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem

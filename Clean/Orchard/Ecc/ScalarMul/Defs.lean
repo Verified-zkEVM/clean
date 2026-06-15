@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Gadgets.Boolean
 import Clean.Orchard.Ecc.Defs
 import Clean.Orchard.NoteCommit
 import Clean.Utils.Tactics
@@ -16,9 +17,6 @@ def ternary {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K]
 
 def tQ {K : Type} [OfNat K 45560315531506369815346746415080538113] : K :=
   OfNat.ofNat 45560315531506369815346746415080538113
-
-def IsBool {K : Type} [Zero K] [One K] (x : K) : Prop :=
-  x = 0 ∨ x = 1
 
 theorem isBool_of_boolPoly_eq_zero {F : Type} [Field F] {x : F}
     (h : NoteCommit.boolPoly x = 0) :

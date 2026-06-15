@@ -17,21 +17,21 @@ def yADouble {K : Type} [Add K] [Sub K] [Mul K] (row : Sinsemilla.DoubleAndAddRo
 
 namespace Init
 
-structure Row (F : Type) where
+structure Input (F : Type) where
   yAWitnessed : F
   next : Sinsemilla.DoubleAndAddRow F
 deriving ProvableStruct
 
-def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
+def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Input K) : K :=
   2 * row.yAWitnessed - yADouble row.next
 
-def Spec (row : Row Fp) : Prop :=
+def Spec (row : Input Fp) : Prop :=
   2 * row.yAWitnessed = yADouble row.next
 
-def main (row : Var Row Fp) : Circuit Fp Unit := do
+def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (poly row)
 
-def circuit : FormalAssertion Fp Row where
+def circuit : FormalAssertion Fp Input where
   name := "GATE q_mul_1 == 1 checks"
   main
   Spec := Spec
@@ -48,7 +48,7 @@ end Init
 
 namespace Loop
 
-structure Row (F : Type) where
+structure Input (F : Type) where
   zCur : F
   zPrev : F
   cur : Sinsemilla.DoubleAndAddRow F
@@ -57,22 +57,22 @@ structure Row (F : Type) where
   yANextDouble : F
 deriving ProvableStruct
 
-def bit {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
+def bit {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Input K) : K :=
   row.zCur - row.zPrev * 2
 
 def gradient1 {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
-    (row : Row K) : K :=
+    (row : Input K) : K :=
   2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) - yADouble row.cur +
     2 * ((bit row * 2 - 1) * row.yPCur)
 
-def secantLine {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
+def secantLine {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
   row.cur.lambda2 * row.cur.lambda2 - row.xANext -
     Sinsemilla.DoubleAndAdd.xR row.cur - row.cur.xA
 
-def gradient2 {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
+def gradient2 {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Input K) : K :=
   2 * row.cur.lambda2 * (row.cur.xA - row.xANext) - yADouble row.cur - row.yANextDouble
 
-def Spec (row : Row Fp) : Prop :=
+def Spec (row : Input Fp) : Prop :=
   IsBool (bit row) ∧
     2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) +
         2 * ((bit row * 2 - 1) * row.yPCur) = yADouble row.cur ∧
@@ -81,13 +81,13 @@ def Spec (row : Row Fp) : Prop :=
     2 * row.cur.lambda2 * (row.cur.xA - row.xANext) =
         yADouble row.cur + row.yANextDouble
 
-def main (row : Var Row Fp) : Circuit Fp Unit := do
+def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (NoteCommit.boolPoly (bit row))
   assertZero (gradient1 row)
   assertZero (secantLine row)
   assertZero (gradient2 row)
 
-def circuit : FormalAssertion Fp Row where
+def circuit : FormalAssertion Fp Input where
   name := "GATE q_mul_3 == 1 checks"
   main
   Spec := Spec
@@ -112,26 +112,26 @@ end Loop
 
 namespace MainLoop
 
-structure Row (F : Type) extends Loop.Row F where
+structure Input (F : Type) extends Loop.Input F where
   xPNext : F
   yPNext : F
 deriving ProvableStruct
 
-def xPCheck {K : Type} [Sub K] (row : Row K) : K :=
+def xPCheck {K : Type} [Sub K] (row : Input K) : K :=
   row.cur.xP - row.xPNext
 
-def yPCheck {K : Type} [Sub K] (row : Row K) : K :=
+def yPCheck {K : Type} [Sub K] (row : Input K) : K :=
   row.yPCur - row.yPNext
 
-def Spec (row : Row Fp) : Prop :=
-  row.cur.xP = row.xPNext ∧ row.yPCur = row.yPNext ∧ Loop.Spec row.toRow
+def Spec (row : Input Fp) : Prop :=
+  row.cur.xP = row.xPNext ∧ row.yPCur = row.yPNext ∧ Loop.Spec row.toInput
 
-def main (row : Var Row Fp) : Circuit Fp Unit := do
+def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (xPCheck row)
   assertZero (yPCheck row)
-  Loop.circuit row.toRow
+  Loop.circuit row.toInput
 
-def circuit : FormalAssertion Fp Row where
+def circuit : FormalAssertion Fp Input where
   name := "GATE q_mul_2 == 1 checks"
   main
   Spec := Spec
@@ -186,7 +186,7 @@ instance : Inhabited BitsHint := ⟨fun _ => false⟩
 /-- The inputs of `double_and_add`: the non-identity base point, the accumulator cells
 `(x_a, y_a)`, the starting running-sum cell `z`, and the prover-side scalar bits. -/
 structure Input (F : Type) where
-  base : Ecc.Point F
+  base : Point F
   xA : F
   yA : F
   z : F
@@ -267,9 +267,9 @@ private theorem step_nsmul {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ
     {m : ℕ} (h2 : 2 ≤ m) (hBound : 2 * m + 1 < PALLAS_SCALAR_CARD) (b : ℕ) :
     Orchard.Specs.Sinsemilla.step (stepPoint P bits) (m • P) b
       = some ((2 * m + (if bits b then 1 else 0) * 2 - 1) • P) := by
-  have hA0 : m • P ≠ 0 := Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)
+  have hA0 : m • P ≠ 0 := pallas_nsmul_ne_zero hP (by omega) (by omega)
   have hxm1 : (m • P).x ≠ P.x := by
-    have h := Ecc.pallas_nsmul_x_ne hP (s := 1) (t := m) (by omega) (by omega) (by omega)
+    have h := pallas_nsmul_x_ne hP (s := 1) (t := m) (by omega) (by omega) (by omega)
     rwa [one_nsmul] at h
   rw [Orchard.Specs.Sinsemilla.step, stepPoint]
   by_cases hb : bits b
@@ -277,8 +277,8 @@ private theorem step_nsmul {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ
       incompleteAdd_some hA0 hP hxm1,
       show m • P + P = (m + 1) • P from by rw [succ_nsmul],
       Option.bind_some,
-      incompleteAdd_some (Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)) hA0
-        (Ecc.pallas_nsmul_x_ne hP (s := m) (t := m + 1) (by omega) (by omega) (by omega)),
+      incompleteAdd_some (pallas_nsmul_ne_zero hP (by omega) (by omega)) hA0
+        (pallas_nsmul_x_ne hP (s := m) (t := m + 1) (by omega) (by omega) (by omega)),
       ← add_nsmul]
     rw [if_pos hb]
     norm_num
@@ -291,8 +291,8 @@ private theorem step_nsmul {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ
           rw [← succ_nsmul, Nat.sub_add_cancel (by omega)]
         rw [hm, add_neg_cancel_right],
       Option.bind_some,
-      incompleteAdd_some (Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)) hA0
-        (Ne.symm (Ecc.pallas_nsmul_x_ne hP (s := m - 1) (t := m) (by omega) (by omega)
+      incompleteAdd_some (pallas_nsmul_ne_zero hP (by omega) (by omega)) hA0
+        (Ne.symm (pallas_nsmul_x_ne hP (s := m - 1) (t := m) (by omega) (by omega)
           (by omega))),
       ← add_nsmul]
     rw [if_neg hb]
@@ -352,8 +352,8 @@ def main (n : ℕ) (input : Var Input Fp) :
   -- q_mul_1: the copied y_a is the derived y of the first row
   Init.circuit { yAWitnessed := yA₀, next := dRow ⟨0, by omega⟩ }
   -- q_mul_2 on rows 0..n-1
-  let gateRows : Vector (Var MainLoop.Row Fp) n := .ofFn fun i =>
-    { toRow := {
+  let gateRows : Vector (Var MainLoop.Input Fp) n := .ofFn fun i =>
+    { toInput := {
         zCur := (rows[i.val]'(by have := i.isLt; omega)).z,
         zPrev := zPrevOf ⟨i.val, by omega⟩,
         cur := dRow ⟨i.val, by omega⟩,
@@ -509,7 +509,7 @@ private theorem soundness_aux (n : ℕ) (P : SWPoint Pallas.curve) (hP : P ≠ 0
     -- the entering accumulator point
     set M := accScalar m bits v with hM
     have hA0 : M • P ≠ 0 :=
-      Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)
+      pallas_nsmul_ne_zero hP (by omega) (by omega)
     -- the row equations in step_pinned's shape
     have hstepXP : XP v = (stepPoint P bits v).x := by
       rw [hxp v hv]
@@ -576,9 +576,9 @@ private theorem honest_step {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : �
         (m • P).y
       = ((2 * m + (if bits b then 1 else 0) * 2 - 1) • P).y := by
   set l := lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b) with hl
-  have hA0 : m • P ≠ 0 := Ecc.pallas_nsmul_ne_zero hP (by omega) (by omega)
+  have hA0 : m • P ≠ 0 := pallas_nsmul_ne_zero hP (by omega) (by omega)
   have hxne1 : (m • P).x ≠ P.x := by
-    have h := Ecc.pallas_nsmul_x_ne hP (s := 1) (t := m) (by omega) (by omega) (by omega)
+    have h := pallas_nsmul_x_ne hP (s := 1) (t := m) (by omega) (by omega) (by omega)
     rwa [one_nsmul] at h
   have hxne1' : (m • P).x - P.x ≠ 0 := sub_ne_zero.mpr hxne1
   -- λ1 is the chord slope through `[m]P` and `±P`
@@ -623,31 +623,31 @@ private theorem honest_step {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : �
       rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos (Or.inr (Or.inr hx))] at hstep
       simp at hstep
   -- the chord construction lands on `R`
-  have hRadd := Ecc.AddIncomplete.outputValue_eq_add
+  have hRadd := AddIncomplete.outputValue_eq_add
     (input := { p := { x := (m • P).x, y := (m • P).y },
                 q := { x := P.x, y := (stepPoint P bits b).y } })
     (by
       intro h
       apply hA0
       apply SWPoint.ext_pair
-      have hx := congrArg Ecc.Point.x h
-      have hy := congrArg Ecc.Point.y h
-      simp only [Ecc.Point.zero] at hx hy
+      have hx := congrArg Point.x h
+      have hy := congrArg Point.y h
+      simp only [Point.zero] at hx hy
       rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
         = ((0 : Fp), (0 : Fp)) from rfl, hx, hy])
     (by
       intro h
       apply hS0
       apply SWPoint.ext_pair
-      have hx := congrArg Ecc.Point.x h
-      have hy := congrArg Ecc.Point.y h
-      simp only [Ecc.Point.zero] at hx hy
+      have hx := congrArg Point.x h
+      have hy := congrArg Point.y h
+      simp only [Point.zero] at hx hy
       rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
         = ((0 : Fp), (0 : Fp)) from rfl, hxSP, hx, hy])
     hxne1
-  rw [show (({ x := (m • P).x, y := (m • P).y } : Ecc.Point Fp)).coords
+  rw [show (({ x := (m • P).x, y := (m • P).y } : Point Fp)).coords
       = ((m • P).x, (m • P).y) from rfl,
-    show (({ x := P.x, y := (stepPoint P bits b).y } : Ecc.Point Fp)).coords
+    show (({ x := P.x, y := (stepPoint P bits b).y } : Point Fp)).coords
       = ((stepPoint P bits b).x, (stepPoint P bits b).y) from by rw [hxSP]; rfl,
     Pallas.add_coords, ← hR] at hRadd
   have hlam1 : l.lambda1 = ((m • P).y - (stepPoint P bits b).y) / ((m • P).x - P.x) := by
@@ -656,7 +656,7 @@ private theorem honest_step {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : �
   have hxne2 : P.x - (m • P).x ≠ 0 := sub_ne_zero.mpr (Ne.symm hxne1)
   have hRx : l.lambda1 * l.lambda1 - (m • P).x - P.x = R.x := by
     have h := congrArg Prod.fst hRadd
-    simp only [Ecc.AddIncomplete.outputValue, Ecc.Point.coords] at h
+    simp only [AddIncomplete.outputValue, Point.coords] at h
     rw [← h, hlam1]
     field_simp
     ring

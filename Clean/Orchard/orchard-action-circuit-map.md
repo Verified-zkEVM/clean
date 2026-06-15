@@ -99,7 +99,7 @@ Source baseline:
         - Clean: implemented in `Clean/Orchard/Utilities.lean` as `AddChip.circuit`; gate factored as `AddChip.Gate.circuit`.
       - `[poseidon_hash(nk, rho) + psi] NullifierK`
         - Source: `FixedPointBaseField::mul`, `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`
-        - Clean: source-level entry `BaseFieldElem.Assign.circuit` in `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean` — fully verified (soundness + completeness, no sorries); composes the `RunningSumMul` windowed mul with the canonicity gate.
+        - Clean: source-level entry `BaseFieldElem.circuit` in `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean` — fully verified (soundness + completeness, no sorries); composes the `RunningSumMul` windowed mul with the canonicity gate.
       - Add result to `cm_old`
         - Source: `halo2_gadgets/src/ecc/chip/add.rs`
         - Clean: implemented in `Clean/Orchard/Ecc/Add.lean`.
@@ -144,7 +144,7 @@ Source baseline:
       - Clean: no dedicated source-level conversion entry identified.
     - `[ivk] g_d_old`
       - Source: variable-base scalar multiplication, `halo2_gadgets/src/ecc/chip/mul.rs`
-      - Clean: implemented as the variable-base entry `Mul.Assign.circuit`
+      - Clean: implemented as the variable-base entry `Mul.circuit`
         (`Clean/Orchard/Ecc/ScalarMul/Mul/Assign.lean`, `FormalCircuit`, proven sound
         and complete; `Spec` is `output = [alpha] base`).
       - Incomplete variable-base mul gates
@@ -245,11 +245,11 @@ Source baseline:
   - Clean:
     - short signed fixed-base mul: `Clean/Orchard/Ecc/ScalarMul/MulFixed/Short.lean`
     - full-width fixed-base mul: `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`
-    - base-field-element fixed-base mul (entry circuit `BaseFieldElem.Assign.circuit`, fully verified): `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean`
+    - base-field-element fixed-base mul (entry circuit `BaseFieldElem.circuit`, fully verified): `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean`
 
 - Variable-base scalar multiplication
   - Source: `halo2_gadgets/src/ecc/chip/mul*.rs`
-  - Clean: full source-level entry `Mul.Assign.circuit`
+  - Clean: full source-level entry `Mul.circuit`
     (`Clean/Orchard/Ecc/ScalarMul/Mul/Assign.lean`, `FormalCircuit`, proven sound and
     complete), composing the incomplete `DoubleAndAdd`, complete bits, `ProcessLsb`,
     and `OverflowCheck` sub-circuits (all under `Clean/Orchard/Ecc/ScalarMul/Mul*.lean`).

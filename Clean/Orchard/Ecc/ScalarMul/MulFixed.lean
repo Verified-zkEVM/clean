@@ -100,7 +100,7 @@ namespace RunningSumCoords
 /-- The advice cells queried by the gate: the running sum `z` values in the `window`
 column at the current and next row, and the window-table point cells of the current
 row. The window value itself is not a cell; it is derived as `z_cur - z_next · 8`. -/
-structure Row (F : Type) where
+structure Input (F : Type) where
   zCur : F
   zNext : F
   xP : F
@@ -108,20 +108,20 @@ structure Row (F : Type) where
   u : F
 deriving ProvableStruct
 
-def word {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : K :=
+def word {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Input K) : K :=
   row.zCur - row.zNext * 8
 
-def coordsRow {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Row K) : CoordsRow K :=
+def coordsRow {K : Type} [Sub K] [Mul K] [OfNat K 8] (row : Input K) : CoordsRow K :=
   { window := word row, xP := row.xP, yP := row.yP, u := row.u }
 
-def Spec (params : CoordsParams Fp) (row : Row Fp) : Prop :=
+def Spec (params : CoordsParams Fp) (row : Input Fp) : Prop :=
   Coords.Spec params (coordsRow row)
 
-def main (params : CoordsParams Fp) (row : Var Row Fp) :
+def main (params : CoordsParams Fp) (row : Var Input Fp) :
     Circuit Fp Unit := do
   Coords.circuit params { window := word row, xP := row.xP, yP := row.yP, u := row.u }
 
-def circuit (params : CoordsParams Fp) : FormalAssertion Fp Row where
+def circuit (params : CoordsParams Fp) : FormalAssertion Fp Input where
   name := "GATE Running sum coordinates check"
   main := main params
   Spec := Spec params

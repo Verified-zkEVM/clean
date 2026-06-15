@@ -7,7 +7,9 @@ Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.
 
 namespace Orchard.Ecc.ScalarMul.Mul
 
-structure Row (F : Type) where
+namespace Gate
+
+structure Input (F : Type) where
   z1 : F
   z0 : F
   xP : F
@@ -16,33 +18,33 @@ structure Row (F : Type) where
   baseY : F
 deriving ProvableStruct
 
-def lsb {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Row K) : K :=
+def lsb {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Input K) : K :=
   row.z0 - row.z1 * 2
 
 def lsbX {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
-    (row : Row K) : K :=
+    (row : Input K) : K :=
   ternary (lsb row) row.xP (row.xP - row.baseX)
 
 def lsbY {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
-    (row : Row K) : K :=
+    (row : Input K) : K :=
   ternary (lsb row) row.yP (row.yP + row.baseY)
 
-def SelectedCorrectionPoint (row : Row Fp) : Prop :=
+def SelectedCorrectionPoint (row : Input Fp) : Prop :=
   (lsb row = 0 →
     (row.xP, row.yP) =
       CompElliptic.CurveForms.ShortWeierstrass.neg (row.baseX, row.baseY)) ∧
     (lsb row = 1 →
       (row.xP, row.yP) = (0, 0))
 
-def Spec (row : Row Fp) : Prop :=
+def Spec (row : Input Fp) : Prop :=
   IsBool (lsb row) ∧ SelectedCorrectionPoint row
 
-def main (row : Var Row Fp) : Circuit Fp Unit := do
+def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (NoteCommit.boolPoly (lsb row))
   assertZero (lsbX row)
   assertZero (lsbY row)
 
-def circuit : FormalAssertion Fp Row where
+def circuit : FormalAssertion Fp Input where
   name := "GATE LSB check"
   main
   Spec := Spec
@@ -109,5 +111,7 @@ def circuit : FormalAssertion Fp Row where
           simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY, hy]
           left
           linear_combination -hBit
+
+end Gate
 
 end Orchard.Ecc.ScalarMul.Mul

@@ -25,41 +25,41 @@ open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 
 namespace Gate
 
-structure Row (F : Type) where
+structure Input (F : Type) where
   yP : F
   yA : F
   lastWindow : F
   sign : F
 deriving ProvableStruct
 
-def signCheck {K : Type} [One K] [Sub K] [Mul K] (row : Row K) : K :=
+def signCheck {K : Type} [One K] [Sub K] [Mul K] (row : Input K) : K :=
   row.sign * row.sign - 1
 
-def yCheck {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
+def yCheck {K : Type} [Add K] [Sub K] [Mul K] (row : Input K) : K :=
   (row.yP - row.yA) * (row.yP + row.yA)
 
-def negationCheck {K : Type} [Sub K] [Mul K] (row : Row K) : K :=
+def negationCheck {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
   row.sign * row.yP - row.yA
 
 def IsSign (sign : Fp) : Prop :=
   sign = 1 ∨ sign = 0 - 1
 
-def SignedPointSelection (row : Row Fp) : Prop :=
+def SignedPointSelection (row : Input Fp) : Prop :=
   ∀ x : Fp,
     (row.sign = 1 → (x, row.yP) = (x, row.yA)) ∧
       (row.sign = 0 - 1 →
         (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.yA))
 
-def Spec (row : Row Fp) : Prop :=
+def Spec (row : Input Fp) : Prop :=
   IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointSelection row
 
-def main (row : Var Row Fp) : Circuit Fp Unit := do
+def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (NoteCommit.boolPoly row.lastWindow)
   assertZero (signCheck row)
   assertZero (yCheck row)
   assertZero (negationCheck row)
 
-def circuit : FormalAssertion Fp Row where
+def circuit : FormalAssertion Fp Input where
   name := "GATE Short fixed-base mul gate"
   main
   Spec := Spec
@@ -878,7 +878,7 @@ private theorem word_inRange (m : Fp) (w : ℕ) {a b : Fp}
 
 /-- The honest row values satisfy the coordinates check. -/
 private theorem coordsRow_spec (B : FixedBase) (m : Fp) {w : ℕ} (hw : w < 22)
-    {row : RunningSumCoords.Row Fp}
+    {row : RunningSumCoords.Input Fp}
     (hzc : row.zCur = zValue m w) (hzn : row.zNext = zValue m (w + 1))
     (hx : row.xP = (windowPoint B.point w (windowVal m w)).x)
     (hy : row.yP = (windowPoint B.point w (windowVal m w)).y)
