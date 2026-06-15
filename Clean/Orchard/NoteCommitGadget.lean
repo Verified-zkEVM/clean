@@ -142,6 +142,14 @@ private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) 
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hlow]
 
+private theorem chunksOf_one_eq_singleton {x : ℕ} (hx : x < 2 ^ K) :
+    Orchard.Specs.Sinsemilla.chunksOf x 1 = [x] := by
+  unfold Orchard.Specs.Sinsemilla.chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
+  rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
+    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [Nat.mod_eq_of_lt hx]
+
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
 Each witnesses a "prime" value (the element shifted up by `2^130`/`2^140` minus `t_P`)
