@@ -210,6 +210,132 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   soundness := soundness G Q hQ R n₀ ns
   completeness := completeness G Q hQ R n₀ ns
 
+/-! #### `commit` exposing the hash running sums (`zs`)
+
+`NoteCommit` needs the per-piece running sums returned by `hash_to_point` (halo2's
+`commit` returns `(CommitmentPoint, Vec<Vec<AssignedCell>>)`) to feed its canonicity
+gates. `WithZs` is `commit` keeping those sums in its output; it is otherwise identical
+to `commit` and is the entry the `note_commit` gadget composes. -/
+namespace WithZs
+
+/-- Outputs of the zs-exposing commit: the commitment point and the hash running sums. -/
+structure Output (ns : List ℕ) (F : Type) where
+  point : Point F
+  zs : HVec (Chain.zLengths ns) F
+
+instance (ns : List ℕ) : ProvableStruct (Output ns) where
+  components := [Point, HVec (Chain.zLengths ns)]
+  toComponents := fun { point, zs } => .cons point (.cons zs .nil)
+  fromComponents := fun (.cons point (.cons zs .nil)) => { point, zs }
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ)
+    (input : Var (Input (ns.length + 1)) Ecc.Fp) :
+    Circuit Ecc.Fp (Var (Output (n₀ :: ns)) Ecc.Fp) := do
+  let blind ← MulFixed.FullWidth.circuit R input.r
+  let p ← EntryZs.circuit G Q hQ n₀ ns input.pieces
+  let commitment ← Ecc.Add.circuit { p := p.point, q := blind }
+  return { point := commitment, zs := p.zs }
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
+    ElaboratedCircuit Ecc.Fp (Input (ns.length + 1)) (Output (n₀ :: ns))
+      (main G Q hQ R n₀ ns) := by
+  elaborate_circuit
+
+def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+    (n₀ : ℕ) (ns : List ℕ) (input : Value (Input (ns.length + 1)) Ecc.Fp)
+    (output : Value (Output (n₀ :: ns)) Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+  ∃ (chunks : List ℕ) (r : Fq),
+    Chain.PieceChunks (n₀ :: ns) input.pieces chunks ∧
+    Chain.ZsFacts (n₀ :: ns) chunks output.zs ∧
+    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+      output.point.coords = Pallas.add (B.x, B.y) (R.mulValue r).coords
+
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
+    (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Ecc.Fp)
+    (_ : ProverData Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+  Chain.PieceBounds (n₀ :: ns) input.pieces ∧
+  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+    (Chain.honestChunks (n₀ :: ns) input.pieces) = some B
+
+def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+    (n₀ : ℕ) (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Ecc.Fp)
+    (output : ProverValue (Output (n₀ :: ns)) Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+  Chain.ZsHonest (n₀ :: ns) input.pieces output.zs ∧
+  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+      (Chain.honestChunks (n₀ :: ns) input.pieces) = some B →
+    output.point.coords = Pallas.add (B.x, B.y) (R.mulValue input.r).coords
+
+theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ R n₀ ns)
+      (fun _ _ => True) (Spec G Q R n₀ ns) := by
+  circuit_proof_start [main, Spec, EntryZs.circuit, EntryZs.Spec,
+    MulFixed.FullWidth.circuit, MulFixed.FullWidth.Spec,
+    Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
+  obtain ⟨h_fw, h_entry, h_add⟩ := h_holds
+  obtain ⟨s, hblind⟩ := h_fw
+  obtain ⟨chunks, hPC, hZs, hfun⟩ := h_entry
+  refine ⟨chunks, s, hPC, ?_, ?_⟩
+  · convert hZs using 2
+  · intro B hB
+    have hp := hfun B hB
+    have h_final := h_add ⟨by
+        rw [hp]
+        exact Or.inl (SWPoint.onCurve_of_ne_zero
+          (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hB)),
+      by
+        rw [hblind]
+        exact R.mulValue_valid s⟩
+    rw [h_final.2, hp, hblind]
+    rfl
+
+theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ R n₀ ns)
+      (ProverAssumptions G Q n₀ ns) (ProverSpec G Q R n₀ ns) := by
+  circuit_proof_start [main, ProverSpec, ProverAssumptions,
+    EntryZs.circuit, EntryZs.ProverAssumptions, EntryZs.ProverSpec,
+    MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverSpec,
+    Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
+  obtain ⟨h_fw_env, h_entry_env, h_add_env⟩ := h_env
+  obtain ⟨hbounds, B, hchain⟩ := h_assumptions
+  obtain ⟨-, hblind⟩ := h_fw_env
+  obtain ⟨hZsH, hp0⟩ := (h_entry_env ⟨hbounds, B, hchain⟩).2
+  have hp := hp0 B hchain
+  have h_final := h_add_env ⟨by
+      rw [hp]
+      exact Or.inl (SWPoint.onCurve_of_ne_zero
+        (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hchain)),
+    by
+      rw [hblind]
+      exact R.mulValue_valid _⟩
+  refine ⟨⟨⟨hbounds, B, hchain⟩, ?_, ?_⟩, ?_, ?_⟩
+  · rw [hp]
+    exact Or.inl (SWPoint.onCurve_of_ne_zero
+      (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hchain))
+  · rw [hblind]
+    exact R.mulValue_valid _
+  · convert hZsH using 2
+  · intro B' hB'
+    rw [hchain] at hB'
+    obtain rfl : B = B' := Option.some.inj hB'
+    rw [h_final.2, hp, hblind]
+    rfl
+
+def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
+    GeneralFormalCircuit.WithHint Ecc.Fp (Input (ns.length + 1)) (Output (n₀ :: ns)) where
+  main := main G Q hQ R n₀ ns
+  Spec := Spec G Q R n₀ ns
+  ProverAssumptions := ProverAssumptions G Q n₀ ns
+  ProverSpec := ProverSpec G Q R n₀ ns
+  soundness := soundness G Q hQ R n₀ ns
+  completeness := completeness G Q hQ R n₀ ns
+
+end WithZs
+
 /-! #### `short_commit` -/
 
 namespace Short

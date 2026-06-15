@@ -582,7 +582,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     Merkle.circuit, Merkle.Spec, Merkle.a0, Merkle.b0,
     Utilities.LookupRangeCheck.shortRangeCircuit,
     Utilities.LookupRangeCheck.shortRangeSpec,
-    Chain.PieceChunks, Chain.Z1Facts]
+    Chain.PieceChunks]
   obtain ⟨h_b1, h_b2, ⟨chunks, hPC, hZ1, hfun⟩, hg1, hg2, hg3, hg4⟩ := h_holds
   obtain ⟨b1n, hb1n, hb1⟩ : ∃ b1n, b1n < 2 ^ 5 ∧ env.get (i₀ + 1) = ((b1n : ℕ) : Ecc.Fp) :=
     ⟨_, h_b1, (ZMod.natCast_zmod_val _).symm⟩
@@ -590,7 +590,14 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     ⟨_, h_b2, (ZMod.natCast_zmod_val _).symm⟩
   obtain ⟨msA, hmsA, haval, t1, rfl, msB, hmsB, hbval, t2, rfl,
     msC, hmsC, hcval, t3, rfl, rfl⟩ := hPC
-  obtain ⟨hz1A, hz1B, -⟩ := hZ1
+  have hz1A := Chain.z1Facts_getElem_zero hZ1
+  have hz1B := Chain.z1Facts_getElem_one hZ1
+  have heoex : ∃ e, Entry.main G Q 24 [1, 24]
+      #v[Expression.var ⟨i₀⟩, Expression.var ⟨i₀ + 1 + 1 + 1⟩,
+        Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
+      (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1) = e := ⟨_, rfl⟩
+  obtain ⟨eo, heo⟩ := heoex
+  simp only [heo] at hz1A hz1B hfun hg1 hg2 hg3 hg4
   simp only [List.append_nil] at hfun hz1A hz1B
   have haval' : env.get i₀
       = ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Ecc.Fp) := haval
@@ -599,32 +606,16 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have hcval' : env.get (i₀ + 1 + 1 + 1 + 1)
       = ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Ecc.Fp) := hcval
   rw [Chain.z1Facts_head_sum] at hz1A
-  rw [Chain.chunks_drop_append, Chain.z1Facts_head_sum] at hz1B
-  simp only [Finset.sum_range_one, Nat.mul_zero, pow_zero, Nat.mul_one] at hz1B
-  -- restate the z1 facts with consistent length spellings, so that the vector
-  -- indexing lemmas match (the raw hypotheses mix defeq spellings of the length)
-  have hlen0 : (0 : ℕ) < [1, 24].length + 1 := by simp
-  have hlenT : (0 : ℕ) < [1, 24].length + 1 - 1 := by simp
-  have hz1A' : (Vector.map (Expression.eval env)
-        (Entry.main G Q 24 [1, 24]
-            #v[Expression.var ⟨i₀⟩, Expression.var ⟨i₀ + 1 + 1 + 1⟩,
-              Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
-            (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1)).1.z1s)[0]'(by simp)
-      = ((∑ j ∈ Finset.range 24, msA (j + 1) * 2 ^ (K * j) : ℕ) : Ecc.Fp) := hz1A
-  have hz1B' : (Vector.map (Expression.eval env)
-        (Entry.main G Q 24 [1, 24]
-            #v[Expression.var ⟨i₀⟩, Expression.var ⟨i₀ + 1 + 1 + 1⟩,
-              Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
-            (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1)).1.z1s).tail[0]'(by simp)
-      = ((msB 1 : ℕ) : Ecc.Fp) := hz1B
-  rw [Vector.getElem_tail hlenT] at hz1B'
-  simp only [Vector.getElem_map] at hz1A' hz1B'
+  simp only [Chain.chunks_drop_append, Chain.z1Facts_head_sum] at hz1B
+  simp only [Finset.sum_range_one, Nat.mul_zero, pow_zero, Nat.mul_one, Vector.getElem_map]
+    at hz1A hz1B
   have hasm := assemble hmsA hmsB hmsC hl hb1n hb2n
-    haval' hbval' hcval' hb1 hb2 hz1A' hz1B' hg1 hg2 hg3 hg4
+    haval' hbval' hcval' hb1 hb2 hz1A hz1B hg1 hg2 hg3 hg4
   obtain ⟨lv, rv, hlv, hrv, hlcast, hrcast, hchunks⟩ := hasm
   refine ⟨lv, rv, hlv, hrv, hlcast, hrcast, ?_⟩
   intro B hB
   rw [hchunks] at hB
+  rw [heo]
   exact congrArg Ecc.Point.x (hfun B hB)
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
