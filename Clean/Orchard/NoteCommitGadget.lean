@@ -45,6 +45,66 @@ private theorem chain_telescope (f : ℕ → Ecc.Fp) :
     · rw [heq, hstep]; push_cast
       rw [show K * (k + 1) = K * k + K from by ring, pow_add]; ring
 
+private theorem sum_head_shift (Kb m : ℕ) (d : ℕ → ℕ) :
+    ∑ j ∈ Finset.range (m + 1), d j * 2 ^ (Kb * j)
+      = d 0 + 2 ^ Kb * ∑ j ∈ Finset.range m, d (j + 1) * 2 ^ (Kb * j) := by
+  rw [Finset.sum_range_succ', Finset.mul_sum]
+  have hstep : ∀ j : ℕ,
+      d (j + 1) * 2 ^ (Kb * (j + 1)) = 2 ^ Kb * (d (j + 1) * 2 ^ (Kb * j)) := by
+    intro j
+    rw [show Kb * (j + 1) = Kb + Kb * j from by ring, pow_add]
+    ring
+  simp only [hstep, Nat.mul_zero, pow_zero, Nat.mul_one]
+  ring
+
+private theorem sum_digits_lt {Kb : ℕ} {d : ℕ → ℕ} (hd : ∀ j, d j < 2 ^ Kb) (n : ℕ) :
+    ∑ j ∈ Finset.range n, d j * 2 ^ (Kb * j) < 2 ^ (Kb * n) := by
+  induction n with
+  | zero => simp
+  | succ m ih =>
+    rw [Finset.sum_range_succ]
+    have hterm : d m * 2 ^ (Kb * m) + 2 ^ (Kb * m) ≤ 2 ^ (Kb * (m + 1)) := by
+      rw [show Kb * (m + 1) = Kb * m + Kb from by ring, pow_add]
+      calc d m * 2 ^ (Kb * m) + 2 ^ (Kb * m) = (d m + 1) * 2 ^ (Kb * m) := by ring
+        _ ≤ 2 ^ Kb * 2 ^ (Kb * m) := Nat.mul_le_mul_right _ (hd m)
+        _ = 2 ^ (Kb * m) * 2 ^ Kb := by ring
+    omega
+
+private theorem digit_of_sum (Kb : ℕ) :
+    ∀ (i n : ℕ) (d : ℕ → ℕ), (∀ j, d j < 2 ^ Kb) → i < n →
+      (∑ j ∈ Finset.range n, d j * 2 ^ (Kb * j)) / 2 ^ (Kb * i) % 2 ^ Kb = d i := by
+  intro i
+  induction i with
+  | zero =>
+    intro n d hd hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    rw [sum_head_shift, Nat.mul_zero, pow_zero, Nat.div_one,
+      Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt (hd 0)]
+  | succ i ih =>
+    intro n d hd hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    rw [sum_head_shift,
+      show Kb * (i + 1) = Kb + Kb * i from by ring, pow_add,
+      ← Nat.div_div_eq_div_mul,
+      Nat.add_mul_div_left _ _ (Nat.two_pow_pos Kb),
+      Nat.div_eq_of_lt (hd 0), Nat.zero_add]
+    exact ih m (fun j => d (j + 1)) (fun j => hd (j + 1)) (by omega)
+
+private theorem pieceWord_eq_of_sum {piece : Ecc.Fp} {n : ℕ} {ms : ℕ → ℕ}
+    (hms : ∀ r, ms r < 2 ^ K)
+    (hpiece : piece =
+      ((∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hcard : (∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) <
+      CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    {i : ℕ} (hi : i < n) :
+    Orchard.Sinsemilla.pieceWord piece i = ms i := by
+  have hval : piece.val =
+      ∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) := by
+    rw [hpiece, ZMod.val_natCast_of_lt hcard]
+  unfold Orchard.Sinsemilla.pieceWord
+  rw [hval]
+  exact digit_of_sum K i n ms hms hi
+
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
 Each witnesses a "prime" value (the element shifted up by `2^130`/`2^140` minus `t_P`)
