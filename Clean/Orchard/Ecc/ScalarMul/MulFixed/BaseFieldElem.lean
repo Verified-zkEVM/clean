@@ -286,6 +286,111 @@ def ProverSpec (B : MulFixed.FixedBase) (alpha : Fp) (output : Output Fp)
     output.z43 = zValue alpha 43 ∧ output.z44 = zValue alpha 44 ∧
     output.z84 = zValue alpha 84
 
+/-! #### Helper lemmas (ported from `Short`/`MulFixed`, scaled to 85 windows) -/
+
+/-- A `2^3`-range check pins the word to a window value `k < 8`. -/
+private theorem exists_lt_of_inRange {x : Fp}
+    (h : Utilities.RunningSum.InRange (2 ^ 3) x) :
+    ∃ k : ℕ, k < 8 ∧ x = (k : Fp) := by
+  simp [Utilities.RunningSum.InRange, Utilities.RunningSum.rangeCheckValues,
+    show (2 : ℕ) ^ 3 = 8 from rfl, List.range_succ, List.range_zero] at h
+  rcases h with h | h | h | h | h | h | h | h
+  · exact ⟨0, by norm_num, by rw [h]; norm_num⟩
+  · exact ⟨1, by norm_num, by rw [h]; norm_num⟩
+  · exact ⟨2, by norm_num, by rw [h]; norm_num⟩
+  · exact ⟨3, by norm_num, by rw [h]; norm_num⟩
+  · exact ⟨4, by norm_num, by rw [h]; norm_num⟩
+  · exact ⟨5, by norm_num, by rw [h]; norm_num⟩
+  · exact ⟨6, by norm_num, by rw [h]; norm_num⟩
+  · exact ⟨7, by norm_num, by rw [h]; norm_num⟩
+
+/-- Casts of naturals below `8` are injective in `Fp`. -/
+private theorem natCast_inj_of_lt_8 {j k : ℕ} (hj : j < 8) (hk : k < 8)
+    (h : (j : Fp) = (k : Fp)) : j = k := by
+  have hcard : (8 : ℕ) < PALLAS_BASE_CARD := by norm_num [PALLAS_BASE_CARD]
+  have := congrArg ZMod.val h
+  rwa [ZMod.val_natCast_of_lt (by omega), ZMod.val_natCast_of_lt (by omega)] at this
+
+/-- Convert the range-check word equation into the running-sum step relation. -/
+private theorem step_of_word {a b : Fp} {k : ℕ}
+    (h : Utilities.RunningSum.word 3 { zCur := a, zNext := b } = (k : Fp)) :
+    a = (k : Fp) + 8 * b := by
+  simp only [Utilities.RunningSum.word, Utilities.RunningSum.twoPowWindow] at h
+  have h8 : (((2 : ℕ) ^ 3 : ℕ) : Fp) = 8 := by norm_num
+  rw [h8] at h
+  linear_combination h
+
+/-- The telescoped running sum: if every step satisfies the decomposition relation and
+the final value is zero, the initial value is the weighted digit sum. -/
+private theorem chain_eq_sum (z : ℕ → Fp) (ks : ℕ → ℕ)
+    (hword : ∀ w < 85, z w = (ks w : Fp) + 8 * z (w + 1))
+    (hz85 : z 85 = 0) :
+    z 0 = ((∑ j ∈ Finset.range 85, ks j * 8 ^ j : ℕ) : Fp) := by
+  have key : ∀ w ≤ 85,
+      z 0 = ((∑ j ∈ Finset.range w, ks j * 8 ^ j : ℕ) : Fp) + z w * ((8 ^ w : ℕ) : Fp) := by
+    intro w hw
+    induction w with
+    | zero => simp
+    | succ v ih =>
+      rw [ih (by omega), hword v (by omega), Finset.sum_range_succ]
+      push_cast
+      ring
+  have h85 := key 85 (by omega)
+  rw [hz85, zero_mul, _root_.add_zero] at h85
+  exact h85
+
+/-- Weighted base-8 digit sums are bounded by `8^n`. -/
+private theorem sum_lt_of_windows {ks : ℕ → ℕ} {n : ℕ} (hk : ∀ j < n, ks j < 8) :
+    ∑ j ∈ Finset.range n, ks j * 8 ^ j < 8 ^ n := by
+  induction n with
+  | zero => simp
+  | succ v ih =>
+    have hv := hk v (by omega)
+    have := ih fun j hj => hk j (by omega)
+    rw [Finset.sum_range_succ]
+    have : ks v * 8 ^ v ≤ 7 * 8 ^ v := Nat.mul_le_mul_right _ (by omega)
+    have h8 : (8 : ℕ) ^ (v + 1) = 8 * 8 ^ v := by ring
+    omega
+
+/-- The window decomposition recombines to the decomposed value: the `+2` offsets of the
+lower 84 windows cancel against `offset_acc` in the most significant window. -/
+private theorem windowScalar_partialSum (ks : ℕ → ℕ) :
+    MulFixed.windowScalar 84 (ks 84) + (MulFixed.partialSum ks 83 : Fq)
+      = ((∑ j ∈ Finset.range 85, ks j * 8 ^ j : ℕ) : Fq) := by
+  have hoffset : MulFixed.offsetAcc = ∑ j ∈ Finset.range 84, 2 * 8 ^ j := by
+    unfold MulFixed.offsetAcc
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [pow_add, pow_mul]
+    norm_num [mul_comm]
+  have hsplit : MulFixed.partialSum ks 83
+      = (∑ j ∈ Finset.range 84, ks j * 8 ^ j) + MulFixed.offsetAcc := by
+    rw [MulFixed.partialSum_eq_sum, hoffset, ← Finset.sum_add_distrib]
+    exact Finset.sum_congr rfl fun j _ => by ring
+  rw [show (∑ j ∈ Finset.range 85, ks j * 8 ^ j)
+      = (∑ j ∈ Finset.range 84, ks j * 8 ^ j) + ks 84 * 8 ^ 84 from
+    Finset.sum_range_succ _ _]
+  unfold MulFixed.windowScalar
+  rw [if_pos rfl, hsplit]
+  push_cast
+  ring
+
+private theorem inv_lt_card {S j : ℕ} (hS : S < 2 * 8 ^ (j + 1)) (hj : j ≤ 83) :
+    S < PALLAS_SCALAR_CARD := by
+  have hpow : (8 : ℕ) ^ (j + 1) ≤ 8 ^ 84 := Nat.pow_le_pow_right (by norm_num) (by omega)
+  have hcard : 2 * 8 ^ 84 < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
+  omega
+
+private theorem step_sum_lt {S t j : ℕ} (hS : S < 2 * 8 ^ (j + 1))
+    (ht : t ≤ 9 * 8 ^ (j + 1)) (hj : j ≤ 82) : S + t < PALLAS_SCALAR_CARD := by
+  have hpow : (8 : ℕ) ^ (j + 1) ≤ 8 ^ 83 := Nat.pow_le_pow_right (by norm_num) (by omega)
+  have hcard : 11 * 8 ^ 83 < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
+  omega
+
+private theorem step_lt_next {S t j : ℕ} (hS : S < 2 * 8 ^ (j + 1))
+    (ht : t ≤ 9 * 8 ^ (j + 1)) : t + S < 2 * 8 ^ (j + 1 + 1) := by
+  have h16 : 2 * 8 ^ (j + 1 + 1) = 16 * 8 ^ (j + 1) := by ring
+  omega
+
 theorem soundness (B : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main B) (fun _ _ => True) (Spec B) := by
   sorry
