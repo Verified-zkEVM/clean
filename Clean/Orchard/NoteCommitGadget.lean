@@ -186,9 +186,30 @@ instance : Inhabited (Var Input Ecc.Fp) :=
   ⟨{ gd := default, pkd := default, value := default, rho := default, psi := default,
      rcm := fun _ => default }⟩
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
-    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+structure MessageCells where
+  a : Var field Ecc.Fp
+  b : Var field Ecc.Fp
+  c : Var field Ecc.Fp
+  d : Var field Ecc.Fp
+  e : Var field Ecc.Fp
+  f : Var field Ecc.Fp
+  g : Var field Ecc.Fp
+  h : Var field Ecc.Fp
+  b0 : Var field Ecc.Fp
+  b1 : Var field Ecc.Fp
+  b2 : Var field Ecc.Fp
+  b3 : Var field Ecc.Fp
+  d0 : Var field Ecc.Fp
+  d1 : Var field Ecc.Fp
+  d2 : Var field Ecc.Fp
+  e0 : Var field Ecc.Fp
+  e1 : Var field Ecc.Fp
+  g0 : Var field Ecc.Fp
+  g1 : Var field Ecc.Fp
+  h0 : Var field Ecc.Fp
+  h1 : Var field Ecc.Fp
+
+def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells := do
   let gdX := input.gd.x
   let gdY := input.gd.y
   let pkdX := input.pkd.x
@@ -225,10 +246,24 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let g ← witnessField fun env => env g0 + env g1 * 2 +
     bitrangeSubset (Expression.eval env psi) 9 240 * 2 ^ 10
   let h ← witnessField fun env => env h0 + env h1 * 2 ^ 5
+  return {
+    a, b, c, d, e, f, g, h,
+    b0, b1, b2, b3, d0, d1, d2, e0, e1, g0, g1, h0, h1
+  }
+
+def commitAndConstrain (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (cells : MessageCells) :
+    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+  let gdX := input.gd.x
+  let pkdX := input.pkd.x
+  let v := input.value
+  let rho := input.rho
+  let psi := input.psi
   -- cm = NoteCommit_rcm(message); zs are the per-piece running sums
   let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 25
     [1, 25, 6, 1, 25, 25, 1]
-    { pieces := #v[a, b, c, d, e, f, g, h], r := input.rcm }
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
   let cm := out.point
   -- running-sum cells needed for canonicity (note_commit.rs:1702-1708)
   let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
@@ -238,34 +273,61 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
   let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
   -- canonicity bounds
-  let (aPrime, z13aPrime) ← canonBitshift130 a
-  let (b3cPrime, z14b3c) ← pkdXCanonicity b3 c
-  let (e1fPrime, z14e1f) ← rhoCanonicity e1 f
-  let (g1g2Prime, z13g1g2) ← psiCanonicity g1 z1g
+  let (aPrime, z13aPrime) ← canonBitshift130 cells.a
+  let (b3cPrime, z14b3c) ← pkdXCanonicity cells.b3 cells.c
+  let (e1fPrime, z14e1f) ← rhoCanonicity cells.e1 cells.f
+  let (g1g2Prime, z13g1g2) ← psiCanonicity cells.g1 z1g
   -- the NoteCommit decomposition + canonicity gates
-  NoteCommit.DecomposeB.circuit { b := b, b0 := b0, b1 := b1, b2 := b2, b3 := b3 }
-  NoteCommit.DecomposeD.circuit { d := d, d0 := d0, d1 := d1, d2 := d2, d3 := z1d }
-  NoteCommit.DecomposeE.circuit { e := e, e0 := e0, e1 := e1 }
-  NoteCommit.DecomposeG.circuit { g := g, g0 := g0, g1 := g1, g2 := z1g }
-  NoteCommit.DecomposeH.circuit { h := h, h0 := h0, h1 := h1 }
+  NoteCommit.DecomposeB.circuit
+    { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
+  NoteCommit.DecomposeD.circuit
+    { d := cells.d, d0 := cells.d0, d1 := cells.d1, d2 := cells.d2, d3 := z1d }
+  NoteCommit.DecomposeE.circuit { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
+  NoteCommit.DecomposeG.circuit { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := z1g }
+  NoteCommit.DecomposeH.circuit { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
   NoteCommit.GdCanonicity.circuit
-    { gdX := gdX, b0 := b0, b1 := b1, a := a, aPrime := aPrime, z13A := z13a,
+    { gdX := gdX, b0 := cells.b0, b1 := cells.b1, a := cells.a, aPrime := aPrime, z13A := z13a,
       z13APrime := z13aPrime }
   NoteCommit.PkdCanonicity.circuit
-    { pkdX := pkdX, b3 := b3, c := c, d0 := d0, b3CPrime := b3cPrime, z13C := z13c,
-      z14B3CPrime := z14b3c }
-  NoteCommit.ValueCanonicity.circuit { value := v, d2 := d2, d3 := z1d, e0 := e0 }
+    { pkdX := pkdX, b3 := cells.b3, c := cells.c, d0 := cells.d0, b3CPrime := b3cPrime,
+      z13C := z13c, z14B3CPrime := z14b3c }
+  NoteCommit.ValueCanonicity.circuit { value := v, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
   NoteCommit.RhoCanonicity.circuit
-    { rho := rho, e1 := e1, f := f, g0 := g0, e1FPrime := e1fPrime, z13F := z13f,
+    { rho := rho, e1 := cells.e1, f := cells.f, g0 := cells.g0, e1FPrime := e1fPrime, z13F := z13f,
       z14E1FPrime := z14e1f }
   NoteCommit.PsiCanonicity.circuit
-    { psi := psi, h0 := h0, g1 := g1, h1 := h1, g2 := z1g, g1G2Prime := g1g2Prime,
-      z13G := z13g, z13G1G2Prime := z13g1g2 }
+    { psi := psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g,
+      g1G2Prime := g1g2Prime, z13G := z13g, z13G1G2Prime := z13g1g2 }
   return cm
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
+    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+  let cells ← assignMessageCells input
+  commitAndConstrain G Q hQ R input cells
+
+instance assignMessageCellsExplicit (input : Var Input Ecc.Fp) :
+    ExplicitCircuit (assignMessageCells input) := by
+  unfold assignMessageCells
+  infer_explicit_circuit
+
+instance commitAndConstrainExplicit (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
+    (cells : MessageCells) :
+    ExplicitCircuit (commitAndConstrain G Q hQ R input cells) := by
+  unfold commitAndConstrain
+  infer_explicit_circuit
+
+attribute [explicit_circuit_no_unfold] assignMessageCells commitAndConstrain
 
 instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
   infer_explicit_circuits
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
+  elaborate_circuit
 
 /-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
 `g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
@@ -329,11 +391,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
---   (1) `ElaboratedCircuit`: `mainExplicit` is inferable, but the generated metadata is
---       still too large for the default `ExplicitCircuits.IsElaborated` proof. Provide a
---       controlled offset-independence proof or an explicit data override for
---       `localLength`/`output` (output = `out.point`, a clean point).
---   (2) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
+--   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
 --       pieces equal `noteCommitChunks`'s tiling via `noteCommitChunks_tiling`) +
 --       `completeness`. This is the largest remaining proof.
 
