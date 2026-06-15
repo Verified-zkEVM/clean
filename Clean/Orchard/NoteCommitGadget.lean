@@ -209,6 +209,9 @@ structure MessageCells where
   h0 : Var field Ecc.Fp
   h1 : Var field Ecc.Fp
 
+abbrev messageTail : List ℕ := [1, 25, 6, 1, 25, 25, 1]
+abbrev messageLengths : List ℕ := 25 :: messageTail
+
 def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells := do
   let gdX := input.gd.x
   let gdY := input.gd.y
@@ -251,19 +254,21 @@ def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells 
     b0, b1, b2, b3, d0, d1, d2, e0, e1, g0, g1, h0, h1
   }
 
-def commitAndConstrain (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def commitWithZs (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (cells : MessageCells) :
+    Circuit Ecc.Fp (Var (Sinsemilla.CommitDomain.WithZs.Output messageLengths) Ecc.Fp) := do
+  _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 25 messageTail
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+
+def constrainCommitment (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messageLengths) Ecc.Fp) :
     Circuit Ecc.Fp (Var Point Ecc.Fp) := do
   let gdX := input.gd.x
   let pkdX := input.pkd.x
   let v := input.value
   let rho := input.rho
   let psi := input.psi
-  -- cm = NoteCommit_rcm(message); zs are the per-piece running sums
-  let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 25
-    [1, 25, 6, 1, 25, 25, 1]
-    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
-      r := input.rcm }
   let cm := out.point
   -- running-sum cells needed for canonicity (note_commit.rs:1702-1708)
   let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
@@ -300,6 +305,12 @@ def commitAndConstrain (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0
       g1G2Prime := g1g2Prime, z13G := z13g, z13G1G2Prime := z13g1g2 }
   return cm
 
+def commitAndConstrain (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (cells : MessageCells) :
+    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+  let out ← commitWithZs G Q hQ R input cells
+  constrainCommitment input cells out
+
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
     Circuit Ecc.Fp (Var Point Ecc.Fp) := do
@@ -311,6 +322,19 @@ instance assignMessageCellsExplicit (input : Var Input Ecc.Fp) :
   unfold assignMessageCells
   infer_explicit_circuit
 
+instance commitWithZsExplicit (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
+    (cells : MessageCells) :
+    ExplicitCircuit (commitWithZs G Q hQ R input cells) := by
+  unfold commitWithZs
+  infer_explicit_circuit
+
+instance constrainCommitmentExplicit (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messageLengths) Ecc.Fp) :
+    ExplicitCircuit (constrainCommitment input cells out) := by
+  unfold constrainCommitment
+  infer_explicit_circuit
+
 instance commitAndConstrainExplicit (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
     (cells : MessageCells) :
@@ -318,7 +342,8 @@ instance commitAndConstrainExplicit (G : Generators) (Q : SWPoint Pallas.curve)
   unfold commitAndConstrain
   infer_explicit_circuit
 
-attribute [explicit_circuit_no_unfold] assignMessageCells commitAndConstrain
+attribute [explicit_circuit_no_unfold] assignMessageCells commitAndConstrain commitWithZs
+  constrainCommitment
 
 instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
@@ -330,25 +355,6 @@ def mainOutput (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let cells := (assignMessageCells input).output offset
   (commitAndConstrain G Q hQ R input cells).output
     (offset + (assignMessageCells input).localLength offset)
-
-def elaboratedRaw (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) :
-    ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
-  elaborate_circuit
-
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) :
-    ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) where
-  localLength := (elaboratedRaw G Q hQ R).localLength
-  localLength_eq := (elaboratedRaw G Q hQ R).localLength_eq
-  output := mainOutput G Q hQ R
-  output_eq input offset := by
-    unfold main mainOutput
-    simp only [Circuit.output, Circuit.bind_def, Circuit.localLength]
-  subcircuitsConsistent := (elaboratedRaw G Q hQ R).subcircuitsConsistent
-  channelsWithGuarantees := (elaboratedRaw G Q hQ R).channelsWithGuarantees
-  channelsWithRequirements := (elaboratedRaw G Q hQ R).channelsWithRequirements
-  channelsLawful := (elaboratedRaw G Q hQ R).channelsLawful
 
 /-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
 `g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
@@ -410,6 +416,59 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
         (Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi)
       = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
+
+/-- Split the commitment/gate phase into the Sinsemilla commit that exposes running sums
+and the NoteCommit decomposition/canonicity gates that consume those sums. -/
+theorem commitAndConstrain_soundness_constraints_iff (G : Generators)
+    (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (offset : ℕ) :
+    ConstraintsHold.Soundness env ((commitAndConstrain G Q hQ R input cells).operations offset) ↔
+      ConstraintsHold.Soundness env ((commitWithZs G Q hQ R input cells).operations offset) ∧
+      ConstraintsHold.Soundness env
+        ((constrainCommitment input cells ((commitWithZs G Q hQ R input cells).output offset)).operations
+          (offset + (commitWithZs G Q hQ R input cells).localLength offset)) := by
+  unfold commitAndConstrain ConstraintsHold.Soundness
+  rw [Circuit.bind_forAllNoOffset]
+
+theorem commitAndConstrain_requirements_iff (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (cells : MessageCells) (offset : ℕ) :
+    Operations.Requirements env ((commitAndConstrain G Q hQ R input cells).operations offset) ↔
+      Operations.Requirements env ((commitWithZs G Q hQ R input cells).operations offset) ∧
+      Operations.Requirements env
+        ((constrainCommitment input cells ((commitWithZs G Q hQ R input cells).output offset)).operations
+          (offset + (commitWithZs G Q hQ R input cells).localLength offset)) := by
+  unfold commitAndConstrain Operations.Requirements
+  rw [Circuit.bind_forAllNoOffset]
+
+theorem commitAndConstrain_completeness_constraints_iff (G : Generators)
+    (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
+    (env : ProverEnvironment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (offset : ℕ) :
+    ConstraintsHold.Completeness env
+        ((commitAndConstrain G Q hQ R input cells).operations offset) ↔
+      ConstraintsHold.Completeness env ((commitWithZs G Q hQ R input cells).operations offset) ∧
+      ConstraintsHold.Completeness env
+        ((constrainCommitment input cells ((commitWithZs G Q hQ R input cells).output offset)).operations
+          (offset + (commitWithZs G Q hQ R input cells).localLength offset)) := by
+  unfold commitAndConstrain ConstraintsHold.Completeness
+  rw [Circuit.bind_forAllNoOffset]
+
+theorem commitAndConstrain_usesLocalWitnesses_iff (G : Generators)
+    (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
+    (env : ProverEnvironment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (offset : ℕ) :
+    env.UsesLocalWitnessesCompleteness offset
+        ((commitAndConstrain G Q hQ R input cells).operations offset) ↔
+      env.UsesLocalWitnessesCompleteness offset
+        ((commitWithZs G Q hQ R input cells).operations offset) ∧
+      env.UsesLocalWitnessesCompleteness
+        (offset + (commitWithZs G Q hQ R input cells).localLength offset)
+        ((constrainCommitment input cells ((commitWithZs G Q hQ R input cells).output offset)).operations
+          (offset + (commitWithZs G Q hQ R input cells).localLength offset)) := by
+  unfold commitAndConstrain
+  rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses]
 
 /-- Split the top-level source-shaped `main` soundness constraints into the message-cell
 assignment phase and the commitment/gate phase. This is intentionally used instead of
