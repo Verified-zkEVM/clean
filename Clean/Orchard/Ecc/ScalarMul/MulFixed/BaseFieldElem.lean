@@ -526,6 +526,33 @@ theorem soundness (B : MulFixed.FixedBase) :
       norm_num [tPNat] at hα0lt ⊢
       omega
     · -- α2 = 1: canonicity forces α0 < t_p
+      obtain ⟨hα1z, hhi120, _, hz13⟩ := hCanon ha2
+      -- the top window is `4` (α1 = 0, α2 = 1)
+      rw [hα1z, ha2] at hz84dec
+      have hA04 : A0 = 4 :=
+        RunningSumMul.natCast_inj_of_lt_8 hA0lt (by norm_num) (by rw [hz84dec]; norm_num)
+      have hV254 : V = α0 + 2 ^ 254 := by rw [hVsplit, hA04, h884]; norm_num
+      have hz84val : V / 8 ^ 84 = 4 := hA04
+      -- `alpha0_hi_120 = 0` forces `α0 < 2^132`
+      have h844 : (8 : ℕ) ^ 44 = 2 ^ 132 := by norm_num
+      have hdiv44 : V / 8 ^ 44 = α0 / 2 ^ 132 + 2 ^ 122 := by
+        rw [hV254, h844, show (2 : ℕ) ^ 254 = 2 ^ 122 * 2 ^ 132 from by ring,
+          Nat.add_mul_div_right _ _ (by positivity)]
+      rw [e44, e84, hz84val, hdiv44,
+        show (OfNat.ofNat (2 ^ 120) : Fp) = (2 : Fp) ^ 120 from by norm_num] at hhi120
+      have hq0 : α0 / 2 ^ 132 = 0 := by
+        have hcast : ((α0 / 2 ^ 132 : ℕ) : Fp) = 0 := by
+          push_cast at hhi120 ⊢; linear_combination hhi120
+        have hlt : α0 / 2 ^ 132 < PALLAS_BASE_CARD := by
+          have : α0 / 2 ^ 132 < 2 ^ 120 :=
+            Nat.div_lt_of_lt_mul (by rw [show 2 ^ 132 * 2 ^ 120 = 2 ^ 252 from by ring]; omega)
+          rw [base_card_eq]; omega
+        exact Nat.eq_zero_of_dvd_of_lt ((ZMod.natCast_eq_zero_iff _ _).mp hcast) hlt
+      have hα0lt132 : α0 < 2 ^ 132 := by
+        rcases Nat.div_eq_zero_iff.mp hq0 with h | h
+        · norm_num at h
+        · exact h
+      -- the lookup bound on `α0 + 2^130 - t_p` forces `α0 < t_p`
       sorry
   have hVcanon : V = ZMod.val (show Fp from input) := by
     rw [hαV, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp]
