@@ -487,6 +487,23 @@ private theorem telescope13_eq {z0 z1 z2 z3 z4 z5 z6 z7 z8 z9 z10 z11 z12 ap : F
     2 ^ 50 * e5 + 2 ^ 60 * e6 + 2 ^ 70 * e7 + 2 ^ 80 * e8 + 2 ^ 90 * e9 +
     2 ^ 100 * e10 + 2 ^ 110 * e11 + 2 ^ 120 * e12
 
+/-- From the lookup digit sum `S < 2^130` and the field equation `S = α0 + 2^130 - t_p`
+(with `α0 < 2^132` ruling out wraparound), conclude `α0 < t_p`. Factored so the heavy
+`ZMod.val` reasoning is kernel-checked in isolation. -/
+private theorem alpha0_lt_tp {S α0 : ℕ} (hSlt : S < 2 ^ 130) (hα0lt : α0 < 2 ^ 132)
+    (heq : (S : Fp) = (α0 : Fp) + (2 : Fp) ^ 130 - (tPNat : Fp)) : α0 < tPNat := by
+  -- additive form (no `Nat.cast_sub`): `↑(S + t_p) = ↑(α0 + 2^130)`
+  have hadd : ((S + tPNat : ℕ) : Fp) = ((α0 + 2 ^ 130 : ℕ) : Fp) := by
+    push_cast; linear_combination heq
+  have hmod := (ZMod.natCast_eq_natCast_iff _ _ _).mp hadd
+  -- the two literal facts (powers stay opaque to `omega`)
+  have hlit : (2 : ℕ) ^ 130 + tPNat < PALLAS_BASE_CARD ∧ 2 ^ 132 + 2 ^ 130 < PALLAS_BASE_CARD := by
+    norm_num [PALLAS_BASE_CARD, tPNat]
+  have hSp : S + tPNat < PALLAS_BASE_CARD := by omega
+  have hMp : α0 + 2 ^ 130 < PALLAS_BASE_CARD := by omega
+  rw [Nat.ModEq, Nat.mod_eq_of_lt hSp, Nat.mod_eq_of_lt hMp] at hmod
+  omega
+
 theorem soundness (B : MulFixed.FixedBase) :
     Soundness Fp (main B) Assumptions (Spec B) := by
   circuit_proof_start [main, Spec, RunningSumMul.circuit, BaseFieldElem.circuit,
@@ -586,7 +603,39 @@ theorem soundness (B : MulFixed.FixedBase) :
       rw [hαV, e84, hz84val,
         show (V : Fp) = (α0 : Fp) + (4 : ℕ) * OfNat.ofNat (2 ^ 252) from by
           rw [hV254]; push_cast; ring] at hα0prime
-      have hα0tp : α0 < tPNat := by sorry
+      obtain ⟨hz0c, hChain⟩ := hCopy
+      obtain ⟨w0, hw0, he0⟩ := hChain ⟨0, by norm_num⟩
+      obtain ⟨w1, hw1, he1⟩ := hChain ⟨1, by norm_num⟩
+      obtain ⟨w2, hw2, he2⟩ := hChain ⟨2, by norm_num⟩
+      obtain ⟨w3, hw3, he3⟩ := hChain ⟨3, by norm_num⟩
+      obtain ⟨w4, hw4, he4⟩ := hChain ⟨4, by norm_num⟩
+      obtain ⟨w5, hw5, he5⟩ := hChain ⟨5, by norm_num⟩
+      obtain ⟨w6, hw6, he6⟩ := hChain ⟨6, by norm_num⟩
+      obtain ⟨w7, hw7, he7⟩ := hChain ⟨7, by norm_num⟩
+      obtain ⟨w8, hw8, he8⟩ := hChain ⟨8, by norm_num⟩
+      obtain ⟨w9, hw9, he9⟩ := hChain ⟨9, by norm_num⟩
+      obtain ⟨w10, hw10, he10⟩ := hChain ⟨10, by norm_num⟩
+      obtain ⟨w11, hw11, he11⟩ := hChain ⟨11, by norm_num⟩
+      obtain ⟨w12, hw12, he12⟩ := hChain ⟨12, by norm_num⟩
+      clear hChain
+      -- collapse the giant nested cell-offset expressions (`[1,1,1,1].sum`, nested adds)
+      -- to plain numerals, so applying `telescope13_eq` to the `env.get` terms below does
+      -- not send the kernel into deep recursion reducing those offsets
+      simp only [Utilities.LookupRangeCheck.K, List.sum_cons, List.sum_nil, Nat.reduceMul,
+        Nat.reduceAdd] at hz0c hz13 hα0prime he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
+      norm_num [Utilities.LookupRangeCheck.K] at hw0 hw1 hw2 hw3 hw4 hw5 hw6 hw7 hw8 hw9 hw10 hw11 hw12
+      rw [hz13, mul_zero, _root_.zero_add] at he12
+      obtain ⟨S, hSdef⟩ : ∃ S : ℕ, S = w0 + 2 ^ 10 * w1 + 2 ^ 20 * w2 + 2 ^ 30 * w3 +
+        2 ^ 40 * w4 + 2 ^ 50 * w5 + 2 ^ 60 * w6 + 2 ^ 70 * w7 + 2 ^ 80 * w8 +
+        2 ^ 90 * w9 + 2 ^ 100 * w10 + 2 ^ 110 * w11 + 2 ^ 120 * w12 := ⟨_, rfl⟩
+      have hSlt : S < 2 ^ 130 := by rw [hSdef]; omega
+      have hapS :=
+        telescope13_eq hz0c he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
+      have hfield : (S : Fp) = (α0 : Fp) + (2 : Fp) ^ 130 - (tPNat : Fp) := by
+        rw [hSdef, ← hapS, hα0prime]
+        push_cast [NoteCommit.tP, tPNat]
+        ring
+      have hα0tp : α0 < tPNat := alpha0_lt_tp hSlt hα0lt132 hfield
       rw [hV254]; omega
   have hVcanon : V = ZMod.val (show Fp from input) := by
     rw [hαV, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp]
