@@ -612,6 +612,34 @@ theorem commitAndConstrain_usesLocalWitnesses_iff (G : Generators)
   unfold commitAndConstrain
   rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses]
 
+theorem commitWithZs_spec_of_soundness (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (cells : MessageCells) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((commitWithZs G Q hQ R input cells).operations offset)) :
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    Sinsemilla.CommitDomain.WithZs.Spec G Q R 25 messageTail
+      (eval env commitInput)
+      (eval env ((commitWithZs G Q hQ R input cells).output offset)) env.data := by
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  change ConstraintsHold.Soundness env
+    ([.subcircuit ((Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 25 messageTail).toSubcircuit
+      offset commitInput)]) at h
+  simp only [ConstraintsHold.Soundness, Operations.forAllNoOffset,
+    GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at h
+  exact h.1 trivial
+
+theorem commitAndConstrain_output_eq (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
+    (cells : MessageCells) (offset : ℕ) :
+    (commitAndConstrain G Q hQ R input cells).output offset =
+      ((commitWithZs G Q hQ R input cells).output offset).point := by
+  unfold commitAndConstrain constrainCommitment
+  simp only [Circuit.output, Circuit.bind_def]
+
 /-- Split the top-level source-shaped `main` soundness constraints into the message-cell
 assignment phase and the commitment/gate phase. This is intentionally used instead of
 globally unfolding `main` in `circuit_proof_start`, which expands the whole gadget. -/
