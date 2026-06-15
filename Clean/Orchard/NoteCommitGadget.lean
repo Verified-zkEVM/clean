@@ -540,6 +540,38 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
       = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue rcm).coords
 
+theorem spec_of_commitWithZs_spec (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (inputVar : Var Input Ecc.Fp) (input : Value Input Ecc.Fp) (cells : MessageCells)
+    (commitOffset : ℕ) (cm : Point Ecc.Fp)
+    (houtput : cm =
+      (eval env ((commitWithZs G Q hQ R inputVar cells).output commitOffset)).point)
+    (hcommit :
+      let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+        { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+          r := inputVar.rcm }
+      Sinsemilla.CommitDomain.WithZs.Spec G Q R 25 messageTail
+        (eval env commitInput)
+        (eval env ((commitWithZs G Q hQ R inputVar cells).output commitOffset)) env.data)
+    (hchunks : ∀ chunks,
+      let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+        { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+          r := inputVar.rcm }
+      Orchard.Sinsemilla.Chain.PieceChunks messageLengths (eval env commitInput).pieces chunks →
+        chunks =
+          let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := noteScalars input
+          Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi) :
+    Spec G Q R input cm env.data := by
+  unfold Spec
+  obtain ⟨chunks, r, hPC, _hZs, hfun⟩ := hcommit
+  refine ⟨r, ?_⟩
+  intro B hB
+  have hc := hchunks chunks hPC
+  simp only [noteScalars] at hc
+  rw [← hc] at hB
+  rw [houtput]
+  exact hfun B hB
+
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
     (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp)
     (_ : ProverHint Ecc.Fp) : Prop :=
