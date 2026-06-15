@@ -411,6 +411,53 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
       = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
+/-- Split the top-level source-shaped `main` soundness constraints into the message-cell
+assignment phase and the commitment/gate phase. This is intentionally used instead of
+globally unfolding `main` in `circuit_proof_start`, which expands the whole gadget. -/
+theorem main_soundness_constraints_iff (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ) :
+    ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset) ↔
+      ConstraintsHold.Soundness env ((assignMessageCells input).operations offset) ∧
+      ConstraintsHold.Soundness env
+        ((commitAndConstrain G Q hQ R input ((assignMessageCells input).output offset)).operations
+          (offset + (assignMessageCells input).localLength offset)) := by
+  unfold main ConstraintsHold.Soundness
+  rw [Circuit.bind_forAllNoOffset]
+
+theorem main_requirements_iff (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp)
+    (offset : ℕ) :
+    Operations.Requirements env ((main G Q hQ R input).operations offset) ↔
+      Operations.Requirements env ((assignMessageCells input).operations offset) ∧
+      Operations.Requirements env
+        ((commitAndConstrain G Q hQ R input ((assignMessageCells input).output offset)).operations
+          (offset + (assignMessageCells input).localLength offset)) := by
+  unfold main Operations.Requirements
+  rw [Circuit.bind_forAllNoOffset]
+
+theorem main_completeness_constraints_iff (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : ProverEnvironment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ) :
+    ConstraintsHold.Completeness env ((main G Q hQ R input).operations offset) ↔
+      ConstraintsHold.Completeness env ((assignMessageCells input).operations offset) ∧
+      ConstraintsHold.Completeness env
+        ((commitAndConstrain G Q hQ R input ((assignMessageCells input).output offset)).operations
+          (offset + (assignMessageCells input).localLength offset)) := by
+  unfold main ConstraintsHold.Completeness
+  rw [Circuit.bind_forAllNoOffset]
+
+theorem main_usesLocalWitnesses_iff (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : ProverEnvironment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ) :
+    env.UsesLocalWitnessesCompleteness offset ((main G Q hQ R input).operations offset) ↔
+      env.UsesLocalWitnessesCompleteness offset ((assignMessageCells input).operations offset) ∧
+      env.UsesLocalWitnessesCompleteness (offset + (assignMessageCells input).localLength offset)
+        ((commitAndConstrain G Q hQ R input ((assignMessageCells input).output offset)).operations
+          (offset + (assignMessageCells input).localLength offset)) := by
+  unfold main
+  rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses]
+
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
 --       pieces equal `noteCommitChunks`'s tiling via `noteCommitChunks_tiling`) +
