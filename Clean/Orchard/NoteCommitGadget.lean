@@ -258,6 +258,36 @@ structure MessageSubpieces where
 abbrev messagePieceTailRounds : List ℕ := [0, 24, 5, 0, 24, 24, 0]
 abbrev messagePieceRounds : List ℕ := 24 :: messagePieceTailRounds
 
+theorem pieceChunks_messagePieceRounds_chunks
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    (h : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks) :
+    ∃ msA msB msC msD msE msF msG msH : ℕ → ℕ,
+      (∀ r, msA r < 2 ^ K) ∧ (∀ r, msB r < 2 ^ K) ∧
+      (∀ r, msC r < 2 ^ K) ∧ (∀ r, msD r < 2 ^ K) ∧
+      (∀ r, msE r < 2 ^ K) ∧ (∀ r, msF r < 2 ^ K) ∧
+      (∀ r, msG r < 2 ^ K) ∧ (∀ r, msH r < 2 ^ K) ∧
+      chunks =
+        (List.range 25).map msA ++
+        (List.range 1).map msB ++
+        (List.range 25).map msC ++
+        (List.range 6).map msD ++
+        (List.range 1).map msE ++
+        (List.range 25).map msF ++
+        (List.range 25).map msG ++
+        (List.range 1).map msH := by
+  simp only [messagePieceTailRounds, Orchard.Sinsemilla.Chain.PieceChunks] at h
+  obtain ⟨msA, hA, _hpA, tailA, rfl, h⟩ := h
+  obtain ⟨msB, hB, _hpB, tailB, rfl, h⟩ := h
+  obtain ⟨msC, hC, _hpC, tailC, rfl, h⟩ := h
+  obtain ⟨msD, hD, _hpD, tailD, rfl, h⟩ := h
+  obtain ⟨msE, hE, _hpE, tailE, rfl, h⟩ := h
+  obtain ⟨msF, hF, _hpF, tailF, rfl, h⟩ := h
+  obtain ⟨msG, hG, _hpG, tailG, rfl, h⟩ := h
+  obtain ⟨msH, hH, _hpH, tailH, rfl, h⟩ := h
+  subst tailH
+  exact ⟨msA, msB, msC, msD, msE, msF, msG, msH,
+    hA, hB, hC, hD, hE, hF, hG, hH, by simp only [List.append_nil, List.append_assoc]⟩
+
 def assignSubpieces (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageSubpieces := do
   let gdX := input.gd.x
   let gdY := input.gd.y
