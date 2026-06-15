@@ -188,7 +188,8 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     bitrangeSubset (Expression.eval env psi) 9 240 * 2 ^ 10
   let h ← witnessField fun env => env h0 + env h1 * 2 ^ 5
   -- cm = NoteCommit_rcm(message); zs are the per-piece running sums
-  let out ← CommitDomain.WithZs.circuit G Q hQ R 25 [1, 25, 6, 1, 25, 25, 1]
+  let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 25
+    [1, 25, 6, 1, 25, 25, 1]
     { pieces := #v[a, b, c, d, e, f, g, h], r := input.rcm }
   let cm := out.point
   -- running-sum cells needed for canonicity (note_commit.rs:1702-1708)
