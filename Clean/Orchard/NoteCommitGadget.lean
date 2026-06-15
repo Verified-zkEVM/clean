@@ -252,8 +252,11 @@ structure MessageSubpieces where
   h0 : Var field Ecc.Fp
   h1 : Var field Ecc.Fp
 
-abbrev messageTail : List ℕ := [1, 25, 6, 1, 25, 25, 1]
-abbrev messageLengths : List ℕ := 25 :: messageTail
+/-- Sinsemilla per-piece round counts for the note-commit message. Each entry is
+`num_words - 1`, matching `Chain.PieceChunks`: source chunk counts
+`[25, 1, 25, 6, 1, 25, 25, 1]` become `[24, 0, 24, 5, 0, 24, 24, 0]`. -/
+abbrev messagePieceTailRounds : List ℕ := [0, 24, 5, 0, 24, 24, 0]
+abbrev messagePieceRounds : List ℕ := 24 :: messagePieceTailRounds
 
 def assignSubpieces (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageSubpieces := do
   let gdX := input.gd.x
@@ -321,13 +324,13 @@ def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells 
 
 def commitWithZs (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (cells : MessageCells) :
-    Circuit Ecc.Fp (Var (Sinsemilla.CommitDomain.WithZs.Output messageLengths) Ecc.Fp) := do
-  _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 25 messageTail
+    Circuit Ecc.Fp (Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp) := do
+  _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds
     { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
       r := input.rcm }
 
 def constrainCommitment (input : Var Input Ecc.Fp) (cells : MessageCells)
-    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messageLengths) Ecc.Fp) :
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp) :
     Circuit Ecc.Fp (Var Point Ecc.Fp) := do
   let gdX := input.gd.x
   let pkdX := input.pkd.x
@@ -410,7 +413,7 @@ instance commitWithZsExplicit (G : Generators) (Q : SWPoint Pallas.curve)
   infer_explicit_circuit
 
 instance constrainCommitmentExplicit (input : Var Input Ecc.Fp) (cells : MessageCells)
-    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messageLengths) Ecc.Fp) :
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp) :
     ExplicitCircuit (constrainCommitment input cells out) := by
   unfold constrainCommitment
   infer_explicit_circuit
@@ -450,7 +453,7 @@ attribute [explicit_circuit_no_unfold] assignSubpieces constrainYSubpieces assig
 
 @[circuit_norm] theorem constrainCommitment_localLength (input : Var Input Ecc.Fp)
     (cells : MessageCells)
-    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messageLengths) Ecc.Fp)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
     (offset : ℕ) :
     (constrainCommitment input cells out).localLength offset = 62 := by
   unfold constrainCommitment
@@ -461,12 +464,15 @@ attribute [explicit_circuit_no_unfold] assignSubpieces constrainYSubpieces assig
 @[circuit_norm] theorem commitWithZs_localLength (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
     (cells : MessageCells) (offset : ℕ) :
-    (commitWithZs G Q hQ R input cells).localLength offset = 1447 := rfl
+    (commitWithZs G Q hQ R input cells).localLength offset = 1407 := by
+  unfold commitWithZs
+  simp only [circuit_norm, Sinsemilla.CommitDomain.WithZs.circuit]
+  norm_num [messagePieceTailRounds, Chain.chainLength]
 
 @[circuit_norm] theorem commitAndConstrain_localLength (G : Generators)
     (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
     (input : Var Input Ecc.Fp) (cells : MessageCells) (offset : ℕ) :
-    (commitAndConstrain G Q hQ R input cells).localLength offset = 1509 := by
+    (commitAndConstrain G Q hQ R input cells).localLength offset = 1469 := by
   unfold commitAndConstrain
   simp only [circuit_norm]
 
@@ -484,7 +490,7 @@ def mainOutput (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) where
-  localLength _ := 1631
+  localLength _ := 1591
   localLength_eq := by
     intro input offset
     unfold main
@@ -550,14 +556,14 @@ theorem spec_of_commitWithZs_spec (G : Generators) (Q : SWPoint Pallas.curve)
       let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
         { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
           r := inputVar.rcm }
-      Sinsemilla.CommitDomain.WithZs.Spec G Q R 25 messageTail
+      Sinsemilla.CommitDomain.WithZs.Spec G Q R 24 messagePieceTailRounds
         (eval env commitInput)
         (eval env ((commitWithZs G Q hQ R inputVar cells).output commitOffset)) env.data)
     (hchunks : ∀ chunks,
       let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
         { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
           r := inputVar.rcm }
-      Orchard.Sinsemilla.Chain.PieceChunks messageLengths (eval env commitInput).pieces chunks →
+      Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (eval env commitInput).pieces chunks →
         chunks =
           let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := noteScalars input
           Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi) :
@@ -651,14 +657,14 @@ theorem commitWithZs_spec_of_soundness (G : Generators) (Q : SWPoint Pallas.curv
     let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
       { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
         r := input.rcm }
-    Sinsemilla.CommitDomain.WithZs.Spec G Q R 25 messageTail
+    Sinsemilla.CommitDomain.WithZs.Spec G Q R 24 messagePieceTailRounds
       (eval env commitInput)
       (eval env ((commitWithZs G Q hQ R input cells).output offset)) env.data := by
   let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
     { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
       r := input.rcm }
   change ConstraintsHold.Soundness env
-    ([.subcircuit ((Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 25 messageTail).toSubcircuit
+    ([.subcircuit ((Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds).toSubcircuit
       offset commitInput)]) at h
   simp only [ConstraintsHold.Soundness, Operations.forAllNoOffset,
     GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at h
@@ -737,7 +743,7 @@ theorem main_commitWithZs_spec_of_soundness (G : Generators) (Q : SWPoint Pallas
     let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
       { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
         r := input.rcm }
-    Sinsemilla.CommitDomain.WithZs.Spec G Q R 25 messageTail
+    Sinsemilla.CommitDomain.WithZs.Spec G Q R 24 messagePieceTailRounds
       (eval env commitInput)
       (eval env ((commitWithZs G Q hQ R input cells).output commitOffset)) env.data := by
   rw [main_soundness_constraints_iff] at h
