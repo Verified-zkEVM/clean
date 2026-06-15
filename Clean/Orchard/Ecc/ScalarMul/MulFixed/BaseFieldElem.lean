@@ -391,6 +391,101 @@ private theorem step_lt_next {S t j : ℕ} (hS : S < 2 * 8 ^ (j + 1))
   have h16 : 2 * 8 ^ (j + 1 + 1) = 16 * 8 ^ (j + 1) := by ring
   omega
 
+/-- The base-`8` digit of `V = ∑ ks j 8^j` at position `w < 85` is `ks w`. -/
+private theorem digit_eq {ks : ℕ → ℕ} (hk : ∀ w, ks w < 8) {w : ℕ} (hw : w < 85) :
+    (∑ j ∈ Finset.range 85, ks j * 8 ^ j) / 8 ^ w % 8 = ks w := by
+  -- split `V = low + 8^w * (ks w + 8 * high)`, with `low < 8^w`
+  obtain ⟨high, hhigh⟩ : ∃ high, (∑ j ∈ Finset.range 85, ks j * 8 ^ j)
+      = (∑ j ∈ Finset.range w, ks j * 8 ^ j) + 8 ^ w * (ks w + 8 * high) := by
+    refine ⟨∑ j ∈ Finset.range (85 - (w + 1)), ks (w + 1 + j) * 8 ^ j, ?_⟩
+    rw [show (85 : ℕ) = (w + 1) + (85 - (w + 1)) from by omega, Finset.sum_range_add,
+      Finset.sum_range_succ, mul_add, _root_.add_assoc,
+      show w + 1 + (85 - (w + 1)) - (w + 1) = 85 - (w + 1) from by omega]
+    congr 1
+    rw [mul_comm (8 ^ w) (ks w)]
+    congr 1
+    rw [Finset.mul_sum, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [show w + 1 + j = w + (j + 1) from by omega, pow_add, pow_succ]; ring
+  have hlow : ∑ j ∈ Finset.range w, ks j * 8 ^ j < 8 ^ w := sum_lt_of_windows fun j _ => hk j
+  rw [hhigh, Nat.add_mul_div_left _ _ (pow_pos (show 0 < 8 by norm_num) w),
+    Nat.div_eq_of_lt hlow, _root_.zero_add, Nat.add_mul_mod_self_left,
+    Nat.mod_eq_of_lt (hk w)]
+
+/-- The running-sum value at window `w` is `⌊V / 8^w⌋`: from the step relation and the
+strict terminating zero, each running-sum cell equals the corresponding floor division of
+the decomposed value `V = ∑ ks j 8^j`. -/
+private theorem chain_div (z : ℕ → Fp) (ks : ℕ → ℕ) (hk : ∀ w, ks w < 8)
+    (hword : ∀ w < 85, z w = (ks w : Fp) + 8 * z (w + 1))
+    (hz85 : z 85 = 0) :
+    ∀ d w, w + d = 85 → z w = (((∑ j ∈ Finset.range 85, ks j * 8 ^ j) / 8 ^ w : ℕ) : Fp) := by
+  intro d
+  induction d with
+  | zero =>
+    intro w hw
+    obtain rfl : w = 85 := by omega
+    rw [hz85]
+    have hVlt : ∑ j ∈ Finset.range 85, ks j * 8 ^ j < 8 ^ 85 :=
+      sum_lt_of_windows fun j _ => hk j
+    rw [Nat.div_eq_of_lt hVlt]; simp
+  | succ m ih =>
+    intro w hw
+    have hw85 : w < 85 := by omega
+    rw [hword w hw85, ih (w + 1) (by omega)]
+    -- `V / 8^w = (V/8^w % 8) + 8 * (V / 8^{w+1})`, with digit `= ks w`
+    have hdig := digit_eq hk hw85
+    have hdiv : (∑ j ∈ Finset.range 85, ks j * 8 ^ j) / 8 ^ w
+        = ks w + 8 * ((∑ j ∈ Finset.range 85, ks j * 8 ^ j) / 8 ^ (w + 1)) := by
+      conv_lhs => rw [← Nat.div_add_mod ((∑ j ∈ Finset.range 85, ks j * 8 ^ j) / 8 ^ w) 8]
+      rw [hdig, pow_succ, ← Nat.div_div_eq_div_mul]
+      ring
+    rw [hdiv]; push_cast; ring
+
+/-- The cell holding the running-sum value `z_{j+1} = ⌊V / 8^{j+1}⌋` (the `zNext` cell of
+window `j`), relative to a circuit starting at offset `i₀`. Each window row consumes 10
+cells. -/
+private def zCell (i₀ : ℕ) : ℕ → ℕ
+  | 0 => i₀ + 1
+  | j + 1 => i₀ + 1 + 4 + j * 10
+
+private theorem zCell_succ (i₀ j : ℕ) : zCell i₀ (j + 1) = i₀ + 1 + 4 + j * 10 := rfl
+
+private theorem zCell_pos {j : ℕ} (i₀ : ℕ) (hj : 1 ≤ j) :
+    zCell i₀ j = i₀ + 1 + 4 + (j - 1) * 10 := by
+  obtain ⟨j', rfl⟩ : ∃ j', j = j' + 1 := ⟨j - 1, by omega⟩
+  rw [zCell_succ]; congr 1
+
+/-- The evaluated accumulator after processing windows `0..j` (relative to a circuit
+starting at offset `i₀`). Window `0` initializes the accumulator with its window point;
+every subsequent window's output lives at a uniform `+10` stride. -/
+private def accPt (env : Environment Fp) (i₀ : ℕ) : ℕ → Ecc.Point Fp
+  | 0 => { x := env.get (i₀ + 1 + 1), y := env.get (i₀ + 1 + 1 + 1) }
+  | j + 1 =>
+    { x := Expression.eval env (varFromOffset Ecc.Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).x,
+      y := Expression.eval env (varFromOffset Ecc.Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).y }
+
+private theorem accPt_succ (env : Environment Fp) (i₀ j : ℕ) :
+    accPt env i₀ (j + 1) =
+      { x := Expression.eval env (varFromOffset Ecc.Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).x,
+        y := Expression.eval env (varFromOffset Ecc.Point (i₀ + 1 + 4 + j * 10 + 4 + 2 + 2)).y } :=
+  rfl
+
+private theorem accPt_pos {j : ℕ} (env : Environment Fp) (i₀ : ℕ) (hj : 1 ≤ j) :
+    accPt env i₀ j =
+      { x := Expression.eval env
+          (varFromOffset Ecc.Point (i₀ + 1 + 4 + (j - 1) * 10 + 4 + 2 + 2)).x,
+        y := Expression.eval env
+          (varFromOffset Ecc.Point (i₀ + 1 + 4 + (j - 1) * 10 + 4 + 2 + 2)).y } := by
+  obtain ⟨j', rfl⟩ : ∃ j', j = j' + 1 := ⟨j - 1, by omega⟩
+  rw [accPt_succ, Nat.add_sub_cancel]
+
+/-- The cast `(↑V).val • B.point = V • B.point` (the value spec uses the raw `ℕ`-smul). -/
+private theorem natCast_val_nsmul (B : MulFixed.FixedBase) (V : ℕ) :
+    ((V : Fq).val) • B.point = V • B.point := by
+  apply B.nsmul_congr
+  rw [ZMod.val_natCast]
+  exact Nat.mod_modEq _ _
+
 theorem soundness (B : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main B) (fun _ _ => True) (Spec B) := by
   circuit_proof_start [main, Spec,
@@ -398,12 +493,820 @@ theorem soundness (B : MulFixed.FixedBase) :
     MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
     Ecc.AddIncomplete.circuit, Ecc.AddIncomplete.Spec, Ecc.AddIncomplete.Assumptions,
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
-  sorry
+  obtain ⟨h_z0, h_rs0, h_coords0, ⟨h_seg1_w1, h_seg1_loop⟩, h_rs43, h_coords43, h_inc43,
+    ⟨h_seg2_w44, h_seg2_loop⟩, h_rs84, h_coords84, h_z85, h_add⟩ := h_holds
+  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceSub] at h_seg1_w1 h_seg1_loop h_rs43 h_coords43 h_inc43 h_seg2_w44 h_seg2_loop h_rs84 h_coords84 h_z85 h_add ⊢
+  -- unified per-window hypothesis for windows `1..83` (gluing the two foldl segments and
+  -- the explicit window 43); window of iteration `j` is `j + 1`
+  have h_loop' : ∀ (j : ℕ), j < 83 →
+      Utilities.RunningSum.InRange (2 ^ 3) (Utilities.RunningSum.word 3
+        { zCur := env.get (zCell i₀ j), zNext := env.get (zCell i₀ (j + 1)) }) ∧
+      Coords.Spec (B.params (j + 1)) (MulFixed.RunningSumCoords.coordsRow
+        { zCur := env.get (zCell i₀ j), zNext := env.get (zCell i₀ (j + 1)),
+          xP := env.get (i₀ + 1 + 4 + j * 10 + 1),
+          yP := env.get (i₀ + 1 + 4 + j * 10 + 1 + 1),
+          u := env.get (i₀ + 1 + 4 + j * 10 + 1 + 1 + 1) }) ∧
+      (Pallas.OnCurve (env.get (i₀ + 1 + 4 + j * 10 + 1),
+            env.get (i₀ + 1 + 4 + j * 10 + 1 + 1)) ∧
+          Pallas.OnCurve (accPt env i₀ j).coords ∧
+          ¬env.get (i₀ + 1 + 4 + j * 10 + 1) = (accPt env i₀ j).x →
+        Pallas.OnCurve (accPt env i₀ (j + 1)).coords ∧
+          (accPt env i₀ (j + 1)).coords =
+            Pallas.add (env.get (i₀ + 1 + 4 + j * 10 + 1),
+                env.get (i₀ + 1 + 4 + j * 10 + 1 + 1))
+              (accPt env i₀ j).coords) := by
+    intro j hj
+    -- dispatch on which circuit segment covers window `j + 1`
+    rcases Nat.lt_or_ge j 1 with hj0 | hj1
+    · -- window 1
+      obtain rfl : j = 0 := by omega
+      exact h_seg1_w1
+    rcases Nat.lt_or_ge j 42 with hj42 | hj42'
+    · -- windows 2..42 (foldl1 generic, `i = j - 1`)
+      have h := h_seg1_loop (j - 1) (by omega)
+      rw [show j - 1 + 1 = j from by omega] at h
+      rw [zCell_pos i₀ (by omega), accPt_pos env i₀ (by omega)]
+      exact h
+    rcases Nat.lt_or_ge j 43 with hj43 | hj43'
+    · -- window 43 (explicit)
+      obtain rfl : j = 42 := by omega
+      exact ⟨h_rs43, h_coords43, h_inc43⟩
+    rcases Nat.lt_or_ge j 44 with hj44 | hj44'
+    · -- window 44 (foldl2 first)
+      obtain rfl : j = 43 := by omega
+      exact h_seg2_w44
+    · -- windows 45..83 (foldl2 generic, `i = j - 44`)
+      have h := h_seg2_loop (j - 44) (by omega)
+      rw [show j - 44 + 1 = j - 43 from by omega] at h
+      rw [show i₀ + 1 + 4 + 42 * 10 + 4 + 6 + (j - 44) * 10 = i₀ + 1 + 4 + (j - 1) * 10 from by
+          omega,
+        show i₀ + 1 + 4 + 42 * 10 + 4 + 6 + (j - 43) * 10 = i₀ + 1 + 4 + j * 10 from by omega,
+        show j - 43 + 44 = j + 1 from by omega] at h
+      rw [zCell_pos i₀ (by omega), zCell_succ, accPt_pos env i₀ (by omega)]
+      exact h
+  -- window values from the range checks
+  obtain ⟨k0, hk0_lt, hw0⟩ := exists_lt_of_inRange h_rs0
+  obtain ⟨k84, hk84_lt, hw84⟩ := exists_lt_of_inRange h_rs84
+  have hkE : ∀ j : Fin 83, ∃ k : ℕ, k < 8 ∧
+      Utilities.RunningSum.word 3
+          { zCur := env.get (zCell i₀ j.val), zNext := env.get (zCell i₀ (j.val + 1)) }
+        = (k : Fp) :=
+    fun j => exists_lt_of_inRange (h_loop' j.1 j.2).1
+  choose kf hkf_lt hkf using hkE
+  -- combined window function, kept opaque (see `doc/performance-problems.md`)
+  obtain ⟨ks, hks_def⟩ : ∃ ks' : ℕ → ℕ, ks' = fun w =>
+      if w = 0 then k0 else if h : w - 1 < 83 then kf ⟨w - 1, h⟩ else k84 := ⟨_, rfl⟩
+  have hks0 : ks 0 = k0 := by simp [hks_def]
+  have hksj : ∀ (j : ℕ) (hj : j < 83), ks (j + 1) = kf ⟨j, hj⟩ := by
+    intro j hj
+    simp [hks_def, hj]
+  have hks84 : ks 84 = k84 := by norm_num [hks_def]
+  have hks_lt : ∀ w, ks w < 8 := by
+    intro w
+    simp only [hks_def]
+    split_ifs
+    · exact hk0_lt
+    · exact hkf_lt _
+    · exact hk84_lt
+  -- the running sum values as an opaque function
+  obtain ⟨zf, hzf_def⟩ : ∃ zf' : ℕ → Fp, zf' = fun w =>
+      if w = 0 then env.get i₀
+      else if h : w ≤ 84 then env.get (zCell i₀ (w - 1))
+      else env.get (zCell i₀ 84) := ⟨_, rfl⟩
+  have hzf0 : zf 0 = env.get i₀ := by simp [hzf_def]
+  have hzf_succ : ∀ j, j ≤ 83 → zf (j + 1) = env.get (zCell i₀ j) := by
+    intro j hj
+    simp only [hzf_def]
+    rw [if_neg (by omega), dif_pos (by omega), Nat.add_sub_cancel]
+  have hzf85 : zf 85 = env.get (zCell i₀ 84) := by
+    simp only [hzf_def]
+    rw [if_neg (by omega), dif_neg (by omega)]
+  -- telescope the running sum into the decomposed value
+  have hchain : ∀ w < 85, zf w = (ks w : Fp) + 8 * zf (w + 1) := by
+    intro w hw
+    rcases w with _ | w
+    · rw [hzf0, hzf_succ 0 (by omega), hks0]
+      exact step_of_word hw0
+    · rcases Nat.lt_or_ge w 83 with hj | hj
+      · rw [hzf_succ w (by omega), hzf_succ (w + 1) (by omega), hksj w hj]
+        have hk := hkf ⟨w, hj⟩
+        rw [show (⟨w, hj⟩ : Fin 83).val = w from rfl] at hk
+        exact step_of_word hk
+      · have hweq : w = 83 := by omega
+        subst hweq
+        rw [hzf_succ 83 (by omega), hzf85, hks84]
+        exact step_of_word (by
+          have h83' : env.get (zCell i₀ 83) = env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10) := rfl
+          have h84' : env.get (zCell i₀ 84) = env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) := rfl
+          rw [h83', h84']; exact hw84)
+  obtain ⟨V, hV_def⟩ : ∃ V : ℕ, V = ∑ j ∈ Finset.range 85, ks j * 8 ^ j := ⟨_, rfl⟩
+  have hαV : input = (V : Fp) := by
+    rw [← h_z0, ← hzf0, chain_eq_sum zf ks hchain (by rw [hzf85]; exact h_z85), hV_def]
+  -- bound: `V < 8^85`
+  have hVlt : V < 8 ^ 85 := by rw [hV_def]; exact sum_lt_of_windows fun j _ => hks_lt j
+  -- accumulator invariant: after windows `0..w`, the accumulator is `[partialSum ks w]B`
+  have h_inv : ∀ (w : ℕ), w ≤ 83 →
+      accPt env i₀ w
+        = { x := (MulFixed.partialSum ks w • B.point).x,
+            y := (MulFixed.partialSum ks w • B.point).y } := by
+    intro w hw
+    induction w with
+    | zero =>
+      have hwindow : (MulFixed.RunningSumCoords.coordsRow
+          { zCur := env.get i₀, zNext := env.get (i₀ + 1), xP := env.get (i₀ + 1 + 1),
+            yP := env.get (i₀ + 1 + 1 + 1),
+            u := env.get (i₀ + 1 + 1 + 1 + 1) } : MulFixed.CoordsRow Fp).window = (k0 : Fp) := by
+        show env.get i₀ - env.get (i₀ + 1) * 8 = (k0 : Fp)
+        linear_combination step_of_word hw0
+      obtain ⟨hpx, hpy⟩ := B.coords_eq_windowPoint (by norm_num) hk0_lt hwindow h_coords0
+      have hval0 : (MulFixed.windowScalar 0 k0).val = MulFixed.partialSum ks 0 := by
+        rw [MulFixed.windowScalar_val (by norm_num) hk0_lt, MulFixed.partialSum, hks0]
+        simp
+      show ({ x := env.get (i₀ + 1 + 1), y := env.get (i₀ + 1 + 1 + 1) } : Ecc.Point Fp) = _
+      rw [show (MulFixed.RunningSumCoords.coordsRow
+          { zCur := env.get i₀, zNext := env.get (i₀ + 1), xP := env.get (i₀ + 1 + 1),
+            yP := env.get (i₀ + 1 + 1 + 1),
+            u := env.get (i₀ + 1 + 1 + 1 + 1) } : MulFixed.CoordsRow Fp).xP
+          = env.get (i₀ + 1 + 1) from rfl] at hpx
+      rw [show (MulFixed.RunningSumCoords.coordsRow
+          { zCur := env.get i₀, zNext := env.get (i₀ + 1), xP := env.get (i₀ + 1 + 1),
+            yP := env.get (i₀ + 1 + 1 + 1),
+            u := env.get (i₀ + 1 + 1 + 1 + 1) } : MulFixed.CoordsRow Fp).yP
+          = env.get (i₀ + 1 + 1 + 1) from rfl] at hpy
+      rw [hpx, hpy]
+      unfold MulFixed.windowPoint
+      rw [hval0]
+    | succ j ih =>
+      have hj : j < 83 := by omega
+      have hacc := ih (by omega)
+      obtain ⟨_, h_coordsRow, h_inc⟩ := h_loop' j hj
+      have hwindow : (MulFixed.RunningSumCoords.coordsRow
+          { zCur := env.get (zCell i₀ j), zNext := env.get (zCell i₀ (j + 1)),
+            xP := env.get (i₀ + 1 + 4 + j * 10 + 1),
+            yP := env.get (i₀ + 1 + 4 + j * 10 + 1 + 1),
+            u := env.get (i₀ + 1 + 4 + j * 10 + 1 + 1 + 1) } : MulFixed.CoordsRow Fp).window
+          = (kf ⟨j, hj⟩ : Fp) := by
+        show env.get (zCell i₀ j) - env.get (zCell i₀ (j + 1)) * 8 = (kf ⟨j, hj⟩ : Fp)
+        linear_combination step_of_word (hkf ⟨j, hj⟩)
+      obtain ⟨hpx, hpy⟩ :=
+        B.coords_eq_windowPoint (show j + 1 < 85 by omega) (hkf_lt ⟨j, hj⟩) hwindow h_coordsRow
+      replace hpx : env.get (i₀ + 1 + 4 + j * 10 + 1)
+          = (MulFixed.windowPoint B.point (j + 1) (kf ⟨j, hj⟩)).x := hpx
+      replace hpy : env.get (i₀ + 1 + 4 + j * 10 + 1 + 1)
+          = (MulFixed.windowPoint B.point (j + 1) (kf ⟨j, hj⟩)).y := hpy
+      rw [← hksj j hj] at hpx hpy
+      set t := (MulFixed.windowScalar (j + 1) (ks (j + 1))).val with ht_def
+      have hval : t = (ks (j + 1) + 2) * 8 ^ (j + 1) :=
+        MulFixed.windowScalar_val (by omega) (hks_lt (j + 1))
+      have hS_lt := MulFixed.partialSum_lt ks j fun _ _ => hks_lt _
+      have hS_pos := MulFixed.partialSum_pos ks j
+      have hpow : 0 < (8 : ℕ) ^ (j + 1) := pow_pos (by norm_num) _
+      have ht_lower : 2 * 8 ^ (j + 1) ≤ t := by
+        rw [hval]; exact Nat.mul_le_mul_right _ (by omega)
+      have ht_upper : t ≤ 9 * 8 ^ (j + 1) := by
+        rw [hval]; exact Nat.mul_le_mul_right _ (by have := hks_lt (j + 1); omega)
+      have hS_card := inv_lt_card hS_lt (by omega)
+      have hsum_card := step_sum_lt hS_lt ht_upper (by omega)
+      have hwp : MulFixed.windowPoint B.point (j + 1) (ks (j + 1)) = t • B.point := rfl
+      rw [hwp] at hpx hpy
+      have h_spec := h_inc ⟨by
+          rw [hpx, hpy]
+          exact SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero (by omega) (by omega)),
+        by
+          rw [hacc]
+          show Pallas.OnCurve ((MulFixed.partialSum ks j • B.point).x,
+            (MulFixed.partialSum ks j • B.point).y)
+          exact B.nsmul_onCurve hS_pos hS_card,
+        by
+          rw [hpx, hacc]
+          show (t • B.point).x ≠ (MulFixed.partialSum ks j • B.point).x
+          exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
+      apply Ecc.Point.ext_coords
+      rw [h_spec.2, hpx, hpy, hacc]
+      show Pallas.add ((t • B.point).x, (t • B.point).y)
+          ((MulFixed.partialSum ks j • B.point).x, (MulFixed.partialSum ks j • B.point).y)
+        = ((MulFixed.partialSum ks (j + 1) • B.point).x,
+            (MulFixed.partialSum ks (j + 1) • B.point).y)
+      rw [Pallas.add_coords, ← add_nsmul,
+        show t + MulFixed.partialSum ks j = MulFixed.partialSum ks (j + 1) by
+          rw [MulFixed.partialSum, hval]; omega]
+  -- the window-84 point
+  have hwindow84 : (MulFixed.RunningSumCoords.coordsRow
+      { zCur := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10),
+        zNext := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10),
+        xP := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+        yP := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1),
+        u := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1 + 1) }
+        : MulFixed.CoordsRow Fp).window = (k84 : Fp) := by
+    show env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10)
+        - env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) * 8 = (k84 : Fp)
+    linear_combination step_of_word hw84
+  obtain ⟨hpx84, hpy84⟩ :=
+    B.coords_eq_windowPoint (show (84 : ℕ) < 85 by norm_num) hk84_lt hwindow84 h_coords84
+  -- window-84 and accumulated scalars kept opaque (`doc/performance-problems.md`)
+  obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ, t = (MulFixed.windowScalar 84 k84).val := ⟨_, rfl⟩
+  have hP84_eq : MulFixed.windowPoint B.point 84 k84 = t84 • B.point := by
+    rw [ht84_def]; rfl
+  replace hpx84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1) = (t84 • B.point).x := by
+    rw [← hP84_eq]; exact hpx84
+  replace hpy84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) = (t84 • B.point).y := by
+    rw [← hP84_eq]; exact hpy84
+  have hP84_ne : t84 • B.point ≠ 0 := by
+    rw [← hP84_eq]; exact B.windowPoint_ne_zero hk84_lt
+  obtain ⟨S83, hS83_def⟩ : ∃ S : ℕ, S = MulFixed.partialSum ks 83 := ⟨_, rfl⟩
+  have hS83_lt : S83 < 2 * 8 ^ (83 + 1) := by
+    rw [hS83_def]; exact MulFixed.partialSum_lt ks 83 fun _ _ => hks_lt _
+  have hS83_pos : 0 < S83 := by rw [hS83_def]; exact MulFixed.partialSum_pos ks 83
+  have hS83_card := inv_lt_card hS83_lt (by omega)
+  have hacc83 :
+      ({ x := Expression.eval env
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+         y := Expression.eval env
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+        : Ecc.Point Fp)
+      = { x := (S83 • B.point).x, y := (S83 • B.point).y } := by
+    rw [hS83_def]
+    have := h_inv 83 (by omega)
+    rw [accPt_succ] at this
+    convert this using 4
+  -- the complete addition produces `[V]B`
+  have hValidP : Pallas.Valid
+      (env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+       env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)) := by
+    rw [hpx84, hpy84]
+    exact Or.inl (SWPoint.onCurve_of_ne_zero hP84_ne)
+  have hValidAcc : Pallas.Valid
+      (({ x := Expression.eval env
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+          y := Expression.eval env
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+        : Ecc.Point Fp)).coords := by
+    rw [hacc83]
+    exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
+  have h_final := h_add ⟨hValidP, hValidAcc⟩
+  have hresult :
+      ({ x := Expression.eval env
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).x,
+         y := Expression.eval env
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).y }
+        : Ecc.Point Fp).coords = ((V • B.point).x, (V • B.point).y) := by
+    rw [h_final.2]
+    show Pallas.add
+        (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+            y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) }
+          : Ecc.Point Fp)).coords
+        (({ x := Expression.eval env
+              (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+            y := Expression.eval env
+              (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+          : Ecc.Point Fp)).coords = _
+    rw [show (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+                 y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) } : Ecc.Point Fp)).coords
+      = (env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+         env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)) from rfl,
+      hpx84, hpy84, hacc83]
+    show Pallas.add ((t84 • B.point).x, (t84 • B.point).y)
+        ((S83 • B.point).x, (S83 • B.point).y) = ((V • B.point).x, (V • B.point).y)
+    rw [Pallas.add_coords]
+    have hpt : t84 • B.point + S83 • B.point = V • B.point := by
+      rw [ht84_def, hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul, ← hks84,
+        windowScalar_partialSum ks, ← hV_def, natCast_val_nsmul]
+    rw [hpt]
+  -- running-sum cells via the floor-division telescoping
+  have hz85' : zf 85 = 0 := by rw [hzf85]; exact h_z85
+  have hzdiv : ∀ w, w ≤ 83 →
+      env.get (zCell i₀ w) = (((∑ j ∈ Finset.range 85, ks j * 8 ^ j) / 8 ^ (w + 1) : ℕ) : Fp) := by
+    intro w hw
+    rw [← hzf_succ w (by omega)]
+    exact chain_div zf ks hks_lt hchain hz85' (85 - (w + 1)) (w + 1) (by omega)
+  -- assemble
+  refine ⟨ks, fun w _ => hks_lt w, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [hαV, hV_def]
+  · rw [← hV_def]; exact hresult
+  · rw [show env.get (i₀ + 1 + 4 + 41 * 10) = env.get (zCell i₀ 42) from rfl, hzdiv 42 (by omega),
+      ← hV_def]
+  · rw [show env.get (i₀ + 1 + 4 + 42 * 10) = env.get (zCell i₀ 43) from rfl, hzdiv 43 (by omega),
+      ← hV_def]
+  · rw [show env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10) = env.get (zCell i₀ 83) from rfl,
+      hzdiv 83 (by omega), ← hV_def]
+
+/-- Extract the four field equations from a witnessed `RowTail`, keeping the row opaque
+(see `env_get_row` in `FullWidth.lean` and `doc/performance-problems.md`). -/
+private theorem env_get_rowTail {env : ProverEnvironment Fp} {n : ℕ} {r : RowTail Fp}
+    (h : ∀ i : Fin 4, env.get (n + i.val) = (toElements r)[i.val]) :
+    env.get n = r.zNext ∧ env.get (n + 1) = r.xP ∧
+      env.get (n + 1 + 1) = r.yP ∧ env.get (n + 1 + 1 + 1) = r.u := by
+  obtain ⟨zNext, xP, yP, u⟩ := r
+  have h0 := h 0
+  have h1 := h 1
+  have h2 := h 2
+  have h3 := h 3
+  simp only [explicit_provable_type, circuit_norm, Nat.reduceMod, Nat.add_zero]
+    at h0 h1 h2 h3
+  exact ⟨h0, h1, h2, h3⟩
+
+/-- `rfl` bridges between `rowTailValue` fields and their honest values, stated at
+symbolic `w` (`doc/performance-problems.md`). -/
+private theorem rowTailValue_zNext (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
+    (rowTailValue B α w).zNext = zValue α (w + 1) := rfl
+
+private theorem rowTailValue_xP (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
+    (rowTailValue B α w).xP = (MulFixed.windowPoint B.point w (windowVal α w)).x := rfl
+
+private theorem rowTailValue_yP (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
+    (rowTailValue B α w).yP = (MulFixed.windowPoint B.point w (windowVal α w)).y := rfl
+
+private theorem rowTailValue_u (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
+    (rowTailValue B α w).u = B.u w (windowVal α w) := rfl
+
+/-- The running sum step relation on honest values. -/
+private theorem zValue_step (α : Fp) (w : ℕ) :
+    zValue α w = (windowVal α w : Fp) + 8 * zValue α (w + 1) := by
+  unfold zValue windowVal
+  rw [show α.val / 8 ^ (w + 1) = α.val / 8 ^ w / 8 by
+    rw [Nat.div_div_eq_div_mul, pow_succ]]
+  conv_lhs => rw [show α.val / 8 ^ w
+    = α.val / 8 ^ w % 8 + 8 * (α.val / 8 ^ w / 8) by omega]
+  push_cast
+  ring
+
+/-- Membership of small casts in the range-check set. -/
+private theorem inRange_of_lt {k : ℕ} (hk : k < 8) :
+    Utilities.RunningSum.InRange (2 ^ 3) ((k : Fp)) := by
+  simp [Utilities.RunningSum.InRange, Utilities.RunningSum.rangeCheckValues,
+    show (2 : ℕ) ^ 3 = 8 from rfl, List.range_succ, List.range_zero]
+  interval_cases k <;> norm_num
+
+/-- The honest running sum values satisfy the range check. -/
+private theorem word_inRange (α : Fp) (w : ℕ) {a b : Fp}
+    (ha : a = zValue α w) (hb : b = zValue α (w + 1)) :
+    Utilities.RunningSum.InRange (2 ^ 3)
+      (Utilities.RunningSum.word 3 { zCur := a, zNext := b }) := by
+  have hword : Utilities.RunningSum.word 3 { zCur := a, zNext := b }
+      = (windowVal α w : Fp) := by
+    show a - Utilities.RunningSum.twoPowWindow 3 * b = _
+    have h8 : (Utilities.RunningSum.twoPowWindow 3 : Fp) = 8 := by
+      norm_num [Utilities.RunningSum.twoPowWindow]
+    rw [ha, hb, h8]
+    linear_combination zValue_step α w
+  rw [hword]
+  exact inRange_of_lt (windowVal_lt α w)
+
+/-- The honest row values satisfy the coordinates check. -/
+private theorem coordsRow_spec (B : MulFixed.FixedBase) (α : Fp) {w : ℕ} (hw : w < 85)
+    {row : MulFixed.RunningSumCoords.Row Fp}
+    (hzc : row.zCur = zValue α w) (hzn : row.zNext = zValue α (w + 1))
+    (hx : row.xP = (MulFixed.windowPoint B.point w (windowVal α w)).x)
+    (hy : row.yP = (MulFixed.windowPoint B.point w (windowVal α w)).y)
+    (hu : row.u = B.u w (windowVal α w)) :
+    Coords.Spec (B.params w) (MulFixed.RunningSumCoords.coordsRow row) := by
+  have hwin : (MulFixed.RunningSumCoords.coordsRow row).window = (windowVal α w : Fp) := by
+    show row.zCur - row.zNext * 8 = _
+    rw [hzc, hzn]
+    linear_combination zValue_step α w
+  refine ⟨?_, ?_, ?_⟩
+  · rw [show (MulFixed.RunningSumCoords.coordsRow row).xP = row.xP from rfl, hx,
+      MulFixed.interpolatedX, hwin, B.interpolate_eq w hw _ (windowVal_lt α w)]
+  · rw [show (MulFixed.RunningSumCoords.coordsRow row).u = row.u from rfl,
+      show (MulFixed.RunningSumCoords.coordsRow row).yP = row.yP from rfl, hu, hy]
+    exact B.u_mul_u w hw _ (windowVal_lt α w)
+  · rw [show (MulFixed.RunningSumCoords.coordsRow row).yP = row.yP from rfl,
+      show (MulFixed.RunningSumCoords.coordsRow row).xP = row.xP from rfl, hx, hy]
+    have h := B.windowPoint_onCurve (w := w) (k := windowVal α w) (windowVal_lt α w)
+    simp only [CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b] at h
+    linear_combination h
+
+/-- The running sum starts at the base-field element itself. -/
+private theorem zValue_zero (α : Fp) : zValue α 0 = α := by
+  unfold zValue
+  rw [pow_zero, Nat.div_one, ZMod.natCast_zmod_val]
+
+/-- The strict running sum terminates at zero for a canonical base-field element. -/
+private theorem zValue_85_eq_zero {α : Fp} (hα : α.val < PALLAS_BASE_CARD) :
+    zValue α 85 = 0 := by
+  unfold zValue
+  rw [Nat.div_eq_of_lt (lt_of_lt_of_le hα (by norm_num [PALLAS_BASE_CARD]))]
+  exact Nat.cast_zero
+
+/-- Base-8 digit recombination of the base-field element. -/
+private theorem sum_windowVal {α : Fp} (hα : α.val < PALLAS_BASE_CARD) :
+    ∑ j ∈ Finset.range 85, windowVal α j * 8 ^ j = α.val := by
+  unfold windowVal
+  have h := MulFixed.sum_base8 α.val 85
+  rwa [Nat.mod_eq_of_lt (lt_of_lt_of_le hα (by norm_num [PALLAS_BASE_CARD]))] at h
 
 theorem completeness (B : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main B) ProverAssumptions
       (ProverSpec B) := by
-  sorry
+  -- TODO: the honest-prover argument mirrors `Short.completeness` (windows assigned by
+  -- `windowVal`/`rowTailValue`, accumulator invariant `accPt = [partialSum]B`, final
+  -- complete addition giving `[α.val]B`, with `windowScalar_partialSum (windowVal α)` +
+  -- `sum_windowVal` bridging to `α.val • B.point`). The honest-prover helper lemmas above
+  -- (`word_inRange`, `coordsRow_spec`, `zValue_step`, `zValue_zero`, `zValue_85_eq_zero`,
+  -- `sum_windowVal`, `env_get_rowTail`, the `rowTailValue_*` `rfl`-bridges) are in place.
+  -- Remaining blocker: unlike soundness, `circuit_proof_start`/`circuit_norm` does NOT
+  -- expand the *second* `Circuit.foldl`'s `UsesLocalWitnessesCompleteness` obligation
+  -- (windows 44..83); it survives as a raw `env.UsesLocalWitnessesCompleteness _
+  -- (Circuit.foldl (Vector.finRange 40) ...)` because the `foldl.usesLocalWitnesses`
+  -- `circuit_norm ↓` lemma fails to fire on the nested-after-window-43 second segment
+  -- (its `const_out`/`constant` instance arguments do not synthesize against the
+  -- non-canonical accumulated offset). Expanding it by hand, plus the kernel size cliff
+  -- this 85-window two-foldl completeness sits on (see `doc/performance-problems.md`,
+  -- "Kernel size cliffs in completeness proofs of large compositions"), is the open work.
+  circuit_proof_start [main, ProverSpec, ProverAssumptions,
+    Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
+    MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
+    Ecc.AddIncomplete.circuit, Ecc.AddIncomplete.Spec, Ecc.AddIncomplete.Assumptions,
+    Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
+  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceSub] at h_env
+  rw [show (42 * 10 + (i₀ + 1 + 4) + 4 + 6 : ℕ) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 from by omega]
+    at h_env
+  rw [Circuit.foldl.usesLocalWitnesses] at h_env
+  simp only [Vector.getElem_finRange, Fin.val_mk, Nat.reduceMul, circuit_norm] at h_env
+  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceSub] at h_env ⊢
+  obtain ⟨h_z0w, h_t0, ⟨⟨h_t1, h_inc1⟩, h_seg1_loop⟩, h_t43, h_inc43,
+    ⟨⟨h_t44, h_inc44⟩, h_seg2_loop⟩, h_t84, h_add⟩ := h_env
+  simp only [h_input] at h_t44 h_seg2_loop
+  simp only [Ecc.AddIncomplete.Assumptions, Ecc.AddIncomplete.Spec] at h_inc44 h_seg2_loop
+  have hα := h_assumptions
+  -- per-window witnessed row values (windows `1..83`, window `j + 1`), gluing both foldl
+  -- segments and the explicit window 43
+  have hrow : ∀ (j : ℕ), j < 83 →
+      env.get (zCell i₀ (j + 1)) = (rowTailValue B input (j + 1)).zNext ∧
+        env.get (i₀ + 1 + 4 + j * 10 + 1) = (rowTailValue B input (j + 1)).xP ∧
+        env.get (i₀ + 1 + 4 + j * 10 + 1 + 1) = (rowTailValue B input (j + 1)).yP ∧
+        env.get (i₀ + 1 + 4 + j * 10 + 1 + 1 + 1) = (rowTailValue B input (j + 1)).u := by
+    intro j hj
+    rw [show zCell i₀ (j + 1) = i₀ + 1 + 4 + j * 10 from rfl]
+    rcases Nat.lt_or_ge j 1 with hj0 | hj1
+    · obtain rfl : j = 0 := by omega
+      exact env_get_rowTail (n := i₀ + 1 + 4 + 0 * 10) (by simpa using h_t1)
+    rcases Nat.lt_or_ge j 42 with hj42 | hj42'
+    · have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + j * 10 + i.val)
+          = (toElements (rowTailValue B input (j + 1)))[i.val] := by
+        intro i
+        have := (h_seg1_loop (j - 1) (by omega)).1 i
+        rw [show (j - 1 + 1) * 10 = j * 10 from by omega] at this
+        simp only [show j - 1 + 1 + 1 = j + 1 from by omega] at this
+        exact this
+      exact env_get_rowTail hb
+    rcases Nat.lt_or_ge j 43 with hj43 | hj43'
+    · have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + j * 10 + i.val)
+          = (toElements (rowTailValue B input (j + 1)))[i.val] := by
+        intro i
+        have hje : (43 : ℕ) = j + 1 := by omega
+        have := h_t43 i
+        rw [hje, show (420 : ℕ) + (i₀ + 1 + 4) = i₀ + 1 + 4 + j * 10 from by omega] at this
+        exact this
+      exact env_get_rowTail hb
+    rcases Nat.lt_or_ge j 44 with hj44 | hj44'
+    · have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + j * 10 + i.val)
+          = (toElements (rowTailValue B input (j + 1)))[i.val] := by
+        intro i
+        have hje : (44 : ℕ) = j + 1 := by omega
+        have := h_t44 i
+        rw [hje, show i₀ + 1 + 4 + 420 + 4 + 6 = i₀ + 1 + 4 + j * 10 from by omega] at this
+        exact this
+      exact env_get_rowTail hb
+    · have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + j * 10 + i.val)
+          = (toElements (rowTailValue B input (j + 1)))[i.val] := by
+        intro i
+        have := (h_seg2_loop (j - 44) (by omega)).1 i
+        rw [show i₀ + 1 + 4 + 420 + 4 + 6 + (j - 44 + 1) * 10 = i₀ + 1 + 4 + j * 10 from by omega] at this
+        simp only [show j - 44 + 1 + 44 = j + 1 from by omega] at this
+        exact this
+      exact env_get_rowTail hb
+  -- per-window AddIncomplete implication (windows `1..83`), raw OnCurve form
+  have h_step' : ∀ (j : ℕ), j < 83 →
+      (Pallas.OnCurve (env.get (i₀ + 1 + 4 + j * 10 + 1),
+            env.get (i₀ + 1 + 4 + j * 10 + 1 + 1)) ∧
+          Pallas.OnCurve (accPt env.toEnvironment i₀ j).coords ∧
+          ¬env.get (i₀ + 1 + 4 + j * 10 + 1) = (accPt env.toEnvironment i₀ j).x →
+        Pallas.OnCurve (accPt env.toEnvironment i₀ (j + 1)).coords ∧
+          (accPt env.toEnvironment i₀ (j + 1)).coords =
+            Pallas.add (env.get (i₀ + 1 + 4 + j * 10 + 1),
+                env.get (i₀ + 1 + 4 + j * 10 + 1 + 1))
+              (accPt env.toEnvironment i₀ j).coords) := by
+    intro j hj
+    rcases Nat.lt_or_ge j 1 with hj0 | hj1
+    · obtain rfl : j = 0 := by omega
+      exact h_inc1
+    rcases Nat.lt_or_ge j 42 with hj42 | hj42'
+    · have h := (h_seg1_loop (j - 1) (by omega)).2
+      rw [show j - 1 + 1 = j from by omega] at h
+      rw [accPt_pos env.toEnvironment i₀ (by omega)]
+      exact h
+    rcases Nat.lt_or_ge j 43 with hj43 | hj43'
+    · obtain rfl : j = 42 := by omega
+      exact h_inc43
+    rcases Nat.lt_or_ge j 44 with hj44 | hj44'
+    · obtain rfl : j = 43 := by omega
+      exact h_inc44
+    · have h := (h_seg2_loop (j - 44) (by omega)).2
+      rw [show i₀ + 1 + 4 + 420 + 4 + 6 + (j - 44 + 1) * 10 = i₀ + 1 + 4 + j * 10 from by omega,
+        show i₀ + 1 + 4 + 420 + 4 + 6 + (j - 44) * 10 = i₀ + 1 + 4 + (j - 1) * 10 from by omega] at h
+      rw [accPt_pos env.toEnvironment i₀ (by omega), accPt_succ]
+      exact h
+  -- honest window-point coordinate cells
+  have hrowX : ∀ (j : ℕ) (hj : j < 83), env.get (i₀ + 1 + 4 + j * 10 + 1)
+      = (MulFixed.windowPoint B.point (j + 1) (windowVal input (j + 1))).x :=
+    fun j hj => (hrow j hj).2.1.trans (rowTailValue_xP B input (j + 1))
+  have hrowY : ∀ (j : ℕ) (hj : j < 83), env.get (i₀ + 1 + 4 + j * 10 + 1 + 1)
+      = (MulFixed.windowPoint B.point (j + 1) (windowVal input (j + 1))).y :=
+    fun j hj => (hrow j hj).2.2.1.trans (rowTailValue_yP B input (j + 1))
+  -- the honest accumulator after windows `0..w` is `[partialSum]B`
+  have h_inv : ∀ (w : ℕ), w ≤ 83 →
+      accPt env.toEnvironment i₀ w
+        = { x := (MulFixed.partialSum (windowVal input) w • B.point).x,
+            y := (MulFixed.partialSum (windowVal input) w • B.point).y } := by
+    intro w hw
+    induction w with
+    | zero =>
+      have hval0 : (MulFixed.windowScalar 0 (windowVal input 0)).val
+          = MulFixed.partialSum (windowVal input) 0 := by
+        rw [MulFixed.windowScalar_val (by norm_num) (windowVal_lt input 0), MulFixed.partialSum]
+        simp
+      show ({ x := env.get (i₀ + 1 + 1), y := env.get (i₀ + 1 + 1 + 1) } : Ecc.Point Fp) = _
+      obtain ⟨h0z, h0x, h0y, h0u⟩ := env_get_rowTail h_t0
+      rw [h0x, h0y, rowTailValue_xP, rowTailValue_yP]
+      unfold MulFixed.windowPoint
+      rw [hval0]
+    | succ j ih =>
+      have hj : j < 83 := by omega
+      have hacc := ih (by omega)
+      set t := (MulFixed.windowScalar (j + 1) (windowVal input (j + 1))).val with ht_def
+      have hval : t = (windowVal input (j + 1) + 2) * 8 ^ (j + 1) :=
+        MulFixed.windowScalar_val (by omega) (windowVal_lt input (j + 1))
+      have hS_lt := MulFixed.partialSum_lt (windowVal input) j fun _ _ => windowVal_lt input _
+      have hS_pos := MulFixed.partialSum_pos (windowVal input) j
+      have hpow : 0 < (8 : ℕ) ^ (j + 1) := pow_pos (by norm_num) _
+      have ht_lower : 2 * 8 ^ (j + 1) ≤ t := by
+        rw [hval]; exact Nat.mul_le_mul_right _ (by omega)
+      have ht_upper : t ≤ 9 * 8 ^ (j + 1) := by
+        rw [hval]; exact Nat.mul_le_mul_right _ (by have := windowVal_lt input (j + 1); omega)
+      have hS_card := inv_lt_card hS_lt (by omega)
+      have hsum_card := step_sum_lt hS_lt ht_upper (by omega)
+      have hpx : env.get (i₀ + 1 + 4 + j * 10 + 1) = (t • B.point).x := by
+        rw [hrowX j hj]; rfl
+      have hpy : env.get (i₀ + 1 + 4 + j * 10 + 1 + 1) = (t • B.point).y := by
+        rw [hrowY j hj]; rfl
+      have h_spec := h_step' j hj ⟨by
+          rw [hpx, hpy]
+          exact SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero (by omega) (by omega)),
+        by
+          rw [hacc]
+          show Pallas.OnCurve ((MulFixed.partialSum (windowVal input) j • B.point).x,
+            (MulFixed.partialSum (windowVal input) j • B.point).y)
+          exact B.nsmul_onCurve hS_pos hS_card,
+        by
+          rw [hpx, hacc]
+          show (t • B.point).x ≠ (MulFixed.partialSum (windowVal input) j • B.point).x
+          exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
+      apply Ecc.Point.ext_coords
+      rw [h_spec.2, hpx, hpy, hacc]
+      show Pallas.add ((t • B.point).x, (t • B.point).y)
+          ((MulFixed.partialSum (windowVal input) j • B.point).x,
+            (MulFixed.partialSum (windowVal input) j • B.point).y)
+        = ((MulFixed.partialSum (windowVal input) (j + 1) • B.point).x,
+            (MulFixed.partialSum (windowVal input) (j + 1) • B.point).y)
+      rw [Pallas.add_coords, ← add_nsmul,
+        show t + MulFixed.partialSum (windowVal input) j
+          = MulFixed.partialSum (windowVal input) (j + 1) by
+          rw [MulFixed.partialSum, hval]; omega]
+  -- honest running-sum cells
+  obtain ⟨h0z, h0x, h0y, h0u⟩ := env_get_rowTail h_t0
+  have hz0cell : env.get i₀ = zValue input 0 := by rw [h_z0w, zValue_zero]
+  have hzCellSucc : ∀ (j : ℕ), j < 83 → env.get (zCell i₀ (j + 1)) = zValue input (j + 2) :=
+    fun j hj => (hrow j hj).1.trans (rowTailValue_zNext B input (j + 1))
+  have hz1cell : env.get (i₀ + 1) = zValue input 1 :=
+    h0z.trans (rowTailValue_zNext B input 0)
+  -- window-84 witness cells
+  have hw84z : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) = zValue input 85 := by
+    have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + i.val)
+        = (toElements (rowTailValue B input 84))[i.val] := by
+      intro i
+      have := h_t84 i
+      rw [show 400 + (i₀ + 1 + 4 + 420 + 4 + 6) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at this
+      exact this
+    exact (env_get_rowTail hb).1.trans (rowTailValue_zNext B input 84)
+  have hw84x : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1)
+      = (MulFixed.windowPoint B.point 84 (windowVal input 84)).x := by
+    have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + i.val)
+        = (toElements (rowTailValue B input 84))[i.val] := by
+      intro i
+      have := h_t84 i
+      rw [show 400 + (i₀ + 1 + 4 + 420 + 4 + 6) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at this
+      exact this
+    exact (env_get_rowTail hb).2.1.trans (rowTailValue_xP B input 84)
+  have hw84y : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)
+      = (MulFixed.windowPoint B.point 84 (windowVal input 84)).y := by
+    have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + i.val)
+        = (toElements (rowTailValue B input 84))[i.val] := by
+      intro i
+      have := h_t84 i
+      rw [show 400 + (i₀ + 1 + 4 + 420 + 4 + 6) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at this
+      exact this
+    exact (env_get_rowTail hb).2.2.1.trans (rowTailValue_yP B input 84)
+  -- the final accumulator after window 83
+  obtain ⟨S83, hS83_def⟩ : ∃ S : ℕ, S = MulFixed.partialSum (windowVal input) 83 := ⟨_, rfl⟩
+  have hS83_lt : S83 < 2 * 8 ^ (83 + 1) := by
+    rw [hS83_def]; exact MulFixed.partialSum_lt (windowVal input) 83 fun _ _ => windowVal_lt input _
+  have hS83_pos : 0 < S83 := by rw [hS83_def]; exact MulFixed.partialSum_pos (windowVal input) 83
+  have hS83_card := inv_lt_card hS83_lt (by omega)
+  have hacc83 :
+      ({ x := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+         y := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+        : Ecc.Point Fp)
+      = { x := (S83 • B.point).x, y := (S83 • B.point).y } := by
+    rw [hS83_def]
+    have := h_inv 83 (by omega)
+    rw [accPt_succ] at this
+    convert this using 4
+  -- window-84 point opaque
+  obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ, t = (MulFixed.windowScalar 84 (windowVal input 84)).val := ⟨_, rfl⟩
+  have hP84_ne : t84 • B.point ≠ 0 := by
+    rw [ht84_def]; exact B.windowPoint_ne_zero (windowVal_lt input 84)
+  have hpx84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1) = (t84 • B.point).x := by
+    rw [hw84x, ht84_def]; rfl
+  have hpy84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) = (t84 • B.point).y := by
+    rw [hw84y, ht84_def]; rfl
+  have hValidP : Pallas.Valid (env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+      env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)) := by
+    rw [hpx84, hpy84]; exact Or.inl (SWPoint.onCurve_of_ne_zero hP84_ne)
+  have hValidAcc : Pallas.Valid
+      (({ x := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+          y := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+        : Ecc.Point Fp)).coords := by
+    rw [hacc83]; exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
+  -- per-window constraint obligations (windows `1..83`)
+  have hB : ∀ (j : ℕ), j < 83 →
+      Utilities.RunningSum.InRange (2 ^ 3) (Utilities.RunningSum.word 3
+        { zCur := env.get (zCell i₀ j), zNext := env.get (zCell i₀ (j + 1)) }) ∧
+      Coords.Spec (B.params (j + 1)) (MulFixed.RunningSumCoords.coordsRow
+        { zCur := env.get (zCell i₀ j), zNext := env.get (zCell i₀ (j + 1)),
+          xP := env.get (i₀ + 1 + 4 + j * 10 + 1),
+          yP := env.get (i₀ + 1 + 4 + j * 10 + 1 + 1),
+          u := env.get (i₀ + 1 + 4 + j * 10 + 1 + 1 + 1) }) ∧
+      Pallas.OnCurve (env.get (i₀ + 1 + 4 + j * 10 + 1),
+        env.get (i₀ + 1 + 4 + j * 10 + 1 + 1)) ∧
+      Pallas.OnCurve (accPt env.toEnvironment i₀ j).coords ∧
+      ¬env.get (i₀ + 1 + 4 + j * 10 + 1) = (accPt env.toEnvironment i₀ j).x := by
+    intro j hj
+    have hzc : env.get (zCell i₀ j) = zValue input (j + 1) := by
+      rcases Nat.eq_zero_or_pos j with rfl | hjp
+      · exact hz1cell
+      · obtain ⟨j', rfl⟩ : ∃ j', j = j' + 1 := ⟨j - 1, by omega⟩
+        exact hzCellSucc j' (by omega)
+    have hzn : env.get (zCell i₀ (j + 1)) = zValue input (j + 1 + 1) := hzCellSucc j hj
+    have hacc := h_inv j (by omega)
+    have hS_lt := MulFixed.partialSum_lt (windowVal input) j fun _ _ => windowVal_lt input _
+    have hS_pos := MulFixed.partialSum_pos (windowVal input) j
+    have hS_card := inv_lt_card hS_lt (by omega)
+    set t := (MulFixed.windowScalar (j + 1) (windowVal input (j + 1))).val with ht_def
+    have hval : t = (windowVal input (j + 1) + 2) * 8 ^ (j + 1) :=
+      MulFixed.windowScalar_val (by omega) (windowVal_lt input (j + 1))
+    have ht_lower : 2 * 8 ^ (j + 1) ≤ t := by rw [hval]; exact Nat.mul_le_mul_right _ (by omega)
+    have ht_upper : t ≤ 9 * 8 ^ (j + 1) := by
+      rw [hval]; exact Nat.mul_le_mul_right _ (by have := windowVal_lt input (j + 1); omega)
+    have hpow : 0 < (8 : ℕ) ^ (j + 1) := pow_pos (by norm_num) _
+    have hsum_card := step_sum_lt hS_lt ht_upper (by omega)
+    have hpx : env.get (i₀ + 1 + 4 + j * 10 + 1) = (t • B.point).x := by rw [hrowX j hj]; rfl
+    have hpy : env.get (i₀ + 1 + 4 + j * 10 + 1 + 1) = (t • B.point).y := by rw [hrowY j hj]; rfl
+    refine ⟨word_inRange input (j + 1) hzc hzn, ?_, ?_, ?_, ?_⟩
+    · refine coordsRow_spec B input (by omega) hzc hzn ?_ ?_ ?_
+      · rw [hrowX j hj]
+      · rw [hrowY j hj]
+      · exact (hrow j hj).2.2.2.trans (rowTailValue_u B input (j + 1))
+    · rw [hpx, hpy]
+      exact SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero (by omega) (by omega))
+    · rw [hacc]
+      show Pallas.OnCurve ((MulFixed.partialSum (windowVal input) j • B.point).x,
+        (MulFixed.partialSum (windowVal input) j • B.point).y)
+      exact B.nsmul_onCurve hS_pos hS_card
+    · rw [hpx, hacc]
+      show (t • B.point).x ≠ (MulFixed.partialSum (windowVal input) j • B.point).x
+      exact B.nsmul_x_ne hS_pos (by omega) hsum_card
+  -- the complete addition produces `[input.val]B`
+  have h_final := h_add ⟨hValidP, hValidAcc⟩
+  have hresult :
+      ({ x := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).x,
+         y := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).y }
+        : Ecc.Point Fp).coords
+        = (((show Fp from input).val • B.point).x, ((show Fp from input).val • B.point).y) := by
+    rw [h_final.2]
+    show Pallas.add
+        (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+            y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) }
+          : Ecc.Point Fp)).coords
+        (({ x := Expression.eval env.toEnvironment
+              (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+            y := Expression.eval env.toEnvironment
+              (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+          : Ecc.Point Fp)).coords = _
+    rw [show (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+                 y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) } :
+            Ecc.Point Fp)).coords
+      = (env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+         env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)) from rfl,
+      hpx84, hpy84, hacc83]
+    show Pallas.add ((t84 • B.point).x, (t84 • B.point).y)
+        ((S83 • B.point).x, (S83 • B.point).y)
+      = (((show Fp from input).val • B.point).x, ((show Fp from input).val • B.point).y)
+    rw [Pallas.add_coords]
+    have hpt : t84 • B.point + S83 • B.point = (show Fp from input).val • B.point := by
+      rw [ht84_def, hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul,
+        windowScalar_partialSum (windowVal input),
+        sum_windowVal (α := (show Fp from input)) hα, natCast_val_nsmul]
+    rw [hpt]
+  -- the running-sum cells, honest values
+  have hz43 : env.get (i₀ + 1 + 4 + 41 * 10) = zValue input 43 := hzCellSucc 41 (by omega)
+  have hz44 : env.get (i₀ + 1 + 4 + 42 * 10) = zValue input 44 := hzCellSucc 42 (by omega)
+  have hz84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10) = zValue input 84 := by
+    have := hzCellSucc 82 (by omega)
+    rw [show zCell i₀ (82 + 1) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 from rfl] at this
+    exact this
+  -- window-0 constraints
+  have hz0InRange : Utilities.RunningSum.InRange (2 ^ 3) (Utilities.RunningSum.word 3
+      { zCur := env.get i₀, zNext := env.get (i₀ + 1) }) :=
+    word_inRange input 0 hz0cell hz1cell
+  have hz0Coords : Coords.Spec (B.params 0) (MulFixed.RunningSumCoords.coordsRow
+      { zCur := env.get i₀, zNext := env.get (i₀ + 1), xP := env.get (i₀ + 1 + 1),
+        yP := env.get (i₀ + 1 + 1 + 1), u := env.get (i₀ + 1 + 1 + 1 + 1) }) :=
+    coordsRow_spec B input (by norm_num) hz0cell hz1cell
+      (h0x.trans (rowTailValue_xP B input 0)) (h0y.trans (rowTailValue_yP B input 0))
+      (h0u.trans (rowTailValue_u B input 0))
+  -- window-84 constraints
+  have hw84z' : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) = zValue input 85 := hw84z
+  have hzc84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10) = zValue input 84 := hz84
+  have hw84u : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1 + 1)
+      = B.u 84 (windowVal input 84) := by
+    have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + i.val)
+        = (toElements (rowTailValue B input 84))[i.val] := by
+      intro i
+      have := h_t84 i
+      rw [show 400 + (i₀ + 1 + 4 + 420 + 4 + 6) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at this
+      exact this
+    exact (env_get_rowTail hb).2.2.2.trans (rowTailValue_u B input 84)
+  have hw84InRange : Utilities.RunningSum.InRange (2 ^ 3) (Utilities.RunningSum.word 3
+      { zCur := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10),
+        zNext := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) }) :=
+    word_inRange input 84 hzc84 hw84z'
+  have hw84Coords : Coords.Spec (B.params 84) (MulFixed.RunningSumCoords.coordsRow
+      { zCur := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10),
+        zNext := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10),
+        xP := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
+        yP := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1),
+        u := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1 + 1) }) :=
+    coordsRow_spec B input (by norm_num) hzc84 hw84z' hw84x hw84y hw84u
+  -- the strict running sum terminates at zero
+  have hz85zero : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) = 0 := by
+    rw [hw84z']; exact zValue_85_eq_zero hα
+  -- assemble: window 0, the two foldl segments (via `hB`), windows 43/44/84, the strict
+  -- check, the final addition, and the prover spec
+  -- converted (raw-offset) window-43 and window-44 obligations
+  have hB42 := hB 42 (by omega)
+  rw [show zCell i₀ 42 = i₀ + 1 + 4 + 41 * 10 from rfl,
+    show zCell i₀ (42 + 1) = i₀ + 1 + 4 + 42 * 10 from rfl,
+    show accPt env.toEnvironment i₀ 42
+      = { x := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 41 * 10 + 4 + 2 + 2)).x,
+          y := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 41 * 10 + 4 + 2 + 2)).y } from
+      accPt_succ env.toEnvironment i₀ 41] at hB42
+  have hB43 := hB 43 (by omega)
+  rw [show zCell i₀ 43 = i₀ + 1 + 4 + 42 * 10 from rfl,
+    show zCell i₀ (43 + 1) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 from rfl,
+    show accPt env.toEnvironment i₀ 43
+      = { x := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 2 + 2)).x,
+          y := Expression.eval env.toEnvironment
+            (varFromOffset Ecc.Point (i₀ + 1 + 4 + 42 * 10 + 4 + 2 + 2)).y } from
+      accPt_succ env.toEnvironment i₀ 42] at hB43
+  refine ⟨?_, ?_, hz43, hz44, hz84⟩
+  swap
+  · simp only [Ecc.Point.coords] at hresult ⊢
+    exact hresult
+  refine ⟨h_z0w, hz0InRange, hz0Coords, ⟨hB 0 (by omega), ?_⟩, hB42.1, hB42.2.1, hB42.2.2,
+    ⟨hB43, ?_⟩, hw84InRange, hw84Coords, hz85zero, hValidP, hValidAcc⟩
+  -- foldl1 (windows 2..42)
+  · intro i hi
+    have h := hB (i + 1) (by omega)
+    rw [zCell_pos i₀ (by omega), zCell_succ, accPt_pos env.toEnvironment i₀ (by omega)] at h
+    convert h using 6
+  -- foldl2 (windows 45..83)
+  · intro i hi
+    have h := hB (i + 44) (by omega)
+    rw [zCell_pos i₀ (by omega), zCell_succ, accPt_pos env.toEnvironment i₀ (by omega),
+      show i₀ + 1 + 4 + (i + 44 - 1) * 10 = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + i * 10 from by omega,
+      show i₀ + 1 + 4 + (i + 44) * 10 = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + (i + 1) * 10 from by omega,
+      show i + 44 + 1 = i + 1 + 44 from by omega] at h
+    exact h
 
 /-- The decomposition + windowed-multiplication regions of
 `base_field_elem.rs::Config::assign`. -/
