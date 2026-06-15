@@ -324,10 +324,31 @@ instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
   infer_explicit_circuits
 
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def mainOutput (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (offset : ℕ) :
+    Var Point Ecc.Fp :=
+  let cells := (assignMessageCells input).output offset
+  (commitAndConstrain G Q hQ R input cells).output
+    (offset + (assignMessageCells input).localLength offset)
+
+def elaboratedRaw (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
   elaborate_circuit
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) where
+  localLength := (elaboratedRaw G Q hQ R).localLength
+  localLength_eq := (elaboratedRaw G Q hQ R).localLength_eq
+  output := mainOutput G Q hQ R
+  output_eq input offset := by
+    unfold main mainOutput
+    simp only [Circuit.output, Circuit.bind_def, Circuit.localLength]
+  subcircuitsConsistent := (elaboratedRaw G Q hQ R).subcircuitsConsistent
+  channelsWithGuarantees := (elaboratedRaw G Q hQ R).channelsWithGuarantees
+  channelsWithRequirements := (elaboratedRaw G Q hQ R).channelsWithRequirements
+  channelsLawful := (elaboratedRaw G Q hQ R).channelsLawful
 
 /-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
 `g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
