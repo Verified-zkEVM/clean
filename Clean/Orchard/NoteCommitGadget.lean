@@ -237,6 +237,23 @@ def noteScalars (input : Value Input Ecc.Fp) : ℕ × ℕ × ℕ × ℕ × ℕ �
   let psi : Ecc.Fp := input.psi
   (gdX.val, gdY.val % 2, pkdX.val, pkdY.val % 2, v.val, rho.val, psi.val)
 
+def proverNoteScalars (input : ProverValue Input Ecc.Fp) :
+    ℕ × ℕ × ℕ × ℕ × ℕ × ℕ × ℕ :=
+  let gdX : Ecc.Fp := input.gd.x
+  let gdY : Ecc.Fp := input.gd.y
+  let pkdX : Ecc.Fp := input.pkd.x
+  let pkdY : Ecc.Fp := input.pkd.y
+  let v : Ecc.Fp := input.value
+  let rho : Ecc.Fp := input.rho
+  let psi : Ecc.Fp := input.psi
+  (gdX.val, gdY.val % 2, pkdX.val, pkdY.val % 2, v.val, rho.val, psi.val)
+
+/-- `g_d` and `pk_d` enter the Halo2 gadget as already-assigned non-identity points. In
+Clean's point model this is the on-curve half of `NonIdentityEccPoint`; identity is not
+representable as an affine point in the source API at this boundary. -/
+def Assumptions (input : Value Input Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+  Pallas.OnCurve input.gd.coords ∧ Pallas.OnCurve input.pkd.coords
+
 /-- `cm` is the Orchard note commitment of the note `(g_d, pk_d, value, rho, psi)` with
 randomness `rcm`: `cm = NoteCommit^Orchard_rcm(g★_d || pk★_d || v || rho || psi)`. The
 message is the `Sinsemilla` hash of the canonical 109-chunk encoding (the canonicity
@@ -249,6 +266,25 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
         (Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi)
       = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue rcm).coords
+
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
+    (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  Pallas.OnCurve input.gd.coords ∧
+  Pallas.OnCurve input.pkd.coords ∧
+  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := proverNoteScalars input
+  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+    (Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi) = some B
+
+def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+    (input : ProverValue Input Ecc.Fp) (cm : ProverValue Point Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := proverNoteScalars input
+  ∀ B : SWPoint Pallas.curve,
+    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+        (Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi)
+      = some B →
+      cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) a hand-written `ElaboratedCircuit` instance — `elaborate_circuit` whnf-times-out

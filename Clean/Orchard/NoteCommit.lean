@@ -21,14 +21,13 @@ Reference:
 - `NoteCommit input psi`
 - `NoteCommit input value`
 - `y coordinate checks`
-- `gadgets::note_commit`
 
 Most assertions model the enabled Halo2 custom-gate polynomials, not selector, rotation,
 column-layout, lookup, or assignment machinery.
 
-TODO(source-conformance): the `gadgets::note_commit` entry circuit is not implemented.
-It must compose `CommitDomain::commit` and witness the commitment/blinding products
-internally rather than exposing them as row inputs.
+The synthesis-level `gadgets::note_commit` entry circuit lives in
+`Clean.Orchard.NoteCommitGadget`, because it depends on `Sinsemilla.Domain` while this
+low-level gate module is imported by scalar-multiplication definitions.
 -/
 
 namespace Orchard
@@ -585,18 +584,6 @@ def circuit : FormalAssertion Ecc.Fp Row where
     exact ⟨mul_eq_zero_of_or hk2, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
 
 end YCanonicity
-
-/-!
-TODO(source-conformance): `gadgets::note_commit` is not implemented.
-
-Reference:
-`orchard@0.14.0/src/circuit/note_commit.rs`
-- `gadgets::note_commit`
-
-The replacement should build the message/decomposition rows, call `CommitDomain::commit`,
-wire returned running sums into the canonicity gates, witness `[rcm] NoteCommitR`
-internally, and return the computed note-commitment point.
--/
 
 end NoteCommit
 end Orchard
