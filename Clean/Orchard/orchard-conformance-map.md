@@ -113,6 +113,17 @@ Current Clean coverage:
   multiplication entry circuit `[scalar] B`, with soundness and completeness proved
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`:
   `GATE Canonicity checks`
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.RunningSumMul.circuit`: the strict
+  85-window running-sum decomposition, shared fixed-base windowed multiplication, and
+  final complete addition producing `[alpha] B` (`GeneralFormalCircuit.WithHint`,
+  soundness and completeness proved); exposes the running-sum cells `z_43`, `z_44`, `z_84`
+  that the canonicity check copies in
+- `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.Assign.circuit`:
+  `FixedPointBaseField::mul` (`mul_fixed/base_field_elem.rs::Config::assign`), the
+  base-field-element fixed-base scalar multiplication entry circuit `[alpha] B`, with
+  soundness and completeness proved; composes `RunningSumMul` with the canonicity tail
+  (13-window lookup range check on `alpha_0 + 2^130 - t_p` and the `GATE Canonicity
+  checks` gate)
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.Gate.circuit`:
   `GATE Short fixed-base mul gate`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.FixedBase`: value-level model of a short
@@ -240,9 +251,9 @@ source-conformant.
 
 ### Scalar Multiplication Entry APIs
 
-Full-width and signed short fixed-base mul, and variable-base mul, are source-level entry
-circuits; the remaining scalar-mul entry gap is `FixedPointBaseField::mul` (only its row
-gate exists).
+Full-width and signed short fixed-base mul, base-field-element fixed-base mul, and
+variable-base mul are all source-level entry circuits, each fully verified (soundness and
+completeness, no sorries).
 
 - `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by
   `ecc/chip/mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`), is modeled by
@@ -256,13 +267,17 @@ gate exists).
   (`Assign.Decompose` for the decomposition region, `Assign.ProcessLsb` mirroring
   `mul.rs::Config::process_lsb`) factor the proofs without changing operations,
   witnesses, or cell order relative to the inlined source.
-- Missing source-level entry circuit: `FixedPointBaseField::mul`, implemented by
-  `ecc/chip/mul_fixed/base_field_elem.rs`: fixed-base multiplication by a base-field
-  element, used by nullifier derivation.
-
-The missing entry circuit must witness internal decomposition/addition/window values
-and specify actual elliptic-curve scalar multiplication. Downstream Orchard gadgets must
-not accept scalar-multiplication products as free inputs.
+- `FixedPointBaseField::mul`, implemented by
+  `ecc/chip/mul_fixed/base_field_elem.rs::Config::assign`: fixed-base multiplication by a
+  base-field element (used by nullifier derivation), is modeled by
+  `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.Assign.circuit` — fully verified
+  (soundness and completeness, no sorries). Its `Spec` is the semantic contract: the
+  output is `([alpha.val] B).coords`. It composes the strict 85-window running-sum
+  decomposition + shared windowed multiplication + complete addition (`RunningSumMul`)
+  with the canonicity tail — a 13-window lookup range check on `alpha_0 + 2^130 - t_p` and
+  the `GATE Canonicity checks` gate — following `base_field_elem.rs::Config::assign`. The
+  output is just `Point`, matching the source `FixedPointBaseField::mul` (which returns a
+  single `EccPoint`), so it carries none of the output-signature gap noted below.
 
 NON-CONFORMANT output signature (fixed-base mul entries): Halo2's `FixedPoint::mul`
 (`mul_fixed/full_width.rs::Config::assign`) returns `(EccPoint, EccScalarFixed)` and
