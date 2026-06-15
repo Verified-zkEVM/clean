@@ -134,6 +134,14 @@ private theorem chunksOf_eq_map_of_sum {value n : ℕ} {ms : ℕ → ℕ}
   simp only [List.getElem_map, List.getElem_range]
   exact digit_of_sum K i n ms hms hin
 
+private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
+    Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
+      Orchard.Specs.Sinsemilla.chunksOf low n := by
+  rw [← Orchard.Specs.Sinsemilla.chunksOf_mod (low + 2 ^ (K * n) * high) n]
+  rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * n) = 2 ^ (K * n) by
+    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hlow]
+
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
 Each witnesses a "prime" value (the element shifted up by `2^130`/`2^140` minus `t_P`)
