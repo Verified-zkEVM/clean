@@ -100,9 +100,8 @@ abbrev bitrangeSubset : Ecc.Fp → ℕ → ℕ → Ecc.Fp :=
 witness `bitrangeSubset src start numBits` and short-range-check it to `numBits`. -/
 def witnessShort (src : Var field Ecc.Fp) (start numBits : ℕ) (h : numBits ≤ Utilities.LookupRangeCheck.K) :
     Circuit Ecc.Fp (Var field Ecc.Fp) := do
-  let w ← witnessField fun env => bitrangeSubset (Expression.eval env src) start numBits
-  Utilities.LookupRangeCheck.shortRangeCircuit numBits h { word := w }
-  return w
+  Utilities.LookupRangeCheck.WitnessShort.circuit start numBits h
+    (fun env => bitrangeSubset (Expression.eval env src) start numBits)
 
 /-- `RangeConstrained::bitrange_of`: witness `bitrangeSubset src start numBits` with no
 range check (it is bool/decomposition-constrained downstream). -/
@@ -130,6 +129,45 @@ def yCanonicity (y lsb : Var field Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) :
       z13J := zs[13], jPrime := jPrime, z13JPrime := z13JPrime }
   NoteCommit.YCanonicity.circuit yrow
   return lsb
+
+instance witnessShortExplicit (src : Var field Ecc.Fp) (start numBits : ℕ)
+    (h : numBits ≤ Utilities.LookupRangeCheck.K) :
+    ExplicitCircuit (witnessShort src start numBits h) := by
+  unfold witnessShort
+  infer_explicit_circuit
+
+instance witnessBitrangeExplicit (src : Var field Ecc.Fp) (start numBits : ℕ) :
+    ExplicitCircuit (witnessBitrange src start numBits) := by
+  unfold witnessBitrange
+  infer_explicit_circuit
+
+instance canonBitshift130Explicit (a : Var field Ecc.Fp) :
+    ExplicitCircuit (canonBitshift130 a) := by
+  unfold canonBitshift130
+  infer_explicit_circuit
+
+instance pkdXCanonicityExplicit (b3 c : Var field Ecc.Fp) :
+    ExplicitCircuit (pkdXCanonicity b3 c) := by
+  unfold pkdXCanonicity
+  infer_explicit_circuit
+
+instance rhoCanonicityExplicit (e1 f : Var field Ecc.Fp) :
+    ExplicitCircuit (rhoCanonicity e1 f) := by
+  unfold rhoCanonicity
+  infer_explicit_circuit
+
+instance psiCanonicityExplicit (g1 g2 : Var field Ecc.Fp) :
+    ExplicitCircuit (psiCanonicity g1 g2) := by
+  unfold psiCanonicity
+  infer_explicit_circuit
+
+instance yCanonicityExplicit (y lsb : Var field Ecc.Fp) :
+    ExplicitCircuit (yCanonicity y lsb) := by
+  unfold yCanonicity
+  infer_explicit_circuit
+
+attribute [explicit_circuit_no_unfold] witnessShort witnessBitrange canonBitshift130
+  pkdXCanonicity rhoCanonicity psiCanonicity yCanonicity
 
 /-! ### `gadgets::note_commit` (note_commit.rs:1594) -/
 
@@ -225,6 +263,10 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       z13G := z13g, z13G1G2Prime := z13g1g2 }
   return cm
 
+instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
+  infer_explicit_circuits
+
 /-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
 `g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
 def noteScalars (input : Value Input Ecc.Fp) : ℕ × ℕ × ℕ × ℕ × ℕ × ℕ × ℕ :=
@@ -287,9 +329,10 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
---   (1) a hand-written `ElaboratedCircuit` instance — `elaborate_circuit` whnf-times-out
---       on `main` (≈30 witness cells + the `WithZs` hash + canon helpers + 10 gates);
---       compute `localLength`/`output` explicitly (output = `out.point`, a clean point).
+--   (1) `ElaboratedCircuit`: `mainExplicit` is inferable, but the generated metadata is
+--       still too large for the default `ExplicitCircuits.IsElaborated` proof. Provide a
+--       controlled offset-independence proof or an explicit data override for
+--       `localLength`/`output` (output = `out.point`, a clean point).
 --   (2) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
 --       pieces equal `noteCommitChunks`'s tiling via `noteCommitChunks_tiling`) +
 --       `completeness`. This is the largest remaining proof.
