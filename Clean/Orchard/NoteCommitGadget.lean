@@ -345,6 +345,30 @@ private theorem noteCommitChunks_segment_h (gdX gdY pkdX pkdY v rho psi : ℕ)
   rw [chunksOf_one_eq_singleton_mod,
     noteCommitChunks_segment_h_word gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho hpsi]
 
+private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : ℕ)
+    (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
+    (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
+    (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
+    Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdY pkdX pkdY v rho psi =
+      Orchard.Specs.Sinsemilla.chunksOf gdX 25 ++
+      [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] ++
+      Orchard.Specs.Sinsemilla.chunksOf (pkdX / 16) 25 ++
+      Orchard.Specs.Sinsemilla.chunksOf
+        (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6 ++
+      [v / 2 ^ 58 % 64 + (rho % 16) * 64] ++
+      Orchard.Specs.Sinsemilla.chunksOf (rho / 16) 25 ++
+      Orchard.Specs.Sinsemilla.chunksOf (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25 ++
+      [psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32] := by
+  rw [Orchard.Specs.Sinsemilla.noteCommitChunks_tiling]
+  rw [noteCommitChunks_segment_a]
+  rw [noteCommitChunks_segment_b _ _ _ _ _ _ _ hgdX hgdY]
+  rw [noteCommitChunks_segment_c _ _ _ _ _ _ _ hgdX hgdY]
+  rw [noteCommitChunks_segment_d _ _ _ _ _ _ _ hgdX hgdY hpkdX]
+  rw [noteCommitChunks_segment_e _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv]
+  rw [noteCommitChunks_segment_f _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv]
+  rw [noteCommitChunks_segment_g _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho]
+  rw [noteCommitChunks_segment_h _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho hpsi]
+
 /-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
 
 Each witnesses a "prime" value (the element shifted up by `2^130`/`2^140` minus `t_P`)
