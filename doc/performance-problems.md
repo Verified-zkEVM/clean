@@ -94,6 +94,29 @@ cross between different spellings of the same value by **syntactic rewriting** (
    hypothesis term `‹r < 1›` (which elaborates to `by assumption`). Branch explicitly
    (`rcases Nat.lt_or_ge r 1 with h | h`) so omega only runs where it succeeds.
 
+9. **Big power literals (`2^130`, `2^254`) reduced by the kernel cause
+   `(kernel) deep recursion detected`.** The kernel has accelerated `Nat.add/mul/mod`
+   but *not* `Nat.pow`, so a `2^254` that survives into a kernel-checked proof term is
+   unfolded ~254 deep, and nested inside a `norm_num`/`omega` certificate it blows the
+   recursion limit — reported at the *enclosing declaration's header*, not the offending
+   line. Three rules that fixed `base_field_elem`'s canonicity bound (`alpha0_lt_tp`):
+   - **Keep powers opaque to `omega`.** Prove the pure-literal facts in *one* isolated
+     `have h : 2^130 + tPNat < PALLAS_BASE_CARD ∧ … := by norm_num [PALLAS_BASE_CARD, …]`,
+     then feed `omega` only linear hypotheses (`S < 2^130`, `h`, `α0 < 2^132`) where
+     `2^130`/`2^132` are atoms it never reduces. `omega` closing `S + t < P` from
+     `S < X ∧ X + t < P` treats `X` opaquely.
+   - **Avoid `base_card_eq` in the hot path.** Rewriting `PALLAS_BASE_CARD` to
+     `2^254 + tPNat` *introduces* a `2^254` the kernel then reduces. Bound against the
+     `PALLAS_BASE_CARD` *literal* (it's `@[reducible]` to a hex numeral) instead.
+   - **Prefer additive `Nat.ModEq` over `Nat.cast_sub`/`ZMod.val`.** To turn
+     `(S:Fp) = ↑α0 + (2:Fp)^130 - ↑tPNat` into a ℕ equation, cross-multiply to
+     `↑(S + tPNat) = ↑(α0 + 2^130)` (`push_cast; linear_combination`), then
+     `(ZMod.natCast_eq_natCast_iff …).mp` + `Nat.mod_eq_of_lt` on both sides. This dodges
+     the `tPNat ≤ α0 + 2^130` subtraction side-goal whose `norm_num [tPNat]` was itself
+     the recursion trigger.
+   Always factor such arithmetic into a `private theorem` over abstract `ℕ` variables so
+   it is kernel-checked once, not inlined into a giant circuit-soundness term.
+
 ## Kernel size cliffs in completeness proofs of large compositions
 
 A second, distinct kernel failure mode showed up in the variable-base scalar-mul *entry*
