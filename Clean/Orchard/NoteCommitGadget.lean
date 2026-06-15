@@ -134,6 +134,24 @@ private theorem chunksOf_eq_map_of_sum {value n : ℕ} {ms : ℕ → ℕ}
   simp only [List.getElem_map, List.getElem_range]
   exact digit_of_sum K i n ms hms hin
 
+private theorem chunksOf_eq_map_of_field_sum {piece : Ecc.Fp} {value n : ℕ} {ms : ℕ → ℕ}
+    (hms : ∀ r, ms r < 2 ^ K)
+    (hvalue : piece = (value : Ecc.Fp))
+    (hpiece : piece =
+      ((∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hvalueCard : value < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hsumCard : (∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) <
+      CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) :
+    Orchard.Specs.Sinsemilla.chunksOf value n = (List.range n).map ms := by
+  apply chunksOf_eq_map_of_sum hms
+  have hcast :
+      (value : Ecc.Fp) =
+        ((∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp) :=
+    hvalue.symm.trans hpiece
+  have hval := congrArg ZMod.val hcast
+  rw [ZMod.val_natCast_of_lt hvalueCard, ZMod.val_natCast_of_lt hsumCard] at hval
+  exact hval
+
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
     Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
       Orchard.Specs.Sinsemilla.chunksOf low n := by
