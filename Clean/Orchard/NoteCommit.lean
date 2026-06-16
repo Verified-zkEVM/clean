@@ -697,7 +697,8 @@ private theorem lsb_eq_y_low_bit_of_parts {y lsb k0 k2 k3 j z1J : Ecc.Fp}
     (hlsb : IsBool lsb) (hk0 : k0.val < 2 ^ 9) (hk2 : k2.val < 2 ^ 4)
     (hz1J : z1J.val < 2 ^ (K * 24)) (hk3 : IsBool k3)
     (hj : j = lsb + k0 * 2 + z1J * 1024)
-    (hy : y = j + k2 * OfNat.ofNat (2 ^ 250) + k3 * OfNat.ofNat (2 ^ 254))
+    (hy : y = j + k2 * ((2 ^ 250 : ℕ) : Ecc.Fp) +
+      k3 * ((2 ^ 254 : ℕ) : Ecc.Fp))
     (hk2Zero : k3 = 0 ∨ k2 = 0)
     (hjLtTP : k3 = 1 → j.val < tPNat) :
     lsb = ((y.val % 2 : ℕ) : Ecc.Fp) := by
@@ -765,19 +766,19 @@ private theorem lsb_eq_y_low_bit_of_parts {y lsb k0 k2 k3 j z1J : Ecc.Fp}
     rw [Nat.add_mul_mod_self_left]
     exact hjMod.symm
 
-private theorem j_lt_tP_of_prime_bounds {j jPrime : Ecc.Fp}
+private theorem j_lt_tP_of_prime_bounds {j j' : Ecc.Fp}
     (hj : j.val < 2 ^ (K * 13))
-    (hprime : jPrime = j + OfNat.ofNat (2 ^ 130) - Ecc.tP)
-    (hprimeLt : jPrime.val < 2 ^ (K * 13)) :
+    (hprime : j' = j + ((2 ^ 130 : ℕ) : Ecc.Fp) - Ecc.tP)
+    (hprimeLt : j'.val < 2 ^ (K * 13)) :
     j.val < tPNat := by
   by_contra hnot
   have hjGe : tPNat ≤ j.val := Nat.le_of_not_gt hnot
-  have hprimeField : jPrime = ((j.val + 2 ^ 130 - tPNat : ℕ) : Ecc.Fp) := by
+  have hprimeField : j' = ((j.val + 2 ^ 130 - tPNat : ℕ) : Ecc.Fp) := by
     rw [hprime, ← ZMod.natCast_zmod_val j]
     push_cast [Ecc.tP, tPNat]
     rw [ZMod.val_natCast_of_lt (ZMod.val_lt j)]
     ring_nf
-  have hprimeValEq : jPrime.val = j.val + 2 ^ 130 - tPNat := by
+  have hprimeValEq : j'.val = j.val + 2 ^ 130 - tPNat := by
     have hlt : j.val + 2 ^ 130 - tPNat < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
       norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hj ⊢
       omega
@@ -786,15 +787,16 @@ private theorem j_lt_tP_of_prime_bounds {j jPrime : Ecc.Fp}
   norm_num [K] at hj hprimeLt ⊢
   omega
 
-private theorem y_lsb_eq_low_bit_of_row_facts {y lsb k0 k2 k3 j z1J jPrime : Ecc.Fp}
+private theorem y_lsb_eq_low_bit_of_row_facts {y lsb k0 k2 k3 j z1J j' : Ecc.Fp}
     (hlsb : IsBool lsb) (hk0 : k0.val < 2 ^ 9) (hk2 : k2.val < 2 ^ 4)
     (hz1J : z1J.val < 2 ^ (K * 24)) (hk3 : IsBool k3)
     (hj : j = lsb + k0 * 2 + z1J * 1024)
-    (hy : y = j + k2 * OfNat.ofNat (2 ^ 250) + k3 * OfNat.ofNat (2 ^ 254))
-    (hprime : jPrime = j + OfNat.ofNat (2 ^ 130) - Ecc.tP)
+    (hy : y = j + k2 * ((2 ^ 250 : ℕ) : Ecc.Fp) +
+      k3 * ((2 ^ 254 : ℕ) : Ecc.Fp))
+    (hprime : j' = j + ((2 ^ 130 : ℕ) : Ecc.Fp) - Ecc.tP)
     (hk2Zero : k3 = 0 ∨ k2 = 0)
     (hz13 : k3 = 0 ∨ j.val < 2 ^ (K * 13))
-    (hz13Prime : k3 = 0 ∨ jPrime.val < 2 ^ (K * 13)) :
+    (hz13Prime : k3 = 0 ∨ j'.val < 2 ^ (K * 13)) :
     lsb = ((y.val % 2 : ℕ) : Ecc.Fp) := by
   have hjLtTP : k3 = 1 → j.val < tPNat := by
     intro hk3One
@@ -803,7 +805,7 @@ private theorem y_lsb_eq_low_bit_of_row_facts {y lsb k0 k2 k3 j z1J jPrime : Ecc
       · exfalso
         exact (zero_ne_one : (0 : Ecc.Fp) ≠ 1) (by rw [← hz, hk3One])
       · exact hz
-    have hprimeBound : jPrime.val < 2 ^ (K * 13) := by
+    have hprimeBound : j'.val < 2 ^ (K * 13) := by
       rcases hz13Prime with hz | hz
       · exfalso
         exact (zero_ne_one : (0 : Ecc.Fp) ≠ 1) (by rw [← hz, hk3One])
@@ -1651,12 +1653,11 @@ def main (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) := do
     env input.lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) * bitrangeSubset (eval env input.y) 10 240
   let jZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 j
   assertZero jZs[25]
-  let jPrime ← witnessField fun env => env jZs[0] + (2 ^ 130 : Ecc.Fp) - Ecc.tP
-  let jPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 jPrime
+  let j' ← witnessField fun env => env jZs[0] + (2 ^ 130 : Ecc.Fp) - Ecc.tP
+  let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 j'
   Gate.circuit
     { y := input.y, lsb := input.lsb, k0 := k0, k2 := k2, k3 := k3, j := jZs[0],
-      z1J := jZs[1], z13J := jZs[13], jPrime := jPrimeZs[0],
-      z13JPrime := jPrimeZs[13] }
+      z1J := jZs[1], z13J := jZs[13], j' := j'Zs[0], z13J' := j'Zs[13] }
   return input.lsb
 
 instance elaborated : ElaboratedCircuit Ecc.Fp Input field main := by

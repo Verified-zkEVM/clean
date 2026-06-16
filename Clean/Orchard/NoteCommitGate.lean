@@ -53,10 +53,6 @@ structure Row (F : Type) where
   b3 : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K 32]
-    [OfNat K 64] (row : Row K) : K :=
-  row.b - (row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64)
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.b1 ∧
   IsBool row.b2 ∧
@@ -65,18 +61,18 @@ def Spec (row : Row Ecc.Fp) : Prop :=
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertBool row.b1
   assertBool row.b2
-  assertZero (decomposition row)
+  assertZero (row.b - (row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64))
 
 def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece b"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rcases h_holds with ⟨hb1, hb2, hdec⟩
     exact ⟨hb1, hb2, left_eq_of_add_neg_eq_zero hdec⟩
   completeness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rcases h_spec with ⟨hb1, hb2, hdec⟩
     exact ⟨hb1, hb2, by rw [hdec]; ring⟩
 
@@ -92,10 +88,6 @@ structure Row (F : Type) where
   d3 : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 4]
-    [OfNat K 1024] (row : Row K) : K :=
-  row.d - (row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024)
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.d0 ∧
   IsBool row.d1 ∧
@@ -104,18 +96,18 @@ def Spec (row : Row Ecc.Fp) : Prop :=
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertBool row.d0
   assertBool row.d1
-  assertZero (decomposition row)
+  assertZero (row.d - (row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024))
 
 def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece d"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rcases h_holds with ⟨hd0, hd1, hdec⟩
     exact ⟨hd0, hd1, left_eq_of_add_neg_eq_zero hdec⟩
   completeness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rcases h_spec with ⟨hd0, hd1, hdec⟩
     exact ⟨hd0, hd1, by rw [hdec]; ring⟩
 
@@ -129,24 +121,21 @@ structure Row (F : Type) where
   e1 : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 64] (row : Row K) : K :=
-  row.e - (row.e0 + row.e1 * 64)
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   row.e = row.e0 + row.e1 * 64
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (decomposition row)
+  assertZero (row.e - (row.e0 + row.e1 * 64))
 
 def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece e"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     exact left_eq_of_add_neg_eq_zero h_holds
   completeness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rw [h_spec]
     ring
 
@@ -161,28 +150,24 @@ structure Row (F : Type) where
   g2 : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 1024]
-    (row : Row K) : K :=
-  row.g - (row.g0 + row.g1 * 2 + row.g2 * 1024)
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.g0 ∧
   row.g = row.g0 + row.g1 * 2 + row.g2 * 1024
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertBool row.g0
-  assertZero (decomposition row)
+  assertZero (row.g - (row.g0 + row.g1 * 2 + row.g2 * 1024))
 
 def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece g"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rcases h_holds with ⟨hg0, hdec⟩
     exact ⟨hg0, left_eq_of_add_neg_eq_zero hdec⟩
   completeness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rcases h_spec with ⟨hg0, hdec⟩
     exact ⟨hg0, by rw [hdec]; ring⟩
 
@@ -196,27 +181,24 @@ structure Row (F : Type) where
   h1 : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] (row : Row K) : K :=
-  row.h - (row.h0 + row.h1 * 32)
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.h1 ∧
   row.h = row.h0 + row.h1 * 32
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertBool row.h1
-  assertZero (decomposition row)
+  assertZero (row.h - (row.h0 + row.h1 * 32))
 
 def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit MessagePiece h"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rcases h_holds with ⟨hh1, hdec⟩
     exact ⟨hh1, left_eq_of_add_neg_eq_zero hdec⟩
   completeness := by
-    circuit_proof_start [main, Spec, decomposition]
+    circuit_proof_start
     rcases h_spec with ⟨hh1, hdec⟩
     exact ⟨hh1, by rw [hdec]; ring⟩
 
@@ -234,14 +216,6 @@ structure Row (F : Type) where
   z13APrime : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 250)] [OfNat K (2 ^ 254)]
-    (row : Row K) : K :=
-  row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) - row.gdX
-
-def aPrimeCheck (row : Row (Expression Ecc.Fp)) : Expression Ecc.Fp :=
-  row.a + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) - Expression.const Ecc.tP -
-    row.aPrime
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   row.gdX = row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) ∧
     row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - Ecc.tP ∧
@@ -250,8 +224,10 @@ def Spec (row : Row Ecc.Fp) : Prop :=
     (row.b1 = 0 ∨ row.z13APrime = 0)
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (decomposition row)
-  assertZero (aPrimeCheck row)
+  assertZero (row.a + row.b0 * OfNat.ofNat (2 ^ 250) +
+    row.b1 * OfNat.ofNat (2 ^ 254) - row.gdX)
+  assertZero (row.a + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) -
+    Expression.const Ecc.tP - row.aPrime)
   assertZero (row.b1 * row.b0)
   assertZero (row.b1 * row.z13A)
   assertZero (row.b1 * row.z13APrime)
@@ -261,13 +237,13 @@ def circuit : FormalAssertion Ecc.Fp Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition, aPrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_holds with ⟨hdec, hprime, hb0, hz13, hz13p⟩
     exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
       mul_eq_zero.mp hb0, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, Spec, decomposition, aPrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_spec with ⟨hdec, hprime, hb0, hz13, hz13p⟩
     constructor
     · rw [hdec]
@@ -291,14 +267,6 @@ structure Row (F : Type) where
   z14B3CPrime : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K (2 ^ 254)]
-    (row : Row K) : K :=
-  row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) - row.pkdX
-
-def b3CPrimeCheck (row : Row (Expression Ecc.Fp)) : Expression Ecc.Fp :=
-  row.b3 + row.c * 16 + Expression.const ((2 ^ 140 : ℕ) : Ecc.Fp) -
-    Expression.const Ecc.tP - row.b3CPrime
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   row.pkdX = row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) ∧
     row.b3CPrime = row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - Ecc.tP ∧
@@ -306,8 +274,9 @@ def Spec (row : Row Ecc.Fp) : Prop :=
     (row.d0 = 0 ∨ row.z14B3CPrime = 0)
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (decomposition row)
-  assertZero (b3CPrimeCheck row)
+  assertZero (row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) - row.pkdX)
+  assertZero (row.b3 + row.c * 16 + Expression.const ((2 ^ 140 : ℕ) : Ecc.Fp) -
+    Expression.const Ecc.tP - row.b3CPrime)
   assertZero (row.d0 * row.z13C)
   assertZero (row.d0 * row.z14B3CPrime)
 
@@ -316,13 +285,13 @@ def circuit : FormalAssertion Ecc.Fp Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition, b3CPrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_holds with ⟨hdec, hprime, hz13, hz14⟩
     exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
       mul_eq_zero.mp hz13, mul_eq_zero.mp hz14⟩
   completeness := by
-    circuit_proof_start [main, Spec, decomposition, b3CPrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_spec with ⟨hdec, hprime, hz13, hz14⟩
     constructor
     · rw [hdec]
@@ -343,25 +312,21 @@ structure Row (F : Type) where
   e0 : F
 deriving ProvableStruct
 
-def valueCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 256] [OfNat K 288230376151711744]
-    (row : Row K) : K :=
-  row.d2 + row.d3 * 256 + row.e0 * 288230376151711744 - row.value
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   row.value = row.d2 + row.d3 * 256 + row.e0 * 288230376151711744
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (valueCheck row)
+  assertZero (row.d2 + row.d3 * 256 + row.e0 * 288230376151711744 - row.value)
 
 def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE NoteCommit input value"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, valueCheck]
+    circuit_proof_start
     exact (left_eq_of_add_neg_eq_zero h_holds).symm
   completeness := by
-    circuit_proof_start [main, Spec, valueCheck]
+    circuit_proof_start
     rw [h_spec]
     ring
 
@@ -379,14 +344,6 @@ structure Row (F : Type) where
   z14E1FPrime : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K (2 ^ 254)]
-    (row : Row K) : K :=
-  row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) - row.rho
-
-def e1FPrimeCheck (row : Row (Expression Ecc.Fp)) : Expression Ecc.Fp :=
-  row.e1 + row.f * 16 + Expression.const ((2 ^ 140 : ℕ) : Ecc.Fp) -
-    Expression.const Ecc.tP - row.e1FPrime
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   row.rho = row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) ∧
     row.e1FPrime = row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - Ecc.tP ∧
@@ -394,8 +351,9 @@ def Spec (row : Row Ecc.Fp) : Prop :=
     (row.g0 = 0 ∨ row.z14E1FPrime = 0)
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (decomposition row)
-  assertZero (e1FPrimeCheck row)
+  assertZero (row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) - row.rho)
+  assertZero (row.e1 + row.f * 16 + Expression.const ((2 ^ 140 : ℕ) : Ecc.Fp) -
+    Expression.const Ecc.tP - row.e1FPrime)
   assertZero (row.g0 * row.z13F)
   assertZero (row.g0 * row.z14E1FPrime)
 
@@ -404,13 +362,13 @@ def circuit : FormalAssertion Ecc.Fp Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition, e1FPrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_holds with ⟨hdec, hprime, hz13, hz14⟩
     exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
       mul_eq_zero.mp hz13, mul_eq_zero.mp hz14⟩
   completeness := by
-    circuit_proof_start [main, Spec, decomposition, e1FPrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_spec with ⟨hdec, hprime, hz13, hz14⟩
     constructor
     · rw [hdec]
@@ -435,15 +393,6 @@ structure Row (F : Type) where
   z13G1G2Prime : F
 deriving ProvableStruct
 
-def decomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 512] [OfNat K (2 ^ 249)]
-    [OfNat K (2 ^ 254)] (row : Row K) : K :=
-  row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
-    row.h1 * OfNat.ofNat (2 ^ 254) - row.psi
-
-def g1G2PrimeCheck (row : Row (Expression Ecc.Fp)) : Expression Ecc.Fp :=
-  row.g1 + row.g2 * 512 + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) -
-    Expression.const Ecc.tP - row.g1G2Prime
-
 def Spec (row : Row Ecc.Fp) : Prop :=
   row.psi = row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
     row.h1 * OfNat.ofNat (2 ^ 254) ∧
@@ -453,8 +402,10 @@ def Spec (row : Row Ecc.Fp) : Prop :=
     (row.h1 = 0 ∨ row.z13G1G2Prime = 0)
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (decomposition row)
-  assertZero (g1G2PrimeCheck row)
+  assertZero (row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
+    row.h1 * OfNat.ofNat (2 ^ 254) - row.psi)
+  assertZero (row.g1 + row.g2 * 512 + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) -
+    Expression.const Ecc.tP - row.g1G2Prime)
   assertZero (row.h1 * row.h0)
   assertZero (row.h1 * row.z13G)
   assertZero (row.h1 * row.z13G1G2Prime)
@@ -464,13 +415,13 @@ def circuit : FormalAssertion Ecc.Fp Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, decomposition, g1G2PrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_holds with ⟨hdec, hprime, hh0, hz13, hz13p⟩
     exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
       mul_eq_zero.mp hh0, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, Spec, decomposition, g1G2PrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_spec with ⟨hdec, hprime, hh0, hz13, hz13p⟩
     constructor
     · rw [hdec]
@@ -495,53 +446,43 @@ structure Row (F : Type) where
   j : F
   z1J : F
   z13J : F
-  jPrime : F
-  z13JPrime : F
+  j' : F
+  z13J' : F
 deriving ProvableStruct
-
-def jCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 1024] (row : Row K) : K :=
-  row.j - (row.lsb + row.k0 * 2 + row.z1J * 1024)
-
-def yCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 250)] [OfNat K (2 ^ 254)]
-    (row : Row K) : K :=
-  row.y - (row.j + row.k2 * OfNat.ofNat (2 ^ 250) +
-    row.k3 * OfNat.ofNat (2 ^ 254))
-
-def jPrimeCheck (row : Row (Expression Ecc.Fp)) : Expression Ecc.Fp :=
-  row.j + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) - Expression.const Ecc.tP -
-    row.jPrime
 
 def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.k3 ∧
     row.j = row.lsb + row.k0 * 2 + row.z1J * 1024 ∧
-    row.y = row.j + row.k2 * OfNat.ofNat (2 ^ 250) +
-      row.k3 * OfNat.ofNat (2 ^ 254) ∧
-    row.jPrime = row.j + OfNat.ofNat (2 ^ 130) - Ecc.tP ∧
+    row.y = row.j + row.k2 * ((2 ^ 250 : ℕ) : Ecc.Fp) +
+      row.k3 * ((2 ^ 254 : ℕ) : Ecc.Fp) ∧
+    row.j' = row.j + ((2 ^ 130 : ℕ) : Ecc.Fp) - Ecc.tP ∧
     (row.k3 = 0 ∨ row.k2 = 0) ∧
     (row.k3 = 0 ∨ row.z13J = 0) ∧
-    (row.k3 = 0 ∨ row.z13JPrime = 0)
+    (row.k3 = 0 ∨ row.z13J' = 0)
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertBool row.k3
-  assertZero (jCheck row)
-  assertZero (yCheck row)
-  assertZero (jPrimeCheck row)
+  assertZero (row.j - (row.lsb + row.k0 * 2 + row.z1J * 1024))
+  assertZero (row.y - (row.j + row.k2 * ((2 ^ 250 : ℕ) : Ecc.Fp) +
+    row.k3 * ((2 ^ 254 : ℕ) : Ecc.Fp)))
+  assertZero (row.j + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) -
+    Expression.const Ecc.tP - row.j')
   assertZero (row.k3 * row.k2)
   assertZero (row.k3 * row.z13J)
-  assertZero (row.k3 * row.z13JPrime)
+  assertZero (row.k3 * row.z13J')
 
 def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE y coordinate checks"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, jCheck, yCheck, jPrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_holds with ⟨hk3, hj, hy, hp, hk2, hz13, hz13p⟩
     exact ⟨hk3, left_eq_of_add_neg_eq_zero hj, left_eq_of_add_neg_eq_zero hy,
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hp).symm,
       mul_eq_zero.mp hk2, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
   completeness := by
-    circuit_proof_start [main, Spec, jCheck, yCheck, jPrimeCheck, Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_spec with ⟨hk3, hj, hy, hp, hk2, hz13, hz13p⟩
     constructor
     · exact hk3
