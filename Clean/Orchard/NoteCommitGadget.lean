@@ -2187,6 +2187,40 @@ private theorem copyCheck13_zlast_zero_val_lt (env : Environment Ecc.Fp)
   rw [heq, ZMod.val_natCast_of_lt hCard]
   exact hlo
 
+private theorem pkdXCanonicity_prime_evalOutput_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
+    (b3 c : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((pkdXCanonicity b3 c).operations offset))
+    (hzLast : eval env ((pkdXCanonicity b3 c).output offset).2 = 0) :
+    (show Ecc.Fp from eval env ((pkdXCanonicity b3 c).output offset).1).val <
+      2 ^ (K * 14) := by
+  let prime := (witnessField (F := Ecc.Fp) fun env =>
+    env b3 + (2 ^ 4 : Ecc.Fp) * env c + (2 ^ 140 : Ecc.Fp) - tP).output offset
+  let copyOffset := offset + (witnessField (F := Ecc.Fp) fun env =>
+    env b3 + (2 ^ 4 : Ecc.Fp) * env c + (2 ^ 140 : Ecc.Fp) - tP).localLength offset
+  have hCopy :
+      ConstraintsHold.Soundness env
+        ((Utilities.LookupRangeCheck.CopyCheck.circuit 14 prime).operations copyOffset) := by
+    unfold pkdXCanonicity at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact h.2.1
+  have hzLastCopy :
+      (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 14).output prime copyOffset))[14]
+        = 0 := by
+    unfold pkdXCanonicity at hzLast
+    simp only [Circuit.output, Circuit.bind_def, withHint_output] at hzLast
+    rw [ProvableType.eval_field, ProvableType.getElem_eval_fields] at hzLast
+    simpa only [prime, copyOffset, Circuit.output, Circuit.localLength] using hzLast
+  have hPrimeBound := copyCheck14_zlast_zero_val_lt env prime copyOffset hCopy hzLastCopy
+  have hSpec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 14) env prime copyOffset trivial hCopy
+  simp only at hSpec
+  simp only [prime, copyOffset, Circuit.output, Circuit.localLength] at hSpec hPrimeBound
+  unfold pkdXCanonicity
+  simp only [Circuit.output, Circuit.bind_def, withHint_output]
+  rw [ProvableType.eval_field, ProvableType.getElem_eval_fields]
+  rw [hSpec.1]
+  exact hPrimeBound
+
 private theorem rhoCanonicity_prime_evalOutput_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
     (e1 f : Var field Ecc.Fp) (offset : ℕ)
     (h : ConstraintsHold.Soundness env ((rhoCanonicity e1 f).operations offset))
@@ -2511,6 +2545,32 @@ theorem constrainCommitment_rhoCanonicity_soundness (env : Environment Ecc.Fp)
   unfold constrainCommitment at h
   simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
   exact h.2.2.1
+
+theorem constrainCommitment_pkdXCanonicity_soundness (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    ConstraintsHold.Soundness env ((pkdXCanonicity cells.b3 cells.c).operations pkdOffset) := by
+  unfold constrainCommitment at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+  exact h.2.1
+
+theorem constrainCommitment_pkdXCanonicity_prime_val_lt_of_zlast_zero
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    let b3cBounds := (pkdXCanonicity cells.b3 cells.c).output pkdOffset
+    eval env b3cBounds.2 = 0 →
+      (show Ecc.Fp from eval env b3cBounds.1).val < 2 ^ (K * 14) := by
+  let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+  dsimp only
+  intro hzLast
+  exact pkdXCanonicity_prime_evalOutput_val_lt_of_zlast_zero env cells.b3 cells.c pkdOffset
+    (constrainCommitment_pkdXCanonicity_soundness env input cells out offset h) hzLast
 
 theorem constrainCommitment_rhoCanonicity_prime_val_lt_of_zlast_zero
     (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
@@ -3522,6 +3582,61 @@ theorem main_pkd_low_small_of_d0_one (G : Generators) (Q : SWPoint Pallas.curve)
     simpa only [messagePieceRounds, messagePieceTailRounds] using hz13cVar
   have hcTail := main_commitInput_c_tail_value env input offset
   exact b3_c_low_lt_of_piece_z13_zero hb3 hPC hZs hz13cTail hcTail
+
+theorem main_d0_eq_pkd_high_bit (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    (show Ecc.Fp from eval env cells.d0) =
+      (((show Ecc.Fp from eval env input.pkd.x).val / 2 ^ 254 % 2 : ℕ) : Ecc.Fp) := by
+  let cells := (assignMessageCells input).output offset
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let gateOffset := commitOffset + (commitWithZs G Q hQ R input cells).localLength commitOffset
+  let pkdOffset := gateOffset + (canonBitshift130 cells.a).localLength gateOffset
+  let b3cBounds := (pkdXCanonicity cells.b3 cells.c).output pkdOffset
+  have hrange := main_assignMessageCells_short_range_specs G Q hQ R env input offset h
+  have hdecomp := main_message_piece_decomposition_facts G Q hQ R env input offset h
+  have hcanon := main_input_canonicity_facts G Q hQ R env input offset h
+  have hlarge := main_large_piece_bounds G Q hQ R env input offset h
+  simp only at hrange hdecomp hcanon hlarge
+  rcases hrange with ⟨_hb0, hb3, _hd2, _he0, _he1, _hg1, _hh0⟩
+  rcases hdecomp with ⟨_hB, hD, _hE, _hG, _hh1, _hH⟩
+  rcases hD with ⟨hd0Bool, _hd1Bool, _hDdec⟩
+  rcases hcanon with ⟨_hgd, hpkd, _hvalue, _hrho, _hpsi⟩
+  rcases hpkd with ⟨hpkd, hprime, _hz13c, hz14⟩
+  have hcTail := main_commitInput_c_tail_value env input offset
+  have hcBound : (show Ecc.Fp from eval env cells.c).val < 2 ^ (K * 25) := by
+    have hc := hlarge.2.1
+    rw [hcTail] at hc
+    exact hc
+  have hlowSmall :
+      eval env cells.d0 = 1 →
+        (show Ecc.Fp from eval env cells.b3).val +
+          (show Ecc.Fp from eval env cells.c).val * 16 < 2 ^ 134 := by
+    intro hd0One
+    exact main_pkd_low_small_of_d0_one G Q hQ R env input offset h hd0One
+  have hz14Lt :
+      eval env b3cBounds.2 = 0 →
+        (show Ecc.Fp from eval env b3cBounds.1).val < 2 ^ (K * 14) := by
+    rw [main_soundness_constraints_iff] at h
+    rcases h with ⟨_, h_commit⟩
+    rw [commitAndConstrain_soundness_constraints_iff] at h_commit
+    exact constrainCommitment_pkdXCanonicity_prime_val_lt_of_zlast_zero env input
+      ((assignMessageCells input).output offset)
+      ((commitWithZs G Q hQ R input ((assignMessageCells input).output offset)).output
+        (offset + (assignMessageCells input).localLength offset))
+      (offset + (assignMessageCells input).localLength offset +
+        (commitWithZs G Q hQ R input ((assignMessageCells input).output offset)).localLength
+          (offset + (assignMessageCells input).localLength offset))
+      h_commit.2
+  exact g0_eq_rho_high_bit_of_parts hb3 hcBound hd0Bool hlowSmall
+    hpkd hprime hz14 hz14Lt
 
 theorem main_g0_eq_rho_high_bit (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
