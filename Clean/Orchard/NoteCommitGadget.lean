@@ -2378,6 +2378,60 @@ theorem constrainCommitment_psiCanonicity_prime_val_lt_of_zlast_zero
   exact psiCanonicity_prime_evalOutput_val_lt_of_zlast_zero env cells.g1 z1g psiOffset
     (constrainCommitment_psiCanonicity_soundness env input cells out offset h) hzLast
 
+theorem constrainCommitment_psi_canonicity_spec
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+    let g1g2Bounds := (psiCanonicity cells.g1 z1g).output psiOffset
+    let rowPsi : Var NoteCommit.PsiCanonicity.Row Ecc.Fp :=
+      { psi := input.psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g,
+        g1G2Prime := g1g2Bounds.1, z13G := z13g, z13G1G2Prime := g1g2Bounds.2 }
+    NoteCommit.PsiCanonicity.Spec (eval env rowPsi) := by
+  let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+  let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+  let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+  let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+  let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+  let g1g2Bounds := (psiCanonicity cells.g1 z1g).output psiOffset
+  let rowPsi : Var NoteCommit.PsiCanonicity.Row Ecc.Fp :=
+    { psi := input.psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g,
+      g1G2Prime := g1g2Bounds.1, z13G := z13g, z13G1G2Prime := g1g2Bounds.2 }
+  unfold constrainCommitment at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset,
+    PsiCanonicity.circuit] at h
+  exact formalAssertion_spec_of_soundness NoteCommit.PsiCanonicity.circuit env rowPsi _
+    trivial h.2.2.2.2.2.2.2.2.2.2.2.2.2.1
+
+theorem constrainCommitment_psi_canonicity_facts
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+    let g1g2Bounds := (psiCanonicity cells.g1 z1g).output psiOffset
+    (eval env input.psi =
+        eval env cells.g1 + eval env z1g * 512 +
+          eval env cells.h0 * OfNat.ofNat (2 ^ 249) +
+          eval env cells.h1 * OfNat.ofNat (2 ^ 254) ∧
+      eval env g1g2Bounds.1 =
+        eval env cells.g1 + eval env z1g * 512 + OfNat.ofNat (2 ^ 130) -
+          NoteCommit.tP ∧
+      (eval env cells.h1 = 0 ∨ eval env cells.h0 = 0) ∧
+      (eval env cells.h1 = 0 ∨ eval env z13g = 0) ∧
+      (eval env cells.h1 = 0 ∨ eval env g1g2Bounds.2 = 0)) := by
+  have hs := constrainCommitment_psi_canonicity_spec env input cells out offset h
+  simpa only [circuit_norm, NoteCommit.PsiCanonicity.Spec] using hs
+
 theorem commitAndConstrain_output_eq (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
     (cells : MessageCells) (offset : ℕ) :
