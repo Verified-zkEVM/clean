@@ -454,6 +454,81 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
 -- `circuit_proof_start` whnf-times-out; the working start is `circuit_proof_start_core` then
 -- `dsimp only [main, circuit_norm] at h_holds`, projecting each child spec separately (see
 -- `doc/performance-problems.md`). This mirrors `NoteCommit.CommitAndConstrain`, also unfinished.
+/-- The head piece of a `PieceChunks` decomposition is a digit sum of `n+1` `K`-bit words,
+hence its `.val` is `< 2^(K·(n+1))` and equals that digit sum. -/
+private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
+    (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K) ∧
+      pieces[0] = ((∑ r ∈ Finset.range (n + 1),
+        ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) ∧
+      (∀ i, i < n + 1 → chunks.getD i 0 = ms i) ∧
+      Orchard.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
+  simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
+  obtain ⟨ms, hms, hpc, tailChunks, hchunks, hPC⟩ := h
+  subst hchunks
+  refine ⟨ms, hms, hpc, ?_, ?_⟩
+  · intro i hi
+    rw [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simpa using hi)]
+    simp only [List.getElem?_map, List.getElem?_range, hi, Option.map_some, Option.getD_some]
+  · rwa [List.drop_left' (by simp)]
+
+/-- The `Canonicity` canonical-slice spec gives exactly the indexed `commit_ivk` piece
+values consumed by the chunk bridge (same content as `commitIvkPieceValues_of_gate_spec`,
+spelled over the `Canonicity` cells). -/
+private theorem commitIvkPieceValues_of_canonicity_spec (row : Canonicity.Input Fp)
+    (hSpec : Canonicity.Spec row) :
+    CommitIvkPieceValues row.ak row.nk row.a row.b row.c row.d := by
+  simp only [Canonicity.Spec] at hSpec
+  obtain ⟨ha, hb0, hb1, hb2, hc, hd0, hd1, hbW, hdW⟩ := hSpec
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · rw [ha]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hbW, hb0, hb1, hb2]
+    simp only [bitrange, pow_zero, Nat.div_one]
+    push_cast; ring
+  · rw [hc]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hdW, hd0, hd1]
+    simp only [bitrange]
+    push_cast; ring
+
+open Orchard.Specs.Sinsemilla in
+/-- `2^(K·m) < PALLAS_BASE_CARD` for the message piece widths used here (`m ≤ 25`). -/
+private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
+    2 ^ (Orchard.Specs.Sinsemilla.K * m) < PALLAS_BASE_CARD := by
+  have hle : Orchard.Specs.Sinsemilla.K * m ≤ 250 := by
+    simp only [Orchard.Specs.Sinsemilla.K]; omega
+  exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hle)
+    (by norm_num [PALLAS_BASE_CARD])
+
+open Orchard.Specs.Sinsemilla in
+/-- From the head-piece digit data of a `PieceChunks` decomposition (`ms`, the cast-sum
+fact, and `chunks.getD i 0 = ms i` on the head segment), the piece value's `.val` is the
+digit sum, hence `< 2^(K·(n+1))`, and the `ZsFacts` running-sum cell at index `r ≤ n`
+equals `(piece.val / 2^(K·r) : Fp)`. -/
+private theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {ms : ℕ → ℕ}
+    (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K)
+    (hpc : piece = ((∑ r ∈ Finset.range (n + 1),
+      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp))
+    (hgetD : ∀ i, i < n + 1 → chunks.getD i 0 = ms i)
+    {r : ℕ} (hr : r ≤ n) :
+    ((∑ j ∈ Finset.range (n + 1 - r),
+        chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp)
+      = ((piece.val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+  have hpval : piece.val = ∑ r ∈ Finset.range (n + 1),
+      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) := by
+    rw [hpc, ZMod.val_natCast_of_lt
+      (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
+  -- rewrite the suffix-sum chunks to `ms`
+  have hsum : (∑ j ∈ Finset.range (n + 1 - r),
+      chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j))
+        = ∑ j ∈ Finset.range (n + 1 - r),
+          ms (r + j) * 2 ^ (Orchard.Specs.Sinsemilla.K * j) := by
+    apply Finset.sum_congr rfl
+    intro j hj
+    rw [Finset.mem_range] at hj
+    rw [hgetD (r + j) (by omega)]
+  rw [hsum, hpval, sum_suffix_div hms (n + 1) r (by omega)]
+
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
