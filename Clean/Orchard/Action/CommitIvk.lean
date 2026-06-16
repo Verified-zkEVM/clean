@@ -136,14 +136,21 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
     (input : ProverValue Input Fp) (ivk : Fp) (_ : ProverHint Fp) : Prop :=
   ProverCommitIvkRelation G Q R input ivk
 
--- TODO(commit-ivk-proofs): the two entry proofs are deferred. The `Gate` now delivers the
--- canonical bit slices of `ak`/`nk` directly (its lifted canonical-decomposition `Spec`), so
--- what remains is the entry-level *piece-chunks assembly*: turning those slices into
--- `Chain.PieceChunks [24,0,23,0] #v[a,b,c,d] (commitIvkChunks ak.val nk.val)` and threading
--- it through the `CommitDomain.WithZs` spec. This is the same assembly `Action.NoteCommit`
--- is building out (its `CommitAndConstrain` proofs are `sorry` for the same reason, and its
--- `noteCommitChunks_segment_*` / `…_eq_of_piece_digit_sums` helpers are still private + note-
--- specific). Discharge these by lifting that assembly into a reusable layer once it lands.
+-- TODO(commit-ivk-proofs): the supporting theory is complete and committed; only the entry
+-- integration remains. Available, proven building blocks:
+--  * the chunk bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`
+--    (`CommitIvkChunks.lean`): canonical indexed piece values → `chunks = commitIvkChunks`;
+--  * the lifted `Gate.circuit` (entry-provable decomposition-form Assumptions) → canonical
+--    bit slices `a = bitrange ak 0 250`, …, which are exactly those indexed piece values;
+--  * generic `Specs.Sinsemilla.sum_suffix_div` (ZsFacts cell `z13A = a.val/2^130`) and
+--    `running_sum_telescope` (CopyCheck decomposition `∃ lo<2^130, aPrime = lo + 2^130·z`).
+-- The remaining step is the glue: provide the gate Assumptions from the WithZs `ZsFacts`,
+-- the `CopyCheck` running sums and `WitnessShort` ranges, invoke `Gate.soundness`, and
+-- thread the hash relation. NOTE: a one-shot `circuit_proof_start` over the whole entry
+-- whnf-times-out (too many composed subcircuits); per `doc/performance-problems.md` the
+-- entry must first be FACTORED INTO SUBCIRCUITS (a `Commit` part doing WithZs + piece
+-- witnessing, and a `Canonicity` part doing the CopyCheck decompositions + gate), each with
+-- its own kernel-checked soundness/completeness.
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
