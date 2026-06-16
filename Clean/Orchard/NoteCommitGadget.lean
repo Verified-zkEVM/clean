@@ -2158,6 +2158,13 @@ private theorem formalAssertion_spec_of_soundness {Row : TypeMap} [ProvableType 
     Operations.forAllNoOffset, FormalAssertion.toSubcircuit_soundness] at h
   exact h.1 hAssumptions
 
+private theorem assertZero_eq_zero_of_soundness (env : Environment Ecc.Fp)
+    (e : Expression Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((assertZero e).operations offset)) :
+    Expression.eval env e = 0 := by
+  unfold ConstraintsHold.Soundness assertZero at h
+  exact h.1
+
 private theorem withHint_spec_of_soundness {Input Output : TypeMap}
     [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input Output)
