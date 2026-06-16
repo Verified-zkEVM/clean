@@ -49,29 +49,6 @@ structure Input (F : Type) where
   z14B2CPrime : F
 deriving ProvableStruct
 
-def bDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 16] [OfNat K 32]
-    (row : Input K) : K :=
-  row.bWhole - (row.b0 + row.b1 * 16 + row.b2 * 32)
-
-def dDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 512] (row : Input K) : K :=
-  row.dWhole - (row.d0 + row.d1 * 512)
-
-def akDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 250)]
-    [OfNat K (2 ^ 254)] (row : Input K) : K :=
-  row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) - row.ak
-
-def nkDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] [OfNat K (2 ^ 245)]
-    [OfNat K (2 ^ 254)] (row : Input K) : K :=
-  row.b2 + row.c * 32 + row.d0 * OfNat.ofNat (2 ^ 245) +
-    row.d1 * OfNat.ofNat (2 ^ 254) - row.nk
-
-def aPrimeCheck (row : Input (Expression Fp)) : Expression Fp :=
-  row.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP - row.aPrime
-
-def b2CPrimeCheck (row : Input (Expression Fp)) : Expression Fp :=
-  row.b2 + row.c * 32 + Expression.const ((2 ^ 140 : ℕ) : Fp) -
-    Expression.const Ecc.tP - row.b2CPrime
-
 def Spec (row : Input Fp) : Prop :=
   IsBool row.b1 ∧
     IsBool row.d1 ∧
@@ -93,17 +70,21 @@ def Spec (row : Input Fp) : Prop :=
 def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertBool row.b1
   assertBool row.d1
-  assertZero (bDecomposition row)
-  assertZero (dDecomposition row)
-  assertZero (akDecomposition row)
-  assertZero (nkDecomposition row)
+  assertZero (row.bWhole - (row.b0 + row.b1 * 16 + row.b2 * 32))
+  assertZero (row.dWhole - (row.d0 + row.d1 * 512))
+  assertZero (row.a + row.b0 * OfNat.ofNat (2 ^ 250) +
+    row.b1 * OfNat.ofNat (2 ^ 254) - row.ak)
+  assertZero (row.b2 + row.c * 32 + row.d0 * OfNat.ofNat (2 ^ 245) +
+    row.d1 * OfNat.ofNat (2 ^ 254) - row.nk)
   assertZero (row.b1 * row.b0)
   assertZero (row.b1 * row.z13A)
-  assertZero (aPrimeCheck row)
+  assertZero (row.a + Expression.const ((2 ^ 130 : ℕ) : Fp) -
+    Expression.const Ecc.tP - row.aPrime)
   assertZero (row.b1 * row.z13APrime)
   assertZero (row.d1 * row.d0)
   assertZero (row.d1 * row.z13C)
-  assertZero (b2CPrimeCheck row)
+  assertZero (row.b2 + row.c * 32 + Expression.const ((2 ^ 140 : ℕ) : Fp) -
+    Expression.const Ecc.tP - row.b2CPrime)
   assertZero (row.d1 * row.z14B2CPrime)
 
 def circuit : FormalAssertion Fp Input where
@@ -111,9 +92,7 @@ def circuit : FormalAssertion Fp Input where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, bDecomposition, dDecomposition, akDecomposition,
-      nkDecomposition, aPrimeCheck, b2CPrimeCheck,
-      Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_holds with
       ⟨hb1, hd1, hb, hd, hak, hnk, hb0, hz13A, haPrime, hz13APrime, hd0, hz13C,
         hb2CPrime, hz14B2CPrime⟩
@@ -126,9 +105,7 @@ def circuit : FormalAssertion Fp Input where
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hb2CPrime).symm,
       mul_eq_zero.mp hz14B2CPrime⟩
   completeness := by
-    circuit_proof_start [main, Spec, bDecomposition, dDecomposition, akDecomposition,
-      nkDecomposition, aPrimeCheck, b2CPrimeCheck,
-      Ecc.tP]
+    circuit_proof_start [Ecc.tP]
     rcases h_spec with
       ⟨hb1, hd1, hb, hd, hak, hnk, hb0, hz13A, haPrime, hz13APrime, hd0, hz13C,
         hb2CPrime, hz14B2CPrime⟩

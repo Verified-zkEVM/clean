@@ -36,7 +36,7 @@ Reference:
 Ports the `q_decompose` gate that connects the three Sinsemilla message pieces
 `a`, `b`, `c` to `(l, left, right)`. -/
 
-private theorem left_eq_of_add_neg_eq_zero {a b : Ecc.Fp} (h : a + -b = 0) : a = b :=
+private theorem left_eq_of_add_neg_eq_zero {a b : Fp} (h : a + -b = 0) : a = b :=
   sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
 
 def twoPow5 {K : Type} [OfNat K (2 ^ 5)] : K := OfNat.ofNat (2 ^ 5)
@@ -79,19 +79,19 @@ def rightCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K (2 ^ 5)]
     (row : Row K) : K :=
   row.b2 + row.cWhole * twoPow5 - row.rightNode
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   row.lWhole = a0 row ∧
   row.leftNode = row.z1A + (b0 row + row.b1 * twoPow10) * twoPow240 ∧
   row.rightNode = row.b2 + row.cWhole * twoPow5 ∧
   row.z1B = row.b1 + row.b2 * twoPow5
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (a0 row - row.lWhole)
   assertZero (leftCheck row)
   assertZero (rightCheck row)
   assertZero (b1B2Check row)
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE Decomposition check"
   main
   Spec := Spec
@@ -322,7 +322,7 @@ private theorem merkleChunks_eq {dA dB dC : ℕ → ℕ}
 /-! ### Field-level helpers -/
 
 private theorem natCast_inj_lt {a b : ℕ} (ha : a < 2 ^ 10) (hb : b < 2 ^ 10)
-    (h : (a : Ecc.Fp) = (b : Ecc.Fp)) : a = b := by
+    (h : (a : Fp) = (b : Fp)) : a = b := by
   have hp : (2 ^ 10 : ℕ) < PALLAS_BASE_CARD := by norm_num [PALLAS_BASE_CARD]
   have hv := congrArg ZMod.val h
   rwa [ZMod.val_natCast_of_lt (by omega), ZMod.val_natCast_of_lt (by omega)] at hv
@@ -339,27 +339,27 @@ set_option exponentiation.threshold 600 in
 private theorem assemble {msA msB msC : ℕ → ℕ}
     (hmsA : ∀ j, msA j < 2 ^ K) (hmsB : ∀ j, msB j < 2 ^ K) (hmsC : ∀ j, msC j < 2 ^ K)
     {l b1n b2n : ℕ} (hl : l < 2 ^ 10) (hb1n : b1n < 2 ^ 5) (hb2n : b2n < 2 ^ 5)
-    {aCell bCell cCell b1Cell b2Cell z1A z1B left right : Ecc.Fp}
-    (haval : aCell = ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hbval : bCell = ((∑ r ∈ Finset.range 2, msB r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hcval : cCell = ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hb1 : b1Cell = ((b1n : ℕ) : Ecc.Fp)) (hb2 : b2Cell = ((b2n : ℕ) : Ecc.Fp))
-    (hz1A : z1A = ((∑ j ∈ Finset.range 24, msA (j + 1) * 2 ^ (K * j) : ℕ) : Ecc.Fp))
-    (hz1B : z1B = ((msB 1 : ℕ) : Ecc.Fp))
-    (hg1 : (l : Ecc.Fp) = aCell - z1A * twoPow10)
+    {aCell bCell cCell b1Cell b2Cell z1A z1B left right : Fp}
+    (haval : aCell = ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Fp))
+    (hbval : bCell = ((∑ r ∈ Finset.range 2, msB r * 2 ^ (K * r) : ℕ) : Fp))
+    (hcval : cCell = ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Fp))
+    (hb1 : b1Cell = ((b1n : ℕ) : Fp)) (hb2 : b2Cell = ((b2n : ℕ) : Fp))
+    (hz1A : z1A = ((∑ j ∈ Finset.range 24, msA (j + 1) * 2 ^ (K * j) : ℕ) : Fp))
+    (hz1B : z1B = ((msB 1 : ℕ) : Fp))
+    (hg1 : (l : Fp) = aCell - z1A * twoPow10)
     (hg2 : left = z1A + (bCell - z1B * twoPow10 + b1Cell * twoPow10) * twoPow240)
     (hg3 : right = b2Cell + cCell * twoPow5)
     (hg4 : z1B = b1Cell + b2Cell * twoPow5) :
     ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
-      ((lv : ℕ) : Ecc.Fp) = left ∧ ((rv : ℕ) : Ecc.Fp) = right ∧
+      ((lv : ℕ) : Fp) = left ∧ ((rv : ℕ) : Fp) = right ∧
       merkleChunks l lv rv
         = (List.range 25).map msA
           ++ ((List.range 2).map msB ++ (List.range 25).map msC) := by
   subst haval hbval hcval hb1 hb2 hz1A hz1B
   have hK : Orchard.Specs.Sinsemilla.K = 10 := rfl
-  have e5 : (twoPow5 : Ecc.Fp) = ((2 ^ 5 : ℕ) : Ecc.Fp) := by norm_num [twoPow5]
-  have e10 : (twoPow10 : Ecc.Fp) = ((2 ^ 10 : ℕ) : Ecc.Fp) := by norm_num [twoPow10]
-  have e240 : (twoPow240 : Ecc.Fp) = ((2 ^ 240 : ℕ) : Ecc.Fp) := by
+  have e5 : (twoPow5 : Fp) = ((2 ^ 5 : ℕ) : Fp) := by norm_num [twoPow5]
+  have e10 : (twoPow10 : Fp) = ((2 ^ 10 : ℕ) : Fp) := by norm_num [twoPow10]
+  have e240 : (twoPow240 : Fp) = ((2 ^ 240 : ℕ) : Fp) := by
     norm_num [twoPow240]
   rw [e10] at hg1
   rw [e10, e240] at hg2
@@ -487,11 +487,11 @@ set_option exponentiation.threshold 600 in
 `MerkleCRH` message. -/
 private theorem honest_pieces {l lv rv : ℕ} (hl : l < 2 ^ 10)
     (hlv : lv < 2 ^ 255) (hrv : rv < 2 ^ 255)
-    {aCell bCell cCell : Ecc.Fp}
-    (haw : aCell = ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Ecc.Fp))
+    {aCell bCell cCell : Fp}
+    (haw : aCell = ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp))
     (hbw : bCell = ((lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250)
-      + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Ecc.Fp))
-    (hcw : cCell = ((rv / 2 ^ 5 : ℕ) : Ecc.Fp)) :
+      + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Fp))
+    (hcw : cCell = ((rv / 2 ^ 5 : ℕ) : Fp)) :
     (ZMod.val aCell < 2 ^ (K * 25) ∧ ZMod.val bCell < 2 ^ (K * 2)
       ∧ ZMod.val cCell < 2 ^ (K * 25))
     ∧ List.map (pieceWord aCell) (List.range 25)
@@ -500,14 +500,14 @@ private theorem honest_pieces {l lv rv : ℕ} (hl : l < 2 ^ 10)
         = merkleChunks l lv rv := by
   subst haw hbw hcw
   have hK : Orchard.Specs.Sinsemilla.K = 10 := rfl
-  have hvalA : ZMod.val ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Ecc.Fp)
+  have hvalA : ZMod.val ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp)
       = l + 2 ^ 10 * (lv % 2 ^ 240) :=
     ZMod.val_natCast_of_lt (lt_trans (by omega) two_pow_250_lt_p)
   have hvalB : ZMod.val ((lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250)
-        + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Ecc.Fp)
+        + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Fp)
       = lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250) + 2 ^ 15 * (rv % 2 ^ 5) :=
     ZMod.val_natCast_of_lt (lt_trans (by omega) two_pow_250_lt_p)
-  have hvalC : ZMod.val ((rv / 2 ^ 5 : ℕ) : Ecc.Fp) = rv / 2 ^ 5 :=
+  have hvalC : ZMod.val ((rv / 2 ^ 5 : ℕ) : Fp) = rv / 2 ^ 5 :=
     ZMod.val_natCast_of_lt (lt_trans (by omega) two_pow_250_lt_p)
   refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
   · rw [hvalA, hK]
@@ -519,53 +519,53 @@ private theorem honest_pieces {l lv rv : ℕ} (hl : l < 2 ^ 10)
   · rw [honest_chunks hl hlv hrv]
     congr 1
     · exact List.map_congr_left fun j _ => by
-        show ZMod.val ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Ecc.Fp)
+        show ZMod.val ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp)
           / 2 ^ (K * j) % 2 ^ K = _
         rw [hvalA]
     congr 1
     · exact List.map_congr_left fun j _ => by
         show ZMod.val ((lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250)
-            + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Ecc.Fp) / 2 ^ (K * j) % 2 ^ K = _
+            + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Fp) / 2 ^ (K * j) % 2 ^ K = _
         rw [hvalB]
     · exact List.map_congr_left fun j _ => by
-        show ZMod.val ((rv / 2 ^ 5 : ℕ) : Ecc.Fp) / 2 ^ (K * j) % 2 ^ K = _
+        show ZMod.val ((rv / 2 ^ 5 : ℕ) : Fp) / 2 ^ (K * j) % 2 ^ K = _
         rw [hvalC]
 
 set_option exponentiation.threshold 600 in
 /-- The decomposition-gate equations hold on the honest witness values. -/
 private theorem honest_gate {l lv rv : ℕ} (hl : l < 2 ^ 10)
     (hlv : lv < 2 ^ 255) (_hrv : rv < 2 ^ 255)
-    {aCell bCell b1Cell b2Cell cCell z1A z1B left right : Ecc.Fp}
-    (haw : aCell = ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Ecc.Fp))
-    (hb1w : b1Cell = ((lv / 2 ^ 250 : ℕ) : Ecc.Fp))
-    (hb2w : b2Cell = ((rv % 2 ^ 5 : ℕ) : Ecc.Fp))
+    {aCell bCell b1Cell b2Cell cCell z1A z1B left right : Fp}
+    (haw : aCell = ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp))
+    (hb1w : b1Cell = ((lv / 2 ^ 250 : ℕ) : Fp))
+    (hb2w : b2Cell = ((rv % 2 ^ 5 : ℕ) : Fp))
     (hbw : bCell = ((lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250)
-      + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Ecc.Fp))
-    (hcw : cCell = ((rv / 2 ^ 5 : ℕ) : Ecc.Fp))
+      + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Fp))
+    (hcw : cCell = ((rv / 2 ^ 5 : ℕ) : Fp))
     (hz1A : z1A = pieceZ aCell 1) (hz1B : z1B = pieceZ bCell 1)
-    (hleft : ((lv : ℕ) : Ecc.Fp) = left) (hright : ((rv : ℕ) : Ecc.Fp) = right) :
-    ((l : ℕ) : Ecc.Fp) = aCell - z1A * twoPow10
+    (hleft : ((lv : ℕ) : Fp) = left) (hright : ((rv : ℕ) : Fp) = right) :
+    ((l : ℕ) : Fp) = aCell - z1A * twoPow10
       ∧ left = z1A + (bCell - z1B * twoPow10 + b1Cell * twoPow10) * twoPow240
       ∧ right = b2Cell + cCell * twoPow5
       ∧ z1B = b1Cell + b2Cell * twoPow5 := by
-  have e5 : (twoPow5 : Ecc.Fp) = ((2 ^ 5 : ℕ) : Ecc.Fp) := by norm_num [twoPow5]
-  have e10 : (twoPow10 : Ecc.Fp) = ((2 ^ 10 : ℕ) : Ecc.Fp) := by norm_num [twoPow10]
-  have e240 : (twoPow240 : Ecc.Fp) = ((2 ^ 240 : ℕ) : Ecc.Fp) := by
+  have e5 : (twoPow5 : Fp) = ((2 ^ 5 : ℕ) : Fp) := by norm_num [twoPow5]
+  have e10 : (twoPow10 : Fp) = ((2 ^ 10 : ℕ) : Fp) := by norm_num [twoPow10]
+  have e240 : (twoPow240 : Fp) = ((2 ^ 240 : ℕ) : Fp) := by
     norm_num [twoPow240]
-  have hvalA : ZMod.val ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Ecc.Fp)
+  have hvalA : ZMod.val ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp)
       = l + 2 ^ 10 * (lv % 2 ^ 240) :=
     ZMod.val_natCast_of_lt (lt_trans (by omega) two_pow_250_lt_p)
   have hvalB : ZMod.val ((lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250)
-        + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Ecc.Fp)
+        + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Fp)
       = lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250) + 2 ^ 15 * (rv % 2 ^ 5) :=
     ZMod.val_natCast_of_lt (lt_trans (by omega) two_pow_250_lt_p)
-  have hzA : pieceZ aCell 1 = ((lv % 2 ^ 240 : ℕ) : Ecc.Fp) := by
+  have hzA : pieceZ aCell 1 = ((lv % 2 ^ 240 : ℕ) : Fp) := by
     simp only [pieceZ, haw, hvalA]
     congr 1
     rw [show Orchard.Specs.Sinsemilla.K * 1 = 10 from rfl]
     omega
   have hzB : pieceZ bCell 1
-      = ((lv / 2 ^ 250 + 2 ^ 5 * (rv % 2 ^ 5) : ℕ) : Ecc.Fp) := by
+      = ((lv / 2 ^ 250 + 2 ^ 5 * (rv % 2 ^ 5) : ℕ) : Fp) := by
     simp only [pieceZ, hbw, hvalB]
     congr 1
     rw [show Orchard.Specs.Sinsemilla.K * 1 = 10 from rfl]
@@ -578,12 +578,12 @@ private theorem honest_gate {l lv rv : ℕ} (hl : l < 2 ^ 10)
   · rw [hz1A, hzA, hbw, hz1B, hzB, hb1w, e10, e240]
     have hnat : lv = lv % 2 ^ 240 + 2 ^ 240 * (lv / 2 ^ 240 % 2 ^ 10)
         + 2 ^ 250 * (lv / 2 ^ 250) := by omega
-    have hc := congrArg (Nat.cast (R := Ecc.Fp)) hnat
+    have hc := congrArg (Nat.cast (R := Fp)) hnat
     push_cast at hc ⊢
     linear_combination hc
   · rw [hb2w, hcw, e5]
     have hnat : rv = rv % 2 ^ 5 + 2 ^ 5 * (rv / 2 ^ 5) := by omega
-    have hc := congrArg (Nat.cast (R := Ecc.Fp)) hnat
+    have hc := congrArg (Nat.cast (R := Fp)) hnat
     push_cast at hc ⊢
     linear_combination hc
   · rw [hz1B, hzB, hb1w, hb2w, e5]
@@ -602,17 +602,17 @@ structure Input (F : Type) where
 deriving ProvableStruct
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
-    (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Expression Ecc.Fp) := do
+    (input : Var Input Fp) : Circuit Fp (Expression Fp) := do
   -- witness the three message pieces and the short sub-pieces b_1, b_2
   let a ← witnessField fun env =>
-    ((l + 2 ^ 10 * ((env input.left).val % 2 ^ 240) : ℕ) : Ecc.Fp)
-  let b1 ← witnessField fun env => (((env input.left).val / 2 ^ 250 : ℕ) : Ecc.Fp)
-  let b2 ← witnessField fun env => (((env input.right).val % 2 ^ 5 : ℕ) : Ecc.Fp)
+    ((l + 2 ^ 10 * ((env input.left).val % 2 ^ 240) : ℕ) : Fp)
+  let b1 ← witnessField fun env => (((env input.left).val / 2 ^ 250 : ℕ) : Fp)
+  let b2 ← witnessField fun env => (((env input.right).val % 2 ^ 5 : ℕ) : Fp)
   let b ← witnessField fun env =>
     (((env input.left).val / 2 ^ 240 % 2 ^ 10
       + 2 ^ 10 * ((env input.left).val / 2 ^ 250)
-      + 2 ^ 15 * ((env input.right).val % 2 ^ 5) : ℕ) : Ecc.Fp)
-  let c ← witnessField fun env => (((env input.right).val / 2 ^ 5 : ℕ) : Ecc.Fp)
+      + 2 ^ 15 * ((env input.right).val % 2 ^ 5) : ℕ) : Fp)
+  let c ← witnessField fun env => (((env input.right).val / 2 ^ 5 : ℕ) : Fp)
   -- constrain b_1 and b_2 to 5 bits
   Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b1 }
   Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b2 }
@@ -624,7 +624,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
     leftNode := input.left, rightNode := input.right,
     z1A := out.z1s[0], z1B := out.z1s[1],
     b1 := b1, b2 := b2,
-    lWhole := Expression.const (l : Ecc.Fp) }
+    lWhole := Expression.const (l : Fp) }
   return out.point.x
 
 -- Hand-written elaboration data (NOT `elaborate_circuit`): the generated all-in-one
@@ -633,7 +633,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
 -- an explicit `localLength`, keeps each kernel check small.
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) :
-    ElaboratedCircuit Ecc.Fp Input field (main G Q hQ l) where
+    ElaboratedCircuit Fp Input field (main G Q hQ l) where
   localLength _ := 269
   localLength_eq := by
     intro input offset
@@ -650,31 +650,31 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     try trivial
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
-    (input : Value Input Ecc.Fp) (output : Value field Ecc.Fp)
-    (_ : ProverData Ecc.Fp) : Prop :=
+    (input : Value Input Fp) (output : Value field Fp)
+    (_ : ProverData Fp) : Prop :=
   ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
-    ((lv : ℕ) : Ecc.Fp) = input.left ∧ ((rv : ℕ) : Ecc.Fp) = input.right ∧
+    ((lv : ℕ) : Fp) = input.left ∧ ((rv : ℕ) : Fp) = input.right ∧
     ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q (merkleChunks l lv rv) = some B →
       output = B.x
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
-    (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
+    (input : ProverValue Input Fp) (_ : ProverData Fp)
+    (_ : ProverHint Fp) : Prop :=
   ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-    (merkleChunks l (ZMod.val (show Ecc.Fp from input.left))
-      (ZMod.val (show Ecc.Fp from input.right))) = some B
+    (merkleChunks l (ZMod.val (show Fp from input.left))
+      (ZMod.val (show Fp from input.right))) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
-    (input : ProverValue Input Ecc.Fp) (output : ProverValue field Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
+    (input : ProverValue Input Fp) (output : ProverValue field Fp)
+    (_ : ProverHint Fp) : Prop :=
   ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-      (merkleChunks l (ZMod.val (show Ecc.Fp from input.left))
-        (ZMod.val (show Ecc.Fp from input.right))) = some B →
+      (merkleChunks l (ZMod.val (show Fp from input.left))
+        (ZMod.val (show Fp from input.right))) = some B →
     output = B.x
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
-    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ l)
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ l)
       (fun _ _ => True) (Spec G Q l) := by
   circuit_proof_start [main, Spec, Entry.circuit, Entry.Spec,
     Merkle.Gate.circuit, Merkle.Gate.Spec, Merkle.Gate.a0, Merkle.Gate.b0,
@@ -682,9 +682,9 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     Utilities.LookupRangeCheck.shortRangeSpec,
     Chain.PieceChunks]
   obtain ⟨h_b1, h_b2, ⟨chunks, hPC, hZ1, hfun⟩, hg1, hg2, hg3, hg4⟩ := h_holds
-  obtain ⟨b1n, hb1n, hb1⟩ : ∃ b1n, b1n < 2 ^ 5 ∧ env.get (i₀ + 1) = ((b1n : ℕ) : Ecc.Fp) :=
+  obtain ⟨b1n, hb1n, hb1⟩ : ∃ b1n, b1n < 2 ^ 5 ∧ env.get (i₀ + 1) = ((b1n : ℕ) : Fp) :=
     ⟨_, h_b1, (ZMod.natCast_zmod_val _).symm⟩
-  obtain ⟨b2n, hb2n, hb2⟩ : ∃ b2n, b2n < 2 ^ 5 ∧ env.get (i₀ + 1 + 1) = ((b2n : ℕ) : Ecc.Fp) :=
+  obtain ⟨b2n, hb2n, hb2⟩ : ∃ b2n, b2n < 2 ^ 5 ∧ env.get (i₀ + 1 + 1) = ((b2n : ℕ) : Fp) :=
     ⟨_, h_b2, (ZMod.natCast_zmod_val _).symm⟩
   obtain ⟨msA, hmsA, haval, t1, rfl, msB, hmsB, hbval, t2, rfl,
     msC, hmsC, hcval, t3, rfl, rfl⟩ := hPC
@@ -698,11 +698,11 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   simp only [heo] at hz1A hz1B hfun hg1 hg2 hg3 hg4
   simp only [List.append_nil] at hfun hz1A hz1B
   have haval' : env.get i₀
-      = ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Ecc.Fp) := haval
+      = ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Fp) := haval
   have hbval' : env.get (i₀ + 1 + 1 + 1)
-      = ((∑ r ∈ Finset.range 2, msB r * 2 ^ (K * r) : ℕ) : Ecc.Fp) := hbval
+      = ((∑ r ∈ Finset.range 2, msB r * 2 ^ (K * r) : ℕ) : Fp) := hbval
   have hcval' : env.get (i₀ + 1 + 1 + 1 + 1)
-      = ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Ecc.Fp) := hcval
+      = ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Fp) := hcval
   rw [Chain.z1Facts_head_sum] at hz1A
   simp only [Chain.chunks_drop_append, Chain.z1Facts_head_sum] at hz1B
   simp only [Finset.sum_range_one, Nat.mul_zero, pow_zero, Nat.mul_one, Vector.getElem_map]
@@ -718,7 +718,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
-    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ l)
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ l)
       (ProverAssumptions G Q l) (ProverSpec G Q l) := by
   circuit_proof_start [main, ProverSpec, ProverAssumptions, Entry.circuit,
     Entry.ProverAssumptions, Entry.ProverSpec, Merkle.Gate.circuit, Merkle.Gate.Spec,
@@ -784,7 +784,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
-    GeneralFormalCircuit.WithHint Ecc.Fp Input field where
+    GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ l
   Spec := Spec G Q l
   ProverAssumptions := ProverAssumptions G Q l
@@ -797,14 +797,14 @@ end HashLayer
 def depth : ℕ := 32
 
 def MerkleStep (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
-    (node node' : Ecc.Fp) : Prop :=
+    (node node' : Fp) : Prop :=
   ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
-    ((lv : Ecc.Fp) = node ∨ (rv : Ecc.Fp) = node) ∧
+    ((lv : Fp) = node ∨ (rv : Fp) = node) ∧
     ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (merkleChunks l lv rv) = some B →
       node' = B.x
 
 def MerkleRoot (G : Generators) (Q : SWPoint Pallas.curve) :
-    ℕ → Ecc.Fp → ℕ → Ecc.Fp → Prop
+    ℕ → Fp → ℕ → Fp → Prop
   | _, node, 0, root => root = node
   | l, node, k + 1, root =>
     ∃ mid, MerkleStep G Q l node mid ∧ MerkleRoot G Q (l + 1) mid k root
@@ -817,18 +817,18 @@ structure Input (F : Type) where
   posBit : Unconstrained Bool F
 deriving CircuitType
 
-instance : Inhabited (Var Input Ecc.Fp) :=
+instance : Inhabited (Var Input Fp) :=
   ⟨{ node := default, sibling := fun _ => default, posBit := fun _ => default }⟩
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ) (hl : l < 2 ^ 10)
-    (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) := do
+    (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let sw ← Utilities.CondSwap.Swap.circuit
     { a := input.node, b := input.sibling, swap := input.posBit }
   HashLayer.circuit G Q hQ l hl { left := sw.aSwapped, right := sw.bSwapped }
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
-    ElaboratedCircuit Ecc.Fp Input field (main G Q hQ l hl) where
+    ElaboratedCircuit Fp Input field (main G Q hQ l hl) where
   localLength _ := 274
   localLength_eq := by
     intro input offset
@@ -843,13 +843,13 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     try trivial
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
-    (input : Value Input Ecc.Fp) (output : Value field Ecc.Fp)
-    (_ : ProverData Ecc.Fp) : Prop :=
+    (input : Value Input Fp) (output : Value field Fp)
+    (_ : ProverData Fp) : Prop :=
   MerkleStep G Q l input.node output
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
-    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ l hl)
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ l hl)
       (fun _ _ => True) (Spec G Q l) := by
   circuit_proof_start [main, Spec, Utilities.CondSwap.Swap.circuit,
     Utilities.CondSwap.Swap.Spec, HashLayer.circuit, HashLayer.Spec, MerkleStep]
@@ -865,23 +865,23 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 /-- The swapped pair (left, right) hashed by this layer, as `MerkleCRH` chunks: the
 position bit selects which of `node`/`sibling` is the left child. -/
-def proverChunks (l : ℕ) (input : ProverValue Input Ecc.Fp) : List ℕ :=
+def proverChunks (l : ℕ) (input : ProverValue Input Fp) : List ℕ :=
   merkleChunks l
-    (ZMod.val (show Ecc.Fp from if input.posBit then input.sibling else input.node))
-    (ZMod.val (show Ecc.Fp from if input.posBit then input.node else input.sibling))
+    (ZMod.val (show Fp from if input.posBit then input.sibling else input.node))
+    (ZMod.val (show Fp from if input.posBit then input.node else input.sibling))
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
-    (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+    (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   ∃ B, Specs.Sinsemilla.hashToPoint G.S Q (proverChunks l input) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
-    (input : ProverValue Input Ecc.Fp) (output : ProverValue field Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
+    (input : ProverValue Input Fp) (output : ProverValue field Fp)
+    (_ : ProverHint Fp) : Prop :=
   ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (proverChunks l input) = some B → output = B.x
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
-    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ l hl)
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ l hl)
       (ProverAssumptions G Q l) (ProverSpec G Q l) := by
   circuit_proof_start [main, ProverSpec, ProverAssumptions, proverChunks,
     Utilities.CondSwap.Swap.circuit, Utilities.CondSwap.Swap.ProverSpec,
@@ -896,7 +896,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
-    GeneralFormalCircuit.WithHint Ecc.Fp Input field where
+    GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ l hl
   Spec := Spec G Q l
   ProverAssumptions := ProverAssumptions G Q l
@@ -908,7 +908,7 @@ end Layer
 
 /-- Forward induction: a chain of `MerkleStep`s assembles into a `MerkleRoot`. -/
 private theorem merkleRoot_of_steps (G : Generators) (Q : SWPoint Pallas.curve)
-    (f : ℕ → Ecc.Fp) (l : ℕ) :
+    (f : ℕ → Fp) (l : ℕ) :
     ∀ k, (∀ i, i < k → MerkleStep G Q (l + i) (f i) (f (i + 1))) →
       MerkleRoot G Q l (f 0) k (f k) := by
   intro k
@@ -933,19 +933,19 @@ structure Input (F : Type) where
   pos : Unconstrained (Vector Bool 32) F
 deriving CircuitType
 
-instance : Inhabited (Var Input Ecc.Fp) :=
+instance : Inhabited (Var Input Fp) :=
   ⟨{ leaf := default, path := fun _ => default, pos := fun _ => default }⟩
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) :=
+    (input : Var Input Fp) : Circuit Fp (Var field Fp) :=
   Circuit.foldl (.finRange 32) input.leaf
     (fun node i => Layer.circuit G Q hQ i.val (by omega)
       { node := node,
-        sibling := fun env => (show Vector Ecc.Fp 32 from input.path env)[i],
+        sibling := fun env => (show Vector Fp 32 from input.path env)[i],
         posBit := fun env => (show Vector Bool 32 from input.pos env)[i] })
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
-    ElaboratedCircuit Ecc.Fp Input field (main G Q hQ) where
+    ElaboratedCircuit Fp Input field (main G Q hQ) where
   localLength _ := 32 * 274
   localLength_eq := by
     intro input offset
@@ -974,12 +974,12 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
     try trivial
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve)
-    (input : Value Input Ecc.Fp) (output : Value field Ecc.Fp)
-    (_ : ProverData Ecc.Fp) : Prop :=
+    (input : Value Input Fp) (output : Value field Fp)
+    (_ : ProverData Fp) : Prop :=
   MerkleRoot G Q 0 input.leaf depth output
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
-    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ)
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ)
       (fun _ _ => True) (Spec G Q) := by
   circuit_proof_start [main, Spec]
   obtain ⟨h0, hstep⟩ := h_holds
@@ -990,7 +990,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
   -- `rfl` (the kernel reduces the output lazily, ignoring the discarded fields), which
   -- is far cheaper than a `simp` traversal over the large fold expressions.
   have hpf : (0 : ℕ) < 2 ^ 10 := by norm_num
-  have hlen : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Ecc.Fp),
+  have hlen : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Fp),
       (Layer.circuit G Q hQ l hl).localLength inp = 274 := fun _ _ _ => rfl
   -- `bridge` is the key kernel-cheap rewrite. The per-layer output is a pure offset
   -- reference, so as a *value* it is independent of layer index, input record and
@@ -999,13 +999,13 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
   -- and every *application* is mere type instantiation, so no concrete fold output is
   -- ever reduced (which is what blew the budget). Offset gaps are discharged purely at
   -- the `ℕ` level via `hlen`, again touching no output subterm.
-  have bridge : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Ecc.Fp) (o₁ o₂ : ℕ),
+  have bridge : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Fp) (o₁ o₂ : ℕ),
       o₁ = o₂ →
       Expression.eval env ((Layer.circuit G Q hQ l hl).output inp o₁)
         = Expression.eval env ((Layer.circuit G Q hQ 0 hpf).output default o₂) := by
     intro l hl inp o₁ o₂ h; subst h; rfl
   -- state function: f 0 = leaf, f (j+1) = canonical output value at offset i₀ + j*274
-  let f : ℕ → Ecc.Fp := fun n => match n with
+  let f : ℕ → Fp := fun n => match n with
     | 0 => input_leaf
     | j + 1 => Expression.eval env
         ((Layer.circuit G Q hQ 0 hpf).output default (i₀ + j * 274))
@@ -1034,31 +1034,31 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
 /-- The honest running node after `k` layers (`none` if any layer hash is undefined).
 Index-based to mirror the circuit's `Circuit.foldl`. -/
 noncomputable def honestNode (G : Generators) (Q : SWPoint Pallas.curve)
-    (input : ProverValue Input Ecc.Fp) : ℕ → Option Ecc.Fp
-  | 0 => some (show Ecc.Fp from input.leaf)
+    (input : ProverValue Input Fp) : ℕ → Option Fp
+  | 0 => some (show Fp from input.leaf)
   | k + 1 =>
     if hk : k < 32 then
       (honestNode G Q input k).bind fun node =>
         (Specs.Sinsemilla.hashToPoint G.S Q
           (Layer.proverChunks k
             { node := node,
-              sibling := (show Vector Ecc.Fp 32 from input.path)[k]'(by omega),
+              sibling := (show Vector Fp 32 from input.path)[k]'(by omega),
               posBit := (show Vector Bool 32 from input.pos)[k]'(by omega) })).map (·.x)
     else none
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
-    (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+    (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   (honestNode G Q input 32).isSome
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve)
-    (input : ProverValue Input Ecc.Fp) (output : ProverValue field Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
-  ∀ root, honestNode G Q input 32 = some root → (show Ecc.Fp from output) = root
+    (input : ProverValue Input Fp) (output : ProverValue field Fp)
+    (_ : ProverHint Fp) : Prop :=
+  ∀ root, honestNode G Q input 32 = some root → (show Fp from output) = root
 
 /-- `honestNode` is downward-monotone in success: if it succeeds after `k+1` layers, it
 already succeeds after `k`. -/
 theorem honestNode_isSome_of_succ (G : Generators) (Q : SWPoint Pallas.curve)
-    (input : ProverValue Input Ecc.Fp) (k : ℕ)
+    (input : ProverValue Input Fp) (k : ℕ)
     (h : (honestNode G Q input (k + 1)).isSome) : (honestNode G Q input k).isSome := by
   rw [honestNode] at h
   split at h
@@ -1068,7 +1068,7 @@ theorem honestNode_isSome_of_succ (G : Generators) (Q : SWPoint Pallas.curve)
   · simp at h
 
 theorem honestNode_isSome_le (G : Generators) (Q : SWPoint Pallas.curve)
-    (input : ProverValue Input Ecc.Fp) {i j : ℕ} (hij : i ≤ j)
+    (input : ProverValue Input Fp) {i j : ℕ} (hij : i ≤ j)
     (h : (honestNode G Q input j).isSome) : (honestNode G Q input i).isSome := by
   induction j with
   | zero => rw [Nat.le_zero.mp hij]; exact h
@@ -1079,27 +1079,27 @@ theorem honestNode_isSome_le (G : Generators) (Q : SWPoint Pallas.curve)
       rwa [this]
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
-    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ)
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ)
       (ProverAssumptions G Q) (ProverSpec G Q) := by
   circuit_proof_start [main, ProverSpec, ProverAssumptions, Layer.circuit,
     Layer.ProverAssumptions, Layer.ProverSpec, Layer.proverChunks]
   obtain ⟨hL0, hLstep⟩ := h_env
   have hpf : (0 : ℕ) < 2 ^ 10 := by norm_num
-  have hlen : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Ecc.Fp),
+  have hlen : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Fp),
       (Layer.circuit G Q hQ l hl).localLength inp = 274 := fun _ _ _ => rfl
   -- output-value canonicalization (see soundness `bridge`): independent of layer / input
   -- record / proof, with the offset gap folded into a ℕ equation.
-  have bridge : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Ecc.Fp) (o₁ o₂ : ℕ),
+  have bridge : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Fp) (o₁ o₂ : ℕ),
       o₁ = o₂ →
       Expression.eval env.toEnvironment (Layer.main G Q hQ l hl inp o₁).1
         = Expression.eval env.toEnvironment (Layer.main G Q hQ 0 hpf default o₂).1 := by
     intro l hl inp o₁ o₂ h; subst h; rfl
   -- the canonical running node after `n` layers
-  let acc : ℕ → Ecc.Fp := fun n => match n with
+  let acc : ℕ → Fp := fun n => match n with
     | 0 => input_leaf
     | k + 1 => Expression.eval env.toEnvironment
         (Layer.main G Q hQ 0 hpf default (i₀ + k * 274)).1
-  set I : ProverValue Input Ecc.Fp := { leaf := input_leaf, path := input_path, pos := input_pos }
+  set I : ProverValue Input Fp := { leaf := input_leaf, path := input_path, pos := input_pos }
   -- the chunk list hashed at layer `k` with running node `acc k`
   have key : ∀ k, k ≤ 32 → honestNode G Q I k = some (acc k) := by
     intro k
@@ -1112,7 +1112,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
       -- honestNode (k+1) reduces to the layer-k hash, mapped to its x-coordinate
       have hred : honestNode G Q I (k + 1) = (Specs.Sinsemilla.hashToPoint G.S Q
           (Layer.proverChunks k
-            { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk',
+            { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk',
               posBit := (show Vector Bool 32 from I.pos)[k]'hk' })).map (·.x) := by
         rw [honestNode, dif_pos hk', hik]; rfl
       have hsome : (honestNode G Q I (k + 1)).isSome :=
@@ -1120,7 +1120,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
       rw [hred] at hsome ⊢
       -- the layer-k hash exists
       set chunks : List ℕ := Layer.proverChunks k
-        { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk',
+        { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk',
           posBit := (show Vector Bool 32 from I.pos)[k]'hk' } with hchunks
       obtain ⟨B, hB⟩ : ∃ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B := by
         rcases h : Specs.Sinsemilla.hashToPoint G.S Q chunks with _ | B
@@ -1147,17 +1147,17 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
   -- each layer's hash exists (the running node is the honest one, via `key`)
   have hAsm : ∀ k (hk : k < 32), ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
       (Layer.proverChunks k
-        { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk,
+        { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk }) = some B := by
     intro k hk
     have h1 : (Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
-        { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk,
+        { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk })).map (·.x) = some (acc (k + 1)) := by
       have hk1 := key (k + 1) (by omega)
       rw [honestNode, dif_pos hk, key k (by omega)] at hk1
       exact hk1
     rcases hh : Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
-        { node := acc k, sibling := (show Vector Ecc.Fp 32 from I.path)[k]'hk,
+        { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk }) with _ | B
     · rw [hh] at h1; simp at h1
     · exact ⟨B, rfl⟩
@@ -1180,7 +1180,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
     exact bridge 31 (by omega) _ _ _ rfl
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
-    GeneralFormalCircuit.WithHint Ecc.Fp Input field where
+    GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ
   elaborated := elaborated G Q hQ
   Spec := Spec G Q

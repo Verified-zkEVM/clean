@@ -33,30 +33,26 @@ structure Row (F : Type) where
   doubleAndAdd : DoubleAndAddRow F
 deriving ProvableStruct
 
-def Params.toExpr (params : Params Ecc.Fp) :
-    Params (Expression Ecc.Fp) where
+def Params.toExpr (params : Params Fp) :
+    Params (Expression Fp) where
   yQ := params.yQ
 
-def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2]
-    (params : Params K) (row : Row K) : K :=
-  2 * params.yQ - DoubleAndAdd.yA row.doubleAndAdd
-
-def Spec (params : Params Ecc.Fp) (row : Row Ecc.Fp) : Prop :=
+def Spec (params : Params Fp) (row : Row Fp) : Prop :=
   DoubleAndAdd.yA row.doubleAndAdd = 2 * params.yQ
 
-def main (params : Params Ecc.Fp)
-    (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (poly params.toExpr row)
+def main (params : Params Fp)
+    (row : Var Row Fp) : Circuit Fp Unit := do
+  assertZero (2 * params.toExpr.yQ - DoubleAndAdd.yA row.doubleAndAdd)
 
-def circuit (params : Params Ecc.Fp) : FormalAssertion Ecc.Fp Row where
+def circuit (params : Params Fp) : FormalAssertion Fp Row where
   name := "GATE Initial y_Q"
   main := main params
   Spec := Spec params
   soundness := by
-    circuit_proof_start [main, Spec, poly, Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
     exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h_holds)).symm
   completeness := by
-    circuit_proof_start [main, Spec, poly, Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
     simp_all [sub_eq_add_neg]
 
 end InitialYQ
@@ -72,16 +68,12 @@ structure Row (F : Type) where
   next : DoubleAndAddRow F
 deriving ProvableStruct
 
-def Params.toExpr (params : Params Ecc.Fp) :
-    Params (Expression Ecc.Fp) where
+def Params.toExpr (params : Params Fp) :
+    Params (Expression Fp) where
   qS2 := params.qS2
 
 def qS3 {K : Type} [One K] [Sub K] [Mul K] (params : Params K) : K :=
   params.qS2 * (params.qS2 - 1)
-
-def secantLine {K : Type} [Add K] [Sub K] [Mul K] (row : Row K) : K :=
-  row.cur.lambda2 * row.cur.lambda2 -
-    (row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA)
 
 def yLhs {K : Type} [Sub K] [Mul K] [OfNat K 4] (row : Row K) : K :=
   4 * row.cur.lambda2 * (row.cur.xA - row.next.xA)
@@ -92,27 +84,23 @@ def yRhs {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
     (2 - qS3 params) * DoubleAndAdd.yA row.next +
     qS3 params * 2 * row.next.lambda1
 
-def yCheck {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 4]
-    (params : Params K) (row : Row K) : K :=
-  yLhs row - yRhs params row
-
-def Spec (params : Params Ecc.Fp) (row : Row Ecc.Fp) : Prop :=
+def Spec (params : Params Fp) (row : Row Fp) : Prop :=
   row.cur.lambda2 * row.cur.lambda2 =
     row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA ∧
   yLhs row = yRhs params row
 
-def main (params : Params Ecc.Fp)
-    (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (secantLine row)
-  assertZero (yCheck params.toExpr row)
+def main (params : Params Fp)
+    (row : Var Row Fp) : Circuit Fp Unit := do
+  assertZero (row.cur.lambda2 * row.cur.lambda2 -
+    (row.next.xA + DoubleAndAdd.xR row.cur + row.cur.xA))
+  assertZero (yLhs row - yRhs params.toExpr row)
 
-def circuit (params : Params Ecc.Fp) : FormalAssertion Ecc.Fp Row where
+def circuit (params : Params Fp) : FormalAssertion Fp Row where
   name := "GATE Sinsemilla gate"
   main := main params
   Spec := Spec params
   soundness := by
-    circuit_proof_start [main, Spec, secantLine, yCheck, yLhs, yRhs, qS3,
-      Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [yLhs, yRhs, qS3, Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
     constructor
     · have hSec :
           input_cur_lambda2 * input_cur_lambda2 -
@@ -135,8 +123,7 @@ def circuit (params : Params Ecc.Fp) : FormalAssertion Ecc.Fp Row where
         simp_all [sub_eq_add_neg]
       exact sub_eq_zero.mp hY
   completeness := by
-    circuit_proof_start [main, Spec, secantLine, yCheck, yLhs, yRhs, qS3,
-      Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [yLhs, yRhs, qS3, Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
     simp_all [sub_eq_add_neg]
     constructor <;> ring
 

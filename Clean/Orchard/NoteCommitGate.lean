@@ -78,27 +78,27 @@ theorem high_bit_canonical {n : ℕ} (hn : n < PALLAS_BASE_CARD) (hhigh : bitran
   omega
 
 /-- `lsb` is the low (sign) bit of the field element `y`. -/
-def IsLowBit (y lsb : Ecc.Fp) : Prop :=
-  lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Ecc.Fp)
+def IsLowBit (y lsb : Fp) : Prop :=
+  lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Fp)
 
-theorem nat_mod_two_isBool (n : ℕ) : IsBool (((n % 2 : ℕ) : Ecc.Fp)) := by
+theorem nat_mod_two_isBool (n : ℕ) : IsBool (((n % 2 : ℕ) : Fp)) := by
   have hlt : n % 2 < 2 := Nat.mod_lt _ (by norm_num)
   interval_cases n % 2 <;> simp [IsBool]
 
-theorem isLowBit_iff_mod_two {y lsb : Ecc.Fp} :
-    IsLowBit y lsb ↔ lsb = ((y.val % 2 : ℕ) : Ecc.Fp) := by
+theorem isLowBit_iff_mod_two {y lsb : Fp} :
+    IsLowBit y lsb ↔ lsb = ((y.val % 2 : ℕ) : Fp) := by
   have key : (if y.val.testBit 0 then (1 : ℕ) else 0) = y.val % 2 := by
     rw [Nat.testBit_zero]
     rcases Nat.mod_two_eq_zero_or_one y.val with hm | hm <;> simp [hm]
   rw [IsLowBit, key]
 
 /-- `Ecc.tP` as the cast of the natural number `tPNat`. -/
-theorem tP_eq : Ecc.tP = ((tPNat : ℕ) : Ecc.Fp) := by
+theorem tP_eq : Ecc.tP = ((tPNat : ℕ) : Fp) := by
   rw [Ecc.tP, tPNat]; norm_num
 
 /-- A 1-bit field slice is Boolean. -/
 theorem bitrange_one_isBool (n start : ℕ) :
-    IsBool ((bitrange n start 1 : ℕ) : Ecc.Fp) := by
+    IsBool ((bitrange n start 1 : ℕ) : Fp) := by
   have h : bitrange n start 1 < 2 := by simpa using bitrange_lt n start 1
   interval_cases (bitrange n start 1) <;> simp [IsBool]
 
@@ -137,17 +137,17 @@ structure Row (F : Type) where
   b3 : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   IsBool row.b1 ∧
   IsBool row.b2 ∧
   row.b = row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertBool row.b1
   assertBool row.b2
   assertZero (row.b - (row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64))
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece b"
   main
   Spec := Spec
@@ -172,17 +172,17 @@ structure Row (F : Type) where
   d3 : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   IsBool row.d0 ∧
   IsBool row.d1 ∧
   row.d = row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertBool row.d0
   assertBool row.d1
   assertZero (row.d - (row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024))
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece d"
   main
   Spec := Spec
@@ -205,13 +205,13 @@ structure Row (F : Type) where
   e1 : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   row.e = row.e0 + row.e1 * 64
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.e - (row.e0 + row.e1 * 64))
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece e"
   main
   Spec := Spec
@@ -234,15 +234,15 @@ structure Row (F : Type) where
   g2 : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   IsBool row.g0 ∧
   row.g = row.g0 + row.g1 * 2 + row.g2 * 1024
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertBool row.g0
   assertZero (row.g - (row.g0 + row.g1 * 2 + row.g2 * 1024))
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece g"
   main
   Spec := Spec
@@ -265,15 +265,15 @@ structure Row (F : Type) where
   h1 : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   IsBool row.h1 ∧
   row.h = row.h0 + row.h1 * 32
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertBool row.h1
   assertZero (row.h - (row.h0 + row.h1 * 32))
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece h"
   main
   Spec := Spec
@@ -300,23 +300,23 @@ structure Row (F : Type) where
   z13APrime : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   row.gdX = row.a + row.b0 * OfNat.ofNat (2 ^ 250) + row.b1 * OfNat.ofNat (2 ^ 254) ∧
     row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - Ecc.tP ∧
     (row.b1 = 0 ∨ row.b0 = 0) ∧
     (row.b1 = 0 ∨ row.z13A = 0) ∧
     (row.b1 = 0 ∨ row.z13APrime = 0)
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.a + row.b0 * OfNat.ofNat (2 ^ 250) +
     row.b1 * OfNat.ofNat (2 ^ 254) - row.gdX)
-  assertZero (row.a + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) -
+  assertZero (row.a + Expression.const ((2 ^ 130 : ℕ) : Fp) -
     Expression.const Ecc.tP - row.aPrime)
   assertZero (row.b1 * row.b0)
   assertZero (row.b1 * row.z13A)
   assertZero (row.b1 * row.z13APrime)
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input g_d"
   main
   Spec := Spec
@@ -351,20 +351,20 @@ structure Row (F : Type) where
   z14B3CPrime : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   row.pkdX = row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) ∧
     row.b3CPrime = row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - Ecc.tP ∧
     (row.d0 = 0 ∨ row.z13C = 0) ∧
     (row.d0 = 0 ∨ row.z14B3CPrime = 0)
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) - row.pkdX)
-  assertZero (row.b3 + row.c * 16 + Expression.const ((2 ^ 140 : ℕ) : Ecc.Fp) -
+  assertZero (row.b3 + row.c * 16 + Expression.const ((2 ^ 140 : ℕ) : Fp) -
     Expression.const Ecc.tP - row.b3CPrime)
   assertZero (row.d0 * row.z13C)
   assertZero (row.d0 * row.z14B3CPrime)
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input pk_d"
   main
   Spec := Spec
@@ -396,13 +396,13 @@ structure Row (F : Type) where
   e0 : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   row.value = row.d2 + row.d3 * 256 + row.e0 * 288230376151711744
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.d2 + row.d3 * 256 + row.e0 * 288230376151711744 - row.value)
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input value"
   main
   Spec := Spec
@@ -428,20 +428,20 @@ structure Row (F : Type) where
   z14E1FPrime : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   row.rho = row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) ∧
     row.e1FPrime = row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - Ecc.tP ∧
     (row.g0 = 0 ∨ row.z13F = 0) ∧
     (row.g0 = 0 ∨ row.z14E1FPrime = 0)
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) - row.rho)
-  assertZero (row.e1 + row.f * 16 + Expression.const ((2 ^ 140 : ℕ) : Ecc.Fp) -
+  assertZero (row.e1 + row.f * 16 + Expression.const ((2 ^ 140 : ℕ) : Fp) -
     Expression.const Ecc.tP - row.e1FPrime)
   assertZero (row.g0 * row.z13F)
   assertZero (row.g0 * row.z14E1FPrime)
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input rho"
   main
   Spec := Spec
@@ -477,7 +477,7 @@ structure Row (F : Type) where
   z13G1G2Prime : F
 deriving ProvableStruct
 
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   row.psi = row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
     row.h1 * OfNat.ofNat (2 ^ 254) ∧
     row.g1G2Prime = row.g1 + row.g2 * 512 + OfNat.ofNat (2 ^ 130) - Ecc.tP ∧
@@ -485,16 +485,16 @@ def Spec (row : Row Ecc.Fp) : Prop :=
     (row.h1 = 0 ∨ row.z13G = 0) ∧
     (row.h1 = 0 ∨ row.z13G1G2Prime = 0)
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
     row.h1 * OfNat.ofNat (2 ^ 254) - row.psi)
-  assertZero (row.g1 + row.g2 * 512 + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) -
+  assertZero (row.g1 + row.g2 * 512 + Expression.const ((2 ^ 130 : ℕ) : Fp) -
     Expression.const Ecc.tP - row.g1G2Prime)
   assertZero (row.h1 * row.h0)
   assertZero (row.h1 * row.z13G)
   assertZero (row.h1 * row.z13G1G2Prime)
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input psi"
   main
   Spec := Spec
@@ -539,32 +539,32 @@ each supporting cell to be the corresponding bit slice of `y`. Those semantics a
 gate's rely-conditions: every cell equals its `bitrange` of `y.val` (with `j'` the
 canonicity-shifted low part). The sign bit `lsb` is *not* assumed — the gate's constraints
 pin it down, which is exactly what `Spec` records. -/
-def Assumptions (row : Row Ecc.Fp) : Prop :=
-  row.k0 = ((bitrange row.y.val 1 9 : ℕ) : Ecc.Fp) ∧
-    row.k2 = ((bitrange row.y.val 250 4 : ℕ) : Ecc.Fp) ∧
-    row.k3 = ((bitrange row.y.val 254 1 : ℕ) : Ecc.Fp) ∧
-    row.j = ((bitrange row.y.val 0 250 : ℕ) : Ecc.Fp) ∧
-    row.z1J = ((bitrange row.y.val 10 240 : ℕ) : Ecc.Fp) ∧
-    row.z13J = ((bitrange row.y.val 130 120 : ℕ) : Ecc.Fp) ∧
+def Assumptions (row : Row Fp) : Prop :=
+  row.k0 = ((bitrange row.y.val 1 9 : ℕ) : Fp) ∧
+    row.k2 = ((bitrange row.y.val 250 4 : ℕ) : Fp) ∧
+    row.k3 = ((bitrange row.y.val 254 1 : ℕ) : Fp) ∧
+    row.j = ((bitrange row.y.val 0 250 : ℕ) : Fp) ∧
+    row.z1J = ((bitrange row.y.val 10 240 : ℕ) : Fp) ∧
+    row.z13J = ((bitrange row.y.val 130 120 : ℕ) : Fp) ∧
     row.j'.val = bitrange row.y.val 0 250 + 2 ^ 130 - tPNat ∧
-    row.z13J' = ((row.j'.val / 2 ^ 130 : ℕ) : Ecc.Fp)
+    row.z13J' = ((row.j'.val / 2 ^ 130 : ℕ) : Fp)
 
 /-- The gate's payoff: `lsb` is the low (sign) bit of the `y` coordinate. -/
-def Spec (row : Row Ecc.Fp) : Prop :=
+def Spec (row : Row Fp) : Prop :=
   IsLowBit row.y row.lsb
 
-def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
+def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertBool row.k3
   assertZero (row.j - (row.lsb + row.k0 * 2 + row.z1J * 1024))
-  assertZero (row.y - (row.j + row.k2 * ((2 ^ 250 : ℕ) : Ecc.Fp) +
-    row.k3 * ((2 ^ 254 : ℕ) : Ecc.Fp)))
-  assertZero (row.j + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) -
+  assertZero (row.y - (row.j + row.k2 * ((2 ^ 250 : ℕ) : Fp) +
+    row.k3 * ((2 ^ 254 : ℕ) : Fp)))
+  assertZero (row.j + Expression.const ((2 ^ 130 : ℕ) : Fp) -
     Expression.const Ecc.tP - row.j')
   assertZero (row.k3 * row.k2)
   assertZero (row.k3 * row.z13J)
   assertZero (row.k3 * row.z13J')
 
-def circuit : FormalAssertion Ecc.Fp Row where
+def circuit : FormalAssertion Fp Row where
   name := "GATE y coordinate checks"
   main
   Assumptions := Assumptions
@@ -577,10 +577,10 @@ def circuit : FormalAssertion Ecc.Fp Row where
     -- bit-slice values of `j`, `k0`, `z1J` isolates `lsb` as the low bit of `y`.
     rw [isLowBit_iff_mod_two,
       show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
-    have hcast : ((bitrange input_y.val 0 250 : ℕ) : Ecc.Fp)
-        = ((bitrange input_y.val 0 1 : ℕ) : Ecc.Fp)
-          + 2 * ((bitrange input_y.val 1 9 : ℕ) : Ecc.Fp)
-          + 1024 * ((bitrange input_y.val 10 240 : ℕ) : Ecc.Fp) := by
+    have hcast : ((bitrange input_y.val 0 250 : ℕ) : Fp)
+        = ((bitrange input_y.val 0 1 : ℕ) : Fp)
+          + 2 * ((bitrange input_y.val 1 9 : ℕ) : Fp)
+          + 1024 * ((bitrange input_y.val 10 240 : ℕ) : Fp) := by
       rw [low_250_decomp]; push_cast; ring
     rw [hj, hk0, hz1J, hcast] at hj_eq
     linear_combination -hj_eq
@@ -590,7 +590,7 @@ def circuit : FormalAssertion Ecc.Fp Row where
     have hyval : input_y.val < PALLAS_BASE_CARD := ZMod.val_lt input_y
     have hyval255 : input_y.val < 2 ^ 255 := lt_trans hyval (by norm_num [PALLAS_BASE_CARD])
     -- `lsb` is the low bit of `y`, supplied by the `Spec`.
-    have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Ecc.Fp) := by
+    have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Fp) := by
       rw [isLowBit_iff_mod_two] at h_spec
       rw [h_spec, show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -602,27 +602,27 @@ def circuit : FormalAssertion Ecc.Fp Row where
       -- `bit_decomp_255` reconstructs `y` from its slices; cast it and recombine with the
       -- cell equalities.  (Rewriting `input_y` directly would also hit the `input_y.val`
       -- buried inside each `bitrange`, so we feed everything to `linear_combination`.)
-      have hyv : input_y = ((input_y.val : ℕ) : Ecc.Fp) :=
+      have hyv : input_y = ((input_y.val : ℕ) : Fp) :=
         (ZMod.natCast_rightInverse input_y).symm
-      have hdcast : ((input_y.val : ℕ) : Ecc.Fp)
-          = ((bitrange input_y.val 0 250 : ℕ) : Ecc.Fp)
-            + ((bitrange input_y.val 250 4 : ℕ) : Ecc.Fp) * ((2 ^ 250 : ℕ) : Ecc.Fp)
-            + ((bitrange input_y.val 254 1 : ℕ) : Ecc.Fp) * ((2 ^ 254 : ℕ) : Ecc.Fp) := by
+      have hdcast : ((input_y.val : ℕ) : Fp)
+          = ((bitrange input_y.val 0 250 : ℕ) : Fp)
+            + ((bitrange input_y.val 250 4 : ℕ) : Fp) * ((2 ^ 250 : ℕ) : Fp)
+            + ((bitrange input_y.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
         conv_lhs => rw [bit_decomp_255 hyval255]
         push_cast; ring
-      linear_combination hyv + hdcast - hj - ((2 ^ 250 : ℕ) : Ecc.Fp) * hk2
-        - ((2 ^ 254 : ℕ) : Ecc.Fp) * hk3
+      linear_combination hyv + hdcast - hj - ((2 ^ 250 : ℕ) : Fp) * hk2
+        - ((2 ^ 254 : ℕ) : Fp) * hk3
     · -- j' = j + 2^130 - t_P
       have htp : tPNat ≤ bitrange input_y.val 0 250 + 2 ^ 130 := by
         have h1 : tPNat < 2 ^ 130 := by norm_num [tPNat]
         omega
-      have hj'cast : input_j' = ((bitrange input_y.val 0 250 : ℕ) : Ecc.Fp)
-          + ((2 ^ 130 : ℕ) : Ecc.Fp) - ((tPNat : ℕ) : Ecc.Fp) := by
+      have hj'cast : input_j' = ((bitrange input_y.val 0 250 : ℕ) : Fp)
+          + ((2 ^ 130 : ℕ) : Fp) - ((tPNat : ℕ) : Fp) := by
         -- avoid the truncating `Nat` subtraction by adding `tPNat` back: `j'.val + t_P = j + 2^130`.
         have hj'nat : input_j'.val + tPNat = bitrange input_y.val 0 250 + 2 ^ 130 := by omega
-        have hyj : input_j' = ((input_j'.val : ℕ) : Ecc.Fp) :=
+        have hyj : input_j' = ((input_j'.val : ℕ) : Fp) :=
           (ZMod.natCast_rightInverse input_j').symm
-        have hcast := congrArg (Nat.cast (R := Ecc.Fp)) hj'nat
+        have hcast := congrArg (Nat.cast (R := Fp)) hj'nat
         push_cast at hcast ⊢
         rw [hyj]
         linear_combination hcast

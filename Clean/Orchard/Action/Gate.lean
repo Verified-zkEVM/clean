@@ -37,18 +37,6 @@ structure Input (F : Type) where
   enableOutputs : F
 deriving ProvableStruct
 
-def valueNet {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
-  row.vOld - row.vNew - row.magnitude * row.sign
-
-def merklePathValidity {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
-  row.vOld * (row.root - row.anchor)
-
-def spendEnabled {K : Type} [One K] [Sub K] [Mul K] (row : Input K) : K :=
-  row.vOld * (1 - row.enableSpends)
-
-def outputEnabled {K : Type} [One K] [Sub K] [Mul K] (row : Input K) : K :=
-  row.vNew * (1 - row.enableOutputs)
-
 def Spec (row : Input Fp) : Prop :=
   row.vOld = row.vNew + row.magnitude * row.sign ∧
     (row.vOld = 0 ∨ row.root = row.anchor) ∧
@@ -56,17 +44,17 @@ def Spec (row : Input Fp) : Prop :=
     (row.vNew = 0 ∨ row.enableOutputs = 1)
 
 def main (row : Var Input Fp) : Circuit Fp Unit := do
-  assertZero (valueNet row)
-  assertZero (merklePathValidity row)
-  assertZero (spendEnabled row)
-  assertZero (outputEnabled row)
+  assertZero (row.vOld - row.vNew - row.magnitude * row.sign)
+  assertZero (row.vOld * (row.root - row.anchor))
+  assertZero (row.vOld * (1 - row.enableSpends))
+  assertZero (row.vNew * (1 - row.enableOutputs))
 
 def circuit : FormalAssertion Fp Input where
   name := "GATE Orchard circuit checks"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, valueNet, merklePathValidity, spendEnabled, outputEnabled]
+    circuit_proof_start
     rcases h_holds with ⟨hValue, hRoot, hSpend, hOutput⟩
     constructor
     · apply sub_eq_zero.mp
@@ -80,7 +68,7 @@ def circuit : FormalAssertion Fp Input where
     exact (mul_eq_zero.mp hOutput).imp_right fun h =>
       (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
   completeness := by
-    circuit_proof_start [main, Spec, valueNet, merklePathValidity, spendEnabled, outputEnabled]
+    circuit_proof_start
     rcases h_spec with ⟨hValue, hRoot, hSpend, hOutput⟩
     constructor
     · rw [hValue]
