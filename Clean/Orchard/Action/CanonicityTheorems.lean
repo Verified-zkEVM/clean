@@ -105,4 +105,65 @@ theorem high_bit_z13_zero {n : ℕ} (hn : n < PALLAS_BASE_CARD)
     have hge : 2 ^ 130 ≤ 2 ^ 130 * bitrange n (0 + 130) 120 := Nat.le_mul_of_pos_right _ h
     omega
 
+/-- The canonical top-bit decomposition shared by the `x`/`rho`/`psi` canonicity gates: a
+field element written `x = lo + top·2^254`, with `lo` a `< 2^254` value, `top` a bit, and the
+canonicity side-condition `top = 1 → lo < t_P`, equals `lo + top·2^254` over `ℕ` (no
+wraparound) and so `lo`/`top` are its canonical low-254-bit field and top bit. -/
+theorem canonical_top_decomp {x lo top : Fp}
+    (hrec : x = lo + top * ((2 ^ 254 : ℕ) : Fp))
+    (hlo : lo.val < 2 ^ 254) (htop : IsBool top)
+    (hcanon : top = 1 → lo.val < tPNat) :
+    x.val = lo.val + top.val * 2 ^ 254 ∧
+      lo.val = bitrange x.val 0 254 ∧ top.val = bitrange x.val 254 1 := by
+  haveI : Fact (1 < PALLAS_BASE_CARD) := ⟨by norm_num [PALLAS_BASE_CARD]⟩
+  have hp := pallasBaseCard_eq
+  have htv : top.val < 2 := by rcases htop with h | h <;> subst h <;> simp [ZMod.val_one]
+  have hwrap : lo.val + top.val * 2 ^ 254 < PALLAS_BASE_CARD := by
+    rcases htop with h | h
+    · have h0 : top.val = 0 := by rw [h]; simp
+      omega
+    · have hc := hcanon h
+      omega
+  have hcast : x = ((lo.val + top.val * 2 ^ 254 : ℕ) : Fp) := by
+    rw [hrec]; push_cast
+    rw [ZMod.natCast_rightInverse lo, ZMod.natCast_rightInverse top]
+  have hxnat : x.val = lo.val + top.val * 2 ^ 254 := by
+    rw [hcast, ZMod.val_natCast_of_lt hwrap]
+  refine ⟨hxnat, ?_, ?_⟩
+  · simp only [bitrange, hxnat]; omega
+  · simp only [bitrange, hxnat]; omega
+
+/-- `.val` of a non-overflowing two-limb sum `lo + hi·2^k`. -/
+theorem val_limb2 {lo hi : Fp} (k : ℕ)
+    (hsum : lo.val + hi.val * 2 ^ k < PALLAS_BASE_CARD) :
+    (lo + hi * ((2 ^ k : ℕ) : Fp)).val = lo.val + hi.val * 2 ^ k := by
+  have hcast : lo + hi * ((2 ^ k : ℕ) : Fp) = ((lo.val + hi.val * 2 ^ k : ℕ) : Fp) := by
+    push_cast
+    rw [ZMod.natCast_rightInverse lo, ZMod.natCast_rightInverse hi]
+  rw [hcast, ZMod.val_natCast_of_lt hsum]
+
+/-- `.val` of the canonicity-shifted cell `a + 2^k - t_P` (no underflow / overflow). -/
+theorem val_shift {a : Fp} (k : ℕ) (htp : tPNat ≤ a.val + 2 ^ k)
+    (hlt : a.val + 2 ^ k - tPNat < PALLAS_BASE_CARD) :
+    (a + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val = a.val + 2 ^ k - tPNat := by
+  have hcast : a + ((2 ^ k : ℕ) : Fp) - Ecc.tP = ((a.val + 2 ^ k - tPNat : ℕ) : Fp) := by
+    rw [tP_eq, Nat.cast_sub htp]
+    push_cast
+    rw [ZMod.natCast_rightInverse a]
+  rw [hcast, ZMod.val_natCast_of_lt hlt]
+
+/-- Dividing the low `a+b` bits by `2^a` exposes the next `b` bits (the honest running
+sum's `z_a` cell is the corresponding higher `bitrange`). -/
+theorem bitrange_low_div (n a b : ℕ) :
+    bitrange n 0 (a + b) / 2 ^ a = bitrange n a b := by
+  simp only [bitrange, pow_zero, Nat.div_one]
+  rw [pow_add, Nat.mod_mul_right_div_self]
+
+/-- A sub-`p` natural that casts to `0` in `Fp` is `0` (used to read the canonicity guards:
+`z = ↑(…) = 0` forces the running-sum tail to vanish). -/
+theorem natCast_eq_zero {n : ℕ} (hlt : n < PALLAS_BASE_CARD) (h : ((n : ℕ) : Fp) = 0) :
+    n = 0 := by
+  have hv := congrArg ZMod.val h
+  rwa [ZMod.val_natCast_of_lt hlt, ZMod.val_zero] at hv
+
 end Orchard.Action.NoteCommit
