@@ -1,5 +1,6 @@
 import Clean.Orchard.NoteCommitGate
 import Clean.Orchard.Sinsemilla.Domain
+import Clean.Orchard.Specs.Bitrange
 import Clean.Orchard.Utilities
 
 /-!
@@ -832,6 +833,12 @@ private theorem yLowNat_lt (n : ℕ) : yLowNat n < 2 ^ 250 := by
   have h2 : n / 2 ^ 10 % 2 ^ 240 < 2 ^ 240 := Nat.mod_lt _ (by norm_num)
   omega
 
+private theorem yLowNat_div_ten (n : ℕ) :
+    yLowNat n / 2 ^ K = n / 2 ^ 10 % 2 ^ 240 := by
+  unfold yLowNat
+  norm_num [K]
+  omega
+
 private theorem y_decomp_nat {n : ℕ} (hn : n < 2 ^ 255) :
     n = yLowNat n + 2 ^ 250 * (n / 2 ^ 250 % 2 ^ 4) +
       2 ^ 254 * (n / 2 ^ 254 % 2) := by
@@ -853,13 +860,13 @@ private theorem y_high_canonical {n : ℕ}
   omega
 
 private theorem nat_mod_two_isBool (n : ℕ) :
-    IsBool (((n % 2 : ℕ) : Ecc.Fp)) := by
+    IsBool (((n % 2 : ℕ) : Fp)) := by
   have hlt : n % 2 < 2 := Nat.mod_lt _ (by norm_num)
   interval_cases n % 2 <;> simp [IsBool]
 
-private theorem low_bit_eq_mod_two {y lsb : Ecc.Fp}
-    (h : lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Ecc.Fp)) :
-    lsb = ((y.val % 2 : ℕ) : Ecc.Fp) := by
+private theorem low_bit_eq_mod_two {y lsb : Fp}
+    (h : lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Fp)) :
+    lsb = ((y.val % 2 : ℕ) : Fp) := by
   rw [h, nat_mod_two_eq_testBit_zero]
 
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
@@ -1109,7 +1116,7 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
 /-! ### Subpiece witnessing helpers -/
 
 /-- `bitrangeSubset value start numBits = (value.val >> start) mod 2^numBits`. -/
-abbrev bitrangeSubset : Ecc.Fp → ℕ → ℕ → Ecc.Fp :=
+abbrev bitrangeSubset : Fp → ℕ → ℕ → Fp :=
   Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset
 
 /-! ### `y_canonicity` (note_commit.rs:1962)
@@ -1133,7 +1140,7 @@ structure Input (F : Type) where
   rcm : Unconstrained Fq F
 deriving CircuitType
 
-instance : Inhabited (Var Input Ecc.Fp) :=
+instance : Inhabited (Var Input Fp) :=
   ⟨{ gd := default, pkd := default, value := default, rho := default, psi := default,
      rcm := fun _ => default }⟩
 
@@ -1159,9 +1166,9 @@ structure MessageCells (F : Type) where
   g1 : F
   h0 : F
   h1 : F
-deriving CircuitType
+deriving ProvableStruct
 
-instance : Inhabited (Var MessageCells Ecc.Fp) :=
+instance : Inhabited (Var MessageCells Fp) :=
   ⟨{
     a := default, b := default, c := default, d := default,
     e := default, f := default, g := default, h := default,
@@ -1185,23 +1192,23 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
     (hmsC : ∀ r, msC r < 2 ^ K) (hmsD : ∀ r, msD r < 2 ^ K)
     (hmsE : ∀ r, msE r < 2 ^ K) (hmsF : ∀ r, msF r < 2 ^ K)
     (hmsG : ∀ r, msG r < 2 ^ K) (hmsH : ∀ r, msH r < 2 ^ K)
-    (hA : ((gdX % 2 ^ (K * 25) : ℕ) : Ecc.Fp) =
-      ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hA : ((gdX % 2 ^ (K * 25) : ℕ) : Fp) =
+      ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Fp))
     (hB : ((gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
-        (pkdX % 16) * 64 : ℕ) : Ecc.Fp) =
-      ((∑ r ∈ Finset.range 1, msB r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hC : (((pkdX / 16) % 2 ^ (K * 25) : ℕ) : Ecc.Fp) =
-      ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hD : ((pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 : ℕ) : Ecc.Fp) =
-      ((∑ r ∈ Finset.range 6, msD r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hE : ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Ecc.Fp) =
-      ((∑ r ∈ Finset.range 1, msE r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hF : (((rho / 16) % 2 ^ (K * 25) : ℕ) : Ecc.Fp) =
-      ((∑ r ∈ Finset.range 25, msF r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hG : ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Ecc.Fp) =
-      ((∑ r ∈ Finset.range 25, msG r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
-    (hH : ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Ecc.Fp) =
-      ((∑ r ∈ Finset.range 1, msH r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+        (pkdX % 16) * 64 : ℕ) : Fp) =
+      ((∑ r ∈ Finset.range 1, msB r * 2 ^ (K * r) : ℕ) : Fp))
+    (hC : (((pkdX / 16) % 2 ^ (K * 25) : ℕ) : Fp) =
+      ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Fp))
+    (hD : ((pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 : ℕ) : Fp) =
+      ((∑ r ∈ Finset.range 6, msD r * 2 ^ (K * r) : ℕ) : Fp))
+    (hE : ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Fp) =
+      ((∑ r ∈ Finset.range 1, msE r * 2 ^ (K * r) : ℕ) : Fp))
+    (hF : (((rho / 16) % 2 ^ (K * 25) : ℕ) : Fp) =
+      ((∑ r ∈ Finset.range 25, msF r * 2 ^ (K * r) : ℕ) : Fp))
+    (hG : ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Fp) =
+      ((∑ r ∈ Finset.range 25, msG r * 2 ^ (K * r) : ℕ) : Fp))
+    (hH : ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Fp) =
+      ((∑ r ∈ Finset.range 1, msH r * 2 ^ (K * r) : ℕ) : Fp))
     (hgdX255 : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
@@ -1284,7 +1291,7 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
     hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi).symm
 
 theorem pieceChunks_messagePieceRounds_chunks
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
     (h : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks) :
     ∃ msA msB msC msD msE msF msG msH : ℕ → ℕ,
       (∀ r, msA r < 2 ^ K) ∧ (∀ r, msB r < 2 ^ K) ∧
@@ -1314,25 +1321,25 @@ theorem pieceChunks_messagePieceRounds_chunks
     hA, hB, hC, hD, hE, hF, hG, hH, by simp only [List.append_nil, List.append_assoc]⟩
 
 private theorem zsFacts_head_get {n : ℕ} {rest : List ℕ} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
     (h : Orchard.Sinsemilla.Chain.ZsFacts (n :: rest) chunks zs) (r : Fin (n + 1)) :
     (HVec.head zs)[r] =
       ((∑ j ∈ Finset.range (n + 1 - r.val),
-        chunks.getD (r.val + j) 0 * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+        chunks.getD (r.val + j) 0 * 2 ^ (K * j) : ℕ) : Fp) := by
   simp only [Orchard.Sinsemilla.Chain.ZsFacts] at h
   rw [h.1]
   simp only
   norm_num [Orchard.Specs.Sinsemilla.K, K]
 
 private theorem zsFacts_tail {n : ℕ} {rest : List ℕ} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
     (h : Orchard.Sinsemilla.Chain.ZsFacts (n :: rest) chunks zs) :
     Orchard.Sinsemilla.Chain.ZsFacts rest (chunks.drop (n + 1)) (HVec.tail zs) := by
   simp only [Orchard.Sinsemilla.Chain.ZsFacts] at h
   exact h.2
 
 private theorem pieceChunks_tail_drop {n : ℕ} {rest : List ℕ}
-    {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
     (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
     Orchard.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
   simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
@@ -1341,7 +1348,7 @@ private theorem pieceChunks_tail_drop {n : ℕ} {rest : List ℕ}
   exact htail
 
 private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
-    {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
     (hpow : 2 ^ (K * (n + 1)) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
     (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
     (pieces[0]).val < 2 ^ (K * (n + 1)) := by
@@ -1352,8 +1359,8 @@ private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
   exact hsumLt
 
 private theorem pieceChunks_head_val_lt_of_z_zero {n r : ℕ} {rest : List ℕ}
-    {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
     (hr : r < n + 1)
     (hpowLow : 2 ^ (K * r) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
     (hpowHigh : 2 ^ (K * (n + 1 - r)) <
@@ -1367,14 +1374,14 @@ private theorem pieceChunks_head_val_lt_of_z_zero {n r : ℕ} {rest : List ℕ}
   let low : ℕ := ∑ j ∈ Finset.range r, ms j * 2 ^ (K * j)
   let high : ℕ := ∑ j ∈ Finset.range (n + 1 - r), ms (r + j) * 2 ^ (K * j)
   have hhighCast :
-      (high : Ecc.Fp) = 0 := by
+      (high : Fp) = 0 := by
     have hz' := zsFacts_head_get hZs ⟨r, hr⟩
     simp only at hz'
     have hzFin : (HVec.head zs)[r]'hr = 0 := by
       exact hz
     have hz'' : (HVec.head zs)[r]'hr =
         ((∑ j ∈ Finset.range (n + 1 - r),
-          chunks.getD (r + j) 0 * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+          chunks.getD (r + j) 0 * 2 ^ (K * j) : ℕ) : Fp) := by
       exact hz'
     rw [hz''] at hzFin
     have hsum :
@@ -1399,10 +1406,10 @@ private theorem pieceChunks_head_val_lt_of_z_zero {n r : ℕ} {rest : List ℕ}
     dsimp only [low]
     exact sum_digits_lt hms r
   have hpieceLow :
-      pieces[0] = (low : Ecc.Fp) := by
+      pieces[0] = (low : Fp) := by
     have hsplit := sum_digits_split K r (n + 1) (by omega) ms
     have hpieceK :
-        pieces[0] = ((∑ j ∈ Finset.range (n + 1), ms j * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+        pieces[0] = ((∑ j ∈ Finset.range (n + 1), ms j * 2 ^ (K * j) : ℕ) : Fp) := by
       simpa only [Orchard.Specs.Sinsemilla.K, K] using hpiece
     have hsplitLow :
         (∑ j ∈ Finset.range (n + 1), ms j * 2 ^ (K * j)) = low := by
@@ -1415,7 +1422,7 @@ private theorem pieceChunks_head_val_lt_of_z_zero {n r : ℕ} {rest : List ℕ}
   exact hlowLt
 
 private theorem pieceChunks_large_piece_bounds
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks) :
     (pieces[0]).val < 2 ^ (K * 25) ∧
       (pieces.tail.tail[0]).val < 2 ^ (K * 25) ∧
@@ -1441,8 +1448,8 @@ private theorem pieceChunks_large_piece_bounds
   exact ⟨hA, hC, hD, hF, hG⟩
 
 private theorem pieceChunks_f_val_lt_of_z13_zero
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Fp}
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
     (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
     (hz13f :
@@ -1467,8 +1474,8 @@ private theorem pieceChunks_f_val_lt_of_z13_zero
     hPC5 hZs5 hz13f
 
 private theorem pieceChunks_c_val_lt_of_z13_zero
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Fp}
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
     (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
     (hz13c :
@@ -1485,9 +1492,9 @@ private theorem pieceChunks_c_val_lt_of_z13_zero
     (hpowHigh := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
     hPC2 hZs2 hz13c
 
-private theorem b3_c_low_lt_of_piece_z13_zero {b3 c : Ecc.Fp}
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+private theorem b3_c_low_lt_of_piece_z13_zero {b3 c : Fp}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Fp}
     (hb3 : b3.val < 2 ^ 4)
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
     (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
@@ -1502,9 +1509,9 @@ private theorem b3_c_low_lt_of_piece_z13_zero {b3 c : Ecc.Fp}
   omega
 
 private theorem pieceChunks_e1_f_low_lt_of_z13_zero
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
-    {e1 : Ecc.Fp}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Fp}
+    {e1 : Fp}
     (he1 : e1.val < 2 ^ 4)
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
     (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
@@ -1514,9 +1521,9 @@ private theorem pieceChunks_e1_f_low_lt_of_z13_zero
     e1.val + (pieces.tail.tail.tail.tail.tail[0]).val * 16 < 2 ^ 134 := by
   exact e1_f_low_lt_of_f_130 he1 (pieceChunks_f_val_lt_of_z13_zero hPC hZs hz13f)
 
-private theorem e1_f_low_lt_of_piece_z13_zero {e1 f : Ecc.Fp}
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+private theorem e1_f_low_lt_of_piece_z13_zero {e1 f : Fp}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Fp}
     (he1 : e1.val < 2 ^ 4)
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
     (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
@@ -1531,8 +1538,8 @@ private theorem e1_f_low_lt_of_piece_z13_zero {e1 f : Ecc.Fp}
   exact hlow
 
 private theorem pieceChunks_g_val_lt_of_z13_zero
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Fp}
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
     (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
     (hz13g :
@@ -1558,9 +1565,9 @@ private theorem pieceChunks_g_val_lt_of_z13_zero
     (hpowHigh := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
     hPC6 hZs6 hz13g
 
-private theorem g1_g2_low_lt_of_piece_z13_zero {g0 g1 g2 : Ecc.Fp}
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+private theorem g1_g2_low_lt_of_piece_z13_zero {g0 g1 g2 : Fp}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Fp}
     (hg0 : IsBool g0) (hg1 : g1.val < 2 ^ 9)
     (hg2 : g2.val < 2 ^ (K * 24))
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
@@ -1575,8 +1582,8 @@ private theorem g1_g2_low_lt_of_piece_z13_zero {g0 g1 g2 : Ecc.Fp}
   exact g1_g2_low_lt_of_g_piece_130 hg0 hg1 hg2 hg
 
 private theorem z1_head_val_lt {n : ℕ} {rest : List ℕ}
-    {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
-    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
     (hn : 1 < n + 1)
     (hpow : 2 ^ (K * n) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
@@ -1597,7 +1604,7 @@ private theorem z1_head_val_lt {n : ℕ} {rest : List ℕ}
   rw [show n + 1 - 1 = n by omega] at hz
   have hz' :
       (HVec.head zs)[1] =
-        ((∑ j ∈ Finset.range n, chunks.getD (j + 1) 0 * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+        ((∑ j ∈ Finset.range n, chunks.getD (j + 1) 0 * 2 ^ (K * j) : ℕ) : Fp) := by
     simpa only [Nat.add_comm] using hz
   rw [hz']
   rw [hsum]
@@ -1605,23 +1612,23 @@ private theorem z1_head_val_lt {n : ℕ} {rest : List ℕ}
   exact hsumLt
 
 private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
-    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
     {gdX gdY pkdX pkdY v rho psi : ℕ}
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
-    (hA : pieces[0] = ((gdX % 2 ^ (K * 25) : ℕ) : Ecc.Fp))
+    (hA : pieces[0] = ((gdX % 2 ^ (K * 25) : ℕ) : Fp))
     (hB : pieces[1] =
       ((gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
-        (pkdX % 16) * 64 : ℕ) : Ecc.Fp))
-    (hC : pieces[2] = (((pkdX / 16) % 2 ^ (K * 25) : ℕ) : Ecc.Fp))
+        (pkdX % 16) * 64 : ℕ) : Fp))
+    (hC : pieces[2] = (((pkdX / 16) % 2 ^ (K * 25) : ℕ) : Fp))
     (hD : pieces[3] =
-      ((pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 : ℕ) : Ecc.Fp))
+      ((pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 : ℕ) : Fp))
     (hE : pieces[4] =
-      ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Ecc.Fp))
-    (hF : pieces[5] = (((rho / 16) % 2 ^ (K * 25) : ℕ) : Ecc.Fp))
+      ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Fp))
+    (hF : pieces[5] = (((rho / 16) % 2 ^ (K * 25) : ℕ) : Fp))
     (hG : pieces[6] =
-      ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Ecc.Fp))
+      ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Fp))
     (hH : pieces[7] =
-      ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Ecc.Fp))
+      ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Fp))
     (hgdX255 : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
@@ -1687,60 +1694,170 @@ namespace YCanonicity
 structure Input (F : Type) where
   y : F
   lsb : F
-deriving CircuitType
+deriving ProvableStruct
 
-instance : Inhabited (Var Input Ecc.Fp) :=
+instance : Inhabited (Var Input Fp) :=
   ⟨{ y := default, lsb := default }⟩
 
-def main (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) := do
+def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let k0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
     (fun env => eval env input.y)
   let k2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
     (fun env => eval env input.y)
   let k3 ← witnessField fun env => bitrangeSubset (eval env input.y) 254 1
   let j ← witnessField fun env =>
-    env input.lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) * bitrangeSubset (eval env input.y) 10 240
+    env input.lsb + 2 * env k0 + (2 ^ 10 : Fp) * bitrangeSubset (eval env input.y) 10 240
   let jZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 j
   assertZero jZs[25]
-  let j' ← witnessField fun env => env jZs[0] + (2 ^ 130 : Ecc.Fp) - Ecc.tP
+  let j' ← witnessField fun env => env jZs[0] + (2 ^ 130 : Fp) - Ecc.tP
   let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 j'
   Gate.circuit
     { y := input.y, lsb := input.lsb, k0 := k0, k2 := k2, k3 := k3, j := jZs[0],
       z1J := jZs[1], z13J := jZs[13], j' := j'Zs[0], z13J' := j'Zs[13] }
   return input.lsb
 
-instance elaborated : ElaboratedCircuit Ecc.Fp Input field main := by
+instance elaborated : ElaboratedCircuit Fp Input field main := by
   elaborate_circuit
 
-def IsLowBit (y lsb : Ecc.Fp) : Prop :=
-  lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Ecc.Fp)
+def IsLowBit (y lsb : Fp) : Prop :=
+  lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Fp)
 
-def Assumptions (input : Value Input Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
-  IsBool (show Ecc.Fp from input.lsb) ∧
-    IsLowBit (show Ecc.Fp from input.y) (show Ecc.Fp from input.lsb)
+def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
+  IsBool (show Fp from input.lsb) ∧
+    IsLowBit (show Fp from input.y) (show Fp from input.lsb)
 
-def ProverAssumptions (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
-  IsLowBit (show Ecc.Fp from input.y) (show Ecc.Fp from input.lsb)
+def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
+    (_ : ProverHint Fp) : Prop :=
+  IsLowBit (show Fp from input.y) (show Fp from input.lsb)
 
-def Spec (input : Value Input Ecc.Fp) (output : Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
-  output = input.lsb ∧ IsLowBit (show Ecc.Fp from input.y) (show Ecc.Fp from input.lsb)
+def Spec (input : Value Input Fp) (output : Fp) (_ : ProverData Fp) : Prop :=
+  output = input.lsb ∧ IsLowBit (show Fp from input.y) (show Fp from input.lsb)
 
-def ProverSpec (input : ProverValue Input Ecc.Fp) (output : Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
-  output = input.lsb ∧ IsLowBit (show Ecc.Fp from input.y) (show Ecc.Fp from input.lsb)
+def ProverSpec (input : ProverValue Input Fp) (output : Fp)
+    (_ : ProverHint Fp) : Prop :=
+  output = input.lsb ∧ IsLowBit (show Fp from input.y) (show Fp from input.lsb)
+
+private theorem completenessCore
+    {y lsb k0 k2 k3 j z1J z13J j' z13J' j25 : Fp}
+    (hlsb : IsLowBit y lsb)
+    (hk0 : k0 = ((y.val / 2 % 2 ^ 9 : ℕ) : Fp))
+    (hk2 : k2 = ((y.val / 2 ^ 250 % 2 ^ 4 : ℕ) : Fp))
+    (hk3 : k3 = ((y.val / 2 ^ 254 % 2 : ℕ) : Fp))
+    (hj : j = ((yLowNat y.val : ℕ) : Fp))
+    (hz1J : z1J = ((y.val / 2 ^ 10 % 2 ^ 240 : ℕ) : Fp))
+    (hz13J : z13J = ((yLowNat y.val / 2 ^ (K * 13) : ℕ) : Fp))
+    (hj25 : j25 = ((yLowNat y.val / 2 ^ (K * 25) : ℕ) : Fp))
+    (hj' : j' = j + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP)
+    (hz13J' : z13J' = ((j'.val / 2 ^ (K * 13) : ℕ) : Fp)) :
+    (j25 = 0 ∧
+      Gate.Spec { y, lsb, k0, k2, k3, j, z1J, z13J, j', z13J' }) ∧
+      IsLowBit y lsb := by
+  constructor
+  · constructor
+    · rw [hj25]
+      have hlt := yLowNat_lt y.val
+      rw [Nat.div_eq_of_lt]
+      · norm_num
+      · simpa [K] using hlt
+    · change IsBool k3 ∧
+        j = lsb + k0 * 2 + z1J * 1024 ∧
+        y = j + k2 * ((2 ^ 250 : ℕ) : Fp) + k3 * ((2 ^ 254 : ℕ) : Fp) ∧
+        j' = j + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+        (k3 = 0 ∨ k2 = 0) ∧
+        (k3 = 0 ∨ z13J = 0) ∧
+        (k3 = 0 ∨ z13J' = 0)
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      · rw [hk3]
+        exact nat_mod_two_isBool (y.val / 2 ^ 254)
+      · rw [hj, hz1J, hk0, low_bit_eq_mod_two hlsb]
+        unfold yLowNat
+        push_cast
+        ring
+      · rw [hj, hk2, hk3]
+        have hyDec := y_decomp_nat (lt_trans (ZMod.val_lt y)
+          (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+        have hyField :
+            y = ((yLowNat y.val + 2 ^ 250 * (y.val / 2 ^ 250 % 2 ^ 4) +
+              2 ^ 254 * (y.val / 2 ^ 254 % 2) : ℕ) : Fp) :=
+          (ZMod.natCast_zmod_val y).symm.trans
+            (congrArg (fun n : ℕ => (n : Fp)) hyDec)
+        exact hyField.trans (by
+          simp only [Nat.cast_add, Nat.cast_mul]
+          ring)
+      · rw [hj']
+      · change k3 = 0 ∨ k2 = 0
+        by_cases hhigh : y.val / 2 ^ 254 % 2 = 0
+        · left
+          rw [hk3, hhigh]
+          norm_num
+        · right
+          have hhigh1 : y.val / 2 ^ 254 % 2 = 1 := by
+            have hlt : y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+            omega
+          rw [hk2, (y_high_canonical (ZMod.val_lt y) hhigh1).1]
+          norm_num
+      · change k3 = 0 ∨ z13J = 0
+        by_cases hhigh : y.val / 2 ^ 254 % 2 = 0
+        · left
+          rw [hk3, hhigh]
+          norm_num
+        · right
+          have hhigh1 : y.val / 2 ^ 254 % 2 = 1 := by
+            have hlt : y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+            omega
+          rw [hz13J]
+          have hlt := (y_high_canonical (ZMod.val_lt y) hhigh1).2.1
+          have hlt130 : yLowNat y.val < 2 ^ 130 :=
+            lt_trans hlt (by norm_num [tPNat])
+          change ((yLowNat y.val / 2 ^ 130 : ℕ) : Fp) = 0
+          rw [Nat.div_eq_of_lt hlt130]
+          norm_num
+      · change k3 = 0 ∨ z13J' = 0
+        by_cases hhigh : y.val / 2 ^ 254 % 2 = 0
+        · left
+          rw [hk3, hhigh]
+          norm_num
+        · right
+          have hhigh1 : y.val / 2 ^ 254 % 2 = 1 := by
+            have hlt : y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+            omega
+          rw [hz13J']
+          have hj'Val : j'.val = yLowNat y.val + 2 ^ 130 - tPNat := by
+            have hcard : yLowNat y.val + 2 ^ 130 - tPNat <
+                CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+              exact lt_trans (y_high_canonical (ZMod.val_lt y) hhigh1).2.2
+                (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+            have hfield :
+                (yLowNat y.val : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP =
+                  ((yLowNat y.val + 2 ^ 130 - tPNat : ℕ) : Fp) := by
+              push_cast [Ecc.tP, tPNat]
+              ring
+            calc
+              j'.val =
+                  ZMod.val (j + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP) := by
+                rw [hj']
+              _ = ZMod.val ((yLowNat y.val : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP) := by
+                rw [hj]
+              _ = yLowNat y.val + 2 ^ 130 - tPNat := by
+                rw [hfield, ZMod.val_natCast_of_lt hcard]
+          rw [hj'Val]
+          have hlt := (y_high_canonical (ZMod.val_lt y) hhigh1).2.2
+          change (((yLowNat y.val + 2 ^ 130 - tPNat) / 2 ^ 130 : ℕ) : Fp) = 0
+          rw [Nat.div_eq_of_lt hlt]
+          norm_num
+  · exact hlsb
 
 theorem soundness :
-    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp main Assumptions Spec := by
+    GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
   circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
     Utilities.LookupRangeCheck.CopyCheck.circuit, Gate.circuit, Ecc.tP]
   exact h_assumptions.2
 
 theorem completeness :
-    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp main ProverAssumptions ProverSpec := by
+    GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
   sorry
 
-def circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input field where
+def circuit : GeneralFormalCircuit.WithHint Fp Input field where
   main := main
   elaborated := elaborated
   Assumptions := Assumptions
@@ -1751,6 +1868,54 @@ def circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input field where
   completeness := completeness
 
 end YCanonicity
+
+/-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
+`g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
+def noteScalarsOf (gd pkd : Point Fp) (value rho psi : Fp) :
+    ℕ × ℕ × ℕ × ℕ × ℕ × ℕ × ℕ :=
+  let gdX : Fp := gd.x
+  let gdY : Fp := gd.y
+  let pkdX : Fp := pkd.x
+  let pkdY : Fp := pkd.y
+  let v : Fp := value
+  (gdX.val, gdY.val % 2, pkdX.val, pkdY.val % 2, v.val, rho.val, psi.val)
+
+def messagePieces (cells : MessageCells Fp) : Vector Fp messagePieceRounds.length :=
+  #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h]
+
+def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
+  Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
+
+def MessagePiecesEncode (input : Value Input Fp) (cells : Value MessageCells Fp) : Prop :=
+  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
+    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
+  Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (messagePieces cells)
+    (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi)
+
+def ProverMessagePiecesEncode (input : ProverValue Input Fp)
+    (cells : ProverValue MessageCells Fp) : Prop :=
+  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
+    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
+  Orchard.Sinsemilla.Chain.honestChunks messagePieceRounds (messagePieces cells) =
+    noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi
+
+def NoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
+    (R : MulFixed.FixedBase) (input : Value Input Fp) (cm : Point Fp) : Prop :=
+  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
+    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
+  ∃ rcm : Fq, ∀ B : SWPoint Pallas.curve,
+    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+        (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B →
+      cm.coords = Pallas.add (B.x, B.y) (R.mulValue rcm).coords
+
+def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
+    (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
+  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
+    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
+  ∀ B : SWPoint Pallas.curve,
+    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+        (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B →
+      cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
 namespace AssignMessageCells
 
@@ -1811,25 +1976,35 @@ def main (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var MessageCells Ecc.Fp) :
 instance elaborated : ElaboratedCircuit Ecc.Fp Input MessageCells main := by
   elaborate_circuit
 
-def Spec (_input : Value Input Ecc.Fp) (_cells : Value MessageCells Ecc.Fp)
-    (_ : ProverData Ecc.Fp) : Prop :=
+def Assumptions (_input : Value Input Fp) (_ : ProverData Fp) : Prop :=
   True
 
-def ProverSpec (_input : ProverValue Input Ecc.Fp)
-    (_cells : ProverValue MessageCells Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+def ProverAssumptions (_input : ProverValue Input Fp) (_ : ProverData Fp)
+    (_ : ProverHint Fp) : Prop :=
   True
+
+def Spec (input : Value Input Fp) (cells : Value MessageCells Fp)
+    (_ : ProverData Fp) : Prop :=
+  MessagePiecesEncode input cells
+
+def ProverSpec (input : ProverValue Input Fp)
+    (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
+  ProverMessagePiecesEncode input cells
 
 theorem soundness :
-    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp main (fun _ _ => True) Spec := by
+    GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
   sorry
 
 theorem completeness :
-    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp main (fun _ _ _ => True) ProverSpec := by
+    GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
   sorry
 
-def circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input MessageCells where
+def circuit : GeneralFormalCircuit.WithHint Fp Input MessageCells where
   main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
   Spec := Spec
+  ProverAssumptions := ProverAssumptions
   ProverSpec := ProverSpec
   soundness := soundness
   completeness := completeness
@@ -1904,31 +2079,49 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
   elaborate_circuit
 
-def Spec (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
-    (_input : Value Input Ecc.Fp) (_cm : Point Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
-  True
+def Assumptions (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
+    (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
+  MessagePiecesEncode input.note input.cells
 
-def ProverSpec (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
-    (_input : ProverValue Input Ecc.Fp) (_cm : ProverValue Point Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
-  True
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
+    (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
+  ProverMessagePiecesEncode input.note input.cells ∧
+    Orchard.Sinsemilla.Chain.PieceBounds messagePieceRounds (messagePieces input.cells) ∧
+    let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
+      noteScalarsOf input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi
+    ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+      (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B
+
+def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+    (input : Value Input Fp) (cm : Point Fp) (_ : ProverData Fp) : Prop :=
+  MessagePiecesEncode input.note input.cells →
+    NoteCommitRelation G Q R input.note cm
+
+def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+    (input : ProverValue Input Fp) (cm : ProverValue Point Fp)
+    (_ : ProverHint Fp) : Prop :=
+  ProverMessagePiecesEncode input.note input.cells →
+    ProverNoteCommitRelation G Q R input.note cm
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
-    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ R) (fun _ _ => True)
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (Assumptions G Q R)
       (Spec G Q R) := by
   sorry
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
-    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ R) (fun _ _ _ => True)
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R) (ProverAssumptions G Q R)
       (ProverSpec G Q R) := by
   sorry
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Ecc.Fp Input Point where
+    (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
   main := main G Q hQ R
+  elaborated := elaborated G Q hQ R
+  Assumptions := Assumptions G Q R
   Spec := Spec G Q R
+  ProverAssumptions := ProverAssumptions G Q R
   ProverSpec := ProverSpec G Q R
   soundness := soundness G Q hQ R
   completeness := completeness G Q hQ R
@@ -1955,29 +2148,6 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
   elaborate_circuit
 
-/-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
-`g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
-def noteScalars (input : Value Input Ecc.Fp) : ℕ × ℕ × ℕ × ℕ × ℕ × ℕ × ℕ :=
-  let gdX : Ecc.Fp := input.gd.x
-  let gdY : Ecc.Fp := input.gd.y
-  let pkdX : Ecc.Fp := input.pkd.x
-  let pkdY : Ecc.Fp := input.pkd.y
-  let v : Ecc.Fp := input.value
-  let rho : Ecc.Fp := input.rho
-  let psi : Ecc.Fp := input.psi
-  (gdX.val, gdY.val % 2, pkdX.val, pkdY.val % 2, v.val, rho.val, psi.val)
-
-def proverNoteScalars (input : ProverValue Input Ecc.Fp) :
-    ℕ × ℕ × ℕ × ℕ × ℕ × ℕ × ℕ :=
-  let gdX : Ecc.Fp := input.gd.x
-  let gdY : Ecc.Fp := input.gd.y
-  let pkdX : Ecc.Fp := input.pkd.x
-  let pkdY : Ecc.Fp := input.pkd.y
-  let v : Ecc.Fp := input.value
-  let rho : Ecc.Fp := input.rho
-  let psi : Ecc.Fp := input.psi
-  (gdX.val, gdY.val % 2, pkdX.val, pkdY.val % 2, v.val, rho.val, psi.val)
-
 /-- `g_d` and `pk_d` enter the Halo2 gadget as already-assigned non-identity points. In
 Clean's point model this is the on-curve half of `NonIdentityEccPoint`; identity is not
 representable as an affine point in the source API at this boundary. -/
@@ -1990,31 +2160,29 @@ message is the `Sinsemilla` hash of the canonical 109-chunk encoding (the canoni
 gates force the field inputs into that canonical bit-layout) translated by `[rcm] R`. -/
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : Value Input Ecc.Fp) (cm : Point Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
-  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := noteScalars input
-  ∃ rcm : Fq, ∀ B : SWPoint Pallas.curve,
-    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-        (Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi)
-      = some B →
-      cm.coords = Pallas.add (B.x, B.y) (R.mulValue rcm).coords
+  NoteCommitRelation G Q R input cm
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
     (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp)
     (_ : ProverHint Ecc.Fp) : Prop :=
   Pallas.OnCurve input.gd.coords ∧
   Pallas.OnCurve input.pkd.coords ∧
-  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := proverNoteScalars input
+  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
+    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
   ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-    (Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi) = some B
+    (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : ProverValue Input Ecc.Fp) (cm : ProverValue Point Ecc.Fp)
     (_ : ProverHint Ecc.Fp) : Prop :=
-  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := proverNoteScalars input
-  ∀ B : SWPoint Pallas.curve,
-    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-        (Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi)
-      = some B →
-      cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
+  ProverNoteCommitRelation G Q R input cm
+
+theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) Assumptions (Spec G Q R) := by
+  circuit_proof_start [AssignMessageCells.circuit, CommitAndConstrain.circuit]
+  let hMessage := h_holds.1 trivial
+  exact h_holds.2 hMessage hMessage
 
 -- TODO(note_commit): replace the placeholder subcircuit specs/proofs above with the real
 -- semantic contracts. The parent gadget now composes bundled subcircuits; the remaining
