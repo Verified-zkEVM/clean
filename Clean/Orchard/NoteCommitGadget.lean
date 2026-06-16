@@ -1681,6 +1681,68 @@ theorem main_message_piece_decomposition_facts (G : Generators) (Q : SWPoint Pal
     NoteCommit.DecomposeE.Spec, NoteCommit.DecomposeG.Spec, NoteCommit.DecomposeH.Spec]
     using hs
 
+theorem main_input_canonicity_facts (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
+    let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
+    let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+    let z13f := (HVec.get _ out.zs ⟨5, by decide⟩)[13]
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+    let gateOffset := commitOffset + (commitWithZs G Q hQ R input cells).localLength commitOffset
+    let aBounds := (canonBitshift130 cells.a).output gateOffset
+    let pkdOffset := gateOffset + (canonBitshift130 cells.a).localLength gateOffset
+    let b3cBounds := (pkdXCanonicity cells.b3 cells.c).output pkdOffset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    let e1fBounds := (rhoCanonicity cells.e1 cells.f).output rhoOffset
+    let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+    let g1g2Bounds := (psiCanonicity cells.g1 z1g).output psiOffset
+    (eval env input.gd.x =
+        eval env cells.a + eval env cells.b0 * OfNat.ofNat (2 ^ 250) +
+          eval env cells.b1 * OfNat.ofNat (2 ^ 254) ∧
+      eval env aBounds.1 = eval env cells.a + OfNat.ofNat (2 ^ 130) - NoteCommit.tP ∧
+      (eval env cells.b1 = 0 ∨ eval env cells.b0 = 0) ∧
+      (eval env cells.b1 = 0 ∨ eval env z13a = 0) ∧
+      (eval env cells.b1 = 0 ∨ eval env aBounds.2 = 0)) ∧
+      (eval env input.pkd.x =
+          eval env cells.b3 + eval env cells.c * 16 +
+            eval env cells.d0 * OfNat.ofNat (2 ^ 254) ∧
+        eval env b3cBounds.1 =
+          eval env cells.b3 + eval env cells.c * 16 + OfNat.ofNat (2 ^ 140) -
+            NoteCommit.tP ∧
+        (eval env cells.d0 = 0 ∨ eval env z13c = 0) ∧
+        (eval env cells.d0 = 0 ∨ eval env b3cBounds.2 = 0)) ∧
+      eval env input.value =
+        eval env cells.d2 + eval env z1d * 256 +
+          eval env cells.e0 * 288230376151711744 ∧
+      (eval env input.rho =
+          eval env cells.e1 + eval env cells.f * 16 +
+            eval env cells.g0 * OfNat.ofNat (2 ^ 254) ∧
+        eval env e1fBounds.1 =
+          eval env cells.e1 + eval env cells.f * 16 + OfNat.ofNat (2 ^ 140) -
+            NoteCommit.tP ∧
+        (eval env cells.g0 = 0 ∨ eval env z13f = 0) ∧
+        (eval env cells.g0 = 0 ∨ eval env e1fBounds.2 = 0)) ∧
+      (eval env input.psi =
+          eval env cells.g1 + eval env z1g * 512 +
+            eval env cells.h0 * OfNat.ofNat (2 ^ 249) +
+            eval env cells.h1 * OfNat.ofNat (2 ^ 254) ∧
+        eval env g1g2Bounds.1 =
+          eval env cells.g1 + eval env z1g * 512 + OfNat.ofNat (2 ^ 130) -
+            NoteCommit.tP ∧
+        (eval env cells.h1 = 0 ∨ eval env cells.h0 = 0) ∧
+        (eval env cells.h1 = 0 ∨ eval env z13g = 0) ∧
+        (eval env cells.h1 = 0 ∨ eval env g1g2Bounds.2 = 0)) := by
+  have hs := main_constrainCommitment_canonicity_specs G Q hQ R env input offset h
+  simpa only [circuit_norm, NoteCommit.GdCanonicity.Spec, NoteCommit.PkdCanonicity.Spec,
+    NoteCommit.ValueCanonicity.Spec, NoteCommit.RhoCanonicity.Spec,
+    NoteCommit.PsiCanonicity.Spec] using hs
+
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
 --       pieces equal `noteCommitChunks`'s tiling via `noteCommitChunks_tiling`) +
