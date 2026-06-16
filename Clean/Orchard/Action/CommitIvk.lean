@@ -1,4 +1,5 @@
 import Clean.Orchard.Action.CommitIvkGate
+import Clean.Orchard.Action.CommitIvkChunks
 import Clean.Orchard.Sinsemilla.Domain
 import Clean.Orchard.Specs.Sinsemilla
 import Clean.Orchard.Utilities
