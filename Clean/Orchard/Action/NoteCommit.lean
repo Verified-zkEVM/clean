@@ -784,7 +784,7 @@ def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
 
 namespace AssignMessageCells
 
-def main (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var MessageCells Ecc.Fp) := do
+def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
   let gdX := input.gd.x
   let gdY := input.gd.y
   let pkdX := input.pkd.x
@@ -838,7 +838,7 @@ def main (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var MessageCells Ecc.Fp) :
     h0, h1
   }
 
-instance elaborated : ElaboratedCircuit Ecc.Fp Input MessageCells main := by
+instance elaborated : ElaboratedCircuit Fp Input MessageCells main := by
   elaborate_circuit
 
 def Assumptions (_input : Value Input Fp) (_ : ProverData Fp) : Prop :=
@@ -1039,12 +1039,12 @@ structure Input (F : Type) where
   cells : MessageCells F
 deriving CircuitType
 
-instance : Inhabited (Var Input Ecc.Fp) :=
+instance : Inhabited (Var Input Fp) :=
   ⟨{ note := default, cells := default }⟩
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
-    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+    (R : MulFixed.FixedBase) (input : Var Input Fp) :
+    Circuit Fp (Var Point Fp) := do
   let v := input.note.value
   let rho := input.note.rho
   let psi := input.note.psi
@@ -1058,7 +1058,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   return cm
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) : ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
+    (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input Point (main G Q hQ R) := by
   elaborate_circuit
 
 def Assumptions (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
@@ -1112,8 +1112,8 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 end CommitAndConstrain
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
-    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+    (R : MulFixed.FixedBase) (input : Var Input Fp) :
+    Circuit Fp (Var Point Fp) := do
   let cells ← AssignMessageCells.circuit input
   CommitAndConstrain.circuit G Q hQ R { note := input, cells := cells }
 
@@ -1122,19 +1122,19 @@ instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   infer_explicit_circuits
 
 def mainOutput (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (offset : ℕ) :
-    Var Point Ecc.Fp :=
+    (R : MulFixed.FixedBase) (input : Var Input Fp) (offset : ℕ) :
+    Var Point Fp :=
   (main G Q hQ R input).output offset
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
-    ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
+    ElaboratedCircuit Fp Input Point (main G Q hQ R) := by
   elaborate_circuit
 
 /-- `g_d` and `pk_d` enter the Halo2 gadget as already-assigned non-identity points. In
 Clean's point model this is the on-curve half of `NonIdentityEccPoint`; identity is not
 representable as an affine point in the source API at this boundary. -/
-def Assumptions (input : Value Input Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
   Pallas.OnCurve input.gd.coords ∧ Pallas.OnCurve input.pkd.coords
 
 /-- `cm` is the Orchard note commitment of the note `(g_d, pk_d, value, rho, psi)` with
@@ -1142,12 +1142,12 @@ randomness `rcm`: `cm = NoteCommit^Orchard_rcm(g★_d || pk★_d || v || rho || 
 message is the `Sinsemilla` hash of the canonical 109-chunk encoding (the canonicity
 gates force the field inputs into that canonical bit-layout) translated by `[rcm] R`. -/
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (input : Value Input Ecc.Fp) (cm : Point Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+    (input : Value Input Fp) (cm : Point Fp) (_ : ProverData Fp) : Prop :=
   NoteCommitRelation G Q R input cm
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
-    (input : ProverValue Input Ecc.Fp) (_ : ProverData Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
+    (input : ProverValue Input Fp) (_ : ProverData Fp)
+    (_ : ProverHint Fp) : Prop :=
   Pallas.OnCurve input.gd.coords ∧
   Pallas.OnCurve input.pkd.coords ∧
   let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
@@ -1156,8 +1156,8 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
     (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (input : ProverValue Input Ecc.Fp) (cm : ProverValue Point Ecc.Fp)
-    (_ : ProverHint Ecc.Fp) : Prop :=
+    (input : ProverValue Input Fp) (cm : ProverValue Point Fp)
+    (_ : ProverHint Fp) : Prop :=
   ProverNoteCommitRelation G Q R input cm
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
