@@ -896,6 +896,43 @@ private theorem pieceChunks_tail_drop {n : ℕ} {rest : List ℕ}
   rw [hchunks, Orchard.Sinsemilla.Chain.chunks_drop_append ms tailChunks]
   exact htail
 
+private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
+    (hpow : 2 ^ (K * (n + 1)) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    (pieces[0]).val < 2 ^ (K * (n + 1)) := by
+  simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
+  obtain ⟨ms, hms, hpiece, _tailChunks, _hchunks, _htail⟩ := h
+  have hsumLt := sum_digits_lt hms (n + 1)
+  rw [hpiece, ZMod.val_natCast_of_lt (lt_trans hsumLt hpow)]
+  exact hsumLt
+
+private theorem pieceChunks_large_piece_bounds
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks) :
+    (pieces[0]).val < 2 ^ (K * 25) ∧
+      (pieces.tail.tail[0]).val < 2 ^ (K * 25) ∧
+      (pieces.tail.tail.tail[0]).val < 2 ^ (K * 6) ∧
+      (pieces.tail.tail.tail.tail.tail[0]).val < 2 ^ (K * 25) ∧
+      (pieces.tail.tail.tail.tail.tail.tail[0]).val < 2 ^ (K * 25) := by
+  have hA := pieceChunks_head_val_lt (n := 24) (rest := messagePieceTailRounds)
+    two_pow_K_mul_25_lt_p hPC
+  have hPC1 := pieceChunks_tail_drop hPC
+  have hPC2 := pieceChunks_tail_drop hPC1
+  have hC := pieceChunks_head_val_lt (n := 24) (rest := [5, 0, 24, 24, 0])
+    two_pow_K_mul_25_lt_p hPC2
+  have hPC3 := pieceChunks_tail_drop hPC2
+  have hD := pieceChunks_head_val_lt (n := 5) (rest := [0, 24, 24, 0])
+    two_pow_K_mul_6_lt_p hPC3
+  have hPC4 := pieceChunks_tail_drop hPC3
+  have hPC5 := pieceChunks_tail_drop hPC4
+  have hF := pieceChunks_head_val_lt (n := 24) (rest := [24, 0])
+    two_pow_K_mul_25_lt_p hPC5
+  have hPC6 := pieceChunks_tail_drop hPC5
+  have hG := pieceChunks_head_val_lt (n := 24) (rest := [0])
+    two_pow_K_mul_25_lt_p hPC6
+  exact ⟨hA, hC, hD, hF, hG⟩
+
 private theorem z1_head_val_lt {n : ℕ} {rest : List ℕ}
     {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
     {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
@@ -2081,6 +2118,29 @@ theorem main_value_bound (G : Generators) (Q : SWPoint Pallas.curve)
     rw [← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.eval_zs env messagePieceRounds out]
     exact hzBounds.1
   exact value_from_parts_lt hd2 hz1d he0 hvalue
+
+theorem main_large_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    (pieces[0]).val < 2 ^ (K * 25) ∧
+      (pieces.tail.tail[0]).val < 2 ^ (K * 25) ∧
+      (pieces.tail.tail.tail[0]).val < 2 ^ (K * 6) ∧
+      (pieces.tail.tail.tail.tail.tail[0]).val < 2 ^ (K * 25) ∧
+      (pieces.tail.tail.tail.tail.tail.tail[0]).val < 2 ^ (K * 25) := by
+  obtain ⟨chunks, hPC, _hZs⟩ :=
+    main_commitWithZs_pieceChunks_zsFacts_of_soundness G Q hQ R env input offset h
+  let cells := (assignMessageCells input).output offset
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+  exact pieceChunks_large_piece_bounds hPC
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
