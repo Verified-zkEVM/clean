@@ -414,6 +414,90 @@ private theorem e1_eq_rho_low_bits_of_parts {rho e1 f g0 e1FPrime z14 : Ecc.Fp}
     norm_num at he1 ⊢
     omega
 
+private theorem g1_g2_eq_psi_low_bits_of_parts {psi g1 g2 h0 h1 g1G2Prime z13 : Ecc.Fp}
+    (hg1 : g1.val < 2 ^ 9) (hg2 : g2.val < 2 ^ (K * 24))
+    (hh0 : h0.val < 2 ^ 5) (hh1 : NoteCommit.IsBool h1)
+    (hlowSmall : h1 = 1 → g1.val + g2.val * 512 < 2 ^ 130)
+    (hpsi : psi =
+      g1 + g2 * 512 + h0 * OfNat.ofNat (2 ^ 249) + h1 * OfNat.ofNat (2 ^ 254))
+    (hprime : g1G2Prime = g1 + g2 * 512 + OfNat.ofNat (2 ^ 130) - NoteCommit.tP)
+    (hh0zero : h1 = 0 ∨ h0 = 0)
+    (hz13 : h1 = 0 ∨ z13 = 0)
+    (hz13Lt : z13 = 0 → g1G2Prime.val < 2 ^ (K * 13)) :
+    g1 + g2 * 512 = ((psi.val % 2 ^ 249 : ℕ) : Ecc.Fp) := by
+  let low := g1.val + g2.val * 512
+  have hlowLt249 : low < 2 ^ 249 := by
+    dsimp only [low]
+    norm_num [K] at hg1 hg2 ⊢
+    omega
+  have hlowCard : low < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_trans hlowLt249 (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  have hlowField : g1 + g2 * 512 = (low : Ecc.Fp) := by
+    dsimp only [low]
+    rw [← ZMod.natCast_zmod_val g1, ← ZMod.natCast_zmod_val g2]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt g1), ZMod.val_natCast_of_lt (ZMod.val_lt g2)]
+  rw [hlowField]
+  congr
+  rcases hh1 with hh1zero | hh1one
+  · have hpackedLt :
+        low + h0.val * 2 ^ 249 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      dsimp only [low] at hlowLt249
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at hlowLt249 hh0 ⊢
+      omega
+    have hpsiVal : psi.val = low + h0.val * 2 ^ 249 := by
+      have hpsiCast : psi = ((low + h0.val * 2 ^ 249 : ℕ) : Ecc.Fp) := by
+        rw [hpsi, hh1zero, zero_mul, _root_.add_zero, hlowField]
+        rw [← ZMod.natCast_zmod_val h0]
+        push_cast
+        rw [ZMod.val_natCast_of_lt (ZMod.val_lt h0)]
+      rw [hpsiCast, ZMod.val_natCast_of_lt hpackedLt]
+    rw [hpsiVal]
+    rw [Nat.mul_comm h0.val (2 ^ 249)]
+    rw [Nat.add_mul_mod_self_left]
+    rw [Nat.mod_eq_of_lt hlowLt249]
+  · have hh0zero' : h0 = 0 := by
+      rcases hh0zero with hz | hz
+      · exfalso
+        exact zero_ne_one (by rw [← hz, hh1one])
+      · exact hz
+    have hz13zero : z13 = 0 := by
+      rcases hz13 with hz | hz
+      · exfalso
+        exact zero_ne_one (by rw [← hz, hh1one])
+      · exact hz
+    have hprimeValLt := hz13Lt hz13zero
+    have hprimeField : g1G2Prime = (low + 2 ^ 130 - tPNat : ℕ) := by
+      rw [hprime]
+      rw [hlowField]
+      push_cast [NoteCommit.tP, tPNat]
+      ring
+    have hprimeValEq : g1G2Prime.val = low + 2 ^ 130 - tPNat := by
+      have hlt : low + 2 ^ 130 - tPNat < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+        dsimp only [low]
+        have hsmall := hlowSmall hh1one
+        norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hsmall ⊢
+        omega
+      rw [hprimeField, ZMod.val_natCast_of_lt hlt]
+    have hlowLtTP : low < tPNat := by
+      rw [hprimeValEq] at hprimeValLt
+      norm_num [K] at hprimeValLt ⊢
+      omega
+    have hpackedLt :
+        low + 2 ^ 254 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hlowLtTP ⊢
+      omega
+    have hpsiVal : psi.val = low + 2 ^ 254 := by
+      have hpsiCast : psi = ((low + 2 ^ 254 : ℕ) : Ecc.Fp) := by
+        rw [hpsi, hh0zero', hh1one]
+        rw [zero_mul, one_mul, _root_.add_zero, hlowField]
+        norm_num
+      rw [hpsiCast, ZMod.val_natCast_of_lt hpackedLt]
+    rw [hpsiVal]
+    rw [show (2 : ℕ) ^ 254 = 2 ^ 249 * 32 by norm_num]
+    rw [Nat.add_mul_mod_self_left]
+    rw [Nat.mod_eq_of_lt hlowLt249]
+
 private theorem low_58_from_low_middle (v : ℕ) :
     v % 256 + (v / 256 % 2 ^ (K * 5)) * 256 = v % 2 ^ 58 := by
   norm_num [K]
@@ -2608,6 +2692,26 @@ theorem main_commitInput_f_tail_value (env : Environment Ecc.Fp) (input : Var In
         r := input.rcm }
     let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
     pieces.tail.tail.tail.tail.tail[0] = eval env cells.f := by
+  simp only [circuit_norm, Vector.getElem_tail, Nat.reduceAdd]
+
+theorem main_commitInput_g_tail_value (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp)
+    (offset : ℕ) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    pieces.tail.tail.tail.tail.tail.tail[0] = eval env cells.g := by
+  simp only [circuit_norm, Vector.getElem_tail, Nat.reduceAdd]
+
+theorem main_commitInput_h_tail_value (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp)
+    (offset : ℕ) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    pieces.tail.tail.tail.tail.tail.tail.tail[0] = eval env cells.h := by
   simp only [circuit_norm, Vector.getElem_tail, Nat.reduceAdd]
 
 theorem main_large_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
