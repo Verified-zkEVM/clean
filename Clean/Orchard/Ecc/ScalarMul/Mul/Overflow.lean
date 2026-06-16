@@ -147,34 +147,6 @@ def Spec (input : Input Fp) : Prop :=
 instance elaborated : ElaboratedCircuit Fp Input unit main := by
   elaborate_circuit
 
-/-- Telescoping a `K`-bit running-sum chain: `f 0` splits into `K * k` low bits and
-`2^(K*k) * f k`. -/
-private theorem chain_telescope (f : ℕ → Fp) :
-    ∀ k : ℕ,
-    (∀ i, i < k → ∃ w : ℕ, w < 2 ^ Utilities.LookupRangeCheck.K ∧
-      f i = 2 ^ Utilities.LookupRangeCheck.K * f (i + 1) + (w : Fp)) →
-    ∃ lo : ℕ, lo < 2 ^ (Utilities.LookupRangeCheck.K * k) ∧
-      f 0 = (lo : Fp) + 2 ^ (Utilities.LookupRangeCheck.K * k) * f k
-  | 0, _ => ⟨0, by norm_num, by norm_num⟩
-  | k + 1, h => by
-    set K := Utilities.LookupRangeCheck.K
-    obtain ⟨lo, hlt, heq⟩ := chain_telescope f k fun i hi => h i (by omega)
-    obtain ⟨w, hw, hstep⟩ := h k (by omega)
-    refine ⟨lo + w * 2 ^ (K * k), ?_, ?_⟩
-    · have hsplit : (2 : ℕ) ^ (K * (k + 1)) = 2 ^ K * 2 ^ (K * k) := by
-        rw [← pow_add]
-        ring_nf
-      have hbound : lo + w * 2 ^ (K * k) < (w + 1) * 2 ^ (K * k) := by
-        have := Nat.two_pow_pos (K * k)
-        nlinarith
-      have : (w + 1) * 2 ^ (K * k) ≤ 2 ^ K * 2 ^ (K * k) :=
-        Nat.mul_le_mul_right _ (by omega)
-      omega
-    · rw [heq, hstep]
-      push_cast
-      rw [show K * (k + 1) = K * k + K from by ring, pow_add]
-      ring
-
 /-- Name the evaluation of a vector's cell 13 opaquely; stating this over an abstract
 `v` lets the caller instantiate it with a concrete append term whose `getElem` bound
 would not elaborate inline. -/

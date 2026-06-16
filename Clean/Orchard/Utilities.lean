@@ -1096,6 +1096,53 @@ def Spec (numWords : ℕ) (element : Fp) (zs : fields (numWords + 1) Fp)
       zs[i.val]'(Nat.lt_succ_of_lt i.isLt) =
         2 ^ K * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt) + (word : Fp)
 
+/-- Telescoping a `K`-bit running-sum chain: `f 0` splits into `K * k` low bits and
+`2^(K*k) * f k`. -/
+theorem chain_telescope (f : ℕ → Fp) :
+    ∀ k : ℕ,
+    (∀ i, i < k → ∃ w : ℕ, w < 2 ^ K ∧ f i = 2 ^ K * f (i + 1) + (w : Fp)) →
+    ∃ lo : ℕ, lo < 2 ^ (K * k) ∧ f 0 = (lo : Fp) + 2 ^ (K * k) * f k
+  | 0, _ => ⟨0, by norm_num, by norm_num⟩
+  | k + 1, h => by
+    obtain ⟨lo, hlt, heq⟩ := chain_telescope f k fun i hi => h i (by omega)
+    obtain ⟨w, hw, hstep⟩ := h k (by omega)
+    refine ⟨lo + w * 2 ^ (K * k), ?_, ?_⟩
+    · have hsplit : (2 : ℕ) ^ (K * (k + 1)) = 2 ^ K * 2 ^ (K * k) := by
+        rw [← pow_add]
+        ring_nf
+      have hbound : lo + w * 2 ^ (K * k) < (w + 1) * 2 ^ (K * k) := by
+        have := Nat.two_pow_pos (K * k)
+        nlinarith
+      have : (w + 1) * 2 ^ (K * k) ≤ 2 ^ K * 2 ^ (K * k) :=
+        Nat.mul_le_mul_right _ (by omega)
+      omega
+    · rw [heq, hstep]
+      push_cast
+      rw [show K * (k + 1) = K * k + K from by ring, pow_add]
+      ring
+
+/-- A `CopyCheck.Spec` running-sum vector telescopes from `z₀` to any later `z_k`. -/
+theorem spec_telescope {numWords : ℕ} {element : Fp} {zs : fields (numWords + 1) Fp}
+    {data : ProverData Fp} (h : Spec numWords element zs data) (k : ℕ) (hk : k ≤ numWords) :
+    ∃ lo : ℕ, lo < 2 ^ (K * k) ∧
+      zs[0]'(Nat.succ_pos numWords) =
+        (lo : Fp) + 2 ^ (K * k) * zs[k]'(Nat.lt_succ_of_le hk) := by
+  let f : ℕ → Fp := fun i => if hi : i < numWords + 1 then zs[i]'hi else 0
+  have hchain : ∀ i, i < k → ∃ w : ℕ, w < 2 ^ K ∧
+      f i = 2 ^ K * f (i + 1) + (w : Fp) := by
+    intro i hi
+    have hiN : i < numWords := lt_of_lt_of_le hi hk
+    have hiS : i + 1 < numWords + 1 := Nat.succ_lt_succ hiN
+    obtain ⟨w, hw, hstep⟩ := h.2 ⟨i, hiN⟩
+    refine ⟨w, hw, ?_⟩
+    dsimp [f]
+    simp only [dif_pos (Nat.lt_trans hiN (Nat.lt_succ_self numWords)), dif_pos hiS]
+    exact hstep
+  obtain ⟨lo, hlo, htel⟩ := chain_telescope f k hchain
+  refine ⟨lo, hlo, ?_⟩
+  dsimp [f] at htel
+  simpa only [dif_pos (Nat.succ_pos numWords), dif_pos (Nat.lt_succ_of_le hk)] using htel
+
 /-- The honest prover assigns the canonical decomposition: `z_i = element >> (K * i)`. -/
 def ProverSpec (numWords : ℕ) (element : Fp) (zs : fields (numWords + 1) Fp)
     (_ : ProverHint Fp) : Prop :=
