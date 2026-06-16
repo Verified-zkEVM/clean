@@ -1448,6 +1448,41 @@ private theorem pieceChunks_f_val_lt_of_z13_zero
     (hpowHigh := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
     hPC5 hZs5 hz13f
 
+private theorem pieceChunks_c_val_lt_of_z13_zero
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
+    (hz13c :
+      (HVec.head (HVec.tail (HVec.tail zs)))[13]'(by decide) = 0) :
+    (pieces.tail.tail[0]).val < 2 ^ (K * 13) := by
+  have hPC1 := pieceChunks_tail_drop hPC
+  have hZs1 := zsFacts_tail hZs
+  have hPC2 := pieceChunks_tail_drop hPC1
+  have hZs2 := zsFacts_tail hZs1
+  exact pieceChunks_head_val_lt_of_z_zero
+    (n := 24) (r := 13) (rest := [5, 0, 24, 24, 0])
+    (hr := by norm_num)
+    (hpowLow := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    (hpowHigh := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    hPC2 hZs2 hz13c
+
+private theorem b3_c_low_lt_of_piece_z13_zero {b3 c : Ecc.Fp}
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    (hb3 : b3.val < 2 ^ 4)
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
+    (hz13c :
+      (HVec.head (HVec.tail (HVec.tail zs)))[13]'(by decide) = 0)
+    (hc : pieces.tail.tail[0] = c) :
+    b3.val + c.val * 16 < 2 ^ 134 := by
+  have hcLt := pieceChunks_c_val_lt_of_z13_zero hPC hZs hz13c
+  have hcVal := congrArg ZMod.val hc
+  rw [hcVal] at hcLt
+  norm_num [K] at hb3 hcLt ⊢
+  omega
+
 private theorem pieceChunks_e1_f_low_lt_of_z13_zero
     {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
     {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
@@ -3336,6 +3371,16 @@ theorem main_commitInput_f_tail_value (env : Environment Ecc.Fp) (input : Var In
     pieces.tail.tail.tail.tail.tail[0] = eval env cells.f := by
   simp only [circuit_norm, Vector.getElem_tail, Nat.reduceAdd]
 
+theorem main_commitInput_c_tail_value (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp)
+    (offset : ℕ) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    pieces.tail.tail[0] = eval env cells.c := by
+  simp only [circuit_norm, Vector.getElem_tail]
+
 theorem main_commitInput_g_tail_value (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp)
     (offset : ℕ) :
     let cells := (assignMessageCells input).output offset
@@ -3428,6 +3473,55 @@ theorem main_rho_low_small_of_g0_one (G : Generators) (Q : SWPoint Pallas.curve)
     simpa only [messagePieceRounds, messagePieceTailRounds] using hz13fVar
   have hfTail := main_commitInput_f_tail_value env input offset
   exact e1_f_low_lt_of_piece_z13_zero he1 hPC hZs hz13fTail hfTail
+
+theorem main_pkd_low_small_of_d0_one (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    eval env cells.d0 = 1 →
+      (show Ecc.Fp from eval env cells.b3).val +
+        (show Ecc.Fp from eval env cells.c).val * 16 < 2 ^ 134 := by
+  let cells := (assignMessageCells input).output offset
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+  dsimp only
+  intro hd0One
+  obtain ⟨chunks, hPC, hZs⟩ :=
+    main_commitWithZs_pieceChunks_zsFacts_of_soundness G Q hQ R env input offset h
+  have hrange := main_assignMessageCells_short_range_specs G Q hQ R env input offset h
+  have hcanon := main_input_canonicity_facts G Q hQ R env input offset h
+  simp only at hrange hcanon
+  rcases hrange with ⟨_hb0, hb3, _hd2, _he0, _he1, _hg1, _hh0⟩
+  rcases hcanon with ⟨_hgd, hpkd, _hvalue, _hrho, _hpsi⟩
+  rcases hpkd with ⟨_hpkd, _hprime, hz13cZero, _hz14⟩
+  have hz13cVar : eval env z13c = 0 := by
+    rcases hz13cZero with hz | hz
+    · exfalso
+      have h01 : (0 : Ecc.Fp) = 1 := hz.symm.trans hd0One
+      have hval := congrArg ZMod.val h01
+      simp [ZMod.val_one] at hval
+    · simpa only [z13c, out, cells, commitOffset] using hz
+  have hz13cEval :
+      eval env z13c =
+        (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+          (eval env out.zs) ⟨2, by decide⟩)[13] := by
+    dsimp only [z13c, out]
+    exact HVec.eval_getElem env (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+      out.zs ⟨2, by decide⟩ 13 (by decide)
+  rw [hz13cEval] at hz13cVar
+  rw [← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.eval_zs env messagePieceRounds out]
+    at hz13cVar
+  have hz13cTail :
+      (HVec.head (HVec.tail (HVec.tail (eval env out).zs)))[13]'(by decide) = 0 := by
+    simpa only [messagePieceRounds, messagePieceTailRounds] using hz13cVar
+  have hcTail := main_commitInput_c_tail_value env input offset
+  exact b3_c_low_lt_of_piece_z13_zero hb3 hPC hZs hz13cTail hcTail
 
 theorem main_g0_eq_rho_high_bit (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
