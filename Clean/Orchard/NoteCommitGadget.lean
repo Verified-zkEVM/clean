@@ -1245,6 +1245,32 @@ theorem commitWithZs_spec_of_soundness (G : Generators) (Q : SWPoint Pallas.curv
     GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at h
   exact h.1 trivial
 
+private theorem formalAssertion_spec_of_soundness {Row : TypeMap} [ProvableType Row]
+    (circuit : FormalAssertion Ecc.Fp Row) (env : Environment Ecc.Fp)
+    (row : Var Row Ecc.Fp) (offset : ℕ)
+    (hAssumptions : circuit.Assumptions (eval env row))
+    (h : ConstraintsHold.Soundness env ((assertion circuit row).operations offset)) :
+    circuit.Spec (eval env row) := by
+  simp only [ConstraintsHold.Soundness, assertion, Circuit.operations,
+    Operations.forAllNoOffset, FormalAssertion.toSubcircuit_soundness] at h
+  exact h.1 hAssumptions
+
+theorem constrainCommitment_decomposeB_spec (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let row : Var NoteCommit.DecomposeB.Row Ecc.Fp :=
+      { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
+    NoteCommit.DecomposeB.Spec (eval env row) := by
+  let row : Var NoteCommit.DecomposeB.Row Ecc.Fp :=
+    { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
+  unfold constrainCommitment at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset,
+    DecomposeB.circuit] at h
+  exact formalAssertion_spec_of_soundness NoteCommit.DecomposeB.circuit env row _ trivial
+    h.2.2.2.2.1
+
 theorem commitAndConstrain_output_eq (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
     (cells : MessageCells) (offset : ℕ) :
