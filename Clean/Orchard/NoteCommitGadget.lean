@@ -202,6 +202,69 @@ private theorem isBool_val_eq_zero_or_one {x : Ecc.Fp} (h : NoteCommit.IsBool x)
   · right
     rw [h, ZMod.val_one]
 
+private theorem decomposeB_value_lt {b b0 b1 b2 b3 : Ecc.Fp}
+    (hb0 : b0.val < 2 ^ 4) (hb1 : NoteCommit.IsBool b1)
+    (hb2 : NoteCommit.IsBool b2) (hb3 : b3.val < 2 ^ 4)
+    (hdec : b = b0 + b1 * 16 + b2 * 32 + b3 * 64) :
+    b.val < 2 ^ K := by
+  have hb1lt := isBool_val_lt_two hb1
+  have hb2lt := isBool_val_lt_two hb2
+  let packed := b0.val + b1.val * 16 + b2.val * 32 + b3.val * 64
+  have hPackedLt : packed < 2 ^ K := by
+    norm_num [K] at hb0 hb3 ⊢
+    omega
+  have hPackedCard : packed < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD :=
+    lt_trans hPackedLt two_pow_K_lt_p
+  have hcast : b = (packed : Ecc.Fp) := by
+    rw [hdec]
+    dsimp only [packed]
+    rw [← ZMod.natCast_zmod_val b0, ← ZMod.natCast_zmod_val b1,
+      ← ZMod.natCast_zmod_val b2, ← ZMod.natCast_zmod_val b3]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt b0), ZMod.val_natCast_of_lt (ZMod.val_lt b1),
+      ZMod.val_natCast_of_lt (ZMod.val_lt b2), ZMod.val_natCast_of_lt (ZMod.val_lt b3)]
+  rw [hcast, ZMod.val_natCast_of_lt hPackedCard]
+  exact hPackedLt
+
+private theorem decomposeE_value_lt {e e0 e1 : Ecc.Fp}
+    (he0 : e0.val < 2 ^ 6) (he1 : e1.val < 2 ^ 4)
+    (hdec : e = e0 + e1 * 64) :
+    e.val < 2 ^ K := by
+  let packed := e0.val + e1.val * 64
+  have hPackedLt : packed < 2 ^ K := by
+    norm_num [K] at he0 he1 ⊢
+    omega
+  have hPackedCard : packed < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD :=
+    lt_trans hPackedLt two_pow_K_lt_p
+  have hcast : e = (packed : Ecc.Fp) := by
+    rw [hdec]
+    dsimp only [packed]
+    rw [← ZMod.natCast_zmod_val e0, ← ZMod.natCast_zmod_val e1]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt e0), ZMod.val_natCast_of_lt (ZMod.val_lt e1)]
+  rw [hcast, ZMod.val_natCast_of_lt hPackedCard]
+  exact hPackedLt
+
+private theorem decomposeH_value_lt {h h0 h1 : Ecc.Fp}
+    (hh0 : h0.val < 2 ^ 5) (hh1 : NoteCommit.IsBool h1)
+    (hdec : h = h0 + h1 * 32) :
+    h.val < 2 ^ K := by
+  have hh1lt := isBool_val_lt_two hh1
+  let packed := h0.val + h1.val * 32
+  have hPackedLt : packed < 2 ^ K := by
+    norm_num [K] at hh0 ⊢
+    omega
+  have hPackedCard : packed < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD :=
+    lt_trans hPackedLt two_pow_K_lt_p
+  have hcast : h = (packed : Ecc.Fp) := by
+    rw [hdec]
+    dsimp only [packed]
+    rw [← ZMod.natCast_zmod_val h0, ← ZMod.natCast_zmod_val h1]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt h0), ZMod.val_natCast_of_lt (ZMod.val_lt h1)]
+  rw [hcast, ZMod.val_natCast_of_lt hPackedCard]
+  exact hPackedLt
+
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
     Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
       Orchard.Specs.Sinsemilla.chunksOf low n := by
@@ -1861,6 +1924,25 @@ theorem main_input_canonicity_facts (G : Generators) (Q : SWPoint Pallas.curve)
   simpa only [circuit_norm, NoteCommit.GdCanonicity.Spec, NoteCommit.PkdCanonicity.Spec,
     NoteCommit.ValueCanonicity.Spec, NoteCommit.RhoCanonicity.Spec,
     NoteCommit.PsiCanonicity.Spec] using hs
+
+theorem main_one_word_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    (show Ecc.Fp from eval env cells.b).val < 2 ^ K ∧
+      (show Ecc.Fp from eval env cells.e).val < 2 ^ K ∧
+      (show Ecc.Fp from eval env cells.h).val < 2 ^ K := by
+  have hrange := main_assignMessageCells_short_range_specs G Q hQ R env input offset h
+  have hdecomp := main_message_piece_decomposition_facts G Q hQ R env input offset h
+  simp only at hrange hdecomp ⊢
+  rcases hrange with ⟨hb0, hb3, _hd2, he0, he1, _hg1, hh0⟩
+  rcases hdecomp with
+    ⟨⟨hb1, hb2, hB⟩, _hD, hE, _hG, hh1, hH⟩
+  exact ⟨
+    decomposeB_value_lt hb0 hb1 hb2 hb3 hB,
+    decomposeE_value_lt he0 he1 hE,
+    decomposeH_value_lt hh0 hh1 hH⟩
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
