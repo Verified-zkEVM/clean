@@ -1,6 +1,6 @@
 import Clean.Circuit
 import Clean.Gadgets.Boolean
-import Clean.Orchard.NoteCommitGate
+import Clean.Orchard.Action.NoteCommitGate
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 

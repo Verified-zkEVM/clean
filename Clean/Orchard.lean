@@ -1,6 +1,5 @@
 import Clean.Orchard.Action
 import Clean.Orchard.Ecc
-import Clean.Orchard.NoteCommit
 import Clean.Orchard.Poseidon
 import Clean.Orchard.Ecc.ScalarMul
 import Clean.Orchard.Sinsemilla.Chip

@@ -2,6 +2,8 @@ import Clean.Orchard.Action.CommitIvk
 import Clean.Orchard.Action.CommitIvkGate
 import Clean.Orchard.Action.DeriveNullifier
 import Clean.Orchard.Action.Gate
+import Clean.Orchard.Action.NoteCommit
+import Clean.Orchard.Action.NoteCommitGate
 import Clean.Orchard.Action.SpendAuthority
 import Clean.Orchard.Action.ValueCommit
 
