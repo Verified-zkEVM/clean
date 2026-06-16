@@ -752,6 +752,87 @@ theorem pieceChunks_messagePieceRounds_chunks
   exact ⟨msA, msB, msC, msD, msE, msF, msG, msH,
     hA, hB, hC, hD, hE, hF, hG, hH, by simp only [List.append_nil, List.append_assoc]⟩
 
+private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {gdX gdY pkdX pkdY v rho psi : ℕ}
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hA : pieces[0] = (gdX : Ecc.Fp))
+    (hB : pieces[1] =
+      ((gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
+        (pkdX % 16) * 64 : ℕ) : Ecc.Fp))
+    (hC : pieces[2] = ((pkdX / 16 : ℕ) : Ecc.Fp))
+    (hD : pieces[3] =
+      ((pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 : ℕ) : Ecc.Fp))
+    (hE : pieces[4] =
+      ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Ecc.Fp))
+    (hF : pieces[5] = ((rho / 16 : ℕ) : Ecc.Fp))
+    (hG : pieces[6] =
+      ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Ecc.Fp))
+    (hH : pieces[7] =
+      ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Ecc.Fp))
+    (hgdXCard : gdX < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hpkdXCard : pkdX < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hrhoCard : rho < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hgdX255 : gdX < 2 ^ 255) (hgdY : gdY < 2)
+    (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
+    (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
+    chunks = Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
+  simp only [messagePieceTailRounds, Orchard.Sinsemilla.Chain.PieceChunks] at hPC
+  obtain ⟨msA, hmsA, hpA, tailA, rfl, hPC⟩ := hPC
+  obtain ⟨msB, hmsB, hpB, tailB, rfl, hPC⟩ := hPC
+  obtain ⟨msC, hmsC, hpC, tailC, rfl, hPC⟩ := hPC
+  obtain ⟨msD, hmsD, hpD, tailD, rfl, hPC⟩ := hPC
+  obtain ⟨msE, hmsE, hpE, tailE, rfl, hPC⟩ := hPC
+  obtain ⟨msF, hmsF, hpF, tailF, rfl, hPC⟩ := hPC
+  obtain ⟨msG, hmsG, hpG, tailG, rfl, hPC⟩ := hPC
+  obtain ⟨msH, hmsH, hpH, tailH, rfl, hPC⟩ := hPC
+  subst tailH
+  have ht1 : pieces.tail[0] = pieces[1] :=
+    Vector.getElem_tail (v := pieces) (i := 0) (hi := by decide)
+  have ht2 : pieces.tail.tail[0] = pieces[2] := by
+    exact (Vector.getElem_tail (v := pieces.tail) (i := 0) (hi := by decide)).trans
+      (Vector.getElem_tail (v := pieces) (i := 1) (hi := by decide))
+  have ht3 : pieces.tail.tail.tail[0] = pieces[3] := by
+    exact (Vector.getElem_tail (v := pieces.tail.tail) (i := 0) (hi := by decide)).trans
+      ((Vector.getElem_tail (v := pieces.tail) (i := 1) (hi := by decide)).trans
+        (Vector.getElem_tail (v := pieces) (i := 2) (hi := by decide)))
+  have ht4 : pieces.tail.tail.tail.tail[0] = pieces[4] := by
+    exact (Vector.getElem_tail (v := pieces.tail.tail.tail) (i := 0) (hi := by decide)).trans
+      ((Vector.getElem_tail (v := pieces.tail.tail) (i := 1) (hi := by decide)).trans
+        ((Vector.getElem_tail (v := pieces.tail) (i := 2) (hi := by decide)).trans
+          (Vector.getElem_tail (v := pieces) (i := 3) (hi := by decide))))
+  have ht5 : pieces.tail.tail.tail.tail.tail[0] = pieces[5] := by
+    exact (Vector.getElem_tail (v := pieces.tail.tail.tail.tail) (i := 0) (hi := by decide)).trans
+      ((Vector.getElem_tail (v := pieces.tail.tail.tail) (i := 1) (hi := by decide)).trans
+        ((Vector.getElem_tail (v := pieces.tail.tail) (i := 2) (hi := by decide)).trans
+          ((Vector.getElem_tail (v := pieces.tail) (i := 3) (hi := by decide)).trans
+            (Vector.getElem_tail (v := pieces) (i := 4) (hi := by decide)))))
+  have ht6 : pieces.tail.tail.tail.tail.tail.tail[0] = pieces[6] := by
+    exact (Vector.getElem_tail (v := pieces.tail.tail.tail.tail.tail) (i := 0) (hi := by decide)).trans
+      ((Vector.getElem_tail (v := pieces.tail.tail.tail.tail) (i := 1) (hi := by decide)).trans
+        ((Vector.getElem_tail (v := pieces.tail.tail.tail) (i := 2) (hi := by decide)).trans
+          ((Vector.getElem_tail (v := pieces.tail.tail) (i := 3) (hi := by decide)).trans
+            ((Vector.getElem_tail (v := pieces.tail) (i := 4) (hi := by decide)).trans
+              (Vector.getElem_tail (v := pieces) (i := 5) (hi := by decide))))))
+  have ht7 : pieces.tail.tail.tail.tail.tail.tail.tail[0] = pieces[7] := by
+    exact (Vector.getElem_tail (v := pieces.tail.tail.tail.tail.tail.tail) (i := 0) (hi := by decide)).trans
+      ((Vector.getElem_tail (v := pieces.tail.tail.tail.tail.tail) (i := 1) (hi := by decide)).trans
+        ((Vector.getElem_tail (v := pieces.tail.tail.tail.tail) (i := 2) (hi := by decide)).trans
+          ((Vector.getElem_tail (v := pieces.tail.tail.tail) (i := 3) (hi := by decide)).trans
+            ((Vector.getElem_tail (v := pieces.tail.tail) (i := 4) (hi := by decide)).trans
+              ((Vector.getElem_tail (v := pieces.tail) (i := 5) (hi := by decide)).trans
+                (Vector.getElem_tail (v := pieces) (i := 6) (hi := by decide)))))))
+  exact noteCommitChunks_eq_of_piece_digit_sums hmsA hmsB hmsC hmsD hmsE hmsF hmsG hmsH
+    (hA.symm.trans hpA)
+    ((ht1.trans hB).symm.trans hpB)
+    ((ht2.trans hC).symm.trans hpC)
+    ((ht3.trans hD).symm.trans hpD)
+    ((ht4.trans hE).symm.trans hpE)
+    ((ht5.trans hF).symm.trans hpF)
+    ((ht6.trans hG).symm.trans hpG)
+    ((ht7.trans hH).symm.trans hpH)
+    hgdXCard hpkdXCard hrhoCard hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
+
 def assignSubpieces (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageSubpieces := do
   let gdX := input.gd.x
   let gdY := input.gd.y
