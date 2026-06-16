@@ -725,6 +725,37 @@ def noteScalarsOf (gd pkd : Point Fp) (value rho psi : Fp) :
 def messagePieces (cells : MessageCells Fp) : Vector Fp messagePieceRounds.length :=
   #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h]
 
+/-- Semantic facts about the note-commit message cells assigned before the Sinsemilla
+commitment. These are the local bit-slice facts produced by `AssignMessageCells`; the
+Sinsemilla piece/chunk relation is stated separately as `MessagePiecesEncode`. -/
+def MessageCellFacts (gd pkd : Point Fp) (value rho psi : Fp) (cells : MessageCells Fp) :
+    Prop :=
+  cells.a = ((bitrange gd.x.val 0 250 : ℕ) : Fp) ∧
+  cells.b0 = ((bitrange gd.x.val 250 4 : ℕ) : Fp) ∧
+  cells.b1 = ((bitrange gd.x.val 254 1 : ℕ) : Fp) ∧
+  IsLowBit gd.y cells.b2 ∧
+  cells.b3 = ((bitrange pkd.x.val 0 4 : ℕ) : Fp) ∧
+  cells.c = ((bitrange pkd.x.val 4 250 : ℕ) : Fp) ∧
+  cells.d0 = ((bitrange pkd.x.val 254 1 : ℕ) : Fp) ∧
+  IsLowBit pkd.y cells.d1 ∧
+  cells.d2 = ((bitrange value.val 0 8 : ℕ) : Fp) ∧
+  cells.e0 = ((bitrange value.val 58 6 : ℕ) : Fp) ∧
+  cells.e1 = ((bitrange rho.val 0 4 : ℕ) : Fp) ∧
+  cells.f = ((bitrange rho.val 4 250 : ℕ) : Fp) ∧
+  cells.g0 = ((bitrange rho.val 254 1 : ℕ) : Fp) ∧
+  cells.g1 = ((bitrange psi.val 0 9 : ℕ) : Fp) ∧
+  cells.h0 = ((bitrange psi.val 249 5 : ℕ) : Fp) ∧
+  cells.h1 = ((bitrange psi.val 254 1 : ℕ) : Fp) ∧
+  cells.b =
+    cells.b0 + cells.b1 * 16 + cells.b2 * 32 + cells.b3 * 64 ∧
+  cells.d =
+    cells.d0 + cells.d1 * 2 + cells.d2 * 4 +
+      ((bitrange value.val 8 50 : ℕ) : Fp) * 1024 ∧
+  cells.e = cells.e0 + cells.e1 * 64 ∧
+  cells.g =
+    cells.g0 + cells.g1 * 2 + ((bitrange psi.val 9 240 : ℕ) : Fp) * 1024 ∧
+  cells.h = cells.h0 + cells.h1 * 32
+
 def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
   noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
 
@@ -819,11 +850,13 @@ def ProverAssumptions (_input : ProverValue Input Fp) (_ : ProverData Fp)
 
 def Spec (input : Value Input Fp) (cells : Value MessageCells Fp)
     (_ : ProverData Fp) : Prop :=
-  MessagePiecesEncode input cells
+  MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells ∧
+    MessagePiecesEncode input cells
 
 def ProverSpec (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
-  ProverMessagePiecesEncode input cells ∧
+  MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells ∧
+    ProverMessagePiecesEncode input cells ∧
     Orchard.Sinsemilla.Chain.PieceBounds messagePieceRounds (messagePieces cells)
 
 theorem soundness :
@@ -845,6 +878,69 @@ def circuit : GeneralFormalCircuit.WithHint Fp Input MessageCells where
   completeness := completeness
 
 end AssignMessageCells
+
+namespace DecompositionChecks
+
+structure Input (F : Type) where
+  cells : MessageCells F
+  z1d : F
+  z1g : F
+deriving ProvableStruct
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ cells := default, z1d := default, z1g := default }⟩
+
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  let cells := input.cells
+  DecomposeB.Gate.circuit
+    { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
+  DecomposeD.Gate.circuit
+    { d := cells.d, d0 := cells.d0, d1 := cells.d1, d2 := cells.d2, d3 := input.z1d }
+  DecomposeE.Gate.circuit { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
+  DecomposeG.Gate.circuit { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := input.z1g }
+  DecomposeH.Gate.circuit { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+def Spec (input : Input Fp) : Prop :=
+  IsBool input.cells.b1 ∧
+  IsBool input.cells.b2 ∧
+  input.cells.b =
+    input.cells.b0 + input.cells.b1 * 16 + input.cells.b2 * 32 + input.cells.b3 * 64 ∧
+  IsBool input.cells.d0 ∧
+  IsBool input.cells.d1 ∧
+  input.cells.d =
+    input.cells.d0 + input.cells.d1 * 2 + input.cells.d2 * 4 + input.z1d * 1024 ∧
+  input.cells.e = input.cells.e0 + input.cells.e1 * 64 ∧
+  IsBool input.cells.g0 ∧
+  input.cells.g = input.cells.g0 + input.cells.g1 * 2 + input.z1g * 1024 ∧
+  IsBool input.cells.h1 ∧
+  input.cells.h = input.cells.h0 + input.cells.h1 * 32
+
+theorem soundness : FormalAssertion.Soundness Fp main (fun _ => True) Spec := by
+  circuit_proof_start [DecomposeB.Gate.circuit, DecomposeD.Gate.circuit,
+    DecomposeE.Gate.circuit, DecomposeG.Gate.circuit, DecomposeH.Gate.circuit]
+  rcases h_holds with ⟨hB, hD, hE, hG, hH⟩
+  rcases hB with ⟨hb1, hb2, hb⟩
+  rcases hD with ⟨hd0, hd1, hd⟩
+  rcases hG with ⟨hg0, hg⟩
+  exact ⟨hb1, hb2, hb, hd0, hd1, hd, hE, hg0, hg, hH.1, hH.2⟩
+
+theorem completeness : FormalAssertion.Completeness Fp main (fun _ => True) Spec := by
+  circuit_proof_start [DecomposeB.Gate.circuit, DecomposeD.Gate.circuit,
+    DecomposeE.Gate.circuit, DecomposeG.Gate.circuit, DecomposeH.Gate.circuit]
+  rcases h_spec with ⟨hb1, hb2, hb, hd0, hd1, hd, hE, hg0, hg, hh1, hh⟩
+  exact ⟨⟨hb1, hb2, hb⟩, ⟨hd0, hd1, hd⟩, hE, ⟨hg0, hg⟩, ⟨hh1, hh⟩⟩
+
+def circuit : FormalAssertion Fp Input where
+  main := main
+  elaborated := elaborated
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
+
+end DecompositionChecks
 
 namespace ConstraintChecks
 
@@ -890,13 +986,7 @@ def main (input : Var Input Fp) : Circuit Fp Unit := do
     env cells.g1 + (2 ^ 9 : Fp) * env z1g + (2 ^ 130 : Fp) - Ecc.tP
   let g1g2PrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 g1g2Prime
 
-  DecomposeB.Gate.circuit
-    { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
-  DecomposeD.Gate.circuit
-    { d := cells.d, d0 := cells.d0, d1 := cells.d1, d2 := cells.d2, d3 := z1d }
-  DecomposeE.Gate.circuit { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
-  DecomposeG.Gate.circuit { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := z1g }
-  DecomposeH.Gate.circuit { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
+  DecompositionChecks.circuit { cells, z1d, z1g }
   GdCanonicity.Gate.circuit
     { gdX, b0 := cells.b0, b1 := cells.b1, a := cells.a, aPrime := aPrimeZs[0], z13A := z13a,
       z13APrime := aPrimeZs[13] }
@@ -915,9 +1005,10 @@ instance elaborated : ElaboratedCircuit Fp Input unit main := by
   elaborate_circuit
 
 def Assumptions (input : Input Fp) : Prop :=
-  ∃ chunks : List ℕ,
-    Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (messagePieces input.cells) chunks ∧
-    Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks input.zs
+  MessageCellFacts input.gd input.pkd input.value input.rho input.psi input.cells ∧
+    ∃ chunks : List ℕ,
+      Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (messagePieces input.cells) chunks ∧
+      Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks input.zs
 
 def Spec (input : Input Fp) : Prop :=
   NoteCommitPieceValues (noteScalars input.gd input.pkd input.value input.rho input.psi)
@@ -972,10 +1063,14 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 def Assumptions (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
     (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  MessagePiecesEncode input.note input.cells
+  MessageCellFacts input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi
+      input.cells ∧
+    MessagePiecesEncode input.note input.cells
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
+  MessageCellFacts input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi
+      input.cells ∧
   ProverMessagePiecesEncode input.note input.cells ∧
     Orchard.Sinsemilla.Chain.PieceBounds messagePieceRounds (messagePieces input.cells) ∧
     ∃ B, hashToPoint G.S Q
@@ -1080,8 +1175,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     ProverAssumptions, ProverSpec, AssignMessageCells.ProverSpec,
     CommitAndConstrain.ProverAssumptions, CommitAndConstrain.ProverSpec]
   let hAssign := (h_env.1 trivial).2
-  exact ⟨⟨trivial, hAssign.1, hAssign.2, h_assumptions.2.2⟩,
-    (h_env.2 ⟨hAssign.1, hAssign.2, h_assumptions.2.2⟩).2⟩
+  exact ⟨⟨trivial, hAssign.1, hAssign.2.1, hAssign.2.2, h_assumptions.2.2⟩,
+    (h_env.2 ⟨hAssign.1, hAssign.2.1, hAssign.2.2, h_assumptions.2.2⟩).2⟩
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
