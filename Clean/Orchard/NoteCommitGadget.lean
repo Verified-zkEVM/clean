@@ -1054,157 +1054,19 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
   rw [noteCommitChunks_segment_g _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho]
   rw [noteCommitChunks_segment_h _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho hpsi]
 
-/-! ### Canonicity bound helpers (note_commit.rs:1804-1954)
-
-Each witnesses a "prime" value (the element shifted up by `2^130`/`2^140` minus `t_P`)
-and runs a `LookupRangeCheck` running-sum decomposition (`CopyCheck`), returning the
-prime cell (`z_0`) and the final running sum (`z_13`/`z_14`). `prime` decomposes as
-`prime = lo + 2^(K·n) · z_last` with `lo < 2^(K·n)`, so `z_last = 0 ⟹ prime < 2^(K·n)` —
-the canonicity bound the `*Canonicity` gates consume. These are plain synthesis helpers
-(not bundled circuits): the `prime = element + 2^… - t_P` link is enforced by the gate.
-
-`copyCheck` is `LookupRangeCheck.CopyCheck.circuit`. `tP = T_P`. -/
-
-/-- `canon_bitshift_130(a)`: returns `(a_prime, z_13)` for `a_prime = a + 2^130 - t_P`. -/
-def canonBitshift130 (a : Var field Ecc.Fp) :
-    Circuit Ecc.Fp (Var field Ecc.Fp × Var field Ecc.Fp) := do
-  let aPrime ← witnessField fun env => env a + (2 ^ 130 : Ecc.Fp) - tP
-  let zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 aPrime
-  return (zs[0], zs[13])
-
-/-- `pkd_x_canonicity(b_3, c)`: returns `(b3_c_prime, z_14)` for
-`b3_c_prime = b_3 + 2^4·c + 2^140 - t_P`. -/
-def pkdXCanonicity (b3 c : Var field Ecc.Fp) :
-    Circuit Ecc.Fp (Var field Ecc.Fp × Var field Ecc.Fp) := do
-  let prime ← witnessField fun env =>
-    env b3 + (2 ^ 4 : Ecc.Fp) * env c + (2 ^ 140 : Ecc.Fp) - tP
-  let zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 prime
-  return (zs[0], zs[14])
-
-/-- `rho_canonicity(e_1, f)`: returns `(e1_f_prime, z_14)` for
-`e1_f_prime = e_1 + 2^4·f + 2^140 - t_P`. -/
-def rhoCanonicity (e1 f : Var field Ecc.Fp) :
-    Circuit Ecc.Fp (Var field Ecc.Fp × Var field Ecc.Fp) := do
-  let prime ← witnessField fun env =>
-    env e1 + (2 ^ 4 : Ecc.Fp) * env f + (2 ^ 140 : Ecc.Fp) - tP
-  let zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 prime
-  return (zs[0], zs[14])
-
-/-- `psi_canonicity(g_1, g_2)`: returns `(g1_g2_prime, z_13)` for
-`g1_g2_prime = g_1 + 2^9·g_2 + 2^130 - t_P`. -/
-def psiCanonicity (g1 g2 : Var field Ecc.Fp) :
-    Circuit Ecc.Fp (Var field Ecc.Fp × Var field Ecc.Fp) := do
-  let prime ← witnessField fun env =>
-    env g1 + (2 ^ 9 : Ecc.Fp) * env g2 + (2 ^ 130 : Ecc.Fp) - tP
-  let zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 prime
-  return (zs[0], zs[13])
-
 /-! ### Subpiece witnessing helpers -/
 
 /-- `bitrangeSubset value start numBits = (value.val >> start) mod 2^numBits`. -/
 abbrev bitrangeSubset : Ecc.Fp → ℕ → ℕ → Ecc.Fp :=
   Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset
 
-/-- `RangeConstrained::witness_short` reading the source from a constrained cell:
-witness `bitrangeSubset src start numBits` and short-range-check it to `numBits`. -/
-def witnessShort (src : Var field Ecc.Fp) (start numBits : ℕ) (h : numBits ≤ Utilities.LookupRangeCheck.K) :
-    Circuit Ecc.Fp (Var field Ecc.Fp) := do
-  Utilities.LookupRangeCheck.WitnessShort.circuit start numBits h
-    (fun env => bitrangeSubset (Expression.eval env src) start numBits)
-
-/-- `RangeConstrained::bitrange_of`: witness `bitrangeSubset src start numBits` with no
-range check (it is bool/decomposition-constrained downstream). -/
-def witnessBitrange (src : Var field Ecc.Fp) (start numBits : ℕ) :
-    Circuit Ecc.Fp (Var field Ecc.Fp) :=
-  witnessField fun env => bitrangeSubset (Expression.eval env src) start numBits
-
 /-! ### `y_canonicity` (note_commit.rs:1962)
 
 Decomposes `y = lsb || k_0 || k_1 || k_2 || k_3`, range-decomposes `j = lsb + 2·k_0 +
 2^10·k_1` (strict, 25 words), reuses `canon_bitshift_130` on `j`, and wires the
-`YCanonicity` gate. Returns the `lsb` (the `ỹ` sign bit) it was given. -/
-def yCanonicity (y lsb : Var field Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) := do
-  let k0 ← witnessShort y 1 9 (by norm_num [K])
-  let k2 ← witnessShort y 250 4 (by norm_num [K])
-  let k3 ← witnessBitrange y 254 1
-  let j ← witnessField fun env =>
-    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) * bitrangeSubset (Expression.eval env y) 10 240
-  let zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 j
-  -- strict: the running sum must vanish (the value fits exactly in 250 bits)
-  assertZero zs[25]
-  let (jPrime, z13JPrime) ← canonBitshift130 zs[0]
-  let yrow : Var NoteCommit.YCanonicity.Row Ecc.Fp :=
-    { y := y, lsb := lsb, k0 := k0, k2 := k2, k3 := k3, j := zs[0], z1J := zs[1],
-      z13J := zs[13], jPrime := jPrime, z13JPrime := z13JPrime }
-  NoteCommit.YCanonicity.circuit yrow
-  return lsb
-
-instance witnessShortExplicit (src : Var field Ecc.Fp) (start numBits : ℕ)
-    (h : numBits ≤ Utilities.LookupRangeCheck.K) :
-    ExplicitCircuit (witnessShort src start numBits h) := by
-  unfold witnessShort
-  infer_explicit_circuit
-
-instance witnessBitrangeExplicit (src : Var field Ecc.Fp) (start numBits : ℕ) :
-    ExplicitCircuit (witnessBitrange src start numBits) := by
-  unfold witnessBitrange
-  infer_explicit_circuit
-
-instance canonBitshift130Explicit (a : Var field Ecc.Fp) :
-    ExplicitCircuit (canonBitshift130 a) := by
-  unfold canonBitshift130
-  infer_explicit_circuit
-
-instance pkdXCanonicityExplicit (b3 c : Var field Ecc.Fp) :
-    ExplicitCircuit (pkdXCanonicity b3 c) := by
-  unfold pkdXCanonicity
-  infer_explicit_circuit
-
-instance rhoCanonicityExplicit (e1 f : Var field Ecc.Fp) :
-    ExplicitCircuit (rhoCanonicity e1 f) := by
-  unfold rhoCanonicity
-  infer_explicit_circuit
-
-instance psiCanonicityExplicit (g1 g2 : Var field Ecc.Fp) :
-    ExplicitCircuit (psiCanonicity g1 g2) := by
-  unfold psiCanonicity
-  infer_explicit_circuit
-
-instance yCanonicityExplicit (y lsb : Var field Ecc.Fp) :
-    ExplicitCircuit (yCanonicity y lsb) := by
-  unfold yCanonicity
-  infer_explicit_circuit
-
-attribute [explicit_circuit_no_unfold] witnessShort witnessBitrange canonBitshift130
-  pkdXCanonicity rhoCanonicity psiCanonicity yCanonicity
-
-@[circuit_norm] theorem witnessShort_localLength (src : Var field Ecc.Fp) (start numBits : ℕ)
-    (h : numBits ≤ Utilities.LookupRangeCheck.K) (offset : ℕ) :
-    (witnessShort src start numBits h).localLength offset = 2 := by
-  unfold witnessShort
-  simp only [circuit_norm, Utilities.LookupRangeCheck.WitnessShort.circuit]
-
-@[circuit_norm] theorem witnessBitrange_localLength (src : Var field Ecc.Fp) (start numBits : ℕ)
-    (offset : ℕ) :
-    (witnessBitrange src start numBits).localLength offset = 1 := rfl
-
-@[circuit_norm] theorem canonBitshift130_localLength (a : Var field Ecc.Fp) (offset : ℕ) :
-    (canonBitshift130 a).localLength offset = 15 := rfl
-
-@[circuit_norm] theorem pkdXCanonicity_localLength (b3 c : Var field Ecc.Fp) (offset : ℕ) :
-    (pkdXCanonicity b3 c).localLength offset = 16 := rfl
-
-@[circuit_norm] theorem rhoCanonicity_localLength (e1 f : Var field Ecc.Fp) (offset : ℕ) :
-    (rhoCanonicity e1 f).localLength offset = 16 := rfl
-
-@[circuit_norm] theorem psiCanonicity_localLength (g1 g2 : Var field Ecc.Fp) (offset : ℕ) :
-    (psiCanonicity g1 g2).localLength offset = 15 := rfl
-
-@[circuit_norm] theorem yCanonicity_localLength (y lsb : Var field Ecc.Fp) (offset : ℕ) :
-    (yCanonicity y lsb).localLength offset = 47 := by
-  unfold yCanonicity
-  simp only [circuit_norm, Utilities.LookupRangeCheck.CopyCheck.circuit,
-    YCanonicity.circuit]
+`YCanonicity` gate. The gadget inlines this assignment at each call site so the proof
+boundary is the already-bundled `CopyCheck` and `YCanonicity` circuits, not a local plain
+`Circuit` wrapper. -/
 
 /-! ### `gadgets::note_commit` (note_commit.rs:1594) -/
 
@@ -1771,7 +1633,9 @@ private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     ((ht7.trans hH).symm.trans hpH)
     hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
 
-def assignSubpieces (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageSubpieces := do
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
+    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
   let gdX := input.gd.x
   let gdY := input.gd.y
   let pkdX := input.pkd.x
@@ -1779,215 +1643,114 @@ def assignSubpieces (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageSubpieces
   let v := input.value
   let rho := input.rho
   let psi := input.psi
-  let b0 ← witnessShort gdX 250 4 (by norm_num [K])
-  let b3 ← witnessShort pkdX 0 4 (by norm_num [K])
-  let d2 ← witnessShort v 0 8 (by norm_num [K])
-  let e0 ← witnessShort v 58 6 (by norm_num [K])
-  let e1 ← witnessShort rho 0 4 (by norm_num [K])
-  let g1 ← witnessShort psi 0 9 (by norm_num [K])
-  let h0 ← witnessShort psi 249 5 (by norm_num [K])
-  -- bitrange-only subpieces (bool/decomposition-constrained in the gates)
-  let b1 ← witnessBitrange gdX 254 1
-  let b2 ← witnessBitrange gdY 0 1
-  let d0 ← witnessBitrange pkdX 254 1
-  let d1 ← witnessBitrange pkdY 0 1
-  let g0 ← witnessBitrange rho 254 1
-  let h1 ← witnessBitrange psi 254 1
-  return { b0, b1, b2, b3, d0, d1, d2, e0, e1, g0, g1, h0, h1 }
 
-def constrainYSubpieces (input : Var Input Ecc.Fp) (subpieces : MessageSubpieces) :
-    Circuit Ecc.Fp MessageSubpieces := do
-  let b2 ← yCanonicity input.gd.y subpieces.b2
-  let d1 ← yCanonicity input.pkd.y subpieces.d1
-  return { subpieces with b2, d1 }
+  let b0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
+    (fun env => eval env gdX)
+  let b3 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 4 (by norm_num [K])
+    (fun env => eval env pkdX)
+  let d2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 8 (by norm_num [K])
+    (fun env => eval env v)
+  let e0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 58 6 (by norm_num [K])
+    (fun env => eval env v)
+  let e1 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 4 (by norm_num [K])
+    (fun env => eval env rho)
+  let g1 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 9 (by norm_num [K])
+    (fun env => eval env psi)
+  let h0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 249 5 (by norm_num [K])
+    (fun env => eval env psi)
+  let b1 ← witnessField fun env => bitrangeSubset (eval env gdX) 254 1
+  let b2 ← witnessField fun env => bitrangeSubset (eval env gdY) 0 1
+  let d0 ← witnessField fun env => bitrangeSubset (eval env pkdX) 254 1
+  let d1 ← witnessField fun env => bitrangeSubset (eval env pkdY) 0 1
+  let g0 ← witnessField fun env => bitrangeSubset (eval env rho) 254 1
+  let h1 ← witnessField fun env => bitrangeSubset (eval env psi) 254 1
 
-def assignMessagePieces (input : Var Input Ecc.Fp) (subpieces : MessageSubpieces) :
-    Circuit Ecc.Fp MessageCells := do
-  let gdX := input.gd.x
-  let pkdX := input.pkd.x
-  let v := input.value
-  let rho := input.rho
-  let psi := input.psi
-  let a ← witnessBitrange gdX 0 250
+  let gdK0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
+    (fun env => eval env gdY)
+  let gdK2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
+    (fun env => eval env gdY)
+  let gdK3 ← witnessField fun env => bitrangeSubset (eval env gdY) 254 1
+  let gdJ ← witnessField fun env =>
+    env b2 + 2 * env gdK0 + (2 ^ 10 : Ecc.Fp) * bitrangeSubset (eval env gdY) 10 240
+  let gdJZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 gdJ
+  assertZero gdJZs[25]
+  let gdJPrime ← witnessField fun env => env gdJZs[0] + (2 ^ 130 : Ecc.Fp) - tP
+  let gdJPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 gdJPrime
+  NoteCommit.YCanonicity.circuit
+    { y := gdY, lsb := b2, k0 := gdK0, k2 := gdK2, k3 := gdK3, j := gdJZs[0],
+      z1J := gdJZs[1], z13J := gdJZs[13], jPrime := gdJPrimeZs[0],
+      z13JPrime := gdJPrimeZs[13] }
+
+  let pkdK0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
+    (fun env => eval env pkdY)
+  let pkdK2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
+    (fun env => eval env pkdY)
+  let pkdK3 ← witnessField fun env => bitrangeSubset (eval env pkdY) 254 1
+  let pkdJ ← witnessField fun env =>
+    env d1 + 2 * env pkdK0 + (2 ^ 10 : Ecc.Fp) * bitrangeSubset (eval env pkdY) 10 240
+  let pkdJZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 pkdJ
+  assertZero pkdJZs[25]
+  let pkdJPrime ← witnessField fun env => env pkdJZs[0] + (2 ^ 130 : Ecc.Fp) - tP
+  let pkdJPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 pkdJPrime
+  NoteCommit.YCanonicity.circuit
+    { y := pkdY, lsb := d1, k0 := pkdK0, k2 := pkdK2, k3 := pkdK3, j := pkdJZs[0],
+      z1J := pkdJZs[1], z13J := pkdJZs[13], jPrime := pkdJPrimeZs[0],
+      z13JPrime := pkdJPrimeZs[13] }
+
+  let a ← witnessField fun env => bitrangeSubset (eval env gdX) 0 250
   let b ← witnessField fun env =>
-    env subpieces.b0 + env subpieces.b1 * 2 ^ 4 + env subpieces.b2 * 2 ^ 5 +
-      env subpieces.b3 * 2 ^ 6
-  let c ← witnessBitrange pkdX 4 250
+    env b0 + env b1 * 2 ^ 4 + env b2 * 2 ^ 5 + env b3 * 2 ^ 6
+  let c ← witnessField fun env => bitrangeSubset (eval env pkdX) 4 250
   let d ← witnessField fun env =>
-    env subpieces.d0 + env subpieces.d1 * 2 + env subpieces.d2 * 2 ^ 2 +
-    bitrangeSubset (Expression.eval env v) 8 50 * 2 ^ 10
-  let e ← witnessField fun env => env subpieces.e0 + env subpieces.e1 * 2 ^ 6
-  let f ← witnessBitrange rho 4 250
-  let g ← witnessField fun env => env subpieces.g0 + env subpieces.g1 * 2 +
-    bitrangeSubset (Expression.eval env psi) 9 240 * 2 ^ 10
-  let h ← witnessField fun env => env subpieces.h0 + env subpieces.h1 * 2 ^ 5
-  return {
-    a, b, c, d, e, f, g, h,
-    b0 := subpieces.b0, b1 := subpieces.b1, b2 := subpieces.b2, b3 := subpieces.b3,
-    d0 := subpieces.d0, d1 := subpieces.d1, d2 := subpieces.d2,
-    e0 := subpieces.e0, e1 := subpieces.e1,
-    g0 := subpieces.g0, g1 := subpieces.g1,
-    h0 := subpieces.h0, h1 := subpieces.h1
-  }
+    env d0 + env d1 * 2 + env d2 * 2 ^ 2 +
+    bitrangeSubset (eval env v) 8 50 * 2 ^ 10
+  let e ← witnessField fun env => env e0 + env e1 * 2 ^ 6
+  let f ← witnessField fun env => bitrangeSubset (eval env rho) 4 250
+  let g ← witnessField fun env => env g0 + env g1 * 2 +
+    bitrangeSubset (eval env psi) 9 240 * 2 ^ 10
+  let h ← witnessField fun env => env h0 + env h1 * 2 ^ 5
 
-def assignMessageCells (input : Var Input Ecc.Fp) : Circuit Ecc.Fp MessageCells := do
-  let subpieces ← assignSubpieces input
-  let subpieces ← constrainYSubpieces input subpieces
-  assignMessagePieces input subpieces
-
-def commitWithZs (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (cells : MessageCells) :
-    Circuit Ecc.Fp (Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp) := do
-  _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds
-    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
-      r := input.rcm }
-
-def constrainCommitment (input : Var Input Ecc.Fp) (cells : MessageCells)
-    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp) :
-    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
-  let gdX := input.gd.x
-  let pkdX := input.pkd.x
-  let v := input.value
-  let rho := input.rho
-  let psi := input.psi
+  let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds
+    { pieces := #v[a, b, c, d, e, f, g, h], r := input.rcm }
   let cm := out.point
-  -- running-sum cells needed for canonicity (note_commit.rs:1702-1708)
   let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
   let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
   let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
   let z13f := (HVec.get _ out.zs ⟨5, by decide⟩)[13]
   let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
   let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
-  -- canonicity bounds
-  let (aPrime, z13aPrime) ← canonBitshift130 cells.a
-  let (b3cPrime, z14b3c) ← pkdXCanonicity cells.b3 cells.c
-  let (e1fPrime, z14e1f) ← rhoCanonicity cells.e1 cells.f
-  let (g1g2Prime, z13g1g2) ← psiCanonicity cells.g1 z1g
-  -- the NoteCommit decomposition + canonicity gates
-  NoteCommit.DecomposeB.circuit
-    { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
-  NoteCommit.DecomposeD.circuit
-    { d := cells.d, d0 := cells.d0, d1 := cells.d1, d2 := cells.d2, d3 := z1d }
-  NoteCommit.DecomposeE.circuit { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
-  NoteCommit.DecomposeG.circuit { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := z1g }
-  NoteCommit.DecomposeH.circuit { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
+
+  let aPrime ← witnessField fun env => env a + (2 ^ 130 : Ecc.Fp) - tP
+  let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 aPrime
+  let b3cPrime ← witnessField fun env =>
+    env b3 + (2 ^ 4 : Ecc.Fp) * env c + (2 ^ 140 : Ecc.Fp) - tP
+  let b3cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 b3cPrime
+  let e1fPrime ← witnessField fun env =>
+    env e1 + (2 ^ 4 : Ecc.Fp) * env f + (2 ^ 140 : Ecc.Fp) - tP
+  let e1fPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 e1fPrime
+  let g1g2Prime ← witnessField fun env =>
+    env g1 + (2 ^ 9 : Ecc.Fp) * env z1g + (2 ^ 130 : Ecc.Fp) - tP
+  let g1g2PrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 g1g2Prime
+
+  NoteCommit.DecomposeB.circuit { b, b0, b1, b2, b3 }
+  NoteCommit.DecomposeD.circuit { d, d0, d1, d2, d3 := z1d }
+  NoteCommit.DecomposeE.circuit { e, e0, e1 }
+  NoteCommit.DecomposeG.circuit { g, g0, g1, g2 := z1g }
+  NoteCommit.DecomposeH.circuit { h, h0, h1 }
   NoteCommit.GdCanonicity.circuit
-    { gdX := gdX, b0 := cells.b0, b1 := cells.b1, a := cells.a, aPrime := aPrime, z13A := z13a,
-      z13APrime := z13aPrime }
+    { gdX, b0, b1, a, aPrime := aPrimeZs[0], z13A := z13a,
+      z13APrime := aPrimeZs[13] }
   NoteCommit.PkdCanonicity.circuit
-    { pkdX := pkdX, b3 := cells.b3, c := cells.c, d0 := cells.d0, b3CPrime := b3cPrime,
-      z13C := z13c, z14B3CPrime := z14b3c }
-  NoteCommit.ValueCanonicity.circuit { value := v, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
+    { pkdX, b3, c, d0, b3CPrime := b3cPrimeZs[0], z13C := z13c,
+      z14B3CPrime := b3cPrimeZs[14] }
+  NoteCommit.ValueCanonicity.circuit { value := v, d2, d3 := z1d, e0 }
   NoteCommit.RhoCanonicity.circuit
-    { rho := rho, e1 := cells.e1, f := cells.f, g0 := cells.g0, e1FPrime := e1fPrime, z13F := z13f,
-      z14E1FPrime := z14e1f }
+    { rho, e1, f, g0, e1FPrime := e1fPrimeZs[0], z13F := z13f,
+      z14E1FPrime := e1fPrimeZs[14] }
   NoteCommit.PsiCanonicity.circuit
-    { psi := psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g,
-      g1G2Prime := g1g2Prime, z13G := z13g, z13G1G2Prime := z13g1g2 }
+    { psi, h0, g1, h1, g2 := z1g, g1G2Prime := g1g2PrimeZs[0], z13G := z13g,
+      z13G1G2Prime := g1g2PrimeZs[13] }
   return cm
-
-def commitAndConstrain (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (cells : MessageCells) :
-    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
-  let out ← commitWithZs G Q hQ R input cells
-  constrainCommitment input cells out
-
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
-    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
-  let cells ← assignMessageCells input
-  commitAndConstrain G Q hQ R input cells
-
-instance assignSubpiecesExplicit (input : Var Input Ecc.Fp) :
-    ExplicitCircuit (assignSubpieces input) := by
-  unfold assignSubpieces
-  infer_explicit_circuit
-
-instance constrainYSubpiecesExplicit (input : Var Input Ecc.Fp) (subpieces : MessageSubpieces) :
-    ExplicitCircuit (constrainYSubpieces input subpieces) := by
-  unfold constrainYSubpieces
-  infer_explicit_circuit
-
-instance assignMessagePiecesExplicit (input : Var Input Ecc.Fp) (subpieces : MessageSubpieces) :
-    ExplicitCircuit (assignMessagePieces input subpieces) := by
-  unfold assignMessagePieces
-  infer_explicit_circuit
-
-instance assignMessageCellsExplicit (input : Var Input Ecc.Fp) :
-    ExplicitCircuit (assignMessageCells input) := by
-  unfold assignMessageCells
-  infer_explicit_circuit
-
-instance commitWithZsExplicit (G : Generators) (Q : SWPoint Pallas.curve)
-    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
-    (cells : MessageCells) :
-    ExplicitCircuit (commitWithZs G Q hQ R input cells) := by
-  unfold commitWithZs
-  infer_explicit_circuit
-
-instance constrainCommitmentExplicit (input : Var Input Ecc.Fp) (cells : MessageCells)
-    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp) :
-    ExplicitCircuit (constrainCommitment input cells out) := by
-  unfold constrainCommitment
-  infer_explicit_circuit
-
-instance commitAndConstrainExplicit (G : Generators) (Q : SWPoint Pallas.curve)
-    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
-    (cells : MessageCells) :
-    ExplicitCircuit (commitAndConstrain G Q hQ R input cells) := by
-  unfold commitAndConstrain
-  infer_explicit_circuit
-
-attribute [explicit_circuit_no_unfold] assignSubpieces constrainYSubpieces assignMessagePieces
-  assignMessageCells commitAndConstrain commitWithZs constrainCommitment
-
-@[circuit_norm] theorem assignSubpieces_localLength (input : Var Input Ecc.Fp) (offset : ℕ) :
-    (assignSubpieces input).localLength offset = 20 := by
-  unfold assignSubpieces
-  simp only [circuit_norm]
-
-@[circuit_norm] theorem constrainYSubpieces_localLength (input : Var Input Ecc.Fp)
-    (subpieces : MessageSubpieces) (offset : ℕ) :
-    (constrainYSubpieces input subpieces).localLength offset = 94 := by
-  unfold constrainYSubpieces
-  simp only [circuit_norm]
-
-@[circuit_norm] theorem assignMessagePieces_localLength (input : Var Input Ecc.Fp)
-    (subpieces : MessageSubpieces) (offset : ℕ) :
-    (assignMessagePieces input subpieces).localLength offset = 8 := by
-  unfold assignMessagePieces
-  simp only [circuit_norm]
-
-@[circuit_norm] theorem assignMessageCells_localLength (input : Var Input Ecc.Fp)
-    (offset : ℕ) :
-    (assignMessageCells input).localLength offset = 122 := by
-  unfold assignMessageCells
-  simp only [circuit_norm]
-
-@[circuit_norm] theorem constrainCommitment_localLength (input : Var Input Ecc.Fp)
-    (cells : MessageCells)
-    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
-    (offset : ℕ) :
-    (constrainCommitment input cells out).localLength offset = 62 := by
-  unfold constrainCommitment
-  simp only [circuit_norm, DecomposeB.circuit, DecomposeD.circuit, DecomposeE.circuit,
-    DecomposeG.circuit, DecomposeH.circuit, GdCanonicity.circuit, PkdCanonicity.circuit,
-    ValueCanonicity.circuit, RhoCanonicity.circuit, PsiCanonicity.circuit]
-
-@[circuit_norm] theorem commitWithZs_localLength (G : Generators) (Q : SWPoint Pallas.curve)
-    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
-    (cells : MessageCells) (offset : ℕ) :
-    (commitWithZs G Q hQ R input cells).localLength offset = 1407 := by
-  unfold commitWithZs
-  simp only [circuit_norm, Sinsemilla.CommitDomain.WithZs.circuit]
-  norm_num [messagePieceTailRounds, Chain.chainLength]
-
-@[circuit_norm] theorem commitAndConstrain_localLength (G : Generators)
-    (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
-    (input : Var Input Ecc.Fp) (cells : MessageCells) (offset : ℕ) :
-    (commitAndConstrain G Q hQ R input cells).localLength offset = 1469 := by
-  unfold commitAndConstrain
-  simp only [circuit_norm]
 
 instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
@@ -1996,26 +1759,12 @@ instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 def mainOutput (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) (offset : ℕ) :
     Var Point Ecc.Fp :=
-  let cells := (assignMessageCells input).output offset
-  (commitAndConstrain G Q hQ R input cells).output
-    (offset + (assignMessageCells input).localLength offset)
+  (main G Q hQ R input).output offset
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
-    ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) where
-  localLength _ := 1591
-  localLength_eq := by
-    intro input offset
-    unfold main
-    simp only [circuit_norm]
-  output := mainOutput G Q hQ R
-  output_eq input offset := by
-    unfold main mainOutput
-    simp only [Circuit.output, Circuit.bind_def, Circuit.localLength]
-  subcircuitsConsistent input offset :=
-    (mainExplicit G Q hQ R).subcircuitsConsistent input offset
-  channelsLawful input offset := by
-    convert (mainExplicit G Q hQ R).channelsLawful input offset
+    ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
+  elaborate_circuit
 
 /-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
 `g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
