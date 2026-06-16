@@ -2974,6 +2974,74 @@ theorem main_psi_low_small_of_h1_one (G : Generators) (Q : SWPoint Pallas.curve)
     (pieces := pieces) (chunks := chunks) (zs := (eval env out).zs)
     hg0Bool hg1 hzBounds.2 hPC hZs hz13g hgPiece
 
+theorem main_psi_subpiece_bits (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    eval env cells.g1 + eval env z1g * 512 =
+        (((show Ecc.Fp from eval env input.psi).val % 2 ^ 249 : ℕ) : Ecc.Fp) ∧
+      eval env cells.h0 + eval env cells.h1 * 32 =
+        (((show Ecc.Fp from eval env input.psi).val / 2 ^ 249 % 32 +
+          ((show Ecc.Fp from eval env input.psi).val / 2 ^ 254 % 2) * 32 : ℕ) :
+            Ecc.Fp) := by
+  let cells := (assignMessageCells input).output offset
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+  let gateOffset := commitOffset + (commitWithZs G Q hQ R input cells).localLength commitOffset
+  let pkdOffset := gateOffset + (canonBitshift130 cells.a).localLength gateOffset
+  let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+  let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+  let g1g2Bounds := (psiCanonicity cells.g1 z1g).output psiOffset
+  have hrange := main_assignMessageCells_short_range_specs G Q hQ R env input offset h
+  have hdecomp := main_message_piece_decomposition_facts G Q hQ R env input offset h
+  have hcanon := main_input_canonicity_facts G Q hQ R env input offset h
+  have hzBounds := main_z1d_z1g_bounds G Q hQ R env input offset h
+  simp only at hrange hdecomp hcanon hzBounds
+  rcases hrange with ⟨_hb0, _hb3, _hd2, _he0, _he1, hg1, hh0⟩
+  rcases hdecomp with ⟨_hB, _hD, _hE, _hG, hh1, _hH⟩
+  rcases hcanon with ⟨_hgd, _hpkd, _hvalue, _hrho, hpsiFacts⟩
+  rcases hpsiFacts with ⟨hpsi, hprime, hh0zero, _hz13g, hz13Prime⟩
+  have hz1gEval :
+      eval env z1g =
+        (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+          (eval env out.zs) ⟨6, by decide⟩)[1] := by
+    dsimp only [z1g, out]
+    exact HVec.eval_getElem env (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+      out.zs ⟨6, by decide⟩ 1 (by decide)
+  have hz1gEvalOut :
+      eval env z1g =
+        (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+          (eval env out).zs ⟨6, by decide⟩)[1] := by
+    rw [hz1gEval]
+    rw [← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.eval_zs env messagePieceRounds out]
+  have hg2Bound : (show Ecc.Fp from eval env z1g).val < 2 ^ (K * 24) := by
+    rw [hz1gEvalOut]
+    exact hzBounds.2
+  have hlowSmall :
+      eval env cells.h1 = 1 →
+        (show Ecc.Fp from eval env cells.g1).val +
+          (show Ecc.Fp from eval env z1g).val * 512 < 2 ^ 130 := by
+    intro hh1One
+    have hlow := main_psi_low_small_of_h1_one G Q hQ R env input offset h hh1One
+    dsimp only at hlow
+    rw [hz1gEvalOut]
+    exact hlow
+  have hz13Lt :
+      eval env g1g2Bounds.2 = 0 →
+        (show Ecc.Fp from eval env g1g2Bounds.1).val < 2 ^ (K * 13) := by
+    exact psiCanonicity_prime_evalOutput_val_lt_of_zlast_zero env cells.g1 z1g psiOffset
+      (main_psiCanonicity_soundness G Q hQ R env input offset h)
+  exact ⟨
+    g1_g2_eq_psi_low_bits_of_parts hg1 hg2Bound hh0 hh1 hlowSmall
+      hpsi hprime hh0zero hz13Prime hz13Lt,
+    h0_h1_eq_psi_high_bits_of_parts hg1 hg2Bound hh0 hh1 hlowSmall
+      hpsi hprime hh0zero hz13Prime hz13Lt⟩
+
 theorem main_value_bound (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
