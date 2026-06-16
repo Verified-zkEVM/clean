@@ -1988,6 +1988,22 @@ private theorem withHint_spec_of_soundness {Input Output : TypeMap}
     Operations.forAllNoOffset, GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at h
   exact h.1 hAssumptions
 
+private theorem withHint_output {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input Output)
+    (input : Var Input Ecc.Fp) (offset : ℕ) :
+    (subcircuitWithHintAssertion circuit input).output offset = circuit.output input offset := rfl
+
+private theorem eval_field_prod_fst (env : Environment Ecc.Fp)
+    (x y : Var field Ecc.Fp) :
+    (eval env (x, y)).1 = eval env x := by
+  exact congrArg Prod.fst (eval_pair (α := field) (β := field) env x y)
+
+private theorem eval_field_prod_snd (env : Environment Ecc.Fp)
+    (x y : Var field Ecc.Fp) :
+    (eval env (x, y)).2 = eval env y := by
+  exact congrArg Prod.snd (eval_pair (α := field) (β := field) env x y)
+
 private theorem copyCheck14_zlast_zero_val_lt (env : Environment Ecc.Fp)
     (element : Var field Ecc.Fp) (offset : ℕ)
     (h : ConstraintsHold.Soundness env
@@ -2061,6 +2077,41 @@ private theorem copyCheck13_zlast_zero_val_lt (env : Environment Ecc.Fp)
     exact lt_trans hlo (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
   rw [heq, ZMod.val_natCast_of_lt hCard]
   exact hlo
+
+private theorem psiCanonicity_prime_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
+    (g1 g2 : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((psiCanonicity g1 g2).operations offset))
+    (hzLast : (eval env ((psiCanonicity g1 g2).output offset)).2 = 0) :
+    (eval env ((psiCanonicity g1 g2).output offset)).1.val < 2 ^ (K * 13) := by
+  let prime := (witnessField (F := Ecc.Fp) fun env =>
+    env g1 + (2 ^ 9 : Ecc.Fp) * env g2 + (2 ^ 130 : Ecc.Fp) - tP).output offset
+  let copyOffset := offset + (witnessField (F := Ecc.Fp) fun env =>
+    env g1 + (2 ^ 9 : Ecc.Fp) * env g2 + (2 ^ 130 : Ecc.Fp) - tP).localLength offset
+  have hCopy :
+      ConstraintsHold.Soundness env
+        ((Utilities.LookupRangeCheck.CopyCheck.circuit 13 prime).operations copyOffset) := by
+    unfold psiCanonicity at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact h.2.1
+  have hzLastCopy :
+      (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 13).output prime copyOffset))[13]
+        = 0 := by
+    unfold psiCanonicity at hzLast
+    simp only [Circuit.output, Circuit.bind_def, withHint_output] at hzLast
+    rw [eval_field_prod_snd] at hzLast
+    rw [ProvableType.eval_field, ProvableType.getElem_eval_fields] at hzLast
+    simpa only [prime, copyOffset, Circuit.output, Circuit.localLength] using hzLast
+  have hPrimeBound := copyCheck13_zlast_zero_val_lt env prime copyOffset hCopy hzLastCopy
+  have hSpec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 13) env prime copyOffset trivial hCopy
+  simp only at hSpec
+  simp only [prime, copyOffset, Circuit.output, Circuit.localLength] at hSpec hPrimeBound
+  unfold psiCanonicity
+  simp only [Circuit.output, Circuit.bind_def, withHint_output]
+  rw [eval_field_prod_fst]
+  rw [ProvableType.eval_field, ProvableType.getElem_eval_fields]
+  rw [hSpec.1]
+  exact hPrimeBound
 
 private theorem witnessShort_spec_of_soundness (env : Environment Ecc.Fp)
     (src : Var field Ecc.Fp) (start numBits : ℕ)
