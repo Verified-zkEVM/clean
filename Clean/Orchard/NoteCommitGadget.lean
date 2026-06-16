@@ -2309,6 +2309,20 @@ theorem constrainCommitment_canonicity_specs (env : Environment Ecc.Fp)
     formalAssertion_spec_of_soundness NoteCommit.PsiCanonicity.circuit env rowPsi _ trivial
       h.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
 
+theorem constrainCommitment_psiCanonicity_soundness (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+    ConstraintsHold.Soundness env ((psiCanonicity cells.g1 z1g).operations psiOffset) := by
+  unfold constrainCommitment at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+  exact h.2.2.2.1
+
 theorem commitAndConstrain_output_eq (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
     (cells : MessageCells) (offset : ℕ) :
@@ -2660,6 +2674,31 @@ theorem main_input_canonicity_facts (G : Generators) (Q : SWPoint Pallas.curve)
   simpa only [circuit_norm, NoteCommit.GdCanonicity.Spec, NoteCommit.PkdCanonicity.Spec,
     NoteCommit.ValueCanonicity.Spec, NoteCommit.RhoCanonicity.Spec,
     NoteCommit.PsiCanonicity.Spec] using hs
+
+theorem main_psiCanonicity_soundness (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    let gateOffset := commitOffset + (commitWithZs G Q hQ R input cells).localLength commitOffset
+    let pkdOffset := gateOffset + (canonBitshift130 cells.a).localLength gateOffset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+    ConstraintsHold.Soundness env ((psiCanonicity cells.g1 z1g).operations psiOffset) := by
+  rw [main_soundness_constraints_iff] at h
+  rcases h with ⟨_, h_commit⟩
+  rw [commitAndConstrain_soundness_constraints_iff] at h_commit
+  exact constrainCommitment_psiCanonicity_soundness env input
+    ((assignMessageCells input).output offset)
+    ((commitWithZs G Q hQ R input ((assignMessageCells input).output offset)).output
+      (offset + (assignMessageCells input).localLength offset))
+    (offset + (assignMessageCells input).localLength offset +
+      (commitWithZs G Q hQ R input ((assignMessageCells input).output offset)).localLength
+        (offset + (assignMessageCells input).localLength offset))
+    h_commit.2
 
 theorem main_one_word_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
