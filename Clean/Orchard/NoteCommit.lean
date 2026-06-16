@@ -25,6 +25,7 @@ open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc (Point)
 open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
+open Orchard.Specs (bitrange bitrange_lt)
 
 /-- Telescoping a `K`-bit running-sum chain: `f 0` splits into `K·k` low bits and
 `2^(K·k) · f k`. (Mirrors `Mul.OverflowCheck.chain_telescope`.) -/
@@ -189,8 +190,6 @@ private theorem natCast_injective_of_lt {a b : ℕ}
     a = b := by
   have hv := congrArg ZMod.val h
   rwa [ZMod.val_natCast_of_lt ha, ZMod.val_natCast_of_lt hb] at hv
-
-private def tPNat : ℕ := 45560315531419706090280762371685220353
 
 private theorem isBool_val_lt_two {x : Ecc.Fp} (h : IsBool x) :
     x.val < 2 := by
@@ -822,47 +821,6 @@ private theorem nat_mod_two_eq_testBit_zero (n : ℕ) :
   · simp [h]
   · have h1 : n % 2 = 1 := by omega
     simp [h1]
-
-private def yLowNat (n : ℕ) : ℕ :=
-  n % 2 + 2 * (n / 2 % 2 ^ 9) + 2 ^ 10 * (n / 2 ^ 10 % 2 ^ 240)
-
-private theorem yLowNat_lt (n : ℕ) : yLowNat n < 2 ^ 250 := by
-  unfold yLowNat
-  have h0 : n % 2 < 2 := Nat.mod_lt _ (by norm_num)
-  have h1 : n / 2 % 2 ^ 9 < 2 ^ 9 := Nat.mod_lt _ (by norm_num)
-  have h2 : n / 2 ^ 10 % 2 ^ 240 < 2 ^ 240 := Nat.mod_lt _ (by norm_num)
-  omega
-
-private theorem yLowNat_div_ten (n : ℕ) :
-    yLowNat n / 2 ^ K = n / 2 ^ 10 % 2 ^ 240 := by
-  unfold yLowNat
-  norm_num [K]
-  omega
-
-private theorem y_decomp_nat {n : ℕ} (hn : n < 2 ^ 255) :
-    n = yLowNat n + 2 ^ 250 * (n / 2 ^ 250 % 2 ^ 4) +
-      2 ^ 254 * (n / 2 ^ 254 % 2) := by
-  unfold yLowNat
-  omega
-
-private theorem y_high_canonical {n : ℕ}
-    (hn : n < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
-    (hhigh : n / 2 ^ 254 % 2 = 1) :
-    n / 2 ^ 250 % 2 ^ 4 = 0 ∧
-      yLowNat n < tPNat ∧
-      yLowNat n + 2 ^ 130 - tPNat < 2 ^ 130 := by
-  have hn255 : n < 2 ^ 255 := by
-    exact lt_trans hn (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  have hdec := y_decomp_nat hn255
-  rw [hhigh] at hdec
-  have hlow := yLowNat_lt n
-  norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hn hdec hlow ⊢
-  omega
-
-private theorem nat_mod_two_isBool (n : ℕ) :
-    IsBool (((n % 2 : ℕ) : Fp)) := by
-  have hlt : n % 2 < 2 := Nat.mod_lt _ (by norm_num)
-  interval_cases n % 2 <;> simp [IsBool]
 
 private theorem low_bit_eq_mod_two {y lsb : Fp}
     (h : lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Fp)) :
@@ -1689,6 +1647,13 @@ private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     ((ht7.trans hH).symm.trans hpH)
     hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
 
+/-- Dividing the low `a+b` bits by `2^a` exposes the next `b` bits: the honest
+running sum's `z_a` cell is the corresponding higher `bitrange`. -/
+private theorem bitrange_low_div (n a b : ℕ) :
+    bitrange n 0 (a + b) / 2 ^ a = bitrange n a b := by
+  simp only [bitrange, pow_zero, Nat.div_one]
+  rw [pow_add, Nat.mod_mul_right_div_self]
+
 namespace YCanonicity
 
 structure Input (F : Type) where
@@ -1719,9 +1684,6 @@ def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
 instance elaborated : ElaboratedCircuit Fp Input field main := by
   elaborate_circuit
 
-def IsLowBit (y lsb : Fp) : Prop :=
-  lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Fp)
-
 def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
   IsBool (show Fp from input.lsb) ∧
     IsLowBit (show Fp from input.y) (show Fp from input.lsb)
@@ -1737,116 +1699,6 @@ def ProverSpec (input : ProverValue Input Fp) (output : Fp)
     (_ : ProverHint Fp) : Prop :=
   output = input.lsb ∧ IsLowBit (show Fp from input.y) (show Fp from input.lsb)
 
-private theorem completenessCore
-    {y lsb k0 k2 k3 j z1J z13J j' z13J' j25 : Fp}
-    (hlsb : IsLowBit y lsb)
-    (hk0 : k0 = ((y.val / 2 % 2 ^ 9 : ℕ) : Fp))
-    (hk2 : k2 = ((y.val / 2 ^ 250 % 2 ^ 4 : ℕ) : Fp))
-    (hk3 : k3 = ((y.val / 2 ^ 254 % 2 : ℕ) : Fp))
-    (hj : j = ((yLowNat y.val : ℕ) : Fp))
-    (hz1J : z1J = ((y.val / 2 ^ 10 % 2 ^ 240 : ℕ) : Fp))
-    (hz13J : z13J = ((yLowNat y.val / 2 ^ (K * 13) : ℕ) : Fp))
-    (hj25 : j25 = ((yLowNat y.val / 2 ^ (K * 25) : ℕ) : Fp))
-    (hj' : j' = j + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP)
-    (hz13J' : z13J' = ((j'.val / 2 ^ (K * 13) : ℕ) : Fp)) :
-    (j25 = 0 ∧
-      Gate.Spec { y, lsb, k0, k2, k3, j, z1J, z13J, j', z13J' }) ∧
-      IsLowBit y lsb := by
-  constructor
-  · constructor
-    · rw [hj25]
-      have hlt := yLowNat_lt y.val
-      rw [Nat.div_eq_of_lt]
-      · norm_num
-      · simpa [K] using hlt
-    · change IsBool k3 ∧
-        j = lsb + k0 * 2 + z1J * 1024 ∧
-        y = j + k2 * ((2 ^ 250 : ℕ) : Fp) + k3 * ((2 ^ 254 : ℕ) : Fp) ∧
-        j' = j + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
-        (k3 = 0 ∨ k2 = 0) ∧
-        (k3 = 0 ∨ z13J = 0) ∧
-        (k3 = 0 ∨ z13J' = 0)
-      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-      · rw [hk3]
-        exact nat_mod_two_isBool (y.val / 2 ^ 254)
-      · rw [hj, hz1J, hk0, low_bit_eq_mod_two hlsb]
-        unfold yLowNat
-        push_cast
-        ring
-      · rw [hj, hk2, hk3]
-        have hyDec := y_decomp_nat (lt_trans (ZMod.val_lt y)
-          (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
-        have hyField :
-            y = ((yLowNat y.val + 2 ^ 250 * (y.val / 2 ^ 250 % 2 ^ 4) +
-              2 ^ 254 * (y.val / 2 ^ 254 % 2) : ℕ) : Fp) :=
-          (ZMod.natCast_zmod_val y).symm.trans
-            (congrArg (fun n : ℕ => (n : Fp)) hyDec)
-        exact hyField.trans (by
-          simp only [Nat.cast_add, Nat.cast_mul]
-          ring)
-      · rw [hj']
-      · change k3 = 0 ∨ k2 = 0
-        by_cases hhigh : y.val / 2 ^ 254 % 2 = 0
-        · left
-          rw [hk3, hhigh]
-          norm_num
-        · right
-          have hhigh1 : y.val / 2 ^ 254 % 2 = 1 := by
-            have hlt : y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-            omega
-          rw [hk2, (y_high_canonical (ZMod.val_lt y) hhigh1).1]
-          norm_num
-      · change k3 = 0 ∨ z13J = 0
-        by_cases hhigh : y.val / 2 ^ 254 % 2 = 0
-        · left
-          rw [hk3, hhigh]
-          norm_num
-        · right
-          have hhigh1 : y.val / 2 ^ 254 % 2 = 1 := by
-            have hlt : y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-            omega
-          rw [hz13J]
-          have hlt := (y_high_canonical (ZMod.val_lt y) hhigh1).2.1
-          have hlt130 : yLowNat y.val < 2 ^ 130 :=
-            lt_trans hlt (by norm_num [tPNat])
-          change ((yLowNat y.val / 2 ^ 130 : ℕ) : Fp) = 0
-          rw [Nat.div_eq_of_lt hlt130]
-          norm_num
-      · change k3 = 0 ∨ z13J' = 0
-        by_cases hhigh : y.val / 2 ^ 254 % 2 = 0
-        · left
-          rw [hk3, hhigh]
-          norm_num
-        · right
-          have hhigh1 : y.val / 2 ^ 254 % 2 = 1 := by
-            have hlt : y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-            omega
-          rw [hz13J']
-          have hj'Val : j'.val = yLowNat y.val + 2 ^ 130 - tPNat := by
-            have hcard : yLowNat y.val + 2 ^ 130 - tPNat <
-                CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
-              exact lt_trans (y_high_canonical (ZMod.val_lt y) hhigh1).2.2
-                (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-            have hfield :
-                (yLowNat y.val : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP =
-                  ((yLowNat y.val + 2 ^ 130 - tPNat : ℕ) : Fp) := by
-              push_cast [Ecc.tP, tPNat]
-              ring
-            calc
-              j'.val =
-                  ZMod.val (j + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP) := by
-                rw [hj']
-              _ = ZMod.val ((yLowNat y.val : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP) := by
-                rw [hj]
-              _ = yLowNat y.val + 2 ^ 130 - tPNat := by
-                rw [hfield, ZMod.val_natCast_of_lt hcard]
-          rw [hj'Val]
-          have hlt := (y_high_canonical (ZMod.val_lt y) hhigh1).2.2
-          change (((yLowNat y.val + 2 ^ 130 - tPNat) / 2 ^ 130 : ℕ) : Fp) = 0
-          rw [Nat.div_eq_of_lt hlt]
-          norm_num
-  · exact hlsb
-
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
   circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
@@ -1855,7 +1707,75 @@ theorem soundness :
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
-  sorry
+  circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
+    Utilities.LookupRangeCheck.WitnessShort.ProverSpec,
+    Utilities.LookupRangeCheck.CopyCheck.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Gate.circuit, Gate.Assumptions, Gate.Spec]
+  obtain ⟨⟨-, hk0⟩, ⟨-, hk2⟩, hk3, hjdef, ⟨-, hjZs⟩, hj'def, ⟨-, hj'Zs⟩⟩ := h_env
+  -- `input_y : ProverValue field Fp` doesn't expose `.val`; it is defeq to a field element.
+  change Fp at input_y
+  -- The honest prover assigns every cell its bit slice of `y`; the gate's `Assumptions`
+  -- then hold by construction, and its canonicity guards are discharged inside the gate.
+  have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Fp) := by
+    rw [isLowBit_iff_mod_two.mp h_assumptions,
+      show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
+  -- `j` is the low 250 bits of `y`
+  have hJ : env.get (i₀ + 2 + 2 + 1) = ((bitrange input_y.val 0 250 : ℕ) : Fp) := by
+    rw [hjdef, hk0, hlsb]
+    show ((bitrange input_y.val 0 1 : ℕ) : Fp)
+          + 2 * ((bitrange input_y.val 1 9 : ℕ) : Fp)
+          + 2 ^ 10 * ((bitrange input_y.val 10 240 : ℕ) : Fp)
+        = ((bitrange input_y.val 0 250 : ℕ) : Fp)
+    rw [low_250_decomp input_y.val]; push_cast; ring
+  have hbound : bitrange input_y.val 0 250 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD :=
+    lt_trans (bitrange_lt _ 0 250)
+      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  have hJval : (env.get (i₀ + 2 + 2 + 1)).val = bitrange input_y.val 0 250 := by
+    rw [hJ]; exact ZMod.val_natCast_of_lt hbound
+  -- the `jZs` running-sum reads at positions 0, 1, 13, 25
+  have hz0 := hjZs ⟨0, by norm_num⟩
+  simp only [mul_zero, pow_zero, Nat.div_one] at hz0
+  rw [hJval] at hz0
+  have hz1 := hjZs ⟨1, by norm_num⟩
+  rw [show K * 1 = 10 from by norm_num [K], hJval,
+    show bitrange input_y.val 0 250 / 2 ^ 10 = bitrange input_y.val 10 240 from
+      bitrange_low_div input_y.val 10 240] at hz1
+  have hz13 := hjZs ⟨13, by norm_num⟩
+  rw [show K * 13 = 130 from by norm_num [K], hJval,
+    show bitrange input_y.val 0 250 / 2 ^ 130 = bitrange input_y.val 130 120 from
+      bitrange_low_div input_y.val 130 120] at hz13
+  have hz25 := hjZs ⟨25, by norm_num⟩
+  rw [show K * 25 = 250 from by norm_num [K], hJval,
+    Nat.div_eq_of_lt (bitrange_lt input_y.val 0 250), Nat.cast_zero] at hz25
+  -- `j'` is the canonicity-shifted low part
+  have htp : tPNat ≤ bitrange input_y.val 0 250 + 2 ^ 130 := by
+    have h1 : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    omega
+  have hJP : env.get (i₀ + 2 + 2 + 1 + 1 + 26)
+      = ((bitrange input_y.val 0 250 + 2 ^ 130 - tPNat : ℕ) : Fp) := by
+    rw [hj'def, hz0, Nat.cast_sub htp, tP_eq]; push_cast; ring
+  have hJPbound : bitrange input_y.val 0 250 + 2 ^ 130 - tPNat
+      < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    have := bitrange_lt input_y.val 0 250
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at this ⊢
+    omega
+  have hJPval : (env.get (i₀ + 2 + 2 + 1 + 1 + 26)).val
+      = bitrange input_y.val 0 250 + 2 ^ 130 - tPNat := by
+    rw [hJP]; exact ZMod.val_natCast_of_lt hJPbound
+  -- the `j'Zs` reads at positions 0 and 13
+  have hj'0 := hj'Zs ⟨0, by norm_num⟩
+  simp only [mul_zero, pow_zero, Nat.div_one] at hj'0
+  have hj'13 := hj'Zs ⟨13, by norm_num⟩
+  rw [show K * 13 = 130 from by norm_num [K]] at hj'13
+  refine ⟨⟨hz25, ⟨hk0, hk2, hk3, hz0, hz1, hz13, ?_, ?_⟩, h_assumptions⟩, h_assumptions⟩
+  · -- `j'.val` equals the shifted low part
+    rw [hj'0, ZMod.val_natCast_of_lt (ZMod.val_lt _)]; exact hJPval
+  · -- `z13J'` is the top read of `j'`'s decomposition.  Closed term-mode: rewriting the
+    -- indexed running-sum cell `j'Zs[13]` in the goal makes the `rw` motive blow up.
+    have hval0 : ZMod.val _ = (env.get (i₀ + 2 + 2 + 1 + 1 + 26)).val :=
+      (congrArg ZMod.val hj'0).trans
+        (ZMod.val_natCast_of_lt (ZMod.val_lt (env.get (i₀ + 2 + 2 + 1 + 1 + 26))))
+    exact hj'13.trans (congrArg (fun n : ℕ => ((n / 2 ^ 130 : ℕ) : Fp)) hval0.symm)
 
 def circuit : GeneralFormalCircuit.WithHint Fp Input field where
   main := main

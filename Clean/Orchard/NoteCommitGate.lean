@@ -1,6 +1,7 @@
 import Clean.Circuit
 import Clean.Gadgets.Boolean
 import Clean.Orchard.Ecc
+import Clean.Orchard.Specs.Bitrange
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -40,6 +41,89 @@ private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 :=
 
 private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
   sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
+
+/-! ### Foundational bit-decomposition / canonicity facts
+
+These are stated over `Orchard.Specs.bitrange` and the Pallas base modulus, with no
+reference to any particular circuit cell (`y`, `j`, …). The canonicity gates build on
+them. -/
+
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
+open Orchard.Specs (bitrange bitrange_lt bitrange_add)
+
+/-- `t_P`, the Pallas base modulus minus `2^254`, as a natural number. -/
+def tPNat : ℕ := 45560315531419706090280762371685220353
+
+/-- The defining split of the Pallas base modulus: `p = 2^254 + t_P`. -/
+theorem pallasBaseCard_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
+  norm_num [PALLAS_BASE_CARD, tPNat]
+
+/-- A `< 2^255` value is the sum of its low 250 bits, next 4 bits, and top bit. -/
+theorem bit_decomp_255 {n : ℕ} (hn : n < 2 ^ 255) :
+    n = bitrange n 0 250 + 2 ^ 250 * bitrange n 250 4 + 2 ^ 254 * bitrange n 254 1 := by
+  simp only [bitrange, pow_zero, Nat.div_one]
+  omega
+
+/-- Canonicity with the top bit set: for `n < p` with bit 254 set, bits 250–253 vanish
+and the low 250 bits lie below `t_P` (hence the `+2^130-t_P` shift stays below `2^130`). -/
+theorem high_bit_canonical {n : ℕ} (hn : n < PALLAS_BASE_CARD) (hhigh : bitrange n 254 1 = 1) :
+    bitrange n 250 4 = 0 ∧ bitrange n 0 250 < tPNat ∧
+      bitrange n 0 250 + 2 ^ 130 - tPNat < 2 ^ 130 := by
+  have hdec := bit_decomp_255 (lt_trans hn (by norm_num [PALLAS_BASE_CARD]))
+  have hlo := bitrange_lt n 0 250
+  have hk2 := bitrange_lt n 250 4
+  rw [hhigh] at hdec
+  rw [pallasBaseCard_eq] at hn
+  norm_num [tPNat] at hlo hk2 hn hdec ⊢
+  omega
+
+/-- `lsb` is the low (sign) bit of the field element `y`. -/
+def IsLowBit (y lsb : Ecc.Fp) : Prop :=
+  lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Ecc.Fp)
+
+theorem nat_mod_two_isBool (n : ℕ) : IsBool (((n % 2 : ℕ) : Ecc.Fp)) := by
+  have hlt : n % 2 < 2 := Nat.mod_lt _ (by norm_num)
+  interval_cases n % 2 <;> simp [IsBool]
+
+theorem isLowBit_iff_mod_two {y lsb : Ecc.Fp} :
+    IsLowBit y lsb ↔ lsb = ((y.val % 2 : ℕ) : Ecc.Fp) := by
+  have key : (if y.val.testBit 0 then (1 : ℕ) else 0) = y.val % 2 := by
+    rw [Nat.testBit_zero]
+    rcases Nat.mod_two_eq_zero_or_one y.val with hm | hm <;> simp [hm]
+  rw [IsLowBit, key]
+
+/-- `Ecc.tP` as the cast of the natural number `tPNat`. -/
+theorem tP_eq : Ecc.tP = ((tPNat : ℕ) : Ecc.Fp) := by
+  rw [Ecc.tP, tPNat]; norm_num
+
+/-- A 1-bit field slice is Boolean. -/
+theorem bitrange_one_isBool (n start : ℕ) :
+    IsBool ((bitrange n start 1 : ℕ) : Ecc.Fp) := by
+  have h : bitrange n start 1 < 2 := by simpa using bitrange_lt n start 1
+  interval_cases (bitrange n start 1) <;> simp [IsBool]
+
+/-- The low 250-bit field splits into the sign bit, the next 9 bits, and the rest. -/
+theorem low_250_decomp (n : ℕ) :
+    bitrange n 0 250 = bitrange n 0 1 + 2 * bitrange n 1 9 + 1024 * bitrange n 10 240 := by
+  have h1 := bitrange_add n 0 1 249
+  have h2 := bitrange_add n 1 9 240
+  norm_num at h1 h2
+  rw [h1, h2]; ring
+
+/-- With the top bit set, the bits 130–249 of a canonical value vanish. -/
+theorem high_bit_z13_zero {n : ℕ} (hn : n < PALLAS_BASE_CARD)
+    (hhigh : bitrange n 254 1 = 1) : bitrange n 130 120 = 0 := by
+  obtain ⟨_, hlo, _⟩ := high_bit_canonical hn hhigh
+  have hsplit := bitrange_add n 0 130 120
+  have htp : tPNat < 2 ^ 130 := by norm_num [tPNat]
+  have key : bitrange n 0 (130 + 120) < 2 ^ 130 := by
+    rw [show (130 : ℕ) + 120 = 250 by norm_num]; omega
+  rw [hsplit] at key
+  rcases Nat.eq_zero_or_pos (bitrange n (0 + 130) 120) with h | h
+  · simpa using h
+  · exfalso
+    have hge : 2 ^ 130 ≤ 2 ^ 130 * bitrange n (0 + 130) 120 := Nat.le_mul_of_pos_right _ h
+    omega
 
 namespace Gate
 
@@ -450,15 +534,24 @@ structure Row (F : Type) where
   z13J' : F
 deriving ProvableStruct
 
+/-- The gate runs inside `y_canonicity`, where the surrounding running-sum lookups force
+each supporting cell to be the corresponding bit slice of `y`. Those semantics are the
+gate's rely-conditions: every cell equals its `bitrange` of `y.val` (with `j'` the
+canonicity-shifted low part). The sign bit `lsb` is *not* assumed — the gate's constraints
+pin it down, which is exactly what `Spec` records. -/
+def Assumptions (row : Row Ecc.Fp) : Prop :=
+  row.k0 = ((bitrange row.y.val 1 9 : ℕ) : Ecc.Fp) ∧
+    row.k2 = ((bitrange row.y.val 250 4 : ℕ) : Ecc.Fp) ∧
+    row.k3 = ((bitrange row.y.val 254 1 : ℕ) : Ecc.Fp) ∧
+    row.j = ((bitrange row.y.val 0 250 : ℕ) : Ecc.Fp) ∧
+    row.z1J = ((bitrange row.y.val 10 240 : ℕ) : Ecc.Fp) ∧
+    row.z13J = ((bitrange row.y.val 130 120 : ℕ) : Ecc.Fp) ∧
+    row.j'.val = bitrange row.y.val 0 250 + 2 ^ 130 - tPNat ∧
+    row.z13J' = ((row.j'.val / 2 ^ 130 : ℕ) : Ecc.Fp)
+
+/-- The gate's payoff: `lsb` is the low (sign) bit of the `y` coordinate. -/
 def Spec (row : Row Ecc.Fp) : Prop :=
-  IsBool row.k3 ∧
-    row.j = row.lsb + row.k0 * 2 + row.z1J * 1024 ∧
-    row.y = row.j + row.k2 * ((2 ^ 250 : ℕ) : Ecc.Fp) +
-      row.k3 * ((2 ^ 254 : ℕ) : Ecc.Fp) ∧
-    row.j' = row.j + ((2 ^ 130 : ℕ) : Ecc.Fp) - Ecc.tP ∧
-    (row.k3 = 0 ∨ row.k2 = 0) ∧
-    (row.k3 = 0 ∨ row.z13J = 0) ∧
-    (row.k3 = 0 ∨ row.z13J' = 0)
+  IsLowBit row.y row.lsb
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
   assertBool row.k3
@@ -474,28 +567,84 @@ def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
 def circuit : FormalAssertion Ecc.Fp Row where
   name := "GATE y coordinate checks"
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
-    circuit_proof_start [Ecc.tP]
-    rcases h_holds with ⟨hk3, hj, hy, hp, hk2, hz13, hz13p⟩
-    exact ⟨hk3, left_eq_of_add_neg_eq_zero hj, left_eq_of_add_neg_eq_zero hy,
-      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hp).symm,
-      mul_eq_zero.mp hk2, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
+    circuit_proof_start
+    obtain ⟨hk0, _, _, hj, hz1J, _, _, _⟩ := h_assumptions
+    obtain ⟨_, hj_eq, _⟩ := h_holds
+    -- `hj_eq` says the witnessed `j` equals `lsb + 2·k0 + 1024·z1J`; substituting the
+    -- bit-slice values of `j`, `k0`, `z1J` isolates `lsb` as the low bit of `y`.
+    rw [isLowBit_iff_mod_two,
+      show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
+    have hcast : ((bitrange input_y.val 0 250 : ℕ) : Ecc.Fp)
+        = ((bitrange input_y.val 0 1 : ℕ) : Ecc.Fp)
+          + 2 * ((bitrange input_y.val 1 9 : ℕ) : Ecc.Fp)
+          + 1024 * ((bitrange input_y.val 10 240 : ℕ) : Ecc.Fp) := by
+      rw [low_250_decomp]; push_cast; ring
+    rw [hj, hk0, hz1J, hcast] at hj_eq
+    linear_combination -hj_eq
   completeness := by
-    circuit_proof_start [Ecc.tP]
-    rcases h_spec with ⟨hk3, hj, hy, hp, hk2, hz13, hz13p⟩
-    constructor
-    · exact hk3
-    constructor
-    · rw [hj]
-      ring
-    constructor
-    · rw [hy]
-      ring
-    constructor
-    · rw [hp]
-      ring
-    exact ⟨mul_eq_zero_of_or hk2, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
+    circuit_proof_start
+    obtain ⟨hk0, hk2, hk3, hj, hz1J, hz13, hj', hz13'⟩ := h_assumptions
+    have hyval : input_y.val < PALLAS_BASE_CARD := ZMod.val_lt input_y
+    have hyval255 : input_y.val < 2 ^ 255 := lt_trans hyval (by norm_num [PALLAS_BASE_CARD])
+    -- `lsb` is the low bit of `y`, supplied by the `Spec`.
+    have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Ecc.Fp) := by
+      rw [isLowBit_iff_mod_two] at h_spec
+      rw [h_spec, show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · -- k3 Boolean
+      rw [hk3]; exact bitrange_one_isBool _ _
+    · -- j = lsb + 2·k0 + 1024·z1J
+      rw [hj, hk0, hz1J, hlsb, low_250_decomp input_y.val]; push_cast; ring
+    · -- y = j + k2·2^250 + k3·2^254
+      -- `bit_decomp_255` reconstructs `y` from its slices; cast it and recombine with the
+      -- cell equalities.  (Rewriting `input_y` directly would also hit the `input_y.val`
+      -- buried inside each `bitrange`, so we feed everything to `linear_combination`.)
+      have hyv : input_y = ((input_y.val : ℕ) : Ecc.Fp) :=
+        (ZMod.natCast_rightInverse input_y).symm
+      have hdcast : ((input_y.val : ℕ) : Ecc.Fp)
+          = ((bitrange input_y.val 0 250 : ℕ) : Ecc.Fp)
+            + ((bitrange input_y.val 250 4 : ℕ) : Ecc.Fp) * ((2 ^ 250 : ℕ) : Ecc.Fp)
+            + ((bitrange input_y.val 254 1 : ℕ) : Ecc.Fp) * ((2 ^ 254 : ℕ) : Ecc.Fp) := by
+        conv_lhs => rw [bit_decomp_255 hyval255]
+        push_cast; ring
+      linear_combination hyv + hdcast - hj - ((2 ^ 250 : ℕ) : Ecc.Fp) * hk2
+        - ((2 ^ 254 : ℕ) : Ecc.Fp) * hk3
+    · -- j' = j + 2^130 - t_P
+      have htp : tPNat ≤ bitrange input_y.val 0 250 + 2 ^ 130 := by
+        have h1 : tPNat < 2 ^ 130 := by norm_num [tPNat]
+        omega
+      have hj'cast : input_j' = ((bitrange input_y.val 0 250 : ℕ) : Ecc.Fp)
+          + ((2 ^ 130 : ℕ) : Ecc.Fp) - ((tPNat : ℕ) : Ecc.Fp) := by
+        -- avoid the truncating `Nat` subtraction by adding `tPNat` back: `j'.val + t_P = j + 2^130`.
+        have hj'nat : input_j'.val + tPNat = bitrange input_y.val 0 250 + 2 ^ 130 := by omega
+        have hyj : input_j' = ((input_j'.val : ℕ) : Ecc.Fp) :=
+          (ZMod.natCast_rightInverse input_j').symm
+        have hcast := congrArg (Nat.cast (R := Ecc.Fp)) hj'nat
+        push_cast at hcast ⊢
+        rw [hyj]
+        linear_combination hcast
+      rw [hj, tP_eq, hj'cast]; ring
+    · -- k3·k2 = 0
+      rcases (show bitrange input_y.val 254 1 = 0 ∨ bitrange input_y.val 254 1 = 1 from by
+        have := bitrange_lt input_y.val 254 1; omega) with h | h
+      · rw [hk3, h]; simp
+      · rw [hk2, (high_bit_canonical hyval h).1]; simp
+    · -- k3·z13J = 0
+      rcases (show bitrange input_y.val 254 1 = 0 ∨ bitrange input_y.val 254 1 = 1 from by
+        have := bitrange_lt input_y.val 254 1; omega) with h | h
+      · rw [hk3, h]; simp
+      · rw [hz13, high_bit_z13_zero hyval h]; simp
+    · -- k3·z13J' = 0
+      rcases (show bitrange input_y.val 254 1 = 0 ∨ bitrange input_y.val 254 1 = 1 from by
+        have := bitrange_lt input_y.val 254 1; omega) with h | h
+      · rw [hk3, h]; simp
+      · rw [hz13']
+        have hlt : input_j'.val < 2 ^ 130 := by
+          rw [hj']; exact (high_bit_canonical hyval h).2.2
+        rw [Nat.div_eq_of_lt hlt]; simp
 
 end YCanonicity.Gate
 
