@@ -2119,6 +2119,25 @@ theorem main_value_bound (G : Generators) (Q : SWPoint Pallas.curve)
     exact hzBounds.1
   exact value_from_parts_lt hd2 hz1d he0 hvalue
 
+theorem main_noteScalar_bounds (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := noteScalars (eval env input)
+    gdX < 2 ^ 255 ∧ gdYbit < 2 ∧ pkdX < 2 ^ 255 ∧ pkdYbit < 2 ∧
+      v < 2 ^ 64 ∧ rho < 2 ^ 255 ∧ psi < 2 ^ 255 := by
+  have hfields := input_field_255_bounds env input
+  have hv := main_value_bound G Q hQ R env input offset h
+  simp only [noteScalars, circuit_norm] at hfields hv ⊢
+  exact ⟨
+    hfields.1,
+    Nat.mod_lt _ (by norm_num),
+    hfields.2.1,
+    Nat.mod_lt _ (by norm_num),
+    hv,
+    hfields.2.2.1,
+    hfields.2.2.2⟩
+
 theorem main_large_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
