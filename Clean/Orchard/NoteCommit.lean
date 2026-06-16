@@ -1631,7 +1631,7 @@ private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     ((ht7.trans hH).symm.trans hpH)
     hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
 
-namespace YCanonicityGadget
+namespace YCanonicity
 
 structure Input (F : Type) where
   y : F
@@ -1653,7 +1653,7 @@ def main (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) := do
   assertZero jZs[25]
   let jPrime ← witnessField fun env => env jZs[0] + (2 ^ 130 : Ecc.Fp) - Ecc.tP
   let jPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 jPrime
-  Gate.YCanonicity.circuit
+  Gate.circuit
     { y := input.y, lsb := input.lsb, k0 := k0, k2 := k2, k3 := k3, j := jZs[0],
       z1J := jZs[1], z13J := jZs[13], jPrime := jPrimeZs[0],
       z13JPrime := jPrimeZs[13] }
@@ -1684,7 +1684,7 @@ def circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input field where
   soundness := soundness
   completeness := completeness
 
-end YCanonicityGadget
+end YCanonicity
 
 namespace AssignMessageCells
 
@@ -1718,8 +1718,8 @@ def main (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var MessageCells Ecc.Fp) :
   let g0 ← witnessField fun env => bitrangeSubset (eval env rho) 254 1
   let h1 ← witnessField fun env => bitrangeSubset (eval env psi) 254 1
 
-  let b2 ← YCanonicityGadget.circuit { y := gdY, lsb := b2 }
-  let d1 ← YCanonicityGadget.circuit { y := pkdY, lsb := d1 }
+  let b2 ← YCanonicity.circuit { y := gdY, lsb := b2 }
+  let d1 ← YCanonicity.circuit { y := pkdY, lsb := d1 }
 
   let a ← witnessField fun env => bitrangeSubset (eval env gdX) 0 250
   let b ← witnessField fun env =>
@@ -1952,7 +1952,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
 
 -- TODO(note_commit): replace the placeholder subcircuit specs/proofs above with the real
 -- semantic contracts. The parent gadget now composes bundled subcircuits; the remaining
--- proof work is concentrated in `YCanonicityGadget`, `AssignMessageCells`, and
+-- proof work is concentrated in `YCanonicity`, `AssignMessageCells`, and
 -- `CommitAndConstrain`.
 
 end Orchard.NoteCommit

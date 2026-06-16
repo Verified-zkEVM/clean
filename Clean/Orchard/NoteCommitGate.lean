@@ -31,7 +31,7 @@ because it depends on `Sinsemilla.Domain` while this low-level gate module is im
 scalar-multiplication definitions.
 -/
 
-namespace Orchard.NoteCommit.Gate
+namespace Orchard.NoteCommit
 
 variable {F : Type} [Field F]
 
@@ -40,6 +40,8 @@ private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 :=
 
 private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
   sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
+
+namespace Gate
 
 namespace DecomposeB
 
@@ -480,7 +482,9 @@ def circuit : FormalAssertion Ecc.Fp Row where
 
 end PsiCanonicity
 
-namespace YCanonicity
+end Gate
+
+namespace YCanonicity.Gate
 
 structure Row (F : Type) where
   y : F
@@ -552,6 +556,6 @@ def circuit : FormalAssertion Ecc.Fp Row where
       ring
     exact ⟨mul_eq_zero_of_or hk2, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
 
-end YCanonicity
+end YCanonicity.Gate
 
-end Orchard.NoteCommit.Gate
+end Orchard.NoteCommit
