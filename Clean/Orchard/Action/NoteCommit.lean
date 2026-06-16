@@ -655,17 +655,12 @@ private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     ((ht7.trans hH).symm.trans hpH)
     hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
 
-theorem pieceChunks_eq_noteCommitChunks_of_piece_values
-    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
-    {s : NoteCommitScalars}
-    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
-    (hValues : NoteCommitPieceValues s pieces) :
-    chunks = s.chunks := by
-  rcases hValues with
-    ⟨hA, hB, hC, hD, hE, hF, hG, hH,
-      hgdX255, hgdY, hpkdX255, hpkdY, hv, hrho, hpsi⟩
-  exact pieceChunks_eq_noteCommitChunks_of_indexed_piece_values hPC
-    hA hB hC hD hE hF hG hH hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
+/-- Dividing the low `a+b` bits by `2^a` exposes the next `b` bits: the honest
+running sum's `z_a` cell is the corresponding higher `bitrange`. -/
+private theorem bitrange_low_div (n a b : ℕ) :
+    bitrange n 0 (a + b) / 2 ^ a = bitrange n a b := by
+  simp only [bitrange, pow_zero, Nat.div_one]
+  rw [pow_add, Nat.mod_mul_right_div_self]
 
 namespace YCanonicity
 
