@@ -152,6 +152,32 @@ private theorem chunksOf_eq_map_of_field_sum {piece : Ecc.Fp} {value n : ℕ} {m
   rw [ZMod.val_natCast_of_lt hvalueCard, ZMod.val_natCast_of_lt hsumCard] at hval
   exact hval
 
+private theorem chunksOf_eq_map_of_cast_sum {value n : ℕ} {ms : ℕ → ℕ}
+    (hms : ∀ r, ms r < 2 ^ K)
+    (hcast :
+      (value : Ecc.Fp) =
+        ((∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hvalueCard : value < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hsumCard : (∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) <
+      CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) :
+    Orchard.Specs.Sinsemilla.chunksOf value n = (List.range n).map ms := by
+  apply chunksOf_eq_map_of_sum hms
+  have hval := congrArg ZMod.val hcast
+  rw [ZMod.val_natCast_of_lt hvalueCard, ZMod.val_natCast_of_lt hsumCard] at hval
+  exact hval
+
+private theorem two_pow_K_mul_25_lt_p :
+    (2 : ℕ) ^ (K * 25) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+  norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+
+private theorem two_pow_K_mul_6_lt_p :
+    (2 : ℕ) ^ (K * 6) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+  exact lt_trans (by norm_num [K]) two_pow_K_mul_25_lt_p
+
+private theorem two_pow_K_lt_p :
+    (2 : ℕ) ^ K < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+  exact lt_trans (by norm_num [K]) two_pow_K_mul_25_lt_p
+
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
     Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
       Orchard.Specs.Sinsemilla.chunksOf low n := by
@@ -599,6 +625,102 @@ structure MessageSubpieces where
 `[25, 1, 25, 6, 1, 25, 25, 1]` become `[24, 0, 24, 5, 0, 24, 24, 0]`. -/
 abbrev messagePieceTailRounds : List ℕ := [0, 24, 5, 0, 24, 24, 0]
 abbrev messagePieceRounds : List ℕ := 24 :: messagePieceTailRounds
+
+private theorem noteCommitChunks_eq_of_piece_digit_sums
+    {msA msB msC msD msE msF msG msH : ℕ → ℕ}
+    {gdX gdY pkdX pkdY v rho psi : ℕ}
+    (hmsA : ∀ r, msA r < 2 ^ K) (hmsB : ∀ r, msB r < 2 ^ K)
+    (hmsC : ∀ r, msC r < 2 ^ K) (hmsD : ∀ r, msD r < 2 ^ K)
+    (hmsE : ∀ r, msE r < 2 ^ K) (hmsF : ∀ r, msF r < 2 ^ K)
+    (hmsG : ∀ r, msG r < 2 ^ K) (hmsH : ∀ r, msH r < 2 ^ K)
+    (hA : (gdX : Ecc.Fp) =
+      ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hB : ((gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
+        (pkdX % 16) * 64 : ℕ) : Ecc.Fp) =
+      ((∑ r ∈ Finset.range 1, msB r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hC : ((pkdX / 16 : ℕ) : Ecc.Fp) =
+      ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hD : ((pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 : ℕ) : Ecc.Fp) =
+      ((∑ r ∈ Finset.range 6, msD r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hE : ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Ecc.Fp) =
+      ((∑ r ∈ Finset.range 1, msE r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hF : ((rho / 16 : ℕ) : Ecc.Fp) =
+      ((∑ r ∈ Finset.range 25, msF r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hG : ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Ecc.Fp) =
+      ((∑ r ∈ Finset.range 25, msG r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hH : ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Ecc.Fp) =
+      ((∑ r ∈ Finset.range 1, msH r * 2 ^ (K * r) : ℕ) : Ecc.Fp))
+    (hgdXCard : gdX < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hpkdXCard : pkdX < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hrhoCard : rho < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hgdX255 : gdX < 2 ^ 255) (hgdY : gdY < 2)
+    (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
+    (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
+    (List.range 25).map msA ++
+      (List.range 1).map msB ++
+      (List.range 25).map msC ++
+      (List.range 6).map msD ++
+      (List.range 1).map msE ++
+      (List.range 25).map msF ++
+      (List.range 25).map msG ++
+      (List.range 1).map msH =
+      Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
+  have hBValueLt : gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
+      (pkdX % 16) * 64 < 2 ^ K := by
+    have hb0 : gdX / 2 ^ 250 % 16 < 16 := Nat.mod_lt _ (by norm_num)
+    have hb1 : gdX / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+    have hb3 : pkdX % 16 < 16 := Nat.mod_lt _ (by norm_num)
+    norm_num [K]
+    omega
+  have hDValueLt : pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 < 2 ^ (K * 6) := by
+    have hd0 : pkdX / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+    have hv0 : v % 2 ^ 58 < 2 ^ 58 := Nat.mod_lt _ (by norm_num)
+    norm_num [K]
+    omega
+  have hEValueLt : v / 2 ^ 58 % 64 + (rho % 16) * 64 < 2 ^ K := by
+    have he0 : v / 2 ^ 58 % 64 < 64 := Nat.mod_lt _ (by norm_num)
+    have he1 : rho % 16 < 16 := Nat.mod_lt _ (by norm_num)
+    norm_num [K]
+    omega
+  have hGValueLt : rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 < 2 ^ (K * 25) := by
+    have hg0 : rho / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+    have hg2 : psi % 2 ^ 249 < 2 ^ 249 := Nat.mod_lt _ (by norm_num)
+    norm_num [K]
+    omega
+  have hHValueLt : psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 < 2 ^ K := by
+    have hh0 : psi / 2 ^ 249 % 32 < 32 := Nat.mod_lt _ (by norm_num)
+    have hh1 : psi / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+    norm_num [K]
+    omega
+  have hChunksA := chunksOf_eq_map_of_cast_sum hmsA hA hgdXCard
+    (lt_trans (sum_digits_lt hmsA 25) two_pow_K_mul_25_lt_p)
+  have hChunksB := chunksOf_eq_map_of_cast_sum hmsB hB
+    (lt_trans hBValueLt two_pow_K_lt_p)
+    (lt_trans (sum_digits_lt hmsB 1) two_pow_K_lt_p)
+  have hChunksC := chunksOf_eq_map_of_cast_sum hmsC hC
+    (lt_of_le_of_lt (Nat.div_le_self pkdX 16) hpkdXCard)
+    (lt_trans (sum_digits_lt hmsC 25) two_pow_K_mul_25_lt_p)
+  have hChunksD := chunksOf_eq_map_of_cast_sum hmsD hD
+    (lt_trans hDValueLt two_pow_K_mul_6_lt_p)
+    (lt_trans (sum_digits_lt hmsD 6) two_pow_K_mul_6_lt_p)
+  have hChunksE := chunksOf_eq_map_of_cast_sum hmsE hE
+    (lt_trans hEValueLt two_pow_K_lt_p)
+    (lt_trans (sum_digits_lt hmsE 1) two_pow_K_lt_p)
+  have hChunksF := chunksOf_eq_map_of_cast_sum hmsF hF
+    (lt_of_le_of_lt (Nat.div_le_self rho 16) hrhoCard)
+    (lt_trans (sum_digits_lt hmsF 25) two_pow_K_mul_25_lt_p)
+  have hChunksG := chunksOf_eq_map_of_cast_sum hmsG hG
+    (lt_trans hGValueLt two_pow_K_mul_25_lt_p)
+    (lt_trans (sum_digits_lt hmsG 25) two_pow_K_mul_25_lt_p)
+  have hChunksH := chunksOf_eq_map_of_cast_sum hmsH hH
+    (lt_trans hHValueLt two_pow_K_lt_p)
+    (lt_trans (sum_digits_lt hmsH 1) two_pow_K_lt_p)
+  rw [← hChunksA, ← hChunksB, ← hChunksC, ← hChunksD,
+    ← hChunksE, ← hChunksF, ← hChunksG, ← hChunksH]
+  rw [chunksOf_one_eq_singleton hBValueLt, chunksOf_one_eq_singleton hEValueLt,
+    chunksOf_one_eq_singleton hHValueLt]
+  exact (noteCommitChunks_tiling_segments gdX gdY pkdX pkdY v rho psi
+    hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi).symm
 
 theorem pieceChunks_messagePieceRounds_chunks
     {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
