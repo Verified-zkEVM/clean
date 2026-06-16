@@ -48,7 +48,7 @@ def circuit : FormalAssertion Fp Input where
     rcases h_holds with ⟨hBool, hSwitch⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
     constructor
-    · exact hBool
+    · simpa [sub_eq_add_neg] using hBool
     · intro x
       constructor
       · intro hBit
@@ -76,7 +76,7 @@ def circuit : FormalAssertion Fp Input where
     rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
     constructor
-    · exact hBool
+    · simpa [sub_eq_add_neg] using hBool
     · rcases hBool with hBit | hBit
       · exact by
           have hPoint := (hSelect 0).1 hBit
