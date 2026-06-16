@@ -2138,6 +2138,19 @@ theorem main_noteScalar_bounds (G : Generators) (Q : SWPoint Pallas.curve)
     hfields.2.2.1,
     hfields.2.2.2⟩
 
+theorem main_commitInput_piece_values (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp)
+    (offset : ℕ) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    pieces[0] = eval env cells.a ∧ pieces[1] = eval env cells.b ∧
+      pieces[2] = eval env cells.c ∧ pieces[3] = eval env cells.d ∧
+      pieces[4] = eval env cells.e ∧ pieces[5] = eval env cells.f ∧
+      pieces[6] = eval env cells.g ∧ pieces[7] = eval env cells.h := by
+  simp only [circuit_norm]
+
 theorem main_large_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
