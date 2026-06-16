@@ -1989,7 +1989,8 @@ def Spec (input : Value Input Fp) (cells : Value MessageCells Fp)
 
 def ProverSpec (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
-  ProverMessagePiecesEncode input cells
+  ProverMessagePiecesEncode input cells ∧
+    Orchard.Sinsemilla.Chain.PieceBounds messagePieceRounds (messagePieces cells)
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
@@ -2094,14 +2095,12 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (_R : MulFixed
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : Value Input Fp) (cm : Point Fp) (_ : ProverData Fp) : Prop :=
-  MessagePiecesEncode input.note input.cells →
-    NoteCommitRelation G Q R input.note cm
+  NoteCommitRelation G Q R input.note cm
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (cm : ProverValue Point Fp)
     (_ : ProverHint Fp) : Prop :=
-  ProverMessagePiecesEncode input.note input.cells →
-    ProverNoteCommitRelation G Q R input.note cm
+  ProverNoteCommitRelation G Q R input.note cm
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
@@ -2182,7 +2181,18 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) Assumptions (Spec G Q R) := by
   circuit_proof_start [AssignMessageCells.circuit, CommitAndConstrain.circuit]
   let hMessage := h_holds.1 trivial
-  exact h_holds.2 hMessage hMessage
+  exact h_holds.2 hMessage
+
+theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
+      (ProverAssumptions G Q) (ProverSpec G Q R) := by
+  circuit_proof_start [AssignMessageCells.circuit, CommitAndConstrain.circuit,
+    ProverAssumptions, ProverSpec, AssignMessageCells.ProverSpec,
+    CommitAndConstrain.ProverAssumptions, CommitAndConstrain.ProverSpec]
+  let hAssign := (h_env.1 trivial).2
+  exact ⟨⟨trivial, hAssign.1, hAssign.2, h_assumptions.2.2⟩,
+    (h_env.2 ⟨hAssign.1, hAssign.2, h_assumptions.2.2⟩).2⟩
 
 -- TODO(note_commit): replace the placeholder subcircuit specs/proofs above with the real
 -- semantic contracts. The parent gadget now composes bundled subcircuits; the remaining
