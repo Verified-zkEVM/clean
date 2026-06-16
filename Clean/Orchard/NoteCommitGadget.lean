@@ -784,6 +784,27 @@ private theorem lsb_eq_y_low_bit_of_parts {y lsb k0 k2 k3 j z1J : Ecc.Fp}
     rw [Nat.add_mul_mod_self_left]
     exact hjMod.symm
 
+private theorem j_lt_tP_of_prime_bounds {j jPrime : Ecc.Fp}
+    (hj : j.val < 2 ^ (K * 13))
+    (hprime : jPrime = j + OfNat.ofNat (2 ^ 130) - NoteCommit.tP)
+    (hprimeLt : jPrime.val < 2 ^ (K * 13)) :
+    j.val < tPNat := by
+  by_contra hnot
+  have hjGe : tPNat ≤ j.val := Nat.le_of_not_gt hnot
+  have hprimeField : jPrime = ((j.val + 2 ^ 130 - tPNat : ℕ) : Ecc.Fp) := by
+    rw [hprime, ← ZMod.natCast_zmod_val j]
+    push_cast [NoteCommit.tP, tPNat]
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt j)]
+    ring_nf
+  have hprimeValEq : jPrime.val = j.val + 2 ^ 130 - tPNat := by
+    have hlt : j.val + 2 ^ 130 - tPNat < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hj ⊢
+      omega
+    rw [hprimeField, ZMod.val_natCast_of_lt hlt]
+  rw [hprimeValEq] at hprimeLt
+  norm_num [K] at hj hprimeLt ⊢
+  omega
+
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
     Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
       Orchard.Specs.Sinsemilla.chunksOf low n := by
@@ -2165,6 +2186,15 @@ private theorem assertZero_eq_zero_of_soundness (env : Environment Ecc.Fp)
   unfold ConstraintsHold.Soundness assertZero at h
   exact h.1
 
+private theorem eval_fields_getElem_eq_zero_of_expression_eval_getElem_eq_zero
+    (env : Environment Ecc.Fp) {n : ℕ} (zs : Var (fields n) Ecc.Fp)
+    (i : ℕ) (hi : i < n)
+    (h : Expression.eval env (zs[i]'hi) = 0) :
+    (eval env zs)[i]'hi = 0 := by
+  rw [← ProvableType.getElem_eval_fields]
+  change Expression.eval env (zs[i]'hi) = 0
+  exact h
+
 private theorem withHint_spec_of_soundness {Input Output : TypeMap}
     [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input Output)
@@ -2340,6 +2370,40 @@ private theorem copyCheck25_z13_zero_val_lt (env : Environment Ecc.Fp)
     exact lt_trans hlo (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
   rw [heq, ZMod.val_natCast_of_lt hCard]
   exact hlo
+
+private theorem canonBitshift130_prime_evalOutput_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
+    (a : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((canonBitshift130 a).operations offset))
+    (hzLast : eval env ((canonBitshift130 a).output offset).2 = 0) :
+    (show Ecc.Fp from eval env ((canonBitshift130 a).output offset).1).val <
+      2 ^ (K * 13) := by
+  let prime := (witnessField (F := Ecc.Fp) fun env =>
+    env a + (2 ^ 130 : Ecc.Fp) - tP).output offset
+  let copyOffset := offset + (witnessField (F := Ecc.Fp) fun env =>
+    env a + (2 ^ 130 : Ecc.Fp) - tP).localLength offset
+  have hCopy :
+      ConstraintsHold.Soundness env
+        ((Utilities.LookupRangeCheck.CopyCheck.circuit 13 prime).operations copyOffset) := by
+    unfold canonBitshift130 at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact h.2.1
+  have hzLastCopy :
+      (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 13).output prime copyOffset))[13]
+        = 0 := by
+    unfold canonBitshift130 at hzLast
+    simp only [Circuit.output, Circuit.bind_def, withHint_output] at hzLast
+    rw [ProvableType.eval_field, ProvableType.getElem_eval_fields] at hzLast
+    simpa only [prime, copyOffset, Circuit.output, Circuit.localLength] using hzLast
+  have hPrimeBound := copyCheck13_zlast_zero_val_lt env prime copyOffset hCopy hzLastCopy
+  have hSpec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 13) env prime copyOffset trivial hCopy
+  simp only at hSpec
+  simp only [prime, copyOffset, Circuit.output, Circuit.localLength] at hSpec hPrimeBound
+  unfold canonBitshift130
+  simp only [Circuit.output, Circuit.bind_def, withHint_output]
+  rw [ProvableType.eval_field, ProvableType.getElem_eval_fields]
+  rw [hSpec.1]
+  exact hPrimeBound
 
 private theorem pkdXCanonicity_prime_evalOutput_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
     (b3 c : Var field Ecc.Fp) (offset : ℕ)
@@ -2534,6 +2598,130 @@ theorem yCanonicity_gate_spec_of_soundness (env : Environment Ecc.Fp)
     NoteCommit.YCanonicity.circuit] at h
   exact formalAssertion_spec_of_soundness NoteCommit.YCanonicity.circuit env row _ trivial
     h.2.2.2.2.2.2.2.1
+
+theorem yCanonicity_z1J_copy_val_lt (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+    let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+    let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+    let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+    let j := (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+    let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+    ((eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset))[1]).val <
+      2 ^ (K * 24) := by
+  let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+  let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+  let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+  let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+  let j := (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+  let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+  let zs := (Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset
+  have hCopy :
+      ConstraintsHold.Soundness env
+        ((Utilities.LookupRangeCheck.CopyCheck.circuit 25 j).operations copyOffset) := by
+    unfold yCanonicity at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact h.2.2.2.2.1
+  have hzLastExpr : Expression.eval env zs[25] = 0 := by
+    unfold yCanonicity at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact assertZero_eq_zero_of_soundness env zs[25] _ h.2.2.2.2.2.1
+  have hzLast :
+      (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset))[25]
+        = 0 := by
+    exact eval_fields_getElem_eq_zero_of_expression_eval_getElem_eq_zero env zs 25
+      (by decide) hzLastExpr
+  exact copyCheck25_z1_val_lt_of_zlast_zero env j copyOffset hCopy hzLast
+
+theorem yCanonicity_j_val_lt_of_z13_zero (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+    let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+    let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+    let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+    let j := (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+    let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+    (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset))[13] = 0 →
+      ((eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset))[0]).val <
+        2 ^ (K * 13) := by
+  let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+  let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+  let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+  let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+  let j := (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+  let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+  dsimp only
+  intro hz13
+  have hCopy :
+      ConstraintsHold.Soundness env
+        ((Utilities.LookupRangeCheck.CopyCheck.circuit 25 j).operations copyOffset) := by
+    unfold yCanonicity at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact h.2.2.2.2.1
+  have hJ := copyCheck25_z13_zero_val_lt env j copyOffset hCopy hz13
+  have hSpec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 25) env j copyOffset trivial hCopy
+  simp only at hSpec
+  rw [hSpec.1]
+  exact hJ
+
+theorem yCanonicity_jPrime_val_lt_of_z13_zero (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+    let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+    let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+    let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+    let j := (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+    let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+    let zs := (Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset
+    let canonOffset := copyOffset + (Utilities.LookupRangeCheck.CopyCheck.circuit 25 j).localLength copyOffset
+    let bounds := (canonBitshift130 zs[0]).output canonOffset
+    eval env bounds.2 = 0 →
+      (show Ecc.Fp from eval env bounds.1).val < 2 ^ (K * 13) := by
+  let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+  let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+  let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+  let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+  let j := (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+  let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+  let zs := (Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset
+  let canonOffset := copyOffset + (Utilities.LookupRangeCheck.CopyCheck.circuit 25 j).localLength copyOffset
+  let bounds := (canonBitshift130 zs[0]).output canonOffset
+  dsimp only
+  intro hz13
+  have hCanon :
+      ConstraintsHold.Soundness env ((canonBitshift130 zs[0]).operations canonOffset) := by
+    unfold yCanonicity at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact h.2.2.2.2.2.2.1
+  exact canonBitshift130_prime_evalOutput_val_lt_of_zlast_zero env zs[0] canonOffset hCanon hz13
 
 theorem assignSubpieces_short_range_specs (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
