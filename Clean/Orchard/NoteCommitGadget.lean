@@ -1271,6 +1271,56 @@ theorem constrainCommitment_decomposeB_spec (env : Environment Ecc.Fp)
   exact formalAssertion_spec_of_soundness NoteCommit.DecomposeB.circuit env row _ trivial
     h.2.2.2.2.1
 
+theorem constrainCommitment_decompose_specs (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    let rowB : Var NoteCommit.DecomposeB.Row Ecc.Fp :=
+      { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
+    let rowD : Var NoteCommit.DecomposeD.Row Ecc.Fp :=
+      { d := cells.d, d0 := cells.d0, d1 := cells.d1, d2 := cells.d2, d3 := z1d }
+    let rowE : Var NoteCommit.DecomposeE.Row Ecc.Fp :=
+      { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
+    let rowG : Var NoteCommit.DecomposeG.Row Ecc.Fp :=
+      { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := z1g }
+    let rowH : Var NoteCommit.DecomposeH.Row Ecc.Fp :=
+      { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
+    NoteCommit.DecomposeB.Spec (eval env rowB) ∧
+      NoteCommit.DecomposeD.Spec (eval env rowD) ∧
+      NoteCommit.DecomposeE.Spec (eval env rowE) ∧
+      NoteCommit.DecomposeG.Spec (eval env rowG) ∧
+      NoteCommit.DecomposeH.Spec (eval env rowH) := by
+  let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+  let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+  let rowB : Var NoteCommit.DecomposeB.Row Ecc.Fp :=
+    { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
+  let rowD : Var NoteCommit.DecomposeD.Row Ecc.Fp :=
+    { d := cells.d, d0 := cells.d0, d1 := cells.d1, d2 := cells.d2, d3 := z1d }
+  let rowE : Var NoteCommit.DecomposeE.Row Ecc.Fp :=
+    { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
+  let rowG : Var NoteCommit.DecomposeG.Row Ecc.Fp :=
+    { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := z1g }
+  let rowH : Var NoteCommit.DecomposeH.Row Ecc.Fp :=
+    { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
+  unfold constrainCommitment at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset,
+    DecomposeB.circuit, DecomposeD.circuit, DecomposeE.circuit, DecomposeG.circuit,
+    DecomposeH.circuit] at h
+  exact ⟨
+    formalAssertion_spec_of_soundness NoteCommit.DecomposeB.circuit env rowB _ trivial
+      h.2.2.2.2.1,
+    formalAssertion_spec_of_soundness NoteCommit.DecomposeD.circuit env rowD _ trivial
+      h.2.2.2.2.2.1,
+    formalAssertion_spec_of_soundness NoteCommit.DecomposeE.circuit env rowE _ trivial
+      h.2.2.2.2.2.2.1,
+    formalAssertion_spec_of_soundness NoteCommit.DecomposeG.circuit env rowG _ trivial
+      h.2.2.2.2.2.2.2.1,
+    formalAssertion_spec_of_soundness NoteCommit.DecomposeH.circuit env rowH _ trivial
+      h.2.2.2.2.2.2.2.2.1⟩
+
 theorem commitAndConstrain_output_eq (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
     (cells : MessageCells) (offset : ℕ) :
