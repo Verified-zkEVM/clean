@@ -2194,6 +2194,17 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   exact ⟨⟨trivial, hAssign.1, hAssign.2, h_assumptions.2.2⟩,
     (h_env.2 ⟨hAssign.1, hAssign.2, h_assumptions.2.2⟩).2⟩
 
+def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
+  main := main G Q hQ R
+  elaborated := elaborated G Q hQ R
+  Assumptions
+  Spec := Spec G Q R
+  ProverAssumptions := ProverAssumptions G Q
+  ProverSpec := ProverSpec G Q R
+  soundness := soundness G Q hQ R
+  completeness := completeness G Q hQ R
+
 -- TODO(note_commit): replace the placeholder subcircuit specs/proofs above with the real
 -- semantic contracts. The parent gadget now composes bundled subcircuits; the remaining
 -- proof work is concentrated in `YCanonicity`, `AssignMessageCells`, and

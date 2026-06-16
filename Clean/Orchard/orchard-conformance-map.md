@@ -195,12 +195,12 @@ Source:
 
 Current Clean coverage:
 
-- `Clean.Orchard.Gadget.ValueCommitOrchard.circuit`: `gadget.rs::value_commit_orchard`,
+- `Clean.Orchard.Action.ValueCommit.circuit`: `gadget.rs::value_commit_orchard`,
   the value-commitment entry circuit
   `cv = [v] ValueCommitV + [rcv] ValueCommitR`, composing the short and full-width
   fixed-base mul entry circuits and complete addition, with soundness and completeness
   proved
-- `Clean.Orchard.ActionChecks.circuit`: `GATE Orchard circuit checks`
+- `Clean.Orchard.Action.Gate.circuit`: `GATE Orchard circuit checks`
 - `Clean.Orchard.NoteCommit.DecomposeB.circuit`:
   `GATE NoteCommit MessagePiece b`
 - `Clean.Orchard.NoteCommit.DecomposeD.circuit`:
@@ -217,7 +217,7 @@ Current Clean coverage:
 - `Clean.Orchard.NoteCommit.RhoCanonicity.circuit`: `GATE NoteCommit input rho`
 - `Clean.Orchard.NoteCommit.PsiCanonicity.circuit`: `GATE NoteCommit input psi`
 - `Clean.Orchard.NoteCommit.YCanonicity.circuit`: `GATE y coordinate checks`
-- `Clean.Orchard.CommitIvk.circuit`: `GATE CommitIvk canonicity check`
+- `Clean.Orchard.Action.CommitIvk.Gate.circuit`: `GATE CommitIvk canonicity check`
 
 ## Known Non-Conformances
 

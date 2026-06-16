@@ -1,7 +1,5 @@
 import Clean.Orchard.Action
-import Clean.Orchard.CommitIvk
 import Clean.Orchard.Ecc
-import Clean.Orchard.Gadget
 import Clean.Orchard.NoteCommit
 import Clean.Orchard.Poseidon
 import Clean.Orchard.Ecc.ScalarMul
@@ -9,7 +7,6 @@ import Clean.Orchard.Sinsemilla.Chip
 import Clean.Orchard.Sinsemilla.Domain
 import Clean.Orchard.Sinsemilla.HashToPoint
 import Clean.Orchard.Sinsemilla.Merkle
-import Clean.Orchard.SpendAuthority
 import Clean.Orchard.Specs.Elliptic.CoordinateSystem
 import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
 import Clean.Orchard.Specs.Sinsemilla
