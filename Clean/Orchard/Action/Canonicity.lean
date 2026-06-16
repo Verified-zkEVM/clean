@@ -176,39 +176,139 @@ structure Row (F : Type) where
   z14B3CPrime : F
 deriving ProvableStruct
 
+/-- Rely-conditions from the surrounding lookups: `b3`/`c` are range-checked, `d0` is
+Boolean, `b3CPrime` is the canonicity shift of the low limb, and `z13C`/`z14B3CPrime` are
+the running-sum tails of `c`/`b3CPrime`. -/
+def Assumptions (row : Row Fp) : Prop :=
+  IsBool row.d0 ∧
+    row.c.val < 2 ^ 250 ∧
+    row.b3.val < 2 ^ 4 ∧
+    row.b3CPrime = row.b3 + row.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
+    row.z13C = ((row.c.val / 2 ^ 130 : ℕ) : Fp) ∧
+    row.z14B3CPrime = ((row.b3CPrime.val / 2 ^ 140 : ℕ) : Fp)
+
+/-- The gate's payoff: `b3`/`c`/`d0` are the canonical bit slices of `x(pk_d)`. -/
 def Spec (row : Row Fp) : Prop :=
-  row.pkdX = row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) ∧
-    row.b3CPrime = row.b3 + row.c * 16 + OfNat.ofNat (2 ^ 140) - Ecc.tP ∧
-    (row.d0 = 0 ∨ row.z13C = 0) ∧
-    (row.d0 = 0 ∨ row.z14B3CPrime = 0)
+  row.b3 = ((bitrange row.pkdX.val 0 4 : ℕ) : Fp) ∧
+    row.c = ((bitrange row.pkdX.val 4 250 : ℕ) : Fp) ∧
+    row.d0 = ((bitrange row.pkdX.val 254 1 : ℕ) : Fp)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertZero (row.b3 + row.c * 16 + row.d0 * OfNat.ofNat (2 ^ 254) - row.pkdX)
-  assertZero (row.b3 + row.c * 16 + Expression.const ((2 ^ 140 : ℕ) : Fp) -
-    Expression.const Ecc.tP - row.b3CPrime)
+  assertZero (row.b3 + row.c * Expression.const ((2 ^ 4 : ℕ) : Fp) +
+    row.d0 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.pkdX)
+  assertZero (row.b3 + row.c * Expression.const ((2 ^ 4 : ℕ) : Fp) +
+    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.b3CPrime)
   assertZero (row.d0 * row.z13C)
   assertZero (row.d0 * row.z14B3CPrime)
 
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input pk_d"
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    rcases h_holds with ⟨hdec, hprime, hz13, hz14⟩
-    exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
-      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
-      mul_eq_zero.mp hz13, mul_eq_zero.mp hz14⟩
+    obtain ⟨hd0, hc_lt, hb3_lt, hb3cP, hz13C, hz14⟩ := h_assumptions
+    obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
+    have hp := pallasBaseCard_eq
+    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    have hlo_sum : input_b3.val + input_c.val * 2 ^ 4 < PALLAS_BASE_CARD := by omega
+    have hlo_val : (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val
+        = input_b3.val + input_c.val * 2 ^ 4 := val_limb2 4 hlo_sum
+    have hlo_lt : (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val < 2 ^ 254 := by rw [hlo_val]; omega
+    have hcanon : input_d0 = 1 → (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val < tPNat := by
+      intro h1
+      have hc130 : input_c.val < 2 ^ 130 := by
+        have hz : input_z13C = 0 := by
+          rcases mul_eq_zero.mp hg1 with h | h
+          · exact absurd (h1 ▸ h) one_ne_zero
+          · exact h
+        rw [hz13C] at hz
+        have := natCast_eq_zero
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans hc_lt (by norm_num [PALLAS_BASE_CARD]))) hz
+        omega
+      have hb3cP_val : input_b3CPrime.val
+          = (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val + 2 ^ 140 - tPNat := by
+        rw [hb3cP]; exact val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega)
+      have hb3cP_lt : input_b3CPrime.val < 2 ^ 140 := by
+        have hz : input_z14B3CPrime = 0 := by
+          rcases mul_eq_zero.mp hg2 with h | h
+          · exact absurd (h1 ▸ h) one_ne_zero
+          · exact h
+        rw [hz14] at hz
+        have := natCast_eq_zero
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_b3CPrime)) hz
+        omega
+      omega
+    have hrecL : input_pkdX = (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp))
+        + input_d0 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination -hrec
+    obtain ⟨_, hlo_eq, hd0_eq⟩ := canonical_top_decomp hrecL hlo_lt hd0 hcanon
+    have hmod : bitrange input_pkdX.val 0 254 = input_pkdX.val % 2 ^ 254 := by simp [bitrange]
+    have hb3_eq : input_b3.val = bitrange input_pkdX.val 0 4 := by
+      have h1 : input_b3.val = bitrange (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val 0 4 := by
+        simp only [bitrange, pow_zero, Nat.div_one, hlo_val]; omega
+      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 0 + 4 ≤ 254)]
+    have hc_eq : input_c.val = bitrange input_pkdX.val 4 250 := by
+      have h1 : input_c.val = bitrange (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val 4 250 := by
+        simp only [bitrange, hlo_val]; omega
+      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 4 + 250 ≤ 254)]
+    refine ⟨?_, ?_, ?_⟩
+    · rw [← hb3_eq]; exact (ZMod.natCast_rightInverse input_b3).symm
+    · rw [← hc_eq]; exact (ZMod.natCast_rightInverse input_c).symm
+    · rw [← hd0_eq]; exact (ZMod.natCast_rightInverse input_d0).symm
   completeness := by
-    circuit_proof_start [Ecc.tP]
-    rcases h_spec with ⟨hdec, hprime, hz13, hz14⟩
-    constructor
-    · rw [hdec]
-      ring
-    constructor
-    · rw [hprime]
-      ring
-    exact ⟨mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz14⟩
+    circuit_proof_start
+    obtain ⟨_, hc_lt, hb3_lt, hb3cP, hz13C, hz14⟩ := h_assumptions
+    obtain ⟨hb3_eq, hc_eq, hd0_eq⟩ := h_spec
+    have hp := pallasBaseCard_eq
+    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    have hpkdX : input_pkdX.val < 2 ^ 255 :=
+      lt_trans (ZMod.val_lt input_pkdX) (by norm_num [PALLAS_BASE_CARD])
+    have hb3_val : input_b3.val = bitrange input_pkdX.val 0 4 := by
+      rw [hb3_eq]
+      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 4) (by norm_num [PALLAS_BASE_CARD]))
+    have hc_val : input_c.val = bitrange input_pkdX.val 4 250 := by
+      rw [hc_eq]
+      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 4 250) (by norm_num [PALLAS_BASE_CARD]))
+    have hd0cases := show bitrange input_pkdX.val 254 1 = 0 ∨ bitrange input_pkdX.val 254 1 = 1 from by
+      have := bitrange_lt input_pkdX.val 254 1; omega
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · -- reconstruction
+      have hdec : input_pkdX.val = bitrange input_pkdX.val 0 4
+          + 2 ^ 4 * bitrange input_pkdX.val 4 250 + 2 ^ 254 * bitrange input_pkdX.val 254 1 := by
+        simp only [bitrange, pow_zero, Nat.div_one]; omega
+      have hpkd_eq : input_pkdX = ((bitrange input_pkdX.val 0 4 : ℕ) : Fp)
+          + ((bitrange input_pkdX.val 4 250 : ℕ) : Fp) * ((2 ^ 4 : ℕ) : Fp)
+          + ((bitrange input_pkdX.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
+        conv_lhs => rw [← ZMod.natCast_rightInverse input_pkdX, hdec]
+        push_cast; ring
+      rw [hb3_eq, hc_eq, hd0_eq]; linear_combination -hpkd_eq
+    · -- prime
+      rw [hb3cP]; ring
+    · -- d0·z13C = 0
+      rcases hd0cases with h | h
+      · rw [hd0_eq, h]; simp
+      · rw [hz13C, hc_val,
+          show bitrange input_pkdX.val 4 250 / 2 ^ 130 = bitrange input_pkdX.val 134 120 from
+            bitrange_div_pow input_pkdX.val 4 130 120,
+          high_bit_high_zero (ZMod.val_lt input_pkdX) h (by norm_num) (by norm_num)]
+        simp
+    · -- d0·z14B3CPrime = 0
+      rcases hd0cases with h | h
+      · rw [hd0_eq, h]; simp
+      · obtain ⟨hk2z, hlolt, _⟩ := high_bit_canonical (ZMod.val_lt input_pkdX) h
+        have hlo254 : bitrange input_pkdX.val 0 254 = bitrange input_pkdX.val 0 250 := by
+          have := bitrange_add input_pkdX.val 0 250 4; rw [hk2z] at this; norm_num at this ⊢; omega
+        have hlo_val : (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val
+            = bitrange input_pkdX.val 0 254 := by
+          have hsum : input_b3.val + input_c.val * 2 ^ 4 < PALLAS_BASE_CARD := by
+            rw [hb3_val, hc_val]; have := bitrange_lt input_pkdX.val 4 250; omega
+          rw [val_limb2 4 hsum, hb3_val, hc_val]
+          have := bitrange_add input_pkdX.val 0 4 250; norm_num at this; omega
+        have hb3cP_val : input_b3CPrime.val = bitrange input_pkdX.val 0 254 + 2 ^ 140 - tPNat := by
+          rw [hb3cP, val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega), hlo_val]
+        rw [hz14, hb3cP_val, Nat.div_eq_of_lt (by omega)]
+        simp
 
 end PkdCanonicity.Gate
 
@@ -221,23 +321,64 @@ structure Row (F : Type) where
   e0 : F
 deriving ProvableStruct
 
+/-- Rely-conditions: the three sub-pieces are range-checked. -/
+def Assumptions (row : Row Fp) : Prop :=
+  row.d2.val < 2 ^ 8 ∧ row.d3.val < 2 ^ 50 ∧ row.e0.val < 2 ^ 6
+
+/-- The gate's payoff: `value` is a canonical 64-bit value with `d2`/`d3`/`e0` its slices. -/
 def Spec (row : Row Fp) : Prop :=
-  row.value = row.d2 + row.d3 * 256 + row.e0 * 288230376151711744
+  row.value.val < 2 ^ 64 ∧
+    row.d2 = ((bitrange row.value.val 0 8 : ℕ) : Fp) ∧
+    row.d3 = ((bitrange row.value.val 8 50 : ℕ) : Fp) ∧
+    row.e0 = ((bitrange row.value.val 58 6 : ℕ) : Fp)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertZero (row.d2 + row.d3 * 256 + row.e0 * 288230376151711744 - row.value)
+  assertZero (row.d2 + row.d3 * Expression.const ((2 ^ 8 : ℕ) : Fp) +
+    row.e0 * Expression.const ((2 ^ 58 : ℕ) : Fp) - row.value)
 
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input value"
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
     circuit_proof_start
-    exact (left_eq_of_add_neg_eq_zero h_holds).symm
+    obtain ⟨hd2_lt, hd3_lt, he0_lt⟩ := h_assumptions
+    have hp := pallasBaseCard_eq
+    have hbnd : input_d2.val + input_d3.val * 2 ^ 8 + input_e0.val * 2 ^ 58
+        < PALLAS_BASE_CARD := by omega
+    have hval : input_value.val
+        = input_d2.val + input_d3.val * 2 ^ 8 + input_e0.val * 2 ^ 58 := by
+      have hcast : input_value
+          = ((input_d2.val + input_d3.val * 2 ^ 8 + input_e0.val * 2 ^ 58 : ℕ) : Fp) := by
+        have hrec : input_value = input_d2 + input_d3 * ((2 ^ 8 : ℕ) : Fp)
+            + input_e0 * ((2 ^ 58 : ℕ) : Fp) := by linear_combination -h_holds
+        rw [hrec]; push_cast
+        rw [ZMod.natCast_rightInverse input_d2, ZMod.natCast_rightInverse input_d3,
+          ZMod.natCast_rightInverse input_e0]
+      rw [hcast, ZMod.val_natCast_of_lt hbnd]
+    refine ⟨by rw [hval]; omega, ?_, ?_, ?_⟩
+    · have hd2_eq : input_d2.val = bitrange input_value.val 0 8 := by
+        simp only [bitrange, pow_zero, Nat.div_one, hval]; omega
+      rw [← hd2_eq]; exact (ZMod.natCast_rightInverse input_d2).symm
+    · have hd3_eq : input_d3.val = bitrange input_value.val 8 50 := by
+        simp only [bitrange, hval]; omega
+      rw [← hd3_eq]; exact (ZMod.natCast_rightInverse input_d3).symm
+    · have he0_eq : input_e0.val = bitrange input_value.val 58 6 := by
+        simp only [bitrange, hval]; omega
+      rw [← he0_eq]; exact (ZMod.natCast_rightInverse input_e0).symm
   completeness := by
     circuit_proof_start
-    rw [h_spec]
-    ring
+    obtain ⟨hval_lt, hd2_eq, hd3_eq, he0_eq⟩ := h_spec
+    have hdec : input_value.val = bitrange input_value.val 0 8
+        + 2 ^ 8 * bitrange input_value.val 8 50 + 2 ^ 58 * bitrange input_value.val 58 6 := by
+      simp only [bitrange, pow_zero, Nat.div_one]; omega
+    have hval_eq : input_value = ((bitrange input_value.val 0 8 : ℕ) : Fp)
+        + ((bitrange input_value.val 8 50 : ℕ) : Fp) * ((2 ^ 8 : ℕ) : Fp)
+        + ((bitrange input_value.val 58 6 : ℕ) : Fp) * ((2 ^ 58 : ℕ) : Fp) := by
+      conv_lhs => rw [← ZMod.natCast_rightInverse input_value, hdec]
+      push_cast; ring
+    rw [hd2_eq, hd3_eq, he0_eq]; linear_combination -hval_eq
 
 end ValueCanonicity.Gate
 
@@ -253,39 +394,133 @@ structure Row (F : Type) where
   z14E1FPrime : F
 deriving ProvableStruct
 
+/-- Rely-conditions from the surrounding lookups (same shape as `pk_d`). -/
+def Assumptions (row : Row Fp) : Prop :=
+  IsBool row.g0 ∧
+    row.f.val < 2 ^ 250 ∧
+    row.e1.val < 2 ^ 4 ∧
+    row.e1FPrime = row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
+    row.z13F = ((row.f.val / 2 ^ 130 : ℕ) : Fp) ∧
+    row.z14E1FPrime = ((row.e1FPrime.val / 2 ^ 140 : ℕ) : Fp)
+
+/-- The gate's payoff: `e1`/`f`/`g0` are the canonical bit slices of `rho`. -/
 def Spec (row : Row Fp) : Prop :=
-  row.rho = row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) ∧
-    row.e1FPrime = row.e1 + row.f * 16 + OfNat.ofNat (2 ^ 140) - Ecc.tP ∧
-    (row.g0 = 0 ∨ row.z13F = 0) ∧
-    (row.g0 = 0 ∨ row.z14E1FPrime = 0)
+  row.e1 = ((bitrange row.rho.val 0 4 : ℕ) : Fp) ∧
+    row.f = ((bitrange row.rho.val 4 250 : ℕ) : Fp) ∧
+    row.g0 = ((bitrange row.rho.val 254 1 : ℕ) : Fp)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertZero (row.e1 + row.f * 16 + row.g0 * OfNat.ofNat (2 ^ 254) - row.rho)
-  assertZero (row.e1 + row.f * 16 + Expression.const ((2 ^ 140 : ℕ) : Fp) -
-    Expression.const Ecc.tP - row.e1FPrime)
+  assertZero (row.e1 + row.f * Expression.const ((2 ^ 4 : ℕ) : Fp) +
+    row.g0 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.rho)
+  assertZero (row.e1 + row.f * Expression.const ((2 ^ 4 : ℕ) : Fp) +
+    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.e1FPrime)
   assertZero (row.g0 * row.z13F)
   assertZero (row.g0 * row.z14E1FPrime)
 
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input rho"
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    rcases h_holds with ⟨hdec, hprime, hz13, hz14⟩
-    exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
-      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
-      mul_eq_zero.mp hz13, mul_eq_zero.mp hz14⟩
+    obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hz14⟩ := h_assumptions
+    obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
+    have hp := pallasBaseCard_eq
+    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    have hlo_sum : input_e1.val + input_f.val * 2 ^ 4 < PALLAS_BASE_CARD := by omega
+    have hlo_val : (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val
+        = input_e1.val + input_f.val * 2 ^ 4 := val_limb2 4 hlo_sum
+    have hlo_lt : (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val < 2 ^ 254 := by rw [hlo_val]; omega
+    have hcanon : input_g0 = 1 → (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val < tPNat := by
+      intro h1
+      have hf130 : input_f.val < 2 ^ 130 := by
+        have hz : input_z13F = 0 := by
+          rcases mul_eq_zero.mp hg1 with h | h
+          · exact absurd (h1 ▸ h) one_ne_zero
+          · exact h
+        rw [hz13F] at hz
+        have := natCast_eq_zero
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans hf_lt (by norm_num [PALLAS_BASE_CARD]))) hz
+        omega
+      have he1fP_val : input_e1FPrime.val
+          = (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val + 2 ^ 140 - tPNat := by
+        rw [he1fP]; exact val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega)
+      have he1fP_lt : input_e1FPrime.val < 2 ^ 140 := by
+        have hz : input_z14E1FPrime = 0 := by
+          rcases mul_eq_zero.mp hg2 with h | h
+          · exact absurd (h1 ▸ h) one_ne_zero
+          · exact h
+        rw [hz14] at hz
+        have := natCast_eq_zero
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_e1FPrime)) hz
+        omega
+      omega
+    have hrecL : input_rho = (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp))
+        + input_g0 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination -hrec
+    obtain ⟨_, hlo_eq, hg0_eq⟩ := canonical_top_decomp hrecL hlo_lt hg0 hcanon
+    have hmod : bitrange input_rho.val 0 254 = input_rho.val % 2 ^ 254 := by simp [bitrange]
+    have he1_eq : input_e1.val = bitrange input_rho.val 0 4 := by
+      have h1 : input_e1.val = bitrange (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val 0 4 := by
+        simp only [bitrange, pow_zero, Nat.div_one, hlo_val]; omega
+      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 0 + 4 ≤ 254)]
+    have hf_eq : input_f.val = bitrange input_rho.val 4 250 := by
+      have h1 : input_f.val = bitrange (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val 4 250 := by
+        simp only [bitrange, hlo_val]; omega
+      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 4 + 250 ≤ 254)]
+    refine ⟨?_, ?_, ?_⟩
+    · rw [← he1_eq]; exact (ZMod.natCast_rightInverse input_e1).symm
+    · rw [← hf_eq]; exact (ZMod.natCast_rightInverse input_f).symm
+    · rw [← hg0_eq]; exact (ZMod.natCast_rightInverse input_g0).symm
   completeness := by
-    circuit_proof_start [Ecc.tP]
-    rcases h_spec with ⟨hdec, hprime, hz13, hz14⟩
-    constructor
-    · rw [hdec]
-      ring
-    constructor
-    · rw [hprime]
-      ring
-    exact ⟨mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz14⟩
+    circuit_proof_start
+    obtain ⟨_, hf_lt, he1_lt, he1fP, hz13F, hz14⟩ := h_assumptions
+    obtain ⟨he1_eq, hf_eq, hg0_eq⟩ := h_spec
+    have hp := pallasBaseCard_eq
+    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    have hrhoX : input_rho.val < 2 ^ 255 :=
+      lt_trans (ZMod.val_lt input_rho) (by norm_num [PALLAS_BASE_CARD])
+    have he1_val : input_e1.val = bitrange input_rho.val 0 4 := by
+      rw [he1_eq]
+      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 4) (by norm_num [PALLAS_BASE_CARD]))
+    have hf_val : input_f.val = bitrange input_rho.val 4 250 := by
+      rw [hf_eq]
+      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 4 250) (by norm_num [PALLAS_BASE_CARD]))
+    have hg0cases := show bitrange input_rho.val 254 1 = 0 ∨ bitrange input_rho.val 254 1 = 1 from by
+      have := bitrange_lt input_rho.val 254 1; omega
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · have hdec : input_rho.val = bitrange input_rho.val 0 4
+          + 2 ^ 4 * bitrange input_rho.val 4 250 + 2 ^ 254 * bitrange input_rho.val 254 1 := by
+        simp only [bitrange, pow_zero, Nat.div_one]; omega
+      have hrho_eq : input_rho = ((bitrange input_rho.val 0 4 : ℕ) : Fp)
+          + ((bitrange input_rho.val 4 250 : ℕ) : Fp) * ((2 ^ 4 : ℕ) : Fp)
+          + ((bitrange input_rho.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
+        conv_lhs => rw [← ZMod.natCast_rightInverse input_rho, hdec]
+        push_cast; ring
+      rw [he1_eq, hf_eq, hg0_eq]; linear_combination -hrho_eq
+    · rw [he1fP]; ring
+    · rcases hg0cases with h | h
+      · rw [hg0_eq, h]; simp
+      · rw [hz13F, hf_val,
+          show bitrange input_rho.val 4 250 / 2 ^ 130 = bitrange input_rho.val 134 120 from
+            bitrange_div_pow input_rho.val 4 130 120,
+          high_bit_high_zero (ZMod.val_lt input_rho) h (by norm_num) (by norm_num)]
+        simp
+    · rcases hg0cases with h | h
+      · rw [hg0_eq, h]; simp
+      · obtain ⟨hk2z, hlolt, _⟩ := high_bit_canonical (ZMod.val_lt input_rho) h
+        have hlo254 : bitrange input_rho.val 0 254 = bitrange input_rho.val 0 250 := by
+          have := bitrange_add input_rho.val 0 250 4; rw [hk2z] at this; norm_num at this ⊢; omega
+        have hlo_val : (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val
+            = bitrange input_rho.val 0 254 := by
+          have hsum : input_e1.val + input_f.val * 2 ^ 4 < PALLAS_BASE_CARD := by
+            rw [he1_val, hf_val]; have := bitrange_lt input_rho.val 4 250; omega
+          rw [val_limb2 4 hsum, he1_val, hf_val]
+          have := bitrange_add input_rho.val 0 4 250; norm_num at this; omega
+        have he1fP_val : input_e1FPrime.val = bitrange input_rho.val 0 254 + 2 ^ 140 - tPNat := by
+          rw [he1fP, val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega), hlo_val]
+        rw [hz14, he1fP_val, Nat.div_eq_of_lt (by omega)]
+        simp
 
 end RhoCanonicity.Gate
 
@@ -302,19 +537,31 @@ structure Row (F : Type) where
   z13G1G2Prime : F
 deriving ProvableStruct
 
+/-- Rely-conditions from the surrounding lookups: the inner limb is `g1 + g2·2^9`, `h0` is
+the 5-bit field above it, `h1` is Boolean, `g1G2Prime` is the canonicity shift of the inner
+limb, and `z13G`/`z13G1G2Prime` are the running-sum tails of the inner limb / its shift. -/
+def Assumptions (row : Row Fp) : Prop :=
+  IsBool row.h1 ∧
+    row.g1.val < 2 ^ 9 ∧
+    row.g2.val < 2 ^ 240 ∧
+    row.h0.val < 2 ^ 5 ∧
+    row.g1G2Prime = row.g1 + row.g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    row.z13G = ((row.g1.val + row.g2.val * 2 ^ 9) / 2 ^ 130 : ℕ) ∧
+    row.z13G1G2Prime = ((row.g1G2Prime.val / 2 ^ 130 : ℕ) : Fp)
+
+/-- The gate's payoff: `g1`/`g2`/`h0`/`h1` are the canonical bit slices of `psi`. -/
 def Spec (row : Row Fp) : Prop :=
-  row.psi = row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
-    row.h1 * OfNat.ofNat (2 ^ 254) ∧
-    row.g1G2Prime = row.g1 + row.g2 * 512 + OfNat.ofNat (2 ^ 130) - Ecc.tP ∧
-    (row.h1 = 0 ∨ row.h0 = 0) ∧
-    (row.h1 = 0 ∨ row.z13G = 0) ∧
-    (row.h1 = 0 ∨ row.z13G1G2Prime = 0)
+  row.g1 = ((bitrange row.psi.val 0 9 : ℕ) : Fp) ∧
+    row.g2 = ((bitrange row.psi.val 9 240 : ℕ) : Fp) ∧
+    row.h0 = ((bitrange row.psi.val 249 5 : ℕ) : Fp) ∧
+    row.h1 = ((bitrange row.psi.val 254 1 : ℕ) : Fp)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertZero (row.g1 + row.g2 * 512 + row.h0 * OfNat.ofNat (2 ^ 249) +
-    row.h1 * OfNat.ofNat (2 ^ 254) - row.psi)
-  assertZero (row.g1 + row.g2 * 512 + Expression.const ((2 ^ 130 : ℕ) : Fp) -
-    Expression.const Ecc.tP - row.g1G2Prime)
+  assertZero (row.g1 + row.g2 * Expression.const ((2 ^ 9 : ℕ) : Fp) +
+    row.h0 * Expression.const ((2 ^ 249 : ℕ) : Fp) +
+    row.h1 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.psi)
+  assertZero (row.g1 + row.g2 * Expression.const ((2 ^ 9 : ℕ) : Fp) +
+    Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP - row.g1G2Prime)
   assertZero (row.h1 * row.h0)
   assertZero (row.h1 * row.z13G)
   assertZero (row.h1 * row.z13G1G2Prime)
@@ -322,23 +569,151 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input psi"
   main
+  Assumptions := Assumptions
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    rcases h_holds with ⟨hdec, hprime, hh0, hz13, hz13p⟩
-    exact ⟨(left_eq_of_add_neg_eq_zero hdec).symm,
-      by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hprime).symm,
-      mul_eq_zero.mp hh0, mul_eq_zero.mp hz13, mul_eq_zero.mp hz13p⟩
+    obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hz13P⟩ := h_assumptions
+    obtain ⟨hrec, _, hg_h0, hg_z13, hg_z13p⟩ := h_holds
+    have hp := pallasBaseCard_eq
+    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    -- inner limb `g1 + g2·2^9`
+    have hin_sum : input_g1.val + input_g2.val * 2 ^ 9 < PALLAS_BASE_CARD := by omega
+    have hin_val : (input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)).val
+        = input_g1.val + input_g2.val * 2 ^ 9 := val_limb2 9 hin_sum
+    have hin_lt : input_g1.val + input_g2.val * 2 ^ 9 < 2 ^ 249 := by omega
+    -- low 254-bit limb `inner + h0·2^249`
+    have hlo_sum : (input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)).val + input_h0.val * 2 ^ 249
+        < PALLAS_BASE_CARD := by rw [hin_val]; omega
+    have hlo_val : ((input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)) + input_h0 * ((2 ^ 249 : ℕ) : Fp)).val
+        = (input_g1.val + input_g2.val * 2 ^ 9) + input_h0.val * 2 ^ 249 := by
+      rw [val_limb2 249 hlo_sum, hin_val]
+    have hlo_lt : ((input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)) + input_h0 * ((2 ^ 249 : ℕ) : Fp)).val
+        < 2 ^ 254 := by rw [hlo_val]; omega
+    have hcanon : input_h1 = 1 →
+        ((input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)) + input_h0 * ((2 ^ 249 : ℕ) : Fp)).val
+          < tPNat := by
+      intro h1
+      have hh0z : input_h0 = 0 := by
+        rcases mul_eq_zero.mp hg_h0 with h | h
+        · exact absurd (h1 ▸ h) one_ne_zero
+        · exact h
+      have hin130 : input_g1.val + input_g2.val * 2 ^ 9 < 2 ^ 130 := by
+        have hz : input_z13G = 0 := by
+          rcases mul_eq_zero.mp hg_z13 with h | h
+          · exact absurd (h1 ▸ h) one_ne_zero
+          · exact h
+        rw [hz13G] at hz
+        have := natCast_eq_zero
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans hin_lt (by norm_num [PALLAS_BASE_CARD]))) hz
+        omega
+      have hgP_val : input_g1G2Prime.val
+          = (input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)).val + 2 ^ 130 - tPNat := by
+        rw [hg1g2P]; exact val_shift 130 (by rw [hin_val]; omega) (by rw [hin_val]; omega)
+      have hgP_lt : input_g1G2Prime.val < 2 ^ 130 := by
+        have hz : input_z13G1G2Prime = 0 := by
+          rcases mul_eq_zero.mp hg_z13p with h | h
+          · exact absurd (h1 ▸ h) one_ne_zero
+          · exact h
+        rw [hz13P] at hz
+        have := natCast_eq_zero
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_g1G2Prime)) hz
+        omega
+      rw [hlo_val, hh0z, ZMod.val_zero]; rw [hin_val] at hgP_val; omega
+    have hrecL : input_psi
+        = ((input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)) + input_h0 * ((2 ^ 249 : ℕ) : Fp))
+          + input_h1 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination -hrec
+    obtain ⟨_, hlo_eq, hh1_eq⟩ := canonical_top_decomp hrecL hlo_lt hh1 hcanon
+    have hmod : bitrange input_psi.val 0 254 = input_psi.val % 2 ^ 254 := by simp [bitrange]
+    -- inner limb is the low 249 bits
+    have hin_eq : input_g1.val + input_g2.val * 2 ^ 9 = bitrange input_psi.val 0 249 := by
+      have h1 : (input_g1.val + input_g2.val * 2 ^ 9)
+          = bitrange ((input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp))
+              + input_h0 * ((2 ^ 249 : ℕ) : Fp)).val 0 249 := by
+        simp only [bitrange, pow_zero, Nat.div_one, hlo_val]; omega
+      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 0 + 249 ≤ 254)]
+    have hh0_eq : input_h0.val = bitrange input_psi.val 249 5 := by
+      have h1 : input_h0.val = bitrange ((input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp))
+          + input_h0 * ((2 ^ 249 : ℕ) : Fp)).val 249 5 := by
+        simp only [bitrange, hlo_val]; omega
+      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 249 + 5 ≤ 254)]
+    have hg1_eq : input_g1.val = bitrange input_psi.val 0 9 := by
+      have h1 : input_g1.val = bitrange (input_g1.val + input_g2.val * 2 ^ 9) 0 9 := by
+        simp only [bitrange, pow_zero, Nat.div_one]; omega
+      rw [h1, hin_eq]
+      have : bitrange input_psi.val 0 249 = input_psi.val % 2 ^ 249 := by simp [bitrange]
+      rw [this, bitrange_mod (by norm_num : 0 + 9 ≤ 249)]
+    have hg2_eq : input_g2.val = bitrange input_psi.val 9 240 := by
+      have h1 : input_g2.val = bitrange (input_g1.val + input_g2.val * 2 ^ 9) 9 240 := by
+        simp only [bitrange]; omega
+      rw [h1, hin_eq]
+      have : bitrange input_psi.val 0 249 = input_psi.val % 2 ^ 249 := by simp [bitrange]
+      rw [this, bitrange_mod (by norm_num : 9 + 240 ≤ 249)]
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · rw [← hg1_eq]; exact (ZMod.natCast_rightInverse input_g1).symm
+    · rw [← hg2_eq]; exact (ZMod.natCast_rightInverse input_g2).symm
+    · rw [← hh0_eq]; exact (ZMod.natCast_rightInverse input_h0).symm
+    · rw [← hh1_eq]; exact (ZMod.natCast_rightInverse input_h1).symm
   completeness := by
-    circuit_proof_start [Ecc.tP]
-    rcases h_spec with ⟨hdec, hprime, hh0, hz13, hz13p⟩
-    constructor
-    · rw [hdec]
-      ring
-    constructor
-    · rw [hprime]
-      ring
-    exact ⟨mul_eq_zero_of_or hh0, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
+    circuit_proof_start
+    obtain ⟨_, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hz13P⟩ := h_assumptions
+    obtain ⟨hg1_eq, hg2_eq, hh0_eq, hh1_eq⟩ := h_spec
+    have hp := pallasBaseCard_eq
+    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    have hpsiX : input_psi.val < 2 ^ 255 :=
+      lt_trans (ZMod.val_lt input_psi) (by norm_num [PALLAS_BASE_CARD])
+    have hg1_val : input_g1.val = bitrange input_psi.val 0 9 := by
+      rw [hg1_eq]
+      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 9) (by norm_num [PALLAS_BASE_CARD]))
+    have hg2_val : input_g2.val = bitrange input_psi.val 9 240 := by
+      rw [hg2_eq]
+      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 9 240) (by norm_num [PALLAS_BASE_CARD]))
+    -- inner limb is the low 249 bits
+    have hin_eq : input_g1.val + input_g2.val * 2 ^ 9 = bitrange input_psi.val 0 249 := by
+      rw [hg1_val, hg2_val]; have := bitrange_add input_psi.val 0 9 240; norm_num at this; omega
+    have hh1cases := show bitrange input_psi.val 254 1 = 0 ∨ bitrange input_psi.val 254 1 = 1 from by
+      have := bitrange_lt input_psi.val 254 1; omega
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · have hdec : input_psi.val = bitrange input_psi.val 0 9
+          + 2 ^ 9 * bitrange input_psi.val 9 240 + 2 ^ 249 * bitrange input_psi.val 249 5
+          + 2 ^ 254 * bitrange input_psi.val 254 1 := by
+        simp only [bitrange, pow_zero, Nat.div_one]; omega
+      have hpsi_eq : input_psi = ((bitrange input_psi.val 0 9 : ℕ) : Fp)
+          + ((bitrange input_psi.val 9 240 : ℕ) : Fp) * ((2 ^ 9 : ℕ) : Fp)
+          + ((bitrange input_psi.val 249 5 : ℕ) : Fp) * ((2 ^ 249 : ℕ) : Fp)
+          + ((bitrange input_psi.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
+        conv_lhs => rw [← ZMod.natCast_rightInverse input_psi, hdec]
+        push_cast; ring
+      rw [hg1_eq, hg2_eq, hh0_eq, hh1_eq]; linear_combination -hpsi_eq
+    · rw [hg1g2P]; ring
+    · -- h1·h0 = 0
+      rcases hh1cases with h | h
+      · rw [hh1_eq, h]; simp
+      · rw [hh0_eq, high_bit_high_zero (ZMod.val_lt input_psi) h (by norm_num) (by norm_num)]; simp
+    · -- h1·z13G = 0
+      rcases hh1cases with h | h
+      · rw [hh1_eq, h]; simp
+      · rw [hz13G, hin_eq,
+          show bitrange input_psi.val 0 249 / 2 ^ 130 = bitrange input_psi.val 130 119 from
+            bitrange_div_pow input_psi.val 0 130 119,
+          high_bit_high_zero (ZMod.val_lt input_psi) h (by norm_num) (by norm_num)]
+        simp
+    · -- h1·z13G1G2Prime = 0
+      rcases hh1cases with h | h
+      · rw [hh1_eq, h]; simp
+      · obtain ⟨_, hlolt, _⟩ := high_bit_canonical (ZMod.val_lt input_psi) h
+        have hin_lt_tp : bitrange input_psi.val 0 249 < tPNat := by
+          have hsplit := bitrange_add input_psi.val 0 249 1
+          norm_num at hsplit; omega
+        have hin_val : (input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)).val
+            = bitrange input_psi.val 0 249 := by
+          have hsum : input_g1.val + input_g2.val * 2 ^ 9 < PALLAS_BASE_CARD := by
+            rw [hin_eq]; exact lt_trans (bitrange_lt _ 0 249) (by norm_num [PALLAS_BASE_CARD])
+          rw [val_limb2 9 hsum]; exact hin_eq
+        have hgP_val : input_g1G2Prime.val = bitrange input_psi.val 0 249 + 2 ^ 130 - tPNat := by
+          rw [hg1g2P, val_shift 130 (by rw [hin_val]; omega) (by rw [hin_val]; omega), hin_val]
+        rw [hz13P, hgP_val, Nat.div_eq_of_lt (by omega)]
+        simp
 
 end PsiCanonicity.Gate
 

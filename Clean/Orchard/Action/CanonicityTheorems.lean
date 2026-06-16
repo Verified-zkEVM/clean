@@ -29,7 +29,7 @@ reference to any particular circuit cell (`y`, `j`, …). The canonicity gates b
 them. -/
 
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Orchard.Specs (bitrange bitrange_lt bitrange_add)
+open Orchard.Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
 
 /-- `t_P`, the Pallas base modulus minus `2^254`, as a natural number. -/
 def tPNat : ℕ := 45560315531419706090280762371685220353
@@ -152,12 +152,36 @@ theorem val_shift {a : Fp} (k : ℕ) (htp : tPNat ≤ a.val + 2 ^ k)
     rw [ZMod.natCast_rightInverse a]
   rw [hcast, ZMod.val_natCast_of_lt hlt]
 
+/-- Dividing a `bitrange` of width `a+b` by `2^a` exposes the next `b` bits. -/
+theorem bitrange_div_pow (n s a b : ℕ) :
+    bitrange n s (a + b) / 2 ^ a = bitrange n (s + a) b := by
+  simp only [bitrange]
+  rw [pow_add, Nat.mod_mul_right_div_self, Nat.div_div_eq_div_mul, ← pow_add]
+
 /-- Dividing the low `a+b` bits by `2^a` exposes the next `b` bits (the honest running
 sum's `z_a` cell is the corresponding higher `bitrange`). -/
 theorem bitrange_low_div (n a b : ℕ) :
     bitrange n 0 (a + b) / 2 ^ a = bitrange n a b := by
-  simp only [bitrange, pow_zero, Nat.div_one]
-  rw [pow_add, Nat.mod_mul_right_div_self]
+  simpa using bitrange_div_pow n 0 a b
+
+/-- With the top bit set, every bit field of a canonical value at offset `≥ 130` (and
+within the low 254 bits) vanishes. -/
+theorem high_bit_high_zero {n : ℕ} (hn : n < PALLAS_BASE_CARD) (hh : bitrange n 254 1 = 1)
+    {s len : ℕ} (hs : 130 ≤ s) (hsl : s + len ≤ 254) : bitrange n s len = 0 := by
+  obtain ⟨hk2, hlo, _⟩ := high_bit_canonical hn hh
+  have htps : tPNat < 2 ^ 130 := by norm_num [tPNat]
+  have h254 : bitrange n 0 254 < 2 ^ 130 := by
+    have hsplit := bitrange_add n 0 250 4
+    norm_num at hsplit
+    rw [hk2] at hsplit
+    omega
+  rw [← bitrange_mod (n := n) (s := s) (len := len) hsl]
+  have hlt : n % 2 ^ 254 < 2 ^ 130 := by
+    have : n % 2 ^ 254 = bitrange n 0 254 := by simp [bitrange]
+    rw [this]; exact h254
+  simp only [bitrange]
+  rw [Nat.div_eq_of_lt (lt_of_lt_of_le hlt (Nat.pow_le_pow_right (by norm_num) hs))]
+  simp
 
 /-- A sub-`p` natural that casts to `0` in `Fp` is `0` (used to read the canonicity guards:
 `z = ↑(…) = 0` forces the running-sum tail to vanish). -/
