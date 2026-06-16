@@ -309,6 +309,12 @@ private theorem value_from_parts_lt {value d2 d3 e0 : Ecc.Fp}
   norm_num [K] at hd2 hd3 he0 ⊢
   omega
 
+private theorem e1_f_low_lt_of_f_130 {e1 f : Ecc.Fp}
+    (he1 : e1.val < 2 ^ 4) (hf : f.val < 2 ^ (K * 13)) :
+    e1.val + f.val * 16 < 2 ^ 134 := by
+  norm_num [K] at he1 hf ⊢
+  omega
+
 private theorem e1_eq_rho_low_bits_of_parts {rho e1 f g0 e1FPrime z14 : Ecc.Fp}
     (he1 : e1.val < 2 ^ 4) (hf : f.val < 2 ^ (K * 25))
     (hg0 : NoteCommit.IsBool g0)
