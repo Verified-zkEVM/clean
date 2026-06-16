@@ -265,10 +265,10 @@ private theorem decomposeH_value_lt {h h0 h1 : Ecc.Fp}
   rw [hcast, ZMod.val_natCast_of_lt hPackedCard]
   exact hPackedLt
 
-private theorem value_from_parts_lt {value d2 d3 e0 : Ecc.Fp}
+private theorem value_from_parts_val_eq {value d2 d3 e0 : Ecc.Fp}
     (hd2 : d2.val < 2 ^ 8) (hd3 : d3.val < 2 ^ (K * 5)) (he0 : e0.val < 2 ^ 6)
     (hdec : value = d2 + d3 * 256 + e0 * 288230376151711744) :
-    value.val < 2 ^ 64 := by
+    value.val = d2.val + d3.val * 256 + e0.val * 288230376151711744 := by
   let packed := d2.val + d3.val * 256 + e0.val * 288230376151711744
   have hPackedLt : packed < 2 ^ 64 := by
     norm_num [K] at hd2 hd3 he0 ⊢
@@ -284,32 +284,42 @@ private theorem value_from_parts_lt {value d2 d3 e0 : Ecc.Fp}
     rw [ZMod.val_natCast_of_lt (ZMod.val_lt d2),
       ZMod.val_natCast_of_lt (ZMod.val_lt d3), ZMod.val_natCast_of_lt (ZMod.val_lt e0)]
   rw [hcast, ZMod.val_natCast_of_lt hPackedCard]
-  exact hPackedLt
+
+private theorem value_from_parts_lt {value d2 d3 e0 : Ecc.Fp}
+    (hd2 : d2.val < 2 ^ 8) (hd3 : d3.val < 2 ^ (K * 5)) (he0 : e0.val < 2 ^ 6)
+    (hdec : value = d2 + d3 * 256 + e0 * 288230376151711744) :
+    value.val < 2 ^ 64 := by
+  rw [value_from_parts_val_eq hd2 hd3 he0 hdec]
+  norm_num [K] at hd2 hd3 he0 ⊢
+  omega
+
+private theorem d2_eq_value_low_bits {value d2 d3 e0 : Ecc.Fp}
+    (hd2 : d2.val < 2 ^ 8) (hd3 : d3.val < 2 ^ (K * 5)) (he0 : e0.val < 2 ^ 6)
+    (hdec : value = d2 + d3 * 256 + e0 * 288230376151711744) :
+    d2 = ((value.val % 256 : ℕ) : Ecc.Fp) := by
+  rw [← ZMod.natCast_zmod_val d2]
+  congr
+  rw [value_from_parts_val_eq hd2 hd3 he0 hdec]
+  norm_num [K] at hd2 hd3 he0 ⊢
+  omega
+
+private theorem d3_eq_value_middle_bits {value d2 d3 e0 : Ecc.Fp}
+    (hd2 : d2.val < 2 ^ 8) (hd3 : d3.val < 2 ^ (K * 5)) (he0 : e0.val < 2 ^ 6)
+    (hdec : value = d2 + d3 * 256 + e0 * 288230376151711744) :
+    d3 = ((value.val / 256 % 2 ^ (K * 5) : ℕ) : Ecc.Fp) := by
+  rw [← ZMod.natCast_zmod_val d3]
+  congr
+  rw [value_from_parts_val_eq hd2 hd3 he0 hdec]
+  norm_num [K] at hd2 hd3 he0 ⊢
+  omega
 
 private theorem e0_eq_value_high_bits {value d2 d3 e0 : Ecc.Fp}
     (hd2 : d2.val < 2 ^ 8) (hd3 : d3.val < 2 ^ (K * 5)) (he0 : e0.val < 2 ^ 6)
     (hdec : value = d2 + d3 * 256 + e0 * 288230376151711744) :
     e0 = ((value.val / 2 ^ 58 % 64 : ℕ) : Ecc.Fp) := by
-  let packed := d2.val + d3.val * 256 + e0.val * 288230376151711744
-  have hPackedLt : packed < 2 ^ 64 := by
-    norm_num [K] at hd2 hd3 he0 ⊢
-    omega
-  have hPackedCard : packed < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
-    exact lt_trans hPackedLt (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  have hcast : value = (packed : Ecc.Fp) := by
-    rw [hdec]
-    dsimp only [packed]
-    rw [← ZMod.natCast_zmod_val d2, ← ZMod.natCast_zmod_val d3,
-      ← ZMod.natCast_zmod_val e0]
-    push_cast
-    rw [ZMod.val_natCast_of_lt (ZMod.val_lt d2),
-      ZMod.val_natCast_of_lt (ZMod.val_lt d3), ZMod.val_natCast_of_lt (ZMod.val_lt e0)]
-  have hvalueVal : value.val = packed := by
-    rw [hcast, ZMod.val_natCast_of_lt hPackedCard]
   rw [← ZMod.natCast_zmod_val e0]
   congr
-  rw [hvalueVal]
-  dsimp only [packed]
+  rw [value_from_parts_val_eq hd2 hd3 he0 hdec]
   norm_num [K] at hd2 hd3 he0 ⊢
   omega
 
@@ -2146,13 +2156,20 @@ theorem main_value_bound (G : Generators) (Q : SWPoint Pallas.curve)
     exact hzBounds.1
   exact value_from_parts_lt hd2 hz1d he0 hvalue
 
-theorem main_e0_eq_value_high_bits (G : Generators) (Q : SWPoint Pallas.curve)
+theorem main_value_subpiece_bits (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
     (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
     let cells := (assignMessageCells input).output offset
-    (show Ecc.Fp from eval env cells.e0) =
-      (((show Ecc.Fp from eval env input.value).val / 2 ^ 58 % 64 : ℕ) : Ecc.Fp) := by
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+    (show Ecc.Fp from eval env cells.d2) =
+        (((show Ecc.Fp from eval env input.value).val % 256 : ℕ) : Ecc.Fp) ∧
+      (show Ecc.Fp from eval env z1d) =
+        (((show Ecc.Fp from eval env input.value).val / 256 % 2 ^ (K * 5) : ℕ) : Ecc.Fp) ∧
+      (show Ecc.Fp from eval env cells.e0) =
+        (((show Ecc.Fp from eval env input.value).val / 2 ^ 58 % 64 : ℕ) : Ecc.Fp) := by
   let cells := (assignMessageCells input).output offset
   let commitOffset := offset + (assignMessageCells input).localLength offset
   let out := (commitWithZs G Q hQ R input cells).output commitOffset
@@ -2174,7 +2191,40 @@ theorem main_e0_eq_value_high_bits (G : Generators) (Q : SWPoint Pallas.curve)
     rw [hzEval]
     rw [← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.eval_zs env messagePieceRounds out]
     exact hzBounds.1
-  exact e0_eq_value_high_bits hd2 hz1d he0 hvalue
+  exact ⟨
+    d2_eq_value_low_bits hd2 hz1d he0 hvalue,
+    d3_eq_value_middle_bits hd2 hz1d he0 hvalue,
+    e0_eq_value_high_bits hd2 hz1d he0 hvalue⟩
+
+theorem main_d2_eq_value_low_bits (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    (show Ecc.Fp from eval env cells.d2) =
+      (((show Ecc.Fp from eval env input.value).val % 256 : ℕ) : Ecc.Fp) := by
+  exact (main_value_subpiece_bits G Q hQ R env input offset h).1
+
+theorem main_z1d_eq_value_middle_bits (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+    (show Ecc.Fp from eval env z1d) =
+      (((show Ecc.Fp from eval env input.value).val / 256 % 2 ^ (K * 5) : ℕ) : Ecc.Fp) := by
+  exact (main_value_subpiece_bits G Q hQ R env input offset h).2.1
+
+theorem main_e0_eq_value_high_bits (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    (show Ecc.Fp from eval env cells.e0) =
+      (((show Ecc.Fp from eval env input.value).val / 2 ^ 58 % 64 : ℕ) : Ecc.Fp) := by
+  exact (main_value_subpiece_bits G Q hQ R env input offset h).2.2
 
 theorem main_noteScalar_bounds (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
