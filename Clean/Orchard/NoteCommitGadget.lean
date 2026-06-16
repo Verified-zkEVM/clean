@@ -2174,6 +2174,38 @@ theorem main_large_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
   let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
   exact pieceChunks_large_piece_bounds hPC
 
+theorem main_chunks_eq_noteCommitChunks_of_piece_values (G : Generators)
+    (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) := noteScalars (eval env input)
+    ∀ chunks,
+      Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks →
+      pieces[0] = ((gdX % 2 ^ (K * 25) : ℕ) : Ecc.Fp) →
+      pieces[1] =
+        ((gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdYbit * 32 +
+          (pkdX % 16) * 64 : ℕ) : Ecc.Fp) →
+      pieces[2] = (((pkdX / 16) % 2 ^ (K * 25) : ℕ) : Ecc.Fp) →
+      pieces[3] =
+        ((pkdX / 2 ^ 254 % 2 + pkdYbit * 2 + (v % 2 ^ 58) * 4 : ℕ) : Ecc.Fp) →
+      pieces[4] = ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Ecc.Fp) →
+      pieces[5] = (((rho / 16) % 2 ^ (K * 25) : ℕ) : Ecc.Fp) →
+      pieces[6] = ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Ecc.Fp) →
+      pieces[7] = ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Ecc.Fp) →
+      chunks =
+        Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi := by
+  dsimp only
+  intro chunks hPC hA hB hC hD hE hF hG hH
+  have hbounds := main_noteScalar_bounds G Q hQ R env input offset h
+  exact pieceChunks_eq_noteCommitChunks_of_indexed_piece_values hPC hA hB hC hD hE hF hG hH
+    hbounds.1 hbounds.2.1 hbounds.2.2.1 hbounds.2.2.2.1 hbounds.2.2.2.2.1
+    hbounds.2.2.2.2.2.1 hbounds.2.2.2.2.2.2
+
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
 --       pieces equal `noteCommitChunks`'s tiling via `noteCommitChunks_tiling`) +
