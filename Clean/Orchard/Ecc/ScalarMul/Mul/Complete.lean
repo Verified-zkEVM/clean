@@ -35,7 +35,7 @@ def Spec (row : Input Fp) : Prop :=
   IsBool (bit row) ∧ SelectedCompleteBitPointNegation row
 
 def main (row : Var Input Fp) : Circuit Fp Unit := do
-  assertZero (NoteCommit.boolPoly (bit row))
+  assertBool (bit row)
   assertZero (ySwitch row)
 
 def circuit : FormalAssertion Fp Input where
@@ -44,11 +44,11 @@ def circuit : FormalAssertion Fp Input where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, SelectedCompleteBitPointNegation,
-      NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
+      bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_holds with ⟨hBool, hSwitch⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
     constructor
-    · exact isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool)
+    · exact hBool
     · intro x
       constructor
       · intro hBit
@@ -72,11 +72,11 @@ def circuit : FormalAssertion Fp Input where
           linear_combination -hDiff
   completeness := by
     circuit_proof_start [main, Spec, SelectedCompleteBitPointNegation,
-      NoteCommit.boolPoly, bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
+      bit, ySwitch, CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hzPrev, hzNext, hbaseY, hyP⟩
     constructor
-    · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool
+    · exact hBool
     · rcases hBool with hBit | hBit
       · exact by
           have hPoint := (hSelect 0).1 hBit

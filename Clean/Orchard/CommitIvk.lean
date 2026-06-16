@@ -1,5 +1,6 @@
 import Clean.Circuit
-import Clean.Orchard.NoteCommit
+import Clean.Gadgets.Boolean
+import Clean.Orchard.NoteCommitGate
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
@@ -26,19 +27,6 @@ namespace Orchard
 namespace CommitIvk
 
 variable {F : Type} [Field F]
-
-def IsBool {K : Type} [Zero K] [One K] (x : K) : Prop :=
-  x = 0 ∨ x = 1
-
-private theorem isBool_of_bool_factor_eq_zero {x : F} (h : x * (x + -1) = 0) :
-    IsBool x := by
-  rcases mul_eq_zero.mp h with h0 | h1
-  · exact Or.inl h0
-  · exact Or.inr (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h1))
-
-private theorem bool_factor_eq_zero_of_isBool {x : F} (h : IsBool x) :
-    x * (x + -1) = 0 := by
-  rcases h with h | h <;> rw [h] <;> simp
 
 private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
   rcases h with h | h <;> rw [h] <;> simp
@@ -82,13 +70,12 @@ def nkDecomposition {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] [OfNat K (2 
   row.b2 + row.c * 32 + row.d0 * OfNat.ofNat (2 ^ 245) +
     row.d1 * OfNat.ofNat (2 ^ 254) - row.nk
 
-def aPrimeCheck {K : Type} [Add K] [Sub K] [OfNat K (2 ^ 130)]
-    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
-  row.a + OfNat.ofNat (2 ^ 130) - NoteCommit.tP - row.aPrime
+def aPrimeCheck (row : Row (Expression Ecc.Fp)) : Expression Ecc.Fp :=
+  row.a + Expression.const ((2 ^ 130 : ℕ) : Ecc.Fp) - Expression.const Ecc.tP - row.aPrime
 
-def b2CPrimeCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 32] [OfNat K (2 ^ 140)]
-    [OfNat K 45560315531419706090280762371685220353] (row : Row K) : K :=
-  row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP - row.b2CPrime
+def b2CPrimeCheck (row : Row (Expression Ecc.Fp)) : Expression Ecc.Fp :=
+  row.b2 + row.c * 32 + Expression.const ((2 ^ 140 : ℕ) : Ecc.Fp) -
+    Expression.const Ecc.tP - row.b2CPrime
 
 def Spec (row : Row Ecc.Fp) : Prop :=
   IsBool row.b1 ∧
@@ -100,16 +87,16 @@ def Spec (row : Row Ecc.Fp) : Prop :=
       row.d1 * OfNat.ofNat (2 ^ 254) ∧
     (row.b1 = 0 ∨ row.b0 = 0) ∧
     (row.b1 = 0 ∨ row.z13A = 0) ∧
-    row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - NoteCommit.tP ∧
+    row.aPrime = row.a + OfNat.ofNat (2 ^ 130) - Ecc.tP ∧
     (row.b1 = 0 ∨ row.z13APrime = 0) ∧
     (row.d1 = 0 ∨ row.d0 = 0) ∧
     (row.d1 = 0 ∨ row.z13C = 0) ∧
-    row.b2CPrime = row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP ∧
+    row.b2CPrime = row.b2 + row.c * 32 + OfNat.ofNat (2 ^ 140) - Ecc.tP ∧
     (row.d1 = 0 ∨ row.z14B2CPrime = 0)
 
 def main (row : Var Row Ecc.Fp) : Circuit Ecc.Fp Unit := do
-  assertZero (NoteCommit.boolPoly row.b1)
-  assertZero (NoteCommit.boolPoly row.d1)
+  assertBool row.b1
+  assertBool row.d1
   assertZero (bDecomposition row)
   assertZero (dDecomposition row)
   assertZero (akDecomposition row)
@@ -128,13 +115,13 @@ def circuit : FormalAssertion Ecc.Fp Row where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, NoteCommit.boolPoly, bDecomposition,
-      dDecomposition, akDecomposition, nkDecomposition, aPrimeCheck, b2CPrimeCheck,
-      NoteCommit.tP]
+    circuit_proof_start [main, Spec, bDecomposition, dDecomposition, akDecomposition,
+      nkDecomposition, aPrimeCheck, b2CPrimeCheck,
+      Ecc.tP]
     rcases h_holds with
       ⟨hb1, hd1, hb, hd, hak, hnk, hb0, hz13A, haPrime, hz13APrime, hd0, hz13C,
         hb2CPrime, hz14B2CPrime⟩
-    exact ⟨isBool_of_bool_factor_eq_zero hb1, isBool_of_bool_factor_eq_zero hd1,
+    exact ⟨hb1, hd1,
       left_eq_of_add_neg_eq_zero hb, left_eq_of_add_neg_eq_zero hd,
       (left_eq_of_add_neg_eq_zero hak).symm, (left_eq_of_add_neg_eq_zero hnk).symm,
       mul_eq_zero.mp hb0, mul_eq_zero.mp hz13A,
@@ -143,16 +130,16 @@ def circuit : FormalAssertion Ecc.Fp Row where
       by simpa [sub_eq_add_neg] using (left_eq_of_add_neg_eq_zero hb2CPrime).symm,
       mul_eq_zero.mp hz14B2CPrime⟩
   completeness := by
-    circuit_proof_start [main, Spec, NoteCommit.boolPoly, bDecomposition,
-      dDecomposition, akDecomposition, nkDecomposition, aPrimeCheck, b2CPrimeCheck,
-      NoteCommit.tP]
+    circuit_proof_start [main, Spec, bDecomposition, dDecomposition, akDecomposition,
+      nkDecomposition, aPrimeCheck, b2CPrimeCheck,
+      Ecc.tP]
     rcases h_spec with
       ⟨hb1, hd1, hb, hd, hak, hnk, hb0, hz13A, haPrime, hz13APrime, hd0, hz13C,
         hb2CPrime, hz14B2CPrime⟩
     constructor
-    · exact bool_factor_eq_zero_of_isBool hb1
+    · exact hb1
     constructor
-    · exact bool_factor_eq_zero_of_isBool hd1
+    · exact hd1
     constructor
     · rw [hb]
       ring

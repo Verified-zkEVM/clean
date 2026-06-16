@@ -82,7 +82,7 @@ def Spec (row : Input Fp) : Prop :=
         yADouble row.cur + row.yANextDouble
 
 def main (row : Var Input Fp) : Circuit Fp Unit := do
-  assertZero (NoteCommit.boolPoly (bit row))
+  assertBool (bit row)
   assertZero (gradient1 row)
   assertZero (secantLine row)
   assertZero (gradient2 row)
@@ -92,19 +92,17 @@ def circuit : FormalAssertion Fp Input where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, NoteCommit.boolPoly, bit, gradient1,
-      secantLine, gradient2, yADouble, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [main, Spec, bit, gradient1, secantLine, gradient2, yADouble,
+      DoubleAndAdd.yA, DoubleAndAdd.xR]
     rcases h_holds with ⟨hBool, hGradient1, hSecant, hGradient2⟩
-    exact ⟨isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool),
-      by linear_combination hGradient1,
+    exact ⟨by simpa [sub_eq_add_neg] using hBool, by linear_combination hGradient1,
       by linear_combination hSecant,
       by linear_combination hGradient2⟩
   completeness := by
-    circuit_proof_start [main, Spec, NoteCommit.boolPoly, bit, gradient1,
-      secantLine, gradient2, yADouble, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    circuit_proof_start [main, Spec, bit, gradient1, secantLine, gradient2, yADouble,
+      DoubleAndAdd.yA, DoubleAndAdd.xR]
     rcases h_spec with ⟨hBool, hGradient1, hSecant, hGradient2⟩
-    exact ⟨by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool,
-      by linear_combination hGradient1,
+    exact ⟨by simpa [sub_eq_add_neg] using hBool, by linear_combination hGradient1,
       by linear_combination hSecant,
       by linear_combination hGradient2⟩
 

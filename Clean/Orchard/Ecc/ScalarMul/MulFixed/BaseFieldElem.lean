@@ -45,10 +45,9 @@ def alpha1RangeCheck {K : Type} [One K] [Sub K] [Mul K] [OfNat K 2] [OfNat K 3]
 def z84AlphaCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 4] (row : Input K) : K :=
   row.z84Alpha - (row.alpha1 + row.alpha2 * 4)
 
-def alpha0PrimeCheck {K : Type} [Add K] [Sub K] [Mul K]
-    [OfNat K (2 ^ 130)] [OfNat K (2 ^ 252)]
-    [OfNat K 45560315531419706090280762371685220353] (row : Input K) : K :=
-  row.alpha0Prime - (alpha0 row + OfNat.ofNat (2 ^ 130) - NoteCommit.tP)
+def alpha0PrimeCheck (row : Input (Expression Fp)) : Expression Fp :=
+  row.alpha0Prime - (alpha0 row + Expression.const ((2 ^ 130 : ℕ) : Fp) -
+    Expression.const Ecc.tP)
 
 def alpha0Hi120 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 120)] (row : Input K) : K :=
   row.z44Alpha - row.z84Alpha * OfNat.ofNat (2 ^ 120)
@@ -61,7 +60,7 @@ def IsAlpha1 (alpha1 : Fp) : Prop :=
 
 def DecomposesBaseFieldElem (row : Input Fp) : Prop :=
   row.z84Alpha = row.alpha1 + row.alpha2 * 4 ∧
-    row.alpha0Prime = alpha0 row + OfNat.ofNat (2 ^ 130) - NoteCommit.tP
+    row.alpha0Prime = alpha0 row + OfNat.ofNat (2 ^ 130) - Ecc.tP
 
 def CanonicalHighBit (row : Input Fp) : Prop :=
   row.alpha2 = 1 →
@@ -74,10 +73,10 @@ def Spec (row : Input Fp) : Prop :=
 def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (row.alpha2 * row.alpha1)
   assertZero (row.alpha2 * alpha0Hi120 row)
-  assertZero (row.alpha2 * NoteCommit.boolPoly (a43 row))
+  assertZero (row.alpha2 * (a43 row * (a43 row - 1)))
   assertZero (row.alpha2 * row.z13Alpha0Prime)
   assertZero (alpha1RangeCheck row)
-  assertZero (NoteCommit.boolPoly row.alpha2)
+  assertBool row.alpha2
   assertZero (z84AlphaCheck row)
   assertZero (alpha0PrimeCheck row)
 
@@ -88,7 +87,7 @@ def circuit : FormalAssertion Fp Input where
   soundness := by
     circuit_proof_start [main, Spec, IsAlpha1, DecomposesBaseFieldElem,
       CanonicalHighBit, alpha0, alpha1RangeCheck, z84AlphaCheck, alpha0PrimeCheck,
-      alpha0Hi120, a43, NoteCommit.boolPoly, NoteCommit.tP]
+      alpha0Hi120, a43, Ecc.tP]
     rcases h_holds with ⟨hAlpha21, hAlpha2Hi, hAlpha2A43, hAlpha2Z13, hAlpha1Range,
       hAlpha2Bool, hZ84, hAlpha0Prime⟩
     refine ⟨?_, ?_, ?_, ?_⟩
@@ -99,9 +98,7 @@ def circuit : FormalAssertion Fp Input where
           · exact Or.inr (Or.inl (by linear_combination -h1))
         · exact Or.inr (Or.inr (Or.inl (by linear_combination -h2)))
       · exact Or.inr (Or.inr (Or.inr (by linear_combination -h3)))
-    · rcases mul_eq_zero.mp hAlpha2Bool with h0 | h1
-      · exact Or.inl h0
-      · exact Or.inr (by linear_combination h1)
+    · exact hAlpha2Bool
     · constructor
       · exact sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hZ84)
       · exact sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hAlpha0Prime)
@@ -111,19 +108,22 @@ def circuit : FormalAssertion Fp Input where
         simpa using hAlpha21
       · rw [hAlpha2] at hAlpha2Hi
         simpa [sub_eq_add_neg] using hAlpha2Hi
-      · have hA43Poly : NoteCommit.boolPoly (input_z43Alpha - input_z44Alpha * 8) = 0 := by
+      · have hA43Poly :
+            (input_z43Alpha - input_z44Alpha * 8) *
+              ((input_z43Alpha - input_z44Alpha * 8) - 1) = 0 := by
           have hMul :
-              input_alpha2 * NoteCommit.boolPoly (input_z43Alpha - input_z44Alpha * 8) = 0 := by
-            simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hAlpha2A43
+              input_alpha2 * ((input_z43Alpha - input_z44Alpha * 8) *
+                ((input_z43Alpha - input_z44Alpha * 8) - 1)) = 0 := by
+            simpa [sub_eq_add_neg] using hAlpha2A43
           rw [hAlpha2] at hMul
           simpa using hMul
-        exact isBool_of_boolPoly_eq_zero hA43Poly
+        exact IsBool.iff_mul_sub_one.mpr hA43Poly
       · rw [hAlpha2] at hAlpha2Z13
         simpa using hAlpha2Z13
   completeness := by
     circuit_proof_start [main, Spec, IsAlpha1, DecomposesBaseFieldElem,
       CanonicalHighBit, alpha0, alpha1RangeCheck, z84AlphaCheck, alpha0PrimeCheck,
-      alpha0Hi120, a43, NoteCommit.boolPoly, NoteCommit.tP]
+      alpha0Hi120, a43, Ecc.tP]
     rcases h_spec with ⟨hAlpha1, hAlpha2, ⟨hZ84, hAlpha0Prime⟩, hCanon⟩
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · rcases hAlpha2 with h0 | h1
@@ -141,9 +141,9 @@ def circuit : FormalAssertion Fp Input where
       · rw [h0]
         ring
       · exact by
-          have hBoolA43 := boolPoly_eq_zero_of_isBool (hCanon h1).2.2.1
+          have hBoolA43 := IsBool.iff_mul_sub_one.mp (hCanon h1).2.2.1
           rw [h1]
-          simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBoolA43
+          simpa [sub_eq_add_neg] using hBoolA43
     · rcases hAlpha2 with h0 | h1
       · rw [h0]
         ring
@@ -158,11 +158,7 @@ def circuit : FormalAssertion Fp Input where
         ring
       · rw [h3]
         ring
-    · rcases hAlpha2 with h0 | h1
-      · rw [h0]
-        ring
-      · rw [h1]
-        ring
+    · exact hAlpha2
     · rw [hZ84]
       ring
     · rw [hAlpha0Prime]
@@ -1450,7 +1446,7 @@ private theorem honest_canon_spec {row : Input Fp} {α : Fp}
     unfold alpha0
     rw [ha, hz84, show (OfNat.ofNat (2 ^ 252) : Fp) = (2 : Fp) ^ 252 from by norm_num,
       show (OfNat.ofNat (2 ^ 130) : Fp) = (2 : Fp) ^ 130 from by norm_num]
-    push_cast [NoteCommit.tP, tPNat]
+    push_cast [Ecc.tP, tPNat]
     ring
   · -- CanonicalHighBit: the `α2 = 1` branch
     intro hα2eq
@@ -1643,7 +1639,7 @@ theorem soundness (B : MulFixed.FixedBase) :
         telescope13_eq hz0c he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
       have hfield : (S : Fp) = (α0 : Fp) + (2 : Fp) ^ 130 - (tPNat : Fp) := by
         rw [hSdef, ← hapS, hα0prime]
-        push_cast [NoteCommit.tP, tPNat]
+        push_cast [Ecc.tP, tPNat]
         ring
       have hα0tp : α0 < tPNat := alpha0_lt_tp hSlt hα0lt132 hfield
       rw [hV254]; omega

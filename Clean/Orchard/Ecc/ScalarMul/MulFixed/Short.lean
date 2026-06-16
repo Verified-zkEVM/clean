@@ -54,7 +54,7 @@ def Spec (row : Input Fp) : Prop :=
   IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointSelection row
 
 def main (row : Var Input Fp) : Circuit Fp Unit := do
-  assertZero (NoteCommit.boolPoly row.lastWindow)
+  assertBool row.lastWindow
   assertZero (signCheck row)
   assertZero (yCheck row)
   assertZero (negationCheck row)
@@ -65,14 +65,12 @@ def circuit : FormalAssertion Fp Input where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, IsSign, SignedPointSelection,
-      CompElliptic.CurveForms.ShortWeierstrass.neg, NoteCommit.boolPoly, signCheck, yCheck,
-      negationCheck]
+      CompElliptic.CurveForms.ShortWeierstrass.neg, signCheck, yCheck, negationCheck]
     rcases h_holds with ⟨hLastWindow, hSign, _hY, hNegation⟩
     have hSignedY : input_yA = input_sign * input_yP :=
       (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNegation)).symm
     refine ⟨?_, ?_, ?_⟩
-    · exact isBool_of_boolPoly_eq_zero (by
-        simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hLastWindow)
+    · exact hLastWindow
     · have hmul : (input_sign - 1) * (input_sign + 1) = 0 := by
         linear_combination hSign
       rcases mul_eq_zero.mp hmul with hPos | hNeg
@@ -92,12 +90,10 @@ def circuit : FormalAssertion Fp Input where
           simp
   completeness := by
     circuit_proof_start [main, Spec, IsSign, SignedPointSelection,
-      CompElliptic.CurveForms.ShortWeierstrass.neg, NoteCommit.boolPoly, signCheck, yCheck,
-      negationCheck]
+      CompElliptic.CurveForms.ShortWeierstrass.neg, signCheck, yCheck, negationCheck]
     rcases h_spec with ⟨hLastWindow, hSign, hPoint⟩
     refine ⟨?_, ?_, ?_, ?_⟩
-    · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using
-        boolPoly_eq_zero_of_isBool hLastWindow
+    · exact hLastWindow
     · rcases hSign with hSign | hSign <;> rw [hSign] <;> ring
     · rcases hSign with hSign | hSign
       · have hY := congrArg Prod.snd ((hPoint 0).1 hSign)

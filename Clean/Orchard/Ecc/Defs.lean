@@ -18,6 +18,10 @@ variable {F : Type} [Field F]
 abbrev Fp := CompElliptic.Fields.Pasta.PallasBaseField
 abbrev Fq := CompElliptic.Fields.Pasta.PallasScalarField
 
+/-- Pallas base-field canonicity threshold used by Orchard range-check gates. -/
+def tP : Fp :=
+  (45560315531419706090280762371685220353 : Fp)
+
 def pallasB : F := 5
 
 structure Point (F : Type) where

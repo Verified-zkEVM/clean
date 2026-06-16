@@ -40,7 +40,7 @@ def Spec (row : Input Fp) : Prop :=
   IsBool (lsb row) ∧ SelectedCorrectionPoint row
 
 def main (row : Var Input Fp) : Circuit Fp Unit := do
-  assertZero (NoteCommit.boolPoly (lsb row))
+  assertBool (lsb row)
   assertZero (lsbX row)
   assertZero (lsbY row)
 
@@ -49,12 +49,12 @@ def circuit : FormalAssertion Fp Input where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, SelectedCorrectionPoint, NoteCommit.boolPoly,
-      lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg]
+    circuit_proof_start [main, Spec, SelectedCorrectionPoint, lsb, lsbX, lsbY,
+      CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_holds with ⟨hBool, hX, hY⟩
     rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
     constructor
-    · exact isBool_of_boolPoly_eq_zero (by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using hBool)
+    · simpa [sub_eq_add_neg] using hBool
     constructor
     · intro hBit
       apply Prod.ext
@@ -74,12 +74,12 @@ def circuit : FormalAssertion Fp Input where
         simp [circuit_norm, ternary, hz0, hz1, hyP, hbaseY] at hY'
         linear_combination hY' + input_baseY * hBit
   completeness := by
-    circuit_proof_start [main, Spec, SelectedCorrectionPoint, NoteCommit.boolPoly,
-      lsb, lsbX, lsbY, CompElliptic.CurveForms.ShortWeierstrass.neg]
+    circuit_proof_start [main, Spec, SelectedCorrectionPoint, lsb, lsbX, lsbY,
+      CompElliptic.CurveForms.ShortWeierstrass.neg]
     rcases h_spec with ⟨hBool, hSelect⟩
     rcases h_input with ⟨hz1, hz0, hxP, hyP, hbaseX, hbaseY⟩
     constructor
-    · exact by simpa [NoteCommit.boolPoly, sub_eq_add_neg] using boolPoly_eq_zero_of_isBool hBool
+    · simpa [sub_eq_add_neg] using hBool
     constructor
     · rcases hBool with hBit | hBit
       · exact by
