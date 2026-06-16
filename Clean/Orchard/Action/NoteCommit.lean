@@ -26,6 +26,8 @@ open Orchard.Ecc (Point)
 open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt)
+open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod noteCommitMessage noteCommitChunks
+  noteCommitChunks_tiling hashToPoint)
 
 private theorem sum_head_shift (Kb m : ℕ) (d : ℕ → ℕ) :
     ∑ j ∈ Finset.range (m + 1), d j * 2 ^ (Kb * j)
@@ -75,16 +77,16 @@ private theorem digit_of_sum (Kb : ℕ) :
 private theorem chunksOf_eq_map_of_sum {value n : ℕ} {ms : ℕ → ℕ}
     (hms : ∀ r, ms r < 2 ^ K)
     (hvalue : value = ∑ r ∈ Finset.range n, ms r * 2 ^ (K * r)) :
-    Orchard.Specs.Sinsemilla.chunksOf value n = (List.range n).map ms := by
+    chunksOf value n = (List.range n).map ms := by
   apply List.ext_getElem
-  · simp [Orchard.Specs.Sinsemilla.chunksOf]
+  · simp [chunksOf]
   intro i hi hi'
   have hin : i < n := by
-    simp only [Orchard.Specs.Sinsemilla.chunksOf, List.length_map, List.length_range] at hi
+    simp only [chunksOf, List.length_map, List.length_range] at hi
     exact hi
-  rw [show (Orchard.Specs.Sinsemilla.chunksOf value n)[i]
+  rw [show (chunksOf value n)[i]
       = value / 2 ^ (K * i) % 2 ^ K from by
-        simp [Orchard.Specs.Sinsemilla.chunksOf, Orchard.Specs.bitrange]
+        simp [chunksOf, bitrange]
         norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [hvalue]
   simp only [List.getElem_map, List.getElem_range]
@@ -98,26 +100,28 @@ private theorem chunksOf_eq_map_of_cast_sum {value n : ℕ} {ms : ℕ → ℕ}
     (hvalueCard : value < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
     (hsumCard : (∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) <
       CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) :
-    Orchard.Specs.Sinsemilla.chunksOf value n = (List.range n).map ms := by
+    chunksOf value n = (List.range n).map ms := by
   apply chunksOf_eq_map_of_sum hms
   have hval := congrArg ZMod.val hcast
   rw [ZMod.val_natCast_of_lt hvalueCard, ZMod.val_natCast_of_lt hsumCard] at hval
   exact hval
 
 private theorem chunksOf_one_eq_singleton {x : ℕ} (hx : x < 2 ^ K) :
-    Orchard.Specs.Sinsemilla.chunksOf x 1 = [x] := by
-  unfold Orchard.Specs.Sinsemilla.chunksOf Orchard.Specs.bitrange
+    chunksOf x 1 = [x] := by
+  unfold chunksOf bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [Nat.mod_eq_of_lt hx]
 
-set_option exponentiation.threshold 900 in
+section
+set_option exponentiation.threshold 900
+
 private theorem noteCommitChunks_segment_a (gdX gdY pkdX pkdY v rho psi : ℕ) :
-    Orchard.Specs.Sinsemilla.chunksOf
-        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi) 25 =
-      Orchard.Specs.Sinsemilla.chunksOf gdX 25 := by
-  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+    chunksOf
+        (noteCommitMessage gdX gdY pkdX pkdY v rho psi) 25 =
+      chunksOf gdX 25 := by
+  unfold noteCommitMessage
   rw [show
       gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY +
           2 ^ 512 * v + 2 ^ 576 * rho + 2 ^ 831 * psi =
@@ -126,191 +130,177 @@ private theorem noteCommitChunks_segment_a (gdX gdY pkdX pkdY v rho psi : ℕ) :
             2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi) by
     norm_num [K]
     ring_nf]
-  rw [← Orchard.Specs.Sinsemilla.chunksOf_mod
+  rw [← chunksOf_mod
     (gdX + 2 ^ (K * 25) *
       (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
         2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi)) 25]
   rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 25) = 2 ^ (K * 25) by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [Nat.add_mul_mod_self_left]
-  exact Orchard.Specs.Sinsemilla.chunksOf_mod gdX 25
+  exact chunksOf_mod gdX 25
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_b_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
-    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) %
+    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) %
         2 ^ K =
       gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64 := by
   rw [show 2 ^ K = 1024 by norm_num [K]]
-  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  unfold noteCommitMessage
   norm_num at *
   omega
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_b (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
-    Orchard.Specs.Sinsemilla.chunksOf
-        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 1 =
+    chunksOf
+        (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 1 =
       [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] := by
-  unfold Orchard.Specs.Sinsemilla.chunksOf Orchard.Specs.bitrange
+  unfold chunksOf bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [noteCommitChunks_segment_b_word gdX gdY pkdX pkdY v rho psi hgdX hgdY]
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_c_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
-    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) %
+    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) %
         2 ^ (K * 25) =
       (pkdX / 16) % 2 ^ (K * 25) := by
   rw [show 2 ^ (K * 25) = 2 ^ 250 by norm_num [K]]
-  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  unfold noteCommitMessage
   norm_num at *
   omega
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_c (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
-    Orchard.Specs.Sinsemilla.chunksOf
-        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25 =
-      Orchard.Specs.Sinsemilla.chunksOf (pkdX / 16) 25 := by
-  rw [← Orchard.Specs.Sinsemilla.chunksOf_mod
-      (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25,
-    ← Orchard.Specs.Sinsemilla.chunksOf_mod (pkdX / 16) 25]
+    chunksOf
+        (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25 =
+      chunksOf (pkdX / 16) 25 := by
+  rw [← chunksOf_mod
+      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25,
+    ← chunksOf_mod (pkdX / 16) 25]
   rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 25) = 2 ^ (K * 25) by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [noteCommitChunks_segment_c_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY]
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_d_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) (hpkdX : pkdX < 2 ^ 255) :
-    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) %
+    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) %
         2 ^ (K * 6) =
       (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) % 2 ^ (K * 6) := by
   rw [show 2 ^ (K * 6) = 2 ^ 60 by norm_num [K]]
-  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  unfold noteCommitMessage
   norm_num at *
   omega
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_d (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) (hpkdX : pkdX < 2 ^ 255) :
-    Orchard.Specs.Sinsemilla.chunksOf
-        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6 =
-      Orchard.Specs.Sinsemilla.chunksOf
+    chunksOf
+        (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6 =
+      chunksOf
         (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6 := by
-  rw [← Orchard.Specs.Sinsemilla.chunksOf_mod
-      (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6,
-    ← Orchard.Specs.Sinsemilla.chunksOf_mod
+  rw [← chunksOf_mod
+      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6,
+    ← chunksOf_mod
       (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6]
   rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 6) = 2 ^ (K * 6) by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [noteCommitChunks_segment_d_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX]
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_e_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
-    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) %
+    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) %
         2 ^ K =
       v / 2 ^ 58 % 64 + (rho % 16) * 64 := by
   rw [show 2 ^ K = 1024 by norm_num [K]]
-  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  unfold noteCommitMessage
   norm_num at *
   omega
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_e (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
-    Orchard.Specs.Sinsemilla.chunksOf
-        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) 1 =
+    chunksOf
+        (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) 1 =
       [v / 2 ^ 58 % 64 + (rho % 16) * 64] := by
-  unfold Orchard.Specs.Sinsemilla.chunksOf Orchard.Specs.bitrange
+  unfold chunksOf bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [noteCommitChunks_segment_e_word gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv]
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_f_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
-    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) %
+    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) %
         2 ^ (K * 25) =
       (rho / 16) % 2 ^ (K * 25) := by
   rw [show 2 ^ (K * 25) = 2 ^ 250 by norm_num [K]]
-  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  unfold noteCommitMessage
   norm_num at *
   omega
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_f (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
-    Orchard.Specs.Sinsemilla.chunksOf
-        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25 =
-      Orchard.Specs.Sinsemilla.chunksOf (rho / 16) 25 := by
-  rw [← Orchard.Specs.Sinsemilla.chunksOf_mod
-      (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25,
-    ← Orchard.Specs.Sinsemilla.chunksOf_mod (rho / 16) 25]
+    chunksOf
+        (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25 =
+      chunksOf (rho / 16) 25 := by
+  rw [← chunksOf_mod
+      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25,
+    ← chunksOf_mod (rho / 16) 25]
   rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 25) = 2 ^ (K * 25) by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [noteCommitChunks_segment_f_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv]
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_g_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) :
-    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) %
+    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) %
         2 ^ (K * 25) =
       (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) % 2 ^ (K * 25) := by
   rw [show 2 ^ (K * 25) = 2 ^ 250 by norm_num [K]]
-  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  unfold noteCommitMessage
   norm_num at *
   omega
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_g (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) :
-    Orchard.Specs.Sinsemilla.chunksOf
-        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25 =
-      Orchard.Specs.Sinsemilla.chunksOf
+    chunksOf
+        (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25 =
+      chunksOf
         (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25 := by
-  rw [← Orchard.Specs.Sinsemilla.chunksOf_mod
-      (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25,
-    ← Orchard.Specs.Sinsemilla.chunksOf_mod
+  rw [← chunksOf_mod
+      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25,
+    ← chunksOf_mod
       (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25]
   rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 25) = 2 ^ (K * 25) by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [noteCommitChunks_segment_g_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho]
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_h_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
-    (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) %
+    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) %
         2 ^ K =
       psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 := by
   rw [show 2 ^ K = 1024 by norm_num [K]]
-  unfold Orchard.Specs.Sinsemilla.noteCommitMessage
+  unfold noteCommitMessage
   norm_num at *
   omega
 
-set_option exponentiation.threshold 900 in
 private theorem noteCommitChunks_segment_h (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
-    Orchard.Specs.Sinsemilla.chunksOf
-        (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) 1 =
+    chunksOf
+        (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) 1 =
       [psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32] := by
-  unfold Orchard.Specs.Sinsemilla.chunksOf Orchard.Specs.bitrange
+  unfold chunksOf bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
@@ -320,17 +310,17 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
-    Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdY pkdX pkdY v rho psi =
-      Orchard.Specs.Sinsemilla.chunksOf gdX 25 ++
+    noteCommitChunks gdX gdY pkdX pkdY v rho psi =
+      chunksOf gdX 25 ++
       [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] ++
-      Orchard.Specs.Sinsemilla.chunksOf (pkdX / 16) 25 ++
-      Orchard.Specs.Sinsemilla.chunksOf
+      chunksOf (pkdX / 16) 25 ++
+      chunksOf
         (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6 ++
       [v / 2 ^ 58 % 64 + (rho % 16) * 64] ++
-      Orchard.Specs.Sinsemilla.chunksOf (rho / 16) 25 ++
-      Orchard.Specs.Sinsemilla.chunksOf (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25 ++
+      chunksOf (rho / 16) 25 ++
+      chunksOf (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25 ++
       [psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32] := by
-  rw [Orchard.Specs.Sinsemilla.noteCommitChunks_tiling]
+  rw [noteCommitChunks_tiling]
   rw [noteCommitChunks_segment_a]
   rw [noteCommitChunks_segment_b _ _ _ _ _ _ _ hgdX hgdY]
   rw [noteCommitChunks_segment_c _ _ _ _ _ _ _ hgdX hgdY]
@@ -339,6 +329,8 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
   rw [noteCommitChunks_segment_f _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv]
   rw [noteCommitChunks_segment_g _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho]
   rw [noteCommitChunks_segment_h _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho hpsi]
+
+end
 
 /-! ### Subpiece witnessing helpers -/
 
@@ -425,7 +417,7 @@ structure NoteCommitScalars where
 namespace NoteCommitScalars
 
 def chunks (s : NoteCommitScalars) : List ℕ :=
-  Orchard.Specs.Sinsemilla.noteCommitChunks s.gdX s.gdYbit s.pkdX s.pkdYbit s.v s.rho s.psi
+  noteCommitChunks s.gdX s.gdYbit s.pkdX s.pkdYbit s.v s.rho s.psi
 
 end NoteCommitScalars
 
@@ -485,7 +477,7 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
       (List.range 25).map msF ++
       (List.range 25).map msG ++
       (List.range 1).map msH =
-      Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
+      noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
   have hBValueLt : gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
       (pkdX % 16) * 64 < 2 ^ K := by
     have hb0 : gdX / 2 ^ 250 % 16 < 16 := Nat.mod_lt _ (by norm_num)
@@ -516,8 +508,8 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
   have hChunksA_low := chunksOf_eq_map_of_cast_sum hmsA hA
     (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos (K * 25))) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsA 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
-  have hChunksA : Orchard.Specs.Sinsemilla.chunksOf gdX 25 = (List.range 25).map msA := by
-    rw [← Orchard.Specs.Sinsemilla.chunksOf_mod gdX 25]
+  have hChunksA : chunksOf gdX 25 = (List.range 25).map msA := by
+    rw [← chunksOf_mod gdX 25]
     exact hChunksA_low
   have hChunksB := chunksOf_eq_map_of_cast_sum hmsB hB
     (lt_trans hBValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
@@ -525,9 +517,9 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
   have hChunksC_low := chunksOf_eq_map_of_cast_sum hmsC hC
     (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos (K * 25))) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsC 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
-  have hChunksC : Orchard.Specs.Sinsemilla.chunksOf (pkdX / 16) 25 =
+  have hChunksC : chunksOf (pkdX / 16) 25 =
       (List.range 25).map msC := by
-    rw [← Orchard.Specs.Sinsemilla.chunksOf_mod (pkdX / 16) 25]
+    rw [← chunksOf_mod (pkdX / 16) 25]
     exact hChunksC_low
   have hChunksD := chunksOf_eq_map_of_cast_sum hmsD hD
     (lt_trans hDValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
@@ -538,9 +530,9 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
   have hChunksF_low := chunksOf_eq_map_of_cast_sum hmsF hF
     (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos (K * 25))) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsF 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
-  have hChunksF : Orchard.Specs.Sinsemilla.chunksOf (rho / 16) 25 =
+  have hChunksF : chunksOf (rho / 16) 25 =
       (List.range 25).map msF := by
-    rw [← Orchard.Specs.Sinsemilla.chunksOf_mod (rho / 16) 25]
+    rw [← chunksOf_mod (rho / 16) 25]
     exact hChunksF_low
   have hChunksG := chunksOf_eq_map_of_cast_sum hmsG hG
     (lt_trans hGValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
@@ -606,7 +598,7 @@ private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     (hgdX255 : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
-    chunks = Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
+    chunks = noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
   simp only [messagePieceTailRounds, Orchard.Sinsemilla.Chain.PieceChunks] at hPC
   obtain ⟨msA, hmsA, hpA, tailA, rfl, hPC⟩ := hPC
   obtain ⟨msB, hmsB, hpB, tailB, rfl, hPC⟩ := hPC
@@ -830,7 +822,7 @@ def messagePieces (cells : MessageCells Fp) : Vector Fp messagePieceRounds.lengt
   #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h]
 
 def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
-  Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
+  noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
 
 def MessagePiecesEncode (input : Value Input Fp) (cells : Value MessageCells Fp) : Prop :=
   Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (messagePieces cells)
@@ -844,14 +836,14 @@ def ProverMessagePiecesEncode (input : ProverValue Input Fp)
 def NoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (input : Value Input Fp) (cm : Point Fp) : Prop :=
   ∃ rcm : Fq, ∀ B : SWPoint Pallas.curve,
-    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+    hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue rcm).coords
 
 def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
   ∀ B : SWPoint Pallas.curve,
-    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+    hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
@@ -1082,7 +1074,7 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (_R : MulFixed
     (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   ProverMessagePiecesEncode input.note input.cells ∧
     Orchard.Sinsemilla.Chain.PieceBounds messagePieceRounds (messagePieces input.cells) ∧
-    ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+    ∃ B, hashToPoint G.S Q
       (noteScalars input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi).chunks =
         some B
 
@@ -1161,7 +1153,7 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
   Pallas.OnCurve input.pkd.coords ∧
   let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
     noteScalarsOf input.gd input.pkd input.value input.rho input.psi
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, hashToPoint G.S Q
     (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
