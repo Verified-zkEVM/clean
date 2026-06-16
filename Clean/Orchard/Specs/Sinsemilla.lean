@@ -224,6 +224,102 @@ theorem chunksOf_mod (val n : ℕ) : chunksOf (val % 2 ^ (K * n)) n = chunksOf v
   simp only [List.mem_range] at hi
   exact bitrange_mod (by rw [← Nat.mul_succ]; exact Nat.mul_le_mul_left K hi)
 
+/-! ### Recovering chunk lists from `K`-bit digit sums
+
+These generic lemmas turn a field element written as a `K`-bit digit sum
+`∑ ms r · 2^(K·r)` into the statement that `chunksOf` recovers exactly those digits `ms`.
+They are the arithmetic core shared by the `note_commit` and `commit_ivk` message-piece
+soundness bridges (which read the digit functions out of `Chain.PieceChunks`). -/
+
+/-- Peel the head digit off a `K`-bit (here `Kb`-bit) digit sum. -/
+theorem sum_head_shift (Kb m : ℕ) (d : ℕ → ℕ) :
+    ∑ j ∈ Finset.range (m + 1), d j * 2 ^ (Kb * j)
+      = d 0 + 2 ^ Kb * ∑ j ∈ Finset.range m, d (j + 1) * 2 ^ (Kb * j) := by
+  rw [Finset.sum_range_succ', Finset.mul_sum]
+  have hstep : ∀ j : ℕ,
+      d (j + 1) * 2 ^ (Kb * (j + 1)) = 2 ^ Kb * (d (j + 1) * 2 ^ (Kb * j)) := by
+    intro j
+    rw [show Kb * (j + 1) = Kb + Kb * j from by ring, pow_add]
+    ring
+  simp only [hstep, Nat.mul_zero, pow_zero, Nat.mul_one]
+  ring
+
+/-- A `Kb`-bit digit sum of length `n` is bounded by `2^(Kb·n)`. -/
+theorem sum_digits_lt {Kb : ℕ} {d : ℕ → ℕ} (hd : ∀ j, d j < 2 ^ Kb) (n : ℕ) :
+    ∑ j ∈ Finset.range n, d j * 2 ^ (Kb * j) < 2 ^ (Kb * n) := by
+  induction n with
+  | zero => simp
+  | succ m ih =>
+    rw [Finset.sum_range_succ]
+    have hterm : d m * 2 ^ (Kb * m) + 2 ^ (Kb * m) ≤ 2 ^ (Kb * (m + 1)) := by
+      rw [show Kb * (m + 1) = Kb * m + Kb from by ring, pow_add]
+      calc d m * 2 ^ (Kb * m) + 2 ^ (Kb * m) = (d m + 1) * 2 ^ (Kb * m) := by ring
+        _ ≤ 2 ^ Kb * 2 ^ (Kb * m) := Nat.mul_le_mul_right _ (hd m)
+        _ = 2 ^ (Kb * m) * 2 ^ Kb := by ring
+    omega
+
+/-- The `i`-th `Kb`-bit digit of a digit sum is `d i`. -/
+theorem digit_of_sum (Kb : ℕ) :
+    ∀ (i n : ℕ) (d : ℕ → ℕ), (∀ j, d j < 2 ^ Kb) → i < n →
+      (∑ j ∈ Finset.range n, d j * 2 ^ (Kb * j)) / 2 ^ (Kb * i) % 2 ^ Kb = d i := by
+  intro i
+  induction i with
+  | zero =>
+    intro n d hd hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    rw [sum_head_shift, Nat.mul_zero, pow_zero, Nat.div_one,
+      Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt (hd 0)]
+  | succ i ih =>
+    intro n d hd hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    rw [sum_head_shift,
+      show Kb * (i + 1) = Kb + Kb * i from by ring, pow_add,
+      ← Nat.div_div_eq_div_mul,
+      Nat.add_mul_div_left _ _ (Nat.two_pow_pos Kb),
+      Nat.div_eq_of_lt (hd 0), Nat.zero_add]
+    exact ih m (fun j => d (j + 1)) (fun j => hd (j + 1)) (by omega)
+
+/-- `chunksOf` recovers the `K`-bit digits of a value written as their digit sum. -/
+theorem chunksOf_eq_map_of_sum {value n : ℕ} {ms : ℕ → ℕ}
+    (hms : ∀ r, ms r < 2 ^ K)
+    (hvalue : value = ∑ r ∈ Finset.range n, ms r * 2 ^ (K * r)) :
+    chunksOf value n = (List.range n).map ms := by
+  apply List.ext_getElem
+  · simp [chunksOf]
+  intro i hi hi'
+  have hin : i < n := by
+    simp only [chunksOf, List.length_map, List.length_range] at hi
+    exact hi
+  rw [show (chunksOf value n)[i] = value / 2 ^ (K * i) % 2 ^ K from by
+    simp [chunksOf, bitrange]]
+  rw [hvalue]
+  simp only [List.getElem_map, List.getElem_range]
+  exact digit_of_sum K i n ms hms hin
+
+/-- The field-cast form of `chunksOf_eq_map_of_sum`: a digit-sum equality over the base
+field (with both sides below the field cardinality) recovers the chunks. -/
+theorem chunksOf_eq_map_of_cast_sum {value n : ℕ} {ms : ℕ → ℕ}
+    (hms : ∀ r, ms r < 2 ^ K)
+    (hcast :
+      (value : CompElliptic.Fields.Pasta.PallasBaseField) =
+        ((∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) :
+          CompElliptic.Fields.Pasta.PallasBaseField))
+    (hvalueCard : value < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hsumCard : (∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) <
+      CompElliptic.Fields.Pasta.PALLAS_BASE_CARD) :
+    chunksOf value n = (List.range n).map ms := by
+  apply chunksOf_eq_map_of_sum hms
+  have hval := congrArg ZMod.val hcast
+  rw [ZMod.val_natCast_of_lt hvalueCard, ZMod.val_natCast_of_lt hsumCard] at hval
+  exact hval
+
+/-- A one-chunk decomposition is a singleton. -/
+theorem chunksOf_one_eq_singleton {x : ℕ} (hx : x < 2 ^ K) :
+    chunksOf x 1 = [x] := by
+  unfold chunksOf bitrange
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
+  rw [Nat.mod_eq_of_lt hx]
+
 /-! ### The `NoteCommit` message -/
 
 /--
