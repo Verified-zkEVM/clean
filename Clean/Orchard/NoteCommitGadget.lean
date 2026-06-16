@@ -3485,6 +3485,61 @@ theorem main_g0_eq_rho_high_bit (G : Generators) (Q : SWPoint Pallas.curve)
   exact g0_eq_rho_high_bit_of_parts he1 hfBound hg0Bool hlowSmall
     hrho hprime hz14 hz14Lt
 
+theorem main_g_piece_value (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    let (_gdX, _gdYbit, _pkdX, _pkdYbit, _v, rho, psi) := noteScalars (eval env input)
+    pieces[6] = ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Ecc.Fp) := by
+  let cells := (assignMessageCells input).output offset
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  have hp := main_commitInput_piece_values env input offset
+  have hdecomp := main_message_piece_decomposition_facts G Q hQ R env input offset h
+  have hg0 := main_g0_eq_rho_high_bit G Q hQ R env input offset h
+  have hpsi := main_psi_subpiece_bits G Q hQ R env input offset h
+  simp only at hp hdecomp hg0 hpsi ⊢
+  rcases hp with ⟨_hA, _hB, _hC, _hD, _hE, _hF, hpG, _hH⟩
+  rcases hdecomp with ⟨_hBdec, _hDdec, _hEdec, hGdec, _hh1, _hHdec⟩
+  rcases hGdec with ⟨_hg0Bool, hGdec⟩
+  rw [hpG, hGdec, hg0]
+  simp only [noteScalars, circuit_norm] at hpsi ⊢
+  rw [Nat.cast_add, Nat.cast_mul, ← hpsi.1]
+  ring
+
+theorem main_h_piece_value (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    let (_gdX, _gdYbit, _pkdX, _pkdYbit, _v, _rho, psi) := noteScalars (eval env input)
+    pieces[7] = ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Ecc.Fp) := by
+  let cells := (assignMessageCells input).output offset
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  have hp := main_commitInput_piece_values env input offset
+  have hdecomp := main_message_piece_decomposition_facts G Q hQ R env input offset h
+  have hpsi := main_psi_subpiece_bits G Q hQ R env input offset h
+  simp only at hp hdecomp hpsi ⊢
+  rcases hp with ⟨_hA, _hB, _hC, _hD, _hE, _hF, _hG, hpH⟩
+  rcases hdecomp with ⟨_hBdec, _hDdec, _hEdec, _hGdec, _hh1, hHdec⟩
+  rw [hpH, hHdec, hpsi.2]
+  simp only [noteScalars, circuit_norm] at hpsi ⊢
+
 theorem main_chunks_eq_noteCommitChunks_of_piece_values (G : Generators)
     (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
     (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (offset : ℕ)
