@@ -1651,6 +1651,36 @@ theorem main_constrainCommitment_canonicity_specs (G : Generators) (Q : SWPoint 
         (offset + (assignMessageCells input).localLength offset))
     h_commit.2
 
+theorem main_message_piece_decomposition_facts (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    (NoteCommit.IsBool (eval env cells.b1) ∧
+      NoteCommit.IsBool (eval env cells.b2) ∧
+      eval env cells.b =
+        eval env cells.b0 + eval env cells.b1 * 16 + eval env cells.b2 * 32 +
+          eval env cells.b3 * 64) ∧
+      (NoteCommit.IsBool (eval env cells.d0) ∧
+        NoteCommit.IsBool (eval env cells.d1) ∧
+        eval env cells.d =
+          eval env cells.d0 + eval env cells.d1 * 2 + eval env cells.d2 * 4 +
+            eval env z1d * 1024) ∧
+      eval env cells.e = eval env cells.e0 + eval env cells.e1 * 64 ∧
+      (NoteCommit.IsBool (eval env cells.g0) ∧
+        eval env cells.g =
+          eval env cells.g0 + eval env cells.g1 * 2 + eval env z1g * 1024) ∧
+      NoteCommit.IsBool (eval env cells.h1) ∧
+      eval env cells.h = eval env cells.h0 + eval env cells.h1 * 32 := by
+  have hs := main_constrainCommitment_decompose_specs G Q hQ R env input offset h
+  simpa only [circuit_norm, NoteCommit.DecomposeB.Spec, NoteCommit.DecomposeD.Spec,
+    NoteCommit.DecomposeE.Spec, NoteCommit.DecomposeG.Spec, NoteCommit.DecomposeH.Spec]
+    using hs
+
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
 --       pieces equal `noteCommitChunks`'s tiling via `noteCommitChunks_tiling`) +
