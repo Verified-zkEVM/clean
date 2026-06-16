@@ -1592,6 +1592,58 @@ theorem main_commitWithZs_spec_of_soundness (G : Generators) (Q : SWPoint Pallas
   exact commitWithZs_spec_of_soundness G Q hQ R env input ((assignMessageCells input).output offset)
     (offset + (assignMessageCells input).localLength offset) h_commit.1
 
+theorem main_commitWithZs_pieceChunks_zsFacts_of_soundness (G : Generators)
+    (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    ∃ chunks : List ℕ,
+      Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (eval env commitInput).pieces chunks ∧
+      Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds (chunks)
+        (eval env out).zs := by
+  have hcommit := main_commitWithZs_spec_of_soundness G Q hQ R env input offset h
+  obtain ⟨chunks, _r, hPC, hZs, _hfun⟩ := hcommit
+  refine ⟨chunks, ?_, ?_⟩
+  · simpa only [messagePieceRounds] using hPC
+  · simpa only [messagePieceRounds] using hZs
+
+theorem main_pieceChunks_digits_of_soundness (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    ∃ chunks : List ℕ,
+    ∃ msA msB msC msD msE msF msG msH : ℕ → ℕ,
+      Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (eval env commitInput).pieces chunks ∧
+      (∀ r, msA r < 2 ^ K) ∧ (∀ r, msB r < 2 ^ K) ∧
+      (∀ r, msC r < 2 ^ K) ∧ (∀ r, msD r < 2 ^ K) ∧
+      (∀ r, msE r < 2 ^ K) ∧ (∀ r, msF r < 2 ^ K) ∧
+      (∀ r, msG r < 2 ^ K) ∧ (∀ r, msH r < 2 ^ K) ∧
+      chunks =
+        (List.range 25).map msA ++
+        (List.range 1).map msB ++
+        (List.range 25).map msC ++
+        (List.range 6).map msD ++
+        (List.range 1).map msE ++
+        (List.range 25).map msF ++
+        (List.range 25).map msG ++
+        (List.range 1).map msH := by
+  obtain ⟨chunks, hPC, _hZs⟩ :=
+    main_commitWithZs_pieceChunks_zsFacts_of_soundness G Q hQ R env input offset h
+  obtain ⟨msA, msB, msC, msD, msE, msF, msG, msH,
+    hA, hB, hC, hD, hE, hF, hG, hH, hchunks⟩ :=
+    pieceChunks_messagePieceRounds_chunks hPC
+  exact ⟨chunks, msA, msB, msC, msD, msE, msF, msG, msH, hPC,
+    hA, hB, hC, hD, hE, hF, hG, hH, hchunks⟩
+
 theorem main_assignMessageCells_short_range_specs (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
