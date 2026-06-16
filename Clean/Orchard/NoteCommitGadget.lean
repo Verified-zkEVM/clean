@@ -2113,6 +2113,40 @@ private theorem psiCanonicity_prime_val_lt_of_zlast_zero (env : Environment Ecc.
   rw [hSpec.1]
   exact hPrimeBound
 
+private theorem psiCanonicity_prime_evalOutput_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
+    (g1 g2 : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((psiCanonicity g1 g2).operations offset))
+    (hzLast : eval env ((psiCanonicity g1 g2).output offset).2 = 0) :
+    (show Ecc.Fp from eval env ((psiCanonicity g1 g2).output offset).1).val <
+      2 ^ (K * 13) := by
+  let prime := (witnessField (F := Ecc.Fp) fun env =>
+    env g1 + (2 ^ 9 : Ecc.Fp) * env g2 + (2 ^ 130 : Ecc.Fp) - tP).output offset
+  let copyOffset := offset + (witnessField (F := Ecc.Fp) fun env =>
+    env g1 + (2 ^ 9 : Ecc.Fp) * env g2 + (2 ^ 130 : Ecc.Fp) - tP).localLength offset
+  have hCopy :
+      ConstraintsHold.Soundness env
+        ((Utilities.LookupRangeCheck.CopyCheck.circuit 13 prime).operations copyOffset) := by
+    unfold psiCanonicity at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact h.2.1
+  have hzLastCopy :
+      (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 13).output prime copyOffset))[13]
+        = 0 := by
+    unfold psiCanonicity at hzLast
+    simp only [Circuit.output, Circuit.bind_def, withHint_output] at hzLast
+    rw [ProvableType.eval_field, ProvableType.getElem_eval_fields] at hzLast
+    simpa only [prime, copyOffset, Circuit.output, Circuit.localLength] using hzLast
+  have hPrimeBound := copyCheck13_zlast_zero_val_lt env prime copyOffset hCopy hzLastCopy
+  have hSpec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 13) env prime copyOffset trivial hCopy
+  simp only at hSpec
+  simp only [prime, copyOffset, Circuit.output, Circuit.localLength] at hSpec hPrimeBound
+  unfold psiCanonicity
+  simp only [Circuit.output, Circuit.bind_def, withHint_output]
+  rw [ProvableType.eval_field, ProvableType.getElem_eval_fields]
+  rw [hSpec.1]
+  exact hPrimeBound
+
 private theorem witnessShort_spec_of_soundness (env : Environment Ecc.Fp)
     (src : Var field Ecc.Fp) (start numBits : ℕ)
     (hNumBits : numBits ≤ Utilities.LookupRangeCheck.K) (offset : ℕ)
@@ -2322,6 +2356,27 @@ theorem constrainCommitment_psiCanonicity_soundness (env : Environment Ecc.Fp)
   unfold constrainCommitment at h
   simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
   exact h.2.2.2.1
+
+theorem constrainCommitment_psiCanonicity_prime_val_lt_of_zlast_zero
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+    let g1g2Bounds := (psiCanonicity cells.g1 z1g).output psiOffset
+    eval env g1g2Bounds.2 = 0 →
+      (show Ecc.Fp from eval env g1g2Bounds.1).val < 2 ^ (K * 13) := by
+  let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+  let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+  let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+  let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+  dsimp only
+  intro hzLast
+  exact psiCanonicity_prime_evalOutput_val_lt_of_zlast_zero env cells.g1 z1g psiOffset
+    (constrainCommitment_psiCanonicity_soundness env input cells out offset h) hzLast
 
 theorem commitAndConstrain_output_eq (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
