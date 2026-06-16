@@ -1261,6 +1261,50 @@ private theorem formalAssertion_spec_of_soundness {Row : TypeMap} [ProvableType 
     Operations.forAllNoOffset, FormalAssertion.toSubcircuit_soundness] at h
   exact h.1 hAssumptions
 
+private theorem withHint_spec_of_soundness {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input Output)
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (offset : ℕ)
+    (hAssumptions : circuit.Assumptions (eval env input) env.data)
+    (h : ConstraintsHold.Soundness env ((circuit input).operations offset)) :
+    circuit.Spec (eval env input) (eval env (circuit.output input offset)) env.data := by
+  simp only [ConstraintsHold.Soundness, subcircuitWithHintAssertion, Circuit.operations,
+    Operations.forAllNoOffset, GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at h
+  exact h.1 hAssumptions
+
+private theorem witnessShort_spec_of_soundness (env : Environment Ecc.Fp)
+    (src : Var field Ecc.Fp) (start numBits : ℕ)
+    (hNumBits : numBits ≤ Utilities.LookupRangeCheck.K) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((witnessShort src start numBits hNumBits).operations offset)) :
+    (show Ecc.Fp from
+      eval env ((witnessShort src start numBits hNumBits).output offset)).val < 2 ^ numBits := by
+  unfold witnessShort at h ⊢
+  exact withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.WitnessShort.circuit start numBits hNumBits) env
+    (fun env => bitrangeSubset (Expression.eval env src) start numBits) offset trivial h
+
+theorem assignSubpieces_short_range_specs (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((assignSubpieces input).operations offset)) :
+    let subpieces := (assignSubpieces input).output offset
+    (show Ecc.Fp from eval env subpieces.b0).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env subpieces.b3).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env subpieces.d2).val < 2 ^ 8 ∧
+      (show Ecc.Fp from eval env subpieces.e0).val < 2 ^ 6 ∧
+      (show Ecc.Fp from eval env subpieces.e1).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env subpieces.g1).val < 2 ^ 9 ∧
+      (show Ecc.Fp from eval env subpieces.h0).val < 2 ^ 5 := by
+  unfold assignSubpieces at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+  exact ⟨
+    witnessShort_spec_of_soundness env input.gd.x 250 4 (by norm_num [K]) _ h.1,
+    witnessShort_spec_of_soundness env input.pkd.x 0 4 (by norm_num [K]) _ h.2.1,
+    witnessShort_spec_of_soundness env input.value 0 8 (by norm_num [K]) _ h.2.2.1,
+    witnessShort_spec_of_soundness env input.value 58 6 (by norm_num [K]) _ h.2.2.2.1,
+    witnessShort_spec_of_soundness env input.rho 0 4 (by norm_num [K]) _ h.2.2.2.2.1,
+    witnessShort_spec_of_soundness env input.psi 0 9 (by norm_num [K]) _ h.2.2.2.2.2.1,
+    witnessShort_spec_of_soundness env input.psi 249 5 (by norm_num [K]) _ h.2.2.2.2.2.2.1⟩
+
 theorem constrainCommitment_decomposeB_spec (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (cells : MessageCells)
     (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
