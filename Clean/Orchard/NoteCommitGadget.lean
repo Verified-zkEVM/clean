@@ -1085,43 +1085,40 @@ instance : Inhabited (Var Input Ecc.Fp) :=
   ⟨{ gd := default, pkd := default, value := default, rho := default, psi := default,
      rcm := fun _ => default }⟩
 
-structure MessageCells where
-  a : Var field Ecc.Fp
-  b : Var field Ecc.Fp
-  c : Var field Ecc.Fp
-  d : Var field Ecc.Fp
-  e : Var field Ecc.Fp
-  f : Var field Ecc.Fp
-  g : Var field Ecc.Fp
-  h : Var field Ecc.Fp
-  b0 : Var field Ecc.Fp
-  b1 : Var field Ecc.Fp
-  b2 : Var field Ecc.Fp
-  b3 : Var field Ecc.Fp
-  d0 : Var field Ecc.Fp
-  d1 : Var field Ecc.Fp
-  d2 : Var field Ecc.Fp
-  e0 : Var field Ecc.Fp
-  e1 : Var field Ecc.Fp
-  g0 : Var field Ecc.Fp
-  g1 : Var field Ecc.Fp
-  h0 : Var field Ecc.Fp
-  h1 : Var field Ecc.Fp
+structure MessageCells (F : Type) where
+  a : F
+  b : F
+  c : F
+  d : F
+  e : F
+  f : F
+  g : F
+  h : F
+  b0 : F
+  b1 : F
+  b2 : F
+  b3 : F
+  d0 : F
+  d1 : F
+  d2 : F
+  e0 : F
+  e1 : F
+  g0 : F
+  g1 : F
+  h0 : F
+  h1 : F
+deriving CircuitType
 
-structure MessageSubpieces where
-  b0 : Var field Ecc.Fp
-  b1 : Var field Ecc.Fp
-  b2 : Var field Ecc.Fp
-  b3 : Var field Ecc.Fp
-  d0 : Var field Ecc.Fp
-  d1 : Var field Ecc.Fp
-  d2 : Var field Ecc.Fp
-  e0 : Var field Ecc.Fp
-  e1 : Var field Ecc.Fp
-  g0 : Var field Ecc.Fp
-  g1 : Var field Ecc.Fp
-  h0 : Var field Ecc.Fp
-  h1 : Var field Ecc.Fp
+instance : Inhabited (Var MessageCells Ecc.Fp) :=
+  ⟨{
+    a := default, b := default, c := default, d := default,
+    e := default, f := default, g := default, h := default,
+    b0 := default, b1 := default, b2 := default, b3 := default,
+    d0 := default, d1 := default, d2 := default,
+    e0 := default, e1 := default,
+    g0 := default, g1 := default,
+    h0 := default, h1 := default
+  }⟩
 
 /-- Sinsemilla per-piece round counts for the note-commit message. Each entry is
 `num_words - 1`, matching `Chain.PieceChunks`: source chunk counts
@@ -1633,9 +1630,64 @@ private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     ((ht7.trans hH).symm.trans hpH)
     hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
-    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+namespace YCanonicityGadget
+
+structure Input (F : Type) where
+  y : F
+  lsb : F
+deriving CircuitType
+
+instance : Inhabited (Var Input Ecc.Fp) :=
+  ⟨{ y := default, lsb := default }⟩
+
+def main (input : Var Input Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) := do
+  let k0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
+    (fun env => eval env input.y)
+  let k2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
+    (fun env => eval env input.y)
+  let k3 ← witnessField fun env => bitrangeSubset (eval env input.y) 254 1
+  let j ← witnessField fun env =>
+    env input.lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) * bitrangeSubset (eval env input.y) 10 240
+  let jZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 j
+  assertZero jZs[25]
+  let jPrime ← witnessField fun env => env jZs[0] + (2 ^ 130 : Ecc.Fp) - tP
+  let jPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 jPrime
+  NoteCommit.YCanonicity.circuit
+    { y := input.y, lsb := input.lsb, k0 := k0, k2 := k2, k3 := k3, j := jZs[0],
+      z1J := jZs[1], z13J := jZs[13], jPrime := jPrimeZs[0],
+      z13JPrime := jPrimeZs[13] }
+  return input.lsb
+
+instance elaborated : ElaboratedCircuit Ecc.Fp Input field main := by
+  elaborate_circuit
+
+def Spec (input : Value Input Ecc.Fp) (output : Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+  output = input.lsb
+
+def ProverSpec (input : ProverValue Input Ecc.Fp) (output : Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  output = input.lsb
+
+theorem soundness :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp main (fun _ _ => True) Spec := by
+  sorry
+
+theorem completeness :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp main (fun _ _ _ => True) ProverSpec := by
+  sorry
+
+def circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input field where
+  main := main
+  Spec := Spec
+  ProverSpec := ProverSpec
+  soundness := soundness
+  completeness := completeness
+
+end YCanonicityGadget
+
+namespace AssignMessageCells
+
+def main (input : Var NoteCommit.Input Ecc.Fp) : Circuit Ecc.Fp (Var MessageCells Ecc.Fp) := do
   let gdX := input.gd.x
   let gdY := input.gd.y
   let pkdX := input.pkd.x
@@ -1665,37 +1717,8 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let g0 ← witnessField fun env => bitrangeSubset (eval env rho) 254 1
   let h1 ← witnessField fun env => bitrangeSubset (eval env psi) 254 1
 
-  let gdK0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
-    (fun env => eval env gdY)
-  let gdK2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
-    (fun env => eval env gdY)
-  let gdK3 ← witnessField fun env => bitrangeSubset (eval env gdY) 254 1
-  let gdJ ← witnessField fun env =>
-    env b2 + 2 * env gdK0 + (2 ^ 10 : Ecc.Fp) * bitrangeSubset (eval env gdY) 10 240
-  let gdJZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 gdJ
-  assertZero gdJZs[25]
-  let gdJPrime ← witnessField fun env => env gdJZs[0] + (2 ^ 130 : Ecc.Fp) - tP
-  let gdJPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 gdJPrime
-  NoteCommit.YCanonicity.circuit
-    { y := gdY, lsb := b2, k0 := gdK0, k2 := gdK2, k3 := gdK3, j := gdJZs[0],
-      z1J := gdJZs[1], z13J := gdJZs[13], jPrime := gdJPrimeZs[0],
-      z13JPrime := gdJPrimeZs[13] }
-
-  let pkdK0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
-    (fun env => eval env pkdY)
-  let pkdK2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
-    (fun env => eval env pkdY)
-  let pkdK3 ← witnessField fun env => bitrangeSubset (eval env pkdY) 254 1
-  let pkdJ ← witnessField fun env =>
-    env d1 + 2 * env pkdK0 + (2 ^ 10 : Ecc.Fp) * bitrangeSubset (eval env pkdY) 10 240
-  let pkdJZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 pkdJ
-  assertZero pkdJZs[25]
-  let pkdJPrime ← witnessField fun env => env pkdJZs[0] + (2 ^ 130 : Ecc.Fp) - tP
-  let pkdJPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 pkdJPrime
-  NoteCommit.YCanonicity.circuit
-    { y := pkdY, lsb := d1, k0 := pkdK0, k2 := pkdK2, k3 := pkdK3, j := pkdJZs[0],
-      z1J := pkdJZs[1], z13J := pkdJZs[13], jPrime := pkdJPrimeZs[0],
-      z13JPrime := pkdJPrimeZs[13] }
+  let b2 ← YCanonicityGadget.circuit { y := gdY, lsb := b2 }
+  let d1 ← YCanonicityGadget.circuit { y := pkdY, lsb := d1 }
 
   let a ← witnessField fun env => bitrangeSubset (eval env gdX) 0 250
   let b ← witnessField fun env =>
@@ -1709,9 +1732,65 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let g ← witnessField fun env => env g0 + env g1 * 2 +
     bitrangeSubset (eval env psi) 9 240 * 2 ^ 10
   let h ← witnessField fun env => env h0 + env h1 * 2 ^ 5
+  return {
+    a, b, c, d, e, f, g, h,
+    b0, b1, b2, b3,
+    d0, d1, d2,
+    e0, e1,
+    g0, g1,
+    h0, h1
+  }
 
+instance elaborated : ElaboratedCircuit Ecc.Fp NoteCommit.Input MessageCells main := by
+  elaborate_circuit
+
+def Spec (_input : Value NoteCommit.Input Ecc.Fp) (_cells : Value MessageCells Ecc.Fp)
+    (_ : ProverData Ecc.Fp) : Prop :=
+  True
+
+def ProverSpec (_input : ProverValue NoteCommit.Input Ecc.Fp)
+    (_cells : ProverValue MessageCells Ecc.Fp) (_ : ProverHint Ecc.Fp) : Prop :=
+  True
+
+theorem soundness :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp main (fun _ _ => True) Spec := by
+  sorry
+
+theorem completeness :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp main (fun _ _ _ => True) ProverSpec := by
+  sorry
+
+def circuit : GeneralFormalCircuit.WithHint Ecc.Fp NoteCommit.Input MessageCells where
+  main := main
+  Spec := Spec
+  ProverSpec := ProverSpec
+  soundness := soundness
+  completeness := completeness
+
+end AssignMessageCells
+
+namespace CommitAndConstrain
+
+structure Input (F : Type) where
+  note : NoteCommit.Input F
+  cells : MessageCells F
+deriving CircuitType
+
+instance : Inhabited (Var Input Ecc.Fp) :=
+  ⟨{ note := default, cells := default }⟩
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
+    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+  let gdX := input.note.gd.x
+  let pkdX := input.note.pkd.x
+  let v := input.note.value
+  let rho := input.note.rho
+  let psi := input.note.psi
+  let cells := input.cells
   let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds
-    { pieces := #v[a, b, c, d, e, f, g, h], r := input.rcm }
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.note.rcm }
   let cm := out.point
   let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
   let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
@@ -1720,37 +1799,80 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
   let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
 
-  let aPrime ← witnessField fun env => env a + (2 ^ 130 : Ecc.Fp) - tP
+  let aPrime ← witnessField fun env => env cells.a + (2 ^ 130 : Ecc.Fp) - tP
   let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 aPrime
   let b3cPrime ← witnessField fun env =>
-    env b3 + (2 ^ 4 : Ecc.Fp) * env c + (2 ^ 140 : Ecc.Fp) - tP
+    env cells.b3 + (2 ^ 4 : Ecc.Fp) * env cells.c + (2 ^ 140 : Ecc.Fp) - tP
   let b3cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 b3cPrime
   let e1fPrime ← witnessField fun env =>
-    env e1 + (2 ^ 4 : Ecc.Fp) * env f + (2 ^ 140 : Ecc.Fp) - tP
+    env cells.e1 + (2 ^ 4 : Ecc.Fp) * env cells.f + (2 ^ 140 : Ecc.Fp) - tP
   let e1fPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 e1fPrime
   let g1g2Prime ← witnessField fun env =>
-    env g1 + (2 ^ 9 : Ecc.Fp) * env z1g + (2 ^ 130 : Ecc.Fp) - tP
+    env cells.g1 + (2 ^ 9 : Ecc.Fp) * env z1g + (2 ^ 130 : Ecc.Fp) - tP
   let g1g2PrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 g1g2Prime
 
-  NoteCommit.DecomposeB.circuit { b, b0, b1, b2, b3 }
-  NoteCommit.DecomposeD.circuit { d, d0, d1, d2, d3 := z1d }
-  NoteCommit.DecomposeE.circuit { e, e0, e1 }
-  NoteCommit.DecomposeG.circuit { g, g0, g1, g2 := z1g }
-  NoteCommit.DecomposeH.circuit { h, h0, h1 }
+  NoteCommit.DecomposeB.circuit
+    { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
+  NoteCommit.DecomposeD.circuit
+    { d := cells.d, d0 := cells.d0, d1 := cells.d1, d2 := cells.d2, d3 := z1d }
+  NoteCommit.DecomposeE.circuit { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
+  NoteCommit.DecomposeG.circuit { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := z1g }
+  NoteCommit.DecomposeH.circuit { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
   NoteCommit.GdCanonicity.circuit
-    { gdX, b0, b1, a, aPrime := aPrimeZs[0], z13A := z13a,
+    { gdX, b0 := cells.b0, b1 := cells.b1, a := cells.a, aPrime := aPrimeZs[0], z13A := z13a,
       z13APrime := aPrimeZs[13] }
   NoteCommit.PkdCanonicity.circuit
-    { pkdX, b3, c, d0, b3CPrime := b3cPrimeZs[0], z13C := z13c,
+    { pkdX, b3 := cells.b3, c := cells.c, d0 := cells.d0, b3CPrime := b3cPrimeZs[0], z13C := z13c,
       z14B3CPrime := b3cPrimeZs[14] }
-  NoteCommit.ValueCanonicity.circuit { value := v, d2, d3 := z1d, e0 }
+  NoteCommit.ValueCanonicity.circuit { value := v, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
   NoteCommit.RhoCanonicity.circuit
-    { rho, e1, f, g0, e1FPrime := e1fPrimeZs[0], z13F := z13f,
+    { rho, e1 := cells.e1, f := cells.f, g0 := cells.g0, e1FPrime := e1fPrimeZs[0], z13F := z13f,
       z14E1FPrime := e1fPrimeZs[14] }
   NoteCommit.PsiCanonicity.circuit
-    { psi, h0, g1, h1, g2 := z1g, g1G2Prime := g1g2PrimeZs[0], z13G := z13g,
+    { psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g, g1G2Prime := g1g2PrimeZs[0], z13G := z13g,
       z13G1G2Prime := g1g2PrimeZs[13] }
   return cm
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) : ElaboratedCircuit Ecc.Fp Input Point (main G Q hQ R) := by
+  elaborate_circuit
+
+def Spec (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
+    (_input : Value Input Ecc.Fp) (_cm : Point Ecc.Fp) (_ : ProverData Ecc.Fp) : Prop :=
+  True
+
+def ProverSpec (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
+    (_input : ProverValue Input Ecc.Fp) (_cm : ProverValue Point Ecc.Fp)
+    (_ : ProverHint Ecc.Fp) : Prop :=
+  True
+
+theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint.Soundness Ecc.Fp (main G Q hQ R) (fun _ _ => True)
+      (Spec G Q R) := by
+  sorry
+
+theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint.Completeness Ecc.Fp (main G Q hQ R) (fun _ _ _ => True)
+      (ProverSpec G Q R) := by
+  sorry
+
+def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Ecc.Fp Input Point where
+  main := main G Q hQ R
+  Spec := Spec G Q R
+  ProverSpec := ProverSpec G Q R
+  soundness := soundness G Q hQ R
+  completeness := completeness G Q hQ R
+
+end CommitAndConstrain
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var NoteCommit.Input Ecc.Fp) :
+    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+  let cells ← AssignMessageCells.circuit input
+  CommitAndConstrain.circuit G Q hQ R { note := input, cells := cells }
 
 instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
@@ -1827,9 +1949,9 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
       = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
--- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
---   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
---       pieces equal `noteCommitChunks`'s tiling via `noteCommitChunks_tiling`) +
---       `completeness`. This is the largest remaining proof.
+-- TODO(note_commit): replace the placeholder subcircuit specs/proofs above with the real
+-- semantic contracts. The parent gadget now composes bundled subcircuits; the remaining
+-- proof work is concentrated in `YCanonicityGadget`, `AssignMessageCells`, and
+-- `CommitAndConstrain`.
 
 end Orchard.NoteCommit
