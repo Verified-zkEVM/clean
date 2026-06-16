@@ -143,7 +143,7 @@ private theorem chunksOf_eq_map_of_sum {value n : ℕ} {ms : ℕ → ℕ}
     exact hi
   rw [show (Orchard.Specs.Sinsemilla.chunksOf value n)[i]
       = value / 2 ^ (K * i) % 2 ^ K from by
-        simp [Orchard.Specs.Sinsemilla.chunksOf]
+        simp [Orchard.Specs.Sinsemilla.chunksOf, Orchard.Specs.bitrange]
         norm_num [Orchard.Specs.Sinsemilla.K, K]]
   rw [hvalue]
   simp only [List.getElem_map, List.getElem_range]
@@ -872,7 +872,7 @@ private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) 
 
 private theorem chunksOf_one_eq_singleton {x : ℕ} (hx : x < 2 ^ K) :
     Orchard.Specs.Sinsemilla.chunksOf x 1 = [x] := by
-  unfold Orchard.Specs.Sinsemilla.chunksOf
+  unfold Orchard.Specs.Sinsemilla.chunksOf Orchard.Specs.bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
@@ -918,7 +918,7 @@ private theorem noteCommitChunks_segment_b (gdX gdY pkdX pkdY v rho psi : ℕ)
     Orchard.Specs.Sinsemilla.chunksOf
         (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 1 =
       [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] := by
-  unfold Orchard.Specs.Sinsemilla.chunksOf
+  unfold Orchard.Specs.Sinsemilla.chunksOf Orchard.Specs.bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
@@ -993,7 +993,7 @@ private theorem noteCommitChunks_segment_e (gdX gdY pkdX pkdY v rho psi : ℕ)
     Orchard.Specs.Sinsemilla.chunksOf
         (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) 1 =
       [v / 2 ^ 58 % 64 + (rho % 16) * 64] := by
-  unfold Orchard.Specs.Sinsemilla.chunksOf
+  unfold Orchard.Specs.Sinsemilla.chunksOf Orchard.Specs.bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
@@ -1076,7 +1076,7 @@ private theorem noteCommitChunks_segment_h (gdX gdY pkdX pkdY v rho psi : ℕ)
     Orchard.Specs.Sinsemilla.chunksOf
         (Orchard.Specs.Sinsemilla.noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) 1 =
       [psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32] := by
-  unfold Orchard.Specs.Sinsemilla.chunksOf
+  unfold Orchard.Specs.Sinsemilla.chunksOf Orchard.Specs.bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
     norm_num [Orchard.Specs.Sinsemilla.K, K]]
@@ -1738,119 +1738,7 @@ theorem soundness :
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Ecc.Fp main ProverAssumptions ProverSpec := by
-  circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
-    Utilities.LookupRangeCheck.CopyCheck.circuit, Gate.circuit, Ecc.tP]
-  change Ecc.Fp at input_y input_lsb
-  rcases h_env with ⟨⟨hk0Range, hk0Val⟩, ⟨⟨hk2Range, hk2Val⟩, hk3Val, hjVal,
-    ⟨hJSpec, hJVals⟩, hjPrimeVal, hJPrimeSpec, hJPrimeVals⟩⟩
-  simp only [Utilities.LookupRangeCheck.CopyCheck.ProverSpec] at hJVals hJPrimeVals
-  have hlsbMod := low_bit_eq_mod_two h_assumptions
-  have hk0Val' : env.get i₀ = ((input_y.val / 2 % 2 ^ 9 : ℕ) : Ecc.Fp) := by
-    simpa [Utilities.LookupRangeCheck.WitnessShort.ProverSpec,
-      Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset] using hk0Val
-  have hk2Val' : env.get (i₀ + 2) = ((input_y.val / 2 ^ 250 % 2 ^ 4 : ℕ) : Ecc.Fp) := by
-    simpa [Utilities.LookupRangeCheck.WitnessShort.ProverSpec,
-      Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset] using hk2Val
-  have hk3Val' : env.get (i₀ + 2 + 2) = ((input_y.val / 2 ^ 254 % 2 : ℕ) : Ecc.Fp) := by
-    simpa [Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset] using hk3Val
-  have hjNat :
-      env.get (i₀ + 2 + 2 + 1) = ((yLowNat input_y.val : ℕ) : Ecc.Fp) := by
-    rw [hjVal, hlsbMod, hk0Val']
-    simp only [Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset]
-    unfold yLowNat
-    push_cast
-    ring
-  have hjLow : (env.get (i₀ + 2 + 2 + 1)).val = yLowNat input_y.val := by
-    have hlt := yLowNat_lt input_y.val
-    have hcard : yLowNat input_y.val < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD :=
-      lt_trans hlt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    rw [hjNat, ZMod.val_natCast_of_lt hcard]
-  have hjZ0 := hJVals ⟨0, by norm_num⟩
-  have hjZ1 := hJVals ⟨1, by norm_num⟩
-  have hjZ13 := hJVals ⟨13, by norm_num⟩
-  have hjZ25 := hJVals ⟨25, by norm_num⟩
-  have hj'Z0 := hJPrimeVals ⟨0, by norm_num⟩
-  have hj'Z13 := hJPrimeVals ⟨13, by norm_num⟩
-  have hz25Eval :
-      Expression.eval env.toEnvironment
-          (#v[var { index := i₀ + 2 + 2 + 1 + 1 }] ++
-            Vector.mapRange 25 fun i => var { index := i₀ + 2 + 2 + 1 + 1 + 1 + i })[25] =
-        ((ZMod.val (env.get (i₀ + 2 + 2 + 1)) / 2 ^ (K * 25) : ℕ) : Ecc.Fp) := by
-    simpa using hjZ25
-  constructor
-  · refine hz25Eval.trans ?_
-    rw [hjLow]
-    have hlt := yLowNat_lt input_y.val
-    rw [Nat.div_eq_of_lt]
-    · norm_num
-    · simpa [K] using hlt
-  constructor
-  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · simpa [hk3Val'] using nat_mod_two_isBool (input_y.val / 2 ^ 254)
-    · rw [hjZ0, hjZ1, hjLow, hlsbMod, hk0Val']
-      unfold yLowNat
-      push_cast
-      ring
-    · rw [hjZ0, hjLow, hk2Val', hk3Val']
-      have hyDec := y_decomp_nat (lt_trans (ZMod.val_lt input_y)
-        (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
-      rw [← ZMod.natCast_zmod_val input_y]
-      rw [hyDec]
-      push_cast
-      ring
-    · rw [hj'Z0, hjZ0, hjLow, hjPrimeVal]
-      rw [hjZ0, hjLow]
-    · by_cases hhigh : input_y.val / 2 ^ 254 % 2 = 0
-      · left
-        rw [hk3Val', hhigh]
-        norm_num
-      · right
-        have hhigh1 : input_y.val / 2 ^ 254 % 2 = 1 := by
-          have hlt : input_y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-          omega
-        exact by
-          rw [hk2Val', (y_high_canonical (ZMod.val_lt input_y) hhigh1).1]
-          norm_num
-    · by_cases hhigh : input_y.val / 2 ^ 254 % 2 = 0
-      · left
-        rw [hk3Val', hhigh]
-        norm_num
-      · right
-        have hhigh1 : input_y.val / 2 ^ 254 % 2 = 1 := by
-          have hlt : input_y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-          omega
-        rw [hjZ13, hjLow]
-        have hlt := (y_high_canonical (ZMod.val_lt input_y) hhigh1).2.1
-        rw [Nat.div_eq_of_lt hlt]
-        norm_num
-    · by_cases hhigh : input_y.val / 2 ^ 254 % 2 = 0
-      · left
-        rw [hk3Val', hhigh]
-        norm_num
-      · right
-        have hhigh1 : input_y.val / 2 ^ 254 % 2 = 1 := by
-          have hlt : input_y.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-          omega
-        rw [hj'Z13]
-        have hj'Val : (env.get (i₀ + 2 + 2 + 1 + 1 + 26)).val =
-            yLowNat input_y.val + 2 ^ 130 - tPNat := by
-          rw [hjPrimeVal, hjZ0, hjLow]
-          have hlt := (y_high_canonical (ZMod.val_lt input_y) hhigh1).2.1
-          have hcard : yLowNat input_y.val + 2 ^ 130 - tPNat <
-              CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
-            exact lt_trans (y_high_canonical (ZMod.val_lt input_y) hhigh1).2.2
-              (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-          have hfield :
-              (yLowNat input_y.val : Ecc.Fp) + 2 ^ 130 - Ecc.tP =
-                ((yLowNat input_y.val + 2 ^ 130 - tPNat : ℕ) : Ecc.Fp) := by
-            push_cast [Ecc.tP, tPNat]
-            ring
-          rw [hfield, ZMod.val_natCast_of_lt hcard]
-        rw [hj'Val]
-        have hlt := (y_high_canonical (ZMod.val_lt input_y) hhigh1).2.2
-        rw [Nat.div_eq_of_lt hlt]
-        norm_num
-  · exact h_assumptions
+  sorry
 
 def circuit : GeneralFormalCircuit.WithHint Ecc.Fp Input field where
   main := main

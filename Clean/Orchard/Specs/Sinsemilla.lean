@@ -1,4 +1,5 @@
 import Clean.Orchard.Specs.Elliptic.Curves.Pasta
+import Clean.Orchard.Specs.Bitrange
 
 /-!
 # Sinsemilla value-level specification
@@ -197,7 +198,7 @@ def merkleChunks (l lv rv : ℕ) : List ℕ :=
 
 /-- The `n` little-endian `K`-bit chunks of `val`. -/
 def chunksOf (val n : ℕ) : List ℕ :=
-  (List.range n).map fun i => val / 2 ^ (K * i) % 2 ^ K
+  (List.range n).map fun i => bitrange val (K * i) K
 
 @[simp] theorem chunksOf_length (val n : ℕ) : (chunksOf val n).length = n := by
   simp [chunksOf]
@@ -211,8 +212,9 @@ theorem chunksOf_add (val m n : ℕ) :
   congr 1
   apply List.map_congr_left
   intro i _
-  simp only [Function.comp_apply]
-  rw [Nat.div_div_eq_div_mul, ← pow_add, ← Nat.mul_add, Nat.add_comm m i]
+  simp only [Function.comp_apply, bitrange_div]
+  congr 2
+  ring
 
 /-- Chunks below position `n` are unaffected by reducing `val` mod `2 ^ (K * n)`. -/
 theorem chunksOf_mod (val n : ℕ) : chunksOf (val % 2 ^ (K * n)) n = chunksOf val n := by
@@ -220,10 +222,7 @@ theorem chunksOf_mod (val n : ℕ) : chunksOf (val % 2 ^ (K * n)) n = chunksOf v
   apply List.map_congr_left
   intro i hi
   simp only [List.mem_range] at hi
-  have hP : 2 ^ (K * n) = 2 ^ (K * i) * 2 ^ (K * (n - i)) := by
-    rw [← pow_add]; congr 1; rw [← Nat.mul_add, Nat.add_sub_cancel' (Nat.le_of_lt hi)]
-  rw [hP, Nat.mod_mul_right_div_self,
-    Nat.mod_mod_of_dvd _ (pow_dvd_pow 2 (Nat.le_mul_of_pos_right K (by omega)))]
+  exact bitrange_mod (by rw [← Nat.mul_succ]; exact Nat.mul_le_mul_left K hi)
 
 /-! ### The `NoteCommit` message -/
 
