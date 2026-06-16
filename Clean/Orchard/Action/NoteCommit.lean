@@ -1143,6 +1143,44 @@ instance : Inhabited (Var MessageCells Fp) :=
 abbrev messagePieceTailRounds : List ℕ := [0, 24, 5, 0, 24, 24, 0]
 abbrev messagePieceRounds : List ℕ := 24 :: messagePieceTailRounds
 
+/-- The seven natural-number scalars encoded by the Orchard note-commit message. -/
+structure NoteCommitScalars where
+  gdX : ℕ
+  gdYbit : ℕ
+  pkdX : ℕ
+  pkdYbit : ℕ
+  v : ℕ
+  rho : ℕ
+  psi : ℕ
+
+namespace NoteCommitScalars
+
+def chunks (s : NoteCommitScalars) : List ℕ :=
+  Orchard.Specs.Sinsemilla.noteCommitChunks s.gdX s.gdYbit s.pkdX s.pkdYbit s.v s.rho s.psi
+
+end NoteCommitScalars
+
+/-- Semantic statement that the eight Sinsemilla pieces are exactly the note-commit
+message pieces for `s`, with the canonical range facts needed to recover the unique
+natural chunk list from field-valued piece constraints. -/
+def NoteCommitPieceValues (s : NoteCommitScalars)
+    (pieces : Vector Fp messagePieceRounds.length) : Prop :=
+  pieces[0] = ((s.gdX % 2 ^ (K * 25) : ℕ) : Fp) ∧
+  pieces[1] =
+    ((s.gdX / 2 ^ 250 % 16 + (s.gdX / 2 ^ 254 % 2) * 16 + s.gdYbit * 32 +
+      (s.pkdX % 16) * 64 : ℕ) : Fp) ∧
+  pieces[2] = (((s.pkdX / 16) % 2 ^ (K * 25) : ℕ) : Fp) ∧
+  pieces[3] =
+    ((s.pkdX / 2 ^ 254 % 2 + s.pkdYbit * 2 + (s.v % 2 ^ 58) * 4 : ℕ) : Fp) ∧
+  pieces[4] = ((s.v / 2 ^ 58 % 64 + (s.rho % 16) * 64 : ℕ) : Fp) ∧
+  pieces[5] = (((s.rho / 16) % 2 ^ (K * 25) : ℕ) : Fp) ∧
+  pieces[6] =
+    ((s.rho / 2 ^ 254 % 2 + (s.psi % 2 ^ 249) * 2 : ℕ) : Fp) ∧
+  pieces[7] = ((s.psi / 2 ^ 249 % 32 + (s.psi / 2 ^ 254 % 2) * 32 : ℕ) : Fp) ∧
+  s.gdX < 2 ^ 255 ∧ s.gdYbit < 2 ∧
+  s.pkdX < 2 ^ 255 ∧ s.pkdYbit < 2 ∧
+  s.v < 2 ^ 64 ∧ s.rho < 2 ^ 255 ∧ s.psi < 2 ^ 255
+
 private theorem noteCommitChunks_eq_of_piece_digit_sums
     {msA msB msC msD msE msF msG msH : ℕ → ℕ}
     {gdX gdY pkdX pkdY v rho psi : ℕ}
@@ -1647,6 +1685,18 @@ private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     ((ht7.trans hH).symm.trans hpH)
     hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
 
+theorem pieceChunks_eq_noteCommitChunks_of_piece_values
+    {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
+    {s : NoteCommitScalars}
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hValues : NoteCommitPieceValues s pieces) :
+    chunks = s.chunks := by
+  rcases hValues with
+    ⟨hA, hB, hC, hD, hE, hF, hG, hH,
+      hgdX255, hgdY, hpkdX255, hpkdY, hv, hrho, hpsi⟩
+  exact pieceChunks_eq_noteCommitChunks_of_indexed_piece_values hPC
+    hA hB hC hD hE hF hG hH hgdX255 hgdY hpkdX255 hpkdY hv hrho hpsi
+
 /-- Dividing the low `a+b` bits by `2^a` exposes the next `b` bits: the honest
 running sum's `z_a` cell is the corresponding higher `bitrange`. -/
 private theorem bitrange_low_div (n a b : ℕ) :
@@ -1791,14 +1841,19 @@ end YCanonicity
 
 /-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
 `g_d`/`pk_d` contribute their `x` and the `ỹ` sign bit (`y mod 2`). -/
+def noteScalars (gd pkd : Point Fp) (value rho psi : Fp) : NoteCommitScalars where
+  gdX := gd.x.val
+  gdYbit := gd.y.val % 2
+  pkdX := pkd.x.val
+  pkdYbit := pkd.y.val % 2
+  v := value.val
+  rho := rho.val
+  psi := psi.val
+
 def noteScalarsOf (gd pkd : Point Fp) (value rho psi : Fp) :
     ℕ × ℕ × ℕ × ℕ × ℕ × ℕ × ℕ :=
-  let gdX : Fp := gd.x
-  let gdY : Fp := gd.y
-  let pkdX : Fp := pkd.x
-  let pkdY : Fp := pkd.y
-  let v : Fp := value
-  (gdX.val, gdY.val % 2, pkdX.val, pkdY.val % 2, v.val, rho.val, psi.val)
+  let s := noteScalars gd pkd value rho psi
+  (s.gdX, s.gdYbit, s.pkdX, s.pkdYbit, s.v, s.rho, s.psi)
 
 def messagePieces (cells : MessageCells Fp) : Vector Fp messagePieceRounds.length :=
   #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h]
@@ -1807,34 +1862,26 @@ def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
   Orchard.Specs.Sinsemilla.noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
 
 def MessagePiecesEncode (input : Value Input Fp) (cells : Value MessageCells Fp) : Prop :=
-  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
-    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
   Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (messagePieces cells)
-    (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi)
+    (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
 
 def ProverMessagePiecesEncode (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) : Prop :=
-  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
-    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
   Orchard.Sinsemilla.Chain.honestChunks messagePieceRounds (messagePieces cells) =
-    noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi
+    (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
 
 def NoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (input : Value Input Fp) (cm : Point Fp) : Prop :=
-  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
-    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
   ∃ rcm : Fq, ∀ B : SWPoint Pallas.curve,
     Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-        (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B →
+        (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue rcm).coords
 
 def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
-  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
-    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
   ∀ B : SWPoint Pallas.curve,
     Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-        (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B →
+        (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
 namespace AssignMessageCells
@@ -1932,46 +1979,48 @@ def circuit : GeneralFormalCircuit.WithHint Fp Input MessageCells where
 
 end AssignMessageCells
 
-namespace CommitAndConstrain
+namespace ConstraintChecks
 
 structure Input (F : Type) where
-  note : Orchard.Action.NoteCommit.Input F
+  gd : Point F
+  pkd : Point F
+  value : F
+  rho : F
+  psi : F
   cells : MessageCells F
-deriving CircuitType
+  zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) F
+deriving ProvableStruct
 
-instance : Inhabited (Var Input Ecc.Fp) :=
-  ⟨{ note := default, cells := default }⟩
+instance : Inhabited (Var Input Fp) :=
+  ⟨{
+    gd := default, pkd := default, value := default, rho := default, psi := default,
+    cells := default, zs := default
+  }⟩
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
-    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
-  let gdX := input.note.gd.x
-  let pkdX := input.note.pkd.x
-  let v := input.note.value
-  let rho := input.note.rho
-  let psi := input.note.psi
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  let gdX := input.gd.x
+  let pkdX := input.pkd.x
+  let v := input.value
+  let rho := input.rho
+  let psi := input.psi
   let cells := input.cells
-  let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds
-    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
-      r := input.note.rcm }
-  let cm := out.point
-  let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
-  let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
-  let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
-  let z13f := (HVec.get _ out.zs ⟨5, by decide⟩)[13]
-  let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
-  let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+  let z13a := (HVec.get _ input.zs ⟨0, by decide⟩)[13]
+  let z13c := (HVec.get _ input.zs ⟨2, by decide⟩)[13]
+  let z1d := (HVec.get _ input.zs ⟨3, by decide⟩)[1]
+  let z13f := (HVec.get _ input.zs ⟨5, by decide⟩)[13]
+  let z1g := (HVec.get _ input.zs ⟨6, by decide⟩)[1]
+  let z13g := (HVec.get _ input.zs ⟨6, by decide⟩)[13]
 
-  let aPrime ← witnessField fun env => env cells.a + (2 ^ 130 : Ecc.Fp) - Ecc.tP
+  let aPrime ← witnessField fun env => env cells.a + (2 ^ 130 : Fp) - Ecc.tP
   let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 aPrime
   let b3cPrime ← witnessField fun env =>
-    env cells.b3 + (2 ^ 4 : Ecc.Fp) * env cells.c + (2 ^ 140 : Ecc.Fp) - Ecc.tP
+    env cells.b3 + (2 ^ 4 : Fp) * env cells.c + (2 ^ 140 : Fp) - Ecc.tP
   let b3cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 b3cPrime
   let e1fPrime ← witnessField fun env =>
-    env cells.e1 + (2 ^ 4 : Ecc.Fp) * env cells.f + (2 ^ 140 : Ecc.Fp) - Ecc.tP
+    env cells.e1 + (2 ^ 4 : Fp) * env cells.f + (2 ^ 140 : Fp) - Ecc.tP
   let e1fPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 e1fPrime
   let g1g2Prime ← witnessField fun env =>
-    env cells.g1 + (2 ^ 9 : Ecc.Fp) * env z1g + (2 ^ 130 : Ecc.Fp) - Ecc.tP
+    env cells.g1 + (2 ^ 9 : Fp) * env z1g + (2 ^ 130 : Fp) - Ecc.tP
   let g1g2PrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 g1g2Prime
 
   DecomposeB.Gate.circuit
@@ -1994,6 +2043,60 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   PsiCanonicity.Gate.circuit
     { psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g, g1G2Prime := g1g2PrimeZs[0], z13G := z13g,
       z13G1G2Prime := g1g2PrimeZs[13] }
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+def Assumptions (input : Input Fp) : Prop :=
+  ∃ chunks : List ℕ,
+    Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (messagePieces input.cells) chunks ∧
+    Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks input.zs
+
+def Spec (input : Input Fp) : Prop :=
+  NoteCommitPieceValues (noteScalars input.gd input.pkd input.value input.rho input.psi)
+    (messagePieces input.cells)
+
+theorem soundness :
+    FormalAssertion.Soundness Fp main Assumptions Spec := by
+  sorry
+
+theorem completeness :
+    FormalAssertion.Completeness Fp main Assumptions Spec := by
+  sorry
+
+def circuit : FormalAssertion Fp Input where
+  main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
+
+end ConstraintChecks
+
+namespace CommitAndConstrain
+
+structure Input (F : Type) where
+  note : Orchard.Action.NoteCommit.Input F
+  cells : MessageCells F
+deriving CircuitType
+
+instance : Inhabited (Var Input Ecc.Fp) :=
+  ⟨{ note := default, cells := default }⟩
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp) :
+    Circuit Ecc.Fp (Var Point Ecc.Fp) := do
+  let v := input.note.value
+  let rho := input.note.rho
+  let psi := input.note.psi
+  let cells := input.cells
+  let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.note.rcm }
+  let cm := out.point
+  ConstraintChecks.circuit
+    { gd := input.note.gd, pkd := input.note.pkd, value := v, rho, psi, cells, zs := out.zs }
   return cm
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
@@ -2008,10 +2111,9 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (_R : MulFixed
     (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   ProverMessagePiecesEncode input.note input.cells ∧
     Orchard.Sinsemilla.Chain.PieceBounds messagePieceRounds (messagePieces input.cells) ∧
-    let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
-      noteScalarsOf input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi
     ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-      (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B
+      (noteScalars input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi).chunks =
+        some B
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : Value Input Fp) (cm : Point Fp) (_ : ProverData Fp) : Prop :=
