@@ -315,6 +315,29 @@ private theorem e1_f_low_lt_of_f_130 {e1 f : Ecc.Fp}
   norm_num [K] at he1 hf ⊢
   omega
 
+private theorem g1_g2_low_lt_of_g_piece_130 {g0 g1 g2 : Ecc.Fp}
+    (hg0 : NoteCommit.IsBool g0) (hg1 : g1.val < 2 ^ 9)
+    (hg2 : g2.val < 2 ^ (K * 24))
+    (hg : (g0 + g1 * 2 + g2 * 1024).val < 2 ^ (K * 13)) :
+    g1.val + g2.val * 512 < 2 ^ 130 := by
+  have hg0lt := isBool_val_lt_two hg0
+  have hltCard : g0.val + g1.val * 2 + g2.val * 1024 <
+      CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at hg0lt hg1 hg2 ⊢
+    omega
+  have hdec : g0 + g1 * 2 + g2 * 1024 =
+      ((g0.val + g1.val * 2 + g2.val * 1024 : ℕ) : Ecc.Fp) := by
+    rw [← ZMod.natCast_zmod_val g0, ← ZMod.natCast_zmod_val g1,
+      ← ZMod.natCast_zmod_val g2]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt g0), ZMod.val_natCast_of_lt (ZMod.val_lt g1),
+      ZMod.val_natCast_of_lt (ZMod.val_lt g2)]
+  have hgVal : g0.val + g1.val * 2 + g2.val * 1024 < 2 ^ (K * 13) := by
+    rw [hdec, ZMod.val_natCast_of_lt hltCard] at hg
+    exact hg
+  norm_num [K] at hg1 hgVal ⊢
+  omega
+
 private theorem e1_eq_rho_low_bits_of_parts {rho e1 f g0 e1FPrime z14 : Ecc.Fp}
     (he1 : e1.val < 2 ^ 4) (hf : f.val < 2 ^ (K * 25))
     (hg0 : NoteCommit.IsBool g0)
@@ -1190,6 +1213,50 @@ private theorem e1_f_low_lt_of_piece_z13_zero {e1 f : Ecc.Fp}
   have hfVal := congrArg ZMod.val hf
   rw [hfVal] at hlow
   exact hlow
+
+private theorem pieceChunks_g_val_lt_of_z13_zero
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
+    (hz13g :
+      (HVec.head (HVec.tail (HVec.tail (HVec.tail (HVec.tail (HVec.tail (HVec.tail zs)))))))[13]'(by decide)
+        = 0) :
+    (pieces.tail.tail.tail.tail.tail.tail[0]).val < 2 ^ (K * 13) := by
+  have hPC1 := pieceChunks_tail_drop hPC
+  have hZs1 := zsFacts_tail hZs
+  have hPC2 := pieceChunks_tail_drop hPC1
+  have hZs2 := zsFacts_tail hZs1
+  have hPC3 := pieceChunks_tail_drop hPC2
+  have hZs3 := zsFacts_tail hZs2
+  have hPC4 := pieceChunks_tail_drop hPC3
+  have hZs4 := zsFacts_tail hZs3
+  have hPC5 := pieceChunks_tail_drop hPC4
+  have hZs5 := zsFacts_tail hZs4
+  have hPC6 := pieceChunks_tail_drop hPC5
+  have hZs6 := zsFacts_tail hZs5
+  exact pieceChunks_head_val_lt_of_z_zero
+    (n := 24) (r := 13) (rest := [0])
+    (hr := by norm_num)
+    (hpowLow := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    (hpowHigh := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    hPC6 hZs6 hz13g
+
+private theorem g1_g2_low_lt_of_piece_z13_zero {g0 g1 g2 : Ecc.Fp}
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    (hg0 : NoteCommit.IsBool g0) (hg1 : g1.val < 2 ^ 9)
+    (hg2 : g2.val < 2 ^ (K * 24))
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
+    (hz13g :
+      (HVec.head (HVec.tail (HVec.tail (HVec.tail (HVec.tail (HVec.tail (HVec.tail zs)))))))[13]'(by decide)
+        = 0)
+    (hgPiece : pieces.tail.tail.tail.tail.tail.tail[0] = g0 + g1 * 2 + g2 * 1024) :
+    g1.val + g2.val * 512 < 2 ^ 130 := by
+  have hg := pieceChunks_g_val_lt_of_z13_zero hPC hZs hz13g
+  rw [hgPiece] at hg
+  exact g1_g2_low_lt_of_g_piece_130 hg0 hg1 hg2 hg
 
 private theorem z1_head_val_lt {n : ℕ} {rest : List ℕ}
     {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
