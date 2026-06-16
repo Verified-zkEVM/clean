@@ -320,6 +320,55 @@ theorem chunksOf_one_eq_singleton {x : ℕ} (hx : x < 2 ^ K) :
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
   rw [Nat.mod_eq_of_lt hx]
 
+/-- Dividing a `Kb`-bit digit sum by `2^(Kb·r)` drops its low `r` digits (the suffix sum).
+This is the value-level fact behind a Sinsemilla running-sum cell `z_r = piece >> (K·r)`. -/
+theorem sum_suffix_div {Kb : ℕ} {d : ℕ → ℕ} (hd : ∀ j, d j < 2 ^ Kb) :
+    ∀ (m r : ℕ), r ≤ m →
+      (∑ j ∈ Finset.range m, d j * 2 ^ (Kb * j)) / 2 ^ (Kb * r)
+        = ∑ j ∈ Finset.range (m - r), d (r + j) * 2 ^ (Kb * j) := by
+  intro m r
+  induction r generalizing m d with
+  | zero => intro _; simp
+  | succ r ih =>
+    intro hr
+    obtain ⟨m', rfl⟩ : ∃ m', m = m' + 1 := ⟨m - 1, by omega⟩
+    rw [sum_head_shift,
+      show Kb * (r + 1) = Kb + Kb * r from by ring, pow_add, ← Nat.div_div_eq_div_mul,
+      Nat.add_mul_div_left _ _ (Nat.two_pow_pos Kb), Nat.div_eq_of_lt (hd 0), Nat.zero_add,
+      ih (d := fun j => d (j + 1)) (fun j => hd (j + 1)) m' (by omega),
+      show m' + 1 - (r + 1) = m' - r from by omega]
+    exact Finset.sum_congr rfl fun j _ => by rw [Nat.add_right_comm]
+
+/-- A `Kb`-bit running sum telescopes: if `z i = w_i + 2^Kb · z (i+1)` with each `w_i` a
+`Kb`-bit word, then `z 0 = lo + 2^(Kb·r) · z r` for a low `r`-word value `lo < 2^(Kb·r)`.
+This is the soundness content of a `LookupRangeCheck.CopyCheck` running sum: `z r = 0`
+forces `z 0 < 2^(Kb·r)`. -/
+theorem running_sum_telescope (Kb : ℕ)
+    (z : ℕ → CompElliptic.Fields.Pasta.PallasBaseField) :
+    ∀ r : ℕ, (∀ i, i < r → ∃ w : ℕ, w < 2 ^ Kb ∧
+        z i = ((w : ℕ) : CompElliptic.Fields.Pasta.PallasBaseField)
+          + ((2 ^ Kb : ℕ) : CompElliptic.Fields.Pasta.PallasBaseField) * z (i + 1)) →
+      ∃ lo : ℕ, lo < 2 ^ (Kb * r) ∧
+        z 0 = ((lo : ℕ) : CompElliptic.Fields.Pasta.PallasBaseField)
+          + ((2 ^ (Kb * r) : ℕ) : CompElliptic.Fields.Pasta.PallasBaseField) * z r := by
+  intro r
+  induction r with
+  | zero => intro _; exact ⟨0, by positivity, by simp⟩
+  | succ r ih =>
+    intro hstep
+    obtain ⟨lo, hlo, hz0⟩ := ih (fun i hi => hstep i (by omega))
+    obtain ⟨w, hw, hzr⟩ := hstep r (by omega)
+    refine ⟨lo + 2 ^ (Kb * r) * w, ?_, ?_⟩
+    · have : 2 ^ (Kb * r) * w + 2 ^ (Kb * r) ≤ 2 ^ (Kb * (r + 1)) := by
+        rw [show Kb * (r + 1) = Kb * r + Kb from by ring, pow_add]
+        calc 2 ^ (Kb * r) * w + 2 ^ (Kb * r) = 2 ^ (Kb * r) * (w + 1) := by ring
+          _ ≤ 2 ^ (Kb * r) * 2 ^ Kb := Nat.mul_le_mul_left _ (by omega)
+      omega
+    · rw [hz0, hzr,
+        show Kb * (r + 1) = Kb * r + Kb from by ring, pow_add]
+      push_cast
+      ring
+
 /-! ### The `NoteCommit` message -/
 
 /--
