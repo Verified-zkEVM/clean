@@ -2517,6 +2517,16 @@ theorem main_commitInput_piece_values (env : Environment Ecc.Fp) (input : Var In
       pieces[6] = eval env cells.g ∧ pieces[7] = eval env cells.h := by
   simp only [circuit_norm]
 
+theorem main_commitInput_f_tail_value (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp)
+    (offset : ℕ) :
+    let cells := (assignMessageCells input).output offset
+    let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+      { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+        r := input.rcm }
+    let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+    pieces.tail.tail.tail.tail.tail[0] = eval env cells.f := by
+  simp only [circuit_norm, Vector.getElem_tail, Nat.reduceAdd]
+
 theorem main_large_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
