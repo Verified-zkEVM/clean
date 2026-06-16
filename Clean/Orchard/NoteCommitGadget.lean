@@ -2784,6 +2784,45 @@ theorem main_input_canonicity_facts (G : Generators) (Q : SWPoint Pallas.curve)
     NoteCommit.ValueCanonicity.Spec, NoteCommit.RhoCanonicity.Spec,
     NoteCommit.PsiCanonicity.Spec] using hs
 
+theorem main_z13g_zero_of_h1_one (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let outValue := eval env out
+    eval env cells.h1 = 1 →
+      (HVec.get _ outValue.zs ⟨6, by decide⟩)[13] = 0 := by
+  let cells := (assignMessageCells input).output offset
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+  dsimp only
+  intro hh1One
+  have hcanon := main_input_canonicity_facts G Q hQ R env input offset h
+  simp only at hcanon
+  rcases hcanon with ⟨_hgd, _hpkd, _hvalue, _hrho, hpsi⟩
+  rcases hpsi with ⟨_hpsi, _hprime, _hh0zero, hz13gZero, _hz13Prime⟩
+  have hz13gVar : eval env z13g = 0 := by
+    rcases hz13gZero with hz | hz
+    · exfalso
+      have h01 : (0 : Ecc.Fp) = 1 := hz.symm.trans hh1One
+      have hval := congrArg ZMod.val h01
+      simp [ZMod.val_one] at hval
+    · simpa only [z13g, out, cells, commitOffset] using hz
+  have hz13gEval :
+      eval env z13g =
+        (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+          (eval env out.zs) ⟨6, by decide⟩)[13] := by
+    dsimp only [z13g, out]
+    simpa only [out] using
+      HVec.eval_getElem env (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+        out.zs ⟨6, by decide⟩ 13 (by decide)
+  rw [hz13gEval] at hz13gVar
+  rw [_root_.Orchard.Sinsemilla.CommitDomain.WithZs.eval_zs env messagePieceRounds out]
+  exact hz13gVar
+
 theorem main_psiCanonicity_soundness (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
