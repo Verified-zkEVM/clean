@@ -1944,6 +1944,19 @@ theorem main_one_word_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
     decomposeE_value_lt he0 he1 hE,
     decomposeH_value_lt hh0 hh1 hH⟩
 
+theorem input_field_255_bounds (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) :
+    (show Ecc.Fp from eval env input.gd.x).val < 2 ^ 255 ∧
+      (show Ecc.Fp from eval env input.pkd.x).val < 2 ^ 255 ∧
+      (show Ecc.Fp from eval env input.rho).val < 2 ^ 255 ∧
+      (show Ecc.Fp from eval env input.psi).val < 2 ^ 255 := by
+  have hp : CompElliptic.Fields.Pasta.PALLAS_BASE_CARD < 2 ^ 255 := by
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  exact ⟨
+    lt_trans (ZMod.val_lt (show Ecc.Fp from eval env input.gd.x)) hp,
+    lt_trans (ZMod.val_lt (show Ecc.Fp from eval env input.pkd.x)) hp,
+    lt_trans (ZMod.val_lt (show Ecc.Fp from eval env input.rho)) hp,
+    lt_trans (ZMod.val_lt (show Ecc.Fp from eval env input.psi)) hp⟩
+
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
 --       pieces equal `noteCommitChunks`'s tiling via `noteCommitChunks_tiling`) +
