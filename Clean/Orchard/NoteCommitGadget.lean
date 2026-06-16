@@ -1305,6 +1305,23 @@ theorem assignSubpieces_short_range_specs (env : Environment Ecc.Fp)
     witnessShort_spec_of_soundness env input.psi 0 9 (by norm_num [K]) _ h.2.2.2.2.2.1,
     witnessShort_spec_of_soundness env input.psi 249 5 (by norm_num [K]) _ h.2.2.2.2.2.2.1⟩
 
+theorem assignMessageCells_short_range_specs (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((assignMessageCells input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    (show Ecc.Fp from eval env cells.b0).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env cells.b3).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env cells.d2).val < 2 ^ 8 ∧
+      (show Ecc.Fp from eval env cells.e0).val < 2 ^ 6 ∧
+      (show Ecc.Fp from eval env cells.e1).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env cells.g1).val < 2 ^ 9 ∧
+      (show Ecc.Fp from eval env cells.h0).val < 2 ^ 5 := by
+  unfold assignMessageCells at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+  have hs := assignSubpieces_short_range_specs env input offset h.1
+  simpa only [assignMessageCells, assignMessagePieces, constrainYSubpieces, Circuit.output,
+    Circuit.bind_def] using hs
+
 theorem constrainCommitment_decomposeB_spec (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (cells : MessageCells)
     (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
@@ -1532,6 +1549,21 @@ theorem main_commitWithZs_spec_of_soundness (G : Generators) (Q : SWPoint Pallas
   rw [commitAndConstrain_soundness_constraints_iff] at h_commit
   exact commitWithZs_spec_of_soundness G Q hQ R env input ((assignMessageCells input).output offset)
     (offset + (assignMessageCells input).localLength offset) h_commit.1
+
+theorem main_assignMessageCells_short_range_specs (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    (show Ecc.Fp from eval env cells.b0).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env cells.b3).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env cells.d2).val < 2 ^ 8 ∧
+      (show Ecc.Fp from eval env cells.e0).val < 2 ^ 6 ∧
+      (show Ecc.Fp from eval env cells.e1).val < 2 ^ 4 ∧
+      (show Ecc.Fp from eval env cells.g1).val < 2 ^ 9 ∧
+      (show Ecc.Fp from eval env cells.h0).val < 2 ^ 5 := by
+  rw [main_soundness_constraints_iff] at h
+  exact assignMessageCells_short_range_specs env input offset h.1
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
