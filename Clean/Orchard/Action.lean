@@ -1,9 +1,11 @@
+import Clean.Orchard.Action.Canonicity
+import Clean.Orchard.Action.CanonicityTheorems
 import Clean.Orchard.Action.CommitIvk
 import Clean.Orchard.Action.CommitIvkGate
+import Clean.Orchard.Action.Decompose
 import Clean.Orchard.Action.DeriveNullifier
 import Clean.Orchard.Action.Gate
 import Clean.Orchard.Action.NoteCommit
-import Clean.Orchard.Action.NoteCommitGate
 import Clean.Orchard.Action.SpendAuthority
 import Clean.Orchard.Action.ValueCommit
 

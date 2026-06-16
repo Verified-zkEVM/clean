@@ -1,294 +1,22 @@
 import Clean.Circuit
 import Clean.Gadgets.Boolean
-import Clean.Orchard.Ecc
-import Clean.Orchard.Specs.Bitrange
+import Clean.Orchard.Action.CanonicityTheorems
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
 /-!
-# Orchard note commitment gates
+# NoteCommit canonicity gates
 
-Clean ports of Orchard `NoteCommit` arithmetic gates.
-
-Reference:
-`orchard@0.14.0/src/circuit/note_commit.rs`
-- `NoteCommit MessagePiece b`
-- `NoteCommit MessagePiece d`
-- `NoteCommit MessagePiece e`
-- `NoteCommit MessagePiece g`
-- `NoteCommit MessagePiece h`
-- `NoteCommit input g_d`
-- `NoteCommit input pk_d`
-- `NoteCommit input rho`
-- `NoteCommit input psi`
-- `NoteCommit input value`
-- `y coordinate checks`
-
-Most assertions model the enabled Halo2 custom-gate polynomials, not selector, rotation,
-column-layout, lookup, or assignment machinery.
-
-The synthesis-level `gadgets::note_commit` entry circuit lives in
-`Clean.Orchard.Action.NoteCommit`, which depends on `Sinsemilla.Domain`; this gate module is
-kept separate so it stays low in the import graph.
+Custom-gate `FormalAssertion`s enforcing prime-field canonicity of the decomposed note
+fields (`orchard note_commit.rs` `*_canonicity`, `y_canonicity`).
 -/
 
 namespace Orchard.Action.NoteCommit
 
-variable {F : Type} [Field F]
-
-private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
-  rcases h with h | h <;> rw [h] <;> simp
-
-private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
-  sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
-
-/-! ### Foundational bit-decomposition / canonicity facts
-
-These are stated over `Orchard.Specs.bitrange` and the Pallas base modulus, with no
-reference to any particular circuit cell (`y`, `j`, …). The canonicity gates build on
-them. -/
-
-open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open Orchard.Specs (bitrange bitrange_lt bitrange_add)
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
-/-- `t_P`, the Pallas base modulus minus `2^254`, as a natural number. -/
-def tPNat : ℕ := 45560315531419706090280762371685220353
-
-/-- The defining split of the Pallas base modulus: `p = 2^254 + t_P`. -/
-theorem pallasBaseCard_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
-  norm_num [PALLAS_BASE_CARD, tPNat]
-
-/-- A `< 2^255` value is the sum of its low 250 bits, next 4 bits, and top bit. -/
-theorem bit_decomp_255 {n : ℕ} (hn : n < 2 ^ 255) :
-    n = bitrange n 0 250 + 2 ^ 250 * bitrange n 250 4 + 2 ^ 254 * bitrange n 254 1 := by
-  simp only [bitrange, pow_zero, Nat.div_one]
-  omega
-
-/-- Canonicity with the top bit set: for `n < p` with bit 254 set, bits 250–253 vanish
-and the low 250 bits lie below `t_P` (hence the `+2^130-t_P` shift stays below `2^130`). -/
-theorem high_bit_canonical {n : ℕ} (hn : n < PALLAS_BASE_CARD) (hhigh : bitrange n 254 1 = 1) :
-    bitrange n 250 4 = 0 ∧ bitrange n 0 250 < tPNat ∧
-      bitrange n 0 250 + 2 ^ 130 - tPNat < 2 ^ 130 := by
-  have hdec := bit_decomp_255 (lt_trans hn (by norm_num [PALLAS_BASE_CARD]))
-  have hlo := bitrange_lt n 0 250
-  have hk2 := bitrange_lt n 250 4
-  rw [hhigh] at hdec
-  rw [pallasBaseCard_eq] at hn
-  norm_num [tPNat] at hlo hk2 hn hdec ⊢
-  omega
-
-/-- `lsb` is the low (sign) bit of the field element `y`. -/
-def IsLowBit (y lsb : Fp) : Prop :=
-  lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Fp)
-
-theorem nat_mod_two_isBool (n : ℕ) : IsBool (((n % 2 : ℕ) : Fp)) := by
-  have hlt : n % 2 < 2 := Nat.mod_lt _ (by norm_num)
-  interval_cases n % 2 <;> simp [IsBool]
-
-theorem isLowBit_iff_mod_two {y lsb : Fp} :
-    IsLowBit y lsb ↔ lsb = ((y.val % 2 : ℕ) : Fp) := by
-  have key : (if y.val.testBit 0 then (1 : ℕ) else 0) = y.val % 2 := by
-    rw [Nat.testBit_zero]
-    rcases Nat.mod_two_eq_zero_or_one y.val with hm | hm <;> simp [hm]
-  rw [IsLowBit, key]
-
-/-- `Ecc.tP` as the cast of the natural number `tPNat`. -/
-theorem tP_eq : Ecc.tP = ((tPNat : ℕ) : Fp) := by
-  rw [Ecc.tP, tPNat]; norm_num
-
-/-- A 1-bit field slice is Boolean. -/
-theorem bitrange_one_isBool (n start : ℕ) :
-    IsBool ((bitrange n start 1 : ℕ) : Fp) := by
-  have h : bitrange n start 1 < 2 := by simpa using bitrange_lt n start 1
-  interval_cases (bitrange n start 1) <;> simp [IsBool]
-
-/-- The low 250-bit field splits into the sign bit, the next 9 bits, and the rest. -/
-theorem low_250_decomp (n : ℕ) :
-    bitrange n 0 250 = bitrange n 0 1 + 2 * bitrange n 1 9 + 1024 * bitrange n 10 240 := by
-  have h1 := bitrange_add n 0 1 249
-  have h2 := bitrange_add n 1 9 240
-  norm_num at h1 h2
-  rw [h1, h2]; ring
-
-/-- With the top bit set, the bits 130–249 of a canonical value vanish. -/
-theorem high_bit_z13_zero {n : ℕ} (hn : n < PALLAS_BASE_CARD)
-    (hhigh : bitrange n 254 1 = 1) : bitrange n 130 120 = 0 := by
-  obtain ⟨_, hlo, _⟩ := high_bit_canonical hn hhigh
-  have hsplit := bitrange_add n 0 130 120
-  have htp : tPNat < 2 ^ 130 := by norm_num [tPNat]
-  have key : bitrange n 0 (130 + 120) < 2 ^ 130 := by
-    rw [show (130 : ℕ) + 120 = 250 by norm_num]; omega
-  rw [hsplit] at key
-  rcases Nat.eq_zero_or_pos (bitrange n (0 + 130) 120) with h | h
-  · simpa using h
-  · exfalso
-    have hge : 2 ^ 130 ≤ 2 ^ 130 * bitrange n (0 + 130) 120 := Nat.le_mul_of_pos_right _ h
-    omega
-
-namespace Gate
-
-namespace DecomposeB
-
-structure Row (F : Type) where
-  b : F
-  b0 : F
-  b1 : F
-  b2 : F
-  b3 : F
-deriving ProvableStruct
-
-def Spec (row : Row Fp) : Prop :=
-  IsBool row.b1 ∧
-  IsBool row.b2 ∧
-  row.b = row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64
-
-def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertBool row.b1
-  assertBool row.b2
-  assertZero (row.b - (row.b0 + row.b1 * 16 + row.b2 * 32 + row.b3 * 64))
-
-def circuit : FormalAssertion Fp Row where
-  name := "GATE NoteCommit MessagePiece b"
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start
-    rcases h_holds with ⟨hb1, hb2, hdec⟩
-    exact ⟨hb1, hb2, left_eq_of_add_neg_eq_zero hdec⟩
-  completeness := by
-    circuit_proof_start
-    rcases h_spec with ⟨hb1, hb2, hdec⟩
-    exact ⟨hb1, hb2, by rw [hdec]; ring⟩
-
-end DecomposeB
-
-namespace DecomposeD
-
-structure Row (F : Type) where
-  d : F
-  d0 : F
-  d1 : F
-  d2 : F
-  d3 : F
-deriving ProvableStruct
-
-def Spec (row : Row Fp) : Prop :=
-  IsBool row.d0 ∧
-  IsBool row.d1 ∧
-  row.d = row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024
-
-def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertBool row.d0
-  assertBool row.d1
-  assertZero (row.d - (row.d0 + row.d1 * 2 + row.d2 * 4 + row.d3 * 1024))
-
-def circuit : FormalAssertion Fp Row where
-  name := "GATE NoteCommit MessagePiece d"
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start
-    rcases h_holds with ⟨hd0, hd1, hdec⟩
-    exact ⟨hd0, hd1, left_eq_of_add_neg_eq_zero hdec⟩
-  completeness := by
-    circuit_proof_start
-    rcases h_spec with ⟨hd0, hd1, hdec⟩
-    exact ⟨hd0, hd1, by rw [hdec]; ring⟩
-
-end DecomposeD
-
-namespace DecomposeE
-
-structure Row (F : Type) where
-  e : F
-  e0 : F
-  e1 : F
-deriving ProvableStruct
-
-def Spec (row : Row Fp) : Prop :=
-  row.e = row.e0 + row.e1 * 64
-
-def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertZero (row.e - (row.e0 + row.e1 * 64))
-
-def circuit : FormalAssertion Fp Row where
-  name := "GATE NoteCommit MessagePiece e"
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start
-    exact left_eq_of_add_neg_eq_zero h_holds
-  completeness := by
-    circuit_proof_start
-    rw [h_spec]
-    ring
-
-end DecomposeE
-
-namespace DecomposeG
-
-structure Row (F : Type) where
-  g : F
-  g0 : F
-  g1 : F
-  g2 : F
-deriving ProvableStruct
-
-def Spec (row : Row Fp) : Prop :=
-  IsBool row.g0 ∧
-  row.g = row.g0 + row.g1 * 2 + row.g2 * 1024
-
-def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertBool row.g0
-  assertZero (row.g - (row.g0 + row.g1 * 2 + row.g2 * 1024))
-
-def circuit : FormalAssertion Fp Row where
-  name := "GATE NoteCommit MessagePiece g"
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start
-    rcases h_holds with ⟨hg0, hdec⟩
-    exact ⟨hg0, left_eq_of_add_neg_eq_zero hdec⟩
-  completeness := by
-    circuit_proof_start
-    rcases h_spec with ⟨hg0, hdec⟩
-    exact ⟨hg0, by rw [hdec]; ring⟩
-
-end DecomposeG
-
-namespace DecomposeH
-
-structure Row (F : Type) where
-  h : F
-  h0 : F
-  h1 : F
-deriving ProvableStruct
-
-def Spec (row : Row Fp) : Prop :=
-  IsBool row.h1 ∧
-  row.h = row.h0 + row.h1 * 32
-
-def main (row : Var Row Fp) : Circuit Fp Unit := do
-  assertBool row.h1
-  assertZero (row.h - (row.h0 + row.h1 * 32))
-
-def circuit : FormalAssertion Fp Row where
-  name := "GATE NoteCommit MessagePiece h"
-  main
-  Spec := Spec
-  soundness := by
-    circuit_proof_start
-    rcases h_holds with ⟨hh1, hdec⟩
-    exact ⟨hh1, left_eq_of_add_neg_eq_zero hdec⟩
-  completeness := by
-    circuit_proof_start
-    rcases h_spec with ⟨hh1, hdec⟩
-    exact ⟨hh1, by rw [hdec]; ring⟩
-
-end DecomposeH
-
-namespace GdCanonicity
+namespace GdCanonicity.Gate
 
 structure Row (F : Type) where
   gdX : F
@@ -337,9 +65,9 @@ def circuit : FormalAssertion Fp Row where
       ring
     exact ⟨mul_eq_zero_of_or hb0, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
 
-end GdCanonicity
+end GdCanonicity.Gate
 
-namespace PkdCanonicity
+namespace PkdCanonicity.Gate
 
 structure Row (F : Type) where
   pkdX : F
@@ -385,9 +113,9 @@ def circuit : FormalAssertion Fp Row where
       ring
     exact ⟨mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz14⟩
 
-end PkdCanonicity
+end PkdCanonicity.Gate
 
-namespace ValueCanonicity
+namespace ValueCanonicity.Gate
 
 structure Row (F : Type) where
   value : F
@@ -414,9 +142,9 @@ def circuit : FormalAssertion Fp Row where
     rw [h_spec]
     ring
 
-end ValueCanonicity
+end ValueCanonicity.Gate
 
-namespace RhoCanonicity
+namespace RhoCanonicity.Gate
 
 structure Row (F : Type) where
   rho : F
@@ -462,9 +190,9 @@ def circuit : FormalAssertion Fp Row where
       ring
     exact ⟨mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz14⟩
 
-end RhoCanonicity
+end RhoCanonicity.Gate
 
-namespace PsiCanonicity
+namespace PsiCanonicity.Gate
 
 structure Row (F : Type) where
   psi : F
@@ -515,9 +243,7 @@ def circuit : FormalAssertion Fp Row where
       ring
     exact ⟨mul_eq_zero_of_or hh0, mul_eq_zero_of_or hz13, mul_eq_zero_of_or hz13p⟩
 
-end PsiCanonicity
-
-end Gate
+end PsiCanonicity.Gate
 
 namespace YCanonicity.Gate
 

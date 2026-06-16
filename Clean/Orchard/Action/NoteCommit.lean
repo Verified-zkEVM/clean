@@ -1,4 +1,5 @@
-import Clean.Orchard.Action.NoteCommitGate
+import Clean.Orchard.Action.Canonicity
+import Clean.Orchard.Action.Decompose
 import Clean.Orchard.Sinsemilla.Domain
 import Clean.Orchard.Specs.Bitrange
 import Clean.Orchard.Utilities
@@ -1973,24 +1974,24 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     env cells.g1 + (2 ^ 9 : Ecc.Fp) * env z1g + (2 ^ 130 : Ecc.Fp) - Ecc.tP
   let g1g2PrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 g1g2Prime
 
-  Gate.DecomposeB.circuit
+  DecomposeB.Gate.circuit
     { b := cells.b, b0 := cells.b0, b1 := cells.b1, b2 := cells.b2, b3 := cells.b3 }
-  Gate.DecomposeD.circuit
+  DecomposeD.Gate.circuit
     { d := cells.d, d0 := cells.d0, d1 := cells.d1, d2 := cells.d2, d3 := z1d }
-  Gate.DecomposeE.circuit { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
-  Gate.DecomposeG.circuit { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := z1g }
-  Gate.DecomposeH.circuit { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
-  Gate.GdCanonicity.circuit
+  DecomposeE.Gate.circuit { e := cells.e, e0 := cells.e0, e1 := cells.e1 }
+  DecomposeG.Gate.circuit { g := cells.g, g0 := cells.g0, g1 := cells.g1, g2 := z1g }
+  DecomposeH.Gate.circuit { h := cells.h, h0 := cells.h0, h1 := cells.h1 }
+  GdCanonicity.Gate.circuit
     { gdX, b0 := cells.b0, b1 := cells.b1, a := cells.a, aPrime := aPrimeZs[0], z13A := z13a,
       z13APrime := aPrimeZs[13] }
-  Gate.PkdCanonicity.circuit
+  PkdCanonicity.Gate.circuit
     { pkdX, b3 := cells.b3, c := cells.c, d0 := cells.d0, b3CPrime := b3cPrimeZs[0], z13C := z13c,
       z14B3CPrime := b3cPrimeZs[14] }
-  Gate.ValueCanonicity.circuit { value := v, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
-  Gate.RhoCanonicity.circuit
+  ValueCanonicity.Gate.circuit { value := v, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
+  RhoCanonicity.Gate.circuit
     { rho, e1 := cells.e1, f := cells.f, g0 := cells.g0, e1FPrime := e1fPrimeZs[0], z13F := z13f,
       z14E1FPrime := e1fPrimeZs[14] }
-  Gate.PsiCanonicity.circuit
+  PsiCanonicity.Gate.circuit
     { psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g, g1G2Prime := g1g2PrimeZs[0], z13G := z13g,
       z13G1G2Prime := g1g2PrimeZs[13] }
   return cm

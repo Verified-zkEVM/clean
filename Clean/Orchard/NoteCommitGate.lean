@@ -1,7 +1,10 @@
-import Clean.Orchard.Action.NoteCommitGate
+import Clean.Orchard.Action.CanonicityTheorems
+import Clean.Orchard.Action.Decompose
+import Clean.Orchard.Action.Canonicity
 
 /-!
 Compatibility import for the old `Clean.Orchard.NoteCommitGate` module path.
 
-Use `Clean.Orchard.Action.NoteCommitGate`.
+The gates were split into `Clean.Orchard.Action.{Decompose,Canonicity}` and the supporting
+theory into `Clean.Orchard.Action.CanonicityTheorems`.
 -/
