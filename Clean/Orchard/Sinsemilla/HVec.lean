@@ -65,6 +65,22 @@ def get : (ns : List ℕ) → HVec ns F → (i : Fin ns.length) → Vector F ns[
   | _ :: _, f, ⟨0, _⟩ => f.1
   | _ :: ns, f, ⟨i + 1, h⟩ => get ns f.2 ⟨i, Nat.lt_of_succ_lt_succ h⟩
 
+/-- `eval` commutes with function-style heterogeneous-vector access. -/
+theorem eval_get [Field F] (env : Environment F) :
+    (ns : List ℕ) → (v : Var (HVec ns) F) → (i : Fin ns.length) →
+      eval env (get ns v i) = get ns (eval env v) i
+  | [], _, i => i.elim0
+  | _ :: _, v, ⟨0, _⟩ => by
+      cases v
+      rw [eval_pair]
+      simp only [get]
+  | _ :: ns, v, ⟨i + 1, h⟩ => by
+      cases v with
+      | mk head tail =>
+          rw [eval_pair]
+          simp only [get]
+          exact eval_get env ns tail ⟨i, Nat.lt_of_succ_lt_succ h⟩
+
 /-- `eval` distributes over `cons` (it is just `ProvablePair`'s `eval_pair`). -/
 theorem eval_cons [Field F] (env : Environment F) {n : ℕ} {ns : List ℕ}
     (a : Var (fields n) F) (b : Var (HVec ns) F) :

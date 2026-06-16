@@ -866,6 +866,45 @@ private theorem zsFacts_tail {n : ℕ} {rest : List ℕ} {chunks : List ℕ}
   simp only [Orchard.Sinsemilla.Chain.ZsFacts] at h
   exact h.2
 
+private theorem pieceChunks_tail_drop {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
+    (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    Orchard.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
+  simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
+  obtain ⟨ms, _hms, _hpiece, tailChunks, hchunks, htail⟩ := h
+  rw [hchunks, Orchard.Sinsemilla.Chain.chunks_drop_append ms tailChunks]
+  exact htail
+
+private theorem z1_head_val_lt {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
+    (hn : 1 < n + 1)
+    (hpow : 2 ^ (K * n) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts (n :: rest) chunks zs) :
+    ((HVec.head zs)[1]'hn).val < 2 ^ (K * n) := by
+  simp only [Orchard.Sinsemilla.Chain.PieceChunks] at hPC
+  obtain ⟨ms, hms, _hpiece, tailChunks, hchunks, _hPCtail⟩ := hPC
+  have hz := zsFacts_head_get hZs ⟨1, hn⟩
+  have hsum :
+      (∑ j ∈ Finset.range n, chunks.getD (j + 1) 0 * 2 ^ (K * j)) =
+        ∑ j ∈ Finset.range n, ms (j + 1) * 2 ^ (K * j) := by
+    rw [hchunks]
+    simpa only [Orchard.Specs.Sinsemilla.K, K] using
+      (Orchard.Sinsemilla.Chain.z1Facts_head_sum (n := n) ms tailChunks)
+  have hsumLt : (∑ j ∈ Finset.range n, ms (j + 1) * 2 ^ (K * j)) < 2 ^ (K * n) :=
+    sum_digits_lt (fun j => hms (j + 1)) n
+  simp only at hz
+  rw [show n + 1 - 1 = n by omega] at hz
+  have hz' :
+      (HVec.head zs)[1] =
+        ((∑ j ∈ Finset.range n, chunks.getD (j + 1) 0 * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+    simpa only [Nat.add_comm] using hz
+  rw [hz']
+  rw [hsum]
+  rw [ZMod.val_natCast_of_lt (lt_trans hsumLt hpow)]
+  exact hsumLt
+
 private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
     {gdX gdY pkdX pkdY v rho psi : ℕ}
@@ -1956,6 +1995,43 @@ theorem input_field_255_bounds (env : Environment Ecc.Fp) (input : Var Input Ecc
     lt_trans (ZMod.val_lt (show Ecc.Fp from eval env input.pkd.x)) hp,
     lt_trans (ZMod.val_lt (show Ecc.Fp from eval env input.rho)) hp,
     lt_trans (ZMod.val_lt (show Ecc.Fp from eval env input.psi)) hp⟩
+
+theorem main_z1d_z1g_bounds (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let outValue := eval env out
+    let z1d := (HVec.get _ outValue.zs ⟨3, by decide⟩)[1]
+    let z1g := (HVec.get _ outValue.zs ⟨6, by decide⟩)[1]
+    z1d.val < 2 ^ (K * 5) ∧ z1g.val < 2 ^ (K * 24) := by
+  obtain ⟨chunks, hPC, hZs⟩ :=
+    main_commitWithZs_pieceChunks_zsFacts_of_soundness G Q hQ R env input offset h
+  have hPC1 := pieceChunks_tail_drop hPC
+  have hZs1 := zsFacts_tail hZs
+  have hPC2 := pieceChunks_tail_drop hPC1
+  have hZs2 := zsFacts_tail hZs1
+  have hPC3 := pieceChunks_tail_drop hPC2
+  have hZs3 := zsFacts_tail hZs2
+  have hD := z1_head_val_lt (n := 5) (rest := [0, 24, 24, 0])
+    (hn := by norm_num)
+    (hpow := lt_trans (by norm_num [K]) two_pow_K_mul_25_lt_p)
+    hPC3 hZs3
+  have hPC4 := pieceChunks_tail_drop hPC3
+  have hZs4 := zsFacts_tail hZs3
+  have hPC5 := pieceChunks_tail_drop hPC4
+  have hZs5 := zsFacts_tail hZs4
+  have hPC6 := pieceChunks_tail_drop hPC5
+  have hZs6 := zsFacts_tail hZs5
+  have hG := z1_head_val_lt (n := 24) (rest := [0])
+    (hn := by norm_num)
+    (hpow := lt_trans (by norm_num [K]) two_pow_K_mul_25_lt_p)
+    hPC6 hZs6
+  dsimp only
+  simp only [messagePieceRounds, messagePieceTailRounds]
+  exact ⟨hD, hG⟩
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
