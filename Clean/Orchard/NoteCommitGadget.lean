@@ -414,6 +414,80 @@ private theorem e1_eq_rho_low_bits_of_parts {rho e1 f g0 e1FPrime z14 : Ecc.Fp}
     norm_num at he1 ⊢
     omega
 
+private theorem g0_eq_rho_high_bit_of_parts {rho e1 f g0 e1FPrime z14 : Ecc.Fp}
+    (he1 : e1.val < 2 ^ 4) (hf : f.val < 2 ^ (K * 25))
+    (hg0 : NoteCommit.IsBool g0)
+    (hlowSmall : g0 = 1 → e1.val + f.val * 16 < 2 ^ 134)
+    (hrho : rho = e1 + f * 16 + g0 * OfNat.ofNat (2 ^ 254))
+    (hprime : e1FPrime = e1 + f * 16 + OfNat.ofNat (2 ^ 140) - NoteCommit.tP)
+    (hz14 : g0 = 0 ∨ z14 = 0)
+    (hz14Lt : z14 = 0 → e1FPrime.val < 2 ^ (K * 14)) :
+    g0 = ((rho.val / 2 ^ 254 % 2 : ℕ) : Ecc.Fp) := by
+  have hfLow : e1.val + f.val * 16 < 2 ^ 254 := by
+    norm_num [K] at he1 hf ⊢
+    omega
+  have hlowCard : e1.val + f.val * 16 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_trans hfLow (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  have hlowField :
+      e1 + f * 16 = ((e1.val + f.val * 16 : ℕ) : Ecc.Fp) := by
+    rw [← ZMod.natCast_zmod_val e1, ← ZMod.natCast_zmod_val f]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt e1), ZMod.val_natCast_of_lt (ZMod.val_lt f)]
+  rcases hg0 with hg0zero | hg0one
+  · have hrhoVal : rho.val = e1.val + f.val * 16 := by
+      rw [hg0zero, zero_mul, _root_.add_zero] at hrho
+      rw [hrho, hlowField, ZMod.val_natCast_of_lt hlowCard]
+    rw [hg0zero]
+    rw [hrhoVal]
+    rw [Nat.div_eq_of_lt hfLow]
+    norm_num
+  · have hz14zero : z14 = 0 := by
+      rcases hz14 with hz | hz
+      · exfalso
+        exact zero_ne_one (by rw [← hz, hg0one])
+      · exact hz
+    have hprimeValLt := hz14Lt hz14zero
+    let low := e1.val + f.val * 16
+    have hprimeField : e1FPrime = (low + 2 ^ 140 - tPNat : ℕ) := by
+      rw [hprime]
+      dsimp only [low]
+      rw [hlowField]
+      push_cast [NoteCommit.tP, tPNat]
+      ring
+    have hprimeValEq : e1FPrime.val = low + 2 ^ 140 - tPNat := by
+      have hlt : low + 2 ^ 140 - tPNat < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+        dsimp only [low]
+        have hsmall := hlowSmall hg0one
+        norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hsmall ⊢
+        omega
+      rw [hprimeField, ZMod.val_natCast_of_lt hlt]
+    have hlowLtTP : low < tPNat := by
+      dsimp only [low] at hprimeValEq hprimeValLt
+      rw [hprimeValEq] at hprimeValLt
+      norm_num [K] at hprimeValLt ⊢
+      omega
+    have hpackedLt :
+        e1.val + f.val * 16 + 2 ^ 254 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      dsimp only [low] at hlowLtTP
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hlowLtTP ⊢
+      omega
+    have hrhoVal :
+        rho.val = e1.val + f.val * 16 + 2 ^ 254 := by
+      let low := e1.val + f.val * 16
+      have hrhoCast : rho = ((low + 2 ^ 254 : ℕ) : Ecc.Fp) := by
+        rw [hrho, hg0one]
+        dsimp only [low]
+        rw [hlowField]
+        norm_num
+      dsimp only [low] at hrhoCast
+      rw [hrhoCast, ZMod.val_natCast_of_lt hpackedLt]
+    rw [hg0one]
+    rw [hrhoVal]
+    have hdiv : (e1.val + f.val * 16 + 2 ^ 254) / 2 ^ 254 = 1 := by
+      omega
+    rw [hdiv]
+    norm_num
+
 private theorem g1_g2_eq_psi_low_bits_of_parts {psi g1 g2 h0 h1 g1G2Prime z13 : Ecc.Fp}
     (hg1 : g1.val < 2 ^ 9) (hg2 : g2.val < 2 ^ (K * 24))
     (hh0 : h0.val < 2 ^ 5) (hh1 : NoteCommit.IsBool h1)
