@@ -2917,6 +2917,63 @@ theorem main_z1d_z1g_bounds (G : Generators) (Q : SWPoint Pallas.curve)
   simp only [messagePieceRounds, messagePieceTailRounds]
   exact ⟨hD, hG⟩
 
+theorem main_psi_low_small_of_h1_one (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    let commitOffset := offset + (assignMessageCells input).localLength offset
+    let out := (commitWithZs G Q hQ R input cells).output commitOffset
+    let outValue := eval env out
+    let z1g := (HVec.get _ outValue.zs ⟨6, by decide⟩)[1]
+    eval env cells.h1 = 1 →
+      (show Ecc.Fp from eval env cells.g1).val + z1g.val * 512 < 2 ^ 130 := by
+  let cells := (assignMessageCells input).output offset
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+  dsimp only
+  intro hh1One
+  obtain ⟨chunks, hPC, hZs⟩ :=
+    main_commitWithZs_pieceChunks_zsFacts_of_soundness G Q hQ R env input offset h
+  have hrange := main_assignMessageCells_short_range_specs G Q hQ R env input offset h
+  have hdecomp := main_message_piece_decomposition_facts G Q hQ R env input offset h
+  have hzBounds := main_z1d_z1g_bounds G Q hQ R env input offset h
+  simp only at hrange hdecomp hzBounds
+  rcases hrange with ⟨_hb0, _hb3, _hd2, _he0, _he1, hg1, _hh0⟩
+  rcases hdecomp with ⟨_hB, _hD, _hE, hG, _hh1, _hH⟩
+  rcases hG with ⟨hg0Bool, hGdec⟩
+  have hz13g := main_z13g_zero_of_h1_one G Q hQ R env input offset h hh1One
+  have hgTail : pieces.tail.tail.tail.tail.tail.tail[0] = eval env cells.g := by
+    dsimp only [pieces, commitInput]
+    simp only [circuit_norm, Vector.getElem_tail, Nat.reduceAdd]
+  have hz1gEval :
+      eval env (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+          out.zs ⟨6, by decide⟩)[1] =
+        (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+          (eval env out.zs) ⟨6, by decide⟩)[1] := by
+    exact HVec.eval_getElem env (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+      out.zs ⟨6, by decide⟩ 1 (by decide)
+  rw [hz1gEval] at hGdec
+  rw [← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.eval_zs env messagePieceRounds out] at hGdec
+  have hgPiece :
+      pieces.tail.tail.tail.tail.tail.tail[0] =
+        eval env cells.g0 + eval env cells.g1 * 2 +
+          (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+            (eval env out).zs ⟨6, by decide⟩)[1] * 1024 := by
+    rw [hgTail]
+    exact hGdec
+  exact g1_g2_low_lt_of_piece_z13_zero
+    (g0 := eval env cells.g0)
+    (g1 := eval env cells.g1)
+    (g2 := (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+      (eval env out).zs ⟨6, by decide⟩)[1])
+    (pieces := pieces) (chunks := chunks) (zs := (eval env out).zs)
+    hg0Bool hg1 hzBounds.2 hPC hZs hz13g hgPiece
+
 theorem main_value_bound (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
