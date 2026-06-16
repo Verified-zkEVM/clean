@@ -1150,6 +1150,44 @@ def yCanonicity (y lsb : Var field Ecc.Fp) : Circuit Ecc.Fp (Var field Ecc.Fp) :
   NoteCommit.YCanonicity.circuit yrow
   return lsb
 
+structure YCanonicityCells where
+  k0 : Var field Ecc.Fp
+  k2Offset : ℕ
+  k2 : Var field Ecc.Fp
+  k3Offset : ℕ
+  k3 : Var field Ecc.Fp
+  jOffset : ℕ
+  j : Var field Ecc.Fp
+  copyOffset : ℕ
+  zs : Var (fields 26) Ecc.Fp
+  jCell : Var field Ecc.Fp
+  z1J : Var field Ecc.Fp
+  z13J : Var field Ecc.Fp
+  canonOffset : ℕ
+  bounds : Var field Ecc.Fp × Var field Ecc.Fp
+
+def yCanonicityCells (y lsb : Var field Ecc.Fp) (offset : ℕ) : YCanonicityCells :=
+  let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+  let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+  let k2 := (witnessShort y 250 4 (by norm_num [K])).output k2Offset
+  let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+  let k3 := (witnessBitrange y 254 1).output k3Offset
+  let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+  let j := (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+  let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+  let zs := (Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset
+  let jCell := zs[0]
+  let z1J := zs[1]
+  let z13J := zs[13]
+  let canonOffset := copyOffset + (Utilities.LookupRangeCheck.CopyCheck.circuit 25 j).localLength copyOffset
+  let bounds := (canonBitshift130 zs[0]).output canonOffset
+  { k0, k2Offset, k2, k3Offset, k3, jOffset, j, copyOffset, zs, jCell, z1J, z13J,
+    canonOffset, bounds }
+
 instance witnessShortExplicit (src : Var field Ecc.Fp) (start numBits : ℕ)
     (h : numBits ≤ Utilities.LookupRangeCheck.K) :
     ExplicitCircuit (witnessShort src start numBits h) := by
@@ -2669,6 +2707,21 @@ theorem yCanonicity_gate_facts_of_soundness (env : Environment Ecc.Fp)
   simpa only [NoteCommit.YCanonicity.Spec, explicit_provable_type, circuit_norm]
     using hSpec
 
+theorem yCanonicity_gate_facts_cells_of_soundness (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let c := yCanonicityCells y lsb offset
+    NoteCommit.IsBool (eval env c.k3) ∧
+      eval env c.jCell = eval env lsb + eval env c.k0 * 2 + eval env c.z1J * 1024 ∧
+      eval env y = eval env c.jCell + eval env c.k2 * OfNat.ofNat (2 ^ 250) +
+        eval env c.k3 * OfNat.ofNat (2 ^ 254) ∧
+      eval env c.bounds.1 = eval env c.jCell + OfNat.ofNat (2 ^ 130) - NoteCommit.tP ∧
+      (eval env c.k3 = 0 ∨ eval env c.k2 = 0) ∧
+      (eval env c.k3 = 0 ∨ eval env c.z13J = 0) ∧
+      (eval env c.k3 = 0 ∨ eval env c.bounds.2 = 0) := by
+  dsimp only [yCanonicityCells]
+  exact yCanonicity_gate_facts_of_soundness env y lsb offset h
+
 theorem yCanonicity_z1J_copy_val_lt (env : Environment Ecc.Fp)
     (y lsb : Var field Ecc.Fp) (offset : ℕ)
     (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
@@ -2741,6 +2794,14 @@ theorem yCanonicity_z1J_val_lt (env : Environment Ecc.Fp)
   dsimp only
   rw [ProvableType.getElem_eval_fields]
   exact yCanonicity_z1J_copy_val_lt env y lsb offset h
+
+theorem yCanonicity_z1J_cells_val_lt (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let c := yCanonicityCells y lsb offset
+    (Expression.eval env c.zs[1]).val < 2 ^ (K * 24) := by
+  dsimp only [yCanonicityCells]
+  exact yCanonicity_z1J_val_lt env y lsb offset h
 
 theorem yCanonicity_j_val_lt_of_z13_zero (env : Environment Ecc.Fp)
     (y lsb : Var field Ecc.Fp) (offset : ℕ)
@@ -2816,6 +2877,15 @@ theorem yCanonicity_j_val_lt_of_z13_zero_expr (env : Environment Ecc.Fp)
   exact yCanonicity_j_val_lt_of_z13_zero env y lsb offset h
     (eval_fields_getElem_eq_zero_of_expression_eval_getElem_eq_zero env zs 13 (by decide) hz13)
 
+theorem yCanonicity_j_cells_val_lt_of_z13_zero (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let c := yCanonicityCells y lsb offset
+    Expression.eval env c.zs[13] = 0 →
+      (Expression.eval env c.zs[0]).val < 2 ^ (K * 13) := by
+  dsimp only [yCanonicityCells]
+  exact yCanonicity_j_val_lt_of_z13_zero_expr env y lsb offset h
+
 theorem yCanonicity_jPrime_val_lt_of_z13_zero (env : Environment Ecc.Fp)
     (y lsb : Var field Ecc.Fp) (offset : ℕ)
     (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
@@ -2855,6 +2925,15 @@ theorem yCanonicity_jPrime_val_lt_of_z13_zero (env : Environment Ecc.Fp)
     simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
     exact h.2.2.2.2.2.2.1
   exact canonBitshift130_prime_evalOutput_val_lt_of_zlast_zero env zs[0] canonOffset hCanon hz13
+
+theorem yCanonicity_jPrime_cells_val_lt_of_z13_zero (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let c := yCanonicityCells y lsb offset
+    eval env c.bounds.2 = 0 →
+      (show Ecc.Fp from eval env c.bounds.1).val < 2 ^ (K * 13) := by
+  dsimp only [yCanonicityCells]
+  exact yCanonicity_jPrime_val_lt_of_z13_zero env y lsb offset h
 
 theorem assignSubpieces_short_range_specs (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
