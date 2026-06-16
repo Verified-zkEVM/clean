@@ -48,6 +48,324 @@ deriving CircuitType
 instance : Inhabited (Var Input Fp) :=
   ⟨{ ak := default, nk := default, rivk := fun _ => default }⟩
 
+open Orchard.Specs (bitrange bitrange_lt)
+open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope)
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
+open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical)
+
+/-- Semantic statement that the four Sinsemilla pieces `a, b, c, d` are exactly the
+`commit_ivk` message pieces for `ak`/`nk`, in the indexed form consumed by the chunk
+bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`. -/
+def CommitIvkPieceValues (ak nk : Fp) (a b c d : Fp) : Prop :=
+  a = ((ak.val % 2 ^ (Orchard.Specs.Sinsemilla.K * 25) : ℕ) : Fp) ∧
+  b = ((ak.val / 2 ^ 250 % 16 + (ak.val / 2 ^ 254 % 2) * 16 + (nk.val % 2 ^ 5) * 32 : ℕ) : Fp) ∧
+  c = (((nk.val / 2 ^ 5) % 2 ^ (Orchard.Specs.Sinsemilla.K * 24) : ℕ) : Fp) ∧
+  d = ((nk.val / 2 ^ 245 % 2 ^ 9 + (nk.val / 2 ^ 254 % 2) * 512 : ℕ) : Fp)
+
+/-- The gate's canonical bit slices are exactly the indexed `commit_ivk` piece values.
+`bitrange n s len = n / 2^s % 2^len`, so each slice is the divisor/modulus combination the
+chunk bridge expects. -/
+theorem commitIvkPieceValues_of_gate_spec (row : Gate.Input Fp) (hSpec : Gate.Spec row) :
+    CommitIvkPieceValues row.ak row.nk row.a row.bWhole row.c row.dWhole := by
+  simp only [Gate.Spec] at hSpec
+  obtain ⟨ha, hb0, hb1, hb2, hc, hd0, hd1, hbW, hdW⟩ := hSpec
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · rw [ha]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hbW, hb0, hb1, hb2]
+    simp only [bitrange, pow_zero, Nat.div_one]
+    push_cast; ring
+  · rw [hc]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hdW, hd0, hd1]
+    simp only [bitrange]
+    push_cast; ring
+
+/-! ### `Canonicity`: the `ak`/`nk` canonicity decomposition and gate
+
+Virtual subcircuit (no constraint/VK impact) factoring the two `CopyCheck` running-sum
+decompositions and the `CommitIvk` canonicity gate out of the monolithic entry. Modeled on
+`NoteCommit.ConstraintChecks`. Its `Spec` is the gate payoff in the indexed-piece-value form
+that the chunk bridge consumes. -/
+namespace Canonicity
+
+/-- The gate-relevant cells assigned by the entry before the canonicity checks: the input
+keys, the four Sinsemilla pieces (`a, b, c, d`), the sub-pieces (`b0, b1, b2, d0, d1`), and
+the two fully-decomposed Sinsemilla running-sum tails (`z13A, z13C`). -/
+structure Input (F : Type) where
+  ak : F
+  nk : F
+  a : F
+  b : F
+  c : F
+  d : F
+  b0 : F
+  b1 : F
+  b2 : F
+  d0 : F
+  d1 : F
+  z13A : F
+  z13C : F
+deriving ProvableStruct
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ ak := default, nk := default, a := default, b := default, c := default, d := default,
+     b0 := default, b1 := default, b2 := default, d0 := default, d1 := default,
+     z13A := default, z13C := default }⟩
+
+/-- A `CopyCheck` running-sum decomposition telescopes: from `zs[0] = element` and the
+per-step `zs[i] = 2^K·zs[i+1] + word` facts (each `word < 2^K`), the head and tail cells
+satisfy `zs[0] = lo + 2^(K·n)·zs[n]` with `lo < 2^(K·n)`. -/
+private theorem copyCheck_telescope {n : ℕ} (zs : Vector Fp (n + 1))
+    (hstep : ∀ i : Fin n, ∃ word : ℕ, word < 2 ^ K ∧
+      zs[i.val]'(Nat.lt_succ_of_lt i.isLt) =
+        2 ^ K * zs[i.val + 1]'(Nat.succ_lt_succ i.isLt) + (word : Fp)) :
+    ∃ lo : ℕ, lo < 2 ^ (K * n) ∧
+      zs[0]'(Nat.succ_pos n) =
+        ((lo : ℕ) : Fp) + ((2 ^ (K * n) : ℕ) : Fp) * zs[n]'(Nat.lt_succ_self n) := by
+  have hz : ∀ i, i < n → ∃ w : ℕ, w < 2 ^ K ∧
+      (fun j => if hj : j < n + 1 then zs[j]'hj else 0) i =
+        ((w : ℕ) : Fp) + ((2 ^ K : ℕ) : Fp) *
+          (fun j => if hj : j < n + 1 then zs[j]'hj else 0) (i + 1) := by
+    intro i hi
+    obtain ⟨word, hword, heq⟩ := hstep ⟨i, hi⟩
+    refine ⟨word, hword, ?_⟩
+    simp only [dif_pos (Nat.lt_succ_of_lt hi), dif_pos (Nat.succ_lt_succ hi)]
+    push_cast
+    rw [heq]; ring
+  obtain ⟨lo, hlo, hz0⟩ := running_sum_telescope K
+    (fun j => if hj : j < n + 1 then zs[j]'hj else 0) n hz
+  refine ⟨lo, hlo, ?_⟩
+  simp only [dif_pos (Nat.succ_pos n), dif_pos (Nat.lt_succ_self n)] at hz0
+  push_cast at hz0 ⊢
+  convert hz0 using 2
+
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  -- a' = a + 2^130 - t_P, decomposed by the 13-word `CopyCheck` (`z₀ <== a'` wires the
+  -- shift into the running-sum column, matching halo2's `witness_check(a_prime, …)`).
+  let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13
+    (input.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
+  let b2cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14
+    (input.b2 + Expression.const ((2 ^ 5 : ℕ) : Fp) * input.c +
+      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
+  -- The two canonicity guards `b_1 · z13_a_prime = 0` and `d_1 · z14_b2_c_prime = 0`.
+  -- Halo2 enables these as part of the `q_commit_ivk` gate; the `Gate` assertion (below)
+  -- re-checks them, but it also *assumes* the equivalent `b_1 = 1 → z13_a_prime = 0`
+  -- implications, which are only soundly available to the entry from these constraints.
+  assertZero (input.b1 * aPrimeZs[13])
+  assertZero (input.d1 * b2cPrimeZs[14])
+  Gate.circuit
+    { ak := input.ak, nk := input.nk, a := input.a, bWhole := input.b, c := input.c,
+      dWhole := input.d, b0 := input.b0, b1 := input.b1, b2 := input.b2,
+      d0 := input.d0, d1 := input.d1, z13A := input.z13A, z13C := input.z13C,
+      aPrime := aPrimeZs[0], b2CPrime := b2cPrimeZs[0],
+      z13APrime := aPrimeZs[13], z14B2CPrime := b2cPrimeZs[14] }
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+/-- Rely-conditions provided by the surrounding entry: the short pieces are range-checked,
+`b`/`d` are the witnessed sub-piece recombinations, and `z13A`/`z13C` are the fully-decomposed
+Sinsemilla running-sum tails of `a`/`c` (canonical because the hash range-checks every word). -/
+def Assumptions (input : Input Fp) : Prop :=
+  input.a.val < 2 ^ 250 ∧
+    input.b0.val < 2 ^ 4 ∧
+    input.b2.val < 2 ^ 5 ∧
+    input.c.val < 2 ^ 240 ∧
+    input.d0.val < 2 ^ 9 ∧
+    input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp) ∧
+    input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp)
+
+/-- The canonical-decomposition payoff (= `Gate.Spec` spelled over the `Canonicity` cells):
+the sub-pieces are the canonical little-endian bit slices of `ak`/`nk`. -/
+def Spec (input : Input Fp) : Prop :=
+  input.a = ((bitrange input.ak.val 0 250 : ℕ) : Fp) ∧
+    input.b0 = ((bitrange input.ak.val 250 4 : ℕ) : Fp) ∧
+    input.b1 = ((bitrange input.ak.val 254 1 : ℕ) : Fp) ∧
+    input.b2 = ((bitrange input.nk.val 0 5 : ℕ) : Fp) ∧
+    input.c = ((bitrange input.nk.val 5 240 : ℕ) : Fp) ∧
+    input.d0 = ((bitrange input.nk.val 245 9 : ℕ) : Fp) ∧
+    input.d1 = ((bitrange input.nk.val 254 1 : ℕ) : Fp) ∧
+    input.b = input.b0 + input.b1 * 16 + input.b2 * 32 ∧
+    input.d = input.d0 + input.d1 * 512
+
+theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
+  circuit_proof_start [main, Assumptions, Spec,
+    Utilities.LookupRangeCheck.CopyCheck.circuit, Gate.circuit]
+  obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, hz13A, hz13C⟩ := h_assumptions
+  obtain ⟨hCopyA, hCopyB, hbz, hdz, hGate⟩ := h_holds
+  -- name the two `CopyCheck` output vectors and their head/step facts
+  simp only [Utilities.LookupRangeCheck.CopyCheck.Spec] at hCopyA hCopyB
+  obtain ⟨ha0, hastep⟩ := hCopyA
+  obtain ⟨hb0', hbstep⟩ := hCopyB
+  -- telescope decompositions over the two `CopyCheck` output vectors (inferred from the steps)
+  obtain ⟨loA, hloA, hdecA⟩ := copyCheck_telescope _ hastep
+  obtain ⟨loB, hloB, hdecB⟩ := copyCheck_telescope _ hbstep
+  -- the gate reads the same head/tail cells; align spellings to `Vector.map`/`getElem`
+  simp only [Vector.getElem_map, Vector.getElem_cast] at ha0 hb0' hdecA hdecB hbz hdz
+  -- apply the gate: build its 13 assumptions, get the canonical-slice spec
+  apply hGate
+  simp only [Gate.Assumptions]
+  refine ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, ?_, hz13A, ⟨loA, hloA, ?_⟩, ?_, ?_, hz13C,
+    ⟨loB, hloB, ?_⟩, ?_⟩
+  · -- aPrime = a + 2^130 - tP
+    rw [ha0]; push_cast; ring
+  · -- aPrime = loA + 2^130 · z13APrime
+    rw [show (K : ℕ) * 13 = 130 from by norm_num [K]] at hdecA
+    convert hdecA using 2
+  · -- b1 = 1 → z13APrime = 0
+    intro h1
+    rcases mul_eq_zero.mp hbz with h | h
+    · exact absurd (h1 ▸ h) one_ne_zero
+    · exact h
+  · -- b2cPrime = b2 + c·2^5 + 2^140 - tP
+    rw [hb0']; push_cast; ring
+  · -- b2cPrime = loB + 2^140 · z14B2CPrime
+    rw [show (K : ℕ) * 14 = 140 from by norm_num [K]] at hdecB
+    convert hdecB using 2
+  · -- d1 = 1 → z14B2CPrime = 0
+    intro h1
+    rcases mul_eq_zero.mp hdz with h | h
+    · exact absurd (h1 ▸ h) one_ne_zero
+    · exact h
+
+/-- A shifted canonicity cell `lo + 2^k - t_P` with `lo < t_P` (and `130 ≤ k`) is `< 2^k`, so
+its `k`-bit running-sum tail vanishes. -/
+private theorem shifted_high_zero {lo : Fp} {k : ℕ} (hk : 130 ≤ k) (hk254 : k ≤ 254)
+    (hlo : lo.val < tPNat) :
+    (lo + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val / 2 ^ k = 0 := by
+  have htp : tPNat < 2 ^ k :=
+    lt_of_lt_of_le (by norm_num [tPNat] : tPNat < 2 ^ 130) (Nat.pow_le_pow_right (by norm_num) hk)
+  have hp := pallasBaseCard_eq
+  have hPk : (2 : ℕ) ^ k ≤ 2 ^ 254 := Nat.pow_le_pow_right (by norm_num) hk254
+  have hval : (lo + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val = lo.val + 2 ^ k - tPNat :=
+    val_shift k (by omega) (by omega)
+  rw [hval, Nat.div_eq_of_lt (by omega)]
+
+/-- A `.val` splits as low + `2^k` · high (over the natural-number value, cast to `Fp`). -/
+private theorem val_decomp (v k : ℕ) :
+    ((v : ℕ) : Fp) = ((v % 2 ^ k : ℕ) : Fp) + ((2 ^ k : ℕ) : Fp) * ((v / 2 ^ k : ℕ) : Fp) := by
+  have h : v % 2 ^ k + 2 ^ k * (v / 2 ^ k) = v := Nat.mod_add_div v (2 ^ k)
+  have hc := congrArg (Nat.cast (R := Fp)) h
+  rw [Nat.cast_add, Nat.cast_mul] at hc
+  exact hc.symm
+
+theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
+  circuit_proof_start [main, Assumptions, Spec,
+    Utilities.LookupRangeCheck.CopyCheck.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Gate.circuit, Gate.Assumptions, Gate.Spec]
+  obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, hz13A, hz13C⟩ := h_assumptions
+  obtain ⟨ha_eq, hb0_eq, hb1_eq, hb2_eq, hc_eq, hd0_eq, hd1_eq, hbWs, hdWs⟩ := h_spec
+  obtain ⟨⟨-, hCopyA⟩, ⟨-, hCopyB⟩⟩ := h_env
+  have hak : input_ak.val < PALLAS_BASE_CARD := ZMod.val_lt _
+  have hnk : input_nk.val < PALLAS_BASE_CARD := ZMod.val_lt _
+  -- canonical low parts
+  have hav : input_a.val = bitrange input_ak.val 0 250 := by
+    rw [ha_eq]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 250) (by norm_num [PALLAS_BASE_CARD]))
+  -- the low 245-bit `nk` part `b2 + c·2^5` equals `bitrange nk 0 245`
+  have hb2c_val : (input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c).val = bitrange input_nk.val 0 245 := by
+    have hcast : input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c
+        = ((bitrange input_nk.val 0 245 : ℕ) : Fp) := by
+      rw [hb2_eq, hc_eq, Orchard.Specs.bitrange_add input_nk.val 0 5 240]; push_cast; ring
+    rw [hcast, ZMod.val_natCast_of_lt
+      (lt_trans (bitrange_lt _ 0 245) (by norm_num [PALLAS_BASE_CARD]))]
+  -- `aPrime`/`b2cPrime` values, and the running-sum tail cells (13th of `a'`, 14th of `b2c'`)
+  set aP : Fp := input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP with haP_def
+  set bP : Fp := input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP with hbP_def
+  have hcellA0 := hCopyA ⟨0, by norm_num⟩
+  have hcellA13 := hCopyA ⟨13, by norm_num⟩
+  have hcellB0 := hCopyB ⟨0, by norm_num⟩
+  have hcellB14 := hCopyB ⟨14, by norm_num⟩
+  simp only [show (K : ℕ) * 0 = 0 from by norm_num, show (K : ℕ) * 13 = 130 from by norm_num [K],
+    show (K : ℕ) * 14 = 140 from by norm_num [K], pow_zero, Nat.div_one]
+    at hcellA0 hcellA13 hcellB0 hcellB14
+  -- normalize the elements to the `aP`/`bP` spellings
+  rw [show input_a + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP = aP from by rw [haP_def]; ring] at hcellA0 hcellA13
+  rw [show input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -Ecc.tP = bP from by
+    rw [hbP_def]; ring] at hcellB0 hcellB14
+  -- `b_1 = 1 → a'.val / 2^130 = 0`
+  have hImplA : input_b1 = 1 → ((input_a.val / 2 ^ 130 : ℕ) : Fp) = 0 ∧
+      ((aP.val / 2 ^ 130 : ℕ) : Fp) = 0 := by
+    intro h1
+    have hbr : bitrange input_ak.val 254 1 = 1 := by
+      have hlt := bitrange_lt input_ak.val 254 1
+      rcases (by omega : bitrange input_ak.val 254 1 = 0 ∨ bitrange input_ak.val 254 1 = 1) with h | h
+      · rw [hb1_eq, h] at h1; norm_num at h1
+      · exact h
+    obtain ⟨_, hlo, _⟩ := high_bit_canonical hak hbr
+    refine ⟨?_, ?_⟩
+    · rw [hav]
+      rw [Orchard.Action.NoteCommit.bitrange_low_div input_ak.val 130 120,
+        Orchard.Action.NoteCommit.high_bit_high_zero hak hbr (by norm_num) (by norm_num)]
+      simp
+    · rw [haP_def, shifted_high_zero (by norm_num) (by norm_num) (hav ▸ hlo)]; simp
+  -- `d_1 = 1 → b2c'.val / 2^140 = 0`
+  have hImplB : input_d1 = 1 → ((bP.val / 2 ^ 140 : ℕ) : Fp) = 0 := by
+    intro h1
+    have hbr : bitrange input_nk.val 254 1 = 1 := by
+      have hlt := bitrange_lt input_nk.val 254 1
+      rcases (by omega : bitrange input_nk.val 254 1 = 0 ∨ bitrange input_nk.val 254 1 = 1) with h | h
+      · rw [hd1_eq, h] at h1; norm_num at h1
+      · exact h
+    obtain ⟨_, hlo, _⟩ := high_bit_canonical hnk hbr
+    have hlo245 : bitrange input_nk.val 0 245 < tPNat := by
+      have hle : bitrange input_nk.val 0 245 ≤ bitrange input_nk.val 0 250 := by
+        simp only [bitrange, pow_zero, Nat.div_one]
+        calc input_nk.val % 2 ^ 245 = input_nk.val % 2 ^ 250 % 2 ^ 245 := by
+              rw [Nat.mod_mod_of_dvd _ (by norm_num [pow_dvd_pow])]
+          _ ≤ input_nk.val % 2 ^ 250 := Nat.mod_le _ _
+      omega
+    rw [hbP_def]
+    rw [shifted_high_zero (by norm_num) (by norm_num) (hb2c_val ▸ hlo245)]; simp
+  -- the canonical single bits `b_1`, `d_1` are `0` or `1`
+  have hb1cases : input_b1 = 0 ∨ input_b1 = 1 := by
+    have hlt := bitrange_lt input_ak.val 254 1
+    rcases (by omega : bitrange input_ak.val 254 1 = 0 ∨ bitrange input_ak.val 254 1 = 1) with h | h
+    · left; rw [hb1_eq, h]; simp
+    · right; rw [hb1_eq, h]; simp
+  have hd1cases : input_d1 = 0 ∨ input_d1 = 1 := by
+    have hlt := bitrange_lt input_nk.val 254 1
+    rcases (by omega : bitrange input_nk.val 254 1 = 0 ∨ bitrange input_nk.val 254 1 = 1) with h | h
+    · left; rw [hd1_eq, h]; simp
+    · right; rw [hd1_eq, h]; simp
+  -- assemble: discharge each gate-assumption / guard conjunct, rewriting cells as needed
+  refine ⟨?_, ?_, ?_⟩
+  · -- b1 · (a'[13]) = 0
+    rw [hcellA13]
+    rcases hb1cases with h | h
+    · rw [h]; ring
+    · rw [(hImplA h).2]; ring
+  · -- d1 · (b2c'[14]) = 0
+    rw [hcellB14]
+    rcases hd1cases with h | h
+    · rw [h]; ring
+    · rw [hImplB h]; ring
+  -- the gate prover-assumption is `Gate.Assumptions ∧ Gate.Spec`; the spec part is `h_spec`
+  refine ⟨⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, ?_, hz13A, ?_, ?_, ?_, hz13C, ?_, ?_⟩,
+    ha_eq, hb0_eq, hb1_eq, hb2_eq, hc_eq, hd0_eq, hd1_eq, hbWs, hdWs⟩
+  · -- aPrime = aP  (a + 2^130 - t_P)
+    rw [hcellA0]; exact ZMod.natCast_rightInverse aP
+  · -- ∃ lo < 2^130, aP = lo + 2^130 · (aP.val/2^130)
+    rw [hcellA0, hcellA13]
+    refine ⟨aP.val % 2 ^ 130, Nat.mod_lt _ (Nat.two_pow_pos 130), ?_⟩; exact val_decomp aP.val 130
+  · -- b1 = 1 → a'[13] = 0
+    intro h1; rw [hcellA13, (hImplA h1).2]
+  · -- b2cPrime = b2 + c·2^5 + 2^140 - t_P
+    rw [hcellB0, ZMod.natCast_rightInverse bP, hbP_def]; ring
+  · -- ∃ lo < 2^140, bP = lo + 2^140 · (bP.val/2^140)
+    rw [hcellB0, hcellB14]
+    refine ⟨bP.val % 2 ^ 140, Nat.mod_lt _ (Nat.two_pow_pos 140), ?_⟩; exact val_decomp bP.val 140
+  · -- d1 = 1 → b2c'[14] = 0
+    intro h1; rw [hcellB14, hImplB h1]
+
+def circuit : FormalAssertion Fp Input where
+  main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
+
+end Canonicity
+
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let ak := input.ak
@@ -79,21 +397,10 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
   let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
 
-  -- ak canonicity: decompose the low 130 bits of a' = a + 2^130 - t_P.
-  let aPrime ← witnessField fun env => env a + (2 ^ 130 : Fp) - Ecc.tP
-  let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 aPrime
-
-  -- nk canonicity: decompose the low 140 bits of b2c' = b_2 + c * 2^5 + 2^140 - t_P.
-  let b2cPrime ← witnessField fun env =>
-    env b2 + (2 ^ 5 : Fp) * env c + (2 ^ 140 : Fp) - Ecc.tP
-  let b2cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 b2cPrime
-
-  Gate.circuit
-    { ak, nk, a, bWhole := b, c, dWhole := d,
-      b0, b1, b2, d0, d1,
-      z13A := z13a, z13C := z13c,
-      aPrime := aPrimeZs[0], b2CPrime := b2cPrimeZs[0],
-      z13APrime := aPrimeZs[13], z14B2CPrime := b2cPrimeZs[14] }
+  -- ak/nk canonicity: the two `CopyCheck` decompositions and the canonicity gate, factored
+  -- into the virtual `Canonicity` subcircuit.
+  Canonicity.circuit
+    { ak, nk, a, b, c, d, b0, b1, b2, d0, d1, z13A := z13a, z13C := z13c }
   return ivk
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
@@ -136,21 +443,17 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
     (input : ProverValue Input Fp) (ivk : Fp) (_ : ProverHint Fp) : Prop :=
   ProverCommitIvkRelation G Q R input ivk
 
--- TODO(commit-ivk-proofs): the supporting theory is complete and committed; only the entry
--- integration remains. Available, proven building blocks:
---  * the chunk bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`
---    (`CommitIvkChunks.lean`): canonical indexed piece values → `chunks = commitIvkChunks`;
---  * the lifted `Gate.circuit` (entry-provable decomposition-form Assumptions) → canonical
---    bit slices `a = bitrange ak 0 250`, …, which are exactly those indexed piece values;
---  * generic `Specs.Sinsemilla.sum_suffix_div` (ZsFacts cell `z13A = a.val/2^130`) and
---    `running_sum_telescope` (CopyCheck decomposition `∃ lo<2^130, aPrime = lo + 2^130·z`).
--- The remaining step is the glue: provide the gate Assumptions from the WithZs `ZsFacts`,
--- the `CopyCheck` running sums and `WitnessShort` ranges, invoke `Gate.soundness`, and
--- thread the hash relation. NOTE: a one-shot `circuit_proof_start` over the whole entry
--- whnf-times-out (too many composed subcircuits); per `doc/performance-problems.md` the
--- entry must first be FACTORED INTO SUBCIRCUITS (a `Commit` part doing WithZs + piece
--- witnessing, and a `Canonicity` part doing the CopyCheck decompositions + gate), each with
--- its own kernel-checked soundness/completeness.
+-- TODO(commit-ivk-proofs): the `Canonicity` subcircuit (CopyCheck decompositions + gate) is
+-- fully proven (soundness + completeness, kernel-checked). The two remaining `sorry`s are the
+-- top-level composition of `WithZs` (the Sinsemilla hash) with `Canonicity`: the glue must
+-- (1) read the `WithZs` `PieceChunks`/`ZsFacts` and `WitnessShort` ranges, (2) feed them as
+-- the `Canonicity.Assumptions` (notably `z13A = a.val/2^130` from `ZsFacts` + `sum_suffix_div`),
+-- (3) turn `Canonicity.Spec` into indexed piece values and apply the chunk bridge
+-- `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values` to get `chunks = commitIvkChunks`,
+-- and (4) thread `WithZs`'s hash relation to the entry output `ivk = out.point.x`. A one-shot
+-- `circuit_proof_start` whnf-times-out; the working start is `circuit_proof_start_core` then
+-- `dsimp only [main, circuit_norm] at h_holds`, projecting each child spec separately (see
+-- `doc/performance-problems.md`). This mirrors `NoteCommit.CommitAndConstrain`, also unfinished.
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
