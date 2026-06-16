@@ -70,6 +70,20 @@ private theorem sum_digits_lt {Kb : ℕ} {d : ℕ → ℕ} (hd : ∀ j, d j < 2 
         _ = 2 ^ (Kb * m) * 2 ^ Kb := by ring
     omega
 
+private theorem sum_digits_split (Kb r n : ℕ) (hr : r ≤ n) (d : ℕ → ℕ) :
+    ∑ j ∈ Finset.range n, d j * 2 ^ (Kb * j) =
+      (∑ j ∈ Finset.range r, d j * 2 ^ (Kb * j)) +
+        2 ^ (Kb * r) *
+          ∑ j ∈ Finset.range (n - r), d (r + j) * 2 ^ (Kb * j) := by
+  rw [show n = r + (n - r) by omega, Finset.sum_range_add]
+  congr 1
+  rw [Finset.mul_sum]
+  rw [show r + (n - r) - r = n - r by omega]
+  apply Finset.sum_congr rfl
+  intro j _hj
+  rw [show Kb * (r + j) = Kb * r + Kb * j by ring, pow_add]
+  ring
+
 private theorem digit_of_sum (Kb : ℕ) :
     ∀ (i n : ℕ) (d : ℕ → ℕ), (∀ j, d j < 2 ^ Kb) → i < n →
       (∑ j ∈ Finset.range n, d j * 2 ^ (Kb * j)) / 2 ^ (Kb * i) % 2 ^ Kb = d i := by
@@ -1027,6 +1041,69 @@ private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
   rw [hpiece, ZMod.val_natCast_of_lt (lt_trans hsumLt hpow)]
   exact hsumLt
 
+private theorem pieceChunks_head_val_lt_of_z_zero {n r : ℕ} {rest : List ℕ}
+    {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
+    (hr : r < n + 1)
+    (hpowLow : 2 ^ (K * r) < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hpowHigh : 2 ^ (K * (n + 1 - r)) <
+      CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts (n :: rest) chunks zs)
+    (hz : (HVec.head zs)[r]'hr = 0) :
+    (pieces[0]).val < 2 ^ (K * r) := by
+  simp only [Orchard.Sinsemilla.Chain.PieceChunks] at hPC
+  obtain ⟨ms, hms, hpiece, tailChunks, hchunks, _hPCtail⟩ := hPC
+  let low : ℕ := ∑ j ∈ Finset.range r, ms j * 2 ^ (K * j)
+  let high : ℕ := ∑ j ∈ Finset.range (n + 1 - r), ms (r + j) * 2 ^ (K * j)
+  have hhighCast :
+      (high : Ecc.Fp) = 0 := by
+    have hz' := zsFacts_head_get hZs ⟨r, hr⟩
+    simp only at hz'
+    have hzFin : (HVec.head zs)[r]'hr = 0 := by
+      exact hz
+    have hz'' : (HVec.head zs)[r]'hr =
+        ((∑ j ∈ Finset.range (n + 1 - r),
+          chunks.getD (r + j) 0 * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+      exact hz'
+    rw [hz''] at hzFin
+    have hsum :
+        (∑ j ∈ Finset.range (n + 1 - r),
+          chunks.getD (r + j) 0 * 2 ^ (K * j)) = high := by
+      rw [hchunks]
+      dsimp only [high]
+      apply Finset.sum_congr rfl
+      intro j hj
+      have hj' : r + j < n + 1 := by
+        simp only [Finset.mem_range] at hj
+        omega
+      rw [Orchard.Sinsemilla.Chain.chunks_head_getD ms tailChunks (r + j) hj']
+    rw [← hsum]
+    simpa only [Orchard.Specs.Sinsemilla.K, K] using hzFin
+  have hhighLt : high < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    dsimp only [high]
+    exact lt_trans (sum_digits_lt (fun j => hms (r + j)) (n + 1 - r)) hpowHigh
+  have hhighZero : high = 0 := by
+    exact Nat.eq_zero_of_dvd_of_lt ((ZMod.natCast_eq_zero_iff _ _).mp hhighCast) hhighLt
+  have hlowLt : low < 2 ^ (K * r) := by
+    dsimp only [low]
+    exact sum_digits_lt hms r
+  have hpieceLow :
+      pieces[0] = (low : Ecc.Fp) := by
+    have hsplit := sum_digits_split K r (n + 1) (by omega) ms
+    have hpieceK :
+        pieces[0] = ((∑ j ∈ Finset.range (n + 1), ms j * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+      simpa only [Orchard.Specs.Sinsemilla.K, K] using hpiece
+    have hsplitLow :
+        (∑ j ∈ Finset.range (n + 1), ms j * 2 ^ (K * j)) = low := by
+      rw [hsplit]
+      change (∑ j ∈ Finset.range r, ms j * 2 ^ (K * j)) +
+          2 ^ (K * r) * high = low
+      rw [hhighZero, mul_zero, Nat.add_zero]
+    rw [hpieceK, hsplitLow]
+  rw [hpieceLow, ZMod.val_natCast_of_lt (lt_trans hlowLt hpowLow)]
+  exact hlowLt
+
 private theorem pieceChunks_large_piece_bounds
     {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks) :
@@ -1052,6 +1129,32 @@ private theorem pieceChunks_large_piece_bounds
   have hG := pieceChunks_head_val_lt (n := 24) (rest := [0])
     two_pow_K_mul_25_lt_p hPC6
   exact ⟨hA, hC, hD, hF, hG⟩
+
+private theorem pieceChunks_f_val_lt_of_z13_zero
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
+    (hz13f :
+      (HVec.head (HVec.tail (HVec.tail (HVec.tail (HVec.tail (HVec.tail zs))))))[13]'(by decide)
+        = 0) :
+    (pieces.tail.tail.tail.tail.tail[0]).val < 2 ^ (K * 13) := by
+  have hPC1 := pieceChunks_tail_drop hPC
+  have hZs1 := zsFacts_tail hZs
+  have hPC2 := pieceChunks_tail_drop hPC1
+  have hZs2 := zsFacts_tail hZs1
+  have hPC3 := pieceChunks_tail_drop hPC2
+  have hZs3 := zsFacts_tail hZs2
+  have hPC4 := pieceChunks_tail_drop hPC3
+  have hZs4 := zsFacts_tail hZs3
+  have hPC5 := pieceChunks_tail_drop hPC4
+  have hZs5 := zsFacts_tail hZs4
+  exact pieceChunks_head_val_lt_of_z_zero
+    (n := 24) (r := 13) (rest := [24, 0])
+    (hr := by norm_num)
+    (hpowLow := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    (hpowHigh := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    hPC5 hZs5 hz13f
 
 private theorem z1_head_val_lt {n : ℕ} {rest : List ℕ}
     {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
