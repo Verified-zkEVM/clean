@@ -111,6 +111,23 @@ subcircuit. Do not inline a child gadget by calling `Child.main input` from a pa
 circuit. Inlining defeats Clean's subcircuit proof structure and forces parent proofs to
 trace through every nested child operation.
 
+A plain `Circuit` definition is not a proof boundary. If a circuit fragment is intended
+to be reasoned about independently, kept opaque in a parent proof, or exposed through
+helper theorems about its behavior, it must be packaged as a `FormalCircuit`,
+`GeneralFormalCircuit.WithHint`, or `FormalAssertion` with a semantic spec. This is what
+Clean's subcircuit mechanism is for.
+
+Do not define standalone helper circuits, mark them opaque/no-unfold, add
+`localLength`/`output` infrastructure, and then prove external facts about their
+`ConstraintsHold` trace. That reinvents the subcircuit mechanism and produces brittle
+parent proofs.
+
+Use this rule:
+- Bundle it if it is a proof boundary.
+- Inline it if it is not a proof boundary.
+- Never leave it in the middle as an unbundled `Circuit` that parent proofs are expected
+  to treat abstractly.
+
 ### ElaboratedCircuit and `elaborate_circuit`
 
 FormalCircuit and variants carry an instance of `ElaboratedCircuit`, which exposes
@@ -141,6 +158,42 @@ Do not pass the current circuit's `main`, `Spec`, or `Assumptions` to
 `circuit_proof_start`; the tactic unfolds them automatically. Use the argument list for
 helper definitions, child circuit specs, theorem names, or extra simp facts needed after
 setup.
+
+For soundness/completeness work, start from the actual `soundness` or `completeness`
+theorem before building helper lemmas. Run `circuit_proof_start` on that theorem and let
+the generated proof state determine what facts are needed.
+
+Do not begin by manually unpacking `ConstraintsHold.Soundness`, `Operations.Requirements`,
+`Circuit.bind_forAllNoOffset`, offsets, or nested tuple projections into helper lemmas.
+If those facts are needed repeatedly, that usually means a circuit fragment should either
+be a bundled subcircuit with a semantic spec, or should be inlined into the parent proof.
+
+Helper lemmas should be reserved for real mathematical arguments: arithmetic bounds,
+bit decomposition facts, chunk tiling, field/natural-number conversions, algebraic
+canonicity arguments, etc. Do not add helper lemmas that only:
+- unpack Clean circuit traces,
+- restate a child circuit's spec from `ConstraintsHold`,
+- wrap one or two existing lemmas,
+- close by a short `simp`/`rw`/`exact` script,
+- name local offsets or output cells solely to avoid unfolding.
+
+Inline those in the proof instead.
+
+Bad pattern:
+
+```lean
+def phase : Circuit F Output := do
+  ...
+
+@[circuit_norm] theorem phase_localLength ...
+
+theorem phase_some_fact_of_soundness
+    (h : ConstraintsHold.Soundness env ((phase input).operations offset)) : ...
+```
+
+If `phase_some_fact_of_soundness` is important, `phase` should be a bundled circuit with
+that fact in its `Spec`. If it is not important enough to spec, inline `phase` in the
+parent proof.
 
 ### Key Simp Sets
 
