@@ -1644,6 +1644,31 @@ theorem main_pieceChunks_digits_of_soundness (G : Generators) (Q : SWPoint Palla
   exact ⟨chunks, msA, msB, msC, msD, msE, msF, msG, msH, hPC,
     hA, hB, hC, hD, hE, hF, hG, hH, hchunks⟩
 
+theorem main_pieceChunks_flat_chunks_of_soundness (G : Generators)
+    (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    ∃ chunks : List ℕ,
+    ∃ msA msB msC msD msE msF msG msH : ℕ → ℕ,
+      (∀ r, msA r < 2 ^ K) ∧ (∀ r, msB r < 2 ^ K) ∧
+      (∀ r, msC r < 2 ^ K) ∧ (∀ r, msD r < 2 ^ K) ∧
+      (∀ r, msE r < 2 ^ K) ∧ (∀ r, msF r < 2 ^ K) ∧
+      (∀ r, msG r < 2 ^ K) ∧ (∀ r, msH r < 2 ^ K) ∧
+      chunks =
+        (List.range 25).map msA ++
+        (List.range 1).map msB ++
+        (List.range 25).map msC ++
+        (List.range 6).map msD ++
+        (List.range 1).map msE ++
+        (List.range 25).map msF ++
+        (List.range 25).map msG ++
+        (List.range 1).map msH := by
+  obtain ⟨chunks, msA, msB, msC, msD, msE, msF, msG, msH, _hPC,
+    hA, hB, hC, hD, hE, hF, hG, hH, hchunks⟩ :=
+    main_pieceChunks_digits_of_soundness G Q hQ R env input offset h
+  exact ⟨chunks, msA, msB, msC, msD, msE, msF, msG, msH,
+    hA, hB, hC, hD, hE, hF, hG, hH, hchunks⟩
+
 theorem main_assignMessageCells_short_range_specs (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
     (input : Var Input Ecc.Fp) (offset : ℕ)
