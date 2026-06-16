@@ -712,6 +712,78 @@ private theorem e0_eq_value_high_bits {value d2 d3 e0 : Ecc.Fp}
   norm_num [K] at hd2 hd3 he0 ⊢
   omega
 
+private theorem lsb_eq_y_low_bit_of_parts {y lsb k0 k2 k3 j z1J : Ecc.Fp}
+    (hlsb : NoteCommit.IsBool lsb) (hk0 : k0.val < 2 ^ 9) (hk2 : k2.val < 2 ^ 4)
+    (hz1J : z1J.val < 2 ^ (K * 24)) (hk3 : NoteCommit.IsBool k3)
+    (hj : j = lsb + k0 * 2 + z1J * 1024)
+    (hy : y = j + k2 * OfNat.ofNat (2 ^ 250) + k3 * OfNat.ofNat (2 ^ 254))
+    (hk2Zero : k3 = 0 ∨ k2 = 0)
+    (hjLtTP : k3 = 1 → j.val < tPNat) :
+    lsb = ((y.val % 2 : ℕ) : Ecc.Fp) := by
+  have hlsbLt := isBool_val_lt_two hlsb
+  have hsumLt : lsb.val + k0.val * 2 + z1J.val * 1024 < 2 ^ 250 := by
+    norm_num [K] at hlsbLt hk0 hz1J ⊢
+    omega
+  have hsumCard :
+      lsb.val + k0.val * 2 + z1J.val * 1024 <
+        CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_trans hsumLt (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  have hjField :
+      lsb + k0 * 2 + z1J * 1024 =
+        ((lsb.val + k0.val * 2 + z1J.val * 1024 : ℕ) : Ecc.Fp) := by
+    rw [← ZMod.natCast_zmod_val lsb, ← ZMod.natCast_zmod_val k0,
+      ← ZMod.natCast_zmod_val z1J]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt lsb),
+      ZMod.val_natCast_of_lt (ZMod.val_lt k0), ZMod.val_natCast_of_lt (ZMod.val_lt z1J)]
+  have hjVal : j.val = lsb.val + k0.val * 2 + z1J.val * 1024 := by
+    rw [hj, hjField, ZMod.val_natCast_of_lt hsumCard]
+  have hjMod : j.val % 2 = lsb.val := by
+    rw [hjVal]
+    norm_num at hlsbLt ⊢
+    omega
+  rcases hk3 with hk3Zero | hk3One
+  · have hpackedLt :
+        j.val + k2.val * 2 ^ 250 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      rw [hjVal]
+      norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at hlsbLt hk0 hk2 hz1J ⊢
+      omega
+    have hyVal : y.val = j.val + k2.val * 2 ^ 250 := by
+      have hyCast : y = ((j.val + k2.val * 2 ^ 250 : ℕ) : Ecc.Fp) := by
+        rw [hy, hk3Zero, zero_mul, _root_.add_zero]
+        rw [← ZMod.natCast_zmod_val j, ← ZMod.natCast_zmod_val k2]
+        push_cast
+        rw [ZMod.val_natCast_of_lt (ZMod.val_lt j), ZMod.val_natCast_of_lt (ZMod.val_lt k2)]
+      rw [hyCast, ZMod.val_natCast_of_lt hpackedLt]
+    rw [← ZMod.natCast_zmod_val lsb]
+    congr
+    rw [hyVal]
+    rw [show k2.val * 2 ^ 250 = 2 * (k2.val * 2 ^ 249) by ring]
+    rw [Nat.add_mul_mod_self_left]
+    exact hjMod.symm
+  · have hk2Zero' : k2 = 0 := by
+      rcases hk2Zero with hk2Zero | hk2Zero
+      · exfalso
+        exact zero_ne_one (by rw [← hk2Zero, hk3One])
+      · exact hk2Zero
+    have hpackedLt :
+        j.val + 2 ^ 254 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      have hjSmall := hjLtTP hk3One
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hjSmall ⊢
+      omega
+    have hyVal : y.val = j.val + 2 ^ 254 := by
+      have hyCast : y = ((j.val + 2 ^ 254 : ℕ) : Ecc.Fp) := by
+        rw [hy, hk2Zero', hk3One, zero_mul, one_mul]
+        rw [_root_.add_zero, ← ZMod.natCast_zmod_val j]
+        norm_num
+      rw [hyCast, ZMod.val_natCast_of_lt hpackedLt]
+    rw [← ZMod.natCast_zmod_val lsb]
+    congr
+    rw [hyVal]
+    rw [show (2 : ℕ) ^ 254 = 2 * 2 ^ 253 by norm_num]
+    rw [Nat.add_mul_mod_self_left]
+    exact hjMod.symm
+
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
     Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
       Orchard.Specs.Sinsemilla.chunksOf low n := by
@@ -2181,6 +2253,81 @@ private theorem copyCheck13_zlast_zero_val_lt (env : Environment Ecc.Fp)
     dsimp only [f, zs]
     rw [dif_pos (by omega)]
     exact hzLast
+  rw [hf0, hf13, mul_zero, _root_.add_zero] at heq
+  have hCard : lo < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_trans hlo (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  rw [heq, ZMod.val_natCast_of_lt hCard]
+  exact hlo
+
+private theorem copyCheck25_z1_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
+    (element : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env
+      ((Utilities.LookupRangeCheck.CopyCheck.circuit 25 element).operations offset))
+    (hzLast : (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output element offset))[25]
+        = 0) :
+    ((eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output element offset))[1]).val <
+      2 ^ (K * 24) := by
+  let zs : fields 26 Ecc.Fp :=
+    eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output element offset)
+  let f : ℕ → Ecc.Fp := fun i => if hi : i < 25 then zs[i + 1]'(by omega) else 0
+  have hspec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 25) env element offset trivial h
+  simp only at hspec
+  rcases hspec with ⟨_hz0, hchain⟩
+  have hsteps :
+      ∀ i, i < 24 →
+        ∃ w : ℕ, w < 2 ^ K ∧ f i = 2 ^ K * f (i + 1) + (w : Ecc.Fp) := by
+    intro i hi
+    obtain ⟨w, hw, hstep⟩ := hchain ⟨i + 1, by omega⟩
+    refine ⟨w, hw, ?_⟩
+    dsimp only [f]
+    rw [dif_pos (by omega), dif_pos (by omega)]
+    exact hstep
+  obtain ⟨lo, hlo, heq⟩ := chain_telescope f 24 hsteps
+  have hf0 : f 0 = zs[1] := by
+    dsimp only [f]
+    rw [dif_pos (by omega)]
+  have hf24 : f 24 = 0 := by
+    dsimp only [f, zs]
+    rw [dif_pos (by omega)]
+    exact hzLast
+  rw [hf0, hf24, mul_zero, _root_.add_zero] at heq
+  have hCard : lo < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_trans hlo (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  rw [heq, ZMod.val_natCast_of_lt hCard]
+  exact hlo
+
+private theorem copyCheck25_z13_zero_val_lt (env : Environment Ecc.Fp)
+    (element : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env
+      ((Utilities.LookupRangeCheck.CopyCheck.circuit 25 element).operations offset))
+    (hz13 : (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output element offset))[13]
+        = 0) :
+    (show Ecc.Fp from eval env element).val < 2 ^ (K * 13) := by
+  let zs : fields 26 Ecc.Fp :=
+    eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 25).output element offset)
+  let f : ℕ → Ecc.Fp := fun i => if hi : i < 26 then zs[i]'hi else 0
+  have hspec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 25) env element offset trivial h
+  simp only at hspec
+  rcases hspec with ⟨hz0, hchain⟩
+  have hsteps :
+      ∀ i, i < 13 →
+        ∃ w : ℕ, w < 2 ^ K ∧ f i = 2 ^ K * f (i + 1) + (w : Ecc.Fp) := by
+    intro i hi
+    obtain ⟨w, hw, hstep⟩ := hchain ⟨i, by omega⟩
+    refine ⟨w, hw, ?_⟩
+    dsimp only [f]
+    rw [dif_pos (by omega), dif_pos (by omega)]
+    exact hstep
+  obtain ⟨lo, hlo, heq⟩ := chain_telescope f 13 hsteps
+  have hf0 : f 0 = (show Ecc.Fp from eval env element) := by
+    dsimp only [f, zs]
+    rw [dif_pos (by omega), hz0]
+  have hf13 : f 13 = 0 := by
+    dsimp only [f, zs]
+    rw [dif_pos (by omega)]
+    exact hz13
   rw [hf0, hf13, mul_zero, _root_.add_zero] at heq
   have hCard : lo < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
     exact lt_trans hlo (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
