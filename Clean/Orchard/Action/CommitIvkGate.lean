@@ -63,11 +63,21 @@ def Assumptions (row : Input Fp) : Prop :=
     row.c.val < 2 ^ 240 ∧
     row.d0.val < 2 ^ 9 ∧
     row.aPrime = row.a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    -- `z13A` is the Sinsemilla running sum of `a` (a full, range-checked `K`-bit
+    -- decomposition), so the exact running-sum value is soundly available.
     row.z13A = ((row.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-    row.z13APrime = ((row.aPrime.val / 2 ^ 130 : ℕ) : Fp) ∧
+    -- `z13APrime` is the `CopyCheck` (partial, 13-word) running sum of `aPrime`. The sound
+    -- fact is the decomposition `aPrime = lo + 2^130·z13APrime` with `lo < 2^130`, which
+    -- gives `z13APrime = 0 → aPrime < 2^130`. The `b1 = 1 → z13APrime = 0` implication is
+    -- supplied for the completeness direction (and is the gate's own canonicity constraint).
+    (∃ lo : ℕ, lo < 2 ^ 130 ∧
+      row.aPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13APrime) ∧
+    (row.b1 = 1 → row.z13APrime = 0) ∧
     row.b2CPrime = row.b2 + row.c * ((2 ^ 5 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
     row.z13C = ((row.c.val / 2 ^ 130 : ℕ) : Fp) ∧
-    row.z14B2CPrime = ((row.b2CPrime.val / 2 ^ 140 : ℕ) : Fp)
+    (∃ lo : ℕ, lo < 2 ^ 140 ∧
+      row.b2CPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14B2CPrime) ∧
+    (row.d1 = 1 → row.z14B2CPrime = 0)
 
 /-- The gate's payoff: `a`/`b0`/`b1` are the canonical bit slices of `ak`, `b2`/`c`/`d0`/`d1`
 are the canonical bit slices of `nk`, and the pieces `b`/`d` are the witnessed sub-piece
@@ -111,8 +121,8 @@ def circuit : FormalAssertion Fp Input where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, haPrime, hz13A, hz13APrime,
-      hb2cP, hz13C, hz14⟩ := h_assumptions
+    obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, haPrime, hz13A, hz13APrimeDec,
+      _hb1z13APrimeA, hb2cP, hz13C, hz14Dec, _hd1z14A⟩ := h_assumptions
     obtain ⟨hb1, hd1, hbW, hdW, hak, hnk, hb1b0, hb1z13A, _haPrimeC, hb1z13APrime,
       hd1d0, hd1z13C, _hb2cPC, hd1z14⟩ := h_holds
     have hp := pallasBaseCard_eq
@@ -144,10 +154,10 @@ def circuit : FormalAssertion Fp Input where
           rcases mul_eq_zero.mp hb1z13APrime with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
-        rw [hz13APrime] at hz
-        have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_aPrime)) hz
-        omega
+        obtain ⟨lo, hlo, hdec⟩ := hz13APrimeDec
+        rw [hz, mul_zero, _root_.add_zero] at hdec
+        rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
+        exact hlo
       have haPrime_val : input_aPrime.val = input_a.val + 2 ^ 130 - tPNat := by
         rw [haPrime]; exact val_shift 130 (by omega) (by omega)
       rw [hloA_val, hb0z, ZMod.val_zero]; omega
@@ -191,10 +201,10 @@ def circuit : FormalAssertion Fp Input where
             rcases mul_eq_zero.mp hd1z14 with h | h
             · exact absurd (h1 ▸ h) one_ne_zero
             · exact h
-          rw [hz14] at hz
-          have := natCast_eq_zero
-            (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_b2CPrime)) hz
-          omega
+          obtain ⟨lo, hlo, hdec⟩ := hz14Dec
+          rw [hz, mul_zero, _root_.add_zero] at hdec
+          rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
+          exact hlo
         omega
       rw [hloN_val, hd0z, ZMod.val_zero]
       rw [hloC_inner_val] at hinner_lt; omega
@@ -231,8 +241,8 @@ def circuit : FormalAssertion Fp Input where
     · linear_combination hdW
   completeness := by
     circuit_proof_start
-    obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, haPrime, hz13A, hz13APrime,
-      hb2cP, hz13C, hz14⟩ := h_assumptions
+    obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, haPrime, hz13A, _hz13APrimeDec,
+      hb1z13APrimeImpl, hb2cP, hz13C, _hz14Dec, hd1z14Impl⟩ := h_assumptions
     obtain ⟨ha_eq, hb0_eq, hb1_eq, hb2_eq, hc_eq, hd0_eq, hd1_eq, hbW, hdW⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -299,11 +309,7 @@ def circuit : FormalAssertion Fp Input where
     · -- b1·z13APrime = 0
       rcases hb1cases with h | h
       · rw [hb1_eq, h]; simp
-      · have haPrime_val : input_aPrime.val = bitrange input_ak.val 0 250 + 2 ^ 130 - tPNat := by
-          rw [haPrime, val_shift 130 (by omega) (by omega), ha_val]
-        rw [hz13APrime, haPrime_val,
-          Nat.div_eq_of_lt (high_bit_canonical (ZMod.val_lt input_ak) h).2.2]
-        simp
+      · rw [hb1z13APrimeImpl (by rw [hb1_eq, h]; norm_num)]; simp
     · -- d1·d0 = 0
       rcases hd1cases with h | h
       · rw [hd1_eq, h]; simp
@@ -321,17 +327,6 @@ def circuit : FormalAssertion Fp Input where
     · -- d1·z14B2CPrime = 0
       rcases hd1cases with h | h
       · rw [hd1_eq, h]; simp
-      · have hlo250 := (high_bit_canonical (ZMod.val_lt input_nk) h).2.1
-        have hadd245 := bitrange_add input_nk.val 0 5 240
-        have hadd250 := bitrange_add input_nk.val 0 245 5
-        have hk245 := bitrange_lt input_nk.val 245 5
-        simp only [Nat.zero_add, Nat.reduceAdd] at hadd245 hadd250
-        have hinner_lt : input_b2.val + input_c.val * 2 ^ 5 < tPNat := by
-          rw [hb2_val, hc_val]; omega
-        have hb2cP_val : input_b2CPrime.val = input_b2.val + input_c.val * 2 ^ 5 + 2 ^ 140 - tPNat := by
-          rw [hb2cP, val_shift 140 (by rw [val_limb2 5 (by omega)]; omega)
-            (by rw [val_limb2 5 (by omega)]; omega), val_limb2 5 (by omega)]
-        rw [hz14, hb2cP_val, Nat.div_eq_of_lt (by omega)]
-        simp
+      · rw [hd1z14Impl (by rw [hd1_eq, h]; norm_num)]; simp
 
 end Orchard.Action.CommitIvk.Gate
