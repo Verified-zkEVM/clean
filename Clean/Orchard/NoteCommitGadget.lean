@@ -805,6 +805,31 @@ private theorem j_lt_tP_of_prime_bounds {j jPrime : Ecc.Fp}
   norm_num [K] at hj hprimeLt ⊢
   omega
 
+private theorem y_lsb_eq_low_bit_of_row_facts {y lsb k0 k2 k3 j z1J jPrime : Ecc.Fp}
+    (hlsb : NoteCommit.IsBool lsb) (hk0 : k0.val < 2 ^ 9) (hk2 : k2.val < 2 ^ 4)
+    (hz1J : z1J.val < 2 ^ (K * 24)) (hk3 : NoteCommit.IsBool k3)
+    (hj : j = lsb + k0 * 2 + z1J * 1024)
+    (hy : y = j + k2 * OfNat.ofNat (2 ^ 250) + k3 * OfNat.ofNat (2 ^ 254))
+    (hprime : jPrime = j + OfNat.ofNat (2 ^ 130) - NoteCommit.tP)
+    (hk2Zero : k3 = 0 ∨ k2 = 0)
+    (hz13 : k3 = 0 ∨ j.val < 2 ^ (K * 13))
+    (hz13Prime : k3 = 0 ∨ jPrime.val < 2 ^ (K * 13)) :
+    lsb = ((y.val % 2 : ℕ) : Ecc.Fp) := by
+  have hjLtTP : k3 = 1 → j.val < tPNat := by
+    intro hk3One
+    have hjBound : j.val < 2 ^ (K * 13) := by
+      rcases hz13 with hz | hz
+      · exfalso
+        exact (zero_ne_one : (0 : Ecc.Fp) ≠ 1) (by rw [← hz, hk3One])
+      · exact hz
+    have hprimeBound : jPrime.val < 2 ^ (K * 13) := by
+      rcases hz13Prime with hz | hz
+      · exfalso
+        exact (zero_ne_one : (0 : Ecc.Fp) ≠ 1) (by rw [← hz, hk3One])
+      · exact hz
+    exact j_lt_tP_of_prime_bounds hjBound hprime hprimeBound
+  exact lsb_eq_y_low_bit_of_parts hlsb hk0 hk2 hz1J hk3 hj hy hk2Zero hjLtTP
+
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
     Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
       Orchard.Specs.Sinsemilla.chunksOf low n := by
@@ -2687,6 +2712,36 @@ theorem yCanonicity_z1J_copy_val_lt (env : Environment Ecc.Fp)
       (by decide) hzLastExpr
   exact copyCheck25_z1_val_lt_of_zlast_zero env j copyOffset hCopy hzLast
 
+theorem yCanonicity_z1J_val_lt (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+    let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+    let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+    let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+    let j := (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+    let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+    let zs := (Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset
+    (Expression.eval env zs[1]).val < 2 ^ (K * 24) := by
+  let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+  let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+  let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+  let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+  let j := (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+  let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+  let zs := (Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset
+  dsimp only
+  rw [ProvableType.getElem_eval_fields]
+  exact yCanonicity_z1J_copy_val_lt env y lsb offset h
+
 theorem yCanonicity_j_val_lt_of_z13_zero (env : Environment Ecc.Fp)
     (y lsb : Var field Ecc.Fp) (offset : ℕ)
     (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
@@ -2727,6 +2782,39 @@ theorem yCanonicity_j_val_lt_of_z13_zero (env : Environment Ecc.Fp)
   simp only at hSpec
   rw [hSpec.1]
   exact hJ
+
+theorem yCanonicity_j_val_lt_of_z13_zero_expr (env : Environment Ecc.Fp)
+    (y lsb : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((yCanonicity y lsb).operations offset)) :
+    let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+    let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+    let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+    let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+    let j := (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+    let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+      env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+        bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+    let zs := (Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset
+    Expression.eval env zs[13] = 0 →
+      (Expression.eval env zs[0]).val < 2 ^ (K * 13) := by
+  let k0 := (witnessShort y 1 9 (by norm_num [K])).output offset
+  let k2Offset := offset + (witnessShort y 1 9 (by norm_num [K])).localLength offset
+  let k3Offset := k2Offset + (witnessShort y 250 4 (by norm_num [K])).localLength k2Offset
+  let jOffset := k3Offset + (witnessBitrange y 254 1).localLength k3Offset
+  let j := (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).output jOffset
+  let copyOffset := jOffset + (witnessField (F := Ecc.Fp) fun env =>
+    env lsb + 2 * env k0 + (2 ^ 10 : Ecc.Fp) *
+      bitrangeSubset (Expression.eval env y) 10 240).localLength jOffset
+  let zs := (Utilities.LookupRangeCheck.CopyCheck.circuit 25).output j copyOffset
+  dsimp only
+  intro hz13
+  rw [ProvableType.getElem_eval_fields]
+  exact yCanonicity_j_val_lt_of_z13_zero env y lsb offset h
+    (eval_fields_getElem_eq_zero_of_expression_eval_getElem_eq_zero env zs 13 (by decide) hz13)
 
 theorem yCanonicity_jPrime_val_lt_of_z13_zero (env : Environment Ecc.Fp)
     (y lsb : Var field Ecc.Fp) (offset : ℕ)
