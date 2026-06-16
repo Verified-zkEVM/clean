@@ -1162,6 +1162,19 @@ private theorem pieceChunks_f_val_lt_of_z13_zero
     (hpowHigh := by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
     hPC5 hZs5 hz13f
 
+private theorem pieceChunks_e1_f_low_lt_of_z13_zero
+    {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) Ecc.Fp}
+    {e1 : Ecc.Fp}
+    (he1 : e1.val < 2 ^ 4)
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks zs)
+    (hz13f :
+      (HVec.head (HVec.tail (HVec.tail (HVec.tail (HVec.tail (HVec.tail zs))))))[13]'(by decide)
+        = 0) :
+    e1.val + (pieces.tail.tail.tail.tail.tail[0]).val * 16 < 2 ^ 134 := by
+  exact e1_f_low_lt_of_f_130 he1 (pieceChunks_f_val_lt_of_z13_zero hPC hZs hz13f)
+
 private theorem z1_head_val_lt {n : ℕ} {rest : List ℕ}
     {pieces : Vector Ecc.Fp (n :: rest).length} {chunks : List ℕ}
     {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
