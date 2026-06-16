@@ -3379,6 +3379,112 @@ theorem main_large_piece_bounds (G : Generators) (Q : SWPoint Pallas.curve)
   let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
   exact pieceChunks_large_piece_bounds hPC
 
+theorem main_rho_low_small_of_g0_one (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    eval env cells.g0 = 1 →
+      (show Ecc.Fp from eval env cells.e1).val +
+        (show Ecc.Fp from eval env cells.f).val * 16 < 2 ^ 134 := by
+  let cells := (assignMessageCells input).output offset
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let z13f := (HVec.get _ out.zs ⟨5, by decide⟩)[13]
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+  dsimp only
+  intro hg0One
+  obtain ⟨chunks, hPC, hZs⟩ :=
+    main_commitWithZs_pieceChunks_zsFacts_of_soundness G Q hQ R env input offset h
+  have hrange := main_assignMessageCells_short_range_specs G Q hQ R env input offset h
+  have hcanon := main_input_canonicity_facts G Q hQ R env input offset h
+  simp only at hrange hcanon
+  rcases hrange with ⟨_hb0, _hb3, _hd2, _he0, he1, _hg1, _hh0⟩
+  rcases hcanon with ⟨_hgd, _hpkd, _hvalue, hrho, _hpsi⟩
+  rcases hrho with ⟨_hrho, _hprime, hz13fZero, _hz14⟩
+  have hz13fVar : eval env z13f = 0 := by
+    rcases hz13fZero with hz | hz
+    · exfalso
+      have h01 : (0 : Ecc.Fp) = 1 := hz.symm.trans hg0One
+      have hval := congrArg ZMod.val h01
+      simp [ZMod.val_one] at hval
+    · simpa only [z13f, out, cells, commitOffset] using hz
+  have hz13fEval :
+      eval env z13f =
+        (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+          (eval env out.zs) ⟨5, by decide⟩)[13] := by
+    dsimp only [z13f, out]
+    exact HVec.eval_getElem env (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+      out.zs ⟨5, by decide⟩ 13 (by decide)
+  rw [hz13fEval] at hz13fVar
+  rw [← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.eval_zs env messagePieceRounds out]
+    at hz13fVar
+  have hz13fTail :
+      (HVec.head (HVec.tail (HVec.tail (HVec.tail (HVec.tail (HVec.tail (eval env out).zs))))))[13]'(by decide)
+        = 0 := by
+    simpa only [messagePieceRounds, messagePieceTailRounds] using hz13fVar
+  have hfTail := main_commitInput_f_tail_value env input offset
+  exact e1_f_low_lt_of_piece_z13_zero he1 hPC hZs hz13fTail hfTail
+
+theorem main_g0_eq_rho_high_bit (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    let cells := (assignMessageCells input).output offset
+    (show Ecc.Fp from eval env cells.g0) =
+      (((show Ecc.Fp from eval env input.rho).val / 2 ^ 254 % 2 : ℕ) : Ecc.Fp) := by
+  let cells := (assignMessageCells input).output offset
+  let commitInput : Var (Sinsemilla.CommitDomain.Input 8) Ecc.Fp :=
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  let pieces : Vector Ecc.Fp 8 := (eval env commitInput).pieces
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let gateOffset := commitOffset + (commitWithZs G Q hQ R input cells).localLength commitOffset
+  let pkdOffset := gateOffset + (canonBitshift130 cells.a).localLength gateOffset
+  let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+  let e1fBounds := (rhoCanonicity cells.e1 cells.f).output rhoOffset
+  have hrange := main_assignMessageCells_short_range_specs G Q hQ R env input offset h
+  have hdecomp := main_message_piece_decomposition_facts G Q hQ R env input offset h
+  have hcanon := main_input_canonicity_facts G Q hQ R env input offset h
+  have hlarge := main_large_piece_bounds G Q hQ R env input offset h
+  simp only at hrange hdecomp hcanon hlarge
+  rcases hrange with ⟨_hb0, _hb3, _hd2, _he0, he1, _hg1, _hh0⟩
+  rcases hdecomp with ⟨_hB, _hD, _hE, hG, _hh1, _hH⟩
+  rcases hG with ⟨hg0Bool, _hGdec⟩
+  rcases hcanon with ⟨_hgd, _hpkd, _hvalue, hrho, _hpsi⟩
+  rcases hrho with ⟨hrho, hprime, _hz13f, hz14⟩
+  have hfTail := main_commitInput_f_tail_value env input offset
+  have hfBound : (show Ecc.Fp from eval env cells.f).val < 2 ^ (K * 25) := by
+    have hf := hlarge.2.2.2.1
+    rw [hfTail] at hf
+    exact hf
+  have hlowSmall :
+      eval env cells.g0 = 1 →
+        (show Ecc.Fp from eval env cells.e1).val +
+          (show Ecc.Fp from eval env cells.f).val * 16 < 2 ^ 134 := by
+    intro hg0One
+    exact main_rho_low_small_of_g0_one G Q hQ R env input offset h hg0One
+  have hz14Lt :
+      eval env e1fBounds.2 = 0 →
+        (show Ecc.Fp from eval env e1fBounds.1).val < 2 ^ (K * 14) := by
+    rw [main_soundness_constraints_iff] at h
+    rcases h with ⟨_, h_commit⟩
+    rw [commitAndConstrain_soundness_constraints_iff] at h_commit
+    exact constrainCommitment_rhoCanonicity_prime_val_lt_of_zlast_zero env input
+      ((assignMessageCells input).output offset)
+      ((commitWithZs G Q hQ R input ((assignMessageCells input).output offset)).output
+        (offset + (assignMessageCells input).localLength offset))
+      (offset + (assignMessageCells input).localLength offset +
+        (commitWithZs G Q hQ R input ((assignMessageCells input).output offset)).localLength
+          (offset + (assignMessageCells input).localLength offset))
+      h_commit.2
+  exact g0_eq_rho_high_bit_of_parts he1 hfBound hg0Bool hlowSmall
+    hrho hprime hz14 hz14Lt
+
 theorem main_chunks_eq_noteCommitChunks_of_piece_values (G : Generators)
     (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (R : MulFixed.FixedBase)
     (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (offset : ℕ)
