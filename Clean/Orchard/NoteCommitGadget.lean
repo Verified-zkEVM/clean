@@ -1920,6 +1920,43 @@ private theorem copyCheck14_zlast_zero_val_lt (env : Environment Ecc.Fp)
   rw [heq, ZMod.val_natCast_of_lt hCard]
   exact hlo
 
+private theorem copyCheck13_zlast_zero_val_lt (env : Environment Ecc.Fp)
+    (element : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env
+      ((Utilities.LookupRangeCheck.CopyCheck.circuit 13 element).operations offset))
+    (hzLast : (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 13).output element offset))[13]
+        = 0) :
+    (show Ecc.Fp from eval env element).val < 2 ^ (K * 13) := by
+  let zs : fields 14 Ecc.Fp :=
+    eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 13).output element offset)
+  let f : ℕ → Ecc.Fp := fun i => if hi : i < 14 then zs[i]'hi else 0
+  have hspec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 13) env element offset trivial h
+  simp only at hspec
+  rcases hspec with ⟨hz0, hchain⟩
+  have hsteps :
+      ∀ i, i < 13 →
+        ∃ w : ℕ, w < 2 ^ K ∧ f i = 2 ^ K * f (i + 1) + (w : Ecc.Fp) := by
+    intro i hi
+    obtain ⟨w, hw, hstep⟩ := hchain ⟨i, hi⟩
+    refine ⟨w, hw, ?_⟩
+    dsimp only [f]
+    rw [dif_pos (by omega), dif_pos (by omega)]
+    exact hstep
+  obtain ⟨lo, hlo, heq⟩ := chain_telescope f 13 hsteps
+  have hf0 : f 0 = (show Ecc.Fp from eval env element) := by
+    dsimp only [f, zs]
+    rw [dif_pos (by omega), hz0]
+  have hf13 : f 13 = 0 := by
+    dsimp only [f, zs]
+    rw [dif_pos (by omega)]
+    exact hzLast
+  rw [hf0, hf13, mul_zero, _root_.add_zero] at heq
+  have hCard : lo < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_trans hlo (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  rw [heq, ZMod.val_natCast_of_lt hCard]
+  exact hlo
+
 private theorem witnessShort_spec_of_soundness (env : Environment Ecc.Fp)
     (src : Var field Ecc.Fp) (start numBits : ℕ)
     (hNumBits : numBits ≤ Utilities.LookupRangeCheck.K) (offset : ℕ)
