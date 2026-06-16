@@ -273,4 +273,33 @@ theorem noteCommitChunks_tiling (gdX gdY pkdX pkdY v rho psi : ℕ) :
   simp only [Nat.div_div_eq_div_mul, ← pow_add, K, Nat.reduceMul, Nat.reduceAdd,
     List.append_assoc]
 
+/-- The `CommitIvk` Sinsemilla message `I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)` (protocol spec
+§5.4.8.4, `commit_ivk.rs`), assembled little-endian as `ak [255] || nk [255]` = 510 bits.
+`ak`, `nk` are the (≤255-bit, little-endian) base-field encodings; the encodings may be
+non-canonical, with canonicity enforced separately by the `CommitIvk` gate. -/
+def commitIvkMessage (ak nk : ℕ) : ℕ :=
+  ak + 2 ^ 255 * nk
+
+/-- The 51 `K`-bit chunks of the `CommitIvk` message (510 bits = 51 chunks). -/
+def commitIvkChunks (ak nk : ℕ) : List ℕ :=
+  chunksOf (commitIvkMessage ak nk) 51
+
+/-- The 51 message chunks tile into the 4 Sinsemilla message pieces `a, b, c, d` at their
+`K`-bit boundaries: piece sizes `25, 1, 24, 1` chunks starting at bits `0, 250, 260, 500`. -/
+theorem commitIvkChunks_tiling (ak nk : ℕ) :
+    commitIvkChunks ak nk =
+      chunksOf (commitIvkMessage ak nk) 25
+        ++ chunksOf (commitIvkMessage ak nk / 2 ^ 250) 1
+        ++ chunksOf (commitIvkMessage ak nk / 2 ^ 260) 24
+        ++ chunksOf (commitIvkMessage ak nk / 2 ^ 500) 1 := by
+  unfold commitIvkChunks
+  set m := commitIvkMessage ak nk
+  rw [show (51 : ℕ) = 25 + 26 from rfl, chunksOf_add,
+      show (26 : ℕ) = 1 + 25 from rfl, chunksOf_add]
+  simp only [Nat.div_div_eq_div_mul, ← pow_add, K, Nat.reduceMul, Nat.reduceAdd]
+  nth_rewrite 2 [show (25 : ℕ) = 24 + 1 from rfl]
+  rw [chunksOf_add]
+  simp only [Nat.div_div_eq_div_mul, ← pow_add, K, Nat.reduceMul, Nat.reduceAdd,
+    List.append_assoc]
+
 end Orchard.Specs.Sinsemilla

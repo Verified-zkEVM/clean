@@ -128,10 +128,23 @@ Source baseline:
     - Clean: not implemented as action wiring. TODO in `Clean/Orchard/Action.lean`.
     - `gadget::commit_ivk`
       - Source: `orchard-0.14.0/src/circuit/commit_ivk.rs`
-      - Clean: only the canonicity gate is implemented in `Clean/Orchard/CommitIvk.lean` as `CommitIvk.circuit`; full `gadgets::commit_ivk` entry is missing.
+      - Clean: implemented in `Clean/Orchard/Action/CommitIvk.lean` as
+        `Orchard.Action.CommitIvk.circuit` (a `GeneralFormalCircuit.WithHint` returning the
+        extracted `x`-coordinate `ivk`). Composes the four Sinsemilla pieces `a, b, c, d`
+        over `CommitDomain.WithZs` (rounds `24 :: [0, 23, 0]`), the `ak`/`nk` canonicity
+        decompositions (`CopyCheck 13`/`CopyCheck 14`), and the `CommitIvk.Gate` canonicity
+        gate. Spec is `CommitIvkRelation` (point-level Sinsemilla short-commit relation over
+        `commitIvkChunks`). Circuit + specs + elaboration done; the two entry proofs
+        (`soundness`, `completeness`) are `sorry`, pending the shared message-piece
+        canonicity-encoding bridge also outstanding for `note_commit`.
       - `CommitIvk canonicity check`
         - Source: `orchard-0.14.0/src/circuit/commit_ivk.rs`
-        - Clean: implemented in `Clean/Orchard/CommitIvk.lean`.
+        - Clean: implemented in `Clean/Orchard/Action/CommitIvkGate.lean` as
+          `CommitIvk.Gate.circuit`, proved sound and complete with a **lifted
+          canonical-decomposition `Spec`** (under the lookup `Assumptions`, `a`/`b0`/`b1` are
+          the canonical bit slices of `ak` and `b2`/`c`/`d0`/`d1` of `nk`) — mirroring the
+          `NoteCommit` `GdCanonicity`/`PkdCanonicity` gates and reusing the shared
+          `CanonicityTheorems`.
       - `RangeConstrained::witness_short` for `b_0`, `b_2`, `d_0`
         - Source: `halo2_gadgets/src/utilities/lookup_range_check.rs`
         - Clean: `LookupRangeCheck.WitnessShort.circuit` and

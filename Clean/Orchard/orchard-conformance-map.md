@@ -218,6 +218,9 @@ Current Clean coverage:
 - `Clean.Orchard.NoteCommit.PsiCanonicity.circuit`: `GATE NoteCommit input psi`
 - `Clean.Orchard.NoteCommit.YCanonicity.circuit`: `GATE y coordinate checks`
 - `Clean.Orchard.Action.CommitIvk.Gate.circuit`: `GATE CommitIvk canonicity check`
+- `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry (circuit + specs +
+  elaboration done; `soundness`/`completeness` are `sorry`, pending the shared message-piece
+  canonicity-encoding bridge also outstanding for `note_commit`)
 
 ## Known Non-Conformances
 
@@ -388,9 +391,12 @@ Current Clean state (under-models the output):
   `zs`.
 - `CommitDomain.circuit` / `HashDomain.circuit` return only the point, dropping `zs`.
 
-Consequence: this blocks the canonicity-checking entries that copy specific running-sum
-cells out of the hash region — `gadgets::note_commit` (needs `zs[i][13]`, `zs[i][1]`) and
-`gadgets::commit_ivk` (same pattern). It is why those are still missing.
+Resolution: `CommitDomain.WithZs.circuit` now exposes each piece's full running sum `zs`
+(the `Output.zs : HVec (Chain.zLengths ns)`), unblocking the canonicity-checking entries
+that copy specific running-sum cells out of the hash region. Both consumers are now
+implemented on top of it — `gadgets::note_commit` (`Action.NoteCommit`, reads `zs[i][13]`,
+`zs[i][1]`) and `gadgets::commit_ivk` (`Action.CommitIvk`, reads `zs[0][13]`, `zs[2][13]`).
+The legacy `z1`-only `Output` exposure below is retained for the Merkle decomposition gate.
 
 Fix (faithful, supersedes the z1-only exposure): expose each piece's full running sum
 `zs` through `HashPiece.Output` (so `z1` becomes `zs[1]`), thread per-piece `zs` through
@@ -403,11 +409,17 @@ have different `w`), and return `(Point, zs)` from `CommitDomain.circuit` to mat
 `value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`),
 `derive_nullifier` is implemented (`Gadget.DeriveNullifier.circuit`, soundness and
 completeness proved), and the `Circuit::synthesize` spend-authority block is implemented
-(`SpendAuthority.circuit`, soundness and completeness proved). Missing source-level APIs:
+(`SpendAuthority.circuit`, soundness and completeness proved).
+
+`gadgets::note_commit` (`Action.NoteCommit`) and `gadgets::commit_ivk`
+(`Action.CommitIvk.circuit`) are both implemented as circuits with semantic specs and
+elaboration; their entry-level `soundness`/`completeness` proofs are still `sorry`, blocked
+on the shared message-piece canonicity-encoding bridge (relating the witnessed Sinsemilla
+pieces to the canonical `*Chunks` of the input scalars via the decomposition/canonicity
+gates). Missing source-level APIs:
 
 - address-integrity wiring in `Circuit::synthesize`
-- `gadgets::note_commit`
-- `gadgets::commit_ivk`
+- entry proofs for `gadgets::note_commit` and `gadgets::commit_ivk`
 - full `Circuit::synthesize` action circuit
 
 These must compose source-conformant child circuits. In particular:
