@@ -1321,6 +1321,86 @@ theorem constrainCommitment_decompose_specs (env : Environment Ecc.Fp)
     formalAssertion_spec_of_soundness NoteCommit.DecomposeH.circuit env rowH _ trivial
       h.2.2.2.2.2.2.2.2.1⟩
 
+theorem constrainCommitment_canonicity_specs (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
+    let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
+    let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+    let z13f := (HVec.get _ out.zs ⟨5, by decide⟩)[13]
+    let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+    let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+    let aBounds := (canonBitshift130 cells.a).output offset
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    let b3cBounds := (pkdXCanonicity cells.b3 cells.c).output pkdOffset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    let e1fBounds := (rhoCanonicity cells.e1 cells.f).output rhoOffset
+    let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+    let g1g2Bounds := (psiCanonicity cells.g1 z1g).output psiOffset
+    let rowGd : Var NoteCommit.GdCanonicity.Row Ecc.Fp :=
+      { gdX := input.gd.x, b0 := cells.b0, b1 := cells.b1, a := cells.a,
+        aPrime := aBounds.1, z13A := z13a, z13APrime := aBounds.2 }
+    let rowPkd : Var NoteCommit.PkdCanonicity.Row Ecc.Fp :=
+      { pkdX := input.pkd.x, b3 := cells.b3, c := cells.c, d0 := cells.d0,
+        b3CPrime := b3cBounds.1, z13C := z13c, z14B3CPrime := b3cBounds.2 }
+    let rowValue : Var NoteCommit.ValueCanonicity.Row Ecc.Fp :=
+      { value := input.value, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
+    let rowRho : Var NoteCommit.RhoCanonicity.Row Ecc.Fp :=
+      { rho := input.rho, e1 := cells.e1, f := cells.f, g0 := cells.g0,
+        e1FPrime := e1fBounds.1, z13F := z13f, z14E1FPrime := e1fBounds.2 }
+    let rowPsi : Var NoteCommit.PsiCanonicity.Row Ecc.Fp :=
+      { psi := input.psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g,
+        g1G2Prime := g1g2Bounds.1, z13G := z13g, z13G1G2Prime := g1g2Bounds.2 }
+    NoteCommit.GdCanonicity.Spec (eval env rowGd) ∧
+      NoteCommit.PkdCanonicity.Spec (eval env rowPkd) ∧
+      NoteCommit.ValueCanonicity.Spec (eval env rowValue) ∧
+      NoteCommit.RhoCanonicity.Spec (eval env rowRho) ∧
+      NoteCommit.PsiCanonicity.Spec (eval env rowPsi) := by
+  let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
+  let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
+  let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+  let z13f := (HVec.get _ out.zs ⟨5, by decide⟩)[13]
+  let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+  let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+  let aBounds := (canonBitshift130 cells.a).output offset
+  let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+  let b3cBounds := (pkdXCanonicity cells.b3 cells.c).output pkdOffset
+  let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+  let e1fBounds := (rhoCanonicity cells.e1 cells.f).output rhoOffset
+  let psiOffset := rhoOffset + (rhoCanonicity cells.e1 cells.f).localLength rhoOffset
+  let g1g2Bounds := (psiCanonicity cells.g1 z1g).output psiOffset
+  let rowGd : Var NoteCommit.GdCanonicity.Row Ecc.Fp :=
+    { gdX := input.gd.x, b0 := cells.b0, b1 := cells.b1, a := cells.a,
+      aPrime := aBounds.1, z13A := z13a, z13APrime := aBounds.2 }
+  let rowPkd : Var NoteCommit.PkdCanonicity.Row Ecc.Fp :=
+    { pkdX := input.pkd.x, b3 := cells.b3, c := cells.c, d0 := cells.d0,
+      b3CPrime := b3cBounds.1, z13C := z13c, z14B3CPrime := b3cBounds.2 }
+  let rowValue : Var NoteCommit.ValueCanonicity.Row Ecc.Fp :=
+    { value := input.value, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
+  let rowRho : Var NoteCommit.RhoCanonicity.Row Ecc.Fp :=
+    { rho := input.rho, e1 := cells.e1, f := cells.f, g0 := cells.g0,
+      e1FPrime := e1fBounds.1, z13F := z13f, z14E1FPrime := e1fBounds.2 }
+  let rowPsi : Var NoteCommit.PsiCanonicity.Row Ecc.Fp :=
+    { psi := input.psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g,
+      g1G2Prime := g1g2Bounds.1, z13G := z13g, z13G1G2Prime := g1g2Bounds.2 }
+  unfold constrainCommitment at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset,
+    GdCanonicity.circuit, PkdCanonicity.circuit, ValueCanonicity.circuit,
+    RhoCanonicity.circuit, PsiCanonicity.circuit] at h
+  exact ⟨
+    formalAssertion_spec_of_soundness NoteCommit.GdCanonicity.circuit env rowGd _ trivial
+      h.2.2.2.2.2.2.2.2.2.1,
+    formalAssertion_spec_of_soundness NoteCommit.PkdCanonicity.circuit env rowPkd _ trivial
+      h.2.2.2.2.2.2.2.2.2.2.1,
+    formalAssertion_spec_of_soundness NoteCommit.ValueCanonicity.circuit env rowValue _ trivial
+      h.2.2.2.2.2.2.2.2.2.2.2.1,
+    formalAssertion_spec_of_soundness NoteCommit.RhoCanonicity.circuit env rowRho _ trivial
+      h.2.2.2.2.2.2.2.2.2.2.2.2.1,
+    formalAssertion_spec_of_soundness NoteCommit.PsiCanonicity.circuit env rowPsi _ trivial
+      h.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
+
 theorem commitAndConstrain_output_eq (G : Generators) (Q : SWPoint Pallas.curve)
     (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (input : Var Input Ecc.Fp)
     (cells : MessageCells) (offset : ℕ) :
