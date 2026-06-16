@@ -228,6 +228,13 @@ instance (ns : List ℕ) : ProvableStruct (Output ns) where
   toComponents := fun { point, zs } => .cons point (.cons zs .nil)
   fromComponents := fun (.cons point (.cons zs .nil)) => { point, zs }
 
+theorem eval_zs {F : Type} [Field F] (env : Environment F) (ns : List ℕ)
+    (out : Var (Output ns) F) :
+    (eval env out).zs = eval env out.zs := by
+  rw [ProvableStruct.eval_eq_eval]
+  unfold ProvableStruct.eval
+  simp only [circuit_norm]
+
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ)
     (input : Var (Input (ns.length + 1)) Ecc.Fp) :

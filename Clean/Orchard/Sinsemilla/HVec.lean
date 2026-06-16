@@ -81,6 +81,14 @@ theorem eval_get [Field F] (env : Environment F) :
           simp only [get]
           exact eval_get env ns tail ⟨i, Nat.lt_of_succ_lt_succ h⟩
 
+/-- `eval` commutes with indexing a function-style heterogeneous-vector access. -/
+theorem eval_getElem [Field F] (env : Environment F) (ns : List ℕ)
+    (v : Var (HVec ns) F) (i : Fin ns.length) (j : ℕ) (hj : j < ns[i]) :
+    eval env ((get ns v i)[j]'hj) = (get ns (eval env v) i)[j]'hj := by
+  rw [ProvableType.eval_field]
+  rw [ProvableType.getElem_eval_fields]
+  rw [eval_get]
+
 /-- `eval` distributes over `cons` (it is just `ProvablePair`'s `eval_pair`). -/
 theorem eval_cons [Field F] (env : Environment F) {n : ℕ} {ns : List ℕ}
     (a : Var (fields n) F) (b : Var (HVec ns) F) :

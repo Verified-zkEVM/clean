@@ -265,6 +265,27 @@ private theorem decomposeH_value_lt {h h0 h1 : Ecc.Fp}
   rw [hcast, ZMod.val_natCast_of_lt hPackedCard]
   exact hPackedLt
 
+private theorem value_from_parts_lt {value d2 d3 e0 : Ecc.Fp}
+    (hd2 : d2.val < 2 ^ 8) (hd3 : d3.val < 2 ^ (K * 5)) (he0 : e0.val < 2 ^ 6)
+    (hdec : value = d2 + d3 * 256 + e0 * 288230376151711744) :
+    value.val < 2 ^ 64 := by
+  let packed := d2.val + d3.val * 256 + e0.val * 288230376151711744
+  have hPackedLt : packed < 2 ^ 64 := by
+    norm_num [K] at hd2 hd3 he0 ⊢
+    omega
+  have hPackedCard : packed < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    exact lt_trans hPackedLt (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  have hcast : value = (packed : Ecc.Fp) := by
+    rw [hdec]
+    dsimp only [packed]
+    rw [← ZMod.natCast_zmod_val d2, ← ZMod.natCast_zmod_val d3,
+      ← ZMod.natCast_zmod_val e0]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt d2),
+      ZMod.val_natCast_of_lt (ZMod.val_lt d3), ZMod.val_natCast_of_lt (ZMod.val_lt e0)]
+  rw [hcast, ZMod.val_natCast_of_lt hPackedCard]
+  exact hPackedLt
+
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
     Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
       Orchard.Specs.Sinsemilla.chunksOf low n := by
@@ -2032,6 +2053,34 @@ theorem main_z1d_z1g_bounds (G : Generators) (Q : SWPoint Pallas.curve)
   dsimp only
   simp only [messagePieceRounds, messagePieceTailRounds]
   exact ⟨hD, hG⟩
+
+theorem main_value_bound (G : Generators) (Q : SWPoint Pallas.curve)
+    (hQ : Q ≠ 0) (R : MulFixed.FixedBase) (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((main G Q hQ R input).operations offset)) :
+    (show Ecc.Fp from eval env input.value).val < 2 ^ 64 := by
+  let cells := (assignMessageCells input).output offset
+  let commitOffset := offset + (assignMessageCells input).localLength offset
+  let out := (commitWithZs G Q hQ R input cells).output commitOffset
+  let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+  have hrange := main_assignMessageCells_short_range_specs G Q hQ R env input offset h
+  have hcanon := main_input_canonicity_facts G Q hQ R env input offset h
+  have hzBounds := main_z1d_z1g_bounds G Q hQ R env input offset h
+  simp only at hrange hcanon hzBounds
+  rcases hrange with ⟨_hb0, _hb3, hd2, he0, _he1, _hg1, _hh0⟩
+  rcases hcanon with ⟨_hgd, _hpkd, hvalue, _hrho, _hpsi⟩
+  have hz1d : (show Ecc.Fp from eval env z1d).val < 2 ^ (K * 5) := by
+    have hzEval :
+        eval env z1d =
+          (HVec.get (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+            (eval env out.zs) ⟨3, by decide⟩)[1] := by
+      dsimp only [z1d, out]
+      exact HVec.eval_getElem env (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds)
+        out.zs ⟨3, by decide⟩ 1 (by decide)
+    rw [hzEval]
+    rw [← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.eval_zs env messagePieceRounds out]
+    exact hzBounds.1
+  exact value_from_parts_lt hd2 hz1d he0 hvalue
 
 -- TODO(note_commit): bundle into a `GeneralFormalCircuit.WithHint`. Blocked on:
 --   (1) `soundness` (prime-`p` canonicity: the gates force the inputs canonical, and the
