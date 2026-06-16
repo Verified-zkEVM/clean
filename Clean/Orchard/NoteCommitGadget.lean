@@ -498,6 +498,111 @@ private theorem g1_g2_eq_psi_low_bits_of_parts {psi g1 g2 h0 h1 g1G2Prime z13 : 
     rw [Nat.add_mul_mod_self_left]
     rw [Nat.mod_eq_of_lt hlowLt249]
 
+private theorem h0_h1_eq_psi_high_bits_of_parts {psi g1 g2 h0 h1 g1G2Prime z13 : Ecc.Fp}
+    (hg1 : g1.val < 2 ^ 9) (hg2 : g2.val < 2 ^ (K * 24))
+    (hh0 : h0.val < 2 ^ 5) (hh1 : NoteCommit.IsBool h1)
+    (hlowSmall : h1 = 1 → g1.val + g2.val * 512 < 2 ^ 130)
+    (hpsi : psi =
+      g1 + g2 * 512 + h0 * OfNat.ofNat (2 ^ 249) + h1 * OfNat.ofNat (2 ^ 254))
+    (hprime : g1G2Prime = g1 + g2 * 512 + OfNat.ofNat (2 ^ 130) - NoteCommit.tP)
+    (hh0zero : h1 = 0 ∨ h0 = 0)
+    (hz13 : h1 = 0 ∨ z13 = 0)
+    (hz13Lt : z13 = 0 → g1G2Prime.val < 2 ^ (K * 13)) :
+    h0 + h1 * 32 =
+      ((psi.val / 2 ^ 249 % 32 + (psi.val / 2 ^ 254 % 2) * 32 : ℕ) : Ecc.Fp) := by
+  let low := g1.val + g2.val * 512
+  have hlowLt249 : low < 2 ^ 249 := by
+    dsimp only [low]
+    norm_num [K] at hg1 hg2 ⊢
+    omega
+  have hlowField : g1 + g2 * 512 = (low : Ecc.Fp) := by
+    dsimp only [low]
+    rw [← ZMod.natCast_zmod_val g1, ← ZMod.natCast_zmod_val g2]
+    push_cast
+    rw [ZMod.val_natCast_of_lt (ZMod.val_lt g1), ZMod.val_natCast_of_lt (ZMod.val_lt g2)]
+  rcases hh1 with hh1zero | hh1one
+  · have hpackedLt : low + h0.val * 2 ^ 249 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      dsimp only [low] at hlowLt249
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at hlowLt249 hh0 ⊢
+      omega
+    have hpsiVal : psi.val = low + h0.val * 2 ^ 249 := by
+      have hpsiCast : psi = ((low + h0.val * 2 ^ 249 : ℕ) : Ecc.Fp) := by
+        rw [hpsi, hh1zero, zero_mul, _root_.add_zero, hlowField]
+        rw [← ZMod.natCast_zmod_val h0]
+        push_cast
+        rw [ZMod.val_natCast_of_lt (ZMod.val_lt h0)]
+      rw [hpsiCast, ZMod.val_natCast_of_lt hpackedLt]
+    have hsumLt : h0.val < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := ZMod.val_lt h0
+    rw [hh1zero, zero_mul, _root_.add_zero, ← ZMod.natCast_zmod_val h0]
+    congr
+    rw [hpsiVal]
+    have hdiv : (low + h0.val * 2 ^ 249) / 2 ^ 249 = h0.val := by
+      rw [Nat.mul_comm h0.val (2 ^ 249)]
+      rw [Nat.add_mul_div_left _ _ (Nat.two_pow_pos 249), Nat.div_eq_of_lt hlowLt249,
+        Nat.zero_add]
+    have hdiv254 : (low + h0.val * 2 ^ 249) / 2 ^ 254 = 0 := by
+      apply Nat.div_eq_of_lt
+      norm_num at hh0 hlowLt249 ⊢
+      omega
+    rw [hdiv, hdiv254, Nat.zero_mod, zero_mul, Nat.add_zero]
+    exact (Nat.mod_eq_of_lt hh0).symm
+  · have hh0zero' : h0 = 0 := by
+      rcases hh0zero with hz | hz
+      · exfalso
+        exact zero_ne_one (by rw [← hz, hh1one])
+      · exact hz
+    have hz13zero : z13 = 0 := by
+      rcases hz13 with hz | hz
+      · exfalso
+        exact zero_ne_one (by rw [← hz, hh1one])
+      · exact hz
+    have hprimeValLt := hz13Lt hz13zero
+    have hprimeField : g1G2Prime = (low + 2 ^ 130 - tPNat : ℕ) := by
+      rw [hprime]
+      rw [hlowField]
+      push_cast [NoteCommit.tP, tPNat]
+      ring
+    have hprimeValEq : g1G2Prime.val = low + 2 ^ 130 - tPNat := by
+      have hlt : low + 2 ^ 130 - tPNat < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+        dsimp only [low]
+        have hsmall := hlowSmall hh1one
+        norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hsmall ⊢
+        omega
+      rw [hprimeField, ZMod.val_natCast_of_lt hlt]
+    have hlowLtTP : low < tPNat := by
+      rw [hprimeValEq] at hprimeValLt
+      norm_num [K] at hprimeValLt ⊢
+      omega
+    have hpackedLt : low + 2 ^ 254 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at hlowLtTP ⊢
+      omega
+    have hpsiVal : psi.val = low + 2 ^ 254 := by
+      have hpsiCast : psi = ((low + 2 ^ 254 : ℕ) : Ecc.Fp) := by
+        rw [hpsi, hh0zero', hh1one]
+        rw [zero_mul, one_mul, _root_.add_zero, hlowField]
+        norm_num
+      rw [hpsiCast, ZMod.val_natCast_of_lt hpackedLt]
+    rw [hh0zero', hh1one, _root_.zero_add, one_mul]
+    norm_num
+    rw [hpsiVal]
+    have hdiv249 : (low + 2 ^ 254) / 2 ^ 249 = 32 := by
+      rw [show (2 : ℕ) ^ 254 = 2 ^ 249 * 32 by norm_num]
+      rw [Nat.add_mul_div_left _ _ (Nat.two_pow_pos 249), Nat.div_eq_of_lt hlowLt249,
+        Nat.zero_add]
+    have hdiv254 : (low + 2 ^ 254) / 2 ^ 254 = 1 := by
+      nth_rw 1 [show (2 : ℕ) ^ 254 = 2 ^ 254 * 1 by ring]
+      rw [Nat.add_mul_div_left _ _ (Nat.two_pow_pos 254)]
+      have hlowLt254 : low < 2 ^ 254 := lt_trans hlowLt249 (by norm_num)
+      rw [Nat.div_eq_of_lt hlowLt254, Nat.zero_add]
+    rw [show
+      904625697166532776746648320380374280103671755200316906558262375061821325312 =
+        (2 : ℕ) ^ 249 by norm_num]
+    rw [show
+      28948022309329048855892746252171976963317496166410141009864396001978282409984 =
+        (2 : ℕ) ^ 254 by norm_num]
+    rw [hdiv249, hdiv254]
+    norm_num
+
 private theorem low_58_from_low_middle (v : ℕ) :
     v % 256 + (v / 256 % 2 ^ (K * 5)) * 256 = v % 2 ^ 58 := by
   norm_num [K]
