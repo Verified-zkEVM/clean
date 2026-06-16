@@ -1732,16 +1732,14 @@ def ProverSpec (input : ProverValue Input Ecc.Fp) (output : Ecc.Fp)
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Ecc.Fp main Assumptions Spec := by
-  circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.Spec,
-    Utilities.LookupRangeCheck.CopyCheck.Spec, Gate.Spec, Ecc.tP]
-  constructor
-  · exact h_assumptions.2
-  · simp [circuit_norm]
+  circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.circuit, Gate.circuit, Ecc.tP]
+  exact h_assumptions.2
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Ecc.Fp main ProverAssumptions ProverSpec := by
-  circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.ProverSpec,
-    Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Gate.Spec, Ecc.tP]
+  circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.circuit, Gate.circuit, Ecc.tP]
   change Ecc.Fp at input_y input_lsb
   rcases h_env with ⟨⟨hk0Range, hk0Val⟩, ⟨⟨hk2Range, hk2Val⟩, hk3Val, hjVal,
     ⟨hJSpec, hJVals⟩, hjPrimeVal, hJPrimeSpec, hJPrimeVals⟩⟩
