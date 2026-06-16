@@ -178,6 +178,30 @@ private theorem two_pow_K_lt_p :
     (2 : ℕ) ^ K < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
   exact lt_trans (by norm_num [K]) two_pow_K_mul_25_lt_p
 
+private theorem natCast_injective_of_lt {a b : ℕ}
+    (ha : a < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (hb : b < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD)
+    (h : (a : Ecc.Fp) = (b : Ecc.Fp)) :
+    a = b := by
+  have hv := congrArg ZMod.val h
+  rwa [ZMod.val_natCast_of_lt ha, ZMod.val_natCast_of_lt hb] at hv
+
+private theorem isBool_val_lt_two {x : Ecc.Fp} (h : NoteCommit.IsBool x) :
+    x.val < 2 := by
+  rcases h with h | h
+  · rw [h, ZMod.val_zero]
+    norm_num
+  · rw [h, ZMod.val_one]
+    norm_num
+
+private theorem isBool_val_eq_zero_or_one {x : Ecc.Fp} (h : NoteCommit.IsBool x) :
+    x.val = 0 ∨ x.val = 1 := by
+  rcases h with h | h
+  · left
+    rw [h, ZMod.val_zero]
+  · right
+    rw [h, ZMod.val_one]
+
 private theorem chunksOf_add_high {low high n : ℕ} (hlow : low < 2 ^ (K * n)) :
     Orchard.Specs.Sinsemilla.chunksOf (low + 2 ^ (K * n) * high) n =
       Orchard.Specs.Sinsemilla.chunksOf low n := by
@@ -760,6 +784,24 @@ theorem pieceChunks_messagePieceRounds_chunks
   subst tailH
   exact ⟨msA, msB, msC, msD, msE, msF, msG, msH,
     hA, hB, hC, hD, hE, hF, hG, hH, by simp only [List.append_nil, List.append_assoc]⟩
+
+private theorem zsFacts_head_get {n : ℕ} {rest : List ℕ} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
+    (h : Orchard.Sinsemilla.Chain.ZsFacts (n :: rest) chunks zs) (r : Fin (n + 1)) :
+    (HVec.head zs)[r] =
+      ((∑ j ∈ Finset.range (n + 1 - r.val),
+        chunks.getD (r.val + j) 0 * 2 ^ (K * j) : ℕ) : Ecc.Fp) := by
+  simp only [Orchard.Sinsemilla.Chain.ZsFacts] at h
+  rw [h.1]
+  simp only
+  norm_num [Orchard.Specs.Sinsemilla.K, K]
+
+private theorem zsFacts_tail {n : ℕ} {rest : List ℕ} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Ecc.Fp}
+    (h : Orchard.Sinsemilla.Chain.ZsFacts (n :: rest) chunks zs) :
+    Orchard.Sinsemilla.Chain.ZsFacts rest (chunks.drop (n + 1)) (HVec.tail zs) := by
+  simp only [Orchard.Sinsemilla.Chain.ZsFacts] at h
+  exact h.2
 
 private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     {pieces : Vector Ecc.Fp messagePieceRounds.length} {chunks : List ℕ}
