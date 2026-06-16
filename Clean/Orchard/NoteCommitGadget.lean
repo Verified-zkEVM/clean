@@ -2152,6 +2152,40 @@ private theorem copyCheck13_zlast_zero_val_lt (env : Environment Ecc.Fp)
   rw [heq, ZMod.val_natCast_of_lt hCard]
   exact hlo
 
+private theorem rhoCanonicity_prime_evalOutput_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
+    (e1 f : Var field Ecc.Fp) (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((rhoCanonicity e1 f).operations offset))
+    (hzLast : eval env ((rhoCanonicity e1 f).output offset).2 = 0) :
+    (show Ecc.Fp from eval env ((rhoCanonicity e1 f).output offset).1).val <
+      2 ^ (K * 14) := by
+  let prime := (witnessField (F := Ecc.Fp) fun env =>
+    env e1 + (2 ^ 4 : Ecc.Fp) * env f + (2 ^ 140 : Ecc.Fp) - tP).output offset
+  let copyOffset := offset + (witnessField (F := Ecc.Fp) fun env =>
+    env e1 + (2 ^ 4 : Ecc.Fp) * env f + (2 ^ 140 : Ecc.Fp) - tP).localLength offset
+  have hCopy :
+      ConstraintsHold.Soundness env
+        ((Utilities.LookupRangeCheck.CopyCheck.circuit 14 prime).operations copyOffset) := by
+    unfold rhoCanonicity at h
+    simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+    exact h.2.1
+  have hzLastCopy :
+      (eval env ((Utilities.LookupRangeCheck.CopyCheck.circuit 14).output prime copyOffset))[14]
+        = 0 := by
+    unfold rhoCanonicity at hzLast
+    simp only [Circuit.output, Circuit.bind_def, withHint_output] at hzLast
+    rw [ProvableType.eval_field, ProvableType.getElem_eval_fields] at hzLast
+    simpa only [prime, copyOffset, Circuit.output, Circuit.localLength] using hzLast
+  have hPrimeBound := copyCheck14_zlast_zero_val_lt env prime copyOffset hCopy hzLastCopy
+  have hSpec := withHint_spec_of_soundness
+    (Utilities.LookupRangeCheck.CopyCheck.circuit 14) env prime copyOffset trivial hCopy
+  simp only at hSpec
+  simp only [prime, copyOffset, Circuit.output, Circuit.localLength] at hSpec hPrimeBound
+  unfold rhoCanonicity
+  simp only [Circuit.output, Circuit.bind_def, withHint_output]
+  rw [ProvableType.eval_field, ProvableType.getElem_eval_fields]
+  rw [hSpec.1]
+  exact hPrimeBound
+
 private theorem psiCanonicity_prime_val_lt_of_zlast_zero (env : Environment Ecc.Fp)
     (g1 g2 : Var field Ecc.Fp) (offset : ℕ)
     (h : ConstraintsHold.Soundness env ((psiCanonicity g1 g2).operations offset))
@@ -2430,6 +2464,35 @@ theorem constrainCommitment_psiCanonicity_soundness (env : Environment Ecc.Fp)
   unfold constrainCommitment at h
   simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
   exact h.2.2.2.1
+
+theorem constrainCommitment_rhoCanonicity_soundness (env : Environment Ecc.Fp)
+    (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    ConstraintsHold.Soundness env ((rhoCanonicity cells.e1 cells.f).operations rhoOffset) := by
+  unfold constrainCommitment at h
+  simp only [ConstraintsHold.Soundness, Circuit.bind_forAllNoOffset] at h
+  exact h.2.2.1
+
+theorem constrainCommitment_rhoCanonicity_prime_val_lt_of_zlast_zero
+    (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
+    (out : Var (Sinsemilla.CommitDomain.WithZs.Output messagePieceRounds) Ecc.Fp)
+    (offset : ℕ)
+    (h : ConstraintsHold.Soundness env ((constrainCommitment input cells out).operations offset)) :
+    let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+    let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+    let e1fBounds := (rhoCanonicity cells.e1 cells.f).output rhoOffset
+    eval env e1fBounds.2 = 0 →
+      (show Ecc.Fp from eval env e1fBounds.1).val < 2 ^ (K * 14) := by
+  let pkdOffset := offset + (canonBitshift130 cells.a).localLength offset
+  let rhoOffset := pkdOffset + (pkdXCanonicity cells.b3 cells.c).localLength pkdOffset
+  dsimp only
+  intro hzLast
+  exact rhoCanonicity_prime_evalOutput_val_lt_of_zlast_zero env cells.e1 cells.f rhoOffset
+    (constrainCommitment_rhoCanonicity_soundness env input cells out offset h) hzLast
 
 theorem constrainCommitment_psiCanonicity_prime_val_lt_of_zlast_zero
     (env : Environment Ecc.Fp) (input : Var Input Ecc.Fp) (cells : MessageCells)
