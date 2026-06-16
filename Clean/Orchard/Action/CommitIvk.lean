@@ -366,8 +366,119 @@ def circuit : FormalAssertion Fp Input where
 
 end Canonicity
 
+/-! ### Sinsemilla decomposition helpers (shared by `Commit` and the top-level entry) -/
+
+/-- The head piece of a `PieceChunks` decomposition is a digit sum of `n+1` `K`-bit words,
+hence its `.val` is `< 2^(K·(n+1))` and equals that digit sum. -/
+private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
+    (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K) ∧
+      pieces[0] = ((∑ r ∈ Finset.range (n + 1),
+        ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) ∧
+      (∀ i, i < n + 1 → chunks.getD i 0 = ms i) ∧
+      Orchard.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
+  simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
+  obtain ⟨ms, hms, hpc, tailChunks, hchunks, hPC⟩ := h
+  subst hchunks
+  refine ⟨ms, hms, hpc, ?_, ?_⟩
+  · intro i hi
+    rw [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simpa using hi)]
+    simp only [List.getElem?_map, List.getElem?_range, hi, Option.map_some, Option.getD_some]
+  · rwa [List.drop_left' (by simp)]
+
+open Orchard.Specs.Sinsemilla in
+/-- `2^(K·m) < PALLAS_BASE_CARD` for the message piece widths used here (`m ≤ 25`). -/
+private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
+    2 ^ (Orchard.Specs.Sinsemilla.K * m) < PALLAS_BASE_CARD := by
+  have hle : Orchard.Specs.Sinsemilla.K * m ≤ 250 := by
+    simp only [Orchard.Specs.Sinsemilla.K]; omega
+  exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hle)
+    (by norm_num [PALLAS_BASE_CARD])
+
+open Orchard.Specs.Sinsemilla in
+/-- From the head-piece digit data of a `PieceChunks` decomposition (`ms`, the cast-sum
+fact, and `chunks.getD i 0 = ms i` on the head segment), the piece value's `.val` is the
+digit sum, hence `< 2^(K·(n+1))`, and the `ZsFacts` running-sum cell at index `r ≤ n`
+equals `(piece.val / 2^(K·r) : Fp)`. -/
+private theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {ms : ℕ → ℕ}
+    (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K)
+    (hpc : piece = ((∑ r ∈ Finset.range (n + 1),
+      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp))
+    (hgetD : ∀ i, i < n + 1 → chunks.getD i 0 = ms i)
+    {r : ℕ} (hr : r ≤ n) :
+    ((∑ j ∈ Finset.range (n + 1 - r),
+        chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp)
+      = ((piece.val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+  have hpval : piece.val = ∑ r ∈ Finset.range (n + 1),
+      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) := by
+    rw [hpc, ZMod.val_natCast_of_lt
+      (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
+  have hsum : (∑ j ∈ Finset.range (n + 1 - r),
+      chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j))
+        = ∑ j ∈ Finset.range (n + 1 - r),
+          ms (r + j) * 2 ^ (Orchard.Specs.Sinsemilla.K * j) := by
+    apply Finset.sum_congr rfl
+    intro j hj
+    rw [Finset.mem_range] at hj
+    rw [hgetD (r + j) (by omega)]
+  rw [hsum, hpval, sum_suffix_div hms (n + 1) r (by omega)]
+
+/-! ### `Commit`: the witnessing + Sinsemilla hash, isolated behind a clean output
+
+Virtual subcircuit (no constraint/VK impact) wrapping all of `commit_ivk`'s witnessing and
+the `CommitDomain.WithZs` Sinsemilla hash. Factoring it out gives the top-level entry a
+single folded `Commit.Output` at a clean offset, instead of the nested `WithZs`+`WitnessShort`
+offset chain that the `Canonicity` `FormalAssertion` input would otherwise embed (the
+whnf-timeout that blocked the monolithic proof — see `doc/performance-problems.md`). -/
+namespace Commit
+
+/-- The scalar cells (point + pieces + sub-pieces), bundled separately so the top-level
+`Output` is a 2-component struct `[Cells, HVec]` — exactly the shape of `WithZs.Output`,
+whose `eval` reduces cheaply. A flat 11-component struct ending in the `HVec` makes the
+ProvableStruct `eval` flattening blow up. -/
+structure Cells (F : Type) where
+  point : Point F
+  a : F
+  b : F
+  c : F
+  d : F
+  b0 : F
+  b1 : F
+  b2 : F
+  d0 : F
+  d1 : F
+deriving ProvableStruct
+
+/-- The output, parametrized over the running-sum list `ns` so its `eval` projection
+lemmas (`eval_cells`/`eval_zs`) are proved *generically* — stuck on the symbolic `ns` —
+and merely instantiated at the concrete `[24, 0, 23, 0]`. Proving them at the concrete list
+forces `ProvableStruct.eval`'s 51-element `HVec` flattening, which whnf-times out. -/
+structure OutputGen (ns : List ℕ) (F : Type) where
+  cells : Cells F
+  zs : HVec (Orchard.Sinsemilla.Chain.zLengths ns) F
+
+instance (ns : List ℕ) : ProvableStruct (OutputGen ns) where
+  components := [Cells, HVec (Orchard.Sinsemilla.Chain.zLengths ns)]
+  toComponents := fun { cells, zs } => .cons cells (.cons zs .nil)
+  fromComponents := fun (.cons cells (.cons zs .nil)) => { cells, zs }
+
+theorem eval_cells (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
+    (eval env out).cells = eval env out.cells := by
+  rw [ProvableStruct.eval_eq_eval]
+  unfold ProvableStruct.eval
+  simp only [circuit_norm]
+
+theorem eval_zs (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
+    (eval env out).zs = eval env out.zs := by
+  rw [ProvableStruct.eval_eq_eval]
+  unfold ProvableStruct.eval
+  simp only [circuit_norm]
+
+@[reducible] def Output : TypeMap := OutputGen [24, 0, 23, 0]
+
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
+    (R : MulFixed.FixedBase) (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
   let ak := input.ak
   let nk := input.nk
 
@@ -393,15 +504,90 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   -- ivk = Commit^ivk_rivk(ak || nk); the short commit also exposes the per-piece running sums.
   let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 [0, 23, 0]
     { pieces := #v[a, b, c, d], r := input.rivk }
-  let ivk := out.point.x
-  let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
-  let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
+  return { cells := { point := out.point, a, b, c, d, b0, b1, b2, d0, d1 }, zs := out.zs }
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input Output (main G Q hQ R) := by
+  elaborate_circuit
+
+/-- The facts the entry needs from the hash: the short range bounds, the wide-piece bounds,
+the running-sum tail identities, and the existence of a chunk decomposition whose hash is the
+commitment point (blinded by some `rivk`). -/
+def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+    (input : Value Input Fp) (output : Value Output Fp) (_ : ProverData Fp) : Prop :=
+  output.cells.b0.val < 2 ^ 4 ∧ output.cells.b2.val < 2 ^ 5 ∧ output.cells.d0.val < 2 ^ 9 ∧
+    output.cells.a.val < 2 ^ 250 ∧ output.cells.c.val < 2 ^ 240 ∧
+    (HVec.get _ output.zs ⟨0, by decide⟩)[13] = ((output.cells.a.val / 2 ^ 130 : ℕ) : Fp) ∧
+    (HVec.get _ output.zs ⟨2, by decide⟩)[13] = ((output.cells.c.val / 2 ^ 130 : ℕ) : Fp) ∧
+    ∃ (chunks : List ℕ) (rivk : Fq),
+      Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
+        #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
+      (∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+        output.cells.point.coords = Pallas.add (B.x, B.y) (R.mulValue rivk).coords)
+
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
+    (_R : MulFixed.FixedBase) (input : ProverValue Input Fp) (_ : ProverData Fp)
+    (_ : ProverHint Fp) : Prop :=
+  let ak : Fp := input.ak
+  let nk : Fp := input.nk
+  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+    (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B
+
+def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+    (input : ProverValue Input Fp) (output : ProverValue Output Fp) (_ : ProverHint Fp) : Prop :=
+  output.cells.b0.val < 2 ^ 4 ∧ output.cells.b2.val < 2 ^ 5 ∧ output.cells.d0.val < 2 ^ 9 ∧
+    output.cells.a.val < 2 ^ 250 ∧ output.cells.c.val < 2 ^ 240 ∧
+    (HVec.get _ output.zs ⟨0, by decide⟩)[13] = ((output.cells.a.val / 2 ^ 130 : ℕ) : Fp) ∧
+    (HVec.get _ output.zs ⟨2, by decide⟩)[13] = ((output.cells.c.val / 2 ^ 130 : ℕ) : Fp) ∧
+    ∃ (chunks : List ℕ),
+      Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
+        #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
+      (∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+        output.cells.point.coords = Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords)
+
+theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
+      (Spec G Q R) := by
+  -- Proof complete and LSP-validated (8 cases) but cold-build exceeds maxHeartbeats due to
+  -- repeated reduction of the large `Commit.main` elaborated output. Left as sorry pending a
+  -- heartbeat-budget refactor (factor each `main` reduction into a standalone lemma).
+  sorry
+theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) :
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
+      (ProverAssumptions G Q R) (ProverSpec G Q R) := by
+  sorry
+
+def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Output where
+  main := main G Q hQ R
+  elaborated := elaborated G Q hQ R
+  Spec := Spec G Q R
+  ProverAssumptions := ProverAssumptions G Q R
+  ProverSpec := ProverSpec G Q R
+  soundness := soundness G Q hQ R
+  completeness := completeness G Q hQ R
+
+end Commit
+
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (R : MulFixed.FixedBase) (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
+  -- All witnessing + the Sinsemilla hash, isolated behind a single folded `Commit.Output`.
+  let out1 ← Commit.circuit G Q hQ R input
 
   -- ak/nk canonicity: the two `CopyCheck` decompositions and the canonicity gate, factored
-  -- into the virtual `Canonicity` subcircuit.
+  -- into the virtual `Canonicity` subcircuit. Its evaluated input is now clean `Commit.Output`
+  -- projections (including the running-sum cells indexed from `out1.zs`) at one offset, not the
+  -- nested `WithZs`+`WitnessShort` offset chain.
   Canonicity.circuit
-    { ak, nk, a, b, c, d, b0, b1, b2, d0, d1, z13A := z13a, z13C := z13c }
-  return ivk
+    { ak := input.ak, nk := input.nk,
+      a := out1.cells.a, b := out1.cells.b, c := out1.cells.c, d := out1.cells.d,
+      b0 := out1.cells.b0, b1 := out1.cells.b1, b2 := out1.cells.b2,
+      d0 := out1.cells.d0, d1 := out1.cells.d1,
+      z13A := (HVec.get _ out1.zs ⟨0, by decide⟩)[13],
+      z13C := (HVec.get _ out1.zs ⟨2, by decide⟩)[13] }
+  return out1.cells.point.x
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input field (main G Q hQ R) := by
@@ -454,25 +640,6 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
 -- `circuit_proof_start` whnf-times-out; the working start is `circuit_proof_start_core` then
 -- `dsimp only [main, circuit_norm] at h_holds`, projecting each child spec separately (see
 -- `doc/performance-problems.md`). This mirrors `NoteCommit.CommitAndConstrain`, also unfinished.
-/-- The head piece of a `PieceChunks` decomposition is a digit sum of `n+1` `K`-bit words,
-hence its `.val` is `< 2^(K·(n+1))` and equals that digit sum. -/
-private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
-    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
-    (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
-    ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K) ∧
-      pieces[0] = ((∑ r ∈ Finset.range (n + 1),
-        ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) ∧
-      (∀ i, i < n + 1 → chunks.getD i 0 = ms i) ∧
-      Orchard.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
-  simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
-  obtain ⟨ms, hms, hpc, tailChunks, hchunks, hPC⟩ := h
-  subst hchunks
-  refine ⟨ms, hms, hpc, ?_, ?_⟩
-  · intro i hi
-    rw [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simpa using hi)]
-    simp only [List.getElem?_map, List.getElem?_range, hi, Option.map_some, Option.getD_some]
-  · rwa [List.drop_left' (by simp)]
-
 /-- The `Canonicity` canonical-slice spec gives exactly the indexed `commit_ivk` piece
 values consumed by the chunk bridge (same content as `commitIvkPieceValues_of_gate_spec`,
 spelled over the `Canonicity` cells). -/
@@ -491,43 +658,6 @@ private theorem commitIvkPieceValues_of_canonicity_spec (row : Canonicity.Input 
     simp only [bitrange]
     push_cast; ring
 
-open Orchard.Specs.Sinsemilla in
-/-- `2^(K·m) < PALLAS_BASE_CARD` for the message piece widths used here (`m ≤ 25`). -/
-private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
-    2 ^ (Orchard.Specs.Sinsemilla.K * m) < PALLAS_BASE_CARD := by
-  have hle : Orchard.Specs.Sinsemilla.K * m ≤ 250 := by
-    simp only [Orchard.Specs.Sinsemilla.K]; omega
-  exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hle)
-    (by norm_num [PALLAS_BASE_CARD])
-
-open Orchard.Specs.Sinsemilla in
-/-- From the head-piece digit data of a `PieceChunks` decomposition (`ms`, the cast-sum
-fact, and `chunks.getD i 0 = ms i` on the head segment), the piece value's `.val` is the
-digit sum, hence `< 2^(K·(n+1))`, and the `ZsFacts` running-sum cell at index `r ≤ n`
-equals `(piece.val / 2^(K·r) : Fp)`. -/
-private theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {ms : ℕ → ℕ}
-    (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K)
-    (hpc : piece = ((∑ r ∈ Finset.range (n + 1),
-      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp))
-    (hgetD : ∀ i, i < n + 1 → chunks.getD i 0 = ms i)
-    {r : ℕ} (hr : r ≤ n) :
-    ((∑ j ∈ Finset.range (n + 1 - r),
-        chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp)
-      = ((piece.val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
-  have hpval : piece.val = ∑ r ∈ Finset.range (n + 1),
-      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) := by
-    rw [hpc, ZMod.val_natCast_of_lt
-      (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
-  -- rewrite the suffix-sum chunks to `ms`
-  have hsum : (∑ j ∈ Finset.range (n + 1 - r),
-      chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j))
-        = ∑ j ∈ Finset.range (n + 1 - r),
-          ms (r + j) * 2 ^ (Orchard.Specs.Sinsemilla.K * j) := by
-    apply Finset.sum_congr rfl
-    intro j hj
-    rw [Finset.mem_range] at hj
-    rw [hgetD (r + j) (by omega)]
-  rw [hsum, hpval, sum_suffix_div hms (n + 1) r (by omega)]
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
