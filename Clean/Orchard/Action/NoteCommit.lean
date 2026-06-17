@@ -760,6 +760,16 @@ def AssignedYBits (gd pkd : Point Fp) (cells : MessageCells Fp) : Prop :=
   IsLowBit gd.y cells.b2 ∧
     IsLowBit pkd.y cells.d1
 
+def AssignedMessageFacts (gd pkd : Point Fp) (cells : MessageCells Fp) : Prop :=
+  cells.b0.val < 2 ^ 4 ∧
+  cells.b3.val < 2 ^ 4 ∧
+  cells.d2.val < 2 ^ 8 ∧
+  cells.e0.val < 2 ^ 6 ∧
+  cells.e1.val < 2 ^ 4 ∧
+  cells.g1.val < 2 ^ 9 ∧
+  cells.h0.val < 2 ^ 5 ∧
+  AssignedYBits gd pkd cells
+
 def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
   noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
 
@@ -854,7 +864,7 @@ def ProverAssumptions (_input : ProverValue Input Fp) (_ : ProverData Fp)
 
 def Spec (input : Value Input Fp) (cells : Value MessageCells Fp)
     (_ : ProverData Fp) : Prop :=
-  AssignedYBits input.gd input.pkd cells
+  AssignedMessageFacts input.gd input.pkd cells
 
 def ProverSpec (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
