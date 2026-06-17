@@ -465,7 +465,7 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
 
 theorem pieceChunks_messagePieceRounds_chunks
     {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
-    (h : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks) :
+    (h : Chain.PieceChunks messagePieceRounds pieces chunks) :
     ∃ msA msB msC msD msE msF msG msH : ℕ → ℕ,
       (∀ r, msA r < 2 ^ K) ∧ (∀ r, msB r < 2 ^ K) ∧
       (∀ r, msC r < 2 ^ K) ∧ (∀ r, msD r < 2 ^ K) ∧
@@ -480,7 +480,7 @@ theorem pieceChunks_messagePieceRounds_chunks
         (List.range 25).map msF ++
         (List.range 25).map msG ++
         (List.range 1).map msH := by
-  simp only [messagePieceTailRounds, Orchard.Sinsemilla.Chain.PieceChunks] at h
+  simp only [messagePieceTailRounds, Chain.PieceChunks] at h
   obtain ⟨msA, hA, _hpA, tailA, rfl, h⟩ := h
   obtain ⟨msB, hB, _hpB, tailB, rfl, h⟩ := h
   obtain ⟨msC, hC, _hpC, tailC, rfl, h⟩ := h
@@ -496,7 +496,7 @@ theorem pieceChunks_messagePieceRounds_chunks
 private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
     {gdX gdY pkdX pkdY v rho psi : ℕ}
-    (hPC : Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds pieces chunks)
+    (hPC : Chain.PieceChunks messagePieceRounds pieces chunks)
     (hA : pieces[0] = ((gdX % 2 ^ (K * 25) : ℕ) : Fp))
     (hB : pieces[1] =
       ((gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
@@ -515,7 +515,7 @@ private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
     chunks = noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
-  simp only [messagePieceTailRounds, Orchard.Sinsemilla.Chain.PieceChunks] at hPC
+  simp only [messagePieceTailRounds, Chain.PieceChunks] at hPC
   obtain ⟨msA, hmsA, hpA, tailA, rfl, hPC⟩ := hPC
   obtain ⟨msB, hmsB, hpB, tailB, rfl, hPC⟩ := hPC
   obtain ⟨msC, hmsC, hpC, tailC, rfl, hPC⟩ := hPC
@@ -726,7 +726,7 @@ def messagePieces (cells : MessageCells Fp) : Vector Fp messagePieceRounds.lengt
   #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h]
 
 /-- Semantic facts about the note-commit message cells assigned before the Sinsemilla
-commitment. These are the local bit-slice facts produced by `AssignMessageCells`; the
+commitment. These are the local bit-slice facts produced by `AssignMessagePieces`; the
 Sinsemilla piece/chunk relation is stated separately as `MessagePiecesEncode`. -/
 def MessageCellFacts (gd pkd : Point Fp) (value rho psi : Fp) (cells : MessageCells Fp) :
     Prop :=
@@ -760,12 +760,12 @@ def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
   noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
 
 def MessagePiecesEncode (input : Value Input Fp) (cells : Value MessageCells Fp) : Prop :=
-  Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (messagePieces cells)
+  Chain.PieceChunks messagePieceRounds (messagePieces cells)
     (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
 
 def ProverMessagePiecesEncode (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) : Prop :=
-  Orchard.Sinsemilla.Chain.honestChunks messagePieceRounds (messagePieces cells) =
+  Chain.honestChunks messagePieceRounds (messagePieces cells) =
     (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
 
 def NoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
@@ -782,7 +782,7 @@ def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
       cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
 
-namespace AssignMessageCells
+namespace AssignMessagePieces
 
 def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
   let gdX := input.gd.x
@@ -850,14 +850,11 @@ def ProverAssumptions (_input : ProverValue Input Fp) (_ : ProverData Fp)
 
 def Spec (input : Value Input Fp) (cells : Value MessageCells Fp)
     (_ : ProverData Fp) : Prop :=
-  MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells ∧
-    MessagePiecesEncode input cells
+  MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells
 
 def ProverSpec (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
-  MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells ∧
-    ProverMessagePiecesEncode input cells ∧
-    Orchard.Sinsemilla.Chain.PieceBounds messagePieceRounds (messagePieces cells)
+  MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
@@ -877,9 +874,9 @@ def circuit : GeneralFormalCircuit.WithHint Fp Input MessageCells where
   soundness := soundness
   completeness := completeness
 
-end AssignMessageCells
+end AssignMessagePieces
 
-namespace DecompositionChecks
+namespace MessagePieceChecks
 
 structure Input (F : Type) where
   cells : MessageCells F
@@ -940,151 +937,45 @@ def circuit : FormalAssertion Fp Input where
   soundness := soundness
   completeness := completeness
 
-end DecompositionChecks
+end MessagePieceChecks
 
-namespace ConstraintChecks
+namespace Commit
 
-structure Input (F : Type) where
-  gd : Point F
-  pkd : Point F
-  value : F
-  rho : F
-  psi : F
-  cells : MessageCells F
-  zs : HVec (Orchard.Sinsemilla.Chain.zLengths messagePieceRounds) F
-deriving ProvableStruct
+abbrev Input (F : Type) :=
+  CommitDomain.Input messagePieceRounds.length F
 
-instance : Inhabited (Var Input Fp) :=
-  ⟨{
-    gd := default, pkd := default, value := default, rho := default, psi := default,
-    cells := default, zs := default
-  }⟩
-
-def main (input : Var Input Fp) : Circuit Fp Unit := do
-  let gdX := input.gd.x
-  let pkdX := input.pkd.x
-  let v := input.value
-  let rho := input.rho
-  let psi := input.psi
-  let cells := input.cells
-  let z13a := (HVec.get _ input.zs ⟨0, by decide⟩)[13]
-  let z13c := (HVec.get _ input.zs ⟨2, by decide⟩)[13]
-  let z1d := (HVec.get _ input.zs ⟨3, by decide⟩)[1]
-  let z13f := (HVec.get _ input.zs ⟨5, by decide⟩)[13]
-  let z1g := (HVec.get _ input.zs ⟨6, by decide⟩)[1]
-  let z13g := (HVec.get _ input.zs ⟨6, by decide⟩)[13]
-
-  let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
-    (cells.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
-  let b3cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
-    (cells.b3 + Expression.const ((2 ^ 4 : ℕ) : Fp) * cells.c +
-      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
-  let e1fPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
-    (cells.e1 + Expression.const ((2 ^ 4 : ℕ) : Fp) * cells.f +
-      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
-  let g1g2PrimeZs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
-    (cells.g1 + Expression.const ((2 ^ 9 : ℕ) : Fp) * z1g +
-      Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
-
-  DecompositionChecks.circuit { cells, z1d, z1g }
-  GdCanonicity.Gate.circuit
-    { gdX, b0 := cells.b0, b1 := cells.b1, a := cells.a, a' := aPrimeZs[0], z13A := z13a,
-      z13A' := aPrimeZs[13] }
-  PkdCanonicity.Gate.circuit
-    { pkdX, b3 := cells.b3, c := cells.c, d0 := cells.d0, b3C' := b3cPrimeZs[0], z13C := z13c,
-      z14B3C' := b3cPrimeZs[14] }
-  ValueCanonicity.Gate.circuit { value := v, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
-  RhoCanonicity.Gate.circuit
-    { rho, e1 := cells.e1, f := cells.f, g0 := cells.g0, e1F' := e1fPrimeZs[0], z13F := z13f,
-      z14E1F' := e1fPrimeZs[14] }
-  PsiCanonicity.Gate.circuit
-    { psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g, g1G2' := g1g2PrimeZs[0], z13G := z13g,
-      z13G1G2' := g1g2PrimeZs[13] }
-
-instance elaborated : ElaboratedCircuit Fp Input unit main := by
-  elaborate_circuit
-
-def Assumptions (input : Input Fp) : Prop :=
-  MessageCellFacts input.gd input.pkd input.value input.rho input.psi input.cells ∧
-    ∃ chunks : List ℕ,
-      Orchard.Sinsemilla.Chain.PieceChunks messagePieceRounds (messagePieces input.cells) chunks ∧
-      Orchard.Sinsemilla.Chain.ZsFacts messagePieceRounds chunks input.zs
-
-def Spec (input : Input Fp) : Prop :=
-  NoteCommitPieceValues (noteScalars input.gd input.pkd input.value input.rho input.psi)
-    (messagePieces input.cells)
-
-theorem soundness :
-    FormalAssertion.Soundness Fp main Assumptions Spec := by
-  sorry
-
-theorem completeness :
-    FormalAssertion.Completeness Fp main Assumptions Spec := by
-  sorry
-
-def circuit : FormalAssertion Fp Input where
-  main := main
-  elaborated := elaborated
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
-
-end ConstraintChecks
-
-namespace CommitAndConstrain
-
-structure Input (F : Type) where
-  note : Orchard.Action.NoteCommit.Input F
-  cells : MessageCells F
-deriving CircuitType
-
-instance : Inhabited (Var Input Fp) :=
-  ⟨{ note := default, cells := default }⟩
+abbrev Output (F : Type) :=
+  CommitDomain.WithZs.Output messagePieceRounds F
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Fp) :
-    Circuit Fp (Var Point Fp) := do
-  let v := input.note.value
-  let rho := input.note.rho
-  let psi := input.note.psi
-  let cells := input.cells
-  let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds
-    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
-      r := input.note.rcm }
-  let cm := out.point
-  ConstraintChecks.circuit
-    { gd := input.note.gd, pkd := input.note.pkd, value := v, rho, psi, cells, zs := out.zs }
-  return cm
+    Circuit Fp (Var Output Fp) :=
+  CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds input
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input Point (main G Q hQ R) := by
+    (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input Output (main G Q hQ R) := by
   elaborate_circuit
 
 def Assumptions (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
-    (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  MessageCellFacts input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi
-      input.cells ∧
-    MessagePiecesEncode input.note input.cells
-
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
-    (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  MessageCellFacts input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi
-      input.cells ∧
-  ProverMessagePiecesEncode input.note input.cells ∧
-    Orchard.Sinsemilla.Chain.PieceBounds messagePieceRounds (messagePieces input.cells) ∧
-    ∃ B, hashToPoint G.S Q
-      (noteScalars input.note.gd input.note.pkd input.note.value input.note.rho input.note.psi).chunks =
-        some B
+    (_input : Value Input Fp) (_ : ProverData Fp) : Prop :=
+  True
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (input : Value Input Fp) (cm : Point Fp) (_ : ProverData Fp) : Prop :=
-  NoteCommitRelation G Q R input.note cm
+    (input : Value Input Fp) (output : Value Output Fp) (data : ProverData Fp) : Prop :=
+  CommitDomain.WithZs.Spec G Q R 24 messagePieceTailRounds
+    input output data
+
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
+    (_R : MulFixed.FixedBase) (input : ProverValue Input Fp) (data : ProverData Fp)
+    (hint : ProverHint Fp) : Prop :=
+  CommitDomain.WithZs.ProverAssumptions G Q 24 messagePieceTailRounds
+    input data hint
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (input : ProverValue Input Fp) (cm : ProverValue Point Fp)
-    (_ : ProverHint Fp) : Prop :=
-  ProverNoteCommitRelation G Q R input.note cm
+    (input : ProverValue Input Fp) (output : ProverValue Output Fp) (hint : ProverHint Fp) :
+    Prop :=
+  CommitDomain.WithZs.ProverSpec G Q R 24 messagePieceTailRounds
+    input output hint
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
@@ -1099,7 +990,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   sorry
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
+    (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Output where
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R
   Assumptions := Assumptions G Q R
@@ -1109,13 +1000,277 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   soundness := soundness G Q hQ R
   completeness := completeness G Q hQ R
 
-end CommitAndConstrain
+end Commit
+
+namespace GdCanonicity
+
+structure Input (F : Type) where
+  gdX : F
+  a : F
+  b0 : F
+  b1 : F
+  z13A : F
+deriving ProvableStruct
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ gdX := default, a := default, b0 := default, b1 := default, z13A := default }⟩
+
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  let a'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
+    (input.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
+  Gate.circuit
+    { gdX := input.gdX, b0 := input.b0, b1 := input.b1, a := input.a,
+      a' := a'Zs[0], z13A := input.z13A, z13A' := a'Zs[13] }
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+def Assumptions (input : Input Fp) : Prop :=
+  IsBool input.b1 ∧ input.a.val < 2 ^ 250 ∧ input.b0.val < 2 ^ 4 ∧
+    input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp)
+
+def Spec (input : Input Fp) : Prop :=
+  input.a = ((bitrange input.gdX.val 0 250 : ℕ) : Fp) ∧
+    input.b0 = ((bitrange input.gdX.val 250 4 : ℕ) : Fp) ∧
+    input.b1 = ((bitrange input.gdX.val 254 1 : ℕ) : Fp)
+
+theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
+  sorry
+
+theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
+  sorry
+
+def circuit : FormalAssertion Fp Input where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end GdCanonicity
+
+namespace PkdCanonicity
+
+structure Input (F : Type) where
+  pkdX : F
+  b3 : F
+  c : F
+  d0 : F
+  z13C : F
+deriving ProvableStruct
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ pkdX := default, b3 := default, c := default, d0 := default, z13C := default }⟩
+
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  let b3C'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
+    (input.b3 + Expression.const ((2 ^ 4 : ℕ) : Fp) * input.c +
+      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
+  Gate.circuit
+    { pkdX := input.pkdX, b3 := input.b3, c := input.c, d0 := input.d0,
+      b3C' := b3C'Zs[0], z13C := input.z13C, z14B3C' := b3C'Zs[14] }
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+def Assumptions (input : Input Fp) : Prop :=
+  IsBool input.d0 ∧ input.c.val < 2 ^ 250 ∧ input.b3.val < 2 ^ 4 ∧
+    input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp)
+
+def Spec (input : Input Fp) : Prop :=
+  input.b3 = ((bitrange input.pkdX.val 0 4 : ℕ) : Fp) ∧
+    input.c = ((bitrange input.pkdX.val 4 250 : ℕ) : Fp) ∧
+    input.d0 = ((bitrange input.pkdX.val 254 1 : ℕ) : Fp)
+
+theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
+  sorry
+
+theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
+  sorry
+
+def circuit : FormalAssertion Fp Input where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end PkdCanonicity
+
+namespace ValueCanonicity
+
+structure Input (F : Type) where
+  value : F
+  d2 : F
+  d3 : F
+  e0 : F
+deriving ProvableStruct
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ value := default, d2 := default, d3 := default, e0 := default }⟩
+
+def main (input : Var Input Fp) : Circuit Fp Unit :=
+  Gate.circuit { value := input.value, d2 := input.d2, d3 := input.d3, e0 := input.e0 }
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+def Assumptions (input : Input Fp) : Prop :=
+  Gate.Assumptions { value := input.value, d2 := input.d2, d3 := input.d3, e0 := input.e0 }
+
+def Spec (input : Input Fp) : Prop :=
+  Gate.Spec { value := input.value, d2 := input.d2, d3 := input.d3, e0 := input.e0 }
+
+theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
+  circuit_proof_start [Gate.circuit]
+  exact h_holds h_assumptions
+
+theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
+  circuit_proof_start [Gate.circuit]
+  exact ⟨h_assumptions, h_spec⟩
+
+def circuit : FormalAssertion Fp Input where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end ValueCanonicity
+
+namespace RhoCanonicity
+
+structure Input (F : Type) where
+  rho : F
+  e1 : F
+  f : F
+  g0 : F
+  z13F : F
+deriving ProvableStruct
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{ rho := default, e1 := default, f := default, g0 := default, z13F := default }⟩
+
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  let e1F'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
+    (input.e1 + Expression.const ((2 ^ 4 : ℕ) : Fp) * input.f +
+      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
+  Gate.circuit
+    { rho := input.rho, e1 := input.e1, f := input.f, g0 := input.g0,
+      e1F' := e1F'Zs[0], z13F := input.z13F, z14E1F' := e1F'Zs[14] }
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+def Assumptions (input : Input Fp) : Prop :=
+  IsBool input.g0 ∧ input.f.val < 2 ^ 250 ∧ input.e1.val < 2 ^ 4 ∧
+    input.z13F = ((input.f.val / 2 ^ 130 : ℕ) : Fp)
+
+def Spec (input : Input Fp) : Prop :=
+  input.e1 = ((bitrange input.rho.val 0 4 : ℕ) : Fp) ∧
+    input.f = ((bitrange input.rho.val 4 250 : ℕ) : Fp) ∧
+    input.g0 = ((bitrange input.rho.val 254 1 : ℕ) : Fp)
+
+theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
+  sorry
+
+theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
+  sorry
+
+def circuit : FormalAssertion Fp Input where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end RhoCanonicity
+
+namespace PsiCanonicity
+
+structure Input (F : Type) where
+  psi : F
+  h0 : F
+  g1 : F
+  h1 : F
+  g2 : F
+  z13G : F
+deriving ProvableStruct
+
+instance : Inhabited (Var Input Fp) :=
+  ⟨{
+    psi := default, h0 := default, g1 := default, h1 := default,
+    g2 := default, z13G := default
+  }⟩
+
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  let g1G2'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
+    (input.g1 + Expression.const ((2 ^ 9 : ℕ) : Fp) * input.g2 +
+      Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
+  Gate.circuit
+    { psi := input.psi, h0 := input.h0, g1 := input.g1, h1 := input.h1, g2 := input.g2,
+      g1G2' := g1G2'Zs[0], z13G := input.z13G,
+      z13G1G2' := g1G2'Zs[13] }
+
+instance elaborated : ElaboratedCircuit Fp Input unit main := by
+  elaborate_circuit
+
+def Assumptions (input : Input Fp) : Prop :=
+  IsBool input.h1 ∧ input.g1.val < 2 ^ 9 ∧ input.g2.val < 2 ^ 240 ∧
+    input.h0.val < 2 ^ 5 ∧
+    input.z13G = ((input.g1.val + input.g2.val * 2 ^ 9) / 2 ^ 130 : ℕ)
+
+def Spec (input : Input Fp) : Prop :=
+  input.g1 = ((bitrange input.psi.val 0 9 : ℕ) : Fp) ∧
+    input.g2 = ((bitrange input.psi.val 9 240 : ℕ) : Fp) ∧
+    input.h0 = ((bitrange input.psi.val 249 5 : ℕ) : Fp) ∧
+    input.h1 = ((bitrange input.psi.val 254 1 : ℕ) : Fp)
+
+theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
+  sorry
+
+theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
+  sorry
+
+def circuit : FormalAssertion Fp Input where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
+
+end PsiCanonicity
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
-  let cells ← AssignMessageCells.circuit input
-  CommitAndConstrain.circuit G Q hQ R { note := input, cells := cells }
+  let cells ← AssignMessagePieces.circuit input
+  let out ← Commit.circuit G Q hQ R
+    { pieces := #v[cells.a, cells.b, cells.c, cells.d, cells.e, cells.f, cells.g, cells.h],
+      r := input.rcm }
+  let z13a := (HVec.get _ out.zs ⟨0, by decide⟩)[13]
+  let z13c := (HVec.get _ out.zs ⟨2, by decide⟩)[13]
+  let z1d := (HVec.get _ out.zs ⟨3, by decide⟩)[1]
+  let z13f := (HVec.get _ out.zs ⟨5, by decide⟩)[13]
+  let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
+  let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
+  MessagePieceChecks.circuit { cells, z1d, z1g }
+  GdCanonicity.circuit
+    { gdX := input.gd.x, a := cells.a, b0 := cells.b0, b1 := cells.b1, z13A := z13a }
+  PkdCanonicity.circuit
+    { pkdX := input.pkd.x, b3 := cells.b3, c := cells.c, d0 := cells.d0, z13C := z13c }
+  ValueCanonicity.circuit { value := input.value, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
+  RhoCanonicity.circuit
+    { rho := input.rho, e1 := cells.e1, f := cells.f, g0 := cells.g0, z13F := z13f }
+  PsiCanonicity.circuit
+    { psi := input.psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g,
+      z13G := z13g }
+  return out.point
 
 instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
@@ -1163,20 +1318,13 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) Assumptions (Spec G Q R) := by
-  circuit_proof_start [AssignMessageCells.circuit, CommitAndConstrain.circuit]
-  let hMessage := h_holds.1 trivial
-  exact h_holds.2 hMessage
+  sorry
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q) (ProverSpec G Q R) := by
-  circuit_proof_start [AssignMessageCells.circuit, CommitAndConstrain.circuit,
-    ProverAssumptions, ProverSpec, AssignMessageCells.ProverSpec,
-    CommitAndConstrain.ProverAssumptions, CommitAndConstrain.ProverSpec]
-  let hAssign := (h_env.1 trivial).2
-  exact ⟨⟨trivial, hAssign.1, hAssign.2.1, hAssign.2.2, h_assumptions.2.2⟩,
-    (h_env.2 ⟨hAssign.1, hAssign.2.1, hAssign.2.2, h_assumptions.2.2⟩).2⟩
+  sorry
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
@@ -1189,9 +1337,8 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   soundness := soundness G Q hQ R
   completeness := completeness G Q hQ R
 
--- TODO(note_commit): replace the placeholder subcircuit specs/proofs above with the real
--- semantic contracts. The parent gadget now composes bundled subcircuits; the remaining
--- proof work is concentrated in `YCanonicity`, `AssignMessageCells`, and
--- `CommitAndConstrain`.
+-- TODO(note_commit): discharge the semantic wrapper proofs introduced above, then connect
+-- the top-level proof through `AssignMessagePieces`, `Commit`, `MessagePieceChecks`, and
+-- the coordinate canonicity circuits.
 
 end Orchard.Action.NoteCommit
