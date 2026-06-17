@@ -39,14 +39,14 @@ def Assumptions (row : Row Fp) : Prop :=
     row.z13A = ((row.a.val / 2 ^ 130 : ℕ) : Fp) ∧
     -- `z13A'` is the *partial* (13-word) CopyCheck running sum of `a'`, which overflows
     -- `2^130`, so only the telescoped decomposition is soundly available.
-    (∃ lo : ℕ, lo < 2 ^ 130 ∧ row.a' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13A') ∧
-    (row.b1 = 1 → row.z13A' = 0)
+    ∃ lo : ℕ, lo < 2 ^ 130 ∧ row.a' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13A'
 
 /-- The gate's payoff: `a`/`b0`/`b1` are the canonical bit slices of `x(g_d)`. -/
 def Spec (row : Row Fp) : Prop :=
   row.a = ((bitrange row.gdX.val 0 250 : ℕ) : Fp) ∧
     row.b0 = ((bitrange row.gdX.val 250 4 : ℕ) : Fp) ∧
-    row.b1 = ((bitrange row.gdX.val 254 1 : ℕ) : Fp)
+    row.b1 = ((bitrange row.gdX.val 254 1 : ℕ) : Fp) ∧
+    (row.b1 = 1 → row.z13A' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.a + row.b0 * Expression.const ((2 ^ 250 : ℕ) : Fp) +
@@ -64,7 +64,7 @@ def circuit : FormalAssertion Fp Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨hb1, ha_lt, hb0_lt, haPrime, hz13A, hzaDec, _⟩ := h_assumptions
+    obtain ⟨hb1, ha_lt, hb0_lt, haPrime, hz13A, hzaDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2, hg3⟩ := h_holds
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -117,14 +117,18 @@ def circuit : FormalAssertion Fp Row where
       have h1 : input_b0.val = bitrange (input_a + input_b0 * ((2 ^ 250 : ℕ) : Fp)).val 250 4 := by
         simp only [bitrange, hlo_val]; omega
       rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 250 + 4 ≤ 254)]
-    refine ⟨?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_⟩
     · rw [← ha_eq]; exact (ZMod.natCast_rightInverse input_a).symm
     · rw [← hb0_eq]; exact (ZMod.natCast_rightInverse input_b0).symm
     · rw [← hb1_eq]; exact (ZMod.natCast_rightInverse input_b1).symm
+    · intro h1
+      rcases mul_eq_zero.mp hg3 with h | h
+      · exact absurd (h1 ▸ h) one_ne_zero
+      · exact h
   completeness := by
     circuit_proof_start
-    obtain ⟨_, ha_lt, _, haPrime, hz13A, _, hzaZero⟩ := h_assumptions
-    obtain ⟨ha_eq, hb0_eq, hb1_eq⟩ := h_spec
+    obtain ⟨_, ha_lt, _, haPrime, hz13A, _⟩ := h_assumptions
+    obtain ⟨ha_eq, hb0_eq, hb1_eq, hzaZero⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hgdX : input_gdX.val < 2 ^ 255 :=
