@@ -646,7 +646,61 @@ theorem completeness :
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec,
     Gate.circuit, Gate.Assumptions, Gate.Spec]
-  sorry
+  obtain ⟨⟨_, hk0⟩, ⟨_, hk2⟩, hk3, hj, hDec, htSpec, htz0, htzLast⟩ := h_env
+  set jv := env.get (i₀ + 2 + 2 + 1) with hjv
+  -- `lsb` is the low bit of `y`; the support cells are the canonical bit slices.
+  have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Fp) := by
+    rw [h_assumptions]
+    have hbit : (if input_y.val.testBit 0 then (1 : ℕ) else 0) = bitrange input_y.val 0 1 := by
+      simp only [bitrange, pow_zero, Nat.div_one, pow_one, Nat.testBit_zero]
+      rcases Nat.mod_two_eq_zero_or_one input_y.val with h | h <;> simp [h]
+    rw [hbit]
+  have htile : bitrange input_y.val 0 250
+      = bitrange input_y.val 0 1 + 2 * bitrange input_y.val 1 9
+        + 2 ^ 10 * bitrange input_y.val 10 240 := by
+    rw [show (250 : ℕ) = 1 + 249 from rfl, Orchard.Specs.bitrange_add,
+      show (249 : ℕ) = 9 + 240 from rfl, Orchard.Specs.bitrange_add]
+    ring
+  have hj_br : jv = ((bitrange input_y.val 0 250 : ℕ) : Fp) := by
+    rw [hj, hlsb, hk0, htile]
+    simp only [Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset, bitrange]
+    push_cast; ring
+  have hj_val : jv.val = bitrange input_y.val 0 250 := by
+    rw [hj_br]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
+      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+  have hjlt : jv.val < 2 ^ 250 := by rw [hj_val]; exact bitrange_lt _ _ _
+  have hbsub : ∀ {s l : ℕ}, l ≤ 250 →
+      (Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset input_y s l).val
+        = bitrange input_y.val s l := by
+    intro s l hl
+    show (((bitrange input_y.val s l : ℕ) : Fp)).val = bitrange input_y.val s l
+    exact ZMod.val_natCast_of_lt (lt_of_lt_of_le (bitrange_lt input_y.val s l)
+      (le_trans (Nat.pow_le_pow_right (by norm_num) hl)
+        (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])))
+  refine ⟨⟨?A, ⟨?B1, ?B2, ?B3, ?B4, ?B5, ?B6, ?B7, ?B8⟩,
+    h_assumptions, hj_br, hk0, hk2, hk3, ?guard⟩, h_assumptions⟩
+  case A => exact hjlt
+  case B1 =>
+    rw [hlsb, show bitrange input_y.val 0 1 = input_y.val % 2 from by simp [bitrange]]
+    exact nat_mod_two_isBool _
+  case B2 => exact hjlt
+  case B3 => rw [hk0, hbsub (by norm_num)]; exact bitrange_lt _ _ _
+  case B4 => rw [hk2, hbsub (by norm_num)]; exact bitrange_lt _ _ _
+  case B5 => rw [htz0]; ring
+  case B6 => exact (hDec hjlt).2.1
+  case B7 => exact (hDec hjlt).2.2
+  case B8 =>
+    obtain ⟨lo, hlo, hdec⟩ := htSpec.2
+    simp only [show K * 13 = 130 from rfl] at hlo hdec
+    refine ⟨lo, hlo, ?_⟩
+    rw [htz0]; exact hdec
+  case guard =>
+    intro h1
+    obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_y) (bit_one_of_eq hk3 h1)
+    rw [htzLast, show K * 13 = 130 from rfl,
+      show jv + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP = jv + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
+      shifted_high_zero (by norm_num) (by norm_num) (by rw [hj_val]; exact hatp)]
+    simp
 
 def circuit : GeneralFormalCircuit.WithHint Fp Input field where
   main := main
