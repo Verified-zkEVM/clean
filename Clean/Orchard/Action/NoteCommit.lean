@@ -839,6 +839,10 @@ theorem isLowBit_bitrangeSubset (y : Fp) :
   rw [isLowBit_iff_mod_two, bitrangeSubset_eq]
   norm_num [bitrange]
 
+/-- The honest 1-bit `bitrange` cast of `y` is its low (sign) bit. -/
+theorem isLowBit_bitrange (y : Fp) : IsLowBit y ((bitrange y.val 0 1 : ℕ) : Fp) := by
+  rw [← bitrangeSubset_eq]; exact isLowBit_bitrangeSubset y
+
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Spec, AssignedMessageFacts,
@@ -851,7 +855,16 @@ theorem completeness :
   circuit_proof_start [main, ProverSpec, MessageCellFacts,
     Utilities.LookupRangeCheck.WitnessShort.circuit,
     Utilities.LookupRangeCheck.WitnessShort.ProverSpec]
-  sorry
+  obtain ⟨h_gd, h_pkd, h_v, h_rho, h_psi, -⟩ := h_input
+  subst h_gd; subst h_pkd; subst h_v; subst h_rho; subst h_psi
+  simp only [bitrangeSubset_eq] at h_env
+  obtain ⟨⟨_, e_b0⟩, ⟨_, e_b3⟩, ⟨_, e_d2⟩, ⟨_, e_e0⟩, ⟨_, e_e1⟩, ⟨_, e_g1⟩, ⟨_, e_h0⟩,
+    e_b1, e_b2, e_d0, e_d1, e_g0, e_h1, e_a, e_b, e_c, e_d, e_e, e_f, e_g, e_h⟩ := h_env
+  refine ⟨e_a, e_b0, e_b1, ?_, e_b3, e_c, e_d0, ?_, e_d2, e_e0, e_e1, e_f, e_g0, e_g1, e_h0, e_h1,
+    e_b.trans (by ring), e_d.trans (by ring), e_e.trans (by ring), e_g.trans (by ring),
+    e_h.trans (by ring)⟩
+  · rw [e_b2]; exact isLowBit_bitrange _
+  · rw [e_d1]; exact isLowBit_bitrange _
 
 def circuit : GeneralFormalCircuit.WithHint Fp Input MessageCells where
   main := main
