@@ -1408,6 +1408,143 @@ def circuit : FormalAssertion Fp Input where
 
 end PsiCanonicity
 
+section PieceExtraction
+open Orchard.Specs.Sinsemilla (sum_suffix_div)
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
+
+/-- Reusable Sinsemilla running-sum / piece-bound extraction (generic over the rounds list).
+TODO: dedup with the analogous private helpers in CommitIvk by sharing a Sinsemilla module. -/
+private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
+    (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K) ∧
+      pieces[0] = ((∑ r ∈ Finset.range (n + 1),
+        ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) ∧
+      (∀ i, i < n + 1 → chunks.getD i 0 = ms i) ∧
+      Orchard.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
+  simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
+  obtain ⟨ms, hms, hpc, tailChunks, hchunks, hPC⟩ := h
+  subst hchunks
+  refine ⟨ms, hms, hpc, ?_, ?_⟩
+  · intro i hi
+    rw [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simpa using hi)]
+    simp only [List.getElem?_map, List.getElem?_range, hi, Option.map_some, Option.getD_some]
+  · rwa [List.drop_left' (by simp)]
+
+private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
+    2 ^ (Orchard.Specs.Sinsemilla.K * m) < PALLAS_BASE_CARD := by
+  have hle : Orchard.Specs.Sinsemilla.K * m ≤ 250 := by
+    simp only [Orchard.Specs.Sinsemilla.K]; omega
+  exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hle)
+    (by norm_num [PALLAS_BASE_CARD])
+
+private theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {ms : ℕ → ℕ}
+    (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K)
+    (hpc : piece = ((∑ r ∈ Finset.range (n + 1),
+      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp))
+    (hgetD : ∀ i, i < n + 1 → chunks.getD i 0 = ms i)
+    {r : ℕ} (hr : r ≤ n) :
+    ((∑ j ∈ Finset.range (n + 1 - r),
+        chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp)
+      = ((piece.val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+  have hpval : piece.val = ∑ r ∈ Finset.range (n + 1),
+      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) := by
+    rw [hpc, ZMod.val_natCast_of_lt
+      (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
+  have hsum : (∑ j ∈ Finset.range (n + 1 - r),
+      chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j))
+        = ∑ j ∈ Finset.range (n + 1 - r),
+          ms (r + j) * 2 ^ (Orchard.Specs.Sinsemilla.K * j) := by
+    apply Finset.sum_congr rfl
+    intro j hj
+    rw [Finset.mem_range] at hj
+    rw [hgetD (r + j) (by omega)]
+  rw [hsum, hpval, sum_suffix_div hms (n + 1) r (by omega)]
+
+private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
+    (hm : n + 1 ≤ 25)
+    (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    ZMod.val (pieces[0] : Fp) < 2 ^ (Orchard.Specs.Sinsemilla.K * (n + 1)) := by
+  obtain ⟨ms, hms, hpc, -, -⟩ := pieceChunks_head_digits h
+  rw [hpc, ZMod.val_natCast_of_lt
+    (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
+  exact sum_digits_lt hms (n + 1)
+
+/-- Head running-sum cell at arbitrary index `r ≤ n`. -/
+private theorem zsFacts_head_cell {n : ℕ} {rest : List ℕ} {chunks : List ℕ}
+    {pieces : Vector Fp (n :: rest).length}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
+    (hm : n + 1 ≤ 25) {r : ℕ} (hr : r ≤ n)
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
+    (hZsHead : HVec.head zs = Vector.ofFn (fun i : Fin (n + 1) =>
+      ((∑ j ∈ Finset.range (n + 1 - i.val),
+        chunks.getD (i.val + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp))) :
+    (HVec.head zs)[r]'(Nat.lt_succ_of_le hr)
+      = (((pieces[0] : Fp).val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+  obtain ⟨ms, hms, hpc, hgetD, -⟩ := pieceChunks_head_digits hPC
+  rw [hZsHead, Vector.getElem_ofFn]
+  exact zsFacts_cell_eq_div hm hms hpc hgetD hr
+
+/-- General running-sum cell extraction: the `r`-th entry of the `i`-th piece's running-sum
+vector equals `pieces[i].val / 2^(K·r)`. -/
+private theorem zsFacts_cell :
+    ∀ (ns : List ℕ) (pieces : Vector Fp ns.length) (chunks : List ℕ)
+      (zs : HVec (Orchard.Sinsemilla.Chain.zLengths ns) Fp)
+      (i : Fin (Orchard.Sinsemilla.Chain.zLengths ns).length),
+      Orchard.Sinsemilla.Chain.PieceChunks ns pieces chunks →
+      Orchard.Sinsemilla.Chain.ZsFacts ns chunks zs →
+      (Orchard.Sinsemilla.Chain.zLengths ns)[i] ≤ 25 →
+      ∀ {r : ℕ} (hr : r < (Orchard.Sinsemilla.Chain.zLengths ns)[i]),
+      (HVec.get (Orchard.Sinsemilla.Chain.zLengths ns) zs i)[r]'hr
+        = (((pieces[i.val]'(by
+              have := i.isLt
+              simpa only [Orchard.Sinsemilla.Chain.zLengths, List.length_map] using this) : Fp).val
+            / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp)
+  | n :: rest, pieces, chunks, zs, ⟨0, _⟩, hPC, hZs, hm, r, hr => by
+      simp only [Orchard.Sinsemilla.Chain.ZsFacts] at hZs
+      have hr' : r < n + 1 := hr
+      have hmn : n + 1 ≤ 25 := hm
+      exact zsFacts_head_cell hmn (Nat.lt_succ_iff.mp hr') hPC hZs.1
+  | n :: rest, pieces, chunks, zs, ⟨k + 1, hk⟩, hPC, hZs, hm, r, hr => by
+      obtain ⟨-, -, -, -, hPCtail⟩ := pieceChunks_head_digits hPC
+      simp only [Orchard.Sinsemilla.Chain.ZsFacts] at hZs
+      have hkr : k < (Orchard.Sinsemilla.Chain.zLengths rest).length := by
+        have hk' : k + 1 < (Orchard.Sinsemilla.Chain.zLengths (n :: rest)).length := hk
+        simp only [Orchard.Sinsemilla.Chain.zLengths, List.length_map, List.length_cons]
+          at hk' ⊢
+        omega
+      have IH := zsFacts_cell rest pieces.tail (chunks.drop (n + 1)) (HVec.tail zs)
+        ⟨k, hkr⟩ hPCtail hZs.2 hm hr
+      have hk_tail : k < (n :: rest).length - 1 := by
+        simp only [List.length_cons, Nat.add_sub_cancel]
+        simpa only [Orchard.Sinsemilla.Chain.zLengths, List.length_map] using hkr
+      have hbridge :
+          pieces.tail[(⟨k, hkr⟩ : Fin (Orchard.Sinsemilla.Chain.zLengths rest).length).val]
+            = pieces[(⟨k + 1, hk⟩ :
+                Fin (Orchard.Sinsemilla.Chain.zLengths (n :: rest)).length).val] :=
+        Vector.getElem_tail (v := pieces) (i := k) (hi := hk_tail)
+      exact hbridge ▸ IH
+
+/-- General piece bound: the `i`-th message piece value is `< 2^(K·(nᵢ+1))`. -/
+private theorem pieceChunks_val_lt :
+    ∀ (ns : List ℕ) (pieces : Vector Fp ns.length) (chunks : List ℕ) (i : Fin ns.length),
+      Orchard.Sinsemilla.Chain.PieceChunks ns pieces chunks → ns[i] + 1 ≤ 25 →
+      (pieces[i] : Fp).val < 2 ^ (Orchard.Specs.Sinsemilla.K * (ns[i] + 1))
+  | n :: rest, pieces, chunks, ⟨0, _⟩, hPC, hm => pieceChunks_head_val_lt hm hPC
+  | n :: rest, pieces, chunks, ⟨k + 1, hk⟩, hPC, hm => by
+      obtain ⟨-, -, -, -, hPCtail⟩ := pieceChunks_head_digits hPC
+      have IH := pieceChunks_val_lt rest pieces.tail (chunks.drop (n + 1))
+        ⟨k, Nat.lt_of_succ_lt_succ hk⟩ hPCtail hm
+      have hbridge : pieces.tail[(⟨k, Nat.lt_of_succ_lt_succ hk⟩ : Fin rest.length).val]
+          = pieces[(⟨k + 1, hk⟩ : Fin (n :: rest).length).val] :=
+        Vector.getElem_tail (v := pieces) (i := k)
+          (hi := by simp only [List.length_cons, Nat.add_sub_cancel]
+                    exact Nat.lt_of_succ_lt_succ hk)
+      exact hbridge ▸ IH
+
+end PieceExtraction
+
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
