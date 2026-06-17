@@ -1030,11 +1030,9 @@ def Assumptions (input : Input Fp) : Prop :=
     input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp)
 
 def Spec (input : Input Fp) : Prop :=
-  Gate.Spec
-    { gdX := input.gdX, b0 := input.b0, b1 := input.b1, a := input.a,
-      a' := input.a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP,
-      z13A := input.z13A,
-      z13A' := ((input.a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP).val / 2 ^ 130 : ℕ) }
+  input.a = ((bitrange input.gdX.val 0 250 : ℕ) : Fp) ∧
+    input.b0 = ((bitrange input.gdX.val 250 4 : ℕ) : Fp) ∧
+    input.b1 = ((bitrange input.gdX.val 254 1 : ℕ) : Fp)
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   sorry
@@ -1081,14 +1079,9 @@ def Assumptions (input : Input Fp) : Prop :=
     input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp)
 
 def Spec (input : Input Fp) : Prop :=
-  Gate.Spec
-    { pkdX := input.pkdX, b3 := input.b3, c := input.c, d0 := input.d0,
-      b3C' := input.b3 + input.c * ((2 ^ 4 : ℕ) : Fp) +
-        ((2 ^ 140 : ℕ) : Fp) - Ecc.tP,
-      z13C := input.z13C,
-      z14B3C' :=
-        (((input.b3 + input.c * ((2 ^ 4 : ℕ) : Fp) +
-          ((2 ^ 140 : ℕ) : Fp) - Ecc.tP).val / 2 ^ 140 : ℕ) : Fp) }
+  input.b3 = ((bitrange input.pkdX.val 0 4 : ℕ) : Fp) ∧
+    input.c = ((bitrange input.pkdX.val 4 250 : ℕ) : Fp) ∧
+    input.d0 = ((bitrange input.pkdX.val 254 1 : ℕ) : Fp)
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   sorry
@@ -1177,14 +1170,9 @@ def Assumptions (input : Input Fp) : Prop :=
     input.z13F = ((input.f.val / 2 ^ 130 : ℕ) : Fp)
 
 def Spec (input : Input Fp) : Prop :=
-  Gate.Spec
-    { rho := input.rho, e1 := input.e1, f := input.f, g0 := input.g0,
-      e1F' := input.e1 + input.f * ((2 ^ 4 : ℕ) : Fp) +
-        ((2 ^ 140 : ℕ) : Fp) - Ecc.tP,
-      z13F := input.z13F,
-      z14E1F' :=
-        (((input.e1 + input.f * ((2 ^ 4 : ℕ) : Fp) +
-          ((2 ^ 140 : ℕ) : Fp) - Ecc.tP).val / 2 ^ 140 : ℕ) : Fp) }
+  input.e1 = ((bitrange input.rho.val 0 4 : ℕ) : Fp) ∧
+    input.f = ((bitrange input.rho.val 4 250 : ℕ) : Fp) ∧
+    input.g0 = ((bitrange input.rho.val 254 1 : ℕ) : Fp)
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   sorry
@@ -1237,15 +1225,10 @@ def Assumptions (input : Input Fp) : Prop :=
     input.z13G = ((input.g1.val + input.g2.val * 2 ^ 9) / 2 ^ 130 : ℕ)
 
 def Spec (input : Input Fp) : Prop :=
-  Gate.Spec
-    { psi := input.psi, h0 := input.h0, g1 := input.g1, h1 := input.h1,
-      g2 := input.g2,
-      g1G2' := input.g1 + input.g2 * ((2 ^ 9 : ℕ) : Fp) +
-        ((2 ^ 130 : ℕ) : Fp) - Ecc.tP,
-      z13G := input.z13G,
-      z13G1G2' :=
-        (((input.g1 + input.g2 * ((2 ^ 9 : ℕ) : Fp) +
-          ((2 ^ 130 : ℕ) : Fp) - Ecc.tP).val / 2 ^ 130 : ℕ) : Fp) }
+  input.g1 = ((bitrange input.psi.val 0 9 : ℕ) : Fp) ∧
+    input.g2 = ((bitrange input.psi.val 9 240 : ℕ) : Fp) ∧
+    input.h0 = ((bitrange input.psi.val 249 5 : ℕ) : Fp) ∧
+    input.h1 = ((bitrange input.psi.val 254 1 : ℕ) : Fp)
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   sorry
