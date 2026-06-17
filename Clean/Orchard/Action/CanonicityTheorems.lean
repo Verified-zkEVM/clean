@@ -166,6 +166,15 @@ theorem shifted_high_zero {lo : Fp} {k : ℕ} (hk : 130 ≤ k) (hk254 : k ≤ 25
     val_shift k (by omega) (by omega)
   rw [hval, Nat.div_eq_of_lt (by omega)]
 
+/-- A one-bit slice cast to `Fp` that equals `1` is the bit value `1`. (Turns a canonicity
+gate's `b = ((bitrange n s 1 : ℕ) : Fp)` plus `b = 1` into `bitrange n s 1 = 1`.) -/
+theorem bit_one_of_eq {b : Fp} {n s : ℕ} (heq : b = ((bitrange n s 1 : ℕ) : Fp))
+    (h1 : b = 1) : bitrange n s 1 = 1 := by
+  rcases (show bitrange n s 1 = 0 ∨ bitrange n s 1 = 1 from by
+    have := bitrange_lt n s 1; omega) with h | h
+  · rw [heq, h] at h1; norm_num at h1
+  · exact h
+
 /-- Dividing a `bitrange` of width `a+b` by `2^a` exposes the next `b` bits. -/
 theorem bitrange_div_pow (n s a b : ℕ) :
     bitrange n s (a + b) / 2 ^ a = bitrange n (s + a) b := by

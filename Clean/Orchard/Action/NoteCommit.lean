@@ -1064,33 +1064,20 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   ]
   obtain ⟨hb1, ha_lt, hb0_lt, hz13A⟩ := h_assumptions
   obtain ⟨ha_eq, hb0_eq, hb1_eq⟩ := h_spec
-  -- `h_env` carries both the (sound) decomposition and the honest running-sum values; the
-  -- honest `zLast = (a + 2^130 - t_P).val / 2^130` is what makes `b1 = 1 → zLast = 0` provable.
   obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
   simp only [show K * 13 = 130 from by norm_num [K]] at hlo hdec hzLast
   have ha_val : input_a.val = bitrange input_gdX.val 0 250 := by
     rw [ha_eq]
     exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
       (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
-  have htp : tPNat < 2 ^ 130 := by norm_num [tPNat]
-  refine ⟨⟨hb1, ha_lt, hb0_lt, ?_, hz13A, lo, hlo, ?_⟩, ha_eq, hb0_eq, hb1_eq, ?_⟩
-  · linear_combination hz0
-  · linear_combination hdec + hz0
-  · -- `b1 = 1` ⇒ `g_d` is canonical ⇒ `a < t_P` ⇒ `a + 2^130 - t_P < 2^130` ⇒ the honest
-    -- 13-word running-sum tail `zLast` is `0`.
-    intro h1
-    have hbr : bitrange input_gdX.val 254 1 = 1 := by
-      rcases (show bitrange input_gdX.val 254 1 = 0 ∨ bitrange input_gdX.val 254 1 = 1 from by
-        have := bitrange_lt input_gdX.val 254 1; omega) with h | h
-      · rw [hb1_eq, h] at h1; norm_num at h1
-      · exact h
-    obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) hbr
-    -- the honest tail `zLast = (a + 2^130 - t_P).val / 2^130` (`hzLast`, from the `ProverSpec`)
-    -- vanishes because `a < t_P` makes the shifted value `< 2^130` (`shifted_high_zero`).
-    rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
-        = input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
-      shifted_high_zero (by norm_num) (by norm_num) (by rw [ha_val]; exact hatp)]
-    simp
+  refine ⟨⟨hb1, ha_lt, hb0_lt, by linear_combination hz0, hz13A, lo, hlo,
+    by linear_combination hdec + hz0⟩, ha_eq, hb0_eq, hb1_eq, fun h1 => ?_⟩
+  -- `b1 = 1` ⇒ `g_d` canonical ⇒ `a < t_P` ⇒ the honest tail `zLast` from `ProverSpec` vanishes.
+  obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) (bit_one_of_eq hb1_eq h1)
+  rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
+      = input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
+    shifted_high_zero (by norm_num) (by norm_num) (by rw [ha_val]; exact hatp)]
+  simp
 
 def circuit : FormalAssertion Fp Input where
   main
