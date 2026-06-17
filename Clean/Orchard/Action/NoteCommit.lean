@@ -1016,7 +1016,7 @@ instance : Inhabited (Var Input Fp) :=
   ⟨{ gdX := default, a := default, b0 := default, b1 := default, z13A := default }⟩
 
 def main (input : Var Input Fp) : Circuit Fp Unit := do
-  let a'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
+  let a'Zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13
     (input.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
     { gdX := input.gdX, b0 := input.b0, b1 := input.b1, a := input.a,
@@ -1064,7 +1064,7 @@ instance : Inhabited (Var Input Fp) :=
   ⟨{ pkdX := default, b3 := default, c := default, d0 := default, z13C := default }⟩
 
 def main (input : Var Input Fp) : Circuit Fp Unit := do
-  let b3C'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
+  let b3C'Zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14
     (input.b3 + Expression.const ((2 ^ 4 : ℕ) : Fp) * input.c +
       Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
@@ -1155,7 +1155,7 @@ instance : Inhabited (Var Input Fp) :=
   ⟨{ rho := default, e1 := default, f := default, g0 := default, z13F := default }⟩
 
 def main (input : Var Input Fp) : Circuit Fp Unit := do
-  let e1F'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
+  let e1F'Zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14
     (input.e1 + Expression.const ((2 ^ 4 : ℕ) : Fp) * input.f +
       Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
@@ -1208,7 +1208,7 @@ instance : Inhabited (Var Input Fp) :=
   }⟩
 
 def main (input : Var Input Fp) : Circuit Fp Unit := do
-  let g1G2'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
+  let g1G2'Zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13
     (input.g1 + Expression.const ((2 ^ 9 : ℕ) : Fp) * input.g2 +
       Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
