@@ -645,7 +645,7 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 the running-sum tail identities, and the existence of a chunk decomposition whose hash is the
 commitment point (blinded by some `rivk`). -/
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (input : Value Input Fp) (output : Value Output Fp) (_ : ProverData Fp) : Prop :=
+    (_input : Value Input Fp) (output : Value Output Fp) (_ : ProverData Fp) : Prop :=
   output.cells.b0.val < 2 ^ 4 ∧ output.cells.b2.val < 2 ^ 5 ∧ output.cells.d0.val < 2 ^ 9 ∧
     output.cells.a.val < 2 ^ 250 ∧ output.cells.c.val < 2 ^ 240 ∧
     (HVec.get _ output.zs ⟨0, by decide⟩)[13] = ((output.cells.a.val / 2 ^ 130 : ℕ) : Fp) ∧
@@ -913,6 +913,53 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         = ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 245 9 : ℕ) : Fp)
           + ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 254 1 : ℕ) : Fp) * 2 ^ 9 := by
       rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.1, hO]; exact hEd
+    -- the two running-sum tail cells, identified with `a.val / 2^130` and `c.val / 2^130`
+    -- through the honest `ZsHonest` running sums (mirrors the soundness z13a/z13c proofs)
+    have hOz13a : (HVec.get _ (eval env O).zs ⟨0, by decide⟩)[13]
+        = (((eval env O).cells.a.val / 2 ^ 130 : ℕ) : Fp) := by
+      have hz13a := zsHonest_head_cell_eq_div (n := 24) (rest := [0, 23, 0]) (by norm_num) hZsH.1
+      rw [CircuitType.eval_var_prover_to_verifier] at hz13a
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment _).1, hO]
+      rw [CommitDomain.WithZs.eval_zs] at hz13a
+      rw [Commit.eval_zs]
+      exact hz13a.trans (by simp only [circuit_norm]; rfl)
+    have hOz13c : (HVec.get _ (eval env O).zs ⟨2, by decide⟩)[13]
+        = (((eval env O).cells.c.val / 2 ^ 130 : ℕ) : Fp) := by
+      have hz13c := zsHonest_get2_cell_eq_div hZsH
+      rw [CircuitType.eval_var_prover_to_verifier] at hz13c
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment _).2.2.1, hO]
+      rw [CommitDomain.WithZs.eval_zs] at hz13c
+      rw [Commit.eval_zs]
+      exact hz13c.trans (by simp only [circuit_norm]; rfl)
+    -- the hash existential: the honest chunks `commitIvkChunks ak nk` whose hash is the point
+    have hOpf := honest_pieces_facts
+      (Expression.eval env.toEnvironment input_var.ak) (Expression.eval env.toEnvironment input_var.nk)
+      (eval env O).cells.a (eval env O).cells.b (eval env O).cells.c (eval env O).cells.d
+      hOa hOb hOc hOd
+    have hOhash : ∃ (chunks : List ℕ),
+        Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
+          #v[(eval env O).cells.a, (eval env O).cells.b, (eval env O).cells.c, (eval env O).cells.d] chunks ∧
+        (∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+          (eval env O).cells.point.coords
+            = Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords) := by
+      refine ⟨Orchard.Specs.Sinsemilla.commitIvkChunks
+        (Expression.eval env.toEnvironment input_var.ak).val
+        (Expression.eval env.toEnvironment input_var.nk).val, ?_, ?_⟩
+      · rw [← hOpf.2]
+        exact Orchard.Sinsemilla.Chain.pieceChunks_honestChunks _ _ hOpf.1
+      · intro B hB
+        have hpt := hHash B (by
+          simp only [Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm,
+            hEa, hEb, hEc, hEd]
+          rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
+              (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).2]
+          exact hB)
+        rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, Commit.eval_cells_point, hO]
+        rw [CircuitType.eval_var_prover_to_verifier, Commit.withZs_eval_point] at hpt
+        convert hpt using 4
+        simp only [← h_input, circuit_norm]
     clear_value O
     unfold ProverSpec
     simp only [show (input.ak : Fp) = Expression.eval env.toEnvironment input_var.ak from hak_eq.symm,
@@ -929,9 +976,9 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     · rw [hOc, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
       exact bitrange_lt _ _ _
     · -- z13a
-      sorry
+      exact hOz13a
     · -- z13c
-      sorry
+      exact hOz13c
     · exact hOa
     · exact hOb0
     · exact hOb1
@@ -942,7 +989,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     · rw [hOb, hOb0, hOb1, hOb2]; ring
     · rw [hOd, hOd0, hOd1]; ring
     · -- the hash existential
-      sorry
+      exact hOhash
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Output where
@@ -1014,17 +1061,17 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
     (input : ProverValue Input Fp) (ivk : Fp) (_ : ProverHint Fp) : Prop :=
   ProverCommitIvkRelation G Q R input ivk
 
--- TODO(commit-ivk-proofs): the `Canonicity` subcircuit (CopyCheck decompositions + gate) is
--- fully proven (soundness + completeness, kernel-checked). The two remaining `sorry`s are the
--- top-level composition of `WithZs` (the Sinsemilla hash) with `Canonicity`: the glue must
--- (1) read the `WithZs` `PieceChunks`/`ZsFacts` and `WitnessShort` ranges, (2) feed them as
--- the `Canonicity.Assumptions` (notably `z13A = a.val/2^130` from `ZsFacts` + `sum_suffix_div`),
--- (3) turn `Canonicity.Spec` into indexed piece values and apply the chunk bridge
--- `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values` to get `chunks = commitIvkChunks`,
--- and (4) thread `WithZs`'s hash relation to the entry output `ivk = out.point.x`. A one-shot
--- `circuit_proof_start` whnf-times-out; the working start is `circuit_proof_start_core` then
--- `dsimp only [main, circuit_norm] at h_holds`, projecting each child spec separately (see
--- `doc/performance-problems.md`). This mirrors `NoteCommit.CommitAndConstrain`, also unfinished.
+-- The top-level composition of `Commit` (witnessing + the `WithZs` Sinsemilla hash, behind a
+-- folded `Commit.Output`) with the `Canonicity` subcircuit (CopyCheck decompositions + gate) is
+-- fully proven (soundness + completeness, kernel-checked). The glue (1) reads the `Commit`
+-- `ProverSpec`/`Spec` ranges, `z13A/z13C` running-sum tails, and canonical slices, (2) feeds them
+-- as the `Canonicity.Assumptions`, (3) reads `Canonicity.Spec` as indexed piece values and applies
+-- the chunk bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values` to get
+-- `chunks = commitIvkChunks`, and (4) threads the hash relation to the entry output
+-- `ivk = out.point.x`. A one-shot `circuit_proof_start` whnf-times-out; the working start is
+-- `circuit_proof_start_core` then `dsimp only [main, circuit_norm] at h_holds/h_env`, projecting
+-- each child spec separately and keeping the `Commit` output opaque (see
+-- `doc/performance-problems.md`).
 /-- The `Canonicity` canonical-slice spec gives exactly the indexed `commit_ivk` piece
 values consumed by the chunk bridge (same content as `commitIvkPieceValues_of_gate_spec`,
 spelled over the `Canonicity` cells). -/
@@ -1149,7 +1196,150 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q R) (ProverSpec G Q R) := by
-  sorry
+  circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_env ⊢
+  -- Commit's prover assumptions: the hash exists for the honest `commit_ivk` chunks
+  have hakv : Expression.eval env.toEnvironment input_var.ak = input.ak := by
+    rw [← h_input]; simp only [circuit_norm]
+  have hnkv : Expression.eval env.toEnvironment input_var.nk = input.nk := by
+    rw [← h_input]; simp only [circuit_norm]
+  have hCommitPA : (Commit.circuit G Q hQ R).ProverAssumptions (eval env input_var) env.data env.hint := by
+    simp only [Commit.circuit, Commit.ProverAssumptions]
+    rw [show ((eval env input_var).ak : Fp) = input.ak from by rw [h_input],
+      show ((eval env input_var).nk : Fp) = input.nk from by rw [h_input]]
+    exact h_assumptions
+  -- the Commit `ProverSpec`: all the cell values, ranges, z-cells, and the hash existential
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at h_env
+  have hCommitPS := (h_env.1 hCommitPA).2
+  rw [show (Commit.circuit G Q hQ R).ProverSpec = Commit.ProverSpec G Q R from rfl] at hCommitPS
+  simp only [Commit.ProverSpec] at hCommitPS
+  obtain ⟨hb0, hb2, hd0, ha, hc, hz13a, hz13c, hSa, hSb0, hSb1, hSb2, hSc, hSd0, hSd1, hSb, hSd,
+    chunks, hPC, hHash⟩ := hCommitPS
+  -- keep the (expensive-to-flatten) Commit output variable opaque (folds goal + all hyps);
+  -- `clear_value` makes `O` genuinely opaque so the heavy `eval` never reduces in the kernel
+  set O := (Commit.circuit G Q hQ R).output input_var i₀ with hO
+  clear_value O
+  -- bridge the Commit `ProverSpec` cell facts into the `Expression.eval env.toEnvironment`
+  -- spelling that `canonicity_assumptions_of_commit` consumes (mirrors top soundness 1156–1160)
+  have ha' : (Expression.eval env.toEnvironment O.cells.a).val < 2 ^ 250 := by
+    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+      (Commit.eval_cells_leaves env.toEnvironment _).1] at ha
+  have hb0' : (Expression.eval env.toEnvironment O.cells.b0).val < 2 ^ 4 := by
+    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+      (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.1] at hb0
+  have hb2' : (Expression.eval env.toEnvironment O.cells.b2).val < 2 ^ 5 := by
+    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+      (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.2.2.1] at hb2
+  have hc' : (Expression.eval env.toEnvironment O.cells.c).val < 2 ^ 240 := by
+    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+      (Commit.eval_cells_leaves env.toEnvironment _).2.2.1] at hc
+  have hd0' : (Expression.eval env.toEnvironment O.cells.d0).val < 2 ^ 9 := by
+    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+      (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.2.2.2.1] at hd0
+  have hz13a' : (HVec.get (Chain.zLengths [24, 0, 23, 0]) (eval env.toEnvironment O.zs) ⟨0, by decide⟩)[13]
+      = (((Expression.eval env.toEnvironment O.cells.a).val / 2 ^ 130 : ℕ) : Fp) := by
+    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_zs,
+      show ((eval env.toEnvironment O).cells.a : Fp) = Expression.eval env.toEnvironment O.cells.a from by
+        rw [Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).1]] at hz13a
+  have hz13c' : (HVec.get (Chain.zLengths [24, 0, 23, 0]) (eval env.toEnvironment O.zs) ⟨2, by decide⟩)[13]
+      = (((Expression.eval env.toEnvironment O.cells.c).val / 2 ^ 130 : ℕ) : Fp) := by
+    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_zs,
+      show ((eval env.toEnvironment O).cells.c : Fp) = Expression.eval env.toEnvironment O.cells.c from by
+        rw [Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.1]] at hz13c
+  -- the `Canonicity` assumptions from the bridged Commit facts (helper keeps `O.zs` opaque)
+  have hCanonAssump := canonicity_assumptions_of_commit O input_var env.toEnvironment
+    hb0' hb2' hd0' ha' hc' hz13a' hz13c'
+  refine ⟨⟨?_, ?_⟩, ?_⟩
+  · -- Commit.ProverAssumptions (subcircuit form)
+    rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
+    exact hCommitPA
+  · -- (Canonicity.Assumptions ∧ Canonicity.Spec) ∧ True
+    refine ⟨⟨?_, ?_⟩, trivial⟩
+    · -- Canonicity.Assumptions from the helper (`id` settles the proof-irrelevant `Fin`
+      -- indices); the prover/verifier `eval` spellings are definitionally equal.
+      rw [CircuitType.eval_var_prover_to_verifier]
+      exact id hCanonAssump
+    · -- Canonicity.Spec: the 9 canonical slices, straight from the Commit `ProverSpec`
+      rw [CircuitType.eval_var_prover_to_verifier,
+        show Canonicity.circuit.Spec = Canonicity.Spec from rfl]
+      simp only [Canonicity.Spec, circuit_norm]
+      -- the goal slices coincide with the Commit `ProverSpec` facts up to the defeq
+      -- `Expression.eval env.toEnvironment _ = eval env _` (`convert` settles each leaf by `rfl`)
+      rw [hakv, hnkv]
+      simp only [show (eval env input_var).ak = input.ak from by rw [h_input],
+        show (eval env input_var).nk = input.nk from by rw [h_input]]
+        at hSa hSb0 hSb1 hSb2 hSc hSd0 hSd1 hSb hSd
+      -- bridge the prover LHS `(eval env O).cells.X` to the verifier `Expression.eval` leaf
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).1] at hSa
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.1] at hSb0
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.1] at hSb1
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.1] at hSb2
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.1] at hSc
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.2.1] at hSd0
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.2.2] at hSd1
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.1,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.1,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.1,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.1] at hSb
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.1,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.2.1,
+        (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.2.2] at hSd
+      exact ⟨hSa, hSb0, hSb1, hSb2, hSc, hSd0, hSd1, hSb, hSd⟩
+  · -- the entry `ProverSpec`: `ivk = (B + blind).x` via the Commit hash relation
+    intro B hB
+    -- replace the `eval` input keys by the opaque `input.{ak,nk}` (mirrors entry soundness;
+    -- keeps the expensive `eval env input_var` out of the chunk bridge's `whnf`)
+    simp only [h_input] at hSa hSb0 hSb1 hSb2 hSc hSd0 hSd1 hSb hSd
+    -- generalize the four piece cells to opaque `Fp` atoms, so the chunk bridge never reduces
+    -- the heavy `eval env O` (see `doc/performance-problems.md`, opaque-variable rule)
+    obtain ⟨ca, hca⟩ : ∃ x, (eval env O).cells.a = x := ⟨_, rfl⟩
+    obtain ⟨cb, hcb⟩ : ∃ x, (eval env O).cells.b = x := ⟨_, rfl⟩
+    obtain ⟨cc, hcc⟩ : ∃ x, (eval env O).cells.c = x := ⟨_, rfl⟩
+    obtain ⟨cd, hcd⟩ : ∃ x, (eval env O).cells.d = x := ⟨_, rfl⟩
+    rw [hca] at hSa
+    rw [hcb] at hSb
+    rw [hcc] at hSc
+    rw [hcd] at hSd
+    simp only [hca, hcb, hcc, hcd] at hPC
+    -- the four Commit pieces are the canonical `commit_ivk` slices, so their chunk list is
+    -- `commitIvkChunks ak nk` (same bridge as the entry soundness); `ak`, `nk` are inferred.
+    -- the four piece values are the canonical `commit_ivk` slices, so `chunks = commitIvkChunks`;
+    -- `convert hB` supplies the well-typed `ZMod.val input.{ak,nk}` (pinning the bridge's `ak`/`nk`),
+    -- avoiding a fresh `ZMod.val (input.ak : ProverValue field _)` projection.
+    have hpt := hHash B (by
+      convert hB using 2
+      exact pieceChunks_eq_commitIvkChunks_of_indexed_piece_values hPC
+        (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero];
+            rw [hSa]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K])
+        (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_succ,
+              List.getElem_cons_zero];
+            rw [hSb, hSb0, hSb1, hSb2]; simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring)
+        (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_succ,
+              List.getElem_cons_zero];
+            rw [hSc]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K])
+        (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_succ,
+              List.getElem_cons_zero];
+            rw [hSd, hSd0, hSd1]; simp only [bitrange]; push_cast; ring)
+        (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
+        (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])))
+    rw [show input.rivk = (eval env input_var).rivk from by rw [h_input], ← hpt]
+    -- align both sides to the verifier `eval` of the (single) commitment point var, then the
+    -- entry output var and the Commit point var coincide definitionally at the same offset
+    rw [show ((eval env O).cells.point.coords.1 : Fp)
+        = (eval env.toEnvironment O.cells.point).x from by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, Commit.eval_cells_point,
+        Point.coords], hO]
+    -- the entry output var and the Commit point var coincide at the same offset (one var lookup)
+    simp only [circuit_norm, Commit.circuit]
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input field where

@@ -134,9 +134,12 @@ Source baseline:
         over `CommitDomain.WithZs` (rounds `24 :: [0, 23, 0]`), the `ak`/`nk` canonicity
         decompositions (`CopyCheck 13`/`CopyCheck 14`), and the `CommitIvk.Gate` canonicity
         gate. Spec is `CommitIvkRelation` (point-level Sinsemilla short-commit relation over
-        `commitIvkChunks`). Circuit + specs + elaboration done; the two entry proofs
-        (`soundness`, `completeness`) are `sorry`, pending the shared message-piece
-        canonicity-encoding bridge also outstanding for `note_commit`.
+        `commitIvkChunks`). **Fully proven — `soundness` and `completeness` both closed**
+        (no `sorry`). The entry is factored into a virtual `Commit` subcircuit (witnessing +
+        `WithZs` hash) composed with a `Canonicity` subcircuit (the two `CopyCheck`
+        decompositions + the gate), each proven sound and complete; the top-level composes
+        them via the chunk bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`
+        (soundness) and `honestChunks_eq_commitIvkChunks` (completeness).
       - `CommitIvk canonicity check`
         - Source: `orchard-0.14.0/src/circuit/commit_ivk.rs`
         - Clean: implemented in `Clean/Orchard/Action/CommitIvkGate.lean` as

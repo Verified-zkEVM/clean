@@ -218,9 +218,9 @@ Current Clean coverage:
 - `Clean.Orchard.NoteCommit.PsiCanonicity.circuit`: `GATE NoteCommit input psi`
 - `Clean.Orchard.NoteCommit.YCanonicity.circuit`: `GATE y coordinate checks`
 - `Clean.Orchard.Action.CommitIvk.Gate.circuit`: `GATE CommitIvk canonicity check`
-- `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry (circuit + specs +
-  elaboration done; `soundness`/`completeness` are `sorry`, pending the shared message-piece
-  canonicity-encoding bridge also outstanding for `note_commit`)
+- `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry — **fully proven**
+  (`soundness` + `completeness`, no `sorry`). Factored into proven `Commit` (witnessing +
+  `WithZs` hash) and `Canonicity` (CopyCheck decompositions + gate) subcircuits
 
 ## Known Non-Conformances
 
@@ -411,15 +411,17 @@ have different `w`), and return `(Point, zs)` from `CommitDomain.circuit` to mat
 completeness proved), and the `Circuit::synthesize` spend-authority block is implemented
 (`SpendAuthority.circuit`, soundness and completeness proved).
 
-`gadgets::note_commit` (`Action.NoteCommit`) and `gadgets::commit_ivk`
-(`Action.CommitIvk.circuit`) are both implemented as circuits with semantic specs and
-elaboration; their entry-level `soundness`/`completeness` proofs are still `sorry`, blocked
-on the shared message-piece canonicity-encoding bridge (relating the witnessed Sinsemilla
-pieces to the canonical `*Chunks` of the input scalars via the decomposition/canonicity
-gates). Missing source-level APIs:
+`gadgets::commit_ivk` (`Action.CommitIvk.circuit`) is **fully proven** (soundness +
+completeness), via the message-piece bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`
+/ `honestChunks_eq_commitIvkChunks` and the generic shared running-sum theory in
+`Specs.Sinsemilla` (`sum_suffix_div`, `running_sum_telescope`) and `HashToPoint`
+(`piece_recombine`, `pieceChunks_honestChunks`, public `chain_eq_sum`). `gadgets::note_commit`
+(`Action.NoteCommit`) is implemented with semantic specs and elaboration but its entry-level
+`soundness`/`completeness` are still `sorry`; it can now reuse the same shared bridge theory.
+Missing source-level APIs:
 
 - address-integrity wiring in `Circuit::synthesize`
-- entry proofs for `gadgets::note_commit` and `gadgets::commit_ivk`
+- entry proofs for `gadgets::note_commit` (commit_ivk done)
 - full `Circuit::synthesize` action circuit
 
 These must compose source-conformant child circuits. In particular:
