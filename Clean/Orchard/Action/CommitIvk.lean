@@ -658,12 +658,107 @@ private theorem commitIvkPieceValues_of_canonicity_spec (row : Canonicity.Input 
     simp only [bitrange]
     push_cast; ring
 
+/-- Build the `Canonicity` assumptions from the `Commit` hash spec facts, over an opaque
+output variable `O`. Factored out so the (expensive) `HVec`-flattening `circuit_norm` cast on
+the running-sum cells `z13A`/`z13C` is kernel-checked once here, not inlined into the entry
+soundness term (see `doc/performance-problems.md`). -/
+private theorem canonicity_assumptions_of_commit
+    (O : Var Commit.Output Fp) (input_var : Var Input Fp) (env : Environment Fp)
+    (hb0 : (Expression.eval env O.cells.b0).val < 2 ^ 4)
+    (hb2 : (Expression.eval env O.cells.b2).val < 2 ^ 5)
+    (hd0 : (Expression.eval env O.cells.d0).val < 2 ^ 9)
+    (ha : (Expression.eval env O.cells.a).val < 2 ^ 250)
+    (hc : (Expression.eval env O.cells.c).val < 2 ^ 240)
+    (hz13a : (HVec.get (Chain.zLengths [24, 0, 23, 0]) (eval env O.zs) ⟨0, by decide⟩)[13]
+      = (((Expression.eval env O.cells.a).val / 2 ^ 130 : ℕ) : Fp))
+    (hz13c : (HVec.get (Chain.zLengths [24, 0, 23, 0]) (eval env O.zs) ⟨2, by decide⟩)[13]
+      = (((Expression.eval env O.cells.c).val / 2 ^ 130 : ℕ) : Fp)) :
+    Canonicity.circuit.Assumptions
+      (eval env
+        ({ ak := input_var.ak, nk := input_var.nk,
+           a := O.cells.a, b := O.cells.b, c := O.cells.c, d := O.cells.d,
+           b0 := O.cells.b0, b1 := O.cells.b1, b2 := O.cells.b2, d0 := O.cells.d0, d1 := O.cells.d1,
+           z13A := (HVec.get (Chain.zLengths [24, 0, 23, 0]) O.zs ⟨0, by decide⟩)[13],
+           z13C := (HVec.get (Chain.zLengths [24, 0, 23, 0]) O.zs ⟨2, by decide⟩)[13] }
+          : Var Canonicity.Input Fp)) := by
+  -- Project the `Canonicity.Input` eval field-by-field (cheap: 13 single-field projections),
+  -- without ever forcing `eval env O.zs` (the 51-leaf flatten that `circuit_norm` triggers).
+  -- Project the evaluated `Canonicity.Input` field-by-field. Crucially this is done with
+  -- `ProvableStruct.eval_eq_eval` + the single-field projection only, so the running-sum
+  -- fields stay as `Expression.eval env (… O.zs …)[13]` (one var lookup) and the 51-leaf
+  -- `O.zs` heterogeneous vector is never flattened (unlike a full `circuit_norm`).
+  rw [show Canonicity.circuit.Assumptions = Canonicity.Assumptions from rfl]
+  simp only [Canonicity.Assumptions, circuit_norm]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · exact ha
+  · exact hb0
+  · exact hb2
+  · exact hc
+  · exact hd0
+  · exact (CircuitType.eval_expr env _).symm.trans
+      ((HVec.eval_getElem env (Chain.zLengths [24, 0, 23, 0]) O.zs ⟨0, by decide⟩ 13
+        (by decide)).trans hz13a)
+  · exact (CircuitType.eval_expr env _).symm.trans
+      ((HVec.eval_getElem env (Chain.zLengths [24, 0, 23, 0]) O.zs ⟨2, by decide⟩ 13
+        (by decide)).trans hz13c)
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
       (Spec G Q R) := by
-  sorry
+  circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_holds ⊢
+  obtain ⟨hCommit, hCanon, -⟩ := h_holds
+  -- The Commit subcircuit has trivial assumptions; obtain its Spec (via the `rfl` bridge,
+  -- avoiding `circuit_norm`, which would flatten the expensive Commit output `eval`).
+  replace hCommit := hCommit trivial
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at hCommit
+  -- Keep the (expensive-to-flatten) Commit output variable opaque.
+  set O := (Commit.circuit G Q hQ R).output input_var i₀ with hO
+  clear_value O
+  simp only [Commit.circuit, Commit.Spec, Commit.eval_cells, Commit.eval_zs] at hCommit
+  obtain ⟨hb0, hb2, hd0, ha, hc, hz13a, hz13c, chunks, rivk, hPC, hHash⟩ := hCommit
+  -- Feed the Commit spec facts as the Canonicity assumptions; obtain the canonical slices.
+  -- Convert the (small, `HVec`-free) `Cells` projections to the `Expression.eval` spelling the
+  -- helper expects; the running-sum cells keep `eval env O.zs` opaque.
+  simp only [circuit_norm] at ha hb0 hb2 hc hd0
+  rw [show ((eval env O.cells).a : Fp) = Expression.eval env O.cells.a from by
+    simp only [circuit_norm]] at hz13a
+  rw [show ((eval env O.cells).c : Fp) = Expression.eval env O.cells.c from by
+    simp only [circuit_norm]] at hz13c
+  have hCanonSpec := hCanon
+    (canonicity_assumptions_of_commit O input_var env hb0 hb2 hd0 ha hc hz13a hz13c)
+  rw [show Canonicity.circuit.Spec = Canonicity.Spec from rfl] at hCanonSpec
+  -- the canonical slices are exactly the indexed `commit_ivk` piece values
+  have hPV := commitIvkPieceValues_of_canonicity_spec _ hCanonSpec
+  simp only [circuit_norm, CommitIvkPieceValues] at hPV
+  obtain ⟨hPVa, hPVb, hPVc, hPVd⟩ := hPV
+  -- align the key spellings: `Expression.eval env input_var.{ak,nk}` are the input values
+  have hakv : Expression.eval env input_var.ak = input.ak := by
+    rw [← h_input]; simp only [circuit_norm]
+  have hnkv : Expression.eval env input_var.nk = input.nk := by
+    rw [← h_input]; simp only [circuit_norm]
+  rw [hakv] at hPVa hPVb
+  rw [hnkv] at hPVb hPVc hPVd
+  -- bridge the four pieces to the `commit_ivk` chunk list
+  set ak : Fp := input.ak with hak_def
+  set nk : Fp := input.nk with hnk_def
+  have hak : ak.val < 2 ^ 255 := lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
+  have hnk : nk.val < 2 ^ 255 := lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
+  have hchunks : chunks = Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val :=
+    pieceChunks_eq_commitIvkChunks_of_indexed_piece_values hPC
+      (by simp only [circuit_norm, Orchard.Specs.Sinsemilla.K]; exact hPVa)
+      (by simp only [circuit_norm]; exact hPVb)
+      (by simp only [circuit_norm, Orchard.Specs.Sinsemilla.K]; exact hPVc)
+      (by simp only [circuit_norm]; exact hPVd) hak hnk
+  -- assemble the `CommitIvkRelation`
+  refine ⟨?_, ?_⟩
+  · refine ⟨rivk, fun B hB => ?_⟩
+    have hpt := hHash B (by rw [hchunks]; exact hB)
+    rw [← hpt, hO]
+    simp only [circuit_norm, Point.coords]
+    rfl
+  · exact ⟨Or.inl rfl, Or.inl rfl, trivial⟩
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
