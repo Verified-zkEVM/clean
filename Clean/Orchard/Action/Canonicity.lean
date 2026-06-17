@@ -23,21 +23,21 @@ structure Row (F : Type) where
   b0 : F
   b1 : F
   a : F
-  aPrime : F
+  a' : F
   z13A : F
-  z13APrime : F
+  z13A' : F
 deriving ProvableStruct
 
 /-- Rely-conditions from the surrounding lookups: `a`/`b0` are range-checked, `b1` is
-Boolean, `aPrime` is the canonicity shift of `a`, and `z13A`/`z13APrime` are the 13-word
-running-sum tails of `a`/`aPrime`. -/
+Boolean, `a'` is the canonicity shift of `a`, and `z13A`/`z13A'` are the 13-word
+running-sum tails of `a`/`a'`. -/
 def Assumptions (row : Row Fp) : Prop :=
   IsBool row.b1 ∧
     row.a.val < 2 ^ 250 ∧
     row.b0.val < 2 ^ 4 ∧
-    row.aPrime = row.a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    row.a' = row.a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
     row.z13A = ((row.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-    row.z13APrime = ((row.aPrime.val / 2 ^ 130 : ℕ) : Fp)
+    row.z13A' = ((row.a'.val / 2 ^ 130 : ℕ) : Fp)
 
 /-- The gate's payoff: `a`/`b0`/`b1` are the canonical bit slices of `x(g_d)`. -/
 def Spec (row : Row Fp) : Prop :=
@@ -49,10 +49,10 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.a + row.b0 * Expression.const ((2 ^ 250 : ℕ) : Fp) +
     row.b1 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.gdX)
   assertZero (row.a + Expression.const ((2 ^ 130 : ℕ) : Fp) -
-    Expression.const Ecc.tP - row.aPrime)
+    Expression.const Ecc.tP - row.a')
   assertZero (row.b1 * row.b0)
   assertZero (row.b1 * row.z13A)
-  assertZero (row.b1 * row.z13APrime)
+  assertZero (row.b1 * row.z13A')
 
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input g_d"
@@ -88,16 +88,16 @@ def circuit : FormalAssertion Fp Row where
         have := natCast_eq_zero
           (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans ha_lt (by norm_num [PALLAS_BASE_CARD]))) hz
         omega
-      have haPrime_val : input_aPrime.val = input_a.val + 2 ^ 130 - tPNat := by
+      have haPrime_val : input_a'.val = input_a.val + 2 ^ 130 - tPNat := by
         rw [haPrime]; exact val_shift 130 (by omega) (by omega)
-      have haPrime_lt : input_aPrime.val < 2 ^ 130 := by
-        have hz : input_z13APrime = 0 := by
+      have haPrime_lt : input_a'.val < 2 ^ 130 := by
+        have hz : input_z13A' = 0 := by
           rcases mul_eq_zero.mp hg3 with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
         rw [hz13APrime] at hz
         have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_aPrime)) hz
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_a')) hz
         omega
       rw [hlo_val, hb0z, ZMod.val_zero]; omega
     -- top-bit decomposition of `gdX`
@@ -153,10 +153,10 @@ def circuit : FormalAssertion Fp Row where
             bitrange_low_div input_gdX.val 130 120,
           high_bit_z13_zero (ZMod.val_lt input_gdX) h]
         simp
-    · -- b1·z13APrime = 0
+    · -- b1·z13A' = 0
       rcases hb1cases with h | h
       · rw [hb1_eq, h]; simp
-      · have haPrime_val : input_aPrime.val = bitrange input_gdX.val 0 250 + 2 ^ 130 - tPNat := by
+      · have haPrime_val : input_a'.val = bitrange input_gdX.val 0 250 + 2 ^ 130 - tPNat := by
           rw [haPrime, val_shift 130 (by omega) (by omega), ha_val]
         rw [hz13APrime, haPrime_val,
           Nat.div_eq_of_lt (high_bit_canonical (ZMod.val_lt input_gdX) h).2.2]
@@ -171,21 +171,21 @@ structure Row (F : Type) where
   b3 : F
   d0 : F
   c : F
-  b3CPrime : F
+  b3C' : F
   z13C : F
-  z14B3CPrime : F
+  z14B3C' : F
 deriving ProvableStruct
 
 /-- Rely-conditions from the surrounding lookups: `b3`/`c` are range-checked, `d0` is
-Boolean, `b3CPrime` is the canonicity shift of the low limb, and `z13C`/`z14B3CPrime` are
-the running-sum tails of `c`/`b3CPrime`. -/
+Boolean, `b3C'` is the canonicity shift of the low limb, and `z13C`/`z14B3C'` are
+the running-sum tails of `c`/`b3C'`. -/
 def Assumptions (row : Row Fp) : Prop :=
   IsBool row.d0 ∧
     row.c.val < 2 ^ 250 ∧
     row.b3.val < 2 ^ 4 ∧
-    row.b3CPrime = row.b3 + row.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
+    row.b3C' = row.b3 + row.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
     row.z13C = ((row.c.val / 2 ^ 130 : ℕ) : Fp) ∧
-    row.z14B3CPrime = ((row.b3CPrime.val / 2 ^ 140 : ℕ) : Fp)
+    row.z14B3C' = ((row.b3C'.val / 2 ^ 140 : ℕ) : Fp)
 
 /-- The gate's payoff: `b3`/`c`/`d0` are the canonical bit slices of `x(pk_d)`. -/
 def Spec (row : Row Fp) : Prop :=
@@ -197,9 +197,9 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.b3 + row.c * Expression.const ((2 ^ 4 : ℕ) : Fp) +
     row.d0 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.pkdX)
   assertZero (row.b3 + row.c * Expression.const ((2 ^ 4 : ℕ) : Fp) +
-    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.b3CPrime)
+    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.b3C')
   assertZero (row.d0 * row.z13C)
-  assertZero (row.d0 * row.z14B3CPrime)
+  assertZero (row.d0 * row.z14B3C')
 
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input pk_d"
@@ -227,17 +227,17 @@ def circuit : FormalAssertion Fp Row where
         have := natCast_eq_zero
           (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans hc_lt (by norm_num [PALLAS_BASE_CARD]))) hz
         omega
-      have hb3cP_val : input_b3CPrime.val
+      have hb3cP_val : input_b3C'.val
           = (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val + 2 ^ 140 - tPNat := by
         rw [hb3cP]; exact val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega)
-      have hb3cP_lt : input_b3CPrime.val < 2 ^ 140 := by
-        have hz : input_z14B3CPrime = 0 := by
+      have hb3cP_lt : input_b3C'.val < 2 ^ 140 := by
+        have hz : input_z14B3C' = 0 := by
           rcases mul_eq_zero.mp hg2 with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
         rw [hz14] at hz
         have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_b3CPrime)) hz
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_b3C')) hz
         omega
       omega
     have hrecL : input_pkdX = (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp))
@@ -293,7 +293,7 @@ def circuit : FormalAssertion Fp Row where
             bitrange_div_pow input_pkdX.val 4 130 120,
           high_bit_high_zero (ZMod.val_lt input_pkdX) h (by norm_num) (by norm_num)]
         simp
-    · -- d0·z14B3CPrime = 0
+    · -- d0·z14B3C' = 0
       rcases hd0cases with h | h
       · rw [hd0_eq, h]; simp
       · obtain ⟨hk2z, hlolt, _⟩ := high_bit_canonical (ZMod.val_lt input_pkdX) h
@@ -305,7 +305,7 @@ def circuit : FormalAssertion Fp Row where
             rw [hb3_val, hc_val]; have := bitrange_lt input_pkdX.val 4 250; omega
           rw [val_limb2 4 hsum, hb3_val, hc_val]
           have := bitrange_add input_pkdX.val 0 4 250; norm_num at this; omega
-        have hb3cP_val : input_b3CPrime.val = bitrange input_pkdX.val 0 254 + 2 ^ 140 - tPNat := by
+        have hb3cP_val : input_b3C'.val = bitrange input_pkdX.val 0 254 + 2 ^ 140 - tPNat := by
           rw [hb3cP, val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega), hlo_val]
         rw [hz14, hb3cP_val, Nat.div_eq_of_lt (by omega)]
         simp
@@ -389,9 +389,9 @@ structure Row (F : Type) where
   e1 : F
   g0 : F
   f : F
-  e1FPrime : F
+  e1F' : F
   z13F : F
-  z14E1FPrime : F
+  z14E1F' : F
 deriving ProvableStruct
 
 /-- Rely-conditions from the surrounding lookups (same shape as `pk_d`). -/
@@ -399,9 +399,9 @@ def Assumptions (row : Row Fp) : Prop :=
   IsBool row.g0 ∧
     row.f.val < 2 ^ 250 ∧
     row.e1.val < 2 ^ 4 ∧
-    row.e1FPrime = row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
+    row.e1F' = row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
     row.z13F = ((row.f.val / 2 ^ 130 : ℕ) : Fp) ∧
-    row.z14E1FPrime = ((row.e1FPrime.val / 2 ^ 140 : ℕ) : Fp)
+    row.z14E1F' = ((row.e1F'.val / 2 ^ 140 : ℕ) : Fp)
 
 /-- The gate's payoff: `e1`/`f`/`g0` are the canonical bit slices of `rho`. -/
 def Spec (row : Row Fp) : Prop :=
@@ -413,9 +413,9 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.e1 + row.f * Expression.const ((2 ^ 4 : ℕ) : Fp) +
     row.g0 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.rho)
   assertZero (row.e1 + row.f * Expression.const ((2 ^ 4 : ℕ) : Fp) +
-    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.e1FPrime)
+    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.e1F')
   assertZero (row.g0 * row.z13F)
-  assertZero (row.g0 * row.z14E1FPrime)
+  assertZero (row.g0 * row.z14E1F')
 
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input rho"
@@ -443,17 +443,17 @@ def circuit : FormalAssertion Fp Row where
         have := natCast_eq_zero
           (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans hf_lt (by norm_num [PALLAS_BASE_CARD]))) hz
         omega
-      have he1fP_val : input_e1FPrime.val
+      have he1fP_val : input_e1F'.val
           = (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val + 2 ^ 140 - tPNat := by
         rw [he1fP]; exact val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega)
-      have he1fP_lt : input_e1FPrime.val < 2 ^ 140 := by
-        have hz : input_z14E1FPrime = 0 := by
+      have he1fP_lt : input_e1F'.val < 2 ^ 140 := by
+        have hz : input_z14E1F' = 0 := by
           rcases mul_eq_zero.mp hg2 with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
         rw [hz14] at hz
         have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_e1FPrime)) hz
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_e1F')) hz
         omega
       omega
     have hrecL : input_rho = (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp))
@@ -517,7 +517,7 @@ def circuit : FormalAssertion Fp Row where
             rw [he1_val, hf_val]; have := bitrange_lt input_rho.val 4 250; omega
           rw [val_limb2 4 hsum, he1_val, hf_val]
           have := bitrange_add input_rho.val 0 4 250; norm_num at this; omega
-        have he1fP_val : input_e1FPrime.val = bitrange input_rho.val 0 254 + 2 ^ 140 - tPNat := by
+        have he1fP_val : input_e1F'.val = bitrange input_rho.val 0 254 + 2 ^ 140 - tPNat := by
           rw [he1fP, val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega), hlo_val]
         rw [hz14, he1fP_val, Nat.div_eq_of_lt (by omega)]
         simp
@@ -532,22 +532,22 @@ structure Row (F : Type) where
   g1 : F
   h1 : F
   g2 : F
-  g1G2Prime : F
+  g1G2' : F
   z13G : F
-  z13G1G2Prime : F
+  z13G1G2' : F
 deriving ProvableStruct
 
 /-- Rely-conditions from the surrounding lookups: the inner limb is `g1 + g2·2^9`, `h0` is
-the 5-bit field above it, `h1` is Boolean, `g1G2Prime` is the canonicity shift of the inner
-limb, and `z13G`/`z13G1G2Prime` are the running-sum tails of the inner limb / its shift. -/
+the 5-bit field above it, `h1` is Boolean, `g1G2'` is the canonicity shift of the inner
+limb, and `z13G`/`z13G1G2'` are the running-sum tails of the inner limb / its shift. -/
 def Assumptions (row : Row Fp) : Prop :=
   IsBool row.h1 ∧
     row.g1.val < 2 ^ 9 ∧
     row.g2.val < 2 ^ 240 ∧
     row.h0.val < 2 ^ 5 ∧
-    row.g1G2Prime = row.g1 + row.g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    row.g1G2' = row.g1 + row.g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
     row.z13G = ((row.g1.val + row.g2.val * 2 ^ 9) / 2 ^ 130 : ℕ) ∧
-    row.z13G1G2Prime = ((row.g1G2Prime.val / 2 ^ 130 : ℕ) : Fp)
+    row.z13G1G2' = ((row.g1G2'.val / 2 ^ 130 : ℕ) : Fp)
 
 /-- The gate's payoff: `g1`/`g2`/`h0`/`h1` are the canonical bit slices of `psi`. -/
 def Spec (row : Row Fp) : Prop :=
@@ -561,10 +561,10 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
     row.h0 * Expression.const ((2 ^ 249 : ℕ) : Fp) +
     row.h1 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.psi)
   assertZero (row.g1 + row.g2 * Expression.const ((2 ^ 9 : ℕ) : Fp) +
-    Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP - row.g1G2Prime)
+    Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP - row.g1G2')
   assertZero (row.h1 * row.h0)
   assertZero (row.h1 * row.z13G)
-  assertZero (row.h1 * row.z13G1G2Prime)
+  assertZero (row.h1 * row.z13G1G2')
 
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input psi"
@@ -607,17 +607,17 @@ def circuit : FormalAssertion Fp Row where
         have := natCast_eq_zero
           (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans hin_lt (by norm_num [PALLAS_BASE_CARD]))) hz
         omega
-      have hgP_val : input_g1G2Prime.val
+      have hgP_val : input_g1G2'.val
           = (input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)).val + 2 ^ 130 - tPNat := by
         rw [hg1g2P]; exact val_shift 130 (by rw [hin_val]; omega) (by rw [hin_val]; omega)
-      have hgP_lt : input_g1G2Prime.val < 2 ^ 130 := by
-        have hz : input_z13G1G2Prime = 0 := by
+      have hgP_lt : input_g1G2'.val < 2 ^ 130 := by
+        have hz : input_z13G1G2' = 0 := by
           rcases mul_eq_zero.mp hg_z13p with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
         rw [hz13P] at hz
         have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_g1G2Prime)) hz
+          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_g1G2')) hz
         omega
       rw [hlo_val, hh0z, ZMod.val_zero]; rw [hin_val] at hgP_val; omega
     have hrecL : input_psi
@@ -698,7 +698,7 @@ def circuit : FormalAssertion Fp Row where
             bitrange_div_pow input_psi.val 0 130 119,
           high_bit_high_zero (ZMod.val_lt input_psi) h (by norm_num) (by norm_num)]
         simp
-    · -- h1·z13G1G2Prime = 0
+    · -- h1·z13G1G2' = 0
       rcases hh1cases with h | h
       · rw [hh1_eq, h]; simp
       · obtain ⟨_, hlolt, _⟩ := high_bit_canonical (ZMod.val_lt input_psi) h
@@ -710,7 +710,7 @@ def circuit : FormalAssertion Fp Row where
           have hsum : input_g1.val + input_g2.val * 2 ^ 9 < PALLAS_BASE_CARD := by
             rw [hin_eq]; exact lt_trans (bitrange_lt _ 0 249) (by norm_num [PALLAS_BASE_CARD])
           rw [val_limb2 9 hsum]; exact hin_eq
-        have hgP_val : input_g1G2Prime.val = bitrange input_psi.val 0 249 + 2 ^ 130 - tPNat := by
+        have hgP_val : input_g1G2'.val = bitrange input_psi.val 0 249 + 2 ^ 130 - tPNat := by
           rw [hg1g2P, val_shift 130 (by rw [hin_val]; omega) (by rw [hin_val]; omega), hin_val]
         rw [hz13P, hgP_val, Nat.div_eq_of_lt (by omega)]
         simp

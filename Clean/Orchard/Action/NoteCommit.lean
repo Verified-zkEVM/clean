@@ -988,18 +988,18 @@ def main (input : Var Input Fp) : Circuit Fp Unit := do
 
   DecompositionChecks.circuit { cells, z1d, z1g }
   GdCanonicity.Gate.circuit
-    { gdX, b0 := cells.b0, b1 := cells.b1, a := cells.a, aPrime := aPrimeZs[0], z13A := z13a,
-      z13APrime := aPrimeZs[13] }
+    { gdX, b0 := cells.b0, b1 := cells.b1, a := cells.a, a' := aPrimeZs[0], z13A := z13a,
+      z13A' := aPrimeZs[13] }
   PkdCanonicity.Gate.circuit
-    { pkdX, b3 := cells.b3, c := cells.c, d0 := cells.d0, b3CPrime := b3cPrimeZs[0], z13C := z13c,
-      z14B3CPrime := b3cPrimeZs[14] }
+    { pkdX, b3 := cells.b3, c := cells.c, d0 := cells.d0, b3C' := b3cPrimeZs[0], z13C := z13c,
+      z14B3C' := b3cPrimeZs[14] }
   ValueCanonicity.Gate.circuit { value := v, d2 := cells.d2, d3 := z1d, e0 := cells.e0 }
   RhoCanonicity.Gate.circuit
-    { rho, e1 := cells.e1, f := cells.f, g0 := cells.g0, e1FPrime := e1fPrimeZs[0], z13F := z13f,
-      z14E1FPrime := e1fPrimeZs[14] }
+    { rho, e1 := cells.e1, f := cells.f, g0 := cells.g0, e1F' := e1fPrimeZs[0], z13F := z13f,
+      z14E1F' := e1fPrimeZs[14] }
   PsiCanonicity.Gate.circuit
-    { psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g, g1G2Prime := g1g2PrimeZs[0], z13G := z13g,
-      z13G1G2Prime := g1g2PrimeZs[13] }
+    { psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g, g1G2' := g1g2PrimeZs[0], z13G := z13g,
+      z13G1G2' := g1g2PrimeZs[13] }
 
 instance elaborated : ElaboratedCircuit Fp Input unit main := by
   elaborate_circuit
