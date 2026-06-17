@@ -1617,15 +1617,43 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) Assumptions (Spec G Q R) := by
-  circuit_proof_start [AssignMessagePieces.circuit, Commit.circuit, MessagePieceChecks.circuit,
-    GdCanonicity.circuit, PkdCanonicity.circuit, ValueCanonicity.circuit,
-    RhoCanonicity.circuit, PsiCanonicity.circuit]
+  -- Verified skeleton: `circuit_proof_start_core` exposes each subcircuit's soundness as an
+  -- `Assumptions → Spec` implication; destructure them and keep the (expensive-to-flatten)
+  -- `AssignMessagePieces` output opaque so the heavy `eval` never reduces in the kernel.
+  circuit_proof_start_core
+  obtain ⟨hAM, hCom, hMPC, hY1, hY2, hGd, hPkd, hVal, hRho, hPsi, -⟩ := h_holds
+  set AM := AssignMessagePieces.circuit.output input_var i₀ with hAMdef
+  clear_value AM
+  -- ROADMAP to finish (all infrastructure is in place above this theorem):
+  --  1. `hAM trivial`, `hCom trivial`, `hMPC trivial` (all have `True`/`fun _ => True`
+  --     assumptions) → `AssignMessagePieces.Spec` (7 range bounds), `Commit.Spec`
+  --     (`∃ chunks r, PieceChunks pieces chunks ∧ ZsFacts ∧ hash`), `MessagePieceChecks.Spec`
+  --     (`IsBool b1/b2/d0/d1/g0/h1` + the b/d/e/g/h decompositions). Use the
+  --     `toSubcircuit_soundness` `rfl` bridge, not `circuit_norm`, to avoid flattening.
+  --  2. From `Commit.Spec`: `obtain ⟨chunks, rcm, hPC, hZs, hHash⟩`. Derive
+  --     `a.val,c.val,f.val < 2^250` via `pieceChunks_val_lt … ⟨0/2/5⟩` and the running-sum
+  --     cells `z13a/z13c/z1d/z13f/z1g/z13g` via `zsFacts_cell … ⟨0/2/3/5/6⟩` at r = 13/1.
+  --  3. `hY1`/`hY2`: discharge `IsBool b2`/`IsBool d1` from `MessagePieceChecks.Spec`
+  --     → `IsLowBit gd.y AM.b2`, `IsLowBit pkd.y AM.d1`.
+  --  4. `hGd/hPkd/hVal/hRho/hPsi`: assemble each gate's `Assumptions` from `IsBool` (MPC),
+  --     the range bound (`AssignMessagePieces.Spec`), the piece bound (step 2), and the z-cell
+  --     (step 2) → the canonical bit-slice `Spec`s (`a = bitrange gd.x 0 250`, …).
+  --  5. Assemble the 8 indexed piece values `hA..hH` (gate slices + MPC decompositions +
+  --     `IsLowBit`), then `pieceChunks_eq_noteCommitChunks_of_indexed_piece_values hPC …`
+  --     gives `chunks = noteCommitChunks (noteScalars …)`.
+  --  6. Conclude `NoteCommitRelation` with `rcm`, using `hHash` and `hchunks`; then discharge
+  --     the trailing `Requirements` disjunctions (each `Or.inr <the assumption just built>`).
   sorry
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q) (ProverSpec G Q R) := by
+  -- Mirrors `soundness`: discharge each subcircuit's `ProverAssumptions` and read its
+  -- `ProverSpec` (`AssignMessagePieces` → `MessageCellFacts` incl. the two `IsLowBit` facts;
+  -- `Commit` → honest `ZsHonest`/hash; `MessagePieceChecks`/`YCanonicity`/canonicity gates as
+  -- in `soundness`), then assemble `ProverNoteCommitRelation`. The honest `IsLowBit` cells make
+  -- the `YCanonicity` `ProverAssumptions` dischargeable here.
   circuit_proof_start [AssignMessagePieces.circuit, Commit.circuit, MessagePieceChecks.circuit,
     GdCanonicity.circuit, PkdCanonicity.circuit, ValueCanonicity.circuit,
     RhoCanonicity.circuit, PsiCanonicity.circuit]
