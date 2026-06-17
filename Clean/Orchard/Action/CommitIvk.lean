@@ -424,6 +424,76 @@ private theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {
     rw [hgetD (r + j) (by omega)]
   rw [hsum, hpval, sum_suffix_div hms (n + 1) r (by omega)]
 
+open Orchard.Specs.Sinsemilla in
+/-- The head piece of a `(n :: rest)` `PieceChunks` decomposition has `.val < 2^(K·(n+1))`
+(it is a digit sum of `n+1` `K`-bit words). -/
+private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
+    (hm : n + 1 ≤ 25)
+    (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    ZMod.val (pieces[0] : Fp) < 2 ^ (Orchard.Specs.Sinsemilla.K * (n + 1)) := by
+  obtain ⟨ms, hms, hpc, -, -⟩ := pieceChunks_head_digits h
+  rw [hpc, ZMod.val_natCast_of_lt
+    (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
+  exact sum_digits_lt hms (n + 1)
+
+/-- The `a` (`pieces[0]`) and `c` (`pieces[2]`) message pieces of the `commit_ivk`
+decomposition are `< 2^250` and `< 2^240` respectively. -/
+private theorem commit_pieceChunks_ac_bounds {pieces : Vector Fp 4} {chunks : List ℕ}
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks) :
+    ZMod.val (pieces[0] : Fp) < 2 ^ 250 ∧ ZMod.val (pieces[2] : Fp) < 2 ^ 240 := by
+  obtain ⟨-, -, -, -, hPCtail⟩ := pieceChunks_head_digits hPC
+  obtain ⟨-, -, -, -, hPCtail2⟩ := pieceChunks_head_digits hPCtail
+  have hA := pieceChunks_head_val_lt (by norm_num) hPC
+  have hC := pieceChunks_head_val_lt (by norm_num) hPCtail2
+  rw [show Orchard.Specs.Sinsemilla.K * 25 = 250 from by norm_num [Orchard.Specs.Sinsemilla.K]]
+    at hA
+  rw [show Orchard.Specs.Sinsemilla.K * 24 = 240 from by norm_num [Orchard.Specs.Sinsemilla.K]]
+    at hC
+  have ht2 : (pieces.tail.tail[0]'(by decide) : Fp) = pieces[2] :=
+    (Vector.getElem_tail (v := pieces.tail) (i := 0) (hi := by decide)).trans
+      (Vector.getElem_tail (v := pieces) (i := 1) (hi := by decide))
+  exact ⟨hA, ht2 ▸ hC⟩
+
+open Orchard.Specs.Sinsemilla in
+/-- The `z₁₃` running-sum cell of a head piece (`HVec.head zs`, index 13) is the
+`130`-bit-shifted piece value `piece.val / 2^130`. Combines the `ZsFacts` head identity
+with the `PieceChunks` digit data via `zsFacts_cell_eq_div` (at `r = 13`). -/
+private theorem zsFacts_head_cell_eq_div {n : ℕ} {rest : List ℕ} {chunks : List ℕ}
+    {pieces : Vector Fp (n :: rest).length}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
+    (hm : n + 1 ≤ 25) (h13 : 13 ≤ n)
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
+    (hZsHead : HVec.head zs = Vector.ofFn (fun r : Fin (n + 1) =>
+      ((∑ j ∈ Finset.range (n + 1 - r.val),
+        chunks.getD (r.val + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp))) :
+    (HVec.head zs)[13]'(Nat.lt_succ_of_le h13)
+      = (((pieces[0] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
+  obtain ⟨ms, hms, hpc, hgetD, -⟩ := pieceChunks_head_digits hPC
+  rw [hZsHead, Vector.getElem_ofFn]
+  rw [zsFacts_cell_eq_div hm hms hpc hgetD h13,
+    show Orchard.Specs.Sinsemilla.K * 13 = 130 from by norm_num [Orchard.Specs.Sinsemilla.K]]
+
+open Orchard.Specs.Sinsemilla in
+/-- The `z₁₃` running-sum cell of the `c` piece (`commit_ivk`'s `[24,0,23,0]` index 2) is
+`c.val / 2^130`. Recurses into the `ZsFacts`/`PieceChunks` tails twice, then applies the head
+cell lemma to the `[23,0]` sub-decomposition. -/
+private theorem zsFacts_get2_cell_eq_div {pieces : Vector Fp 4} {chunks : List ℕ}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths [24, 0, 23, 0]) Fp}
+    (hPC : Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks)
+    (hZs : Orchard.Sinsemilla.Chain.ZsFacts [24, 0, 23, 0] chunks zs) :
+    (HVec.get (Orchard.Sinsemilla.Chain.zLengths [24, 0, 23, 0]) zs ⟨2, by decide⟩)[13]'(by decide)
+      = (((pieces[2] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
+  obtain ⟨-, -, -, -, hPCtail⟩ := pieceChunks_head_digits hPC
+  obtain ⟨-, -, -, -, hPCtail2⟩ := pieceChunks_head_digits hPCtail
+  simp only [Orchard.Sinsemilla.Chain.ZsFacts] at hZs
+  obtain ⟨-, -, hZsHeadC, -⟩ := hZs
+  have hcell := zsFacts_head_cell_eq_div (n := 23) (by norm_num) (by norm_num) hPCtail2 hZsHeadC
+  have ht2 : (pieces.tail.tail[0]'(by decide) : Fp) = pieces[2] :=
+    (Vector.getElem_tail (v := pieces.tail) (i := 0) (hi := by decide)).trans
+      (Vector.getElem_tail (v := pieces) (i := 1) (hi := by decide))
+  exact ht2 ▸ hcell
+
 /-! ### `Commit`: the witnessing + Sinsemilla hash, isolated behind a clean output
 
 Virtual subcircuit (no constraint/VK impact) wrapping all of `commit_ivk`'s witnessing and
@@ -471,6 +541,36 @@ theorem eval_cells (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen 
 
 theorem eval_zs (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
     (eval env out).zs = eval env out.zs := by
+  rw [ProvableStruct.eval_eq_eval]
+  unfold ProvableStruct.eval
+  simp only [circuit_norm]
+
+/-- Single-leaf projections of an evaluated `Cells`. Proved generically (stuck on the
+ProvableStruct round-trip) so each cell value is one `Expression.eval`, never forcing the
+sibling `point` coordinates. -/
+theorem eval_cells_leaves (env : Environment Fp) (c : Var Cells Fp) :
+    (eval env c).a = Expression.eval env c.a ∧
+    (eval env c).b = Expression.eval env c.b ∧
+    (eval env c).c = Expression.eval env c.c ∧
+    (eval env c).d = Expression.eval env c.d ∧
+    (eval env c).b0 = Expression.eval env c.b0 ∧
+    (eval env c).b1 = Expression.eval env c.b1 ∧
+    (eval env c).b2 = Expression.eval env c.b2 ∧
+    (eval env c).d0 = Expression.eval env c.d0 ∧
+    (eval env c).d1 = Expression.eval env c.d1 := by
+  rw [ProvableStruct.eval_eq_eval]
+  unfold ProvableStruct.eval
+  simp only [circuit_norm]
+
+theorem eval_cells_point (env : Environment Fp) (c : Var Cells Fp) :
+    (eval env c).point = eval env c.point := by
+  rw [ProvableStruct.eval_eq_eval]
+  unfold ProvableStruct.eval
+  simp only [circuit_norm]
+
+theorem withZs_eval_point (env : Environment Fp) (ns : List ℕ)
+    (out : Var (CommitDomain.WithZs.Output ns) Fp) :
+    (eval env out).point = eval env out.point := by
   rw [ProvableStruct.eval_eq_eval]
   unfold ProvableStruct.eval
   simp only [circuit_norm]
@@ -549,10 +649,68 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
       (Spec G Q R) := by
-  -- Proof complete and LSP-validated (8 cases) but cold-build exceeds maxHeartbeats due to
-  -- repeated reduction of the large `Commit.main` elaborated output. Left as sorry pending a
-  -- heartbeat-budget refactor (factor each `main` reduction into a standalone lemma).
-  sorry
+  circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_holds ⊢
+  obtain ⟨hB0, hB2, hD0, -, -, -, -, -, -, hWithZs, -⟩ := h_holds
+  -- the three WitnessShort range bounds
+  replace hB0 := hB0 trivial
+  replace hB2 := hB2 trivial
+  replace hD0 := hD0 trivial
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at hB0 hB2 hD0
+  simp only [Utilities.LookupRangeCheck.WitnessShort.circuit,
+    Utilities.LookupRangeCheck.WitnessShort.Spec, circuit_norm] at hB0 hB2 hD0
+  -- the WithZs hash spec
+  replace hWithZs := hWithZs trivial
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at hWithZs
+  rw [show (CommitDomain.WithZs.circuit G Q hQ R 24 [0, 23, 0]).Spec
+      = CommitDomain.WithZs.Spec G Q R 24 [0, 23, 0] from rfl] at hWithZs
+  simp only [CommitDomain.WithZs.Spec] at hWithZs
+  obtain ⟨chunks, r, hPC, hZs, hHash⟩ := hWithZs
+  refine ⟨?_, ?_⟩
+  swap
+  · refine ⟨Or.inl rfl, Or.inl rfl, Or.inl rfl, trivial, trivial, trivial, trivial,
+      trivial, trivial, Or.inl rfl, trivial⟩
+  simp only [Commit.Spec]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).2.2.2.2.1]; exact hB0
+  · rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).2.2.2.2.2.2.1]; exact hB2
+  · rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).2.2.2.2.2.2.2.1]; exact hD0
+  · rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).1]
+    have hAC := commit_pieceChunks_ac_bounds hPC
+    convert hAC.1 using 2; simp only [circuit_norm]; rfl
+  · rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).2.2.1]
+    have hAC := commit_pieceChunks_ac_bounds hPC
+    convert hAC.2 using 2; simp only [circuit_norm]; rfl
+  · obtain ⟨hZsHeadA, hZsTail⟩ := hZs
+    have hz13a := zsFacts_head_cell_eq_div (n := 24) (by norm_num) (by norm_num) hPC hZsHeadA
+    rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).1]
+    -- align both `zs` spellings to `eval env (… .zs)` (same `EntryZs` term), then the head
+    -- cell is one shared `eval`; the head piece value is the entry `a` cell (one cell)
+    rw [CommitDomain.WithZs.eval_zs] at hz13a
+    rw [Commit.eval_zs]
+    exact hz13a.trans (by simp only [circuit_norm]; rfl)
+  · have hz13c := zsFacts_get2_cell_eq_div hPC hZs
+    rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).2.2.1]
+    rw [CommitDomain.WithZs.eval_zs] at hz13c
+    rw [Commit.eval_zs]
+    exact hz13c.trans (by simp only [circuit_norm]; rfl)
+  · refine ⟨chunks, r, ?_, fun B hB => ?_⟩
+    · -- the four message pieces are the same cells the hash decomposed
+      simp only [circuit_norm] at hPC
+      convert hPC using 2
+      rw [Commit.eval_cells]
+      simp only [(Commit.eval_cells_leaves env _).1, (Commit.eval_cells_leaves env _).2.1,
+        (Commit.eval_cells_leaves env _).2.2.1, (Commit.eval_cells_leaves env _).2.2.2.1]
+      simp only [circuit_norm]
+      rfl
+    · -- the commitment point coords coincide with the hash output's
+      have hpt := hHash B hB
+      -- the goal point coords coincide (definitionally, one point) with the hash output's;
+      -- align both spellings to `eval env (point Var)` first so the bridge is one cheap `rfl`
+      rw [Commit.withZs_eval_point] at hpt
+      rw [Commit.eval_cells, Commit.eval_cells_point]
+      exact Eq.trans rfl hpt
+
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
