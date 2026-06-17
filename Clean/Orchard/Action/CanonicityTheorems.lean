@@ -152,6 +152,20 @@ theorem val_shift {a : Fp} (k : ℕ) (htp : tPNat ≤ a.val + 2 ^ k)
     rw [ZMod.natCast_rightInverse a]
   rw [hcast, ZMod.val_natCast_of_lt hlt]
 
+/-- A canonicity-shifted cell `lo + 2^k - t_P` with `lo < t_P` (and `130 ≤ k ≤ 254`) is
+`< 2^k`, so its `k`-bit running-sum tail vanishes. Shared by the `NoteCommit`/`CommitIvk`
+canonicity gates (and their completeness, via `Telescoped.zLast_eq_zero`). -/
+theorem shifted_high_zero {lo : Fp} {k : ℕ} (hk : 130 ≤ k) (hk254 : k ≤ 254)
+    (hlo : lo.val < tPNat) :
+    (lo + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val / 2 ^ k = 0 := by
+  have htp : tPNat < 2 ^ k :=
+    lt_of_lt_of_le (by norm_num [tPNat] : tPNat < 2 ^ 130) (Nat.pow_le_pow_right (by norm_num) hk)
+  have hp := pallasBaseCard_eq
+  have hPk : (2 : ℕ) ^ k ≤ 2 ^ 254 := Nat.pow_le_pow_right (by norm_num) hk254
+  have hval : (lo + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val = lo.val + 2 ^ k - tPNat :=
+    val_shift k (by omega) (by omega)
+  rw [hval, Nat.div_eq_of_lt (by omega)]
+
 /-- Dividing a `bitrange` of width `a+b` by `2^a` exposes the next `b` bits. -/
 theorem bitrange_div_pow (n s a b : ℕ) :
     bitrange n s (a + b) / 2 ^ a = bitrange n (s + a) b := by

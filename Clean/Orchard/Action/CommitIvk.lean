@@ -51,7 +51,8 @@ instance : Inhabited (Var Input Fp) :=
 open Orchard.Specs (bitrange bitrange_lt)
 open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical)
+open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
+  shifted_high_zero)
 
 /-- Semantic statement that the four Sinsemilla pieces `a, b, c, d` are exactly the
 `commit_ivk` message pieces for `ak`/`nk`, in the indexed form consumed by the chunk
@@ -227,18 +228,6 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     · exact absurd (h1 ▸ h) one_ne_zero
     · exact h
 
-/-- A shifted canonicity cell `lo + 2^k - t_P` with `lo < t_P` (and `130 ≤ k`) is `< 2^k`, so
-its `k`-bit running-sum tail vanishes. -/
-private theorem shifted_high_zero {lo : Fp} {k : ℕ} (hk : 130 ≤ k) (hk254 : k ≤ 254)
-    (hlo : lo.val < tPNat) :
-    (lo + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val / 2 ^ k = 0 := by
-  have htp : tPNat < 2 ^ k :=
-    lt_of_lt_of_le (by norm_num [tPNat] : tPNat < 2 ^ 130) (Nat.pow_le_pow_right (by norm_num) hk)
-  have hp := pallasBaseCard_eq
-  have hPk : (2 : ℕ) ^ k ≤ 2 ^ 254 := Nat.pow_le_pow_right (by norm_num) hk254
-  have hval : (lo + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val = lo.val + 2 ^ k - tPNat :=
-    val_shift k (by omega) (by omega)
-  rw [hval, Nat.div_eq_of_lt (by omega)]
 
 /-- A `.val` splits as low + `2^k` · high (over the natural-number value, cast to `Fp`). -/
 private theorem val_decomp (v k : ℕ) :

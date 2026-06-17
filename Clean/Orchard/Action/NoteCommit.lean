@@ -1085,14 +1085,11 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
       · rw [hb1_eq, h] at h1; norm_num at h1
       · exact h
     obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) hbr
-    have hcard : (2 : ℕ) ^ 131 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
-      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
-    have hval : (input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP).val = input_a.val + 2 ^ 130 - tPNat :=
-      val_shift 130 (by omega) (by rw [ha_val]; omega)
-    have hzero : (input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP).val / 2 ^ 130 = 0 := by
-      rw [hval, ha_val]; omega
+    -- the honest tail `zLast = (a + 2^130 - t_P).val / 2^130` (`hzLast`, from the `ProverSpec`)
+    -- vanishes because `a < t_P` makes the shifted value `< 2^130` (`shifted_high_zero`).
     rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
-        = input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring, hzero]
+        = input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
+      shifted_high_zero (by norm_num) (by norm_num) (by rw [ha_val]; exact hatp)]
     simp
 
 def circuit : FormalAssertion Fp Input where
