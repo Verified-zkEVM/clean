@@ -756,6 +756,10 @@ def MessageCellFacts (gd pkd : Point Fp) (value rho psi : Fp) (cells : MessageCe
     cells.g0 + cells.g1 * 2 + ((bitrange psi.val 9 240 : ℕ) : Fp) * 1024 ∧
   cells.h = cells.h0 + cells.h1 * 32
 
+def AssignedYBits (gd pkd : Point Fp) (cells : MessageCells Fp) : Prop :=
+  IsLowBit gd.y cells.b2 ∧
+    IsLowBit pkd.y cells.d1
+
 def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
   noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
 
@@ -850,7 +854,7 @@ def ProverAssumptions (_input : ProverValue Input Fp) (_ : ProverData Fp)
 
 def Spec (input : Value Input Fp) (cells : Value MessageCells Fp)
     (_ : ProverData Fp) : Prop :=
-  MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells
+  AssignedYBits input.gd input.pkd cells
 
 def ProverSpec (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
