@@ -1053,6 +1053,7 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   ]
   simp_all only [true_and, ←sub_eq_add_neg]
   use h_env.2
+  trace_state
   sorry
 
 def circuit : FormalAssertion Fp Input where
