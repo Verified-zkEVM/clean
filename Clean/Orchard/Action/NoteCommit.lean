@@ -714,15 +714,18 @@ def AssignedYBits (gd pkd : Point Fp) (cells : MessageCells Fp) : Prop :=
   IsLowBit gd.y cells.b2 ∧
     IsLowBit pkd.y cells.d1
 
-def AssignedMessageFacts (gd pkd : Point Fp) (cells : MessageCells Fp) : Prop :=
+/-- Soundness-side facts for the assigned cells: only the `WitnessShort` range bounds. The
+`ỹ` sign-bit relations (`AssignedYBits`) are **not** included here — they require the cells
+to be Boolean, which is enforced by `MessagePieceChecks`/`YCanonicity` at the top level, not
+within `AssignMessagePieces`. -/
+def AssignedMessageFacts (cells : MessageCells Fp) : Prop :=
   cells.b0.val < 2 ^ 4 ∧
   cells.b3.val < 2 ^ 4 ∧
   cells.d2.val < 2 ^ 8 ∧
   cells.e0.val < 2 ^ 6 ∧
   cells.e1.val < 2 ^ 4 ∧
   cells.g1.val < 2 ^ 9 ∧
-  cells.h0.val < 2 ^ 5 ∧
-  AssignedYBits gd pkd cells
+  cells.h0.val < 2 ^ 5
 
 def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
   noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
@@ -782,9 +785,10 @@ def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
   let g0 ← witnessField fun env => bitrangeSubset (eval env rho) 254 1
   let h1 ← witnessField fun env => bitrangeSubset (eval env psi) 254 1
 
-  let b2 ← YCanonicity.circuit { y := gdY, lsb := b2 }
-  let d1 ← YCanonicity.circuit { y := pkdY, lsb := d1 }
-
+  -- `y_canonicity` (for the `ỹ` sign cells `b2`/`d1`) is *not* run here: it requires
+  -- `IsBool b2`/`IsBool d1`, which the source establishes in the `b`/`d` message-piece
+  -- decomposition gates (`MessagePieceChecks`). It is therefore composed at the top level,
+  -- after `MessagePieceChecks`, as a sibling of the x-canonicity gates.
   let a ← witnessField fun env => bitrangeSubset (eval env gdX) 0 250
   let b ← witnessField fun env =>
     env b0 + env b1 * 2 ^ 4 + env b2 * 2 ^ 5 + env b3 * 2 ^ 6
@@ -816,22 +820,37 @@ def ProverAssumptions (_input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
   True
 
-def Spec (input : Value Input Fp) (cells : Value MessageCells Fp)
+def Spec (_input : Value Input Fp) (cells : Value MessageCells Fp)
     (_ : ProverData Fp) : Prop :=
-  AssignedMessageFacts input.gd input.pkd cells
+  AssignedMessageFacts cells
 
 def ProverSpec (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
   MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells
 
+/-- `WitnessShort.bitrangeSubset` is the field cast of the natural `bitrange`. -/
+theorem bitrangeSubset_eq (v : Fp) (s n : ℕ) :
+    Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset v s n
+      = ((bitrange v.val s n : ℕ) : Fp) := rfl
+
+/-- The honest 1-bit subset of `y` is its low (sign) bit. -/
+theorem isLowBit_bitrangeSubset (y : Fp) :
+    IsLowBit y (Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset y 0 1) := by
+  rw [isLowBit_iff_mod_two, bitrangeSubset_eq]
+  norm_num [bitrange]
+
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [YCanonicity.circuit]
-  sorry
+  circuit_proof_start [main, Spec, AssignedMessageFacts,
+    Utilities.LookupRangeCheck.WitnessShort.circuit,
+    Utilities.LookupRangeCheck.WitnessShort.Spec]
+  exact h_holds
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
-  circuit_proof_start [bitrangeSubset, YCanonicity.circuit]
+  circuit_proof_start [main, ProverSpec, MessageCellFacts,
+    Utilities.LookupRangeCheck.WitnessShort.circuit,
+    Utilities.LookupRangeCheck.WitnessShort.ProverSpec]
   sorry
 
 def circuit : GeneralFormalCircuit.WithHint Fp Input MessageCells where
@@ -1336,6 +1355,10 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let z1g := (HVec.get _ out.zs ⟨6, by decide⟩)[1]
   let z13g := (HVec.get _ out.zs ⟨6, by decide⟩)[13]
   MessagePieceChecks.circuit { cells, z1d, z1g }
+  -- `y_canonicity` for the `ỹ` sign cells: composed here (not in `AssignMessagePieces`) so its
+  -- `IsBool b2`/`IsBool d1` precondition is dischargeable from `MessagePieceChecks`.
+  let _ ← YCanonicity.circuit { y := input.gd.y, lsb := cells.b2 }
+  let _ ← YCanonicity.circuit { y := input.pkd.y, lsb := cells.d1 }
   GdCanonicity.circuit
     { gdX := input.gd.x, a := cells.a, b0 := cells.b0, b1 := cells.b1, z13A := z13a }
   PkdCanonicity.circuit
