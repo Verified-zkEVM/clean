@@ -188,14 +188,14 @@ def Assumptions (row : Row Fp) : Prop :=
     row.b3.val < 2 ^ 4 ∧
     row.b3C' = row.b3 + row.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
     row.z13C = ((row.c.val / 2 ^ 130 : ℕ) : Fp) ∧
-    (∃ lo : ℕ, lo < 2 ^ 140 ∧ row.b3C' = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14B3C') ∧
-    (row.d0 = 1 → row.z14B3C' = 0)
+    ∃ lo : ℕ, lo < 2 ^ 140 ∧ row.b3C' = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14B3C'
 
 /-- The gate's payoff: `b3`/`c`/`d0` are the canonical bit slices of `x(pk_d)`. -/
 def Spec (row : Row Fp) : Prop :=
   row.b3 = ((bitrange row.pkdX.val 0 4 : ℕ) : Fp) ∧
     row.c = ((bitrange row.pkdX.val 4 250 : ℕ) : Fp) ∧
-    row.d0 = ((bitrange row.pkdX.val 254 1 : ℕ) : Fp)
+    row.d0 = ((bitrange row.pkdX.val 254 1 : ℕ) : Fp) ∧
+    (row.d0 = 1 → row.z14B3C' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.b3 + row.c * Expression.const ((2 ^ 4 : ℕ) : Fp) +
@@ -212,7 +212,7 @@ def circuit : FormalAssertion Fp Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨hd0, hc_lt, hb3_lt, hb3cP, hz13C, hzbDec, _⟩ := h_assumptions
+    obtain ⟨hd0, hc_lt, hb3_lt, hb3cP, hz13C, hzbDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -256,14 +256,18 @@ def circuit : FormalAssertion Fp Row where
       have h1 : input_c.val = bitrange (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val 4 250 := by
         simp only [bitrange, hlo_val]; omega
       rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 4 + 250 ≤ 254)]
-    refine ⟨?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_⟩
     · rw [← hb3_eq]; exact (ZMod.natCast_rightInverse input_b3).symm
     · rw [← hc_eq]; exact (ZMod.natCast_rightInverse input_c).symm
     · rw [← hd0_eq]; exact (ZMod.natCast_rightInverse input_d0).symm
+    · intro h1
+      rcases mul_eq_zero.mp hg2 with h | h
+      · exact absurd (h1 ▸ h) one_ne_zero
+      · exact h
   completeness := by
     circuit_proof_start
-    obtain ⟨_, hc_lt, hb3_lt, hb3cP, hz13C, _, hzbZero⟩ := h_assumptions
-    obtain ⟨hb3_eq, hc_eq, hd0_eq⟩ := h_spec
+    obtain ⟨_, hc_lt, hb3_lt, hb3cP, hz13C, _⟩ := h_assumptions
+    obtain ⟨hb3_eq, hc_eq, hd0_eq, hzbZero⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hpkdX : input_pkdX.val < 2 ^ 255 :=
@@ -393,14 +397,14 @@ def Assumptions (row : Row Fp) : Prop :=
     row.e1.val < 2 ^ 4 ∧
     row.e1F' = row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
     row.z13F = ((row.f.val / 2 ^ 130 : ℕ) : Fp) ∧
-    (∃ lo : ℕ, lo < 2 ^ 140 ∧ row.e1F' = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14E1F') ∧
-    (row.g0 = 1 → row.z14E1F' = 0)
+    ∃ lo : ℕ, lo < 2 ^ 140 ∧ row.e1F' = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14E1F'
 
 /-- The gate's payoff: `e1`/`f`/`g0` are the canonical bit slices of `rho`. -/
 def Spec (row : Row Fp) : Prop :=
   row.e1 = ((bitrange row.rho.val 0 4 : ℕ) : Fp) ∧
     row.f = ((bitrange row.rho.val 4 250 : ℕ) : Fp) ∧
-    row.g0 = ((bitrange row.rho.val 254 1 : ℕ) : Fp)
+    row.g0 = ((bitrange row.rho.val 254 1 : ℕ) : Fp) ∧
+    (row.g0 = 1 → row.z14E1F' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.e1 + row.f * Expression.const ((2 ^ 4 : ℕ) : Fp) +
@@ -417,7 +421,7 @@ def circuit : FormalAssertion Fp Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hzeDec, _⟩ := h_assumptions
+    obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hzeDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -461,14 +465,18 @@ def circuit : FormalAssertion Fp Row where
       have h1 : input_f.val = bitrange (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val 4 250 := by
         simp only [bitrange, hlo_val]; omega
       rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 4 + 250 ≤ 254)]
-    refine ⟨?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_⟩
     · rw [← he1_eq]; exact (ZMod.natCast_rightInverse input_e1).symm
     · rw [← hf_eq]; exact (ZMod.natCast_rightInverse input_f).symm
     · rw [← hg0_eq]; exact (ZMod.natCast_rightInverse input_g0).symm
+    · intro h1
+      rcases mul_eq_zero.mp hg2 with h | h
+      · exact absurd (h1 ▸ h) one_ne_zero
+      · exact h
   completeness := by
     circuit_proof_start
-    obtain ⟨_, hf_lt, he1_lt, he1fP, hz13F, _, hzeZero⟩ := h_assumptions
-    obtain ⟨he1_eq, hf_eq, hg0_eq⟩ := h_spec
+    obtain ⟨_, hf_lt, he1_lt, he1fP, hz13F, _⟩ := h_assumptions
+    obtain ⟨he1_eq, hf_eq, hg0_eq, hzeZero⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hrhoX : input_rho.val < 2 ^ 255 :=
@@ -528,15 +536,15 @@ def Assumptions (row : Row Fp) : Prop :=
     row.h0.val < 2 ^ 5 ∧
     row.g1G2' = row.g1 + row.g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
     row.z13G = ((row.g1.val + row.g2.val * 2 ^ 9) / 2 ^ 130 : ℕ) ∧
-    (∃ lo : ℕ, lo < 2 ^ 130 ∧ row.g1G2' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13G1G2') ∧
-    (row.h1 = 1 → row.z13G1G2' = 0)
+    ∃ lo : ℕ, lo < 2 ^ 130 ∧ row.g1G2' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13G1G2'
 
 /-- The gate's payoff: `g1`/`g2`/`h0`/`h1` are the canonical bit slices of `psi`. -/
 def Spec (row : Row Fp) : Prop :=
   row.g1 = ((bitrange row.psi.val 0 9 : ℕ) : Fp) ∧
     row.g2 = ((bitrange row.psi.val 9 240 : ℕ) : Fp) ∧
     row.h0 = ((bitrange row.psi.val 249 5 : ℕ) : Fp) ∧
-    row.h1 = ((bitrange row.psi.val 254 1 : ℕ) : Fp)
+    row.h1 = ((bitrange row.psi.val 254 1 : ℕ) : Fp) ∧
+    (row.h1 = 1 → row.z13G1G2' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.g1 + row.g2 * Expression.const ((2 ^ 9 : ℕ) : Fp) +
@@ -555,7 +563,7 @@ def circuit : FormalAssertion Fp Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hzgDec, _⟩ := h_assumptions
+    obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hzgDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg_h0, hg_z13, hg_z13p⟩ := h_holds
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -631,15 +639,19 @@ def circuit : FormalAssertion Fp Row where
       rw [h1, hin_eq]
       have : bitrange input_psi.val 0 249 = input_psi.val % 2 ^ 249 := by simp [bitrange]
       rw [this, bitrange_mod (by norm_num : 9 + 240 ≤ 249)]
-    refine ⟨?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · rw [← hg1_eq]; exact (ZMod.natCast_rightInverse input_g1).symm
     · rw [← hg2_eq]; exact (ZMod.natCast_rightInverse input_g2).symm
     · rw [← hh0_eq]; exact (ZMod.natCast_rightInverse input_h0).symm
     · rw [← hh1_eq]; exact (ZMod.natCast_rightInverse input_h1).symm
+    · intro h1
+      rcases mul_eq_zero.mp hg_z13p with h | h
+      · exact absurd (h1 ▸ h) one_ne_zero
+      · exact h
   completeness := by
     circuit_proof_start
-    obtain ⟨_, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, _, hzgZero⟩ := h_assumptions
-    obtain ⟨hg1_eq, hg2_eq, hh0_eq, hh1_eq⟩ := h_spec
+    obtain ⟨_, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, _⟩ := h_assumptions
+    obtain ⟨hg1_eq, hg2_eq, hh0_eq, hh1_eq, hzgZero⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hpsiX : input_psi.val < 2 ^ 255 :=
