@@ -622,18 +622,19 @@ def ProverSpec (input : ProverValue Input Fp) (output : Fp)
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
-  -- The gate derives `IsLowBit`; this wrapper only assembles the gate's range/running-sum
-  -- assumptions from the `Decomposed`/`Telescoped`/`WitnessShort` child specs and applies it:
-  --   circuit_proof_start [WitnessShort.circuit, Telescoped.circuit,
-  --     WitnessShort.Spec, Decomposed.Spec, Telescoped.Spec]
-  --   obtain ⟨hk0, hk2, hfr, htel, hgate⟩ := h_holds
-  --   refine ⟨rfl, (hgate ⟨h_assumptions, (hfr trivial).1, hk0 trivial, hk2 trivial, htel.1,
-  --     (hfr trivial).2.1, (hfr trivial).2.2, htel.2⟩).1⟩
-  -- The LSP accepts that, but the full build exceeds 200k heartbeats reducing the 25-word
-  -- `Decomposed` subcircuit's `mapRange` metadata during `circuit_proof_start`. Unblocking it
-  -- needs `Decomposed` to expose direct-var projections + an explicit `localLength`/`output`
-  -- (`elaborate_circuit_with … using …`) so the 25-word vector never reaches this elaboration.
-  sorry
+  circuit_proof_start [Utilities.LookupRangeCheck.WitnessShort.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit,
+    Utilities.LookupRangeCheck.WitnessShort.Spec,
+    Utilities.LookupRangeCheck.CopyCheck.Decomposed.Spec,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec,
+    Gate.circuit, Gate.Spec, Gate.Assumptions]
+  simp_all only [true_and, ←sub_eq_add_neg]
+  obtain ⟨hk0, hk2, hd, htel, h_gate⟩ := h_holds
+  obtain ⟨lo, hlo, hdec⟩ := htel.2
+  simp only [show K * 13 = 130 from rfl] at hlo hdec
+  rw [htel.1] at h_gate
+  exact (h_gate ⟨hd.1, hk0, hk2, rfl, hd.2.1, hd.2.2, lo, hlo, hdec⟩).1
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
