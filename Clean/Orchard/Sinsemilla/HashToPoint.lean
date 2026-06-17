@@ -511,7 +511,7 @@ theorem pieceZ_last {p : Fp} {w : ℕ} (hp : p.val < 2 ^ (K * (w + 1))) :
   exact hp
 
 /-- Telescoped base-`2^K` running sum (mirrors the short-mul chain lemma). -/
-private theorem chain_eq_sum {n : ℕ} (z : ℕ → Fp) (ms : ℕ → ℕ)
+theorem chain_eq_sum {n : ℕ} (z : ℕ → Fp) (ms : ℕ → ℕ)
     (hword : ∀ r < n, z r = (ms r : Fp) + 2 ^ K * z (r + 1))
     (hzn : z n = 0) :
     z 0 = ((∑ r ∈ Finset.range n, ms r * 2 ^ (K * r) : ℕ) : Fp) := by
@@ -530,6 +530,13 @@ private theorem chain_eq_sum {n : ℕ} (z : ℕ → Fp) (ms : ℕ → ℕ)
   have hn := key n (by omega)
   rw [hzn, zero_mul, _root_.add_zero] at hn
   exact hn
+
+/-- A piece that fits in `K·m` bits is the base-`2^K` recombination of its `K`-bit words. -/
+theorem piece_recombine (p : Fp) (m : ℕ) (hp : p.val < 2 ^ (K * m)) :
+    p = ((∑ r ∈ Finset.range m, pieceWord p r * 2 ^ (K * r) : ℕ) : Fp) := by
+  have hzn : pieceZ p m = 0 := by simp only [pieceZ, Nat.div_eq_of_lt hp, Nat.cast_zero]
+  have h := chain_eq_sum (n := m) (pieceZ p) (pieceWord p) (fun r _ => pieceZ_succ p r) hzn
+  rwa [pieceZ_zero] at h
 
 /-- Each running sum `z_r` is the recombination of the words from position `r` onward
 (the suffix sum). Mirrors `chain_eq_sum` but characterizes every prefix exit, not just
@@ -1244,6 +1251,17 @@ def PieceBounds : (ns : List ℕ) → Vector Fp ns.length → Prop
   | n :: rest, pieces =>
     ZMod.val (show Fp from pieces[0]) < 2 ^ (K * (n + 1)) ∧
       PieceBounds rest pieces.tail
+
+/-- The honest chunk values realize the `PieceChunks` relation when the pieces are in
+range: each piece is the recombination of its `K`-bit words (`piece_recombine`). -/
+theorem pieceChunks_honestChunks : (ns : List ℕ) → (pieces : Vector Fp ns.length) →
+    PieceBounds ns pieces → PieceChunks ns pieces (honestChunks ns pieces)
+  | [], _, _ => rfl
+  | n :: rest, pieces, hbounds => by
+    obtain ⟨hb0, hbrest⟩ := hbounds
+    refine ⟨pieceWord pieces[0], fun r => HashPiece.pieceWord_lt _ _, ?_,
+      honestChunks rest pieces.tail, rfl, pieceChunks_honestChunks rest pieces.tail hbrest⟩
+    exact HashPiece.piece_recombine pieces[0] (n + 1) hb0
 
 /-- Each exposed `z_1` cell is the recombination of its piece's chunks with the first
 word stripped (anchored to the same flat chunk list as `PieceChunks`). -/

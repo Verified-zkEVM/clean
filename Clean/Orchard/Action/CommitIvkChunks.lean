@@ -180,4 +180,21 @@ theorem pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
     ((ht3.trans hD).symm.trans hpD)
     hak hnk
 
+/-- Completeness-direction identification: the honest chunk values of pieces that decode
+`ak`/`nk` are exactly `commitIvkChunks ak nk`. Reuses the soundness bridge via
+`pieceChunks_honestChunks` (the honest chunks always realize `PieceChunks` when the pieces
+are in range). -/
+theorem honestChunks_eq_commitIvkChunks
+    {pieces : Vector Fp 4} {ak nk : ℕ}
+    (hbounds : Orchard.Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] pieces)
+    (hA : pieces[0] = ((ak % 2 ^ (K * 25) : ℕ) : Fp))
+    (hB : pieces[1] = ((ak / 2 ^ 250 % 16 + (ak / 2 ^ 254 % 2) * 16 + (nk % 2 ^ 5) * 32 : ℕ) : Fp))
+    (hC : pieces[2] = (((nk / 2 ^ 5) % 2 ^ (K * 24) : ℕ) : Fp))
+    (hD : pieces[3] = ((nk / 2 ^ 245 % 2 ^ 9 + (nk / 2 ^ 254 % 2) * 512 : ℕ) : Fp))
+    (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
+    Orchard.Sinsemilla.Chain.honestChunks [24, 0, 23, 0] pieces = commitIvkChunks ak nk :=
+  pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
+    (Orchard.Sinsemilla.Chain.pieceChunks_honestChunks [24, 0, 23, 0] pieces hbounds)
+    hA hB hC hD hak hnk
+
 end Orchard.Action.CommitIvk
