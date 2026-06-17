@@ -1053,7 +1053,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   ]
   simp_all only [true_and, ←sub_eq_add_neg]
   use h_env.2
-  trace_state
   sorry
 
 def circuit : FormalAssertion Fp Input where
@@ -1097,7 +1096,19 @@ def Spec (input : Input Fp) : Prop :=
     input.d0 = ((bitrange input.pkdX.val 254 1 : ℕ) : Fp)
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
+  ]
+  simp_all only [true_and, ←sub_eq_add_neg]
+  obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
+  rw [z0_eq] at h_gate
+  have hshift :
+      input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP =
+        input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP := by
+    ring
+  obtain ⟨h1, h2, h3, _⟩ := h_gate ⟨hshift, element_eq⟩
+  exact ⟨h1, h2, h3⟩
 
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
   sorry
@@ -1185,7 +1196,19 @@ def Spec (input : Input Fp) : Prop :=
     input.g0 = ((bitrange input.rho.val 254 1 : ℕ) : Fp)
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
+  ]
+  simp_all only [true_and, ←sub_eq_add_neg]
+  obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
+  rw [z0_eq] at h_gate
+  have hshift :
+      input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP =
+        input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP := by
+    ring
+  obtain ⟨h1, h2, h3, _⟩ := h_gate ⟨hshift, element_eq⟩
+  exact ⟨h1, h2, h3⟩
 
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
   sorry
@@ -1235,7 +1258,19 @@ def Spec (input : Input Fp) : Prop :=
     input.h1 = ((bitrange input.psi.val 254 1 : ℕ) : Fp)
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
+  ]
+  simp_all only [true_and, ←sub_eq_add_neg]
+  obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
+  rw [z0_eq] at h_gate
+  have hshift :
+      input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP =
+        input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP := by
+    ring
+  obtain ⟨h1, h2, h3, h4, _⟩ := h_gate ⟨hshift, element_eq⟩
+  exact ⟨h1, h2, h3, h4⟩
 
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
   sorry
