@@ -1249,6 +1249,7 @@ instance elaborated (numWords : ℕ) :
   elaborate_circuit
 
 def Spec (numWords : ℕ) (element : Fp) (zs : fields (numWords + 1) Fp) : Prop :=
+  zs[0]'(Nat.succ_pos numWords) = element ∧
   ∃ lo : ℕ, lo < 2 ^ (K * numWords) ∧
     element =
       (lo : Fp) + 2 ^ (K * numWords) * zs[numWords]'(Nat.lt_succ_self numWords)
@@ -1257,10 +1258,11 @@ theorem soundness (numWords : ℕ) :
     Soundness Fp (main numWords) (fun _ => True) (Spec numWords) := by
   circuit_proof_start [CopyCheck.circuit]
   obtain ⟨lo, hlo, htel⟩ := CopyCheck.spec_telescope h_holds numWords le_rfl
-  refine ⟨lo, hlo, ?_⟩
-  rw [← h_holds.1]
-  convert htel using 1
-  simp [circuit_norm]
+  refine ⟨?_, lo, hlo, ?_⟩
+  · convert h_holds.1 using 1; simp [circuit_norm]
+  · rw [← h_holds.1]
+    convert htel using 1
+    simp [circuit_norm]
 
 theorem completeness (numWords : ℕ) :
     Completeness Fp (main numWords) (fun _ => True) := by
