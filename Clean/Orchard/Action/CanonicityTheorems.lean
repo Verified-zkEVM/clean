@@ -175,6 +175,51 @@ theorem bit_one_of_eq {b : Fp} {n s : ℕ} (heq : b = ((bitrange n s 1 : ℕ) : 
   · rw [heq, h] at h1; norm_num at h1
   · exact h
 
+/-- Canonicity with the top bit set, in the form needed when the canonicity element spans
+the full low 254 bits (the `pk_d`/`rho` gates): `n < p` with bit 254 set forces the low 254
+bits below `t_P`. -/
+theorem high_bit_canonical_254 {n : ℕ} (hn : n < PALLAS_BASE_CARD)
+    (hhigh : bitrange n 254 1 = 1) : bitrange n 0 254 < tPNat := by
+  have hsplit := bitrange_add n 0 254 1
+  have hfull : bitrange n 0 255 = n := by
+    simp only [bitrange, pow_zero, Nat.div_one]
+    exact Nat.mod_eq_of_lt (lt_trans hn (by norm_num [PALLAS_BASE_CARD]))
+  rw [show (254 : ℕ) + 1 = 255 from rfl, hfull, hhigh, mul_one] at hsplit
+  rw [pallasBaseCard_eq] at hn
+  omega
+
+/-- Top bit set ⇒ every low-bit prefix of width `≤ 254` lies below `t_P`. Generalises
+`high_bit_canonical` over the prefix width, covering all four `x`/`rho`/`psi` canonicity
+gates (whose canonicity bases are the low `250`/`254`/`254`/`249` bits). -/
+theorem high_bit_low_lt_tP {n : ℕ} (hn : n < PALLAS_BASE_CARD)
+    (hhigh : bitrange n 254 1 = 1) {s : ℕ} (hs : s ≤ 254) :
+    bitrange n 0 s < tPNat := by
+  have h254 := high_bit_canonical_254 hn hhigh
+  have hle : bitrange n 0 s ≤ bitrange n 0 254 := by
+    simp only [bitrange, pow_zero, Nat.div_one]
+    conv_lhs => rw [← Nat.mod_mod_of_dvd n (pow_dvd_pow 2 hs)]
+    exact Nat.mod_le _ _
+  omega
+
+/-- The two-limb canonicity base `lo + 2^a·hi` (where `lo`/`hi` are the canonical low-`a`
+and next-`b` slices of `n`) equals the low `(a+b)` bits as a field element; with the top
+bit set it lies below `t_P`. Feeds `shifted_high_zero` for the `pk_d`/`rho`/`psi` gates. -/
+theorem base_val_lt_tP {loF hiF : Fp} {n a b : ℕ}
+    (hlo : loF = ((bitrange n 0 a : ℕ) : Fp))
+    (hhi : hiF = ((bitrange n a b : ℕ) : Fp))
+    (hn : n < PALLAS_BASE_CARD) (hhigh : bitrange n 254 1 = 1) (hab : a + b ≤ 254) :
+    (loF + ((2 ^ a : ℕ) : Fp) * hiF).val < tPNat := by
+  have hbr := bitrange_add n 0 a b
+  simp only [Nat.zero_add] at hbr
+  have hbase : loF + ((2 ^ a : ℕ) : Fp) * hiF = ((bitrange n 0 (a + b) : ℕ) : Fp) := by
+    rw [hlo, hhi, hbr]; push_cast; ring
+  have hlt : bitrange n 0 (a + b) < PALLAS_BASE_CARD :=
+    lt_trans (bitrange_lt n 0 (a + b))
+      (lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hab)
+        (by norm_num [PALLAS_BASE_CARD]))
+  rw [hbase, ZMod.val_natCast_of_lt hlt]
+  exact high_bit_low_lt_tP hn hhigh hab
+
 /-- Dividing a `bitrange` of width `a+b` by `2^a` exposes the next `b` bits. -/
 theorem bitrange_div_pow (n s a b : ℕ) :
     bitrange n s (a + b) / 2 ^ a = bitrange n (s + a) b := by

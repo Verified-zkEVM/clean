@@ -1135,7 +1135,25 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   exact ⟨h1, h2, h3⟩
 
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec, Gate.Spec, Gate.Assumptions
+  ]
+  obtain ⟨hd0, hc_lt, hb3_lt, hz13C⟩ := h_assumptions
+  obtain ⟨hb3_eq, hc_eq, hd0_eq⟩ := h_spec
+  obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
+  simp only [show K * 14 = 140 from by norm_num [K]] at hlo hdec hzLast
+  refine ⟨⟨hd0, hc_lt, hb3_lt, by linear_combination hz0, hz13C, lo, hlo,
+    by linear_combination hdec + hz0⟩, hb3_eq, hc_eq, hd0_eq, fun h1 => ?_⟩
+  -- `d0 = 1` ⇒ `x(pk_d)` canonical ⇒ the low 254-bit base `< t_P` ⇒ honest tail vanishes.
+  have hbase_lt := base_val_lt_tP hb3_eq hc_eq (ZMod.val_lt input_pkdX)
+    (bit_one_of_eq hd0_eq h1) (by norm_num)
+  rw [hzLast,
+    show input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -Ecc.tP
+      = (input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP from by ring,
+    shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
+  simp
 
 def circuit : FormalAssertion Fp Input where
   main
@@ -1235,7 +1253,25 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   exact ⟨h1, h2, h3⟩
 
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec, Gate.Spec, Gate.Assumptions
+  ]
+  obtain ⟨hg0, hf_lt, he1_lt, hz13F⟩ := h_assumptions
+  obtain ⟨he1_eq, hf_eq, hg0_eq⟩ := h_spec
+  obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
+  simp only [show K * 14 = 140 from by norm_num [K]] at hlo hdec hzLast
+  refine ⟨⟨hg0, hf_lt, he1_lt, by linear_combination hz0, hz13F, lo, hlo,
+    by linear_combination hdec + hz0⟩, he1_eq, hf_eq, hg0_eq, fun h1 => ?_⟩
+  -- `g0 = 1` ⇒ `rho` canonical ⇒ the low 254-bit base `< t_P` ⇒ honest tail vanishes.
+  have hbase_lt := base_val_lt_tP he1_eq hf_eq (ZMod.val_lt input_rho)
+    (bit_one_of_eq hg0_eq h1) (by norm_num)
+  rw [hzLast,
+    show input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) + -Ecc.tP
+      = (input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP from by ring,
+    shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
+  simp
 
 def circuit : FormalAssertion Fp Input where
   main
@@ -1297,7 +1333,25 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   exact ⟨h1, h2, h3, h4⟩
 
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec, Gate.Spec, Gate.Assumptions
+  ]
+  obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hz13G⟩ := h_assumptions
+  obtain ⟨hg1_eq, hg2_eq, hh0_eq, hh1_eq⟩ := h_spec
+  obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
+  simp only [show K * 13 = 130 from by norm_num [K]] at hlo hdec hzLast
+  refine ⟨⟨hh1, hg1_lt, hg2_lt, hh0_lt, by linear_combination hz0, hz13G, lo, hlo,
+    by linear_combination hdec + hz0⟩, hg1_eq, hg2_eq, hh0_eq, hh1_eq, fun h1 => ?_⟩
+  -- `h1 = 1` ⇒ `psi` canonical ⇒ the low 249-bit base `< t_P` ⇒ honest tail vanishes.
+  have hbase_lt := base_val_lt_tP hg1_eq hg2_eq (ZMod.val_lt input_psi)
+    (bit_one_of_eq hh1_eq h1) (by norm_num)
+  rw [hzLast,
+    show input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
+      = (input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
+    shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
+  simp
 
 def circuit : FormalAssertion Fp Input where
   main
