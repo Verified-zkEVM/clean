@@ -494,6 +494,37 @@ private theorem zsFacts_get2_cell_eq_div {pieces : Vector Fp 4} {chunks : List �
       (Vector.getElem_tail (v := pieces) (i := 1) (hi := by decide))
   exact ht2 ▸ hcell
 
+open Orchard.Specs.Sinsemilla in
+/-- The `z₁₃` cell of an honest head running-sum vector is `piece.val / 2^130`
+(`pieceZ piece 13`, with `K·13 = 130`). -/
+private theorem zsHonest_head_cell_eq_div {n : ℕ} {rest : List ℕ} (h13 : 13 ≤ n)
+    {pieces : Vector Fp (n :: rest).length}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
+    (hZsHead : HVec.head zs = Vector.ofFn (fun r : Fin (n + 1) =>
+      Orchard.Sinsemilla.pieceZ pieces[0] r.val)) :
+    (HVec.head zs)[13]'(Nat.lt_succ_of_le h13)
+      = (((pieces[0] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
+  rw [hZsHead, Vector.getElem_ofFn]
+  simp only [Orchard.Sinsemilla.pieceZ,
+    show Orchard.Specs.Sinsemilla.K * 13 = 130 from by norm_num [Orchard.Specs.Sinsemilla.K]]
+
+open Orchard.Specs.Sinsemilla in
+/-- The `z₁₃` cell of the honest `c` running-sum vector (index 2 of `[24,0,23,0]`) is
+`c.val / 2^130`. -/
+private theorem zsHonest_get2_cell_eq_div {pieces : Vector Fp 4}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths [24, 0, 23, 0]) Fp}
+    (hZs : Orchard.Sinsemilla.Chain.ZsHonest [24, 0, 23, 0] pieces zs) :
+    (HVec.get (Orchard.Sinsemilla.Chain.zLengths [24, 0, 23, 0]) zs ⟨2, by decide⟩)[13]'(by decide)
+      = (((pieces[2] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
+  simp only [Orchard.Sinsemilla.Chain.ZsHonest] at hZs
+  obtain ⟨-, -, hZsHeadC, -⟩ := hZs
+  have hcell := zsHonest_head_cell_eq_div (n := 23) (rest := [0]) (by norm_num)
+    (pieces := pieces.tail.tail) hZsHeadC
+  have ht2 : (pieces.tail.tail[0]'(by decide) : Fp) = pieces[2] :=
+    (Vector.getElem_tail (v := pieces.tail) (i := 0) (hi := by decide)).trans
+      (Vector.getElem_tail (v := pieces) (i := 1) (hi := by decide))
+  exact ht2 ▸ hcell
+
 /-! ### `Commit`: the witnessing + Sinsemilla hash, isolated behind a clean output
 
 Virtual subcircuit (no constraint/VK impact) wrapping all of `commit_ivk`'s witnessing and
@@ -635,10 +666,21 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (output : ProverValue Output Fp) (_ : ProverHint Fp) : Prop :=
+  let ak : Fp := input.ak
+  let nk : Fp := input.nk
   output.cells.b0.val < 2 ^ 4 ∧ output.cells.b2.val < 2 ^ 5 ∧ output.cells.d0.val < 2 ^ 9 ∧
     output.cells.a.val < 2 ^ 250 ∧ output.cells.c.val < 2 ^ 240 ∧
     (HVec.get _ output.zs ⟨0, by decide⟩)[13] = ((output.cells.a.val / 2 ^ 130 : ℕ) : Fp) ∧
     (HVec.get _ output.zs ⟨2, by decide⟩)[13] = ((output.cells.c.val / 2 ^ 130 : ℕ) : Fp) ∧
+    output.cells.a = ((bitrange ak.val 0 250 : ℕ) : Fp) ∧
+    output.cells.b0 = ((bitrange ak.val 250 4 : ℕ) : Fp) ∧
+    output.cells.b1 = ((bitrange ak.val 254 1 : ℕ) : Fp) ∧
+    output.cells.b2 = ((bitrange nk.val 0 5 : ℕ) : Fp) ∧
+    output.cells.c = ((bitrange nk.val 5 240 : ℕ) : Fp) ∧
+    output.cells.d0 = ((bitrange nk.val 245 9 : ℕ) : Fp) ∧
+    output.cells.d1 = ((bitrange nk.val 254 1 : ℕ) : Fp) ∧
+    output.cells.b = output.cells.b0 + output.cells.b1 * 16 + output.cells.b2 * 32 ∧
+    output.cells.d = output.cells.d0 + output.cells.d1 * 512 ∧
     ∃ (chunks : List ℕ),
       Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
         #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
@@ -711,11 +753,196 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       rw [Commit.eval_cells, Commit.eval_cells_point]
       exact Eq.trans rfl hpt
 
+/-- The honest `WitnessShort` value is the `bitrange` slice, cast to `Fp`. -/
+private theorem bitrangeSubset_eq_bitrange (v : Fp) (start numBits : ℕ) :
+    Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset v start numBits
+      = ((bitrange v.val start numBits : ℕ) : Fp) := rfl
+
+/-- The honest `commit_ivk` message pieces (canonical bit slices of `ak`/`nk`) satisfy the
+`PieceBounds` and their honest chunks are `commitIvkChunks ak.val nk.val`. Stated over the
+abstract piece cells (with their honest-slice values) so the heavy WithZs offsets never enter
+the kernel-checked term. -/
+private theorem honest_pieces_facts (ak nk a b c d : Fp)
+    (ha : a = ((bitrange ak.val 0 250 : ℕ) : Fp))
+    (hb : b = ((bitrange ak.val 250 4 : ℕ) : Fp) + ((bitrange ak.val 254 1 : ℕ) : Fp) * 2 ^ 4
+            + ((bitrange nk.val 0 5 : ℕ) : Fp) * 2 ^ 5)
+    (hc : c = ((bitrange nk.val 5 240 : ℕ) : Fp))
+    (hd : d = ((bitrange nk.val 245 9 : ℕ) : Fp) + ((bitrange nk.val 254 1 : ℕ) : Fp) * 2 ^ 9) :
+    Orchard.Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] #v[a, b, c, d] ∧
+    Orchard.Sinsemilla.Chain.honestChunks [24, 0, 23, 0] #v[a, b, c, d]
+      = Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val := by
+  -- the four piece values, recast into the indexed `(divisor/modulus)` form the bridge wants
+  have hbN : b = ((ak.val / 2 ^ 250 % 16 + (ak.val / 2 ^ 254 % 2) * 16 + (nk.val % 2 ^ 5) * 32
+      : ℕ) : Fp) := by rw [hb]; simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
+  have hdN : d = ((nk.val / 2 ^ 245 % 2 ^ 9 + (nk.val / 2 ^ 254 % 2) * 512 : ℕ) : Fp) := by
+    rw [hd]; simp only [bitrange]; push_cast; ring
+  have haN : a = ((ak.val % 2 ^ (Orchard.Specs.Sinsemilla.K * 25) : ℕ) : Fp) := by
+    rw [ha]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  have hcN : c = (((nk.val / 2 ^ 5) % 2 ^ (Orchard.Specs.Sinsemilla.K * 24) : ℕ) : Fp) := by
+    rw [hc]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  -- the `.val`s of the honest pieces are bounded by their bit widths
+  have hak : ak.val < 2 ^ 255 := lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
+  have hnk : nk.val < 2 ^ 255 := lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
+  have haval : a.val < 2 ^ (Orchard.Specs.Sinsemilla.K * 25) := by
+    rw [haN, ZMod.val_natCast_of_lt
+      (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos _)) (by norm_num [Orchard.Specs.Sinsemilla.K, PALLAS_BASE_CARD]))]
+    exact Nat.mod_lt _ (Nat.two_pow_pos _)
+  have hcval : c.val < 2 ^ (Orchard.Specs.Sinsemilla.K * 24) := by
+    rw [hcN, ZMod.val_natCast_of_lt
+      (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos _)) (by norm_num [Orchard.Specs.Sinsemilla.K, PALLAS_BASE_CARD]))]
+    exact Nat.mod_lt _ (Nat.two_pow_pos _)
+  have hbbound : (ak.val / 2 ^ 250 % 16 + (ak.val / 2 ^ 254 % 2) * 16 + (nk.val % 2 ^ 5) * 32) < 1024 := by
+    have h1 : ak.val / 2 ^ 250 % 16 < 16 := Nat.mod_lt _ (by norm_num)
+    have h2 : ak.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+    have h3 : nk.val % 2 ^ 5 < 32 := Nat.mod_lt _ (by norm_num)
+    omega
+  have hbval : b.val < 2 ^ (Orchard.Specs.Sinsemilla.K * 1) := by
+    rw [hbN, ZMod.val_natCast_of_lt (lt_trans hbbound (by norm_num [PALLAS_BASE_CARD]))]
+    simpa [Orchard.Specs.Sinsemilla.K] using hbbound
+  have hdbound : (nk.val / 2 ^ 245 % 2 ^ 9 + (nk.val / 2 ^ 254 % 2) * 512) < 1024 := by
+    have h1 : nk.val / 2 ^ 245 % 2 ^ 9 < 512 := Nat.mod_lt _ (by norm_num)
+    have h2 : nk.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+    omega
+  have hdval : d.val < 2 ^ (Orchard.Specs.Sinsemilla.K * 1) := by
+    rw [hdN, ZMod.val_natCast_of_lt (lt_trans hdbound (by norm_num [PALLAS_BASE_CARD]))]
+    simpa [Orchard.Specs.Sinsemilla.K] using hdbound
+  have hbounds : Orchard.Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] #v[a, b, c, d] := by
+    simp only [Orchard.Sinsemilla.Chain.PieceBounds]
+    refine ⟨?_, ?_, ?_, ?_, trivial⟩
+    · show a.val < _; exact haval
+    · show b.val < _; exact hbval
+    · show c.val < _; exact hcval
+    · show d.val < _; exact hdval
+  refine ⟨hbounds, ?_⟩
+  exact honestChunks_eq_commitIvkChunks hbounds
+    (by simpa using haN) (by simpa using hbN) (by simpa using hcN) (by simpa using hdN) hak hnk
+
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q R) (ProverSpec G Q R) := by
-  sorry
+  circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_env ⊢
+  -- Extract the three `WitnessShort` honest values and the `WithZs` honest spec, via the
+  -- `usesLocalWitnesses` rfl bridge (no `circuit_norm`, which would flatten the heavy output).
+  have hB0 := h_env.1
+  have hB2 := h_env.2.1
+  have hD0 := h_env.2.2.1
+  have hEb1 := h_env.2.2.2.1
+  have hEd1 := h_env.2.2.2.2.1
+  have hEa := h_env.2.2.2.2.2.1
+  have hEb := h_env.2.2.2.2.2.2.1
+  have hEc := h_env.2.2.2.2.2.2.2.1
+  have hEd := h_env.2.2.2.2.2.2.2.2.1
+  have hWZ := h_env.2.2.2.2.2.2.2.2.2.1
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at hB0 hB2 hD0 hWZ
+  clear h_env
+  replace hB0 := (hB0 trivial).2
+  replace hB2 := (hB2 trivial).2
+  replace hD0 := (hD0 trivial).2
+  simp only [Utilities.LookupRangeCheck.WitnessShort.circuit,
+    Utilities.LookupRangeCheck.WitnessShort.ProverSpec, circuit_norm] at hB0 hB2 hD0
+  replace hEb1 := hEb1 ⟨0, by norm_num⟩
+  replace hEd1 := hEd1 ⟨0, by norm_num⟩
+  replace hEa := hEa ⟨0, by norm_num⟩
+  replace hEb := hEb ⟨0, by norm_num⟩
+  replace hEc := hEc ⟨0, by norm_num⟩
+  replace hEd := hEd ⟨0, by norm_num⟩
+  simp only [Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm]
+    at hEa hEb1 hEc hEd1 hEb hEd
+  -- the honest short/single cells in clean `bitrange` form
+  simp only [bitrangeSubset_eq_bitrange] at hEa hEb1 hEc hEd1 hB0 hB2 hD0
+  -- the two recombination cells `b`, `d`, expressed through their sub-cells' honest values
+  rw [hB0, hEb1, hB2] at hEb
+  rw [hD0, hEd1] at hEd
+  -- the two key field values (the pieces read the input through `eval`)
+  have hak_eq : Expression.eval env.toEnvironment input_var.ak = input.ak := by
+    rw [← h_input]; simp only [circuit_norm]
+  have hnk_eq : Expression.eval env.toEnvironment input_var.nk = input.nk := by
+    rw [← h_input]; simp only [circuit_norm]
+  -- apply the `WithZs` honest spec: feed it the `ProverAssumptions` (pieces in range, hash exists)
+  have hWZspec := (hWZ (by
+    simp only [CommitDomain.WithZs.circuit, CommitDomain.WithZs.ProverAssumptions,
+      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd]
+    refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
+        (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_⟩
+    rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
+        (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).2,
+      hak_eq, hnk_eq]
+    exact h_assumptions)).2
+  simp only [CommitDomain.WithZs.circuit, CommitDomain.WithZs.ProverSpec] at hWZspec
+  obtain ⟨hZsH, hHash⟩ := hWZspec
+  refine ⟨⟨trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial,
+    ?_, trivial⟩, ?_⟩
+  · -- WithZs.ProverAssumptions
+    rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
+    simp only [CommitDomain.WithZs.circuit, CommitDomain.WithZs.ProverAssumptions,
+      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd]
+    refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
+        (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_⟩
+    rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
+        (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).2,
+      hak_eq, hnk_eq]
+    exact h_assumptions
+  · -- the strengthened ProverSpec; re-fold the (dsimp-reduced) output to a clean opaque var
+    show ProverSpec G Q R input
+      (eval env (ElaboratedCircuit.output (main G Q hQ R) input_var i₀)) env.hint
+    set O := ElaboratedCircuit.output (main G Q hQ R) input_var i₀ with hO
+    -- the honest cell values, projected to single cells (`eval_cells` + per-leaf), via `hO`
+    have hOa : (eval env O).cells.a = ((bitrange (Expression.eval env.toEnvironment input_var.ak).val 0 250 : ℕ) : Fp) := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).1, hO]
+      exact hEa
+    have hOb0 : (eval env O).cells.b0 = ((bitrange (Expression.eval env.toEnvironment input_var.ak).val 250 4 : ℕ) : Fp) := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.1, hO]; exact hB0
+    have hOb1 : (eval env O).cells.b1 = ((bitrange (Expression.eval env.toEnvironment input_var.ak).val 254 1 : ℕ) : Fp) := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.2.1, hO]; exact hEb1
+    have hOb2 : (eval env O).cells.b2 = ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 0 5 : ℕ) : Fp) := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.2.2.1, hO]; exact hB2
+    have hOc : (eval env O).cells.c = ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 5 240 : ℕ) : Fp) := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.1, hO]; exact hEc
+    have hOd0 : (eval env O).cells.d0 = ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 245 9 : ℕ) : Fp) := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.2.2.2.1, hO]; exact hD0
+    have hOd1 : (eval env O).cells.d1 = ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 254 1 : ℕ) : Fp) := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.2.2.2.2, hO]; exact hEd1
+    have hOb : (eval env O).cells.b
+        = ((bitrange (Expression.eval env.toEnvironment input_var.ak).val 250 4 : ℕ) : Fp)
+          + ((bitrange (Expression.eval env.toEnvironment input_var.ak).val 254 1 : ℕ) : Fp) * 2 ^ 4
+          + ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 0 5 : ℕ) : Fp) * 2 ^ 5 := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.1, hO]; exact hEb
+    have hOd : (eval env O).cells.d
+        = ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 245 9 : ℕ) : Fp)
+          + ((bitrange (Expression.eval env.toEnvironment input_var.nk).val 254 1 : ℕ) : Fp) * 2 ^ 9 := by
+      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.1, hO]; exact hEd
+    clear_value O
+    unfold ProverSpec
+    simp only [show (input.ak : Fp) = Expression.eval env.toEnvironment input_var.ak from hak_eq.symm,
+      show (input.nk : Fp) = Expression.eval env.toEnvironment input_var.nk from hnk_eq.symm]
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · rw [hOb0, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+      exact bitrange_lt _ _ _
+    · rw [hOb2, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+      exact bitrange_lt _ _ _
+    · rw [hOd0, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+      exact bitrange_lt _ _ _
+    · rw [hOa, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+      exact bitrange_lt _ _ _
+    · rw [hOc, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+      exact bitrange_lt _ _ _
+    · -- z13a
+      sorry
+    · -- z13c
+      sorry
+    · exact hOa
+    · exact hOb0
+    · exact hOb1
+    · exact hOb2
+    · exact hOc
+    · exact hOd0
+    · exact hOd1
+    · rw [hOb, hOb0, hOb1, hOb2]; ring
+    · rw [hOd, hOd0, hOd1]; ring
+    · -- the hash existential
+      sorry
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Output where
