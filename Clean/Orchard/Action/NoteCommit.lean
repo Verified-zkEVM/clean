@@ -493,7 +493,7 @@ theorem pieceChunks_messagePieceRounds_chunks
   exact ⟨msA, msB, msC, msD, msE, msF, msG, msH,
     hA, hB, hC, hD, hE, hF, hG, hH, by simp only [List.append_nil, List.append_assoc]⟩
 
-private theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
+theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
     {gdX gdY pkdX pkdY v rho psi : ℕ}
     (hPC : Chain.PieceChunks messagePieceRounds pieces chunks)
@@ -1438,7 +1438,7 @@ private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
   exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hle)
     (by norm_num [PALLAS_BASE_CARD])
 
-private theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {ms : ℕ → ℕ}
+theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {ms : ℕ → ℕ}
     (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K)
     (hpc : piece = ((∑ r ∈ Finset.range (n + 1),
       ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp))
@@ -1488,7 +1488,7 @@ private theorem zsFacts_head_cell {n : ℕ} {rest : List ℕ} {chunks : List ℕ
 
 /-- General running-sum cell extraction: the `r`-th entry of the `i`-th piece's running-sum
 vector equals `pieces[i].val / 2^(K·r)`. -/
-private theorem zsFacts_cell :
+theorem zsFacts_cell :
     ∀ (ns : List ℕ) (pieces : Vector Fp ns.length) (chunks : List ℕ)
       (zs : HVec (Orchard.Sinsemilla.Chain.zLengths ns) Fp)
       (i : Fin (Orchard.Sinsemilla.Chain.zLengths ns).length),
@@ -1527,7 +1527,7 @@ private theorem zsFacts_cell :
       exact hbridge ▸ IH
 
 /-- General piece bound: the `i`-th message piece value is `< 2^(K·(nᵢ+1))`. -/
-private theorem pieceChunks_val_lt :
+theorem pieceChunks_val_lt :
     ∀ (ns : List ℕ) (pieces : Vector Fp ns.length) (chunks : List ℕ) (i : Fin ns.length),
       Orchard.Sinsemilla.Chain.PieceChunks ns pieces chunks → ns[i] + 1 ≤ 25 →
       (pieces[i] : Fp).val < 2 ^ (Orchard.Specs.Sinsemilla.K * (ns[i] + 1))
