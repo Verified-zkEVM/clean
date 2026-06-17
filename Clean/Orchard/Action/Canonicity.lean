@@ -714,24 +714,31 @@ structure Row (F : Type) where
   z13J' : F
 deriving ProvableStruct
 
-/-- The gate runs inside `y_canonicity`, where the surrounding running-sum lookups force
-each supporting cell to be the corresponding bit slice of `y`. Those semantics are the
-gate's rely-conditions: every cell equals its `bitrange` of `y.val` (with `j'` the
-canonicity-shifted low part). The sign bit `lsb` is *not* assumed — the gate's constraints
-pin it down, which is exactly what `Spec` records. -/
+/-- Rely-conditions from the surrounding lookups, mirroring `GdCanonicity.Gate` with the
+extra sign-bit split of the low limb: `lsb` is Boolean (the 1-bit sign cell), `k0`/`k2` are
+range-checked, `j` is the `< 2^250` low limb, `j'` is its canonicity shift, `z1J`/`z13J` are
+the exact 1- and 13-word running-sum tails of `j` (supplied by the surrounding running sum), and
+`z13J'` is the *partial* 13-word telescoped tail of `j'`. The bit slices and `lsb` itself are
+**derived**, not assumed — that is the `Spec`. -/
 def Assumptions (row : Row Fp) : Prop :=
-  row.k0 = ((bitrange row.y.val 1 9 : ℕ) : Fp) ∧
+  IsBool row.lsb ∧
+    row.j.val < 2 ^ 250 ∧
+    row.k0.val < 2 ^ 9 ∧
+    row.k2.val < 2 ^ 4 ∧
+    row.j' = row.j + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    row.z1J.val = row.j.val / 2 ^ 10 ∧
+    row.z13J.val = row.j.val / 2 ^ 130 ∧
+    ∃ lo : ℕ, lo < 2 ^ 130 ∧ row.j' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13J'
+
+/-- The gate's payoff: `lsb` is the low (sign) bit of `y`, and the support cells are the
+canonical bit slices of `y` (`j`/`k0`/`k2`/`k3`). -/
+def Spec (row : Row Fp) : Prop :=
+  IsLowBit row.y row.lsb ∧
+    row.j = ((bitrange row.y.val 0 250 : ℕ) : Fp) ∧
+    row.k0 = ((bitrange row.y.val 1 9 : ℕ) : Fp) ∧
     row.k2 = ((bitrange row.y.val 250 4 : ℕ) : Fp) ∧
     row.k3 = ((bitrange row.y.val 254 1 : ℕ) : Fp) ∧
-    row.j = ((bitrange row.y.val 0 250 : ℕ) : Fp) ∧
-    row.z1J = ((bitrange row.y.val 10 240 : ℕ) : Fp) ∧
-    row.z13J = ((bitrange row.y.val 130 120 : ℕ) : Fp) ∧
-    row.j'.val = bitrange row.y.val 0 250 + 2 ^ 130 - tPNat ∧
-    row.z13J' = ((row.j'.val / 2 ^ 130 : ℕ) : Fp)
-
-/-- The gate's payoff: `lsb` is the low (sign) bit of the `y` coordinate. -/
-def Spec (row : Row Fp) : Prop :=
-  IsLowBit row.y row.lsb
+    (row.k3 = 1 → row.z13J' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertBool row.k3
@@ -750,38 +757,113 @@ def circuit : FormalAssertion Fp Row where
   Assumptions := Assumptions
   Spec := Spec
   soundness := by
-    circuit_proof_start
-    obtain ⟨hk0, _, _, hj, hz1J, _, _, _⟩ := h_assumptions
-    obtain ⟨_, hj_eq, _⟩ := h_holds
-    -- `hj_eq` says the witnessed `j` equals `lsb + 2·k0 + 1024·z1J`; substituting the
-    -- bit-slice values of `j`, `k0`, `z1J` isolates `lsb` as the low bit of `y`.
-    rw [isLowBit_iff_mod_two,
-      show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
-    have hcast : ((bitrange input_y.val 0 250 : ℕ) : Fp)
-        = ((bitrange input_y.val 0 1 : ℕ) : Fp)
-          + 2 * ((bitrange input_y.val 1 9 : ℕ) : Fp)
-          + 1024 * ((bitrange input_y.val 10 240 : ℕ) : Fp) := by
-      rw [low_250_decomp]; push_cast; ring
-    rw [hj, hk0, hz1J, hcast] at hj_eq
-    linear_combination -hj_eq
+    circuit_proof_start [Ecc.tP]
+    obtain ⟨hlsb_bool, hj_lt, hk0_lt, hk2_lt, hj', hz1J, hz13J, hzjDec⟩ := h_assumptions
+    obtain ⟨hk3, hj_dec, hrec, _, hg1, hg2, hg3⟩ := h_holds
+    have hp := pallasBaseCard_eq
+    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+    -- canonical top-bit decomposition of `y` (mirrors `GdCanonicity.Gate`, with `j`/`k2`/`k3`
+    -- for `a`/`b0`/`b1`)
+    have hlo_sum : input_j.val + input_k2.val * 2 ^ 250 < PALLAS_BASE_CARD := by omega
+    have hlo_val : (input_j + input_k2 * ((2 ^ 250 : ℕ) : Fp)).val
+        = input_j.val + input_k2.val * 2 ^ 250 := val_limb2 250 hlo_sum
+    have hlo_lt : (input_j + input_k2 * ((2 ^ 250 : ℕ) : Fp)).val < 2 ^ 254 := by
+      rw [hlo_val]; omega
+    have hcanon : input_k3 = 1 →
+        (input_j + input_k2 * ((2 ^ 250 : ℕ) : Fp)).val < tPNat := by
+      intro h1
+      have hk2z : input_k2 = 0 := by
+        rcases mul_eq_zero.mp hg1 with h | h
+        · exact absurd (h1 ▸ h) one_ne_zero
+        · exact h
+      have hj'_val : input_j'.val = input_j.val + 2 ^ 130 - tPNat := by
+        rw [hj']; exact val_shift 130 (by omega) (by omega)
+      have hj'_lt : input_j'.val < 2 ^ 130 := by
+        have hz : input_z13J' = 0 := by
+          rcases mul_eq_zero.mp hg3 with h | h
+          · exact absurd (h1 ▸ h) one_ne_zero
+          · exact h
+        obtain ⟨lo, hlo, hdec⟩ := hzjDec
+        rw [hz, mul_zero, _root_.add_zero] at hdec
+        rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
+        exact hlo
+      rw [hlo_val, hk2z, ZMod.val_zero]; omega
+    have hrecL : input_y = (input_j + input_k2 * ((2 ^ 250 : ℕ) : Fp))
+        + input_k3 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination hrec
+    obtain ⟨_, hlo_eq, hk3_eq⟩ := canonical_top_decomp hrecL hlo_lt hk3 hcanon
+    have hmod : bitrange input_y.val 0 254 = input_y.val % 2 ^ 254 := by simp [bitrange]
+    have hj_val : input_j.val = bitrange input_y.val 0 250 := by
+      have h1 : input_j.val
+          = bitrange (input_j + input_k2 * ((2 ^ 250 : ℕ) : Fp)).val 0 250 := by
+        simp only [bitrange, pow_zero, Nat.div_one, hlo_val]; omega
+      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 0 + 250 ≤ 254)]
+    have hk2_val : input_k2.val = bitrange input_y.val 250 4 := by
+      have h1 : input_k2.val
+          = bitrange (input_j + input_k2 * ((2 ^ 250 : ℕ) : Fp)).val 250 4 := by
+        simp only [bitrange, hlo_val]; omega
+      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 250 + 4 ≤ 254)]
+    -- sign-bit extraction off `j = lsb + 2·k0 + 1024·z1J`, entirely in ℕ
+    have hjsum : input_j
+        = (((input_lsb.val + input_k0.val * 2 + input_z1J.val * 1024 : ℕ)) : Fp) := by
+      have hcast : input_lsb + input_k0 * 2 + input_z1J * 1024
+          = (((input_lsb.val + input_k0.val * 2 + input_z1J.val * 1024 : ℕ)) : Fp) := by
+        push_cast
+        rw [ZMod.natCast_rightInverse input_lsb, ZMod.natCast_rightInverse input_k0,
+          ZMod.natCast_rightInverse input_z1J]
+      linear_combination hj_dec + hcast
+    have hz1J_le : input_z1J.val * 2 ^ 10 ≤ input_j.val := by
+      rw [hz1J]; exact Nat.div_mul_le_self _ _
+    have hlsb_lt : input_lsb.val < 2 := IsBool.val_lt_two hlsb_bool
+    have hjval2 : input_j.val
+        = input_lsb.val + input_k0.val * 2 + input_z1J.val * 1024 := by
+      rw [hjsum]
+      refine ZMod.val_natCast_of_lt ?_
+      norm_num [PALLAS_BASE_CARD] at hj_lt ⊢
+      omega
+    have hlsb_val : input_lsb.val = input_j.val % 2 := by omega
+    have hk0_val : input_k0.val = bitrange input_y.val 1 9 := by
+      have hj250 : input_j.val = input_y.val % 2 ^ 250 := by rw [hj_val]; simp [bitrange]
+      have hbr : bitrange input_y.val 1 9 = input_j.val / 2 % 2 ^ 9 := by
+        rw [hj250, ← bitrange_mod (show (1 : ℕ) + 9 ≤ 250 from by norm_num)]; simp [bitrange]
+      rw [hbr]; omega
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+    · -- `lsb` is the low bit of `y`
+      rw [isLowBit_iff_mod_two, ← ZMod.natCast_rightInverse input_lsb, hlsb_val, hj_val]
+      congr 1
+      rw [show bitrange input_y.val 0 250 = input_y.val % 2 ^ 250 from by simp [bitrange]]
+      exact Nat.mod_mod_of_dvd _ (by norm_num)
+    · rw [← hj_val]; exact (ZMod.natCast_rightInverse input_j).symm
+    · rw [← hk0_val]; exact (ZMod.natCast_rightInverse input_k0).symm
+    · rw [← hk2_val]; exact (ZMod.natCast_rightInverse input_k2).symm
+    · rw [← hk3_eq]; exact (ZMod.natCast_rightInverse input_k3).symm
+    · intro h1
+      rcases mul_eq_zero.mp hg3 with h | h
+      · exact absurd (h1 ▸ h) one_ne_zero
+      · exact h
   completeness := by
-    circuit_proof_start
-    obtain ⟨hk0, hk2, hk3, hj, hz1J, hz13, hj', hz13'⟩ := h_assumptions
+    circuit_proof_start [Ecc.tP]
+    obtain ⟨hlsb_bool, hj_lt, hk0_lt, hk2_lt, hj', hz1J, hz13J, hzjDec⟩ := h_assumptions
+    obtain ⟨hlowbit, hj_eq, hk0_eq, hk2_eq, hk3_eq, hzjZero⟩ := h_spec
     have hyval : input_y.val < PALLAS_BASE_CARD := ZMod.val_lt input_y
     have hyval255 : input_y.val < 2 ^ 255 := lt_trans hyval (by norm_num [PALLAS_BASE_CARD])
-    -- `lsb` is the low bit of `y`, supplied by the `Spec`.
+    have hjval : input_j.val = bitrange input_y.val 0 250 := by
+      rw [hj_eq]
+      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 250) (by norm_num [PALLAS_BASE_CARD]))
     have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Fp) := by
-      rw [isLowBit_iff_mod_two] at h_spec
-      rw [h_spec, show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
+      rw [isLowBit_iff_mod_two] at hlowbit
+      rw [hlowbit, show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
+    have hz1J_f : input_z1J = ((bitrange input_y.val 10 240 : ℕ) : Fp) := by
+      rw [← ZMod.natCast_rightInverse input_z1J, hz1J, hjval,
+        show bitrange input_y.val 0 250 / 2 ^ 10 = bitrange input_y.val 10 240 from
+          bitrange_low_div input_y.val 10 240]
+    have hb1cases := show bitrange input_y.val 254 1 = 0 ∨ bitrange input_y.val 254 1 = 1 from by
+      have := bitrange_lt input_y.val 254 1; omega
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · -- k3 Boolean
-      rw [hk3]; exact bitrange_one_isBool _ _
-    · -- j = lsb + 2·k0 + 1024·z1J
-      rw [hj, hk0, hz1J, hlsb, low_250_decomp input_y.val]; push_cast; ring
+      rw [hk3_eq]; exact bitrange_one_isBool _ _
+    · -- j = lsb + k0·2 + z1J·1024
+      rw [hj_eq, hlsb, hk0_eq, hz1J_f, low_250_decomp input_y.val]; push_cast; ring
     · -- y = j + k2·2^250 + k3·2^254
-      -- `bit_decomp_255` reconstructs `y` from its slices; cast it and recombine with the
-      -- cell equalities.  (Rewriting `input_y` directly would also hit the `input_y.val`
-      -- buried inside each `bitrange`, so we feed everything to `linear_combination`.)
       have hyv : input_y = ((input_y.val : ℕ) : Fp) :=
         (ZMod.natCast_rightInverse input_y).symm
       have hdcast : ((input_y.val : ℕ) : Fp)
@@ -790,41 +872,26 @@ def circuit : FormalAssertion Fp Row where
             + ((bitrange input_y.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
         conv_lhs => rw [bit_decomp_255 hyval255]
         push_cast; ring
-      linear_combination hyv + hdcast - hj - ((2 ^ 250 : ℕ) : Fp) * hk2
-        - ((2 ^ 254 : ℕ) : Fp) * hk3
+      linear_combination hyv + hdcast - hj_eq - ((2 ^ 250 : ℕ) : Fp) * hk2_eq
+        - ((2 ^ 254 : ℕ) : Fp) * hk3_eq
     · -- j' = j + 2^130 - t_P
-      have htp : tPNat ≤ bitrange input_y.val 0 250 + 2 ^ 130 := by
-        have h1 : tPNat < 2 ^ 130 := by norm_num [tPNat]
-        omega
-      have hj'cast : input_j' = ((bitrange input_y.val 0 250 : ℕ) : Fp)
-          + ((2 ^ 130 : ℕ) : Fp) - ((tPNat : ℕ) : Fp) := by
-        -- avoid the truncating `Nat` subtraction by adding `tPNat` back: `j'.val + t_P = j + 2^130`.
-        have hj'nat : input_j'.val + tPNat = bitrange input_y.val 0 250 + 2 ^ 130 := by omega
-        have hyj : input_j' = ((input_j'.val : ℕ) : Fp) :=
-          (ZMod.natCast_rightInverse input_j').symm
-        have hcast := congrArg (Nat.cast (R := Fp)) hj'nat
-        push_cast at hcast ⊢
-        rw [hyj]
-        linear_combination hcast
-      rw [hj, tP_eq, hj'cast]; ring
+      linear_combination -hj'
     · -- k3·k2 = 0
-      rcases (show bitrange input_y.val 254 1 = 0 ∨ bitrange input_y.val 254 1 = 1 from by
-        have := bitrange_lt input_y.val 254 1; omega) with h | h
-      · rw [hk3, h]; simp
-      · rw [hk2, (high_bit_canonical hyval h).1]; simp
+      rcases hb1cases with h | h
+      · rw [hk3_eq, h]; simp
+      · rw [hk2_eq, (high_bit_canonical hyval h).1]; simp
     · -- k3·z13J = 0
-      rcases (show bitrange input_y.val 254 1 = 0 ∨ bitrange input_y.val 254 1 = 1 from by
-        have := bitrange_lt input_y.val 254 1; omega) with h | h
-      · rw [hk3, h]; simp
-      · rw [hz13, high_bit_z13_zero hyval h]; simp
+      rcases hb1cases with h | h
+      · rw [hk3_eq, h]; simp
+      · have hz : input_z13J = 0 := by
+          rw [← ZMod.val_eq_zero, hz13J, hjval,
+            show bitrange input_y.val 0 250 / 2 ^ 130 = bitrange input_y.val 130 120 from
+              bitrange_low_div input_y.val 130 120, high_bit_z13_zero hyval h]
+        rw [hz]; simp
     · -- k3·z13J' = 0
-      rcases (show bitrange input_y.val 254 1 = 0 ∨ bitrange input_y.val 254 1 = 1 from by
-        have := bitrange_lt input_y.val 254 1; omega) with h | h
-      · rw [hk3, h]; simp
-      · rw [hz13']
-        have hlt : input_j'.val < 2 ^ 130 := by
-          rw [hj']; exact (high_bit_canonical hyval h).2.2
-        rw [Nat.div_eq_of_lt hlt]; simp
+      rcases hb1cases with h | h
+      · rw [hk3_eq, h]; simp
+      · rw [hzjZero (by rw [hk3_eq, h]; norm_num)]; simp
 
 end YCanonicity.Gate
 

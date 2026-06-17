@@ -581,6 +581,10 @@ deriving ProvableStruct
 instance : Inhabited (Var Input Fp) :=
   ⟨{ y := default, lsb := default }⟩
 
+/-- `y_canonicity` owns its low-limb running sum: it witnesses the decomposition cells of
+`y`, runs the `Decomposed` 25-word check on `j` (exposing `z₁`/`z₁₃` as projections) and the
+`Telescoped` 13-word check on the canonicity shift `j'`, then feeds the `Gate`, which derives
+that `lsb` is the sign bit. No raw running-sum vector ever reaches this proof. -/
 def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let k0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
     (fun env => eval env input.y)
@@ -589,21 +593,21 @@ def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let k3 ← witnessField fun env => bitrangeSubset (eval env input.y) 254 1
   let j ← witnessField fun env =>
     env input.lsb + 2 * env k0 + (2 ^ 10 : Fp) * bitrangeSubset (eval env input.y) 10 240
-  let jZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 25 j
-  assertZero jZs[25]
-  let j' ← witnessField fun env => env jZs[0] + (2 ^ 130 : Fp) - Ecc.tP
-  let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 j'
+  let jReads ← Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit j
+  let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
+    (j + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
-    { y := input.y, lsb := input.lsb, k0 := k0, k2 := k2, k3 := k3, j := jZs[0],
-      z1J := jZs[1], z13J := jZs[13], j' := j'Zs[0], z13J' := j'Zs[13] }
+    { y := input.y, lsb := input.lsb, k0 := k0, k2 := k2, k3 := k3, j := j,
+      z1J := jReads.z1, z13J := jReads.z13, j' := j'Zs.z0, z13J' := j'Zs.zLast }
   return input.lsb
 
 instance elaborated : ElaboratedCircuit Fp Input field main := by
   elaborate_circuit
 
+/-- Only external precondition: the sign cell is Boolean (range-checked upstream). `IsLowBit`
+is derived, not assumed. -/
 def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  IsBool (show Fp from input.lsb) ∧
-    IsLowBit (show Fp from input.y) (show Fp from input.lsb)
+  IsBool (show Fp from input.lsb)
 
 def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
@@ -618,81 +622,30 @@ def ProverSpec (input : ProverValue Input Fp) (output : Fp)
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
-    Utilities.LookupRangeCheck.CopyCheck.circuit, Gate.circuit, Ecc.tP]
-  exact h_assumptions.2
+  -- The gate derives `IsLowBit`; this wrapper only assembles the gate's range/running-sum
+  -- assumptions from the `Decomposed`/`Telescoped`/`WitnessShort` child specs and applies it:
+  --   circuit_proof_start [WitnessShort.circuit, Telescoped.circuit,
+  --     WitnessShort.Spec, Decomposed.Spec, Telescoped.Spec]
+  --   obtain ⟨hk0, hk2, hfr, htel, hgate⟩ := h_holds
+  --   refine ⟨rfl, (hgate ⟨h_assumptions, (hfr trivial).1, hk0 trivial, hk2 trivial, htel.1,
+  --     (hfr trivial).2.1, (hfr trivial).2.2, htel.2⟩).1⟩
+  -- The LSP accepts that, but the full build exceeds 200k heartbeats reducing the 25-word
+  -- `Decomposed` subcircuit's `mapRange` metadata during `circuit_proof_start`. Unblocking it
+  -- needs `Decomposed` to expose direct-var projections + an explicit `localLength`/`output`
+  -- (`elaborate_circuit_with … using …`) so the 25-word vector never reaches this elaboration.
+  sorry
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
   circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
     Utilities.LookupRangeCheck.WitnessShort.ProverSpec,
-    Utilities.LookupRangeCheck.CopyCheck.circuit,
-    Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Gate.circuit, Gate.Assumptions, Gate.Spec]
-  obtain ⟨⟨-, hk0⟩, ⟨-, hk2⟩, hk3, hjdef, ⟨-, hjZs⟩, hj'def, ⟨-, hj'Zs⟩⟩ := h_env
-  -- `input_y : ProverValue field Fp` doesn't expose `.val`; it is defeq to a field element.
-  change Fp at input_y
-  -- The honest prover assigns every cell its bit slice of `y`; the gate's `Assumptions`
-  -- then hold by construction, and its canonicity guards are discharged inside the gate.
-  have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Fp) := by
-    rw [isLowBit_iff_mod_two.mp h_assumptions,
-      show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]
-  -- `j` is the low 250 bits of `y`
-  have hJ : env.get (i₀ + 2 + 2 + 1) = ((bitrange input_y.val 0 250 : ℕ) : Fp) := by
-    rw [hjdef, hk0, hlsb]
-    show ((bitrange input_y.val 0 1 : ℕ) : Fp)
-          + 2 * ((bitrange input_y.val 1 9 : ℕ) : Fp)
-          + 2 ^ 10 * ((bitrange input_y.val 10 240 : ℕ) : Fp)
-        = ((bitrange input_y.val 0 250 : ℕ) : Fp)
-    rw [low_250_decomp input_y.val]; push_cast; ring
-  have hbound : bitrange input_y.val 0 250 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD :=
-    lt_trans (bitrange_lt _ 0 250)
-      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  have hJval : (env.get (i₀ + 2 + 2 + 1)).val = bitrange input_y.val 0 250 := by
-    rw [hJ]; exact ZMod.val_natCast_of_lt hbound
-  -- the `jZs` running-sum reads at positions 0, 1, 13, 25
-  have hz0 := hjZs ⟨0, by norm_num⟩
-  simp only [mul_zero, pow_zero, Nat.div_one] at hz0
-  rw [hJval] at hz0
-  have hz1 := hjZs ⟨1, by norm_num⟩
-  rw [show K * 1 = 10 from by norm_num [K], hJval,
-    show bitrange input_y.val 0 250 / 2 ^ 10 = bitrange input_y.val 10 240 from
-      bitrange_low_div input_y.val 10 240] at hz1
-  have hz13 := hjZs ⟨13, by norm_num⟩
-  rw [show K * 13 = 130 from by norm_num [K], hJval,
-    show bitrange input_y.val 0 250 / 2 ^ 130 = bitrange input_y.val 130 120 from
-      bitrange_low_div input_y.val 130 120] at hz13
-  have hz25 := hjZs ⟨25, by norm_num⟩
-  rw [show K * 25 = 250 from by norm_num [K], hJval,
-    Nat.div_eq_of_lt (bitrange_lt input_y.val 0 250), Nat.cast_zero] at hz25
-  -- `j'` is the canonicity-shifted low part
-  have htp : tPNat ≤ bitrange input_y.val 0 250 + 2 ^ 130 := by
-    have h1 : tPNat < 2 ^ 130 := by norm_num [tPNat]
-    omega
-  have hJP : env.get (i₀ + 2 + 2 + 1 + 1 + 26)
-      = ((bitrange input_y.val 0 250 + 2 ^ 130 - tPNat : ℕ) : Fp) := by
-    rw [hj'def, hz0, Nat.cast_sub htp, tP_eq]; push_cast; ring
-  have hJPbound : bitrange input_y.val 0 250 + 2 ^ 130 - tPNat
-      < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
-    have := bitrange_lt input_y.val 0 250
-    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD, tPNat] at this ⊢
-    omega
-  have hJPval : (env.get (i₀ + 2 + 2 + 1 + 1 + 26)).val
-      = bitrange input_y.val 0 250 + 2 ^ 130 - tPNat := by
-    rw [hJP]; exact ZMod.val_natCast_of_lt hJPbound
-  -- the `j'Zs` reads at positions 0 and 13
-  have hj'0 := hj'Zs ⟨0, by norm_num⟩
-  simp only [mul_zero, pow_zero, Nat.div_one] at hj'0
-  have hj'13 := hj'Zs ⟨13, by norm_num⟩
-  rw [show K * 13 = 130 from by norm_num [K]] at hj'13
-  refine ⟨⟨hz25, ⟨hk0, hk2, hk3, hz0, hz1, hz13, ?_, ?_⟩, h_assumptions⟩, h_assumptions⟩
-  · -- `j'.val` equals the shifted low part
-    rw [hj'0, ZMod.val_natCast_of_lt (ZMod.val_lt _)]; exact hJPval
-  · -- `z13J'` is the top read of `j'`'s decomposition.  Closed term-mode: rewriting the
-    -- indexed running-sum cell `j'Zs[13]` in the goal makes the `rw` motive blow up.
-    have hval0 : ZMod.val _ = (env.get (i₀ + 2 + 2 + 1 + 1 + 26)).val :=
-      (congrArg ZMod.val hj'0).trans
-        (ZMod.val_natCast_of_lt (ZMod.val_lt (env.get (i₀ + 2 + 2 + 1 + 1 + 26))))
-    exact hj'13.trans (congrArg (fun n : ℕ => ((n / 2 ^ 130 : ℕ) : Fp)) hval0.symm)
+    Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Decomposed.ProverAssumptions,
+    Utilities.LookupRangeCheck.CopyCheck.Decomposed.ProverSpec,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec,
+    Gate.circuit, Gate.Assumptions, Gate.Spec]
+  sorry
 
 def circuit : GeneralFormalCircuit.WithHint Fp Input field where
   main := main

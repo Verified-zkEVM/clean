@@ -1143,6 +1143,79 @@ theorem spec_telescope {numWords : ℕ} {element : Fp} {zs : fields (numWords + 
   dsimp [f] at htel
   simpa only [dif_pos (Nat.succ_pos numWords), dif_pos (Nat.lt_succ_of_le hk)] using htel
 
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD) in
+/-- The suffix of a running-sum chain telescopes: from word `k`, `z_k` splits into
+`K·(numWords-k)` low bits and `2^(K·(numWords-k))·z_{numWords}`; with full decomposition
+(`z_{numWords} = 0`) this bounds `z_k < 2^(K·(numWords-k))`. -/
+private theorem suffix {numWords : ℕ} {element : Fp} {zs : fields (numWords + 1) Fp}
+    {data : ProverData Fp} (h : Spec numWords element zs data)
+    (htop : zs[numWords]'(Nat.lt_succ_self _) = 0) (k : ℕ) (hk : k ≤ numWords) :
+    ∃ lo : ℕ, lo < 2 ^ (K * (numWords - k)) ∧ zs[k]'(Nat.lt_succ_of_le hk) = (lo : Fp) := by
+  set g : ℕ → Fp := fun i => if hj : k + i < numWords + 1 then zs[k + i]'hj else 0 with hg
+  have hchain : ∀ i, i < numWords - k → ∃ w : ℕ, w < 2 ^ K ∧
+      g i = 2 ^ K * g (i + 1) + (w : Fp) := by
+    intro i hi
+    have hki : k + i < numWords := by omega
+    obtain ⟨w, hw, hstep⟩ := h.2 ⟨k + i, hki⟩
+    refine ⟨w, hw, ?_⟩
+    simp only [hg, dif_pos (show k + i < numWords + 1 by omega),
+      dif_pos (show k + (i + 1) < numWords + 1 by omega)]
+    exact hstep
+  obtain ⟨lo, hlo, htel⟩ := chain_telescope g (numWords - k) hchain
+  refine ⟨lo, hlo, ?_⟩
+  have hg0 : g 0 = zs[k]'(Nat.lt_succ_of_le hk) := by
+    simp only [hg, Nat.add_zero, dif_pos (Nat.lt_succ_of_le hk)]
+  have hgn : g (numWords - k) = 0 := by
+    simp only [hg, show k + (numWords - k) = numWords by omega, dif_pos (Nat.lt_succ_self numWords)]
+    exact htop
+  rw [hg0, hgn, mul_zero, _root_.add_zero] at htel
+  exact htel
+
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD) in
+/-- A fully-decomposed chain bounds its element below `2^(K·numWords)`. -/
+theorem element_lt {numWords : ℕ} (hpow : K * numWords ≤ 254)
+    {element : Fp} {zs : fields (numWords + 1) Fp} {data : ProverData Fp}
+    (h : Spec numWords element zs data) (htop : zs[numWords]'(Nat.lt_succ_self _) = 0) :
+    element.val < 2 ^ (K * numWords) := by
+  obtain ⟨lo, hlo, htel⟩ := spec_telescope h numWords le_rfl
+  rw [htop, mul_zero, _root_.add_zero] at htel
+  have helem : element = (lo : Fp) := by rw [← h.1]; exact htel
+  rw [helem, ZMod.val_natCast_of_lt (lt_of_lt_of_le hlo
+    (le_trans (Nat.pow_le_pow_right (by norm_num) hpow)
+      (le_of_lt (by norm_num [PALLAS_BASE_CARD] : (2 : ℕ) ^ 254 < PALLAS_BASE_CARD))))]
+  exact hlo
+
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD) in
+/-- A fully-decomposed chain pins each running sum to the exact shift of `element`:
+`(z_k).val = element.val / 2^(K·k)`. -/
+theorem read {numWords : ℕ} (hpow : K * numWords ≤ 254)
+    {element : Fp} {zs : fields (numWords + 1) Fp} {data : ProverData Fp}
+    (h : Spec numWords element zs data) (htop : zs[numWords]'(Nat.lt_succ_self _) = 0)
+    (k : ℕ) (hk : k ≤ numWords) :
+    (zs[k]'(Nat.lt_succ_of_le hk)).val = element.val / 2 ^ (K * k) := by
+  have hcard : ∀ m : ℕ, m ≤ 254 → (2 : ℕ) ^ m < PALLAS_BASE_CARD := fun m hm =>
+    lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hm) (by norm_num [PALLAS_BASE_CARD])
+  have hsubpow : K * (numWords - k) ≤ 254 :=
+    le_trans (Nat.mul_le_mul_left K (Nat.sub_le numWords k)) hpow
+  obtain ⟨lok, hlok, htelk⟩ := spec_telescope h k hk
+  obtain ⟨lo', hlo', hzk⟩ := suffix h htop k hk
+  have hsum_lt : lok + 2 ^ (K * k) * lo' < 2 ^ (K * numWords) := by
+    have hab : 2 ^ (K * k) * 2 ^ (K * (numWords - k)) = 2 ^ (K * numWords) := by
+      rw [← pow_add]; congr 1; rw [← Nat.mul_add]; congr 1; omega
+    calc lok + 2 ^ (K * k) * lo'
+        < 2 ^ (K * k) + 2 ^ (K * k) * lo' := by omega
+      _ = 2 ^ (K * k) * (lo' + 1) := by ring
+      _ ≤ 2 ^ (K * k) * 2 ^ (K * (numWords - k)) := by gcongr; omega
+      _ = 2 ^ (K * numWords) := hab
+  have hzkval : (zs[k]'(Nat.lt_succ_of_le hk)).val = lo' := by
+    rw [hzk]; exact ZMod.val_natCast_of_lt (lt_trans hlo' (hcard _ hsubpow))
+  have helem : element = (((lok + 2 ^ (K * k) * lo' : ℕ)) : Fp) := by
+    rw [← h.1, htelk, hzk]; push_cast; ring
+  have helemval : element.val = lok + 2 ^ (K * k) * lo' := by
+    rw [helem]; exact ZMod.val_natCast_of_lt (lt_trans hsum_lt (hcard _ hpow))
+  rw [hzkval, helemval, Nat.add_mul_div_left _ _ (by positivity : 0 < 2 ^ (K * k)),
+    Nat.div_eq_of_lt hlok, Nat.zero_add]
+
 /-- The honest prover assigns the canonical decomposition: `z_i = element >> (K * i)`. -/
 def ProverSpec (numWords : ℕ) (element : Fp) (zs : fields (numWords + 1) Fp)
     (_ : ProverHint Fp) : Prop :=
@@ -1293,6 +1366,92 @@ def circuit (numWords : ℕ) : GeneralFormalCircuit Fp field Output where
     simp
 
 end Telescoped
+
+/- A *full* 25-word (`K`-bit) decomposition of `element` — the final running sum is asserted
+to `0`, so the exposed reads are exact — surfacing the two interior running sums
+`z₁ = element ≫ K` and `z₁₃ = element ≫ 13·K` that `y_canonicity` consumes. Like `Telescoped`,
+it returns a struct of projections (not a vector) with a hand-written opaque `output`, so
+parents read `.z1`/`.z13` without unfolding the `mapRange` term. Tailored for now to the
+250-bit low limb of a `y`-coordinate; generalize if a second consumer appears. -/
+namespace Decomposed
+
+structure Output (F : Type) where
+  z1 : F
+  z13 : F
+deriving ProvableStruct
+
+def main (element : Expression Fp) : Circuit Fp (Var Output Fp) := do
+  let zs ← CopyCheck.circuit 25 element
+  assertZero zs[25]
+  return { z1 := zs[1], z13 := zs[13] }
+
+def output (offset : ℕ) : Var Output Fp :=
+  let zs := #v[var (F:=Fp) ⟨offset⟩] ++ varFromOffset (F:=Fp) (fields 25) (offset + 1)
+  { z1 := zs[1], z13 := zs[13] }
+
+instance elaborated : ElaboratedCircuit Fp field Output main := by
+  elaborate_circuit_with {
+    output _ offset := output offset
+  }
+
+def Spec (element : Fp) (out : Output Fp) (_ : ProverData Fp) : Prop :=
+  element.val < 2 ^ 250 ∧
+    out.z1.val = element.val / 2 ^ 10 ∧
+    out.z13.val = element.val / 2 ^ 130
+
+/-- Completeness precondition: the element is a genuine `< 2^250` low limb. Soundness does
+*not* assume this — the asserted full decomposition (`z₂₅ = 0`) derives it — but the honest
+prover can only satisfy `z₂₅ = 0` when the element actually fits in 250 bits. -/
+def ProverAssumptions (element : Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
+  element.val < 2 ^ 250
+
+def ProverSpec (element : Fp) (out : Output Fp) (_ : ProverHint Fp) : Prop :=
+  out.z1.val = element.val / 2 ^ 10 ∧
+    out.z13.val = element.val / 2 ^ 130
+
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD) in
+def circuit : GeneralFormalCircuit.WithHint Fp field Output where
+  main
+  elaborated
+  Spec
+  ProverAssumptions
+  ProverSpec
+  soundness := by
+    circuit_proof_start [CopyCheck.circuit, output]
+    obtain ⟨hcc, hz25⟩ := h_holds
+    refine ⟨?_, ?_, ?_⟩
+    · simpa only [show K * 25 = 250 from by norm_num [K]] using
+        element_lt (by norm_num [K]) hcc
+          (by simp only [Vector.getElem_map, Vector.getElem_cast]; exact hz25)
+    · simpa only [Vector.getElem_map, Vector.getElem_cast,
+        show K * 1 = 10 from by norm_num [K]] using
+        read (by norm_num [K]) hcc
+          (by simp only [Vector.getElem_map, Vector.getElem_cast]; exact hz25) 1 (by norm_num)
+    · simpa only [Vector.getElem_map, Vector.getElem_cast,
+        show K * 13 = 130 from by norm_num [K]] using
+        read (by norm_num [K]) hcc
+          (by simp only [Vector.getElem_map, Vector.getElem_cast]; exact hz25) 13 (by norm_num)
+  completeness := by
+    circuit_proof_start [CopyCheck.circuit, CopyCheck.ProverSpec, output]
+    change Fp at input
+    have hlt : ∀ k : ℕ, input.val / 2 ^ k < PALLAS_BASE_CARD := by
+      intro k
+      have h1 : input.val / 2 ^ k ≤ input.val := Nat.div_le_self _ _
+      have h2 : input.val < PALLAS_BASE_CARD :=
+        lt_trans h_assumptions (by norm_num [PALLAS_BASE_CARD])
+      omega
+    refine ⟨?_, ?_, ?_⟩
+    · -- z₂₅ = 0 (honest tail vanishes since the limb fits in 250 bits)
+      rw [h_env.2 ⟨25, by norm_num⟩, show K * 25 = 250 from by norm_num [K],
+        Nat.div_eq_of_lt h_assumptions, Nat.cast_zero]
+    · -- z₁ = element ≫ 10
+      rw [h_env.2 ⟨1, by norm_num⟩, show K * 1 = 10 from by norm_num [K]]
+      exact ZMod.val_natCast_of_lt (hlt 10)
+    · -- z₁₃ = element ≫ 130
+      rw [h_env.2 ⟨13, by norm_num⟩, show K * 13 = 130 from by norm_num [K]]
+      exact ZMod.val_natCast_of_lt (hlt 130)
+
+end Decomposed
 
 end CopyCheck
 
