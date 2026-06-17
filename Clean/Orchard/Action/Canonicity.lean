@@ -60,8 +60,8 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input g_d"
   main
-  Assumptions := Assumptions
-  Spec := Spec
+  Assumptions
+  Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
     obtain ⟨hb1, ha_lt, hb0_lt, haPrime, hz13A, hzaDec⟩ := h_assumptions

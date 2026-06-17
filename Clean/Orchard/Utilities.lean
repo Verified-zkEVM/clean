@@ -1240,41 +1240,44 @@ def circuit (numWords : ℕ) :
 
 namespace Telescoped
 
-def main (numWords : ℕ) (element : Var field Fp) :
-    Circuit Fp (Var (fields (numWords + 1)) Fp) :=
-  CopyCheck.circuit numWords element
+structure Output (F : Type) where
+  z0 : F
+  zLast : F
+deriving ProvableStruct
+
+def main (numWords : ℕ) (element : Expression Fp) :
+    Circuit Fp (Var Output Fp) := do
+  let zs ← CopyCheck.circuit numWords element
+  return { z0 := zs[0], zLast := zs[numWords] }
+
+def output (numWords : ℕ) (offset : ℕ) : Var Output Fp :=
+  let zs := #v[var (F:=Fp) ⟨offset⟩] ++ varFromOffset (F:=Fp) (fields numWords) (offset + 1)
+  { z0 := zs[0], zLast := zs[numWords] }
 
 instance elaborated (numWords : ℕ) :
-    ElaboratedCircuit Fp field (fields (numWords + 1)) (main numWords) := by
-  elaborate_circuit
+    ElaboratedCircuit Fp field Output (main numWords) := by
+  elaborate_circuit_with {
+    output _ offset := output numWords offset
+  }
 
-def Spec (numWords : ℕ) (element : Fp) (zs : fields (numWords + 1) Fp) : Prop :=
-  zs[0]'(Nat.succ_pos numWords) = element ∧
+def Spec (numWords : ℕ) (element : Fp) (out : Output Fp) : Prop :=
+  out.z0 = element ∧
   ∃ lo : ℕ, lo < 2 ^ (K * numWords) ∧
-    element =
-      (lo : Fp) + 2 ^ (K * numWords) * zs[numWords]'(Nat.lt_succ_self numWords)
+    element = lo + ((2 ^ (K * numWords) : ℕ) : Fp) * out.zLast
 
-theorem soundness (numWords : ℕ) :
-    Soundness Fp (main numWords) (fun _ => True) (Spec numWords) := by
-  circuit_proof_start [CopyCheck.circuit]
-  obtain ⟨lo, hlo, htel⟩ := CopyCheck.spec_telescope h_holds numWords le_rfl
-  refine ⟨?_, lo, hlo, ?_⟩
-  · convert h_holds.1 using 1; simp [circuit_norm]
-  · rw [← h_holds.1]
-    convert htel using 1
-    simp [circuit_norm]
-
-theorem completeness (numWords : ℕ) :
-    Completeness Fp (main numWords) (fun _ => True) := by
-  circuit_proof_start [CopyCheck.circuit]
-
-def circuit (numWords : ℕ) : FormalCircuit Fp field (fields (numWords + 1)) where
+def circuit (numWords : ℕ) : FormalCircuit Fp field Output where
   main := main numWords
-  elaborated := elaborated numWords
-  Assumptions := fun _ => True
   Spec := Spec numWords
-  soundness := soundness numWords
-  completeness := completeness numWords
+  soundness := by
+    circuit_proof_start [CopyCheck.circuit, output]
+    obtain ⟨lo, hlo, htel⟩ := CopyCheck.spec_telescope h_holds numWords le_rfl
+    refine ⟨?_, lo, hlo, ?_⟩
+    · convert h_holds.1 using 1; simp [circuit_norm]
+    · rw [← h_holds.1]
+      convert htel using 1
+      simp [circuit_norm]
+  completeness := by
+    circuit_proof_start [CopyCheck.circuit]
 
 end Telescoped
 

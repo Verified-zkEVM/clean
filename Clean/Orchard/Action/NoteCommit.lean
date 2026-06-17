@@ -1016,15 +1016,12 @@ structure Input (F : Type) where
   z13A : F
 deriving ProvableStruct
 
-instance : Inhabited (Var Input Fp) :=
-  ⟨{ gdX := default, a := default, b0 := default, b1 := default, z13A := default }⟩
-
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let a'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
     (input.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
     { gdX := input.gdX, b0 := input.b0, b1 := input.b1, a := input.a,
-      a' := a'Zs[0], z13A := input.z13A, z13A' := a'Zs[13] }
+      a' := a'Zs.z0, z13A := input.z13A, z13A' := a'Zs.zLast }
 
 instance elaborated : ElaboratedCircuit Fp Input unit main := by
   elaborate_circuit
@@ -1039,9 +1036,24 @@ def Spec (input : Input Fp) : Prop :=
     input.b1 = ((bitrange input.gdX.val 254 1 : ℕ) : Fp)
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
-  sorry
+  circuit_proof_start [
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
+  ]
+  simp_all only [true_and, ←sub_eq_add_neg]
+  obtain ⟨ ⟨ z0_eq, element_eq ⟩, h_gate ⟩ := h_holds
+  rw [z0_eq] at h_gate
+  obtain ⟨ h1, h2, h3, _ ⟩ := h_gate ⟨ rfl,  element_eq ⟩
+  exact ⟨ h1, h2, h3 ⟩
 
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
+  circuit_proof_start [
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
+  ]
+  simp_all only [true_and, ←sub_eq_add_neg]
+  use h_env.2
+  trace_state
   sorry
 
 def circuit : FormalAssertion Fp Input where
@@ -1064,16 +1076,13 @@ structure Input (F : Type) where
   z13C : F
 deriving ProvableStruct
 
-instance : Inhabited (Var Input Fp) :=
-  ⟨{ pkdX := default, b3 := default, c := default, d0 := default, z13C := default }⟩
-
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let b3C'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
     (input.b3 + Expression.const ((2 ^ 4 : ℕ) : Fp) * input.c +
       Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
     { pkdX := input.pkdX, b3 := input.b3, c := input.c, d0 := input.d0,
-      b3C' := b3C'Zs[0], z13C := input.z13C, z14B3C' := b3C'Zs[14] }
+      b3C' := b3C'Zs.z0, z13C := input.z13C, z14B3C' := b3C'Zs.zLast }
 
 instance elaborated : ElaboratedCircuit Fp Input unit main := by
   elaborate_circuit
@@ -1155,16 +1164,13 @@ structure Input (F : Type) where
   z13F : F
 deriving ProvableStruct
 
-instance : Inhabited (Var Input Fp) :=
-  ⟨{ rho := default, e1 := default, f := default, g0 := default, z13F := default }⟩
-
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let e1F'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
     (input.e1 + Expression.const ((2 ^ 4 : ℕ) : Fp) * input.f +
       Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
     { rho := input.rho, e1 := input.e1, f := input.f, g0 := input.g0,
-      e1F' := e1F'Zs[0], z13F := input.z13F, z14E1F' := e1F'Zs[14] }
+      e1F' := e1F'Zs.z0, z13F := input.z13F, z14E1F' := e1F'Zs.zLast }
 
 instance elaborated : ElaboratedCircuit Fp Input unit main := by
   elaborate_circuit
@@ -1205,20 +1211,14 @@ structure Input (F : Type) where
   z13G : F
 deriving ProvableStruct
 
-instance : Inhabited (Var Input Fp) :=
-  ⟨{
-    psi := default, h0 := default, g1 := default, h1 := default,
-    g2 := default, z13G := default
-  }⟩
-
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let g1G2'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
     (input.g1 + Expression.const ((2 ^ 9 : ℕ) : Fp) * input.g2 +
       Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
   Gate.circuit
     { psi := input.psi, h0 := input.h0, g1 := input.g1, h1 := input.h1, g2 := input.g2,
-      g1G2' := g1G2'Zs[0], z13G := input.z13G,
-      z13G1G2' := g1G2'Zs[13] }
+      g1G2' := g1G2'Zs.z0, z13G := input.z13G,
+      z13G1G2' := g1G2'Zs.zLast }
 
 instance elaborated : ElaboratedCircuit Fp Input unit main := by
   elaborate_circuit
@@ -1275,10 +1275,6 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     { psi := input.psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1, g2 := z1g,
       z13G := z13g }
   return out.point
-
-instance mainExplicit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) : ExplicitCircuits (main G Q hQ R) := by
-  infer_explicit_circuits
 
 def mainOutput (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Fp) (offset : ℕ) :
@@ -1340,9 +1336,5 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   ProverSpec := ProverSpec G Q R
   soundness := soundness G Q hQ R
   completeness := completeness G Q hQ R
-
--- TODO(note_commit): discharge the semantic wrapper proofs introduced above, then connect
--- the top-level proof through `AssignMessagePieces`, `Commit`, `MessagePieceChecks`, and
--- the coordinate canonicity circuits.
 
 end Orchard.Action.NoteCommit
