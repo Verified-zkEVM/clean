@@ -335,6 +335,7 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint Fp (Input (ns.length + 1)) (Output (n₀ :: ns)) where
   main := main G Q hQ R n₀ ns
+  elaborated := elaborated G Q hQ R n₀ ns
   Spec := Spec G Q R n₀ ns
   ProverAssumptions := ProverAssumptions G Q n₀ ns
   ProverSpec := ProverSpec G Q R n₀ ns

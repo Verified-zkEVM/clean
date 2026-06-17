@@ -181,7 +181,10 @@ def main (B : FixedBase) (scalar : Var (Unconstrained Fq) Fp) :
 
 instance elaborated (B : FixedBase) :
     ElaboratedCircuit Fp (Unconstrained Fq) Point (main B) := by
-  elaborate_circuit
+  elaborate_circuit_with {
+    localLength _ := 849
+    output _ offset := varFromOffset Point (offset + 842)
+  }
 
 def Spec (B : FixedBase) (_ : Unit) (output : Point Fp) (_ : ProverData Fp) : Prop :=
   ∃ s : Fq, output = B.mulValue s
@@ -620,6 +623,7 @@ theorem completeness (B : FixedBase) :
 
 def circuit (B : FixedBase) : GeneralFormalCircuit.WithHint Fp (Unconstrained Fq) Point where
   main := main B
+  elaborated := elaborated B
   Spec := Spec B
   ProverSpec := ProverSpec B
   soundness := soundness B

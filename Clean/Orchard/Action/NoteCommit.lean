@@ -318,7 +318,7 @@ instance : Inhabited (Var MessageCells Fp) :=
 `num_words - 1`, matching `Chain.PieceChunks`: source chunk counts
 `[25, 1, 25, 6, 1, 25, 25, 1]` become `[24, 0, 24, 5, 0, 24, 24, 0]`. -/
 abbrev messagePieceTailRounds : List ℕ := [0, 24, 5, 0, 24, 24, 0]
-abbrev messagePieceRounds : List ℕ := 24 :: messagePieceTailRounds
+abbrev messagePieceRounds : List ℕ := [24, 0, 24, 5, 0, 24, 24, 0]
 
 /-- The seven natural-number scalars encoded by the Orchard note-commit message. -/
 structure NoteCommitScalars where
@@ -956,7 +956,7 @@ end MessagePieceChecks
 namespace Commit
 
 abbrev Input (F : Type) :=
-  CommitDomain.Input messagePieceRounds.length F
+  CommitDomain.Input 8 F
 
 abbrev Output (F : Type) :=
   CommitDomain.WithZs.Output messagePieceRounds F
@@ -967,12 +967,15 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds input
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input Output (main G Q hQ R) := by
-  elaborate_circuit
-
-def Assumptions (_G : Generators) (_Q : SWPoint Pallas.curve) (_R : MulFixed.FixedBase)
-    (_input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  True
+    (R : MulFixed.FixedBase) : ElaboratedCircuit Fp
+      (CommitDomain.Input 8)
+      (CommitDomain.WithZs.Output messagePieceRounds) (main G Q hQ R) := by
+  elaborate_circuit_with {
+    localLength _ := 1407
+    output input offset := {
+      point := varFromOffset Point (offset + 1400),
+      zs := ((EntryZs.main G Q 24 messagePieceTailRounds input.pieces).output (offset + 849)).zs }
+  }
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : Value Input Fp) (output : Value Output Fp) (data : ProverData Fp) : Prop :=
@@ -980,26 +983,23 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     input output data
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
-    (_R : MulFixed.FixedBase) (input : ProverValue Input Fp) (data : ProverData Fp)
+    (input : ProverValue Input Fp) (data : ProverData Fp)
     (hint : ProverHint Fp) : Prop :=
-  CommitDomain.WithZs.ProverAssumptions G Q 24 messagePieceTailRounds
-    input data hint
+  CommitDomain.WithZs.ProverAssumptions G Q 24 messagePieceTailRounds input data hint
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (output : ProverValue Output Fp) (hint : ProverHint Fp) :
     Prop :=
-  CommitDomain.WithZs.ProverSpec G Q R 24 messagePieceTailRounds
-    input output hint
+  CommitDomain.WithZs.ProverSpec G Q R 24 messagePieceTailRounds input output hint
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
-    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (Assumptions G Q R)
-      (Spec G Q R) := by
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True) (Spec G Q R) := by
   sorry
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
-    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R) (ProverAssumptions G Q R)
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R) (ProverAssumptions G Q)
       (ProverSpec G Q R) := by
   sorry
 
@@ -1007,9 +1007,8 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Output where
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R
-  Assumptions := Assumptions G Q R
   Spec := Spec G Q R
-  ProverAssumptions := ProverAssumptions G Q R
+  ProverAssumptions := ProverAssumptions G Q
   ProverSpec := ProverSpec G Q R
   soundness := soundness G Q hQ R
   completeness := completeness G Q hQ R

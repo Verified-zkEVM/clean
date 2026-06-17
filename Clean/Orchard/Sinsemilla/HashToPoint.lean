@@ -1445,6 +1445,16 @@ def chainLength : List ℕ → ℕ
   | [] => 1
   | n :: rest => 1 + (n + (n + 1 + (n + 1 + (n + 1 + (n + 1))))) + chainLength rest
 
+lemma chainLength_cons (n : ℕ) (rest : List ℕ) :
+    chainLength (n :: rest) = 5*(n + 1) + chainLength rest := by
+  simp +arith [chainLength]
+
+lemma chainLength_def (list : List ℕ) :
+    chainLength list = 5*list.sum + 5*list.length + 1 := by
+  induction list with
+  | nil => rfl
+  | cons n rest ih => simp_all +arith [chainLength_cons]
+
 namespace Cons
 
 def main (G : Generators) (n : ℕ) (rest : List ℕ)
@@ -2042,6 +2052,7 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     GeneralFormalCircuit.WithHint Fp (fields (ns.length + 1))
       (Output (n₀ :: ns)) where
   main := main G Q n₀ ns
+  elaborated := elaborated G Q n₀ ns
   Spec := Spec G Q n₀ ns
   ProverAssumptions := ProverAssumptions G Q n₀ ns
   ProverSpec := ProverSpec G Q n₀ ns
