@@ -1049,12 +1049,41 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
   circuit_proof_start [
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
-    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec,
+    Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
-  use h_env.2
-  trace_state
-  sorry
+  obtain ⟨hb1, ha_lt, hb0_lt, hz13A⟩ := h_assumptions
+  obtain ⟨ha_eq, hb0_eq, hb1_eq⟩ := h_spec
+  -- `h_env` carries both the (sound) decomposition and the honest running-sum values; the
+  -- honest `zLast = (a + 2^130 - t_P).val / 2^130` is what makes `b1 = 1 → zLast = 0` provable.
+  obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
+  simp only [show K * 13 = 130 from by norm_num [K]] at hlo hdec hzLast
+  have ha_val : input_a.val = bitrange input_gdX.val 0 250 := by
+    rw [ha_eq]
+    exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
+      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+  have htp : tPNat < 2 ^ 130 := by norm_num [tPNat]
+  refine ⟨⟨hb1, ha_lt, hb0_lt, ?_, hz13A, lo, hlo, ?_⟩, ha_eq, hb0_eq, hb1_eq, ?_⟩
+  · linear_combination hz0
+  · linear_combination hdec + hz0
+  · -- `b1 = 1` ⇒ `g_d` is canonical ⇒ `a < t_P` ⇒ `a + 2^130 - t_P < 2^130` ⇒ the honest
+    -- 13-word running-sum tail `zLast` is `0`.
+    intro h1
+    have hbr : bitrange input_gdX.val 254 1 = 1 := by
+      rcases (show bitrange input_gdX.val 254 1 = 0 ∨ bitrange input_gdX.val 254 1 = 1 from by
+        have := bitrange_lt input_gdX.val 254 1; omega) with h | h
+      · rw [hb1_eq, h] at h1; norm_num at h1
+      · exact h
+    obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) hbr
+    have hcard : (2 : ℕ) ^ 131 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+    have hval : (input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP).val = input_a.val + 2 ^ 130 - tPNat :=
+      val_shift 130 (by omega) (by rw [ha_val]; omega)
+    have hzero : (input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP).val / 2 ^ 130 = 0 := by
+      rw [hval, ha_val]; omega
+    rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
+        = input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring, hzero]
+    simp
 
 def circuit : FormalAssertion Fp Input where
   main

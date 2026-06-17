@@ -1260,14 +1260,24 @@ instance elaborated (numWords : ℕ) :
     output _ offset := output numWords offset
   }
 
-def Spec (numWords : ℕ) (element : Fp) (out : Output Fp) : Prop :=
+/-- Soundness payoff: `z0 = element` and the (only soundly available) telescoped
+decomposition `element = lo + 2^(K·numWords)·zLast` with `lo < 2^(K·numWords)`. -/
+def Spec (numWords : ℕ) (element : Fp) (out : Output Fp) (_ : ProverData Fp) : Prop :=
   out.z0 = element ∧
   ∃ lo : ℕ, lo < 2 ^ (K * numWords) ∧
     element = lo + ((2 ^ (K * numWords) : ℕ) : Fp) * out.zLast
 
-def circuit (numWords : ℕ) : FormalCircuit Fp field Output where
+/-- Completeness payoff: the *honest* running-sum cells. `zLast = element >> (K·numWords)`
+is the exact value (unavailable in `Spec`, since the constraints alone admit non-canonical
+decompositions); consumers use it to discharge `b = 1 → zLast = 0` when `element < 2^(K·n)`. -/
+def ProverSpec (numWords : ℕ) (element : Fp) (out : Output Fp) (_ : ProverHint Fp) : Prop :=
+  out.z0 = element ∧
+    out.zLast = ((element.val / 2 ^ (K * numWords) : ℕ) : Fp)
+
+def circuit (numWords : ℕ) : GeneralFormalCircuit Fp field Output where
   main := main numWords
   Spec := Spec numWords
+  ProverSpec := ProverSpec numWords
   soundness := by
     circuit_proof_start [CopyCheck.circuit, output]
     obtain ⟨lo, hlo, htel⟩ := CopyCheck.spec_telescope h_holds numWords le_rfl
@@ -1277,7 +1287,10 @@ def circuit (numWords : ℕ) : FormalCircuit Fp field Output where
       convert htel using 1
       simp [circuit_norm]
   completeness := by
-    circuit_proof_start [CopyCheck.circuit]
+    circuit_proof_start [CopyCheck.circuit, CopyCheck.ProverSpec, output]
+    refine ⟨?_, h_env.2 ⟨numWords, by omega⟩⟩
+    rw [h_env.2 ⟨0, by omega⟩]
+    simp
 
 end Telescoped
 
