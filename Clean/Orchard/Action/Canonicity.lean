@@ -37,7 +37,10 @@ def Assumptions (row : Row Fp) : Prop :=
     row.b0.val < 2 ^ 4 ∧
     row.a' = row.a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
     row.z13A = ((row.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-    row.z13A' = ((row.a'.val / 2 ^ 130 : ℕ) : Fp)
+    -- `z13A'` is the *partial* (13-word) CopyCheck running sum of `a'`, which overflows
+    -- `2^130`, so only the telescoped decomposition is soundly available.
+    (∃ lo : ℕ, lo < 2 ^ 130 ∧ row.a' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13A') ∧
+    (row.b1 = 1 → row.z13A' = 0)
 
 /-- The gate's payoff: `a`/`b0`/`b1` are the canonical bit slices of `x(g_d)`. -/
 def Spec (row : Row Fp) : Prop :=
@@ -61,7 +64,7 @@ def circuit : FormalAssertion Fp Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨hb1, ha_lt, hb0_lt, haPrime, hz13A, hz13APrime⟩ := h_assumptions
+    obtain ⟨hb1, ha_lt, hb0_lt, haPrime, hz13A, hzaDec, _⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2, hg3⟩ := h_holds
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -95,10 +98,10 @@ def circuit : FormalAssertion Fp Row where
           rcases mul_eq_zero.mp hg3 with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
-        rw [hz13APrime] at hz
-        have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_a')) hz
-        omega
+        obtain ⟨lo, hlo, hdec⟩ := hzaDec
+        rw [hz, mul_zero, _root_.add_zero] at hdec
+        rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
+        exact hlo
       rw [hlo_val, hb0z, ZMod.val_zero]; omega
     -- top-bit decomposition of `gdX`
     have hrecL : input_gdX = (input_a + input_b0 * ((2 ^ 250 : ℕ) : Fp))
@@ -120,7 +123,7 @@ def circuit : FormalAssertion Fp Row where
     · rw [← hb1_eq]; exact (ZMod.natCast_rightInverse input_b1).symm
   completeness := by
     circuit_proof_start
-    obtain ⟨_, ha_lt, _, haPrime, hz13A, hz13APrime⟩ := h_assumptions
+    obtain ⟨_, ha_lt, _, haPrime, hz13A, _, hzaZero⟩ := h_assumptions
     obtain ⟨ha_eq, hb0_eq, hb1_eq⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -153,14 +156,10 @@ def circuit : FormalAssertion Fp Row where
             bitrange_low_div input_gdX.val 130 120,
           high_bit_z13_zero (ZMod.val_lt input_gdX) h]
         simp
-    · -- b1·z13A' = 0
+    · -- b1·z13A' = 0  (the canonicity-shifted running sum vanishes when the top bit is set)
       rcases hb1cases with h | h
       · rw [hb1_eq, h]; simp
-      · have haPrime_val : input_a'.val = bitrange input_gdX.val 0 250 + 2 ^ 130 - tPNat := by
-          rw [haPrime, val_shift 130 (by omega) (by omega), ha_val]
-        rw [hz13APrime, haPrime_val,
-          Nat.div_eq_of_lt (high_bit_canonical (ZMod.val_lt input_gdX) h).2.2]
-        simp
+      · rw [hzaZero (by rw [hb1_eq, h]; norm_num)]; simp
 
 end GdCanonicity.Gate
 
@@ -185,7 +184,8 @@ def Assumptions (row : Row Fp) : Prop :=
     row.b3.val < 2 ^ 4 ∧
     row.b3C' = row.b3 + row.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
     row.z13C = ((row.c.val / 2 ^ 130 : ℕ) : Fp) ∧
-    row.z14B3C' = ((row.b3C'.val / 2 ^ 140 : ℕ) : Fp)
+    (∃ lo : ℕ, lo < 2 ^ 140 ∧ row.b3C' = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14B3C') ∧
+    (row.d0 = 1 → row.z14B3C' = 0)
 
 /-- The gate's payoff: `b3`/`c`/`d0` are the canonical bit slices of `x(pk_d)`. -/
 def Spec (row : Row Fp) : Prop :=
@@ -208,7 +208,7 @@ def circuit : FormalAssertion Fp Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨hd0, hc_lt, hb3_lt, hb3cP, hz13C, hz14⟩ := h_assumptions
+    obtain ⟨hd0, hc_lt, hb3_lt, hb3cP, hz13C, hzbDec, _⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -235,10 +235,10 @@ def circuit : FormalAssertion Fp Row where
           rcases mul_eq_zero.mp hg2 with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
-        rw [hz14] at hz
-        have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_b3C')) hz
-        omega
+        obtain ⟨lo, hlo, hdec⟩ := hzbDec
+        rw [hz, mul_zero, _root_.add_zero] at hdec
+        rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
+        exact hlo
       omega
     have hrecL : input_pkdX = (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp))
         + input_d0 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination -hrec
@@ -258,7 +258,7 @@ def circuit : FormalAssertion Fp Row where
     · rw [← hd0_eq]; exact (ZMod.natCast_rightInverse input_d0).symm
   completeness := by
     circuit_proof_start
-    obtain ⟨_, hc_lt, hb3_lt, hb3cP, hz13C, hz14⟩ := h_assumptions
+    obtain ⟨_, hc_lt, hb3_lt, hb3cP, hz13C, _, hzbZero⟩ := h_assumptions
     obtain ⟨hb3_eq, hc_eq, hd0_eq⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -296,19 +296,7 @@ def circuit : FormalAssertion Fp Row where
     · -- d0·z14B3C' = 0
       rcases hd0cases with h | h
       · rw [hd0_eq, h]; simp
-      · obtain ⟨hk2z, hlolt, _⟩ := high_bit_canonical (ZMod.val_lt input_pkdX) h
-        have hlo254 : bitrange input_pkdX.val 0 254 = bitrange input_pkdX.val 0 250 := by
-          have := bitrange_add input_pkdX.val 0 250 4; rw [hk2z] at this; norm_num at this ⊢; omega
-        have hlo_val : (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val
-            = bitrange input_pkdX.val 0 254 := by
-          have hsum : input_b3.val + input_c.val * 2 ^ 4 < PALLAS_BASE_CARD := by
-            rw [hb3_val, hc_val]; have := bitrange_lt input_pkdX.val 4 250; omega
-          rw [val_limb2 4 hsum, hb3_val, hc_val]
-          have := bitrange_add input_pkdX.val 0 4 250; norm_num at this; omega
-        have hb3cP_val : input_b3C'.val = bitrange input_pkdX.val 0 254 + 2 ^ 140 - tPNat := by
-          rw [hb3cP, val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega), hlo_val]
-        rw [hz14, hb3cP_val, Nat.div_eq_of_lt (by omega)]
-        simp
+      · rw [hzbZero (by rw [hd0_eq, h]; norm_num)]; simp
 
 end PkdCanonicity.Gate
 
@@ -401,7 +389,8 @@ def Assumptions (row : Row Fp) : Prop :=
     row.e1.val < 2 ^ 4 ∧
     row.e1F' = row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
     row.z13F = ((row.f.val / 2 ^ 130 : ℕ) : Fp) ∧
-    row.z14E1F' = ((row.e1F'.val / 2 ^ 140 : ℕ) : Fp)
+    (∃ lo : ℕ, lo < 2 ^ 140 ∧ row.e1F' = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14E1F') ∧
+    (row.g0 = 1 → row.z14E1F' = 0)
 
 /-- The gate's payoff: `e1`/`f`/`g0` are the canonical bit slices of `rho`. -/
 def Spec (row : Row Fp) : Prop :=
@@ -424,7 +413,7 @@ def circuit : FormalAssertion Fp Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hz14⟩ := h_assumptions
+    obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hzeDec, _⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -451,10 +440,10 @@ def circuit : FormalAssertion Fp Row where
           rcases mul_eq_zero.mp hg2 with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
-        rw [hz14] at hz
-        have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_e1F')) hz
-        omega
+        obtain ⟨lo, hlo, hdec⟩ := hzeDec
+        rw [hz, mul_zero, _root_.add_zero] at hdec
+        rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
+        exact hlo
       omega
     have hrecL : input_rho = (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp))
         + input_g0 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination -hrec
@@ -474,7 +463,7 @@ def circuit : FormalAssertion Fp Row where
     · rw [← hg0_eq]; exact (ZMod.natCast_rightInverse input_g0).symm
   completeness := by
     circuit_proof_start
-    obtain ⟨_, hf_lt, he1_lt, he1fP, hz13F, hz14⟩ := h_assumptions
+    obtain ⟨_, hf_lt, he1_lt, he1fP, hz13F, _, hzeZero⟩ := h_assumptions
     obtain ⟨he1_eq, hf_eq, hg0_eq⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -508,19 +497,7 @@ def circuit : FormalAssertion Fp Row where
         simp
     · rcases hg0cases with h | h
       · rw [hg0_eq, h]; simp
-      · obtain ⟨hk2z, hlolt, _⟩ := high_bit_canonical (ZMod.val_lt input_rho) h
-        have hlo254 : bitrange input_rho.val 0 254 = bitrange input_rho.val 0 250 := by
-          have := bitrange_add input_rho.val 0 250 4; rw [hk2z] at this; norm_num at this ⊢; omega
-        have hlo_val : (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val
-            = bitrange input_rho.val 0 254 := by
-          have hsum : input_e1.val + input_f.val * 2 ^ 4 < PALLAS_BASE_CARD := by
-            rw [he1_val, hf_val]; have := bitrange_lt input_rho.val 4 250; omega
-          rw [val_limb2 4 hsum, he1_val, hf_val]
-          have := bitrange_add input_rho.val 0 4 250; norm_num at this; omega
-        have he1fP_val : input_e1F'.val = bitrange input_rho.val 0 254 + 2 ^ 140 - tPNat := by
-          rw [he1fP, val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega), hlo_val]
-        rw [hz14, he1fP_val, Nat.div_eq_of_lt (by omega)]
-        simp
+      · rw [hzeZero (by rw [hg0_eq, h]; norm_num)]; simp
 
 end RhoCanonicity.Gate
 
@@ -547,7 +524,8 @@ def Assumptions (row : Row Fp) : Prop :=
     row.h0.val < 2 ^ 5 ∧
     row.g1G2' = row.g1 + row.g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
     row.z13G = ((row.g1.val + row.g2.val * 2 ^ 9) / 2 ^ 130 : ℕ) ∧
-    row.z13G1G2' = ((row.g1G2'.val / 2 ^ 130 : ℕ) : Fp)
+    (∃ lo : ℕ, lo < 2 ^ 130 ∧ row.g1G2' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13G1G2') ∧
+    (row.h1 = 1 → row.z13G1G2' = 0)
 
 /-- The gate's payoff: `g1`/`g2`/`h0`/`h1` are the canonical bit slices of `psi`. -/
 def Spec (row : Row Fp) : Prop :=
@@ -573,7 +551,7 @@ def circuit : FormalAssertion Fp Row where
   Spec := Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
-    obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hz13P⟩ := h_assumptions
+    obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hzgDec, _⟩ := h_assumptions
     obtain ⟨hrec, _, hg_h0, hg_z13, hg_z13p⟩ := h_holds
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -615,10 +593,10 @@ def circuit : FormalAssertion Fp Row where
           rcases mul_eq_zero.mp hg_z13p with h | h
           · exact absurd (h1 ▸ h) one_ne_zero
           · exact h
-        rw [hz13P] at hz
-        have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt input_g1G2')) hz
-        omega
+        obtain ⟨lo, hlo, hdec⟩ := hzgDec
+        rw [hz, mul_zero, _root_.add_zero] at hdec
+        rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
+        exact hlo
       rw [hlo_val, hh0z, ZMod.val_zero]; rw [hin_val] at hgP_val; omega
     have hrecL : input_psi
         = ((input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)) + input_h0 * ((2 ^ 249 : ℕ) : Fp))
@@ -656,7 +634,7 @@ def circuit : FormalAssertion Fp Row where
     · rw [← hh1_eq]; exact (ZMod.natCast_rightInverse input_h1).symm
   completeness := by
     circuit_proof_start
-    obtain ⟨_, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hz13P⟩ := h_assumptions
+    obtain ⟨_, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, _, hzgZero⟩ := h_assumptions
     obtain ⟨hg1_eq, hg2_eq, hh0_eq, hh1_eq⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
@@ -701,19 +679,7 @@ def circuit : FormalAssertion Fp Row where
     · -- h1·z13G1G2' = 0
       rcases hh1cases with h | h
       · rw [hh1_eq, h]; simp
-      · obtain ⟨_, hlolt, _⟩ := high_bit_canonical (ZMod.val_lt input_psi) h
-        have hin_lt_tp : bitrange input_psi.val 0 249 < tPNat := by
-          have hsplit := bitrange_add input_psi.val 0 249 1
-          norm_num at hsplit; omega
-        have hin_val : (input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)).val
-            = bitrange input_psi.val 0 249 := by
-          have hsum : input_g1.val + input_g2.val * 2 ^ 9 < PALLAS_BASE_CARD := by
-            rw [hin_eq]; exact lt_trans (bitrange_lt _ 0 249) (by norm_num [PALLAS_BASE_CARD])
-          rw [val_limb2 9 hsum]; exact hin_eq
-        have hgP_val : input_g1G2'.val = bitrange input_psi.val 0 249 + 2 ^ 130 - tPNat := by
-          rw [hg1g2P, val_shift 130 (by rw [hin_val]; omega) (by rw [hin_val]; omega), hin_val]
-        rw [hz13P, hgP_val, Nat.div_eq_of_lt (by omega)]
-        simp
+      · rw [hzgZero (by rw [hh1_eq, h]; norm_num)]; simp
 
 end PsiCanonicity.Gate
 
