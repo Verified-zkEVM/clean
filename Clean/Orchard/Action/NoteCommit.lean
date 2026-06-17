@@ -974,17 +974,17 @@ def main (input : Var Input Fp) : Circuit Fp Unit := do
   let z1g := (HVec.get _ input.zs ⟨6, by decide⟩)[1]
   let z13g := (HVec.get _ input.zs ⟨6, by decide⟩)[13]
 
-  let aPrime ← witnessField fun env => env cells.a + (2 ^ 130 : Fp) - Ecc.tP
-  let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 aPrime
-  let b3cPrime ← witnessField fun env =>
-    env cells.b3 + (2 ^ 4 : Fp) * env cells.c + (2 ^ 140 : Fp) - Ecc.tP
-  let b3cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 b3cPrime
-  let e1fPrime ← witnessField fun env =>
-    env cells.e1 + (2 ^ 4 : Fp) * env cells.f + (2 ^ 140 : Fp) - Ecc.tP
-  let e1fPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14 e1fPrime
-  let g1g2Prime ← witnessField fun env =>
-    env cells.g1 + (2 ^ 9 : Fp) * env z1g + (2 ^ 130 : Fp) - Ecc.tP
-  let g1g2PrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 g1g2Prime
+  let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
+    (cells.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
+  let b3cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
+    (cells.b3 + Expression.const ((2 ^ 4 : ℕ) : Fp) * cells.c +
+      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
+  let e1fPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
+    (cells.e1 + Expression.const ((2 ^ 4 : ℕ) : Fp) * cells.f +
+      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
+  let g1g2PrimeZs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
+    (cells.g1 + Expression.const ((2 ^ 9 : ℕ) : Fp) * z1g +
+      Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
 
   DecompositionChecks.circuit { cells, z1d, z1g }
   GdCanonicity.Gate.circuit

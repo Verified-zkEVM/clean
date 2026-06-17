@@ -1238,6 +1238,41 @@ def circuit (numWords : ℕ) :
   soundness := soundness numWords
   completeness := completeness numWords
 
+namespace Telescoped
+
+def main (numWords : ℕ) (element : Var field Fp) :
+    Circuit Fp (Var (fields (numWords + 1)) Fp) :=
+  CopyCheck.circuit numWords element
+
+instance elaborated (numWords : ℕ) :
+    ElaboratedCircuit Fp field (fields (numWords + 1)) (main numWords) := by
+  elaborate_circuit
+
+def Spec (numWords : ℕ) (_element : Fp) (zs : fields (numWords + 1) Fp) : Prop :=
+  ∃ lo : ℕ, lo < 2 ^ (K * numWords) ∧
+    zs[0]'(Nat.succ_pos numWords) =
+      (lo : Fp) + 2 ^ (K * numWords) * zs[numWords]'(Nat.lt_succ_self numWords)
+
+theorem soundness (numWords : ℕ) :
+    Soundness Fp (main numWords) (fun _ => True) (Spec numWords) := by
+  circuit_proof_start [CopyCheck.circuit]
+  convert CopyCheck.spec_telescope h_holds numWords le_rfl using 1
+  simp [circuit_norm]
+
+theorem completeness (numWords : ℕ) :
+    Completeness Fp (main numWords) (fun _ => True) := by
+  circuit_proof_start [CopyCheck.circuit]
+
+def circuit (numWords : ℕ) : FormalCircuit Fp field (fields (numWords + 1)) where
+  main := main numWords
+  elaborated := elaborated numWords
+  Assumptions := fun _ => True
+  Spec := Spec numWords
+  soundness := soundness numWords
+  completeness := completeness numWords
+
+end Telescoped
+
 end CopyCheck
 
 end LookupRangeCheck
