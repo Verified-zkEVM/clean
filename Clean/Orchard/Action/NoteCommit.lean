@@ -948,13 +948,28 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True) (Spec G Q R) := by
-  sorry
+  circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_holds ⊢
+  refine ⟨?_, Or.inr trivial, trivial⟩
+  have hs := h_holds.1 trivial
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_soundness, h_input] at hs
+  exact hs
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R) (ProverAssumptions G Q)
       (ProverSpec G Q R) := by
-  sorry
+  circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_env ⊢
+  obtain ⟨hPS, -⟩ := h_env
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at hPS
+  have hpa : (CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds).ProverAssumptions
+      (eval env input_var) env.data env.hint := by rw [h_input]; exact h_assumptions
+  obtain ⟨-, hps⟩ := hPS hpa
+  rw [h_input] at hps
+  refine ⟨⟨?_, trivial⟩, hps⟩
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
+  exact hpa
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Output where
