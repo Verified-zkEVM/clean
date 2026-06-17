@@ -948,12 +948,8 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True) (Spec G Q R) := by
-  circuit_proof_start_core
-  dsimp only [main, circuit_norm] at h_holds ⊢
-  refine ⟨?_, Or.inr trivial, trivial⟩
-  have hs := h_holds.1 trivial
-  rw [GeneralFormalCircuit.WithHint.toSubcircuit_soundness, h_input] at hs
-  exact hs
+  circuit_proof_start [CommitDomain.WithZs.circuit]
+  simpa [Spec, Chain.chainLength, messagePieceTailRounds] using h_holds
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :

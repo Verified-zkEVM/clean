@@ -1227,14 +1227,20 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       (Commit.eval_cells_leaves env.toEnvironment _).2.2.2.2.2.2.2.1] at hd0
   have hz13a' : (HVec.get (Chain.zLengths [24, 0, 23, 0]) (eval env.toEnvironment O.zs) ⟨0, by decide⟩)[13]
       = (((Expression.eval env.toEnvironment O.cells.a).val / 2 ^ 130 : ℕ) : Fp) := by
-    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_zs,
-      show ((eval env.toEnvironment O).cells.a : Fp) = Expression.eval env.toEnvironment O.cells.a from by
-        rw [Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).1]] at hz13a
+    rw [CircuitType.eval_var_prover_to_verifier] at hz13a
+    exact (congrArg
+      (fun zs => (HVec.get (Chain.zLengths [24, 0, 23, 0]) zs ⟨0, by decide⟩)[13])
+      (Commit.eval_zs _ env.toEnvironment O).symm).trans
+      (hz13a.trans (congrArg (fun x : Fp => (((x.val / 2 ^ 130 : ℕ) : Fp)))
+        (by rw [Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).1])))
   have hz13c' : (HVec.get (Chain.zLengths [24, 0, 23, 0]) (eval env.toEnvironment O.zs) ⟨2, by decide⟩)[13]
       = (((Expression.eval env.toEnvironment O.cells.c).val / 2 ^ 130 : ℕ) : Fp) := by
-    rwa [CircuitType.eval_var_prover_to_verifier, Commit.eval_zs,
-      show ((eval env.toEnvironment O).cells.c : Fp) = Expression.eval env.toEnvironment O.cells.c from by
-        rw [Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.1]] at hz13c
+    rw [CircuitType.eval_var_prover_to_verifier] at hz13c
+    exact (congrArg
+      (fun zs => (HVec.get (Chain.zLengths [24, 0, 23, 0]) zs ⟨2, by decide⟩)[13])
+      (Commit.eval_zs _ env.toEnvironment O).symm).trans
+      (hz13c.trans (congrArg (fun x : Fp => (((x.val / 2 ^ 130 : ℕ) : Fp)))
+        (by rw [Commit.eval_cells, (Commit.eval_cells_leaves env.toEnvironment _).2.2.1])))
   -- the `Canonicity` assumptions from the bridged Commit facts (helper keeps `O.zs` opaque)
   have hCanonAssump := canonicity_assumptions_of_commit O input_var env.toEnvironment
     hb0' hb2' hd0' ha' hc' hz13a' hz13c'
