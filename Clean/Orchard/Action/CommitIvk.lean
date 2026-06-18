@@ -29,7 +29,7 @@ checks).
 
 namespace Orchard.Action.CommitIvk
 
-open Utilities.LookupRangeCheck (K)
+open Orchard.Specs (K)
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc (Point)
@@ -57,9 +57,9 @@ open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canon
 `commit_ivk` message pieces for `ak`/`nk`, in the indexed form consumed by the chunk
 bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`. -/
 def CommitIvkPieceValues (ak nk : Fp) (a b c d : Fp) : Prop :=
-  a = ((ak.val % 2 ^ (Orchard.Specs.Sinsemilla.K * 25) : ℕ) : Fp) ∧
+  a = ((ak.val % 2 ^ (K * 25) : ℕ) : Fp) ∧
   b = ((ak.val / 2 ^ 250 % 16 + (ak.val / 2 ^ 254 % 2) * 16 + (nk.val % 2 ^ 5) * 32 : ℕ) : Fp) ∧
-  c = (((nk.val / 2 ^ 5) % 2 ^ (Orchard.Specs.Sinsemilla.K * 24) : ℕ) : Fp) ∧
+  c = (((nk.val / 2 ^ 5) % 2 ^ (K * 24) : ℕ) : Fp) ∧
   d = ((nk.val / 2 ^ 245 % 2 ^ 9 + (nk.val / 2 ^ 254 % 2) * 512 : ℕ) : Fp)
 
 /-- The gate's canonical bit slices are exactly the indexed `commit_ivk` piece values.
@@ -84,11 +84,11 @@ theorem commitIvkPieceValues_of_gate_spec (row : Gate.Input Fp) (hSpec : Gate.Sp
   have hd1' : row.d1 = ((bitrange row.nk.val 254 1 : ℕ) : Fp) := by
     rw [← hd1]; exact (ZMod.natCast_rightInverse row.d1).symm
   refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [ha']; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [ha']; norm_num [bitrange, K]
   · rw [hbW, hb0', hb1', hb2']
     simp only [bitrange, pow_zero, Nat.div_one]
     push_cast; ring
-  · rw [hc']; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hc']; norm_num [bitrange, K]
   · rw [hdW, hd0', hd1']
     simp only [bitrange]
     push_cast; ring
@@ -382,9 +382,9 @@ hence its `.val` is `< 2^(K·(n+1))` and equals that digit sum. -/
 private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
     {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
     (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
-    ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K) ∧
+    ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ K) ∧
       pieces[0] = ((∑ r ∈ Finset.range (n + 1),
-        ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) ∧
+        ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
       (∀ i, i < n + 1 → chunks.getD i 0 = ms i) ∧
       Orchard.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
   simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
@@ -399,9 +399,9 @@ private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
 open Orchard.Specs.Sinsemilla in
 /-- `2^(K·m) < PALLAS_BASE_CARD` for the message piece widths used here (`m ≤ 25`). -/
 private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
-    2 ^ (Orchard.Specs.Sinsemilla.K * m) < PALLAS_BASE_CARD := by
-  have hle : Orchard.Specs.Sinsemilla.K * m ≤ 250 := by
-    simp only [Orchard.Specs.Sinsemilla.K]; omega
+    2 ^ (K * m) < PALLAS_BASE_CARD := by
+  have hle : K * m ≤ 250 := by
+    simp only [K]; omega
   exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hle)
     (by norm_num [PALLAS_BASE_CARD])
 
@@ -411,22 +411,22 @@ fact, and `chunks.getD i 0 = ms i` on the head segment), the piece value's `.val
 digit sum, hence `< 2^(K·(n+1))`, and the `ZsFacts` running-sum cell at index `r ≤ n`
 equals `(piece.val / 2^(K·r) : Fp)`. -/
 private theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {ms : ℕ → ℕ}
-    (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K)
+    (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ K)
     (hpc : piece = ((∑ r ∈ Finset.range (n + 1),
-      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp))
+      ms r * 2 ^ (K * r) : ℕ) : Fp))
     (hgetD : ∀ i, i < n + 1 → chunks.getD i 0 = ms i)
     {r : ℕ} (hr : r ≤ n) :
     ((∑ j ∈ Finset.range (n + 1 - r),
-        chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp)
-      = ((piece.val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+        chunks.getD (r + j) 0 * 2 ^ (K * j) : ℕ) : Fp)
+      = ((piece.val / 2 ^ (K * r) : ℕ) : Fp) := by
   have hpval : piece.val = ∑ r ∈ Finset.range (n + 1),
-      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) := by
+      ms r * 2 ^ (K * r) := by
     rw [hpc, ZMod.val_natCast_of_lt
       (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
   have hsum : (∑ j ∈ Finset.range (n + 1 - r),
-      chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j))
+      chunks.getD (r + j) 0 * 2 ^ (K * j))
         = ∑ j ∈ Finset.range (n + 1 - r),
-          ms (r + j) * 2 ^ (Orchard.Specs.Sinsemilla.K * j) := by
+          ms (r + j) * 2 ^ (K * j) := by
     apply Finset.sum_congr rfl
     intro j hj
     rw [Finset.mem_range] at hj
@@ -440,7 +440,7 @@ private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
     {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
     (hm : n + 1 ≤ 25)
     (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
-    ZMod.val (pieces[0] : Fp) < 2 ^ (Orchard.Specs.Sinsemilla.K * (n + 1)) := by
+    ZMod.val (pieces[0] : Fp) < 2 ^ (K * (n + 1)) := by
   obtain ⟨ms, hms, hpc, -, -⟩ := pieceChunks_head_digits h
   rw [hpc, ZMod.val_natCast_of_lt
     (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
@@ -455,9 +455,9 @@ private theorem commit_pieceChunks_ac_bounds {pieces : Vector Fp 4} {chunks : Li
   obtain ⟨-, -, -, -, hPCtail2⟩ := pieceChunks_head_digits hPCtail
   have hA := pieceChunks_head_val_lt (by norm_num) hPC
   have hC := pieceChunks_head_val_lt (by norm_num) hPCtail2
-  rw [show Orchard.Specs.Sinsemilla.K * 25 = 250 from by norm_num [Orchard.Specs.Sinsemilla.K]]
+  rw [show K * 25 = 250 from by norm_num [K]]
     at hA
-  rw [show Orchard.Specs.Sinsemilla.K * 24 = 240 from by norm_num [Orchard.Specs.Sinsemilla.K]]
+  rw [show K * 24 = 240 from by norm_num [K]]
     at hC
   have ht2 : (pieces.tail.tail[0]'(by decide) : Fp) = pieces[2] :=
     (Vector.getElem_tail (v := pieces.tail) (i := 0) (hi := by decide)).trans
@@ -475,13 +475,13 @@ private theorem zsFacts_head_cell_eq_div {n : ℕ} {rest : List ℕ} {chunks : L
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
     (hZsHead : HVec.head zs = Vector.ofFn (fun r : Fin (n + 1) =>
       ((∑ j ∈ Finset.range (n + 1 - r.val),
-        chunks.getD (r.val + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp))) :
+        chunks.getD (r.val + j) 0 * 2 ^ (K * j) : ℕ) : Fp))) :
     (HVec.head zs)[13]'(Nat.lt_succ_of_le h13)
       = (((pieces[0] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
   obtain ⟨ms, hms, hpc, hgetD, -⟩ := pieceChunks_head_digits hPC
   rw [hZsHead, Vector.getElem_ofFn]
   rw [zsFacts_cell_eq_div hm hms hpc hgetD h13,
-    show Orchard.Specs.Sinsemilla.K * 13 = 130 from by norm_num [Orchard.Specs.Sinsemilla.K]]
+    show K * 13 = 130 from by norm_num [K]]
 
 open Orchard.Specs.Sinsemilla in
 /-- The `z₁₃` running-sum cell of the `c` piece (`commit_ivk`'s `[24,0,23,0]` index 2) is
@@ -515,7 +515,7 @@ private theorem zsHonest_head_cell_eq_div {n : ℕ} {rest : List ℕ} (h13 : 13 
       = (((pieces[0] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
   rw [hZsHead, Vector.getElem_ofFn]
   simp only [Orchard.Sinsemilla.pieceZ,
-    show Orchard.Specs.Sinsemilla.K * 13 = 130 from by norm_num [Orchard.Specs.Sinsemilla.K]]
+    show K * 13 = 130 from by norm_num [K]]
 
 open Orchard.Specs.Sinsemilla in
 /-- The `z₁₃` cell of the honest `c` running-sum vector (index 2 of `[24,0,23,0]`) is
@@ -780,36 +780,36 @@ private theorem honest_pieces_facts (ak nk a b c d : Fp)
       : ℕ) : Fp) := by rw [hb]; simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
   have hdN : d = ((nk.val / 2 ^ 245 % 2 ^ 9 + (nk.val / 2 ^ 254 % 2) * 512 : ℕ) : Fp) := by
     rw [hd]; simp only [bitrange]; push_cast; ring
-  have haN : a = ((ak.val % 2 ^ (Orchard.Specs.Sinsemilla.K * 25) : ℕ) : Fp) := by
-    rw [ha]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
-  have hcN : c = (((nk.val / 2 ^ 5) % 2 ^ (Orchard.Specs.Sinsemilla.K * 24) : ℕ) : Fp) := by
-    rw [hc]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  have haN : a = ((ak.val % 2 ^ (K * 25) : ℕ) : Fp) := by
+    rw [ha]; norm_num [bitrange, K]
+  have hcN : c = (((nk.val / 2 ^ 5) % 2 ^ (K * 24) : ℕ) : Fp) := by
+    rw [hc]; norm_num [bitrange, K]
   -- the `.val`s of the honest pieces are bounded by their bit widths
   have hak : ak.val < 2 ^ 255 := lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
   have hnk : nk.val < 2 ^ 255 := lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
-  have haval : a.val < 2 ^ (Orchard.Specs.Sinsemilla.K * 25) := by
+  have haval : a.val < 2 ^ (K * 25) := by
     rw [haN, ZMod.val_natCast_of_lt
-      (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos _)) (by norm_num [Orchard.Specs.Sinsemilla.K, PALLAS_BASE_CARD]))]
+      (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos _)) (by norm_num [K, PALLAS_BASE_CARD]))]
     exact Nat.mod_lt _ (Nat.two_pow_pos _)
-  have hcval : c.val < 2 ^ (Orchard.Specs.Sinsemilla.K * 24) := by
+  have hcval : c.val < 2 ^ (K * 24) := by
     rw [hcN, ZMod.val_natCast_of_lt
-      (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos _)) (by norm_num [Orchard.Specs.Sinsemilla.K, PALLAS_BASE_CARD]))]
+      (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos _)) (by norm_num [K, PALLAS_BASE_CARD]))]
     exact Nat.mod_lt _ (Nat.two_pow_pos _)
   have hbbound : (ak.val / 2 ^ 250 % 16 + (ak.val / 2 ^ 254 % 2) * 16 + (nk.val % 2 ^ 5) * 32) < 1024 := by
     have h1 : ak.val / 2 ^ 250 % 16 < 16 := Nat.mod_lt _ (by norm_num)
     have h2 : ak.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
     have h3 : nk.val % 2 ^ 5 < 32 := Nat.mod_lt _ (by norm_num)
     omega
-  have hbval : b.val < 2 ^ (Orchard.Specs.Sinsemilla.K * 1) := by
+  have hbval : b.val < 2 ^ (K * 1) := by
     rw [hbN, ZMod.val_natCast_of_lt (lt_trans hbbound (by norm_num [PALLAS_BASE_CARD]))]
-    simpa [Orchard.Specs.Sinsemilla.K] using hbbound
+    simpa [K] using hbbound
   have hdbound : (nk.val / 2 ^ 245 % 2 ^ 9 + (nk.val / 2 ^ 254 % 2) * 512) < 1024 := by
     have h1 : nk.val / 2 ^ 245 % 2 ^ 9 < 512 := Nat.mod_lt _ (by norm_num)
     have h2 : nk.val / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
     omega
-  have hdval : d.val < 2 ^ (Orchard.Specs.Sinsemilla.K * 1) := by
+  have hdval : d.val < 2 ^ (K * 1) := by
     rw [hdN, ZMod.val_natCast_of_lt (lt_trans hdbound (by norm_num [PALLAS_BASE_CARD]))]
-    simpa [Orchard.Specs.Sinsemilla.K] using hdbound
+    simpa [K] using hdbound
   have hbounds : Orchard.Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] #v[a, b, c, d] := by
     simp only [Orchard.Sinsemilla.Chain.PieceBounds]
     refine ⟨?_, ?_, ?_, ?_, trivial⟩
@@ -1088,11 +1088,11 @@ private theorem commitIvkPieceValues_of_canonicity_spec (row : Canonicity.Input 
   have hd1' : row.d1 = ((bitrange row.nk.val 254 1 : ℕ) : Fp) := by
     rw [← hd1]; exact (ZMod.natCast_rightInverse row.d1).symm
   refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [ha']; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [ha']; norm_num [bitrange, K]
   · rw [hbW, hb0', hb1', hb2']
     simp only [bitrange, pow_zero, Nat.div_one]
     push_cast; ring
-  · rw [hc']; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hc']; norm_num [bitrange, K]
   · rw [hdW, hd0', hd1']
     simp only [bitrange]
     push_cast; ring
@@ -1186,9 +1186,9 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have hnk : nk.val < 2 ^ 255 := lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])
   have hchunks : chunks = Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val :=
     pieceChunks_eq_commitIvkChunks_of_indexed_piece_values hPC
-      (by simp only [circuit_norm, Orchard.Specs.Sinsemilla.K]; exact hPVa)
+      (by simp only [circuit_norm, K]; exact hPVa)
       (by simp only [circuit_norm]; exact hPVb)
-      (by simp only [circuit_norm, Orchard.Specs.Sinsemilla.K]; exact hPVc)
+      (by simp only [circuit_norm, K]; exact hPVc)
       (by simp only [circuit_norm]; exact hPVd) hak hnk
   -- assemble the entry spec
   refine ⟨?_, ?_⟩
@@ -1340,13 +1340,13 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       convert hB using 2
       exact pieceChunks_eq_commitIvkChunks_of_indexed_piece_values hPC
         (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero];
-            rw [hSa]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K])
+            rw [hSa]; norm_num [bitrange, K])
         (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_succ,
               List.getElem_cons_zero];
             rw [hSb, hSb0, hSb1, hSb2]; simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring)
         (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_succ,
               List.getElem_cons_zero];
-            rw [hSc]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K])
+            rw [hSc]; norm_num [bitrange, K])
         (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_succ,
               List.getElem_cons_zero];
             rw [hSd, hSd0, hSd1]; simp only [bitrange]; push_cast; ring)

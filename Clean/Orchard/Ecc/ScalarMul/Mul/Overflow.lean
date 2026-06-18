@@ -178,8 +178,8 @@ theorem soundness : FormalAssertion.Soundness Fp main (fun _ => True) Spec := by
   obtain ⟨w12, hw12, he12⟩ := hChain ⟨12, by norm_num⟩
   clear hChain
   norm_num [Vector.getElem_append, Vector.getElem_mapRange, Expression.eval,
-    Utilities.LookupRangeCheck.K] at hS0 hSHiZ hEta he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
-  norm_num [Utilities.LookupRangeCheck.K] at hw0 hw1 hw2 hw3 hw4 hw5 hw6 hw7 hw8 hw9 hw10 hw11 hw12
+    Orchard.Specs.K] at hS0 hSHiZ hEta he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
+  norm_num [Orchard.Specs.K] at hw0 hw1 hw2 hw3 hw4 hw5 hw6 hw7 hw8 hw9 hw10 hw11 hw12
   -- name the final decomposition cell opaquely
   obtain ⟨z13, hz13⟩ := eval_get13 env
     ((#v[var { index := i₀ + 1 }] : Vector (Expression Fp) 1) ++
@@ -214,7 +214,7 @@ theorem completeness : FormalAssertion.Completeness Fp main (fun _ => True) Spec
   have h2130 : (OfNat.ofNat (2 ^ 130) : Fp) = (2 : Fp) ^ 130 := by norm_num
   -- the honest final decomposition cell, and its vanishing when s fits in 130 bits
   have h13 := h_values ⟨13, by norm_num⟩
-  norm_num [Utilities.LookupRangeCheck.K] at h13
+  norm_num [Orchard.Specs.K] at h13
   have hsmall : sHi = 0 → ZMod.val (env.get i₀) / 2 ^ 130 = 0 := by
     intro h0
     have hval : env.get i₀ = (sLo : Fp) := by

@@ -25,7 +25,8 @@ namespace Orchard.Sinsemilla.Merkle
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Orchard.Specs.Sinsemilla (K Generators merkleChunks)
+open Orchard.Specs.Sinsemilla (Generators merkleChunks)
+open Orchard.Specs (K)
 
 /-! ### MerkleCRH decomposition gate
 
@@ -355,7 +356,7 @@ private theorem assemble {msA msB msC : ℕ → ℕ}
         = (List.range 25).map msA
           ++ ((List.range 2).map msB ++ (List.range 25).map msC) := by
   subst haval hbval hcval hb1 hb2 hz1A hz1B
-  have hK : Orchard.Specs.Sinsemilla.K = 10 := rfl
+  have hK : K = 10 := rfl
   have e5 : (twoPow5 : Fp) = ((2 ^ 5 : ℕ) : Fp) := by norm_num [twoPow5]
   have e10 : (twoPow10 : Fp) = ((2 ^ 10 : ℕ) : Fp) := by norm_num [twoPow10]
   have e240 : (twoPow240 : Fp) = ((2 ^ 240 : ℕ) : Fp) := by
@@ -441,7 +442,7 @@ private theorem honest_chunks {l lv rv : ℕ} (hl : l < 2 ^ 10) (hlv : lv < 2 ^ 
             (fun j => (lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250)
                 + 2 ^ 15 * (rv % 2 ^ 5)) / 2 ^ (K * j) % 2 ^ K)
           ++ (List.range 25).map (fun j => rv / 2 ^ 5 / 2 ^ (K * j) % 2 ^ K)) := by
-  have hK : Orchard.Specs.Sinsemilla.K = 10 := rfl
+  have hK : K = 10 := rfl
   have haN : l + 2 ^ 10 * (lv % 2 ^ 240) < 2 ^ (K * 25) := by
     rw [hK]
     have h := append_lt hl (Nat.mod_lt lv (y := 2 ^ 240) (by positivity))
@@ -498,7 +499,7 @@ private theorem honest_pieces {l lv rv : ℕ} (hl : l < 2 ^ 10)
           ++ List.map (pieceWord cCell) (List.range 25))
         = merkleChunks l lv rv := by
   subst haw hbw hcw
-  have hK : Orchard.Specs.Sinsemilla.K = 10 := rfl
+  have hK : K = 10 := rfl
   have hvalA : ZMod.val ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp)
       = l + 2 ^ 10 * (lv % 2 ^ 240) :=
     ZMod.val_natCast_of_lt (lt_trans (by omega) two_pow_250_lt_p)
@@ -561,13 +562,13 @@ private theorem honest_gate {l lv rv : ℕ} (hl : l < 2 ^ 10)
   have hzA : pieceZ aCell 1 = ((lv % 2 ^ 240 : ℕ) : Fp) := by
     simp only [pieceZ, haw, hvalA]
     congr 1
-    rw [show Orchard.Specs.Sinsemilla.K * 1 = 10 from rfl]
+    rw [show K * 1 = 10 from rfl]
     omega
   have hzB : pieceZ bCell 1
       = ((lv / 2 ^ 250 + 2 ^ 5 * (rv % 2 ^ 5) : ℕ) : Fp) := by
     simp only [pieceZ, hbw, hvalB]
     congr 1
-    rw [show Orchard.Specs.Sinsemilla.K * 1 = 10 from rfl]
+    rw [show K * 1 = 10 from rfl]
     omega
   subst hleft hright
   refine ⟨?_, ?_, ?_, ?_⟩

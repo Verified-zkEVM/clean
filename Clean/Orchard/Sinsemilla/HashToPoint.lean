@@ -20,7 +20,8 @@ the derived generator `y`-coordinate
 namespace Orchard.Sinsemilla
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
-open Orchard.Specs.Sinsemilla (K Generators)
+open Orchard.Specs.Sinsemilla (Generators)
+open Orchard.Specs (K)
 open Orchard.Sinsemilla.Chip
 open Orchard.Ecc
 

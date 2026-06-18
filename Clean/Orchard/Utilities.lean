@@ -24,6 +24,8 @@ column layout.
 namespace Orchard
 namespace Utilities
 
+open Orchard.Specs (K)
+
 variable {F : Type} [Field F]
 
 def ternary (choice ifTrue ifFalse : F) : F :=
@@ -708,9 +710,6 @@ into `K`-bit words via the running sum `z_{i+1} = (z_i - a_i) / 2^K`. Each word
 table. With `strict = false`, the final `z_{numWords}` is not constrained to zero; for
 an honest prover it carries the high bits `element >> (K * numWords)`.
 -/
-
-/-- Number of bits constrained per lookup word (`sinsemilla::K`). -/
-def K : ℕ := 10
 
 /-- The 10-bit range table `table_idx`. In Orchard it is preloaded by the Sinsemilla
 chip; here it is the static table of the field elements `0, …, 2^K - 1`. -/

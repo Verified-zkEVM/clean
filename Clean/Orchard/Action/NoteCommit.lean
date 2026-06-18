@@ -19,7 +19,7 @@ exposes the running sums), which sits above `ScalarMul`.
 
 namespace Orchard.Action.NoteCommit
 
-open Utilities.LookupRangeCheck (K)
+open Orchard.Specs (K)
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc (Point)
@@ -50,8 +50,8 @@ private theorem noteCommitChunks_segment_a (gdX gdY pkdX pkdY v rho psi : ℕ) :
     (gdX + 2 ^ (K * 25) *
       (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
         2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi)) 25]
-  rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 25) = 2 ^ (K * 25) by
-    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
+    norm_num [K, K]]
   rw [Nat.add_mul_mod_self_left]
   exact chunksOf_mod gdX 25
 
@@ -72,8 +72,8 @@ private theorem noteCommitChunks_segment_b (gdX gdY pkdX pkdY v rho psi : ℕ)
       [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] := by
   unfold chunksOf bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
-    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [show 2 ^ K = 2 ^ K by
+    norm_num [K, K]]
   rw [noteCommitChunks_segment_b_word gdX gdY pkdX pkdY v rho psi hgdX hgdY]
 
 private theorem noteCommitChunks_segment_c_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -94,8 +94,8 @@ private theorem noteCommitChunks_segment_c (gdX gdY pkdX pkdY v rho psi : ℕ)
   rw [← chunksOf_mod
       (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25,
     ← chunksOf_mod (pkdX / 16) 25]
-  rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 25) = 2 ^ (K * 25) by
-    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
+    norm_num [K, K]]
   rw [noteCommitChunks_segment_c_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY]
 
 private theorem noteCommitChunks_segment_d_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -118,8 +118,8 @@ private theorem noteCommitChunks_segment_d (gdX gdY pkdX pkdY v rho psi : ℕ)
       (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6,
     ← chunksOf_mod
       (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6]
-  rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 6) = 2 ^ (K * 6) by
-    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [show 2 ^ (K * 6) = 2 ^ (K * 6) by
+    norm_num [K, K]]
   rw [noteCommitChunks_segment_d_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX]
 
 private theorem noteCommitChunks_segment_e_word (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -141,8 +141,8 @@ private theorem noteCommitChunks_segment_e (gdX gdY pkdX pkdY v rho psi : ℕ)
       [v / 2 ^ 58 % 64 + (rho % 16) * 64] := by
   unfold chunksOf bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
-    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [show 2 ^ K = 2 ^ K by
+    norm_num [K, K]]
   rw [noteCommitChunks_segment_e_word gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv]
 
 private theorem noteCommitChunks_segment_f_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -165,8 +165,8 @@ private theorem noteCommitChunks_segment_f (gdX gdY pkdX pkdY v rho psi : ℕ)
   rw [← chunksOf_mod
       (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25,
     ← chunksOf_mod (rho / 16) 25]
-  rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 25) = 2 ^ (K * 25) by
-    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
+    norm_num [K, K]]
   rw [noteCommitChunks_segment_f_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv]
 
 private theorem noteCommitChunks_segment_g_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -193,8 +193,8 @@ private theorem noteCommitChunks_segment_g (gdX gdY pkdX pkdY v rho psi : ℕ)
       (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25,
     ← chunksOf_mod
       (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25]
-  rw [show 2 ^ (Orchard.Specs.Sinsemilla.K * 25) = 2 ^ (K * 25) by
-    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
+    norm_num [K, K]]
   rw [noteCommitChunks_segment_g_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho]
 
 private theorem noteCommitChunks_segment_h_word (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -218,8 +218,8 @@ private theorem noteCommitChunks_segment_h (gdX gdY pkdX pkdY v rho psi : ℕ)
       [psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32] := by
   unfold chunksOf bitrange
   simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ Orchard.Specs.Sinsemilla.K = 2 ^ K by
-    norm_num [Orchard.Specs.Sinsemilla.K, K]]
+  rw [show 2 ^ K = 2 ^ K by
+    norm_num [K, K]]
   rw [noteCommitChunks_segment_h_word gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho hpsi]
 
 private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -412,7 +412,7 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
   have hChunksA : chunksOf gdX 25 = (List.range 25).map msA := by
     rw [← chunksOf_mod gdX 25]
     convert hChunksA_low using 2
-    simp [bitrange, Orchard.Specs.Sinsemilla.K]
+    simp [bitrange, K]
   have hChunksB := chunksOf_eq_map_of_cast_sum hmsB hB
     (lt_trans hBValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsB 1) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
@@ -1494,9 +1494,9 @@ TODO: dedup with the analogous private helpers in CommitIvk by sharing a Sinsemi
 private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
     {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
     (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
-    ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K) ∧
+    ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ K) ∧
       pieces[0] = ((∑ r ∈ Finset.range (n + 1),
-        ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) ∧
+        ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
       (∀ i, i < n + 1 → chunks.getD i 0 = ms i) ∧
       Orchard.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
   simp only [Orchard.Sinsemilla.Chain.PieceChunks] at h
@@ -1509,29 +1509,29 @@ private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
   · rwa [List.drop_left' (by simp)]
 
 private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
-    2 ^ (Orchard.Specs.Sinsemilla.K * m) < PALLAS_BASE_CARD := by
-  have hle : Orchard.Specs.Sinsemilla.K * m ≤ 250 := by
-    simp only [Orchard.Specs.Sinsemilla.K]; omega
+    2 ^ (K * m) < PALLAS_BASE_CARD := by
+  have hle : K * m ≤ 250 := by
+    simp only [K]; omega
   exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hle)
     (by norm_num [PALLAS_BASE_CARD])
 
 theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {ms : ℕ → ℕ}
-    (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ Orchard.Specs.Sinsemilla.K)
+    (hm : n + 1 ≤ 25) (hms : ∀ r, ms r < 2 ^ K)
     (hpc : piece = ((∑ r ∈ Finset.range (n + 1),
-      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp))
+      ms r * 2 ^ (K * r) : ℕ) : Fp))
     (hgetD : ∀ i, i < n + 1 → chunks.getD i 0 = ms i)
     {r : ℕ} (hr : r ≤ n) :
     ((∑ j ∈ Finset.range (n + 1 - r),
-        chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp)
-      = ((piece.val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+        chunks.getD (r + j) 0 * 2 ^ (K * j) : ℕ) : Fp)
+      = ((piece.val / 2 ^ (K * r) : ℕ) : Fp) := by
   have hpval : piece.val = ∑ r ∈ Finset.range (n + 1),
-      ms r * 2 ^ (Orchard.Specs.Sinsemilla.K * r) := by
+      ms r * 2 ^ (K * r) := by
     rw [hpc, ZMod.val_natCast_of_lt
       (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
   have hsum : (∑ j ∈ Finset.range (n + 1 - r),
-      chunks.getD (r + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j))
+      chunks.getD (r + j) 0 * 2 ^ (K * j))
         = ∑ j ∈ Finset.range (n + 1 - r),
-          ms (r + j) * 2 ^ (Orchard.Specs.Sinsemilla.K * j) := by
+          ms (r + j) * 2 ^ (K * j) := by
     apply Finset.sum_congr rfl
     intro j hj
     rw [Finset.mem_range] at hj
@@ -1542,7 +1542,7 @@ private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
     {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
     (hm : n + 1 ≤ 25)
     (h : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
-    ZMod.val (pieces[0] : Fp) < 2 ^ (Orchard.Specs.Sinsemilla.K * (n + 1)) := by
+    ZMod.val (pieces[0] : Fp) < 2 ^ (K * (n + 1)) := by
   obtain ⟨ms, hms, hpc, -, -⟩ := pieceChunks_head_digits h
   rw [hpc, ZMod.val_natCast_of_lt
     (lt_trans (sum_digits_lt hms (n + 1)) (two_pow_K_lt_card hm))]
@@ -1556,9 +1556,9 @@ private theorem zsFacts_head_cell {n : ℕ} {rest : List ℕ} {chunks : List ℕ
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
     (hZsHead : HVec.head zs = Vector.ofFn (fun i : Fin (n + 1) =>
       ((∑ j ∈ Finset.range (n + 1 - i.val),
-        chunks.getD (i.val + j) 0 * 2 ^ (Orchard.Specs.Sinsemilla.K * j) : ℕ) : Fp))) :
+        chunks.getD (i.val + j) 0 * 2 ^ (K * j) : ℕ) : Fp))) :
     (HVec.head zs)[r]'(Nat.lt_succ_of_le hr)
-      = (((pieces[0] : Fp).val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+      = (((pieces[0] : Fp).val / 2 ^ (K * r) : ℕ) : Fp) := by
   obtain ⟨ms, hms, hpc, hgetD, -⟩ := pieceChunks_head_digits hPC
   rw [hZsHead, Vector.getElem_ofFn]
   exact zsFacts_cell_eq_div hm hms hpc hgetD hr
@@ -1577,7 +1577,7 @@ theorem zsFacts_cell :
         = (((pieces[i.val]'(by
               have := i.isLt
               simpa only [Orchard.Sinsemilla.Chain.zLengths, List.length_map] using this) : Fp).val
-            / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp)
+            / 2 ^ (K * r) : ℕ) : Fp)
   | n :: rest, pieces, chunks, zs, ⟨0, _⟩, hPC, hZs, hm, r, hr => by
       simp only [Orchard.Sinsemilla.Chain.ZsFacts] at hZs
       have hr' : r < n + 1 := hr
@@ -1607,7 +1607,7 @@ theorem zsFacts_cell :
 theorem pieceChunks_val_lt :
     ∀ (ns : List ℕ) (pieces : Vector Fp ns.length) (chunks : List ℕ) (i : Fin ns.length),
       Orchard.Sinsemilla.Chain.PieceChunks ns pieces chunks → ns[i] + 1 ≤ 25 →
-      (pieces[i] : Fp).val < 2 ^ (Orchard.Specs.Sinsemilla.K * (ns[i] + 1))
+      (pieces[i] : Fp).val < 2 ^ (K * (ns[i] + 1))
   | n :: rest, pieces, chunks, ⟨0, _⟩, hPC, hm => pieceChunks_head_val_lt hm hPC
   | n :: rest, pieces, chunks, ⟨k + 1, hk⟩, hPC, hm => by
       obtain ⟨-, -, -, -, hPCtail⟩ := pieceChunks_head_digits hPC
@@ -1627,7 +1627,7 @@ private theorem zsHonest_head_cell {n : ℕ} {rest : List ℕ}
     (hhead : HVec.head zs = Vector.ofFn (fun i : Fin (n + 1) =>
       Orchard.Sinsemilla.pieceZ pieces[0] i.val)) :
     (HVec.head zs)[r]'(Nat.lt_succ_of_le hr)
-      = (((pieces[0] : Fp).val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+      = (((pieces[0] : Fp).val / 2 ^ (K * r) : ℕ) : Fp) := by
   rw [hhead, Vector.getElem_ofFn]
   rfl
 
@@ -1643,7 +1643,7 @@ theorem zsHonest_cell :
         = (((pieces[i.val]'(by
               have := i.isLt
               simpa only [Orchard.Sinsemilla.Chain.zLengths, List.length_map] using this) : Fp).val
-            / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp)
+            / 2 ^ (K * r) : ℕ) : Fp)
   | n :: rest, pieces, zs, ⟨0, _⟩, hZs, r, hr => by
       simp only [Orchard.Sinsemilla.Chain.ZsHonest] at hZs
       have hr' : r < n + 1 := hr
@@ -2071,31 +2071,31 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks ⟨0, by decide⟩ hPC (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hc_lt : (eval env AM).c.val < 2 ^ 250 := by
     have h := pieceChunks_val_lt messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks ⟨2, by decide⟩ hPC (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hd_lt : (eval env AM).d.val < 2 ^ 60 := by
     have h := pieceChunks_val_lt messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks ⟨3, by decide⟩ hPC (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hf_lt : (eval env AM).f.val < 2 ^ 250 := by
     have h := pieceChunks_val_lt messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks ⟨5, by decide⟩ hPC (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hg_lt : (eval env AM).g.val < 2 ^ 250 := by
     have h := pieceChunks_val_lt messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks ⟨6, by decide⟩ hPC (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz13a :
       (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨0, by decide⟩)[13] =
         (((eval env AM).a.val / 2 ^ 130 : ℕ) : Fp) := by
@@ -2103,7 +2103,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks (eval env COut).zs ⟨0, by decide⟩ hPC hZs (by decide) (r := 13) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz13c :
       (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨2, by decide⟩)[13] =
         (((eval env AM).c.val / 2 ^ 130 : ℕ) : Fp) := by
@@ -2111,7 +2111,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks (eval env COut).zs ⟨2, by decide⟩ hPC hZs (by decide) (r := 13) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz1d :
       (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨3, by decide⟩)[1] =
         (((eval env AM).d.val / 2 ^ 10 : ℕ) : Fp) := by
@@ -2119,7 +2119,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks (eval env COut).zs ⟨3, by decide⟩ hPC hZs (by decide) (r := 1) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz13f :
       (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨5, by decide⟩)[13] =
         (((eval env AM).f.val / 2 ^ 130 : ℕ) : Fp) := by
@@ -2127,7 +2127,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks (eval env COut).zs ⟨5, by decide⟩ hPC hZs (by decide) (r := 13) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz1g :
       (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[1] =
         (((eval env AM).g.val / 2 ^ 10 : ℕ) : Fp) := by
@@ -2135,7 +2135,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks (eval env COut).zs ⟨6, by decide⟩ hPC hZs (by decide) (r := 1) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz13g :
       (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[13] =
         (((eval env AM).g.val / 2 ^ 130 : ℕ) : Fp) := by
@@ -2143,7 +2143,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       chunks (eval env COut).zs ⟨6, by decide⟩ hPC hZs (by decide) (r := 13) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   let MPCIn : Var MessagePieceChecks.Input Fp :=
     { cells := AM,
       z1d := (HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨3, by decide⟩)[1],
@@ -2359,19 +2359,19 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     honestChunks_eq_noteCommitChunks_of_cellFacts hMCF hvalue
   have ha_lt : (eval env AM).a.val < 2 ^ 250 := by
     have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨0, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieces, messagePieceRounds, K, K] using h
   have hc_lt : (eval env AM).c.val < 2 ^ 250 := by
     have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨2, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieces, messagePieceRounds, K, K] using h
   have hd_lt : (eval env AM).d.val < 2 ^ 60 := by
     have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨3, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieces, messagePieceRounds, K, K] using h
   have hf_lt : (eval env AM).f.val < 2 ^ 250 := by
     have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨5, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieces, messagePieceRounds, K, K] using h
   have hg_lt : (eval env AM).g.val < 2 ^ 250 := by
     have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨6, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieces, messagePieceRounds, K, K] using h
   have hComPS : (Commit.circuit G Q hQ R).ProverSpec
       { pieces := #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
           (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h], r := input.rcm }
@@ -2385,42 +2385,42 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       (eval env COut).zs ⟨0, by decide⟩ hZsHonest (r := 13) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz13c : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨2, by decide⟩)[13] =
       (((eval env AM).c.val / 2 ^ 130 : ℕ) : Fp) := by
     have h := zsHonest_cell messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       (eval env COut).zs ⟨2, by decide⟩ hZsHonest (r := 13) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz1d : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨3, by decide⟩)[1] =
       (((eval env AM).d.val / 2 ^ 10 : ℕ) : Fp) := by
     have h := zsHonest_cell messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       (eval env COut).zs ⟨3, by decide⟩ hZsHonest (r := 1) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz13f : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨5, by decide⟩)[13] =
       (((eval env AM).f.val / 2 ^ 130 : ℕ) : Fp) := by
     have h := zsHonest_cell messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       (eval env COut).zs ⟨5, by decide⟩ hZsHonest (r := 13) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz1g : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[1] =
       (((eval env AM).g.val / 2 ^ 10 : ℕ) : Fp) := by
     have h := zsHonest_cell messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       (eval env COut).zs ⟨6, by decide⟩ hZsHonest (r := 1) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   have hz13g : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[13] =
       (((eval env AM).g.val / 2 ^ 130 : ℕ) : Fp) := by
     have h := zsHonest_cell messagePieceRounds
       #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       (eval env COut).zs ⟨6, by decide⟩ hZsHonest (r := 13) (by decide)
-    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+    simpa [messagePieceRounds, K, K] using h
   obtain ⟨ha_v, hb0_v, hb1_v, hb2_low, hb3_v, hc_v, hd0_v, hd1_low, hd2_v, he0_v, he1_v, hf_v, hg0_v, hg1_v, hh0_v, hh1_v, hb_dec, hd_dec, he_dec, hg_dec, hh_dec⟩ := hMCF
   have hb1_bool : IsBool (eval env AM).b1 := by rw [cell_eq_of_val hb1_v]; exact bitrange_one_isBool _ _
   have hd0_bool : IsBool (eval env AM).d0 := by rw [cell_eq_of_val hd0_v]; exact bitrange_one_isBool _ _

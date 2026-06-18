@@ -14,6 +14,10 @@ is just a list of `K`-aligned, `K`-wide `bitrange`s).
 
 namespace Orchard.Specs
 
+/-- The Sinsemilla / lookup-range-check word width: bits per chunk (`= 10`).
+Shared by `Sinsemilla.chunksOf` and `LookupRangeCheck`. -/
+def K : ℕ := 10
+
 /-- The value of the `len`-bit field of `n` starting at bit `start`. -/
 def bitrange (n start len : ℕ) : ℕ := n / 2 ^ start % 2 ^ len
 

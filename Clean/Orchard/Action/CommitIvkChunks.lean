@@ -15,7 +15,8 @@ namespace Orchard.Action.CommitIvk
 
 open Orchard.Ecc (Fp)
 open Orchard.Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
-open Orchard.Specs.Sinsemilla (K chunksOf chunksOf_mod commitIvkMessage commitIvkChunks
+open Orchard.Specs (K)
+open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod commitIvkMessage commitIvkChunks
   commitIvkChunks_tiling sum_head_shift sum_digits_lt digit_of_sum
   chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum chunksOf_one_eq_singleton)
 

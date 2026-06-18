@@ -1627,9 +1627,9 @@ theorem soundness (B : MulFixed.FixedBase) :
       -- collapse the giant nested cell-offset expressions (`[1,1,1,1].sum`, nested adds)
       -- to plain numerals, so applying `telescope13_eq` to the `env.get` terms below does
       -- not send the kernel into deep recursion reducing those offsets
-      simp only [Utilities.LookupRangeCheck.K, List.sum_cons, List.sum_nil, Nat.reduceMul,
+      simp only [Orchard.Specs.K, List.sum_cons, List.sum_nil, Nat.reduceMul,
         Nat.reduceAdd] at hz0c hz13 hα0prime he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
-      norm_num [Utilities.LookupRangeCheck.K] at hw0 hw1 hw2 hw3 hw4 hw5 hw6 hw7 hw8 hw9 hw10 hw11 hw12
+      norm_num [Orchard.Specs.K] at hw0 hw1 hw2 hw3 hw4 hw5 hw6 hw7 hw8 hw9 hw10 hw11 hw12
       rw [hz13, mul_zero, _root_.zero_add] at he12
       obtain ⟨S, hSdef⟩ : ∃ S : ℕ, S = w0 + 2 ^ 10 * w1 + 2 ^ 20 * w2 + 2 ^ 30 * w3 +
         2 ^ 40 * w4 + 2 ^ 50 * w5 + 2 ^ 60 * w6 + 2 ^ 70 * w7 + 2 ^ 80 * w8 +

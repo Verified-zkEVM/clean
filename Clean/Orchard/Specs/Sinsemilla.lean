@@ -29,9 +29,6 @@ namespace Orchard.Specs.Sinsemilla
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 
-/-- Number of bits per Sinsemilla message chunk (`sinsemilla::K`). -/
-def K : ℕ := 10
-
 /-- Maximum number of chunks in a Sinsemilla message (`sinsemilla::C`). -/
 def C : ℕ := 253
 
@@ -223,6 +220,10 @@ theorem chunksOf_mod (val n : ℕ) : chunksOf (val % 2 ^ (K * n)) n = chunksOf v
   intro i hi
   simp only [List.mem_range] at hi
   exact bitrange_mod (by rw [← Nat.mul_succ]; exact Nat.mul_le_mul_left K hi)
+
+theorem chunksOf_eq_of_mod_eq {a b n : ℕ} (h : a % 2 ^ (K * n) = b % 2 ^ (K * n)) :
+    chunksOf a n = chunksOf b n := by
+  rw [← chunksOf_mod a n, ← chunksOf_mod b n, h]
 
 /-! ### Recovering chunk lists from `K`-bit digit sums
 
