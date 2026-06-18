@@ -1631,6 +1631,52 @@ theorem pieceChunks_val_lt :
                     exact Nat.lt_of_succ_lt_succ hk)
       exact hbridge ▸ IH
 
+/-- Honest head running-sum cell at arbitrary index `r ≤ n`. -/
+private theorem zsHonest_head_cell {n : ℕ} {rest : List ℕ}
+    {pieces : Vector Fp (n :: rest).length}
+    {zs : HVec (Orchard.Sinsemilla.Chain.zLengths (n :: rest)) Fp} {r : ℕ} (hr : r ≤ n)
+    (hhead : HVec.head zs = Vector.ofFn (fun i : Fin (n + 1) =>
+      Orchard.Sinsemilla.pieceZ pieces[0] i.val)) :
+    (HVec.head zs)[r]'(Nat.lt_succ_of_le hr)
+      = (((pieces[0] : Fp).val / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp) := by
+  rw [hhead, Vector.getElem_ofFn]
+  rfl
+
+/-- Honest running-sum cell extraction: the `r`-th entry of the `i`-th piece's honest
+running-sum vector is `pieces[i].val / 2^(K·r)`. (Completeness analog of `zsFacts_cell`.) -/
+theorem zsHonest_cell :
+    ∀ (ns : List ℕ) (pieces : Vector Fp ns.length)
+      (zs : HVec (Orchard.Sinsemilla.Chain.zLengths ns) Fp)
+      (i : Fin (Orchard.Sinsemilla.Chain.zLengths ns).length),
+      Orchard.Sinsemilla.Chain.ZsHonest ns pieces zs →
+      ∀ {r : ℕ} (hr : r < (Orchard.Sinsemilla.Chain.zLengths ns)[i]),
+      (HVec.get (Orchard.Sinsemilla.Chain.zLengths ns) zs i)[r]'hr
+        = (((pieces[i.val]'(by
+              have := i.isLt
+              simpa only [Orchard.Sinsemilla.Chain.zLengths, List.length_map] using this) : Fp).val
+            / 2 ^ (Orchard.Specs.Sinsemilla.K * r) : ℕ) : Fp)
+  | n :: rest, pieces, zs, ⟨0, _⟩, hZs, r, hr => by
+      simp only [Orchard.Sinsemilla.Chain.ZsHonest] at hZs
+      have hr' : r < n + 1 := hr
+      exact zsHonest_head_cell (Nat.lt_succ_iff.mp hr') hZs.1
+  | n :: rest, pieces, zs, ⟨k + 1, hk⟩, hZs, r, hr => by
+      simp only [Orchard.Sinsemilla.Chain.ZsHonest] at hZs
+      have hkr : k < (Orchard.Sinsemilla.Chain.zLengths rest).length := by
+        have hk' : k + 1 < (Orchard.Sinsemilla.Chain.zLengths (n :: rest)).length := hk
+        simp only [Orchard.Sinsemilla.Chain.zLengths, List.length_map, List.length_cons]
+          at hk' ⊢
+        omega
+      have IH := zsHonest_cell rest pieces.tail (HVec.tail zs) ⟨k, hkr⟩ hZs.2 hr
+      have hk_tail : k < (n :: rest).length - 1 := by
+        simp only [List.length_cons, Nat.add_sub_cancel]
+        simpa only [Orchard.Sinsemilla.Chain.zLengths, List.length_map] using hkr
+      have hbridge :
+          pieces.tail[(⟨k, hkr⟩ : Fin (Orchard.Sinsemilla.Chain.zLengths rest).length).val]
+            = pieces[(⟨k + 1, hk⟩ :
+                Fin (Orchard.Sinsemilla.Chain.zLengths (n :: rest)).length).val] :=
+        Vector.getElem_tail (v := pieces) (i := k) (hi := hk_tail)
+      exact hbridge ▸ IH
+
 /-- `n % 2^(a+b)` splits into its low `a` bits plus the next `b` bits. -/
 private theorem mod_pow_split (n a b : ℕ) :
     n % 2 ^ (a + b) = n % 2 ^ a + 2 ^ a * (n / 2 ^ a % 2 ^ b) := by
@@ -1868,6 +1914,9 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
     (_ : ProverHint Fp) : Prop :=
   Pallas.OnCurve input.gd.coords ∧
   Pallas.OnCurve input.pkd.coords ∧
+  -- the note's value is a `u64` (the prover commits to a valid note); the `value_canonicity`
+  -- gate's constraint `value = d2 + d3·2^8 + e0·2^58` is satisfiable only at such values.
+  (show Fp from input.value).val < 2 ^ 64 ∧
   let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
     noteScalarsOf input.gd input.pkd input.value input.rho input.psi
   ∃ B, hashToPoint G.S Q
