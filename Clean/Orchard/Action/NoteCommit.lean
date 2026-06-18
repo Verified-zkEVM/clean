@@ -248,12 +248,6 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
 
 end
 
-/-! ### Subpiece witnessing helpers -/
-
-/-- `bitrangeSubset value start numBits = (value.val >> start) mod 2^numBits`. -/
-abbrev bitrangeSubset : Fp → ℕ → ℕ → Fp :=
-  Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset
-
 /-! ### `y_canonicity` (note_commit.rs:1962)
 
 Decomposes `y = lsb || k_0 || k_1 || k_2 || k_3`, range-decomposes `j = lsb + 2·k_0 +
@@ -576,9 +570,9 @@ def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
     (fun env => eval env input.y)
   let k2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
     (fun env => eval env input.y)
-  let k3 ← witnessField fun env => bitrangeSubset (eval env input.y) 254 1
+  let k3 ← witnessField fun env => let v : Fp := eval env input.y; ((bitrange v.val 254 1 : ℕ) : Fp)
   let j ← witnessField fun env =>
-    env input.lsb + 2 * env k0 + (2 ^ 10 : Fp) * bitrangeSubset (eval env input.y) 10 240
+    env input.lsb + 2 * env k0 + (2 ^ 10 : Fp) * (let v : Fp := eval env input.y; ((bitrange v.val 10 240 : ℕ) : Fp))
   let jReads ← Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit j
   let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
     (j + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
@@ -624,7 +618,7 @@ theorem soundness :
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
-  circuit_proof_start [bitrangeSubset, Utilities.LookupRangeCheck.WitnessShort.circuit,
+  circuit_proof_start [Utilities.LookupRangeCheck.WitnessShort.circuit,
     Utilities.LookupRangeCheck.WitnessShort.ProverSpec,
     Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Decomposed.ProverAssumptions,
@@ -647,33 +641,31 @@ theorem completeness :
     rw [show (250 : ℕ) = 1 + 249 from rfl, Orchard.Specs.bitrange_add,
       show (249 : ℕ) = 9 + 240 from rfl, Orchard.Specs.bitrange_add]
     ring
+  -- `hk0` is a `.val = bitrange` fact; lift it to an `Fp` equation on the cell.
+  have hk0F : env.get i₀ = ((bitrange input_y.val 1 9 : ℕ) : Fp) := by
+    rw [← hk0]; exact (ZMod.natCast_zmod_val _).symm
   have hj_br : jv = ((bitrange input_y.val 0 250 : ℕ) : Fp) := by
-    rw [hj, hlsb, hk0, htile]
-    simp only [Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset, bitrange]
+    rw [hj, hlsb, hk0F, htile]
     push_cast; ring
   have hj_val : jv.val = bitrange input_y.val 0 250 := by
     rw [hj_br]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
       (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
   have hjlt : jv.val < 2 ^ 250 := by rw [hj_val]; exact bitrange_lt _ _ _
-  have hbsub : ∀ {s l : ℕ}, l ≤ 250 →
-      (Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset input_y s l).val
-        = bitrange input_y.val s l := by
-    intro s l hl
-    show (((bitrange input_y.val s l : ℕ) : Fp)).val = bitrange input_y.val s l
-    exact ZMod.val_natCast_of_lt (lt_of_lt_of_le (bitrange_lt input_y.val s l)
-      (le_trans (Nat.pow_le_pow_right (by norm_num) hl)
-        (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])))
+  -- `k3`'s direct witness gives the `Fp` value `↑(bitrange y 254 1)`; lift to `.val`.
+  have hk3val : (env.get (i₀ + 2 + 2)).val = bitrange input_y.val 254 1 := by
+    rw [hk3]
+    exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
+      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
   refine ⟨⟨?A, ⟨?B1, ?B2, ?B3, ?B4, ?B5, ?B6, ?B7, ?B8⟩,
-    h_assumptions, hj_val, by rw [hk0, hbsub (by norm_num)],
-    by rw [hk2, hbsub (by norm_num)], by rw [hk3, hbsub (by norm_num)], ?guard⟩,
+    h_assumptions, hj_val, hk0, hk2, hk3val, ?guard⟩,
     h_assumptions⟩
   case A => exact hjlt
   case B1 =>
     rw [hlsb, show bitrange input_y.val 0 1 = input_y.val % 2 from by simp [bitrange]]
     exact nat_mod_two_isBool _
   case B2 => exact hjlt
-  case B3 => rw [hk0, hbsub (by norm_num)]; exact bitrange_lt _ _ _
-  case B4 => rw [hk2, hbsub (by norm_num)]; exact bitrange_lt _ _ _
+  case B3 => rw [hk0]; exact bitrange_lt _ _ _
+  case B4 => rw [hk2]; exact bitrange_lt _ _ _
   case B5 => rw [htz0]; ring
   case B6 => exact (hDec hjlt).2.1
   case B7 => exact (hDec hjlt).2.2
@@ -933,28 +925,28 @@ def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
     (fun env => eval env psi)
   let h0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 249 5 (by norm_num [K])
     (fun env => eval env psi)
-  let b1 ← witnessField fun env => bitrangeSubset (eval env gdX) 254 1
-  let b2 ← witnessField fun env => bitrangeSubset (eval env gdY) 0 1
-  let d0 ← witnessField fun env => bitrangeSubset (eval env pkdX) 254 1
-  let d1 ← witnessField fun env => bitrangeSubset (eval env pkdY) 0 1
-  let g0 ← witnessField fun env => bitrangeSubset (eval env rho) 254 1
-  let h1 ← witnessField fun env => bitrangeSubset (eval env psi) 254 1
+  let b1 ← witnessField fun env => let v : Fp := eval env gdX; ((bitrange v.val 254 1 : ℕ) : Fp)
+  let b2 ← witnessField fun env => let v : Fp := eval env gdY; ((bitrange v.val 0 1 : ℕ) : Fp)
+  let d0 ← witnessField fun env => let v : Fp := eval env pkdX; ((bitrange v.val 254 1 : ℕ) : Fp)
+  let d1 ← witnessField fun env => let v : Fp := eval env pkdY; ((bitrange v.val 0 1 : ℕ) : Fp)
+  let g0 ← witnessField fun env => let v : Fp := eval env rho; ((bitrange v.val 254 1 : ℕ) : Fp)
+  let h1 ← witnessField fun env => let v : Fp := eval env psi; ((bitrange v.val 254 1 : ℕ) : Fp)
 
   -- `y_canonicity` (for the `ỹ` sign cells `b2`/`d1`) is *not* run here: it requires
   -- `IsBool b2`/`IsBool d1`, which the source establishes in the `b`/`d` message-piece
   -- decomposition gates (`MessagePieceChecks`). It is therefore composed at the top level,
   -- after `MessagePieceChecks`, as a sibling of the x-canonicity gates.
-  let a ← witnessField fun env => bitrangeSubset (eval env gdX) 0 250
+  let a ← witnessField fun env => let v : Fp := eval env gdX; ((bitrange v.val 0 250 : ℕ) : Fp)
   let b ← witnessField fun env =>
     env b0 + env b1 * 2 ^ 4 + env b2 * 2 ^ 5 + env b3 * 2 ^ 6
-  let c ← witnessField fun env => bitrangeSubset (eval env pkdX) 4 250
+  let c ← witnessField fun env => let v : Fp := eval env pkdX; ((bitrange v.val 4 250 : ℕ) : Fp)
   let d ← witnessField fun env =>
     env d0 + env d1 * 2 + env d2 * 2 ^ 2 +
-    bitrangeSubset (eval env v) 8 50 * 2 ^ 10
+    (let vv : Fp := eval env v; ((bitrange vv.val 8 50 : ℕ) : Fp)) * 2 ^ 10
   let e ← witnessField fun env => env e0 + env e1 * 2 ^ 6
-  let f ← witnessField fun env => bitrangeSubset (eval env rho) 4 250
+  let f ← witnessField fun env => let v : Fp := eval env rho; ((bitrange v.val 4 250 : ℕ) : Fp)
   let g ← witnessField fun env => env g0 + env g1 * 2 +
-    bitrangeSubset (eval env psi) 9 240 * 2 ^ 10
+    (let v : Fp := eval env psi; ((bitrange v.val 9 240 : ℕ) : Fp)) * 2 ^ 10
   let h ← witnessField fun env => env h0 + env h1 * 2 ^ 5
   return {
     a, b, c, d, e, f, g, h,
@@ -976,20 +968,10 @@ def ProverSpec (input : ProverValue Input Fp)
     (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
   MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells
 
-/-- `WitnessShort.bitrangeSubset` is the field cast of the natural `bitrange`. -/
-theorem bitrangeSubset_eq (v : Fp) (s n : ℕ) :
-    Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset v s n
-      = ((bitrange v.val s n : ℕ) : Fp) := rfl
-
-/-- The honest 1-bit subset of `y` is its low (sign) bit. -/
-theorem isLowBit_bitrangeSubset (y : Fp) :
-    IsLowBit y (Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset y 0 1) := by
-  rw [isLowBit_iff_mod_two, bitrangeSubset_eq]
-  norm_num [bitrange]
-
 /-- The honest 1-bit `bitrange` cast of `y` is its low (sign) bit. -/
 theorem isLowBit_bitrange (y : Fp) : IsLowBit y ((bitrange y.val 0 1 : ℕ) : Fp) := by
-  rw [← bitrangeSubset_eq]; exact isLowBit_bitrangeSubset y
+  rw [isLowBit_iff_mod_two]
+  norm_num [bitrange]
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True) Spec := by
@@ -1005,16 +987,15 @@ theorem completeness :
     Utilities.LookupRangeCheck.WitnessShort.ProverSpec]
   obtain ⟨h_gd, h_pkd, h_v, h_rho, h_psi, -⟩ := h_input
   subst h_gd; subst h_pkd; subst h_v; subst h_rho; subst h_psi
-  simp only [bitrangeSubset_eq] at h_env
   obtain ⟨⟨_, e_b0⟩, ⟨_, e_b3⟩, ⟨_, e_d2⟩, ⟨_, e_e0⟩, ⟨_, e_e1⟩, ⟨_, e_g1⟩, ⟨_, e_h0⟩,
     e_b1, e_b2, e_d0, e_d1, e_g0, e_h1, e_a, e_b, e_c, e_d, e_e, e_f, e_g, e_h⟩ := h_env
-  refine ⟨val_eq_of_cell_eq (by norm_num) e_a, val_eq_of_cell_eq (by norm_num) e_b0,
-    val_eq_of_cell_eq (by norm_num) e_b1, ?_, val_eq_of_cell_eq (by norm_num) e_b3,
+  refine ⟨val_eq_of_cell_eq (by norm_num) e_a, e_b0,
+    val_eq_of_cell_eq (by norm_num) e_b1, ?_, e_b3,
     val_eq_of_cell_eq (by norm_num) e_c, val_eq_of_cell_eq (by norm_num) e_d0, ?_,
-    val_eq_of_cell_eq (by norm_num) e_d2, val_eq_of_cell_eq (by norm_num) e_e0,
-    val_eq_of_cell_eq (by norm_num) e_e1, val_eq_of_cell_eq (by norm_num) e_f,
-    val_eq_of_cell_eq (by norm_num) e_g0, val_eq_of_cell_eq (by norm_num) e_g1,
-    val_eq_of_cell_eq (by norm_num) e_h0, val_eq_of_cell_eq (by norm_num) e_h1,
+    e_d2, e_e0,
+    e_e1, val_eq_of_cell_eq (by norm_num) e_f,
+    val_eq_of_cell_eq (by norm_num) e_g0, e_g1,
+    e_h0, val_eq_of_cell_eq (by norm_num) e_h1,
     e_b.trans (by ring), e_d.trans (by ring), e_e.trans (by ring), e_g.trans (by ring),
     e_h.trans (by ring)⟩
   · rw [e_b2]; exact isLowBit_bitrange _

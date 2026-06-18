@@ -30,7 +30,6 @@ checks).
 namespace Orchard.Action.CommitIvk
 
 open Utilities.LookupRangeCheck (K)
-open Utilities.LookupRangeCheck.WitnessShort (bitrangeSubset)
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc (Point)
@@ -633,13 +632,13 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (fun env => eval env nk)
 
   -- The single-bit subpieces b_1, d_1 are boolean-constrained in the canonicity gate.
-  let b1 ← witnessField fun env => bitrangeSubset (eval env ak) 254 1
-  let d1 ← witnessField fun env => bitrangeSubset (eval env nk) 254 1
+  let b1 ← witnessField fun env => let v : Fp := eval env ak; ((bitrange v.val 254 1 : ℕ) : Fp)
+  let d1 ← witnessField fun env => let v : Fp := eval env nk; ((bitrange v.val 254 1 : ℕ) : Fp)
 
   -- The four Sinsemilla message pieces.
-  let a ← witnessField fun env => bitrangeSubset (eval env ak) 0 250
+  let a ← witnessField fun env => let v : Fp := eval env ak; ((bitrange v.val 0 250 : ℕ) : Fp)
   let b ← witnessField fun env => env b0 + env b1 * 2 ^ 4 + env b2 * 2 ^ 5
-  let c ← witnessField fun env => bitrangeSubset (eval env nk) 5 240
+  let c ← witnessField fun env => let v : Fp := eval env nk; ((bitrange v.val 5 240 : ℕ) : Fp)
   let d ← witnessField fun env => env d0 + env d1 * 2 ^ 9
 
   -- ivk = Commit^ivk_rivk(ak || nk); the short commit also exposes the per-piece running sums.
@@ -763,11 +762,6 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       rw [Commit.eval_cells, Commit.eval_cells_point]
       exact Eq.trans rfl hpt
 
-/-- The honest `WitnessShort` value is the `bitrange` slice, cast to `Fp`. -/
-private theorem bitrangeSubset_eq_bitrange (v : Fp) (start numBits : ℕ) :
-    Utilities.LookupRangeCheck.WitnessShort.bitrangeSubset v start numBits
-      = ((bitrange v.val start numBits : ℕ) : Fp) := rfl
-
 /-- The honest `commit_ivk` message pieces (canonical bit slices of `ak`/`nk`) satisfy the
 `PieceBounds` and their honest chunks are `commitIvkChunks ak.val nk.val`. Stated over the
 abstract piece cells (with their honest-slice values) so the heavy WithZs offsets never enter
@@ -860,8 +854,10 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   replace hEd := hEd ⟨0, by norm_num⟩
   simp only [Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm]
     at hEa hEb1 hEc hEd1 hEb hEd
-  -- the honest short/single cells in clean `bitrange` form
-  simp only [bitrangeSubset_eq_bitrange] at hEa hEb1 hEc hEd1 hB0 hB2 hD0
+  -- `WitnessShort.ProverSpec` now yields `.val = bitrange`; lift these to the `Fp`-cast form.
+  replace hB0 : _ = ((bitrange _ 250 4 : ℕ) : Fp) := (ZMod.natCast_zmod_val _).symm.trans (by rw [hB0])
+  replace hB2 : _ = ((bitrange _ 0 5 : ℕ) : Fp) := (ZMod.natCast_zmod_val _).symm.trans (by rw [hB2])
+  replace hD0 : _ = ((bitrange _ 245 9 : ℕ) : Fp) := (ZMod.natCast_zmod_val _).symm.trans (by rw [hD0])
   -- the two recombination cells `b`, `d`, expressed through their sub-cells' honest values
   rw [hB0, hEb1, hB2] at hEb
   rw [hD0, hEd1] at hEd
