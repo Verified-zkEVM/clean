@@ -1569,6 +1569,101 @@ theorem note_chunks_eq_of_cellFacts {cells : MessageCells Fp} {chunks : List ℕ
     rw [hh_dec, hh0, hh1]
     simp only [bitrange]; push_cast; ring
 
+
+private theorem val_bitrange_cast (n s l : ℕ) (hl : l ≤ 254) :
+    ((bitrange n s l : ℕ) : Fp).val = bitrange n s l := by
+  have h : bitrange n s l < PALLAS_BASE_CARD := by
+    have h1 := bitrange_lt n s l
+    have h2 : (2 : ℕ) ^ l ≤ 2 ^ 254 := Nat.pow_le_pow_right (by norm_num) hl
+    have h3 : (2 : ℕ) ^ 254 < PALLAS_BASE_CARD := by norm_num [PALLAS_BASE_CARD]
+    omega
+  exact ZMod.val_natCast_of_lt h
+
+private theorem pieceBounds_of_all :
+    ∀ (ns : List ℕ) (pieces : Vector Fp ns.length),
+      (∀ (i : ℕ) (hi : i < ns.length), (pieces[i] : Fp).val < 2 ^ (K * (ns[i] + 1))) →
+      Chain.PieceBounds ns pieces
+  | [], _, _ => trivial
+  | n :: rest, pieces, h => by
+      refine ⟨h 0 (by simp), pieceBounds_of_all rest pieces.tail (fun i hi => ?_)⟩
+      have key := h (i + 1) (by simp only [List.length_cons]; omega)
+      rw [List.getElem_cons_succ] at key
+      convert key using 2
+      exact Vector.getElem_tail (v := pieces) (i := i)
+        (hi := by simp only [List.length_cons, Nat.add_sub_cancel]; exact hi)
+
+theorem pieceBounds_of_cellFacts {cells : MessageCells Fp} {gd pkd : Point Fp}
+    {value rho psi : Fp}
+    (hMCF : MessageCellFacts gd pkd value rho psi cells) :
+    Chain.PieceBounds messagePieceRounds (messagePieces cells) := by
+  obtain ⟨ha, hb0, hb1, hb2, hb3, hc, hd0, hd1, hd2, he0, he1, hf, hg0, hg1, hh0, hh1,
+    hb_dec, hd_dec, he_dec, hg_dec, hh_dec⟩ := hMCF
+  have hb2' : cells.b2 = ((gd.y.val % 2 : ℕ) : Fp) := isLowBit_iff_mod_two.mp hb2
+  have hd1' : cells.d1 = ((pkd.y.val % 2 : ℕ) : Fp) := isLowBit_iff_mod_two.mp hd1
+  have hgy : gd.y.val % 2 < 2 := Nat.mod_lt _ (by norm_num)
+  have hpy : pkd.y.val % 2 < 2 := Nat.mod_lt _ (by norm_num)
+  apply pieceBounds_of_all
+  intro i hi
+  simp only [messagePieceRounds, List.length_cons, List.length_nil] at hi
+  interval_cases i
+  · show ZMod.val cells.a < 2 ^ 250
+    rw [ha, val_bitrange_cast _ _ _ (by norm_num)]; exact bitrange_lt _ _ _
+  · show ZMod.val cells.b < 2 ^ 10
+    rw [hb_dec, hb0, hb1, hb2', hb3]
+    have := bitrange_lt gd.x.val 250 4; have := bitrange_lt gd.x.val 254 1
+    have := bitrange_lt pkd.x.val 0 4
+    rw [show ((bitrange gd.x.val 250 4 : ℕ) : Fp) + ((bitrange gd.x.val 254 1 : ℕ) : Fp) * 16
+      + ((gd.y.val % 2 : ℕ) : Fp) * 32 + ((bitrange pkd.x.val 0 4 : ℕ) : Fp) * 64
+      = ((bitrange gd.x.val 250 4 + bitrange gd.x.val 254 1 * 16 + gd.y.val % 2 * 32
+        + bitrange pkd.x.val 0 4 * 64 : ℕ) : Fp) from by push_cast; ring]
+    rw [ZMod.val_natCast_of_lt (by norm_num [PALLAS_BASE_CARD]; omega)]; omega
+  · show ZMod.val cells.c < 2 ^ 250
+    rw [hc, val_bitrange_cast _ _ _ (by norm_num)]; exact bitrange_lt _ _ _
+  · show ZMod.val cells.d < 2 ^ 60
+    rw [hd_dec, hd0, hd1', hd2]
+    have := bitrange_lt pkd.x.val 254 1; have := bitrange_lt value.val 0 8
+    have := bitrange_lt value.val 8 50
+    rw [show ((bitrange pkd.x.val 254 1 : ℕ) : Fp) + ((pkd.y.val % 2 : ℕ) : Fp) * 2
+      + ((bitrange value.val 0 8 : ℕ) : Fp) * 4 + ((bitrange value.val 8 50 : ℕ) : Fp) * 1024
+      = ((bitrange pkd.x.val 254 1 + pkd.y.val % 2 * 2 + bitrange value.val 0 8 * 4
+        + bitrange value.val 8 50 * 1024 : ℕ) : Fp) from by push_cast; ring]
+    rw [ZMod.val_natCast_of_lt (by norm_num [PALLAS_BASE_CARD]; omega)]; omega
+  · show ZMod.val cells.e < 2 ^ 10
+    rw [he_dec, he0, he1]
+    have := bitrange_lt value.val 58 6; have := bitrange_lt rho.val 0 4
+    rw [show ((bitrange value.val 58 6 : ℕ) : Fp) + ((bitrange rho.val 0 4 : ℕ) : Fp) * 64
+      = ((bitrange value.val 58 6 + bitrange rho.val 0 4 * 64 : ℕ) : Fp) from by push_cast; ring]
+    rw [ZMod.val_natCast_of_lt (by norm_num [PALLAS_BASE_CARD]; omega)]; omega
+  · show ZMod.val cells.f < 2 ^ 250
+    rw [hf, val_bitrange_cast _ _ _ (by norm_num)]; exact bitrange_lt _ _ _
+  · show ZMod.val cells.g < 2 ^ 250
+    rw [hg_dec, hg0, hg1]
+    have := bitrange_lt rho.val 254 1; have := bitrange_lt psi.val 0 9
+    have := bitrange_lt psi.val 9 240
+    rw [show ((bitrange rho.val 254 1 : ℕ) : Fp) + ((bitrange psi.val 0 9 : ℕ) : Fp) * 2
+      + ((bitrange psi.val 9 240 : ℕ) : Fp) * 1024
+      = ((bitrange rho.val 254 1 + bitrange psi.val 0 9 * 2 + bitrange psi.val 9 240 * 1024 : ℕ) : Fp)
+        from by push_cast; ring]
+    rw [ZMod.val_natCast_of_lt (by norm_num [PALLAS_BASE_CARD]; omega)]; omega
+  · show ZMod.val cells.h < 2 ^ 10
+    rw [hh_dec, hh0, hh1]
+    have := bitrange_lt psi.val 249 5; have := bitrange_lt psi.val 254 1
+    rw [show ((bitrange psi.val 249 5 : ℕ) : Fp) + ((bitrange psi.val 254 1 : ℕ) : Fp) * 32
+      = ((bitrange psi.val 249 5 + bitrange psi.val 254 1 * 32 : ℕ) : Fp) from by push_cast; ring]
+    rw [ZMod.val_natCast_of_lt (by norm_num [PALLAS_BASE_CARD]; omega)]; omega
+
+/-- Completeness-side chunk connection: the honest chunks of the assigned message pieces
+are exactly the canonical note encoding. -/
+theorem honestChunks_eq_noteCommitChunks_of_cellFacts {cells : MessageCells Fp}
+    {gd pkd : Point Fp} {value rho psi : Fp}
+    (hMCF : MessageCellFacts gd pkd value rho psi cells) (hv : value.val < 2 ^ 64) :
+    Chain.honestChunks messagePieceRounds (messagePieces cells)
+      = noteCommitChunks gd.x.val (gd.y.val % 2) pkd.x.val (pkd.y.val % 2)
+        value.val rho.val psi.val :=
+  note_chunks_eq_of_cellFacts
+    (Chain.pieceChunks_honestChunks messagePieceRounds (messagePieces cells)
+      (pieceBounds_of_cellFacts hMCF)) hMCF hv
+
 end PieceExtraction
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
