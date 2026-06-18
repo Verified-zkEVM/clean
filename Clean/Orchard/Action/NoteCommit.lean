@@ -2326,6 +2326,22 @@ theorem lo2_lt {a b : Fp} (ha : a.val < 2) (hb : b.val < 2 ^ 9) :
   rw [hcast, ZMod.val_natCast_of_lt (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]; omega)]
   omega
 
+/-- The psi-canonicity obligation, factored out of `completeness`. From the honest `g`-piece
+decomposition (`g = g0 + g1·2 + bitrange(psi,9,240)·2^10`, `g0` a bit, `g1` the 9-bit base)
+and the round-1/round-13 running-sum cells (`z1g = g.val/2^10`, `z13g = g.val/2^130`), the
+outer `PsiCanonicity` Assumptions and Spec hold for the canonical psi slices. -/
+theorem psi_canonicity_obligation {psi g0 g1 h0 h1 g z1g z13g : Fp}
+    (hg_dec : g = g0 + g1 * 2 + ((bitrange psi.val 9 240 : ℕ) : Fp) * 1024)
+    (hg0 : g0.val < 2) (hg1 : g1.val = bitrange psi.val 0 9)
+    (hh0 : h0.val = bitrange psi.val 249 5) (hh1 : h1.val = bitrange psi.val 254 1)
+    (hz1g : z1g = ((g.val / 2 ^ 10 : ℕ) : Fp))
+    (hz13g : z13g = ((g.val / 2 ^ 130 : ℕ) : Fp)) :
+    PsiCanonicity.Assumptions
+        { psi := psi, h0 := h0, g1 := g1, h1 := h1, g2 := z1g, z13G := z13g } ∧
+      PsiCanonicity.Spec
+        { psi := psi, h0 := h0, g1 := g1, h1 := h1, g2 := z1g, z13G := z13g } := by
+  sorry
+
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
@@ -2447,7 +2463,15 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
             (isBool_of_isLowBit hd1_low).val_lt_two (by rw [hd2_v]; exact bitrange_lt _ _ _))
           (bitrange_lt _ _ _) (by norm_num)
       · exact lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt _)
-  case psi => sorry
+  case psi =>
+    exact psi_canonicity_obligation hg_dec (by rw [hg0_v]; exact bitrange_lt _ _ _)
+      hg1_v hh0_v hh1_v
+      ((CircuitType.eval_expr env.toEnvironment _).symm.trans
+        ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨6, by decide⟩ 1
+          (by decide)).trans (by simpa [circuit_norm] using hz1g)))
+      ((CircuitType.eval_expr env.toEnvironment _).symm.trans
+        ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨6, by decide⟩ 13
+          (by decide)).trans (by simpa [circuit_norm] using hz13g)))
   case mpc =>
     simp only [MessagePieceChecks.Spec, circuit_norm]
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
