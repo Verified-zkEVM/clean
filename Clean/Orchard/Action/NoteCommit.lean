@@ -630,11 +630,8 @@ theorem completeness :
   set jv := env.get (i₀ + 2 + 2 + 1) with hjv
   -- `lsb` is the low bit of `y`; the support cells are the canonical bit slices.
   have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Fp) := by
-    rw [h_assumptions]
-    have hbit : (if input_y.val.testBit 0 then (1 : ℕ) else 0) = bitrange input_y.val 0 1 := by
-      simp only [bitrange, pow_zero, Nat.div_one, pow_one, Nat.testBit_zero]
-      rcases Nat.mod_two_eq_zero_or_one input_y.val with h | h <;> simp [h]
-    rw [hbit]
+    rw [isLowBit_iff_mod_two.mp h_assumptions,
+      show bitrange input_y.val 0 1 = input_y.val % 2 from by simp [bitrange]]
   have htile : bitrange input_y.val 0 250
       = bitrange input_y.val 0 1 + 2 * bitrange input_y.val 1 9
         + 2 ^ 10 * bitrange input_y.val 10 240 := by
@@ -970,8 +967,10 @@ def ProverSpec (input : ProverValue Input Fp)
 
 /-- The honest 1-bit `bitrange` cast of `y` is its low (sign) bit. -/
 theorem isLowBit_bitrange (y : Fp) : IsLowBit y ((bitrange y.val 0 1 : ℕ) : Fp) := by
-  rw [isLowBit_iff_mod_two]
-  norm_num [bitrange]
+  unfold IsLowBit
+  rw [show bitrange y.val 0 1 = y.val % 2 from by simp [bitrange],
+    ZMod.val_natCast_of_lt (lt_trans (Nat.mod_lt _ (by norm_num))
+      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))]
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True) Spec := by
