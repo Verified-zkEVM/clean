@@ -645,11 +645,11 @@ theorem completeness :
     rw [hj, hlsb, hk0F, htile]
     push_cast; ring
   have hj_val : jv.val = bitrange input_y.val 0 250 := by
-    rw [hj_br]; exact cast_bitrange_val (by norm_num) _
+    rw [hj_br]; apply cast_bitrange_val (by norm_num)
   have hjlt : jv.val < 2 ^ 250 := by rw [hj_val]; exact bitrange_lt _ _ _
   -- `k3`'s direct witness gives the `Fp` value `↑(bitrange y 254 1)`; lift to `.val`.
   have hk3val : (env.get (i₀ + 2 + 2)).val = bitrange input_y.val 254 1 := by
-    rw [hk3]; exact cast_bitrange_val (by norm_num) _
+    rw [hk3]; apply cast_bitrange_val (by norm_num)
   refine ⟨⟨?A, ⟨?B1, ?B2, ?B3, ?B4, ?B5, ?B6, ?B7, ?B8⟩,
     h_assumptions, hj_val, hk0, hk2, hk3val, ?guard⟩,
     h_assumptions⟩
