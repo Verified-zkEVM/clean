@@ -303,17 +303,6 @@ structure MessageCells (F : Type) where
   h1 : F
 deriving ProvableStruct
 
-instance : Inhabited (Var MessageCells Fp) :=
-  ⟨{
-    a := default, b := default, c := default, d := default,
-    e := default, f := default, g := default, h := default,
-    b0 := default, b1 := default, b2 := default, b3 := default,
-    d0 := default, d1 := default, d2 := default,
-    e0 := default, e1 := default,
-    g0 := default, g1 := default,
-    h0 := default, h1 := default
-  }⟩
-
 /-- Sinsemilla per-piece round counts for the note-commit message. Each entry is
 `num_words - 1`, matching `Chain.PieceChunks`: source chunk counts
 `[25, 1, 25, 6, 1, 25, 25, 1]` become `[24, 0, 24, 5, 0, 24, 24, 0]`. -/
@@ -577,9 +566,6 @@ structure Input (F : Type) where
   y : F
   lsb : F
 deriving ProvableStruct
-
-instance : Inhabited (Var Input Fp) :=
-  ⟨{ y := default, lsb := default }⟩
 
 /-- `y_canonicity` owns its low-limb running sum: it witnesses the decomposition cells of
 `y`, runs the `Decomposed` 25-word check on `j` (exposing `z₁`/`z₁₃` as projections) and the
@@ -931,9 +917,6 @@ structure Input (F : Type) where
   z1g : F
 deriving ProvableStruct
 
-instance : Inhabited (Var Input Fp) :=
-  ⟨{ cells := default, z1d := default, z1g := default }⟩
-
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let cells := input.cells
   DecomposeB.Gate.circuit
@@ -1209,9 +1192,6 @@ structure Input (F : Type) where
   d3 : F
   e0 : F
 deriving ProvableStruct
-
-instance : Inhabited (Var Input Fp) :=
-  ⟨{ value := default, d2 := default, d3 := default, e0 := default }⟩
 
 def main (input : Var Input Fp) : Circuit Fp Unit :=
   Gate.circuit { value := input.value, d2 := input.d2, d3 := input.d3, e0 := input.e0 }
