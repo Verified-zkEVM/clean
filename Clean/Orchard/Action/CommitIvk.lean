@@ -70,13 +70,27 @@ theorem commitIvkPieceValues_of_gate_spec (row : Gate.Input Fp) (hSpec : Gate.Sp
     CommitIvkPieceValues row.ak row.nk row.a row.bWhole row.c row.dWhole := by
   simp only [Gate.Spec] at hSpec
   obtain ⟨ha, hb0, hb1, hb2, hc, hd0, hd1, hbW, hdW⟩ := hSpec
+  have ha' : row.a = ((bitrange row.ak.val 0 250 : ℕ) : Fp) := by
+    rw [← ha]; exact (ZMod.natCast_rightInverse row.a).symm
+  have hb0' : row.b0 = ((bitrange row.ak.val 250 4 : ℕ) : Fp) := by
+    rw [← hb0]; exact (ZMod.natCast_rightInverse row.b0).symm
+  have hb1' : row.b1 = ((bitrange row.ak.val 254 1 : ℕ) : Fp) := by
+    rw [← hb1]; exact (ZMod.natCast_rightInverse row.b1).symm
+  have hb2' : row.b2 = ((bitrange row.nk.val 0 5 : ℕ) : Fp) := by
+    rw [← hb2]; exact (ZMod.natCast_rightInverse row.b2).symm
+  have hc' : row.c = ((bitrange row.nk.val 5 240 : ℕ) : Fp) := by
+    rw [← hc]; exact (ZMod.natCast_rightInverse row.c).symm
+  have hd0' : row.d0 = ((bitrange row.nk.val 245 9 : ℕ) : Fp) := by
+    rw [← hd0]; exact (ZMod.natCast_rightInverse row.d0).symm
+  have hd1' : row.d1 = ((bitrange row.nk.val 254 1 : ℕ) : Fp) := by
+    rw [← hd1]; exact (ZMod.natCast_rightInverse row.d1).symm
   refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [ha]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
-  · rw [hbW, hb0, hb1, hb2]
+  · rw [ha']; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hbW, hb0', hb1', hb2']
     simp only [bitrange, pow_zero, Nat.div_one]
     push_cast; ring
-  · rw [hc]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
-  · rw [hdW, hd0, hd1]
+  · rw [hc']; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hdW, hd0', hd1']
     simp only [bitrange]
     push_cast; ring
 
@@ -178,13 +192,13 @@ def Assumptions (input : Input Fp) : Prop :=
 /-- The canonical-decomposition payoff (= `Gate.Spec` spelled over the `Canonicity` cells):
 the sub-pieces are the canonical little-endian bit slices of `ak`/`nk`. -/
 def Spec (input : Input Fp) : Prop :=
-  input.a = ((bitrange input.ak.val 0 250 : ℕ) : Fp) ∧
-    input.b0 = ((bitrange input.ak.val 250 4 : ℕ) : Fp) ∧
-    input.b1 = ((bitrange input.ak.val 254 1 : ℕ) : Fp) ∧
-    input.b2 = ((bitrange input.nk.val 0 5 : ℕ) : Fp) ∧
-    input.c = ((bitrange input.nk.val 5 240 : ℕ) : Fp) ∧
-    input.d0 = ((bitrange input.nk.val 245 9 : ℕ) : Fp) ∧
-    input.d1 = ((bitrange input.nk.val 254 1 : ℕ) : Fp) ∧
+  input.a.val = bitrange input.ak.val 0 250 ∧
+    input.b0.val = bitrange input.ak.val 250 4 ∧
+    input.b1.val = bitrange input.ak.val 254 1 ∧
+    input.b2.val = bitrange input.nk.val 0 5 ∧
+    input.c.val = bitrange input.nk.val 5 240 ∧
+    input.d0.val = bitrange input.nk.val 245 9 ∧
+    input.d1.val = bitrange input.nk.val 254 1 ∧
     input.b = input.b0 + input.b1 * 16 + input.b2 * 32 ∧
     input.d = input.d0 + input.d1 * 512
 
@@ -242,13 +256,21 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     Utilities.LookupRangeCheck.CopyCheck.circuit,
     Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Gate.circuit, Gate.Assumptions, Gate.Spec]
   obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, hz13A, hz13C⟩ := h_assumptions
-  obtain ⟨ha_eq, hb0_eq, hb1_eq, hb2_eq, hc_eq, hd0_eq, hd1_eq, hbWs, hdWs⟩ := h_spec
+  obtain ⟨ha_val, hb0_val, hb1_val, hb2_val, hc_val, hd0_val, hd1_val, hbWs, hdWs⟩ := h_spec
   obtain ⟨⟨-, hCopyA⟩, ⟨-, hCopyB⟩⟩ := h_env
   have hak : input_ak.val < PALLAS_BASE_CARD := ZMod.val_lt _
   have hnk : input_nk.val < PALLAS_BASE_CARD := ZMod.val_lt _
+  -- Fp-cast forms of the `.val` slice facts, needed for reconstruction/recombination
+  have hb1_eq : input_b1 = ((bitrange input_ak.val 254 1 : ℕ) : Fp) := by
+    rw [← hb1_val]; exact (ZMod.natCast_rightInverse input_b1).symm
+  have hb2_eq : input_b2 = ((bitrange input_nk.val 0 5 : ℕ) : Fp) := by
+    rw [← hb2_val]; exact (ZMod.natCast_rightInverse input_b2).symm
+  have hc_eq : input_c = ((bitrange input_nk.val 5 240 : ℕ) : Fp) := by
+    rw [← hc_val]; exact (ZMod.natCast_rightInverse input_c).symm
+  have hd1_eq : input_d1 = ((bitrange input_nk.val 254 1 : ℕ) : Fp) := by
+    rw [← hd1_val]; exact (ZMod.natCast_rightInverse input_d1).symm
   -- canonical low parts
-  have hav : input_a.val = bitrange input_ak.val 0 250 := by
-    rw [ha_eq]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 250) (by norm_num [PALLAS_BASE_CARD]))
+  have hav : input_a.val = bitrange input_ak.val 0 250 := ha_val
   -- the low 245-bit `nk` part `b2 + c·2^5` equals `bitrange nk 0 245`
   have hb2c_val : (input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c).val = bitrange input_nk.val 0 245 := by
     have hcast : input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c
@@ -329,7 +351,7 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     · rw [hImplB h]; ring
   -- the gate prover-assumption is `Gate.Assumptions ∧ Gate.Spec`; the spec part is `h_spec`
   refine ⟨⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, ?_, hz13A, ?_, ?_, ?_, hz13C, ?_, ?_⟩,
-    ha_eq, hb0_eq, hb1_eq, hb2_eq, hc_eq, hd0_eq, hd1_eq, hbWs, hdWs⟩
+    ha_val, hb0_val, hb1_val, hb2_val, hc_val, hd0_val, hd1_val, hbWs, hdWs⟩
   · -- aPrime = aP  (a + 2^130 - t_P)
     rw [hcellA0]; exact ZMod.natCast_rightInverse aP
   · -- ∃ lo < 2^130, aP = lo + 2^130 · (aP.val/2^130)
@@ -1069,13 +1091,27 @@ private theorem commitIvkPieceValues_of_canonicity_spec (row : Canonicity.Input 
     CommitIvkPieceValues row.ak row.nk row.a row.b row.c row.d := by
   simp only [Canonicity.Spec] at hSpec
   obtain ⟨ha, hb0, hb1, hb2, hc, hd0, hd1, hbW, hdW⟩ := hSpec
+  have ha' : row.a = ((bitrange row.ak.val 0 250 : ℕ) : Fp) := by
+    rw [← ha]; exact (ZMod.natCast_rightInverse row.a).symm
+  have hb0' : row.b0 = ((bitrange row.ak.val 250 4 : ℕ) : Fp) := by
+    rw [← hb0]; exact (ZMod.natCast_rightInverse row.b0).symm
+  have hb1' : row.b1 = ((bitrange row.ak.val 254 1 : ℕ) : Fp) := by
+    rw [← hb1]; exact (ZMod.natCast_rightInverse row.b1).symm
+  have hb2' : row.b2 = ((bitrange row.nk.val 0 5 : ℕ) : Fp) := by
+    rw [← hb2]; exact (ZMod.natCast_rightInverse row.b2).symm
+  have hc' : row.c = ((bitrange row.nk.val 5 240 : ℕ) : Fp) := by
+    rw [← hc]; exact (ZMod.natCast_rightInverse row.c).symm
+  have hd0' : row.d0 = ((bitrange row.nk.val 245 9 : ℕ) : Fp) := by
+    rw [← hd0]; exact (ZMod.natCast_rightInverse row.d0).symm
+  have hd1' : row.d1 = ((bitrange row.nk.val 254 1 : ℕ) : Fp) := by
+    rw [← hd1]; exact (ZMod.natCast_rightInverse row.d1).symm
   refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [ha]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
-  · rw [hbW, hb0, hb1, hb2]
+  · rw [ha']; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hbW, hb0', hb1', hb2']
     simp only [bitrange, pow_zero, Nat.div_one]
     push_cast; ring
-  · rw [hc]; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
-  · rw [hdW, hd0, hd1]
+  · rw [hc']; norm_num [bitrange, Orchard.Specs.Sinsemilla.K]
+  · rw [hdW, hd0', hd1']
     simp only [bitrange]
     push_cast; ring
 
@@ -1288,7 +1324,14 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.1,
         (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.2.1,
         (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.2.2] at hSd
-      exact ⟨hSa, hSb0, hSb1, hSb2, hSc, hSd0, hSd1, hSb, hSd⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, hSb, hSd⟩
+      · rw [hSa]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
+      · rw [hSb0]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
+      · rw [hSb1]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
+      · rw [hSb2]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
+      · rw [hSc]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
+      · rw [hSd0]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
+      · rw [hSd1]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
   · -- the entry `ProverSpec`: `ivk = (B + blind).x` via the Commit hash relation
     intro B hB
     -- replace the `eval` input keys by the opaque `input.{ak,nk}` (mirrors entry soundness;

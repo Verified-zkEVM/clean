@@ -83,13 +83,13 @@ def Assumptions (row : Input Fp) : Prop :=
 are the canonical bit slices of `nk`, and the pieces `b`/`d` are the witnessed sub-piece
 recombinations. -/
 def Spec (row : Input Fp) : Prop :=
-  row.a = ((bitrange row.ak.val 0 250 : ℕ) : Fp) ∧
-    row.b0 = ((bitrange row.ak.val 250 4 : ℕ) : Fp) ∧
-    row.b1 = ((bitrange row.ak.val 254 1 : ℕ) : Fp) ∧
-    row.b2 = ((bitrange row.nk.val 0 5 : ℕ) : Fp) ∧
-    row.c = ((bitrange row.nk.val 5 240 : ℕ) : Fp) ∧
-    row.d0 = ((bitrange row.nk.val 245 9 : ℕ) : Fp) ∧
-    row.d1 = ((bitrange row.nk.val 254 1 : ℕ) : Fp) ∧
+  row.a.val = bitrange row.ak.val 0 250 ∧
+    row.b0.val = bitrange row.ak.val 250 4 ∧
+    row.b1.val = bitrange row.ak.val 254 1 ∧
+    row.b2.val = bitrange row.nk.val 0 5 ∧
+    row.c.val = bitrange row.nk.val 5 240 ∧
+    row.d0.val = bitrange row.nk.val 245 9 ∧
+    row.d1.val = bitrange row.nk.val 254 1 ∧
     row.bWhole = row.b0 + row.b1 * 16 + row.b2 * 32 ∧
     row.dWhole = row.d0 + row.d1 * 512
 
@@ -229,36 +229,33 @@ def circuit : FormalAssertion Fp Input where
         simp only [bitrange, hloN_val]; omega
       rw [h1, hloN_eq, hmodN, bitrange_mod (by norm_num : 245 + 9 ≤ 254)]
     -- ===== assemble the spec =====
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [← ha_eq]; exact (ZMod.natCast_rightInverse input_a).symm
-    · rw [← hb0_eq]; exact (ZMod.natCast_rightInverse input_b0).symm
-    · rw [← hb1_eq]; exact (ZMod.natCast_rightInverse input_b1).symm
-    · rw [← hb2_eq]; exact (ZMod.natCast_rightInverse input_b2).symm
-    · rw [← hc_eq]; exact (ZMod.natCast_rightInverse input_c).symm
-    · rw [← hd0_eq]; exact (ZMod.natCast_rightInverse input_d0).symm
-    · rw [← hd1_eq]; exact (ZMod.natCast_rightInverse input_d1).symm
-    · linear_combination hbW
-    · linear_combination hdW
+    exact ⟨ha_eq, hb0_eq, hb1_eq, hb2_eq, hc_eq, hd0_eq, hd1_eq,
+      by linear_combination hbW, by linear_combination hdW⟩
   completeness := by
     circuit_proof_start
     obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, haPrime, hz13A, _hz13APrimeDec,
       hb1z13APrimeImpl, hb2cP, hz13C, _hz14Dec, hd1z14Impl⟩ := h_assumptions
-    obtain ⟨ha_eq, hb0_eq, hb1_eq, hb2_eq, hc_eq, hd0_eq, hd1_eq, hbW, hdW⟩ := h_spec
+    obtain ⟨ha_val, hb0_val, hb1_val, hb2_val, hc_val, hd0_val, hd1_val, hbW, hdW⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hak : input_ak.val < 2 ^ 255 :=
       lt_trans (ZMod.val_lt input_ak) (by norm_num [PALLAS_BASE_CARD])
     have hnk : input_nk.val < 2 ^ 255 :=
       lt_trans (ZMod.val_lt input_nk) (by norm_num [PALLAS_BASE_CARD])
-    have ha_val : input_a.val = bitrange input_ak.val 0 250 := by
-      rw [ha_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 250) (by norm_num [PALLAS_BASE_CARD]))
-    have hc_val : input_c.val = bitrange input_nk.val 5 240 := by
-      rw [hc_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 5 240) (by norm_num [PALLAS_BASE_CARD]))
-    have hb2_val : input_b2.val = bitrange input_nk.val 0 5 := by
-      rw [hb2_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 5) (by norm_num [PALLAS_BASE_CARD]))
+    have ha_eq : input_a = ((bitrange input_ak.val 0 250 : ℕ) : Fp) := by
+      rw [← ha_val]; exact (ZMod.natCast_rightInverse input_a).symm
+    have hb0_eq : input_b0 = ((bitrange input_ak.val 250 4 : ℕ) : Fp) := by
+      rw [← hb0_val]; exact (ZMod.natCast_rightInverse input_b0).symm
+    have hb1_eq : input_b1 = ((bitrange input_ak.val 254 1 : ℕ) : Fp) := by
+      rw [← hb1_val]; exact (ZMod.natCast_rightInverse input_b1).symm
+    have hb2_eq : input_b2 = ((bitrange input_nk.val 0 5 : ℕ) : Fp) := by
+      rw [← hb2_val]; exact (ZMod.natCast_rightInverse input_b2).symm
+    have hc_eq : input_c = ((bitrange input_nk.val 5 240 : ℕ) : Fp) := by
+      rw [← hc_val]; exact (ZMod.natCast_rightInverse input_c).symm
+    have hd0_eq : input_d0 = ((bitrange input_nk.val 245 9 : ℕ) : Fp) := by
+      rw [← hd0_val]; exact (ZMod.natCast_rightInverse input_d0).symm
+    have hd1_eq : input_d1 = ((bitrange input_nk.val 254 1 : ℕ) : Fp) := by
+      rw [← hd1_val]; exact (ZMod.natCast_rightInverse input_d1).symm
     have hb1cases := show bitrange input_ak.val 254 1 = 0 ∨ bitrange input_ak.val 254 1 = 1 from by
       have := bitrange_lt input_ak.val 254 1; omega
     have hd1cases := show bitrange input_nk.val 254 1 = 0 ∨ bitrange input_nk.val 254 1 = 1 from by
