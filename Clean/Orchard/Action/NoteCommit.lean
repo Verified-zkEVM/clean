@@ -745,7 +745,7 @@ def MessageCellFacts (gd pkd : Point Fp) (value rho psi : Fp) (cells : MessageCe
   cells.h = cells.h0 + cells.h1 * 32
 
 /-- Bridge a `.val` bit-slice fact back to its `Fp`-cast form. -/
-private theorem cell_eq_of_val {cell : Fp} {m : ℕ} (h : cell.val = m) :
+theorem cell_eq_of_val {cell : Fp} {m : ℕ} (h : cell.val = m) :
     cell = (m : Fp) := by
   rw [← h, ZMod.natCast_zmod_val]
 
@@ -1943,7 +1943,7 @@ private theorem z13G_tail_of_decompose_g {g g0 g1 g2 z13G : Fp}
     omega
   rw [hz13, hg_val, hdiv]
 
-private theorem valueCanonicity_assumptions_of_commit
+theorem valueCanonicity_assumptions_of_commit
     (O : Var Commit.Output Fp) (input_var : Var Input Fp) (cells : Var MessageCells Fp)
     (env : Environment Fp)
     (hd2 : (eval env cells).d2.val < 2 ^ 8)
@@ -1975,7 +1975,7 @@ private theorem valueCanonicity_assumptions_of_commit
       omega
     exact lt_trans hq (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
 
-private theorem psiCanonicity_assumptions_of_commit
+theorem psiCanonicity_assumptions_of_commit
     (O : Var Commit.Output Fp) (input_var : Var Input Fp) (cells : Var MessageCells Fp)
     (env : Environment Fp)
     (hh1_bool : IsBool (Expression.eval env cells.h1))
@@ -2320,14 +2320,37 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q) (ProverSpec G Q R) := by
-  -- Mirrors `soundness`: discharge each subcircuit's `ProverAssumptions` and read its
-  -- `ProverSpec` (`AssignMessagePieces` → `MessageCellFacts` incl. the two `IsLowBit` facts;
-  -- `Commit` → honest `ZsHonest`/hash; `MessagePieceChecks`/`YCanonicity`/canonicity gates as
-  -- in `soundness`), then assemble `ProverNoteCommitRelation`. The honest `IsLowBit` cells make
-  -- the `YCanonicity` `ProverAssumptions` dischargeable here.
-  circuit_proof_start [AssignMessagePieces.circuit, Commit.circuit, MessagePieceChecks.circuit,
-    GdCanonicity.circuit, PkdCanonicity.circuit, ValueCanonicity.circuit,
-    RhoCanonicity.circuit, PsiCanonicity.circuit]
+  -- Mirrors `soundness` (above). `AssignMessagePieces.ProverSpec` gives `MessageCellFacts`
+  -- directly (no gate-spec assembly); `Commit.ProverSpec` gives honest `ZsHonest` + hash. The
+  -- canonicity gate assumptions reuse the same `*_assumptions_of_commit` helpers, with the
+  -- honest running-sum cells from `zsHonest_cell` and the piece bounds from
+  -- `pieceBounds_of_cellFacts`; the relation closes via `honestChunks_eq_noteCommitChunks…`.
+  circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_env ⊢
+  obtain ⟨hAM, hCom, hMPC, hY1, hY2, hGd, hPkd, hVal, hRho, hPsi⟩ := h_env
+  set AM := AssignMessagePieces.circuit.output input_var i₀ with hAMdef
+  clear_value AM
+  set COut := (Commit.circuit G Q hQ R).output
+    { pieces := #v[AM.a, AM.b, AM.c, AM.d, AM.e, AM.f, AM.g, AM.h],
+      r := input_var.rcm }
+    (i₀ + ((AssignMessagePieces.circuit.toSubcircuit i₀ input_var).localLength + 0)) with hCOutdef
+  clear_value COut
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at hAM hCom hY1 hY2
+  -- ROADMAP to finish (transcribe `soundness` above, lines ~2067–2336, with these swaps):
+  --  • `MessageCellFacts` comes for free: `hMCF := (hAM trivial).2` (= `AssignMessagePieces`
+  --    `.ProverSpec`); no gate-spec assembly (soundness' lines 2219–2265 are skipped).
+  --  • `obtain ⟨-, -, hvalue, hHashEx⟩ := h_assumptions` (the `value<2^64` + hash-exists).
+  --  • piece bounds: `hPB := pieceBounds_of_cellFacts hMCF`; `hPC := Chain.pieceChunks_honestChunks
+  --    _ _ hPB`; then `ha_lt/hc_lt/hd_lt/hf_lt/hg_lt` via `pieceChunks_val_lt` (verbatim 2078–2107).
+  --  • z-cells `hz13a … hz13g`: as 2108–2155 but `zsHonest_cell … (hCom hComPA).2.1` (the honest
+  --    `ZsHonest` from `Commit.ProverSpec`) instead of `zsFacts_cell`.
+  --  • `Commit.ProverAssumptions = ⟨hPB, hHashEx ▸ honestChunks_eq_noteCommitChunks_of_cellFacts
+  --    hMCF hvalue⟩`; feed it to `hCom` for the honest hash relation.
+  --  • discharge each subcircuit's `ProverAssumptions`/`Spec` (the goal conjunction): `MPC.Spec`
+  --    + `YCanonicity`/canonicity gates exactly as soundness 2156–2218 (gate `Assumptions` via the
+  --    `*_assumptions_of_commit` helpers + the honest z-cells), `Spec`s from `hMCF`.
+  --  • relation: `ProverNoteCommitRelation` via the honest hash relation + `honestChunks =
+  --    noteCommitChunks` (= `(noteScalars …).chunks`).
   sorry
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
