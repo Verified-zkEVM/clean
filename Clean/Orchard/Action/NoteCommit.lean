@@ -2448,6 +2448,10 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
           (bitrange_lt _ _ _) (by norm_num)
       · exact lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt _)
   case psi => sorry
+  -- The b/e/h decompositions and all IsBool facts come directly from the cell facts; the d/g
+  -- decompositions equate the running-sum cells `z1d`/`z1g` with `bitrange value`/`bitrange psi`
+  -- via `cell_div_pow10_eq`, but bridging the goal's running-sum cell (whose `Fin` index proof
+  -- differs from the `by decide` form) into that equality whnf-times-out under `change`/`congr`.
   case mpc => sorry
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
