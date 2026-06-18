@@ -25,7 +25,7 @@ open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc (Point)
 open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
-open Orchard.Specs (bitrange bitrange_lt bitrange_add)
+open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
 open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod noteCommitMessage noteCommitChunks
   noteCommitChunks_tiling hashToPoint sum_head_shift sum_digits_lt digit_of_sum
   chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum chunksOf_one_eq_singleton)
@@ -645,14 +645,11 @@ theorem completeness :
     rw [hj, hlsb, hk0F, htile]
     push_cast; ring
   have hj_val : jv.val = bitrange input_y.val 0 250 := by
-    rw [hj_br]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
-      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+    rw [hj_br]; exact cast_bitrange_val (by norm_num) _
   have hjlt : jv.val < 2 ^ 250 := by rw [hj_val]; exact bitrange_lt _ _ _
   -- `k3`'s direct witness gives the `Fp` value `↑(bitrange y 254 1)`; lift to `.val`.
   have hk3val : (env.get (i₀ + 2 + 2)).val = bitrange input_y.val 254 1 := by
-    rw [hk3]
-    exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
-      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+    rw [hk3]; exact cast_bitrange_val (by norm_num) _
   refine ⟨⟨?A, ⟨?B1, ?B2, ?B3, ?B4, ?B5, ?B6, ?B7, ?B8⟩,
     h_assumptions, hj_val, hk0, hk2, hk3val, ?guard⟩,
     h_assumptions⟩

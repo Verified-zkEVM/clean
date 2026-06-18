@@ -47,7 +47,7 @@ deriving CircuitType
 instance : Inhabited (Var Input Fp) :=
   ⟨{ ak := default, nk := default, rivk := fun _ => default }⟩
 
-open Orchard.Specs (bitrange bitrange_lt)
+open Orchard.Specs (bitrange bitrange_lt cast_bitrange_val)
 open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
@@ -971,15 +971,15 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     simp only [show (input.ak : Fp) = Expression.eval env.toEnvironment input_var.ak from hak_eq.symm,
       show (input.nk : Fp) = Expression.eval env.toEnvironment input_var.nk from hnk_eq.symm]
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [hOb0, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+    · rw [hOb0, cast_bitrange_val (by norm_num) _]
       exact bitrange_lt _ _ _
-    · rw [hOb2, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+    · rw [hOb2, cast_bitrange_val (by norm_num) _]
       exact bitrange_lt _ _ _
-    · rw [hOd0, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+    · rw [hOd0, cast_bitrange_val (by norm_num) _]
       exact bitrange_lt _ _ _
-    · rw [hOa, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+    · rw [hOa, cast_bitrange_val (by norm_num) _]
       exact bitrange_lt _ _ _
-    · rw [hOc, ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))]
+    · rw [hOc, cast_bitrange_val (by norm_num) _]
       exact bitrange_lt _ _ _
     · -- z13a
       exact hOz13a
@@ -1320,13 +1320,13 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.2.1,
         (Commit.eval_cells_leaves env.toEnvironment O.cells).2.2.2.2.2.2.2.2] at hSd
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, hSb, hSd⟩
-      · rw [hSa]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
-      · rw [hSb0]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
-      · rw [hSb1]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
-      · rw [hSb2]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
-      · rw [hSc]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
-      · rw [hSd0]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
-      · rw [hSd1]; exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by norm_num [PALLAS_BASE_CARD]))
+      · rw [hSa]; exact cast_bitrange_val (by norm_num) _
+      · rw [hSb0]; exact cast_bitrange_val (by norm_num) _
+      · rw [hSb1]; exact cast_bitrange_val (by norm_num) _
+      · rw [hSb2]; exact cast_bitrange_val (by norm_num) _
+      · rw [hSc]; exact cast_bitrange_val (by norm_num) _
+      · rw [hSd0]; exact cast_bitrange_val (by norm_num) _
+      · rw [hSd1]; exact cast_bitrange_val (by norm_num) _
   · -- the entry `ProverSpec`: `ivk = (B + blind).x` via the Commit hash relation
     intro B hB
     -- replace the `eval` input keys by the opaque `input.{ak,nk}` (mirrors entry soundness;
