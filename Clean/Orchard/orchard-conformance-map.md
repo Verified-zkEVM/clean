@@ -66,6 +66,14 @@ Current Clean coverage:
   `RangeConstrained::witness_short` / `LookupRangeCheck::witness_short_check`
 - `Clean.Orchard.Utilities.LookupRangeCheck.WitnessShort.taggedCircuit`:
   4/5-bit tagged `RangeConstrained::witness_short` path
+- `Clean.Orchard.Utilities.LookupRangeCheck.CopyCheck.circuit`: lookup-backed running-sum
+  copy/decomposition helper, with soundness and completeness proved
+- `Clean.Orchard.Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit`: projected
+  `z_0`/`z_last` wrapper exposing the sound telescoped decomposition used by canonicity
+  gates, with soundness and completeness proved
+- `Clean.Orchard.Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit`: full
+  25-word decomposition wrapper exposing exact `z_1`/`z_13` reads for y-canonicity,
+  with soundness and completeness proved
 
 ### Scalar Multiplication
 
@@ -201,22 +209,33 @@ Current Clean coverage:
   fixed-base mul entry circuits and complete addition, with soundness and completeness
   proved
 - `Clean.Orchard.Action.Gate.circuit`: `GATE Orchard circuit checks`
-- `Clean.Orchard.NoteCommit.DecomposeB.circuit`:
+- `Clean.Orchard.Action.NoteCommit.DecomposeB.Gate.circuit`:
   `GATE NoteCommit MessagePiece b`
-- `Clean.Orchard.NoteCommit.DecomposeD.circuit`:
+- `Clean.Orchard.Action.NoteCommit.DecomposeD.Gate.circuit`:
   `GATE NoteCommit MessagePiece d`
-- `Clean.Orchard.NoteCommit.DecomposeE.circuit`:
+- `Clean.Orchard.Action.NoteCommit.DecomposeE.Gate.circuit`:
   `GATE NoteCommit MessagePiece e`
-- `Clean.Orchard.NoteCommit.DecomposeG.circuit`:
+- `Clean.Orchard.Action.NoteCommit.DecomposeG.Gate.circuit`:
   `GATE NoteCommit MessagePiece g`
-- `Clean.Orchard.NoteCommit.DecomposeH.circuit`:
+- `Clean.Orchard.Action.NoteCommit.DecomposeH.Gate.circuit`:
   `GATE NoteCommit MessagePiece h`
-- `Clean.Orchard.NoteCommit.GdCanonicity.circuit`: `GATE NoteCommit input g_d`
-- `Clean.Orchard.NoteCommit.PkdCanonicity.circuit`: `GATE NoteCommit input pk_d`
-- `Clean.Orchard.NoteCommit.ValueCanonicity.circuit`: `GATE NoteCommit input value`
-- `Clean.Orchard.NoteCommit.RhoCanonicity.circuit`: `GATE NoteCommit input rho`
-- `Clean.Orchard.NoteCommit.PsiCanonicity.circuit`: `GATE NoteCommit input psi`
-- `Clean.Orchard.NoteCommit.YCanonicity.circuit`: `GATE y coordinate checks`
+- `Clean.Orchard.Action.NoteCommit.GdCanonicity.Gate.circuit`: `GATE NoteCommit input g_d`
+- `Clean.Orchard.Action.NoteCommit.PkdCanonicity.Gate.circuit`: `GATE NoteCommit input pk_d`
+- `Clean.Orchard.Action.NoteCommit.ValueCanonicity.Gate.circuit`: `GATE NoteCommit input value`
+- `Clean.Orchard.Action.NoteCommit.RhoCanonicity.Gate.circuit`: `GATE NoteCommit input rho`
+- `Clean.Orchard.Action.NoteCommit.PsiCanonicity.Gate.circuit`: `GATE NoteCommit input psi`
+- `Clean.Orchard.Action.NoteCommit.YCanonicity.Gate.circuit`: `GATE y coordinate checks`
+- `Clean.Orchard.Action.NoteCommit.AssignMessagePieces.circuit`: source-shaped assignment of
+  the note-commit message cells, with soundness exporting range facts and completeness
+  proving the honest bit-slice facts
+- `Clean.Orchard.Action.NoteCommit.MessagePieceChecks.circuit`: source decomposition-gate
+  block for the five decomposed message pieces, with soundness and completeness proved
+- `Clean.Orchard.Action.NoteCommit.Commit.circuit`: Sinsemilla
+  `CommitDomain::commit` block specialized to note-commit message-piece sizes, using
+  `CommitDomain.WithZs.circuit` so the subsequent canonicity checks can read the hash
+  running sums
+- `Clean.Orchard.Action.NoteCommit.circuit`: `gadgets::note_commit` entry, implemented
+  with semantic specs; entry-level soundness is proved and completeness remains pending
 - `Clean.Orchard.Action.CommitIvk.Gate.circuit`: `GATE CommitIvk canonicity check`
 - `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry — **fully proven**
   (`soundness` + `completeness`, no `sorry`). Factored into proven `Commit` (witnessing +
@@ -233,56 +252,9 @@ specialized or isolated so Orchard circuit packages themselves are Pallas-base c
 and field facts needed by specs are proved for that concrete field instead of assumed by
 callers.
 
-### Lookup And Range-Check Conformance
+### Scalar Multiplication Output Signatures
 
-Clean now models the short lookup-backed range-check paths with Clean `lookup`
-operations:
-
-- `LookupRangeCheck.shortRangeCircuit`: looks up `word` in `table_idx`, witnesses and
-  looks up `word * 2^(K - num_bits)`, and composes `GATE Short lookup bitshift`.
-- `LookupRangeCheck.taggedShortRangeCircuit`: models
-  `LookupRangeCheck4_5BConfig::short_range_check` for `num_bits = 4` and `5` with a
-  two-column tagged table `(table_idx, table_range_check_tag)`.
-- `LookupRangeCheck.WitnessShort.circuit`: witnesses the prover-only bitrange subset
-  and calls the generic short range-check path.
-- `LookupRangeCheck.WitnessShort.taggedCircuit`: witnesses the prover-only bitrange
-  subset and calls the optimized tagged 4/5-bit path.
-
-Note that `GATE range check` (`decompose_running_sum.rs`) is _not_ lookup-backed in
-halo2: it is the polynomial constraint `range_check(word, 8)` and the Clean port is
-source-conformant.
-
-### Scalar Multiplication Entry APIs
-
-Full-width and signed short fixed-base mul, base-field-element fixed-base mul, and
-variable-base mul are all source-level entry circuits, each fully verified (soundness and
-completeness, no sorries).
-
-- `NonIdentityPoint::mul` / `EccInstructions::mul`, implemented by
-  `ecc/chip/mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`), is modeled by
-  `Clean.Orchard.Ecc.ScalarMul.Mul.circuit` — fully verified (soundness and
-  completeness, no sorries). Its `Spec` is the semantic contract: for any nonzero curve
-  point `B` matching the base coordinates, the output is `([alpha.val] B).coords`. The
-  composition follows the source: `[2]base` by complete addition, `z_init = 0`, the
-  `hi`/`lo` incomplete halves, the three complete bits, `process_lsb`, and
-  `overflow_check`; the scalar bits are prover-side hints derived from
-  `k = alpha + t_q`, as in the source. Two purely virtual subcircuit boundaries
-  (`Assign.Decompose` for the decomposition region, `Assign.ProcessLsb` mirroring
-  `mul.rs::Config::process_lsb`) factor the proofs without changing operations,
-  witnesses, or cell order relative to the inlined source.
-- `FixedPointBaseField::mul`, implemented by
-  `ecc/chip/mul_fixed/base_field_elem.rs::Config::assign`: fixed-base multiplication by a
-  base-field element (used by nullifier derivation), is modeled by
-  `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit` — fully verified
-  (soundness and completeness, no sorries). Its `Spec` is the semantic contract: the
-  output is `([alpha.val] B).coords`. It composes the strict 85-window running-sum
-  decomposition + shared windowed multiplication + complete addition (`RunningSumMul`)
-  with the canonicity tail — a 13-window lookup range check on `alpha_0 + 2^130 - t_p` and
-  the `GATE Canonicity checks` gate — following `base_field_elem.rs::Config::assign`. The
-  output is just `Point`, matching the source `FixedPointBaseField::mul` (which returns a
-  single `EccPoint`), so it carries none of the output-signature gap noted below.
-
-NON-CONFORMANT output signature (fixed-base mul entries): Halo2's `FixedPoint::mul`
+Halo2's `FixedPoint::mul`
 (`mul_fixed/full_width.rs::Config::assign`) returns `(EccPoint, EccScalarFixed)` and
 `FixedPointShort::mul` (`mul_fixed/short.rs::Config::assign`) returns
 `(EccPoint, EccScalarFixedShort)` — the second component is the witnessed scalar
@@ -338,6 +310,9 @@ Implemented building blocks:
   - `CommitDomain::commit`: `Sinsemilla.CommitDomain.circuit`
     (`M.hash_to_point(msg) + [r] R` via the full-width fixed-base mul and complete
     addition, mirroring `value_commit_orchard`'s composition).
+  - `CommitDomain::commit` with running sums: `Sinsemilla.CommitDomain.WithZs.circuit`,
+    used by `Action.CommitIvk` and `Action.NoteCommit` when source callers copy specific
+    Sinsemilla running-sum cells into later gates.
   - `CommitDomain::short_commit`: `Sinsemilla.CommitDomain.Short.circuit`.
   - `CommitDomain::blinding_factor`: `Sinsemilla.CommitDomain.blindingFactor`
     (the bare `[r] R`, an alias of `MulFixed.FullWidth.circuit`).
@@ -365,44 +340,35 @@ Missing source-level APIs:
 
 - `SinsemillaInstructions::hash_to_point_with_private_init`
 
-### Hash Output Signature: Running Sums (NON-CONFORMANT)
+### Sinsemilla Output Signature: Base APIs Still Point-Only
 
-The Sinsemilla hash output type does **not** match Halo2, violating the input/output
-signature requirement (plan "Goal" and "Synthesize" §: the I/O schema of a Clean circuit
-must precisely match the Halo2 method).
+This gap is resolved for the canonicity-checking action circuits:
+`CommitDomain.WithZs.circuit` exposes each piece's full running sum
+`Output.zs : HVec (Chain.zLengths ns)`, and both consumers that copy hash-region running
+sums now use it:
 
-Halo2 returns the per-piece running sums as part of the output:
+- `gadgets::note_commit` (`Action.NoteCommit`) reads `zs[i][13]` / `zs[i][1]` for the
+  note-commit canonicity and decomposition checks.
+- `gadgets::commit_ivk` (`Action.CommitIvk`) reads `zs[0][13]` / `zs[2][13]` for its
+  canonicity check.
+
+The remaining source-signature gap is in the base Sinsemilla APIs. Halo2 returns the
+per-piece running sums as part of the output:
 
 ```rust
 // halo2_gadgets/src/sinsemilla.rs
-fn hash_to_point(...) -> Result<(NonIdentityPoint, Vec<Vec<AssignedCell<…>>>), Error>
-fn commit(...)        -> Result<(Point,            Vec<Vec<AssignedCell<…>>>), Error>
-// zs[i] = [z_0, …, z_{w_i}] is piece i's running sum
-// (hash_to_point.rs::hash_piece builds zs; hash_all_pieces collects zs_sum;
-//  note_commit.rs reads zs[0][13], zs[3][1], …)
+fn hash_to_point(...) -> Result<(NonIdentityPoint, Vec<Vec<AssignedCell<...>>>), Error>
+fn commit(...)        -> Result<(Point,            Vec<Vec<AssignedCell<...>>>), Error>
+// zs[i] = [z_0, ..., z_{w_i}] is piece i's running sum
 ```
 
-Current Clean state (under-models the output):
-
-- `HashPiece` computes the full running sum `zs : Vector field (w + 1)` internally
-  (`HashToPoint.lean`, in `main`) but its `Output` exposes only `z1 = zs[1]` — a one-off
-  added by the z1-refactor for the single cell Merkle's decomposition gate needed.
-- `Chain.Output` / `Entry.Output` carry only `z1s` (the per-piece `z_1`), not the full
-  `zs`.
-- `CommitDomain.circuit` / `HashDomain.circuit` return only the point, dropping `zs`.
-
-Resolution: `CommitDomain.WithZs.circuit` now exposes each piece's full running sum `zs`
-(the `Output.zs : HVec (Chain.zLengths ns)`), unblocking the canonicity-checking entries
-that copy specific running-sum cells out of the hash region. Both consumers are now
-implemented on top of it — `gadgets::note_commit` (`Action.NoteCommit`, reads `zs[i][13]`,
-`zs[i][1]`) and `gadgets::commit_ivk` (`Action.CommitIvk`, reads `zs[0][13]`, `zs[2][13]`).
-The legacy `z1`-only `Output` exposure below is retained for the Merkle decomposition gate.
-
-Fix (faithful, supersedes the z1-only exposure): expose each piece's full running sum
-`zs` through `HashPiece.Output` (so `z1` becomes `zs[1]`), thread per-piece `zs` through
-the recursive `Chain`/`Entry` tower (a flat `Vector (Vector …) …` does not type — pieces
-have different `w`), and return `(Point, zs)` from `CommitDomain.circuit` to match
-`commit`. Re-prove the four hash circuits accordingly.
+`HashPiece` computes the full running sum internally, but the base
+`HashPiece`/`Chain`/`Entry` outputs expose only the `z_1` cells used by Merkle, and
+`HashDomain.circuit` / `CommitDomain.circuit` return only the point. If those base APIs
+are brought into exact source-signature conformance, thread full `zs` through the
+recursive tower (an `HVec` shape, not a flat vector) and return `(Point, zs)` from the
+source-shaped domain circuits. Until then, `WithZs` is the conformant path for action
+circuits that need running-sum cells.
 
 ### Orchard Entry APIs
 
@@ -415,13 +381,17 @@ completeness proved), and the `Circuit::synthesize` spend-authority block is imp
 completeness), via the message-piece bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`
 / `honestChunks_eq_commitIvkChunks` and the generic shared running-sum theory in
 `Specs.Sinsemilla` (`sum_suffix_div`, `running_sum_telescope`) and `HashToPoint`
-(`piece_recombine`, `pieceChunks_honestChunks`, public `chain_eq_sum`). `gadgets::note_commit`
-(`Action.NoteCommit`) is implemented with semantic specs and elaboration but its entry-level
-`soundness`/`completeness` are still `sorry`; it can now reuse the same shared bridge theory.
+(`piece_recombine`, `pieceChunks_honestChunks`, public `chain_eq_sum`).
+
+`gadgets::note_commit` (`Action.NoteCommit.circuit`) is implemented with semantic specs
+and source-shaped subcircuits for assignment, Sinsemilla commit with `zs`, message-piece
+checks, y-canonicity, and coordinate canonicity. Entry-level soundness is proved; entry
+completeness remains pending.
+
 Missing source-level APIs:
 
 - address-integrity wiring in `Circuit::synthesize`
-- entry proofs for `gadgets::note_commit` (commit_ivk done)
+- completeness proof for `gadgets::note_commit`
 - full `Circuit::synthesize` action circuit
 
 These must compose source-conformant child circuits. In particular:
