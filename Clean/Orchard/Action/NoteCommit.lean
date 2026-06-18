@@ -664,7 +664,9 @@ theorem completeness :
       (le_trans (Nat.pow_le_pow_right (by norm_num) hl)
         (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])))
   refine ⟨⟨?A, ⟨?B1, ?B2, ?B3, ?B4, ?B5, ?B6, ?B7, ?B8⟩,
-    h_assumptions, hj_br, hk0, hk2, hk3, ?guard⟩, h_assumptions⟩
+    h_assumptions, hj_val, by rw [hk0, hbsub (by norm_num)],
+    by rw [hk2, hbsub (by norm_num)], by rw [hk3, hbsub (by norm_num)], ?guard⟩,
+    h_assumptions⟩
   case A => exact hjlt
   case B1 =>
     rw [hlsb, show bitrange input_y.val 0 1 = input_y.val % 2 from by simp [bitrange]]
@@ -724,22 +726,22 @@ commitment. These are the local bit-slice facts produced by `AssignMessagePieces
 Sinsemilla piece/chunk relation is stated separately as `MessagePiecesEncode`. -/
 def MessageCellFacts (gd pkd : Point Fp) (value rho psi : Fp) (cells : MessageCells Fp) :
     Prop :=
-  cells.a = ((bitrange gd.x.val 0 250 : ℕ) : Fp) ∧
-  cells.b0 = ((bitrange gd.x.val 250 4 : ℕ) : Fp) ∧
-  cells.b1 = ((bitrange gd.x.val 254 1 : ℕ) : Fp) ∧
+  cells.a.val = bitrange gd.x.val 0 250 ∧
+  cells.b0.val = bitrange gd.x.val 250 4 ∧
+  cells.b1.val = bitrange gd.x.val 254 1 ∧
   IsLowBit gd.y cells.b2 ∧
-  cells.b3 = ((bitrange pkd.x.val 0 4 : ℕ) : Fp) ∧
-  cells.c = ((bitrange pkd.x.val 4 250 : ℕ) : Fp) ∧
-  cells.d0 = ((bitrange pkd.x.val 254 1 : ℕ) : Fp) ∧
+  cells.b3.val = bitrange pkd.x.val 0 4 ∧
+  cells.c.val = bitrange pkd.x.val 4 250 ∧
+  cells.d0.val = bitrange pkd.x.val 254 1 ∧
   IsLowBit pkd.y cells.d1 ∧
-  cells.d2 = ((bitrange value.val 0 8 : ℕ) : Fp) ∧
-  cells.e0 = ((bitrange value.val 58 6 : ℕ) : Fp) ∧
-  cells.e1 = ((bitrange rho.val 0 4 : ℕ) : Fp) ∧
-  cells.f = ((bitrange rho.val 4 250 : ℕ) : Fp) ∧
-  cells.g0 = ((bitrange rho.val 254 1 : ℕ) : Fp) ∧
-  cells.g1 = ((bitrange psi.val 0 9 : ℕ) : Fp) ∧
-  cells.h0 = ((bitrange psi.val 249 5 : ℕ) : Fp) ∧
-  cells.h1 = ((bitrange psi.val 254 1 : ℕ) : Fp) ∧
+  cells.d2.val = bitrange value.val 0 8 ∧
+  cells.e0.val = bitrange value.val 58 6 ∧
+  cells.e1.val = bitrange rho.val 0 4 ∧
+  cells.f.val = bitrange rho.val 4 250 ∧
+  cells.g0.val = bitrange rho.val 254 1 ∧
+  cells.g1.val = bitrange psi.val 0 9 ∧
+  cells.h0.val = bitrange psi.val 249 5 ∧
+  cells.h1.val = bitrange psi.val 254 1 ∧
   cells.b =
     cells.b0 + cells.b1 * 16 + cells.b2 * 32 + cells.b3 * 64 ∧
   cells.d =
@@ -750,6 +752,23 @@ def MessageCellFacts (gd pkd : Point Fp) (value rho psi : Fp) (cells : MessageCe
     cells.g0 + cells.g1 * 2 + ((bitrange psi.val 9 240 : ℕ) : Fp) * 1024 ∧
   cells.h = cells.h0 + cells.h1 * 32
 
+/-- Bridge a `.val` bit-slice fact back to its `Fp`-cast form. -/
+private theorem cell_eq_of_val {cell : Fp} {m : ℕ} (h : cell.val = m) :
+    cell = (m : Fp) := by
+  rw [← h, ZMod.natCast_zmod_val]
+
+/-- Bridge an `Fp`-cast bit-slice fact to its `.val` form. -/
+private theorem val_eq_of_cell_eq {cell : Fp} {n s l : ℕ} (hl : l ≤ 254)
+    (h : cell = ((bitrange n s l : ℕ) : Fp)) :
+    cell.val = bitrange n s l := by
+  have hlt : bitrange n s l < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    have h1 := bitrange_lt n s l
+    have h2 : (2 : ℕ) ^ l ≤ 2 ^ 254 := Nat.pow_le_pow_right (by norm_num) hl
+    have h3 : (2 : ℕ) ^ 254 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+    omega
+  rw [h, ZMod.val_natCast_of_lt hlt]
+
 theorem noteCommitPieceValues_of_messageCellFacts {gd pkd : Point Fp}
     {value rho psi : Fp} {cells : MessageCells Fp}
     (hvalue : value.val < 2 ^ 64)
@@ -758,6 +777,20 @@ theorem noteCommitPieceValues_of_messageCellFacts {gd pkd : Point Fp}
   simp only [MessageCellFacts] at h
   obtain ⟨ha, hb0, hb1, hygd, hb3, hc, hd0, hypkd, hd2, he0, he1, hf, hg0, hg1,
     hh0, hh1, hb, hd, he, hg, hh⟩ := h
+  replace ha := cell_eq_of_val ha
+  replace hb0 := cell_eq_of_val hb0
+  replace hb1 := cell_eq_of_val hb1
+  replace hb3 := cell_eq_of_val hb3
+  replace hc := cell_eq_of_val hc
+  replace hd0 := cell_eq_of_val hd0
+  replace hd2 := cell_eq_of_val hd2
+  replace he0 := cell_eq_of_val he0
+  replace he1 := cell_eq_of_val he1
+  replace hf := cell_eq_of_val hf
+  replace hg0 := cell_eq_of_val hg0
+  replace hg1 := cell_eq_of_val hg1
+  replace hh0 := cell_eq_of_val hh0
+  replace hh1 := cell_eq_of_val hh1
   have hgdY := isLowBit_iff_mod_two.mp hygd
   have hpkdY := isLowBit_iff_mod_two.mp hypkd
   simp only [NoteCommitPieceValues, noteScalars, messagePieces]
@@ -975,7 +1008,13 @@ theorem completeness :
   simp only [bitrangeSubset_eq] at h_env
   obtain ⟨⟨_, e_b0⟩, ⟨_, e_b3⟩, ⟨_, e_d2⟩, ⟨_, e_e0⟩, ⟨_, e_e1⟩, ⟨_, e_g1⟩, ⟨_, e_h0⟩,
     e_b1, e_b2, e_d0, e_d1, e_g0, e_h1, e_a, e_b, e_c, e_d, e_e, e_f, e_g, e_h⟩ := h_env
-  refine ⟨e_a, e_b0, e_b1, ?_, e_b3, e_c, e_d0, ?_, e_d2, e_e0, e_e1, e_f, e_g0, e_g1, e_h0, e_h1,
+  refine ⟨val_eq_of_cell_eq (by norm_num) e_a, val_eq_of_cell_eq (by norm_num) e_b0,
+    val_eq_of_cell_eq (by norm_num) e_b1, ?_, val_eq_of_cell_eq (by norm_num) e_b3,
+    val_eq_of_cell_eq (by norm_num) e_c, val_eq_of_cell_eq (by norm_num) e_d0, ?_,
+    val_eq_of_cell_eq (by norm_num) e_d2, val_eq_of_cell_eq (by norm_num) e_e0,
+    val_eq_of_cell_eq (by norm_num) e_e1, val_eq_of_cell_eq (by norm_num) e_f,
+    val_eq_of_cell_eq (by norm_num) e_g0, val_eq_of_cell_eq (by norm_num) e_g1,
+    val_eq_of_cell_eq (by norm_num) e_h0, val_eq_of_cell_eq (by norm_num) e_h1,
     e_b.trans (by ring), e_d.trans (by ring), e_e.trans (by ring), e_g.trans (by ring),
     e_h.trans (by ring)⟩
   · rw [e_b2]; exact isLowBit_bitrange _
@@ -1142,9 +1181,9 @@ def Assumptions (input : Input Fp) : Prop :=
     input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp)
 
 def Spec (input : Input Fp) : Prop :=
-  input.a = ((bitrange input.gdX.val 0 250 : ℕ) : Fp) ∧
-    input.b0 = ((bitrange input.gdX.val 250 4 : ℕ) : Fp) ∧
-    input.b1 = ((bitrange input.gdX.val 254 1 : ℕ) : Fp)
+  input.a.val = bitrange input.gdX.val 0 250 ∧
+    input.b0.val = bitrange input.gdX.val 250 4 ∧
+    input.b1.val = bitrange input.gdX.val 254 1
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   circuit_proof_start [
@@ -1164,17 +1203,13 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec, Gate.Spec, Gate.Assumptions
   ]
   obtain ⟨hb1, ha_lt, hb0_lt, hz13A⟩ := h_assumptions
-  obtain ⟨ha_eq, hb0_eq, hb1_eq⟩ := h_spec
+  obtain ⟨ha_val, hb0_val, hb1_val⟩ := h_spec
   obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
   simp only [show K * 13 = 130 from by norm_num [K]] at hlo hdec hzLast
-  have ha_val : input_a.val = bitrange input_gdX.val 0 250 := by
-    rw [ha_eq]
-    exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
-      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
   refine ⟨⟨hb1, ha_lt, hb0_lt, by linear_combination hz0, hz13A, lo, hlo,
-    by linear_combination hdec + hz0⟩, ha_eq, hb0_eq, hb1_eq, fun h1 => ?_⟩
+    by linear_combination hdec + hz0⟩, ha_val, hb0_val, hb1_val, fun h1 => ?_⟩
   -- `b1 = 1` ⇒ `g_d` canonical ⇒ `a < t_P` ⇒ the honest tail `zLast` from `ProverSpec` vanishes.
-  obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) (bit_one_of_eq hb1_eq h1)
+  obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) (bit_one_of_val_eq hb1_val h1)
   rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
       = input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) (by rw [ha_val]; exact hatp)]
@@ -1216,9 +1251,9 @@ def Assumptions (input : Input Fp) : Prop :=
     input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp)
 
 def Spec (input : Input Fp) : Prop :=
-  input.b3 = ((bitrange input.pkdX.val 0 4 : ℕ) : Fp) ∧
-    input.c = ((bitrange input.pkdX.val 4 250 : ℕ) : Fp) ∧
-    input.d0 = ((bitrange input.pkdX.val 254 1 : ℕ) : Fp)
+  input.b3.val = bitrange input.pkdX.val 0 4 ∧
+    input.c.val = bitrange input.pkdX.val 4 250 ∧
+    input.d0.val = bitrange input.pkdX.val 254 1
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   circuit_proof_start [
@@ -1242,14 +1277,14 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec, Gate.Spec, Gate.Assumptions
   ]
   obtain ⟨hd0, hc_lt, hb3_lt, hz13C⟩ := h_assumptions
-  obtain ⟨hb3_eq, hc_eq, hd0_eq⟩ := h_spec
+  obtain ⟨hb3_val, hc_val, hd0_val⟩ := h_spec
   obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
   simp only [show K * 14 = 140 from by norm_num [K]] at hlo hdec hzLast
   refine ⟨⟨hd0, hc_lt, hb3_lt, by linear_combination hz0, hz13C, lo, hlo,
-    by linear_combination hdec + hz0⟩, hb3_eq, hc_eq, hd0_eq, fun h1 => ?_⟩
+    by linear_combination hdec + hz0⟩, hb3_val, hc_val, hd0_val, fun h1 => ?_⟩
   -- `d0 = 1` ⇒ `x(pk_d)` canonical ⇒ the low 254-bit base `< t_P` ⇒ honest tail vanishes.
-  have hbase_lt := base_val_lt_tP hb3_eq hc_eq (ZMod.val_lt input_pkdX)
-    (bit_one_of_eq hd0_eq h1) (by norm_num)
+  have hbase_lt := base_val_lt_tP_val hb3_val hc_val (ZMod.val_lt input_pkdX)
+    (bit_one_of_val_eq hd0_val h1) (by norm_num)
   rw [hzLast,
     show input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -Ecc.tP
       = (input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP from by ring,
@@ -1331,9 +1366,9 @@ def Assumptions (input : Input Fp) : Prop :=
     input.z13F = ((input.f.val / 2 ^ 130 : ℕ) : Fp)
 
 def Spec (input : Input Fp) : Prop :=
-  input.e1 = ((bitrange input.rho.val 0 4 : ℕ) : Fp) ∧
-    input.f = ((bitrange input.rho.val 4 250 : ℕ) : Fp) ∧
-    input.g0 = ((bitrange input.rho.val 254 1 : ℕ) : Fp)
+  input.e1.val = bitrange input.rho.val 0 4 ∧
+    input.f.val = bitrange input.rho.val 4 250 ∧
+    input.g0.val = bitrange input.rho.val 254 1
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   circuit_proof_start [
@@ -1357,14 +1392,14 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec, Gate.Spec, Gate.Assumptions
   ]
   obtain ⟨hg0, hf_lt, he1_lt, hz13F⟩ := h_assumptions
-  obtain ⟨he1_eq, hf_eq, hg0_eq⟩ := h_spec
+  obtain ⟨he1_val, hf_val, hg0_val⟩ := h_spec
   obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
   simp only [show K * 14 = 140 from by norm_num [K]] at hlo hdec hzLast
   refine ⟨⟨hg0, hf_lt, he1_lt, by linear_combination hz0, hz13F, lo, hlo,
-    by linear_combination hdec + hz0⟩, he1_eq, hf_eq, hg0_eq, fun h1 => ?_⟩
+    by linear_combination hdec + hz0⟩, he1_val, hf_val, hg0_val, fun h1 => ?_⟩
   -- `g0 = 1` ⇒ `rho` canonical ⇒ the low 254-bit base `< t_P` ⇒ honest tail vanishes.
-  have hbase_lt := base_val_lt_tP he1_eq hf_eq (ZMod.val_lt input_rho)
-    (bit_one_of_eq hg0_eq h1) (by norm_num)
+  have hbase_lt := base_val_lt_tP_val he1_val hf_val (ZMod.val_lt input_rho)
+    (bit_one_of_val_eq hg0_val h1) (by norm_num)
   rw [hzLast,
     show input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) + -Ecc.tP
       = (input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP from by ring,
@@ -1410,10 +1445,10 @@ def Assumptions (input : Input Fp) : Prop :=
     input.z13G = ((input.g1.val + input.g2.val * 2 ^ 9) / 2 ^ 129 : ℕ)
 
 def Spec (input : Input Fp) : Prop :=
-  input.g1 = ((bitrange input.psi.val 0 9 : ℕ) : Fp) ∧
-    input.g2 = ((bitrange input.psi.val 9 240 : ℕ) : Fp) ∧
-    input.h0 = ((bitrange input.psi.val 249 5 : ℕ) : Fp) ∧
-    input.h1 = ((bitrange input.psi.val 254 1 : ℕ) : Fp)
+  input.g1.val = bitrange input.psi.val 0 9 ∧
+    input.g2.val = bitrange input.psi.val 9 240 ∧
+    input.h0.val = bitrange input.psi.val 249 5 ∧
+    input.h1.val = bitrange input.psi.val 254 1
 
 theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   circuit_proof_start [
@@ -1437,14 +1472,14 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.ProverSpec, Gate.Spec, Gate.Assumptions
   ]
   obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hz13G⟩ := h_assumptions
-  obtain ⟨hg1_eq, hg2_eq, hh0_eq, hh1_eq⟩ := h_spec
+  obtain ⟨hg1_val, hg2_val, hh0_val, hh1_val⟩ := h_spec
   obtain ⟨⟨hz0, lo, hlo, hdec⟩, _, hzLast⟩ := h_env
   simp only [show K * 13 = 130 from by norm_num [K]] at hlo hdec hzLast
   refine ⟨⟨hh1, hg1_lt, hg2_lt, hh0_lt, by linear_combination hz0, hz13G, lo, hlo,
-    by linear_combination hdec + hz0⟩, hg1_eq, hg2_eq, hh0_eq, hh1_eq, fun h1 => ?_⟩
+    by linear_combination hdec + hz0⟩, hg1_val, hg2_val, hh0_val, hh1_val, fun h1 => ?_⟩
   -- `h1 = 1` ⇒ `psi` canonical ⇒ the low 249-bit base `< t_P` ⇒ honest tail vanishes.
-  have hbase_lt := base_val_lt_tP hg1_eq hg2_eq (ZMod.val_lt input_psi)
-    (bit_one_of_eq hh1_eq h1) (by norm_num)
+  have hbase_lt := base_val_lt_tP_val hg1_val hg2_val (ZMod.val_lt input_psi)
+    (bit_one_of_val_eq hh1_val h1) (by norm_num)
   rw [hzLast,
     show input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
       = (input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
@@ -1616,6 +1651,20 @@ theorem note_chunks_eq_of_cellFacts {cells : MessageCells Fp} {chunks : List ℕ
       value.val rho.val psi.val := by
   obtain ⟨ha, hb0, hb1, hb2, hb3, hc, hd0, hd1, hd2, he0, he1, hf, hg0, hg1, hh0, hh1,
     hb_dec, hd_dec, he_dec, hg_dec, hh_dec⟩ := hMCF
+  replace ha := cell_eq_of_val ha
+  replace hb0 := cell_eq_of_val hb0
+  replace hb1 := cell_eq_of_val hb1
+  replace hb3 := cell_eq_of_val hb3
+  replace hc := cell_eq_of_val hc
+  replace hd0 := cell_eq_of_val hd0
+  replace hd2 := cell_eq_of_val hd2
+  replace he0 := cell_eq_of_val he0
+  replace he1 := cell_eq_of_val he1
+  replace hf := cell_eq_of_val hf
+  replace hg0 := cell_eq_of_val hg0
+  replace hg1 := cell_eq_of_val hg1
+  replace hh0 := cell_eq_of_val hh0
+  replace hh1 := cell_eq_of_val hh1
   have hb2' : cells.b2 = ((gd.y.val % 2 : ℕ) : Fp) := isLowBit_iff_mod_two.mp hb2
   have hd1' : cells.d1 = ((pkd.y.val % 2 : ℕ) : Fp) := isLowBit_iff_mod_two.mp hd1
   refine pieceChunks_eq_noteCommitChunks_of_indexed_piece_values hPC
@@ -1680,6 +1729,20 @@ theorem pieceBounds_of_cellFacts {cells : MessageCells Fp} {gd pkd : Point Fp}
     Chain.PieceBounds messagePieceRounds (messagePieces cells) := by
   obtain ⟨ha, hb0, hb1, hb2, hb3, hc, hd0, hd1, hd2, he0, he1, hf, hg0, hg1, hh0, hh1,
     hb_dec, hd_dec, he_dec, hg_dec, hh_dec⟩ := hMCF
+  replace ha := cell_eq_of_val ha
+  replace hb0 := cell_eq_of_val hb0
+  replace hb1 := cell_eq_of_val hb1
+  replace hb3 := cell_eq_of_val hb3
+  replace hc := cell_eq_of_val hc
+  replace hd0 := cell_eq_of_val hd0
+  replace hd2 := cell_eq_of_val hd2
+  replace he0 := cell_eq_of_val he0
+  replace he1 := cell_eq_of_val he1
+  replace hf := cell_eq_of_val hf
+  replace hg0 := cell_eq_of_val hg0
+  replace hg1 := cell_eq_of_val hg1
+  replace hh0 := cell_eq_of_val hh0
+  replace hh1 := cell_eq_of_val hh1
   have hb2' : cells.b2 = ((gd.y.val % 2 : ℕ) : Fp) := isLowBit_iff_mod_two.mp hb2
   have hd1' : cells.d1 = ((pkd.y.val % 2 : ℕ) : Fp) := isLowBit_iff_mod_two.mp hd1
   have hgy : gd.y.val % 2 < 2 := Nat.mod_lt _ (by norm_num)
@@ -2138,7 +2201,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       rw [show Expression.eval env
           ((HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨3, by decide⟩)[1]) =
           ((bitrange (ZMod.val (eval env input_var.value)) 8 50 : ℕ) : Fp) by
-        simpa [circuit_norm] using hValSpec.2.2.1]
+        simpa [circuit_norm] using cell_eq_of_val hValSpec.2.2.1]
       ring
     · simpa [MPCIn, circuit_norm] using he_decomp
     · rw [show (eval env AM).g =
@@ -2150,7 +2213,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       rw [show Expression.eval env
           ((HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨6, by decide⟩)[1]) =
           ((bitrange (ZMod.val (eval env input_var.psi)) 9 240 : ℕ) : Fp) by
-        simpa [circuit_norm] using hPsiSpec.2.1]
+        simpa [circuit_norm] using cell_eq_of_val hPsiSpec.2.1]
       ring
     · simpa [MPCIn, circuit_norm] using hh_decomp
   have hMessageFacts : MessageCellFacts input.gd input.pkd input.value input.rho input.psi

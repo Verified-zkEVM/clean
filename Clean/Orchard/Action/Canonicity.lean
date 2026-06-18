@@ -43,9 +43,9 @@ def Assumptions (row : Row Fp) : Prop :=
 
 /-- The gate's payoff: `a`/`b0`/`b1` are the canonical bit slices of `x(g_d)`. -/
 def Spec (row : Row Fp) : Prop :=
-  row.a = ((bitrange row.gdX.val 0 250 : ℕ) : Fp) ∧
-    row.b0 = ((bitrange row.gdX.val 250 4 : ℕ) : Fp) ∧
-    row.b1 = ((bitrange row.gdX.val 254 1 : ℕ) : Fp) ∧
+  row.a.val = bitrange row.gdX.val 0 250 ∧
+    row.b0.val = bitrange row.gdX.val 250 4 ∧
+    row.b1.val = bitrange row.gdX.val 254 1 ∧
     (row.b1 = 1 → row.z13A' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
@@ -117,25 +117,24 @@ def circuit : FormalAssertion Fp Row where
       have h1 : input_b0.val = bitrange (input_a + input_b0 * ((2 ^ 250 : ℕ) : Fp)).val 250 4 := by
         simp only [bitrange, hlo_val]; omega
       rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 250 + 4 ≤ 254)]
-    refine ⟨?_, ?_, ?_, ?_⟩
-    · rw [← ha_eq]; exact (ZMod.natCast_rightInverse input_a).symm
-    · rw [← hb0_eq]; exact (ZMod.natCast_rightInverse input_b0).symm
-    · rw [← hb1_eq]; exact (ZMod.natCast_rightInverse input_b1).symm
-    · intro h1
+    exact ⟨ha_eq, hb0_eq, hb1_eq, fun h1 => by
       rcases mul_eq_zero.mp hg3 with h | h
       · exact absurd (h1 ▸ h) one_ne_zero
-      · exact h
+      · exact h⟩
   completeness := by
     circuit_proof_start
     obtain ⟨_, ha_lt, _, haPrime, hz13A, _⟩ := h_assumptions
-    obtain ⟨ha_eq, hb0_eq, hb1_eq, hzaZero⟩ := h_spec
+    obtain ⟨ha_val, hb0_val, hb1_val, hzaZero⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hgdX : input_gdX.val < 2 ^ 255 :=
       lt_trans (ZMod.val_lt input_gdX) (by norm_num [PALLAS_BASE_CARD])
-    have ha_val : input_a.val = bitrange input_gdX.val 0 250 := by
-      rw [ha_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 250) (by norm_num [PALLAS_BASE_CARD]))
+    have ha_eq : input_a = ((bitrange input_gdX.val 0 250 : ℕ) : Fp) := by
+      rw [← ha_val]; exact (ZMod.natCast_rightInverse input_a).symm
+    have hb0_eq : input_b0 = ((bitrange input_gdX.val 250 4 : ℕ) : Fp) := by
+      rw [← hb0_val]; exact (ZMod.natCast_rightInverse input_b0).symm
+    have hb1_eq : input_b1 = ((bitrange input_gdX.val 254 1 : ℕ) : Fp) := by
+      rw [← hb1_val]; exact (ZMod.natCast_rightInverse input_b1).symm
     have hb1cases := show bitrange input_gdX.val 254 1 = 0 ∨ bitrange input_gdX.val 254 1 = 1 from by
       have := bitrange_lt input_gdX.val 254 1; omega
     refine ⟨?_, ?_, ?_, ?_, ?_⟩
@@ -192,9 +191,9 @@ def Assumptions (row : Row Fp) : Prop :=
 
 /-- The gate's payoff: `b3`/`c`/`d0` are the canonical bit slices of `x(pk_d)`. -/
 def Spec (row : Row Fp) : Prop :=
-  row.b3 = ((bitrange row.pkdX.val 0 4 : ℕ) : Fp) ∧
-    row.c = ((bitrange row.pkdX.val 4 250 : ℕ) : Fp) ∧
-    row.d0 = ((bitrange row.pkdX.val 254 1 : ℕ) : Fp) ∧
+  row.b3.val = bitrange row.pkdX.val 0 4 ∧
+    row.c.val = bitrange row.pkdX.val 4 250 ∧
+    row.d0.val = bitrange row.pkdX.val 254 1 ∧
     (row.d0 = 1 → row.z14B3C' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
@@ -256,28 +255,24 @@ def circuit : FormalAssertion Fp Row where
       have h1 : input_c.val = bitrange (input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)).val 4 250 := by
         simp only [bitrange, hlo_val]; omega
       rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 4 + 250 ≤ 254)]
-    refine ⟨?_, ?_, ?_, ?_⟩
-    · rw [← hb3_eq]; exact (ZMod.natCast_rightInverse input_b3).symm
-    · rw [← hc_eq]; exact (ZMod.natCast_rightInverse input_c).symm
-    · rw [← hd0_eq]; exact (ZMod.natCast_rightInverse input_d0).symm
-    · intro h1
+    exact ⟨hb3_eq, hc_eq, hd0_eq, fun h1 => by
       rcases mul_eq_zero.mp hg2 with h | h
       · exact absurd (h1 ▸ h) one_ne_zero
-      · exact h
+      · exact h⟩
   completeness := by
     circuit_proof_start
     obtain ⟨_, hc_lt, hb3_lt, hb3cP, hz13C, _⟩ := h_assumptions
-    obtain ⟨hb3_eq, hc_eq, hd0_eq, hzbZero⟩ := h_spec
+    obtain ⟨hb3_val, hc_val, hd0_val, hzbZero⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hpkdX : input_pkdX.val < 2 ^ 255 :=
       lt_trans (ZMod.val_lt input_pkdX) (by norm_num [PALLAS_BASE_CARD])
-    have hb3_val : input_b3.val = bitrange input_pkdX.val 0 4 := by
-      rw [hb3_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 4) (by norm_num [PALLAS_BASE_CARD]))
-    have hc_val : input_c.val = bitrange input_pkdX.val 4 250 := by
-      rw [hc_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 4 250) (by norm_num [PALLAS_BASE_CARD]))
+    have hb3_eq : input_b3 = ((bitrange input_pkdX.val 0 4 : ℕ) : Fp) := by
+      rw [← hb3_val]; exact (ZMod.natCast_rightInverse input_b3).symm
+    have hc_eq : input_c = ((bitrange input_pkdX.val 4 250 : ℕ) : Fp) := by
+      rw [← hc_val]; exact (ZMod.natCast_rightInverse input_c).symm
+    have hd0_eq : input_d0 = ((bitrange input_pkdX.val 254 1 : ℕ) : Fp) := by
+      rw [← hd0_val]; exact (ZMod.natCast_rightInverse input_d0).symm
     have hd0cases := show bitrange input_pkdX.val 254 1 = 0 ∨ bitrange input_pkdX.val 254 1 = 1 from by
       have := bitrange_lt input_pkdX.val 254 1; omega
     refine ⟨?_, ?_, ?_, ?_⟩
@@ -324,9 +319,9 @@ def Assumptions (row : Row Fp) : Prop :=
 /-- The gate's payoff: `value` is a canonical 64-bit value with `d2`/`d3`/`e0` its slices. -/
 def Spec (row : Row Fp) : Prop :=
   row.value.val < 2 ^ 64 ∧
-    row.d2 = ((bitrange row.value.val 0 8 : ℕ) : Fp) ∧
-    row.d3 = ((bitrange row.value.val 8 50 : ℕ) : Fp) ∧
-    row.e0 = ((bitrange row.value.val 58 6 : ℕ) : Fp)
+    row.d2.val = bitrange row.value.val 0 8 ∧
+    row.d3.val = bitrange row.value.val 8 50 ∧
+    row.e0.val = bitrange row.value.val 58 6
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.d2 + row.d3 * Expression.const ((2 ^ 8 : ℕ) : Fp) +
@@ -354,18 +349,18 @@ def circuit : FormalAssertion Fp Row where
           ZMod.natCast_rightInverse input_e0]
       rw [hcast, ZMod.val_natCast_of_lt hbnd]
     refine ⟨by rw [hval]; omega, ?_, ?_, ?_⟩
-    · have hd2_eq : input_d2.val = bitrange input_value.val 0 8 := by
-        simp only [bitrange, pow_zero, Nat.div_one, hval]; omega
-      rw [← hd2_eq]; exact (ZMod.natCast_rightInverse input_d2).symm
-    · have hd3_eq : input_d3.val = bitrange input_value.val 8 50 := by
-        simp only [bitrange, hval]; omega
-      rw [← hd3_eq]; exact (ZMod.natCast_rightInverse input_d3).symm
-    · have he0_eq : input_e0.val = bitrange input_value.val 58 6 := by
-        simp only [bitrange, hval]; omega
-      rw [← he0_eq]; exact (ZMod.natCast_rightInverse input_e0).symm
+    · simp only [bitrange, pow_zero, Nat.div_one, hval]; omega
+    · simp only [bitrange, hval]; omega
+    · simp only [bitrange, hval]; omega
   completeness := by
     circuit_proof_start
-    obtain ⟨hval_lt, hd2_eq, hd3_eq, he0_eq⟩ := h_spec
+    obtain ⟨hval_lt, hd2_val, hd3_val, he0_val⟩ := h_spec
+    have hd2_eq : input_d2 = ((bitrange input_value.val 0 8 : ℕ) : Fp) := by
+      rw [← hd2_val]; exact (ZMod.natCast_rightInverse input_d2).symm
+    have hd3_eq : input_d3 = ((bitrange input_value.val 8 50 : ℕ) : Fp) := by
+      rw [← hd3_val]; exact (ZMod.natCast_rightInverse input_d3).symm
+    have he0_eq : input_e0 = ((bitrange input_value.val 58 6 : ℕ) : Fp) := by
+      rw [← he0_val]; exact (ZMod.natCast_rightInverse input_e0).symm
     have hdec : input_value.val = bitrange input_value.val 0 8
         + 2 ^ 8 * bitrange input_value.val 8 50 + 2 ^ 58 * bitrange input_value.val 58 6 := by
       simp only [bitrange, pow_zero, Nat.div_one]; omega
@@ -401,9 +396,9 @@ def Assumptions (row : Row Fp) : Prop :=
 
 /-- The gate's payoff: `e1`/`f`/`g0` are the canonical bit slices of `rho`. -/
 def Spec (row : Row Fp) : Prop :=
-  row.e1 = ((bitrange row.rho.val 0 4 : ℕ) : Fp) ∧
-    row.f = ((bitrange row.rho.val 4 250 : ℕ) : Fp) ∧
-    row.g0 = ((bitrange row.rho.val 254 1 : ℕ) : Fp) ∧
+  row.e1.val = bitrange row.rho.val 0 4 ∧
+    row.f.val = bitrange row.rho.val 4 250 ∧
+    row.g0.val = bitrange row.rho.val 254 1 ∧
     (row.g0 = 1 → row.z14E1F' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
@@ -465,28 +460,24 @@ def circuit : FormalAssertion Fp Row where
       have h1 : input_f.val = bitrange (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val 4 250 := by
         simp only [bitrange, hlo_val]; omega
       rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 4 + 250 ≤ 254)]
-    refine ⟨?_, ?_, ?_, ?_⟩
-    · rw [← he1_eq]; exact (ZMod.natCast_rightInverse input_e1).symm
-    · rw [← hf_eq]; exact (ZMod.natCast_rightInverse input_f).symm
-    · rw [← hg0_eq]; exact (ZMod.natCast_rightInverse input_g0).symm
-    · intro h1
+    exact ⟨he1_eq, hf_eq, hg0_eq, fun h1 => by
       rcases mul_eq_zero.mp hg2 with h | h
       · exact absurd (h1 ▸ h) one_ne_zero
-      · exact h
+      · exact h⟩
   completeness := by
     circuit_proof_start
     obtain ⟨_, hf_lt, he1_lt, he1fP, hz13F, _⟩ := h_assumptions
-    obtain ⟨he1_eq, hf_eq, hg0_eq, hzeZero⟩ := h_spec
+    obtain ⟨he1_val, hf_val, hg0_val, hzeZero⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hrhoX : input_rho.val < 2 ^ 255 :=
       lt_trans (ZMod.val_lt input_rho) (by norm_num [PALLAS_BASE_CARD])
-    have he1_val : input_e1.val = bitrange input_rho.val 0 4 := by
-      rw [he1_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 4) (by norm_num [PALLAS_BASE_CARD]))
-    have hf_val : input_f.val = bitrange input_rho.val 4 250 := by
-      rw [hf_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 4 250) (by norm_num [PALLAS_BASE_CARD]))
+    have he1_eq : input_e1 = ((bitrange input_rho.val 0 4 : ℕ) : Fp) := by
+      rw [← he1_val]; exact (ZMod.natCast_rightInverse input_e1).symm
+    have hf_eq : input_f = ((bitrange input_rho.val 4 250 : ℕ) : Fp) := by
+      rw [← hf_val]; exact (ZMod.natCast_rightInverse input_f).symm
+    have hg0_eq : input_g0 = ((bitrange input_rho.val 254 1 : ℕ) : Fp) := by
+      rw [← hg0_val]; exact (ZMod.natCast_rightInverse input_g0).symm
     have hg0cases := show bitrange input_rho.val 254 1 = 0 ∨ bitrange input_rho.val 254 1 = 1 from by
       have := bitrange_lt input_rho.val 254 1; omega
     refine ⟨?_, ?_, ?_, ?_⟩
@@ -540,10 +531,10 @@ def Assumptions (row : Row Fp) : Prop :=
 
 /-- The gate's payoff: `g1`/`g2`/`h0`/`h1` are the canonical bit slices of `psi`. -/
 def Spec (row : Row Fp) : Prop :=
-  row.g1 = ((bitrange row.psi.val 0 9 : ℕ) : Fp) ∧
-    row.g2 = ((bitrange row.psi.val 9 240 : ℕ) : Fp) ∧
-    row.h0 = ((bitrange row.psi.val 249 5 : ℕ) : Fp) ∧
-    row.h1 = ((bitrange row.psi.val 254 1 : ℕ) : Fp) ∧
+  row.g1.val = bitrange row.psi.val 0 9 ∧
+    row.g2.val = bitrange row.psi.val 9 240 ∧
+    row.h0.val = bitrange row.psi.val 249 5 ∧
+    row.h1.val = bitrange row.psi.val 254 1 ∧
     (row.h1 = 1 → row.z13G1G2' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
@@ -639,29 +630,26 @@ def circuit : FormalAssertion Fp Row where
       rw [h1, hin_eq]
       have : bitrange input_psi.val 0 249 = input_psi.val % 2 ^ 249 := by simp [bitrange]
       rw [this, bitrange_mod (by norm_num : 9 + 240 ≤ 249)]
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
-    · rw [← hg1_eq]; exact (ZMod.natCast_rightInverse input_g1).symm
-    · rw [← hg2_eq]; exact (ZMod.natCast_rightInverse input_g2).symm
-    · rw [← hh0_eq]; exact (ZMod.natCast_rightInverse input_h0).symm
-    · rw [← hh1_eq]; exact (ZMod.natCast_rightInverse input_h1).symm
-    · intro h1
+    exact ⟨hg1_eq, hg2_eq, hh0_eq, hh1_eq, fun h1 => by
       rcases mul_eq_zero.mp hg_z13p with h | h
       · exact absurd (h1 ▸ h) one_ne_zero
-      · exact h
+      · exact h⟩
   completeness := by
     circuit_proof_start
     obtain ⟨_, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, _⟩ := h_assumptions
-    obtain ⟨hg1_eq, hg2_eq, hh0_eq, hh1_eq, hzgZero⟩ := h_spec
+    obtain ⟨hg1_val, hg2_val, hh0_val, hh1_val, hzgZero⟩ := h_spec
     have hp := pallasBaseCard_eq
     have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
     have hpsiX : input_psi.val < 2 ^ 255 :=
       lt_trans (ZMod.val_lt input_psi) (by norm_num [PALLAS_BASE_CARD])
-    have hg1_val : input_g1.val = bitrange input_psi.val 0 9 := by
-      rw [hg1_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 9) (by norm_num [PALLAS_BASE_CARD]))
-    have hg2_val : input_g2.val = bitrange input_psi.val 9 240 := by
-      rw [hg2_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 9 240) (by norm_num [PALLAS_BASE_CARD]))
+    have hg1_eq : input_g1 = ((bitrange input_psi.val 0 9 : ℕ) : Fp) := by
+      rw [← hg1_val]; exact (ZMod.natCast_rightInverse input_g1).symm
+    have hg2_eq : input_g2 = ((bitrange input_psi.val 9 240 : ℕ) : Fp) := by
+      rw [← hg2_val]; exact (ZMod.natCast_rightInverse input_g2).symm
+    have hh0_eq : input_h0 = ((bitrange input_psi.val 249 5 : ℕ) : Fp) := by
+      rw [← hh0_val]; exact (ZMod.natCast_rightInverse input_h0).symm
+    have hh1_eq : input_h1 = ((bitrange input_psi.val 254 1 : ℕ) : Fp) := by
+      rw [← hh1_val]; exact (ZMod.natCast_rightInverse input_h1).symm
     -- inner limb is the low 249 bits
     have hin_eq : input_g1.val + input_g2.val * 2 ^ 9 = bitrange input_psi.val 0 249 := by
       rw [hg1_val, hg2_val]; have := bitrange_add input_psi.val 0 9 240; norm_num at this; omega
@@ -746,10 +734,10 @@ def Assumptions (row : Row Fp) : Prop :=
 canonical bit slices of `y` (`j`/`k0`/`k2`/`k3`). -/
 def Spec (row : Row Fp) : Prop :=
   IsLowBit row.y row.lsb ∧
-    row.j = ((bitrange row.y.val 0 250 : ℕ) : Fp) ∧
-    row.k0 = ((bitrange row.y.val 1 9 : ℕ) : Fp) ∧
-    row.k2 = ((bitrange row.y.val 250 4 : ℕ) : Fp) ∧
-    row.k3 = ((bitrange row.y.val 254 1 : ℕ) : Fp) ∧
+    row.j.val = bitrange row.y.val 0 250 ∧
+    row.k0.val = bitrange row.y.val 1 9 ∧
+    row.k2.val = bitrange row.y.val 250 4 ∧
+    row.k3.val = bitrange row.y.val 254 1 ∧
     (row.k3 = 1 → row.z13J' = 0)
 
 def main (row : Var Row Fp) : Circuit Fp Unit := do
@@ -838,29 +826,30 @@ def circuit : FormalAssertion Fp Row where
       have hbr : bitrange input_y.val 1 9 = input_j.val / 2 % 2 ^ 9 := by
         rw [hj250, ← bitrange_mod (show (1 : ℕ) + 9 ≤ 250 from by norm_num)]; simp [bitrange]
       rw [hbr]; omega
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
-    · -- `lsb` is the low bit of `y`
-      rw [isLowBit_iff_mod_two, ← ZMod.natCast_rightInverse input_lsb, hlsb_val, hj_val]
-      congr 1
-      rw [show bitrange input_y.val 0 250 = input_y.val % 2 ^ 250 from by simp [bitrange]]
-      exact Nat.mod_mod_of_dvd _ (by norm_num)
-    · rw [← hj_val]; exact (ZMod.natCast_rightInverse input_j).symm
-    · rw [← hk0_val]; exact (ZMod.natCast_rightInverse input_k0).symm
-    · rw [← hk2_val]; exact (ZMod.natCast_rightInverse input_k2).symm
-    · rw [← hk3_eq]; exact (ZMod.natCast_rightInverse input_k3).symm
-    · intro h1
+    refine ⟨?_, hj_val, hk0_val, hk2_val, hk3_eq, fun h1 => by
       rcases mul_eq_zero.mp hg3 with h | h
       · exact absurd (h1 ▸ h) one_ne_zero
-      · exact h
+      · exact h⟩
+    -- `lsb` is the low bit of `y`
+    rw [isLowBit_iff_mod_two, ← ZMod.natCast_rightInverse input_lsb, hlsb_val, hj_val]
+    congr 1
+    rw [show bitrange input_y.val 0 250 = input_y.val % 2 ^ 250 from by simp [bitrange]]
+    exact Nat.mod_mod_of_dvd _ (by norm_num)
   completeness := by
     circuit_proof_start [Ecc.tP]
     obtain ⟨hlsb_bool, hj_lt, hk0_lt, hk2_lt, hj', hz1J, hz13J, hzjDec⟩ := h_assumptions
-    obtain ⟨hlowbit, hj_eq, hk0_eq, hk2_eq, hk3_eq, hzjZero⟩ := h_spec
+    obtain ⟨hlowbit, hj_val, hk0_val, hk2_val, hk3_val, hzjZero⟩ := h_spec
     have hyval : input_y.val < PALLAS_BASE_CARD := ZMod.val_lt input_y
     have hyval255 : input_y.val < 2 ^ 255 := lt_trans hyval (by norm_num [PALLAS_BASE_CARD])
-    have hjval : input_j.val = bitrange input_y.val 0 250 := by
-      rw [hj_eq]
-      exact ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 250) (by norm_num [PALLAS_BASE_CARD]))
+    have hj_eq : input_j = ((bitrange input_y.val 0 250 : ℕ) : Fp) := by
+      rw [← hj_val]; exact (ZMod.natCast_rightInverse input_j).symm
+    have hk0_eq : input_k0 = ((bitrange input_y.val 1 9 : ℕ) : Fp) := by
+      rw [← hk0_val]; exact (ZMod.natCast_rightInverse input_k0).symm
+    have hk2_eq : input_k2 = ((bitrange input_y.val 250 4 : ℕ) : Fp) := by
+      rw [← hk2_val]; exact (ZMod.natCast_rightInverse input_k2).symm
+    have hk3_eq : input_k3 = ((bitrange input_y.val 254 1 : ℕ) : Fp) := by
+      rw [← hk3_val]; exact (ZMod.natCast_rightInverse input_k3).symm
+    have hjval : input_j.val = bitrange input_y.val 0 250 := hj_val
     have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Fp) := by
       rw [isLowBit_iff_mod_two] at hlowbit
       rw [hlowbit, show input_y.val % 2 = bitrange input_y.val 0 1 from by simp [bitrange]]

@@ -175,6 +175,12 @@ theorem bit_one_of_eq {b : Fp} {n s : ℕ} (heq : b = ((bitrange n s 1 : ℕ) : 
   · rw [heq, h] at h1; norm_num at h1
   · exact h
 
+/-- `.val`-form sibling of `bit_one_of_eq`: a one-bit slice whose cell equals `1` has
+`bitrange = 1`. (Lets canonicity consumers stay in the `.val = bitrange` spelling.) -/
+theorem bit_one_of_val_eq {b : Fp} {n s : ℕ} (heq : b.val = bitrange n s 1)
+    (h1 : b = 1) : bitrange n s 1 = 1 :=
+  bit_one_of_eq (by rw [← heq]; exact (ZMod.natCast_rightInverse b).symm) h1
+
 /-- Canonicity with the top bit set, in the form needed when the canonicity element spans
 the full low 254 bits (the `pk_d`/`rho` gates): `n < p` with bit 254 set forces the low 254
 bits below `t_P`. -/
@@ -219,6 +225,16 @@ theorem base_val_lt_tP {loF hiF : Fp} {n a b : ℕ}
         (by norm_num [PALLAS_BASE_CARD]))
   rw [hbase, ZMod.val_natCast_of_lt hlt]
   exact high_bit_low_lt_tP hn hhigh hab
+
+/-- `.val`-form sibling of `base_val_lt_tP`: the canonical low/next slices are given by
+their `.val = bitrange` cells (as produced by the converted canonicity gate specs). -/
+theorem base_val_lt_tP_val {loF hiF : Fp} {n a b : ℕ}
+    (hlo : loF.val = bitrange n 0 a)
+    (hhi : hiF.val = bitrange n a b)
+    (hn : n < PALLAS_BASE_CARD) (hhigh : bitrange n 254 1 = 1) (hab : a + b ≤ 254) :
+    (loF + ((2 ^ a : ℕ) : Fp) * hiF).val < tPNat :=
+  base_val_lt_tP (by rw [← hlo]; exact (ZMod.natCast_rightInverse loF).symm)
+    (by rw [← hhi]; exact (ZMod.natCast_rightInverse hiF).symm) hn hhigh hab
 
 /-- Dividing a `bitrange` of width `a+b` by `2^a` exposes the next `b` bits. -/
 theorem bitrange_div_pow (n s a b : ℕ) :
