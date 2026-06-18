@@ -10,4 +10,5 @@ import Clean.Orchard.Specs.CompElliptic.CoordinateSystem
 import Clean.Orchard.Specs.CompElliptic.CurveForms.ShortWeierstrass
 import Clean.Orchard.Specs.Pallas
 import Clean.Orchard.Specs.Sinsemilla
+import Clean.Orchard.Specs.Types
 import Clean.Orchard.Utilities
