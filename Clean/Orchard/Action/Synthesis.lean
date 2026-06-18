@@ -211,11 +211,54 @@ def IntermediateSpec (P : Params) (input : Value Input Fp) (_ : Unit)
 
 theorem intermediate_spec_of_constraints (P : Params) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main P) Assumptions (IntermediateSpec P) := by
-  -- All seven `IntermediateSpec` conjuncts are provable at the elaborator (each child Spec is
-  -- bridged to its public-output cell), but `circuit_proof_start`'s `simp at h_holds` step
-  -- currently `whnf`-expands the composed offsets past the kernel budget. TODO(perf): debug
-  -- where `circuit_proof_start` whnfs (trace the simp) and fix it, as was done for note_commit.
-  sorry
+  -- `circuit_proof_start` with the six non-recursive children. CalculateRoot.circuit is
+  -- deliberately omitted from the lemma list: its foldl-based output makes the tactic's
+  -- final goal-rewrite blow the kernel budget. The merkle child's spec is extracted at its
+  -- own hypothesis below instead.
+  circuit_proof_start [ValueCommit.circuit, DeriveNullifier.circuit, SpendAuthority.circuit,
+    AddressIntegrity.circuit, NoteCommit.circuit, Gate.circuit]
+  -- name composed-gadget facts via projections (discharging each child's Assumptions)
+  have hVCeq := h_holds.2.2.1
+  have hNFeq := h_holds.2.2.2.2.1
+  have hSAeq := h_holds.2.2.2.2.2.2.1
+  have hNColdEq := h_holds.2.2.2.2.2.2.2.2.2.1
+  have hNCnewEq := h_holds.2.2.2.2.2.2.2.2.2.2.2.1
+  have hVC := h_holds.2.1
+  have hNF := h_holds.2.2.2.1 (by exact h_assumptions.2.2.2.2.1)
+  have hSA := h_holds.2.2.2.2.2.1
+    (by simp only [SpendAuthority.Assumptions]
+        exact (Point.valid_iff input_akP).mpr h_assumptions.2.2.2.2.2)
+  have hAI := h_holds.2.2.2.2.2.2.2.1 (by exact h_assumptions.1)
+  have hNCold := h_holds.2.2.2.2.2.2.2.2.1 (by exact ⟨h_assumptions.1, h_assumptions.2.1⟩)
+  have hNCnew := h_holds.2.2.2.2.2.2.2.2.2.2.1
+    (by exact ⟨h_assumptions.2.2.1, h_assumptions.2.2.2.1⟩)
+  -- merkle child: omitted from the lemma list, so it is the raw (trivial-Assumptions) impl
+  have hMerkle := h_holds.1 trivial
+  have hGate := h_holds.2.2.2.2.2.2.2.2.2.2.2.2
+  -- Var-projection bridges: the leaf / ak fed as `input.cmOld.x` / `input.akP.x`
+  have hleaf : input_cmOld.x = Expression.eval env input_var.cmOld.x :=
+    (congrArg Point.x h_input.2.2.2.2.2.2.1).symm
+  have hakx : input_akP.x = Expression.eval env input_var.akP.x :=
+    (congrArg Point.x h_input.2.2.2.2.2.2.2.2.1).symm
+  dsimp only [IntermediateSpec]
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
+  · exact hVCeq ▸ hVC                                  -- value commitment
+  · exact hNFeq ▸ hNF                                  -- nullifier
+  · exact hSAeq ▸ hSA                                  -- spend authority
+  · rw [hakx]; exact hAI                               -- diversified address integrity
+  · exact hNColdEq ▸ hNCold                            -- old note commitment
+  · rw [← hNFeq]                                       -- new note commitment: bridge ρ = nf_old
+    exact ⟨_, hNCnewEq ▸ hNCnew⟩
+  · -- merkle root + q_orchard checks: reduce the gate record's projections, pin leaf/root
+    -- via cheap Eqs, then discharge the calculated-root gadget Spec
+    simp only [Orchard.Action.Gate.Spec] at hGate
+    refine ⟨_, _, hleaf.symm, ?_, hGate.1, hGate.2.1, hGate.2.2.1, hGate.2.2.2⟩
+    exact hMerkle
+  · -- channel-requirements side goals: merkle's (trivial `True` Assumptions) and the
+    -- nullifier-Poseidon's (discharged by `cm_old` validity)
+    refine ⟨Or.inr ?_, Or.inr ?_⟩
+    · trivial
+    · exact h_assumptions.2.2.2.2.1
 
 /-- Honest-prover preconditions: each composed gadget's `ProverAssumptions` instantiated at
 the honest witnesses. -/
