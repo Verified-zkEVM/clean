@@ -1086,8 +1086,6 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
         exact ⟨hpin.1, hpin.2.symm⟩
   exact hinv w (by omega) B hchain
 
-
-
 theorem soundness (G : Generators) (w : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G w) (fun _ _ => True)
       (Spec G w) := by

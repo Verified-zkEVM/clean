@@ -1631,7 +1631,6 @@ theorem pieceChunks_val_lt :
                     exact Nat.lt_of_succ_lt_succ hk)
       exact hbridge ▸ IH
 
-
 /-- `n % 2^(a+b)` splits into its low `a` bits plus the next `b` bits. -/
 private theorem mod_pow_split (n a b : ℕ) :
     n % 2 ^ (a + b) = n % 2 ^ a + 2 ^ a * (n / 2 ^ a % 2 ^ b) := by
@@ -1699,7 +1698,6 @@ theorem note_chunks_eq_of_cellFacts {cells : MessageCells Fp} {chunks : List ℕ
   · show cells.h = _
     rw [hh_dec, hh0, hh1]
     simp only [bitrange]; push_cast; ring
-
 
 private theorem val_bitrange_cast (n s l : ℕ) (hl : l ≤ 254) :
     ((bitrange n s l : ℕ) : Fp).val = bitrange n s l := by

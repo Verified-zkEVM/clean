@@ -40,7 +40,6 @@ def kNat (alpha : Fp) : ℕ := alpha.val + tQNat
 /-- MSB-first bits of the working scalar: `kBits alpha i = k_{254-i}`. -/
 def kBits (alpha : Fp) : BitsHint := fun i => (kNat alpha).testBit (254 - i)
 
-
 /-! ### Running-sum chains as natural numbers
 
 The circuit's running sum lives in `Fp`; the canonicity argument needs its exact

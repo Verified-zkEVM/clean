@@ -242,7 +242,6 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     · exact absurd (h1 ▸ h) one_ne_zero
     · exact h
 
-
 /-- A `.val` splits as low + `2^k` · high (over the natural-number value, cast to `Fp`). -/
 private theorem val_decomp (v k : ℕ) :
     ((v : ℕ) : Fp) = ((v % 2 ^ k : ℕ) : Fp) + ((2 ^ k : ℕ) : Fp) * ((v / 2 ^ k : ℕ) : Fp) := by

@@ -924,7 +924,6 @@ theorem soundness (n : ℕ) :
     rw [if_pos rfl] at hy
     exact Prod.ext hx (mul_left_cancel₀ Add.pallas_two_ne_zero hy)
 
-
 /-- The honest accumulator entering row `r` is `[accScalar m bits r] P`, by induction
 over `honest_step`'s output conclusions. -/
 private theorem accVal_eq_nsmul {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : ℕ → Bool)

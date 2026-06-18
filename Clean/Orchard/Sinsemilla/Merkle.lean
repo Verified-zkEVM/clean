@@ -327,7 +327,6 @@ private theorem natCast_inj_lt {a b : ℕ} (ha : a < 2 ^ 10) (hb : b < 2 ^ 10)
   have hv := congrArg ZMod.val h
   rwa [ZMod.val_natCast_of_lt (by omega), ZMod.val_natCast_of_lt (by omega)] at hv
 
-
 /-! ### Assembling the soundness-side encodings
 
 From the decomposition-gate equations, the pieces' chunk sums, and the range-checked
@@ -1031,7 +1030,6 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
   -- without reducing the output expression.
   refine Eq.mp (congrArg (MerkleRoot G Q 0 (f 0) 32) ?_) hconcl
   exact (bridge 31 (by omega) _ _ _ (by simp [hlen])).symm
-
 
 /-- The honest running node after `k` layers (`none` if any layer hash is undefined).
 Index-based to mirror the circuit's `Circuit.foldl`. -/
