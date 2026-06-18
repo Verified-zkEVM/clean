@@ -268,8 +268,8 @@ namespace PointMux
 
 structure Inputs (F : Type) where
   choice : F
-  left : Ecc.Point F
-  right : Ecc.Point F
+  left : Point F
+  right : Point F
 deriving ProvableStruct
 
 def xInput {K : Type} (input : Inputs K) : CondSwapInputs K where
@@ -287,17 +287,17 @@ def Assumptions (input : Inputs Fp) : Prop :=
   IsBool input.choice
 
 @[circuit_norm]
-def Spec (input : Inputs Fp) (output : Ecc.Point Fp) :
+def Spec (input : Inputs Fp) (output : Point Fp) :
     Prop :=
   output = if input.choice = 1 then input.right else input.left
 
 def main (input : Var Inputs Fp) :
-    Circuit Fp (Var Ecc.Point Fp) := do
+    Circuit Fp (Var Point Fp) := do
   let xOut ← CondSwap.circuit (xInput input)
   let yOut ← CondSwap.circuit (yInput input)
   return { x := xOut.aSwapped, y := yOut.aSwapped }
 
-instance elaborated : ElaboratedCircuit Fp Inputs Ecc.Point main := by
+instance elaborated : ElaboratedCircuit Fp Inputs Point main := by
   elaborate_circuit
 
 theorem soundness :
@@ -308,26 +308,24 @@ theorem soundness :
   have hXMux := hX h_assumptions
   have hYMux := hY h_assumptions
   have hLeftX : Expression.eval env input_var_left.x = input_left.x := by
-    have h := congrArg Ecc.Point.x h_input.2.1
+    have h := congrArg Point.x h_input.2.1
     simpa [circuit_norm] using h
   have hLeftY : Expression.eval env input_var_left.y = input_left.y := by
-    have h := congrArg Ecc.Point.y h_input.2.1
+    have h := congrArg Point.y h_input.2.1
     simpa [circuit_norm] using h
   have hRightX : Expression.eval env input_var_right.x = input_right.x := by
-    have h := congrArg Ecc.Point.x h_input.2.2
+    have h := congrArg Point.x h_input.2.2
     simpa [circuit_norm] using h
   have hRightY : Expression.eval env input_var_right.y = input_right.y := by
-    have h := congrArg Ecc.Point.y h_input.2.2
+    have h := congrArg Point.y h_input.2.2
     simpa [circuit_norm] using h
   by_cases hChoiceOne : input_choice = 1
   · simp [hChoiceOne, hLeftX, hLeftY, hRightX, hRightY] at hXMux hYMux ⊢
-    apply congrArg₂ Ecc.Point.mk
-    · exact hXMux.1
-    · exact hYMux.1
+    rw [Point.mk.injEq]
+    exact ⟨hXMux.1, hYMux.1⟩
   · simp [hChoiceOne, hLeftX, hLeftY, hRightX, hRightY] at hXMux hYMux ⊢
-    apply congrArg₂ Ecc.Point.mk
-    · exact hXMux.1
-    · exact hYMux.1
+    rw [Point.mk.injEq]
+    exact ⟨hXMux.1, hYMux.1⟩
 
 theorem completeness :
     Completeness Fp main Assumptions := by
@@ -337,7 +335,7 @@ theorem completeness :
   · exact Or.inl hChoiceZero
   · exact Or.inr hChoiceOne
 
-def circuit : FormalCircuit Fp Inputs Ecc.Point where
+def circuit : FormalCircuit Fp Inputs Point where
   main
   elaborated
   Assumptions
@@ -368,21 +366,21 @@ def Assumptions (input : Inputs Fp) : Prop :=
 
 open CompElliptic.Curves.Pasta in
 @[circuit_norm]
-def Spec (input : Inputs Fp) (output : Ecc.Point Fp) :
+def Spec (input : Inputs Fp) (output : Point Fp) :
     Prop :=
   PointMux.Spec input output ∧ Pallas.OnCurve output.coords
 
 def main (input : Var Inputs Fp) :
-    Circuit Fp (Var Ecc.Point Fp) := do
+    Circuit Fp (Var Point Fp) := do
   let output ← PointMux.circuit input
   return output
 
-instance elaborated : ElaboratedCircuit Fp Inputs Ecc.Point main := by
+instance elaborated : ElaboratedCircuit Fp Inputs Point main := by
   elaborate_circuit
 
 open CompElliptic.Curves.Pasta in
 theorem onCurve_of_spec_and_assumptions
-    {input : Inputs Fp} {output : Ecc.Point Fp}
+    {input : Inputs Fp} {output : Point Fp}
     (hAssumptions : Assumptions input)
     (hSpec : PointMux.Spec input output) :
     Pallas.OnCurve output.coords := by
@@ -416,7 +414,7 @@ theorem completeness :
   circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec]
   exact h_assumptions.1
 
-def circuit : FormalCircuit Fp Inputs Ecc.Point where
+def circuit : FormalCircuit Fp Inputs Point where
   main
   elaborated
   Assumptions

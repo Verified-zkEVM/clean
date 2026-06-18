@@ -62,7 +62,7 @@ def Assumptions (row : Input Fp) : Prop :=
     row.b2.val < 2 ^ 5 ∧
     row.c.val < 2 ^ 240 ∧
     row.d0.val < 2 ^ 9 ∧
-    row.aPrime = row.a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    row.aPrime = row.a + ((2 ^ 130 : ℕ) : Fp) - tP ∧
     -- `z13A` is the Sinsemilla running sum of `a` (a full, range-checked `K`-bit
     -- decomposition), so the exact running-sum value is soundly available.
     row.z13A = ((row.a.val / 2 ^ 130 : ℕ) : Fp) ∧
@@ -73,7 +73,7 @@ def Assumptions (row : Input Fp) : Prop :=
     (∃ lo : ℕ, lo < 2 ^ 130 ∧
       row.aPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13APrime) ∧
     (row.b1 = 1 → row.z13APrime = 0) ∧
-    row.b2CPrime = row.b2 + row.c * ((2 ^ 5 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
+    row.b2CPrime = row.b2 + row.c * ((2 ^ 5 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP ∧
     row.z13C = ((row.c.val / 2 ^ 130 : ℕ) : Fp) ∧
     (∃ lo : ℕ, lo < 2 ^ 140 ∧
       row.b2CPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14B2CPrime) ∧
@@ -106,12 +106,12 @@ def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertZero (row.b1 * row.b0)
   assertZero (row.b1 * row.z13A)
   assertZero (row.a + Expression.const ((2 ^ 130 : ℕ) : Fp) -
-    Expression.const Ecc.tP - row.aPrime)
+    Expression.const tP - row.aPrime)
   assertZero (row.b1 * row.z13APrime)
   assertZero (row.d1 * row.d0)
   assertZero (row.d1 * row.z13C)
   assertZero (row.b2 + row.c * Expression.const ((2 ^ 5 : ℕ) : Fp) +
-    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.b2CPrime)
+    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const tP - row.b2CPrime)
   assertZero (row.d1 * row.z14B2CPrime)
 
 def circuit : FormalAssertion Fp Input where
@@ -120,7 +120,7 @@ def circuit : FormalAssertion Fp Input where
   Assumptions
   Spec
   soundness := by
-    circuit_proof_start [Ecc.tP]
+    circuit_proof_start [tP]
     obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, haPrime, hz13A, hz13APrimeDec,
       _hb1z13APrimeA, hb2cP, hz13C, hz14Dec, _hd1z14A⟩ := h_assumptions
     obtain ⟨hb1, hd1, hbW, hdW, hak, hnk, hb1b0, hb1z13A, _haPrimeC, hb1z13APrime,

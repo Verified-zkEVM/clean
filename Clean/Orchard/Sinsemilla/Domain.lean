@@ -23,7 +23,6 @@ namespace Orchard.Sinsemilla
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
-open Orchard.Ecc (Point)
 open Orchard.Ecc.ScalarMul
 
 /-! ### `HashDomain::hash` -/
@@ -69,7 +68,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   obtain ⟨chunks, hPC, hZ1, hfun⟩ := h_holds
   refine ⟨chunks, hPC, ?_⟩
   intro B hB
-  exact congrArg Ecc.Point.x (hfun B hB)
+  exact congrArg Point.x (hfun B hB)
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
@@ -79,7 +78,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     Entry.ProverAssumptions, Entry.ProverSpec]
   refine ⟨h_assumptions, ?_⟩
   intro B hB
-  exact congrArg Ecc.Point.x ((h_env h_assumptions).2.2 B hB)
+  exact congrArg Point.x ((h_env h_assumptions).2.2 B hB)
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :

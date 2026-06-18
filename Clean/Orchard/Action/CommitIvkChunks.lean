@@ -13,7 +13,6 @@ pieces with word counts `25, 1, 24, 1`).
 
 namespace Orchard.Action.CommitIvk
 
-open Orchard.Ecc (Fp)
 open Orchard.Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
 open Orchard.Specs (K)
 open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod commitIvkMessage commitIvkChunks

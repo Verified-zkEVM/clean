@@ -251,21 +251,21 @@ theorem step_pinned (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
   subst hXP
   -- nonzero points have nonzero coordinate encodings
   have point_ne_zero : ∀ {P : SWPoint Pallas.curve}, P ≠ 0 →
-      ({ x := P.x, y := P.y } : Ecc.Point Fp) ≠ Ecc.Point.zero := by
+      ({ x := P.x, y := P.y } : Point Fp) ≠ Point.zero := by
     intro P hP h
     apply hP
     apply SWPoint.ext_pair
-    have hx := congrArg Ecc.Point.x h
-    have hy := congrArg Ecc.Point.y h
-    simp only [Ecc.Point.zero] at hx hy
+    have hx := congrArg Point.x h
+    have hy := congrArg Point.y h
+    simp only [Point.zero] at hx hy
     rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
       = ((0 : Fp), (0 : Fp)) from rfl, hx, hy]
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
   have hRadd := Ecc.AddIncomplete.outputValue_eq_add
     (input := { p := { x := A.x, y := A.y }, q := { x := (S m).x, y := (S m).y } })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS
-  rw [show (({ x := A.x, y := A.y } : Ecc.Point Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := (S m).x, y := (S m).y } : Ecc.Point Fp)).coords
+  rw [show (({ x := A.x, y := A.y } : Point Fp)).coords = (A.x, A.y) from rfl,
+    show (({ x := (S m).x, y := (S m).y } : Point Fp)).coords
       = ((S m).x, (S m).y) from rfl,
     Pallas.add_coords, ← hR_def] at hRadd
   set slope₁ : Fp := ((S m).y - A.y) * ((S m).x - A.x)⁻¹ with hslope₁
@@ -296,8 +296,8 @@ theorem step_pinned (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
   have hBadd := Ecc.AddIncomplete.outputValue_eq_add
     (input := { p := { x := A.x, y := A.y }, q := { x := R.x, y := R.y } })
     (point_ne_zero hA0) (point_ne_zero hR0) (fun h => hRxA h.symm)
-  rw [show (({ x := A.x, y := A.y } : Ecc.Point Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := R.x, y := R.y } : Ecc.Point Fp)).coords = (R.x, R.y) from rfl,
+  rw [show (({ x := A.x, y := A.y } : Point Fp)).coords = (A.x, A.y) from rfl,
+    show (({ x := R.x, y := R.y } : Point Fp)).coords = (R.x, R.y) from rfl,
     Pallas.add_coords, ← hB] at hBadd
   set slope₂ : Fp := (R.y - A.y) * (R.x - A.x)⁻¹ with hslope₂
   have hBx : slope₂ * slope₂ - A.x - R.x = B.x := by
@@ -366,21 +366,21 @@ theorem step_honest (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
     have := Option.some.inj hstep
     rw [← this, _root_.add_comm]
   have point_ne_zero : ∀ {P : SWPoint Pallas.curve}, P ≠ 0 →
-      ({ x := P.x, y := P.y } : Ecc.Point Fp) ≠ Ecc.Point.zero := by
+      ({ x := P.x, y := P.y } : Point Fp) ≠ Point.zero := by
     intro P hP h
     apply hP
     apply SWPoint.ext_pair
-    have hx := congrArg Ecc.Point.x h
-    have hy := congrArg Ecc.Point.y h
-    simp only [Ecc.Point.zero] at hx hy
+    have hx := congrArg Point.x h
+    have hy := congrArg Point.y h
+    simp only [Point.zero] at hx hy
     rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
       = ((0 : Fp), (0 : Fp)) from rfl, hx, hy]
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
   have hRadd := Ecc.AddIncomplete.outputValue_eq_add
     (input := { p := { x := A.x, y := A.y }, q := { x := (S m).x, y := (S m).y } })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS
-  rw [show (({ x := A.x, y := A.y } : Ecc.Point Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := (S m).x, y := (S m).y } : Ecc.Point Fp)).coords
+  rw [show (({ x := A.x, y := A.y } : Point Fp)).coords = (A.x, A.y) from rfl,
+    show (({ x := (S m).x, y := (S m).y } : Point Fp)).coords
       = ((S m).x, (S m).y) from rfl,
     Pallas.add_coords, ← hR_def] at hRadd
   set slope₁ : Fp := ((S m).y - A.y) * ((S m).x - A.x)⁻¹ with hslope₁
@@ -414,8 +414,8 @@ theorem step_honest (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
   have hBadd := Ecc.AddIncomplete.outputValue_eq_add
     (input := { p := { x := A.x, y := A.y }, q := { x := R.x, y := R.y } })
     (point_ne_zero hA0) (point_ne_zero hR0) (fun h => hRxA h.symm)
-  rw [show (({ x := A.x, y := A.y } : Ecc.Point Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := R.x, y := R.y } : Ecc.Point Fp)).coords = (R.x, R.y) from rfl,
+  rw [show (({ x := A.x, y := A.y } : Point Fp)).coords = (A.x, A.y) from rfl,
+    show (({ x := R.x, y := R.y } : Point Fp)).coords = (R.x, R.y) from rfl,
     Pallas.add_coords, ← hB] at hBadd
   set slope₂ : Fp := (R.y - A.y) * (R.x - A.x)⁻¹ with hslope₂
   have hBx : slope₂ * slope₂ - A.x - R.x = B.x := by
@@ -1207,13 +1207,13 @@ the dummy row carrying the witnessed final `y_a` in its `λ₁` cell), the `z_1`
 running-sum cells of the remaining pieces, and the full per-piece running sums `zs`
 (`hash_to_point` returns all running sums; `MerkleCRH`/`NoteCommit` read specific cells). -/
 structure Output (ns : List ℕ) (F : Type) where
-  point : Ecc.Point F
+  point : Point F
   first : DoubleAndAddRow F
   z1s : Vector F ns.length
   zs : HVec (zLengths ns) F
 
 instance (ns : List ℕ) : ProvableStruct (Output ns) where
-  components := [Ecc.Point, DoubleAndAddRow, fields ns.length, HVec (zLengths ns)]
+  components := [Point, DoubleAndAddRow, fields ns.length, HVec (zLengths ns)]
   toComponents := fun { point, first, z1s, zs } =>
     .cons point (.cons first (.cons z1s (.cons zs .nil)))
   fromComponents := fun (.cons point (.cons first (.cons z1s (.cons zs .nil)))) =>
@@ -1811,11 +1811,11 @@ piece. (The full per-piece running sums `zs` are exposed by `Chain.Output`; the
 note-commit `CommitDomain` reads them there. `MerkleCRH` only needs `z_1`, so its
 `hash_to_point` output stays `HVec`-free to keep its concrete-circuit proofs cheap.) -/
 structure Output (ns : List ℕ) (F : Type) where
-  point : Ecc.Point F
+  point : Point F
   z1s : Vector F ns.length
 
 instance (ns : List ℕ) : ProvableStruct (Output ns) where
-  components := [Ecc.Point, fields ns.length]
+  components := [Point, fields ns.length]
   toComponents := fun { point, z1s } => .cons point (.cons z1s .nil)
   fromComponents := fun (.cons point (.cons z1s .nil)) => { point, z1s }
 
@@ -1946,11 +1946,11 @@ namespace EntryZs
 /-- Outputs of `hash_to_point` on the note-commit path: the hash point and the full
 per-piece running sums. -/
 structure Output (ns : List ℕ) (F : Type) where
-  point : Ecc.Point F
+  point : Point F
   zs : HVec (Chain.zLengths ns) F
 
 instance (ns : List ℕ) : ProvableStruct (Output ns) where
-  components := [Ecc.Point, HVec (Chain.zLengths ns)]
+  components := [Point, HVec (Chain.zLengths ns)]
   toComponents := fun { point, zs } => .cons point (.cons zs .nil)
   fromComponents := fun (.cons point (.cons zs .nil)) => { point, zs }
 

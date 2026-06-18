@@ -22,7 +22,6 @@ namespace Orchard.Action.NoteCommit
 open Orchard.Specs (K)
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
-open Orchard.Ecc (Point)
 open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
@@ -579,7 +578,7 @@ def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
     env input.lsb + 2 * env k0 + (2 ^ 10 : Fp) * (let v : Fp := eval env input.y; ((bitrange v.val 10 240 : ℕ) : Fp))
   let jReads ← Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit j
   let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
-    (j + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
+    (j + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const tP)
   Gate.circuit
     { y := input.y, lsb := input.lsb, k0 := k0, k2 := k2, k3 := k3, j := j,
       z1J := jReads.z1, z13J := jReads.z13, j' := j'Zs.z0, z13J' := j'Zs.zLast }
@@ -676,7 +675,7 @@ theorem completeness :
     intro h1
     obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_y) (bit_one_of_eq hk3 h1)
     rw [htzLast, show K * 13 = 130 from rfl,
-      show jv + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP = jv + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
+      show jv + ((2 ^ 130 : ℕ) : Fp) + -tP = jv + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
       shifted_high_zero (by norm_num) (by norm_num) (by rw [hj_val]; exact hatp)]
     simp
 
@@ -1158,7 +1157,7 @@ deriving ProvableStruct
 
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let a'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
-    (input.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
+    (input.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const tP)
   Gate.circuit
     { gdX := input.gdX, b0 := input.b0, b1 := input.b1, a := input.a,
       a' := a'Zs.z0, z13A := input.z13A, z13A' := a'Zs.zLast }
@@ -1200,8 +1199,8 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     by linear_combination hdec + hz0⟩, ha_val, hb0_val, hb1_val, fun h1 => ?_⟩
   -- `b1 = 1` ⇒ `g_d` canonical ⇒ `a < t_P` ⇒ the honest tail `zLast` from `ProverSpec` vanishes.
   obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) (bit_one_of_val_eq hb1_val h1)
-  rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
-      = input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
+  rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -tP
+      = input_a + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) (by rw [ha_val]; exact hatp)]
   simp
 
@@ -1228,7 +1227,7 @@ deriving ProvableStruct
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let b3C'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
     (input.b3 + Expression.const ((2 ^ 4 : ℕ) : Fp) * input.c +
-      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
+      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const tP)
   Gate.circuit
     { pkdX := input.pkdX, b3 := input.b3, c := input.c, d0 := input.d0,
       b3C' := b3C'Zs.z0, z13C := input.z13C, z14B3C' := b3C'Zs.zLast }
@@ -1254,8 +1253,8 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
-      input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP =
-        input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP := by
+      input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - tP =
+        input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP := by
     ring
   obtain ⟨h1, h2, h3, _⟩ := h_gate ⟨hshift, element_eq⟩
   exact ⟨h1, h2, h3⟩
@@ -1276,8 +1275,8 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val hb3_val hc_val (ZMod.val_lt input_pkdX)
     (bit_one_of_val_eq hd0_val h1) (by norm_num)
   rw [hzLast,
-    show input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -Ecc.tP
-      = (input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP from by ring,
+    show input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -tP
+      = (input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c) + ((2 ^ 140 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 
@@ -1343,7 +1342,7 @@ deriving ProvableStruct
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let e1F'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 14
     (input.e1 + Expression.const ((2 ^ 4 : ℕ) : Fp) * input.f +
-      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
+      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const tP)
   Gate.circuit
     { rho := input.rho, e1 := input.e1, f := input.f, g0 := input.g0,
       e1F' := e1F'Zs.z0, z13F := input.z13F, z14E1F' := e1F'Zs.zLast }
@@ -1369,8 +1368,8 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
-      input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP =
-        input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP := by
+      input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) - tP =
+        input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP := by
     ring
   obtain ⟨h1, h2, h3, _⟩ := h_gate ⟨hshift, element_eq⟩
   exact ⟨h1, h2, h3⟩
@@ -1391,8 +1390,8 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val he1_val hf_val (ZMod.val_lt input_rho)
     (bit_one_of_val_eq hg0_val h1) (by norm_num)
   rw [hzLast,
-    show input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) + -Ecc.tP
-      = (input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP from by ring,
+    show input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) + -tP
+      = (input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f) + ((2 ^ 140 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 
@@ -1420,7 +1419,7 @@ deriving ProvableStruct
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   let g1G2'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
     (input.g1 + Expression.const ((2 ^ 9 : ℕ) : Fp) * input.g2 +
-      Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
+      Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const tP)
   Gate.circuit
     { psi := input.psi, h0 := input.h0, g1 := input.g1, h1 := input.h1, g2 := input.g2,
       g1G2' := g1G2'Zs.z0, z13G := input.z13G,
@@ -1449,8 +1448,8 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
-      input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP =
-        input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP := by
+      input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) - tP =
+        input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - tP := by
     ring
   obtain ⟨h1, h2, h3, h4, _⟩ := h_gate ⟨hshift, element_eq⟩
   exact ⟨h1, h2, h3, h4⟩
@@ -1471,8 +1470,8 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val hg1_val hg2_val (ZMod.val_lt input_psi)
     (bit_one_of_val_eq hh1_val h1) (by norm_num)
   rw [hzLast,
-    show input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP
-      = (input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP from by ring,
+    show input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) + -tP
+      = (input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2) + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 

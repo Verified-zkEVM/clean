@@ -6,7 +6,8 @@ import Clean.Orchard.Sinsemilla.Chip
 import Clean.Orchard.Sinsemilla.Domain
 import Clean.Orchard.Sinsemilla.HashToPoint
 import Clean.Orchard.Sinsemilla.Merkle
-import Clean.Orchard.Specs.Elliptic.CoordinateSystem
-import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
+import Clean.Orchard.Specs.CompElliptic.CoordinateSystem
+import Clean.Orchard.Specs.CompElliptic.CurveForms.ShortWeierstrass
+import Clean.Orchard.Specs.Pallas
 import Clean.Orchard.Specs.Sinsemilla
 import Clean.Orchard.Utilities

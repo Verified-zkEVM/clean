@@ -81,9 +81,9 @@ theorem isBool_of_isLowBit {y lsb : Fp} (h : IsLowBit y lsb) : IsBool lsb := by
   rw [isLowBit_iff_mod_two] at h
   rw [h]; exact nat_mod_two_isBool _
 
-/-- `Ecc.tP` as the cast of the natural number `tPNat`. -/
-theorem tP_eq : Ecc.tP = ((tPNat : ℕ) : Fp) := by
-  rw [Ecc.tP, tPNat]; norm_num
+/-- `tP` as the cast of the natural number `tPNat`. -/
+theorem tP_eq : tP = ((tPNat : ℕ) : Fp) := by
+  rw [tP, tPNat]; norm_num
 
 /-- A 1-bit field slice is Boolean. -/
 theorem bitrange_one_isBool (n start : ℕ) :
@@ -154,8 +154,8 @@ theorem val_limb2 {lo hi : Fp} (k : ℕ)
 /-- `.val` of the canonicity-shifted cell `a + 2^k - t_P` (no underflow / overflow). -/
 theorem val_shift {a : Fp} (k : ℕ) (htp : tPNat ≤ a.val + 2 ^ k)
     (hlt : a.val + 2 ^ k - tPNat < PALLAS_BASE_CARD) :
-    (a + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val = a.val + 2 ^ k - tPNat := by
-  have hcast : a + ((2 ^ k : ℕ) : Fp) - Ecc.tP = ((a.val + 2 ^ k - tPNat : ℕ) : Fp) := by
+    (a + ((2 ^ k : ℕ) : Fp) - tP).val = a.val + 2 ^ k - tPNat := by
+  have hcast : a + ((2 ^ k : ℕ) : Fp) - tP = ((a.val + 2 ^ k - tPNat : ℕ) : Fp) := by
     rw [tP_eq, Nat.cast_sub htp]
     push_cast
     rw [ZMod.natCast_rightInverse a]
@@ -166,12 +166,12 @@ theorem val_shift {a : Fp} (k : ℕ) (htp : tPNat ≤ a.val + 2 ^ k)
 canonicity gates (and their completeness, via `Telescoped.zLast_eq_zero`). -/
 theorem shifted_high_zero {lo : Fp} {k : ℕ} (hk : 130 ≤ k) (hk254 : k ≤ 254)
     (hlo : lo.val < tPNat) :
-    (lo + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val / 2 ^ k = 0 := by
+    (lo + ((2 ^ k : ℕ) : Fp) - tP).val / 2 ^ k = 0 := by
   have htp : tPNat < 2 ^ k :=
     lt_of_lt_of_le (by norm_num [tPNat] : tPNat < 2 ^ 130) (Nat.pow_le_pow_right (by norm_num) hk)
   have hp := pallasBaseCard_eq
   have hPk : (2 : ℕ) ^ k ≤ 2 ^ 254 := Nat.pow_le_pow_right (by norm_num) hk254
-  have hval : (lo + ((2 ^ k : ℕ) : Fp) - Ecc.tP).val = lo.val + 2 ^ k - tPNat :=
+  have hval : (lo + ((2 ^ k : ℕ) : Fp) - tP).val = lo.val + 2 ^ k - tPNat :=
     val_shift k (by omega) (by omega)
   rw [hval, Nat.div_eq_of_lt (by omega)]
 

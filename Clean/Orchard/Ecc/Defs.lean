@@ -1,32 +1,14 @@
 import Clean.Circuit
-import Clean.Orchard.Specs.Elliptic.Curves.Pasta
-import Clean.Orchard.Specs.Elliptic.CurveForms.ShortWeierstrass
+import Clean.Orchard.Specs.CompElliptic.CurveForms.ShortWeierstrass
+import Clean.Orchard.Specs.Pallas
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
-/-!
-# Orchard ECC definitions
-
-Shared Pallas field and point definitions used by the Orchard ECC circuits.
+/-
+Some definitions useful for circuits involving points
 -/
-
 namespace Orchard
-namespace Ecc
-
 variable {F : Type} [Field F]
-
-abbrev Fp := CompElliptic.Fields.Pasta.PallasBaseField
-abbrev Fq := CompElliptic.Fields.Pasta.PallasScalarField
-
-/-- Pallas base-field canonicity threshold used by Orchard range-check gates. -/
-def tP : Fp :=
-  (45560315531419706090280762371685220353 : Fp)
-
-def pallasB : F := 5
-
-structure Point (F : Type) where
-  x : F
-  y : F
 
 structure CurrentNext (F : Type) where
   curr : F
@@ -41,48 +23,9 @@ instance : ProvableType Point where
     y := elems[1]
   }
 
-namespace Point
-
 @[circuit_norm]
-theorem eval_eq (env : Environment F) (point : Point (Expression F)) :
-    eval env point = ({ x := env point.x, y := env point.y } : Point F) := by
+theorem Point.eval_eq (env : Environment F) (point : Point (Expression F)) :
+    eval env point = { x := env point.x, y := env point.y } := by
   with_unfolding_all rfl
-
-def zero : Point F := { x := 0, y := 0 }
-
-instance : Zero (Point F) := ⟨zero⟩
-
-def coords (point : Point F) : F × F :=
-  (point.x, point.y)
-
-def ofSW (point : CompElliptic.CurveForms.ShortWeierstrass.SWPoint
-    CompElliptic.Curves.Pasta.Pallas.curve) : Point Fp :=
-  { x := point.x, y := point.y }
-
-def neg [Neg F] (point : Point F) : Point F where
-  x := point.x
-  y := -point.y
-
-@[circuit_norm]
-def add (p q : Point Fp) : Point Fp :=
-  let coords := CompElliptic.CurveForms.ShortWeierstrass.add
-    CompElliptic.Curves.Pasta.Pallas.a p.coords q.coords
-  { x := coords.1, y := coords.2 }
-
-instance : Add (Point Fp) := ⟨add⟩
-
-@[circuit_norm]
-def nsmul (n : ℕ) (point : Point Fp) : Point Fp :=
-  let coords := CompElliptic.CurveForms.ShortWeierstrass.smul
-    CompElliptic.Curves.Pasta.Pallas.a n point.coords
-  { x := coords.1, y := coords.2 }
-
-instance : SMul ℕ (Point Fp) := ⟨nsmul⟩
-
-end Point
-
-end Ecc
-
-export Ecc (Fp Fq)
 
 end Orchard

@@ -32,7 +32,6 @@ namespace Orchard.Action.CommitIvk
 open Orchard.Specs (K)
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
-open Orchard.Ecc (Point)
 open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
 
@@ -157,10 +156,10 @@ def main (input : Var Input Fp) : Circuit Fp Unit := do
   -- a' = a + 2^130 - t_P, decomposed by the 13-word `CopyCheck` (`z₀ <== a'` wires the
   -- shift into the running-sum column, matching halo2's `witness_check(a_prime, …)`).
   let aPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 13
-    (input.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP)
+    (input.a + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const tP)
   let b2cPrimeZs ← Utilities.LookupRangeCheck.CopyCheck.circuit 14
     (input.b2 + Expression.const ((2 ^ 5 : ℕ) : Fp) * input.c +
-      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP)
+      Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const tP)
   -- The two canonicity guards `b_1 · z13_a_prime = 0` and `d_1 · z14_b2_c_prime = 0`.
   -- Halo2 enables these as part of the `q_commit_ivk` gate; the `Gate` assertion (below)
   -- re-checks them, but it also *assumes* the equivalent `b_1 = 1 → z13_a_prime = 0`
@@ -278,8 +277,8 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     rw [hcast, ZMod.val_natCast_of_lt
       (lt_trans (bitrange_lt _ 0 245) (by norm_num [PALLAS_BASE_CARD]))]
   -- `aPrime`/`b2cPrime` values, and the running-sum tail cells (13th of `a'`, 14th of `b2c'`)
-  set aP : Fp := input_a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP with haP_def
-  set bP : Fp := input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP with hbP_def
+  set aP : Fp := input_a + ((2 ^ 130 : ℕ) : Fp) - tP with haP_def
+  set bP : Fp := input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - tP with hbP_def
   have hcellA0 := hCopyA ⟨0, by norm_num⟩
   have hcellA13 := hCopyA ⟨13, by norm_num⟩
   have hcellB0 := hCopyB ⟨0, by norm_num⟩
@@ -288,8 +287,8 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     show (K : ℕ) * 14 = 140 from by norm_num [K], pow_zero, Nat.div_one]
     at hcellA0 hcellA13 hcellB0 hcellB14
   -- normalize the elements to the `aP`/`bP` spellings
-  rw [show input_a + ((2 ^ 130 : ℕ) : Fp) + -Ecc.tP = aP from by rw [haP_def]; ring] at hcellA0 hcellA13
-  rw [show input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -Ecc.tP = bP from by
+  rw [show input_a + ((2 ^ 130 : ℕ) : Fp) + -tP = aP from by rw [haP_def]; ring] at hcellA0 hcellA13
+  rw [show input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -tP = bP from by
     rw [hbP_def]; ring] at hcellB0 hcellB14
   -- `b_1 = 1 → a'.val / 2^130 = 0`
   have hImplA : input_b1 = 1 → ((input_a.val / 2 ^ 130 : ℕ) : Fp) = 0 ∧

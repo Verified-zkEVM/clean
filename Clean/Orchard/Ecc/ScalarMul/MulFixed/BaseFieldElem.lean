@@ -47,7 +47,7 @@ def z84AlphaCheck {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 4] (row : Input K)
 
 def alpha0PrimeCheck (row : Input (Expression Fp)) : Expression Fp :=
   row.alpha0Prime - (alpha0 row + Expression.const ((2 ^ 130 : ℕ) : Fp) -
-    Expression.const Ecc.tP)
+    Expression.const tP)
 
 def alpha0Hi120 {K : Type} [Sub K] [Mul K] [OfNat K (2 ^ 120)] (row : Input K) : K :=
   row.z44Alpha - row.z84Alpha * OfNat.ofNat (2 ^ 120)
@@ -60,7 +60,7 @@ def IsAlpha1 (alpha1 : Fp) : Prop :=
 
 def DecomposesBaseFieldElem (row : Input Fp) : Prop :=
   row.z84Alpha = row.alpha1 + row.alpha2 * 4 ∧
-    row.alpha0Prime = alpha0 row + OfNat.ofNat (2 ^ 130) - Ecc.tP
+    row.alpha0Prime = alpha0 row + OfNat.ofNat (2 ^ 130) - tP
 
 def CanonicalHighBit (row : Input Fp) : Prop :=
   row.alpha2 = 1 →
@@ -87,7 +87,7 @@ def circuit : FormalAssertion Fp Input where
   soundness := by
     circuit_proof_start [main, Spec, IsAlpha1, DecomposesBaseFieldElem,
       CanonicalHighBit, alpha0, alpha1RangeCheck, z84AlphaCheck, alpha0PrimeCheck,
-      alpha0Hi120, a43, Ecc.tP]
+      alpha0Hi120, a43, tP]
     rcases h_holds with ⟨hAlpha21, hAlpha2Hi, hAlpha2A43, hAlpha2Z13, hAlpha1Range,
       hAlpha2Bool, hZ84, hAlpha0Prime⟩
     refine ⟨?_, ?_, ?_, ?_⟩
@@ -123,7 +123,7 @@ def circuit : FormalAssertion Fp Input where
   completeness := by
     circuit_proof_start [main, Spec, IsAlpha1, DecomposesBaseFieldElem,
       CanonicalHighBit, alpha0, alpha1RangeCheck, z84AlphaCheck, alpha0PrimeCheck,
-      alpha0Hi120, a43, Ecc.tP]
+      alpha0Hi120, a43, tP]
     rcases h_spec with ⟨hAlpha1, hAlpha2, ⟨hZ84, hAlpha0Prime⟩, hCanon⟩
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · rcases hAlpha2 with h0 | h1
@@ -1446,7 +1446,7 @@ private theorem honest_canon_spec {row : Input Fp} {α : Fp}
     unfold alpha0
     rw [ha, hz84, show (OfNat.ofNat (2 ^ 252) : Fp) = (2 : Fp) ^ 252 from by norm_num,
       show (OfNat.ofNat (2 ^ 130) : Fp) = (2 : Fp) ^ 130 from by norm_num]
-    push_cast [Ecc.tP, tPNat]
+    push_cast [tP, tPNat]
     ring
   · -- CanonicalHighBit: the `α2 = 1` branch
     intro hα2eq
@@ -1639,7 +1639,7 @@ theorem soundness (B : MulFixed.FixedBase) :
         telescope13_eq hz0c he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
       have hfield : (S : Fp) = (α0 : Fp) + (2 : Fp) ^ 130 - (tPNat : Fp) := by
         rw [hSdef, ← hapS, hα0prime]
-        push_cast [Ecc.tP, tPNat]
+        push_cast [tP, tPNat]
         ring
       have hα0tp : α0 < tPNat := alpha0_lt_tp hSlt hα0lt132 hfield
       rw [hV254]; omega

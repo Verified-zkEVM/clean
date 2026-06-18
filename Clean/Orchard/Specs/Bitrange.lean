@@ -1,5 +1,5 @@
 import Mathlib.Tactic
-import Clean.Orchard.Specs.Elliptic.Fields.Pasta
+import Clean.Orchard.Specs.CompElliptic.Fields.Pasta
 
 open CompElliptic.Fields.Pasta (Fp)
 

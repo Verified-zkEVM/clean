@@ -1,32 +1,25 @@
 import Clean.Orchard.Ecc.Defs
 import Mathlib.Tactic
 
-open CompElliptic.Curves.Pasta.Pallas CompElliptic.CurveForms
+open CompElliptic.Curves.Pasta CompElliptic.CurveForms
 
-namespace Orchard.Ecc
-
-namespace Point
-
-theorem ext_coords {F : Type} {p q : Point F} (h : p.coords = q.coords) : p = q := by
-  rcases p with ⟨px, py⟩
-  rcases q with ⟨qx, qy⟩
-  simpa [Point.coords, Prod.ext_iff, Point.mk.injEq] using h
+namespace Orchard.Point
 
 lemma neg_coords (point : Point Fp) :
     point.neg.coords = ShortWeierstrass.neg point.coords := by
-  simp only [Point.neg, Point.coords, ShortWeierstrass.neg]
+  simp only [neg, Point.coords, ShortWeierstrass.neg]
 
-theorem valid_neg {point : Point Fp} (h : Valid point.coords) :
-    Valid point.neg.coords := by
+theorem valid_neg {point : Point Fp} (h : Pallas.Valid point.coords) :
+    Pallas.Valid point.neg.coords := by
   rw [neg_coords]
   exact ShortWeierstrass.valid_neg h
 
 theorem not_onCurve_of_x_eq_zero (y : Fp) :
-    ¬ OnCurve ({ x := 0, y } : Point Fp).coords := by
+    ¬ Pallas.OnCurve ({ x := 0, y } : Point Fp).coords := by
   apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y
 
 theorem ne_zero_of_onCurve {point : Point Fp}
-  (hPoint : OnCurve point.coords) :
+  (hPoint : Pallas.OnCurve point.coords) :
     point ≠ zero := by
   rcases point with ⟨x, y⟩
   intro hIdentity
@@ -35,7 +28,7 @@ theorem ne_zero_of_onCurve {point : Point Fp}
   exact not_onCurve_of_x_eq_zero y hPoint
 
 theorem y_eq_zero_of_valid_of_x_eq_zero {point : Point Fp}
-  (hPoint : Valid point.coords) :
+  (hPoint : Pallas.Valid point.coords) :
     point.x = 0 → point.y = 0 := by
   rcases point with ⟨x, y⟩
   simp only [Point.coords] at *
@@ -46,18 +39,18 @@ theorem y_eq_zero_of_valid_of_x_eq_zero {point : Point Fp}
   · simp_all
 
 theorem y_ne_zero_of_valid_of_x_ne_zero {point : Point Fp}
-    (hPoint : Valid point.coords) (hx : point.x ≠ 0) :
+    (hPoint : Pallas.Valid point.coords) (hx : point.x ≠ 0) :
     point.y ≠ 0 := by
   rcases point with ⟨x, y⟩
   simp only [Point.coords] at *
   rintro rfl
   rcases hPoint with hCurve | hIdentity
-  · apply no_onCurve_y_zero x hCurve
+  · apply Pallas.no_onCurve_y_zero x hCurve
   · simp_all
 
-end Orchard.Ecc.Point
+end Point
 
-namespace Orchard.Ecc
+namespace Ecc
 
 /-! ### Pallas group order -/
 
@@ -72,10 +65,10 @@ scalar-multiplication circuit proofs; all consumers needing order facts derive t
 here (see `pallas_addOrderOf`).
 -/
 axiom pallas_natCard :
-    Nat.card (ShortWeierstrass.SWPoint curve) = PALLAS_SCALAR_CARD
+    Nat.card (ShortWeierstrass.SWPoint Pallas.curve) = PALLAS_SCALAR_CARD
 
 /-- Every non-identity Pallas point generates the full prime-order group. -/
-theorem pallas_addOrderOf {P : ShortWeierstrass.SWPoint curve} (h : P ≠ 0) :
+theorem pallas_addOrderOf {P : ShortWeierstrass.SWPoint Pallas.curve} (h : P ≠ 0) :
     addOrderOf P = PALLAS_SCALAR_CARD := by
   have hdvd := addOrderOf_dvd_natCard P
   rw [pallas_natCard] at hdvd
@@ -84,20 +77,20 @@ theorem pallas_addOrderOf {P : ShortWeierstrass.SWPoint curve} (h : P ≠ 0) :
   · exact absurd (AddMonoid.addOrderOf_eq_one_iff.mp h1) h
   · exact hq
 
-theorem pallas_nsmul_eq_zero_iff {P : ShortWeierstrass.SWPoint curve} (hP : P ≠ 0)
+theorem pallas_nsmul_eq_zero_iff {P : ShortWeierstrass.SWPoint Pallas.curve} (hP : P ≠ 0)
     (n : ℕ) : n • P = 0 ↔ PALLAS_SCALAR_CARD ∣ n := by
   rw [← pallas_addOrderOf hP, addOrderOf_dvd_iff_nsmul_eq_zero]
 
-theorem pallas_nsmul_ne_zero {P : ShortWeierstrass.SWPoint curve} (hP : P ≠ 0)
+theorem pallas_nsmul_ne_zero {P : ShortWeierstrass.SWPoint Pallas.curve} (hP : P ≠ 0)
     {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) : n • P ≠ 0 := by
   rw [Ne, pallas_nsmul_eq_zero_iff hP]
   intro hdvd
   have := Nat.le_of_dvd hn hdvd
   omega
 
-theorem pallas_nsmul_onCurve {P : ShortWeierstrass.SWPoint curve} (hP : P ≠ 0)
+theorem pallas_nsmul_onCurve {P : ShortWeierstrass.SWPoint Pallas.curve} (hP : P ≠ 0)
     {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
-    OnCurve ((n • P).x, (n • P).y) :=
+    Pallas.OnCurve ((n • P).x, (n • P).y) :=
   ShortWeierstrass.SWPoint.onCurve_of_ne_zero (pallas_nsmul_ne_zero hP hn hlt)
 
 /--
@@ -106,7 +99,7 @@ small positive multiples of a non-identity point have distinct `x`-coordinates, 
 equal `x` would force equal-or-opposite points and hence a relation `t ∓ s ≡ 0` modulo
 the (large) group order.
 -/
-theorem pallas_nsmul_x_ne {P : ShortWeierstrass.SWPoint curve} (hP : P ≠ 0)
+theorem pallas_nsmul_x_ne {P : ShortWeierstrass.SWPoint Pallas.curve} (hP : P ≠ 0)
     {s t : ℕ} (hs : 0 < s) (hst : s < t) (hsum : s + t < PALLAS_SCALAR_CARD) :
     (t • P).x ≠ (s • P).x := by
   have hs_ne : s • P ≠ 0 := pallas_nsmul_ne_zero hP hs (by omega)

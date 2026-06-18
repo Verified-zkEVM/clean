@@ -90,9 +90,9 @@ Pow5 review: <https://github.com/Verified-zkEVM/clean/pull/405#pullrequestreview
   gate `main` / assertion list unless the helper names a real Halo2 concept or is
   substantively reused.
 - Use the unqualified exported Orchard names, not `Ecc.`-qualified ones. `Ecc.Defs`
-  does `export Ecc (Fp Fq)` and defines `Ecc.Point`, and Orchard gadget files sit under
+  does `export Ecc (Fp Fq)` and defines `Point`, and Orchard gadget files sit under
   the `Orchard.Ecc.*` namespace, so write `Fp`, `Fq`, `Point`, `Add.circuit`,
-  `AddIncomplete.circuit` — never `Ecc.Fp`, `Ecc.Point`, `Ecc.Add.circuit`. (The sibling
+  `AddIncomplete.circuit` — never `Ecc.Fp`, `Point`, `Ecc.Add.circuit`. (The sibling
   `FullWidth`/`Short` files already do this; match them.)
 - Use Clean's existing top-level `IsBool` (from `Gadgets.Boolean`) and its lemmas, not a
   per-namespace re-definition. Do not redefine `IsBool`/`ternary` in a local `Defs` module

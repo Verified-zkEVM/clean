@@ -714,7 +714,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   intro B hB
   rw [hchunks] at hB
   rw [heo]
-  exact congrArg Ecc.Point.x (hfun B hB)
+  exact congrArg Point.x (hfun B hB)
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
@@ -773,7 +773,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   · exact hg.2.2.1
   · exact hg.2.2.2
   · intro B' hB'
-    refine congrArg Ecc.Point.x (hBfun B' ?_)
+    refine congrArg Point.x (hBfun B' ?_)
     show Specs.Sinsemilla.hashToSWPoint G.S Q
       (List.map (pieceWord (env.get i₀)) (List.range 25)
         ++ (List.map (pieceWord (env.get (i₀ + 1 + 1 + 1))) (List.range 2)

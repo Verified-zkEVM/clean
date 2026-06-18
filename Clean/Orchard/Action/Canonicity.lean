@@ -35,7 +35,7 @@ def Assumptions (row : Row Fp) : Prop :=
   IsBool row.b1 ∧
     row.a.val < 2 ^ 250 ∧
     row.b0.val < 2 ^ 4 ∧
-    row.a' = row.a + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    row.a' = row.a + ((2 ^ 130 : ℕ) : Fp) - tP ∧
     row.z13A = ((row.a.val / 2 ^ 130 : ℕ) : Fp) ∧
     -- `z13A'` is the *partial* (13-word) CopyCheck running sum of `a'`, which overflows
     -- `2^130`, so only the telescoped decomposition is soundly available.
@@ -52,7 +52,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.a + row.b0 * Expression.const ((2 ^ 250 : ℕ) : Fp) +
     row.b1 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.gdX)
   assertZero (row.a + Expression.const ((2 ^ 130 : ℕ) : Fp) -
-    Expression.const Ecc.tP - row.a')
+    Expression.const tP - row.a')
   assertZero (row.b1 * row.b0)
   assertZero (row.b1 * row.z13A)
   assertZero (row.b1 * row.z13A')
@@ -63,7 +63,7 @@ def circuit : FormalAssertion Fp Row where
   Assumptions
   Spec
   soundness := by
-    circuit_proof_start [Ecc.tP]
+    circuit_proof_start [tP]
     obtain ⟨hb1, ha_lt, hb0_lt, haPrime, hz13A, hzaDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2, hg3⟩ := h_holds
     have hp := pallasBaseCard_eq
@@ -185,7 +185,7 @@ def Assumptions (row : Row Fp) : Prop :=
   IsBool row.d0 ∧
     row.c.val < 2 ^ 250 ∧
     row.b3.val < 2 ^ 4 ∧
-    row.b3C' = row.b3 + row.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
+    row.b3C' = row.b3 + row.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP ∧
     row.z13C = ((row.c.val / 2 ^ 130 : ℕ) : Fp) ∧
     ∃ lo : ℕ, lo < 2 ^ 140 ∧ row.b3C' = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14B3C'
 
@@ -200,7 +200,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.b3 + row.c * Expression.const ((2 ^ 4 : ℕ) : Fp) +
     row.d0 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.pkdX)
   assertZero (row.b3 + row.c * Expression.const ((2 ^ 4 : ℕ) : Fp) +
-    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.b3C')
+    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const tP - row.b3C')
   assertZero (row.d0 * row.z13C)
   assertZero (row.d0 * row.z14B3C')
 
@@ -210,7 +210,7 @@ def circuit : FormalAssertion Fp Row where
   Assumptions
   Spec
   soundness := by
-    circuit_proof_start [Ecc.tP]
+    circuit_proof_start [tP]
     obtain ⟨hd0, hc_lt, hb3_lt, hb3cP, hz13C, hzbDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
     have hp := pallasBaseCard_eq
@@ -390,7 +390,7 @@ def Assumptions (row : Row Fp) : Prop :=
   IsBool row.g0 ∧
     row.f.val < 2 ^ 250 ∧
     row.e1.val < 2 ^ 4 ∧
-    row.e1F' = row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Ecc.tP ∧
+    row.e1F' = row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP ∧
     row.z13F = ((row.f.val / 2 ^ 130 : ℕ) : Fp) ∧
     ∃ lo : ℕ, lo < 2 ^ 140 ∧ row.e1F' = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * row.z14E1F'
 
@@ -405,7 +405,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.e1 + row.f * Expression.const ((2 ^ 4 : ℕ) : Fp) +
     row.g0 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.rho)
   assertZero (row.e1 + row.f * Expression.const ((2 ^ 4 : ℕ) : Fp) +
-    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const Ecc.tP - row.e1F')
+    Expression.const ((2 ^ 140 : ℕ) : Fp) - Expression.const tP - row.e1F')
   assertZero (row.g0 * row.z13F)
   assertZero (row.g0 * row.z14E1F')
 
@@ -415,7 +415,7 @@ def circuit : FormalAssertion Fp Row where
   Assumptions
   Spec
   soundness := by
-    circuit_proof_start [Ecc.tP]
+    circuit_proof_start [tP]
     obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hzeDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
     have hp := pallasBaseCard_eq
@@ -525,7 +525,7 @@ def Assumptions (row : Row Fp) : Prop :=
     row.g1.val < 2 ^ 9 ∧
     row.g2.val < 2 ^ 240 ∧
     row.h0.val < 2 ^ 5 ∧
-    row.g1G2' = row.g1 + row.g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    row.g1G2' = row.g1 + row.g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - tP ∧
     row.z13G = ((row.g1.val + row.g2.val * 2 ^ 9) / 2 ^ 129 : ℕ) ∧
     ∃ lo : ℕ, lo < 2 ^ 130 ∧ row.g1G2' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13G1G2'
 
@@ -542,7 +542,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
     row.h0 * Expression.const ((2 ^ 249 : ℕ) : Fp) +
     row.h1 * Expression.const ((2 ^ 254 : ℕ) : Fp) - row.psi)
   assertZero (row.g1 + row.g2 * Expression.const ((2 ^ 9 : ℕ) : Fp) +
-    Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const Ecc.tP - row.g1G2')
+    Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const tP - row.g1G2')
   assertZero (row.h1 * row.h0)
   assertZero (row.h1 * row.z13G)
   assertZero (row.h1 * row.z13G1G2')
@@ -553,7 +553,7 @@ def circuit : FormalAssertion Fp Row where
   Assumptions
   Spec
   soundness := by
-    circuit_proof_start [Ecc.tP]
+    circuit_proof_start [tP]
     obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hzgDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg_h0, hg_z13, hg_z13p⟩ := h_holds
     have hp := pallasBaseCard_eq
@@ -725,7 +725,7 @@ def Assumptions (row : Row Fp) : Prop :=
     row.j.val < 2 ^ 250 ∧
     row.k0.val < 2 ^ 9 ∧
     row.k2.val < 2 ^ 4 ∧
-    row.j' = row.j + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
+    row.j' = row.j + ((2 ^ 130 : ℕ) : Fp) - tP ∧
     row.z1J.val = row.j.val / 2 ^ 10 ∧
     row.z13J.val = row.j.val / 2 ^ 130 ∧
     ∃ lo : ℕ, lo < 2 ^ 130 ∧ row.j' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13J'
@@ -746,7 +746,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.y - (row.j + row.k2 * ((2 ^ 250 : ℕ) : Fp) +
     row.k3 * ((2 ^ 254 : ℕ) : Fp)))
   assertZero (row.j + Expression.const ((2 ^ 130 : ℕ) : Fp) -
-    Expression.const Ecc.tP - row.j')
+    Expression.const tP - row.j')
   assertZero (row.k3 * row.k2)
   assertZero (row.k3 * row.z13J)
   assertZero (row.k3 * row.z13J')
@@ -757,7 +757,7 @@ def circuit : FormalAssertion Fp Row where
   Assumptions
   Spec
   soundness := by
-    circuit_proof_start [Ecc.tP]
+    circuit_proof_start [tP]
     obtain ⟨hlsb_bool, hj_lt, hk0_lt, hk2_lt, hj', hz1J, hz13J, hzjDec⟩ := h_assumptions
     obtain ⟨hk3, hj_dec, hrec, _, hg1, hg2, hg3⟩ := h_holds
     have hp := pallasBaseCard_eq
@@ -836,7 +836,7 @@ def circuit : FormalAssertion Fp Row where
       show bitrange input_y.val 0 250 = input_y.val % 2 ^ 250 from by simp [bitrange]]
     exact Nat.mod_mod_of_dvd _ (by norm_num)
   completeness := by
-    circuit_proof_start [Ecc.tP]
+    circuit_proof_start [tP]
     obtain ⟨hlsb_bool, hj_lt, hk0_lt, hk2_lt, hj', hz1J, hz13J, hzjDec⟩ := h_assumptions
     obtain ⟨hlowbit, hj_val, hk0_val, hk2_val, hk3_val, hzjZero⟩ := h_spec
     have hyval : input_y.val < PALLAS_BASE_CARD := ZMod.val_lt input_y

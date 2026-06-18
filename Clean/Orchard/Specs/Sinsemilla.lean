@@ -1,5 +1,5 @@
-import Clean.Orchard.Ecc.Defs
-import Clean.Orchard.Specs.Elliptic.Curves.Pasta
+import Clean.Orchard.Specs.Pallas
+import Clean.Orchard.Specs.CompElliptic.Curves.Pasta
 import Clean.Orchard.Specs.Bitrange
 
 /-!
@@ -58,14 +58,14 @@ noncomputable def hashToSWPoint (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint 
 over the Pallas base field. The internal chain stays on `SWPoint` because its proofs use
 the curve membership carried by that type. -/
 noncomputable def hashToPoint (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
-    (chunks : List ℕ) : Option (Ecc.Point Fp) :=
-  (hashToSWPoint S Q chunks).map Ecc.Point.ofSW
+    (chunks : List ℕ) : Option (Point Fp) :=
+  (hashToSWPoint S Q chunks).map Point.ofSW
 
 theorem hashToPoint_eq_some_iff {S : ℕ → SWPoint Pallas.curve} {Q : SWPoint Pallas.curve}
-    {chunks : List ℕ} {B : Ecc.Point Fp} :
+    {chunks : List ℕ} {B : Point Fp} :
     hashToPoint S Q chunks = some B ↔
       ∃ B' : SWPoint Pallas.curve, hashToSWPoint S Q chunks = some B' ∧
-        Ecc.Point.ofSW B' = B := by
+        Point.ofSW B' = B := by
   unfold hashToPoint
   cases h : hashToSWPoint S Q chunks with
   | none =>
@@ -92,7 +92,7 @@ structure Generators where
 namespace Generators
 
 theorem S_onCurve (G : Generators) {k : ℕ} (hk : k < 2 ^ K) :
-    Pallas.OnCurve ((G.S k).x, (G.S k).y) :=
+    CompElliptic.Curves.Pasta.Pallas.OnCurve ((G.S k).x, (G.S k).y) :=
   SWPoint.onCurve_of_ne_zero (G.S_ne_zero k hk)
 
 end Generators
