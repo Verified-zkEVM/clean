@@ -67,13 +67,11 @@ Current Clean coverage:
 - `Clean.Orchard.Utilities.LookupRangeCheck.WitnessShort.taggedCircuit`:
   4/5-bit tagged `RangeConstrained::witness_short` path
 - `Clean.Orchard.Utilities.LookupRangeCheck.CopyCheck.circuit`: lookup-backed running-sum
-  copy/decomposition helper, with soundness and completeness proved
+  copy/decomposition helper
 - `Clean.Orchard.Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit`: projected
-  `z_0`/`z_last` wrapper exposing the sound telescoped decomposition used by canonicity
-  gates, with soundness and completeness proved
+  `z_0`/`z_last` wrapper exposing the telescoped decomposition used by canonicity gates
 - `Clean.Orchard.Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit`: full
-  25-word decomposition wrapper exposing exact `z_1`/`z_13` reads for y-canonicity,
-  with soundness and completeness proved
+  25-word decomposition wrapper exposing exact `z_1`/`z_13` reads for y-canonicity
 
 ### Scalar Multiplication
 
@@ -101,11 +99,10 @@ Current Clean coverage:
 - `Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete.Loop.circuit`:
   `GATE q_mul_3 == 1 checks`
 - `Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete.DoubleAndAdd.circuit`:
-  `incomplete.rs::Config::double_and_add` (`CircuitVersion::AnchoredBase`), fully
-  proven (soundness and completeness). Witness cells are created in the source's
-  assignment order: the three starting copies (`z`, `x_a`, `y_a`), then per loop row
-  `z, x_p, y_p, λ1, λ2, x_a(next)` exactly as `assign_advice`/`copy_advice` are
-  called, then the final `y_a`.
+  `incomplete.rs::Config::double_and_add` (`CircuitVersion::AnchoredBase`). Witness
+  cells are created in the source's assignment order: the three starting copies (`z`,
+  `x_a`, `y_a`), then per loop row `z, x_p, y_p, λ1, λ2, x_a(next)` exactly as
+  `assign_advice`/`copy_advice` are called, then the final `y_a`.
 - `Clean.Orchard.Ecc.ScalarMul.Mul.Overflow.circuit`: `GATE overflow checks`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.Coords.circuit`: helper for `coords_check`,
   without a `GATE` name
@@ -118,30 +115,27 @@ Current Clean coverage:
   `GATE Full-width fixed-base scalar mul`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth.circuit`: `FixedPoint::mul`
   (`mul_fixed/full_width.rs::Config::assign`), the full-width fixed-base scalar
-  multiplication entry circuit `[scalar] B`, with soundness and completeness proved
+  multiplication entry circuit `[scalar] B`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.Gate.circuit`:
   `GATE Canonicity checks`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.RunningSumMul.circuit`: the strict
   85-window running-sum decomposition, shared fixed-base windowed multiplication, and
-  final complete addition producing `[alpha] B` (`GeneralFormalCircuit.WithHint`,
-  soundness and completeness proved); exposes the running-sum cells `z_43`, `z_44`, `z_84`
-  that the canonicity check copies in
+  final complete addition producing `[alpha] B`; exposes the running-sum cells `z_43`,
+  `z_44`, `z_84` that the canonicity check copies in
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`:
   `FixedPointBaseField::mul` (`mul_fixed/base_field_elem.rs::Config::assign`), the
-  base-field-element fixed-base scalar multiplication entry circuit `[alpha] B`, with
-  soundness and completeness proved; composes `RunningSumMul` with the canonicity tail
-  (13-window lookup range check on `alpha_0 + 2^130 - t_p` and the `GATE Canonicity
-  checks` gate)
+  base-field-element fixed-base scalar multiplication entry circuit `[alpha] B`, composing
+  `RunningSumMul` with the canonicity tail (13-window lookup range check on
+  `alpha_0 + 2^130 - t_p` and the `GATE Canonicity checks` gate)
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.Gate.circuit`:
   `GATE Short fixed-base mul gate`
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.FixedBase`: value-level model of a short
   fixed base point with its 22-window tables, parameterizing the short entry circuit
 - `Clean.Orchard.Ecc.ScalarMul.MulFixed.Short.circuit`: `FixedPointShort::mul`
   (`mul_fixed/short.rs::Config::assign`), the signed short fixed-base scalar
-  multiplication entry circuit `[±magnitude] B`, with soundness and completeness proved;
-  composes the strict running-sum decomposition (`GATE range check` and
-  `GATE Running sum coordinates check` per window), incomplete and complete addition,
-  and the final conditional negation gate
+  multiplication entry circuit `[±magnitude] B`, composing the strict running-sum
+  decomposition (`GATE range check` and `GATE Running sum coordinates check` per window),
+  incomplete and complete addition, and the final conditional negation gate
 
 ### Poseidon
 
@@ -206,8 +200,7 @@ Current Clean coverage:
 - `Clean.Orchard.Action.ValueCommit.circuit`: `gadget.rs::value_commit_orchard`,
   the value-commitment entry circuit
   `cv = [v] ValueCommitV + [rcv] ValueCommitR`, composing the short and full-width
-  fixed-base mul entry circuits and complete addition, with soundness and completeness
-  proved
+  fixed-base mul entry circuits and complete addition
 - `Clean.Orchard.Action.Gate.circuit`: `GATE Orchard circuit checks`
 - `Clean.Orchard.Action.NoteCommit.DecomposeB.Gate.circuit`:
   `GATE NoteCommit MessagePiece b`
@@ -226,20 +219,20 @@ Current Clean coverage:
 - `Clean.Orchard.Action.NoteCommit.PsiCanonicity.Gate.circuit`: `GATE NoteCommit input psi`
 - `Clean.Orchard.Action.NoteCommit.YCanonicity.Gate.circuit`: `GATE y coordinate checks`
 - `Clean.Orchard.Action.NoteCommit.AssignMessagePieces.circuit`: source-shaped assignment of
-  the note-commit message cells, with soundness exporting range facts and completeness
-  proving the honest bit-slice facts
+  the note-commit message cells; the consumer-facing spec exports range facts, while the
+  prover spec records honest bit-slice facts
 - `Clean.Orchard.Action.NoteCommit.MessagePieceChecks.circuit`: source decomposition-gate
-  block for the five decomposed message pieces, with soundness and completeness proved
+  block for the five decomposed message pieces
 - `Clean.Orchard.Action.NoteCommit.Commit.circuit`: Sinsemilla
   `CommitDomain::commit` block specialized to note-commit message-piece sizes, using
   `CommitDomain.WithZs.circuit` so the subsequent canonicity checks can read the hash
   running sums
 - `Clean.Orchard.Action.NoteCommit.circuit`: `gadgets::note_commit` entry, implemented
-  with semantic specs; entry-level soundness is proved and completeness remains pending
+  with semantic specs; entry completeness remains pending
 - `Clean.Orchard.Action.CommitIvk.Gate.circuit`: `GATE CommitIvk canonicity check`
-- `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry — **fully proven**
-  (`soundness` + `completeness`, no `sorry`). Factored into proven `Commit` (witnessing +
-  `WithZs` hash) and `Canonicity` (CopyCheck decompositions + gate) subcircuits
+- `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry, factored into
+  `Commit` (witnessing + `WithZs` hash) and `Canonicity` (CopyCheck decompositions + gate)
+  subcircuits
 
 ## Known Non-Conformances
 
@@ -249,8 +242,8 @@ The plan requires Orchard circuits to use the concrete Orchard `Fp` circuit fiel
 Several modules still define helper functions and some assertions generically over
 `{F : Type} [Field F]` or generic semiring-like typeclass sets. These should be
 specialized or isolated so Orchard circuit packages themselves are Pallas-base circuits,
-and field facts needed by specs are proved for that concrete field instead of assumed by
-callers.
+and field facts needed by specs are established for that concrete field instead of
+assumed by callers.
 
 ### Scalar Multiplication Output Signatures
 
@@ -287,25 +280,22 @@ Implemented building blocks:
 - `chip/generator_table.rs` lookup table: `Sinsemilla.generatorTable` (the `2^K`-entry
   `(idx, x, y)` table over abstract `Specs.Sinsemilla.Generators`).
 - `hash_to_point.rs::hash_piece`: `Sinsemilla.HashPiece.circuit`
-  (`GeneralFormalCircuit.WithHint`, proven sound and complete for any word count):
-  running-sum decomposition with per-word generator lookups (including the derived
-  `y_p = Y_A/2 - λ₁(x_A - x_P)` lookup expression), in-piece `q_s2 = 1` gates, and the
-  accumulator `y` threaded as a prover hint, matching the source cell layout. The
-  value-level spec layer (`Specs.Sinsemilla`: incomplete `⸭`, `⊥`-propagating chain) is
-  the semantic anchor.
+  (`GeneralFormalCircuit.WithHint`): running-sum decomposition with per-word generator
+  lookups (including the derived `y_p = Y_A/2 - λ₁(x_A - x_P)` lookup expression),
+  in-piece `q_s2 = 1` gates, and the accumulator `y` threaded as a prover hint, matching
+  the source cell layout. The value-level spec layer (`Specs.Sinsemilla`: incomplete `⸭`,
+  `⊥`-propagating chain) is the semantic anchor.
 
 - `hash_to_point.rs::hash_all_pieces` + public-`Q` initialization:
-  `Sinsemilla.Entry.circuit` (`GeneralFormalCircuit.WithHint`, proven sound and
-  complete for any nonempty list of per-piece word counts). Pieces are chained by a
-  recursive bundled tower (`Sinsemilla.Chain.circuit`): each level emits the gate
-  completing its own piece's last double-and-add step against the next level's
-  exposed first row (`q_s2 = 0` between pieces, `q_s2 = 2` for the final gate whose
-  dummy row carries the witnessed final `y_a`), and the entry adds the constant
-  `x_Q` cell plus the `q_sinsemilla4` (`Initial y_Q`) gate. The `Spec` lands at
+  `Sinsemilla.Entry.circuit` (`GeneralFormalCircuit.WithHint`). Pieces are chained by
+  a recursive bundled tower (`Sinsemilla.Chain.circuit`): each level emits the gate
+  completing its own piece's last double-and-add step against the next level's exposed
+  first row (`q_s2 = 0` between pieces, `q_s2 = 2` for the final gate whose dummy row
+  carries the witnessed final `y_a`), and the entry adds the constant `x_Q` cell plus
+  the `q_sinsemilla4` (`Initial y_Q`) gate. The `Spec` lands at
   `Specs.Sinsemilla.hashToPoint` from the protocol-spec value layer.
 
-- `sinsemilla.rs` domain APIs (`Clean/Orchard/Sinsemilla/Domain.lean`, all proven
-  sound and complete):
+- `sinsemilla.rs` domain APIs (`Clean/Orchard/Sinsemilla/Domain.lean`):
   - `HashDomain::hash`: `Sinsemilla.HashDomain.circuit` (entry + `x`-extraction).
   - `CommitDomain::commit`: `Sinsemilla.CommitDomain.circuit`
     (`M.hash_to_point(msg) + [r] R` via the full-width fixed-base mul and complete
@@ -318,23 +308,20 @@ Implemented building blocks:
     (the bare `[r] R`, an alias of `MulFixed.FullWidth.circuit`).
 
 - `MerkleInstructions::hash_layer`: `Sinsemilla.Merkle.HashLayer.circuit`
-  (`Clean/Orchard/Sinsemilla/Merkle.lean`, proven sound and complete): witnesses the
-  three message pieces `a`/`b`/`c` and the 5-bit sub-pieces `b_1`/`b_2`
-  (range-checked), hashes via the `hash_to_point` entry, and ties the pieces to
-  `(l, left, right)` with the `q_decompose` gate reading the hash's own `z_1`
-  running-sum cells. Spec: the output is the `x`-coordinate of
+  (`Clean/Orchard/Sinsemilla/Merkle.lean`): witnesses the three message pieces
+  `a`/`b`/`c` and the 5-bit sub-pieces `b_1`/`b_2` (range-checked), hashes via the
+  `hash_to_point` entry, and ties the pieces to `(l, left, right)` with the
+  `q_decompose` gate reading the hash's own `z_1` running-sum cells. Spec: the output is
+  the `x`-coordinate of
   `SinsemillaHashToPoint(Q, merkleChunks l lv rv)` for 255-bit encodings `lv`, `rv`
   of the child nodes (non-canonical encodings allowed, as in the source).
 
 - `MerklePath::calculate_root`: `Sinsemilla.Merkle.CalculateRoot.circuit`
-  (`Clean/Orchard/Sinsemilla/Merkle.lean`, proven sound and complete): the
-  `MERKLE_DEPTH = 32` authentication-path fold, a `Circuit.foldl` over 32
-  `Sinsemilla.Merkle.Layer` sub-circuits (each composing `CondSwap.Swap.circuit` with
-  `Merkle.HashLayer.circuit`). `Spec` is the value-level 32-layer `MerkleCRH` fold from
-  the leaf (`MerkleRoot`); `ProverSpec` is the honest root (`honestNode`). The
-  kernel-heavy 32-fold proof relies on a `bridge` lemma so the non-opaque hash output
-  is never reduced (see `lean-perf-debugging` notes); the bundle passes `elaborated`
-  explicitly.
+  (`Clean/Orchard/Sinsemilla/Merkle.lean`): the `MERKLE_DEPTH = 32` authentication-path
+  fold, a `Circuit.foldl` over 32 `Sinsemilla.Merkle.Layer` sub-circuits (each composing
+  `CondSwap.Swap.circuit` with `Merkle.HashLayer.circuit`). `Spec` is the value-level
+  32-layer `MerkleCRH` fold from the leaf (`MerkleRoot`); `ProverSpec` is the honest root
+  (`honestNode`). The 32-fold bundle passes `elaborated` explicitly.
 
 Missing source-level APIs:
 
@@ -373,20 +360,18 @@ circuits that need running-sum cells.
 ### Orchard Entry APIs
 
 `value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`),
-`derive_nullifier` is implemented (`Gadget.DeriveNullifier.circuit`, soundness and
-completeness proved), and the `Circuit::synthesize` spend-authority block is implemented
-(`SpendAuthority.circuit`, soundness and completeness proved).
+`derive_nullifier` is implemented (`Gadget.DeriveNullifier.circuit`), and the
+`Circuit::synthesize` spend-authority block is implemented (`SpendAuthority.circuit`).
 
-`gadgets::commit_ivk` (`Action.CommitIvk.circuit`) is **fully proven** (soundness +
-completeness), via the message-piece bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`
-/ `honestChunks_eq_commitIvkChunks` and the generic shared running-sum theory in
+`gadgets::commit_ivk` (`Action.CommitIvk.circuit`) uses the message-piece bridge
+`pieceChunks_eq_commitIvkChunks_of_indexed_piece_values` /
+`honestChunks_eq_commitIvkChunks` and the generic shared running-sum theory in
 `Specs.Sinsemilla` (`sum_suffix_div`, `running_sum_telescope`) and `HashToPoint`
 (`piece_recombine`, `pieceChunks_honestChunks`, public `chain_eq_sum`).
 
 `gadgets::note_commit` (`Action.NoteCommit.circuit`) is implemented with semantic specs
 and source-shaped subcircuits for assignment, Sinsemilla commit with `zs`, message-piece
-checks, y-canonicity, and coordinate canonicity. Entry-level soundness is proved; entry
-completeness remains pending.
+checks, y-canonicity, and coordinate canonicity. Entry completeness remains pending.
 
 Missing source-level APIs:
 
@@ -407,8 +392,8 @@ These must compose source-conformant child circuits. In particular:
 
 Current Clean rows generally do not distinguish advice cells, fixed cells, selector
 cells, equality-enabled columns, column identity, or rotations such as current, next, and
-previous row queries. This is enough for arithmetic proof work, but not enough to
-reconstruct the Halo2 layout or pinned VK.
+previous row queries. This is enough for arithmetic reasoning, but not enough to reconstruct
+the Halo2 layout or pinned VK.
 
 The intended direction is not to add selectors as circuit inputs. Selectors are modeled
 by subcircuit calls. Fixed columns should remain Lean parameters to gate assertions.
