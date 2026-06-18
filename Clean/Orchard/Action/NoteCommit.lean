@@ -630,11 +630,8 @@ theorem completeness :
   set jv := env.get (i₀ + 2 + 2 + 1) with hjv
   -- `lsb` is the low bit of `y`; the support cells are the canonical bit slices.
   have hlsb : input_lsb = ((bitrange input_y.val 0 1 : ℕ) : Fp) := by
-    rw [h_assumptions]
-    have hbit : (if input_y.val.testBit 0 then (1 : ℕ) else 0) = bitrange input_y.val 0 1 := by
-      simp only [bitrange, pow_zero, Nat.div_one, pow_one, Nat.testBit_zero]
-      rcases Nat.mod_two_eq_zero_or_one input_y.val with h | h <;> simp [h]
-    rw [hbit]
+    rw [isLowBit_iff_mod_two.mp h_assumptions,
+      show bitrange input_y.val 0 1 = input_y.val % 2 from by simp [bitrange]]
   have htile : bitrange input_y.val 0 250
       = bitrange input_y.val 0 1 + 2 * bitrange input_y.val 1 9
         + 2 ^ 10 * bitrange input_y.val 10 240 := by
@@ -745,7 +742,7 @@ def MessageCellFacts (gd pkd : Point Fp) (value rho psi : Fp) (cells : MessageCe
   cells.h = cells.h0 + cells.h1 * 32
 
 /-- Bridge a `.val` bit-slice fact back to its `Fp`-cast form. -/
-private theorem cell_eq_of_val {cell : Fp} {m : ℕ} (h : cell.val = m) :
+theorem cell_eq_of_val {cell : Fp} {m : ℕ} (h : cell.val = m) :
     cell = (m : Fp) := by
   rw [← h, ZMod.natCast_zmod_val]
 
@@ -970,8 +967,10 @@ def ProverSpec (input : ProverValue Input Fp)
 
 /-- The honest 1-bit `bitrange` cast of `y` is its low (sign) bit. -/
 theorem isLowBit_bitrange (y : Fp) : IsLowBit y ((bitrange y.val 0 1 : ℕ) : Fp) := by
-  rw [isLowBit_iff_mod_two]
-  norm_num [bitrange]
+  unfold IsLowBit
+  rw [show bitrange y.val 0 1 = y.val % 2 from by simp [bitrange],
+    ZMod.val_natCast_of_lt (lt_trans (Nat.mod_lt _ (by norm_num))
+      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))]
 
 theorem soundness :
     GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True) Spec := by
@@ -1943,7 +1942,7 @@ private theorem z13G_tail_of_decompose_g {g g0 g1 g2 z13G : Fp}
     omega
   rw [hz13, hg_val, hdiv]
 
-private theorem valueCanonicity_assumptions_of_commit
+theorem valueCanonicity_assumptions_of_commit
     (O : Var Commit.Output Fp) (input_var : Var Input Fp) (cells : Var MessageCells Fp)
     (env : Environment Fp)
     (hd2 : (eval env cells).d2.val < 2 ^ 8)
@@ -1975,7 +1974,7 @@ private theorem valueCanonicity_assumptions_of_commit
       omega
     exact lt_trans hq (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
 
-private theorem psiCanonicity_assumptions_of_commit
+theorem psiCanonicity_assumptions_of_commit
     (O : Var Commit.Output Fp) (input_var : Var Input Fp) (cells : Var MessageCells Fp)
     (env : Environment Fp)
     (hh1_bool : IsBool (Expression.eval env cells.h1))
@@ -2320,15 +2319,109 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q) (ProverSpec G Q R) := by
-  -- Mirrors `soundness`: discharge each subcircuit's `ProverAssumptions` and read its
-  -- `ProverSpec` (`AssignMessagePieces` → `MessageCellFacts` incl. the two `IsLowBit` facts;
-  -- `Commit` → honest `ZsHonest`/hash; `MessagePieceChecks`/`YCanonicity`/canonicity gates as
-  -- in `soundness`), then assemble `ProverNoteCommitRelation`. The honest `IsLowBit` cells make
-  -- the `YCanonicity` `ProverAssumptions` dischargeable here.
-  circuit_proof_start [AssignMessagePieces.circuit, Commit.circuit, MessagePieceChecks.circuit,
-    GdCanonicity.circuit, PkdCanonicity.circuit, ValueCanonicity.circuit,
-    RhoCanonicity.circuit, PsiCanonicity.circuit]
-  sorry
+  -- Mirrors `soundness` (above). `AssignMessagePieces.ProverSpec` gives `MessageCellFacts`
+  -- directly (no gate-spec assembly); `Commit.ProverSpec` gives honest `ZsHonest` + hash. The
+  -- canonicity gate assumptions reuse the same `*_assumptions_of_commit` helpers, with the
+  -- honest running-sum cells from `zsHonest_cell` and the piece bounds from
+  -- `pieceBounds_of_cellFacts`; the relation closes via `honestChunks_eq_noteCommitChunks…`.
+  circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_env ⊢
+  obtain ⟨hAM, hCom, hMPC, hY1, hY2, hGd, hPkd, hVal, hRho, hPsi⟩ := h_env
+  set AM := AssignMessagePieces.circuit.output input_var i₀ with hAMdef
+  clear_value AM
+  set COut := (Commit.circuit G Q hQ R).output
+    { pieces := #v[AM.a, AM.b, AM.c, AM.d, AM.e, AM.f, AM.g, AM.h],
+      r := input_var.rcm }
+    (i₀ + ((AssignMessagePieces.circuit.toSubcircuit i₀ input_var).localLength + 0)) with hCOutdef
+  clear_value COut
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at hAM hCom
+  have hMCF : MessageCellFacts input.gd input.pkd input.value input.rho input.psi (eval env AM) := by
+    simpa [h_input, hAMdef, AssignMessagePieces.ProverSpec] using (hAM trivial).2
+  obtain ⟨-, -, hvalue, hHashEx⟩ := h_assumptions
+  have hPB := pieceBounds_of_cellFacts hMCF
+  have hPC : Chain.PieceChunks messagePieceRounds (messagePieces (eval env AM))
+      (Chain.honestChunks messagePieceRounds (messagePieces (eval env AM))) :=
+    Chain.pieceChunks_honestChunks _ _ hPB
+  have hHonestEq : Chain.honestChunks messagePieceRounds (messagePieces (eval env AM))
+      = noteCommitChunks input.gd.x.val (input.gd.y.val % 2) input.pkd.x.val (input.pkd.y.val % 2)
+        input.value.val input.rho.val input.psi.val :=
+    honestChunks_eq_noteCommitChunks_of_cellFacts hMCF hvalue
+  have ha_lt : (eval env AM).a.val < 2 ^ 250 := by
+    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨0, by decide⟩ hPC (by decide)
+    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hc_lt : (eval env AM).c.val < 2 ^ 250 := by
+    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨2, by decide⟩ hPC (by decide)
+    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hd_lt : (eval env AM).d.val < 2 ^ 60 := by
+    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨3, by decide⟩ hPC (by decide)
+    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hf_lt : (eval env AM).f.val < 2 ^ 250 := by
+    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨5, by decide⟩ hPC (by decide)
+    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hg_lt : (eval env AM).g.val < 2 ^ 250 := by
+    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨6, by decide⟩ hPC (by decide)
+    simpa [messagePieces, messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hComPS : (Commit.circuit G Q hQ R).ProverSpec
+      { pieces := #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+          (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h], r := input.rcm }
+      (eval env COut) env.hint := by
+    sorry
+  simp only [Commit.circuit, Commit.ProverSpec, CommitDomain.WithZs.ProverSpec] at hComPS
+  obtain ⟨hZsHonest, hHashHonest⟩ := hComPS
+  have hz13a : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨0, by decide⟩)[13] =
+      (((eval env AM).a.val / 2 ^ 130 : ℕ) : Fp) := by
+    have h := zsHonest_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      (eval env COut).zs ⟨0, by decide⟩ hZsHonest (r := 13) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz13c : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨2, by decide⟩)[13] =
+      (((eval env AM).c.val / 2 ^ 130 : ℕ) : Fp) := by
+    have h := zsHonest_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      (eval env COut).zs ⟨2, by decide⟩ hZsHonest (r := 13) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz1d : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨3, by decide⟩)[1] =
+      (((eval env AM).d.val / 2 ^ 10 : ℕ) : Fp) := by
+    have h := zsHonest_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      (eval env COut).zs ⟨3, by decide⟩ hZsHonest (r := 1) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz13f : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨5, by decide⟩)[13] =
+      (((eval env AM).f.val / 2 ^ 130 : ℕ) : Fp) := by
+    have h := zsHonest_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      (eval env COut).zs ⟨5, by decide⟩ hZsHonest (r := 13) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz1g : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[1] =
+      (((eval env AM).g.val / 2 ^ 10 : ℕ) : Fp) := by
+    have h := zsHonest_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      (eval env COut).zs ⟨6, by decide⟩ hZsHonest (r := 1) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz13g : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[13] =
+      (((eval env AM).g.val / 2 ^ 130 : ℕ) : Fp) := by
+    have h := zsHonest_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      (eval env COut).zs ⟨6, by decide⟩ hZsHonest (r := 13) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  refine ⟨?_, ?_⟩
+  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> sorry
+  · simp only [ProverSpec, ProverNoteCommitRelation]
+    intro B hBhash
+    have hHashB := hHashHonest B (by
+      show hashToPoint G.S Q
+        (Chain.honestChunks messagePieceRounds (messagePieces (eval env AM))) = some B
+      rw [hHonestEq]; exact hBhash)
+    have hCOutPoint : COut.point = (varFromOffset Point (i₀ + 28 + 1400) : Var Point Fp) := by
+      rw [hCOutdef]; rfl
+    rw [← hCOutPoint]
+    simpa [circuit_norm] using hHashB
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where

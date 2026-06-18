@@ -831,9 +831,9 @@ def circuit : FormalAssertion Fp Row where
       · exact absurd (h1 ▸ h) one_ne_zero
       · exact h⟩
     -- `lsb` is the low bit of `y`
-    rw [isLowBit_iff_mod_two, ← ZMod.natCast_rightInverse input_lsb, hlsb_val, hj_val]
-    congr 1
-    rw [show bitrange input_y.val 0 250 = input_y.val % 2 ^ 250 from by simp [bitrange]]
+    show input_lsb.val = input_y.val % 2
+    rw [hlsb_val, hj_val,
+      show bitrange input_y.val 0 250 = input_y.val % 2 ^ 250 from by simp [bitrange]]
     exact Nat.mod_mod_of_dvd _ (by norm_num)
   completeness := by
     circuit_proof_start [Ecc.tP]

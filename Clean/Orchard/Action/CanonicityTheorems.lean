@@ -59,7 +59,7 @@ theorem high_bit_canonical {n : ℕ} (hn : n < PALLAS_BASE_CARD) (hhigh : bitran
 
 /-- `lsb` is the low (sign) bit of the field element `y`. -/
 def IsLowBit (y lsb : Fp) : Prop :=
-  lsb = ((if y.val.testBit 0 then 1 else 0 : ℕ) : Fp)
+  lsb.val = y.val % 2
 
 theorem nat_mod_two_isBool (n : ℕ) : IsBool (((n % 2 : ℕ) : Fp)) := by
   have hlt : n % 2 < 2 := Nat.mod_lt _ (by norm_num)
@@ -67,10 +67,19 @@ theorem nat_mod_two_isBool (n : ℕ) : IsBool (((n % 2 : ℕ) : Fp)) := by
 
 theorem isLowBit_iff_mod_two {y lsb : Fp} :
     IsLowBit y lsb ↔ lsb = ((y.val % 2 : ℕ) : Fp) := by
-  have key : (if y.val.testBit 0 then (1 : ℕ) else 0) = y.val % 2 := by
-    rw [Nat.testBit_zero]
-    rcases Nat.mod_two_eq_zero_or_one y.val with hm | hm <;> simp [hm]
-  rw [IsLowBit, key]
+  have hlt : y.val % 2 < PALLAS_BASE_CARD :=
+    lt_trans (Nat.mod_lt _ (by norm_num)) (by norm_num [PALLAS_BASE_CARD])
+  unfold IsLowBit
+  constructor
+  · intro h
+    rw [← ZMod.natCast_rightInverse lsb, h]
+  · intro h
+    rw [h, ZMod.val_natCast_of_lt hlt]
+
+/-- The low bit is Boolean. -/
+theorem isBool_of_isLowBit {y lsb : Fp} (h : IsLowBit y lsb) : IsBool lsb := by
+  rw [isLowBit_iff_mod_two] at h
+  rw [h]; exact nat_mod_two_isBool _
 
 /-- `Ecc.tP` as the cast of the natural number `tPNat`. -/
 theorem tP_eq : Ecc.tP = ((tPNat : ℕ) : Fp) := by
