@@ -1,3 +1,4 @@
+import Clean.Orchard.Ecc.Defs
 import Clean.Orchard.Specs.Elliptic.Curves.Pasta
 import Clean.Orchard.Specs.Bitrange
 
@@ -49,15 +50,34 @@ noncomputable def step (S : ℕ → SWPoint Pallas.curve) (acc : SWPoint Pallas.
 /-- `SinsemillaHashToPoint` over a list of `K`-bit chunk values, starting from the
 domain point `Q`. Padding of bit-level messages into chunks (`pad` in the protocol
 spec) is part of message construction and happens before this function. -/
-noncomputable def hashToPoint (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+noncomputable def hashToSWPoint (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
     (chunks : List ℕ) : Option (SWPoint Pallas.curve) :=
   chunks.foldl (fun acc m => acc.bind (step S · m)) (some Q)
+
+/-- Spec-facing `SinsemillaHashToPoint`, represented with the Orchard affine point type
+over the Pallas base field. The internal chain stays on `SWPoint` because its proofs use
+the curve membership carried by that type. -/
+noncomputable def hashToPoint (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+    (chunks : List ℕ) : Option (Ecc.Point Fp) :=
+  (hashToSWPoint S Q chunks).map Ecc.Point.ofSW
+
+theorem hashToPoint_eq_some_iff {S : ℕ → SWPoint Pallas.curve} {Q : SWPoint Pallas.curve}
+    {chunks : List ℕ} {B : Ecc.Point Fp} :
+    hashToPoint S Q chunks = some B ↔
+      ∃ B' : SWPoint Pallas.curve, hashToSWPoint S Q chunks = some B' ∧
+        Ecc.Point.ofSW B' = B := by
+  unfold hashToPoint
+  cases h : hashToSWPoint S Q chunks with
+  | none =>
+    simp
+  | some B' =>
+    simp
 
 /-- `SinsemillaHash`: the `x`-coordinate of the hash point. Our affine encoding maps
 the identity to `(0, 0)`, so `.x` is exactly `Extract⊥` on defined results. -/
 noncomputable def hash (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
     (chunks : List ℕ) : Option CompElliptic.Fields.Pasta.PallasBaseField :=
-  (hashToPoint S Q chunks).map (·.x)
+  (hashToSWPoint S Q chunks).map (·.x)
 
 /--
 The Sinsemilla generator constants: the per-chunk generators
@@ -79,8 +99,8 @@ end Generators
 
 /-! ### Chain lemmas -/
 
-theorem hashToPoint_nil (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve) :
-    hashToPoint S Q [] = some Q := rfl
+theorem hashToSWPoint_nil (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve) :
+    hashToSWPoint S Q [] = some Q := rfl
 
 private theorem foldl_none (S : ℕ → SWPoint Pallas.curve) (ms : List ℕ) :
     ms.foldl (fun acc m => acc.bind (step S · m)) none = none := by
@@ -88,10 +108,10 @@ private theorem foldl_none (S : ℕ → SWPoint Pallas.curve) (ms : List ℕ) :
   | nil => rfl
   | cons m ms ih => exact ih
 
-theorem hashToPoint_cons (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+theorem hashToSWPoint_cons (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
     (m : ℕ) (ms : List ℕ) :
-    hashToPoint S Q (m :: ms)
-      = (step S Q m).bind fun acc => hashToPoint S acc ms := by
+    hashToSWPoint S Q (m :: ms)
+      = (step S Q m).bind fun acc => hashToSWPoint S acc ms := by
   show List.foldl _ (step S Q m) ms = _
   cases h : step S Q m with
   | none =>
@@ -100,14 +120,14 @@ theorem hashToPoint_cons (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.
   | some acc =>
     rfl
 
-theorem hashToPoint_append (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+theorem hashToSWPoint_append (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
     (l₁ l₂ : List ℕ) :
-    hashToPoint S Q (l₁ ++ l₂)
-      = (hashToPoint S Q l₁).bind fun acc => hashToPoint S acc l₂ := by
+    hashToSWPoint S Q (l₁ ++ l₂)
+      = (hashToSWPoint S Q l₁).bind fun acc => hashToSWPoint S acc l₂ := by
   show List.foldl _ _ (l₁ ++ l₂) = _
   rw [List.foldl_append]
-  show List.foldl _ (hashToPoint S Q l₁) l₂ = _
-  cases h : hashToPoint S Q l₁ with
+  show List.foldl _ (hashToSWPoint S Q l₁) l₂ = _
+  cases h : hashToSWPoint S Q l₁ with
   | none =>
     show List.foldl _ none l₂ = none
     exact foldl_none S l₂
@@ -135,14 +155,14 @@ theorem step_ne_zero {S : ℕ → SWPoint Pallas.curve} {A B : SWPoint Pallas.cu
   exact hc₂.2.2 (by rw [add_eq_zero_iff_eq_neg.mp h0, SWPoint.neg_x])
 
 /-- Chain points of a defined hash are never the identity. -/
-theorem hashToPoint_ne_zero {S : ℕ → SWPoint Pallas.curve} {Q B : SWPoint Pallas.curve}
-    {l : List ℕ} (hQ : Q ≠ 0) (h : hashToPoint S Q l = some B) : B ≠ 0 := by
+theorem hashToSWPoint_ne_zero {S : ℕ → SWPoint Pallas.curve} {Q B : SWPoint Pallas.curve}
+    {l : List ℕ} (hQ : Q ≠ 0) (h : hashToSWPoint S Q l = some B) : B ≠ 0 := by
   induction l generalizing Q with
   | nil =>
-    rw [hashToPoint_nil] at h
+    rw [hashToSWPoint_nil] at h
     exact Option.some.inj h ▸ hQ
   | cons m ms ih =>
-    rw [hashToPoint_cons] at h
+    rw [hashToSWPoint_cons] at h
     cases hs : step S Q m with
     | none =>
       rw [hs] at h
@@ -152,12 +172,12 @@ theorem hashToPoint_ne_zero {S : ℕ → SWPoint Pallas.curve} {Q B : SWPoint Pa
       exact ih (step_ne_zero hs) h
 
 /-- Split a defined chain at a list boundary. -/
-theorem hashToPoint_append_some {S : ℕ → SWPoint Pallas.curve}
+theorem hashToSWPoint_append_some {S : ℕ → SWPoint Pallas.curve}
     {Q B : SWPoint Pallas.curve} {l₁ l₂ : List ℕ}
-    (h : hashToPoint S Q (l₁ ++ l₂) = some B) :
-    ∃ C, hashToPoint S Q l₁ = some C ∧ hashToPoint S C l₂ = some B := by
-  rw [hashToPoint_append] at h
-  cases hc : hashToPoint S Q l₁ with
+    (h : hashToSWPoint S Q (l₁ ++ l₂) = some B) :
+    ∃ C, hashToSWPoint S Q l₁ = some C ∧ hashToSWPoint S C l₂ = some B := by
+  rw [hashToSWPoint_append] at h
+  cases hc : hashToSWPoint S Q l₁ with
   | none =>
     rw [hc] at h
     simp at h
@@ -166,16 +186,16 @@ theorem hashToPoint_append_some {S : ℕ → SWPoint Pallas.curve}
     exact ⟨C, rfl, h⟩
 
 /-- Peel the last step off a chain. -/
-theorem hashToPoint_concat (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+theorem hashToSWPoint_concat (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
     (l : List ℕ) (m : ℕ) :
-    hashToPoint S Q (l ++ [m])
-      = (hashToPoint S Q l).bind fun acc => step S acc m := by
-  rw [hashToPoint_append]
-  cases h : hashToPoint S Q l with
+    hashToSWPoint S Q (l ++ [m])
+      = (hashToSWPoint S Q l).bind fun acc => step S acc m := by
+  rw [hashToSWPoint_append]
+  cases h : hashToSWPoint S Q l with
   | none => rfl
   | some acc =>
-    show hashToPoint S acc [m] = step S acc m
-    rw [hashToPoint_cons]
+    show hashToSWPoint S acc [m] = step S acc m
+    rw [hashToSWPoint_cons]
     cases h : step S acc m with
     | none => rfl
     | some b => rfl

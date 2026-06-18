@@ -446,20 +446,20 @@ theorem step_honest (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
 spec-level chain is defined. -/
 theorem accAfter_eq_chain (G : Generators) {A : SWPoint Pallas.curve} (p : Fp)
     {r : ℕ} {Ar : SWPoint Pallas.curve}
-    (hchain : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    (hchain : Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
       ((List.range r).map (pieceWord p)) = some Ar) :
     accAfter G (A.x, A.y) p r = (Ar.x, Ar.y) := by
   induction r generalizing Ar with
   | zero =>
     rw [show ((List.range 0).map (pieceWord p)) = ([] : List ℕ) from rfl,
-      Orchard.Specs.Sinsemilla.hashToPoint_nil] at hchain
+      Orchard.Specs.Sinsemilla.hashToSWPoint_nil] at hchain
     obtain rfl : A = Ar := Option.some.inj hchain
     rfl
   | succ r ih =>
     rw [List.range_succ] at hchain
     simp only [List.map_append, List.map_cons, List.map_nil] at hchain
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hchain
-    cases hpre : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    rw [Orchard.Specs.Sinsemilla.hashToSWPoint_concat] at hchain
+    cases hpre : Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
         ((List.range r).map (pieceWord p)) with
     | none =>
       rw [hpre] at hchain
@@ -579,7 +579,7 @@ def Spec (G : Generators) (w : ℕ) (input : Value Input Fp)
         - output.last.lambda1 * (output.last.xA - output.last.xP) = (G.S (ms w)).y ∧
     ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA →
       2 * A.y = DoubleAndAdd.yA output.first →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+      ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
           ((List.range w).map ms) = some B →
         output.last.xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA output.last
 
@@ -593,7 +593,7 @@ def ProverAssumptions (G : Generators) (w : ℕ) (input : ProverValue Input Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   (show Fp from input.piece).val < 2 ^ (K * (w + 1)) ∧
   ∃ (A B : SWPoint Pallas.curve), A ≠ 0 ∧ A.x = input.xA ∧ A.y = input.yA ∧
-    Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
       ((List.range (w + 1)).map (pieceWord input.piece)) = some B
 
 /--
@@ -611,20 +611,20 @@ def ProverSpec (G : Generators) (w : ℕ) (input : ProverValue Input Fp)
   output.zs = Vector.ofFn (fun r : Fin (w + 1) => pieceZ input.piece r.val) ∧
   ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA → A.y = input.yA →
     DoubleAndAdd.yA output.first = 2 * A.y ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
         ((List.range (w + 1)).map (pieceWord input.piece)) = some B →
       output.xANext = B.x ∧ output.yANext = B.y ∧
       nextYA output.last output.xANext = 2 * B.y
 
 private theorem range_prefix_some (S : ℕ → SWPoint Pallas.curve)
     (Q : SWPoint Pallas.curve) (f : ℕ → ℕ) {n : ℕ} {B : SWPoint Pallas.curve}
-    (hn : Orchard.Specs.Sinsemilla.hashToPoint S Q ((List.range n).map f) = some B)
+    (hn : Orchard.Specs.Sinsemilla.hashToSWPoint S Q ((List.range n).map f) = some B)
     {r : ℕ} (hr : r ≤ n) :
-    ∃ C, Orchard.Specs.Sinsemilla.hashToPoint S Q ((List.range r).map f) = some C := by
+    ∃ C, Orchard.Specs.Sinsemilla.hashToSWPoint S Q ((List.range r).map f) = some C := by
   obtain ⟨k, rfl⟩ : ∃ k, n = r + k := ⟨n - r, by omega⟩
   rw [List.range_add, List.map_append,
-    Orchard.Specs.Sinsemilla.hashToPoint_append] at hn
-  cases hc : Orchard.Specs.Sinsemilla.hashToPoint S Q ((List.range r).map f) with
+    Orchard.Specs.Sinsemilla.hashToSWPoint_append] at hn
+  cases hc : Orchard.Specs.Sinsemilla.hashToSWPoint S Q ((List.range r).map f) with
   | none =>
     rw [hc] at hn
     simp at hn
@@ -639,7 +639,7 @@ each declaration within the elaboration budget.
 -/
 private theorem completeness_aux (G : Generators) (w : ℕ) (p xA yA : Fp)
     {A B : SWPoint Pallas.curve} (hAx : A.x = xA) (hAy : A.y = yA)
-    (hchain : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    (hchain : Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
       ((List.range (w + 1)).map (pieceWord p)) = some B) :
     (∀ r, r ≤ w →
       ((rowValue (accAfter G (xA, yA) p r)
@@ -667,7 +667,7 @@ private theorem completeness_aux (G : Generators) (w : ℕ) (p xA yA : Fp)
   have hstep : Orchard.Specs.Sinsemilla.step G.S Ar (pieceWord p r) = some Ar1 := by
     rw [List.range_succ] at hAr1
     simp only [List.map_append, List.map_cons, List.map_nil] at hAr1
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat, hAr] at hAr1
+    rw [Orchard.Specs.Sinsemilla.hashToSWPoint_concat, hAr] at hAr1
     exact hAr1
   have hacc := accAfter_eq_chain G p hAr
   have hh := step_honest G.S hstep
@@ -955,7 +955,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
         - (dR w).lambda1 * ((dR w).xA - (dR w).xP) = (G.S (ms w)).y ∧
       ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = xA →
         2 * A.y = DoubleAndAdd.yA (dR 0) →
-        ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+        ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
             ((List.range w).map ms) = some B →
           (dR w).xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA (dR w) := by
   -- choose the word values
@@ -1044,22 +1044,22 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
   -- the chain invariant over message prefixes
   intro A hA0 hAx hAyA B hchain
   have hinv : ∀ r, r ≤ w → ∀ Ar : SWPoint Pallas.curve,
-      Orchard.Specs.Sinsemilla.hashToPoint G.S A ((List.range r).map ms) = some Ar →
+      Orchard.Specs.Sinsemilla.hashToSWPoint G.S A ((List.range r).map ms) = some Ar →
       (dR r).xA = Ar.x ∧ 2 * Ar.y = DoubleAndAdd.yA (dR r) := by
     intro r
     induction r with
     | zero =>
       intro _ Ar hAr
       rw [show ((List.range 0).map ms) = ([] : List ℕ) from rfl,
-        Orchard.Specs.Sinsemilla.hashToPoint_nil] at hAr
+        Orchard.Specs.Sinsemilla.hashToSWPoint_nil] at hAr
       obtain rfl : A = Ar := Option.some.inj hAr
       exact ⟨hxA0.trans hAx.symm, hAyA⟩
     | succ r ih =>
       intro hr Ar hAr
       rw [List.range_succ] at hAr
       simp only [List.map_append, List.map_cons, List.map_nil] at hAr
-      rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hAr
-      cases hpre : Orchard.Specs.Sinsemilla.hashToPoint G.S A ((List.range r).map ms) with
+      rw [Orchard.Specs.Sinsemilla.hashToSWPoint_concat] at hAr
+      cases hpre : Orchard.Specs.Sinsemilla.hashToSWPoint G.S A ((List.range r).map ms) with
       | none =>
         rw [hpre] at hAr
         simp at hAr
@@ -1322,7 +1322,7 @@ def Spec (G : Generators) (ns : List ℕ) (input : Value (Input ns.length) Fp)
     ZsFacts ns chunks output.zs ∧
     ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA →
       2 * A.y = enterYA ns.isEmpty output.first →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A chunks = some B →
+      ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S A chunks = some B →
         output.point.x = B.x ∧ output.point.y = B.y
 
 def ProverAssumptions (G : Generators) (ns : List ℕ)
@@ -1330,7 +1330,7 @@ def ProverAssumptions (G : Generators) (ns : List ℕ)
     (_ : ProverHint Fp) : Prop :=
   PieceBounds ns input.pieces ∧
   ∃ (A B : SWPoint Pallas.curve), A ≠ 0 ∧ A.x = input.xA ∧ A.y = input.yA ∧
-    Orchard.Specs.Sinsemilla.hashToPoint G.S A (honestChunks ns input.pieces) = some B
+    Orchard.Specs.Sinsemilla.hashToSWPoint G.S A (honestChunks ns input.pieces) = some B
 
 def ProverSpec (G : Generators) (ns : List ℕ)
     (input : ProverValue (Input ns.length) Fp)
@@ -1340,7 +1340,7 @@ def ProverSpec (G : Generators) (ns : List ℕ)
   ZsHonest ns input.pieces output.zs ∧
   ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA → A.y = input.yA →
     enterYA ns.isEmpty output.first = 2 * A.y ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
         (honestChunks ns input.pieces) = some B →
       output.point.x = B.x ∧ output.point.y = B.y
 
@@ -1366,7 +1366,7 @@ theorem soundness (G : Generators) :
   refine ⟨[], rfl, ?_⟩
   intro A hA0 hAx hAy B hB
   have hAy' : 2 * A.y = 2 * env.get i₀ := by simpa using hAy
-  rw [Orchard.Specs.Sinsemilla.hashToPoint_nil] at hB
+  rw [Orchard.Specs.Sinsemilla.hashToSWPoint_nil] at hB
   obtain rfl : A = B := Option.some.inj hB
   exact ⟨hAx.symm, (mul_left_cancel₀ HashPiece.two_ne_zero_Fp hAy').symm⟩
 
@@ -1380,7 +1380,7 @@ theorem completeness (G : Generators) :
   · simp only [List.isEmpty_nil, if_true]
     rw [h_env, ← hAy]
   · intro B hB
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_nil] at hB
+    rw [Orchard.Specs.Sinsemilla.hashToSWPoint_nil] at hB
     obtain rfl : A = B := Option.some.inj hB
     exact ⟨hAx.symm, by rw [h_env, ← hAy]⟩
 
@@ -1519,7 +1519,7 @@ private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
       - last.lambda1 * (last.xA - last.xP) = (G.S (ms n)).y)
     (hchain_piece : ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = xAin →
       2 * A.y = DoubleAndAdd.yA first →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+      ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
           ((List.range n).map ms) = some B →
         last.xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA last)
     (hsec : last.lambda2 * last.lambda2
@@ -1531,29 +1531,29 @@ private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
     (tailChunks : List ℕ) {pointX pointY : Fp}
     (htail_chain : ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = xATail →
       2 * A.y = enterYA isFinal tailFirst →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A tailChunks = some B →
+      ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S A tailChunks = some B →
         pointX = B.x ∧ pointY = B.y) :
     ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = xAin →
       2 * A.y = DoubleAndAdd.yA first →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+      ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
           ((List.range (n + 1)).map ms ++ tailChunks) = some B →
         pointX = B.x ∧ pointY = B.y := by
   intro A hA0 hAx hAyA B hB
   -- split the chain at the piece boundary
-  rw [Orchard.Specs.Sinsemilla.hashToPoint_append] at hB
-  cases hpre : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+  rw [Orchard.Specs.Sinsemilla.hashToSWPoint_append] at hB
+  cases hpre : Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
       ((List.range (n + 1)).map ms) with
   | none =>
     rw [hpre] at hB
     simp at hB
   | some B₁ =>
     rw [hpre] at hB
-    replace hB : Orchard.Specs.Sinsemilla.hashToPoint G.S B₁ tailChunks = some B := hB
+    replace hB : Orchard.Specs.Sinsemilla.hashToSWPoint G.S B₁ tailChunks = some B := hB
     -- peel the piece's last word
     rw [List.range_succ] at hpre
     simp only [List.map_append, List.map_cons, List.map_nil] at hpre
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hpre
-    cases hpre0 : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    rw [Orchard.Specs.Sinsemilla.hashToSWPoint_concat] at hpre
+    cases hpre0 : Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
         ((List.range n).map ms) with
     | none =>
       rw [hpre0] at hpre
@@ -1681,8 +1681,8 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     ext i hi
     simp
   rw [hmt] at hptail
-  obtain ⟨B₁, hpre, hsuffix⟩ := Orchard.Specs.Sinsemilla.hashToPoint_append_some hchain
-  have hpre' : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+  obtain ⟨B₁, hpre, hsuffix⟩ := Orchard.Specs.Sinsemilla.hashToSWPoint_append_some hchain
+  have hpre' : Orchard.Specs.Sinsemilla.hashToSWPoint G.S A
       ((List.range (n + 1)).map
         (pieceWord (Expression.eval env.toEnvironment input_var.pieces[0])))
       = some B₁ := by
@@ -1696,7 +1696,7 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
   obtain ⟨-, hfxA0, hsecPS, hz1PS, hzsPS, hchainPS⟩ := hPSpiece
   obtain ⟨hYA0, hBfun⟩ := hchainPS A hA0 hAx hAy
   obtain ⟨hxAsN, hyAcc, hnext⟩ := hBfun B₁ hpre'
-  have hB₁0 : B₁ ≠ 0 := Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hA0 hpre
+  have hB₁0 : B₁ ≠ 0 := Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hA0 hpre
   have hPStail := h_tail_env (by
     rw [hPA]
     refine ⟨?_, B₁, B, hB₁0, hxAsN.symm, hyAcc.symm, ?_⟩
@@ -1852,14 +1852,14 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ
     (_ : ProverData Fp) : Prop :=
   ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
     Chain.Z1Facts (n₀ :: ns) chunks output.z1s ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
       output.point = { x := B.x, y := B.y }
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   Chain.PieceBounds (n₀ :: ns) pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
     (Chain.honestChunks (n₀ :: ns) pieces) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
@@ -1867,7 +1867,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : Li
     (output : ProverValue (Output (n₀ :: ns)) Fp)
     (_ : ProverHint Fp) : Prop :=
   Chain.Z1sHonest (n₀ :: ns) pieces output.z1s ∧
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) pieces) = some B →
     output.point = { x := B.x, y := B.y }
 
@@ -1986,14 +1986,14 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ
     (_ : ProverData Fp) : Prop :=
   ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
     Chain.ZsFacts (n₀ :: ns) chunks output.zs ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
       output.point = { x := B.x, y := B.y }
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   Chain.PieceBounds (n₀ :: ns) pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
     (Chain.honestChunks (n₀ :: ns) pieces) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
@@ -2001,7 +2001,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : Li
     (output : ProverValue (Output (n₀ :: ns)) Fp)
     (_ : ProverHint Fp) : Prop :=
   Chain.ZsHonest (n₀ :: ns) pieces output.zs ∧
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) pieces) = some B →
     output.point = { x := B.x, y := B.y }
 

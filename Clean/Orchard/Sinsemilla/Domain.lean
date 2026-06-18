@@ -45,19 +45,19 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ
     (pieces : Value (fields (ns.length + 1)) Fp) (output : Value field Fp)
     (_ : ProverData Fp) : Prop :=
   ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B → output = B.x
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B → output = B.x
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   Chain.PieceBounds (n₀ :: ns) pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
     (Chain.honestChunks (n₀ :: ns) pieces) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
     (pieces : ProverValue (fields (ns.length + 1)) Fp)
     (output : ProverValue field Fp) (_ : ProverHint Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) pieces) = some B →
     output = B.x
 
@@ -130,20 +130,20 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (output : Point Fp) (_ : ProverData Fp) : Prop :=
   ∃ (chunks : List ℕ) (r : Fq),
     Chain.PieceChunks (n₀ :: ns) input.pieces chunks ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
       output.coords = Pallas.add (B.x, B.y) (R.mulValue r).coords
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   Chain.PieceBounds (n₀ :: ns) input.pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
     (Chain.honestChunks (n₀ :: ns) input.pieces) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (n₀ : ℕ) (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
     (output : Point Fp) (_ : ProverHint Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) input.pieces) = some B →
     output.coords = Pallas.add (B.x, B.y) (R.mulValue input.r).coords
 
@@ -163,7 +163,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have h_final := h_add ⟨by
       rw [hp]
       exact Or.inl (SWPoint.onCurve_of_ne_zero
-        (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hB)),
+        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hB)),
     by
       rw [hblind]
       exact R.mulValue_valid s⟩
@@ -185,14 +185,14 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have h_final := h_add_env ⟨by
       rw [hp]
       exact Or.inl (SWPoint.onCurve_of_ne_zero
-        (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hchain)),
+        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain)),
     by
       rw [hblind]
       exact R.mulValue_valid _⟩
   refine ⟨⟨⟨hbounds, B, hchain⟩, ?_, ?_⟩, ?_⟩
   · rw [hp]
     exact Or.inl (SWPoint.onCurve_of_ne_zero
-      (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hchain))
+      (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain))
   · rw [hblind]
     exact R.mulValue_valid _
   · intro B' hB'
@@ -258,21 +258,21 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
   ∃ (chunks : List ℕ) (r : Fq),
     Chain.PieceChunks (n₀ :: ns) input.pieces chunks ∧
     Chain.ZsFacts (n₀ :: ns) chunks output.zs ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
       output.point.coords = Pallas.add (B.x, B.y) (R.mulValue r).coords
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
     (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   Chain.PieceBounds (n₀ :: ns) input.pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
     (Chain.honestChunks (n₀ :: ns) input.pieces) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (n₀ : ℕ) (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
     (output : ProverValue (Output (n₀ :: ns)) Fp) (_ : ProverHint Fp) : Prop :=
   Chain.ZsHonest (n₀ :: ns) input.pieces output.zs ∧
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) input.pieces) = some B →
     output.point.coords = Pallas.add (B.x, B.y) (R.mulValue input.r).coords
 
@@ -293,7 +293,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     have h_final := h_add ⟨by
         rw [hp]
         exact Or.inl (SWPoint.onCurve_of_ne_zero
-          (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hB)),
+          (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hB)),
       by
         rw [hblind]
         exact R.mulValue_valid s⟩
@@ -316,14 +316,14 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have h_final := h_add_env ⟨by
       rw [hp]
       exact Or.inl (SWPoint.onCurve_of_ne_zero
-        (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hchain)),
+        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain)),
     by
       rw [hblind]
       exact R.mulValue_valid _⟩
   refine ⟨⟨⟨hbounds, B, hchain⟩, ?_, ?_⟩, ?_, ?_⟩
   · rw [hp]
     exact Or.inl (SWPoint.onCurve_of_ne_zero
-      (Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hQ hchain))
+      (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain))
   · rw [hblind]
     exact R.mulValue_valid _
   · convert hZsH using 2
@@ -368,13 +368,13 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (output : Value field Fp) (_ : ProverData Fp) : Prop :=
   ∃ (chunks : List ℕ) (r : Fq),
     Chain.PieceChunks (n₀ :: ns) input.pieces chunks ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
       output = (Pallas.add (B.x, B.y) (R.mulValue r).coords).1
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (n₀ : ℕ) (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
     (output : ProverValue field Fp) (_ : ProverHint Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) input.pieces) = some B →
     output = (Pallas.add (B.x, B.y) (R.mulValue input.r).coords).1
 

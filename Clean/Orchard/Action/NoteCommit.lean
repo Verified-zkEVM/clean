@@ -27,8 +27,9 @@ open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
 open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod noteCommitMessage noteCommitChunks
-  noteCommitChunks_tiling hashToPoint sum_head_shift sum_digits_lt digit_of_sum
-  chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum chunksOf_one_eq_singleton)
+  noteCommitChunks_tiling hashToPoint hashToPoint_eq_some_iff hashToSWPoint sum_head_shift
+  sum_digits_lt digit_of_sum chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum
+  chunksOf_one_eq_singleton)
 
 section
 set_option exponentiation.threshold 900
@@ -894,17 +895,17 @@ def ProverMessagePiecesEncode (input : ProverValue Input Fp)
 
 def NoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (input : Value Input Fp) (cm : Point Fp) : Prop :=
-  ∃ rcm : Fq, ∀ B : SWPoint Pallas.curve,
+  ∃ rcm : Fq, ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm.coords = Pallas.add (B.x, B.y) (R.mulValue rcm).coords
+      cm = B + R.mulValue rcm
 
 def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
-  ∀ B : SWPoint Pallas.curve,
+  ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm.coords = Pallas.add (B.x, B.y) (R.mulValue input.rcm).coords
+      cm = B + R.mulValue input.rcm
 
 namespace AssignMessagePieces
 
@@ -2275,13 +2276,15 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   · simp only [Spec, NoteCommitRelation]
     refine ⟨rcm, ?_⟩
     intro B hBhash
-    have hHashB := hHash B (by simpa [hchunks] using hBhash)
+    rcases hashToPoint_eq_some_iff.mp hBhash with ⟨B', hB', rfl⟩
+    have hHashB := hHash B' (by simpa [hchunks] using hB')
     have hCOutPoint :
         COut.point = (varFromOffset Point (i₀ + 28 + 1400) : Var Point Fp) := by
       rw [hCOutdef]
       rfl
     rw [← hCOutPoint]
-    simpa [circuit_norm] using hHashB
+    exact Point.ext_coords (by
+      simpa only [circuit_norm, Point.add, Point.ofSW] using hHashB)
   · exact Or.inl rfl
   · exact Or.inl rfl
   · exact Or.inl rfl
@@ -2446,7 +2449,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       simpa [YCanonicity.circuit, YCanonicity.ProverAssumptions, ← h_input, circuit_norm] using hd1_low
     · refine ⟨?_, ?_⟩
       · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [GdCanonicity.circuit, GdCanonicity.Assumptions, ← h_input, circuit_norm] at hb1_bool hb0_lt ha_lt ⊢
+        simp only [GdCanonicity.circuit, GdCanonicity.Assumptions, circuit_norm] at hb1_bool hb0_lt ha_lt ⊢
         exact ⟨hb1_bool, ha_lt, hb0_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
           ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨0, by decide⟩ 13
             (by decide)).trans (by simpa [circuit_norm] using hz13a))⟩
@@ -2455,7 +2458,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         exact ⟨ha_v, hb0_v, hb1_v⟩
     · refine ⟨?_, ?_⟩
       · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [PkdCanonicity.circuit, PkdCanonicity.Assumptions, ← h_input, circuit_norm] at hd0_bool hc_lt hb3_lt ⊢
+        simp only [PkdCanonicity.circuit, PkdCanonicity.Assumptions, circuit_norm] at hd0_bool hc_lt hb3_lt ⊢
         exact ⟨hd0_bool, hc_lt, hb3_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
           ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨2, by decide⟩ 13
             (by decide)).trans (by simpa [circuit_norm] using hz13c))⟩
@@ -2465,7 +2468,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     · sorry
     · refine ⟨?_, ?_⟩
       · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [RhoCanonicity.circuit, RhoCanonicity.Assumptions, ← h_input, circuit_norm] at hg0_bool hf_lt he1_lt ⊢
+        simp only [RhoCanonicity.circuit, RhoCanonicity.Assumptions, circuit_norm] at hg0_bool hf_lt he1_lt ⊢
         exact ⟨hg0_bool, hf_lt, he1_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
           ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨5, by decide⟩ 13
             (by decide)).trans (by simpa [circuit_norm] using hz13f))⟩
@@ -2475,14 +2478,16 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     · sorry
   · simp only [ProverSpec, ProverNoteCommitRelation]
     intro B hBhash
-    have hHashB := hHashHonest B (by
-      show hashToPoint G.S Q
-        (Chain.honestChunks messagePieceRounds (messagePieces (eval env AM))) = some B
-      rw [hHonestEq]; exact hBhash)
+    rcases hashToPoint_eq_some_iff.mp hBhash with ⟨B', hB', rfl⟩
+    have hHashB := hHashHonest B' (by
+      show hashToSWPoint G.S Q
+        (Chain.honestChunks messagePieceRounds (messagePieces (eval env AM))) = some B'
+      rw [hHonestEq]; exact hB')
     have hCOutPoint : COut.point = (varFromOffset Point (i₀ + 28 + 1400) : Var Point Fp) := by
       rw [hCOutdef]; rfl
     rw [← hCOutPoint]
-    simpa [circuit_norm] using hHashB
+    exact Point.ext_coords (by
+      simpa only [circuit_norm, Point.add, Point.ofSW] using hHashB)
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where

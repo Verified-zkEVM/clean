@@ -63,18 +63,18 @@ def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (ak nk : Fp) (gDOld output : Point Fp) : Prop :=
   ∃ ivk : Fp,
-    (∃ rivk : Fq, ∀ B : SWPoint Pallas.curve,
+    (∃ rivk : Fq, ∀ B : Point Fp,
       hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-        ivk = (Pallas.add (B.x, B.y) (R.mulValue rivk).coords).1) ∧
+        ivk = (B + R.mulValue rivk).x) ∧
     output = ivk.val • gDOld
 
 /-- Honest-prover diversified-address integrity for the concrete `rivk`. -/
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (ak nk : Fp) (rivk : Fq) (gDOld output : Point Fp) : Prop :=
   ∃ ivk : Fp,
-    (∀ B : SWPoint Pallas.curve,
+    (∀ B : Point Fp,
       hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-        ivk = (Pallas.add (B.x, B.y) (R.mulValue rivk).coords).1) ∧
+        ivk = (B + R.mulValue rivk).x) ∧
     output = ivk.val • gDOld
 
 /-- Honest proving requires the explicit `pk_d_old` witness to be the derived address for
@@ -88,9 +88,9 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.
   (∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B) ∧
   Pallas.OnCurve gDOld.coords ∧
     ∀ ivk : Fp,
-      (∀ B : SWPoint Pallas.curve,
+      (∀ B : Point Fp,
         hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-          ivk = (Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords).1) →
+          ivk = (B + R.mulValue input.rivk).x) →
       pkDOld = ivk.val • gDOld
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
@@ -104,20 +104,8 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have h_ivk_child : CommitIvk.Spec G Q R input_ak input_nk (eval env ivkOut) := by
     simpa [ivkOut, CommitIvk.Spec, circuit_norm] using h_ivk
   refine ⟨eval env ivkOut, h_ivk_child, ?_⟩
-  let B : SWPoint Pallas.curve := ⟨input_gDOld.x, input_gDOld.y, Or.inl h_assumptions⟩
-  have hB : B ≠ 0 := by
-    intro h0
-    have hx : input_gDOld.x = (0 : Fp) := congrArg SWPoint.x h0
-    have hy : input_gDOld.y = (0 : Fp) := congrArg SWPoint.y h0
-    rw [Point.coords, hx, hy] at h_assumptions
-    exact Pallas.not_onCurve_zero h_assumptions
-  have hbase : input_gDOld.coords = (B.x, B.y) := rfl
-  have hmul := h_mul h_assumptions B hB hbase
-  rw [← h_eq]
-  apply Point.ext_coords
-  simpa [ivkOut, Point.nsmul, circuit_norm,
-    CompElliptic.Curves.Pasta.Pallas.curve,
-    CompElliptic.CurveForms.ShortWeierstrass.coords_nsmul] using hmul
+  have hmul := h_mul h_assumptions
+  exact h_eq.symm.trans (by simpa [ivkOut, circuit_norm] using hmul)
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
@@ -139,26 +127,11 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     simpa [ivkOut, CommitIvk.ProverSpec, circuit_norm]
       using (h_env.1 h_commit_assumptions).2
   have h_mul_spec := h_env.2 h_gd
-  obtain ⟨B, hB, hbase⟩ : ∃ B : SWPoint Pallas.curve, B ≠ 0 ∧
-      input_gDOld = { x := B.x, y := B.y } := by
-    refine ⟨⟨input_gDOld.x, input_gDOld.y, Or.inl h_gd⟩, ?_, rfl⟩
-    intro h0
-    have hx : input_gDOld.x = (0 : Fp) := congrArg SWPoint.x h0
-    have hy : input_gDOld.y = (0 : Fp) := congrArg SWPoint.y h0
-    rw [Point.coords, hx, hy] at h_gd
-    exact Pallas.not_onCurve_zero h_gd
-  have hderived := h_mul_spec B hB (by rw [hbase]; rfl)
+  have hderived := h_mul_spec
   have hpkd := h_pkd (Expression.eval env.toEnvironment ivkOut) h_ivk_child_prover
   refine ⟨⟨h_commit_assumptions, h_gd, ?_⟩, ?_⟩
-  · apply Point.ext_coords
-    let ivkValue : Fp := Expression.eval env.toEnvironment ivkOut
-    trans (Point.nsmul ivkValue.val input_gDOld).coords
-    · simp only [Point.nsmul]
-      rw [hbase]
-      simpa [ivkValue, Point.coords, ivkOut, circuit_norm,
-        CompElliptic.Curves.Pasta.Pallas.curve,
-        CompElliptic.CurveForms.ShortWeierstrass.coords_nsmul] using hderived
-    · exact congrArg Point.coords hpkd.symm
+  · rw [hpkd]
+    simpa [ivkOut, circuit_norm] using hderived
   refine ⟨(Expression.eval env.toEnvironment ivkOut : Fp), h_ivk_child_prover, ?_⟩
   exact hpkd
 

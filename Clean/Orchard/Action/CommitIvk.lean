@@ -48,7 +48,8 @@ instance : Inhabited (Var Input Fp) :=
   ⟨{ ak := default, nk := default, rivk := fun _ => default }⟩
 
 open Orchard.Specs (bitrange bitrange_lt cast_bitrange_val)
-open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope)
+open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint hashToPoint_eq_some_iff
+  hashToSWPoint running_sum_telescope)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
   shifted_high_zero)
@@ -662,7 +663,7 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     ∃ (chunks : List ℕ) (rivk : Fq),
       Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
         #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
-      (∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+      (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
         output.cells.point.coords = Pallas.add (B.x, B.y) (R.mulValue rivk).coords)
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
@@ -670,7 +671,7 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
     (_ : ProverHint Fp) : Prop :=
   let ak : Fp := input.ak
   let nk : Fp := input.nk
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
     (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
@@ -693,7 +694,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
     ∃ (chunks : List ℕ),
       Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
         #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
-      (∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+      (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
         output.cells.point.coords = Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords)
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
@@ -947,7 +948,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     have hOhash : ∃ (chunks : List ℕ),
         Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
           #v[(eval env O).cells.a, (eval env O).cells.b, (eval env O).cells.c, (eval env O).cells.d] chunks ∧
-        (∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+        (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
           (eval env O).cells.point.coords
             = Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords) := by
       refine ⟨Orchard.Specs.Sinsemilla.commitIvkChunks
@@ -1035,18 +1036,18 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 canonical message `I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)`, blinded by `[rivk] CommitIvkR`. -/
 def Spec (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (ak nk ivk : Fp) : Prop :=
-  ∃ rivk : Fq, ∀ B : SWPoint Pallas.curve,
+  ∃ rivk : Fq, ∀ B : Point Fp,
     Orchard.Specs.Sinsemilla.hashToPoint G.S Q
         (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B →
-      ivk = (Pallas.add (B.x, B.y) (R.mulValue rivk).coords).1
+      ivk = (B + R.mulValue rivk).x
 
 /-- Honest-prover version of `Spec`, for the prover's concrete `rivk`. -/
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (ak nk : Fp) (rivk : Fq) (ivk : Fp) : Prop :=
-  ∀ B : SWPoint Pallas.curve,
+  ∀ B : Point Fp,
     Orchard.Specs.Sinsemilla.hashToPoint G.S Q
         (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B →
-      ivk = (Pallas.add (B.x, B.y) (R.mulValue rivk).coords).1
+      ivk = (B + R.mulValue rivk).x
 
 /-- Honest proving needs the Sinsemilla hash-to-point to succeed for the canonical
 `commit_ivk` message. -/
@@ -1193,10 +1194,11 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   -- assemble the entry spec
   refine ⟨?_, ?_⟩
   · refine ⟨rivk, fun B hB => ?_⟩
-    have hpt := hHash B (by rw [hchunks]; exact hB)
-    rw [← hpt, hO]
-    simp only [circuit_norm, Point.coords]
-    rfl
+    rcases hashToPoint_eq_some_iff.mp hB with ⟨B', hB', rfl⟩
+    have hpt := hHash B' (by rw [hchunks]; exact hB')
+    have hx := congrArg Prod.fst hpt
+    rw [hO] at hx
+    simpa [Point.add, Point.ofSW, Point.coords, circuit_norm] using hx
   · exact ⟨Or.inl rfl, Or.inl rfl, trivial⟩
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
@@ -1215,7 +1217,9 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     simp only [Commit.circuit, Commit.ProverAssumptions]
     rw [show ((eval env input_var).ak : Fp) = input.ak from by rw [h_input],
       show ((eval env input_var).nk : Fp) = input.nk from by rw [h_input]]
-    exact h_assumptions
+    rcases h_assumptions with ⟨B, hB⟩
+    rcases hashToPoint_eq_some_iff.mp hB with ⟨B', hB', _⟩
+    exact ⟨B', hB'⟩
   -- the Commit `ProverSpec`: all the cell values, ranges, z-cells, and the hash existential
   rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at h_env
   have hCommitPS := (h_env.1 hCommitPA).2
@@ -1317,6 +1321,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       · rw [hSd1]; apply cast_bitrange_val (by norm_num)
   · -- the entry `ProverSpec`: `ivk = (B + blind).x` via the Commit hash relation
     intro B hB
+    rcases hashToPoint_eq_some_iff.mp hB with ⟨B', hB', rfl⟩
     -- replace the `eval` input keys by the opaque `input.{ak,nk}` (mirrors entry soundness;
     -- keeps the expensive `eval env input_var` out of the chunk bridge's `whnf`)
     simp only [h_input] at hSa hSb0 hSb1 hSb2 hSc hSd0 hSd1 hSb hSd
@@ -1336,8 +1341,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     -- the four piece values are the canonical `commit_ivk` slices, so `chunks = commitIvkChunks`;
     -- `convert hB` supplies the well-typed `ZMod.val input.{ak,nk}` (pinning the bridge's `ak`/`nk`),
     -- avoiding a fresh `ZMod.val (input.ak : ProverValue field _)` projection.
-    have hpt := hHash B (by
-      convert hB using 2
+    have hpt := hHash B' (by
+      convert hB' using 2
       exact pieceChunks_eq_commitIvkChunks_of_indexed_piece_values hPC
         (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero];
             rw [hSa]; norm_num [bitrange, K])
@@ -1352,7 +1357,12 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
             rw [hSd, hSd0, hSd1]; simp only [bitrange]; push_cast; ring)
         (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
         (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])))
-    rw [show input.rivk = (eval env input_var).rivk from by rw [h_input], ← hpt]
+    rw [show input.rivk = (eval env input_var).rivk from by rw [h_input]]
+    rw [show (Point.ofSW B' + R.mulValue (eval env input_var).rivk).x
+        = (Pallas.add (B'.x, B'.y) (R.mulValue (eval env input_var).rivk).coords).1 by
+      change (Point.add (Point.ofSW B') (R.mulValue (eval env input_var).rivk)).x
+        = (Pallas.add (B'.x, B'.y) (R.mulValue (eval env input_var).rivk).coords).1
+      rfl, ← hpt]
     -- align both sides to the verifier `eval` of the (single) commitment point var, then the
     -- entry output var and the Commit point var coincide definitionally at the same offset
     rw [show ((eval env O).cells.point.coords.1 : Fp)

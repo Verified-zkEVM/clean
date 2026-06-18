@@ -755,8 +755,7 @@ def Assumptions (input : Input Fp) : Prop :=
 /-- The circuit computes the variable-base scalar multiplication `[alpha] base`,
 with the identity encoded as `(0, 0)` coordinates. -/
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
-  ∀ B : SWPoint Pallas.curve, B ≠ 0 → input.base.coords = (B.x, B.y) →
-    output.coords = ((input.alpha.val • B).x, (input.alpha.val • B).y)
+  output = input.alpha.val • input.base
 theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [Add.circuit, Decompose.circuit, ProcessLsb.circuit,
     Overflow.OverflowCheck.circuit]
@@ -767,7 +766,23 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   obtain ⟨k0, hk0Bool, hz0eq, hResImpl⟩ := hLsb
   simp only [Overflow.OverflowCheck.Spec] at hOv
   obtain ⟨hOvZ0, hOvDisj2, hOvEx⟩ := hOv
-  intro B hB hcoords
+  let B : SWPoint Pallas.curve := ⟨input_base.x, input_base.y, Or.inl h_assumptions⟩
+  have hB : B ≠ 0 := by
+    intro h0
+    have hx : input_base.x = (0 : Fp) := congrArg SWPoint.x h0
+    have hy : input_base.y = (0 : Fp) := congrArg SWPoint.y h0
+    rw [Point.coords, hx, hy] at h_assumptions
+    exact Pallas.not_onCurve_zero h_assumptions
+  have hcoords : input_base.coords = (B.x, B.y) := rfl
+  have hBaseNsmul : ∀ n : ℕ, ((n • B).x, (n • B).y) = (n • input_base).coords := by
+    intro n
+    change ((n • B).x, (n • B).y) =
+      (Point.nsmul n input_base).coords
+    simp only [Point.nsmul, Point.coords,
+      CompElliptic.Curves.Pasta.Pallas.curve,
+      CompElliptic.CurveForms.ShortWeierstrass.coords_nsmul]
+    rw [← hcoords]
+  apply Point.ext_coords
   simp only [Add.Assumptions, Add.Spec, Point.coords] at hAcc
   simp only [Point.coords] at h_assumptions hcoords ⊢
   -- the doubled base: acc = [2]B
@@ -846,6 +861,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     rw [hRes, hfin
       (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 - 1)
       (by rw [hm3]; omega)]
+    exact hBaseNsmul _
   · -- k₀ = 1: the correction point is the identity, the result is [m₃]B
     rw [hk0] at hz0eq
     rw [hk0, if_pos rfl, _root_.zero_add] at hRes
@@ -854,6 +870,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     rw [hRes, hfin
       (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3)
       (by rw [hm3]; omega)]
+    exact hBaseNsmul _
 
 /-- The honest running-sum chains of `kBits` are the shifted values of `k`. -/
 private theorem cells_kNat (alpha : Fp) :

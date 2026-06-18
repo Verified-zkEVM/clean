@@ -55,6 +55,10 @@ instance : Zero (Point F) := ⟨zero⟩
 def coords (point : Point F) : F × F :=
   (point.x, point.y)
 
+def ofSW (point : CompElliptic.CurveForms.ShortWeierstrass.SWPoint
+    CompElliptic.Curves.Pasta.Pallas.curve) : Point Fp :=
+  { x := point.x, y := point.y }
+
 def neg [Neg F] (point : Point F) : Point F where
   x := point.x
   y := -point.y

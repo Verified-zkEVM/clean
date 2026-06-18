@@ -654,20 +654,20 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
     (_ : ProverData Fp) : Prop :=
   ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
     ((lv : ℕ) : Fp) = input.left ∧ ((rv : ℕ) : Fp) = input.right ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q (merkleChunks l lv rv) = some B →
+    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q (merkleChunks l lv rv) = some B →
       output = B.x
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
     (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
     (merkleChunks l (ZMod.val (show Fp from input.left))
       (ZMod.val (show Fp from input.right))) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
     (input : ProverValue Input Fp) (output : ProverValue field Fp)
     (_ : ProverHint Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
       (merkleChunks l (ZMod.val (show Fp from input.left))
         (ZMod.val (show Fp from input.right))) = some B →
     output = B.x
@@ -741,7 +741,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (rv := ZMod.val input_right) (aCell := env.get i₀)
     (bCell := env.get (i₀ + 1 + 1 + 1)) (cCell := env.get (i₀ + 1 + 1 + 1 + 1))
     hl hlv hrv ha_w hb_w hc_w
-  have hex : ∃ B', Specs.Sinsemilla.hashToPoint G.S Q
+  have hex : ∃ B', Specs.Sinsemilla.hashToSWPoint G.S Q
       (List.map (pieceWord (env.get i₀)) (List.range 25)
         ++ (List.map (pieceWord (env.get (i₀ + 1 + 1 + 1))) (List.range 2)
           ++ List.map (pieceWord (env.get (i₀ + 1 + 1 + 1 + 1))) (List.range 25)))
@@ -774,7 +774,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   · exact hg.2.2.2
   · intro B' hB'
     refine congrArg Ecc.Point.x (hBfun B' ?_)
-    show Specs.Sinsemilla.hashToPoint G.S Q
+    show Specs.Sinsemilla.hashToSWPoint G.S Q
       (List.map (pieceWord (env.get i₀)) (List.range 25)
         ++ (List.map (pieceWord (env.get (i₀ + 1 + 1 + 1))) (List.range 2)
           ++ List.map (pieceWord (env.get (i₀ + 1 + 1 + 1 + 1))) (List.range 25)))
@@ -801,7 +801,7 @@ def MerkleStep (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
     (node node' : Fp) : Prop :=
   ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
     ((lv : Fp) = node ∨ (rv : Fp) = node) ∧
-    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (merkleChunks l lv rv) = some B →
+    ∀ B, Specs.Sinsemilla.hashToSWPoint G.S Q (merkleChunks l lv rv) = some B →
       node' = B.x
 
 def MerkleRoot (G : Generators) (Q : SWPoint Pallas.curve) :
@@ -873,12 +873,12 @@ def proverChunks (l : ℕ) (input : ProverValue Input Fp) : List ℕ :=
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
     (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q (proverChunks l input) = some B
+  ∃ B, Specs.Sinsemilla.hashToSWPoint G.S Q (proverChunks l input) = some B
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
     (input : ProverValue Input Fp) (output : ProverValue field Fp)
     (_ : ProverHint Fp) : Prop :=
-  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (proverChunks l input) = some B → output = B.x
+  ∀ B, Specs.Sinsemilla.hashToSWPoint G.S Q (proverChunks l input) = some B → output = B.x
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
@@ -1040,7 +1040,7 @@ noncomputable def honestNode (G : Generators) (Q : SWPoint Pallas.curve)
   | k + 1 =>
     if hk : k < 32 then
       (honestNode G Q input k).bind fun node =>
-        (Specs.Sinsemilla.hashToPoint G.S Q
+        (Specs.Sinsemilla.hashToSWPoint G.S Q
           (Layer.proverChunks k
             { node := node,
               sibling := (show Vector Fp 32 from input.path)[k]'(by omega),
@@ -1111,7 +1111,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
       have hk' : k < 32 := by omega
       have hik : honestNode G Q I k = some (acc k) := ih (by omega)
       -- honestNode (k+1) reduces to the layer-k hash, mapped to its x-coordinate
-      have hred : honestNode G Q I (k + 1) = (Specs.Sinsemilla.hashToPoint G.S Q
+      have hred : honestNode G Q I (k + 1) = (Specs.Sinsemilla.hashToSWPoint G.S Q
           (Layer.proverChunks k
             { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk',
               posBit := (show Vector Bool 32 from I.pos)[k]'hk' })).map (·.x) := by
@@ -1123,8 +1123,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
       set chunks : List ℕ := Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk',
           posBit := (show Vector Bool 32 from I.pos)[k]'hk' } with hchunks
-      obtain ⟨B, hB⟩ : ∃ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B := by
-        rcases h : Specs.Sinsemilla.hashToPoint G.S Q chunks with _ | B
+      obtain ⟨B, hB⟩ : ∃ B, Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B := by
+        rcases h : Specs.Sinsemilla.hashToSWPoint G.S Q chunks with _ | B
         · rw [h] at hsome; simp at hsome
         · exact ⟨B, rfl⟩
       rw [hB]
@@ -1146,18 +1146,18 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
         rw [← spec]
         exact bridge (j + 1) (by omega) _ _ _ rfl
   -- each layer's hash exists (the running node is the honest one, via `key`)
-  have hAsm : ∀ k (hk : k < 32), ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
+  have hAsm : ∀ k (hk : k < 32), ∃ B, Specs.Sinsemilla.hashToSWPoint G.S Q
       (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk }) = some B := by
     intro k hk
-    have h1 : (Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
+    have h1 : (Specs.Sinsemilla.hashToSWPoint G.S Q (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk })).map (·.x) = some (acc (k + 1)) := by
       have hk1 := key (k + 1) (by omega)
       rw [honestNode, dif_pos hk, key k (by omega)] at hk1
       exact hk1
-    rcases hh : Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
+    rcases hh : Specs.Sinsemilla.hashToSWPoint G.S Q (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk }) with _ | B
     · rw [hh] at h1; simp at h1
