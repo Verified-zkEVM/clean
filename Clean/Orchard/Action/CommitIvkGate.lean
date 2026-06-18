@@ -117,8 +117,8 @@ def main (row : Var Input Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Input where
   name := "GATE CommitIvk canonicity check"
   main
-  Assumptions := Assumptions
-  Spec := Spec
+  Assumptions
+  Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
     obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, haPrime, hz13A, hz13APrimeDec,

@@ -92,9 +92,10 @@ theorem completeness (SpendAuthG : MulFixed.FixedBase) :
 
 def circuit (SpendAuthG : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
   main := main SpendAuthG
-  Assumptions := Assumptions
+  elaborated := elaborated SpendAuthG
+  Assumptions
   Spec := Spec SpendAuthG
-  ProverAssumptions := ProverAssumptions
+  ProverAssumptions
   ProverSpec := ProverSpec SpendAuthG
   soundness := soundness SpendAuthG
   completeness := completeness SpendAuthG

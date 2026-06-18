@@ -52,7 +52,7 @@ def main (row : Var Input Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Input where
   name := "GATE Orchard circuit checks"
   main
-  Spec := Spec
+  Spec
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hValue, hRoot, hSpend, hOutput⟩

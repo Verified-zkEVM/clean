@@ -36,7 +36,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece b"
   main
-  Spec := Spec
+  Spec
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hb1, hb2, hdec⟩
@@ -71,7 +71,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece d"
   main
-  Spec := Spec
+  Spec
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hd0, hd1, hdec⟩
@@ -100,7 +100,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece e"
   main
-  Spec := Spec
+  Spec
   soundness := by
     circuit_proof_start
     exact left_eq_of_add_neg_eq_zero h_holds
@@ -131,7 +131,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece g"
   main
-  Spec := Spec
+  Spec
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hg0, hdec⟩
@@ -162,7 +162,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit MessagePiece h"
   main
-  Spec := Spec
+  Spec
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hh1, hdec⟩

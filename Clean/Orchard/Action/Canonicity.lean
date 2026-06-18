@@ -208,8 +208,8 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input pk_d"
   main
-  Assumptions := Assumptions
-  Spec := Spec
+  Assumptions
+  Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
     obtain ⟨hd0, hc_lt, hb3_lt, hb3cP, hz13C, hzbDec⟩ := h_assumptions
@@ -335,8 +335,8 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input value"
   main
-  Assumptions := Assumptions
-  Spec := Spec
+  Assumptions
+  Spec
   soundness := by
     circuit_proof_start
     obtain ⟨hd2_lt, hd3_lt, he0_lt⟩ := h_assumptions
@@ -417,8 +417,8 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input rho"
   main
-  Assumptions := Assumptions
-  Spec := Spec
+  Assumptions
+  Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
     obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hzeDec⟩ := h_assumptions
@@ -559,8 +559,8 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input psi"
   main
-  Assumptions := Assumptions
-  Spec := Spec
+  Assumptions
+  Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
     obtain ⟨hh1, hg1_lt, hg2_lt, hh0_lt, hg1g2P, hz13G, hzgDec⟩ := h_assumptions
@@ -766,8 +766,8 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE y coordinate checks"
   main
-  Assumptions := Assumptions
-  Spec := Spec
+  Assumptions
+  Spec
   soundness := by
     circuit_proof_start [Ecc.tP]
     obtain ⟨hlsb_bool, hj_lt, hk0_lt, hk2_lt, hj', hz1J, hz13J, hzjDec⟩ := h_assumptions

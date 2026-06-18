@@ -480,7 +480,7 @@ theorem pieceChunks_messagePieceRounds_chunks
         (List.range 25).map msF ++
         (List.range 25).map msG ++
         (List.range 1).map msH := by
-  simp only [messagePieceTailRounds, Chain.PieceChunks] at h
+  simp only [Chain.PieceChunks] at h
   obtain ⟨msA, hA, _hpA, tailA, rfl, h⟩ := h
   obtain ⟨msB, hB, _hpB, tailB, rfl, h⟩ := h
   obtain ⟨msC, hC, _hpC, tailC, rfl, h⟩ := h
@@ -515,7 +515,7 @@ theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
     chunks = noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
-  simp only [messagePieceTailRounds, Chain.PieceChunks] at hPC
+  simp only [Chain.PieceChunks] at hPC
   obtain ⟨msA, hmsA, hpA, tailA, rfl, hPC⟩ := hPC
   obtain ⟨msB, hmsB, hpB, tailB, rfl, hPC⟩ := hPC
   obtain ⟨msC, hmsC, hpC, tailC, rfl, hPC⟩ := hPC
@@ -867,13 +867,6 @@ def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
 instance elaborated : ElaboratedCircuit Fp Input MessageCells main := by
   elaborate_circuit
 
-def Assumptions (_input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  True
-
-def ProverAssumptions (_input : ProverValue Input Fp) (_ : ProverData Fp)
-    (_ : ProverHint Fp) : Prop :=
-  True
-
 def Spec (_input : Value Input Fp) (cells : Value MessageCells Fp)
     (_ : ProverData Fp) : Prop :=
   AssignedMessageFacts cells
@@ -898,14 +891,14 @@ theorem isLowBit_bitrange (y : Fp) : IsLowBit y ((bitrange y.val 0 1 : ℕ) : Fp
   rw [← bitrangeSubset_eq]; exact isLowBit_bitrangeSubset y
 
 theorem soundness :
-    GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
+    GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True) Spec := by
   circuit_proof_start [main, Spec, AssignedMessageFacts,
     Utilities.LookupRangeCheck.WitnessShort.circuit,
     Utilities.LookupRangeCheck.WitnessShort.Spec]
   exact h_holds
 
 theorem completeness :
-    GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
+    GeneralFormalCircuit.WithHint.Completeness Fp main (fun _ _ _ => True) ProverSpec := by
   circuit_proof_start [main, ProverSpec, MessageCellFacts,
     Utilities.LookupRangeCheck.WitnessShort.circuit,
     Utilities.LookupRangeCheck.WitnessShort.ProverSpec]
@@ -921,14 +914,12 @@ theorem completeness :
   · rw [e_d1]; exact isLowBit_bitrange _
 
 def circuit : GeneralFormalCircuit.WithHint Fp Input MessageCells where
-  main := main
-  elaborated := elaborated
-  Assumptions := Assumptions
-  Spec := Spec
-  ProverAssumptions := ProverAssumptions
-  ProverSpec := ProverSpec
-  soundness := soundness
-  completeness := completeness
+  main
+  elaborated
+  Spec
+  ProverSpec
+  soundness
+  completeness
 
 end AssignMessagePieces
 
@@ -987,11 +978,11 @@ theorem completeness : FormalAssertion.Completeness Fp main (fun _ => True) Spec
   exact ⟨⟨hb1, hb2, hb⟩, ⟨hd0, hd1, hd⟩, hE, ⟨hg0, hg⟩, ⟨hh1, hh⟩⟩
 
 def circuit : FormalAssertion Fp Input where
-  main := main
-  elaborated := elaborated
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main
+  elaborated
+  Spec
+  soundness
+  completeness
 
 end MessagePieceChecks
 

@@ -1167,6 +1167,7 @@ theorem soundness (G : Generators) (w : ℕ) :
 def circuit (G : Generators) (w : ℕ) :
     GeneralFormalCircuit.WithHint Fp Input (Output (w + 1)) where
   main := main G w
+  elaborated := elaborated G w
   Spec := Spec G w
   ProverAssumptions := ProverAssumptions G w
   ProverSpec := ProverSpec G w
@@ -1386,7 +1387,8 @@ theorem completeness (G : Generators) :
 
 def circuit (G : Generators) :
     GeneralFormalCircuit.WithHint Fp (Input 0) (Output []) where
-  main := main
+  main
+  elaborated
   Spec := Spec G []
   ProverAssumptions := ProverAssumptions G []
   ProverSpec := ProverSpec G []
@@ -1923,6 +1925,7 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     GeneralFormalCircuit.WithHint Fp (fields (ns.length + 1))
       (Output (n₀ :: ns)) where
   main := main G Q n₀ ns
+  elaborated := elaborated G Q n₀ ns
   Spec := Spec G Q n₀ ns
   ProverAssumptions := ProverAssumptions G Q n₀ ns
   ProverSpec := ProverSpec G Q n₀ ns

@@ -94,7 +94,7 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Row where
   name := "GATE Decomposition check"
   main
-  Spec := Spec
+  Spec
   soundness := by
     circuit_proof_start [main, Spec, a0, leftCheck, rightCheck, b1B2Check,
       b0, twoPow5, twoPow10, twoPow240]
@@ -786,6 +786,7 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ l
+  elaborated := elaborated G Q hQ l
   Spec := Spec G Q l
   ProverAssumptions := ProverAssumptions G Q l
   ProverSpec := ProverSpec G Q l
@@ -898,6 +899,7 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ l hl
+  elaborated := elaborated G Q hQ l hl
   Spec := Spec G Q l
   ProverAssumptions := ProverAssumptions G Q l
   ProverSpec := ProverSpec G Q l

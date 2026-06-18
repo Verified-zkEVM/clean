@@ -119,6 +119,7 @@ theorem completeness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
 def circuit (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint Fp Input Point where
   main := main V R
+  elaborated := elaborated V R
   Spec := Spec V R
   ProverAssumptions := ProverAssumptions
   ProverSpec := ProverSpec V R

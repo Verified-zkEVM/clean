@@ -86,7 +86,8 @@ theorem completeness (K : MulFixed.FixedBase) :
 
 def circuit (K : MulFixed.FixedBase) : FormalCircuit Fp Input field where
   main := main K
-  Assumptions := Assumptions
+  elaborated := elaborated K
+  Assumptions
   Spec := Spec K
   soundness := soundness K
   completeness := completeness K

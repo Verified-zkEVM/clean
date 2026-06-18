@@ -346,12 +346,12 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     intro h1; rw [hcellB14, hImplB h1]
 
 def circuit : FormalAssertion Fp Input where
-  main := main
-  elaborated := elaborated
-  Assumptions := Assumptions
-  Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
 
 end Canonicity
 
