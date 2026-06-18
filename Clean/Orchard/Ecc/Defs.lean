@@ -50,12 +50,30 @@ theorem eval_eq (env : Environment F) (point : Point (Expression F)) :
 
 def zero : Point F := { x := 0, y := 0 }
 
+instance : Zero (Point F) := ⟨zero⟩
+
 def coords (point : Point F) : F × F :=
   (point.x, point.y)
 
 def neg [Neg F] (point : Point F) : Point F where
   x := point.x
   y := -point.y
+
+@[circuit_norm]
+def add (p q : Point Fp) : Point Fp :=
+  let coords := CompElliptic.CurveForms.ShortWeierstrass.add
+    CompElliptic.Curves.Pasta.Pallas.a p.coords q.coords
+  { x := coords.1, y := coords.2 }
+
+instance : Add (Point Fp) := ⟨add⟩
+
+@[circuit_norm]
+def nsmul (n : ℕ) (point : Point Fp) : Point Fp :=
+  let coords := CompElliptic.CurveForms.ShortWeierstrass.smul
+    CompElliptic.Curves.Pasta.Pallas.a n point.coords
+  { x := coords.1, y := coords.2 }
+
+instance : SMul ℕ (Point Fp) := ⟨nsmul⟩
 
 end Point
 

@@ -1033,39 +1033,26 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 /-- The committed `ivk` is the `x`-coordinate of the Sinsemilla short commitment of the
 canonical message `I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)`, blinded by `[rivk] CommitIvkR`. -/
-def CommitIvkRelation (G : Generators) (Q : SWPoint Pallas.curve)
-    (R : MulFixed.FixedBase) (input : Value Input Fp) (ivk : Fp) : Prop :=
-  let ak : Fp := input.ak
-  let nk : Fp := input.nk
+def Spec (G : Generators) (Q : SWPoint Pallas.curve)
+    (R : MulFixed.FixedBase) (ak nk ivk : Fp) : Prop :=
   ∃ rivk : Fq, ∀ B : SWPoint Pallas.curve,
     Orchard.Specs.Sinsemilla.hashToPoint G.S Q
         (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B →
       ivk = (Pallas.add (B.x, B.y) (R.mulValue rivk).coords).1
 
-def ProverCommitIvkRelation (G : Generators) (Q : SWPoint Pallas.curve)
-    (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (ivk : Fp) : Prop :=
-  let ak : Fp := input.ak
-  let nk : Fp := input.nk
+/-- Honest-prover version of `Spec`, for the prover's concrete `rivk`. -/
+def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve)
+    (R : MulFixed.FixedBase) (ak nk : Fp) (rivk : Fq) (ivk : Fp) : Prop :=
   ∀ B : SWPoint Pallas.curve,
     Orchard.Specs.Sinsemilla.hashToPoint G.S Q
         (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B →
-      ivk = (Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords).1
+      ivk = (Pallas.add (B.x, B.y) (R.mulValue rivk).coords).1
 
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (input : Value Input Fp) (ivk : Fp) (_ : ProverData Fp) : Prop :=
-  CommitIvkRelation G Q R input ivk
-
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
-    (_R : MulFixed.FixedBase) (input : ProverValue Input Fp) (_ : ProverData Fp)
-    (_ : ProverHint Fp) : Prop :=
-  let ak : Fp := input.ak
-  let nk : Fp := input.nk
+/-- Honest proving needs the Sinsemilla hash-to-point to succeed for the canonical
+`commit_ivk` message. -/
+def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (ak nk : Fp) : Prop :=
   ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
     (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B
-
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (input : ProverValue Input Fp) (ivk : Fp) (_ : ProverHint Fp) : Prop :=
-  ProverCommitIvkRelation G Q R input ivk
 
 -- The top-level composition of `Commit` (witnessing + the `WithZs` Sinsemilla hash, behind a
 -- folded `Commit.Output`) with the `Canonicity` subcircuit (CopyCheck decompositions + gate) is
@@ -1157,7 +1144,7 @@ private theorem canonicity_assumptions_of_commit
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
-      (Spec G Q R) := by
+      (fun input ivk _ => Spec G Q R input.ak input.nk ivk) := by
   circuit_proof_start_core
   dsimp only [main, circuit_norm] at h_holds ⊢
   obtain ⟨hCommit, hCanon, -⟩ := h_holds
@@ -1203,7 +1190,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       (by simp only [circuit_norm]; exact hPVb)
       (by simp only [circuit_norm, Orchard.Specs.Sinsemilla.K]; exact hPVc)
       (by simp only [circuit_norm]; exact hPVd) hak hnk
-  -- assemble the `CommitIvkRelation`
+  -- assemble the entry spec
   refine ⟨?_, ?_⟩
   · refine ⟨rivk, fun B hB => ?_⟩
     have hpt := hHash B (by rw [hchunks]; exact hB)
@@ -1215,7 +1202,8 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
-      (ProverAssumptions G Q R) (ProverSpec G Q R) := by
+      (fun input _ _ => ProverAssumptions G Q input.ak input.nk)
+      (fun input ivk _ => ProverSpec G Q R input.ak input.nk input.rivk ivk) := by
   circuit_proof_start_core
   dsimp only [main, circuit_norm] at h_env ⊢
   -- Commit's prover assumptions: the hash exists for the honest `commit_ivk` chunks
@@ -1378,9 +1366,9 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R
-  Spec := Spec G Q R
-  ProverAssumptions := ProverAssumptions G Q R
-  ProverSpec := ProverSpec G Q R
+  Spec := fun input ivk _ => Spec G Q R input.ak input.nk ivk
+  ProverAssumptions := fun input _ _ => ProverAssumptions G Q input.ak input.nk
+  ProverSpec := fun input ivk _ => ProverSpec G Q R input.ak input.nk input.rivk ivk
   soundness := soundness G Q hQ R
   completeness := completeness G Q hQ R
 

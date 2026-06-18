@@ -136,7 +136,7 @@ Source baseline:
         extracted `x`-coordinate `ivk`). Composes the four Sinsemilla pieces `a, b, c, d`
         over `CommitDomain.WithZs` (rounds `24 :: [0, 23, 0]`), the `ak`/`nk` canonicity
         decompositions (`CopyCheck 13`/`CopyCheck 14`), and the `CommitIvk.Gate` canonicity
-        gate. Spec is `CommitIvkRelation` (point-level Sinsemilla short-commit relation over
+        gate. Spec is `CommitIvk.Spec` (point-level Sinsemilla short-commit relation over
         `commitIvkChunks`). **Fully proven — `soundness` and `completeness` both closed**
         (no `sorry`). The entry is factored into a virtual `Commit` subcircuit (witnessing +
         `WithZs` hash) composed with a `Canonicity` subcircuit (the two `CopyCheck`
