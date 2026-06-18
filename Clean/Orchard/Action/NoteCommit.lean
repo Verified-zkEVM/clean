@@ -26,7 +26,7 @@ open Orchard.Ecc (Point)
 open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
-open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod noteCommitMessage noteCommitChunks
+open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq noteCommitMessage noteCommitChunks
   noteCommitChunks_tiling hashToPoint hashToPoint_eq_some_iff hashToSWPoint sum_head_shift
   sum_digits_lt digit_of_sum chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum
   chunksOf_one_eq_singleton)
@@ -37,30 +37,22 @@ set_option exponentiation.threshold 900
 private theorem noteCommitChunks_segment_a (gdX gdY pkdX pkdY v rho psi : ℕ) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi) 25 =
-      chunksOf gdX 25 := by
-  unfold noteCommitMessage
-  rw [show
-      gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY +
-          2 ^ 512 * v + 2 ^ 576 * rho + 2 ^ 831 * psi =
-        gdX + 2 ^ (K * 25) *
-          (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
-            2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi) by
-    norm_num [K]
-    ring_nf]
-  rw [← chunksOf_mod
-    (gdX + 2 ^ (K * 25) *
-      (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
-        2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi)) 25]
-  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
-    norm_num [K, K]]
-  rw [Nat.add_mul_mod_self_left]
-  exact chunksOf_mod gdX 25
+      chunksOf gdX 25 :=
+  chunksOf_eq_of_mod_eq (by
+    unfold noteCommitMessage
+    rw [show
+        gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY +
+            2 ^ 512 * v + 2 ^ 576 * rho + 2 ^ 831 * psi =
+          gdX + 2 ^ (K * 25) *
+            (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
+              2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi) by norm_num [K]; ring_nf]
+    apply Nat.add_mul_mod_self_left)
 
 private theorem noteCommitChunks_segment_b_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
-    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) %
-        2 ^ K =
-      gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64 := by
+    bitrange (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 0 K =
+      bitrange gdX 250 4 + bitrange gdX 254 1 * 16 + gdY * 32 + bitrange pkdX 0 4 * 64 := by
+  simp only [bitrange]
   rw [show 2 ^ K = 1024 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -70,11 +62,9 @@ private theorem noteCommitChunks_segment_b (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 1 =
-      [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] := by
-  unfold chunksOf bitrange
-  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ K = 2 ^ K by
-    norm_num [K, K]]
+      [bitrange gdX 250 4 + bitrange gdX 254 1 * 16 + gdY * 32 + bitrange pkdX 0 4 * 64] := by
+  unfold chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero]
   rw [noteCommitChunks_segment_b_word gdX gdY pkdX pkdY v rho psi hgdX hgdY]
 
 private theorem noteCommitChunks_segment_c_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -91,19 +81,15 @@ private theorem noteCommitChunks_segment_c (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25 =
-      chunksOf (pkdX / 16) 25 := by
-  rw [← chunksOf_mod
-      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25,
-    ← chunksOf_mod (pkdX / 16) 25]
-  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
-    norm_num [K, K]]
-  rw [noteCommitChunks_segment_c_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY]
+      chunksOf (pkdX / 16) 25 :=
+  chunksOf_eq_of_mod_eq (noteCommitChunks_segment_c_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY)
 
 private theorem noteCommitChunks_segment_d_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) (hpkdX : pkdX < 2 ^ 255) :
     (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) %
         2 ^ (K * 6) =
-      (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) % 2 ^ (K * 6) := by
+      (bitrange pkdX 254 1 + pkdY * 2 + bitrange v 0 58 * 4) % 2 ^ (K * 6) := by
+  simp only [bitrange]
   rw [show 2 ^ (K * 6) = 2 ^ 60 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -113,22 +99,16 @@ private theorem noteCommitChunks_segment_d (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) (hpkdX : pkdX < 2 ^ 255) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6 =
-      chunksOf
-        (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6 := by
-  rw [← chunksOf_mod
-      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6,
-    ← chunksOf_mod
-      (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6]
-  rw [show 2 ^ (K * 6) = 2 ^ (K * 6) by
-    norm_num [K, K]]
-  rw [noteCommitChunks_segment_d_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX]
+      chunksOf (bitrange pkdX 254 1 + pkdY * 2 + bitrange v 0 58 * 4) 6 :=
+  chunksOf_eq_of_mod_eq
+    (noteCommitChunks_segment_d_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX)
 
 private theorem noteCommitChunks_segment_e_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
-    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) %
-        2 ^ K =
-      v / 2 ^ 58 % 64 + (rho % 16) * 64 := by
+    bitrange (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) 0 K =
+      bitrange v 58 6 + bitrange rho 0 4 * 64 := by
+  simp only [bitrange]
   rw [show 2 ^ K = 1024 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -139,11 +119,9 @@ private theorem noteCommitChunks_segment_e (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) 1 =
-      [v / 2 ^ 58 % 64 + (rho % 16) * 64] := by
-  unfold chunksOf bitrange
-  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ K = 2 ^ K by
-    norm_num [K, K]]
+      [bitrange v 58 6 + bitrange rho 0 4 * 64] := by
+  unfold chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero]
   rw [noteCommitChunks_segment_e_word gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv]
 
 private theorem noteCommitChunks_segment_f_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -162,13 +140,9 @@ private theorem noteCommitChunks_segment_f (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25 =
-      chunksOf (rho / 16) 25 := by
-  rw [← chunksOf_mod
-      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25,
-    ← chunksOf_mod (rho / 16) 25]
-  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
-    norm_num [K, K]]
-  rw [noteCommitChunks_segment_f_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv]
+      chunksOf (rho / 16) 25 :=
+  chunksOf_eq_of_mod_eq
+    (noteCommitChunks_segment_f_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv)
 
 private theorem noteCommitChunks_segment_g_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
@@ -176,7 +150,8 @@ private theorem noteCommitChunks_segment_g_mod (gdX gdY pkdX pkdY v rho psi : �
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) :
     (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) %
         2 ^ (K * 25) =
-      (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) % 2 ^ (K * 25) := by
+      (bitrange rho 254 1 + bitrange psi 0 249 * 2) % 2 ^ (K * 25) := by
+  simp only [bitrange]
   rw [show 2 ^ (K * 25) = 2 ^ 250 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -188,23 +163,17 @@ private theorem noteCommitChunks_segment_g (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25 =
-      chunksOf
-        (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25 := by
-  rw [← chunksOf_mod
-      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25,
-    ← chunksOf_mod
-      (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25]
-  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
-    norm_num [K, K]]
-  rw [noteCommitChunks_segment_g_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho]
+      chunksOf (bitrange rho 254 1 + bitrange psi 0 249 * 2) 25 :=
+  chunksOf_eq_of_mod_eq
+    (noteCommitChunks_segment_g_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho)
 
 private theorem noteCommitChunks_segment_h_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
-    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) %
-        2 ^ K =
-      psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 := by
+    bitrange (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) 0 K =
+      bitrange psi 249 5 + bitrange psi 254 1 * 32 := by
+  simp only [bitrange]
   rw [show 2 ^ K = 1024 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -216,11 +185,9 @@ private theorem noteCommitChunks_segment_h (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) 1 =
-      [psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32] := by
-  unfold chunksOf bitrange
-  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ K = 2 ^ K by
-    norm_num [K, K]]
+      [bitrange psi 249 5 + bitrange psi 254 1 * 32] := by
+  unfold chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero]
   rw [noteCommitChunks_segment_h_word gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho hpsi]
 
 private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -246,8 +213,6 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
   rw [noteCommitChunks_segment_f _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv]
   rw [noteCommitChunks_segment_g _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho]
   rw [noteCommitChunks_segment_h _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho hpsi]
-  simp only [bitrange, pow_zero, Nat.div_one]
-  norm_num
 
 end
 
