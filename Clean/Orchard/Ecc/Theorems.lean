@@ -5,44 +5,30 @@ open CompElliptic.Curves.Pasta CompElliptic.CurveForms
 
 namespace Orchard.Point
 
-lemma neg_coords (point : Point Fp) :
-    point.neg.coords = ShortWeierstrass.neg point.coords := by
-  simp only [neg, Point.coords, ShortWeierstrass.neg]
-
-theorem valid_neg {point : Point Fp} (h : Pallas.Valid point.coords) :
-    Pallas.Valid point.neg.coords := by
-  rw [neg_coords]
-  exact ShortWeierstrass.valid_neg h
-
-theorem not_onCurve_of_x_eq_zero (y : Fp) :
-    ¬ Pallas.OnCurve ({ x := 0, y } : Point Fp).coords := by
-  apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y
-
 theorem ne_zero_of_onCurve {point : Point Fp}
-  (hPoint : Pallas.OnCurve point.coords) :
+  (hPoint : point.OnCurve) :
     point ≠ zero := by
-  rcases point with ⟨x, y⟩
-  intro hIdentity
-  simp only [zero, mk.injEq] at hIdentity
-  rw [hIdentity.1] at hPoint
-  exact not_onCurve_of_x_eq_zero y hPoint
+  exact Point.onCurve_ne_zero hPoint
 
 theorem y_eq_zero_of_valid_of_x_eq_zero {point : Point Fp}
-  (hPoint : Pallas.Valid point.coords) :
+  (hPoint : point.Valid) :
     point.x = 0 → point.y = 0 := by
   rcases point with ⟨x, y⟩
-  simp only [Point.coords] at *
+  rw [Point.valid_iff] at hPoint
+  simp only [Point.coords] at hPoint
   intro hx
+  change x = 0 at hx
   rcases hPoint with hCurve | hIdentity
   · rw [hx] at hCurve
-    nomatch not_onCurve_of_x_eq_zero y hCurve
+    exact False.elim (Point.no_onCurve_x_zero y ((Point.onCurve_iff { x := 0, y }).mpr hCurve))
   · simp_all
 
 theorem y_ne_zero_of_valid_of_x_ne_zero {point : Point Fp}
-    (hPoint : Pallas.Valid point.coords) (hx : point.x ≠ 0) :
+    (hPoint : point.Valid) (hx : point.x ≠ 0) :
     point.y ≠ 0 := by
   rcases point with ⟨x, y⟩
-  simp only [Point.coords] at *
+  rw [Point.valid_iff] at hPoint
+  simp only [Point.coords] at hPoint
   rintro rfl
   rcases hPoint with hCurve | hIdentity
   · apply Pallas.no_onCurve_y_zero x hCurve

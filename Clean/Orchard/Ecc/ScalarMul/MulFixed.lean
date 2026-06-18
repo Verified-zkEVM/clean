@@ -270,6 +270,12 @@ theorem windowPoint_onCurve {w k : ℕ} (hk : k < 8) :
     Pallas.OnCurve ((windowPoint B.point w k).x, (windowPoint B.point w k).y) :=
   SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero hk)
 
+theorem windowPoint_point_onCurve {w k : ℕ} (hk : k < 8) :
+    ({ x := (windowPoint B.point w k).x, y := (windowPoint B.point w k).y } :
+      Point Fp).OnCurve := by
+  rw [Point.onCurve_iff]
+  exact B.windowPoint_onCurve hk
+
 theorem nsmul_ne_zero {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
     n • B.point ≠ 0 := by
   rw [Ne, B.nsmul_eq_zero_iff]
@@ -280,6 +286,11 @@ theorem nsmul_ne_zero {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
 theorem nsmul_onCurve {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
     Pallas.OnCurve ((n • B.point).x, (n • B.point).y) :=
   SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero hn hlt)
+
+theorem nsmul_point_onCurve {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
+    ({ x := (n • B.point).x, y := (n • B.point).y } : Point Fp).OnCurve := by
+  rw [Point.onCurve_iff]
+  exact B.nsmul_onCurve hn hlt
 
 /--
 The collision-freedom fact behind the incomplete additions of fixed-base scalar
@@ -323,8 +334,8 @@ def scalarMul (s : Fq) : Point Fp :=
 instance : HSMul Fq FixedBase (Point Fp) where
   hSMul s B := B.scalarMul s
 
-theorem smul_valid (s : Fq) : Pallas.Valid (s • B).coords :=
-  (s.val • B.point).onCurve
+theorem smul_valid (s : Fq) : (s • B).Valid :=
+  (Point.valid_iff (s • B)).mpr (s.val • B.point).onCurve
 
 theorem smul_coords (s : Fq) :
     (s • B).coords = ((s.val • B.point).x, (s.val • B.point).y) := rfl

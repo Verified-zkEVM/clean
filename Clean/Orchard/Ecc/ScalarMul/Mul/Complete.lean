@@ -136,6 +136,20 @@ def accValue (baseX baseY : Fp) (acc : Fp × Fp) (bits : ℕ → Bool) : ℕ →
   | 0 => acc
   | b + 1 => stepValue baseX baseY (accValue baseX baseY acc bits b) (bits b)
 
+private def accValuePoint (baseX baseY xA yA : Fp) (bits : ℕ → Bool) :
+    ℕ → Point Fp
+  | 0 => { x := xA, y := yA }
+  | b + 1 =>
+      let acc := accValuePoint baseX baseY xA yA bits b
+      acc + ({ x := baseX, y := if bits b then baseY else -baseY } + acc)
+
+private theorem accValuePoint_coords
+    (baseX baseY xA yA : Fp) (bits : ℕ → Bool) :
+    (accValuePoint baseX baseY xA yA bits 3).coords
+      = accValue baseX baseY (xA, yA) bits 3 := by
+  simp only [accValuePoint, accValue, stepValue, Point.coords_add]
+  simp [Point.coords]
+
 def main (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
   -- copy the running sum from incomplete addition
   let z₀ <== input.z
@@ -167,13 +181,13 @@ def Spec (input : Value Input Fp) (output : Output Fp) (_ : ProverData Fp) : Pro
       ∀ b : Fin 2, output.zs[b.val + 1] =
         2 * output.zs[b.val]'(by have := b.isLt; omega) +
           (if bits (b.val + 1) then 1 else 0)) ∧
-    (Pallas.Valid (input.xA, input.yA) → Pallas.Valid input.base.coords →
-      Pallas.Valid output.acc.coords ∧
+    (({ x := input.xA, y := input.yA } : Point Fp).Valid → input.base.Valid →
+      output.acc.Valid ∧
         output.acc.coords = accValue input.base.x input.base.y (input.xA, input.yA) bits 3)
 
 def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
-  Pallas.Valid (input.xA, input.yA) ∧ Pallas.Valid input.base.coords
+  ({ x := input.xA, y := input.yA } : Point Fp).Valid ∧ input.base.Valid
 
 def ProverSpec (input : ProverValue Input Fp) (output : Output Fp)
     (_ : ProverHint Fp) : Prop :=
@@ -269,21 +283,28 @@ theorem soundness :
     rw [hby1] at hyP1
     rw [hby2] at hyP2
     -- the conditionally-negated points are valid
-    have hU0V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 1)) := by
+    have hBaseVP : Pallas.Valid input_base.coords := (Point.valid_iff input_base).mp hBaseV
+    have hU0V :
+        ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 1) } : Point Fp).Valid := by
       rw [hyP0]
+      apply (Point.valid_iff _).mpr
       split
-      · exact hBaseV
-      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
-    have hU1V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 24 + 1)) := by
+      · exact hBaseVP
+      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+    have hU1V :
+        ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 24 + 1) } : Point Fp).Valid := by
       rw [hyP1]
+      apply (Point.valid_iff _).mpr
       split
-      · exact hBaseV
-      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
-    have hU2V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 48 + 1)) := by
+      · exact hBaseVP
+      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+    have hU2V :
+        ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 48 + 1) } : Point Fp).Valid := by
       rw [hyP2]
+      apply (Point.valid_iff _).mpr
       split
-      · exact hBaseV
-      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
+      · exact hBaseVP
+      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
     -- chain the six complete additions
     have hT0 := hAddA0 hU0V hAccV
     have hA1 := hAddB0 hAccV hT0.1
@@ -296,8 +317,10 @@ theorem soundness :
     rw [show i₀ + 1 + 3 + 2 * 24 + 2 + 11 + 2 + 2
         = i₀ + 1 + 3 + 48 + 1 + 1 + 11 + 2 + 2 from by omega]
     rw [hA3.2, hT2.2, hA2.2, hT1.2, hA1.2, hT0.2, hyP0, hyP1, hyP2]
-    simp only [accValue, stepValue, Point.coords, decide_eq_true_eq]
-    norm_num
+    simpa [accValuePoint, Point.coords] using
+      accValuePoint_coords input_base.x input_base.y input_xA input_yA
+        (fun b => decide (env.get (i₀ + 1 + b) =
+          2 * (if b = 0 then env.get i₀ else env.get (i₀ + b)) + 1))
 
 /-- The honest assignment of one complete bit satisfies the decomposition gate. -/
 private theorem bit_facts_complete (zP bY : Fp) (b : Bool) :
@@ -361,21 +384,28 @@ theorem completeness :
     rw [hz3, hz2]
     rfl
   -- the conditionally-negated points are valid
-  have hU0V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 1)) := by
+  have hBaseVP : Pallas.Valid input_base.coords := (Point.valid_iff input_base).mp hBaseV
+  have hU0V :
+      ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 1) } : Point Fp).Valid := by
     rw [hyP0]
+    apply (Point.valid_iff _).mpr
     split
-    · exact hBaseV
-    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
-  have hU1V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 24 + 1)) := by
+    · exact hBaseVP
+    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+  have hU1V :
+      ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 24 + 1) } : Point Fp).Valid := by
     rw [hyP1]
+    apply (Point.valid_iff _).mpr
     split
-    · exact hBaseV
-    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
-  have hU2V : Pallas.Valid (input_base.x, env.get (i₀ + 1 + 3 + 48 + 1)) := by
+    · exact hBaseVP
+    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+  have hU2V :
+      ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 48 + 1) } : Point Fp).Valid := by
     rw [hyP2]
+    apply (Point.valid_iff _).mpr
     split
-    · exact hBaseV
-    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseV
+    · exact hBaseVP
+    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
   -- chain the six complete additions
   have hT0 := hAdds0.1 hU0V hAccV
   have hA1 := hAdds0.2 hAccV hT0.1
@@ -409,7 +439,8 @@ theorem completeness :
     rw [show i₀ + 1 + 3 + 2 * 24 + 2 + 11 + 2 + 2
         = i₀ + 1 + 3 + 48 + 1 + 1 + 11 + 2 + 2 from by omega]
     rw [hA3.2, hT2.2, hA2.2, hT1.2, hA1.2, hT0.2, hyP0, hyP1, hyP2]
-    simp only [accValue, stepValue, Point.coords]
+    simpa [accValuePoint, Point.coords] using
+      accValuePoint_coords input_base.x input_base.y input_xA input_yA input_bits
 
 /-- `complete.rs::Config::assign_region`: the complete-addition bits of variable-base
 scalar multiplication. -/

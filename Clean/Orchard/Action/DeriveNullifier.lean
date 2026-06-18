@@ -51,7 +51,7 @@ instance elaborated (K : MulFixed.FixedBase) :
 
 /-- `cm` is an already-assigned valid point. -/
 def Assumptions (input : Input Fp) : Prop :=
-  Pallas.Valid input.cm.coords
+  input.cm.Valid
 
 /-- The nullifier `nf = extract_p(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`: the
 `x`-coordinate of the complete sum of `cm` with the base-field-element fixed-base product. -/
@@ -70,7 +70,7 @@ theorem soundness (K : MulFixed.FixedBase) :
   obtain ⟨h_hash, h_scalar, h_bfe, h_complete⟩ := h_holds
   have h_nf := (h_complete ⟨h_assumptions, by rw [h_bfe]; exact K.smul_valid _⟩).2
   rw [h_bfe, h_scalar, h_hash] at h_nf
-  exact congrArg Prod.fst h_nf
+  exact congrArg Point.x h_nf
 
 theorem completeness (K : MulFixed.FixedBase) :
     Completeness Fp (main K) Assumptions := by

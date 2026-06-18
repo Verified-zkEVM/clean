@@ -218,6 +218,10 @@ private def accPt (env : Environment Fp) (i₀ : ℕ) : ℕ → Point Fp
     { x := Expression.eval env (varFromOffset Point (i₀ + 4 + j * 10 + 4 + 2 + 2)).x,
       y := Expression.eval env (varFromOffset Point (i₀ + 4 + j * 10 + 4 + 2 + 2)).y }
 
+private def winPt (env : Environment Fp) (i₀ j : ℕ) : Point Fp :=
+  { x := env.get (i₀ + 4 + j * 10 + 1),
+    y := env.get (i₀ + 4 + j * 10 + 1 + 1) }
+
 theorem soundness (B : FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main B) (fun _ _ => True) (Spec B) := by
   circuit_proof_start [main, Spec, Gate.circuit, Gate.Spec,
@@ -235,13 +239,12 @@ theorem soundness (B : FixedBase) :
             yP := env.get (i₀ + 4 + j * 10 + 1 + 1),
             u := env.get (i₀ + 4 + j * 10 + 1 + 1 + 1) } ∧
         Gate.IsWindow (env.get (i₀ + 4 + j * 10))) ∧
-      (Pallas.OnCurve (env.get (i₀ + 4 + j * 10 + 1), env.get (i₀ + 4 + j * 10 + 1 + 1)) ∧
-          Pallas.OnCurve (accPt env i₀ j).coords ∧
+      ((winPt env i₀ j).OnCurve ∧
+          (accPt env i₀ j).OnCurve ∧
           ¬env.get (i₀ + 4 + j * 10 + 1) = (accPt env i₀ j).x →
-        Pallas.OnCurve (accPt env i₀ (j + 1)).coords ∧
-          (accPt env i₀ (j + 1)).coords =
-            Pallas.add (env.get (i₀ + 4 + j * 10 + 1), env.get (i₀ + 4 + j * 10 + 1 + 1))
-              (accPt env i₀ j).coords) := by
+        (accPt env i₀ (j + 1)).OnCurve ∧
+          accPt env i₀ (j + 1) =
+            winPt env i₀ j + accPt env i₀ j) := by
     intro j hj
     have h := h_loop ⟨j, hj⟩
     simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
@@ -296,20 +299,26 @@ theorem soundness (B : FixedBase) :
       have hwp : windowPoint B.point (j + 1) k = t • B.point := rfl
       rw [hwp] at hpx hpy
       -- discharge the incomplete-addition assumptions
-      have h_spec := h_inc ⟨by
-          rw [hpx, hpy]
-          exact SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero (by omega) (by omega)),
-        by
-          rw [hacc]
+      have h_inc_assumptions :
+          (winPt env i₀ j).OnCurve ∧ (accPt env i₀ j).OnCurve ∧
+            ¬env.get (i₀ + 4 + j * 10 + 1) = (accPt env i₀ j).x := by
+        refine ⟨?_, ?_, ?_⟩
+        · simp only [winPt]
+          rw [Point.onCurve_iff, hpx, hpy]
+          exact SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero (by omega) (by omega))
+        · rw [hacc]
+          rw [Point.onCurve_iff]
           show Pallas.OnCurve ((S • B.point).x, (S • B.point).y)
-          exact B.nsmul_onCurve hS_pos hS_card,
-        by
-          rw [hpx, hacc]
+          exact B.nsmul_onCurve hS_pos hS_card
+        · rw [hpx, hacc]
           show (t • B.point).x ≠ (S • B.point).x
-          exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
+          exact B.nsmul_x_ne hS_pos (by omega) hsum_card
+      have h_spec := h_inc h_inc_assumptions
       refine ⟨t + S, by omega, step_lt_next hS_lt ht_upper, ?_⟩
       apply Point.ext_coords
-      rw [h_spec.2, hpx, hpy, hacc]
+      rw [h_spec.2]
+      simp only [winPt, Point.coords]
+      rw [hpx, hpy, hacc]
       show Pallas.add ((t • B.point).x, (t • B.point).y) ((S • B.point).x, (S • B.point).y)
         = (((t + S) • B.point).x, ((t + S) • B.point).y)
       rw [Pallas.add_coords, ← add_nsmul]
@@ -325,20 +334,29 @@ theorem soundness (B : FixedBase) :
   replace hpx : env.get (i₀ + 4 + 830 + 1) = (windowPoint B.point 84 k).x := hpx
   replace hpy : env.get (i₀ + 4 + 830 + 1 + 1) = (windowPoint B.point 84 k).y := hpy
   have hS_card : S < PALLAS_SCALAR_CARD := inv_lt_card hS_lt (by omega)
-  have h_spec := h_add ⟨by
-      show Pallas.Valid (env.get (i₀ + 4 + 830 + 1), env.get (i₀ + 4 + 830 + 1 + 1))
-      rw [hpx, hpy]
-      exact Or.inl (SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero hk)),
-    by
-      show Pallas.Valid
-        (({ x := Expression.eval env (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).x,
-            y := Expression.eval env (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).y } :
-          Point Fp)).coords
-      rw [hacc]
-      exact Or.inl (B.nsmul_onCurve hS_pos hS_card)⟩
+  have hcurveP :
+      ({ x := env.get (i₀ + 4 + 830 + 1),
+         y := env.get (i₀ + 4 + 830 + 1 + 1) } : Point Fp).OnCurve := by
+    obtain ⟨_, _, hcurve⟩ := h_coords84
+    unfold Point.OnCurve
+    linear_combination hcurve
+  have hValidP :
+      ({ x := env.get (i₀ + 4 + 830 + 1),
+         y := env.get (i₀ + 4 + 830 + 1 + 1) } : Point Fp).Valid := by
+    exact Or.inl hcurveP
+  have hValidAcc :
+      ({ x := Expression.eval env (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).x,
+         y := Expression.eval env (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).y } :
+        Point Fp).Valid := by
+    rw [hacc]
+    apply Or.inl
+    rw [Point.onCurve_iff]
+    exact B.nsmul_onCurve hS_pos hS_card
+  have h_spec := h_add ⟨hValidP, hValidAcc⟩
   refine ⟨windowScalar 84 k + (S : Fq), ?_⟩
   apply Point.ext_coords
   rw [h_spec.2]
+  simp only [Point.coords]
   show Pallas.add
       (({ x := env.get (i₀ + 4 + 830 + 1), y := env.get (i₀ + 4 + 830 + 1 + 1) } :
         Point Fp)).coords
@@ -432,13 +450,12 @@ theorem completeness (B : FixedBase) :
     coordsRow_eq h84w h84x h84y h84u
   -- per-iteration incomplete addition, with the accumulator cleaned up
   have h_step' : ∀ (j : ℕ) (hj : j < 83),
-      Pallas.OnCurve (env.get (i₀ + 4 + j * 10 + 1), env.get (i₀ + 4 + j * 10 + 1 + 1)) ∧
-        Pallas.OnCurve (accPt env.toEnvironment i₀ j).coords ∧
+      (winPt env.toEnvironment i₀ j).OnCurve ∧
+        (accPt env.toEnvironment i₀ j).OnCurve ∧
         ¬env.get (i₀ + 4 + j * 10 + 1) = (accPt env.toEnvironment i₀ j).x →
-      Pallas.OnCurve (accPt env.toEnvironment i₀ (j + 1)).coords ∧
-        (accPt env.toEnvironment i₀ (j + 1)).coords =
-          Pallas.add (env.get (i₀ + 4 + j * 10 + 1), env.get (i₀ + 4 + j * 10 + 1 + 1))
-            (accPt env.toEnvironment i₀ j).coords := by
+      (accPt env.toEnvironment i₀ (j + 1)).OnCurve ∧
+        accPt env.toEnvironment i₀ (j + 1) =
+          winPt env.toEnvironment i₀ j + accPt env.toEnvironment i₀ j := by
     intro j hj
     have h := (h_loop_env ⟨j, hj⟩).2
     simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
@@ -482,21 +499,28 @@ theorem completeness (B : FixedBase) :
         exact Nat.mul_le_mul_right _ (by have := windowVal_lt input (j + 1); omega)
       have hS_card := inv_lt_card hS_lt (by omega)
       have hsum_card := step_sum_lt hS_lt ht_upper (by omega)
-      have h_spec := h_step' j hj ⟨by
-          rw [hrowX j hj, hrowY j hj]
+      have h_step_assumptions :
+          (winPt env.toEnvironment i₀ j).OnCurve ∧
+            (accPt env.toEnvironment i₀ j).OnCurve ∧
+            ¬env.get (i₀ + 4 + j * 10 + 1) = (accPt env.toEnvironment i₀ j).x := by
+        refine ⟨?_, ?_, ?_⟩
+        · simp only [winPt]
+          rw [Point.onCurve_iff, hrowX j hj, hrowY j hj]
           exact SWPoint.onCurve_of_ne_zero
-            (B.windowPoint_ne_zero (windowVal_lt input (j + 1))),
-        by
-          rw [hacc]
+            (B.windowPoint_ne_zero (windowVal_lt input (j + 1)))
+        · rw [hacc]
+          rw [Point.onCurve_iff]
           show Pallas.OnCurve ((partialSum (windowVal input) j • B.point).x,
             (partialSum (windowVal input) j • B.point).y)
-          exact B.nsmul_onCurve hS_pos hS_card,
-        by
-          rw [hrowX j hj, hacc]
+          exact B.nsmul_onCurve hS_pos hS_card
+        · rw [hrowX j hj, hacc]
           show (t • B.point).x ≠ (partialSum (windowVal input) j • B.point).x
-          exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
+          exact B.nsmul_x_ne hS_pos (by omega) hsum_card
+      have h_spec := h_step' j hj h_step_assumptions
       apply Point.ext_coords
-      rw [h_spec.2, hrowX j hj, hrowY j hj, hacc]
+      rw [h_spec.2]
+      simp only [winPt, Point.coords]
+      rw [hrowX j hj, hrowY j hj, hacc]
       show Pallas.add ((t • B.point).x, (t • B.point).y)
           ((partialSum (windowVal input) j • B.point).x,
             (partialSum (windowVal input) j • B.point).y)
@@ -512,8 +536,8 @@ theorem completeness (B : FixedBase) :
             yP := env.get (i₀ + 4 + j * 10 + 1 + 1),
             u := env.get (i₀ + 4 + j * 10 + 1 + 1 + 1) } ∧
         Gate.IsWindow (env.get (i₀ + 4 + j * 10))) ∧
-      Pallas.OnCurve (env.get (i₀ + 4 + j * 10 + 1), env.get (i₀ + 4 + j * 10 + 1 + 1)) ∧
-      Pallas.OnCurve (accPt env.toEnvironment i₀ j).coords ∧
+      (winPt env.toEnvironment i₀ j).OnCurve ∧
+      (accPt env.toEnvironment i₀ j).OnCurve ∧
       ¬env.get (i₀ + 4 + j * 10 + 1) = (accPt env.toEnvironment i₀ j).x := by
     intro j hj
     have hacc := h_inv j (by omega)
@@ -525,9 +549,11 @@ theorem completeness (B : FixedBase) :
       exact (rowValue_spec B input (by omega)).1
     · rw [hrowW j hj]
       exact (rowValue_spec B input (by omega)).2
-    · rw [hrowX j hj, hrowY j hj]
+    · simp only [winPt]
+      rw [Point.onCurve_iff, hrowX j hj, hrowY j hj]
       exact SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero (windowVal_lt input (j + 1)))
     · rw [hacc]
+      rw [Point.onCurve_iff]
       show Pallas.OnCurve ((partialSum (windowVal input) j • B.point).x,
         (partialSum (windowVal input) j • B.point).y)
       exact B.nsmul_onCurve hS_pos hS_card
@@ -566,16 +592,32 @@ theorem completeness (B : FixedBase) :
       = { x := (S83 • B.point).x, y := (S83 • B.point).y } := by
     rw [← hS83_def]
     exact h_inv 83 (by omega)
-  have hValidP : Pallas.Valid (env.get (i₀ + 4 + 830 + 1), env.get (i₀ + 4 + 830 + 1 + 1)) := by
-    rw [h84x, h84y, rowValue_xP, rowValue_yP]
-    exact Or.inl (SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero (windowVal_lt input 84)))
-  have hValidAcc : Pallas.Valid
-      (({ x := Expression.eval env.toEnvironment
+  obtain ⟨R84, hR84_def⟩ : ∃ R : CoordsRow Fp, rowValue B input 84 = R := ⟨_, rfl⟩
+  have h84xR : env.get (i₀ + 4 + 830 + 1) = R84.xP := by
+    rw [← hR84_def]
+    exact h84x
+  have h84yR : env.get (i₀ + 4 + 830 + 1 + 1) = R84.yP := by
+    rw [← hR84_def]
+    exact h84y
+  have hcurveR : R84.yP * R84.yP = R84.xP * R84.xP * R84.xP + 5 := by
+    rw [← hR84_def]
+    exact (rowValue_spec B input (w := 84) (by norm_num)).1.2.2
+  have hValidP :
+      ({ x := env.get (i₀ + 4 + 830 + 1),
+         y := env.get (i₀ + 4 + 830 + 1 + 1) } : Point Fp).Valid := by
+    apply Or.inl
+    unfold Point.OnCurve
+    rw [h84xR, h84yR]
+    linear_combination hcurveR
+  have hValidAcc :
+      ({ x := Expression.eval env.toEnvironment
             (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).x,
           y := Expression.eval env.toEnvironment
-            (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).y } : Point Fp)).coords := by
+            (varFromOffset Point (i₀ + 4 + 820 + 4 + 2 + 2)).y } : Point Fp).Valid := by
     rw [hacc83]
-    exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
+    apply Or.inl
+    rw [Point.onCurve_iff]
+    exact B.nsmul_onCurve hS83_pos hS83_card
   refine ⟨⟨⟨?_, ?_⟩, ?_, ⟨?_, ?_⟩, hValidP, hValidAcc⟩, ?_⟩
   · rw [h0w, h0x, h0y, h0u]
     exact (rowValue_spec B input (by norm_num)).1
@@ -598,6 +640,7 @@ theorem completeness (B : FixedBase) :
   · have h_final := h_add_env ⟨hValidP, hValidAcc⟩
     apply Point.ext_coords
     rw [h_final.2]
+    simp only [Point.coords]
     show Pallas.add
         (({ x := env.get (i₀ + 4 + 830 + 1), y := env.get (i₀ + 4 + 830 + 1 + 1) } :
           Point Fp)).coords

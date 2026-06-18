@@ -26,9 +26,9 @@ def main (point : Var Point Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Point where
   name := "GATE witness point"
   main
-  Spec point := Pallas.Valid point.coords
+  Spec point := point.Valid
   soundness := by
-    circuit_proof_start [main, Pallas.Valid, Point.coords, pallasB,
+    circuit_proof_start [main, Point.Valid, Point.OnCurve, Point.zero, Point.coords, pallasB,
       CompElliptic.CurveForms.ShortWeierstrass.Valid,
       CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
     rw [← h_input]
@@ -36,7 +36,7 @@ def circuit : FormalAssertion Fp Point where
     set y := Expression.eval env input_var.y
     by_cases hx : x = 0
     · by_cases hy : y = 0
-      · exact Or.inr (by rw [Prod.mk.injEq]; exact ⟨hx, hy⟩)
+      · exact Or.inr (by rw [hx, hy]; rfl)
       · left
         have hy_mul : y * (y * y - x * x * x - (5 : Fp)) = 0 := by
           simpa [sub_eq_add_neg] using h_holds.2
@@ -48,7 +48,7 @@ def circuit : FormalAssertion Fp Point where
       have h_eq := (mul_eq_zero.mp hx_mul).resolve_left hx
       linear_combination h_eq
   completeness := by
-    circuit_proof_start [main, Pallas.Valid, Point.coords, pallasB,
+    circuit_proof_start [main, Point.Valid, Point.OnCurve, Point.zero, Point.coords, pallasB,
       CompElliptic.CurveForms.ShortWeierstrass.Valid,
       CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
     rw [← h_input] at h_spec
@@ -59,9 +59,10 @@ def circuit : FormalAssertion Fp Point where
       constructor
       · linear_combination x * h_eq
       · linear_combination y * h_eq
-    · rw [Prod.mk.injEq] at h_identity
-      obtain ⟨hx, hy⟩ := h_identity
-      simp only at hx hy
+    · have hx := congrArg Point.x h_identity
+      have hy := congrArg Point.y h_identity
+      change x = 0 at hx
+      change y = 0 at hy
       constructor
       · rw [hx]; ring
       · rw [hy]; ring
@@ -73,8 +74,8 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point wh
     Gate.circuit point
     return point
 
-  Spec _ output _ := Pallas.Valid output.coords
-  ProverAssumptions value _ _ := Pallas.Valid value.coords
+  Spec _ output _ := output.Valid
+  ProverAssumptions value _ _ := value.Valid
   ProverSpec value output _ := output = value
 
   soundness := by
@@ -98,14 +99,14 @@ def main (point : Var Point Fp) : Circuit Fp Unit := do
 def circuit : FormalAssertion Fp Point where
   name := "GATE witness non-identity point"
   main
-  Spec point := Pallas.OnCurve point.coords
+  Spec point := point.OnCurve
   soundness := by
-    circuit_proof_start [main, Point.coords, pallasB,
+    circuit_proof_start [main, Point.OnCurve, Point.coords, pallasB,
       CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
     rw [← h_input]
     linear_combination h_holds
   completeness := by
-    circuit_proof_start [main, Point.coords, pallasB,
+    circuit_proof_start [main, Point.OnCurve, Point.coords, pallasB,
       CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
     rw [← h_input] at h_spec
     linear_combination h_spec
@@ -118,8 +119,8 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point wh
     Gate.circuit point
     return point
 
-  Spec _ output _ := Pallas.OnCurve output.coords
-  ProverAssumptions value _ _ := Pallas.OnCurve value.coords
+  Spec _ output _ := output.OnCurve
+  ProverAssumptions value _ _ := value.OnCurve
   ProverSpec value output _ := output = value
 
   soundness := by

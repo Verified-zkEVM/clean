@@ -42,11 +42,11 @@ instance elaborated (SpendAuthG : MulFixed.FixedBase) :
 
 /-- `ak_P` is already assigned as a valid Pallas point before the spend-authority block. -/
 def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  Pallas.Valid input.akP.coords
+  input.akP.Valid
 
 def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
-  Pallas.Valid input.akP.coords
+  input.akP.Valid
 
 /-- The spend validating key is randomized as `rk = [alpha] SpendAuthG + ak_P`. -/
 def Spec (SpendAuthG : MulFixed.FixedBase) (input : Value Input Fp)
@@ -70,9 +70,9 @@ theorem soundness (SpendAuthG : MulFixed.FixedBase) :
       rw [h_alpha_commitment]
       exact SpendAuthG.smul_valid alpha,
     h_assumptions⟩
-  exact ⟨alpha, Point.ext_coords (by
+  exact ⟨alpha, by
     rw [h_alpha_commitment] at h_final
-    simpa [Point.add] using h_final.2)⟩
+    exact h_final.2⟩
 
 theorem completeness (SpendAuthG : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main SpendAuthG) ProverAssumptions
@@ -89,9 +89,9 @@ theorem completeness (SpendAuthG : MulFixed.FixedBase) :
   exact ⟨⟨by
       rw [h_alpha_commitment]
       exact SpendAuthG.smul_valid input_alpha,
-    h_assumptions⟩, Point.ext_coords (by
+    h_assumptions⟩, by
       rw [h_alpha_commitment] at h_final
-      simpa [Point.add] using h_final.2)⟩
+      exact h_final.2⟩
 
 def circuit (SpendAuthG : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
   main := main SpendAuthG

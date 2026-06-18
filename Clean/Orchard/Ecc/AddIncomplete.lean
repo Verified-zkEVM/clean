@@ -177,22 +177,24 @@ def main (input : Var Input Fp) :
   return r
 
 def Assumptions (input : Input Fp) : Prop :=
-  Pallas.OnCurve input.p.coords ∧
-    Pallas.OnCurve input.q.coords ∧
+  input.p.OnCurve ∧
+    input.q.OnCurve ∧
     input.p.x ≠ input.q.x
 
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
-  Pallas.OnCurve output.coords ∧
-    output.coords = Pallas.add input.p.coords input.q.coords
+  output.OnCurve ∧
+    output = input.p + input.q
 
 theorem outputValue_onCurve {input : Input Fp}
-    (hp : Pallas.OnCurve input.p.coords)
-    (hq : Pallas.OnCurve input.q.coords)
+    (hp : input.p.OnCurve)
+    (hq : input.q.OnCurve)
     (hx : input.p.x ≠ input.q.x) :
-    Pallas.OnCurve (outputValue input).coords := by
+    (outputValue input).OnCurve := by
   have hpNonId : input.p ≠ Point.zero := Point.ne_zero_of_onCurve hp
   have hqNonId : input.q ≠ Point.zero := Point.ne_zero_of_onCurve hq
   have hcoords := outputValue_eq_add hpNonId hqNonId hx
+  replace hp := (Point.onCurve_iff input.p).mp hp
+  replace hq := (Point.onCurve_iff input.q).mp hq
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
   have hp0 : (px, py) ≠ ((0 : Fp), 0) := by
     intro h
@@ -209,6 +211,7 @@ theorem outputValue_onCurve {input : Input Fp}
   have hxy : ¬(px = qx ∧ py + qy = 0) := by
     intro h
     exact hx h.1
+  rw [Point.onCurve_iff]
   rw [hcoords]
   simp only [Pallas.add, Pallas.OnCurve, Point.coords]
   rw [CompElliptic.CurveForms.ShortWeierstrass.add_eq_addXY hp0 hq0 hxy]
@@ -247,7 +250,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   simp only [hrow, hpCopyEq, hqCopyEq]
   constructor
   · exact outputValue_onCurve hpCurve hqCurve hx
-  · exact outputValue_eq_add (input := { p := input_p, q := input_q }) hp hq hx
+  · exact Point.ext_coords (outputValue_eq_add (input := { p := input_p, q := input_q }) hp hq hx)
 
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Gate.circuit, Gate.Assumptions, Gate.Spec]

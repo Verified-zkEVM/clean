@@ -161,14 +161,15 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have hp := hfun B hB
   have h_final := h_add ⟨by
       rw [hp]
-      exact Or.inl (SWPoint.onCurve_of_ne_zero
-        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hB)),
+      exact Or.inl (by
+        rw [Point.onCurve_iff]
+        exact SWPoint.onCurve_of_ne_zero
+          (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hB)),
     by
       rw [hblind]
       exact R.smul_valid s⟩
-  exact Point.ext_coords (by
-    rw [hp, hblind] at h_final
-    simpa [Point.add, Point.ofSW] using h_final.2)
+  rw [hp, hblind] at h_final
+  simpa [Point.ofSW] using h_final.2
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
@@ -184,23 +185,26 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have hp := (h_entry_env ⟨hbounds, B, hchain⟩).2.2 B hchain
   have h_final := h_add_env ⟨by
       rw [hp]
-      exact Or.inl (SWPoint.onCurve_of_ne_zero
-        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain)),
+      exact Or.inl (by
+        rw [Point.onCurve_iff]
+        exact SWPoint.onCurve_of_ne_zero
+          (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain)),
     by
       rw [hblind]
       exact R.smul_valid _⟩
   refine ⟨⟨⟨hbounds, B, hchain⟩, ?_, ?_⟩, ?_⟩
   · rw [hp]
-    exact Or.inl (SWPoint.onCurve_of_ne_zero
-      (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain))
+    exact Or.inl (by
+      rw [Point.onCurve_iff]
+      exact SWPoint.onCurve_of_ne_zero
+        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain))
   · rw [hblind]
     exact R.smul_valid _
   · intro B' hB'
     rw [hchain] at hB'
     obtain rfl : B = B' := Option.some.inj hB'
-    exact Point.ext_coords (by
-      rw [hp, hblind] at h_final
-      simpa [Point.add, Point.ofSW] using h_final.2)
+    rw [hp, hblind] at h_final
+    simpa [Point.ofSW] using h_final.2
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
@@ -293,14 +297,15 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     have hp := hfun B hB
     have h_final := h_add ⟨by
         rw [hp]
-        exact Or.inl (SWPoint.onCurve_of_ne_zero
-          (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hB)),
+        exact Or.inl (by
+          rw [Point.onCurve_iff]
+          exact SWPoint.onCurve_of_ne_zero
+            (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hB)),
       by
         rw [hblind]
         exact R.smul_valid s⟩
-    exact Point.ext_coords (by
-      rw [hp, hblind] at h_final
-      simpa [Point.add, Point.ofSW] using h_final.2)
+    rw [hp, hblind] at h_final
+    simpa [Point.ofSW] using h_final.2
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
@@ -317,24 +322,27 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have hp := hp0 B hchain
   have h_final := h_add_env ⟨by
       rw [hp]
-      exact Or.inl (SWPoint.onCurve_of_ne_zero
-        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain)),
+      exact Or.inl (by
+        rw [Point.onCurve_iff]
+        exact SWPoint.onCurve_of_ne_zero
+          (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain)),
     by
       rw [hblind]
       exact R.smul_valid _⟩
   refine ⟨⟨⟨hbounds, B, hchain⟩, ?_, ?_⟩, ?_, ?_⟩
   · rw [hp]
-    exact Or.inl (SWPoint.onCurve_of_ne_zero
-      (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain))
+    exact Or.inl (by
+      rw [Point.onCurve_iff]
+      exact SWPoint.onCurve_of_ne_zero
+        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain))
   · rw [hblind]
     exact R.smul_valid _
   · convert hZsH using 2
   · intro B' hB'
     rw [hchain] at hB'
     obtain rfl : B = B' := Option.some.inj hB'
-    exact Point.ext_coords (by
-      rw [hp, hblind] at h_final
-      simpa [Point.add, Point.ofSW] using h_final.2)
+    rw [hp, hblind] at h_final
+    simpa [Point.ofSW] using h_final.2
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :

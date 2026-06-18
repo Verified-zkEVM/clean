@@ -80,12 +80,10 @@ theorem soundness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
     by rw [hblind]; exact R.smul_valid s⟩
   refine ⟨m, s, hm_lt, hmag, ?_⟩
   rcases hcases with ⟨hsign, hC1⟩ | ⟨hsign, hC1⟩
-  · exact Or.inl ⟨hsign, Point.ext_coords (by
-      rw [hC1, hblind] at h_final
-      simpa [Point.add] using h_final.2)⟩
-  · exact Or.inr ⟨hsign, Point.ext_coords (by
-      rw [hC1, hblind] at h_final
-      simpa [Point.add] using h_final.2)⟩
+  · rw [hC1, hblind] at h_final
+    exact Or.inl ⟨hsign, by simpa using h_final.2⟩
+  · rw [hC1, hblind] at h_final
+    exact Or.inr ⟨hsign, by simpa using h_final.2⟩
 
 theorem completeness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main V R) ProverAssumptions
@@ -113,13 +111,11 @@ theorem completeness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
   · rw [hblind]
     exact R.smul_valid _
   · intro hs
-    exact Point.ext_coords (by
-      rw [hC1 hs, hblind] at h_final
-      simpa [Point.add] using h_final.2)
+    rw [hC1 hs, hblind] at h_final
+    simpa using h_final.2
   · intro hs
-    exact Point.ext_coords (by
-      rw [hCneg hs, hblind] at h_final
-      simpa [Point.add] using h_final.2)
+    rw [hCneg hs, hblind] at h_final
+    simpa using h_final.2
 
 def circuit (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint Fp Input Point where

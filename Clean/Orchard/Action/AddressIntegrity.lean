@@ -56,7 +56,7 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 /-- `g_d_old` is witnessed by `NonIdentityPoint::new` before this block in the source. -/
 def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  Pallas.OnCurve input.gDOld.coords
+  input.gDOld.OnCurve
 
 /-- The block returns the witnessed `pk_d_old`, constrained to equal `[ivk] g_d_old` where
 `ivk` is the committed incoming viewing key. -/
@@ -86,7 +86,7 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.
   let gDOld : Point Fp := input.gDOld
   let pkDOld : Point Fp := input.pkDOld
   (∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B) ∧
-  Pallas.OnCurve gDOld.coords ∧
+  gDOld.OnCurve ∧
     ∀ ivk : Fp,
       (∀ B : Point Fp,
         hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →

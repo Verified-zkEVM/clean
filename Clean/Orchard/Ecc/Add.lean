@@ -326,22 +326,30 @@ def rowValue (input : Input Fp) : Gate.Input Fp where
       0
 
 theorem outputValue_eq_shortWeierstrass_add {input : Input Fp}
-    (hp : Pallas.Valid input.p.coords)
-    (hq : Pallas.Valid input.q.coords) :
+    (hp : input.p.Valid)
+    (hq : input.q.Valid) :
     (outputValue input).coords =
       CompElliptic.CurveForms.ShortWeierstrass.add
         (0 : Fp) input.p.coords input.q.coords := by
+  have hpCoords := (Point.valid_iff input.p).mp hp
+  have hqCoords := (Point.valid_iff input.q).mp hq
   rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
+  have hpNative : ({ x := px, y := py } : Point Fp).Valid := by
+    simpa using hp
+  have hqNative : ({ x := qx, y := qy } : Point Fp).Valid := by
+    simpa using hq
   unfold Point.coords outputValue lambdaValue
     CompElliptic.CurveForms.ShortWeierstrass.add at *
+  change Pallas.Valid (px, py) at hpCoords
+  change Pallas.Valid (qx, qy) at hqCoords
   simp only
   by_cases hpx : px = 0
   · have hpy : py = 0 :=
-      Point.y_eq_zero_of_valid_of_x_eq_zero (point := { x := px, y := py }) hp hpx
+      Point.y_eq_zero_of_valid_of_x_eq_zero (point := { x := px, y := py }) hpNative hpx
     simp [hpx, hpy]
   · by_cases hqx : qx = 0
     · have hqy : qy = 0 :=
-        Point.y_eq_zero_of_valid_of_x_eq_zero (point := { x := qx, y := qy }) hq hqx
+        Point.y_eq_zero_of_valid_of_x_eq_zero (point := { x := qx, y := qy }) hqNative hqx
       simp [hpx, hqx, hqy]
     · simp [hpx, hqx]
       by_cases hx : px = qx
@@ -364,20 +372,20 @@ theorem outputValue_eq_shortWeierstrass_add {input : Input Fp}
         constructor <;> ring
 
 theorem outputValue_eq_add {input : Input Fp}
-    (hp : Pallas.Valid input.p.coords)
-    (hq : Pallas.Valid input.q.coords) :
-    (outputValue input).coords =
-      Pallas.add input.p.coords input.q.coords := by
-  exact outputValue_eq_shortWeierstrass_add
-    hp
-    hq
+    (hp : input.p.Valid)
+    (hq : input.q.Valid) :
+    outputValue input = input.p + input.q := by
+  apply Point.ext_coords
+  exact outputValue_eq_shortWeierstrass_add hp hq
 
 theorem outputValue_valid_pallas {input : Input Fp}
-    (hp : Pallas.Valid input.p.coords)
-    (hq : Pallas.Valid input.q.coords) :
-    Pallas.Valid (outputValue input).coords := by
+    (hp : input.p.Valid)
+    (hq : input.q.Valid) :
+    (outputValue input).Valid := by
   rw [outputValue_eq_add hp hq]
-  exact CompElliptic.CurveForms.ShortWeierstrass.valid_add hp hq
+  exact (Point.valid_iff (input.p + input.q)).mpr
+    (CompElliptic.CurveForms.ShortWeierstrass.valid_add
+      ((Point.valid_iff input.p).mp hp) ((Point.valid_iff input.q).mp hq))
 
 theorem pallas_two_ne_zero : (2 : Fp) ≠ 0 := by
   decide
@@ -390,16 +398,18 @@ theorem pallas_add_self_ne_zero {y : Fp} (hy : y ≠ 0) :
   exact hy ((mul_eq_zero.mp hmul).resolve_left pallas_two_ne_zero)
 
 theorem pallas_y_eq_or_neg_of_same_x {p q : Point Fp}
-    (hp : Pallas.Valid p.coords) (hq : Pallas.Valid q.coords)
+    (hp : p.Valid) (hq : q.Valid)
     (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
     q.y = p.y ∨ q.y = -p.y := by
   have hpCurve : Pallas.OnCurve p.coords := by
+    replace hp := (Point.valid_iff p).mp hp
     rcases hp with hCurve | hIdentity
     · exact hCurve
     · rcases p with ⟨px, py⟩
       simp only [Point.coords, Prod.mk.injEq] at hIdentity
       exact False.elim (hpx hIdentity.1)
   have hqCurve : Pallas.OnCurve q.coords := by
+    replace hq := (Point.valid_iff q).mp hq
     rcases hq with hCurve | hIdentity
     · exact hCurve
     · rcases q with ⟨qx, qy⟩
@@ -421,7 +431,7 @@ end ValueModel
 open Gate
 
 theorem rowValue_spec_pallas {input : Input Fp}
-    (hp : Pallas.Valid input.p.coords) (hq : Pallas.Valid input.q.coords) :
+    (hp : input.p.Valid) (hq : input.q.Valid) :
     Spec (rowValue input) := by
   constructor
   · intro hxdiff
@@ -566,7 +576,7 @@ theorem rowValue_spec_pallas {input : Input Fp}
           exact False.elim (hflag hcontra)
 
 theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
-    (hp : Pallas.Valid row.p.coords) (hq : Pallas.Valid row.q.coords) (hrow : Spec row) :
+    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Spec row) :
     row.r = outputValue { p := row.p, q := row.q } := by
   dsimp [Gate.Input.p, Gate.Input.q, Gate.Input.r] at hp hq hrow ⊢
   rcases hrow with ⟨hSlope, hTangent, hNonexceptionalDiff, hNonexceptionalSum,
@@ -656,14 +666,14 @@ theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
           exact hr.2
 
 theorem spec_eq_add_pallas {row : Gate.Input Fp}
-    (hp : Pallas.Valid row.p.coords) (hq : Pallas.Valid row.q.coords) (hrow : Spec row) :
-    row.r.coords = Pallas.add row.p.coords row.q.coords := by
+    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Spec row) :
+    row.r = row.p + row.q := by
   rw [spec_eq_outputValue_pallas hp hq hrow]
   exact outputValue_eq_add hp hq
 
 theorem spec_valid_pallas {row : Gate.Input Fp}
-    (hp : Pallas.Valid row.p.coords) (hq : Pallas.Valid row.q.coords) (hrow : Spec row) :
-    Pallas.Valid row.r.coords := by
+    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Spec row) :
+    row.r.Valid := by
   rw [spec_eq_outputValue_pallas hp hq hrow]
   exact outputValue_valid_pallas hp hq
 
@@ -697,17 +707,16 @@ def main (input : Var Input Fp) :
   return r
 
 def Assumptions (input : Input Fp) : Prop :=
-  Pallas.Valid input.p.coords ∧ Pallas.Valid input.q.coords
+  input.p.Valid ∧ input.q.Valid
 
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
-  Pallas.Valid output.coords ∧
-    output.coords = Pallas.add input.p.coords input.q.coords
+  output.Valid ∧ output = input.p + input.q
 
 instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec, Pallas.Valid,
+  circuit_proof_start [main, Assumptions, Spec,
     Gate.circuit, Gate.Spec, spec_eq_add_pallas, spec_valid_pallas]
   rcases h_assumptions with ⟨hp, hq⟩
   rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
@@ -730,9 +739,9 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     gamma := env.get (i₀ + 2 + 2 + 1 + 1 + 1 + 1 + 1)
     delta := env.get (i₀ + 2 + 2 + 1 + 1 + 1 + 1 + 1 + 1)
   }
-  have hpCopy : Pallas.Valid pCopy.coords := by
+  have hpCopy : pCopy.Valid := by
     simpa [pCopy, hpCopyEq] using hp
-  have hqCopy : Pallas.Valid qCopy.coords := by
+  have hqCopy : qCopy.Valid := by
     simpa [qCopy, hqCopyEq] using hq
   have hvalid := spec_valid_pallas (row := row) hpCopy hqCopy hrow
   have hcoords := spec_eq_add_pallas (row := row) hpCopy hqCopy hrow
@@ -740,7 +749,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     by simpa [row, pCopy, qCopy, hpCopyEq, hqCopyEq] using hcoords⟩
 
 theorem completeness : Completeness Fp main Assumptions := by
-  circuit_proof_start [main, Assumptions, Spec, Pallas.Valid,
+  circuit_proof_start [main, Assumptions, Spec,
     Gate.circuit, Gate.Spec, rowValue_spec_pallas]
   rcases h_assumptions with ⟨hp, hq⟩
   rcases input_p with ⟨px, py⟩

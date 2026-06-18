@@ -101,6 +101,10 @@ def add (p q : Point Fp) : Point Fp :=
   { x := coords.1, y := coords.2 }
 
 instance : Add (Point Fp) := ⟨add⟩
+
+@[simp] theorem coords_add (p q : Point Fp) :
+    (p + q).coords = Pallas.add p.coords q.coords := rfl
+
 instance : Sub (Point Fp) where
   sub p q := add p (neg q)
 
